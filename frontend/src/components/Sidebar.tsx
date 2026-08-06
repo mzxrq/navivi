@@ -1,24 +1,32 @@
-import { Settings, Film, MapPin, Sparkles, ChevronRight, Layers } from 'lucide-react';
+import { Settings, MapPin, Sparkles, ChevronRight, Layers } from "lucide-react";
 
 export function Sidebar() {
   return (
     <aside className="w-80 bg-slate-900/90 backdrop-blur-xl border-r border-slate-800/80 flex flex-col justify-between p-5 h-full select-none">
       <div className="space-y-6">
-        {/* App Branding */}
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-blue-500/25">
+        {/* App Branding - Now acts as the window drag handle */}
+        <div
+          data-tauri-drag-region
+          className="flex items-center gap-3 cursor-default select-none pb-2"
+        >
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-blue-500/25 pointer-events-none">
+            {/* Ensure child elements don't block the drag event by using pointer-events-none */}
             <MapPin className="w-5 h-5 text-white" />
           </div>
-          <div>
-            <h1 className="text-sm font-bold text-slate-100 tracking-wide">GPS Studio</h1>
-            <p className="text-[11px] text-slate-400 font-medium">NaviVideo Creator v1.0</p>
+          <div className="pointer-events-none">
+            <h1 className="text-sm font-bold text-slate-100 tracking-wide">
+              Video Creation
+            </h1>
+            <p className="text-[11px] text-slate-400 font-medium">naviVi</p>
           </div>
         </div>
 
         {/* Global Config Card */}
         <div className="space-y-3 bg-slate-800/40 p-3.5 rounded-xl border border-slate-700/40 shadow-inner">
           <div className="flex items-center justify-between text-xs font-semibold text-slate-400 uppercase tracking-wider">
-            <span className="flex items-center gap-1.5"><Settings className="w-3.5 h-3.5" /> Output Config</span>
+            <span className="flex items-center gap-1.5">
+              <Settings className="w-3.5 h-3.5" /> Output Config
+            </span>
           </div>
           <div className="space-y-2 pt-1">
             <div className="flex justify-between items-center text-xs">
@@ -56,7 +64,7 @@ export function Sidebar() {
       </div>
 
       {/* Primary Action Button */}
-      <button 
+      <button
         className="w-full relative group overflow-hidden rounded-xl p-0.5 font-semibold text-sm shadow-xl shadow-blue-900/20 active:scale-[0.98] transition-transform disabled:opacity-40 disabled:pointer-events-none"
         disabled
       >
