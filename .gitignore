@@ -55,3 +55,7 @@ dist/
 # Operating System Files
 .DS_Store
 Thumbs.db
+
+# Other files to ignore
+bin/
+data/
