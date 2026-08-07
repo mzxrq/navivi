@@ -15,13 +15,14 @@
         "title": "Navivi",
         "width": 1200,
         "height": 800,
+        "minWidth": 1000,
+        "minHeight": 600,
         "dragDropEnabled": true,
         "decorations": false
       }
     ],
     "security": {
-      "csp": null
-    }
+        "csp": "default-src 'self'; img-src 'self' asset: https://*.cartocdn.com https://*.openstreetmap.org data:; style-src 'self' 'unsafe-inline' https://unpkg.com;"    }
   },
   "bundle": {
     "active": true,
