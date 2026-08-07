@@ -1,0 +1,186 @@
+"""
+mapfetcher.py
+---------------------------------------------------------------------------
+Bounding box + 16:9 HD static map image generator (OSM tiles via contextily).
+"""
+
+from __future__ import annotations
+
+import math
+import os
+from pathlib import Path
+
+import contextily as cx
+import matplotlib.pyplot as plt
+import pandas as pd
+
+
+def calculate_bounding_box(route_df: pd.DataFrame, padding_percent: float = 0.15) -> dict:
+    """
+    Finds the exact geographical corners of the GPS route and adds padding
+    so the route doesn't clip the edges of the final frame.
+    """
+    min_lat = route_df["latitude"].min()
+    max_lat = route_df["latitude"].max()
+    min_lon = route_df["longitude"].min()
+    max_lon = route_df["longitude"].max()
+
+    lat_span = max_lat - min_lat
+    lon_span = max_lon - min_lon
+
+    if lat_span == 0:
+        lat_span = 0.001
+    if lon_span == 0:
+        lon_span = 0.001
+
+    pad_lat = lat_span * padding_percent
+    pad_lon = lon_span * padding_percent
+
+    padded_box = {
+        "min_lat": min_lat - pad_lat,
+        "max_lat": max_lat + pad_lat,
+        "min_lon": min_lon - pad_lon,
+        "max_lon": max_lon + pad_lon,
+    }
+
+    print("Bounding Box Calculated:")
+    print(f"  Latitude:  {padded_box['min_lat']:.5f} to {padded_box['max_lat']:.5f}")
+    print(f"  Longitude: {padded_box['min_lon']:.5f} to {padded_box['max_lon']:.5f}")
+
+    return padded_box
+
+
+def save_map_image(
+    bounding_box: dict,
+    output_filename: str = "map_background.png",
+    output_size: tuple[int, int] = (1920, 1080),
+    max_zoom: int = 19,
+) -> tuple[tuple[float, float, float, float], int, int]:
+    """
+    Forces the map boundaries into a perfect 16:9 aspect ratio, fetches the tiles
+    (capped at `max_zoom` — default 19, OSM's usual max) and a safe tile-count
+    budget), and saves them as a high-resolution, video-ready background at
+    exactly `output_size` pixels (must be 16:9, e.g. (1920, 1080), (1280, 720),
+    (960, 540)).
+
+    Note: `max_zoom` controls tile *detail*, not the pixel size of the saved
+    image (`output_size` controls that). Capping `max_zoom` too low actually
+    makes the map cover MORE ground area for small/short routes, since each
+    tile then spans more real-world distance — shrinking your route to a
+    speck instead of tightening the frame around it. Leave this at 19 unless
+    you have a specific reason (e.g. very slow/limited connection) to fetch
+    coarser tiles.
+
+    Returns (extent, img_width_px, img_height_px). extent is (w, e, s, n) in
+    Web Mercator (EPSG:3857) meters — pass this straight into
+    gpsparser.convert_gps_to_pixels(extent=...).
+    """
+    out_w, out_h = output_size
+    if abs((out_w / out_h) - (16.0 / 9.0)) > 0.01:
+        raise ValueError(
+            f"output_size {output_size} is not a 16:9 ratio "
+            f"(try (1920, 1080), (1280, 720), or (960, 540))."
+        )
+    # figsize is fixed at 16x9 inches below, so dpi = width_px / 16 lands
+    # exactly on the requested resolution (960x540 needs dpi=60; 1080p needs
+    # dpi=120; 4K needs dpi=240, etc.)
+    target_dpi = out_w / 16.0
+
+    print(f"Calculating 16:9 aspect ratio boundaries (target {out_w}x{out_h})...")
+
+    w = bounding_box["min_lon"]
+    s = bounding_box["min_lat"]
+    e = bounding_box["max_lon"]
+    n = bounding_box["max_lat"]
+
+    # --- MINIMUM COVERAGE GUARD (fixes low-res output on short routes) ---
+    MIN_SPAN_METERS = 300
+    center_lat = (s + n) / 2.0
+    meters_per_deg_lat = 111_320
+    meters_per_deg_lon = 111_320 * math.cos(math.radians(center_lat))
+
+    min_lat_span = MIN_SPAN_METERS / meters_per_deg_lat
+    min_lon_span = MIN_SPAN_METERS / meters_per_deg_lon
+
+    if (n - s) < min_lat_span:
+        pad = (min_lat_span - (n - s)) / 2.0
+        s -= pad
+        n += pad
+    if (e - w) < min_lon_span:
+        pad = (min_lon_span - (e - w)) / 2.0
+        w -= pad
+        e += pad
+    # -----------------------------------------------------------------
+
+    # --- 16:9 ASPECT RATIO MATH ---
+    target_ratio = 16.0 / 9.0
+
+    center_lat = (s + n) / 2.0
+    lat_span = n - s
+    lon_span = e - w
+
+    lon_scale = math.cos(math.radians(center_lat))
+    current_ratio = (lon_span * lon_scale) / lat_span
+
+    if current_ratio < target_ratio:
+        new_lon_span = (lat_span * target_ratio) / lon_scale
+        expansion = (new_lon_span - lon_span) / 2.0
+        w -= expansion
+        e += expansion
+    else:
+        new_lat_span = (lon_span * lon_scale) / target_ratio
+        expansion = (new_lat_span - lat_span) / 2.0
+        s -= expansion
+        n += expansion
+    # -----------------------------------
+
+    # Dynamically resolve the path to src-python/data/caches
+    CACHE_DIR = Path(__file__).resolve().parent.parent / "data" / "caches"
+    
+    os.makedirs(CACHE_DIR, exist_ok=True)
+    cx.set_cache_dir(str(CACHE_DIR))
+
+    print(f"Calculating optimal zoom level (capped at {max_zoom})...")
+
+    print(f"Calculating optimal zoom level (capped at {max_zoom})...")
+    optimal_zoom = max_zoom
+    for z in range(max_zoom, 0, -1):
+        if cx.howmany(w, s, e, n, z, ll=True) <= 30:
+            optimal_zoom = z
+            break
+    if optimal_zoom > max_zoom:
+        optimal_zoom = max_zoom
+
+    print(f"Fetching 16:9 map tiles via Contextily (Max Zoom: {optimal_zoom})...")
+
+    img = None
+    extent = None
+
+    while optimal_zoom > 0:
+        try:
+            print(f"Trying zoom level {optimal_zoom}...")
+            img, extent = cx.bounds2img(w, s, e, n, ll=True, zoom=optimal_zoom, use_cache=str(CACHE_DIR))  # type: ignore
+            break  # <--- ADD THIS LINE! If it succeeds, exit the loop!
+        except Exception as download_error:
+            print(f"Zoom {optimal_zoom} failed ({download_error}). Lowering zoom by 1...")
+            optimal_zoom -= 1
+
+    if img is None:
+        raise RuntimeError("Failed to download map tiles at any zoom level.")
+
+    fig, ax = plt.subplots(figsize=(16, 9), dpi=target_dpi)
+    fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
+    ax.axis('off')
+    ax.imshow(img, extent=extent, aspect='auto', interpolation='lanczos')
+
+    fig.savefig(output_filename, pad_inches=0, dpi=target_dpi, transparent=True)
+    plt.close(fig)
+
+    img_width_px = int(round(16 * target_dpi))
+    img_height_px = int(round(9 * target_dpi))
+
+    print(f"✅ Success! 16:9 map saved to: {os.path.abspath(output_filename)}")
+    print(f"🌍 Map Extent (Web Mercator): {extent}")
+    print(f"🖼  Saved image size: {img_width_px}x{img_height_px}px")
+
+    return extent, img_width_px, img_height_px  # type: ignore
