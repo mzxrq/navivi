@@ -1,10 +1,13 @@
 import subprocess
 import shutil
+import math
 from pathlib import Path
 import pandas as pd
 import numpy as np
+import cv2
+import pyproj
 
-GPSBABEL_BIN = Path(__file__).resolve().parent / "bin" / "GPSBabel" / "gpsbabel.exe"
+GPSBABEL_BIN = Path(__file__).resolve().parent.parent / "bin" / "GPSBabel" / "gpsbabel.exe"
 
 
 def convert_nmea(input_file, output_file, output_format, input_format="nmea", extra_args=None):
@@ -150,3 +153,152 @@ def clean_gps_data(csv_path: str) -> dict:
         "route": route_df,
         "waypoints": waypoints_df
     }
+
+def convert_gps_to_pixels(route_df: pd.DataFrame, extent: tuple, image_path: str) -> list:
+    """
+    Translates GPS Latitude/Longitude coordinates into exact X/Y pixel locations 
+    on the generated map image.
+    """
+    print("Translating GPS coordinates to image pixels...")
+    
+    # 1. Load the image using OpenCV to get its exact pixel dimensions
+    img = cv2.imread(image_path)
+    if img is None:
+        raise FileNotFoundError(f"❌ Could not find image at {image_path}")
+        
+    img_h, img_w, _ = img.shape
+    print(f"Detected map image size: {img_w}x{img_h} pixels")
+    
+    # 2. Extract the Web Mercator boundaries from the contextily extent
+    # extent format is (min_x, max_x, min_y, max_y)
+    xmin, xmax, ymin, ymax = extent
+    
+    # 3. Set up the coordinate transformer
+    # epsg:4326 is standard GPS (Lat/Lon)
+    # epsg:3857 is Web Mercator (Flat map in meters, which contextily uses)
+    transformer = pyproj.Transformer.from_crs("epsg:4326", "epsg:3857", always_xy=True)
+    
+    pixel_coordinates = []
+    
+    # 4. Loop through every GPS point in the route
+    for index, row in route_df.iterrows():
+        lon = row['longitude']
+        lat = row['latitude']
+        
+        # Step A: Convert Lat/Lon to flat map meters
+        merc_x, merc_y = transformer.transform(lon, lat)
+        
+        # Step B: Convert map meters to a percentage across the image (0.0 to 1.0)
+        percent_x = (merc_x - xmin) / (xmax - xmin)
+        
+        # Y is inverted! In math, Y goes up. In image pixels, Y=0 is the TOP of the image and goes down.
+        percent_y = (ymax - merc_y) / (ymax - ymin)
+        
+        # Step C: Multiply the percentage by the actual pixel width/height
+        pixel_x = int(percent_x * img_w)
+        pixel_y = int(percent_y * img_h)
+
+        pixel_coordinates.append((pixel_x, pixel_y))
+
+    print(f"✅ Successfully translated {len(pixel_coordinates)} points to pixels!")
+    return pixel_coordinates
+
+
+def _lat_lng_to_world_pixels(lat: float, lng: float, zoom_level: int) -> tuple[float, float]:
+    world_size = 256 * (2**zoom_level)
+    x = (lng + 180.0) / 360.0 * world_size
+
+    sin_lat = math.sin(math.radians(lat))
+    y = (0.5 - math.log((1 + sin_lat) / (1 - sin_lat)) / (4 * math.pi)) * world_size
+    return x, y
+
+
+def convert_gps_to_google_maps_pixels(
+    route_df: pd.DataFrame,
+    center_lat: float,
+    center_lng: float,
+    zoom_level: int,
+    image_path: str,
+) -> list:
+    """Translate GPS coordinates into pixel coordinates for a Google Maps screenshot."""
+    print("Translating GPS coordinates to Google Maps screenshot pixels...")
+
+    img = cv2.imread(image_path)
+    if img is None:
+        raise FileNotFoundError(f"❌ Could not find image at {image_path}")
+
+    img_h, img_w, _ = img.shape
+    print(f"Detected follow screenshot size: {img_w}x{img_h} pixels")
+
+    center_world_x, center_world_y = _lat_lng_to_world_pixels(center_lat, center_lng, zoom_level)
+    pixel_coordinates = []
+
+    for _, row in route_df.iterrows():
+        lon = row["longitude"]
+        lat = row["latitude"]
+
+        world_x, world_y = _lat_lng_to_world_pixels(lat, lon, zoom_level)
+
+        pixel_x = int((world_x - center_world_x) + (img_w / 2.0))
+        pixel_y = int((world_y - center_world_y) + (img_h / 2.0))
+        pixel_coordinates.append((pixel_x, pixel_y))
+
+    print(f"✅ Successfully translated {len(pixel_coordinates)} points to Google Maps pixels!")
+    return pixel_coordinates
+
+import json
+
+def export_pixels_to_json(
+    pixel_points: list,
+    labels: list,
+    output_json_path: str = "data/route.json",
+    settings: dict | None = None,
+):
+    """
+    Takes the translated X/Y pixel coordinates and labels, and packages 
+    them into the JSON format expected by the video script.
+    """
+    print(f"Exporting {len(pixel_points)} points to {output_json_path}...")
+    
+    route_list = []
+    
+    for (x, y), label in zip(pixel_points, labels):
+        # Create the dictionary for this specific point
+        point_data = {"x": x, "y": y}
+
+        # Only add the label key if a label actually exists.
+        # pd.isna() catches both None and NaN (pandas stores missing
+        # strings as NaN, which `label is not None` alone won't catch,
+        # and would otherwise write the literal string "nan").
+        if not pd.isna(label) and str(label).strip() != "":
+            point_data["label"] = str(label)
+            
+        route_list.append(point_data)
+        
+    # Build the final JSON structure including your default settings
+    default_settings = {
+        "duration_seconds": 10.0,
+        "fps": 30,
+        "line_color": [0, 200, 255],
+        "line_thickness": 8,
+        "marker_color": [0, 0, 255],
+        "marker_radius": 15,
+        "overview_seconds": 2.0,
+        "follow_zoom_level": 17,
+        "follow_viewport_size": [1280, 900],
+        "follow_wait_ms": 5000,
+        "camera_lookahead_frames": 28,
+        "simplify_tolerance": 3.0,
+    }
+
+    final_json_data = {
+        "route": route_list,
+        "settings": {**default_settings, **(settings or {})},
+    }
+    
+    # Save it to the file
+    with open(output_json_path, "w", encoding="utf-8") as f:
+        json.dump(final_json_data, f, indent=4)
+        
+    print(f"✅ JSON successfully saved to: {output_json_path}")
+    return output_json_path
