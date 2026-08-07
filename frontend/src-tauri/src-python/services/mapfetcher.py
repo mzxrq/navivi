@@ -12,7 +12,11 @@ from pathlib import Path
 
 import contextily as cx
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
+
+# Dynamically resolve the path to src-python/data/caches
+CACHE_DIR = Path(__file__).resolve().parent.parent / "data" / "caches"
 
 
 def calculate_bounding_box(route_df: pd.DataFrame, padding_percent: float = 0.15) -> dict:
@@ -133,16 +137,12 @@ def save_map_image(
         s -= expansion
         n += expansion
     # -----------------------------------
-
-    # Dynamically resolve the path to src-python/data/caches
-    CACHE_DIR = Path(__file__).resolve().parent.parent / "data" / "caches"
     
     os.makedirs(CACHE_DIR, exist_ok=True)
     cx.set_cache_dir(str(CACHE_DIR))
 
     print(f"Calculating optimal zoom level (capped at {max_zoom})...")
-
-    print(f"Calculating optimal zoom level (capped at {max_zoom})...")
+    
     optimal_zoom = max_zoom
     for z in range(max_zoom, 0, -1):
         if cx.howmany(w, s, e, n, z, ll=True) <= 30:
@@ -160,7 +160,7 @@ def save_map_image(
         try:
             print(f"Trying zoom level {optimal_zoom}...")
             img, extent = cx.bounds2img(w, s, e, n, ll=True, zoom=optimal_zoom, use_cache=str(CACHE_DIR))  # type: ignore
-            break  # <--- ADD THIS LINE! If it succeeds, exit the loop!
+            break  
         except Exception as download_error:
             print(f"Zoom {optimal_zoom} failed ({download_error}). Lowering zoom by 1...")
             optimal_zoom -= 1
@@ -179,8 +179,170 @@ def save_map_image(
     img_width_px = int(round(16 * target_dpi))
     img_height_px = int(round(9 * target_dpi))
 
-    print(f"✅ Success! 16:9 map saved to: {os.path.abspath(output_filename)}")
+    print(f" Success! 16:9 map saved to: {os.path.abspath(output_filename)}")
     print(f"🌍 Map Extent (Web Mercator): {extent}")
     print(f"🖼  Saved image size: {img_width_px}x{img_height_px}px")
 
     return extent, img_width_px, img_height_px  # type: ignore
+
+
+def get_residential_map(
+    lat: float, 
+    lon: float, 
+    radius_meters: int = 400, 
+    output_filename: str = "residential_map.png",
+    output_size: tuple[int, int] = (1920, 1080)
+):
+    """
+    Takes a single Lat/Lon coordinate, calculates a physical bounding box 
+    around it based on a radius, and fetches a high-detail residential map.
+    """
+    print(f"📍 Calculating map boundaries for Center: {lat}, {lon} (Radius: {radius_meters}m)")
+
+    # 1. LAT/LON TO METERS MATH
+    # 1 degree of latitude is roughly 111,320 meters
+    meters_per_deg_lat = 111_320.0
+    meters_per_deg_lon = 111_320.0 * math.cos(math.radians(lat))
+
+    # Calculate the offsets
+    lat_offset = radius_meters / meters_per_deg_lat
+    lon_offset = radius_meters / meters_per_deg_lon
+
+    # Create the initial bounding box
+    s = lat - lat_offset
+    n = lat + lat_offset
+    w = lon - lon_offset
+    e = lon + lon_offset
+
+    # 2. FORCE 16:9 ASPECT RATIO
+    out_w, out_h = output_size
+    target_ratio = out_w / out_h
+    
+    lat_span = n - s
+    lon_span = e - w
+    lon_scale = math.cos(math.radians(lat))
+    current_ratio = (lon_span * lon_scale) / lat_span
+
+    if current_ratio < target_ratio:
+        new_lon_span = (lat_span * target_ratio) / lon_scale
+        expansion = (new_lon_span - lon_span) / 2.0
+        w -= expansion
+        e += expansion
+    else:
+        new_lat_span = (lon_span * lon_scale) / target_ratio
+        expansion = (new_lat_span - lat_span) / 2.0
+        s -= expansion
+        n += expansion
+
+    # 3. CONFIGURE TILE PROVIDER
+    provider = cx.providers.CartoDB.Voyager  # type: ignore
+    
+    os.makedirs(CACHE_DIR, exist_ok=True)
+    cx.set_cache_dir(str(CACHE_DIR))
+
+    optimal_zoom = 18
+
+    print("Fetching high-detail map tiles...")
+    img = None
+    extent = None
+    
+    while optimal_zoom > 0:
+        try:
+            print(f"Trying zoom level {optimal_zoom}...")
+            img, extent = cx.bounds2img(
+                w, s, e, n, 
+                ll=True, 
+                zoom=optimal_zoom,  # type: ignore
+                source=provider,
+                use_cache=str(CACHE_DIR)  # type: ignore
+            )
+            break
+        except Exception as download_error:
+            print(f"Zoom {optimal_zoom} failed ({download_error}). Lowering zoom by 1...")
+            optimal_zoom -= 1
+
+    if img is None:
+        raise RuntimeError("Failed to download map tiles at any zoom level.")
+
+    # 4. RENDER AND SAVE
+    target_dpi = out_w / 16.0
+    fig, ax = plt.subplots(figsize=(16, 9), dpi=target_dpi)
+    fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
+    ax.axis('off')
+    ax.imshow(img, extent=extent, aspect='auto', interpolation='lanczos')
+
+    fig.savefig(output_filename, pad_inches=0, dpi=target_dpi, transparent=True)
+    plt.close(fig)
+
+    print(f" Success! Residential map saved to: {os.path.abspath(output_filename)}")
+    return extent
+
+
+def generate_residential_map_series(
+    route_df: pd.DataFrame, 
+    points_per_slice: int = 500,  
+    output_dir: str = "data/outputs",
+    output_prefix: str = "res_map",
+    output_size: tuple[int, int] = (1920, 1080)
+) -> list[dict]:
+    """
+    Slices the full GPS route dynamically based on a set number of points 
+    per slice, generating a highly detailed residential map for each segment.
+    """
+    total_points = len(route_df)
+    num_slices = max(1, math.ceil(total_points / points_per_slice))
+    
+    print(f"🔪 Total data points: {total_points}.")
+    print(f"🔪 Slicing route into {num_slices} segments (target: {points_per_slice} points/slice)...")
+    
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # --- THE FIX: Use pure Pandas to chunk the data safely ---
+    chunks = [route_df.iloc[i : i + points_per_slice] for i in range(0, total_points, points_per_slice)]
+    
+    results = []
+    
+    for i, chunk in enumerate(chunks):
+        # 1. Find the geographical center of this specific chunk
+        min_lat = chunk["latitude"].min()
+        max_lat = chunk["latitude"].max()
+        min_lon = chunk["longitude"].min()
+        max_lon = chunk["longitude"].max()
+        
+        center_lat = (min_lat + max_lat) / 2.0
+        center_lon = (min_lon + max_lon) / 2.0
+        
+        # 2. Calculate the physical size of this chunk in meters
+        lat_span_meters = (max_lat - min_lat) * 111_320.0
+        lon_span_meters = (max_lon - min_lon) * (111_320.0 * math.cos(math.radians(center_lat)))
+        
+        # 3. Determine the radius needed to fit this chunk (plus 20% padding)
+        chunk_radius = max(lat_span_meters, lon_span_meters) / 2.0
+        chunk_radius = int(chunk_radius * 1.2)
+        
+        # Enforce a minimum radius so it still looks like a "residential" zoom level
+        if chunk_radius < 300:
+            chunk_radius = 300
+            
+        out_name = os.path.join(output_dir, f"{output_prefix}_{i+1}.png")
+        
+        print(f"\n--- Generating Map {i+1}/{num_slices} (contains {len(chunk)} points) ---")
+        
+        # 4. Call your existing function for this chunk
+        extent = get_residential_map(
+            lat=center_lat,
+            lon=center_lon,
+            radius_meters=chunk_radius,
+            output_filename=out_name,
+            output_size=output_size
+        )
+        
+        # Save the data so the video renderer can use it later
+        results.append({
+            "chunk_df": chunk,       
+            "map_file": out_name,    
+            "extent": extent         
+        })
+        
+    print(f"\n Finished generating {num_slices} residential maps!")
+    return results

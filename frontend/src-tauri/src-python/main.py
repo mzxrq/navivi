@@ -1,23 +1,16 @@
 """
 run_pipeline.py
 ---------------------------------------------------------------------------
-One-pass GPS -> map -> video pipeline. Fetches the map ONCE and reuses the
-same pixel_points computed via gpsparser.convert_gps_to_pixels — no
-redundant tile downloads, no discarded work.
-
-Import and call `run_pipeline(...)` from any other file:
-
-    from run_pipeline import run_pipeline
-    run_pipeline("backend\\data\\LOG00001.TXT", device_format="iblue747")
+One-pass GPS -> map -> video pipeline.
 """
 
 from pathlib import Path
-
 import pandas as pd
 
 from services.gpsparser import clean_gps_data, convert_nmea, convert_gps_to_pixels, export_pixels_to_json
-from services.mapfetcher import calculate_bounding_box, save_map_image
-from services.route2vdo import render_route_animation
+from services.mapfetcher import calculate_bounding_box, save_map_image, generate_residential_map_series
+# --- NEW: Import load_route so we can read the JSON for testing ---
+from services.route2vdo import render_route_animation, load_route
 
 def run_pipeline(
     nmea_file: str,
@@ -34,93 +27,123 @@ def run_pipeline(
     line_thickness: int = 8,
     marker_radius: int = 15,
 ) -> str:
-    """
-    Runs the full GPS-log -> video pipeline in a single pass:
-
-      1. NMEA -> CSV                     (convert_nmea, gpsbabel)
-      2. CSV  -> cleaned route DataFrame  (clean_gps_data)
-      3. route DataFrame -> bounding box  (calculate_bounding_box)
-      4. bounding box -> 16:9 HD map      (save_map_image)  [fetched ONCE]
-      5. route DataFrame -> pixel points  (convert_gps_to_pixels, using the
-         SAME extent/image from step 4 — no second map fetch)
-      6. pixel points -> route.json       (export_pixels_to_json) [optional,
-         handy for inspecting/re-running the video step without repeating
-         steps 1-5]
-      7. map + pixel points -> MP4        (render_route_animation)
-
-    Returns the output video path.
-    """
+    
     Path(csv_path).parent.mkdir(parents=True, exist_ok=True)
     Path(map_image_path).parent.mkdir(parents=True, exist_ok=True)
     Path(output_video).parent.mkdir(parents=True, exist_ok=True)
 
-    # 1. Convert the raw NMEA text file to CSV
-    track_csv = convert_nmea(nmea_file, csv_path, device_format)
+    # # =========================================================================
+    # # 🟢 FULL PIPELINE MODE: Uncomment this block to run GPS -> Map -> Video
+    # # =========================================================================
 
-    # 2. Clean the data and extract the route DataFrame
-    gps_data = clean_gps_data(track_csv)
-    route_df = gps_data["route"]
-    waypoints_df = gps_data["waypoints"]
+    # # 1-3. Data Cleaning and Bounding Box
+    # track_csv = convert_nmea(nmea_file, csv_path, device_format)
+    # gps_data = clean_gps_data(track_csv)
+    # route_df = gps_data["route"]
+    
+    # padded_box = calculate_bounding_box(route_df, padding_percent=padding_percent)
 
-    # NOTE: clean_gps_data splits named points into `waypoints_df` and
-    # puts everything else (usually unnamed) into `route_df`. If you want
-    # checkpoint labels to show up on the video, route_df needs a "name"
-    # (or "label") column with values on the points you want marked — as
-    # written, route_df's names will mostly be empty since named points
-    # were pulled out into waypoints_df. Merge waypoints back in by
-    # timestamp/position first if you want them to appear as markers.
+    # # 4-5. BIG PICTURE MAP
+    # map_extent, img_w, img_h = save_map_image(
+    #     bounding_box=padded_box,
+    #     output_filename=map_image_path,
+    #     output_size=output_size,
+    #     max_zoom=max_zoom,
+    # )
 
-    # 3. Calculate the padded bounding box for the map
-    padded_box = calculate_bounding_box(route_df, padding_percent=padding_percent)
+    # big_pixel_points = convert_gps_to_pixels(
+    #     route_df=route_df,
+    #     extent=map_extent,
+    #     image_path=map_image_path,
+    # )
 
-    # 4. Fetch and save the high-resolution map image — ONCE.
-    #    save_map_image returns 3 values: unpack all of them.
-    map_extent, img_w, img_h = save_map_image(
-        bounding_box=padded_box,
-        output_filename=map_image_path,
-        output_size=output_size,
-        max_zoom=max_zoom,
-    )
+    # if "store_name" in route_df.columns:
+    #     big_labels = [None if pd.isna(v) else str(v) for v in route_df["store_name"].tolist()]
+    # else:
+    #     big_labels = [None] * len(route_df)
 
-    # 5. Convert every route point to pixel coordinates on that SAME image,
-    #    reusing map_extent from step 4 (no second tile fetch).
-    pixel_points = convert_gps_to_pixels(
-        route_df=route_df,
-        extent=map_extent,
-        image_path=map_image_path,
-    )
-    print("First 5 pixel locations:", pixel_points[:5])
+    # big_popups = []
+    # for index, row in route_df.iterrows():
+    #     if "store_name" in route_df.columns and not pd.isna(row["store_name"]) and str(row["store_name"]).strip() != "":
+    #         big_popups.append({
+    #             "freeze_seconds": 3.0,
+    #             "popup_image": str(row["img_url"]) if not pd.isna(row.get("img_url")) else ""
+    #         })
+    #     else:
+    #         big_popups.append(None)
 
-    # Labels: pull from a "name" column if present, else no labels.
-    # route_df["name"] comes straight from pandas, where missing values are
-    # NaN (a float) rather than None — sanitize here so downstream code
-    # never has to special-case NaN vs None vs "".
-    if "name" in route_df.columns:
-        labels = [None if pd.isna(v) else str(v) for v in route_df["name"].tolist()]
-    else:
-        labels = [None] * len(route_df)
+    # print("\n🗺️ Generating Residential Map Slices...")
+    # res_slices = generate_residential_map_series(
+    #     route_df=route_df,
+    #     points_per_slice=500, 
+    #     output_dir="src-tauri\\src-python\\data\\outputs\\res_maps",
+    #     output_prefix="res_map",
+    #     output_size=output_size
+    # )
 
-    # 6. (Optional) export to route.json — useful if you want to re-render
-    #    the video later with different settings without repeating 1-5.
-    export_pixels_to_json(pixel_points, labels, output_json_path=json_path)
+    # res_video_sequence = []
+    # for slice_data in res_slices:
+    #     chunk_df = slice_data["chunk_df"]
+    #     chunk_pixels = convert_gps_to_pixels(route_df=chunk_df, extent=slice_data["extent"], image_path=slice_data["map_file"])
+        
+    #     if "store_name" in chunk_df.columns:
+    #         chunk_labels = [None if pd.isna(v) else str(v) for v in chunk_df["store_name"].tolist()]
+    #     else:
+    #         chunk_labels = [None] * len(chunk_df)
+            
+    #     chunk_popups = []
+    #     for index, row in chunk_df.iterrows():
+    #         if "store_name" in chunk_df.columns and not pd.isna(row["store_name"]) and str(row["store_name"]).strip() != "":
+    #             chunk_popups.append({"freeze_seconds": 3.0, "popup_image": str(row["img_url"]) if not pd.isna(row.get("img_url")) else ""})
+    #         else:
+    #             chunk_popups.append(None)
+                
+    #     res_video_sequence.append({
+    #         "img_path": slice_data["map_file"],
+    #         "points": [list(p) for p in chunk_pixels],
+    #         "labels": chunk_labels,
+    #         "popups": chunk_popups
+    #     })
 
-    # 7. Render the final video directly from the pixel points we already
-    #    have — no second bounding-box/map/pixel pass.
-    print(f"🎬 Sending {len(pixel_points)} points to the video renderer...")
+    # export_pixels_to_json(big_pixel_points, big_labels, popups=big_popups, output_json_path=json_path)
+
+    # =========================================================================
+    # 🟡 TEST MODE (JSON -> VIDEO ONLY): Uncomment this block to test video
+    # =========================================================================
+    print("🟡 TEST MODE: Loading data directly from JSON...")
+    # Load your manually edited or pre-generated JSON file
+    loaded_points, loaded_labels, loaded_popups, loaded_settings = load_route(json_path)
+    
+    # Assign the loaded JSON data to the variables the video renderer expects
+    big_pixel_points = loaded_points
+    big_labels = loaded_labels
+    big_popups = loaded_popups
+    
+    # For testing just the big picture map, we use an empty residential sequence
+    res_video_sequence = []
+
+    # =========================================================================
+    # 🔴 VIDEO RENDERING: Keep this block UNCOMMENTED at all times
+    # =========================================================================
+    print(f"\n🎬 Sending Big Picture + {len(res_video_sequence)} Residential Slices to video renderer...")
+    
     result = render_route_animation(
-        img_path=map_image_path, # type: ignore
-        points=[list(p) for p in pixel_points], # type: ignore
-        labels=labels,
+        img_path=map_image_path, 
+        points=[list(p) for p in big_pixel_points], 
+        labels=big_labels,
+        popups=big_popups,  
         output_path=output_video,
         duration_seconds=duration_seconds,
         fps=fps,
         line_thickness=line_thickness,
         marker_radius=marker_radius,
+        res_sequence=res_video_sequence,
+        res_duration_per_slice=5.0,  
+        pause_seconds=2.0
     )
 
-    print(f"✅ Pipeline complete → {result}")
+    print(f" Pipeline complete → {result}")
     return result
-
 
 if __name__ == "__main__":
     run_pipeline("src-tauri\\src-python\\data\\inputs\\gpsdata\\rawdata\\LOG00002.TXT", device_format="iblue747")

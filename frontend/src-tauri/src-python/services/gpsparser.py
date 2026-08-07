@@ -1,10 +1,12 @@
+import json
+import math
 import subprocess
 import shutil
-import math
 from pathlib import Path
-import pandas as pd
-import numpy as np
+
 import cv2
+import numpy as np
+import pandas as pd
 import pyproj
 
 GPSBABEL_BIN = Path(__file__).resolve().parent.parent / "bin" / "GPSBabel" / "gpsbabel.exe"
@@ -75,15 +77,12 @@ def convert_nmea(input_file, output_file, output_format, input_format="nmea", ex
 
     return str(output_path)
 
+
 def clean_gps_data(csv_path: str) -> dict:
     """
     Reads a GPSBabel-generated CSV, cleans the data, and separates 
     track points from waypoints.
     """
-    # ==========================================
-    # WBS 1.1.4: Pandas data cleaning + waypoint extraction
-    # ==========================================
-    
     # 1.1.4 (a): Load the raw CSV
     df = pd.read_csv(csv_path)
 
@@ -112,39 +111,36 @@ def clean_gps_data(csv_path: str) -> dict:
     # ==========================================
     # WBS 1.1.5: Stationary point removal & filtering
     # ==========================================
-    
-    # Drop rows where the person hasn't moved from the exact same Lat/Lon.
     if 'latitude' in route_df.columns and 'longitude' in route_df.columns:
-        # Round to 5 decimal places (~1.1 meters precision) to account for GPS jitter
         route_df['lat_round'] = route_df['latitude'].round(5)
         route_df['lon_round'] = route_df['longitude'].round(5)
         
-        # NEW ADDITION: Count how many times this exact coordinate appears.
-        # Since it's ~1 record per second, this equals the seconds spent at this location.
+        # Count how many seconds spent at this exact location
         route_df['duplicate_count'] = route_df.groupby(['lat_round', 'lon_round'])['lat_round'].transform('size')
         
-        # Keep rows only if they differ from the previous row (dropping the consecutive duplicates)
-        # But because we added the count above, the row we KEEP will now store 
-        # the total number of seconds the person stood there!
         route_df = route_df.loc[(route_df['lat_round'] != route_df['lat_round'].shift()) | 
                                 (route_df['lon_round'] != route_df['lon_round'].shift())]
         
-        # Clean up temp rounding columns, but KEEP our new 'duplicate_count' column
         route_df = route_df.drop(columns=['lat_round', 'lon_round'])
+
+        # --- NEW: Flag Long Stops (5 minutes / 300 seconds) ---
+        route_df['store_name'] = None
+        route_df['img_url'] = None
+
+        long_stops = route_df['duplicate_count'] >= 300
+        
+        # Automatically set the store_name to highlight the detected stop
+        route_df.loc[long_stops, 'store_name'] = "Detected Stop (" + (route_df['duplicate_count'] // 60).astype(str) + " mins)"
+        route_df.loc[long_stops, 'img_url'] = ""  # Ready to be filled with an image path
 
     # ==========================================
     # WBS 1.1.6: Fallback parser for timestampless files
     # ==========================================
-    
-    # Check if 'timestamp' column is missing or entirely empty (NaT)
     if 'timestamp' not in route_df.columns or route_df['timestamp'].isnull().all():
         print("⚠️ Warning: No timestamps found in raw data! Generating artificial 1-second timeline...")
-        
         start_time = pd.Timestamp.now()
         route_df['timestamp'] = pd.date_range(start=start_time, periods=len(route_df), freq='1S')
-        
     else:
-        # Fill any randomly missing gaps in an otherwise valid timeline
         route_df['timestamp'] = route_df['timestamp'].ffill()
 
     print(f"Data cleaned! Found {len(route_df)} route points and {len(waypoints_df)} waypoints.")
@@ -153,6 +149,7 @@ def clean_gps_data(csv_path: str) -> dict:
         "route": route_df,
         "waypoints": waypoints_df
     }
+
 
 def convert_gps_to_pixels(route_df: pd.DataFrame, extent: tuple, image_path: str) -> list:
     """
@@ -164,7 +161,7 @@ def convert_gps_to_pixels(route_df: pd.DataFrame, extent: tuple, image_path: str
     # 1. Load the image using OpenCV to get its exact pixel dimensions
     img = cv2.imread(image_path)
     if img is None:
-        raise FileNotFoundError(f"❌ Could not find image at {image_path}")
+        raise FileNotFoundError(f" Could not find image at {image_path}")
         
     img_h, img_w, _ = img.shape
     print(f"Detected map image size: {img_w}x{img_h} pixels")
@@ -200,7 +197,7 @@ def convert_gps_to_pixels(route_df: pd.DataFrame, extent: tuple, image_path: str
 
         pixel_coordinates.append((pixel_x, pixel_y))
 
-    print(f"✅ Successfully translated {len(pixel_coordinates)} points to pixels!")
+    print(f" Successfully translated {len(pixel_coordinates)} points to pixels!")
     return pixel_coordinates
 
 
@@ -225,7 +222,7 @@ def convert_gps_to_google_maps_pixels(
 
     img = cv2.imread(image_path)
     if img is None:
-        raise FileNotFoundError(f"❌ Could not find image at {image_path}")
+        raise FileNotFoundError(f" Could not find image at {image_path}")
 
     img_h, img_w, _ = img.shape
     print(f"Detected follow screenshot size: {img_w}x{img_h} pixels")
@@ -243,39 +240,45 @@ def convert_gps_to_google_maps_pixels(
         pixel_y = int((world_y - center_world_y) + (img_h / 2.0))
         pixel_coordinates.append((pixel_x, pixel_y))
 
-    print(f"✅ Successfully translated {len(pixel_coordinates)} points to Google Maps pixels!")
+    print(f" Successfully translated {len(pixel_coordinates)} points to Google Maps pixels!")
     return pixel_coordinates
 
-import json
 
 def export_pixels_to_json(
     pixel_points: list,
     labels: list,
+    popups: list = None, # type: ignore
     output_json_path: str = "data/route.json",
     settings: dict | None = None,
 ):
     """
-    Takes the translated X/Y pixel coordinates and labels, and packages 
-    them into the JSON format expected by the video script.
+    Takes the translated X/Y pixel coordinates, labels, and popups, 
+    and packages them into the JSON format expected by the video script.
     """
     print(f"Exporting {len(pixel_points)} points to {output_json_path}...")
     
     route_list = []
     
-    for (x, y), label in zip(pixel_points, labels):
-        # Create the dictionary for this specific point
+    # Safely handle the popups list if it wasn't provided
+    if popups is None:
+        popups = [None] * len(pixel_points)
+
+    for i, ((x, y), label) in enumerate(zip(pixel_points, labels)):
         point_data = {"x": x, "y": y}
 
-        # Only add the label key if a label actually exists.
-        # pd.isna() catches both None and NaN (pandas stores missing
-        # strings as NaN, which `label is not None` alone won't catch,
-        # and would otherwise write the literal string "nan").
+        # Handle the label
         if not pd.isna(label) and str(label).strip() != "":
             point_data["label"] = str(label)
             
+        # --- NEW: Handle the Freeze and Image formatting ---
+        if popups[i] is not None:
+            if popups[i].get("freeze_seconds"):
+                point_data["freeze_seconds"] = popups[i]["freeze_seconds"]
+            if popups[i].get("popup_image") and str(popups[i]["popup_image"]).strip() != "":
+                point_data["popup_image"] = str(popups[i]["popup_image"])
+                
         route_list.append(point_data)
         
-    # Build the final JSON structure including your default settings
     default_settings = {
         "duration_seconds": 10.0,
         "fps": 30,
@@ -296,9 +299,8 @@ def export_pixels_to_json(
         "settings": {**default_settings, **(settings or {})},
     }
     
-    # Save it to the file
     with open(output_json_path, "w", encoding="utf-8") as f:
         json.dump(final_json_data, f, indent=4)
         
-    print(f"✅ JSON successfully saved to: {output_json_path}")
+    print(f" JSON successfully saved to: {output_json_path}")
     return output_json_path
