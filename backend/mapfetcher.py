@@ -107,6 +107,13 @@ def save_map_image(bounding_box: dict, output_filename: str = "map_background.pn
         n += expansion
     # -----------------------------------
 
+    # --- NEW: ENABLE TILE CACHING ---
+    # This will create a folder called 'map_cache' inside your 'data' folder.
+    # It will store every downloaded tile here forever.
+    os.makedirs("data/map_cache", exist_ok=True)
+    cx.set_cache_dir("data/map_cache")
+    # --------------------------------
+
     # --- CALCULATE AND CAP ZOOM AT 19 ---
     print("Calculating optimal zoom level...")
     optimal_zoom = 19
@@ -134,7 +141,7 @@ def save_map_image(bounding_box: dict, output_filename: str = "map_background.pn
     while optimal_zoom > 0:
         try:
             print(f"Trying zoom level {optimal_zoom}...")
-            img, extent = cx.bounds2img(w, s, e, n, ll=True, zoom=optimal_zoom)
+            img, extent = cx.bounds2img(w, s, e, n, ll=True, zoom=optimal_zoom, use_cache="data/map_cache") # type: ignore
             break  # Success! Exit the loop.
         except Exception as download_error:
             print(f"Zoom {optimal_zoom} failed ({download_error}). Lowering zoom by 1...")
