@@ -1,36 +1,97 @@
-import { useEffect, useState } from 'react';
-import { listen } from '@tauri-apps/api/event';
-import { UploadCloud, CheckCircle2, FileCode } from 'lucide-react';
+import { useWorkspace } from '../hooks/useWorkspace';
+import { useEffect, useState } from "react";
+import { listen } from "@tauri-apps/api/event";
+import { readTextFile } from '@tauri-apps/plugin-fs';
+import { MapContainer, Polyline, TileLayer, useMap, useMapEvents, Marker, Tooltip } from "react-leaflet";
+import L from 'leaflet';
+import { Clock, UploadCloud, CheckCircle2, FileCode } from "lucide-react";
+
+// tailwind map marker
+const waypointIcon = L.divIcon({
+  className: 'bg-transparent',
+  html: `<div class="w-4 h-4 bg-emerald-400 border-2 border-white rounded-full shadow-[0_0_10px_rgba(52,211,153,0.8)] hover:scale-125 transition-transform cursor-pointer"></div>`,
+  iconSize: [16, 16],
+  iconAnchor: [8, 8],
+});
+
+// map controllers
+function MapAutoZoom({ routePoints }: { routePoints: [number, number][] }) {
+  const map = useMap();
+  useEffect(() => {
+    setTimeout(() => map.invalidateSize(), 100);
+    if (routePoints.length > 0) {
+      map.fitBounds(routePoints, { padding: [50, 50], animate: true });
+    }
+  }, [routePoints, map]);
+  return null;
+}
+
+function MapClickListener({ onMapClick }: { onMapClick: (lat: number, lng: number) => void }) {
+  useMapEvents({
+    click(e) {
+      onMapClick(e.latlng.lat, e.latlng.lng);
+    },
+  });
+  return null;
+}
+
+// function MapController({ routePoints }: { routePoints: [number, number][] }) {
+//   const map = useMap();
+
+//   useEffect(() => {
+//     // force recalc container size after rendering
+//     setTimeout(() => {
+//       map.invalidateSize();
+//     }, 100)
+
+//     if (routePoints.length > 0) {
+//       map.fitBounds(routePoints, { padding: [50, 50], animate: true });
+//     }
+//   }, [routePoints, map]);
+//   return null;
+// }
 
 export function MapArea() {
-  const [gpxPath, setGpxPath] = useState<string | null>(null);
+  const [droppedFile, setDroppedFile] = useState<string | null>(null);
   const [isHovering, setIsHovering] = useState(false);
+  const [routePoints, setRoutePoints] = useState<[number, number][]>([]);
+  const { waypoints, setWaypoints } = useWorkspace();
 
+  const handleAddWaypoint = async (lat: number, lng: number) => {
+    // Unique ID for marker
+    const newId = Math.random().toString(36).substring(7);
+    // add to map
+    setWaypoints((prev) => [...prev, { id: newId, lat, lng, name: 'Locating...', image: null, narration: ''}]);
+    // get Location
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
+      const data = await res.json();
+      // grab point name
+      const placeName = data.name || data.address?.road || data.address?.city || 'Waypoint ${newId.substring(0,4).toUpperCase()}';
+      // update waypoint with real name
+      setWaypoints((prev) =>
+        prev.map((wp) => (wp.id === newId ? { ...wp, name: placeName } : wp))
+      );
+    } catch (error) {
+      setWaypoints((prev) =>
+        prev.map((wp) => (wp.id === newId ? { ...wp, name: 'Unknown Location' } : wp))
+      );
+    }
+
+  }
+
+  // drag and drop
   useEffect(() => {
-    // 1. Listen for when a file enters the window
     const unlistenHover = listen('tauri://drag-enter', () => setIsHovering(true));
-    
-    // 2. Listen for when a file leaves the window without dropping
-    const unlistenLeave = listen('tauri://drag-leave', () => setIsHovering(false));
-    
-    // 3. Listen for the actual file drop
+    const unlistenLeave = listen ('tauri://drag-leave', () => setIsHovering(false));
     const unlistenDrop = listen<{ paths: string[] }>('tauri://drop', (event) => {
       setIsHovering(false);
-      
       const droppedFiles = event.payload.paths;
       if (droppedFiles && droppedFiles.length > 0) {
-        const filePath = droppedFiles[0];
-        
-        // Basic validation to ensure the user dropped a GPX file
-        if (filePath.toLowerCase().endsWith('.gpx')) {
-          setGpxPath(filePath);
-        } else {
-          alert('Please drop a valid .gpx file!');
-        }
+        setDroppedFile(droppedFiles[0]);
       }
     });
 
-    // Cleanup listeners when the component unmounts to prevent memory leaks
     return () => {
       unlistenHover.then((f) => f());
       unlistenLeave.then((f) => f());
@@ -38,55 +99,123 @@ export function MapArea() {
     };
   }, []);
 
-  return (
-    <main className="flex-1 relative bg-slate-950 flex items-center justify-center p-6 overflow-hidden">
-      {/* Background Ambient Glow */}
-      <div className="absolute w-96 h-96 bg-blue-600/5 rounded-full blur-3xl pointer-events-none" />
+  // parse file gpx, otherwise wait backend
+  useEffect(() => {
+    if (!droppedFile) return;
 
-      {/* Main Dropzone Container */}
-      <div 
-        className={`w-full h-full border-2 border-dashed rounded-2xl flex flex-col items-center justify-center transition-all duration-300 relative z-10 ${
-          isHovering 
-            ? 'border-blue-500 bg-blue-500/5 scale-[0.99] shadow-2xl shadow-blue-500/10' 
-            : gpxPath 
-            ? 'border-emerald-500/40 bg-emerald-500/5' 
-            : 'border-slate-800/80 bg-slate-900/20 hover:border-slate-700'
-        }`}
-      >
-        {gpxPath ? (
-          // Success State: File Loaded
-          <div className="text-center p-6 bg-slate-900/80 backdrop-blur-md border border-emerald-500/30 rounded-2xl shadow-2xl max-w-lg space-y-3">
-            <div className="w-12 h-12 rounded-full bg-emerald-500/10 text-emerald-400 flex items-center justify-center mx-auto border border-emerald-500/20">
-              <CheckCircle2 className="w-6 h-6" />
-            </div>
-            <div>
-              <h3 className="text-slate-200 font-semibold text-sm">GPS Track Loaded</h3>
-              <p className="text-xs text-slate-400 mt-0.5">Ready for map rendering</p>
-            </div>
-            <div className="flex items-center gap-2 bg-slate-950 px-3 py-2 rounded-lg border border-slate-800/80 text-left w-full overflow-hidden">
-              <FileCode className="w-4 h-4 text-slate-500 shrink-0" />
-              <p className="text-xs text-slate-300 font-mono truncate" title={gpxPath}>
-                {gpxPath}
-              </p>
-            </div>
-          </div>
-        ) : (
-          // Default/Hover State: Waiting for File
-          <div className="text-center space-y-4 pointer-events-none">
-            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mx-auto transition-all ${
-              isHovering ? 'bg-blue-500 text-white scale-110' : 'bg-slate-900 text-slate-400 border border-slate-800'
-            }`}>
-              <UploadCloud className="w-7 h-7" />
-            </div>
-            <div className="space-y-1">
-              <p className="text-slate-200 font-medium text-sm">
-                {isHovering ? 'Drop GPX File Now' : 'Drag & Drop GPX Route File'}
-              </p>
-              <p className="text-xs text-slate-500">Supports standard .gpx files from Garmin, Strava, or OsmAnd</p>
-            </div>
-          </div>
-        )}
+    if (droppedFile.toLowerCase().endsWith('.gpx')) {
+      const parseGpx = async () => {
+        try {
+          const fileContent = await readTextFile(droppedFile);
+          const parser = new DOMParser();
+          const xmlDoc = parser.parseFromString(fileContent, "text/xml");
+          const trackPoints = xmlDoc.getElementsByTagName("trkpt");
+          const points: [number, number][] = [];
+
+          for (let i = 0; i < trackPoints.length; i++) {
+            const lat = parseFloat(trackPoints[i].getAttribute("lat") || "0");
+            const lon = parseFloat(trackPoints[i].getAttribute("lon") || "0");
+            if (lat && lon) points.push([lat, lon]);
+          }
+          setRoutePoints(points);
+        } catch (error) {
+          console.error("Failed to parse GPX:", error);
+        }
+      };
+      parseGpx();
+    } else {
+      //            //
+      // Wait for   //
+      // backend    //
+      // from Dev 1 //
+      //            //
+      setRoutePoints([]);
+    }
+  }, [droppedFile]);
+
+  // determine file status
+  const isGpx = droppedFile?.toLowerCase().endsWith('.gpx');
+
+  return (
+    <main className="flex-1 relative bg-[#09090b] overflow-hidden">
+      <div className="absolute inset-0 z-0">
+        <MapContainer 
+          center={[35.6895, 139.6917]}
+          zoom={13}
+          zoomControl={false}
+          style={{ height: '100%', width: '100%', background: '#09090b' }}
+        >
+          <TileLayer
+            attribution="&copy; OpenStreetMap contributors &copy; CARTO"
+            url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+          />
+
+          {routePoints.length > 0 && (
+            <Polyline
+              positions={routePoints}
+              pathOptions={{ color: '#3b82f6', weight: 4, opacity: 0.8, lineCap: 'round', lineJoin: 'round' }}
+            />
+          )}
+
+          {/* Draw waypoints */}
+          {waypoints.map((wp) => (
+            <Marker key={wp.id} position={[wp.lat, wp.lng]} icon={waypointIcon}>
+              <Tooltip direction="top" offset={[0, -10]} opacity={1} permanent>
+                {wp.name}
+              </Tooltip>
+            </Marker>
+          ))}
+
+          <MapAutoZoom routePoints={routePoints} />
+          <MapClickListener onMapClick={handleAddWaypoint} />
+        </MapContainer>
       </div>
+
+      {isHovering && (
+        <div className="absolute inset-0 z-50 bg-zinc-950/80 backdrop-blur-sm border-2 border-dashed border-zinc-500 m-4 rounded-2xl flex flex-col items-center justify-center transition-all animate-in fade-in">
+          <div className="w-16 h-16 rounded-2xl bg-zinc-200 text-zinc-900 flex items-center justify-center mb-4 shadow-lg shadow-white/10 scale-110">
+            <UploadCloud className="w-8 h-8"/>
+          </div>
+          <p className="text-zinc-200 font-medium text-lg">Drop any GPS file to Load</p>
+        </div>
+      )}
+
+      {/* floating status */}
+      {!isHovering && (
+        <div className="absolute top-6 left-6 z-40">
+          {droppedFile ? (
+            isGpx ? (
+              <div className="flex items-center gap-3 bg-zinc-900/90 backdrop-blur-md border border-emerald-500/30 px-4 py-2.5 rounded-xl shadow-lg shadow-black/50">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                <div className="flex flex-col">
+                  <span className="text-xs font-bold text-zinc-200 uppercase tracking-wider">Route Loaded</span>
+                  <span className="text-[10px] text-zinc-400 font-mono max-w-[200px] truncate" title={droppedFile}>
+                    {droppedFile}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3 bg-zinc-900/90 backdrop-blur-md border border-amber-500/30 px-4 py-2.5 rounded-xl shadow-lg shadow-black/50">
+                <Clock className="w-4 h-4 text-amber-400 animate-pulse" />
+                <div className="flex flex-col">
+                  <span className="text-xs font-bold text-zinc-200 uppercase tracking-wider">Awaiting Conversion</span>
+                  <span className="text-[10px] text-zinc-400 font-mono max-w-[200px] truncate" title={droppedFile}>
+                    {droppedFile}
+                  </span>
+                </div>
+              </div>
+            )
+          ) : (
+            <div className="flex items-center gap-3 bg-zinc-900/90 backdrop-blur-md border border-white/10 px-4 py-2.5 rounded-xl shadow-lg shadow-black/50">
+              <FileCode className="w-4 h-4 text-zinc-500" />
+              <div className="flex flex-col">
+                <span className="text-xs font-bold text-zinc-300 uppercase tracking-wider">No Route Loaded</span>
+                <span className="text-[10px] text-zinc-500">Drag any GPS file to beign</span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </main>
   );
 }
