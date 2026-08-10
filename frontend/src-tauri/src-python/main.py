@@ -145,5 +145,229 @@ def run_pipeline(
     print(f" Pipeline complete → {result}")
     return result
 
+"""
+main.py
+---------------------------------------------------------------------------
+The main entry point for the GPS Video Engine.
+Triggered by the Tauri frontend via: python main.py --config temp_job_config.json
+"""
+
+import argparse
+import json
+import sys
+from pathlib import Path
+
+# Import the core engine functions from Dev 1's modules
+from services.gpsparser import (
+    convert_nmea, 
+    clean_gps_data, 
+    convert_gps_to_pixels, 
+    export_pixels_to_json, 
+    inject_waypoints
+)
+from services.mapfetcher import calculate_bounding_box, save_map_image
+from services.route2vdo import load_route, render_route_animation
+
+def process_job(config_json_path: str):
+    print(f"🚀 Initializing Video Engine with config: {config_json_path}")
+    
+    # 1. Read the JSON config passed by the React frontend
+    try:
+        with open(config_json_path, 'r', encoding='utf-8') as f:
+            job = json.load(f)
+    except Exception as e:
+        print(f"❌ Error: Could not read config file: {e}")
+        sys.exit(1)
+
+    project_settings = job.get("project_settings", {})
+    waypoints = job.get("waypoints", [])
+    
+    input_gps = project_settings.get("input_gps_file")
+    output_mp4 = project_settings.get("output_video_file", "output.mp4")
+    
+    if not input_gps or not Path(input_gps).exists():
+        print(f"❌ Error: Input GPS file not found at {input_gps}")
+        sys.exit(1)
+
+    # Prepare a directory to store the output and intermediate cache files
+    output_dir = Path(output_mp4).parent
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    # ---------------------------------------------------------
+    # PHASE 1: Data Parsing & Cleaning
+    # ---------------------------------------------------------
+    input_path = Path(input_gps)
+    csv_path = input_gps
+    
+    # If the user uploaded a .gpx or .fit, we convert it to .csv first using GPSBabel
+    if input_path.suffix.lower() != '.csv':
+        print(f"🔄 Converting {input_path.suffix} to CSV...")
+        csv_path = str(output_dir / "converted_route.csv")
+        
+        # Dynamically guess the input format for GPSBabel based on file extension
+        in_fmt = "gpx" if input_path.suffix.lower() == ".gpx" else "nmea"
+        
+        convert_nmea(
+            input_file=input_gps, 
+            output_file=csv_path, 
+            output_format="csv", 
+            input_format=in_fmt
+        )
+
+    print("🧹 Cleaning GPS data...")
+    data = clean_gps_data(csv_path)
+    route_df = data["route"]
+    
+    if route_df.empty:
+        print("❌ Error: No valid GPS coordinates found after cleaning.")
+        sys.exit(1)
+
+    # ---------------------------------------------------------
+    # PHASE 2: Map Fetching & Projection
+    # ---------------------------------------------------------
+    print("🗺️ Fetching OpenStreetMap background...")
+    bbox = calculate_bounding_box(route_df)
+    map_bg_path = str(output_dir / "map_bg.png")
+    
+    # Generate the 16:9 background map image
+    extent, img_w, img_h = save_map_image(bbox, output_filename=map_bg_path)
+
+    print("📐 Converting Latitude/Longitude to Image Pixels...")
+    pixel_points = convert_gps_to_pixels(route_df, extent, map_bg_path)
+
+    # ---------------------------------------------------------
+    # PHASE 3: Waypoint Injection & JSON Export
+    # ---------------------------------------------------------
+    print(f"📍 Injecting {len(waypoints)} landmarks/popups from frontend...")
+    # This requires the inject_waypoints function we wrote earlier inside gpsparser.py
+    labels, popups = inject_waypoints(route_df, waypoints)
+
+    final_route_json = str(output_dir / "final_route.json")
+    print("💾 Exporting animation math to JSON...")
+    export_pixels_to_json(
+        pixel_points=pixel_points,
+        labels=labels,
+        popups=popups,
+        output_json_path=final_route_json,
+        settings={
+            "fps": project_settings.get("fps", 30),
+            "duration_seconds": 10.0 # You can make this dynamic later
+        }
+    )
+
+    # ---------------------------------------------------------
+    # PHASE 4: Video Rendering
+    # ---------------------------------------------------------
+    print("🎬 Starting video render using OpenCV and FFmpeg...")
+    points, loaded_labels, loaded_popups, settings = load_route(final_route_json)
+    
+    render_route_animation(
+        img_path=map_bg_path,
+        points=points,
+        labels=loaded_labels,
+        popups=loaded_popups,
+        output_path=output_mp4,
+        fps=settings.get("fps", 30),
+        duration_seconds=settings.get("duration_seconds", 10.0),
+        pause_seconds=2.0  # Time to pause at the very end of the video
+    )
+
+    print("✅ Render Complete! Video saved successfully.")
+
+
+import json
+import argparse
+
+def run_from_ui_config(config_path: str):
+    """
+    Reads the job_config.json generated by the Tauri React frontend, 
+    processes the raw GPS file, maps the UI waypoints to the route, 
+    and triggers the video renderer.
+    """
+    print(f"\n🚀 IGNITION SEQUENCE START: Loading config from {config_path}")
+    
+    with open(config_path, "r", encoding="utf-8") as f:
+        config = json.load(f)
+
+    project_name = config.get("project_name", "Exported_Video")
+    nmea_file = config["source_files"]["gps_route"]
+    ui_waypoints = config.get("waypoints", [])
+
+    # File paths for the intermediate processing
+    csv_path = "data/temp/gps_log.csv"
+    map_image_path = "data/temp/final_map.jpeg"
+    output_video = f"data/outputs/{project_name.replace(' ', '_')}.mp4"
+    
+    Path(csv_path).parent.mkdir(parents=True, exist_ok=True)
+    Path(output_video).parent.mkdir(parents=True, exist_ok=True)
+
+    # 1. Process the raw GPS file (assuming GPX/NMEA)
+    print("📍 Step 1: Parsing GPS File...")
+    # NOTE: Dev 1 used "iblue747", but if you are dropping GPX files, gpsbabel format is "gpx"
+    track_csv = convert_nmea(nmea_file, csv_path, "gpx") 
+    gps_data = clean_gps_data(track_csv)
+    route_df = gps_data["route"]
+
+    # 2. Generate the background map
+    print("🗺️ Step 2: Generating Map...")
+    padded_box = calculate_bounding_box(route_df, padding_percent=0.15)
+    map_extent, img_w, img_h = save_map_image(
+        bounding_box=padded_box,
+        output_filename=map_image_path,
+        output_size=(1920, 1080),
+        max_zoom=19,
+    )
+
+    # 3. Convert the entire route line into X/Y pixels
+    print("📏 Step 3: Calculating pixel paths...")
+    full_route_pixels = convert_gps_to_pixels(
+        route_df=route_df,
+        extent=map_extent,
+        image_path=map_image_path,
+    )
+
+    # 4. Map our UI waypoints to the closest GPS point on the route
+    print("🎯 Step 4: Aligning UI Waypoints...")
+    labels = [None] * len(full_route_pixels)
+    popups = [None] * len(full_route_pixels)
+
+    for wp in ui_waypoints:
+        # Find the point in the dataframe with the closest Lat/Lng to our click
+        distances = ((route_df["latitude"] - wp["lat"])**2 + (route_df["longitude"] - wp["lng"])**2)
+        closest_idx = distances.idxmin()
+        
+        labels[closest_idx] = wp.get("label")
+        
+        # Prepare the popup data if an image or freeze exists
+        if wp.get("popup_image") or wp.get("freeze_seconds"):
+            popups[closest_idx] = {
+                "freeze_seconds": wp.get("freeze_seconds", 3.0),
+                "popup_image": wp.get("popup_image", ""),
+                "narration": wp.get("narration", "") # Saved for Dev 1's future audio integration!
+            }
+
+    # 5. Render the final video!
+    print(f"🎬 Step 5: Rendering {project_name}...")
+    result = render_route_animation(
+        img_path=map_image_path,
+        points=[list(p) for p in full_route_pixels],
+        labels=labels,
+        popups=popups,
+        output_path=output_video,
+        duration_seconds=10.0,
+        fps=30
+    )
+    
+    print(f"\n🎉 DONE! Video saved to {result}")
+
 if __name__ == "__main__":
-    run_pipeline("src-tauri\\src-python\\data\\inputs\\gpsdata\\rawdata\\LOG00002.TXT", device_format="iblue747")
+    # Setup argparse so Rust can call: python main.py --config job_config.json
+    parser = argparse.ArgumentParser(description="GPS Studio Video Renderer")
+    parser.add_argument("--config", type=str, help="Path to the job_config.json file")
+    
+    args = parser.parse_args()
+    
+    if args.config:
+        run_from_ui_config(args.config)
+    else:
+        print("No config provided. Use --config path/to/job_config.json")
