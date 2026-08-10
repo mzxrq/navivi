@@ -1,0 +1,24 @@
+{
+  "project_name": "Untitled Project",
+  "source_files": {
+    "gps_route": null
+  },
+  "waypoints": [
+    {
+      "lat": 34.582344417658376,
+      "lng": 135.48374176025393,
+      "label": "阪神高速15号堺線",
+      "freeze_seconds": 3,
+      "popup_image": null,
+      "narration": ""
+    },
+    {
+      "lat": 34.60438909041995,
+      "lng": 135.4930114746094,
+      "label": "大阪市",
+      "freeze_seconds": 3,
+      "popup_image": null,
+      "narration": ""
+    }
+  ]
+}

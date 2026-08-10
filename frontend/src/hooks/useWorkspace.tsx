@@ -10,6 +10,8 @@ export type Waypoint = {
 };
 
 type WorkspaceContextType = {
+    projectName: string;
+    setProjectName: (name: string) => void;
     routeFile: string | null;
     setRouteFile: (path: string | null) => void;
     waypoints: Waypoint[];
@@ -20,6 +22,7 @@ type WorkspaceContextType = {
 const WorkspaceContext = createContext<WorkspaceContextType | undefined>(undefined);
 
 export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
+    const [projectName, setProjectName] = useState("Untitled Project");
     const [routeFile, setRouteFile] = useState<string | null>(null);
     const [waypoints, setWaypoints] = useState<Waypoint[]>([]);
     const updateWaypoint = (id: string, updates: Partial<Waypoint>) => {
@@ -29,7 +32,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     };
 
     return (
-      <WorkspaceContext.Provider value={{ routeFile, setRouteFile, waypoints, setWaypoints, updateWaypoint }}>
+      <WorkspaceContext.Provider value={{ projectName, setProjectName, routeFile, setRouteFile, waypoints, setWaypoints, updateWaypoint }}>
         {children}
       </WorkspaceContext.Provider>
     );
