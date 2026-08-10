@@ -1,7 +1,8 @@
+import { useWorkspace } from '../hooks/useWorkspace';
 import { useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { readTextFile } from '@tauri-apps/plugin-fs';
-import { MapContainer, Polyline, TileLayer, useMap, useMapEvents, Marker } from "react-leaflet";
+import { MapContainer, Polyline, TileLayer, useMap, useMapEvents, Marker, Tooltip } from "react-leaflet";
 import L from 'leaflet';
 import { Clock, UploadCloud, CheckCircle2, FileCode } from "lucide-react";
 
@@ -54,7 +55,30 @@ export function MapArea() {
   const [droppedFile, setDroppedFile] = useState<string | null>(null);
   const [isHovering, setIsHovering] = useState(false);
   const [routePoints, setRoutePoints] = useState<[number, number][]>([]);
-  const [waypoints, setWaypoints] = useState<[number, number][]>([]);
+  const { waypoints, setWaypoints } = useWorkspace();
+
+  const handleAddWaypoint = async (lat: number, lng: number) => {
+    // Unique ID for marker
+    const newId = Math.random().toString(36).substring(7);
+    // add to map
+    setWaypoints((prev) => [...prev, { id: newId, lat, lng, name: 'Locating...', image: null, narration: ''}]);
+    // get Location
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
+      const data = await res.json();
+      // grab point name
+      const placeName = data.name || data.address?.road || data.address?.city || 'Waypoint ${newId.substring(0,4).toUpperCase()}';
+      // update waypoint with real name
+      setWaypoints((prev) =>
+        prev.map((wp) => (wp.id === newId ? { ...wp, name: placeName } : wp))
+      );
+    } catch (error) {
+      setWaypoints((prev) =>
+        prev.map((wp) => (wp.id === newId ? { ...wp, name: 'Unknown Location' } : wp))
+      );
+    }
+
+  }
 
   // drag and drop
   useEffect(() => {
@@ -109,10 +133,6 @@ export function MapArea() {
     }
   }, [droppedFile]);
 
-  const handleAddWaypoint = (lat: number, lng: number) => {
-    setWaypoints((prev) => [...prev, [lat, lng]]);
-  }
-
   // determine file status
   const isGpx = droppedFile?.toLowerCase().endsWith('.gpx');
 
@@ -127,7 +147,7 @@ export function MapArea() {
         >
           <TileLayer
             attribution="&copy; OpenStreetMap contributors &copy; CARTO"
-            url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}/{r}.png"
+            url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
           />
 
           {routePoints.length > 0 && (
@@ -137,8 +157,13 @@ export function MapArea() {
             />
           )}
 
-          {waypoints.map((pos, idx) => (
-            <Marker key={idx} position={pos} icon={waypointIcon} />
+          {/* Draw waypoints */}
+          {waypoints.map((wp) => (
+            <Marker key={wp.id} position={[wp.lat, wp.lng]} icon={waypointIcon}>
+              <Tooltip direction="top" offset={[0, -10]} opacity={1} permanent>
+                {wp.name}
+              </Tooltip>
+            </Marker>
           ))}
 
           <MapAutoZoom routePoints={routePoints} />

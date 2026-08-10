@@ -47,3 +47,24 @@ body {
 .leaflet-control-attribution span[aria-hidden="true"] {
   display: none !important;
 }
+
+/* --- Custom Leaflet Dark Tooltips --- */
+.leaflet-tooltip {
+  background-color: #18181b !important; /* Tailwind bg-zinc-900 */
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  color: #e4e4e7 !important; /* Tailwind text-zinc-200 */
+  border-radius: 8px !important;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5) !important;
+  font-weight: 600 !important;
+  font-family: inherit !important;
+  padding: 4px 8px !important;
+}
+
+/* Fix the little triangle pointing down so it matches the dark background */
+.leaflet-tooltip-top:before {
+  border-top-color: rgba(255, 255, 255, 0.1) !important;
+  margin-bottom: -1px;
+}
+.leaflet-tooltip-bottom:before {
+  border-bottom-color: rgba(255, 255, 255, 0.1) !important;
+}
