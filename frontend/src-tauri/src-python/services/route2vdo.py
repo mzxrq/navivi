@@ -197,7 +197,7 @@ def render_route_animation(
                     "label": labels[i]  # Include the label for the popup box
                 })
 
-    print(f"🎬 Rendering Phase 1: Big Picture ({duration_seconds}s)")
+    print(f"Rendering Phase 1: Big Picture ({duration_seconds}s)")
     for p in smooth_path:
         frame = base_img.copy()
         path_history.append((int(p[0]), int(p[1])))
@@ -269,7 +269,7 @@ def render_route_animation(
     # PHASE 2: THE PAUSE
     # ==========================================
     pause_frames = int(pause_seconds * fps)
-    print(f"⏸️  Pausing for {pause_seconds}s")
+    print(f"Pausing for {pause_seconds}s")
     for _ in range(pause_frames):
         video.write(last_frame)
 
@@ -278,7 +278,7 @@ def render_route_animation(
     # ==========================================
     if res_sequence:
         for i, res_data in enumerate(res_sequence):
-            print(f"🏡 Rendering Residential Map {i+1}/{len(res_sequence)}")
+            print(f" Rendering Residential Map {i+1}/{len(res_sequence)}")
             
             res_img = cv2.imread(res_data["img_path"])
             res_points = res_data["points"]
@@ -328,13 +328,13 @@ def render_route_animation(
                     video.write(last_frame)
 
     video.release()
-    print("✅ Frames written ✓")
+    print(" Frames written ✓")
 
     output_path = str(output_path)
     if output_path.lower().endswith(".mp4") and reencode_to_h264(tmp_avi, output_path):
         os.remove(tmp_avi)
         total_dur = duration_seconds + pause_seconds + (len(res_sequence) * res_duration_per_slice if res_sequence else 0)
-        print(f"🎥 Saved Final Video → '{output_path}' ({total_dur}s total, H.264)")
+        print(f"Saved Final Video → '{output_path}' ({total_dur}s total, H.264)")
     else:
         avi_out = str(Path(output_path).with_suffix(".avi"))
         os.rename(tmp_avi, avi_out)

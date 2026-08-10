@@ -40,7 +40,7 @@ def convert_gps_file(input_file, output_filename, output_format, input_format=No
         raise FileNotFoundError(f"Input file not found: {input_file}")
 
     # 1.3 : Auto-generate date, time, sequence number, and _raw suffix for output path
-    target_dir = Path("src-tauri/src-python/data/inputs/gpsdata/processdata/csv")
+    target_dir = Path("data/inputs/gpsdata/processdata/csv")
     target_dir.mkdir(parents=True, exist_ok=True)
 
     datetime_str = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -188,7 +188,15 @@ def clean_gps_data(csv_path: str, save_output: bool = True) -> dict:
         # Calculate minutes as string for the label
         mins_spent = (route_df.loc[long_stops, 'stop_duration_sec'] // 60).astype(int).astype(str)
         route_df.loc[long_stops, 'store_name'] = "Detected Stop (" + mins_spent + " mins)"
-        route_df.loc[long_stops, 'img_url'] = ""
+        # NOTE: img_url is intentionally left as NaN (pd.NA), not "". At this
+        # stage no residential map has been rendered yet — that happens later
+        # in main.save_route_video() via mapfetcher.generate_residential_map_
+        # series_by_landmark(). Using "" here reads as "resolved/no image"
+        # both to pandas' truthiness checks AND to a human reading the CSV,
+        # which caused the resulting popup image path to be silently dropped
+        # downstream in export_to_frontend_json(). NaN honestly represents
+        # "not yet generated" until the video pipeline stage fills it in.
+        route_df.loc[long_stops, 'img_url'] = pd.NA
         route_df.loc[long_stops, 'is_landmarked'] = True
 
         # Clean up temporary processing columns
@@ -305,9 +313,9 @@ def export_to_frontend_json(
         "waypoints": waypoints_list
     }
 
-    # 4. Save JSON to the target directory: src-tauri/src-python/data/inputs/gpsdata/processdata/json
+    # 4. Save JSON to the target directory: data/inputs/gpsdata/processdata/json
     if save_json:
-        json_dir = Path("src-tauri/src-python/data/inputs/gpsdata/processdata/json")
+        json_dir = Path("data/inputs/gpsdata/processdata/json")
         json_dir.mkdir(parents=True, exist_ok=True)
 
         saved_paths = cleaned_data.get("saved_paths", {})
@@ -325,9 +333,197 @@ def export_to_frontend_json(
 
     return payload
 
+def convert_gps_to_pixels(route_df: pd.DataFrame, extent: tuple, image_path: str) -> list:
+    """
+    Translates GPS Latitude/Longitude coordinates into exact X/Y pixel locations 
+    on the generated map image.
+    """
+    print("Translating GPS coordinates to image pixels...")
+    
+    # 1. Load the image using OpenCV to get its exact pixel dimensions
+    img = cv2.imread(image_path)
+    if img is None:
+        raise FileNotFoundError(f" Could not find image at {image_path}")
+        
+    img_h, img_w, _ = img.shape
+    print(f"Detected map image size: {img_w}x{img_h} pixels")
+    
+    # 2. Extract the Web Mercator boundaries from the contextily extent
+    # extent format is (min_x, max_x, min_y, max_y)
+    xmin, xmax, ymin, ymax = extent
+    
+    # 3. Set up the coordinate transformer
+    # epsg:4326 is standard GPS (Lat/Lon)
+    # epsg:3857 is Web Mercator (Flat map in meters, which contextily uses)
+    transformer = pyproj.Transformer.from_crs("epsg:4326", "epsg:3857", always_xy=True)
+    
+    pixel_coordinates = []
+    
+    # 4. Loop through every GPS point in the route
+    for index, row in route_df.iterrows():
+        lon = row['longitude']
+        lat = row['latitude']
+        
+        # Step A: Convert Lat/Lon to flat map meters
+        merc_x, merc_y = transformer.transform(lon, lat)
+        
+        # Step B: Convert map meters to a percentage across the image (0.0 to 1.0)
+        percent_x = (merc_x - xmin) / (xmax - xmin)
+        
+        # Y is inverted! In math, Y goes up. In image pixels, Y=0 is the TOP of the image and goes down.
+        percent_y = (ymax - merc_y) / (ymax - ymin)
+        
+        # Step C: Multiply the percentage by the actual pixel width/height
+        pixel_x = int(percent_x * img_w)
+        pixel_y = int(percent_y * img_h)
+
+        pixel_coordinates.append((pixel_x, pixel_y))
+
+    print(f" Successfully translated {len(pixel_coordinates)} points to pixels!")
+    return pixel_coordinates
 
 
+def _lat_lng_to_world_pixels(lat: float, lng: float, zoom_level: int) -> tuple[float, float]:
+    world_size = 256 * (2**zoom_level)
+    x = (lng + 180.0) / 360.0 * world_size
+
+    sin_lat = math.sin(math.radians(lat))
+    y = (0.5 - math.log((1 + sin_lat) / (1 - sin_lat)) / (4 * math.pi)) * world_size
+    return x, y
 
 
+def convert_gps_to_google_maps_pixels(
+    route_df: pd.DataFrame,
+    center_lat: float,
+    center_lng: float,
+    zoom_level: int,
+    image_path: str,
+) -> list:
+    """Translate GPS coordinates into pixel coordinates for a Google Maps screenshot."""
+    print("Translating GPS coordinates to Google Maps screenshot pixels...")
+
+    img = cv2.imread(image_path)
+    if img is None:
+        raise FileNotFoundError(f" Could not find image at {image_path}")
+
+    img_h, img_w, _ = img.shape
+    print(f"Detected follow screenshot size: {img_w}x{img_h} pixels")
+
+    center_world_x, center_world_y = _lat_lng_to_world_pixels(center_lat, center_lng, zoom_level)
+    pixel_coordinates = []
+
+    for _, row in route_df.iterrows():
+        lon = row["longitude"]
+        lat = row["latitude"]
+
+        world_x, world_y = _lat_lng_to_world_pixels(lat, lon, zoom_level)
+
+        pixel_x = int((world_x - center_world_x) + (img_w / 2.0))
+        pixel_y = int((world_y - center_world_y) + (img_h / 2.0))
+        pixel_coordinates.append((pixel_x, pixel_y))
+
+    print(f" Successfully translated {len(pixel_coordinates)} points to Google Maps pixels!")
+    return pixel_coordinates
 
 
+def export_pixels_to_json(
+    pixel_points: list,
+    labels: list,
+    popups: list = None, # type: ignore
+    output_json_path: str = "data/route.json",
+    settings: dict | None = None,
+):
+    """
+    Takes the translated X/Y pixel coordinates, labels, and popups, 
+    and packages them into the JSON format expected by the video script.
+    """
+    print(f"Exporting {len(pixel_points)} points to {output_json_path}...")
+    
+    route_list = []
+    
+    # Safely handle the popups list if it wasn't provided
+    if popups is None:
+        popups = [None] * len(pixel_points)
+
+    for i, ((x, y), label) in enumerate(zip(pixel_points, labels)):
+        point_data = {"x": x, "y": y}
+
+        # Handle the label
+        if not pd.isna(label) and str(label).strip() != "":
+            point_data["label"] = str(label)
+            
+        # --- NEW: Handle the Freeze and Image formatting ---
+        if popups[i] is not None:
+            if popups[i].get("freeze_seconds"):
+                point_data["freeze_seconds"] = popups[i]["freeze_seconds"]
+            if popups[i].get("popup_image") and str(popups[i]["popup_image"]).strip() != "":
+                point_data["popup_image"] = str(popups[i]["popup_image"])
+                
+        route_list.append(point_data)
+        
+    default_settings = {
+        "duration_seconds": 10.0,
+        "fps": 30,
+        "line_color": [0, 200, 255],
+        "line_thickness": 8,
+        "marker_color": [0, 0, 255],
+        "marker_radius": 15,
+        "overview_seconds": 2.0,
+        "follow_zoom_level": 17,
+        "follow_viewport_size": [1280, 900],
+        "follow_wait_ms": 5000,
+        "camera_lookahead_frames": 28,
+        "simplify_tolerance": 3.0,
+    }
+
+    final_json_data = {
+        "route": route_list,
+        "settings": {**default_settings, **(settings or {})},
+    }
+    
+    with open(output_json_path, "w", encoding="utf-8") as f:
+        json.dump(final_json_data, f, indent=4)
+        
+    print(f" JSON successfully saved to: {output_json_path}")
+    return output_json_path
+
+def split_route_by_landmarks(route_df: pd.DataFrame) -> list[pd.DataFrame]:
+    """
+    Partitions the cleaned route into contiguous segments, one per detected
+    landmark (long stop). Guarantees len(result) == number of landmarked
+    rows, so residential maps generated 1:1 from this list always match the
+    waypoint count in the exported JSON.
+
+    Each chunk = (previous landmark, current landmark] i.e. it INCLUDES the
+    landmark row itself as the terminal point of that segment. Any trailing
+    rows after the final landmark (no landmark follows them) are folded
+    into the last chunk rather than being dropped or spawning an orphan
+    segment with no corresponding waypoint.
+    """
+    if "is_landmarked" not in route_df.columns:
+        raise ValueError(
+            "route_df is missing 'is_landmarked' — run clean_gps_data() first."
+        )
+
+    # Reset index so positional slicing (iloc) is unambiguous regardless of
+    # upstream filtering/sorting that left gaps in the original index.
+    df = route_df.reset_index(drop=True)
+    landmark_positions = df.index[df["is_landmarked"]].tolist()
+
+    if not landmark_positions:
+        # No landmarks detected -> nothing to split on. Caller decides
+        # whether to fall back to a single whole-route slice.
+        return []
+
+    chunks: list[pd.DataFrame] = []
+    prev = 0
+    for pos in landmark_positions:
+        chunks.append(df.iloc[prev:pos + 1].copy())
+        prev = pos + 1
+
+    # Fold any post-final-landmark tail into the last chunk so the
+    # invariant len(chunks) == len(landmark_positions) always holds.
+    if prev < len(df):
+        chunks[-1] = pd.concat([chunks[-1], df.iloc[prev:]], ignore_index=True)
+
+    return chunks

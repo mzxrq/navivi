@@ -14,6 +14,7 @@ import contextily as cx
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from datetime import datetime
 
 # Dynamically resolve the path to src-python/data/caches
 CACHE_DIR = Path(__file__).resolve().parent.parent / "data" / "caches"
@@ -296,7 +297,20 @@ def generate_residential_map_series(
     print(f"🔪 Slicing route into {num_slices} segments (target: {points_per_slice} points/slice)...")
     
     os.makedirs(output_dir, exist_ok=True)
-    
+
+    # Collision-safe naming: {prefix}_{date}_{time}_{seq:02d}.png, matching
+    # the convention used everywhere else in the pipeline (filehandler.
+    # store_raw_file_with_datetime, gpsparser.convert_gps_file/clean_gps_data,
+    # and the sibling generate_residential_map_series_by_landmark below).
+    # One timestamp is captured per *call* (not per file) — files produced
+    # by the same batch share a time and are disambiguated only by the
+    # sequence suffix, exactly like store_raw_file_with_datetime's pattern.
+    # Without this, two consecutive runs against the same output_dir /
+    # output_prefix would overwrite each other's residential maps, since
+    # the old scheme (f"{output_prefix}_{i+1}.png") only encoded a slice
+    # index with no time component at all.
+    datetime_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+
     # --- THE FIX: Use pure Pandas to chunk the data safely ---
     chunks = [route_df.iloc[i : i + points_per_slice] for i in range(0, total_points, points_per_slice)]
     
@@ -324,8 +338,24 @@ def generate_residential_map_series(
         if chunk_radius < 300:
             chunk_radius = 300
             
-        out_name = os.path.join(output_dir, f"{output_prefix}_{i+1}.png")
-        
+        # Probe sequence numbers 01-99 for this timestamp so re-runs within
+        # the same second (or reusing the same prefix/dir) never clobber
+        # a previously rendered slice — same pattern as
+        # filehandler.store_raw_file_with_datetime and
+        # generate_residential_map_series_by_landmark.
+        out_path = None
+        for seq in range(1, 100):
+            candidate = Path(output_dir) / f"{output_prefix}_{datetime_str}_{seq:02d}.png"
+            if not candidate.exists():
+                out_path = candidate
+                break
+        if out_path is None:
+            raise FileExistsError(
+                f"Could not generate a unique filename for residential slice {i+1} "
+                f"(99 files already exist for {datetime_str})."
+            )
+        out_name = str(out_path)
+
         print(f"\n--- Generating Map {i+1}/{num_slices} (contains {len(chunk)} points) ---")
         
         # 4. Call your existing function for this chunk
@@ -345,4 +375,74 @@ def generate_residential_map_series(
         })
         
     print(f"\n Finished generating {num_slices} residential maps!")
+    return results
+
+def generate_residential_map_series_by_landmark(
+    route_chunks: list[pd.DataFrame],
+    source_filename: str,
+    output_dir: str = "data/outputs",
+    output_size: tuple[int, int] = (1920, 1080),
+) -> list[dict]:
+    """
+    One residential map per landmark chunk (from split_route_by_landmarks),
+    centered on that landmark's own coordinates. File naming follows the
+    project-wide convention: {source_stem}_{date}_{time}_{seq}_res{N}.png,
+    so waypoints[N-1] in the exported JSON always maps to res{N}.png.
+    """
+    os.makedirs(output_dir, exist_ok=True)
+    datetime_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+    base_stem = Path(source_filename).stem  # traceability back to source log
+
+    results = []
+    for res_num, chunk in enumerate(route_chunks, start=1):
+        landmarked_rows = chunk[chunk["is_landmarked"]]
+        if landmarked_rows.empty:
+            # Should never happen given split_route_by_landmarks' contract,
+            # but fail loudly rather than silently mis-centering the image.
+            raise ValueError(f"Chunk {res_num} has no landmark row to center on.")
+        landmark_row = landmarked_rows.iloc[-1]
+        center_lat = float(landmark_row["latitude"])
+        center_lon = float(landmark_row["longitude"])
+
+        # Radius sized to fully contain the chunk's approach path, not just
+        # the landmark point itself, reusing the existing padding heuristic.
+        min_lat, max_lat = chunk["latitude"].min(), chunk["latitude"].max()
+        min_lon, max_lon = chunk["longitude"].min(), chunk["longitude"].max()
+        meters_per_deg_lat = 111_320.0
+        meters_per_deg_lon = 111_320.0 * math.cos(math.radians(center_lat))
+        lat_span_m = (max_lat - min_lat) * meters_per_deg_lat
+        lon_span_m = (max_lon - min_lon) * meters_per_deg_lon
+        radius = max(int(max(lat_span_m, lon_span_m) / 2.0 * 1.2), 300)
+
+        # Collision-safe filename: probe sequence numbers 01-99 the same
+        # way filehandler.store_raw_file_with_datetime does.
+        out_path = None
+        for seq in range(1, 100):
+            candidate = f"{base_stem}_{datetime_str}_{seq:02d}_res{res_num:02d}.png"
+            candidate_path = Path(output_dir) / candidate
+            if not candidate_path.exists():
+                out_path = candidate_path
+                break
+        if out_path is None:
+            raise FileExistsError(
+                f"Could not generate a unique filename for residential map #{res_num}."
+            )
+
+        print(f"🏘️  Residential map {res_num}/{len(route_chunks)} → {out_path.name}")
+        extent = get_residential_map(
+            lat=center_lat,
+            lon=center_lon,
+            radius_meters=radius,
+            output_filename=str(out_path),
+            output_size=output_size,
+        )
+
+        results.append({
+            "chunk_df": chunk,
+            "map_file": str(out_path),
+            "extent": extent,
+            "center": (center_lat, center_lon),
+            "residential_number": res_num,
+        })
+
     return results
