@@ -236,16 +236,22 @@ def get_residential_map(
         n += expansion
 
     # 3. CONFIGURE TILE PROVIDER
-    provider = cx.providers.CartoDB.Voyager  # type: ignore
+    provider = cx.providers.CartoDB.Voyager  
     
     os.makedirs(CACHE_DIR, exist_ok=True)
     cx.set_cache_dir(str(CACHE_DIR))
 
-    optimal_zoom = 18
+    # --- NEW DYNAMIC ZOOM CALCULATION ---
+    # Find the maximum zoom that keeps the total tile download under 40 tiles
+    max_zoom = 19
+    optimal_zoom = max_zoom
+    for z in range(max_zoom, 0, -1):
+        if cx.howmany(w, s, e, n, z, ll=True) <= 40:
+            optimal_zoom = z
+            break
+    # ------------------------------------
 
-    print("Fetching high-detail map tiles...")
-    img = None
-    extent = None
+    print(f"Fetching high-detail map tiles (Optimal Zoom: {optimal_zoom})...")
     
     while optimal_zoom > 0:
         try:
@@ -297,18 +303,6 @@ def generate_residential_map_series(
     print(f"🔪 Slicing route into {num_slices} segments (target: {points_per_slice} points/slice)...")
     
     os.makedirs(output_dir, exist_ok=True)
-
-    # Collision-safe naming: {prefix}_{date}_{time}_{seq:02d}.png, matching
-    # the convention used everywhere else in the pipeline (filehandler.
-    # store_raw_file_with_datetime, gpsparser.convert_gps_file/clean_gps_data,
-    # and the sibling generate_residential_map_series_by_landmark below).
-    # One timestamp is captured per *call* (not per file) — files produced
-    # by the same batch share a time and are disambiguated only by the
-    # sequence suffix, exactly like store_raw_file_with_datetime's pattern.
-    # Without this, two consecutive runs against the same output_dir /
-    # output_prefix would overwrite each other's residential maps, since
-    # the old scheme (f"{output_prefix}_{i+1}.png") only encoded a slice
-    # index with no time component at all.
     datetime_str = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     # --- THE FIX: Use pure Pandas to chunk the data safely ---
@@ -335,14 +329,9 @@ def generate_residential_map_series(
         chunk_radius = int(chunk_radius * 1.2)
         
         # Enforce a minimum radius so it still looks like a "residential" zoom level
-        if chunk_radius < 300:
-            chunk_radius = 300
+        if chunk_radius < 100: # Changed from 300 to allow tighter zooms
+            chunk_radius = 100
             
-        # Probe sequence numbers 01-99 for this timestamp so re-runs within
-        # the same second (or reusing the same prefix/dir) never clobber
-        # a previously rendered slice — same pattern as
-        # filehandler.store_raw_file_with_datetime and
-        # generate_residential_map_series_by_landmark.
         out_path = None
         for seq in range(1, 100):
             candidate = Path(output_dir) / f"{output_prefix}_{datetime_str}_{seq:02d}.png"
@@ -404,15 +393,16 @@ def generate_residential_map_series_by_landmark(
         center_lat = float(landmark_row["latitude"])
         center_lon = float(landmark_row["longitude"])
 
-        # Radius sized to fully contain the chunk's approach path, not just
-        # the landmark point itself, reusing the existing padding heuristic.
+        # Radius sized to fully contain the chunk's approach path
         min_lat, max_lat = chunk["latitude"].min(), chunk["latitude"].max()
         min_lon, max_lon = chunk["longitude"].min(), chunk["longitude"].max()
         meters_per_deg_lat = 111_320.0
         meters_per_deg_lon = 111_320.0 * math.cos(math.radians(center_lat))
         lat_span_m = (max_lat - min_lat) * meters_per_deg_lat
         lon_span_m = (max_lon - min_lon) * meters_per_deg_lon
-        radius = max(int(max(lat_span_m, lon_span_m) / 2.0 * 1.2), 300)
+        
+        # Changed minimum from 300 to 100
+        radius = max(int(max(lat_span_m, lon_span_m) / 2.0 * 1.2), 100)
 
         # Collision-safe filename: probe sequence numbers 01-99 the same
         # way filehandler.store_raw_file_with_datetime does.
