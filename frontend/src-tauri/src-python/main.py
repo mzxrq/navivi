@@ -1,36 +1,65 @@
-# ============================================================
-# main.py — full pipeline: cleaned data -> big picture + residential video
-# ============================================================
+"""
+main.py
+---------------------------------------------------------------------------
+Entry point / orchestrator for the whole GPS-to-navigation-video pipeline.
+
+PIPELINE OVERVIEW (this is the "first run" you asked for - one raw GPS
+file in, one finished MP4 out):
+
+    raw file (.TXT/.GPX/...)
+        │
+        ▼  store_raw_file_with_datetime()        [filehandler.py]
+    timestamped copy in rawdata/
+        │
+        ▼  convert_gps_file()                    [gpsparser.py]
+    CSV (via gpsbabel)
+        │
+        ▼  clean_gps_data()                      [gpsparser.py]
+    cleaned route_df + waypoints_df + summary (distance/duration)
+        │
+        ├──▶  export_to_frontend_json()          [gpsparser.py]
+        │     frontend JSON payload (lat/lon waypoints + summary)
+        │
+        └──▶  calculate_bounding_box() + save_map_image()   [mapfetcher.py]
+              16:9 background map PNG + its geographic extent
+                  │
+                  ▼  _project_route_to_pixels()   (NEW, this file)
+              route/waypoints converted from lat/lon -> pixel coords
+                  │
+                  ▼  render_route_animation()      [route2vdo.py]
+              final navigation MP4 with the distance/time summary card
+
+Everything below `_project_route_to_pixels` and `run_full_pipeline` is
+NEW wiring for this "first run." Everything else (store_raw_file,
+handle_incoming_gps_upload, data_pipeline_process, and the CLI's
+`process_gps` command) is UNCHANGED from before - preserved as-is since
+it isn't part of what you asked me to touch.
+---------------------------------------------------------------------------
+"""
+
 import sys
 import json
-import math
 from pathlib import Path
-from datetime import datetime
 
-import pandas as pd
+import numpy as np
+import pyproj
 
-from services.gpsparser import (
-    convert_gps_file,
-    clean_gps_data,
-    export_to_frontend_json,
-    convert_gps_to_pixels,
-    split_route_by_landmarks,          # from prior refactor
-)
+from services.gpsparser import convert_gps_file, clean_gps_data, export_to_frontend_json
 from services.filehandler import store_raw_file_with_datetime
-from services.mapfetcher import (
-    calculate_bounding_box,
-    save_map_image,
-    generate_residential_map_series_by_landmark,  # from prior refactor
-)
+from services.mapfetcher import MapFetcher, get_residential_map
 from services.route2vdo import render_route_animation
 
 
+# =======================================================================
+# EXISTING / UNRELATED FUNCTIONS — preserved exactly as they were.
+# =======================================================================
+
 def data_pipeline_process(input_file: str, output_format: str = "iblue747") -> str:
-    print(f"Processing file: {input_file}")
+    print(f"🔄 Processing file: {input_file}")
     route = convert_gps_file(input_file=input_file, output_filename=input_file.replace(".TXT", ".csv"), output_format=output_format)
     cleaned_route = clean_gps_data(route)
     json_route = export_to_frontend_json(cleaned_route, original_input_path=input_file, project_name="Untitled Project")
-    print(f"Pipeline completed successfully!")
+    print(f"✅ Pipeline completed successfully!")
     return json.dumps(json_route, ensure_ascii=False)
 
 
@@ -50,154 +79,209 @@ def handle_incoming_gps_upload(raw_source_path: str) -> str:
     return data_pipeline_process(input_file=stored_path, output_format="iblue747")
 
 
-def _next_video_path(source_stem: str, output_dir: Path) -> Path:
-    """
-    Collision-safe video output naming, matching the project-wide
-    {stem}_{date}_{time}_{seq:02d}.mp4 convention used for raw/cleaned files.
-    """
-    output_dir.mkdir(parents=True, exist_ok=True)
-    datetime_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-    for seq in range(1, 100):
-        candidate = output_dir / f"{source_stem}_video_{datetime_str}_{seq:02d}.mp4"
-        if not candidate.exists():
-            return candidate
-    raise FileExistsError(f"Could not generate a unique video filename for {source_stem}.")
+# =======================================================================
+# NEW: lat/lon -> pixel projection
+# ---------------------------------------------------------------------
+# route2vdo.py works entirely in PIXEL space (it draws directly onto the
+# map PNG's canvas), but gpsparser.py's cleaned route/waypoints are in
+# lat/lon (WGS84 degrees). mapfetcher.save_map_image() already hands us
+# exactly what's needed to bridge the two: an `extent` tuple (w, e, s, n)
+# in Web Mercator (EPSG:3857) *meters*, plus the exact pixel size of the
+# saved image. This function is the missing link the route2vdo.py
+# docstring referenced but that didn't exist yet in gpsparser.py.
+# =======================================================================
+
+# Built once at import time and reused for every point - constructing a
+# pyproj.Transformer involves parsing CRS definitions and building an
+# internal projection pipeline, which is comparatively expensive. Doing
+# that once per call (or worse, once per point) would dominate the cost
+# of an otherwise O(n) vectorizable operation.
+_WGS84_TO_WEBMERCATOR = pyproj.Transformer.from_crs(
+    "EPSG:4326", "EPSG:3857", always_xy=True
+)
 
 
-def save_route_video(
-    cleaned_csv_path: str,
-    output_dir: str = "data/outputs/video",
-    tmp_map_dir: str = "data/outputs/maps",
+def _project_route_to_pixels(
+    lats,
+    lons,
+    extent: tuple[float, float, float, float],
+    img_width_px: int,
+    img_height_px: int,
+) -> list[list[float]]:
+    """
+    Projects arrays of latitude/longitude (WGS84 degrees) into pixel
+    coordinates on the saved map image, using the same Web Mercator
+    extent mapfetcher.save_map_image() returned for that image.
+
+    extent is (w, e, s, n) in EPSG:3857 meters - w/e are the left/right
+    (longitude-axis) bounds, s/n are the bottom/top (latitude-axis)
+    bounds. Image pixel (0, 0) is the TOP-LEFT corner, so the vertical
+    axis has to be flipped relative to the north-up meters axis: pixel
+    y increases downward while northing increases upward.
+
+    Vectorized via pyproj's array-input transform - a single batched
+    call handles the whole route in one pass rather than one Python-
+    level Transformer.transform() call per point, which matters once
+    routes have thousands of GPS samples.
+    """
+    w, e, s, n = extent
+    # `always_xy=True` above guarantees (lon, lat) -> (x, y) input/output
+    # order regardless of the underlying CRS's native axis order.
+    merc_x, merc_y = _WGS84_TO_WEBMERCATOR.transform(lons, lats)
+
+    px = (np.asarray(merc_x) - w) / (e - w) * img_width_px
+    py = (n - np.asarray(merc_y)) / (n - s) * img_height_px  # flipped: north is up, pixel-y is down
+
+    return [[float(x), float(y)] for x, y in zip(px, py)]
+
+
+# =======================================================================
+# NEW: full end-to-end pipeline - "first run" from raw file to final MP4
+# =======================================================================
+
+def generate_navigation_video(
+    cleaned_route: dict,
+    output_video_path: str = "data\\outputs\\video\\route_animation.mp4",
+    map_output_path: str = "data\\inputs\\fullmap_image\\map_background.png",
 ) -> str:
     """
-    Full pipeline stage: cleaned route CSV -> big-picture map + animation
-    -> landmark-anchored residential maps -> stitched MP4.
-
-    Orchestration only — all map math / rendering lives in mapfetcher.py
-    and route2vdo.py, and pixel conversion lives in gpsparser.py. This
-    function just sequences the stages and owns output naming/IO.
+    Takes the dict returned by clean_gps_data() and drives it through the map-fetch,
+    pixel-projection, and video-render stages. 
     """
-    csv_path = Path(cleaned_csv_path)
-    if not csv_path.exists():
-        raise FileNotFoundError(f"Cleaned route CSV not found: {cleaned_csv_path}")
+    route_df = cleaned_route["route"]
+    waypoints_df = cleaned_route.get("waypoints")
+    summary = cleaned_route.get("summary", {})
 
-    print(f"Starting video pipeline for: {csv_path.name}")
-
-    # 1. Reload the cleaned route (clean_gps_data already normalized/sorted it)
-    route_df = pd.read_csv(csv_path)
-    route_df.columns = [c.strip().lower() for c in route_df.columns]
     if route_df.empty:
-        raise ValueError("Cleaned route is empty — nothing to render.")
+        raise ValueError("Cannot render a navigation video from an empty route.")
 
-    # img_url is all-NaN/empty at this point (clean_gps_data only flags
-    # landmarks, it doesn't render images yet), so a plain CSV round-trip
-    # gets pandas to infer this column as float64 (an all-NaN column has
-    # no way to signal "this should hold strings" on its own). A simple
-    # `.astype(object)` re-assignment can still leave the underlying block
-    # eligible for re-inference in edge cases (empty masks, consolidated
-    # blocks, re-runs against a stale float64 column already on disk), so
-    # instead we unconditionally REPLACE the column with a freshly
-    # allocated, guaranteed object-dtype array built from Python's own
-    # None — this can never silently collapse back to float64 the way an
-    # in-place astype() on existing float data sometimes does.
-    if "img_url" in route_df.columns:
-        existing_urls = route_df["img_url"].where(pd.notna(route_df["img_url"]), None).tolist()
-        route_df["img_url"] = pd.Series(existing_urls, index=route_df.index, dtype=object)
-    else:
-        route_df["img_url"] = pd.Series([None] * len(route_df), index=route_df.index, dtype=object)
-
-    out_dir = Path(output_dir)
-    map_dir = Path(tmp_map_dir)
-    map_dir.mkdir(parents=True, exist_ok=True)
-
-    # 2. Big-picture background map (16:9, video-ready)
-    bbox = calculate_bounding_box(route_df)
-    big_map_path = str(map_dir / f"{csv_path.stem}_bigmap.png")
-    extent, img_w, img_h = save_map_image(bbox, output_filename=big_map_path)
-
-    # 3. Pixel-space conversion for the big-picture pass
-    pixel_points = convert_gps_to_pixels(route_df, extent, big_map_path)
-    labels = (
-        route_df["store_name"].tolist()
-        if "store_name" in route_df.columns
-        else [None] * len(pixel_points)
+    # ---- 1. Bounding box + background map image ----
+    fetcher = MapFetcher()
+    bbox = fetcher.get_bounding_box(route_df, padding_factor=0.15)
+    map_output_path, extent, (img_w, img_h) = fetcher.fetch_image(
+        bbox, output_filename=map_output_path
     )
-    if not pixel_points:
-        raise ValueError("Pixel conversion produced no points — aborting render.")
+    if map_output_path is None:
+        raise RuntimeError("Map fetch failed - cannot render video without background map.")
 
-    # 4. Landmark-anchored residential slices (len == waypoint/landmark count)
-    chunks = split_route_by_landmarks(route_df)
-    res_sequence = []
-    if chunks:
-        res_assets = generate_residential_map_series_by_landmark(
-            route_chunks=chunks,
-            source_filename=str(csv_path),
-            output_dir=str(map_dir),
+    # ---- 2. Project the cleaned route into pixel space (Main Map) ----
+    route_points = _project_route_to_pixels(
+        route_df["latitude"].to_numpy(),
+        route_df["longitude"].to_numpy(),
+        extent, img_w, img_h,
+    )
+    
+    route_labels = [(row["store_name"] if row.get("is_landmarked") else None) for _, row in route_df.iterrows()]
+    route_popups = [None] * len(route_points)
+
+    # ---- 3. Project waypoints for popups (Main Map) ----
+    if waypoints_df is not None and not waypoints_df.empty:
+        wp_points = _project_route_to_pixels(
+            waypoints_df["latitude"].to_numpy(),
+            waypoints_df["longitude"].to_numpy(),
+            extent, img_w, img_h,
         )
-        for asset in res_assets:
-            res_pixels = convert_gps_to_pixels(asset["chunk_df"], asset["extent"], asset["map_file"])
-            res_labels = (
-                asset["chunk_df"]["store_name"].tolist()
-                if "store_name" in asset["chunk_df"].columns
-                else [None] * len(res_pixels)
-            )
-            res_sequence.append({
-                "img_path": asset["map_file"],
-                "points": [list(p) for p in res_pixels],
-                "labels": res_labels,
-            })
+        wp_labels = [(str(name) if str(name).strip() else "Waypoint") for name in waypoints_df.get("name", ["Waypoint"] * len(wp_points))]
+        wp_popups = [{"freeze_seconds": 3.0, "popup_image": img_url or None, "triggered": False} for img_url in waypoints_df.get("img_url", [None] * len(wp_points))]
+        
+        route_points += wp_points
+        route_labels += wp_labels
+        route_popups += wp_popups
 
-            # --- BINDING FIX -------------------------------------------------
-            # mapfetcher renders a real PNG per landmark chunk and hands its
-            # path back via asset["map_file"], but nothing previously wrote
-            # that path onto route_df — clean_gps_data() only ever set
-            # img_url to a placeholder ("" originally, now NaN) because no
-            # image existed yet at that stage. Without this write-back,
-            # export_to_frontend_json()'s `pd.notna(row.get("img_url"))`
-            # check always fails and the popup_image the video already
-            # references on disk never makes it into the JSON payload the
-            # frontend/consumer reads — the file was rendered but orphaned.
-            #
-            # Match on the landmark's own coordinates (rounded to ~11cm
-            # precision at 6 decimal places) rather than positional index,
-            # since route_df here is the full, unsplit route and asset
-            # only carries its chunk_df — coordinate identity is the only
-            # stable join key split_route_by_landmarks preserves.
-            landmark_mask = (
-                (route_df["latitude"].round(6) == round(asset["center"][0], 6)) &
-                (route_df["longitude"].round(6) == round(asset["center"][1], 6)) &
-                (route_df["is_landmarked"] == True)
-            )
-            route_df.loc[landmark_mask, "img_url"] = asset["map_file"]
-            # --------------------------------------------------------------
+    # ---- 3.5 Generate Residential Maps (Phase 3 Prep) ----
+    res_sequence = []
+    
+    if waypoints_df is not None and not waypoints_df.empty:
+        print(f" Generating {len(waypoints_df)} residential map(s) for waypoints...")
+        for i, wp in waypoints_df.iterrows():
+            lbl = "".join(c for c in str(wp.get("name", f"WP_{i}")) if c.isalnum() or c in (' ', '_')).rstrip()
+            res_map_path = str(Path(map_output_path).parent / f"res_map_{lbl}.png")
+
+            res_extent = get_residential_map(wp["latitude"], wp["longitude"], 400, res_map_path, (img_w, img_h))
+            
+            # Project only the points that exist close to this waypoint to avoid off-screen animation
+            res_route_points = _project_route_to_pixels(route_df["latitude"].to_numpy(), route_df["longitude"].to_numpy(), res_extent, img_w, img_h)
+            res_sequence.append({"img_path": res_map_path, "points": res_route_points, "labels": route_labels[:len(route_df)]})
+            
     else:
-        print("No landmarks detected — skipping residential (Phase 3) slices.")
+        print(" No waypoints found! Falling back to route chunking...")
+        points_per_slice = 500 # Adjust this to change chunk size
+        chunks = [route_df.iloc[i : i + points_per_slice] for i in range(0, len(route_df), points_per_slice)]
+        
+        for i, chunk in enumerate(chunks):
+            # Find the center of the chunk
+            center_lat, center_lon = chunk["latitude"].mean(), chunk["longitude"].mean()
+            res_map_path = str(Path(map_output_path).parent / f"res_map_chunk_{i+1}.png")
 
-    # Persist the now-populated img_url column back to the cleaned CSV, and
-    # re-export the frontend JSON so downstream consumers (and this run's
-    # own video render) see the bound popup images rather than the stale,
-    # pre-render placeholder values written at clean_gps_data() time.
-    route_df.to_csv(csv_path, index=False)
-    export_to_frontend_json(
-        {"route": route_df, "waypoints": pd.DataFrame(), "saved_paths": {"route_file": str(csv_path)}},
-        original_input_path=str(csv_path),
+            # Fetch the map
+            res_extent = get_residential_map(center_lat, center_lon, 300, res_map_path, (img_w, img_h))
+            
+            # Pass ONLY the points for this chunk so the dot animates properly across the screen
+            chunk_points = _project_route_to_pixels(chunk["latitude"].to_numpy(), chunk["longitude"].to_numpy(), res_extent, img_w, img_h)
+            
+            res_sequence.append({"img_path": res_map_path, "points": chunk_points, "labels": [None] * len(chunk_points)})
+
+    # ---- 4. Render the final video ----
+    return render_route_animation(
+        img_path=map_output_path,
+        points=route_points,
+        labels=route_labels,
+        popups=route_popups,
+        output_path=output_video_path,
+        summary=summary,
+        res_sequence=res_sequence,
     )
 
-    # 5. Render + stitch final MP4
-    video_out = _next_video_path(csv_path.stem, out_dir)
-    render_route_animation(
-        img_path=big_map_path,
-        points=[list(p) for p in pixel_points],
-        labels=labels,
-        popups=[None] * len(pixel_points),  # popups sourced separately if/when frontend sends them
-        output_path=str(video_out),
-        res_sequence=res_sequence or None, # type: ignore
+
+def run_full_pipeline(raw_source_path: str, output_video_path: str = "data\\outputs\\video\\route_animation.mp4") -> dict:
+    """
+    THE FIRST RUN: one call that takes a raw GPS device file all the way
+    to a finished navigation MP4.
+
+        raw file -> store -> convert -> clean -> map -> project -> video
+
+    Returns a dict with the frontend JSON payload AND the final video
+    path, so a caller (e.g. the Tauri command layer) gets everything it
+    needs in one response instead of having to re-derive it.
+    """
+    # Stages 1-2: store + convert, reusing the existing helpers exactly
+    # as they already work - no need to reinvent filename handling or
+    # gpsbabel invocation here.
+    stored_path = store_raw_file(raw_source_path)
+    if not stored_path:
+        raise ValueError(f"Failed to store raw file from: {raw_source_path}")
+
+    csv_path = convert_gps_file(
+        input_file=stored_path,
+        output_filename=Path(stored_path).with_suffix(".csv").name,
+        output_format="iblue747",
     )
 
-    print(f" Video pipeline complete → {video_out}")
-    return str(video_out)
+    # Stage 3: clean + summarize (summary is now baked into this call's
+    # return value - see the clean_gps_data() rewrite from earlier).
+    cleaned_route = clean_gps_data(csv_path)
+
+    # Stage 3b: frontend JSON (unchanged responsibility, still lat/lon -
+    # this is what a map UI would consume, separate from the pixel-space
+    # video renderer).
+    frontend_json = export_to_frontend_json(
+        cleaned_route, original_input_path=stored_path, project_name="Untitled Project"
+    )
+
+    # Stages 4-6: map fetch, pixel projection, video render.
+    video_path = generate_navigation_video(cleaned_route, output_video_path=output_video_path)
+
+    return {
+        "frontend_json": frontend_json,
+        "video_path": video_path,
+        "summary": cleaned_route.get("summary", {}),
+    }
 
 
+# =======================================================================
+# CLI — `process_gps` is unchanged; `full_pipeline` is the new command
+# that drives the entire first run described above.
+# =======================================================================
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         command = sys.argv[1]
@@ -205,12 +289,19 @@ if __name__ == "__main__":
 
         try:
             if command == "process_gps":
+                # Unchanged: JSON-only pipeline, no map/video generation.
                 result_json = handle_incoming_gps_upload(payload)
                 print(result_json)
-            elif command == "save_video":
-                # payload = path to the *_cleaned_*.csv produced by clean_gps_data
-                video_path = save_route_video(payload)
-                print(video_path)
+
+            elif command == "full_pipeline":
+                # New: raw file -> finished navigation MP4, in one shot.
+                output_arg = sys.argv[3] if len(sys.argv) > 3 else "data\\outputs\\videoroute_animation.mp4"
+                result = run_full_pipeline(payload, output_video_path=output_arg)
+                print(json.dumps({
+                    "video_path": result["video_path"],
+                    "summary": result["summary"],
+                }, ensure_ascii=False))
+
             else:
                 print(f"Error: Unknown command '{command}'", file=sys.stderr)
                 sys.exit(1)

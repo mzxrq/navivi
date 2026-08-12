@@ -1,253 +1,400 @@
-import json
-import math
-import subprocess
+"""
+gpsparser.py (convert_gps_file, refactored)
+---------------------------------------------------------------------------
+Stage 1 of the pipeline: converts a raw GPS device file (GPX/KML/NMEA/FIT/
+TCX/LOC/TXT) into CSV via the bundled GPSBabel binary.
+"""
+
+from __future__ import annotations
+
+import logging
 import shutil
+import subprocess
 from datetime import datetime
 from pathlib import Path
+from typing import Final, Optional
 
-import cv2
 import numpy as np
 import pandas as pd
-import pyproj
+import json
 
-# ------------------------------------------
-# GPSBabel Binary Path
-# ------------------------------------------
-GPSBABEL_BIN = Path(__file__).resolve().parent.parent / "bin" / "GPSBabel" / "gpsbabel.exe"
+logger = logging.getLogger(__name__)
 
-# ------------------------------------------
-# GPS Data Processing Functions
-# ------------------------------------------
-def convert_gps_file(input_file, output_filename, output_format, input_format=None, extra_args=None):
+# ------------------------------------------------------------------
+# Anchored to THIS file's location, not the process CWD. This mirrors
+# the pattern used by mapfetcher.CACHE_DIR and route2vdo.FFMPEG_BIN so
+# every module resolves paths identically regardless of how/where the
+# Tauri sidecar process is launched from.
+# ------------------------------------------------------------------
+GPSBABEL_BIN: Final[Path] = (
+    Path(__file__).resolve().parent.parent / "bin" / "GPSBabel" / "gpsbabel.exe"
+)
+
+# Module-level constant: built once at import time, not re-allocated
+# on every convert_gps_file() call. Also doubles as documentation of
+# which input formats this pipeline officially supports.
+EXTENSION_TO_FORMAT: Final[dict[str, str]] = {
+    ".gpx": "gpx",
+    ".kml": "kml",
+    ".nmea": "nmea",
+    ".fit": "garmin_fit",
+    ".tcx": "gtrnctr",
+    ".loc": "geo",
+    ".txt": "nmea",
+}
+
+# Bound how long we'll let gpsbabel run before giving up. Corrupt or
+# unusually large device dumps can otherwise hang the subprocess
+# indefinitely, blocking the whole pipeline with no recovery path.
+GPSBABEL_TIMEOUT_SECONDS: Final[int] = 120
+
+
+def _resolve_gpsbabel_binary() -> str:
+    """Locate the gpsbabel executable: prefer the bundled binary,
+    fall back to a system PATH install. Raises if neither exists."""
+    if GPSBABEL_BIN.exists():
+        return str(GPSBABEL_BIN)
+
+    system_binary = shutil.which("gpsbabel")
+    if system_binary is None:
+        raise FileNotFoundError(
+            "gpsbabel not found. Expected a bundled binary at "
+            f"'{GPSBABEL_BIN}' or a PATH install."
+        )
+    return system_binary
+
+def _detect_input_format(input_path: Path) -> str:
+    """Maps a file extension to its gpsbabel format identifier."""
+    ext = input_path.suffix.lower()
+    fmt = EXTENSION_TO_FORMAT.get(ext)
+    if fmt is None:
+        raise ValueError(
+            f"Could not auto-detect gpsbabel format for extension '{ext}'. "
+            f"Supported: {sorted(EXTENSION_TO_FORMAT)}. "
+            "Pass 'input_format' explicitly to override."
+        )
+    return fmt
+
+def _generate_unique_output_path(target_dir: Path, stem: str, suffix: str) -> Path:
+    """
+    Finds a non-colliding filename of the form
+    '<stem>_raw_<YYYYMMDD_HHMMSS>_<01-99><suffix>'.
+
+    Linear probing over a 2-digit sequence is intentionally simple: the
+    timestamp already gives second-level uniqueness, so collisions only
+    happen when multiple files land in the same second (rapid batch
+    uploads). 99 slots per second is a generous ceiling for that case;
+    a UUID would remove the (tiny) collision-scan cost entirely but at
+    the expense of human-readable, sortable filenames — a trade-off not
+    worth making here since this isn't a hot path (one call per upload).
+    """
+    target_dir.mkdir(parents=True, exist_ok=True)
+    datetime_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    for sequence in range(1, 100):
+        candidate = target_dir / f"{stem}_raw_{datetime_str}_{sequence:02d}{suffix}"
+        if not candidate.exists():
+            return candidate
+
+    raise FileExistsError(
+        f"Could not generate a unique filename; 99 files already exist "
+        f"for timestamp {datetime_str}."
+    )
+
+def convert_gps_file(
+    input_file: str,
+    output_filename: str,
+    output_format: str,
+    input_format: Optional[str] = None,
+    extra_args: Optional[list[str]] = None,
+) -> str:
     """
     Convert a GPS file to any format supported by gpsbabel.
-    Saves the output with a _raw suffix, date/time, and auto-incrementing suffix (1-99).
+
+    Output is written to data/inputs/gpsdata/processdata/csv/, named
+    '<stem>_raw_<timestamp>_<seq><ext>' to guarantee uniqueness across
+    concurrent/rapid uploads.
+
+    Returns the absolute path to the converted file as a string.
     """
-    # 1.1 : Determine the gpsbabel command path
-    if 'GPSBABEL_BIN' in globals() and GPSBABEL_BIN.exists():
-        gpsbabel_cmd = str(GPSBABEL_BIN)
-    else:
-        gpsbabel_cmd = shutil.which("gpsbabel")
+    gpsbabel_cmd = _resolve_gpsbabel_binary()
 
-    if gpsbabel_cmd is None:
-        raise FileNotFoundError(
-            "gpsbabel not found. Expected a bundled binary or a PATH install."
-        )
-
-    # 1.2 : Validate input file existence
     input_path = Path(input_file)
     if not input_path.exists():
         raise FileNotFoundError(f"Input file not found: {input_file}")
 
-    # 1.3 : Auto-generate date, time, sequence number, and _raw suffix for output path
-    target_dir = Path("data/inputs/gpsdata/processdata/csv")
-    target_dir.mkdir(parents=True, exist_ok=True)
-
-    datetime_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-    requested_file = Path(output_filename)
-    stem = requested_file.stem       # e.g., "my_track" from "my_track.csv"
-    suffix = requested_file.suffix   # e.g., ".csv"
-    
-    # 1.3.1 : Loop to find the next available filename with _raw suffix and timestamp
-    output_path = None
-    for i in range(1, 100):
-        # Format: my_track_raw_20260810_140236_01.csv
-        new_name = f"{stem}_raw_{datetime_str}_{i:02d}{suffix}"
-        test_path = target_dir / new_name
-        
-        if not test_path.exists():
-            output_path = test_path
-            break
-            
-    if output_path is None:
-        raise FileExistsError(f"Could not generate a unique filename; 99 files already exist for {datetime_str}.")
-
-    # 1.4 : Auto-detect input format if not provided
     if input_format is None:
-        extension_map = {
-            ".gpx": "gpx",
-            ".kml": "kml",
-            ".nmea": "nmea",
-            ".fit": "garmin_fit",
-            ".tcx": "gtrnctr",
-            ".loc": "geo",
-            ".txt" : "nmea"
-        }
-        ext = input_path.suffix.lower()
-        if ext in extension_map:
-            input_format = extension_map[ext]
-        else:
-            raise ValueError(
-                f"Could not auto-detect format for '{ext}'. "
-                f"Please specify 'input_format' explicitly."
-            )
+        input_format = _detect_input_format(input_path)
 
-    # 1.5 : Construct the gpsbabel command
-    cmd = [gpsbabel_cmd, "-i", input_format, "-f", str(input_path.absolute())]
+    # Anchored relative to this module's file, not the process CWD —
+    # see the GPSBABEL_BIN comment above for why this matters.
+    target_dir = (
+        Path(__file__).resolve().parent.parent
+        / "data" / "inputs" / "gpsdata" / "processdata" / "csv"
+    )
+    requested = Path(output_filename)
+    output_path = _generate_unique_output_path(target_dir, requested.stem, requested.suffix)
 
+    cmd = [gpsbabel_cmd, "-i", input_format, "-f", str(input_path.resolve())]
     if extra_args:
         cmd.extend(extra_args)
 
-    dummy_bin = None
-    
-    # 1.6 : Handle special case for MTK-BIN output with CSV
+    dummy_bin: Optional[Path] = None
+
+    # gpsbabel's mtk-bin writer always requires a binary firmware-format
+    # target via -F, even when the CSV output (the thing we actually
+    # want) is produced as a side-effect via the 'csv=' sub-option. We
+    # give it a throwaway file and delete it immediately after — this
+    # is a gpsbabel CLI quirk, not something our own design chose.
     if output_format.lower() == "mtk-bin" and output_path.suffix.lower() == ".csv":
-        actual_format = f"mtk-bin,csv={str(output_path.absolute())}"
+        cmd.extend(["-o", f"mtk-bin,csv={output_path.resolve()}"])
         dummy_bin = output_path.parent / "dummy.bin"
-        cmd.extend(["-o", actual_format, "-F", str(dummy_bin.absolute())])
+        cmd.extend(["-F", str(dummy_bin.resolve())])
     else:
-        # Standard export mapping
-        cmd.extend(["-o", output_format, "-F", str(output_path.absolute())])
+        cmd.extend(["-o", output_format, "-F", str(output_path.resolve())])
 
-    # 1.7 : Execute the subprocess
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    logger.info("Running gpsbabel: %s", " ".join(cmd))
 
-    # 1.8: Clean up temporary junk files generated by the CLI
-    if dummy_bin and dummy_bin.exists():
-        dummy_bin.unlink()
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=GPSBABEL_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(
+            f"gpsbabel timed out after {GPSBABEL_TIMEOUT_SECONDS}s "
+            f"(input possibly corrupt or unusually large: {input_file})"
+        ) from exc
+    finally:
+        # Clean up the throwaway binary regardless of success/failure —
+        # a `finally` here (rather than only on the success path) avoids
+        # leaking dummy.bin files on repeated failed conversions.
+        if dummy_bin and dummy_bin.exists():
+            dummy_bin.unlink()
 
-    # 1.9 : Error handling and logging
     if result.returncode != 0:
         raise RuntimeError(
             f"gpsbabel failed (exit {result.returncode}):\n{result.stderr.strip()}"
         )
 
-    # Return the full, correctly formatted path
+    logger.info("Converted '%s' -> '%s'", input_file, output_path)
     return str(output_path)
 
 # ------------------------------------------
-# GPS Data Cleaning Functions
+# Constants
 # ------------------------------------------
+
+# How many decimal places of lat/lon define "the same spot" for stop
+# detection. 5 decimals ≈ 1.1 meters of grid resolution — tight enough
+# that GPS drift while stationary won't fragment a real stop into many
+# tiny blocks, but coarse enough that walking across a parking lot still
+# registers as movement. Previously this was silently 3 decimals
+# (≈111m) inside the function body, contradicting the docstring — now
+# it's a single named constant so "what counts as stationary" is a
+# deliberate, visible, tunable decision instead of a magic number.
+STOP_DETECTION_PRECISION: Final[int] = 5
+
+# Stops shorter than this aren't "landmarks" — just normal traffic
+# stops, red lights, etc. 300s = 5 minutes, matching the original spec.
+LANDMARK_MIN_STOP_SECONDS: Final[int] = 300
+
+def haversine_vectorized(lat1, lon1, lat2, lon2):
+    """
+    Calculate the great circle distance between two points 
+    on the earth (specified in decimal degrees) using NumPy.
+    """
+    # Earth radius in kilometers
+    R = 6371.0
+    
+    # Convert decimal degrees to radians
+    lat1, lon1, lat2, lon2 = map(np.radians, [lat1, lon1, lat2, lon2])
+    
+    # Haversine formula
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
+    a = np.sin(dlat / 2.0)**2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2.0)**2
+    c = 2 * np.arcsin(np.sqrt(a))
+    
+    return R * c
+
+def _compute_route_summary(route_df: pd.DataFrame, waypoints_df: pd.DataFrame) -> dict:
+    """
+    Single source of truth for route-level statistics: total distance
+    (haversine sum over consecutive cleaned points) and total duration
+    (max timestamp - min timestamp). Shared by both clean_gps_data()
+    (so every cleaned route ships with its own stats automatically) and
+    the standalone summarize_gps_data() utility, so there is exactly
+    one implementation of "how we compute distance" in the codebase.
+    """
+    total_distance_km = 0.0
+    total_duration_seconds = 0.0
+
+    if not route_df.empty:
+        if "timestamp" in route_df.columns:
+            # Sort defensively — this function may be called on data
+            # that wasn't guaranteed sorted by an upstream caller.
+            ordered = route_df.sort_values("timestamp")
+            total_duration_seconds = (
+                ordered["timestamp"].max() - ordered["timestamp"].min()
+            ).total_seconds()
+
+        if "latitude" in route_df.columns and "longitude" in route_df.columns:
+            # Vectorized consecutive-point distance: shift(-1) pairs each
+            # row with its successor in a single O(n) pass, no Python-level
+            # loop over rows. The trailing NaN from the last row's shift
+            # is handled by nansum, not by an explicit branch.
+            lat1, lon1 = route_df["latitude"], route_df["longitude"]
+            lat2, lon2 = route_df["latitude"].shift(-1), route_df["longitude"].shift(-1)
+            total_distance_km = float(
+                np.nansum(haversine_vectorized(lat1, lon1, lat2, lon2))
+            )
+
+    duration_td = pd.Timedelta(seconds=total_duration_seconds)
+
+    return {
+        "total_route_points": len(route_df),
+        "total_waypoints": len(waypoints_df),
+        "total_landmarked_stops": (
+            int(route_df["is_landmarked"].sum()) if "is_landmarked" in route_df.columns else 0
+        ),
+        # Raw numeric values — safe for the frontend to do further math/
+        # charting on without re-parsing a display string.
+        "total_distance_km": round(total_distance_km, 3),
+        "total_duration_seconds": total_duration_seconds,
+        # Presentation-layer strings — separated from the raw values so
+        # neither consumer (charting code vs. display label) has to
+        # convert the other's format.
+        "total_distance_km_formatted": f"{total_distance_km:.2f} km",
+        "total_duration_formatted": str(duration_td),
+    }
+
 def clean_gps_data(csv_path: str, save_output: bool = True) -> dict:
     """
-    Reads a GPSBabel-generated CSV, cleans the data, separates 
-    track points from waypoints, flags landmarks (stops >= 5 mins at same lat/long rounded to 5 decimal places), 
-    and saves them using the _cleaned suffix with date and time.
+    Reads a GPSBabel-generated CSV, cleans the data, separates track
+    points from waypoints, flags landmarks (stops >= 5 mins at the same
+    lat/long, rounded to STOP_DETECTION_PRECISION decimal places), and
+    saves them using the _cleaned suffix with date and time.
+
+    Returns a dict with 'route', 'waypoints', 'saved_paths', AND now
+    'summary' (total distance/duration/landmark counts) — computed
+    automatically so callers can never forget to compute it.
     """
-    # 1.1 : Load the CSV into a DataFrame
     df = pd.read_csv(csv_path)
-
-    # 1.2 : Standardize column names (lowercase and strip spaces)
     df.columns = [col.strip().lower() for col in df.columns]
-
-    # 1.3 : Drop critical NaNs (Must have lat/lon)
     df = df.dropna(subset=['latitude', 'longitude'])
 
-    # 1.4 : Combine and parse datetime
     if 'date' in df.columns and 'time' in df.columns:
         df['timestamp'] = pd.to_datetime(df['date'] + ' ' + df['time'], errors='coerce')
-    
-    # 1.5 : Extract Waypoints vs. Track Points based on 'name'
+
     if 'name' in df.columns:
         waypoints_df = df[df['name'].notna() & (df['name'] != '')].copy()
         route_df = df[df['name'].isna() | (df['name'] == '')].copy()
     else:
-        waypoints_df = pd.DataFrame() 
+        waypoints_df = pd.DataFrame()
         route_df = df.copy()
 
-    # 1.6 : Sort chronologically
     if 'timestamp' in route_df.columns:
         route_df = route_df.sort_values(by='timestamp').reset_index(drop=True)
 
-    # 1.7 : Handle missing timestamps
     if 'timestamp' not in route_df.columns or route_df['timestamp'].isnull().all():
-        print("Warning: No timestamps found in raw data! Generating artificial 1-second timeline...")
+        logger.warning("No timestamps found in raw data! Generating artificial 1-second timeline...")
         start_time = pd.Timestamp.now()
         route_df['timestamp'] = pd.date_range(start=start_time, periods=len(route_df), freq='s')
     else:
         route_df['timestamp'] = route_df['timestamp'].ffill()
 
-    # 1.8 : Detect stops and calculate durations
     if 'latitude' in route_df.columns and 'longitude' in route_df.columns:
-        route_df['lat_round'] = route_df['latitude'].round(3)
-        route_df['lon_round'] = route_df['longitude'].round(3)
-        
-        # 1.8.1 Flag rows where the coordinates actually changed from the previous row
+        # Fixed precision (was silently 3 decimals ≈111m; docstring
+        # promised 5 ≈1.1m — see STOP_DETECTION_PRECISION comment above).
+        route_df['lat_round'] = route_df['latitude'].round(STOP_DETECTION_PRECISION)
+        route_df['lon_round'] = route_df['longitude'].round(STOP_DETECTION_PRECISION)
+
         is_moving = (route_df['lat_round'] != route_df['lat_round'].shift()) | \
                     (route_df['lon_round'] != route_df['lon_round'].shift())
-        
-        # 1.8.2 Create a unique ID for each continuous block of identical coordinates
+
         route_df['stop_block'] = is_moving.cumsum()
 
-        # 1.8.3 Calculate exact time spent at each stop block
         block_durations = route_df.groupby('stop_block')['timestamp'].transform(
             lambda x: (x.max() - x.min()).total_seconds()
         )
         route_df['stop_duration_sec'] = block_durations.fillna(0)
 
-        # 1.8.4 Filter the dataframe to keep only the first point of each location block
         route_df = route_df[is_moving].copy()
 
-        # 1.8.5 Flag Long Stops and Landmarks (5 minutes / 300 seconds)
         route_df['store_name'] = None
         route_df['img_url'] = None
         route_df['is_landmarked'] = False
 
-        long_stops = route_df['stop_duration_sec'] >= 300
-        
-        # Calculate minutes as string for the label
+        long_stops = route_df['stop_duration_sec'] >= LANDMARK_MIN_STOP_SECONDS
         mins_spent = (route_df.loc[long_stops, 'stop_duration_sec'] // 60).astype(int).astype(str)
         route_df.loc[long_stops, 'store_name'] = "Detected Stop (" + mins_spent + " mins)"
-        # NOTE: img_url is intentionally left as NaN (pd.NA), not "". At this
-        # stage no residential map has been rendered yet — that happens later
-        # in main.save_route_video() via mapfetcher.generate_residential_map_
-        # series_by_landmark(). Using "" here reads as "resolved/no image"
-        # both to pandas' truthiness checks AND to a human reading the CSV,
-        # which caused the resulting popup image path to be silently dropped
-        # downstream in export_to_frontend_json(). NaN honestly represents
-        # "not yet generated" until the video pipeline stage fills it in.
-        route_df.loc[long_stops, 'img_url'] = pd.NA
+        route_df.loc[long_stops, 'img_url'] = ""
         route_df.loc[long_stops, 'is_landmarked'] = True
 
-        # Clean up temporary processing columns
         route_df = route_df.drop(columns=['lat_round', 'lon_round', 'stop_block', 'stop_duration_sec'])
 
-    print(f"Data cleaned! Found {len(route_df)} route points and {len(waypoints_df)} waypoints.")
-    
-    saved_paths = {}
+    # Compute stats BEFORE saving so they can be persisted alongside the
+    # CSVs if you later want a sidecar summary.json — cheap to do now
+    # since route_df/waypoints_df are already fully in memory.
+    summary = _compute_route_summary(route_df, waypoints_df)
+    logger.info(
+        "Data cleaned: %d route points, %d waypoints, %.2f km, %s",
+        summary["total_route_points"], summary["total_waypoints"],
+        summary["total_distance_km"], summary["total_duration_formatted"],
+    )
 
-    # 1.9 : Save cleaned route and waypoints to CSV using the _cleaned naming convention with date/time
+    saved_paths = {}
     if save_output:
         input_path = Path(csv_path)
         datetime_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-        
-        # Extract base stem by stripping '_raw' if present from the input filename stem
         raw_stem = input_path.stem
         base_stem = raw_stem.split('_raw')[0] if '_raw' in raw_stem else raw_stem
-        
-        # Loop from 1 to 99 to find the next available filename using _cleaned suffix and timestamp
+
         seq_num = None
+        route_filepath = None
         for i in range(1, 100):
-            # Format: my_track_cleaned_20260810_140236_01.csv
             route_filename = f"{base_stem}_cleaned_{datetime_str}_{i:02d}.csv"
             test_path = input_path.parent / route_filename
-            
             if not test_path.exists():
                 seq_num = i
                 route_filepath = test_path
                 break
-                
+
         if seq_num is None:
             raise FileExistsError(f"Could not generate a unique filename; 99 files already exist for {datetime_str}.")
 
-        # Save route DataFrame to CSV
         route_df.to_csv(route_filepath, index=False)
         saved_paths["route_file"] = str(route_filepath)
-        print(f"Route saved to: {route_filepath}")
-        
-        # Save waypoints DataFrame to CSV (if any exist) with matching sequence number and timestamp
+        logger.info("Route saved to: %s", route_filepath)
+
         if not waypoints_df.empty:
             waypoints_filename = f"{base_stem}_cleaned_waypoints_{datetime_str}_{seq_num:02d}.csv"
             waypoints_filepath = input_path.parent / waypoints_filename
             waypoints_df.to_csv(waypoints_filepath, index=False)
             saved_paths["waypoints_file"] = str(waypoints_filepath)
-            print(f"Waypoints saved to: {waypoints_filepath}")
+            logger.info("Waypoints saved to: %s", waypoints_filepath)
 
     return {
         "route": route_df,
         "waypoints": waypoints_df,
-        "saved_paths": saved_paths
+        "saved_paths": saved_paths,
+        "summary": summary,  # <-- now always present, no separate call needed
     }
+
+def summarize_gps_data(cleaned_data: dict) -> dict:
+    """
+    Standalone summary utility — kept for callers who already have a
+    `cleaned_data` dict (e.g. a frontend 'recompute stats' action) and
+    don't want to re-run the full clean pipeline. Delegates to the same
+    _compute_route_summary() helper clean_gps_data() uses internally,
+    so there's zero risk of the two ever disagreeing on the math.
+    """
+    return _compute_route_summary(
+        cleaned_data.get("route", pd.DataFrame()),
+        cleaned_data.get("waypoints", pd.DataFrame()),
+    )
 
 # ------------------------------------------
 # JSON Conversion Function
@@ -313,9 +460,9 @@ def export_to_frontend_json(
         "waypoints": waypoints_list
     }
 
-    # 4. Save JSON to the target directory: data/inputs/gpsdata/processdata/json
+    # 4. Save JSON to the target directory: src-tauri/src-python/data/inputs/gpsdata/processdata/json
     if save_json:
-        json_dir = Path("data/inputs/gpsdata/processdata/json")
+        json_dir = Path("src-tauri/src-python/data/inputs/gpsdata/processdata/json")
         json_dir.mkdir(parents=True, exist_ok=True)
 
         saved_paths = cleaned_data.get("saved_paths", {})
@@ -332,198 +479,3 @@ def export_to_frontend_json(
         print(f"JSON config saved to: {json_filename}")
 
     return payload
-
-def convert_gps_to_pixels(route_df: pd.DataFrame, extent: tuple, image_path: str) -> list:
-    """
-    Translates GPS Latitude/Longitude coordinates into exact X/Y pixel locations 
-    on the generated map image.
-    """
-    print("Translating GPS coordinates to image pixels...")
-    
-    # 1. Load the image using OpenCV to get its exact pixel dimensions
-    img = cv2.imread(image_path)
-    if img is None:
-        raise FileNotFoundError(f" Could not find image at {image_path}")
-        
-    img_h, img_w, _ = img.shape
-    print(f"Detected map image size: {img_w}x{img_h} pixels")
-    
-    # 2. Extract the Web Mercator boundaries from the contextily extent
-    # extent format is (min_x, max_x, min_y, max_y)
-    xmin, xmax, ymin, ymax = extent
-    
-    # 3. Set up the coordinate transformer
-    # epsg:4326 is standard GPS (Lat/Lon)
-    # epsg:3857 is Web Mercator (Flat map in meters, which contextily uses)
-    transformer = pyproj.Transformer.from_crs("epsg:4326", "epsg:3857", always_xy=True)
-    
-    pixel_coordinates = []
-    
-    # 4. Loop through every GPS point in the route
-    for index, row in route_df.iterrows():
-        lon = row['longitude']
-        lat = row['latitude']
-        
-        # Step A: Convert Lat/Lon to flat map meters
-        merc_x, merc_y = transformer.transform(lon, lat)
-        
-        # Step B: Convert map meters to a percentage across the image (0.0 to 1.0)
-        percent_x = (merc_x - xmin) / (xmax - xmin)
-        
-        # Y is inverted! In math, Y goes up. In image pixels, Y=0 is the TOP of the image and goes down.
-        percent_y = (ymax - merc_y) / (ymax - ymin)
-        
-        # Step C: Multiply the percentage by the actual pixel width/height
-        pixel_x = int(percent_x * img_w)
-        pixel_y = int(percent_y * img_h)
-
-        pixel_coordinates.append((pixel_x, pixel_y))
-
-    print(f" Successfully translated {len(pixel_coordinates)} points to pixels!")
-    return pixel_coordinates
-
-
-def _lat_lng_to_world_pixels(lat: float, lng: float, zoom_level: int) -> tuple[float, float]:
-    world_size = 256 * (2**zoom_level)
-    x = (lng + 180.0) / 360.0 * world_size
-
-    sin_lat = math.sin(math.radians(lat))
-    y = (0.5 - math.log((1 + sin_lat) / (1 - sin_lat)) / (4 * math.pi)) * world_size
-    return x, y
-
-
-def convert_gps_to_google_maps_pixels(
-    route_df: pd.DataFrame,
-    center_lat: float,
-    center_lng: float,
-    zoom_level: int,
-    image_path: str,
-) -> list:
-    """Translate GPS coordinates into pixel coordinates for a Google Maps screenshot."""
-    print("Translating GPS coordinates to Google Maps screenshot pixels...")
-
-    img = cv2.imread(image_path)
-    if img is None:
-        raise FileNotFoundError(f" Could not find image at {image_path}")
-
-    img_h, img_w, _ = img.shape
-    print(f"Detected follow screenshot size: {img_w}x{img_h} pixels")
-
-    center_world_x, center_world_y = _lat_lng_to_world_pixels(center_lat, center_lng, zoom_level)
-    pixel_coordinates = []
-
-    for _, row in route_df.iterrows():
-        lon = row["longitude"]
-        lat = row["latitude"]
-
-        world_x, world_y = _lat_lng_to_world_pixels(lat, lon, zoom_level)
-
-        pixel_x = int((world_x - center_world_x) + (img_w / 2.0))
-        pixel_y = int((world_y - center_world_y) + (img_h / 2.0))
-        pixel_coordinates.append((pixel_x, pixel_y))
-
-    print(f" Successfully translated {len(pixel_coordinates)} points to Google Maps pixels!")
-    return pixel_coordinates
-
-
-def export_pixels_to_json(
-    pixel_points: list,
-    labels: list,
-    popups: list = None, # type: ignore
-    output_json_path: str = "data/route.json",
-    settings: dict | None = None,
-):
-    """
-    Takes the translated X/Y pixel coordinates, labels, and popups, 
-    and packages them into the JSON format expected by the video script.
-    """
-    print(f"Exporting {len(pixel_points)} points to {output_json_path}...")
-    
-    route_list = []
-    
-    # Safely handle the popups list if it wasn't provided
-    if popups is None:
-        popups = [None] * len(pixel_points)
-
-    for i, ((x, y), label) in enumerate(zip(pixel_points, labels)):
-        point_data = {"x": x, "y": y}
-
-        # Handle the label
-        if not pd.isna(label) and str(label).strip() != "":
-            point_data["label"] = str(label)
-            
-        # --- NEW: Handle the Freeze and Image formatting ---
-        if popups[i] is not None:
-            if popups[i].get("freeze_seconds"):
-                point_data["freeze_seconds"] = popups[i]["freeze_seconds"]
-            if popups[i].get("popup_image") and str(popups[i]["popup_image"]).strip() != "":
-                point_data["popup_image"] = str(popups[i]["popup_image"])
-                
-        route_list.append(point_data)
-        
-    default_settings = {
-        "duration_seconds": 10.0,
-        "fps": 30,
-        "line_color": [0, 200, 255],
-        "line_thickness": 8,
-        "marker_color": [0, 0, 255],
-        "marker_radius": 15,
-        "overview_seconds": 2.0,
-        "follow_zoom_level": 17,
-        "follow_viewport_size": [1280, 900],
-        "follow_wait_ms": 5000,
-        "camera_lookahead_frames": 28,
-        "simplify_tolerance": 3.0,
-    }
-
-    final_json_data = {
-        "route": route_list,
-        "settings": {**default_settings, **(settings or {})},
-    }
-    
-    with open(output_json_path, "w", encoding="utf-8") as f:
-        json.dump(final_json_data, f, indent=4)
-        
-    print(f" JSON successfully saved to: {output_json_path}")
-    return output_json_path
-
-def split_route_by_landmarks(route_df: pd.DataFrame) -> list[pd.DataFrame]:
-    """
-    Partitions the cleaned route into contiguous segments, one per detected
-    landmark (long stop). Guarantees len(result) == number of landmarked
-    rows, so residential maps generated 1:1 from this list always match the
-    waypoint count in the exported JSON.
-
-    Each chunk = (previous landmark, current landmark] i.e. it INCLUDES the
-    landmark row itself as the terminal point of that segment. Any trailing
-    rows after the final landmark (no landmark follows them) are folded
-    into the last chunk rather than being dropped or spawning an orphan
-    segment with no corresponding waypoint.
-    """
-    if "is_landmarked" not in route_df.columns:
-        raise ValueError(
-            "route_df is missing 'is_landmarked' — run clean_gps_data() first."
-        )
-
-    # Reset index so positional slicing (iloc) is unambiguous regardless of
-    # upstream filtering/sorting that left gaps in the original index.
-    df = route_df.reset_index(drop=True)
-    landmark_positions = df.index[df["is_landmarked"]].tolist()
-
-    if not landmark_positions:
-        # No landmarks detected -> nothing to split on. Caller decides
-        # whether to fall back to a single whole-route slice.
-        return []
-
-    chunks: list[pd.DataFrame] = []
-    prev = 0
-    for pos in landmark_positions:
-        chunks.append(df.iloc[prev:pos + 1].copy())
-        prev = pos + 1
-
-    # Fold any post-final-landmark tail into the last chunk so the
-    # invariant len(chunks) == len(landmark_positions) always holds.
-    if prev < len(df):
-        chunks[-1] = pd.concat([chunks[-1], df.iloc[prev:]], ignore_index=True)
-
-    return chunks
