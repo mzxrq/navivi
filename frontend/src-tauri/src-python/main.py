@@ -7,6 +7,7 @@ Entry point / orchestrator for the whole GPS-to-navigation-video pipeline.
 
 import sys
 import json
+import math
 from pathlib import Path
 
 import numpy as np
@@ -57,9 +58,9 @@ def _project_route_to_pixels(lats, lons, extent: tuple[float, float, float, floa
 def generate_navigation_video(
     cleaned_route: dict,
     project_config_path: str = "data\\inputs\\gpsdata\\processdata\\json\\example_frontend.json",
-    output_video_path: str = "data\\outputs\\video\\route_animation.mp4",
+    output_video_dir: str = "data\\outputs\\video",
     map_output_path: str = "data\\inputs\\fullmap_image\\map_background.png",
-) -> str:
+) -> list[str]:
     route_df = cleaned_route["route"]
     summary = cleaned_route.get("summary", {})
 
@@ -110,52 +111,66 @@ def generate_navigation_video(
                 "triggered": False
             }
 
+    # Residential maps grouped strictly by waypoint: one zoomed-in chunk
+    # per waypoint-to-waypoint segment (max_chunk_distance_meters=inf
+    # disables the distance-based sub-splitting that generate_residential_
+    # sequence() would otherwise do, so chunk count == number of waypoint
+    # legs, not an arbitrary number of ~1km slices).
     image_output_dir = Path("data/inputs/res_images")
     sequence_data = MapFetcher.generate_residential_sequence(
-        route_df, waypoints, image_output_dir, (img_w, img_h), precomputed_indices=wp_indices
+        route_df, waypoints, image_output_dir, (img_w, img_h),
+        max_chunk_distance_meters=math.inf, precomputed_indices=wp_indices,
     )
 
-    # Distance-proportional durations averaging 10s per rendered chunk —
-    # long stretches get more screen time, short hops stay brisk, but
-    # the animation as a whole averages to the target pace per waypoint.
-    # Combined with ease-in-out sampling (in get_smooth_path) this is
-    # what produces a "slow, deliberate" feel rather than just a longer
-    # constant-speed traversal.
-    chunk_durations = MapFetcher.compute_chunk_durations(sequence_data, target_avg_seconds=10.0)
+    # Distance-proportional durations averaging 10s per waypoint segment.
+    # Because chunking is 1:1 with waypoint pairs now (no sub-splitting),
+    # this maps directly onto sequence_data in order — segment i's
+    # duration belongs to chunk i.
+    seg_durations = MapFetcher.compute_segment_durations(waypoints, wp_indices, route_df, target_avg_seconds=10.0) if waypoints and len(wp_indices) > 1 else []
 
     res_sequence = []
     for seq_idx, item in enumerate(sequence_data):
         start_idx = item["start_idx"]
         end_idx = item["end_idx"]
         chunk = route_df.iloc[start_idx : end_idx + 1]
-        
+
         chunk_points = _project_route_to_pixels(chunk["latitude"].to_numpy(), chunk["longitude"].to_numpy(), item["extent"], img_w, img_h)
-    
+
         res_sequence.append({
-            "img_path": item["img_path"], 
+            "img_path": item["img_path"],
             "extent": item["extent"],
             "lats": item["lats"],
             "lons": item["lons"],
-            "points": chunk_points, 
+            "points": chunk_points,
             "labels": route_labels[start_idx : end_idx + 1],
             "popups": route_popups[start_idx : end_idx + 1],
-            "segment_duration": chunk_durations[seq_idx] if seq_idx < len(chunk_durations) else None,
+            "segment_duration": seg_durations[seq_idx] if seq_idx < len(seg_durations) else None,
         })
 
+    # Big-picture overview keeps its own flat duration (Phase 1) —
+    # the per-waypoint 10s-average pacing applies to the residential
+    # legs (Phase 3), which is where "navigating between waypoints"
+    # actually happens.
+    # Returns a LIST of file paths now — one for the overview, one per
+    # waypoint residential leg, one for the summary card — instead of a
+    # single combined MP4. See render_route_animation's docstring.
     return render_route_animation(
         img_path=map_output_path, points=route_points, labels=route_labels,
-        popups=route_popups, output_path=output_video_path, summary=summary, res_sequence=res_sequence,
+        popups=route_popups, output_dir=output_video_dir, summary=summary,
+        res_sequence=res_sequence,
     )
 
 
-def run_full_pipeline(raw_source_path: str, output_video_path: str = "data\\outputs\\video\\route_animation.mp4") -> dict:
+def run_full_pipeline(raw_source_path: str, output_video_dir: str = "data\\outputs\\video") -> dict:
     csv_path = convert_gps_file(input_file=raw_source_path, output_filename=Path(raw_source_path).with_suffix(".csv").name, output_format="iblue747")
     cleaned_route = clean_gps_data(csv_path)
     base_dir = Path(__file__).resolve().parent
     config_path = base_dir / "data" / "inputs" / "gpsdata" / "processdata" / "json" / "example_frontend.json"
 
-    video_path = generate_navigation_video(cleaned_route=cleaned_route, project_config_path=str(config_path), output_video_path=output_video_path)
-    return {"video_path": video_path, "summary": cleaned_route.get("summary", {})}
+    # video_paths is now a LIST (overview + per-waypoint legs + summary),
+    # not a single path — see generate_navigation_video/render_route_animation.
+    video_paths = generate_navigation_video(cleaned_route=cleaned_route, project_config_path=str(config_path), output_video_dir=output_video_dir)
+    return {"video_paths": video_paths, "summary": cleaned_route.get("summary", {})}
 
 
 if __name__ == "__main__":
@@ -165,9 +180,11 @@ if __name__ == "__main__":
             if command == "process_gps":
                 print(handle_incoming_gps_upload(payload))
             elif command == "full_pipeline":
-                output_arg = sys.argv[3] if len(sys.argv) > 3 else "data\\outputs\\videoroute_animation.mp4"
-                result = run_full_pipeline(payload, output_video_path=output_arg)
-                print(json.dumps({"video_path": result["video_path"], "summary": result["summary"]}, ensure_ascii=False))
+                # NOTE: this arg is now an output DIRECTORY (multiple
+                # files get written into it), not a single .mp4 path.
+                output_arg = sys.argv[3] if len(sys.argv) > 3 else "data\\outputs\\video"
+                result = run_full_pipeline(payload, output_video_dir=output_arg)
+                print(json.dumps({"video_paths": result["video_paths"], "summary": result["summary"]}, ensure_ascii=False))
             else:
                 print(f"Error: Unknown command '{command}'", file=sys.stderr)
                 sys.exit(1)

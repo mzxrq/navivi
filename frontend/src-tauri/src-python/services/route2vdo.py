@@ -363,13 +363,28 @@ def reencode_to_h264(src: str, dst: str) -> bool:
 
 def render_route_animation(
     img_path: str, points: list, labels: list, popups: list = None,
-    output_path: str = "data\\outputs\\videoroute_animation.mp4", fps: int = 30,
+    output_dir: str = "data\\outputs\\video", fps: int = 30,
     duration_seconds: float = 8.0, line_color: tuple = (0, 200, 255),
     line_thickness: int = 10, marker_color: tuple = (0, 0, 255),
     marker_radius: int = 18, res_sequence: list = None,
     res_duration_per_slice: float = 5.0, pause_seconds: float = 2.0,
     summary: dict = None, summary_hold_seconds: float = 4.0, summary_fade_seconds: float = 0.5,
-):
+) -> list[str]:
+    """
+    Renders the navigation animation as SEPARATE video files instead of
+    one continuous MP4:
+      01_overview.mp4               - Phase 1 (big picture) + Phase 2 (pause)
+      02_waypoint_XX_<label>.mp4    - one file per residential chunk (Phase 3)
+      03_summary.mp4                - Phase 4 (summary card), if `summary` given
+
+    Splitting into separate files (rather than one _FrameSink spanning
+    the whole timeline) means each phase gets its own ffmpeg encode
+    process and its own container — useful for downstream consumers
+    that want to play/re-order/drop individual legs (e.g. a frontend
+    stepping through "leg 2 of 4") without re-cutting a monolithic MP4.
+
+    Returns the list of output file paths in playback order.
+    """
     img = _read_image_safe(img_path)
     if img is None:
         raise FileNotFoundError(f"Cannot read: {img_path}")
@@ -377,13 +392,17 @@ def render_route_animation(
     h, w = img.shape[:2]
     font = cv2.FONT_HERSHEY_SIMPLEX
 
-    # Streams frames directly into a single-pass H.264 encode instead of
-    # writing a raw/XVID .avi and then re-encoding it end-to-end — see
-    # _FrameSink docstring for the O(2n) -> O(n) I/O rationale.
-    video = _FrameSink(output_path, w, h, fps)
+    out_dir = Path(output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    output_paths: list[str] = []
+
+    def _sink_for(filename: str) -> _FrameSink:
+        # Every phase gets its own ffmpeg subprocess/container instead of
+        # one writer spanning the whole animation — see docstring above.
+        return _FrameSink(str(out_dir / filename), w, h, fps)
 
     # ==========================================
-    # PHASE 1: BIG PICTURE ROUTE
+    # PHASE 1: BIG PICTURE ROUTE  (+ PHASE 2: PAUSE, same file)
     # ==========================================
     num_frames = max(10, int(duration_seconds * fps))
     named = [(int(points[i][0]), int(points[i][1]), labels[i]) for i in range(len(points)) if _is_real_label(labels[i])]
@@ -407,6 +426,7 @@ def render_route_animation(
     # with O(landmarks) bakes + cheap per-frame alpha blits.
     landmark_sprites = {lbl: _prebake_landmark_sprite(lbl) for _, _, lbl in named}
 
+    overview_video = _sink_for("01_overview.mp4")
     print(f"🎬 Rendering Phase 1: Big Picture ({duration_seconds}s)")
     for p in smooth_path:
         frame = base_img.copy()
@@ -453,24 +473,27 @@ def render_route_animation(
                         freeze_frame[box_y + border:box_y + border + ph, box_x + border:box_x + border + pw] = pop_img
 
                 for _ in range(int(popup["data"]["freeze_seconds"] * fps)):
-                    video.write(freeze_frame)
+                    overview_video.write(freeze_frame)
 
         last_frame = frame
-        video.write(frame)
+        overview_video.write(frame)
 
-    # ==========================================
-    # PHASE 2: THE PAUSE
-    # ==========================================
+    # Phase 2 (pause) rides in the SAME file as Phase 1 — it's a hold on
+    # the overview's final frame, not a distinct navigational unit, so
+    # splitting it out as its own file would just add a near-static clip
+    # with no content of its own.
     for _ in range(int(pause_seconds * fps)):
-        video.write(last_frame)
+        overview_video.write(last_frame)
+
+    output_paths.append(overview_video.release(str(out_dir / "01_overview.mp4")))
 
     if popups:
         for p_data in popups:
             if p_data is not None:
                 p_data["triggered"] = False
 
-# ==========================================
-    # PHASE 3: RESIDENTIAL MAPS (WITH SMOOTH PATH)
+    # ==========================================
+    # PHASE 3: RESIDENTIAL MAPS, ONE FILE PER WAYPOINT SEGMENT
     # ==========================================
     if res_sequence:
         historical_lats, historical_lons = [], []
@@ -485,124 +508,135 @@ def render_route_animation(
             res_labels = res_data["labels"]
             res_popups = res_data.get("popups", [None] * len(res_points))
 
-            if res_img is not None:
-                if res_img.shape[:2] != (h, w):
-                    res_img = cv2.resize(res_img, (w, h))
+            if res_img is None:
+                continue
 
-                res_base = res_img.copy()
-                # Distance-proportional duration (falls back to the flat
-                # res_duration_per_slice if the caller didn't supply a
-                # per-chunk value) so long stretches get more screen time
-                # and short hops stay brisk, while averaging to the
-                # target seconds/waypoint across the whole route.
-                chunk_duration = res_data.get("segment_duration", res_duration_per_slice)
-                res_frames = max(10, int(chunk_duration * fps))
+            if res_img.shape[:2] != (h, w):
+                res_img = cv2.resize(res_img, (w, h))
 
-                # ease=True gives the marker a deliberate, decelerating
-                # arrival into each waypoint instead of constant-speed
-                # travel — this is what actually reads as "slow"
-                # regardless of how many seconds are allocated.
-                res_smooth_path = MapFetcher.get_smooth_path(res_points, res_frames, ease=True)
+            res_base = res_img.copy()
+            # Distance-proportional duration (falls back to the flat
+            # res_duration_per_slice if the caller didn't supply a
+            # per-chunk value) so long stretches get more screen time
+            # and short hops stay brisk, while averaging to the
+            # target seconds/waypoint across the whole route.
+            chunk_duration = res_data.get("segment_duration", res_duration_per_slice)
+            res_frames = max(10, int(chunk_duration * fps))
 
-                res_named = [(int(res_points[j][0]), int(res_points[j][1]), res_labels[j]) for j in range(len(res_points)) if _is_real_label(res_labels[j])]
-                active_res_popups = [{"x": res_points[j][0], "y": res_points[j][1], "data": res_popups[j], "label": res_labels[j]} for j in range(len(res_points)) if res_popups[j] is not None]
+            # ease=True gives the marker a deliberate, decelerating
+            # arrival into each waypoint instead of constant-speed
+            # travel — this is what actually reads as "slow"
+            # regardless of how many seconds are allocated.
+            res_smooth_path = MapFetcher.get_smooth_path(res_points, res_frames, ease=True)
 
-                # Same hoist-out-of-loop rationale as Phase 1: bake once
-                # per residential chunk, blit per frame.
-                res_landmark_sprites = {lbl: _prebake_landmark_sprite(lbl) for _, _, lbl in res_named}
+            res_named = [(int(res_points[j][0]), int(res_points[j][1]), res_labels[j]) for j in range(len(res_points)) if _is_real_label(res_labels[j])]
+            active_res_popups = [{"x": res_points[j][0], "y": res_points[j][1], "data": res_popups[j], "label": res_labels[j]} for j in range(len(res_points)) if res_popups[j] is not None]
 
-                for f_idx, p in enumerate(res_smooth_path):
-                    frame = res_base.copy()
+            # Same hoist-out-of-loop rationale as Phase 1: bake once
+            # per residential chunk, blit per frame.
+            res_landmark_sprites = {lbl: _prebake_landmark_sprite(lbl) for _, _, lbl in res_named}
 
-                    # 1. Draw historical paths from previous chunks smoothly
-                    if len(historical_lats) > 0:
-                        hist_px = _project_latlons_to_pixels(np.array(historical_lats), np.array(historical_lons), extent, w, h)
-                        if len(hist_px) > 1:
-                            cv2.polylines(frame, [hist_px.astype(np.int32)], False, line_color, line_thickness, cv2.LINE_AA)
+            # Filesystem-safe label suffix for the filename — falls back
+            # to a plain index if every point in this chunk is unlabeled.
+            named_labels = [lbl for _, _, lbl in res_named]
+            raw_suffix = named_labels[-1] if named_labels else f"leg{i + 1}"
+            safe_suffix = "".join(c for c in str(raw_suffix) if c.isalnum() or c in (" ", "_", "-")).strip().replace(" ", "_") or f"leg{i + 1}"
+            chunk_filename = f"02_waypoint_{i + 1:02d}_{safe_suffix}.mp4"
+            chunk_video = _sink_for(chunk_filename)
 
-                    # 2. Draw current chunk's path smoothly up to current frame index
-                    current_chunk_px = res_smooth_path[:f_idx + 1]
-                    if len(current_chunk_px) > 1:
-                        cv2.polylines(frame, [current_chunk_px.astype(np.int32)], False, line_color, line_thickness, cv2.LINE_AA)
-                        cx_, cy_ = int(current_chunk_px[-1][0]), int(current_chunk_px[-1][1])
-                    else:
-                        cx_, cy_ = int(p[0]), int(p[1])
+            for f_idx, p in enumerate(res_smooth_path):
+                frame = res_base.copy()
 
-                    for x, y, lbl in res_named:
-                        sprite, anchor = res_landmark_sprites[lbl]
-                        _blit_sprite(frame, sprite, anchor, x, y)
+                # 1. Draw historical paths from previous chunks smoothly
+                if len(historical_lats) > 0:
+                    hist_px = _project_latlons_to_pixels(np.array(historical_lats), np.array(historical_lons), extent, w, h)
+                    if len(hist_px) > 1:
+                        cv2.polylines(frame, [hist_px.astype(np.int32)], False, line_color, line_thickness, cv2.LINE_AA)
 
-                    cv2.circle(frame, (cx_, cy_), marker_radius, marker_color, -1, cv2.LINE_AA)
-                    cv2.circle(frame, (cx_, cy_), marker_radius + 4, (255, 255, 255), 2, cv2.LINE_AA)
-                    cv2.circle(frame, (cx_, cy_), marker_radius + 7, marker_color, 1, cv2.LINE_AA)
+                # 2. Draw current chunk's path smoothly up to current frame index
+                current_chunk_px = res_smooth_path[:f_idx + 1]
+                if len(current_chunk_px) > 1:
+                    cv2.polylines(frame, [current_chunk_px.astype(np.int32)], False, line_color, line_thickness, cv2.LINE_AA)
+                    cx_, cy_ = int(current_chunk_px[-1][0]), int(current_chunk_px[-1][1])
+                else:
+                    cx_, cy_ = int(p[0]), int(p[1])
 
-                    for popup in active_res_popups:
-                        if np.hypot(cx_ - popup["x"], cy_ - popup["y"]) < 30.0 and not popup["data"]["triggered"]:
-                            popup["data"]["triggered"] = True
-                            freeze_frame = frame.copy()
-                            img_url = popup["data"].get("popup_image")
+                for x, y, lbl in res_named:
+                    sprite, anchor = res_landmark_sprites[lbl]
+                    _blit_sprite(frame, sprite, anchor, x, y)
 
-                            if img_url and os.path.exists(img_url):
-                                pop_img = _read_image_safe(img_url)
-                                if pop_img is not None:
-                                    target_img_w = 350
-                                    ph, pw = pop_img.shape[:2]
-                                    pop_img = cv2.resize(pop_img, (target_img_w, int(target_img_w / (pw / ph))))
-                                    ph, pw = pop_img.shape[:2]
+                cv2.circle(frame, (cx_, cy_), marker_radius, marker_color, -1, cv2.LINE_AA)
+                cv2.circle(frame, (cx_, cy_), marker_radius + 4, (255, 255, 255), 2, cv2.LINE_AA)
+                cv2.circle(frame, (cx_, cy_), marker_radius + 7, marker_color, 1, cv2.LINE_AA)
 
-                                    border, label_text = 6, popup.get("label")
-                                    text_offset = cv2.getTextSize(label_text, font, 0.6, 1)[0][1] + 15 if _is_real_label(label_text) else 0
-                                    total_w, total_h = pw + (border * 2), ph + (border * 2)
+                for popup in active_res_popups:
+                    if np.hypot(cx_ - popup["x"], cy_ - popup["y"]) < 30.0 and not popup["data"]["triggered"]:
+                        popup["data"]["triggered"] = True
+                        freeze_frame = frame.copy()
+                        img_url = popup["data"].get("popup_image")
 
-                                    margin = 40
-                                    box_x = int(popup["x"]) - total_w - marker_radius - 4 if popup["x"] > w * 0.6 else int(popup["x"]) + marker_radius + 4
-                                    box_y = int(popup["y"]) + marker_radius + 10 if int(popup["y"]) - total_h - text_offset - 10 < margin else int(popup["y"]) - total_h - text_offset - 10
-                                    box_x = max(margin, min(box_x, w - total_w - margin))
-                                    box_y = max(margin, min(box_y, h - total_h - margin))
+                        if img_url and os.path.exists(img_url):
+                            pop_img = _read_image_safe(img_url)
+                            if pop_img is not None:
+                                target_img_w = 350
+                                ph, pw = pop_img.shape[:2]
+                                pop_img = cv2.resize(pop_img, (target_img_w, int(target_img_w / (pw / ph))))
+                                ph, pw = pop_img.shape[:2]
 
-                                    cv2.rectangle(freeze_frame, (box_x, box_y), (box_x + total_w, box_y + total_h), (255, 255, 255), -1)
-                                    cv2.rectangle(freeze_frame, (box_x, box_y), (box_x + total_w, box_y + total_h), (100, 100, 100), 2)
-                                    freeze_frame[box_y + border:box_y + border + ph, box_x + border:box_x + border + pw] = pop_img
+                                border, label_text = 6, popup.get("label")
+                                text_offset = cv2.getTextSize(label_text, font, 0.6, 1)[0][1] + 15 if _is_real_label(label_text) else 0
+                                total_w, total_h = pw + (border * 2), ph + (border * 2)
 
-                            for _ in range(int(popup["data"]["freeze_seconds"] * fps)):
-                                video.write(freeze_frame)
+                                margin = 40
+                                box_x = int(popup["x"]) - total_w - marker_radius - 4 if popup["x"] > w * 0.6 else int(popup["x"]) + marker_radius + 4
+                                box_y = int(popup["y"]) + marker_radius + 10 if int(popup["y"]) - total_h - text_offset - 10 < margin else int(popup["y"]) - total_h - text_offset - 10
+                                box_x = max(margin, min(box_x, w - total_w - margin))
+                                box_y = max(margin, min(box_y, h - total_h - margin))
 
-                    video.write(frame)
-                    last_frame = frame
+                                cv2.rectangle(freeze_frame, (box_x, box_y), (box_x + total_w, box_y + total_h), (255, 255, 255), -1)
+                                cv2.rectangle(freeze_frame, (box_x, box_y), (box_x + total_w, box_y + total_h), (100, 100, 100), 2)
+                                freeze_frame[box_y + border:box_y + border + ph, box_x + border:box_x + border + pw] = pop_img
 
-                for _ in range(fps):
-                    video.write(last_frame)
+                        for _ in range(int(popup["data"]["freeze_seconds"] * fps)):
+                            chunk_video.write(freeze_frame)
 
-                if len(chunk_lats) > 0:
-                    historical_lats.extend(chunk_lats)
-                    historical_lons.extend(chunk_lons)
-                    
+                chunk_video.write(frame)
+                last_frame = frame
+
+            for _ in range(fps):
+                chunk_video.write(last_frame)
+
+            output_paths.append(chunk_video.release(str(out_dir / chunk_filename)))
+
+            if len(chunk_lats) > 0:
+                historical_lats.extend(chunk_lats)
+                historical_lons.extend(chunk_lons)
+
     # ==========================================
-    # PHASE 4: SUMMARY CARD
+    # PHASE 4: SUMMARY CARD (own file)
     # ==========================================
     if summary:
+        summary_video = _sink_for("03_summary.mp4")
         card = render_summary_card(distance_km=summary.get("total_distance_km", 0.0), duration_seconds=summary.get("total_duration_seconds", 0.0))
         fade_frames = max(1, int(summary_fade_seconds * fps))
         hold_frames = max(0, int(summary_hold_seconds * fps) - fade_frames)
 
         for i in range(fade_frames):
-            video.write(composite_card_on_frame(last_frame, card, alpha=(i + 1) / fade_frames))
+            summary_video.write(composite_card_on_frame(last_frame, card, alpha=(i + 1) / fade_frames))
         held_frame = composite_card_on_frame(last_frame, card, alpha=1.0)
         for _ in range(hold_frames):
-            video.write(held_frame)
+            summary_video.write(held_frame)
 
-    # video.release() now closes ffmpeg's stdin and waits for the
-    # single-pass encode to finish (or falls back to the legacy
-    # AVI+reencode path if ffmpeg wasn't resolvable) — see _FrameSink.
-    output_path = video.release(str(output_path))
-    return output_path
+        output_paths.append(summary_video.release(str(out_dir / "03_summary.mp4")))
+
+    return output_paths
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--map", required=True)
     parser.add_argument("--route", required=True)
-    parser.add_argument("--output", default="data\\outputs\\video\\route_animation.mp4")
+    parser.add_argument("--output", default="data\\outputs\\video", help="Output DIRECTORY — render_route_animation now writes multiple files (01_overview.mp4, 02_waypoint_XX_*.mp4, 03_summary.mp4) into this directory instead of a single file.")
     parser.add_argument("--duration", type=float, default=None)
     parser.add_argument("--fps", type=int, default=None)
     parser.add_argument("--thickness", type=int, default=None)
@@ -625,9 +659,9 @@ def main():
 
     summary = json.load(open(args.summary_json, "r", encoding="utf-8")) if args.summary_json else None
 
-    render_route_animation(
+    output_files = render_route_animation(
         img_path=args.map, points=points, labels=labels, popups=popups,
-        output_path=args.output, fps=args.fps or settings.get("fps", 30),
+        output_dir=args.output, fps=args.fps or settings.get("fps", 30),
         duration_seconds=args.duration or settings.get("duration_seconds", 8),
         line_thickness=args.thickness or settings.get("line_thickness", 10),
         marker_radius=args.radius or settings.get("marker_radius", 18),
@@ -635,6 +669,9 @@ def main():
         pause_seconds=args.pause, summary=summary,
         summary_hold_seconds=args.summary_hold, summary_fade_seconds=args.summary_fade,
     )
+    print(f"✅ Rendered {len(output_files)} file(s):")
+    for f in output_files:
+        print(f"   {f}")
 
 
 if __name__ == "__main__":
