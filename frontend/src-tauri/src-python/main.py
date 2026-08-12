@@ -14,7 +14,7 @@ import numpy as np
 import pyproj
 
 from services.gpsparser import convert_gps_file, clean_gps_data, export_to_frontend_json
-from services.filehandler import initialize_new_project, save_project_asset_image, store_raw_file_with_datetime
+from services.filehandler import initialize_new_project, save_project_asset_image, store_raw_file_with_datetime, generate_and_save_audio
 from services.mapfetcher import MapFetcher
 from services.route2vdo import render_route_animation
 
@@ -179,22 +179,32 @@ if __name__ == "__main__":
         try:
             if command == "process_gps":
                 print(handle_incoming_gps_upload(payload))
+                
             elif command == "full_pipeline":
                 output_arg = sys.argv[3] if len(sys.argv) > 3 else "data\\outputs\\video"
                 result = run_full_pipeline(payload, output_video_dir=output_arg)
                 print(json.dumps({"video_paths": result["video_paths"], "summary": result["summary"]}, ensure_ascii=False))
+                
             elif command == "init_project":
                 project_name = sys.argv[3] if len(sys.argv) > 3 else "Untitled Project"
                 config_path = initialize_new_project(user_id=payload, project_name=project_name)
                 print(json.dumps({"config_path": config_path}, ensure_ascii=False))
+                
             elif command == "save_asset":
-                # payload is project_dir (sys.argv[2]), source image path is sys.argv[3]
                 source_image_path = sys.argv[3] if len(sys.argv) > 3 else ""
                 asset_path = save_project_asset_image(project_dir=payload, source_image_path=source_image_path)
                 print(json.dumps({"asset_path": asset_path}, ensure_ascii=False))
+                
+            # --- Added TTS Command ---
+            elif command == "generate_speech":
+                output_path = sys.argv[3] if len(sys.argv) > 3 else "output.mp3"
+                saved_path = generate_and_save_audio(text=payload, output_path=output_path)
+                print(json.dumps({"audio_path": saved_path}, ensure_ascii=False))
+                
             else:
                 print(f"Error: Unknown command '{command}'", file=sys.stderr)
                 sys.exit(1)
+                
         except Exception as e:
             print(f"Error: {str(e)}", file=sys.stderr)
             sys.exit(1)

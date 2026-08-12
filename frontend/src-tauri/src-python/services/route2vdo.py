@@ -183,7 +183,7 @@ def render_summary_card(distance_km: float, duration_seconds: float, card_size: 
     draw.text((text_x2, 22 * scale), "Distance", font=font_label, fill=text_color)
     draw.text((text_x2, 44 * scale), distance_str, font=font_value, fill=text_color)
 
-    canvas = canvas.resize((w, h), Image.LANCZOS)
+    canvas = canvas.resize((w, h), Image.LANCZOS) # type: ignore
     return np.array(canvas)[:, :, [2, 1, 0, 3]]
 
 
@@ -273,7 +273,7 @@ class _FrameSink:
         if self.proc is None:
             self._fallback_path = tempfile.mktemp(suffix=".avi")
             self._fallback_writer = cv2.VideoWriter(
-                self._fallback_path, cv2.VideoWriter_fourcc(*"XVID"), fps, (w, h)
+                self._fallback_path, cv2.VideoWriter_fourcc(*"XVID"), fps, (w, h) # type: ignore
             )
             if not self._fallback_writer.isOpened():
                 raise RuntimeError("Neither ffmpeg nor OpenCV VideoWriter is available.")
@@ -282,21 +282,21 @@ class _FrameSink:
         if self.proc is not None:
             # .tobytes() is a single contiguous memcpy — cheap relative
             # to the encode work itself.
-            self.proc.stdin.write(frame.tobytes())
+            self.proc.stdin.write(frame.tobytes()) # type: ignore
         else:
-            self._fallback_writer.write(frame)
+            self._fallback_writer.write(frame) # type: ignore
 
     def release(self, output_path: str) -> str:
         if self.proc is not None:
-            self.proc.stdin.close()
+            self.proc.stdin.close() # type: ignore
             self.proc.wait()
             return output_path
-        self._fallback_writer.release()
-        if output_path.lower().endswith(".mp4") and reencode_to_h264(self._fallback_path, output_path):
-            os.remove(self._fallback_path)
+        self._fallback_writer.release() # type: ignore
+        if output_path.lower().endswith(".mp4") and reencode_to_h264(self._fallback_path, output_path): # type: ignore
+            os.remove(self._fallback_path) # type: ignore
             return output_path
         avi_path = str(Path(output_path).with_suffix(".avi"))
-        os.rename(self._fallback_path, avi_path)
+        os.rename(self._fallback_path, avi_path) # type: ignore
         return avi_path
 
 
@@ -362,13 +362,13 @@ def reencode_to_h264(src: str, dst: str) -> bool:
 
 
 def render_route_animation(
-    img_path: str, points: list, labels: list, popups: list = None,
+    img_path: str, points: list, labels: list, popups: list = None, # type: ignore
     output_dir: str = "data\\outputs\\video", fps: int = 30,
     duration_seconds: float = 8.0, line_color: tuple = (0, 200, 255),
     line_thickness: int = 10, marker_color: tuple = (0, 0, 255),
-    marker_radius: int = 18, res_sequence: list = None,
+    marker_radius: int = 18, res_sequence: list = None, # type: ignore
     res_duration_per_slice: float = 5.0, pause_seconds: float = 2.0,
-    summary: dict = None, summary_hold_seconds: float = 4.0, summary_fade_seconds: float = 0.5,
+    summary: dict = None, summary_hold_seconds: float = 4.0, summary_fade_seconds: float = 0.5, # type: ignore
 ) -> list[str]:
     """
     Renders the navigation animation as SEPARATE video files instead of
@@ -584,7 +584,7 @@ def render_route_animation(
                                 ph, pw = pop_img.shape[:2]
 
                                 border, label_text = 6, popup.get("label")
-                                text_offset = cv2.getTextSize(label_text, font, 0.6, 1)[0][1] + 15 if _is_real_label(label_text) else 0
+                                text_offset = cv2.getTextSize(label_text, font, 0.6, 1)[0][1] + 15 if _is_real_label(label_text) else 0 # type: ignore
                                 total_w, total_h = pw + (border * 2), ph + (border * 2)
 
                                 margin = 40
@@ -665,8 +665,8 @@ def main():
         duration_seconds=args.duration or settings.get("duration_seconds", 8),
         line_thickness=args.thickness or settings.get("line_thickness", 10),
         marker_radius=args.radius or settings.get("marker_radius", 18),
-        res_sequence=res_sequence, res_duration_per_slice=args.res_duration,
-        pause_seconds=args.pause, summary=summary,
+        res_sequence=res_sequence, res_duration_per_slice=args.res_duration, # type: ignore
+        pause_seconds=args.pause, summary=summary, # type: ignore
         summary_hold_seconds=args.summary_hold, summary_fade_seconds=args.summary_fade,
     )
     print(f"✅ Rendered {len(output_files)} file(s):")

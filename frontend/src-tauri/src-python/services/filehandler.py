@@ -2,6 +2,7 @@ import shutil
 from pathlib import Path
 from datetime import datetime
 import json
+import requests
 
 def store_raw_file_with_datetime(source_path_str: str) -> str:
     """
@@ -84,6 +85,41 @@ def save_project_asset_image(project_dir: str | Path, source_image_path: str | P
     
     # Return path with forward slashes for cross-platform JSON compatibility
     return str(target_path).replace("\\", "/")
+
+def generate_and_save_audio(text: str, output_path: str = "output.mp3", server_url: str = "http://localhost:8000/v1/audio/speech") -> str | None:
+    """
+    Sends text to the local Irodori-TTS server and saves the response as an audio file.
+    
+    :param text: The text you want to convert to speech.
+    :param output_path: The file path where the MP3 should be saved.
+    :param server_url: The URL of the running Irodori-TTS server.
+    :return: The path to the saved file if successful, otherwise None.
+    """
+    payload = {
+        "model": "irodori-tts",
+        "input": text,
+        "voice": "default",
+        "response_format": "mp3"
+    }
+    
+    try:
+        response = requests.post(server_url, json=payload)
+        
+        if response.status_code == 200:
+            with open(output_path, "wb") as f:
+                f.write(response.content)
+            print(f"Audio successfully saved to: {output_path}")
+            return output_path
+        else:
+            print(f"Error from server ({response.status_code}): {response.text}")
+            return None
+            
+    except requests.exceptions.ConnectionError:
+        print("Error: Could not connect to the Irodori-TTS server. Make sure it is running on http://localhost:8000")
+        return None
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
+        return None
 
 def initialize_new_project(user_id: str, project_name: str, base_settings: dict = None) -> str:
     """
