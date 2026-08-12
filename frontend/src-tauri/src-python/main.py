@@ -14,7 +14,7 @@ import numpy as np
 import pyproj
 
 from services.gpsparser import convert_gps_file, clean_gps_data, export_to_frontend_json
-from services.filehandler import store_raw_file_with_datetime
+from services.filehandler import initialize_new_project, save_project_asset_image, store_raw_file_with_datetime
 from services.mapfetcher import MapFetcher
 from services.route2vdo import render_route_animation
 
@@ -172,19 +172,26 @@ def run_full_pipeline(raw_source_path: str, output_video_dir: str = "data\\outpu
     video_paths = generate_navigation_video(cleaned_route=cleaned_route, project_config_path=str(config_path), output_video_dir=output_video_dir)
     return {"video_paths": video_paths, "summary": cleaned_route.get("summary", {})}
 
-
 if __name__ == "__main__":
     if len(sys.argv) > 1:
-        command, payload = sys.argv[1], (sys.argv[2] if len(sys.argv) > 2 else "")
+        command = sys.argv[1]
+        payload = sys.argv[2] if len(sys.argv) > 2 else ""
         try:
             if command == "process_gps":
                 print(handle_incoming_gps_upload(payload))
             elif command == "full_pipeline":
-                # NOTE: this arg is now an output DIRECTORY (multiple
-                # files get written into it), not a single .mp4 path.
                 output_arg = sys.argv[3] if len(sys.argv) > 3 else "data\\outputs\\video"
                 result = run_full_pipeline(payload, output_video_dir=output_arg)
                 print(json.dumps({"video_paths": result["video_paths"], "summary": result["summary"]}, ensure_ascii=False))
+            elif command == "init_project":
+                project_name = sys.argv[3] if len(sys.argv) > 3 else "Untitled Project"
+                config_path = initialize_new_project(user_id=payload, project_name=project_name)
+                print(json.dumps({"config_path": config_path}, ensure_ascii=False))
+            elif command == "save_asset":
+                # payload is project_dir (sys.argv[2]), source image path is sys.argv[3]
+                source_image_path = sys.argv[3] if len(sys.argv) > 3 else ""
+                asset_path = save_project_asset_image(project_dir=payload, source_image_path=source_image_path)
+                print(json.dumps({"asset_path": asset_path}, ensure_ascii=False))
             else:
                 print(f"Error: Unknown command '{command}'", file=sys.stderr)
                 sys.exit(1)

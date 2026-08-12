@@ -1,6 +1,7 @@
 import shutil
 from pathlib import Path
 from datetime import datetime
+import json
 
 def store_raw_file_with_datetime(source_path_str: str) -> str:
     """
@@ -53,6 +54,105 @@ def store_raw_file_with_datetime(source_path_str: str) -> str:
     except Exception as e:
         print(f"Failed to store raw file: {e}")
         return ""
+
+def save_project_asset_image(project_dir: str | Path, source_image_path: str | Path) -> str:
+    """
+    Copies an uploaded image file into the project's 'assets' directory,
+    ensures a unique filename to prevent overwrites, and returns the 
+    normalized path string to be stored in the waypoint configuration.
+    """
+    proj_path = Path(project_dir)
+    assets_dir = proj_path / "assets"
+    assets_dir.mkdir(parents=True, exist_ok=True)
+    
+    src_path = Path(source_image_path)
+    if not src_path.exists():
+        raise FileNotFoundError(f"Source image not found: {source_image_path}")
+        
+    # Generate a unique filename using a timestamp to avoid collisions
+    timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+    original_stem = src_path.stem
+    suffix = src_path.suffix.lower()
+    
+    target_filename = f"{original_stem}_{timestamp_str}{suffix}"
+    target_path = assets_dir / target_filename
+    
+    # Copy the file into the project assets folder
+    shutil.copy2(src_path, target_path)
+    
+    print(f"🖼️ Asset image saved to: {target_path}")
+    
+    # Return path with forward slashes for cross-platform JSON compatibility
+    return str(target_path).replace("\\", "/")
+
+def initialize_new_project(user_id: str, project_name: str, base_settings: dict = None) -> str:
+    """
+    Initializes a dedicated project folder structure and creates 
+    an initial project.json metadata configuration file.
+    
+    Returns the absolute or relative path to the created project.json file.
+    """
+    # 1. Sanitize the project name into a safe directory slug
+    safe_slug = "".join(c.lower() if c.isalnum() else "_" for c in project_name).strip("_")
+    if not safe_slug:
+        safe_slug = "untitled_project"
+
+    # 2. Define directory paths using pathlib
+    project_dir = Path("data") / "projects" / user_id / safe_slug
+    assets_dir = project_dir / "assets"
+    res_images_dir = project_dir / "res_images"
+
+    # Create directories recursively
+    project_dir.mkdir(parents=True, exist_ok=True)
+    assets_dir.mkdir(exist_ok=True)
+    res_images_dir.mkdir(exist_ok=True)
+
+    # 3. Default video/animation settings mapping to route2vdo configuration
+    default_settings = {
+        "fps": 30,
+        "duration_seconds": 8.0,
+        "line_color": [0, 200, 255],
+        "line_thickness": 10,
+        "marker_color": [0, 0, 255],
+        "marker_radius": 18,
+        "res_duration": 12.0,
+        "pause": 2.0,
+        "summary_hold": 4.0,
+        "summary_fade": 0.5
+    }
+    if base_settings:
+        default_settings.update(base_settings)
+
+    # 4. Construct project state payload
+    timestamp = datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
+    project_id = f"proj_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{safe_slug}"
+
+    payload = {
+        "project_id": project_id,
+        "user_id": user_id,
+        "project_name": project_name,
+        "created_at": timestamp,
+        "status": "initialized",
+        "directory_path": str(project_dir).replace("\\", "/"),
+        "source_files": {
+            "gps_route": None
+        },
+        "settings": default_settings,
+        "waypoints": []
+    }
+
+    # 5. Save project.json using an atomic write pattern (via a temp file)
+    config_path = project_dir / "project.json"
+    temp_path = project_dir / "project.json.tmp"
+
+    with open(temp_path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2, ensure_ascii=False)
+    
+    # Safely replace the target file to prevent corruption on crash
+    temp_path.replace(config_path)
+
+    print(f"📁 Project initialized successfully at: {config_path}")
+    return str(config_path)
 
 # Testing
 # if __name__ == "__main__":
