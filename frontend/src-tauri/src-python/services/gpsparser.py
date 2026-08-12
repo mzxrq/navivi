@@ -460,9 +460,9 @@ def export_to_frontend_json(
         "waypoints": waypoints_list
     }
 
-    # 4. Save JSON to the target directory: src-tauri/src-python/data/inputs/gpsdata/processdata/json
+    # 4. Save JSON to the target directory: data/inputs/gpsdata/processdata/json
     if save_json:
-        json_dir = Path("src-tauri/src-python/data/inputs/gpsdata/processdata/json")
+        json_dir = Path("data/inputs/gpsdata/processdata/json")
         json_dir.mkdir(parents=True, exist_ok=True)
 
         saved_paths = cleaned_data.get("saved_paths", {})

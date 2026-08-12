@@ -9,7 +9,7 @@ def store_raw_file_with_datetime(source_path_str: str) -> str:
     Example: 'track.gpx' becomes '20260810_130008_01.gpx'
     """
     # 1. Define the storage folder
-    raw_storage_dir = Path("src-tauri\\src-python\\data\\inputs\\gpsdata\\rawdata")
+    raw_storage_dir = Path("data\\inputs\\gpsdata\\rawdata")
     raw_storage_dir.mkdir(parents=True, exist_ok=True)
 
     source_path = Path(source_path_str)
