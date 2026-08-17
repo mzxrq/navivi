@@ -40,7 +40,7 @@ def convert_gps_file(input_file, output_filename, output_format, input_format=No
         raise FileNotFoundError(f"Input file not found: {input_file}")
 
     # 1.3 : Auto-generate date, time, sequence number, and _raw suffix for output path
-    target_dir = Path("src-tauri/src-python/data/inputs/gpsdata/processdata/csv")
+    target_dir = Path("src-python/data/inputs/gpsdata/processdata/csv")
     target_dir.mkdir(parents=True, exist_ok=True)
 
     datetime_str = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -307,7 +307,7 @@ def export_to_frontend_json(
 
     # 4. Save JSON to the target directory: src-tauri/src-python/data/inputs/gpsdata/processdata/json
     if save_json:
-        json_dir = Path("src-tauri/src-python/data/inputs/gpsdata/processdata/json")
+        json_dir = Path("src-python/data/inputs/gpsdata/processdata/json")
         json_dir.mkdir(parents=True, exist_ok=True)
 
         saved_paths = cleaned_data.get("saved_paths", {})

@@ -1,4 +1,5 @@
 import shutil
+import sys
 from pathlib import Path
 from datetime import datetime
 
@@ -9,7 +10,7 @@ def store_raw_file_with_datetime(source_path_str: str) -> str:
     Example: 'track.gpx' becomes '20260810_130008_01.gpx'
     """
     # 1. Define the storage folder
-    raw_storage_dir = Path("src-tauri\\src-python\\data\\inputs\\gpsdata\\rawdata")
+    raw_storage_dir = Path("src-python\\data\\inputs\\gpsdata\\rawdata")
     raw_storage_dir.mkdir(parents=True, exist_ok=True)
 
     source_path = Path(source_path_str)
@@ -53,6 +54,14 @@ def store_raw_file_with_datetime(source_path_str: str) -> str:
     except Exception as e:
         print(f"Failed to store raw file: {e}")
         return ""
+
+if __name__ == "__main__":
+    if len(sys.argv) > 1:
+        source = sys.argv[1]
+        result_path = store_raw_file_with_datetime(source)
+        # Print the resulting path so Rust can capture it
+        if result_path:
+            print(result_path)
 
 # Testing
 # if __name__ == "__main__":

@@ -4,7 +4,16 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' ipc: http://ipc.localhost ws://localhost:* https://nominatim.openstreetmap.org; img-src 'self' asset: https://*.cartocdn.com https://*.openstreetmap.org data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;">
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="
+        default-src 'self'; 
+        connect-src 'self' ipc: http://ipc.localhost https://router.project-osrm.org https://*.openstreetmap.org https://api.openrouteservice.org; 
+        style-src 'self' 'unsafe-inline' https://unpkg.com https://fonts.googleapis.com; 
+        img-src 'self' data: blob: https://*.cartocdn.com https://*.openstreetmap.org https://unpkg.com; 
+        font-src 'self' https://fonts.gstatic.com;
+      "
+    />
     <title>Navivi</title>
   </head>
 

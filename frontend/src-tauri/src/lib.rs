@@ -1,21 +1,49 @@
 use std::fs;
-use std::path::Path;
 use std::process::Command;
 
 #[tauri::command]
-fn store_file_in_backend(source_path: String, filename: String) -> Result<String, String> {
-    let target_dir = Path::new("src-python/data/inputs/gpsdata/rawdata");
-    if !target_dir.exists() {
-        fs::create_dir_all(target_dir).map_err(|e| e.to_string())?;
-    }
-
-    let destination_path = target_dir.join(&filename);
-
-    match fs::copy(&source_path, &destination_path) {
-        Ok(_) => Ok(destination_path.to_string_lossy().into_owned()),
-        Err(e) => Err(format!("Failed to copy file: {}", e)),
+async fn run_python_blueprint(action: String, payload: String) -> Result<String, String> {
+    let output = Command::new("python")
+        .env("PYTHONIOENCODING", "utf-8")
+        .arg("src-python/main.py")
+        .arg(&action)
+        .arg(&payload)
+        .output();
+    match output {
+        Ok(res) => {
+            if res.status.success() {
+                Ok(String::from_utf8_lossy(&res.stdout).to_string())
+            } else {
+                Err(String::from_utf8_lossy(&res.stderr).to_string())
+            }
+        }
+        Err(e) => Err(e.to_string())
     }
 }
+
+// #[tauri::command]
+// async fn store_file_in_backend(source_path: String, payload: String) -> Result<String, String> {
+//     let output = Command::new("python")
+//         .arg("src-python/services/filehandler.py")
+//         .arg(&source_path)
+//         .output()
+//         .map_err(|e| format!("Failed to call file handler: {}", e))?;
+
+//     if output.status.success() {
+//         // grab printed path from terminal
+//         let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+//         let final_path = stdout.lines().last().unwrap_or("").to_string();
+
+//         if final_path.is_empty() {
+//             Err("Python file handler failed to return a path.".into())
+//         } else {
+//             Ok(final_path)
+//         }
+//     } else {
+//         let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+//         Err(format!("Python script crashed: {}", stdeer))
+//     }
+// }
 
 #[tauri::command]
 fn trigger_render_pipeline(payload: String) -> Result<String, String> {
@@ -48,7 +76,7 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
 
         .invoke_handler(tauri::generate_handler![
-            store_file_in_backend,
+            run_python_blueprint,
             trigger_render_pipeline
         ])
 

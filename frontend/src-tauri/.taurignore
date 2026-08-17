@@ -1,2 +1,4 @@
 src-python/data/
 src-python/data/**/*
+
+src-python/services/__pycache__

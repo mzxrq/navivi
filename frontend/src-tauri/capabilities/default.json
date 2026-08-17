@@ -15,6 +15,10 @@
     "core:menu:default",
     "fs:default",
     "dialog:default",
+    "fs:allow-exists",
+    "fs:allow-mkdir",
+    "fs:allow-copy-file",
+    "fs:allow-write-text-file",
     "fs:allow-read-text-file",
     {
       "identifier": "fs:scope",
