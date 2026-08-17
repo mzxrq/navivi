@@ -1,28 +1,23 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useState, useEffect, useRef } from "react";
-import { open } from "@tauri-apps/plugin-dialog";
+import { open, save } from "@tauri-apps/plugin-dialog";
 import {
   MapPin,
   Layers,
-  ChevronRight,
+  ChevronLeft, ChevronRight, ChevronUp, ChevronDown,
   X,
   Edit2,
-  ChevronLeft,
   Image as ImageIcon,
   Mic,
   Trash2,
 } from "lucide-react";
 import { useWorkspace } from "../hooks/useWorkspace";
+import { useUI } from "../hooks/useUI";
 
 export function Sidebar() {
-  const {
-    projectName,
-    setProjectName,
-    routeFile,
-    waypoints,
-    setWaypoints,
-    updateWaypoint,
-  } = useWorkspace();
+  const { showToast } = useUI();
+  const { waypoints, setWaypoints, updateWaypoint, metadata, updateMetadata, saveProject } = useWorkspace();
+  
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isListEditMode, setIsListEditMode] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
@@ -30,10 +25,7 @@ export function Sidebar() {
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (
-        sidebarRef.current &&
-        !sidebarRef.current.contains(event.target as Node)
-      ) {
+      if (sidebarRef.current && !sidebarRef.current.contains(event.target as Node)) {
         setIsListEditMode(false);
         setShowClearConfirm(false);
       }
@@ -43,47 +35,70 @@ export function Sidebar() {
   }, []);
 
   const handleRenderVideo = async () => {
-    if (
-      !confirm(
-        "Ready to render? This will generate the configuration for the backend.",
-      )
-    )
+    if (waypoints.length === 0) {
+      showToast("Cannot render: Please add at least one waypoint.", "error");
       return;
-    const jobConfig = {
-      project_name: projectName,
-      source_files: { gps_route: routeFile },
-      waypoints: waypoints.map((wp) => ({
-        lat: wp.lat,
-        lng: wp.lng,
-        label: wp.name,
-        freeze_seconds: 3.0,
-        popup_image: wp.image,
-        narration: wp.narration,
-      })),
-    };
-    
+    }
+    const invalidWps = waypoints.filter(wp => !wp.narration.trim() || !wp.images || wp.images.length === 0);
+
+    if (invalidWps.length > 0) {
+      const names = invalidWps.map(w => w.name).join(", ");
+      showToast(`Validation Failed: Missing image or script in [${names}]`, "error");
+      return;
+    }
+
+    //////////////////////////////////////////////////////
+
+    if (!confirm("Ready to render? This will generate the configuration for the backend.")) return;
+    await saveProject();
+
     try {
+      const configPath = `${metadata.directory_path}/job_config.json`;
       const response = await invoke('trigger_render_pipeline', {
-        payload: JSON.stringify(jobConfig, null, 2)
+        payload: JSON.stringify({ config_path: configPath })
       });
       alert(response);
     } catch (error) {
-      alert('Error from Rust: ${error}');
+      alert(`Error from Rust: ${error}`);
     }
   };
 
-  const handleImageSelect = async (id: string) => {
-    const selectedPath = await open({
-      multiple: false,
+  const handleImageSelect = async (id: string, currentImages: string[] = []) => {
+    if (currentImages.length >= 3) {
+      showToast("Maximum of 3 images allowed per waypoint.", "error");
+      return;
+    }
+
+    const selectedPaths = await open({
+      multiple: true,
       filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg"] }],
     });
-    if (typeof selectedPath === "string")
-      updateWaypoint(id, { image: selectedPath });
+
+    if (selectedPaths) {
+      const pathsArray = Array.isArray(selectedPaths) ? selectedPaths : [selectedPaths];
+      const newImages = [...currentImages, ...pathsArray].slice(0, 3);
+      updateWaypoint(id, { images: newImages });
+    }
+  };
+
+  const moveWaypointUp = (index: number) => {
+    if (index === 0) return;
+    const newWaypoints = [...waypoints];
+    [newWaypoints[index - 1], newWaypoints[index]] = [newWaypoints[index], newWaypoints[index - 1]];
+    setWaypoints(newWaypoints);
+  };
+
+  const moveWaypointDown = (index: number) => {
+    if (index === waypoints.length - 1) return;
+    const newWaypoints = [...waypoints];
+    [newWaypoints[index + 1], newWaypoints[index]] = [newWaypoints[index], newWaypoints[index + 1]];
+    setWaypoints(newWaypoints);
   };
 
   if (editingId) {
     const wp = waypoints.find((w) => w.id === editingId);
     if (!wp) return null;
+    const wpImages = wp.images || [];
 
     return (
       <aside className="w-[340px] bg-white dark:bg-zinc-950 border-r border-zinc-200 dark:border-white/[0.08] flex flex-col p-6 h-full select-none z-10 relative shadow-xl transition-colors gap-6">
@@ -103,9 +118,7 @@ export function Sidebar() {
               <input
                 type="text"
                 value={wp.name}
-                onChange={(e) =>
-                  updateWaypoint(wp.id, { name: e.target.value })
-                }
+                onChange={(e) => updateWaypoint(wp.id, { name: e.target.value })}
                 className="w-full bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-white/10 rounded-xl px-3 py-2 text-sm text-zinc-900 dark:text-zinc-200 outline-none focus:border-zinc-400 dark:focus:border-zinc-500 transition-colors"
               />
             </div>
@@ -116,9 +129,7 @@ export function Sidebar() {
               </label>
               <textarea
                 value={wp.narration}
-                onChange={(e) =>
-                  updateWaypoint(wp.id, { narration: e.target.value })
-                }
+                onChange={(e) => updateWaypoint(wp.id, { narration: e.target.value })}
                 placeholder="Type what the AI voice should say here..."
                 className="w-full bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-white/10 rounded-xl px-3 py-2 text-sm text-zinc-900 dark:text-zinc-200 outline-none focus:border-zinc-400 dark:focus:border-zinc-500 transition-colors resize-none h-24 custom-scrollbar"
               />
@@ -126,20 +137,54 @@ export function Sidebar() {
 
             <div className="space-y-1.5">
               <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest px-1 flex items-center gap-1.5">
-                <ImageIcon className="w-3.5 h-3.5" /> Pop-up Picture
+                <ImageIcon className="w-3.5 h-3.5" /> Pop-up Pictures ({wpImages.length}/3)
               </label>
-              <button
-                onClick={() => handleImageSelect(wp.id)}
-                className="w-full bg-zinc-50 dark:bg-zinc-900/50 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 border border-zinc-300 dark:border-white/10 border-dashed rounded-xl px-3 py-3 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 transition-all flex items-center justify-center gap-2 truncate"
-              >
-                {wp.image ? (
-                  <span className="truncate max-w-[200px]" title={wp.image}>
-                    Selected: {wp.image.split("\\").pop()}
-                  </span>
-                ) : (
-                  "Click to browse local files..."
+              
+              <div className="flex flex-col gap-2">
+                {wpImages.map((img, idx) => (
+                  <div key={idx} className="flex items-center justify-between bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs text-zinc-600 dark:text-zinc-400">
+                    <span className="truncate max-w-[200px]" title={img}>
+                      {img.split(/[/\\]/).pop()}
+                    </span>
+                    <button 
+                      onClick={() => {
+                        const newImages = wpImages.filter((_, i) => i !== idx);
+                        updateWaypoint(wp.id, { images: newImages });
+                      }}
+                      className="text-red-500 hover:text-red-600 transition-colors"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+
+                {wpImages.length < 3 && (
+                  <button
+                    onClick={() => handleImageSelect(wp.id, wpImages)}
+                    className="w-full bg-zinc-50 dark:bg-zinc-900/50 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 border border-zinc-300 dark:border-white/10 border-dashed rounded-xl px-3 py-3 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 transition-all flex items-center justify-center gap-2"
+                  >
+                    Click to add images...
+                  </button>
                 )}
-              </button>
+
+                {/* NEW: PIP vs Fullscreen Toggle */}
+                {wpImages.length > 0 && (
+                  <div className="flex gap-2 mt-1">
+                    <button
+                      onClick={() => updateWaypoint(wp.id, { imageDisplay: 'pip' })}
+                      className={`flex-1 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${wp.imageDisplay !== 'fullscreen' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20' : 'bg-zinc-100 dark:bg-zinc-800/50 text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}
+                    >
+                      PIP Overlay
+                    </button>
+                    <button
+                      onClick={() => updateWaypoint(wp.id, { imageDisplay: 'fullscreen' })}
+                      className={`flex-1 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${wp.imageDisplay === 'fullscreen' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20' : 'bg-zinc-100 dark:bg-zinc-800/50 text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}
+                    >
+                      Fullscreen
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -174,8 +219,8 @@ export function Sidebar() {
           <div className="flex flex-col flex-1">
             <input
               type="text"
-              value={projectName}
-              onChange={(e) => setProjectName(e.target.value)}
+              value={metadata.project_name}
+              onChange={(e) => updateMetadata({ project_name: e.target.value })}
               className="bg-transparent border-b border-transparent focus:border-zinc-400 dark:focus:border-zinc-500 hover:border-zinc-300 dark:hover:border-zinc-700 outline-none text-base font-semibold text-zinc-900 dark:text-zinc-200 tracking-tight transition-all w-full px-1 -ml-1 rounded-sm"
               placeholder="Project Name"
             />
@@ -253,9 +298,7 @@ export function Sidebar() {
               <div key={wp.id} className="flex items-center gap-2 group">
                 {isListEditMode && (
                   <button
-                    onClick={() =>
-                      setWaypoints(waypoints.filter((w) => w.id !== wp.id))
-                    }
+                    onClick={() => setWaypoints(waypoints.filter((w) => w.id !== wp.id))}
                     className="shrink-0 p-1.5 text-red-500 dark:text-red-400/70 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-all animate-in slide-in-from-left-2"
                   >
                     <X className="w-4 h-4" />
@@ -268,29 +311,30 @@ export function Sidebar() {
                       {i + 1}
                     </div>
                     <div className="flex flex-col overflow-hidden">
-                      <span
-                        className="text-xs font-medium text-zinc-800 dark:text-zinc-300 truncate"
-                        title={wp.name}
-                      >
+                      <span className="text-xs font-medium text-zinc-800 dark:text-zinc-300 truncate" title={wp.name}>
                         {wp.name}
                       </span>
                       <div className="flex gap-1.5 mt-0.5">
-                        {wp.image && (
-                          <ImageIcon className="w-3 h-3 text-zinc-400 dark:text-zinc-500" />
+                        {wp.images && wp.images.length > 0 && (
+                          <div className="flex items-center gap-1 text-zinc-400 dark:text-zinc-500">
+                            <ImageIcon className="w-3 h-3" />
+                            <span className="text-[9px] font-bold">{wp.images.length}</span>
+                          </div>
                         )}
-                        {wp.narration && (
-                          <Mic className="w-3 h-3 text-zinc-400 dark:text-zinc-500" />
-                        )}
+                        {wp.narration && <Mic className="w-3 h-3 text-zinc-400 dark:text-zinc-500" />}
                       </div>
                     </div>
                   </div>
 
                   {!isListEditMode && (
                     <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-all shrink-0">
-                      <button
-                        onClick={() => setEditingId(wp.id)}
-                        className="p-1.5 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-500 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-white rounded-md transition-all"
-                      >
+                      <button onClick={() => moveWaypointUp(i)} disabled={i === 0} className="p-1.5 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-500 disabled:opacity-30 disabled:cursor-not-allowed">
+                        <ChevronUp className="w-3.5 h-3.5"/>
+                      </button>
+                      <button onClick={() => moveWaypointDown(i)} disabled={i === waypoints.length - 1} className="p-1.5 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-500 disabled:opacity-30 disabled:cursor-not-allowed">
+                        <ChevronDown className="w-3.5 h-3.5"/>
+                      </button>
+                      <button onClick={() => setEditingId(wp.id)} className="p-1.5 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-500">
                         <Edit2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
@@ -302,7 +346,7 @@ export function Sidebar() {
         )}
       </div>
 
-      <div className="shrink-0 pt-2">
+      <div className="shrink-0 pt-2 flex flex-col gap-2">
         <button
           onClick={handleRenderVideo}
           className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-zinc-900 dark:bg-zinc-900 hover:bg-zinc-800 text-zinc-100 dark:text-zinc-400 dark:hover:text-zinc-200 border border-transparent dark:border-white/5 dark:hover:border-white/10 font-medium text-sm transition-all disabled:opacity-40 disabled:pointer-events-none shadow-md dark:shadow-none"

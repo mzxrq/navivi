@@ -1,7 +1,9 @@
+import { MapSettings } from "./MapSettings";
+import { useUI } from "../hooks/useUI";
 import { invoke } from "@tauri-apps/api/core";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { useTheme } from "../hooks/useTheme";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { readTextFile } from "@tauri-apps/plugin-fs";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -15,15 +17,29 @@ import {
   Popup,
 } from "react-leaflet";
 import L from "leaflet";
-import { Clock, UploadCloud, CheckCircle2, FileCode } from "lucide-react";
+import {
+  Clock,
+  UploadCloud,
+  CheckCircle2,
+  FileCode,
+  Car,
+  Footprints,
+  Ruler,
+  Plane,
+  Ship,
+} from "lucide-react";
 
 // tailwind map marker
-const waypointIcon = L.divIcon({
-  className: "bg-transparent",
-  html: `<div class="w-4 h-4 bg-emerald-400 border-2 border-white rounded-full shadow-[0_0_10px_rgba(52,211,153,0.8)] hover:scale-125 transition-transform cursor-pointer"></div>`,
-  iconSize: [16, 16],
-  iconAnchor: [8, 8],
-});
+const waypointIcon = (number: number, hexColor: string) => {
+  return L.divIcon({
+    className: "custom-marker",
+    html: `<div style="background-color: ${hexColor} !important; width: 24px; height: 24px; border: 2px solid white; border-radius: 50%; box-shadow: 0 0 10px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; color: white; font-size: 10px; font-weight: bold;">
+            ${number}
+           </div>`,
+    iconSize: [24, 24],
+    iconAnchor: [12, 12],
+  });
+};
 
 // map controllers
 function MapAutoZoom({ routePoints }: { routePoints: [number, number][] }) {
@@ -50,17 +66,159 @@ function MapClickListener({
   return null;
 }
 
+const getBezierCurve = (
+  start: [number, number],
+  end: [number, number],
+  segments = 30,
+) => {
+  const [lat1, lon1] = start;
+  const [lat2, lon2] = end;
+
+  const mLat = (lat1 + lat2) / 2; // get midpoint
+  const mLon = (lon1 + lon2) / 2;
+
+  const dLat = lat2 - lat1; // calculate perpendicular offset for curve height
+  const dLon = lon2 - lon1;
+  const ctrlLat = mLat - dLon * 0.2;
+  const ctrlLon = mLon + dLat * 0.2;
+
+  const curve: [number, number][] = [];
+  for (let i = 0; i <= segments; i++) {
+    const t = i / segments;
+    const u = 1 - t;
+    // quadratic bezier formu (1/4)
+    const lat = u * u * lat1 + 2 * u * t * ctrlLat + t * t * lat2;
+    const lon = u * u * lon1 + 2 * u * t * ctrlLon + t * t * lon2;
+    curve.push([lat, lon]);
+  }
+  return curve;
+};
+
 export function MapArea() {
+  const { showToast } = useUI();
+  const [uploadedRouteLine, setUplodadedRouteLine] = useState<
+    [number, number][]
+  >([]);
   const [isHovering, setIsHovering] = useState(false);
-  const [routeLine, setRouteLine] = useState<[number, number][]>([]);
   const [routePoints, setRoutePoints] = useState<[number, number][]>([]);
+  const [droppedFile, setDroppedFile] = useState<string | null>(null);
   const {
-    routeFile: droppedFile,
-    setRouteFile: setDroppedFile,
     waypoints,
     setWaypoints,
     updateWaypoint,
+    routeSegments,
+    setRouteSegments,
+    updateMetadata,
+    settings,
+    updateSettings,
   } = useWorkspace();
+  const hexLineColor = "#" + settings.line_color.map((x) => x.toString(16).padStart(2, "0")).join('');
+  const hexMarkerColor = '#' + settings.marker_color.map(x => x.toString(16).padStart(2, '0')).join('');
+  
+  const processFile = async (filePath: string) => {
+    try {
+      if (filePath.toLowerCase().endsWith(".json")) {
+        const fileContent = await readTextFile(filePath);
+        const data = JSON.parse(fileContent);
+
+        updateMetadata({
+          project_id: data.project_id,
+          user_id: data.user_id,
+          project_name: data.project_name,
+          created_at: data.created_at,
+          status: "loaded",
+          directory_path: data.directory_path,
+        });
+
+        if (data.settings) updateSettings(data.settings);
+
+        if (data.waypoints) {
+          setWaypoints(
+            data.waypoints.map((wp: any) => ({
+              id: crypto.randomUUID(),
+              lat: wp.lat,
+              lon: wp.lng,
+              name: wp.label,
+              image: wp.popup_image,
+              narration: wp.narration,
+              routeMode: wp.routeMode || "driving",
+            })),
+          );
+        }
+
+        if (data.source_files?.gps_route) {
+          setDroppedFile(data.source_files.gps_route);
+
+          const gpxContent = await readTextFile(data.source_files.gps_route);
+          const parser = new DOMParser();
+          const xmlDoc = parser.parseFromString(gpxContent, "text/xml");
+          const trkpts = xmlDoc.getElementsByTagName("trkpt");
+          const rawCoords: [number, number][] = [];
+          for (let i = 0; i < trkpts.length; i++) {
+            const lat = parseFloat(trkpts[i].getAttribute("lat") || "0");
+            const lon = parseFloat(trkpts[i].getAttribute("lon") || "0");
+            if (lat && lon) rawCoords.push([lat, lon]);
+          }
+          setUplodadedRouteLine(rawCoords);
+        }
+        return;
+      }
+
+      // Load .gpx
+      showToast(`Processing ${filePath.split(/[\\]/).pop()}...`, "info");
+
+      const pythonResponse = await invoke<string>("run_python_blueprint", {
+        action: "process_gps",
+        payload: filePath,
+      });
+
+      if (filePath.toLowerCase().endsWith(".gpx")) {
+        const fileContent = await readTextFile(filePath);
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(fileContent, "text/xml");
+        const trkpts = xmlDoc.getElementsByTagName("trkpt");
+        const rawCoords: [number, number][] = [];
+        for (let i = 0; i < trkpts.length; i++) {
+          const lat = parseFloat(trkpts[i].getAttribute("lat") || "0");
+          const lon = parseFloat(trkpts[i].getAttribute("lon") || "0");
+          if (lat && lon) rawCoords.push([lat, lon]);
+        }
+        setUplodadedRouteLine(rawCoords);
+      }
+
+      const outputLines = pythonResponse.trim().split("\n");
+      const jsonString = outputLines[outputLines.length - 1];
+      const data = JSON.parse(jsonString);
+
+      if (!data.waypoints || data.waypoints.length === 0) {
+        alert("△ Route Loaded, cannot detected landmarks/stops");
+        setWaypoints([]);
+      } else {
+        setWaypoints(
+          data.waypoints.map((wp: any) => ({
+            id: crypto.randomUUID(),
+            lat: wp.lat,
+            lon: wp.lng,
+            name: wp.label,
+            image: wp.popup_image || null,
+            narration: wp.narration || "",
+            routeMode: "driving",
+          })),
+        );
+      }
+      if (data.project_name)
+        updateMetadata({ project_name: data.project_name });
+      if (data.source_files?.gps_route)
+        setDroppedFile(data.source_files.gps_route);
+    } catch (error) {
+      console.error("Failed to process file:", error);
+      alert("An error occured while loading the file.");
+    }
+  };
+
+  const segmentCache = useRef(
+    new Map<string, { positions: [number, number][]; mode: string }>(),
+  );
   const { theme } = useTheme();
 
   const isDark =
@@ -80,24 +238,8 @@ export function MapArea() {
       "tauri://drag-drop",
       async (event) => {
         setIsHovering(false);
-        const droppedFiles = event.payload.paths;
-
-        if (droppedFiles && droppedFiles.length > 0) {
-          const sourcePath = droppedFiles[0];
-          const filename = sourcePath.split(/[\\/]/).pop() || "dropped.gpx";
-
-          try {
-            const safeBackendPath = await invoke<string>(
-              "store_file_in_backend",
-              {
-                sourcePath: sourcePath,
-                filename: filename,
-              },
-            );
-            setDroppedFile(safeBackendPath);
-          } catch (error) {
-            console.error("Failed to copy dragged file:", error);
-          }
+        if (event.payload.paths && event.payload.paths.length > 0) {
+          await processFile(event.payload.paths[0]);
         }
       },
     );
@@ -107,43 +249,191 @@ export function MapArea() {
       unlistenLeave.then((f) => f());
       unlistenDrop.then((f) => f());
     };
-  }, [setDroppedFile]);
+  }, []);
 
-  // routing
+  // browse files (same as drag and drop)
+  const handleBrowseFiles = async () => {
+    const selectedPath = await open({
+      multiple: false,
+      filters: [
+        {
+          name: "Navivi & GPS",
+          extensions: ["json", "gpx", "fit", "tcx", "kml"],
+        },
+      ],
+    });
+
+    if (typeof selectedPath === "string") {
+      await processFile(selectedPath);
+    }
+  };
+
+  // segment-based routing engine (openrouteservice)
   useEffect(() => {
-    // when have less than 2 waypoint, line can't be drawn so
-    // we need validation
     if (waypoints.length < 2) {
-      setRouteLine([]);
+      setRouteSegments([]);
       return;
     }
 
-    const fetchRoute = async () => {
-      try {
-        // osrm prefer lon/lat not lat/lon so we format coords first
-        const coordinateString = waypoints.map(wp => '${wp.lng},${wp.lat}').join(';');
-        // call osrm (free)
-        const response = await fetch('https://router.project-osrm.org/route/v1/driving/${coordinateString}?overview=full&geometries=geojson');
-        const data = await response.json();
+    const sleep = (ms: number) =>
+      new Promise((resolve) => setTimeout(resolve, ms));
+    const fetchAllSegments = async () => {
+      const newSegments: { positions: [number, number][]; mode: string }[] = [];
+      const apiKey = import.meta.env.VITE_ORS_API_KEY;
 
-        if (data.routes && data.routes.length > 0) {
-          const osrmCoords = data.routes[0].geometry.coordinates.map(
-            (coord: [number, number]) => [coord[1], coord[0]]
-          )
+      for (let i = 0; i < waypoints.length - 1; i++) {
+        const wp1 = waypoints[i];
+        const wp2 = waypoints[i + 1];
+        const mode = wp1.routeMode || "driving";
 
-          setRouteLine(osrmCoords);
+        // create unique signature
+        const cacheKey = `${wp1.lat},${wp1.lng}|${wp2.lat},${wp2.lng}|${mode}`;
+        if (segmentCache.current.has(cacheKey)) {
+          newSegments.push(segmentCache.current.get(cacheKey)!);
+          continue;
         }
-      } catch (error) {
-        console.error("Routing Engine Failed:", error);
-      };
-      // tiny delay so it doesnt spam api
-      const timeoutId = setTimeout(() => {
-        fetchRoute();
-      }, 500);
+        // check cache
+        if (mode === "direct") {
+          const seg = {
+            positions: [
+              [wp1.lat, wp1.lng],
+              [wp2.lat, wp2.lng],
+            ] as [number, number][],
+            mode: "direct",
+          };
+          segmentCache.current.set(cacheKey, seg);
+          newSegments.push(seg);
+        } else if (mode === "curve") {
+          const curvePoints = getBezierCurve(
+            [wp1.lat, wp1.lng],
+            [wp2.lat, wp2.lng],
+          );
+          const seg = { positions: curvePoints, mode: "curve" };
+          segmentCache.current.set(cacheKey, seg);
+          newSegments.push(seg);
+        } else {
+          // ORS Routing (Driving & Hiking)
+          const profile = mode === "walking" ? "foot-hiking" : "driving-car";
 
-      return () => clearTimeout(timeoutId);
-    }
+          try {
+            if (!apiKey)
+              throw new Error("ORS API key is missing from .env file");
+
+            await sleep(1000); // prevent 429
+
+            const url = `https://api.openrouteservice.org/v2/directions/${profile}?api_key=${apiKey}&start=${wp1.lng},${wp1.lat}&end=${wp2.lng},${wp2.lat}`;
+            const response = await fetch(url);
+
+            if (response.ok) {
+              const data = await response.json();
+              if (data.features && data.features.length > 0) {
+                // ORS returns GeoJSON coordinates in [longitude, latitude] format
+                const coords = data.features[0].geometry.coordinates.map(
+                  (coord: [number, number]) => [coord[1], coord[0]],
+                );
+
+                const seg = { positions: coords, mode: mode };
+                segmentCache.current.set(cacheKey, seg);
+                newSegments.push(seg);
+                continue;
+              }
+            }
+            throw new Error(
+              `ORS returned no route for ${profile}. Status: ${response.status}`,
+            );
+          } catch (error) {
+            console.warn(
+              `[ORS] Failed for segment ${i + 1}. Falling back to direct line.`,
+              error,
+            );
+
+            const fallbackSeg = {
+              positions: [
+                [wp1.lat, wp1.lng],
+                [wp2.lat, wp2.lng],
+              ] as [number, number][],
+              mode: "direct",
+            };
+            segmentCache.current.set(cacheKey, fallbackSeg);
+            newSegments.push(fallbackSeg);
+          }
+        }
+      }
+      setRouteSegments(newSegments);
+    };
+
+    fetchAllSegments();
   }, [waypoints]);
+
+  // segment-based routing engine (OSRM)
+  // useEffect(() => {
+  //   if (waypoints.length < 2) {
+  //     setRouteSegments([]);
+  //     return;
+  //   }
+
+  //   const fetchAllSegments = async () => {
+  //     const newSegments: { positions: [number, number][]; mode: string }[] = [];
+
+  //     // loop through waypoints
+  //     for (let i = 0; i < waypoints.length - 1; i++) {
+  //       const wp1 = waypoints[i];
+  //       const wp2 = waypoints[i + 1];
+  //       const mode = wp1.routeMode || "driving";
+
+  //       if (mode === "direct") {
+  //         newSegments.push({
+  //           // draw straight line
+  //           positions: [
+  //             [wp1.lat, wp1.lng],
+  //             [wp2.lat, wp2.lng],
+  //           ],
+  //           mode: "direct",
+  //         });
+  //       } else if (mode === "curve") {
+  //         const curvePoints = getBezierCurve(
+  //           [wp1.lat, wp1.lng],
+  //           [wp2.lat, wp2.lng],
+  //         );
+  //         newSegments.push({ positions: curvePoints, mode: "curve " });
+  //       } else {
+  //         const profile = mode === "walking" ? "foot" : "driving";
+
+  //         try {
+  //           //osrm
+  //           const url = `https://router.project-osrm.org/route/v1/${profile}/${wp1.lng},${wp1.lat};${wp2.lng},${wp2.lat}?overview=full&geometries=geojson`;
+  //           const response = await fetch(url);
+
+  //           if (response.ok) {
+  //             const data = await response.json();
+  //             if (data.routes && data.routes.length > 0) {
+  //               const coords = data.routes[0].geometry.coordinates.map(
+  //                 (coord: [number, number]) => [coord[1], coord[0]],
+  //               );
+  //               newSegments.push({ positions: coords, mode: mode });
+  //               continue;
+  //             }
+  //           }
+  //           throw new Error("OSRM returned no route");
+  //         } catch (error) {
+  //           console.warn(
+  //             `[OSRM] Failed for segment ${i + 1}. Falling back to direct line.`,
+  //             error,
+  //           );
+  //           newSegments.push({
+  //             positions: [
+  //               [wp1.lat, wp1.lng],
+  //               [wp2.lat, wp2.lng],
+  //             ],
+  //             mode: "direct",
+  //           });
+  //         }
+  //       }
+  //     }
+  //     setRouteSegments(newSegments);
+  //   };
+  //   fetchAllSegments();
+  // }, [waypoints]);
 
   // parse file directly if gpx (if not gpx, gpsbabel goes boom boom and reformat it to gpx/kml/csv/xlsx)
   useEffect(() => {
@@ -179,7 +469,15 @@ export function MapArea() {
     const newId = Math.random().toString(36).substring(7);
     setWaypoints((prev) => [
       ...prev,
-      { id: newId, lat, lng, name: "Locating...", image: null, narration: "" },
+      {
+        id: newId,
+        lat,
+        lng,
+        name: "Locating...",
+        images: [],
+        narration: "",
+        routeMode: "driving",
+      },
     ]);
 
     try {
@@ -205,34 +503,11 @@ export function MapArea() {
     }
   };
 
-  // browse files (same as drag and drop)
-  const handleBrowseFiles = async () => {
-    const selectedPath = await open({
-      multiple: false,
-      filters: [
-        { name: "GPS Routes", extensions: ["gpx", "fit", "tcx", "kml"] },
-      ],
-    });
-
-    if (typeof selectedPath === "string") {
-      const filename = selectedPath.split(/[\\/]/).pop() || "uploaded.gpx";
-
-      try {
-        const safeBackendPath = await invoke<string>("store_file_in_backend", {
-          sourcePath: selectedPath,
-          filename: filename,
-        });
-        setDroppedFile(safeBackendPath);
-      } catch (error) {
-        console.error("Failed to copy file:", error);
-      }
-    }
-  };
-
   const isGpx = droppedFile?.toLowerCase().endsWith(".gpx");
 
   return (
     <main className="flex-1 relative bg-zinc-100 dark:bg-[#09090b] overflow-hidden transition-colors">
+      <MapSettings />
       <div className="absolute inset-0 z-0">
         <MapContainer
           center={[34.6937, 135.5023]}
@@ -249,6 +524,70 @@ export function MapArea() {
             }
           />
 
+          {/*routing logic*/}
+          {/* Draw the exact GPX path if uploaded (Semi-transparent Blue) */}
+          {uploadedRouteLine.length > 0 && (
+            <Polyline
+              positions={uploadedRouteLine}
+              pathOptions={{ color: "#3b82f6", weight: 4, opacity: 0.5 }}
+            />
+          )}
+
+          {/* Draw the Dynamic Segments */}
+          {routeSegments.map((segment, idx) => {
+            if (segment.mode === "direct") {
+              return (
+                <Polyline
+                  key={`dir-${idx}`}
+                  positions={segment.positions}
+                  pathOptions={{
+                    color: "#a1a1aa",
+                    weight: 4,
+                    dashArray: "8, 8",
+                  }}
+                />
+              );
+            }
+            if (segment.mode === "curve") {
+              return (
+                <Polyline
+                  key={`crv-${idx}`}
+                  positions={segment.positions}
+                  pathOptions={{
+                    color: "#a855f7",
+                    weight: 4,
+                    dashArray: "10, 10",
+                  }}
+                />
+              );
+            }
+            if (segment.mode === "walking") {
+              return (
+                <Polyline
+                  key={`wlk-${idx}`}
+                  positions={segment.positions}
+                  pathOptions={{
+                    color: hexLineColor,
+                    weight: settings.line_thickness,
+                    dashArray: "2, 6",
+                    lineCap: "round",
+                  }}
+                />
+              );
+            }
+            // Default Driving
+            return (
+              <Polyline
+                key={`drv-${idx}`}
+                positions={segment.positions}
+                pathOptions={{
+                  color: hexLineColor,
+                  weight: settings.line_thickness,
+                }}
+              />
+            );
+          })}
+
           {routePoints.length > 0 && (
             <Polyline
               positions={routePoints}
@@ -262,39 +601,108 @@ export function MapArea() {
             />
           )}
 
-          {waypoints.map((wp) => (
-            <Marker 
+          {waypoints.map((wp, index) => (
+            <Marker
               key={wp.id}
               position={[wp.lat, wp.lng]}
               draggable={true}
-              icon={waypointIcon}
+              icon={waypointIcon(index + 1, hexMarkerColor)}
               eventHandlers={{
                 dragend: async (e) => {
                   const marker = e.target;
                   const position = marker.getLatLng();
-                  updateWaypoint(wp.id, { lat: position.lat, lng: position.lng });
+                  updateWaypoint(wp.id, {
+                    lat: position.lat,
+                    lng: position.lng,
+                  });
                   // get new location name
                   try {
-                    const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${position.lat}&lon=${position.lng}`);
+                    const response = await fetch(
+                      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${position.lat}&lon=${position.lng}`,
+                    );
                     const data = await response.json();
 
-                    const newName = data.address?.road || data.address?.amenity || data.name || "Unnamed Location";
+                    const newName =
+                      data.address?.road ||
+                      data.address?.amenity ||
+                      data.name ||
+                      "Unnamed Location";
                     updateWaypoint(wp.id, { name: newName });
                   } catch (error) {
                     console.error("Failed to fetch location name:", error);
                   }
-                }
-              }}>
-                <Popup>
-                  <div className="font-semibold">{wp.name}</div>
-                  {wp.narration && <div className="text-xs text-gray-600 mt-1">{wp.narration}</div>}
-                </Popup>
+                },
+              }}
+            >
+              <Popup>
+                <div className="flex flex-col gap-2 min-w-[160px] pb-1">
+                  <div className="font-bold text-sm text-zinc-900 leading-tight">
+                    {wp.name}
+                  </div>
+
+                  {wp.narration && (
+                    <div className="text-xs text-zinc-600 italic border-l-2 border-zinc-300 pl-2">
+                      "{wp.narration}"
+                    </div>
+                  )}
+
+                  {/* The Route Mode Toggle */}
+                  {/* The Route Mode Toggle */}
+                  <div className="flex flex-col gap-1 mt-2 pt-2 border-t border-zinc-200">
+                    <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider mb-1">
+                      Travel to next stop:
+                    </span>
+
+                    <div className="flex items-center gap-1 bg-zinc-100 p-1 rounded-lg border border-zinc-200">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          updateWaypoint(wp.id, { routeMode: "driving" });
+                        }}
+                        className={`flex-1 flex justify-center p-1.5 rounded-md transition-all ${!wp.routeMode || wp.routeMode === "driving" ? "bg-white shadow-sm text-emerald-600 ring-1 ring-zinc-200" : "text-zinc-500 hover:text-zinc-800 hover:bg-zinc-200/50"}`}
+                        title="Driving"
+                      >
+                        <Car className="w-4 h-4" />
+                      </button>
+
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          updateWaypoint(wp.id, { routeMode: "walking" });
+                        }}
+                        className={`flex-1 flex justify-center p-1.5 rounded-md transition-all ${wp.routeMode === "walking" ? "bg-white shadow-sm text-emerald-600 ring-1 ring-zinc-200" : "text-zinc-500 hover:text-zinc-800 hover:bg-zinc-200/50"}`}
+                        title="Walking"
+                      >
+                        <Footprints className="w-4 h-4" />
+                      </button>
+
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          updateWaypoint(wp.id, { routeMode: "direct" });
+                        }}
+                        className={`flex-1 flex justify-center p-1.5 rounded-md transition-all ${wp.routeMode === "direct" ? "bg-white shadow-sm text-emerald-600 ring-1 ring-zinc-200" : "text-zinc-500 hover:text-zinc-800 hover:bg-zinc-200/50"}`}
+                        title="Direct"
+                      >
+                        <Ruler className="w-4 h-4" />
+                      </button>
+
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          updateWaypoint(wp.id, { routeMode: "curve" });
+                        }}
+                        className={`flex-1 flex justify-center p-1.5 rounded-md transition-all ${wp.routeMode === "curve" ? "bg-white shadow-sm text-emerald-600 ring-1 ring-zinc-200" : "text-zinc-500 hover:text-zinc-800 hover:bg-zinc-200/50"}`}
+                        title="Fly/Ship"
+                      >
+                        <Ship className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </Popup>
             </Marker>
           ))}
-
-          {routeLine.length > 0 && (
-            <Polyline positions={routeLine} pathOptions={{ color: '#3b82f6', weight: 4 }} />
-          )}
 
           <MapAutoZoom routePoints={routePoints} />
           <MapClickListener onMapClick={handleAddWaypoint} />
