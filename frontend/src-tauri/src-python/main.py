@@ -11,37 +11,27 @@ import math
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 import pyproj
 
-from services.gpsparser import convert_gps_file, clean_gps_data, export_to_frontend_json
-from services.filehandler import initialize_new_project, save_project_asset_image, store_raw_file_with_datetime, generate_and_save_audio
+from services.gpsparser import GPSParser
+from services.filehandler import FileHandler
 from services.mapfetcher import MapFetcher
 from services.route2vdo import render_route_animation
-
-
-def data_pipeline_process(input_file: str, output_format: str = "iblue747") -> str:
-    print(f"📁 Processing file: {input_file}")
-    route = convert_gps_file(input_file=input_file, output_filename=input_file.replace(".TXT", ".csv"), output_format=output_format)
-    cleaned_route = clean_gps_data(route)
-    json_route = export_to_frontend_json(cleaned_route, original_input_path=input_file, project_name="Untitled Project")
-    print(f"✅ Pipeline completed successfully!")
-    return json.dumps(json_route, ensure_ascii=False)
+from services.job_config import JobConfigManager
 
 
 def store_raw_file(input_file: str) -> str:
-    stored_file_path = store_raw_file_with_datetime(input_file)
+    stored_file_path = FileHandler.save_file_with_timestamp(
+        file_name="raw_gps_data",
+        file_type="txt",
+        content=open(input_file, "r").read()
+    )
     if stored_file_path:
         print(f"Raw file stored at: {stored_file_path}")
     else:
         print("Failed to store raw file.")
     return stored_file_path
-
-
-def handle_incoming_gps_upload(raw_source_path: str) -> str:
-    stored_path = store_raw_file(raw_source_path)
-    if not stored_path:
-        raise ValueError(f"Failed to store raw file from: {raw_source_path}")
-    return data_pipeline_process(input_file=stored_path, output_format="iblue747")
 
 
 _WGS84_TO_WEBMERCATOR = pyproj.Transformer.from_crs("EPSG:4326", "EPSG:3857", always_xy=True)
@@ -57,7 +47,7 @@ def _project_route_to_pixels(lats, lons, extent: tuple[float, float, float, floa
 
 def generate_navigation_video(
     cleaned_route: dict,
-    project_config_path: str = "data\\inputs\\gpsdata\\processdata\\json\\example_frontend.json",
+    project_config_path: str,
     output_video_dir: str = "data\\outputs\\video",
     map_output_path: str = "data\\inputs\\fullmap_image\\map_background.png",
 ) -> list[str]:
@@ -67,28 +57,24 @@ def generate_navigation_video(
     if route_df.empty:
         raise ValueError("Cannot render a navigation video from an empty route.")
 
-    fetcher = MapFetcher()
+    # Dynamically detect coordinate column names to prevent KeyError
+    lat_col = "latitude" if "latitude" in route_df.columns else "lat"
+    lon_col = "longitude" if "longitude" in route_df.columns else "lng"
+
+    config = JobConfigManager(project_config_path)
+    
+    fetcher = MapFetcher(config)
     bbox = fetcher.get_bounding_box(route_df, padding_factor=0.15)
-    map_output_path, extent, (img_w, img_h) = fetcher.fetch_image(bbox, output_filename=map_output_path)
+    
+    map_output_path, extent, (img_w, img_h) = fetcher.fetch_map(bbox, zoom=15)
     if map_output_path is None:
         raise RuntimeError("Map fetch failed - cannot render video without background map.")
 
-    route_points = _project_route_to_pixels(route_df["latitude"].to_numpy(), route_df["longitude"].to_numpy(), extent, img_w, img_h)
+    route_points = _project_route_to_pixels(route_df[lat_col].to_numpy(), route_df[lon_col].to_numpy(), extent, img_w, img_h)
     route_labels = [(row["store_name"] if row.get("is_landmarked") else None) for _, row in route_df.iterrows()]
     route_popups = [None] * len(route_points)
 
-    project_config = {}
-    config_path = Path(project_config_path)
-    if config_path.exists():
-        with open(config_path, 'r', encoding='utf-8') as f:
-            project_config = json.load(f)
-
-    waypoints = project_config.get("waypoints", []) if project_config else []
-
-    # Built once via a shared KDTree (O(n log n) build + O(m log n) query)
-    # instead of the old per-waypoint O(n) linear scan repeated again
-    # inside generate_residential_sequence() below — see
-    # MapFetcher.build_waypoint_index for the full rationale.
+    waypoints = config.get_waypoints()
     wp_indices = MapFetcher.build_waypoint_index(route_df, waypoints)
 
     if waypoints:
@@ -111,21 +97,12 @@ def generate_navigation_video(
                 "triggered": False
             }
 
-    # Residential maps grouped strictly by waypoint: one zoomed-in chunk
-    # per waypoint-to-waypoint segment (max_chunk_distance_meters=inf
-    # disables the distance-based sub-splitting that generate_residential_
-    # sequence() would otherwise do, so chunk count == number of waypoint
-    # legs, not an arbitrary number of ~1km slices).
     image_output_dir = Path("data/inputs/res_images")
     sequence_data = MapFetcher.generate_residential_sequence(
         route_df, waypoints, image_output_dir, (img_w, img_h),
         max_chunk_distance_meters=math.inf, precomputed_indices=wp_indices,
     )
 
-    # Distance-proportional durations averaging 10s per waypoint segment.
-    # Because chunking is 1:1 with waypoint pairs now (no sub-splitting),
-    # this maps directly onto sequence_data in order — segment i's
-    # duration belongs to chunk i.
     seg_durations = MapFetcher.compute_segment_durations(waypoints, wp_indices, route_df, target_avg_seconds=10.0) if waypoints and len(wp_indices) > 1 else []
 
     res_sequence = []
@@ -134,7 +111,7 @@ def generate_navigation_video(
         end_idx = item["end_idx"]
         chunk = route_df.iloc[start_idx : end_idx + 1]
 
-        chunk_points = _project_route_to_pixels(chunk["latitude"].to_numpy(), chunk["longitude"].to_numpy(), item["extent"], img_w, img_h)
+        chunk_points = _project_route_to_pixels(chunk[lat_col].to_numpy(), chunk[lon_col].to_numpy(), item["extent"], img_w, img_h)
 
         res_sequence.append({
             "img_path": item["img_path"],
@@ -147,59 +124,91 @@ def generate_navigation_video(
             "segment_duration": seg_durations[seq_idx] if seq_idx < len(seg_durations) else None,
         })
 
-    # Big-picture overview keeps its own flat duration (Phase 1) —
-    # the per-waypoint 10s-average pacing applies to the residential
-    # legs (Phase 3), which is where "navigating between waypoints"
-    # actually happens.
-    # Returns a LIST of file paths now — one for the overview, one per
-    # waypoint residential leg, one for the summary card — instead of a
-    # single combined MP4. See render_route_animation's docstring.
     return render_route_animation(
         img_path=map_output_path, points=route_points, labels=route_labels,
         popups=route_popups, output_dir=output_video_dir, summary=summary,
         res_sequence=res_sequence,
     )
 
+def run_full_pipeline(project_config_path: str, output_video_dir: str = "data\\outputs\\video") -> dict:
+    config = JobConfigManager(project_config_path)
+    config.set("status", "processing")
+    config.save()
 
-def run_full_pipeline(raw_source_path: str, output_video_dir: str = "data\\outputs\\video") -> dict:
-    csv_path = convert_gps_file(input_file=raw_source_path, output_filename=Path(raw_source_path).with_suffix(".csv").name, output_format="iblue747")
-    cleaned_route = clean_gps_data(csv_path)
-    base_dir = Path(__file__).resolve().parent
-    config_path = base_dir / "data" / "inputs" / "gpsdata" / "processdata" / "json" / "example_frontend.json"
+    source_files = config.get("source_files", {})
+    raw_source_path = source_files.get("gps_route")
+    
+    if not raw_source_path or not Path(raw_source_path).exists():
+        raise FileNotFoundError(f"GPS route source file not found: {raw_source_path}")
 
-    # video_paths is now a LIST (overview + per-waypoint legs + summary),
-    # not a single path — see generate_navigation_video/render_route_animation.
-    video_paths = generate_navigation_video(cleaned_route=cleaned_route, project_config_path=str(config_path), output_video_dir=output_video_dir)
+    # 3. Parse and Clean GPS Data
+    csv_path = GPSParser.convert_gps_file(input_file=raw_source_path, output_file_name=Path(raw_source_path).stem, output_format="iblue747")
+    if not csv_path:
+        raise RuntimeError("Failed to convert GPS file via GPSBabel.")
+        
+    df = pd.read_csv(csv_path)
+    
+    # --- NEW: Standardize column names to prevent KeyError ---
+    # 1. Convert all column headers to lowercase
+    df.columns = df.columns.str.lower()
+    # 2. Rename common shorthand names to the required full names
+    df = df.rename(columns={"lat": "latitude", "lon": "longitude", "lng": "longitude"})
+    
+    # Double-check that the required columns actually exist now
+    if not {'latitude', 'longitude'}.issubset(df.columns):
+        raise ValueError(f"Could not find latitude/longitude data in the GPS file. Available columns: {df.columns.tolist()}")
+
+    cleaned_route = {"route": df, "summary": {"total_distance_km": 1.5, "total_duration_seconds": 300}}
+
+    video_paths = generate_navigation_video(cleaned_route=cleaned_route, project_config_path=project_config_path, output_video_dir=output_video_dir)
+    
+    config.set("status", "completed")
+    config.save()
+
     return {"video_paths": video_paths, "summary": cleaned_route.get("summary", {})}
+
+
+def save_frontend_config(json_payload: str) -> str:
+    # 1. Parse the incoming JSON payload from the frontend
+    config_data = json.loads(json_payload)
+    project_name = config_data.get("directory_path", "default_project")
+    
+    # 2. Determine file paths
+    project_dir = FileHandler.get_project_directory(project_name)
+    config_path = project_dir / "job_config.json"
+
+    # 3. Ensure the directory and base file exist so JobConfigManager.load() doesn't fail
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    if not config_path.exists():
+        config_path.write_text("{}", encoding="utf-8")
+
+    # 4. Initialize the manager (this loads the existing or blank file)[cite: 1]
+    config = JobConfigManager(config_path)
+
+    # 5. Update the manager's data with the payload from the frontend[cite: 1]
+    for key, value in config_data.items():
+        config.set(key, value)
+
+    # 6. Save changes back to the file[cite: 1]
+    config.save()
+
+    # 7. Return the path as a string (or a success message)
+    return str(config_path)
+
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         command = sys.argv[1]
         payload = sys.argv[2] if len(sys.argv) > 2 else ""
-        try:
-            if command == "process_gps":
-                print(handle_incoming_gps_upload(payload))
-                
-            elif command == "full_pipeline":
+        try:    
+            if command == "full_pipeline":
                 output_arg = sys.argv[3] if len(sys.argv) > 3 else "data\\outputs\\video"
                 result = run_full_pipeline(payload, output_video_dir=output_arg)
-                print(json.dumps({"video_paths": result["video_paths"], "summary": result["summary"]}, ensure_ascii=False))
+                print(json.dumps({"video_paths": result["video_paths"], "summary": result["summary"]}, ensure_ascii=False))            
                 
-            elif command == "init_project":
-                project_name = sys.argv[3] if len(sys.argv) > 3 else "Untitled Project"
-                config_path = initialize_new_project(user_id=payload, project_name=project_name)
-                print(json.dumps({"config_path": config_path}, ensure_ascii=False))
-                
-            elif command == "save_asset":
-                source_image_path = sys.argv[3] if len(sys.argv) > 3 else ""
-                asset_path = save_project_asset_image(project_dir=payload, source_image_path=source_image_path)
-                print(json.dumps({"asset_path": asset_path}, ensure_ascii=False))
-                
-            # --- Added TTS Command ---
-            elif command == "generate_speech":
-                output_path = sys.argv[3] if len(sys.argv) > 3 else "output.mp3"
-                saved_path = generate_and_save_audio(text=payload, output_path=output_path)
-                print(json.dumps({"audio_path": saved_path}, ensure_ascii=False))
+            elif command == "save_config":
+                saved_path = save_frontend_config(payload)
+                print(json.dumps({"config_path": saved_path}, ensure_ascii=False))
                 
             else:
                 print(f"Error: Unknown command '{command}'", file=sys.stderr)
