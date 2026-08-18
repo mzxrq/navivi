@@ -1,9 +1,9 @@
-import { MapSettings } from "./MapSettings";
-import { useUI } from "../hooks/useUI";
+import { MapSettings } from "../../modal/MapSettings";
+import { useUI } from "../../../hooks/useUI";
 import { invoke } from "@tauri-apps/api/core";
-import { useWorkspace } from "../hooks/useWorkspace";
-import { useTheme } from "../hooks/useTheme";
-import { useEffect, useState, useRef } from "react";
+import { useWorkspace } from "../../../hooks/useWorkspace";
+import { useTheme } from "../../../hooks/useTheme";
+import { useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { readTextFile } from "@tauri-apps/plugin-fs";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -11,12 +11,9 @@ import {
   MapContainer,
   Polyline,
   TileLayer,
-  useMap,
-  useMapEvents,
   Marker,
   Popup,
 } from "react-leaflet";
-import L from "leaflet";
 import {
   Clock,
   UploadCloud,
@@ -26,76 +23,18 @@ import {
   Footprints,
   Ruler,
   Plane,
-  Ship,
 } from "lucide-react";
-
-// tailwind map marker
-const waypointIcon = (number: number, hexColor: string) => {
-  return L.divIcon({
-    className: "custom-marker",
-    html: `<div style="background-color: ${hexColor} !important; width: 24px; height: 24px; border: 2px solid white; border-radius: 50%; box-shadow: 0 0 10px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; color: white; font-size: 10px; font-weight: bold;">
-            ${number}
-           </div>`,
-    iconSize: [24, 24],
-    iconAnchor: [12, 12],
-  });
-};
-
-// map controllers
-function MapAutoZoom({ routePoints }: { routePoints: [number, number][] }) {
-  const map = useMap();
-  useEffect(() => {
-    setTimeout(() => map.invalidateSize(), 100);
-    if (routePoints.length > 0) {
-      map.fitBounds(routePoints, { padding: [50, 50], animate: true });
-    }
-  }, [routePoints, map]);
-  return null;
-}
-
-function MapClickListener({
-  onMapClick,
-}: {
-  onMapClick: (lat: number, lng: number) => void;
-}) {
-  useMapEvents({
-    click(e) {
-      onMapClick(e.latlng.lat, e.latlng.lng);
-    },
-  });
-  return null;
-}
-
-const getBezierCurve = (
-  start: [number, number],
-  end: [number, number],
-  segments = 30,
-) => {
-  const [lat1, lon1] = start;
-  const [lat2, lon2] = end;
-
-  const mLat = (lat1 + lat2) / 2; // get midpoint
-  const mLon = (lon1 + lon2) / 2;
-
-  const dLat = lat2 - lat1; // calculate perpendicular offset for curve height
-  const dLon = lon2 - lon1;
-  const ctrlLat = mLat - dLon * 0.2;
-  const ctrlLon = mLon + dLat * 0.2;
-
-  const curve: [number, number][] = [];
-  for (let i = 0; i <= segments; i++) {
-    const t = i / segments;
-    const u = 1 - t;
-    // quadratic bezier formu (1/4)
-    const lat = u * u * lat1 + 2 * u * t * ctrlLat + t * t * lat2;
-    const lon = u * u * lon1 + 2 * u * t * ctrlLon + t * t * lon2;
-    curve.push([lat, lon]);
-  }
-  return curve;
-};
+import { waypointIcon } from "../../../utils/mapUtils";
+import {
+  MapAutoZoom,
+  MapClickListener,
+} from "../../controllers/mapControllers";
+import { useMapRouting } from "../../../hooks/useMapRouting";
 
 export function MapArea() {
+  const { theme, mapTheme } = useTheme();
   const { showToast } = useUI();
+
   const [uploadedRouteLine, setUplodadedRouteLine] = useState<
     [number, number][]
   >([]);
@@ -107,14 +46,21 @@ export function MapArea() {
     setWaypoints,
     updateWaypoint,
     routeSegments,
-    setRouteSegments,
     updateMetadata,
     settings,
     updateSettings,
+    metadata,
+    setIsDirty,
   } = useWorkspace();
-  const hexLineColor = "#" + settings.line_color.map((x) => x.toString(16).padStart(2, "0")).join('');
-  const hexMarkerColor = '#' + settings.marker_color.map(x => x.toString(16).padStart(2, '0')).join('');
-  
+
+  useMapRouting();
+  const hexLineColor =
+    "#" +
+    settings.line_color.map((x) => x.toString(16).padStart(2, "0")).join("");
+  const hexMarkerColor =
+    "#" +
+    settings.marker_color.map((x) => x.toString(16).padStart(2, "0")).join("");
+
   const processFile = async (filePath: string) => {
     try {
       if (filePath.toLowerCase().endsWith(".json")) {
@@ -216,15 +162,12 @@ export function MapArea() {
     }
   };
 
-  const segmentCache = useRef(
-    new Map<string, { positions: [number, number][]; mode: string }>(),
-  );
-  const { theme } = useTheme();
-
-  const isDark =
-    theme === "dark" ||
-    (theme === "system" &&
-      window.matchMedia("(prefers-color-scheme: dark)").matches);
+  const isDarkMap =
+    mapTheme === "dark" ||
+    (mapTheme === "sync" &&
+      (theme === "dark" ||
+        (theme === "system" &&
+          window.matchMedia("(prefers-color-scheme: dark)").matches)));
 
   // drag and drop get files
   useEffect(() => {
@@ -268,173 +211,6 @@ export function MapArea() {
     }
   };
 
-  // segment-based routing engine (openrouteservice)
-  useEffect(() => {
-    if (waypoints.length < 2) {
-      setRouteSegments([]);
-      return;
-    }
-
-    const sleep = (ms: number) =>
-      new Promise((resolve) => setTimeout(resolve, ms));
-    const fetchAllSegments = async () => {
-      const newSegments: { positions: [number, number][]; mode: string }[] = [];
-      const apiKey = import.meta.env.VITE_ORS_API_KEY;
-
-      for (let i = 0; i < waypoints.length - 1; i++) {
-        const wp1 = waypoints[i];
-        const wp2 = waypoints[i + 1];
-        const mode = wp1.routeMode || "driving";
-
-        // create unique signature
-        const cacheKey = `${wp1.lat},${wp1.lng}|${wp2.lat},${wp2.lng}|${mode}`;
-        if (segmentCache.current.has(cacheKey)) {
-          newSegments.push(segmentCache.current.get(cacheKey)!);
-          continue;
-        }
-        // check cache
-        if (mode === "direct") {
-          const seg = {
-            positions: [
-              [wp1.lat, wp1.lng],
-              [wp2.lat, wp2.lng],
-            ] as [number, number][],
-            mode: "direct",
-          };
-          segmentCache.current.set(cacheKey, seg);
-          newSegments.push(seg);
-        } else if (mode === "curve") {
-          const curvePoints = getBezierCurve(
-            [wp1.lat, wp1.lng],
-            [wp2.lat, wp2.lng],
-          );
-          const seg = { positions: curvePoints, mode: "curve" };
-          segmentCache.current.set(cacheKey, seg);
-          newSegments.push(seg);
-        } else {
-          // ORS Routing (Driving & Hiking)
-          const profile = mode === "walking" ? "foot-hiking" : "driving-car";
-
-          try {
-            if (!apiKey)
-              throw new Error("ORS API key is missing from .env file");
-
-            await sleep(1000); // prevent 429
-
-            const url = `https://api.openrouteservice.org/v2/directions/${profile}?api_key=${apiKey}&start=${wp1.lng},${wp1.lat}&end=${wp2.lng},${wp2.lat}`;
-            const response = await fetch(url);
-
-            if (response.ok) {
-              const data = await response.json();
-              if (data.features && data.features.length > 0) {
-                // ORS returns GeoJSON coordinates in [longitude, latitude] format
-                const coords = data.features[0].geometry.coordinates.map(
-                  (coord: [number, number]) => [coord[1], coord[0]],
-                );
-
-                const seg = { positions: coords, mode: mode };
-                segmentCache.current.set(cacheKey, seg);
-                newSegments.push(seg);
-                continue;
-              }
-            }
-            throw new Error(
-              `ORS returned no route for ${profile}. Status: ${response.status}`,
-            );
-          } catch (error) {
-            console.warn(
-              `[ORS] Failed for segment ${i + 1}. Falling back to direct line.`,
-              error,
-            );
-
-            const fallbackSeg = {
-              positions: [
-                [wp1.lat, wp1.lng],
-                [wp2.lat, wp2.lng],
-              ] as [number, number][],
-              mode: "direct",
-            };
-            segmentCache.current.set(cacheKey, fallbackSeg);
-            newSegments.push(fallbackSeg);
-          }
-        }
-      }
-      setRouteSegments(newSegments);
-    };
-
-    fetchAllSegments();
-  }, [waypoints]);
-
-  // segment-based routing engine (OSRM)
-  // useEffect(() => {
-  //   if (waypoints.length < 2) {
-  //     setRouteSegments([]);
-  //     return;
-  //   }
-
-  //   const fetchAllSegments = async () => {
-  //     const newSegments: { positions: [number, number][]; mode: string }[] = [];
-
-  //     // loop through waypoints
-  //     for (let i = 0; i < waypoints.length - 1; i++) {
-  //       const wp1 = waypoints[i];
-  //       const wp2 = waypoints[i + 1];
-  //       const mode = wp1.routeMode || "driving";
-
-  //       if (mode === "direct") {
-  //         newSegments.push({
-  //           // draw straight line
-  //           positions: [
-  //             [wp1.lat, wp1.lng],
-  //             [wp2.lat, wp2.lng],
-  //           ],
-  //           mode: "direct",
-  //         });
-  //       } else if (mode === "curve") {
-  //         const curvePoints = getBezierCurve(
-  //           [wp1.lat, wp1.lng],
-  //           [wp2.lat, wp2.lng],
-  //         );
-  //         newSegments.push({ positions: curvePoints, mode: "curve " });
-  //       } else {
-  //         const profile = mode === "walking" ? "foot" : "driving";
-
-  //         try {
-  //           //osrm
-  //           const url = `https://router.project-osrm.org/route/v1/${profile}/${wp1.lng},${wp1.lat};${wp2.lng},${wp2.lat}?overview=full&geometries=geojson`;
-  //           const response = await fetch(url);
-
-  //           if (response.ok) {
-  //             const data = await response.json();
-  //             if (data.routes && data.routes.length > 0) {
-  //               const coords = data.routes[0].geometry.coordinates.map(
-  //                 (coord: [number, number]) => [coord[1], coord[0]],
-  //               );
-  //               newSegments.push({ positions: coords, mode: mode });
-  //               continue;
-  //             }
-  //           }
-  //           throw new Error("OSRM returned no route");
-  //         } catch (error) {
-  //           console.warn(
-  //             `[OSRM] Failed for segment ${i + 1}. Falling back to direct line.`,
-  //             error,
-  //           );
-  //           newSegments.push({
-  //             positions: [
-  //               [wp1.lat, wp1.lng],
-  //               [wp2.lat, wp2.lng],
-  //             ],
-  //             mode: "direct",
-  //           });
-  //         }
-  //       }
-  //     }
-  //     setRouteSegments(newSegments);
-  //   };
-  //   fetchAllSegments();
-  // }, [waypoints]);
-
   // parse file directly if gpx (if not gpx, gpsbabel goes boom boom and reformat it to gpx/kml/csv/xlsx)
   useEffect(() => {
     if (!droppedFile) return;
@@ -467,6 +243,7 @@ export function MapArea() {
   // waypoints on map click
   const handleAddWaypoint = async (lat: number, lng: number) => {
     const newId = Math.random().toString(36).substring(7);
+
     setWaypoints((prev) => [
       ...prev,
       {
@@ -479,7 +256,7 @@ export function MapArea() {
         routeMode: "driving",
       },
     ]);
-
+    setIsDirty(true);
     try {
       const res = await fetch(
         `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`,
@@ -510,15 +287,16 @@ export function MapArea() {
       <MapSettings />
       <div className="absolute inset-0 z-0">
         <MapContainer
-          center={[34.6937, 135.5023]}
+          center={settings.start_coords || [34.6937, 135.5023]}
           zoom={10}
           zoomControl={false}
           style={{ height: "100%", width: "100%", background: "transparent" }}
         >
           <TileLayer
+            key={isDarkMap ? "dark-map" : "light-map"}
             attribution="&copy; OpenStreetMap contributors &copy; CARTO"
             url={
-              isDark
+              isDarkMap
                 ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
                 : "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
             }
@@ -695,7 +473,7 @@ export function MapArea() {
                         className={`flex-1 flex justify-center p-1.5 rounded-md transition-all ${wp.routeMode === "curve" ? "bg-white shadow-sm text-emerald-600 ring-1 ring-zinc-200" : "text-zinc-500 hover:text-zinc-800 hover:bg-zinc-200/50"}`}
                         title="Fly/Ship"
                       >
-                        <Ship className="w-4 h-4" />
+                        <Plane className="w-4 h-4" />
                       </button>
                     </div>
                   </div>
@@ -704,7 +482,7 @@ export function MapArea() {
             </Marker>
           ))}
 
-          <MapAutoZoom routePoints={routePoints} />
+          <MapAutoZoom waypoints={waypoints} projectId={metadata.project_id} />
           <MapClickListener onMapClick={handleAddWaypoint} />
         </MapContainer>
       </div>

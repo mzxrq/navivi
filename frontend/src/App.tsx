@@ -1,20 +1,22 @@
 import { useState, useEffect, useRef } from "react";
-import { Sidebar } from "./components/Sidebar";
-import { MapArea } from "./components/MapArea";
-import { VideoArea } from "./components/VideoArea";
-import { TitleBar } from "./components/TitleBar";
-import { RenderOverlay } from "./components/RenderOverlay";
-import { TitleScreen } from "./components/TitleScreen";
-import { CheckCircle2, AlertCircle, Info, RefreshCw, Trash2, Settings2 } from "lucide-react";
+import { Sidebar } from "./components/view/editor/Sidebar";
+import { MapArea } from "./components/view/editor/MapArea";
+import { VideoArea } from "./components/view/editor/VideoArea";
+import { TitleBar } from "./components/ui/TitleBar";
+import { RenderOverlay } from "./components/ui/RenderOverlay";
+import { TitleScreen } from "./components/view/TitleScreen";
+import { NewProject } from "./components/view/NewProject";
+import { AppSettings } from "./components/modal/AppSettings";
+import {  CheckCircle2,  AlertCircle,  Info,  RefreshCw,  Trash2,  Settings2, } from "lucide-react";
 import { useUI } from "./hooks/useUI";
 import "./App.css";
+import { useWorkspace } from "./hooks/useWorkspace";
 
 export default function App() {
   const [contextMenu, setContextMenu] = useState({ show: false, x: 0, y: 0 });
   const menuRef = useRef<HTMLDivElement>(null);
-
-  const { currentView, showVideoPanel, toast } = useUI();
-
+  const { isDirty } = useWorkspace();
+  const { currentView, showVideoPanel, toast, setShowAppSettings } = useUI();
   useEffect(() => {
     const handleClick = () =>
       setContextMenu((prev) => ({ ...prev, show: false }));
@@ -50,12 +52,14 @@ export default function App() {
     >
       <TitleBar />
       <RenderOverlay />
+      <AppSettings />
 
-      {currentView === "title_screen" ? (
-        <TitleScreen />
-      ) : (
+      {(currentView === "title_screen" || currentView === "new_project") && <TitleScreen />}
+
+      {currentView === "new_project" && <NewProject />}
+
+      {(currentView === "editor") && (
         <div className="flex flex-1 overflow-hidden relative animate-in fade-in zoom-in-95 duration-300">
-          {" "}
           <Sidebar />
           <div className="flex flex-col flex-1 h-full relative">
             <MapArea />
@@ -69,7 +73,7 @@ export default function App() {
         </div>
       )}
 
-      {/* Custom CSS Menu with Smart Positioning */}
+      {/* Custom CSS Menu with Smart Positioning
       {contextMenu.show && (
         <div
           key={`${contextMenu.x}-${contextMenu.y}`}
@@ -80,39 +84,43 @@ export default function App() {
           <div className="flex flex-col text-sm text-zinc-700 dark:text-zinc-300 font-medium">
             <button
               className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors text-left"
-              onClick={() => window.location.reload()}
+              onClick={() => {
+                if (isDirty) {
+                  if(!confirm("You have unsaved changes. Reloading will lose them. Continue?"))
+                  window.location.reload();    
+                } 
+              }}
             >
               <RefreshCw className="w-4 h-4" /> Reload UI
             </button>
 
-            <button className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors text-left">
+            <button className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors text-left"
+              onClick={() => setShowAppSettings(true)}
+            >
               <Settings2 className="w-4 h-4" /> Quick Settings
-            </button>
-
-            {/* Divider */}
-            <div className="h-px bg-zinc-200 dark:bg-white/5 my-1" />
-
-            <button className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-500/20 text-red-600 dark:text-red-400 transition-colors text-left">
-              <Trash2 className="w-4 h-4" /> Clear Workspace
             </button>
           </div>
         </div>
-      )}
+      )} */}
 
       {/* Toast */}
       {toast.visible && (
         <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-[999] animate-in slide-in-from-bottom-6 fade-in zoom-in-95 duration-300 pointer-events-none">
-          <div className={`flex items-center gap-3 px-5 py-3 rounded-full backdrop-blur-xl border shadow-2xl ${
-            toast.type === 'success' 
-              ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-700 dark:text-emerald-400 shadow-emerald-500/10' 
-              : toast.type === 'error' 
-                ? 'bg-red-500/10 border-red-500/20 text-red-700 dark:text-red-400 shadow-red-500/10'
-                : 'bg-zinc-500/10 border-zinc-500/20 text-zinc-700 dark:text-zinc-300 shadow-zinc-500/10'
-          }`}>
-            {toast.type === 'success' && <CheckCircle2 className="w-5 h-5" />}
-            {toast.type === 'error' && <AlertCircle className="w-5 h-5" />}
-            {toast.type === 'info' && <Info className="w-5 h-5" />}
-            <span className="text-sm font-bold tracking-wide">{toast.message}</span>
+          <div
+            className={`flex items-center gap-3 px-5 py-3 rounded-full backdrop-blur-xl border shadow-2xl ${
+              toast.type === "success"
+                ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-700 dark:text-emerald-400 shadow-emerald-500/10"
+                : toast.type === "error"
+                  ? "bg-red-500/10 border-red-500/20 text-red-700 dark:text-red-400 shadow-red-500/10"
+                  : "bg-zinc-500/10 border-zinc-500/20 text-zinc-700 dark:text-zinc-300 shadow-zinc-500/10"
+            }`}
+          >
+            {toast.type === "success" && <CheckCircle2 className="w-5 h-5" />}
+            {toast.type === "error" && <AlertCircle className="w-5 h-5" />}
+            {toast.type === "info" && <Info className="w-5 h-5" />}
+            <span className="text-sm font-bold tracking-wide">
+              {toast.message}
+            </span>
           </div>
         </div>
       )}

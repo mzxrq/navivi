@@ -68,3 +68,5 @@ body {
 .leaflet-tooltip-bottom:before {
   border-bottom-color: rgba(255, 255, 255, 0.1) !important;
 }
+
+.no-spinners::-webkit-inner-spin-button, .no-spinners::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }

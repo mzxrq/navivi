@@ -8,7 +8,7 @@ import {
   Settings2,
   PictureInPicture,
 } from "lucide-react";
-import { useUI } from "../hooks/useUI";
+import { useUI } from "../../../hooks/useUI";
 import { useRef, useState } from "react";
 
 export function VideoArea() {

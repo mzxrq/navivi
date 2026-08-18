@@ -1,4 +1,4 @@
-import { useUI } from "../hooks/useUI";
+import { useUI } from "../../hooks/useUI";
 import { Loader2 } from "lucide-react";
 
 export function RenderOverlay() {
