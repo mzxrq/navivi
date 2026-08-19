@@ -32,6 +32,7 @@ export interface ProjectSettings {
   summary_fade: number;
   start_coords?: [number, number];
   resolution: string;
+  ors_api_key: string;
 }
 
 export interface ProjectMetadata {
@@ -71,7 +72,7 @@ export interface WorkspaceState {
   updateSettings: (data: Partial<ProjectSettings>) => void;
 
   saveProject: (overrideName?: string, asDuplicate?: boolean) => Promise<string | undefined>;
-  recentProject: RecentProjects[];
+  recentProjects: RecentProjects[];
   loadProject: (forcePath?: string) => Promise<boolean>;
   resetWorkspace: () => void;
 

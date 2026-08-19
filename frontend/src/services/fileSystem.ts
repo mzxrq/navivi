@@ -1,6 +1,7 @@
 import { documentDir, join, basename } from "@tauri-apps/api/path";
 import { writeTextFile, mkdir, exists, copyFile, readTextFile } from "@tauri-apps/plugin-fs";
 import { open } from "@tauri-apps/plugin-dialog";
+import { appConfig, fileSystem } from "../config/constants";
 
 export const saveProjectData = async (
     waypoints: any[],
@@ -11,13 +12,13 @@ export const saveProjectData = async (
     asDuplicate?: boolean,
 ) => {
     const docsPath = await documentDir();
-    const projectRoot = await join(docsPath, "Navivi", "Projects");
+    const projectRoot = await join(docsPath, fileSystem.rootFolder, fileSystem.projectsFolder);
 
     if (!(await exists(projectRoot))) {
         await mkdir(projectRoot, { recursive: true });
     }
 
-    let projName = overrideName || metadata.projName || "Untitled Project";
+    let projName = overrideName || metadata.projName || appConfig.defaultProjectName;
     let projId = asDuplicate ? "" : metadata.projId;
     let projectDir = "";
 
@@ -33,7 +34,7 @@ export const saveProjectData = async (
         let counter = 1;
         while (await exists(projectDir)) {
             counter++;
-            projName = `${overrideName || metadata.project_name || "Untitled Project"} (${counter})`;
+            projName = `${overrideName || metadata.project_name || appConfig.defaultProjectName} (${counter})`;
             safeName = projName.toLowerCase().replace(/[^a-z0-9]+/g, "_");
             projId = `${baseProjId}_${counter}`; 
             projectDir = await join(projectRoot, projId);
@@ -42,13 +43,13 @@ export const saveProjectData = async (
 
     const assetsDir = await join(projectDir, "assets");
     const gpxPath = await join(projectDir, "raw_track.gpx");
-    const nvvPath = await join(projectDir, `${projName}.nvv`);
+    const nvvPath = await join(projectDir, `${projName}.${fileSystem.extensions.project}`);
     const jsonPath = await join(projectDir, "job_config.json");
 
     if (!(await exists(projectDir))) await mkdir(projectDir, { recursive: true});
     if (!(await exists(assetsDir))) await mkdir(assetsDir, { recursive: true });
 
-    let gpxStr = `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Navivi">\n  <trk>\n    <name>${projName}</name>\n    <trkseg>\n`;
+    let gpxStr = `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="${appConfig.name}">\n  <trk>\n    <name>${projName}</name>\n    <trkseg>\n`;
     routeSegments.forEach((segment) => {
         segment.positions.forEach((pos: [number, number]) => {
             gpxStr += `      <trkpt lat="${pos[0]}" lon="${pos[1]}"></trkpt>\n`;
@@ -114,7 +115,7 @@ export const loadProjectData = async (forcePath?: string) => {
     if (!selectedPath) {
         const res = await open({
             multiple: false,
-            filters: [{ name: "Navivi Project", extensions: ["nvv","json"] }],
+            filters: [{ name: `${appConfig.name} Project`, extensions: [fileSystem.extensions.project] }],
         });
         if (!res || typeof res !== 'string') return null;
         selectedPath = res;

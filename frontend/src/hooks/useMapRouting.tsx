@@ -2,9 +2,10 @@ import { useEffect, useRef } from "react";
 import { useWorkspace } from "./useWorkspace";
 import { useUI } from "./useUI";
 import { getCurve } from "../utils/mapUtils";
+import { apiEndpoints } from "../config/constants";
 
 export function useMapRouting() {
-  const { waypoints, setRouteSegments } = useWorkspace();
+  const { waypoints, setRouteSegments, settings } = useWorkspace();
   const { showToast } = useUI();
   
   const segmentCache = useRef(
@@ -21,7 +22,8 @@ export function useMapRouting() {
     
     const fetchAllSegments = async () => {
       const newSegments: { positions: [number, number][]; mode: string }[] = [];
-      const apiKey = import.meta.env.VITE_ORS_API_KEY;
+
+      const apiKey = settings.ors_api_key || import.meta.env.VITE_ORS_API_KEY;
 
       let warnedApiLimit = false;
       let warnedNoRoute = false;
@@ -54,11 +56,11 @@ export function useMapRouting() {
           const profile = mode === "walking" ? "foot-hiking" : "driving-car";
 
           try {
-            if (!apiKey) throw new Error("ORS API key is missing from .env file");
+            if (!apiKey) throw new Error("missing_api_key");
 
             await sleep(1000); 
 
-            const url = `https://api.openrouteservice.org/v2/directions/${profile}?api_key=${apiKey}&start=${wp1.lng},${wp1.lat}&end=${wp2.lng},${wp2.lat}`;
+            const url = `${apiEndpoints.orsBase}/${profile}?api_key=${apiKey}&start=${wp1.lng},${wp1.lat}&end=${wp2.lng},${wp2.lat}`;
             const response = await fetch(url);
 
             if (!response.ok) {
@@ -85,11 +87,17 @@ export function useMapRouting() {
 
             const errMsg = error instanceof Error ? error.message : String(error);
 
-            if (errMsg.includes("Failed to fetch") || errMsg.includes("QUOTA_LIMIT")) {
-              if (!warnedApiLimit) {
-                showToast("Routing limit reached. Falling back to direct lines.", "error");
+            if (errMsg.includes("missing_api_key")) {
+             if (!warnedApiLimit) {
+              showToast("Missing ORS API Key. Please add your API Key in Settings.", "warning");
                 warnedApiLimit = true;
-              }
+             }
+            } 
+            else if (errMsg.includes("Failed to fetch") || errMsg.includes("quota_limit")) {
+             if (!warnedApiLimit) {
+              showToast("Routing limit reached or invalid key. Failling back to direct lines.", "error");
+              warnedApiLimit = true;
+             }  
             } else if (errMsg.includes("NO_ROUTE") || errMsg.includes("HTTP_")) {
               if (!warnedNoRoute) {
                 const modeName = mode.charAt(0).toUpperCase() + mode.slice(1);
@@ -97,6 +105,7 @@ export function useMapRouting() {
                 warnedNoRoute = true;
               }
             }
+          }
 
             const fallbackSeg = {
               positions: [[wp1.lat, wp1.lng], [wp2.lat, wp2.lng]] as [number, number][],
@@ -106,10 +115,9 @@ export function useMapRouting() {
             newSegments.push(fallbackSeg);
           }
         }
-      }
-      setRouteSegments(newSegments);
-    };
+        setRouteSegments(newSegments);
+      };  
 
     fetchAllSegments();
-  }, [waypoints, setRouteSegments, showToast]);
+  }, [waypoints, setRouteSegments, showToast, settings.ors_api_key]);
 }
