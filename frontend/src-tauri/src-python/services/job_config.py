@@ -39,27 +39,33 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 class JobConfigManager:
     """
-    An OOP class to load, read, update, and save job configuration JSON files.
+    An OOP singleton class to load, read, update, and save job configuration JSON files.
     """
 
-    # =========================
-    # Initialization
-    # =========================
     _instance = None
-    _initialized = False
 
     def __new__(cls, config_path=None):
         if cls._instance is None:
             cls._instance = super(JobConfigManager, cls).__new__(cls)
         return cls._instance
 
-    def __init__(self, config_path: Optional[Union[str, Path]] = None) -> None:
-        """
-        Initialize the manager with a path to a JSON configuration file.
-        """
-        self.config_path = Path(config_path) if config_path else Path("C:\\Users\\user1\\Documents\\Navivi\\Projects\\proj_2026_very_cool_tomogashima_islands\\job_config.json")
-        self.data: Dict[str, Any] = {}
-        self.load()
+    def __init__(self, config_path: Optional[Union[str, Path]] = None) -> None: 
+        if getattr(self, '_initialized', False) and not config_path:
+            return
+
+        # Update path only if explicitly provided, otherwise keep existing or fall back
+        if config_path:
+            self.config_path = Path(config_path).resolve()
+        elif not getattr(self, 'config_path', None):
+            self.config_path = Path("job_config.json").resolve()
+
+        if not hasattr(self, 'data'):
+            self.data: Dict[str, Any] = {}
+
+        if self.config_path.exists():
+            self.load()
+            
+        self._initialized = True
 
     # =========================
     # Configuration operations
