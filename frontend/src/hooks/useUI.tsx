@@ -22,10 +22,10 @@ interface UIState {
   setIsSettingsOpen: (isOpen: boolean) => void;
   toast: {
     message: string;
-    type: "success" | "error" | "info";
+    type: "success" | "error" | "warning" | "info";
     visible: boolean;
   };
-  showToast: (message: string, type?: "success" | "error" | "info") => void;
+  showToast: (message: string, type?: "success" | "error" | "warning" | "info") => void;
   showAppSettings: boolean;
   setShowAppSettings: (show: boolean) => void;
 }
@@ -41,7 +41,7 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({
   const [showVideoPanel, setShowVideoPanel] = useState(false);
   const [toast, setToast] = useState<{
     message: string;
-    type: "success" | "error" | "info";
+    type: "success" | "error" | "warning" | "info";
     visible: boolean;
   }>({
     message: "",
@@ -58,7 +58,7 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const showToast = (
     message: string,
-    type: "success" | "error" | "info" = "info",
+    type: "success" | "error" | "warning" | "info" = "info",
   ) => {
     setToast({ message, type, visible: true });
     setTimeout(() => {
