@@ -40,6 +40,9 @@ def data_pipeline_process(input_file: str, output_format: str = "iblue747") -> s
     print(f"✅ Pipeline completed successfully!")
     return json.dumps(json_route, ensure_ascii=False)
 
+def generate_audio_tts(text: str, output_path: str = "output.mp3") -> str | None:
+    """Backwards-compatibility alias for legacy tests."""
+    return generate_and_save_audio(text, output_path)
 
 def store_raw_file(input_file: str) -> str:
     stored_file_path = store_raw_file_with_datetime(input_file)
@@ -73,8 +76,8 @@ def generate_navigation_video(
     project_config_path: str = "data\\inputs\\gpsdata\\processdata\\json\\example_frontend.json",
     output_video_dir: str = "data\\outputs\\video",
     map_output_path: str = "data\\inputs\\fullmap_image\\map_background.png",
-    audio_durations: list = None,
-    audio_pauses: list = None
+    audio_durations: Optional[list] = None,
+    audio_pauses: Optional[list] = None
 ) -> list[str]:
     route_df = cleaned_route["route"]
     summary = cleaned_route.get("summary", {})
@@ -199,131 +202,153 @@ def generate_navigation_video(
     )
 
 
-# async def run_synced_tts_pipeline(project_config_path: str, output_video_dir: str = "data\\outputs\\video") -> dict:
-#     """
-#     Orchestrates upstream TTS synthesis, exact audio duration and pause analysis,
-#     full navigation video rendering, and final assembly into a combined deliverable
-#     ensuring every active waypoint clip has its corresponding narration audio.
-#     """
-#     config_path = Path(project_config_path)
-#     if not config_path.exists():
-#         raise FileNotFoundError(f"Project config not found: {project_config_path}")
+async def run_synced_tts_pipeline(project_config_path: str, output_video_dir: Optional[str] = None) -> dict:
+    """
+    Orchestrates upstream TTS synthesis, exact audio duration and pause analysis,
+    full navigation video rendering, and final assembly into a combined deliverable
+    ensuring every active waypoint clip has its corresponding narration audio.
+    """
+    config_path = Path(project_config_path)
+    if not config_path.exists():
+        raise FileNotFoundError(f"Project config not found: {project_config_path}")
 
-#     with open(config_path, 'r', encoding='utf-8') as f:
-#         project_config = json.load(f)
+    # 1. Initialize the global JobConfigManager singleton store[cite: 9, 16]
+    job_config = JobConfigManager(config_path)
 
-#     waypoints = project_config.get("waypoints", [])
-#     audio_paths = []
-#     audio_durations = []
-#     audio_pauses = []
+    # Resolve project centralized directories from config
+    project_dir = Path(job_config.get("directory_path", config_path.parent))
+    audio_output_dir = project_dir / "audio"
+    audio_output_dir.mkdir(parents=True, exist_ok=True)
 
-#     print("🎙️ Generating Irodori-TTS narration audio for waypoints...", file=sys.stderr)
-#     for wp in waypoints:
-#         text = wp.get("narration", "").strip()
-#         if text:
-#             # Fixed: Use get_irodori_speech wrapper (or TTSPipelineManager().get_speech)
-#             path = await get_irodori_speech(text)
-#             audio_paths.append(path)
-#             analysis = analyze_wav_pauses(path)
-#             audio_durations.append(analysis['duration_seconds'])
-#             audio_pauses.append(analysis['pauses'])
-#             print(f"   -> Generated {path} (Duration: {analysis['duration_seconds']}s, Pauses: {len(analysis['pauses'])})", file=sys.stderr)
-#         else:
-#             audio_paths.append(None)
-#             audio_durations.append(0.0)
-#             audio_pauses.append([])
+    if not output_video_dir:
+        output_video_dir = str((project_dir / "video").resolve())
 
-#     valid_audio_paths = [p for p in audio_paths if p]
-#     master_audio = None
-#     if valid_audio_paths:
-#         # Fixed: Use concatenate_audio_files wrapper
-#         master_audio = concatenate_audio_files(valid_audio_paths, "outputs/master_navigation_audio.wav")
+    waypoints = job_config.get_waypoints()
+    audio_paths = []
+    audio_durations = []
+    audio_pauses = []
 
-#     csv_path = project_config.get("source_files", {}).get("gps_route")
-#     if not csv_path:
-#         raise ValueError("GPS route source file not specified in configuration.")
+    # 2. Instantiate TTS client targeting the project's audio folder[cite: 13]
+    from services.tts import IrodoriTTSClient, AudioProcessor
+    tts_client = IrodoriTTSClient(output_dir=audio_output_dir)
+    audio_processor = AudioProcessor(output_dir=audio_output_dir)
 
-#     cleaned_route = clean_gps_data(csv_path)
+    print("🎙️ Generating Irodori-TTS narration audio for waypoints...", file=sys.stderr)
+    for wp in waypoints:
+        text = wp.get("narration", "").strip()
+        if text:
+            # Generates and saves each individual audio file in the project's audio folder[cite: 13]
+            path = await tts_client.generate_speech(text)
+            audio_paths.append(path)
+            analysis = audio_processor.analyze_pauses(path)
+            audio_durations.append(analysis['duration_seconds'])
+            audio_pauses.append(analysis['pauses'])
+            print(f"   -> Generated {path} (Duration: {analysis['duration_seconds']}s, Pauses: {len(analysis['pauses'])})", file=sys.stderr)
+        else:
+            audio_paths.append(None)
+            audio_durations.append(0.0)
+            audio_pauses.append([])
 
-#     # 1. Generate the video files with exact audio timings injected
-#     video_paths = generate_navigation_video(
-#         cleaned_route=cleaned_route,
-#         project_config_path=project_config_path,
-#         output_video_dir=output_video_dir,
-#         audio_durations=audio_durations,
-#         audio_pauses=audio_pauses
-#     )
+    valid_audio_paths = [p for p in audio_paths if p]
+    master_audio = None
+    if valid_audio_paths:
+        master_audio_path = audio_output_dir / "master_navigation_audio.wav"
+        master_audio = audio_processor.concatenate_files(valid_audio_paths, str(master_audio_path))
 
-#     # Initialize the OOP VideoEditor
-#     editor = VideoEditor()
+    # 3. Retrieve and convert the raw GPS route to CSV so latitude/longitude columns exist[cite: 8]
+    raw_gps_path = job_config.get("source_files", {}).get("gps_route")
+    if not raw_gps_path:
+        raise ValueError("GPS route source file not specified in configuration.")
 
-#     final_video_paths = []
-#     segment_has_narration = []
-#     segment_narration_audio = []
-#     segment_durations = []
+    csv_output_filename = f"{Path(raw_gps_path).stem}_converted.csv"
+    csv_path = convert_gps_file(
+        input_file=raw_gps_path,
+        output_filename=csv_output_filename,
+        output_format="iblue747"
+    )
+    cleaned_route = clean_gps_data(csv_path)
 
-#     has_summary = len(video_paths) > 0 and "summary" in video_paths[-1]
+    # 4. Generate the video files with exact audio timings injected
+    base_dir = Path(__file__).resolve().parent
+    frontend_config_path = base_dir / "data" / "inputs" / "gpsdata" / "processdata" / "json" / "example_frontend.json"
 
-#     DEFAULT_OVERVIEW_DURATION = 8.0
-#     DEFAULT_PAUSE_SECONDS = 2.0
-#     DEFAULT_SUMMARY_HOLD = 4.0
+    video_paths = generate_navigation_video(
+        cleaned_route=cleaned_route,
+        project_config_path=str(frontend_config_path),
+        output_video_dir=output_video_dir,
+        audio_durations=audio_durations,
+        audio_pauses=audio_pauses
+    )
 
-#     # 2. Mux audio into every respective waypoint clip cleanly using VideoEditor
-#     for i, vid_path in enumerate(video_paths):
-#         is_waypoint_leg = (i > 0) if not has_summary else (0 < i < len(video_paths) - 1)
-#         audio_idx = i - 1
+    editor = VideoEditor(job_config=job_config)
 
-#         if is_waypoint_leg and audio_idx < len(audio_paths) and audio_paths[audio_idx]:
-#             print(f"🎵 Muxing audio into segment {i}...", file=sys.stderr)
+    final_video_paths = []
+    segment_has_narration = []
+    segment_narration_audio = []
+    segment_durations = []
+
+    has_summary = len(video_paths) > 0 and "summary" in video_paths[-1]
+
+    DEFAULT_OVERVIEW_DURATION = 8.0
+    DEFAULT_PAUSE_SECONDS = 2.0
+    DEFAULT_SUMMARY_HOLD = 4.0
+
+    # 5. Mux audio into every respective waypoint clip cleanly using VideoEditor[cite: 14, 18]
+    for i, vid_path in enumerate(video_paths):
+        is_waypoint_leg = (i > 0) if not has_summary else (0 < i < len(video_paths) - 1)
+        audio_idx = i - 1
+
+        if is_waypoint_leg and audio_idx < len(audio_paths) and audio_paths[audio_idx]:
+            print(f"🎵 Muxing audio into segment {i}...", file=sys.stderr)
             
-#             base_name = Path(vid_path).stem
-#             muxed_filename = f"{base_name}_with_audio.mp4"
+            base_name = Path(vid_path).stem
+            muxed_filename = f"{base_name}_with_audio.mp4"
             
-#             try:
-#                 muxed_path = editor.mux_audio_to_video(
-#                     video_path=vid_path, 
-#                     audio_path=audio_paths[audio_idx], 
-#                     output_filename=muxed_filename
-#                 )
-#             except Exception as e:
-#                 raise RuntimeError(f"Failed to mux audio into segment {i} ({vid_path}): {e}")
+            try:
+                muxed_path = editor.mux_audio_to_video(
+                    video_path=vid_path, 
+                    audio_path=audio_paths[audio_idx], 
+                    output_filename=muxed_filename
+                )
+            except Exception as e:
+                raise RuntimeError(f"Failed to mux audio into segment {i} ({vid_path}): {e}")
 
-#             final_video_paths.append(muxed_path)
-#             segment_has_narration.append(True)
-#             segment_narration_audio.append(audio_paths[audio_idx])
-#             segment_durations.append(audio_durations[audio_idx])
+            final_video_paths.append(muxed_path)
+            segment_has_narration.append(True)
+            segment_narration_audio.append(audio_paths[audio_idx])
+            segment_durations.append(audio_durations[audio_idx])
 
-#             if os.path.exists(vid_path):
-#                 os.remove(vid_path)
-#         else:
-#             final_video_paths.append(vid_path)
-#             segment_has_narration.append(False)
-#             segment_narration_audio.append(None)
-#             if i == 0:
-#                 segment_durations.append(DEFAULT_OVERVIEW_DURATION + DEFAULT_PAUSE_SECONDS)
-#             elif has_summary and i == len(video_paths) - 1:
-#                 segment_durations.append(DEFAULT_SUMMARY_HOLD)
-#             else:
-#                 segment_durations.append(audio_durations[audio_idx] if audio_idx < len(audio_durations) else 0.0)
+            if os.path.exists(vid_path):
+                os.remove(vid_path)
+        else:
+            final_video_paths.append(vid_path)
+            segment_has_narration.append(False)
+            segment_narration_audio.append(None)
+            if i == 0:
+                segment_durations.append(DEFAULT_OVERVIEW_DURATION + DEFAULT_PAUSE_SECONDS)
+            elif has_summary and i == len(video_paths) - 1:
+                segment_durations.append(DEFAULT_SUMMARY_HOLD)
+            else:
+                segment_durations.append(audio_durations[audio_idx] if audio_idx < len(audio_durations) else 0.0)
 
-#     # 3. Final assembly of all video segments and timeline audio via module wrapper
-#     print("🎬 Assembling final combined video + audio...", file=sys.stderr)
-#     assembly = TTSPipelineManager.assemble_final_deliverable(
-#         video_segment_paths=final_video_paths,
-#         segment_has_narration=segment_has_narration,
-#         segment_durations=segment_durations,
-#         segment_narration_audio=segment_narration_audio,
-#         output_dir="outputs",
-#     )
+    # 6. Final assembly of all video segments and timeline audio[cite: 13]
+    print("🎬 Assembling final combined video + audio...", file=sys.stderr)
+    assembly = assemble_final_deliverable(
+        video_segment_paths=final_video_paths,
+        segment_has_narration=segment_has_narration,
+        segment_durations=segment_durations,
+        segment_narration_audio=segment_narration_audio,
+        output_dir=output_video_dir,
+    )
 
-#     return {
-#         "video_paths": final_video_paths,                          
-#         "master_audio_path": master_audio,                          
-#         "final_video_path": assembly["full_video_path"],        
-#         "full_master_audio_path": assembly["full_audio_path"],  
-#         "final_combined_path": assembly["final_combined_path"], 
-#         "summary": cleaned_route.get("summary", {})
-#     }
+    return {
+        "video_paths": final_video_paths,                          
+        "master_audio_path": master_audio,                          
+        "final_video_path": assembly["full_video_path"],        
+        "full_master_audio_path": assembly["full_audio_path"],  
+        "final_combined_path": assembly["final_combined_path"], 
+        "summary": cleaned_route.get("summary", {})
+    }
 
 
 def run_full_pipeline(raw_source_path: str, output_video_dir: Optional[str] = None) -> dict:
@@ -389,8 +414,8 @@ if __name__ == "__main__":
 
             elif command == "synced_tts_pipeline":
                 output_arg = sys.argv[3] if len(sys.argv) > 3 else None
-                # result = asyncio.run(run_synced_tts_pipeline(project_config_path=payload, output_video_dir=output_arg))
-                # print(json.dumps({"success": True, **result}, ensure_ascii=False))
+                result = asyncio.run(run_synced_tts_pipeline(project_config_path=payload, output_video_dir=output_arg))
+                print(json.dumps({"success": True, **result}, ensure_ascii=False))
 
             elif command == "save_config":
                 # 1. This initializes the global singleton instance in memory

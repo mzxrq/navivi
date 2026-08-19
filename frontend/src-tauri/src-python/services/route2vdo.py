@@ -338,7 +338,7 @@ class RouteAnimator:
             marker_color=config.get("marker_color", (0, 0, 255)),
             marker_radius=config.get("marker_radius", 18)
         )
-        self.out_dir = Path(config.get("output_dir", "data\\outputs\\video"))
+        self.out_dir = Path(config.get("output_dir", ""))
         self.out_dir.mkdir(parents=True, exist_ok=True)
 
     def load_route_data(self, json_path: str) -> Tuple[List, List, List, Dict]:
@@ -701,3 +701,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+Route2VDO = RouteAnimator

@@ -246,7 +246,7 @@ class AudioProcessor:
             raise RuntimeError(f"Failed to synthesize silent audio '{output_path}': {result.stderr.strip()}")
         return output_path
 
-    def build_full_narration_master(self, segment_durations: List[float], segment_narration_audio: List[str], final_output_path: str = "outputs/master_full_timeline_audio.wav") -> str:
+    def build_full_narration_master(self, segment_durations: List[float], segment_narration_audio: List[Optional[str]], final_output_path: str = "outputs/master_full_timeline_audio.wav") -> str:
         """Builds a timeline-accurate master audio track combining narration and procedural silence."""
         if len(segment_durations) != len(segment_narration_audio):
             raise ValueError("segment_durations and segment_narration_audio must be the same length and order.")
@@ -254,7 +254,8 @@ class AudioProcessor:
         ref_sample_rate, ref_channels = self._detect_reference_audio_format(segment_narration_audio)
         print(f"🔊 Reference audio format for silence padding: {ref_sample_rate}Hz, {ref_channels}ch")
 
-        temp_dir = Path("outputs/tmp_master_audio")
+        # ✅ Route temporary audio files into the active project audio directory instead of root outputs
+        temp_dir = self.output_dir / "tmp_master_audio"
         temp_dir.mkdir(parents=True, exist_ok=True)
         parts = []
 
@@ -293,7 +294,7 @@ class VideoProcessor:
     """Manages video segment padding, stream-copy concatenation, and final muxing."""
 
     @staticmethod
-    def normalize_segment_audio(video_path: str, has_narration: bool, sample_rate: int, channels: int, temp_dir: str = "outputs/tmp_normalized") -> str:
+    def normalize_segment_audio(video_path: str, has_narration: bool, sample_rate: int, channels: int, temp_dir: str = "") -> str:
         """Ensures a video segment has a matching audio stream (pads with silent AAC if missing)."""
         if has_narration:
             return video_path
@@ -483,3 +484,18 @@ def assemble_final_deliverable(
     return _default_manager.assemble_final_deliverable(
         video_segment_paths, segment_has_narration, segment_durations, segment_narration_audio, output_dir
     )
+
+class TTSService:
+    """Backwards-compatibility facade wrapper for legacy tests."""
+    def __init__(self, audio_dir: Optional[Path | str] = None, output_dir: Optional[Path | str] = None, *args, **kwargs):
+        audio_path = Path(audio_dir) if audio_dir else Path("data/outputs/audio")
+        self.manager = TTSPipelineManager(output_audio_dir=audio_path, *args, **kwargs)
+
+    async def get_speech(self, text: str) -> str:
+        return await self.manager.get_speech(text)
+
+    def analyze_pauses(self, wav_path: str, silence_threshold: int = 500, min_pause_duration: float = 0.2) -> dict:
+        return self.manager.analyze_pauses(wav_path, silence_threshold, min_pause_duration)
+
+    def concatenate_audio(self, audio_paths: list[str], final_output_path: str = "outputs/master_narration.wav") -> str:
+        return self.manager.concatenate_audio(audio_paths, final_output_path)

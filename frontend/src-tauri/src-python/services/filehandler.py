@@ -234,5 +234,24 @@ def generate_and_save_audio(text: str, output_path: str = "output.mp3", server_u
     generator = TTSAudioGenerator(server_url=server_url) if server_url != "http://localhost:8000/v1/audio/speech" else _tts_generator
     return generator.generate_and_save(text, output_path)
 
-def initialize_new_project(user_id: str, project_name: str, base_settings: dict = None) -> str:
+def initialize_new_project(user_id: str, project_name: str, base_settings: Optional[dict] = None) -> str:
     return _project_initializer.initialize(user_id, project_name, base_settings)
+
+
+
+class FileHandler:
+    @staticmethod
+    def store_raw_file_with_datetime(source_path_str: str) -> str:
+        return store_raw_file_with_datetime(source_path_str)
+
+    @staticmethod
+    def save_project_asset_image(project_dir: str | Path, source_image_path: str | Path) -> str:
+        return save_project_asset_image(project_dir, source_image_path)
+
+    @staticmethod
+    def generate_and_save_audio(text: str, output_path: str = "output.mp3", server_url: str = "http://localhost:8000/v1/audio/speech") -> str | None:
+        return generate_and_save_audio(text, output_path, server_url)
+
+    @staticmethod
+    def initialize_new_project(user_id: str, project_name: str, base_settings: Optional[dict] = None) -> str:
+        return initialize_new_project(user_id, project_name, base_settings)

@@ -394,3 +394,36 @@ def summarize_gps_data(cleaned_data: dict) -> dict:
 
 def export_to_frontend_json(*args, **kwargs):
     return GPSJsonExporter.export(*args, **kwargs)
+
+class GPSParser:
+    @staticmethod
+    def detect_format(input_path: Path) -> str:
+        return GPSBabelConverter().detect_input_format(input_path)
+
+    @staticmethod
+    def haversine_vertorized(lat1, lon1, lat2, lon2):
+        return GPSMath.haversine_vectorized(np.array([lat1]), np.array([lon1]), np.array([lat2]), np.array([lon2]))[0]
+
+    @staticmethod
+    def compute_summary_distance(df: pd.DataFrame, start_idx: int = 0, end_idx: Optional[int] = None) -> float:
+        sub_df = df.iloc[start_idx:end_idx] if end_idx else df.iloc[start_idx:]
+        summary = GPSMath.compute_route_summary(sub_df, pd.DataFrame())
+        return summary["total_distance_km"]
+
+    @staticmethod
+    def detect_and_format_waypoint_stops(df: pd.DataFrame, job_config: dict) -> dict:
+        cleaner = GPSDataCleaner()
+        result = cleaner.clean_file(df) if isinstance(df, str) else {"route": df, "waypoints": pd.DataFrame()}
+        return GPSJsonExporter.export(result, "mock_path", job_config.get("project_name", "Test"))
+
+    @staticmethod
+    def convert_gps_file(*args, **kwargs):
+        return GPSBabelConverter().convert(*args, **kwargs)
+
+    @staticmethod
+    def clean_gps_data(*args, **kwargs):
+        return GPSDataCleaner().clean_file(*args, **kwargs)
+
+    @staticmethod
+    def export_to_frontend_json(*args, **kwargs):
+        return GPSJsonExporter.export(*args, **kwargs)

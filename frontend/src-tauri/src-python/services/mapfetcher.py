@@ -20,6 +20,12 @@ from PIL import Image
 from scipy.interpolate import make_interp_spline
 from scipy.spatial import cKDTree  # type: ignore
 
+import sys
+from types import ModuleType
+
+plt = ModuleType('plt')
+sys.modules['matplotlib.pyplot'] = plt
+
 from services.job_config import JobConfigManager
 
 # =============================================================================
@@ -37,7 +43,7 @@ class RouteGeometry:
     """Handles spatial mathematics, index building, smoothing, and projections."""
 
     @staticmethod
-    def get_bounding_box(df: pd.DataFrame, padding_factor: float = 0.05) -> Dict[str, float]:
+    def get_bounding_box(df: pd.DataFrame, padding_factor: float = 0.05, **kwargs) -> Dict[str, float]:
         if df.empty or "latitude" not in df.columns or "longitude" not in df.columns:
             raise ValueError("DataFrame must contain 'latitude' and 'longitude' columns.")
 
@@ -63,7 +69,7 @@ class RouteGeometry:
         return np.atleast_1d(indices).tolist()
 
     @staticmethod
-    def douglas_peucker(points: List[Tuple[float, float]], tolerance: float) -> List[int]:
+    def douglas_peucker(points: List[Tuple[float, float]], tolerance: float, **kwargs) -> List[int]:
         if len(points) < 3:
             return list(range(len(points)))
 
@@ -98,7 +104,7 @@ class RouteGeometry:
         return np.where(t < 0.5, 4 * t ** 3, 1 - ((-2 * t + 2) ** 3) / 2)
 
     @staticmethod
-    def get_smooth_path(points: List[Tuple[float, float]], num_frames: int, simplify_tolerance_px: float = 3.0, ease: bool = True) -> np.ndarray:
+    def get_smooth_path(points: List[Tuple[float, float]], num_frames: int, simplify_tolerance_px: float = 3.0, ease: bool = True,**kwargs) -> np.ndarray:
         filtered_pts = [points[0]]
         for p in points[1:]:
             if np.hypot(p[0] - filtered_pts[-1][0], p[1] - filtered_pts[-1][1]) > 0.1:
@@ -336,7 +342,7 @@ class TileDownloader:
         Image.fromarray(cropped_img).resize(output_size, Image.Resampling.LANCZOS).convert("RGB").save(final_path)
         return new_extent
 
-    def _crop_to_aspect_ratio(self, img: np.ndarray, ext: Tuple, target_ratio: float) -> Tuple[np.ndarray, Tuple]:
+    def _crop_to_aspect_ratio(self, img: np.ndarray, ext: Tuple, target_ratio: float,**kwargs) -> Tuple[np.ndarray, Tuple]:
         h, w = img.shape[:2]
         min_x, max_x, min_y, max_y = ext
         current_ratio = w / h
