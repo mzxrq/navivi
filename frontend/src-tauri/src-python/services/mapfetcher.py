@@ -1,351 +1,491 @@
 """
-Map Fetcher Service (mapfetcher.py)
+mapfetcher.py (OOP Refactored)
+---------------------------------------------------------------------------
+Fetches static background map images (via contextily/OSM-style tiles)
+for a given route's bounding box and handles geographic route slicing.
+---------------------------------------------------------------------------
 """
-'''
-This module provides a service for fetching map data from various sources. It is designed to be used within the Tauri application framework, allowing for seamless integration with the frontend.
 
-How to Use:
-"""
-# 1. Import the file (Python automatically looks in the same folder)
-import mapfetcher
+from __future__ import annotations
 
-# 2. Call a function or class from inside that file.
-map_data = mapfetcher.fetch_map(lat=40.7128, lng=-74.0060)
-
-# Alternatively, import a specific function directly:
-from mapfetcher import fetch_map
-
-map_data = fetch_map(lat=40.7128, lng=-74.0060)
-"""
-'''
-
-# Import necessary modules
-import logging
+import math
+import os
 from pathlib import Path
-from typing import Final, List
+from typing import Final, Dict, List, Tuple, Optional, Any
+
 import contextily as cx
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from PIL import Image
 from scipy.interpolate import make_interp_spline
+from scipy.spatial import cKDTree  # type: ignore
 
-# Import custom modules
-from job_config import JobConfigManager
+from services.job_config import JobConfigManager
 
-# Define Final constants for map fetching
+# =============================================================================
+# CONSTANTS
+# =============================================================================
+
 TARGET_ASPECT_RATIO: Final[float] = 16 / 9
-MIN_MAP_WIDTH: Final[int] = 1280
+MIN_MAP_WIDTH_PX: Final[int] = 1280
 
-# DEFINE Path for the cache directory
-CACHE_DIR = Path(".cache") / "mapfetcher"
+# =============================================================================
+# GEOMETRY & MATH ENGINE
+# =============================================================================
+
+class RouteGeometry:
+    """Handles spatial mathematics, index building, smoothing, and projections."""
+
+    @staticmethod
+    def get_bounding_box(df: pd.DataFrame, padding_factor: float = 0.05) -> Dict[str, float]:
+        if df.empty or "latitude" not in df.columns or "longitude" not in df.columns:
+            raise ValueError("DataFrame must contain 'latitude' and 'longitude' columns.")
+
+        min_lat, max_lat = df["latitude"].min(), df["latitude"].max()
+        min_lon, max_lon = df["longitude"].min(), df["longitude"].max()
+
+        lat_padding = (max_lat - min_lat) * padding_factor
+        lon_padding = (max_lon - min_lon) * padding_factor
+
+        return {
+            "w": min_lon - lon_padding,
+            "s": min_lat - lat_padding,
+            "e": max_lon + lon_padding,
+            "n": max_lat + lat_padding,
+        }
+
+    @staticmethod
+    def build_waypoint_index(route_df: pd.DataFrame, waypoints: List[Dict]) -> List[int]:
+        if route_df.empty or not waypoints:
+            return []
+        tree = cKDTree(route_df[["latitude", "longitude"]].to_numpy())
+        _, indices = tree.query([[wp["lat"], wp["lng"]] for wp in waypoints])
+        return np.atleast_1d(indices).tolist()
+
+    @staticmethod
+    def douglas_peucker(points: List[Tuple[float, float]], tolerance: float) -> List[int]:
+        if len(points) < 3:
+            return list(range(len(points)))
+
+        pts = np.array(points)
+        keep = {0, len(points) - 1}
+
+        def _dp(start, end):
+            if end - start <= 1:
+                return
+            line = pts[end] - pts[start]
+            line_len = np.hypot(*line)
+            if line_len == 0:
+                dists = np.hypot(*(pts[start+1:end] - pts[start]).T)
+            else:
+                norm = np.array([-line[1], line[0]]) / line_len
+                dists = np.abs((pts[start+1:end] - pts[start]) @ norm)
+
+            max_idx = np.argmax(dists)
+            max_dist = dists[max_idx]
+            mid = start + 1 + max_idx
+
+            if max_dist > tolerance:
+                keep.add(mid)
+                _dp(start, mid)
+                _dp(mid, end)
+
+        _dp(0, len(points) - 1)
+        return sorted(keep)
+
+    @staticmethod
+    def ease_in_out_cubic(t: np.ndarray) -> np.ndarray:
+        return np.where(t < 0.5, 4 * t ** 3, 1 - ((-2 * t + 2) ** 3) / 2)
+
+    @staticmethod
+    def get_smooth_path(points: List[Tuple[float, float]], num_frames: int, simplify_tolerance_px: float = 3.0, ease: bool = True) -> np.ndarray:
+        filtered_pts = [points[0]]
+        for p in points[1:]:
+            if np.hypot(p[0] - filtered_pts[-1][0], p[1] - filtered_pts[-1][1]) > 0.1:
+                filtered_pts.append(p)
+
+        if len(filtered_pts) > 2:
+            keep_idx = RouteGeometry.douglas_peucker(filtered_pts, tolerance=simplify_tolerance_px)
+            filtered_pts = [filtered_pts[i] for i in keep_idx]
+
+        pts = np.array(filtered_pts, dtype=float)
+        n = len(pts)
+        if n < 2:
+            if len(points) > 0:
+                return np.array([points[0]] * num_frames)
+            return np.zeros((num_frames, 2))
+
+        diffs = np.diff(pts, axis=0)
+        dists = np.hypot(diffs[:, 0], diffs[:, 1])
+        cum_dists = np.concatenate(([0], np.cumsum(dists)))
+
+        total_dist = cum_dists[-1]
+        t = cum_dists / total_dist if total_dist > 0 else np.linspace(0, 1, n)
+        t_linear = np.linspace(0, 1, num_frames)
+        t_fine = RouteGeometry.ease_in_out_cubic(t_linear) if ease else t_linear
+
+        k = min(3, n - 1)
+        sx = make_interp_spline(t, pts[:, 0], k=k)
+        sy = make_interp_spline(t, pts[:, 1], k=k)
+        return np.vstack([sx(t_fine), sy(t_fine)]).T
+
+    @staticmethod
+    def project_latlon_to_pixel(lat: float, lon: float, extent: Tuple[float, float, float, float], img_w: int, img_h: int) -> List[float]:
+        """Projects a single real-world coordinate to a pixel on the generated map tile."""
+        min_x, max_x, min_y, max_y = extent
+        r = 6378137.0
+        mx = lon * (r * np.pi / 180.0)
+        my = np.log(np.tan((90.0 + lat) * np.pi / 360.0)) * r
+        px = (mx - min_x) / (max_x - min_x) * img_w
+        py = (max_y - my) / (max_y - min_y) * img_h
+        return [float(px), float(py)]
+
+
+# =============================================================================
+# TIME ALLOCATION & PACING
+# =============================================================================
+
+class RoutePacing:
+    """Calculates temporal durations based on physical geographic distances."""
+
+    @staticmethod
+    def compute_segment_durations(waypoints: List[Dict], wp_indices: List[int], route_df: pd.DataFrame, target_avg_seconds: float = 10.0, min_segment_seconds: float = 3.0) -> List[float]:
+        n_segments = len(wp_indices) - 1
+        if n_segments <= 0:
+            return []
+
+        from services.gpsparser import haversine_vectorized
+
+        seg_distances = []
+        for i in range(n_segments):
+            start_idx, end_idx = wp_indices[i], wp_indices[i + 1]
+            chunk = route_df.iloc[start_idx:end_idx + 1]
+            if len(chunk) > 1:
+                lat1, lon1 = chunk["latitude"].to_numpy()[:-1], chunk["longitude"].to_numpy()[:-1]
+                lat2, lon2 = chunk["latitude"].to_numpy()[1:], chunk["longitude"].to_numpy()[1:]
+                seg_distances.append(float(np.nansum(haversine_vectorized(lat1, lon1, lat2, lon2))))
+            else:
+                seg_distances.append(0.0)
+
+        total_distance = sum(seg_distances)
+        total_target_time = n_segments * target_avg_seconds
+
+        if total_distance <= 0:
+            return [target_avg_seconds] * n_segments
+
+        return [max(min_segment_seconds, total_target_time * (d / total_distance)) for d in seg_distances]
+
+    @staticmethod
+    def compute_chunk_durations(sequence_data: List[Dict], target_avg_seconds: float = 10.0, min_chunk_seconds: float = 3.0) -> List[float]:
+        n_chunks = len(sequence_data)
+        if n_chunks == 0:
+            return []
+
+        chunk_distances = []
+        for item in sequence_data:
+            lats, lons = item.get("lats"), item.get("lons")
+            if lats is not None and len(lats) > 1:
+                lat1, lon1 = np.asarray(lats)[:-1], np.asarray(lons)[:-1]
+                lat2, lon2 = np.asarray(lats)[1:], np.asarray(lons)[1:]
+                dlat, dlon = np.radians(lat2 - lat1), np.radians(lon2 - lon1)
+                a = np.sin(dlat / 2.0) ** 2 + np.cos(np.radians(lat1)) * np.cos(np.radians(lat2)) * np.sin(dlon / 2.0) ** 2
+                chunk_distances.append(float(np.nansum(6371000.0 * 2.0 * np.arcsin(np.sqrt(a)))))
+            else:
+                chunk_distances.append(0.0)
+
+        total_distance = sum(chunk_distances)
+        total_target_time = n_chunks * target_avg_seconds
+
+        if total_distance <= 0:
+            return [target_avg_seconds] * n_chunks
+
+        return [max(min_chunk_seconds, total_target_time * (d / total_distance)) for d in chunk_distances]
+
+
+# =============================================================================
+# TILE DOWNLOADER
+# =============================================================================
+
+class TileDownloader:
+    """Manages contextily maps, cache directories, zoom logic, and image cropping."""
+
+    def __init__(self, job_config=None, provider=None):
+        self.config = job_config or JobConfigManager()
+        
+        base_path = Path(self.config.get("directory_path", "data/caches/contextily"))
+        self.cache_dir = (base_path / "cache").resolve()
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        
+        cx.set_cache_dir(str(self.cache_dir))
+        self.provider = provider if provider else cx.providers.CartoDB.Voyager # pyright: ignore[reportAttributeAccessIssue]
+
+    def _force_png_path(self, filepath: str) -> Path:
+        """Ensures the file is saved inside a 'png' directory and creates it if missing."""
+        path = Path(filepath)
+        if path.parent.name.lower() != "png":
+            path = path.parent / "png" / path.name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        return path
+
+    def fetch_overview_image(self, bbox: Dict[str, float], output_filename: str, output_size: Tuple[int, int] = (1920, 1080), max_zoom: int = 19) -> Tuple[str, Tuple[float, float, float, float], Tuple[int, int]]:
+        out_w, out_h = output_size
+        w, s = bbox.get("w", bbox.get("min_lon")), bbox.get("s", bbox.get("min_lat"))
+        e, n = bbox.get("e", bbox.get("max_lon")), bbox.get("n", bbox.get("max_lat"))
+
+        if s is not None and n is not None and e is not None and w is not None:
+            center_lat = (s + n) / 2.0
+            lat_span, lon_span = n - s, e - w
+        else:
+            pass
+
+        target_ratio = out_w / out_h
+        lon_scale = math.cos(math.radians(center_lat))
+        current_ratio = (lon_span * lon_scale) / lat_span
+
+        if s is not None and n is not None and e is not None and w is not None:
+            center_lat = (s + n) / 2.0
+            lat_span, lon_span = n - s, e - w
+
+            if current_ratio < target_ratio:
+                    new_lon_span = (lat_span * target_ratio) / lon_scale
+                    expansion = (new_lon_span - lon_span) / 2.0
+                    w, e = w - expansion, e + expansion
+            else:
+                    new_lat_span = (lon_span * lon_scale) / target_ratio
+                    expansion = (new_lat_span - lat_span) / 2.0
+                    s, n = s - expansion, n + expansion
+        
+        optimal_zoom = max_zoom
+        for z in range(max_zoom, 0, -1):
+            if cx.howmany(w, s, e, n, z, ll=True) <= 30:
+                optimal_zoom = z
+                break
+
+        img, extent = None, None
+        while optimal_zoom > 0:
+            try:
+                img, extent = cx.bounds2img(w, s, e, n, ll=True, source=self.provider, zoom=optimal_zoom, use_cache=str(self.cache_dir)) # pyright: ignore[reportArgumentType]
+                break  
+            except Exception:
+                optimal_zoom -= 1
+
+        if img is None or extent is None:
+            raise RuntimeError("Failed to download map tiles at any zoom level.")
+
+        # Force the output to go to a /png/ directory
+        final_path = self._force_png_path(output_filename)
+        
+        cropped_img, new_extent = self._crop_to_aspect_ratio(img, extent, target_ratio)
+        Image.fromarray(cropped_img).resize(output_size, Image.Resampling.LANCZOS).convert("RGB").save(final_path)
+
+        return str(final_path), new_extent, (out_w, out_h)
+
+    def fetch_residential_chunk(self, chunk_df: pd.DataFrame, output_filename: str, output_size: Tuple[int, int] = (1920, 1080)) -> Tuple[float, float, float, float]:
+        if chunk_df.empty:
+            raise ValueError("Chunk DataFrame is empty.")
+
+        start_lat, start_lon = float(chunk_df["latitude"].iloc[0]), float(chunk_df["longitude"].iloc[0])
+        end_lat, end_lon = float(chunk_df["latitude"].iloc[-1]), float(chunk_df["longitude"].iloc[-1])
+
+        min_lat = min(chunk_df["latitude"].min(), start_lat, end_lat)
+        max_lat = max(chunk_df["latitude"].max(), start_lat, end_lat)
+        min_lon = min(chunk_df["longitude"].min(), start_lon, end_lon)
+        max_lon = max(chunk_df["longitude"].max(), start_lon, end_lon)
+
+        center_lat = (min_lat + max_lat) / 2.0
+        lat_span, lon_span = max_lat - min_lat, max_lon - min_lon
+
+        meters_per_deg_lat = 111_320.0
+        meters_per_deg_lon = 111_320.0 * math.cos(math.radians(center_lat))
+        span_meters = max(lat_span * meters_per_deg_lat, lon_span * meters_per_deg_lon)
+
+        optimal_zoom = 19 if span_meters <= 300 else (18 if span_meters <= 600 else (17 if span_meters <= 1200 else (16 if span_meters <= 2500 else 15)))
+
+        s, n = min_lat - lat_span * 0.03, max_lat + lat_span * 0.03
+        w, e = min_lon - lon_span * 0.03, max_lon + lon_span * 0.03
+
+        out_w, out_h = output_size
+        target_ratio = out_w / out_h
+        lon_scale = math.cos(math.radians(center_lat))
+        current_ratio = ((e - w) * lon_scale) / (n - s)
+
+        if current_ratio < target_ratio:
+            new_lon_span = ((n - s) * target_ratio) / lon_scale
+            expansion = (new_lon_span - (e - w)) / 2.0
+            w, e = w - expansion, e + expansion
+        else:
+            new_lat_span = ((e - w) * lon_scale) / target_ratio
+            expansion = (new_lat_span - (n - s)) / 2.0
+            s, n = s - expansion, n + expansion
+
+        img, extent = None, None
+        while optimal_zoom > 0:
+            try:
+                img, extent = cx.bounds2img(w, s, e, n, ll=True, zoom=optimal_zoom, source=self.provider, use_cache=str(self.cache_dir)) # pyright: ignore[reportArgumentType]
+                break
+            except Exception:
+                optimal_zoom -= 1
+
+        if img is None or extent is None:
+            raise RuntimeError("Failed to download map tiles for chunk.")
+
+        # Force the output to go to a /png/ directory
+        final_path = self._force_png_path(output_filename)
+
+        cropped_img, new_extent = self._crop_to_aspect_ratio(img, extent, target_ratio)
+        Image.fromarray(cropped_img).resize(output_size, Image.Resampling.LANCZOS).convert("RGB").save(final_path)
+        return new_extent
+
+    def _crop_to_aspect_ratio(self, img: np.ndarray, ext: Tuple, target_ratio: float) -> Tuple[np.ndarray, Tuple]:
+        h, w = img.shape[:2]
+        min_x, max_x, min_y, max_y = ext
+        current_ratio = w / h
+        if abs(current_ratio - target_ratio) < 1e-6:
+            return img, ext
+
+        if current_ratio > target_ratio:
+            target_w = int(round(h * target_ratio))
+            x0 = (w - target_w) // 2
+            meters_per_px_x = (max_x - min_x) / w
+            return img[:, x0:x0 + target_w], (min_x + x0 * meters_per_px_x, max_x - (w - target_w - x0) * meters_per_px_x, min_y, max_y)
+        else:
+            target_h = int(round(w / target_ratio))
+            y0 = (h - target_h) // 2
+            meters_per_px_y = (max_y - min_y) / h
+            return img[y0:y0 + target_h, :], (min_x, max_x, max_y - y0 * meters_per_px_y, min_y + (h - target_h - y0) * meters_per_px_y)
+
+
+# =============================================================================
+# FACADE & ORCHESTRATOR
+# =============================================================================
 
 class MapFetcher:
-    """
-    A class to fetch map data from various sources and handle map-related operations.
-    """
+    """Orchestrates geographic data parsing and image downloading."""
 
-    # =========================
-    # Initialization
-    # =========================
-    def __init__(self, config : JobConfigManager):
-        self.config = config
+    def __init__(self, provider=None, job_config=None):
+        # 1. Bring in JobConfigManager just like the other modules
+        self.config = job_config or JobConfigManager()
+        self.downloader = TileDownloader(job_config=self.config, provider=provider)
 
-        # Pull required settings from the job configuration
-        self.project_name = self.config.get("project_name")
-        self.directory_path = Path(self.config.get("directory_path"))
-        self.fps = self.config.get_settings().get("fps", 30)
-
-    # ==========================
-    # Map fetching operations
-    # ==========================
-    def get_bounding_box(self, waypoints: pd.DataFrame, padding: float = 0.0) -> tuple:
-        """
-        Calculate the bounding box for the given waypoints.
-        """
-        # 1. Check if waypoints DataFrame is empty
-        if waypoints.empty:
-            raise ValueError("Waypoints DataFrame is empty. Cannot calculate bounding box.")
-
-        # 2. Calculate min and max lat and lng
-        min_lat = waypoints['lat'].min()
-        max_lat = waypoints['lat'].max()
-        min_lon = waypoints['lng'].min()
-        max_lon = waypoints['lng'].max()
-
-        # 3. Apply padding if specified
-        if padding > 0:
-            lat_range = max_lat - min_lat
-            lon_range = max_lon - min_lon
-            min_lat -= lat_range * padding
-            max_lat += lat_range * padding
-            min_lon -= lon_range * padding
-            max_lon += lon_range * padding
-
-        return (min_lat, max_lat, min_lon, max_lon)
-
-    # ==========================
-    # douglas-peucker algorithm for path simplification
-    # ==========================
-    def douglas_peucker(self, points: np.ndarray, epsilon: float) -> np.ndarray:
-        """
-        Simplify a path using the Douglas-Peucker algorithm.
-        """
-
-        # 1. Check if points array is empty
-        if points.size == 0:
-            raise ValueError("Points array is empty. Cannot simplify path.")
-
-        # 2. If there are 2 or fewer points, nothing to simplify
-        if len(points) <= 2:
-            return points
-
-        start, end = points[0], points[-1]
+    def fetch_image(self, bounding_box: Dict[str, float], output_filename: str, output_size: Tuple[int, int] = (1920, 1080), max_zoom: int = 19):
+        """Instance method mapping for overview maps."""
+        # ---------------------------------------------------------------------
+        # DYNAMIC PATH FIX: Route the overview map to the central png directory
+        # ---------------------------------------------------------------------
+        base_path = Path(self.config.get("directory_path", "assets"))
+        png_dir = (base_path / "png").resolve()
+        png_dir.mkdir(parents=True, exist_ok=True)
         
-        # 3. Use only X, Y (or lat, lon -> columns 0 and 1) for geometric distance calculation
-        p_xy = points[:, :2]
-        start_xy = start[:2]
-        end_xy = end[:2]
-
-        line_vec = end_xy - start_xy
-        line_len = np.linalg.norm(line_vec)
-
-        if line_len == 0:
-            return np.array([start])
-
-        line_unit_vec = line_vec / line_len
+        # Override the filename path to sit correctly in the png folder
+        final_filename = str(png_dir / Path(output_filename).name)
         
-        # 4. Calculate the perpendicular distances from each point to the line segment
-        v = p_xy - start_xy
-        distances = np.abs(v[:, 0] * (-line_unit_vec[1]) + v[:, 1] * line_unit_vec[0])
+        return self.downloader.fetch_overview_image(bounding_box, final_filename, output_size, max_zoom)
 
-        max_distance_index = np.argmax(distances)
-        max_distance = distances[max_distance_index]
-
-        # If the maximum distance is greater than epsilon, recursively simplify
-        if max_distance > epsilon:
-            # 5. Recursively simplify the left and right segments
-            left_points = self.douglas_peucker(points[:max_distance_index + 1], epsilon)
-            right_points = self.douglas_peucker(points[max_distance_index:], epsilon)
-
-            # 6. Combine results, dropping the duplicate connecting point
-            return np.vstack((left_points[:-1], right_points))
-        else:
-            return np.array([start, end])
-
-    # ==========================
-    # Get smoothed path using spline interpolation
-    # ==========================
-    def get_smoothed_path(self, points: np.ndarray, num_points: int = 100) -> np.ndarray:
-        """
-        Smooth a path using spline interpolation.
-        """
-        # 1. Check if points array is empty
-        if points.size == 0:
-            raise ValueError("Points array is empty. Cannot smooth path.")
-
-        # 2. If there are fewer than 3 points, return the original points
-        if len(points) < 3:
-            return points
-
-        # 3. Use only X, Y (or lat, lon -> columns 0 and 1) for smoothing
-        x = points[:, 0]
-        y = points[:, 1]
-
-        # 4. Create a parameter t for the spline
-        t = np.linspace(0, 1, len(points))
+    def process_residential_sequence(
+        self, route_df: pd.DataFrame, waypoints: List[Dict], output_dir: Path, 
+        output_size: Tuple[int, int] = (1920, 1080), 
+        max_chunk_distance_meters: float = 1000.0, 
+        precomputed_indices: Optional[List[int]] = None
+    ) -> List[Dict]:
+        """Core orchestrator logic utilizing the dedicated Downloader and Geometry classes."""
+        sequence_data = []
         
-        # 5. Create a new parameter t_new for the smoothed path
-        t_new = np.linspace(0, 1, num_points)
+        # ---------------------------------------------------------------------
+        # DYNAMIC PATH FIX: Route all residential chunks to the central png directory
+        # ---------------------------------------------------------------------
+        base_path = Path(self.config.get("directory_path", "assets"))
+        png_dir = (base_path / "png").resolve()
+        png_dir.mkdir(parents=True, exist_ok=True)
+        
+        if route_df.empty or not waypoints:
+            return sequence_data
 
-        # 6. Create spline functions for x and y
-        spline_x = make_interp_spline(t, x)
-        spline_y = make_interp_spline(t, y)
+        wp_indices = precomputed_indices if precomputed_indices is not None else RouteGeometry.build_waypoint_index(route_df, waypoints)
+        sorted_wps = sorted(zip(wp_indices, waypoints), key=lambda x: x[0])
+        wp_indices = [x[0] for x in sorted_wps]
+        waypoints = [x[1] for x in sorted_wps]
 
-        # 7. Evaluate the splines at the new parameter values
-        x_smooth = spline_x(t_new)
-        y_smooth = spline_y(t_new)
+        segments = [(wp_indices[i], wp_indices[i+1], waypoints[i+1]) for i in range(len(wp_indices) - 1)]
 
-        return np.column_stack((x_smooth, y_smooth))
+        for seg_start, seg_end, wp in segments:
+            chunk_starts = [seg_start]
+            accumulated_distance = 0.0
 
-    # ==========================
-    # Fetch map tiles and create a composite image
-    # ==========================
-    def fetch_map(self, bounding_box: tuple, zoom: int = 15) -> Image.Image:
-        """
-        Fetch map tiles for the given bounding box and create a composite image.
-        """
-        # 1. Check if bounding box is valid
-        if len(bounding_box) != 4:
-            raise ValueError("Bounding box must be a tuple of (min_lat, max_lat, min_lon, max_lon).")
+            for i in range(seg_start, seg_end):
+                lat1, lon1 = route_df.iloc[i][["latitude", "longitude"]]
+                lat2, lon2 = route_df.iloc[i+1][["latitude", "longitude"]]
+                dlat, dlon = math.radians(lat2 - lat1), math.radians(lon2 - lon1)
+                a = math.sin(dlat / 2.0)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2.0)**2
+                accumulated_distance += 6371000.0 * (2.0 * math.asin(math.sqrt(a)))
 
-        min_lat, max_lat, min_lon, max_lon = bounding_box
+                if accumulated_distance >= max_chunk_distance_meters:
+                    chunk_starts.append(i + 1)
+                    accumulated_distance = 0.0
 
-        try:
-            fig, ax = plt.subplots(figsize=(10, 10))
-            
-            # Set the limits FIRST so contextily knows the exact size of the map
-            ax.set_xlim(min_lon, max_lon)
-            ax.set_ylim(min_lat, max_lat)
-            ax.axis('off')
-            
-            # Add the basemap. 
-            # By omitting the 'zoom' parameter, contextily will automatically 
-            # calculate the best zoom level based on the xlim and ylim we just set.
-            cx.add_basemap(ax, crs="EPSG:4326")
+            if chunk_starts[-1] != seg_end:
+                chunk_starts.append(seg_end)
 
-            # 3. Save the figure to a temporary file
-            temp_map_path = CACHE_DIR / f"map_{min_lat}_{max_lat}_{min_lon}_{max_lon}.png"
-            temp_map_path.parent.mkdir(parents=True, exist_ok=True)
-            plt.savefig(temp_map_path, bbox_inches='tight', pad_inches=0)
-            plt.close(fig)
+            for chunk_idx in range(len(chunk_starts) - 1):
+                chunk_start, chunk_end = chunk_starts[chunk_idx], chunk_starts[chunk_idx + 1]
+                if chunk_start >= chunk_end:
+                    continue
 
-            # 4. Open the saved image and return it
-            return Image.open(temp_map_path)
-
-        except Exception as e:
-            logging.error(f"Failed to fetch map: {e}")
-            raise
-
-    # ==========================
-    # Additional utility methods can be added here
-    # =========================
-
-    # =========================
-    # Crop and resize the map image to fit the target aspect ratio
-    # =========================
-    def crop_and_resize_map(self, map_image: Image.Image, target_aspect_ratio: float = TARGET_ASPECT_RATIO) -> Image.Image:
-        """
-        Crop and resize the map image to fit the target aspect ratio.
-        """
-        # 1. Get the current size of the image
-        width, height = map_image.size
-        current_aspect_ratio = width / height
-
-        # 2. Determine how to crop based on the aspect ratio
-        if current_aspect_ratio > target_aspect_ratio:
-            # Image is too wide, crop width
-            new_width = int(height * target_aspect_ratio)
-            left = (width - new_width) // 2
-            right = left + new_width
-            top = 0
-            bottom = height
-        else:
-            # Image is too tall, crop height
-            new_height = int(width / target_aspect_ratio)
-            top = (height - new_height) // 2
-            bottom = top + new_height
-            left = 0
-            right = width
-
-        # 3. Crop the image
-        cropped_image = map_image.crop((left, top, right, bottom))
-
-        # 4. Resize the image to meet minimum width requirements while maintaining aspect ratio
-        if cropped_image.width < MIN_MAP_WIDTH:
-            new_height = int(MIN_MAP_WIDTH / target_aspect_ratio)
-            resized_image = cropped_image.resize((MIN_MAP_WIDTH, new_height), Image.Resampling.LANCZOS)
-            return resized_image
-
-        return cropped_image
-
-    # ==========================
-    # Get residential map image for the project
-    # ==========================
-    def get_residential_map(self) -> Image.Image:
-        """
-        Get the residential map image for the project based on waypoints.
-        """
-        # 1. Load waypoints from the job configuration
-        waypoints = pd.DataFrame(self.config.get_waypoints())
-
-        # 2. Check if waypoints are available
-        if waypoints.empty:
-            raise ValueError("No waypoints available in the job configuration.")
-
-        # 3. Calculate the bounding box with padding
-        bounding_box = self.get_bounding_box(waypoints, padding=0.05)
-
-        # 4. Fetch the map image for the bounding box
-        map_image = self.fetch_map(bounding_box)
-
-        # 5. Crop and resize the map image to fit the target aspect ratio
-        final_map_image = self.crop_and_resize_map(map_image)
-
-        return final_map_image
-
-    # ==========================
-    # Generate residential map sequence for the project
-    # ==========================
-    def generate_residential_map_sequence(self) -> List[Image.Image]:
-            """
-            Generate a sequence of residential map images by downloading one large map 
-            and cropping localized frames to prevent API rate-limiting and improve speed.
-            """
-            # 1. Load waypoints from the job configuration
-            waypoints = pd.DataFrame(self.config.get_waypoints())
-
-            if waypoints.empty:
-                raise ValueError("No waypoints available in the job configuration.")
-
-            waypoints = waypoints.rename(columns={
-                "latitude": "lat", 
-                "longitude": "lng", 
-                "lon": "lng"
-            })
-
-            # 2. Simplify and smooth the path
-            simplified_points = self.douglas_peucker(waypoints[['lat', 'lng']].to_numpy(), epsilon=0.0001)
-            smoothed_points = self.get_smoothed_path(simplified_points, num_points=100)
-
-            # 3. Calculate the "Master Bounding Box" for the entire smoothed path.
-            # We add a 0.01 padding to ensure the camera window doesn't go off the edge 
-            # when we are at the very start or end of the route.
-            min_lat = np.min(smoothed_points[:, 0]) - 0.01
-            max_lat = np.max(smoothed_points[:, 0]) + 0.01
-            min_lon = np.min(smoothed_points[:, 1]) - 0.01
-            max_lon = np.max(smoothed_points[:, 1]) + 0.01
-            
-            master_bbox = (min_lat, max_lat, min_lon, max_lon)
-
-            # 4. Fetch the single large map (Only ONE network request!)
-            logging.info("Fetching master map for sequence generation...")
-            master_map = self.fetch_map(master_bbox)
-            map_width, map_height = master_map.size
-
-            # 5. Define the "Camera Window" size in pixels. 
-            # Your original code used a 0.02 degree radius (lat-0.01 to lat+0.01).
-            # Here we translate that 0.02 degree scale into pixels.
-            lat_range = max_lat - min_lat
-            lon_range = max_lon - min_lon
-            
-            crop_width_px = int((0.02 / lon_range) * map_width)
-            crop_height_px = int((0.02 / lat_range) * map_height)
-
-            # 6. Loop through points and dynamically crop from the master map
-            map_sequence = []
-            for point in smoothed_points:
-                lat, lon = point
+                chunk = route_df.iloc[chunk_start : chunk_end + 1]
+                lbl_base = "".join(c for c in str(wp.get("label", "Segment")) if c.isalnum() or c in (' ', '_')).rstrip()
+                lbl = f"{lbl_base}_part{chunk_idx + 1}" if len(chunk_starts) > 2 else lbl_base
                 
-                # Map Lat/Lon coordinates to X/Y pixel coordinates on the image
-                # Note: Y is calculated from max_lat because image Y=0 is the TOP of the map
-                pixel_x = int(((lon - min_lon) / lon_range) * map_width)
-                pixel_y = int(((max_lat - lat) / lat_range) * map_height)
-                
-                # Calculate crop boundaries
-                left = pixel_x - (crop_width_px // 2)
-                right = pixel_x + (crop_width_px // 2)
-                top = pixel_y - (crop_height_px // 2)
-                bottom = pixel_y + (crop_height_px // 2)
-                
-                # Crop the frame directly from memory (Instantaneous)
-                frame = master_map.crop((left, top, right, bottom))
-                
-                # Pass through your existing resizer
-                final_frame = self.crop_and_resize_map(frame)
-                map_sequence.append(final_frame)
+                # Update file path to use the absolute, centralized png directory
+                res_map_path = str(png_dir / f"res_map_{lbl}.png")
 
-            logging.info(f"Successfully generated {len(map_sequence)} map frames.")
-            return map_sequence
+                res_extent = self.downloader.fetch_residential_chunk(chunk, res_map_path, output_size)
+                
+                chunk_points, chunk_labels, chunk_popups = [], [], []
+                for row_idx, row in chunk.iterrows():
+                    px, py = RouteGeometry.project_latlon_to_pixel(row["latitude"], row["longitude"], res_extent, output_size[0], output_size[1])
+                    chunk_points.append([px, py])
 
+                    if row_idx == seg_end:
+                        chunk_labels.append(wp.get("label"))
+                        chunk_popups.append({"freeze_seconds": float(wp.get("freeze_seconds", 3.0)), "popup_image": wp.get("popup_image"), "triggered": False})
+                    else:
+                        chunk_labels.append(None)
+                        chunk_popups.append(None)
 
+                sequence_data.append({
+                    "start_idx": chunk_start, "end_idx": chunk_end,
+                    "img_path": res_map_path, "extent": res_extent,
+                    "lats": chunk["latitude"].to_numpy(),
+                    "lons": chunk["longitude"].to_numpy(),
+                    "points": chunk_points, "labels": chunk_labels, "popups": chunk_popups
+                })
+
+        return sequence_data
+
+    # --- Backwards Compatibility Wrappers ---
+    @staticmethod
+    def get_bounding_box(*args, **kwargs):
+        return RouteGeometry.get_bounding_box(*args, **kwargs)
+
+    @staticmethod
+    def build_waypoint_index(*args, **kwargs):
+        return RouteGeometry.build_waypoint_index(*args, **kwargs)
+
+    @staticmethod
+    def douglas_peucker(*args, **kwargs):
+        return RouteGeometry.douglas_peucker(*args, **kwargs)
+
+    @staticmethod
+    def get_smooth_path(*args, **kwargs):
+        return RouteGeometry.get_smooth_path(*args, **kwargs)
+
+    @staticmethod
+    def compute_segment_durations(*args, **kwargs):
+        return RoutePacing.compute_segment_durations(*args, **kwargs)
+
+    @staticmethod
+    def compute_chunk_durations(*args, **kwargs):
+        return RoutePacing.compute_chunk_durations(*args, **kwargs)
+
+    @staticmethod
+    def generate_residential_sequence(*args, **kwargs):
+        return MapFetcher().process_residential_sequence(*args, **kwargs)

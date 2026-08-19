@@ -45,11 +45,19 @@ class JobConfigManager:
     # =========================
     # Initialization
     # =========================
-    def __init__(self, config_path: Union[str, Path]) -> None:
+    _instance = None
+    _initialized = False
+
+    def __new__(cls, config_path=None):
+        if cls._instance is None:
+            cls._instance = super(JobConfigManager, cls).__new__(cls)
+        return cls._instance
+
+    def __init__(self, config_path: Optional[Union[str, Path]] = None) -> None:
         """
         Initialize the manager with a path to a JSON configuration file.
         """
-        self.config_path = Path(config_path)
+        self.config_path = Path(config_path) if config_path else Path("C:\\Users\\user1\\Documents\\Navivi\\Projects\\proj_2026_very_cool_tomogashima_islands\\job_config.json")
         self.data: Dict[str, Any] = {}
         self.load()
 
@@ -122,3 +130,9 @@ class JobConfigManager:
         Retrieve project settings (fps, duration, etc.).
         """
         return self.data.get("settings", {})
+
+    def get_all(self) -> Dict[str, Any]:
+        """
+        Retrieve the entire configuration data.
+        """
+        return self.data
