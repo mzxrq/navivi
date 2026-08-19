@@ -73,7 +73,7 @@ export default function App() {
         </div>
       )}
 
-      {/* Custom CSS Menu with Smart Positioning
+      {/* Custom CSS Menu with Smart Positioning */}
       {contextMenu.show && (
         <div
           key={`${contextMenu.x}-${contextMenu.y}`}
@@ -101,7 +101,7 @@ export default function App() {
             </button>
           </div>
         </div>
-      )} */}
+      )}
 
       {/* Toast */}
       {toast.visible && (

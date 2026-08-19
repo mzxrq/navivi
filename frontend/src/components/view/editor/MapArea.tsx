@@ -7,29 +7,12 @@ import { useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { readTextFile } from "@tauri-apps/plugin-fs";
 import { open } from "@tauri-apps/plugin-dialog";
-import {
-  MapContainer,
-  Polyline,
-  TileLayer,
-  Marker,
-  Popup,
-} from "react-leaflet";
-import {
-  Clock,
-  UploadCloud,
-  CheckCircle2,
-  FileCode,
-  Car,
-  Footprints,
-  Ruler,
-  Plane,
-} from "lucide-react";
-import { waypointIcon } from "../../../utils/mapUtils";
-import {
-  MapAutoZoom,
-  MapClickListener,
-} from "../../controllers/mapControllers";
+import { Clock, UploadCloud,  CheckCircle2,  FileCode, } from "lucide-react";
+import { MapContainer, TileLayer } from "react-leaflet";
 import { useMapRouting } from "../../../hooks/useMapRouting";
+import { MapAutoZoom, MapClickListener } from "../../controllers/mapControllers";
+import { RouteLayer } from "./MapLayers/RouteLayer";
+import { WaypointLayer } from "./MapLayers/WaypointLayer";
 
 export function MapArea() {
   const { theme, mapTheme } = useTheme();
@@ -44,8 +27,6 @@ export function MapArea() {
   const {
     waypoints,
     setWaypoints,
-    updateWaypoint,
-    routeSegments,
     updateMetadata,
     settings,
     updateSettings,
@@ -54,12 +35,6 @@ export function MapArea() {
   } = useWorkspace();
 
   useMapRouting();
-  const hexLineColor =
-    "#" +
-    settings.line_color.map((x) => x.toString(16).padStart(2, "0")).join("");
-  const hexMarkerColor =
-    "#" +
-    settings.marker_color.map((x) => x.toString(16).padStart(2, "0")).join("");
 
   const processFile = async (filePath: string) => {
     try {
@@ -302,187 +277,14 @@ export function MapArea() {
             }
           />
 
-          {/*routing logic*/}
-          {/* Draw the exact GPX path if uploaded (Semi-transparent Blue) */}
-          {uploadedRouteLine.length > 0 && (
-            <Polyline
-              positions={uploadedRouteLine}
-              pathOptions={{ color: "#3b82f6", weight: 4, opacity: 0.5 }}
-            />
-          )}
+          {/* Clean, abstracted map layers */}
+          <RouteLayer 
+            uploadedRouteLine={uploadedRouteLine} 
+            routePoints={routePoints} 
+          />
+          <WaypointLayer />
 
-          {/* Draw the Dynamic Segments */}
-          {routeSegments.map((segment, idx) => {
-            if (segment.mode === "direct") {
-              return (
-                <Polyline
-                  key={`dir-${idx}`}
-                  positions={segment.positions}
-                  pathOptions={{
-                    color: "#a1a1aa",
-                    weight: 4,
-                    dashArray: "8, 8",
-                  }}
-                />
-              );
-            }
-            if (segment.mode === "curve") {
-              return (
-                <Polyline
-                  key={`crv-${idx}`}
-                  positions={segment.positions}
-                  pathOptions={{
-                    color: "#a855f7",
-                    weight: 4,
-                    dashArray: "10, 10",
-                  }}
-                />
-              );
-            }
-            if (segment.mode === "walking") {
-              return (
-                <Polyline
-                  key={`wlk-${idx}`}
-                  positions={segment.positions}
-                  pathOptions={{
-                    color: hexLineColor,
-                    weight: settings.line_thickness,
-                    dashArray: "2, 6",
-                    lineCap: "round",
-                  }}
-                />
-              );
-            }
-            // Default Driving
-            return (
-              <Polyline
-                key={`drv-${idx}`}
-                positions={segment.positions}
-                pathOptions={{
-                  color: hexLineColor,
-                  weight: settings.line_thickness,
-                }}
-              />
-            );
-          })}
-
-          {routePoints.length > 0 && (
-            <Polyline
-              positions={routePoints}
-              pathOptions={{
-                color: "#3b82f6",
-                weight: 4,
-                opacity: 0.8,
-                lineCap: "round",
-                lineJoin: "round",
-              }}
-            />
-          )}
-
-          {waypoints.map((wp, index) => (
-            <Marker
-              key={wp.id}
-              position={[wp.lat, wp.lng]}
-              draggable={true}
-              icon={waypointIcon(index + 1, hexMarkerColor)}
-              eventHandlers={{
-                dragend: async (e) => {
-                  const marker = e.target;
-                  const position = marker.getLatLng();
-                  updateWaypoint(wp.id, {
-                    lat: position.lat,
-                    lng: position.lng,
-                  });
-                  // get new location name
-                  try {
-                    const response = await fetch(
-                      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${position.lat}&lon=${position.lng}`,
-                    );
-                    const data = await response.json();
-
-                    const newName =
-                      data.address?.road ||
-                      data.address?.amenity ||
-                      data.name ||
-                      "Unnamed Location";
-                    updateWaypoint(wp.id, { name: newName });
-                  } catch (error) {
-                    console.error("Failed to fetch location name:", error);
-                  }
-                },
-              }}
-            >
-              <Popup>
-                <div className="flex flex-col gap-2 min-w-[160px] pb-1">
-                  <div className="font-bold text-sm text-zinc-900 leading-tight">
-                    {wp.name}
-                  </div>
-
-                  {wp.narration && (
-                    <div className="text-xs text-zinc-600 italic border-l-2 border-zinc-300 pl-2">
-                      "{wp.narration}"
-                    </div>
-                  )}
-
-                  {/* The Route Mode Toggle */}
-                  {/* The Route Mode Toggle */}
-                  <div className="flex flex-col gap-1 mt-2 pt-2 border-t border-zinc-200">
-                    <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider mb-1">
-                      Travel to next stop:
-                    </span>
-
-                    <div className="flex items-center gap-1 bg-zinc-100 p-1 rounded-lg border border-zinc-200">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          updateWaypoint(wp.id, { routeMode: "driving" });
-                        }}
-                        className={`flex-1 flex justify-center p-1.5 rounded-md transition-all ${!wp.routeMode || wp.routeMode === "driving" ? "bg-white shadow-sm text-emerald-600 ring-1 ring-zinc-200" : "text-zinc-500 hover:text-zinc-800 hover:bg-zinc-200/50"}`}
-                        title="Driving"
-                      >
-                        <Car className="w-4 h-4" />
-                      </button>
-
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          updateWaypoint(wp.id, { routeMode: "walking" });
-                        }}
-                        className={`flex-1 flex justify-center p-1.5 rounded-md transition-all ${wp.routeMode === "walking" ? "bg-white shadow-sm text-emerald-600 ring-1 ring-zinc-200" : "text-zinc-500 hover:text-zinc-800 hover:bg-zinc-200/50"}`}
-                        title="Walking"
-                      >
-                        <Footprints className="w-4 h-4" />
-                      </button>
-
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          updateWaypoint(wp.id, { routeMode: "direct" });
-                        }}
-                        className={`flex-1 flex justify-center p-1.5 rounded-md transition-all ${wp.routeMode === "direct" ? "bg-white shadow-sm text-emerald-600 ring-1 ring-zinc-200" : "text-zinc-500 hover:text-zinc-800 hover:bg-zinc-200/50"}`}
-                        title="Direct"
-                      >
-                        <Ruler className="w-4 h-4" />
-                      </button>
-
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          updateWaypoint(wp.id, { routeMode: "curve" });
-                        }}
-                        className={`flex-1 flex justify-center p-1.5 rounded-md transition-all ${wp.routeMode === "curve" ? "bg-white shadow-sm text-emerald-600 ring-1 ring-zinc-200" : "text-zinc-500 hover:text-zinc-800 hover:bg-zinc-200/50"}`}
-                        title="Fly/Ship"
-                      >
-                        <Plane className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </Popup>
-            </Marker>
-          ))}
-
-          <MapAutoZoom waypoints={waypoints} projectId={metadata.project_id} />
+          <MapAutoZoom waypoints={waypoints} projectId={metadata.project_id}/>
           <MapClickListener onMapClick={handleAddWaypoint} />
         </MapContainer>
       </div>

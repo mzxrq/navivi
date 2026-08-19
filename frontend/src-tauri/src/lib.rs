@@ -1,5 +1,7 @@
-use std::fs;
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::io::{BufRead, BufReader};
+use std::thread;
+use tauri::{AppHandle, Emitter};
 
 #[tauri::command]
 async fn run_python_blueprint(action: String, payload: String) -> Result<String, String> {
@@ -21,52 +23,50 @@ async fn run_python_blueprint(action: String, payload: String) -> Result<String,
     }
 }
 
-// #[tauri::command]
-// async fn store_file_in_backend(source_path: String, payload: String) -> Result<String, String> {
-//     let output = Command::new("python")
-//         .arg("src-python/services/filehandler.py")
-//         .arg(&source_path)
-//         .output()
-//         .map_err(|e| format!("Failed to call file handler: {}", e))?;
-
-//     if output.status.success() {
-//         // grab printed path from terminal
-//         let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-//         let final_path = stdout.lines().last().unwrap_or("").to_string();
-
-//         if final_path.is_empty() {
-//             Err("Python file handler failed to return a path.".into())
-//         } else {
-//             Ok(final_path)
-//         }
-//     } else {
-//         let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-//         Err(format!("Python script crashed: {}", stdeer))
-//     }
-// }
-
 #[tauri::command]
-fn trigger_render_pipeline(payload: String) -> Result<String, String> {
-    let config_path = "src-python/data/job_config.json";
-    
-    // write json config to drive
-    fs::write(config_path, &payload)
-        .map_err(|e| format!("Failed to save config: {}", e))?;
-    // call bg process
-    let output = Command::new("python")
+fn start_render(app: AppHandle, config_path: String) -> Result<String, String> {
+    let mut child = Command::new("python")
         .arg("src-python/main.py")
         .arg("--config")
-        .arg(config_path)
-        .output()
-        .map_err(|e| format!("Failed to wake up Python: {}", e))?;
-    // error handle exception (check if render success or not)
-    if output.status.success() {
-        let success_logs = String::from_utf8_lossy(&output.stdout).to_string();
-        Ok(format!("Render Complete.\nLogs:\n{}", success_logs))
-    } else {
-        let error_logs = String::from_utf8_lossy(&output.stderr).to_string();
-        Err(format!("Engine Crashed:\n{}", error_logs))
-    }
+        .arg(&config_path)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("Failed to call Python: {}", e))?;
+
+    let stdout = child.stdout.take().ok_or("Failed to capture stdout")?;
+    let stderr = child.stderr.take().ok_or("Failed to capture stderr")?;
+
+    let app_stdout = app.clone();
+    thread::spawn(move || {
+        let reader = BufReader::new(stdout);
+        for line in reader.lines() {
+            if let Ok(line) = line {
+                let _ = app_stdout.emit("render-log", line);
+            }
+        }
+    });
+
+    let app_stderr = app.clone();
+    thread::spawn(move || {
+        let reader = BufReader::new(stderr);
+        for line in reader.lines() {
+            if let Ok(line) = line {
+                let _ = app_stderr.emit("render-error", line);
+            }
+        }
+    });
+
+    thread::spawn(move || {
+        let status = child.wait().expect("Failed to wait on child");
+        if status.success() {
+            let _ = app.emit("render-finish", "Success");
+        } else {
+            let _ = app.emit("render-finish", "Failed");
+        }
+    });
+
+    Ok("Rendering".to_string())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -77,7 +77,7 @@ pub fn run() {
 
         .invoke_handler(tauri::generate_handler![
             run_python_blueprint,
-            trigger_render_pipeline
+            start_render
         ])
 
         .run(tauri::generate_context!())
