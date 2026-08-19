@@ -92,18 +92,33 @@ class JobConfigManager:
     def save(self, target_path: Optional[Union[str, Path]] = None) -> None:
         """
         Save the current configuration state back to a JSON file.
-        If no path is provided, it saves back to the original config path.
+        If no target path is provided, it checks if 'directory_path' exists 
+        in the data; otherwise, it saves back to the original config path.
         """
-        save_path = Path(target_path) if target_path else self.config_path
+        if target_path:
+            save_path = Path(target_path)
+        else:
+            # Check if directory_path is defined inside the project settings data
+            directory_path = self.data.get("directory_path")
+            if directory_path:
+                save_path = Path(directory_path) / "job_config.json"
+            else:
+                save_path = self.config_path
+
+        save_path = save_path.resolve()
         save_path.parent.mkdir(parents=True, exist_ok=True)
 
         try:
             with open(save_path, "w", encoding="utf-8") as f:
                 json.dump(self.data, f, indent=2, ensure_ascii=False)
             logging.info(f"Successfully saved configuration to {save_path}")
+            
+            # Keep self.config_path updated to the new active path
+            self.config_path = save_path
         except Exception as e:
             logging.error(f"Failed to save configuration to {save_path}: {e}")
             raise
+
 
     def get(self, key: str, default: Any = None) -> Any:
         """
