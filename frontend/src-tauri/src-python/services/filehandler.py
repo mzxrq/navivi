@@ -80,7 +80,11 @@ class FileHandler:
     # Storage file service with date and time
     # ==========================
     @staticmethod
+<<<<<<< HEAD
     def save_file_with_timestamp(file_name: str,file_type: str, content: str) -> None:
+=======
+    def save_file_with_timestamp(file_name: str,file_type: str, content: str) :
+>>>>>>> chore/backend-unit-testing
         """
         Save a file with the current date and time appended to its name.
 
@@ -108,5 +112,11 @@ class FileHandler:
         # DEBUG: Print the new file path for verification
         # print(f"File saved as: {new_file_path}")
 
+<<<<<<< HEAD
 
+=======
+        return str(new_file_path)  # Return the path of the newly created file as a string
+
+
+>>>>>>> chore/backend-unit-testing
     

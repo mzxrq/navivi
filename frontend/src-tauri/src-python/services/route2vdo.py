@@ -32,6 +32,7 @@ from frame_sink import FrameSink
 FFMPEG_PATH = Path(__file__).parent / "FFmpeg" / "bin" / "ffmpeg.exe"
 
 
+<<<<<<< HEAD
 class Route2VDO:
     """
     A class to convert route data into video format.
@@ -53,6 +54,14 @@ class Route2VDO:
         if FFMPEG_PATH.exists():
             return FFMPEG_PATH
         raise FileNotFoundError(f"FFMPEG executable not found at {FFMPEG_PATH}")
+=======
+def _is_real_label(lbl) -> bool:
+    if lbl is None:
+        return False
+    if isinstance(lbl, float) and math.isnan(lbl):
+        return False
+    return str(lbl).strip() != ""
+>>>>>>> chore/backend-unit-testing
 
     # ========================
     # Geometry helpers
@@ -277,10 +286,170 @@ class Route2VDO:
         dummy = Image.new("RGBA", (1, 1))
         ddraw = ImageDraw.Draw(dummy)
 
+<<<<<<< HEAD
         # 4. Calculate the bounding box of the text to determine its width and height
         if font is not None:
             bbox = ddraw.textbbox((0, 0), text, font=font)
             text_w, text_h = bbox[2] - bbox[0], bbox[3] - bbox[1]
+=======
+def _draw_walking_icon(draw: ImageDraw.ImageDraw, cx: int, cy: int, size: int, color: tuple):
+    r = size // 6
+    draw.ellipse([cx - r, cy - size // 2, cx + r, cy - size // 2 + 2 * r], fill=color)
+    torso_top = (cx, cy - size // 2 + 2 * r)
+    torso_bottom = (cx - size // 8, cy)
+    draw.line([torso_top, torso_bottom], fill=color, width=max(2, size // 12))
+    draw.line([torso_bottom, (cx - size // 3, cy + size // 2)], fill=color, width=max(2, size // 12))
+    draw.line([torso_bottom, (cx + size // 4, cy + size // 2 - r // 2)], fill=color, width=max(2, size // 12))
+
+
+def _draw_ruler_icon(draw: ImageDraw.ImageDraw, cx: int, cy: int, size: int, color: tuple):
+    half = size // 2
+    p1 = (cx - half, cy + half // 2)
+    p2 = (cx + half, cy - half // 2)
+    draw.line([p1, p2], fill=color, width=max(3, size // 10))
+    for t in (0.25, 0.5, 0.75):
+        tx = p1[0] + (p2[0] - p1[0]) * t
+        ty = p1[1] + (p2[1] - p1[1]) * t
+        draw.line([(tx - 4, ty - 6), (tx + 4, ty + 6)], fill=color, width=2)
+
+
+def _format_duration_short(seconds: float) -> str:
+    total_minutes = int(round(seconds / 60))
+    hrs, mins = divmod(total_minutes, 60)
+    return f"{hrs} hr {mins:02d} min" if hrs else f"{mins} min"
+
+
+def render_summary_card(distance_km: float, duration_seconds: float, card_size: tuple[int, int] = (460, 100)) -> np.ndarray:
+    w, h = card_size
+    scale = 2
+    canvas = Image.new("RGBA", (w * scale, h * scale), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(canvas)
+
+    bg_color, text_color, icon_color, divider_color = (250, 250, 250, 235), (40, 40, 40, 255), (80, 80, 80, 255), (210, 210, 210, 255)
+    draw.rounded_rectangle([0, 0, w * scale - 1, h * scale - 1], radius=(h * scale) // 2, fill=bg_color)
+
+    font_label = _load_font(_FONT_CANDIDATES_REGULAR, 15 * scale)
+    font_value = _load_font(_FONT_CANDIDATES_BOLD, 24 * scale)
+
+    icon_size, pad = 44 * scale, 28 * scale
+    _draw_walking_icon(draw, pad + icon_size // 2, h * scale // 2, icon_size, icon_color)
+
+    text_x = pad + icon_size + 14 * scale
+    draw.text((text_x, 22 * scale), "Time", font=font_label, fill=text_color)
+    draw.text((text_x, 44 * scale), _format_duration_short(duration_seconds), font=font_value, fill=text_color)
+
+    div_x = w * scale // 2
+    draw.line([(div_x, 20 * scale), (div_x, h * scale - 20 * scale)], fill=divider_color, width=2 * scale)
+
+    icon_cx2 = div_x + 30 * scale + icon_size // 2
+    _draw_ruler_icon(draw, icon_cx2, h * scale // 2, icon_size, icon_color)
+
+    text_x2 = icon_cx2 + icon_size // 2 + 14 * scale
+    distance_str = f"{distance_km * 1000:.0f} m" if distance_km < 1 else f"{distance_km:.2f} km"
+    draw.text((text_x2, 22 * scale), "Distance", font=font_label, fill=text_color)
+    draw.text((text_x2, 44 * scale), distance_str, font=font_value, fill=text_color)
+
+    canvas = canvas.resize((w, h), Image.LANCZOS) # type: ignore
+    return np.array(canvas)[:, :, [2, 1, 0, 3]]
+
+
+def composite_card_on_frame(frame: np.ndarray, card_bgra: np.ndarray, alpha: float, margin: int = 40) -> np.ndarray:
+    out = frame.copy()
+    h, w = out.shape[:2]
+    ch, cw = card_bgra.shape[:2]
+
+    if cw > w - 2 * margin or ch > h - 2 * margin:
+        shrink = min((w - 2 * margin) / cw, (h - 2 * margin) / ch)
+        card_bgra = cv2.resize(card_bgra, (max(1, int(cw * shrink)), max(1, int(ch * shrink))), interpolation=cv2.INTER_AREA)
+        ch, cw = card_bgra.shape[:2]
+
+    x0, y0 = w - cw - margin, h - ch - margin
+    card_bgr, card_alpha = card_bgra[:, :, :3].astype(np.float32), (card_bgra[:, :, 3].astype(np.float32) / 255.0) * alpha
+    roi = out[y0:y0 + ch, x0:x0 + cw].astype(np.float32)
+    out[y0:y0 + ch, x0:x0 + cw] = (card_bgr * card_alpha[..., None] + roi * (1 - card_alpha[..., None])).astype(np.uint8)
+    return out
+
+
+# def _get_exact_path(pts_list: list, frames: int) -> np.ndarray:
+#     filtered_pts = [pts_list[0]]
+#     for p in pts_list[1:]:
+#         if np.hypot(p[0] - filtered_pts[-1][0], p[1] - filtered_pts[-1][1]) > 0.1:
+#             filtered_pts.append(p)
+
+#     pts = np.array(filtered_pts, dtype=float)
+#     diffs = np.diff(pts, axis=0)
+#     dists = np.hypot(diffs[:, 0], diffs[:, 1])
+#     cum_dists = np.concatenate(([0], np.cumsum(dists)))
+#     total_dist = cum_dists[-1]
+
+#     t = cum_dists / total_dist if total_dist > 0 else np.linspace(0, 1, len(pts))
+#     t_fine = np.linspace(0, 1, frames)
+
+#     k = min(3, len(pts) - 1)
+#     sx = make_interp_spline(t, pts[:, 0], k=max(1, k))
+#     sy = make_interp_spline(t, pts[:, 1], k=max(1, k))
+#     return np.vstack([sx(t_fine), sy(t_fine)]).T
+
+
+def _open_ffmpeg_writer(output_path: str, w: int, h: int, fps: int) -> subprocess.Popen | None:
+    """
+    Opens a persistent ffmpeg subprocess that reads raw BGR24 frames from
+    stdin and encodes directly to H.264, one pass, no intermediate file.
+
+    Why this matters: the previous design wrote every frame twice —
+    once as a raw/XVID .avi via cv2.VideoWriter, then a *second* full
+    decode+encode pass via a separate ffmpeg subprocess.run() call.
+    That's O(2 * frame_count) of heavy image I/O and codec work for a
+    single logical operation. Streaming raw frames straight into libx264
+    collapses this to O(frame_count) with no disk round-trip for the
+    intermediate representation.
+    """
+    ffmpeg_cmd = _resolve_ffmpeg()
+    if ffmpeg_cmd is None:
+        return None
+
+    cmd = [
+        ffmpeg_cmd, "-y",
+        "-f", "rawvideo", "-vcodec", "rawvideo",
+        "-pix_fmt", "bgr24", "-s", f"{w}x{h}", "-r", str(fps),
+        "-i", "-",
+        "-an",
+        "-vcodec", "libx264", "-crf", "18", "-preset", "fast",
+        "-pix_fmt", "yuv420p", output_path,
+    ]
+    # bufsize=0: no Python-side buffering of the pipe, so backpressure
+    # from a slow encoder propagates immediately to the writer loop
+    # instead of silently ballooning memory.
+    return subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL, bufsize=0)
+
+
+class _FrameSink:
+    """
+    Drop-in replacement for cv2.VideoWriter's .write()/.release() surface.
+    Streams frames directly into a single-pass ffmpeg H.264 encode when
+    ffmpeg is available; falls back to the legacy AVI + reencode_to_h264
+    path only when it isn't, so behavior on ffmpeg-less machines is
+    unchanged.
+    """
+    def __init__(self, output_path: str, w: int, h: int, fps: int):
+        self.proc = _open_ffmpeg_writer(output_path, w, h, fps)
+        self._fallback_path = None
+        self._fallback_writer = None
+        if self.proc is None:
+            self._fallback_path = tempfile.mktemp(suffix=".avi")
+            self._fallback_writer = cv2.VideoWriter(
+                self._fallback_path, cv2.VideoWriter_fourcc(*"XVID"), fps, (w, h) # type: ignore
+            )
+            if not self._fallback_writer.isOpened():
+                raise RuntimeError("Neither ffmpeg nor OpenCV VideoWriter is available.")
+
+    def write(self, frame: np.ndarray) -> None:
+        if self.proc is not None:
+            # .tobytes() is a single contiguous memcpy — cheap relative
+            # to the encode work itself.
+            self.proc.stdin.write(frame.tobytes()) # type: ignore
+>>>>>>> chore/backend-unit-testing
         else:
             text_w, text_h = len(text) * 6, 10
 
@@ -292,12 +461,32 @@ class Route2VDO:
         sprite = Image.new("RGBA", (int(canvas_w), int(canvas_h)), (0, 0, 0, 0))
         draw = ImageDraw.Draw(sprite)
 
+<<<<<<< HEAD
         # 7. Draw the pin shape (circle + triangle) in the specified color
         # Draw the circular part of the pin and the triangular tip
         cx = int(canvas_w // 2)
         circle_cy = pad_top + text_h + 4 + (pin_h - pin_w // 2) // 2
         r = pin_w // 2
         bgra_color = (pin_color[2], pin_color[1], pin_color[0], 255) 
+=======
+def _prebake_landmark_sprite(label: str, radius: int = 16, font=cv2.FONT_HERSHEY_SIMPLEX) -> tuple[np.ndarray, tuple[int, int]]:
+    """
+    Renders a landmark's marker+label as a standalone BGRA sprite ONE TIME,
+    outside the frame loop. Label text and box geometry are invariant
+    across every frame they appear in, so recomputing cv2.getTextSize /
+    cv2.putText / cv2.rectangle per-frame is pure waste — this hoists
+    that loop-invariant work out of the hot path.
+
+    Returns (sprite, anchor) where anchor is the (x, y) offset within
+    the sprite that corresponds to the landmark's true map coordinate,
+    so callers can alpha-blit it directly at (map_x, map_y).
+    """
+    (tw, th), _ = cv2.getTextSize(label, font, 0.6, 1)
+    pad = 5
+    sprite_w = radius + 4 + tw + pad * 2 + radius + 4
+    sprite_h = max(2 * (radius + 3), th + pad * 2) + 8
+    sprite = np.zeros((sprite_h, sprite_w, 4), dtype=np.uint8)
+>>>>>>> chore/backend-unit-testing
 
         draw.ellipse([cx - r, circle_cy - r, cx + r, circle_cy + r], fill=bgra_color, outline=(255, 255, 255, 255), width=2)
 
@@ -310,9 +499,26 @@ class Route2VDO:
         if font is not None:
             draw.text((cx - text_w / 2, 0), text, fill=(0, 0, 0, 255), font=font)
 
+<<<<<<< HEAD
         # 9. Convert the PIL image to a NumPy array in BGRA format and return it along with the anchor point
         sprite_bgra = cv2.cvtColor(np.array(sprite), cv2.COLOR_RGBA2BGRA)
         anchor = (cx, tip[1])
+=======
+def _blit_sprite(frame: np.ndarray, sprite_bgra: np.ndarray, anchor: tuple[int, int], x: int, y: int) -> None:
+    """In-place alpha blit of a prebaked sprite — bounded-region float
+    multiply-add, no glyph rasterization or shape recompute per call."""
+    h, w = frame.shape[:2]
+    sh, sw = sprite_bgra.shape[:2]
+    ox, oy = x - anchor[0], y - anchor[1]
+    x0, y0 = max(0, ox), max(0, oy)
+    x1, y1 = min(w, ox + sw), min(h, oy + sh)
+    if x0 >= x1 or y0 >= y1:
+        return
+    sx0, sy0 = x0 - ox, y0 - oy
+    region = sprite_bgra[sy0:sy0 + (y1 - y0), sx0:sx0 + (x1 - x0)]
+    alpha = region[:, :, 3:4].astype(np.float32) / 255.0
+    frame[y0:y1, x0:x1] = (region[:, :, :3] * alpha + frame[y0:y1, x0:x1] * (1 - alpha)).astype(np.uint8)
+>>>>>>> chore/backend-unit-testing
 
         # 10. Return the sprite and the anchor point for alignment
         return sprite_bgra, anchor
@@ -325,6 +531,7 @@ class Route2VDO:
         sh, sw = sprite.shape[:2]
         ox, oy = x - anchor[0], y - anchor[1]
 
+<<<<<<< HEAD
         # 2. Determine the region of the frame where the sprite will be drawn, handling clipping
         frame_h, frame_w = frame.shape[:2]
         src_x0, src_y0 = max(0, -ox), max(0, -oy)
@@ -380,6 +587,35 @@ class Route2VDO:
     @staticmethod
     def read_image_safe(image_path) -> Optional[np.ndarray]:
         """Safely read an image from the given path. Returns None if it can't be read."""
+=======
+def render_route_animation(
+    img_path: str, points: list, labels: list, popups: list = None, # type: ignore
+    output_dir: str = "data\\outputs\\video", fps: int = 30,
+    duration_seconds: float = 8.0, line_color: tuple = (0, 200, 255),
+    line_thickness: int = 10, marker_color: tuple = (0, 0, 255),
+    marker_radius: int = 18, res_sequence: list = None, # type: ignore
+    res_duration_per_slice: float = 5.0, pause_seconds: float = 2.0,
+    summary: dict = None, summary_hold_seconds: float = 4.0, summary_fade_seconds: float = 0.5, # type: ignore
+) -> list[str]:
+    """
+    Renders the navigation animation as SEPARATE video files instead of
+    one continuous MP4:
+      01_overview.mp4               - Phase 1 (big picture) + Phase 2 (pause)
+      02_waypoint_XX_<label>.mp4    - one file per residential chunk (Phase 3)
+      03_summary.mp4                - Phase 4 (summary card), if `summary` given
+
+    Splitting into separate files (rather than one _FrameSink spanning
+    the whole timeline) means each phase gets its own ffmpeg encode
+    process and its own container — useful for downstream consumers
+    that want to play/re-order/drop individual legs (e.g. a frontend
+    stepping through "leg 2 of 4") without re-cutting a monolithic MP4.
+
+    Returns the list of output file paths in playback order.
+    """
+    img = _read_image_safe(img_path)
+    if img is None:
+        raise FileNotFoundError(f"Cannot read: {img_path}")
+>>>>>>> chore/backend-unit-testing
 
         # 1. Check if the image path exists
         if not os.path.exists(image_path):
@@ -391,13 +627,21 @@ class Route2VDO:
             # Read the image using OpenCV
             image = cv2.imread(str(image_path))
 
+<<<<<<< HEAD
             # Check if the image was successfully read
             if image is None:
                 logging.warning(f"Image at {image_path} could not be read.")
+=======
+    def _sink_for(filename: str) -> _FrameSink:
+        # Every phase gets its own ffmpeg subprocess/container instead of
+        # one writer spanning the whole animation — see docstring above.
+        return _FrameSink(str(out_dir / filename), w, h, fps)
+>>>>>>> chore/backend-unit-testing
 
             # Return the image (or None if it couldn't be read)
             return image
 
+<<<<<<< HEAD
         # 3. Catch any exceptions that occur during reading and log the error
         except Exception as e:
             logging.error(f"Error reading image at {image_path}: {e}")
@@ -606,6 +850,85 @@ class Route2VDO:
 
         # 8. Pre-bake landmark sprites for all real labels to optimize rendering
         landmark_sprites = {lbl: self._prebake_landmark_sprite(lbl) for _, _, lbl in named}
+=======
+    base_img = img.copy()
+    # ease=True: deliberate deceleration into landmarks/turns rather than
+    # constant-speed traversal — see MapFetcher.get_smooth_path.
+    smooth_path = MapFetcher.get_smooth_path(points, num_frames, ease=True)
+    path_history: list[tuple[int, int]] = []
+    last_frame = base_img.copy()
+
+    active_popups = []
+    if popups:
+        for i in range(len(points)):
+            if popups[i] is not None:
+                active_popups.append({"x": points[i][0], "y": points[i][1], "data": popups[i], "label": labels[i]})
+
+    # Bake each landmark's marker+label once — label text and geometry
+    # never change across the `num_frames` iterations below, so this
+    # replaces O(frames * landmarks) putText/getTextSize/rectangle calls
+    # with O(landmarks) bakes + cheap per-frame alpha blits.
+    landmark_sprites = {lbl: _prebake_landmark_sprite(lbl) for _, _, lbl in named}
+
+    overview_video = _sink_for("01_overview.mp4")
+    print(f"🎬 Rendering Phase 1: Big Picture ({duration_seconds}s)")
+    for p in smooth_path:
+        frame = base_img.copy()
+        path_history.append((int(p[0]), int(p[1])))
+
+        if len(path_history) > 1:
+            cv2.polylines(frame, [np.array(path_history, dtype=np.int32)], False, line_color, line_thickness, cv2.LINE_AA)
+
+        for x, y, lbl in named:
+            sprite, anchor = landmark_sprites[lbl]
+            _blit_sprite(frame, sprite, anchor, x, y)
+
+        cx_, cy_ = path_history[-1]
+        cv2.circle(frame, (cx_, cy_), marker_radius, marker_color, -1, cv2.LINE_AA)
+        cv2.circle(frame, (cx_, cy_), marker_radius + 4, (255, 255, 255), 2, cv2.LINE_AA)
+        cv2.circle(frame, (cx_, cy_), marker_radius + 7, marker_color, 1, cv2.LINE_AA)
+
+        for popup in active_popups:
+            if np.hypot(p[0] - popup["x"], p[1] - popup["y"]) < 5.0 and not popup["data"]["triggered"]:
+                popup["data"]["triggered"] = True
+                freeze_frame = frame.copy()
+                img_url = popup["data"].get("popup_image")
+
+                if img_url and os.path.exists(img_url):
+                    pop_img = _read_image_safe(img_url)
+                    if pop_img is not None:
+                        target_img_w = 350
+                        ph, pw = pop_img.shape[:2]
+                        pop_img = cv2.resize(pop_img, (target_img_w, int(target_img_w / (pw / ph))))
+                        ph, pw = pop_img.shape[:2]
+
+                        border, label_text = 6, popup.get("label")
+                        text_offset = cv2.getTextSize(label_text, font, 0.6, 1)[0][1] + 15 if _is_real_label(label_text) else 0
+                        total_w, total_h = pw + (border * 2), ph + (border * 2)
+
+                        margin = 40
+                        box_x = int(popup["x"]) - total_w - marker_radius - 4 if popup["x"] > w * 0.6 else int(popup["x"]) + marker_radius + 4
+                        box_y = int(popup["y"]) + marker_radius + 10 if int(popup["y"]) - total_h - text_offset - 10 < margin else int(popup["y"]) - total_h - text_offset - 10
+                        box_x = max(margin, min(box_x, w - total_w - margin))
+                        box_y = max(margin, min(box_y, h - total_h - margin))
+
+                        cv2.rectangle(freeze_frame, (box_x, box_y), (box_x + total_w, box_y + total_h), (255, 255, 255), -1)
+                        cv2.rectangle(freeze_frame, (box_x, box_y), (box_x + total_w, box_y + total_h), (100, 100, 100), 2)
+                        freeze_frame[box_y + border:box_y + border + ph, box_x + border:box_x + border + pw] = pop_img
+
+                for _ in range(int(popup["data"]["freeze_seconds"] * fps)):
+                    overview_video.write(freeze_frame)
+
+        last_frame = frame
+        overview_video.write(frame)
+
+    # Phase 2 (pause) rides in the SAME file as Phase 1 — it's a hold on
+    # the overview's final frame, not a distinct navigational unit, so
+    # splitting it out as its own file would just add a near-static clip
+    # with no content of its own.
+    for _ in range(int(pause_seconds * fps)):
+        overview_video.write(last_frame)
+>>>>>>> chore/backend-unit-testing
 
         # 9. Initialize the video writer for the overview phase
         overview_video = FrameSink(os.path.join(out_dir, "01_overview.mp4"), w, h, fps, FFMPEG_PATH)
@@ -613,6 +936,24 @@ class Route2VDO:
         # 10. Log the rendering phase and duration for debugging purposes
         logging.info(f"Rendering Phase 1: Big Picture ({duration_seconds}s)")
 
+<<<<<<< HEAD
+=======
+    # ==========================================
+    # PHASE 3: RESIDENTIAL MAPS, ONE FILE PER WAYPOINT SEGMENT
+    # ==========================================
+    if res_sequence:
+        historical_lats, historical_lons = [], []
+
+        for i, res_data in enumerate(res_sequence):
+            print(f"🏡 Rendering Residential Map {i + 1}/{len(res_sequence)}")
+            res_img = _read_image_safe(res_data["img_path"])
+            extent = res_data["extent"]
+            chunk_lats = res_data.get("lats", np.array([]))
+            chunk_lons = res_data.get("lons", np.array([]))
+            res_points = res_data["points"]
+            res_labels = res_data["labels"]
+            res_popups = res_data.get("popups", [None] * len(res_points))
+>>>>>>> chore/backend-unit-testing
 
         # =========================================================
         # Render the overview animation with popups and route line
@@ -620,6 +961,7 @@ class Route2VDO:
 
         # --- STEP 1: Show Start & Stop Popups first (Intro) ---
 
+<<<<<<< HEAD
         # 1.1 Create a copy of the base image for the intro frame and filter the active popups to include only the start and stop points
         intro_frame = base_img.copy()
 
@@ -653,6 +995,54 @@ class Route2VDO:
 
             # 2.1.2 Append the current point (x, y) to the path history for drawing the route line
             path_history.append((int(p[0]), int(p[1])))
+=======
+            res_base = res_img.copy()
+            # Distance-proportional duration (falls back to the flat
+            # res_duration_per_slice if the caller didn't supply a
+            # per-chunk value) so long stretches get more screen time
+            # and short hops stay brisk, while averaging to the
+            # target seconds/waypoint across the whole route.
+            chunk_duration = res_data.get("segment_duration", res_duration_per_slice)
+            res_frames = max(10, int(chunk_duration * fps))
+
+            # ease=True gives the marker a deliberate, decelerating
+            # arrival into each waypoint instead of constant-speed
+            # travel — this is what actually reads as "slow"
+            # regardless of how many seconds are allocated.
+            res_smooth_path = MapFetcher.get_smooth_path(res_points, res_frames, ease=True)
+
+            res_named = [(int(res_points[j][0]), int(res_points[j][1]), res_labels[j]) for j in range(len(res_points)) if _is_real_label(res_labels[j])]
+            active_res_popups = [{"x": res_points[j][0], "y": res_points[j][1], "data": res_popups[j], "label": res_labels[j]} for j in range(len(res_points)) if res_popups[j] is not None]
+
+            # Same hoist-out-of-loop rationale as Phase 1: bake once
+            # per residential chunk, blit per frame.
+            res_landmark_sprites = {lbl: _prebake_landmark_sprite(lbl) for _, _, lbl in res_named}
+
+            # Filesystem-safe label suffix for the filename — falls back
+            # to a plain index if every point in this chunk is unlabeled.
+            named_labels = [lbl for _, _, lbl in res_named]
+            raw_suffix = named_labels[-1] if named_labels else f"leg{i + 1}"
+            safe_suffix = "".join(c for c in str(raw_suffix) if c.isalnum() or c in (" ", "_", "-")).strip().replace(" ", "_") or f"leg{i + 1}"
+            chunk_filename = f"02_waypoint_{i + 1:02d}_{safe_suffix}.mp4"
+            chunk_video = _sink_for(chunk_filename)
+
+            for f_idx, p in enumerate(res_smooth_path):
+                frame = res_base.copy()
+
+                # 1. Draw historical paths from previous chunks smoothly
+                if len(historical_lats) > 0:
+                    hist_px = _project_latlons_to_pixels(np.array(historical_lats), np.array(historical_lons), extent, w, h)
+                    if len(hist_px) > 1:
+                        cv2.polylines(frame, [hist_px.astype(np.int32)], False, line_color, line_thickness, cv2.LINE_AA)
+
+                # 2. Draw current chunk's path smoothly up to current frame index
+                current_chunk_px = res_smooth_path[:f_idx + 1]
+                if len(current_chunk_px) > 1:
+                    cv2.polylines(frame, [current_chunk_px.astype(np.int32)], False, line_color, line_thickness, cv2.LINE_AA)
+                    cx_, cy_ = int(current_chunk_px[-1][0]), int(current_chunk_px[-1][1])
+                else:
+                    cx_, cy_ = int(p[0]), int(p[1])
+>>>>>>> chore/backend-unit-testing
 
             # 2.1.3 Draw the route line on the current frame using the path history if there are at least two points in the history
             if len(path_history) > 1:
@@ -663,6 +1053,7 @@ class Route2VDO:
             cx_, cy_ = path_history[-1]
             px_, py_ = path_history[-2] if len(path_history) > 1 else path_history[-1]
 
+<<<<<<< HEAD
             # 2.1.5 Loop through the active popups to check if any should be triggered based on the current marker position
             for popup in active_popups:
                 # 2.1.5.1 Calculate the distance from the current marker position to the popup's position and determine if it should be triggered based on the trigger radius
@@ -872,6 +1263,13 @@ class Route2VDO:
                     )
                 else:
                     near_segment = False
+=======
+                for popup in active_res_popups:
+                    if np.hypot(cx_ - popup["x"], cy_ - popup["y"]) < 30.0 and not popup["data"]["triggered"]:
+                        popup["data"]["triggered"] = True
+                        freeze_frame = frame.copy()
+                        img_url = popup["data"].get("popup_image")
+>>>>>>> chore/backend-unit-testing
 
                 # 17.11.5 If the marker is near the popup segment or has just arrived at the end of the path, trigger the popup and create a freeze frame
                 if near_segment or just_arrived:
@@ -894,7 +1292,12 @@ class Route2VDO:
         # 19. Release the video writer for the residential segment and return the output path and last frame for further processing
         output_path = chunk_video.release(str(out_dir / chunk_filename))
 
+<<<<<<< HEAD
         return output_path, last_frame
+=======
+                chunk_video.write(frame)
+                last_frame = frame
+>>>>>>> chore/backend-unit-testing
 
     def _render_phase3_residential(
         self, res_sequence, out_dir, w, h, fps, font,
@@ -905,6 +1308,7 @@ class Route2VDO:
         output_paths = []
         last_frame = fallback_last_frame
 
+<<<<<<< HEAD
         for i, res_data in enumerate(res_sequence):
             path, seg_last_frame = self._render_residential_segment(
                 i, res_data, out_dir, w, h, fps, font,
@@ -940,6 +1344,20 @@ class Route2VDO:
         card_frame = self.render_summary_card(last_frame.copy(), summary_data)
 
         # 4. Calculate the number of frames for the fade-in effect and the hold duration based on the specified summary fade seconds, summary hold seconds, and frames per second (fps)
+=======
+            output_paths.append(chunk_video.release(str(out_dir / chunk_filename)))
+
+            if len(chunk_lats) > 0:
+                historical_lats.extend(chunk_lats)
+                historical_lons.extend(chunk_lons)
+
+    # ==========================================
+    # PHASE 4: SUMMARY CARD (own file)
+    # ==========================================
+    if summary:
+        summary_video = _sink_for("03_summary.mp4")
+        card = render_summary_card(distance_km=summary.get("total_distance_km", 0.0), duration_seconds=summary.get("total_duration_seconds", 0.0))
+>>>>>>> chore/backend-unit-testing
         fade_frames = max(1, int(summary_fade_seconds * fps))
         hold_frames = max(0, int(summary_hold_seconds * fps) - fade_frames)
         
@@ -984,9 +1402,28 @@ class Route2VDO:
         # 1. Safely read the base image from the provided image path; if it fails, raise a FileNotFoundError
         img = self.read_image_safe(img_path)
 
+<<<<<<< HEAD
         # 2. If the image could not be read (img is None), raise a FileNotFoundError with a descriptive message
         if img is None:
             raise FileNotFoundError(f"Cannot read: {img_path}")
+=======
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--map", required=True)
+    parser.add_argument("--route", required=True)
+    parser.add_argument("--output", default="data\\outputs\\video", help="Output DIRECTORY — render_route_animation now writes multiple files (01_overview.mp4, 02_waypoint_XX_*.mp4, 03_summary.mp4) into this directory instead of a single file.")
+    parser.add_argument("--duration", type=float, default=None)
+    parser.add_argument("--fps", type=int, default=None)
+    parser.add_argument("--thickness", type=int, default=None)
+    parser.add_argument("--radius", type=int, default=None)
+    parser.add_argument("--res-map", default=None)
+    parser.add_argument("--res-route", default=None)
+    parser.add_argument("--res-duration", type=float, default=12.0)
+    parser.add_argument("--pause", type=float, default=2.0)
+    parser.add_argument("--summary-json", default=None)
+    parser.add_argument("--summary-hold", type=float, default=4.0)
+    parser.add_argument("--summary-fade", type=float, default=0.5)
+>>>>>>> chore/backend-unit-testing
 
         # 3. Extract the height and width of the image and retrieve the font to be used for rendering text
         h, w = img.shape[:2]    
