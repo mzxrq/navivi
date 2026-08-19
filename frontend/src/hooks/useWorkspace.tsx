@@ -1,29 +1,20 @@
 import { saveProjectData, loadProjectData } from "../services/fileSystem";
 import { createContext, useContext, useState, useCallback, ReactNode } from "react";
 import { Waypoint, ProjectMetadata, ProjectSettings, RouteSegment, RecentProjects, WorkspaceState } from "../types";
+import { appConfig, defaultProjectSettings, mapDefaults } from "../config/constants";
 
 const WorkspaceContext = createContext<WorkspaceState | undefined>(undefined);
 
 // 5. Default Values based on Dev 1's JSON
 const DefaultSettings: ProjectSettings = {
-  fps: 30,
-  duration_seconds: 8.0,
-  line_color: [0, 200, 255],
-  line_thickness: 10,
-  marker_color: [0, 0, 255],
-  marker_radius: 18,
-  res_duration: 12.0,
-  pause: 2.0,
-  summary_hold: 4.0,
-  summary_fade: 0.5,
-  start_coords: [34.6937, 135.5023],
-  resolution: "1080p",
+  ...defaultProjectSettings,
+  start_coords: mapDefaults.startCoords,
 };
 
 const DefaultMetadata: ProjectMetadata = {
   project_id: ``,
-  user_id: "local_user",
-  project_name: "Untitled Project",
+  user_id: appConfig.defaultUserId,
+  project_name: appConfig.defaultProjectName,
   created_at: "",
   status: "initialized",
   directory_path: "",
@@ -32,7 +23,10 @@ const DefaultMetadata: ProjectMetadata = {
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [waypoints, setWaypoints] = useState<Waypoint[]>([]);
   const [routeSegments, setRouteSegments] = useState<RouteSegment[]>([]);
-  const [metadata, setMetadata] = useState<ProjectMetadata>(DefaultMetadata);
+  const [metadata, setMetadata] = useState<ProjectMetadata>(() => ({
+    ...DefaultMetadata,
+    created_at: new Date().toISOString()
+  }));
   const [settings, setSettings] = useState<ProjectSettings>(DefaultSettings);
   const [isDirty, setIsDirty] = useState(false);
   const [recentProjects, setRecentProjects] = useState<RecentProjects[]>(() => {
@@ -40,7 +34,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     return saved ? JSON.parse(saved) : [];
   });
 
-  const addToRecents = (name: string, path: string) => {
+  const addToRecents = useCallback((name: string, path: string) => {
     setRecentProjects((prev) => {
       const filtered = prev.filter((p) => p.path !== path);
 
@@ -51,7 +45,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       localStorage.setItem("navivi-recents", JSON.stringify(updated));
       return updated;
     });
-  };
+  }, []);
 
   const updateWaypoint = useCallback((id: string, data: Partial<Waypoint>) => {
     setWaypoints((prev) =>
@@ -77,7 +71,6 @@ const saveProject = async (overrideName?: string, asDuplicate?: boolean) => {
     }
 
     try {
-      // Delegate the heavy lifting to the service
       const result = await saveProjectData(
         waypoints,
         routeSegments,
@@ -87,7 +80,6 @@ const saveProject = async (overrideName?: string, asDuplicate?: boolean) => {
         asDuplicate
       );
 
-      // Update React State
       updateMetadata({
         project_name: result.projName,
         status: "saved",
@@ -122,7 +114,7 @@ const saveProject = async (overrideName?: string, asDuplicate?: boolean) => {
       // Sync React State
       setMetadata({
         project_id: data.project_id,
-        project_name: data.project_name || "Untitled Project",
+        project_name: data.project_name || appConfig.defaultProjectName,
         user_id: data.user_id,
         created_at: data.created_at,
         status: "saved",
@@ -145,7 +137,7 @@ const saveProject = async (overrideName?: string, asDuplicate?: boolean) => {
       })));
 
       setIsDirty(false);
-      addToRecents(data.project_name || "Loaded Project", selectedPath);
+      addToRecents(data.project_name || appConfig.defaultProjectName, selectedPath);
 
       return true;
     } catch (error) {
@@ -158,12 +150,8 @@ const saveProject = async (overrideName?: string, asDuplicate?: boolean) => {
     setWaypoints([]);
     setRouteSegments([]);
     setMetadata({
-      project_id: "",
-      project_name: "Untitled Project",
-      user_id: "local",
+      ...DefaultMetadata,
       created_at: new Date().toISOString(),
-      status: "new",
-      directory_path: "",
     })
     setSettings(DefaultSettings);
     setIsDirty(false);
@@ -187,7 +175,7 @@ const saveProject = async (overrideName?: string, asDuplicate?: boolean) => {
         loadProject,
         isDirty,
         setIsDirty,
-        recentProject: recentProjects,
+        recentProjects: recentProjects,
         resetWorkspace
       }}
     >
