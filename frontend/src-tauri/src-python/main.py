@@ -18,7 +18,7 @@ import numpy as np
 from typing import Optional
 import pyproj
 
-from services.gpsparser import convert_gps_file, clean_gps_data, export_to_frontend_json
+from services.gpsparser import convert_gps_file, clean_gps_data, export_to_frontend_json, haversine_vectorized
 from services.filehandler import initialize_new_project, save_project_asset_image, store_raw_file_with_datetime, generate_and_save_audio
 from services.mapfetcher import MapFetcher
 from services.route2vdo import RouteAnimator
@@ -30,6 +30,7 @@ from services.tts import (
 )
 from services.job_config import JobConfigManager
 from services.vdoeditor import VideoEditor
+from typing import List, Dict, Any, Optional
 
 
 def data_pipeline_process(input_file: str, output_format: str = "iblue747") -> str:
@@ -79,6 +80,10 @@ def generate_navigation_video(
     audio_durations: Optional[list] = None,
     audio_pauses: Optional[list] = None
 ) -> list[str]:
+
+    audio_durations = audio_durations or []
+    audio_pauses = audio_pauses or []
+    
     route_df = cleaned_route["route"]
     summary = cleaned_route.get("summary", {})
 
@@ -93,7 +98,7 @@ def generate_navigation_video(
 
     route_points = _project_route_to_pixels(route_df["latitude"].to_numpy(), route_df["longitude"].to_numpy(), extent, img_w, img_h)
     route_labels = [(row["store_name"] if row.get("is_landmarked") else None) for _, row in route_df.iterrows()]
-    route_popups = [None] * len(route_points)
+    route_popups: List[Optional[Dict[str, Any]]] = [None] * len(route_points)
 
     project_config = {}
     config_path = Path(project_config_path)
@@ -130,10 +135,6 @@ def generate_navigation_video(
         max_chunk_distance_meters=math.inf, precomputed_indices=wp_indices,
     )
 
-    # Calculate physical travel times based on distance — used ONLY as a
-    # fallback pacing for legs that have NO narration audio at all (a
-    # waypoint with empty narration text). This heuristic must never be
-    # allowed to override real audio timing (see bug note below).
     seg_durations = MapFetcher.compute_segment_durations(waypoints, wp_indices, route_df, target_avg_seconds=20.0) if waypoints and len(wp_indices) > 1 else []
 
     res_sequence = []
@@ -143,28 +144,33 @@ def generate_navigation_video(
         chunk = route_df.iloc[start_idx : end_idx + 1]
         chunk_points = _project_route_to_pixels(chunk["latitude"].to_numpy(), chunk["longitude"].to_numpy(), item["extent"], img_w, img_h)
 
+        # --- NEW: Calculate the real GPS travel time for this specific clip ---
+        real_time_sec = 0.0
+        if "timestamp" in chunk.columns and len(chunk) > 1:
+            real_time_sec = (chunk["timestamp"].iloc[-1] - chunk["timestamp"].iloc[0]).total_seconds()
+        # ----------------------------------------------------------------------
+        
+        # --- RESTORED ORIGINAL LOGIC ---
+        lats_arr, lons_arr = item["lats"], item["lons"]
+        if len(lats_arr) > 1:
+            seg_distance_km = float(np.nansum(
+                haversine_vectorized(lats_arr[:-1], lons_arr[:-1], lats_arr[1:], lons_arr[1:])
+            ))
+        else:
+            seg_distance_km = 0.0
+
         distance_fallback = seg_durations[seq_idx] if seq_idx < len(seg_durations) else 10.0
         has_audio = bool(audio_durations) and seq_idx < len(audio_durations) and audio_durations[seq_idx] > 0
         active_pauses = audio_pauses[seq_idx] if audio_pauses and seq_idx < len(audio_pauses) else []
 
-        # -------------------------------------------------------------
-        # AUDIO-FIRST DURATION MODEL (fixes "route line finishes before
-        # the video/audio ends"):
-        #
-        # NEW rule: when real narration exists for this leg, audio is the
-        # single source of truth for BOTH the total clip length AND the
-        # pacing of the line-drawing animation. travel_duration is set to
-        # the same audio-derived duration (not the distance heuristic),
-        # so the marker consumes the ENTIRE clip and reaches the end of
-        # the line at the moment the narration finishes.
-        # -------------------------------------------------------------
         if has_audio:
             audio_time = audio_durations[seq_idx]
-            travel_duration = audio_time 
+            travel_duration = audio_time
             total_time = audio_time
         else:
             total_time = distance_fallback
             travel_duration = distance_fallback
+        # --------------------------------
 
         res_sequence.append({
             "img_path": item["img_path"],
@@ -174,13 +180,13 @@ def generate_navigation_video(
             "points": chunk_points,
             "labels": route_labels[start_idx : end_idx + 1],
             "popups": route_popups[start_idx : end_idx + 1],
-            "travel_duration": travel_duration,   # Stretches to match audio pacing
-            "segment_duration": total_time,       # Total clip matches audio duration
+            "travel_duration": travel_duration,
+            "segment_duration": total_time,
+            "real_duration_seconds": real_time_sec, # <-- Safely added!
+            "distance_km": seg_distance_km,  
             "pauses": active_pauses
         })
-    
-    # Note: If you are using the OOP refactored RouteAnimator, you may need to 
-    # instantiate this with RouteAnimator(config={}) depending on your final class setup.
+
     animator_config = {
         "output_dir": output_video_dir,
         "fps": project_config.get("fps", 30),
@@ -200,7 +206,6 @@ def generate_navigation_video(
         img_path=map_output_path, points=route_points, labels=route_labels,
         popups=route_popups, res_sequence=res_sequence, summary=summary
     )
-
 
 async def run_synced_tts_pipeline(project_config_path: str, output_video_dir: Optional[str] = None) -> dict:
     """
@@ -293,12 +298,11 @@ async def run_synced_tts_pipeline(project_config_path: str, output_video_dir: Op
     DEFAULT_PAUSE_SECONDS = 2.0
     DEFAULT_SUMMARY_HOLD = 4.0
 
-    # 5. Mux audio into every respective waypoint clip cleanly using VideoEditor[cite: 14, 18]
+    # 5. Mux audio into every respective segment cleanly using VideoEditor
     for i, vid_path in enumerate(video_paths):
-        is_waypoint_leg = (i > 0) if not has_summary else (0 < i < len(video_paths) - 1)
-        audio_idx = i - 1
+        audio_idx = i  # Direct 1-to-1 mapping!
 
-        if is_waypoint_leg and audio_idx < len(audio_paths) and audio_paths[audio_idx]:
+        if audio_idx < len(audio_paths) and audio_paths[audio_idx]:
             print(f"🎵 Muxing audio into segment {i}...", file=sys.stderr)
             
             base_name = Path(vid_path).stem
@@ -324,12 +328,12 @@ async def run_synced_tts_pipeline(project_config_path: str, output_video_dir: Op
             final_video_paths.append(vid_path)
             segment_has_narration.append(False)
             segment_narration_audio.append(None)
+            
+            # Padding durations if no audio exists
             if i == 0:
-                segment_durations.append(DEFAULT_OVERVIEW_DURATION + DEFAULT_PAUSE_SECONDS)
-            elif has_summary and i == len(video_paths) - 1:
-                segment_durations.append(DEFAULT_SUMMARY_HOLD)
+                segment_durations.append(DEFAULT_OVERVIEW_DURATION + DEFAULT_PAUSE_SECONDS + DEFAULT_SUMMARY_HOLD)
             else:
-                segment_durations.append(audio_durations[audio_idx] if audio_idx < len(audio_durations) else 0.0)
+                segment_durations.append(12.0)  # Default fallback for waypoint legs
 
     # 6. Final assembly of all video segments and timeline audio[cite: 13]
     print("🎬 Assembling final combined video + audio...", file=sys.stderr)
@@ -435,3 +439,17 @@ if __name__ == "__main__":
             error_res = {"success": False, "error": str(e)}
             print(json.dumps(error_res, ensure_ascii=False))
             sys.exit(1)
+
+
+# =============================================================================
+# TEST BLOCK
+# =============================================================================
+"""
+    py main.py process_gps "data/inputs/gpsdata/raw/LOG00002.TXT"
+    py main.py full_pipeline "C:\\Users\\user1\\Documents\\Navivi\\Projects\\proj_2026_very_cool_tomogashima_islands\\log.txt"
+    py main.py init_project "local_user" "My Cool Project"
+    py main.py save_asset "data/projects/proj_2026_very_cool_tomogashima_islands" "assets/images/custom_marker.png"
+    py main.py generate_speech "Welcome to the navigation video!" "data/projects/proj_2026_very_cool_tomogashima_islands/audio/welcome.mp3"
+    py main.py synced_tts_pipeline "C:\\Users\\user1\\Documents\\Navivi\\Projects\\proj_2026_very_cool_tomogashima_islands\\log.txt"
+    py main.py save_config "C:\\Users\\user1\\Documents\\Navivi\\Projects\\proj_2026_very_cool_tomogashima_islands\\job_config.json"
+"""

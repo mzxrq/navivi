@@ -202,9 +202,10 @@ class GPSDataCleaner:
     STOP_DETECTION_PRECISION: Final[int] = 5
     LANDMARK_MIN_STOP_SECONDS: Final[int] = 300
 
-    def __init__(self, precision: int = STOP_DETECTION_PRECISION, min_stop_sec: int = LANDMARK_MIN_STOP_SECONDS):
+    def __init__(self, precision: int = STOP_DETECTION_PRECISION, min_stop_sec: int = LANDMARK_MIN_STOP_SECONDS, fallback_speed_m_s: float = 1.4):
         self.precision = precision
         self.min_stop_sec = min_stop_sec
+        self.fallback_speed_m_s = fallback_speed_m_s
 
     def clean_file(self, csv_path: str, save_output: bool = True) -> Dict[str, Any]:
         df = pd.read_csv(csv_path)
@@ -225,11 +226,90 @@ class GPSDataCleaner:
             route_df = route_df.sort_values(by='timestamp').reset_index(drop=True)
 
         if 'timestamp' not in route_df.columns or route_df['timestamp'].isnull().all():
+            logger.warning("No timestamps found! Generating timeline based on physical distance...")
+            
+            # 1. Get physical distance between consecutive points
+            lat1 = route_df['latitude'].shift().fillna(route_df['latitude']).to_numpy()
+            lon1 = route_df['longitude'].shift().fillna(route_df['longitude']).to_numpy()
+            lat2 = route_df['latitude'].to_numpy()
+            lon2 = route_df['longitude'].to_numpy()
+            
+            distances_m = GPSMath.haversine_vectorized(lat1, lon1, lat2, lon2) * 1000.0
+            
+            # 2. Calculate time per segment (distance / fallback_speed). Minimum 1 second.
+            dt_seconds = (distances_m / self.fallback_speed_m_s).clip(1.0)
+            
+            # 3. Create the timeline
+            start_time = pd.Timestamp.now()
+            route_df['timestamp'] = start_time + pd.to_timedelta(np.cumsum(dt_seconds) - dt_seconds[0], unit='s')
+        else:
+            route_df['timestamp'] = route_df['timestamp'].ffill()
+            
+            # --- Existing Time-by-Distance Fallback ---
+            dt = route_df['timestamp'].diff().dt.total_seconds().fillna(1.0)
+            if (dt <= 0).any():
+                logger.warning("Detected 0 or negative time deltas. Averaging time by distance...")
+                
+                lat1 = route_df['latitude'].shift().fillna(route_df['latitude']).to_numpy()
+                lon1 = route_df['longitude'].shift().fillna(route_df['longitude']).to_numpy()
+                lat2 = route_df['latitude'].to_numpy()
+                lon2 = route_df['longitude'].to_numpy()
+                distances_m = GPSMath.haversine_vectorized(lat1, lon1, lat2, lon2) * 1000.0
+
+                valid_mask = dt > 0
+                valid_dist = distances_m[valid_mask].sum()
+                valid_time = dt[valid_mask].sum()
+
+                # Use dynamic class variable
+                avg_speed_m_s = (valid_dist / valid_time) if (valid_time > 0 and valid_dist > 0) else self.fallback_speed_m_s
+                
+                invalid_mask = dt <= 0
+                dt[invalid_mask] = (distances_m[invalid_mask] / avg_speed_m_s).clip(1.0)
+                
+                start_time = route_df['timestamp'].iloc[0]
+                route_df['timestamp'] = start_time + pd.to_timedelta(dt.cumsum() - dt.iloc[0], unit='s')
+
+        if 'timestamp' not in route_df.columns or route_df['timestamp'].isnull().all():
             logger.warning("No timestamps found! Generating artificial 1-second timeline...")
             start_time = pd.Timestamp.now()
             route_df['timestamp'] = pd.date_range(start=start_time, periods=len(route_df), freq='s')
         else:
+            # 1. Forward-fill any completely missing timestamp cells
             route_df['timestamp'] = route_df['timestamp'].ffill()
+
+            # --- NEW VALIDATION: Time-by-Distance Fallback ---
+            # Calculate time differences in seconds
+            dt = route_df['timestamp'].diff().dt.total_seconds().fillna(1.0)
+
+            # Check for 0 or negative time jumps (duplicates or rollovers)
+            if (dt <= 0).any():
+                logger.warning("Detected 0 or negative time deltas. Averaging time by distance...")
+
+                # A. Get physical distance in meters between consecutive points
+                lat1 = route_df['latitude'].shift().fillna(route_df['latitude']).to_numpy()
+                lon1 = route_df['longitude'].shift().fillna(route_df['longitude']).to_numpy()
+                lat2 = route_df['latitude'].to_numpy()
+                lon2 = route_df['longitude'].to_numpy()
+
+                distances_m = GPSMath.haversine_vectorized(lat1, lon1, lat2, lon2) * 1000.0
+
+                # B. Calculate average speed from the valid segments of the route
+                valid_mask = dt > 0
+                valid_dist = distances_m[valid_mask].sum()
+                valid_time = dt[valid_mask].sum()
+
+                # Default to the fallback speed if there are no valid times at all
+                avg_speed_m_s = (valid_dist / valid_time) if (valid_time > 0 and valid_dist > 0) else self.fallback_speed_m_s
+
+                # C. Replace invalid times with calculated time (Distance / Average Speed)
+                invalid_mask = dt <= 0
+                
+                # Apply fallback, ensuring at least 1 second passes to prevent overlapping timestamps
+                dt[invalid_mask] = (distances_m[invalid_mask] / avg_speed_m_s).clip(1.0)
+
+                # D. Reconstruct the timeline safely using cumulative sum
+                start_time = route_df['timestamp'].iloc[0]
+                route_df['timestamp'] = start_time + pd.to_timedelta(dt.cumsum() - dt.iloc[0], unit='s')
 
         if 'latitude' in route_df.columns and 'longitude' in route_df.columns:
             route_df['lat_round'] = route_df['latitude'].round(self.precision)

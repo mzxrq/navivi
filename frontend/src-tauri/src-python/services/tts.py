@@ -475,15 +475,70 @@ def get_audio_format(path: str) -> tuple[int, int]:
     return FFmpegManager.get_audio_format(path)
 
 def assemble_final_deliverable(
-    video_segment_paths: list[str],
-    segment_has_narration: list[bool],
-    segment_durations: list[float],
-    segment_narration_audio: list,
-    output_dir: str = "outputs",
-) -> dict:
-    return _default_manager.assemble_final_deliverable(
-        video_segment_paths, segment_has_narration, segment_durations, segment_narration_audio, output_dir
-    )
+        # Removed 'self' from here
+        video_segment_paths: List[str],
+        segment_has_narration: List[bool],
+        segment_durations: List[float],
+        segment_narration_audio: List[Optional[str]],
+        output_dir: str = "outputs",
+    ) -> Dict[str, str]:
+        """Executes the 3-step compilation of video segments and master audio tracks."""
+        if not (len(video_segment_paths) == len(segment_has_narration) == len(segment_durations) == len(segment_narration_audio)):
+            raise ValueError(
+                "video_segment_paths, segment_has_narration, segment_durations, and "
+                "segment_narration_audio must all be the same length."
+            )
+
+        ref_sample_rate, ref_channels = AudioProcessor._detect_reference_audio_format(segment_narration_audio)
+
+        # BUGFIX: Scope the temp directory under this project's own output_dir
+        segment_audio_temp_dir = str(Path(output_dir) / "tmp_segment_audio")
+
+        normalized_paths = [
+            _default_manager.video_processor.normalize_segment_audio(  # Changed self to _default_manager
+                path,
+                has_narration=has_narr,
+                sample_rate=ref_sample_rate,
+                channels=ref_channels,
+                temp_dir=segment_audio_temp_dir,
+            )
+            for path, has_narr in zip(video_segment_paths, segment_has_narration)
+        ]
+
+        full_video_path = _default_manager.video_processor.concatenate_segments( # Changed self to _default_manager
+            normalized_paths, final_output_path=f"{output_dir}/final_navigation_video.mp4"
+        )
+
+        full_audio_path = _default_manager.audio_processor.build_full_narration_master( # Changed self to _default_manager
+            segment_durations=segment_durations,
+            segment_narration_audio=segment_narration_audio,
+            final_output_path=f"{output_dir}/master_full_timeline_audio.wav",
+        )
+
+        final_combined_path = _default_manager.video_processor.combine_video_and_audio( # Changed self to _default_manager
+            video_path=full_video_path,
+            audio_path=full_audio_path,
+            final_output_path=f"{output_dir}/final_output_with_audio.mp4",
+        )
+
+        # HYGIENE: clean up temp files
+        temp_dir_path = Path(segment_audio_temp_dir)
+        if temp_dir_path.exists():
+            for leftover in temp_dir_path.glob("*_padded.mp4"):
+                try:
+                    leftover.unlink()
+                except OSError:
+                    pass
+            try:
+                temp_dir_path.rmdir() 
+            except OSError:
+                pass
+
+        return {
+            "full_video_path": full_video_path,
+            "full_audio_path": full_audio_path,
+            "final_combined_path": final_combined_path,
+        }
 
 class TTSService:
     """Backwards-compatibility facade wrapper for legacy tests."""
