@@ -31,6 +31,7 @@ from services.tts import (
 from services.job_config import JobConfigManager
 from services.vdoeditor import VideoEditor
 from typing import List, Dict, Any, Optional
+from services.llmscript import analyze_travel_image
 
 
 def data_pipeline_process(input_file: str, output_format: str = "iblue747") -> str:
@@ -430,6 +431,14 @@ if __name__ == "__main__":
                 
                 print(json.dumps({"success": True}, ensure_ascii=False))
 
+            elif command == "analyze_image":
+                # payload is the target image path passed from Tauri
+                analysis_result = analyze_travel_image(payload)
+                print(json.dumps({
+                    "success": True, 
+                    "data": analysis_result
+                }, ensure_ascii=False))
+
             else:
                 error_res = {"success": False, "error": f"Unknown command '{command}'"}
                 print(json.dumps(error_res, ensure_ascii=False))
@@ -452,4 +461,5 @@ if __name__ == "__main__":
     py main.py generate_speech "Welcome to the navigation video!" "data/projects/proj_2026_very_cool_tomogashima_islands/audio/welcome.mp3"
     py main.py synced_tts_pipeline "C:\\Users\\user1\\Documents\\Navivi\\Projects\\proj_2026_very_cool_tomogashima_islands\\log.txt"
     py main.py save_config "C:\\Users\\user1\\Documents\\Navivi\\Projects\\proj_2026_very_cool_tomogashima_islands\\job_config.json"
+    python main.py analyze_image "test_map.png"
 """
