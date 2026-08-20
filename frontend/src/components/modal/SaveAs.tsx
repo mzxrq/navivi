@@ -32,7 +32,7 @@ export function SaveAs({
       .replace(/[^a-z0-9]+/g, "_") || "untitled";
 
   return (
-    <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/60 animate-in fade-in">
+    <div className="fixed inset-0 z-999 flex items-center justify-center bg-black/60 animate-in fade-in">
       <div className="w-96 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-white/10 rounded-xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
         {/* Header Section */}
         <div className="px-5 py-4 border-b border-zinc-100 dark:border-white/5 bg-zinc-50/50 dark:bg-zinc-900/50 flex items-center gap-3">

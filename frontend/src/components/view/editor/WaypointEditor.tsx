@@ -30,7 +30,7 @@ export function WaypointEditor({ wpId, onClose }: { wpId: string; onClose: () =>
   };
 
   return (
-    <aside className="w-[340px] bg-white dark:bg-zinc-950 border-r border-zinc-200 dark:border-white/[0.08] flex flex-col p-6 h-full select-none z-10 relative shadow-xl transition-colors gap-6">
+    <aside className="w-85 shrink-0 bg-white dark:bg-zinc-950 border-r border-zinc-200 dark:border-white/8 flex flex-col p-6 h-full select-none z-10 relative shadow-xl transition-colors gap-6">
       <div className="flex-1 flex flex-col min-h-0 space-y-6 overflow-y-auto custom-scrollbar pr-2">
         <button onClick={onClose} className="flex items-center gap-2 text-xs font-semibold text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300 transition-colors w-fit shrink-0">
           <ChevronLeft className="w-4 h-4" /> Back to List
@@ -67,7 +67,7 @@ export function WaypointEditor({ wpId, onClose }: { wpId: string; onClose: () =>
             <div className="flex flex-col gap-2">
               {wpImages.map((img, idx) => (
                 <div key={idx} className="flex items-center justify-between bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs text-zinc-600 dark:text-zinc-400">
-                  <span className="truncate max-w-[200px]" title={img}>{img.split(/[/\\]/).pop()}</span>
+                  <span className="truncate max-w-200px" title={img}>{img.split(/[/\\]/).pop()}</span>
                   <button onClick={() => updateWaypoint(wp.id, { images: wpImages.filter((_, i) => i !== idx) })} className="text-red-500 hover:text-red-600 transition-colors">
                     <X className="w-3.5 h-3.5" />
                   </button>

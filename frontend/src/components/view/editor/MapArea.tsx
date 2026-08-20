@@ -6,24 +6,27 @@ import { useTheme } from "../../../hooks/useTheme";
 import { useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { readTextFile } from "@tauri-apps/plugin-fs";
-import { open } from "@tauri-apps/plugin-dialog";
-import { Clock, UploadCloud,  CheckCircle2,  FileCode, } from "lucide-react";
+import { 
+  // Clock, 
+  UploadCloud,  
+  // CheckCircle2,  
+  // FileCode, 
+  MapPin } from "lucide-react";
 import { MapContainer, TileLayer } from "react-leaflet";
 import { useMapRouting } from "../../../hooks/useMapRouting";
-import { MapAutoZoom, MapClickListener } from "../../controllers/mapControllers";
+import { MapAutoZoom, MapEventsHandler } from "../../controllers/mapControllers";
 import { RouteLayer } from "./MapLayers/RouteLayer";
 import { WaypointLayer } from "./MapLayers/WaypointLayer";
+import { useFileActions } from "../../../hooks/useFileActions";
 
 export function MapArea() {
   const { theme, mapTheme } = useTheme();
   const { showToast } = useUI();
-
   const [uploadedRouteLine, setUplodadedRouteLine] = useState<
     [number, number][]
   >([]);
   const [isHovering, setIsHovering] = useState(false);
-  const [routePoints, setRoutePoints] = useState<[number, number][]>([]);
-  const [droppedFile, setDroppedFile] = useState<string | null>(null);
+  const { routePoints } = useWorkspace();
   const {
     waypoints,
     setWaypoints,
@@ -33,9 +36,31 @@ export function MapArea() {
     metadata,
     setIsDirty,
   } = useWorkspace();
+  const { importRouteFile } = useFileActions();
+
+  const [menu, setMenu] = useState<{ show: boolean; x: number; y: number; lat: number; lng: number } | null>(null);
+
+  useEffect(() => {
+    const closeMenu = () => setMenu(null);
+    window.addEventListener("click", closeMenu);
+    window.addEventListener("close-context-menus", closeMenu);
+
+    return () => {
+      window.removeEventListener("click", closeMenu);
+      window.removeEventListener("close-context-menus", closeMenu);
+    };
+  }, []);
+
+  const handleMapContextMenu = (e: MouseEvent, lat: number, lng: number) => {
+    window.dispatchEvent(new Event("close-context-menus"));    
+    const xPos = e.pageX + 192 > window.innerWidth ? window.innerWidth - 192 : e.pageX;
+    const yPos = e.pageY + 130 > window.innerHeight ? window.innerHeight - 130 : e.pageY;
+    setMenu({ show: true, x: xPos, y: yPos, lat, lng });
+  };
 
   useMapRouting();
 
+  // load project
   const processFile = async (filePath: string) => {
     try {
       if (filePath.toLowerCase().endsWith(".json")) {
@@ -68,7 +93,6 @@ export function MapArea() {
         }
 
         if (data.source_files?.gps_route) {
-          setDroppedFile(data.source_files.gps_route);
 
           const gpxContent = await readTextFile(data.source_files.gps_route);
           const parser = new DOMParser();
@@ -129,20 +153,13 @@ export function MapArea() {
       }
       if (data.project_name)
         updateMetadata({ project_name: data.project_name });
-      if (data.source_files?.gps_route)
-        setDroppedFile(data.source_files.gps_route);
     } catch (error) {
       console.error("Failed to process file:", error);
       alert("An error occured while loading the file.");
     }
   };
 
-  const isDarkMap =
-    mapTheme === "dark" ||
-    (mapTheme === "sync" &&
-      (theme === "dark" ||
-        (theme === "system" &&
-          window.matchMedia("(prefers-color-scheme: dark)").matches)));
+  const isDarkMap = mapTheme === "dark" || (mapTheme === "sync" && (theme === "dark" || (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches)));
 
   // drag and drop get files
   useEffect(() => {
@@ -157,7 +174,13 @@ export function MapArea() {
       async (event) => {
         setIsHovering(false);
         if (event.payload.paths && event.payload.paths.length > 0) {
-          await processFile(event.payload.paths[0]);
+          const path = event.payload.paths[0];
+
+          if (path.toLowerCase().endsWith(".json")) {
+            await processFile(path);
+          } else {
+            await importRouteFile(path);
+          }
         }
       },
     );
@@ -169,51 +192,51 @@ export function MapArea() {
     };
   }, []);
 
-  // browse files (same as drag and drop)
-  const handleBrowseFiles = async () => {
-    const selectedPath = await open({
-      multiple: false,
-      filters: [
-        {
-          name: "Navivi & GPS",
-          extensions: ["json", "gpx", "fit", "tcx", "kml"],
-        },
-      ],
-    });
+  // // browse files (same as drag and drop)
+  // const handleBrowseFiles = async () => {
+  //   const selectedPath = await open({
+  //     multiple: false,
+  //     filters: [
+  //       {
+  //         name: "Navivi & GPS",
+  //         extensions: ["json", "gpx", "fit", "tcx", "kml"],
+  //       },
+  //     ],
+  //   });
 
-    if (typeof selectedPath === "string") {
-      await processFile(selectedPath);
-    }
-  };
+  //   if (typeof selectedPath === "string") {
+  //     await processFile(selectedPath);
+  //   }
+  // };
 
   // parse file directly if gpx (if not gpx, gpsbabel goes boom boom and reformat it to gpx/kml/csv/xlsx)
-  useEffect(() => {
-    if (!droppedFile) return;
+  // useEffect(() => {
+  //   if (!droppedFile) return;
 
-    if (droppedFile.toLowerCase().endsWith(".gpx")) {
-      const parseGpx = async () => {
-        try {
-          const fileContent = await readTextFile(droppedFile);
-          const parser = new DOMParser();
-          const xmlDoc = parser.parseFromString(fileContent, "text/xml");
-          const trackPoints = xmlDoc.getElementsByTagName("trkpt");
-          const points: [number, number][] = [];
+  //   if (droppedFile.toLowerCase().endsWith(".gpx")) {
+  //     const parseGpx = async () => {
+  //       try {
+  //         const fileContent = await readTextFile(droppedFile);
+  //         const parser = new DOMParser();
+  //         const xmlDoc = parser.parseFromString(fileContent, "text/xml");
+  //         const trackPoints = xmlDoc.getElementsByTagName("trkpt");
+  //         const points: [number, number][] = [];
 
-          for (let i = 0; i < trackPoints.length; i++) {
-            const lat = parseFloat(trackPoints[i].getAttribute("lat") || "0");
-            const lon = parseFloat(trackPoints[i].getAttribute("lon") || "0");
-            if (lat && lon) points.push([lat, lon]);
-          }
-          setRoutePoints(points);
-        } catch (error) {
-          console.error("Failed to parse GPX:", error);
-        }
-      };
-      parseGpx();
-    } else {
-      setRoutePoints([]);
-    }
-  }, [droppedFile]);
+  //         for (let i = 0; i < trackPoints.length; i++) {
+  //           const lat = parseFloat(trackPoints[i].getAttribute("lat") || "0");
+  //           const lon = parseFloat(trackPoints[i].getAttribute("lon") || "0");
+  //           if (lat && lon) points.push([lat, lon]);
+  //         }
+  //         setRoutePoints(points);
+  //       } catch (error) {
+  //         console.error("Failed to parse GPX:", error);
+  //       }
+  //     };
+  //     parseGpx();
+  //   } else {
+  //     setRoutePoints([]);
+  //   }
+  // }, [droppedFile]);
 
   // waypoints on map click
   const handleAddWaypoint = async (lat: number, lng: number) => {
@@ -255,11 +278,15 @@ export function MapArea() {
     }
   };
 
-  const isGpx = droppedFile?.toLowerCase().endsWith(".gpx");
+  // const isGpx = droppedFile?.toLowerCase().endsWith(".gpx");
 
   return (
-    <main className="flex-1 relative bg-zinc-100 dark:bg-[#09090b] overflow-hidden transition-colors">
+    <main 
+      className="flex-1 relative bg-zinc-100 dark:bg-[#09090b] overflow-hidden transition-colors"
+      onClick={() => setMenu(null)} // Clicking outside closes menu
+    >
       <MapSettings />
+      
       <div className="absolute inset-0 z-0">
         <MapContainer
           center={settings.start_coords || [34.6937, 135.5023]}
@@ -285,7 +312,13 @@ export function MapArea() {
           <WaypointLayer />
 
           <MapAutoZoom waypoints={waypoints} projectId={metadata.project_id}/>
-          <MapClickListener onMapClick={handleAddWaypoint} />
+          
+          {/* New Event Handler */}
+          <MapEventsHandler 
+            onMapClick={handleAddWaypoint} 
+            onMapContextMenu={handleMapContextMenu}
+            onMapDrag={() => setMenu(null)}
+          />
         </MapContainer>
       </div>
 
@@ -301,57 +334,27 @@ export function MapArea() {
         </div>
       )}
 
-      {/* Floating Status Panel */}
-      {!isHovering && (
-        <div className="absolute top-6 left-6 z-40">
-          {droppedFile ? (
-            isGpx ? (
-              <div className="flex items-center gap-3 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border border-emerald-500/30 px-4 py-2.5 rounded-xl shadow-lg">
-                <CheckCircle2 className="w-4 h-4 text-emerald-500 dark:text-emerald-400" />
-                <div className="flex flex-col">
-                  <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-wider">
-                    Route Loaded
-                  </span>
-                  <span
-                    className="text-[10px] text-zinc-500 dark:text-zinc-400 font-mono max-w-[200px] truncate"
-                    title={droppedFile}
-                  >
-                    {droppedFile}
-                  </span>
-                </div>
-              </div>
-            ) : (
-              <div className="flex items-center gap-3 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border border-amber-500/30 px-4 py-2.5 rounded-xl shadow-lg">
-                <Clock className="w-4 h-4 text-amber-500 dark:text-amber-400 animate-pulse" />
-                <div className="flex flex-col">
-                  <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-wider">
-                    Awaiting Conversion
-                  </span>
-                  <span
-                    className="text-[10px] text-zinc-500 dark:text-zinc-400 font-mono max-w-[200px] truncate"
-                    title={droppedFile}
-                  >
-                    {droppedFile}
-                  </span>
-                </div>
-              </div>
-            )
-          ) : (
+      {/* Map Context Menu */}
+      {menu?.show && (
+        <div
+          key={`${menu.x}-${menu.y}`}
+          className="fixed z-1000 w-48 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl border border-zinc-200 dark:border-white/10 rounded-xl shadow-2xl p-1 animate-in fade-in zoom-in-95 duration-100"
+          style={{ top: menu.y, left: menu.x }}
+          onContextMenu={(e) => e.preventDefault()} // Prevent native menu on top of this menu
+        >
+          <div className="flex flex-col text-sm text-zinc-700 dark:text-zinc-300 font-medium">
             <button
-              onClick={handleBrowseFiles}
-              className="flex items-center gap-3 bg-white/90 dark:bg-zinc-900/90 hover:bg-zinc-50 dark:hover:bg-zinc-800/95 backdrop-blur-md border border-zinc-200 dark:border-white/10 hover:border-zinc-300 dark:hover:border-zinc-400/50 transition-all px-4 py-2.5 rounded-xl shadow-lg text-left group"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleAddWaypoint(menu.lat, menu.lng);
+                setMenu(null);
+              }}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors text-left"
             >
-              <FileCode className="w-4 h-4 text-zinc-500 group-hover:text-zinc-700 dark:group-hover:text-zinc-300 transition-colors" />
-              <div className="flex flex-col">
-                <span className="text-xs font-bold text-zinc-800 dark:text-zinc-300 uppercase tracking-wider group-hover:text-zinc-950 dark:group-hover:text-zinc-100 transition-colors">
-                  No Route Loaded
-                </span>
-                <span className="text-[10px] text-zinc-500 dark:text-zinc-500 group-hover:text-zinc-600 dark:group-hover:text-zinc-400 transition-colors">
-                  Drag or click to browse files
-                </span>
-              </div>
+              <MapPin className="w-4 h-4" /> Add Waypoint Here
             </button>
-          )}
+            {/* Future option: Add "Search nearby..." or "Paste Coordinates" here */}
+          </div>
         </div>
       )}
     </main>

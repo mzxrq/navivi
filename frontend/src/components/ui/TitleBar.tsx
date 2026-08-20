@@ -14,6 +14,7 @@ import {
 import { Window } from "@tauri-apps/api/window";
 import { SaveAs } from "../modal/SaveAs";
 import { UnsavedChanges } from "../modal/UnsavedChanges";
+import { useFileActions } from "../../hooks/useFileActions";
 
 export function TitleBar() {
   const {
@@ -28,14 +29,13 @@ export function TitleBar() {
   const {
     saveProject,
     metadata,
-    updateMetadata,
     loadProject,
     isDirty,
     setIsDirty,
   } = useWorkspace();
+  const { importRouteFile } = useFileActions();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [showSaveAs, setShowSaveAs] = useState(false);
-  const [saveAsName, setSaveAsName] = useState("");
   const [saveMode, setSaveMode] = useState<"initial" | "duplicate">("initial");
   const [pendingNavigation, setPendingNavigation] = useState<
     "title_screen" | "new_project" | "close" | null
@@ -134,7 +134,7 @@ export function TitleBar() {
             </button>
 
             {isMenuOpen && (
-              <div className="absolute top-10 left-2 w-56 bg-white dark:bg-[#1f1f22] border border-zinc-200 dark:border-white/10 rounded-md shadow-2xl py-1 z-[200] text-sm text-zinc-700 dark:text-zinc-300">
+              <div className="absolute top-10 left-2 w-56 bg-white dark:bg-[#1f1f22] border border-zinc-200 dark:border-white/10 rounded-md shadow-2xl py-1 z-200 text-sm text-zinc-700 dark:text-zinc-300">
                 <button
                   onClick={() => handleSafeNavigation("title_screen")}
                   className="w-full flex items-center justify-between px-4 py-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-700/50 transition-colors"
@@ -168,6 +168,18 @@ export function TitleBar() {
                   <span className="text-xs text-zinc-400">Ctrl+O</span>
                 </button>
 
+                <div className="h-px bg-zinc-200 dark:bg-white/5 my-1 mx-2" />
+                <button 
+                  onClick={async () => {
+                    setIsMenuOpen(false);
+                    await importRouteFile();
+                  }} 
+                  className="w-full flex items-center justify-between px-4 py-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-700/50 transition-colors"
+                >
+                  <span>Import GPX...</span>
+                  {/* Optional: Add an icon or shortcut here if you want */}
+                </button>
+                
                 {/* Save options only visible when in the editor */}
                 {currentView === "editor" && (
                   <>
@@ -178,7 +190,6 @@ export function TitleBar() {
                         // Intercept First Save
                         if (!metadata.project_id && metadata.project_name === "Untitled Project") {
                           setSaveMode("initial");
-                          setSaveAsName(""); // Empty it so they have to type
                           setShowSaveAs(true);
                         } else {
                           handleSave();
@@ -194,7 +205,6 @@ export function TitleBar() {
                       onClick={() => { 
                         setIsMenuOpen(false); 
                         setSaveMode("duplicate");
-                        setSaveAsName(`${metadata.project_name} Copy`); 
                         setShowSaveAs(true); 
                       }} 
                       className="w-full flex items-center justify-between px-4 py-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-700/50 transition-colors"
@@ -291,7 +301,6 @@ export function TitleBar() {
           // Intercept First Save from the warning modal
           if (!metadata.project_id && metadata.project_name === "Untitled Project") {
             setSaveMode("initial");
-            setSaveAsName(""); 
             setShowSaveAs(true);
             // Do NOT navigate yet. Navigation will resume inside submitSaveAs.
             return;

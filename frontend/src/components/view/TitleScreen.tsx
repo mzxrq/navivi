@@ -4,7 +4,7 @@ import { Plus, FolderOpen, Map, Clock } from "lucide-react";
 
 export function TitleScreen() {
   const { setCurrentView, showToast } = useUI();
-  const { loadProject, recentProject, resetWorkspace } = useWorkspace(); // <-- Extract resetWorkspace
+  const { loadProject, recentProjects, resetWorkspace } = useWorkspace(); // <-- Extract resetWorkspace
 
   const handleOpenProject = async (path?: string) => {
     try {
@@ -24,7 +24,7 @@ export function TitleScreen() {
   };
 
   // Safe fallback if recentProjects is undefined due to context errors
-  const safeRecentProject = recentProject || [];
+  const safeRecentProject = recentProjects || [];
 
 return (
     <div className="flex-1 flex flex-col w-full h-full p-8 relative z-10 animate-in fade-in duration-300">
@@ -75,7 +75,7 @@ return (
               {/* Thumbnail Area (16:9 Aspect Ratio) */}
               <div className="w-full aspect-video bg-zinc-100 dark:bg-zinc-950 flex items-center justify-center relative overflow-hidden">
                 <Map className="w-8 h-8 text-zinc-300 dark:text-zinc-800 group-hover:scale-110 transition-transform duration-500" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                <div className="absolute inset-0 bg-linear-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
               </div>
               
               {/* Metadata Area */}
