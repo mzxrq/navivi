@@ -1,4 +1,4 @@
-import { ChevronLeft, Mic, Image as ImageIcon, X, Trash2 } from "lucide-react";
+import { ChevronLeft, Mic, Image as ImageIcon, X, Trash2, MapPin, Settings2 } from "lucide-react";
 import { ScrubInput } from "../../ui/ScrubInput";
 import { useWorkspace } from "../../../hooks/useWorkspace";
 import { useUI } from "../../../hooks/useUI";
@@ -30,77 +30,132 @@ export function WaypointEditor({ wpId, onClose }: { wpId: string; onClose: () =>
   };
 
   return (
-    <aside className="w-[340px] bg-white dark:bg-zinc-950 border-r border-zinc-200 dark:border-white/[0.08] flex flex-col p-6 h-full select-none z-10 relative shadow-xl transition-colors gap-6">
-      <div className="flex-1 flex flex-col min-h-0 space-y-6 overflow-y-auto custom-scrollbar pr-2">
-        <button onClick={onClose} className="flex items-center gap-2 text-xs font-semibold text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300 transition-colors w-fit shrink-0">
-          <ChevronLeft className="w-4 h-4" /> Back to List
+    <aside className="w-85 shrink-0 bg-white dark:bg-zinc-950 border-r border-zinc-200 dark:border-white/10 flex flex-col h-full select-none z-10 relative shadow-xl transition-colors">
+      
+      {/* --- HEADER --- */}
+      <div className="flex items-center gap-3 p-4 border-b border-zinc-200 dark:border-white/10 shrink-0">
+        <button
+          onClick={onClose}
+          className="p-1.5 -ml-1.5 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
+        >
+          <ChevronLeft className="w-5 h-5" />
         </button>
+        <div className="flex flex-col min-w-0">
+          <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-500 uppercase tracking-wider">
+            Editing Stop
+          </span>
+          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate">
+            {wp.name}
+          </h2>
+        </div>
+      </div>
 
-        <div className="space-y-4">
-          <div className="space-y-1.5">
-            <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest px-1">Location Name</label>
-            <input
-              type="text"
-              value={wp.name}
-              onChange={(e) => updateWaypoint(wp.id, { name: e.target.value })}
-              className="w-full bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-white/10 rounded-xl px-3 py-2 text-sm text-zinc-900 dark:text-zinc-200 outline-none focus:border-zinc-400 dark:focus:border-zinc-500 transition-colors"
-            />
-          </div>
+      {/* --- SCROLLABLE EDITOR CONTENT --- */}
+      <div className="flex-1 flex flex-col min-h-0 space-y-6 overflow-y-auto custom-scrollbar p-5">
+        
+        {/* Location Name */}
+        <div className="space-y-1.5">
+          <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
+            <MapPin className="w-3.5 h-3.5 text-zinc-400" /> Location Name
+          </label>
+          <input
+            type="text"
+            value={wp.name}
+            onChange={(e) => updateWaypoint(wp.id, { name: e.target.value })}
+            className="w-full bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-white/10 rounded-xl px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-emerald-500 dark:focus:border-emerald-500/50 transition-colors shadow-sm"
+          />
+        </div>
 
-          <div className="space-y-1.5">
-            <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest px-1 flex items-center gap-1.5">
-              <Mic className="w-3.5 h-3.5" /> AI Script
+        {/* AI Script */}
+        <div className="space-y-1.5">
+          <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
+            <Mic className="w-3.5 h-3.5 text-zinc-400" /> AI Script
+          </label>
+          <textarea
+            value={wp.narration || ""}
+            onChange={(e) => updateWaypoint(wp.id, { narration: e.target.value })}
+            placeholder="Type what the AI voice should say here..."
+            className="w-full h-28 resize-none bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-white/10 rounded-xl px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-emerald-500 dark:focus:border-emerald-500/50 transition-colors custom-scrollbar shadow-sm"
+          />
+        </div>
+
+        {/* Images */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
+              <ImageIcon className="w-3.5 h-3.5 text-zinc-400" /> Pop-up Pictures
             </label>
-            <textarea
-              value={wp.narration}
-              onChange={(e) => updateWaypoint(wp.id, { narration: e.target.value })}
-              placeholder="Type what the AI voice should say here..."
-              className="w-full bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-white/10 rounded-xl px-3 py-2 text-sm text-zinc-900 dark:text-zinc-200 outline-none focus:border-zinc-400 dark:focus:border-zinc-500 transition-colors resize-none h-24 custom-scrollbar"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest px-1 flex items-center gap-1.5">
-              <ImageIcon className="w-3.5 h-3.5" /> Pop-up Pictures ({wpImages.length}/3)
-            </label>
-            
-            <div className="flex flex-col gap-2">
-              {wpImages.map((img, idx) => (
-                <div key={idx} className="flex items-center justify-between bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs text-zinc-600 dark:text-zinc-400">
-                  <span className="truncate max-w-[200px]" title={img}>{img.split(/[/\\]/).pop()}</span>
-                  <button onClick={() => updateWaypoint(wp.id, { images: wpImages.filter((_, i) => i !== idx) })} className="text-red-500 hover:text-red-600 transition-colors">
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              ))}
-              
-              {wpImages.length < 3 && (
-                <button onClick={handleImageSelect} className="w-full bg-zinc-50 dark:bg-zinc-900/50 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 border border-zinc-300 dark:border-white/10 border-dashed rounded-xl px-3 py-3 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 transition-all flex items-center justify-center gap-2">
-                  Click to add images...
-                </button>
-              )}
-
-              {wpImages.length > 0 && (
-                <div className="flex gap-2 mt-1">
-                  <button onClick={() => updateWaypoint(wp.id, { imageDisplay: "pip" })} className={`flex-1 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${wp.imageDisplay !== "fullscreen" ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20" : "bg-zinc-100 dark:bg-zinc-800/50 text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"}`}>PIP Overlay</button>
-                  <button onClick={() => updateWaypoint(wp.id, { imageDisplay: "fullscreen" })} className={`flex-1 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${wp.imageDisplay === "fullscreen" ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20" : "bg-zinc-100 dark:bg-zinc-800/50 text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"}`}>Fullscreen</button>
-                </div>
-              )}
-            </div>
+            <span className="text-[10px] font-medium text-zinc-400 bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded-md">
+              {wpImages.length} / 3
+            </span>
           </div>
           
-          <div className="space-y-3 pt-4 border-t border-zinc-200 dark:border-white/10">
-            <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Timing & FPS Override</h4>
-            <div className="space-y-2">
-              <ScrubInput label="Hold Duration" value={wp.duration || settings.duration_seconds} onChange={(v) => updateWaypoint(wp.id, { duration: v })} min={1} max={15} step={0.5} suffix="s" />
-              <ScrubInput label="Frame Rate" value={wp.fps || settings.fps} onChange={(v) => updateWaypoint(wp.id, { fps: v })} min={1} max={60} step={1} suffix=" FPS" />
-            </div>
+          <div className="flex flex-col gap-2">
+            {wpImages.map((img, idx) => (
+              <div key={idx} className="flex items-center justify-between bg-zinc-50 dark:bg-zinc-900/80 border border-zinc-200 dark:border-white/10 rounded-lg pl-3 pr-1 py-1 group hover:border-zinc-300 dark:hover:border-white/20 transition-colors">
+                <span className="text-xs text-zinc-600 dark:text-zinc-300 truncate mr-2" title={img}>
+                  {img.split(/[/\\]/).pop()}
+                </span>
+                <button 
+                  onClick={() => updateWaypoint(wp.id, { images: wpImages.filter((_, i) => i !== idx) })} 
+                  className="p-1.5 text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-md transition-colors"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ))}
+            
+            {wpImages.length < 3 && (
+              <button 
+                onClick={handleImageSelect} 
+                className="w-full bg-zinc-50 dark:bg-zinc-900/50 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 border border-zinc-300 dark:border-white/10 hover:border-emerald-500/50 border-dashed rounded-xl py-3 text-xs font-medium text-zinc-500 hover:text-emerald-600 dark:hover:text-emerald-400 transition-all flex items-center justify-center gap-2"
+              >
+                + Add Image
+              </button>
+            )}
+
+            {wpImages.length > 0 && (
+              <div className="flex p-0.5 mt-2 bg-zinc-100 dark:bg-zinc-900 rounded-lg border border-zinc-200/50 dark:border-white/5">
+                <button 
+                  onClick={() => updateWaypoint(wp.id, { imageDisplay: "pip" })} 
+                  className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all duration-200 ${wp.imageDisplay !== "fullscreen" ? "bg-white dark:bg-zinc-800 shadow-sm text-emerald-600 dark:text-emerald-400" : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-200/50 dark:hover:bg-white/5"}`}
+                >
+                  PIP Overlay
+                </button>
+                <button 
+                  onClick={() => updateWaypoint(wp.id, { imageDisplay: "fullscreen" })} 
+                  className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all duration-200 ${wp.imageDisplay === "fullscreen" ? "bg-white dark:bg-zinc-800 shadow-sm text-emerald-600 dark:text-emerald-400" : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-200/50 dark:hover:bg-white/5"}`}
+                >
+                  Fullscreen
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+        
+        {/* Timing & FPS Override */}
+        <div className="bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-white/10 rounded-xl p-4 space-y-3 mt-2">
+          <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-1.5">
+            <Settings2 className="w-3.5 h-3.5" /> Timing & Video
+          </h4>
+          <div className="space-y-3">
+            <ScrubInput label="Hold Duration" value={wp.duration || settings.duration_seconds} onChange={(v) => updateWaypoint(wp.id, { duration: v })} min={1} max={15} step={0.5} suffix="s" />
+            <ScrubInput label="Frame Rate" value={wp.fps || settings.fps} onChange={(v) => updateWaypoint(wp.id, { fps: v })} min={1} max={60} step={1} suffix=" FPS" />
           </div>
         </div>
       </div>
 
-      <div className="shrink-0 pt-2 border-t border-zinc-200 dark:border-white/10">
-        <button onClick={() => { if (confirm(`Remove ${wp.name}?`)) { setWaypoints(waypoints.filter((w) => w.id !== wp.id)); onClose(); } }} className="w-full py-2.5 rounded-xl border border-transparent text-zinc-500 dark:text-zinc-500 text-xs font-semibold hover:border-red-500/20 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/5 transition-all flex justify-center items-center gap-2">
+      {/* --- FOOTER / DANGER ZONE --- */}
+      <div className="p-4 border-t border-zinc-200 dark:border-white/10 shrink-0 bg-zinc-50/50 dark:bg-zinc-900/20">
+        <button 
+          onClick={() => { 
+            if (confirm(`Remove ${wp.name}?`)) { 
+              setWaypoints(waypoints.filter((w) => w.id !== wp.id)); 
+              onClose(); 
+            } 
+          }} 
+          className="w-full py-2.5 rounded-xl border border-red-200 dark:border-red-500/20 bg-white dark:bg-zinc-950 text-red-600 dark:text-red-400 text-xs font-bold hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors flex justify-center items-center gap-2 shadow-sm"
+        >
           <Trash2 className="w-4 h-4" /> Remove Waypoint
         </button>
       </div>

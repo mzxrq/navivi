@@ -5,7 +5,6 @@ import { appConfig, defaultProjectSettings, mapDefaults } from "../config/consta
 
 const WorkspaceContext = createContext<WorkspaceState | undefined>(undefined);
 
-// 5. Default Values based on Dev 1's JSON
 const DefaultSettings: ProjectSettings = {
   ...defaultProjectSettings,
   start_coords: mapDefaults.startCoords,
@@ -23,11 +22,13 @@ const DefaultMetadata: ProjectMetadata = {
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [waypoints, setWaypoints] = useState<Waypoint[]>([]);
   const [routeSegments, setRouteSegments] = useState<RouteSegment[]>([]);
+  const [routePoints, setRoutePoints] = useState<[number, number][]>([]);
   const [metadata, setMetadata] = useState<ProjectMetadata>(() => ({
     ...DefaultMetadata,
     created_at: new Date().toISOString()
   }));
   const [settings, setSettings] = useState<ProjectSettings>(DefaultSettings);
+  const [routingCache, setRoutingCache] = useState<Record<string, [number, number][]>>({});
   const [isDirty, setIsDirty] = useState(false);
   const [recentProjects, setRecentProjects] = useState<RecentProjects[]>(() => {
     const saved = localStorage.getItem("navivi-recents");
@@ -64,7 +65,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     setIsDirty(true);
   }, []);
 
-const saveProject = async (overrideName?: string, asDuplicate?: boolean) => {
+  const saveProject = async (overrideName?: string, asDuplicate?: boolean, safeFolderName?: string) => {
     if (waypoints.length === 0) {
       console.warn("No waypoints to save.");
       return;
@@ -76,8 +77,10 @@ const saveProject = async (overrideName?: string, asDuplicate?: boolean) => {
         routeSegments,
         metadata,
         settings,
+        routingCache,
         overrideName,
-        asDuplicate
+        asDuplicate,
+        safeFolderName
       );
 
       updateMetadata({
@@ -110,6 +113,8 @@ const saveProject = async (overrideName?: string, asDuplicate?: boolean) => {
       if (!data.project_id || !data.waypoints) {
         throw new Error("Invalid Navivi project file format.");
       }
+
+      setRoutingCache(data.routingCache || {});
 
       // Sync React State
       setMetadata({
@@ -154,6 +159,7 @@ const saveProject = async (overrideName?: string, asDuplicate?: boolean) => {
       created_at: new Date().toISOString(),
     })
     setSettings(DefaultSettings);
+    setRoutingCache({});
     setIsDirty(false);
   }
 
@@ -165,6 +171,8 @@ const saveProject = async (overrideName?: string, asDuplicate?: boolean) => {
         updateWaypoint,
         routeSegments,
         setRouteSegments,
+        routePoints,
+        setRoutePoints,
         metadata,
         setMetadata,
         updateMetadata,
@@ -176,7 +184,9 @@ const saveProject = async (overrideName?: string, asDuplicate?: boolean) => {
         isDirty,
         setIsDirty,
         recentProjects: recentProjects,
-        resetWorkspace
+        resetWorkspace,
+        routingCache,
+        setRoutingCache,
       }}
     >
       {children}

@@ -37,8 +37,8 @@ export function NewProject() {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 animate-in fade-in duration-200">
-      <div className="w-full max-w-[480px] bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-white/10 rounded-2xl shadow-xl p-8 animate-in fade-in zoom-in-95 duration-300">
+    <div className="fixed inset-0 z-100 flex items-center justify-center bg-black/60 animate-in fade-in duration-200">
+      <div className="w-full max-w-480px bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-white/10 rounded-2xl shadow-xl p-8 animate-in fade-in zoom-in-95 duration-300">
         <div className="flex items-center gap-3 mb-8">
           <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center border border-emerald-200 dark:border-emerald-500/20">
             <FolderPlus className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
@@ -64,7 +64,7 @@ export function NewProject() {
               value={projectName}
               onChange={(e) => setProjectName(e.target.value)}
               className="w-full bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-white/10 rounded-xl px-3 py-2.5 text-sm font-medium text-zinc-900 dark:text-zinc-200 outline-none focus:border-emerald-500 dark:focus:border-emerald-500 transition-colors"
-              placeholder="e.g. Summer Vacation 2026"
+              placeholder="e.g. My Osaka Trip"
             />
           </div>
 

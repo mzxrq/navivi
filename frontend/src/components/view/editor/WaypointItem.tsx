@@ -1,5 +1,5 @@
-import { ChevronUp, ChevronDown, Edit2, X, Image as ImageIcon, Mic } from "lucide-react";
-import { Waypoint } from "../../../types"; // Assuming you moved types here, adjust if needed
+import { GripVertical, Edit2, X, Image as ImageIcon, Mic } from "lucide-react";
+import { Waypoint } from "../../../types"; 
 
 interface WaypointItemProps {
   wp: Waypoint;
@@ -9,13 +9,13 @@ interface WaypointItemProps {
   isLast: boolean;
   onEdit: () => void;
   onDelete: () => void;
-  onMoveUp: () => void;
-  onMoveDown: () => void;
 }
 
-export function WaypointItem({ wp, index, isListEditMode, isFirst, isLast, onEdit, onDelete, onMoveUp, onMoveDown }: WaypointItemProps) {
+export function WaypointItem({ wp, index, isListEditMode, onEdit, onDelete, }: WaypointItemProps) {
   return (
     <div className="flex items-center gap-2 group shrink-0">
+      
+      {/* Delete Button (Edit Mode Only) */}
       {isListEditMode && (
         <button
           onClick={onDelete}
@@ -25,11 +25,24 @@ export function WaypointItem({ wp, index, isListEditMode, isFirst, isLast, onEdi
         </button>
       )}
 
+      {/* Main Card */}
       <div className="flex-1 flex items-center justify-between bg-zinc-50 dark:bg-zinc-900/30 border border-zinc-200 dark:border-white/5 p-2.5 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-900/80 transition-colors overflow-hidden shadow-sm dark:shadow-none">
+        
         <div className="flex items-center gap-2.5 overflow-hidden">
+          
+          {/* Drag Grip Indicator (Normal Mode Only) */}
+          {!isListEditMode && (
+            <div className="shrink-0 text-zinc-300 dark:text-zinc-700 group-hover:text-zinc-500 transition-colors">
+              <GripVertical className="w-4 h-4" />
+            </div>
+          )}
+
+          {/* Number Badge */}
           <div className="w-6 h-6 rounded-md bg-zinc-200 dark:bg-zinc-800/50 text-zinc-600 dark:text-zinc-500 flex items-center justify-center text-xs font-bold shrink-0 transition-colors">
             {index + 1}
           </div>
+          
+          {/* Info Section */}
           <div className="flex flex-col overflow-hidden">
             <span className="text-xs font-medium text-zinc-800 dark:text-zinc-300 truncate" title={wp.name}>
               {wp.name}
@@ -46,15 +59,10 @@ export function WaypointItem({ wp, index, isListEditMode, isFirst, isLast, onEdi
           </div>
         </div>
 
+        {/* Hover Actions */}
         {!isListEditMode && (
           <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-all shrink-0">
-            <button onClick={onMoveUp} disabled={isFirst} className="p-1.5 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-500 disabled:opacity-30 disabled:cursor-not-allowed">
-              <ChevronUp className="w-3.5 h-3.5" />
-            </button>
-            <button onClick={onMoveDown} disabled={isLast} className="p-1.5 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-500 disabled:opacity-30 disabled:cursor-not-allowed">
-              <ChevronDown className="w-3.5 h-3.5" />
-            </button>
-            <button onClick={onEdit} className="p-1.5 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-500">
+            <button onClick={onEdit} className="p-1.5 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-md text-zinc-500">
               <Edit2 className="w-3.5 h-3.5" />
             </button>
           </div>

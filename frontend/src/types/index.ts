@@ -1,3 +1,5 @@
+import React from "react";
+
 export type RouteMode = "driving" | "walking" | "direct" | "curve";
 
 export interface Waypoint {
@@ -33,15 +35,18 @@ export interface ProjectSettings {
   start_coords?: [number, number];
   resolution: string;
   ors_api_key: string;
+  is_round_trip?: boolean;
+  return_route_mode?: "driving" | "walking" | "direct" | "curve";
 }
 
 export interface ProjectMetadata {
-  project_id: string;
+  project_id?: string;
   user_id: string;
   project_name: string;
   created_at: string;
   status: string;
   directory_path: string;
+  overview_narration?: string;
 }
 // end dev 1 settings
 
@@ -62,6 +67,9 @@ export interface WorkspaceState {
   routeSegments: RouteSegment[];
   setRouteSegments: React.Dispatch<React.SetStateAction<RouteSegment[]>>;
 
+  routePoints: [number, number][];
+  setRoutePoints: React.Dispatch<React.SetStateAction<[number, number][]>>;
+
   // Project Config
   metadata: ProjectMetadata;
   setMetadata: React.Dispatch<React.SetStateAction<ProjectMetadata>>;
@@ -71,11 +79,14 @@ export interface WorkspaceState {
   setSettings: React.Dispatch<React.SetStateAction<ProjectSettings>>;
   updateSettings: (data: Partial<ProjectSettings>) => void;
 
-  saveProject: (overrideName?: string, asDuplicate?: boolean) => Promise<string | undefined>;
+  saveProject: (overrideName?: string, asDuplicate?: boolean, safeFolderName?: string) => Promise<string | undefined>;
   recentProjects: RecentProjects[];
   loadProject: (forcePath?: string) => Promise<boolean>;
   resetWorkspace: () => void;
 
   isDirty: boolean;
   setIsDirty: (val: boolean) => void;
+
+  routingCache: Record<string, [number, number][]>;
+  setRoutingCache: React.Dispatch<React.SetStateAction<Record<string, [number, number][]>>>;
 }
