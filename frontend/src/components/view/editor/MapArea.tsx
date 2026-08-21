@@ -1,11 +1,8 @@
 import { MapSettings } from "../../modal/MapSettings";
-import { useUI } from "../../../hooks/useUI";
-import { invoke } from "@tauri-apps/api/core";
 import { useWorkspace } from "../../../hooks/useWorkspace";
 import { useTheme } from "../../../hooks/useTheme";
 import { useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { readTextFile } from "@tauri-apps/plugin-fs";
 import { 
   // Clock, 
   UploadCloud,  
@@ -14,15 +11,15 @@ import {
   MapPin } from "lucide-react";
 import { MapContainer, TileLayer } from "react-leaflet";
 import { useMapRouting } from "../../../hooks/useMapRouting";
-import { MapAutoZoom, MapEventsHandler } from "../../controllers/mapControllers";
+import { MapAutoZoom, MapEventsHandler, MapPreviewer } from "../../controllers/mapControllers";
 import { RouteLayer } from "./MapLayers/RouteLayer";
 import { WaypointLayer } from "./MapLayers/WaypointLayer";
 import { useFileActions } from "../../../hooks/useFileActions";
+import { loadProjectData } from "../../../services/fileSystem";
 
 export function MapArea() {
   const { theme, mapTheme } = useTheme();
-  const { showToast } = useUI();
-  const [uploadedRouteLine, setUplodadedRouteLine] = useState<
+  const [uploadedRouteLine] = useState<
     [number, number][]
   >([]);
   const [isHovering, setIsHovering] = useState(false);
@@ -30,9 +27,7 @@ export function MapArea() {
   const {
     waypoints,
     setWaypoints,
-    updateMetadata,
     settings,
-    updateSettings,
     metadata,
     setIsDirty,
   } = useWorkspace();
@@ -53,111 +48,13 @@ export function MapArea() {
 
   const handleMapContextMenu = (e: MouseEvent, lat: number, lng: number) => {
     window.dispatchEvent(new Event("close-context-menus"));    
-    const xPos = e.pageX + 192 > window.innerWidth ? window.innerWidth - 192 : e.pageX;
-    const yPos = e.pageY + 130 > window.innerHeight ? window.innerHeight - 130 : e.pageY;
+    const xPos = e.clientX + 192 > window.innerWidth ? window.innerWidth - 192 : e.clientX;
+    const yPos = e.clientY + 130 > window.innerHeight ? window.innerHeight - 130 : e.clientY;
     setMenu({ show: true, x: xPos, y: yPos, lat, lng });
   };
 
   useMapRouting();
-
-  // load project
-  const processFile = async (filePath: string) => {
-    try {
-      if (filePath.toLowerCase().endsWith(".json")) {
-        const fileContent = await readTextFile(filePath);
-        const data = JSON.parse(fileContent);
-
-        updateMetadata({
-          project_id: data.project_id,
-          user_id: data.user_id,
-          project_name: data.project_name,
-          created_at: data.created_at,
-          status: "loaded",
-          directory_path: data.directory_path,
-        });
-
-        if (data.settings) updateSettings(data.settings);
-
-        if (data.waypoints) {
-          setWaypoints(
-            data.waypoints.map((wp: any) => ({
-              id: crypto.randomUUID(),
-              lat: wp.lat,
-              lon: wp.lng,
-              name: wp.label,
-              image: wp.popup_image,
-              narration: wp.narration,
-              routeMode: wp.routeMode || "driving",
-            })),
-          );
-        }
-
-        if (data.source_files?.gps_route) {
-
-          const gpxContent = await readTextFile(data.source_files.gps_route);
-          const parser = new DOMParser();
-          const xmlDoc = parser.parseFromString(gpxContent, "text/xml");
-          const trkpts = xmlDoc.getElementsByTagName("trkpt");
-          const rawCoords: [number, number][] = [];
-          for (let i = 0; i < trkpts.length; i++) {
-            const lat = parseFloat(trkpts[i].getAttribute("lat") || "0");
-            const lon = parseFloat(trkpts[i].getAttribute("lon") || "0");
-            if (lat && lon) rawCoords.push([lat, lon]);
-          }
-          setUplodadedRouteLine(rawCoords);
-        }
-        return;
-      }
-
-      // Load .gpx
-      showToast(`Processing ${filePath.split(/[\\]/).pop()}...`, "info");
-
-      const pythonResponse = await invoke<string>("run_python_blueprint", {
-        action: "process_gps",
-        payload: filePath,
-      });
-
-      if (filePath.toLowerCase().endsWith(".gpx")) {
-        const fileContent = await readTextFile(filePath);
-        const parser = new DOMParser();
-        const xmlDoc = parser.parseFromString(fileContent, "text/xml");
-        const trkpts = xmlDoc.getElementsByTagName("trkpt");
-        const rawCoords: [number, number][] = [];
-        for (let i = 0; i < trkpts.length; i++) {
-          const lat = parseFloat(trkpts[i].getAttribute("lat") || "0");
-          const lon = parseFloat(trkpts[i].getAttribute("lon") || "0");
-          if (lat && lon) rawCoords.push([lat, lon]);
-        }
-        setUplodadedRouteLine(rawCoords);
-      }
-
-      const outputLines = pythonResponse.trim().split("\n");
-      const jsonString = outputLines[outputLines.length - 1];
-      const data = JSON.parse(jsonString);
-
-      if (!data.waypoints || data.waypoints.length === 0) {
-        alert("△ Route Loaded, cannot detected landmarks/stops");
-        setWaypoints([]);
-      } else {
-        setWaypoints(
-          data.waypoints.map((wp: any) => ({
-            id: crypto.randomUUID(),
-            lat: wp.lat,
-            lon: wp.lng,
-            name: wp.label,
-            image: wp.popup_image || null,
-            narration: wp.narration || "",
-            routeMode: "driving",
-          })),
-        );
-      }
-      if (data.project_name)
-        updateMetadata({ project_name: data.project_name });
-    } catch (error) {
-      console.error("Failed to process file:", error);
-      alert("An error occured while loading the file.");
-    }
-  };
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const isDarkMap = mapTheme === "dark" || (mapTheme === "sync" && (theme === "dark" || (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches)));
 
@@ -177,7 +74,7 @@ export function MapArea() {
           const path = event.payload.paths[0];
 
           if (path.toLowerCase().endsWith(".json")) {
-            await processFile(path);
+            await loadProjectData(path);
           } else {
             await importRouteFile(path);
           }
@@ -191,52 +88,6 @@ export function MapArea() {
       unlistenDrop.then((f) => f());
     };
   }, []);
-
-  // // browse files (same as drag and drop)
-  // const handleBrowseFiles = async () => {
-  //   const selectedPath = await open({
-  //     multiple: false,
-  //     filters: [
-  //       {
-  //         name: "Navivi & GPS",
-  //         extensions: ["json", "gpx", "fit", "tcx", "kml"],
-  //       },
-  //     ],
-  //   });
-
-  //   if (typeof selectedPath === "string") {
-  //     await processFile(selectedPath);
-  //   }
-  // };
-
-  // parse file directly if gpx (if not gpx, gpsbabel goes boom boom and reformat it to gpx/kml/csv/xlsx)
-  // useEffect(() => {
-  //   if (!droppedFile) return;
-
-  //   if (droppedFile.toLowerCase().endsWith(".gpx")) {
-  //     const parseGpx = async () => {
-  //       try {
-  //         const fileContent = await readTextFile(droppedFile);
-  //         const parser = new DOMParser();
-  //         const xmlDoc = parser.parseFromString(fileContent, "text/xml");
-  //         const trackPoints = xmlDoc.getElementsByTagName("trkpt");
-  //         const points: [number, number][] = [];
-
-  //         for (let i = 0; i < trackPoints.length; i++) {
-  //           const lat = parseFloat(trackPoints[i].getAttribute("lat") || "0");
-  //           const lon = parseFloat(trackPoints[i].getAttribute("lon") || "0");
-  //           if (lat && lon) points.push([lat, lon]);
-  //         }
-  //         setRoutePoints(points);
-  //       } catch (error) {
-  //         console.error("Failed to parse GPX:", error);
-  //       }
-  //     };
-  //     parseGpx();
-  //   } else {
-  //     setRoutePoints([]);
-  //   }
-  // }, [droppedFile]);
 
   // waypoints on map click
   const handleAddWaypoint = async (lat: number, lng: number) => {
@@ -278,6 +129,7 @@ export function MapArea() {
     }
   };
 
+  
   // const isGpx = droppedFile?.toLowerCase().endsWith(".gpx");
 
   return (
@@ -312,7 +164,8 @@ export function MapArea() {
           <WaypointLayer />
 
           <MapAutoZoom waypoints={waypoints} projectId={metadata.project_id}/>
-          
+          <MapPreviewer waypoints={waypoints} routePoints={uploadedRouteLine.length > 0 ? uploadedRouteLine : routePoints}/>
+
           {/* New Event Handler */}
           <MapEventsHandler 
             onMapClick={handleAddWaypoint} 
@@ -330,6 +183,16 @@ export function MapArea() {
           </div>
           <p className="text-zinc-900 dark:text-zinc-200 font-medium text-lg">
             Drop any GPS file to Load
+          </p>
+        </div>
+      )}
+      
+      {/* Processing Overlay */}
+      {isProcessing && (
+        <div className="absolute inset-0 z-[100] bg-white/50 dark:bg-zinc-950/50 backdrop-blur-sm flex flex-col items-center justify-center transition-all animate-in fade-in">
+          <div className="w-12 h-12 border-4 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin mb-4" />
+          <p className="text-zinc-900 dark:text-zinc-200 font-bold text-sm tracking-widest uppercase">
+            Parsing Route Data...
           </p>
         </div>
       )}

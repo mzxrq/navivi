@@ -1,5 +1,6 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useMap, useMapEvents } from "react-leaflet";
+import { Waypoint } from "../../types";
 
 export function MapAutoZoom({ waypoints, projectId }: { waypoints: any[], projectId?: string }) {
   const map = useMap();
@@ -33,5 +34,78 @@ export function MapEventsHandler({
       onMapDrag()
     }
   });
+  return null;
+}
+
+export function MapPreviewer({ waypoints, routePoints }: { waypoints: Waypoint[], routePoints?: any[] }) {
+  const map = useMap();
+  const isPreviewingRef = useRef(false);
+
+  useEffect(() => {
+    const startPreview = async () => {
+      if (waypoints.length === 0) return;
+      isPreviewingRef.current = true;
+
+      // follow route line
+      if (routePoints && routePoints.length > 0) {
+        map.flyTo(routePoints[0], 15, {duration: 1.5});
+        await new Promise((res) => setTimeout(res, 1500));
+
+        let currentIndex = 0;
+
+        const step = Math.max(1, Math.floor(routePoints.length / 500));
+
+        const animateCamera = () => {
+          if (!isPreviewingRef.current) return;
+
+          if (currentIndex >= routePoints.length) {
+            isPreviewingRef.current = false;
+            window.dispatchEvent(new Event("preview-finished"));
+            return;
+          }
+
+          const currentPoint = routePoints[currentIndex];
+          const targetCoord = Array.isArray(currentPoint) ? currentPoint : [currentPoint.lat, currentPoint.lng || currentPoint.lon];
+
+          map.setView(targetCoord as [number, number], map.getZoom(), { animate: false });
+
+          currentIndex += step;
+          requestAnimationFrame(animateCamera);
+        };
+        console.log("if");
+        animateCamera();
+      } else {
+          for (let i = 0; i < waypoints.length; i++) {
+          if (!isPreviewingRef.current) break;
+
+          const wp = waypoints[i];
+
+          map.flyTo([wp.lat, wp.lng], 15, {
+            duration: 2,
+            easeLinearity: 0.25,
+          });
+
+          await new Promise((resolve) => setTimeout(resolve, 3500));
+          console.log("else");
+        }
+
+        isPreviewingRef.current = false;
+        window.dispatchEvent(new Event("preview-finished"));
+      }
+    };
+
+    const stopPreview = () => {
+      isPreviewingRef.current = false;
+    };
+
+    window.addEventListener("start-preview", startPreview);
+    window.addEventListener("stop-preview", stopPreview);
+
+    return () => {
+      window.removeEventListener("start-preview", startPreview);
+      window.removeEventListener("stop-preview", stopPreview);
+    };
+  }, [map, waypoints, routePoints]);
+
   return null;
 }
