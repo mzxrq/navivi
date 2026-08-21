@@ -32,6 +32,85 @@ from services.job_config import JobConfigManager
 from services.vdoeditor import VideoEditor
 from typing import List, Dict, Any, Optional
 from services.llmscript import analyze_travel_image
+# In main.py
+from services.img2vdo import AttractionVideoGenerator
+
+async def generate_attraction_videos(project_config_path: str, audio_paths: list, audio_durations: list) -> list[str]:
+"""
+    Generates TTS audio in WAV format, analyzes pauses, and triggers ComfyUI 
+    to generate, scale, and mux attraction videos for all waypoints.
+    """
+    from services.tts import IrodoriTTSClient, AudioProcessor
+    from services.img2vdo import WaypointVideoGenerator
+    from services.job_config import JobConfigManager
+    from pathlib import Path
+
+    # 1. Setup paths based on the specific project config
+    job_config = JobConfigManager(project_config_path)
+    project_dir = Path(job_config.get("directory_path", Path(project_config_path).parent))
+    
+    # Route audio specifically to the project's audio folder
+    audio_output_dir = project_dir / "audio"
+    audio_output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Instantiate our services
+    tts_client = IrodoriTTSClient(output_dir=audio_output_dir)
+    audio_processor = AudioProcessor(output_dir=audio_output_dir)
+    video_generator = WaypointVideoGenerator(job_config=job_config)
+
+    waypoints = job_config.get_waypoints()
+    audio_paths = []
+    audio_durations = []
+
+    print("Step 1: Generating Irodori-TTS narration audio for attractions...", file=sys.stderr)
+    for i, wp in enumerate(waypoints):
+        text = wp.get("video_narration") or wp.get("narration") or ""
+        
+        if text:
+            # Generate WAV file natively using the Irodori TTS Client
+            audio_path = await tts_client.generate_speech(text)
+            audio_paths.append(audio_path)
+            
+            # Analyze WAV pauses accurately using wave module
+            analysis = audio_processor.analyze_pauses(audio_path)
+            audio_durations.append(analysis['duration_seconds'])
+            print(f"   -> Waypoint {i}: Audio generated ({analysis['duration_seconds']}s)", file=sys.stderr)
+        else:
+            audio_paths.append(None)
+            audio_durations.append(0.0)
+            print(f"   -> Waypoint {i}: No narration text provided.", file=sys.stderr)
+
+    print("\n🎬 Step 2: Generating AI Video Clips from Images...", file=sys.stderr)
+    waypoint_video_outputs = []
+    
+    for i, wp in enumerate(waypoints):
+        popup_image = wp.get("popup_image")
+        
+        # Default prompt fallback
+        prompt = wp.get("video_narration") or wp.get("narration") or "Cinematic slow pan"
+        
+        audio_path = audio_paths[i]
+        
+        # Determine target duration (fallback to freeze_seconds if no audio)
+        target_dur = audio_durations[i] if audio_durations[i] > 0 else float(wp.get("freeze_seconds", 3.0))
+
+        if popup_image:
+            out_filename = f"attraction_wp_{i:02d}.mp4"
+            print(f"\n--- Processing Waypoint {i} ---", file=sys.stderr)
+            
+            video_result = video_generator.process_waypoint_video(
+                popup_image_entry=popup_image,
+                prompt_text=prompt,
+                target_audio_duration=target_dur,
+                audio_path=audio_path,
+                output_filename=out_filename
+            )
+            waypoint_video_outputs.append(video_result)
+        else:
+            print(f"Skipping Waypoint {i}: No popup image found.", file=sys.stderr)
+            waypoint_video_outputs.append(None)
+
+    return waypoint_video_outputs
 
 
 def data_pipeline_process(input_file: str, output_format: str = "iblue747") -> str:
@@ -439,6 +518,15 @@ if __name__ == "__main__":
                     "data": analysis_result
                 }, ensure_ascii=False))
 
+            elif command == "generate_attraction_videos":
+                # payload is the project config path passed from Tauri
+                output_arg = sys.argv[3] if len(sys.argv) > 3 else None
+                
+                # Execute the fully contained async pipeline
+                video_outputs = asyncio.run(process_attraction_videos_command(payload))
+                
+                print(json.dumps({"success": True, "video_outputs": video_outputs}, ensure_ascii=False))
+                
             else:
                 error_res = {"success": False, "error": f"Unknown command '{command}'"}
                 print(json.dumps(error_res, ensure_ascii=False))
