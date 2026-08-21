@@ -103,7 +103,7 @@ export function RenderOverlay() {
 
   return (
     <div className="fixed inset-0 z-9999 bg-zinc-950/80 backdrop-blur-sm flex items-center justify-center p-6 animate-in fade-in duration-200">
-      <div className="w-full max-w-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-white/10 rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-300 h-600px max-h-[90vh]">
+      <div className="w-full max-w-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-white/10 rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-300 h-150 max-h-[90vh]">
         
         {/* Header & Progress */}
         <div className="p-6 border-b border-zinc-100 dark:border-white/5 bg-zinc-50/50 dark:bg-zinc-900/50 shrink-0">

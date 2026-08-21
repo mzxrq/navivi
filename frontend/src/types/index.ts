@@ -1,4 +1,4 @@
-import React from "react";
+import type { Dispatch, SetStateAction, } from "react";
 
 export type RouteMode = "driving" | "walking" | "direct" | "curve";
 
@@ -60,23 +60,23 @@ export interface RecentProjects {
 export interface WorkspaceState {
   // Waypoints
   waypoints: Waypoint[];
-  setWaypoints: React.Dispatch<React.SetStateAction<Waypoint[]>>;
+  setWaypoints: Dispatch<SetStateAction<Waypoint[]>>;
   updateWaypoint: (id: string, data: Partial<Waypoint>) => void;
 
   // Routing Engine
   routeSegments: RouteSegment[];
-  setRouteSegments: React.Dispatch<React.SetStateAction<RouteSegment[]>>;
+  setRouteSegments: Dispatch<SetStateAction<RouteSegment[]>>;
 
   routePoints: [number, number][];
-  setRoutePoints: React.Dispatch<React.SetStateAction<[number, number][]>>;
+  setRoutePoints: Dispatch<SetStateAction<[number, number][]>>;
 
   // Project Config
   metadata: ProjectMetadata;
-  setMetadata: React.Dispatch<React.SetStateAction<ProjectMetadata>>;
+  setMetadata: Dispatch<SetStateAction<ProjectMetadata>>;
   updateMetadata: (data: Partial<ProjectMetadata>) => void;
 
   settings: ProjectSettings;
-  setSettings: React.Dispatch<React.SetStateAction<ProjectSettings>>;
+  setSettings: Dispatch<SetStateAction<ProjectSettings>>;
   updateSettings: (data: Partial<ProjectSettings>) => void;
 
   saveProject: (overrideName?: string, asDuplicate?: boolean, safeFolderName?: string) => Promise<string | undefined>;
@@ -88,5 +88,5 @@ export interface WorkspaceState {
   setIsDirty: (val: boolean) => void;
 
   routingCache: Record<string, [number, number][]>;
-  setRoutingCache: React.Dispatch<React.SetStateAction<Record<string, [number, number][]>>>;
+  setRoutingCache: Dispatch<SetStateAction<Record<string, [number, number][]>>>;
 }

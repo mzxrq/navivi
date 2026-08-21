@@ -46,7 +46,7 @@ export default function App() {
       
       {/* Toast */}
       {toast.visible && (
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-999 animate-in slide-in-from-bottom-6 fade-in zoom-in-95 duration-300 pointer-events-none">
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-[999] animate-in slide-in-from-bottom-6 fade-in zoom-in-95 duration-300 pointer-events-none">
           <div
             className={`flex items-center gap-3 px-5 py-3 rounded-full backdrop-blur-xl border shadow-2xl ${
               toast.type === "success"

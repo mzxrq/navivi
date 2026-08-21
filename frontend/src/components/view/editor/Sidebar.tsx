@@ -109,7 +109,6 @@ export function Sidebar() {
         configPath: configPath,
       });
 
-      response;
       showToast(response as string, "info");
     } catch (error) {
       setIsRendering(false);

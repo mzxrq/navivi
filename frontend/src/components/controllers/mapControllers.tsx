@@ -9,7 +9,7 @@ export function MapAutoZoom({ waypoints, projectId }: { waypoints: any[], projec
       const bounds = waypoints.map(wp => [wp.lat, wp.lng] as [number, number]);
       map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14, animate: true, duration: 1 });
     }
-  }, [projectId]);
+  }, [projectId, waypoints, map]);
   return null;
 }
 

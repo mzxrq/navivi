@@ -24,9 +24,13 @@ export function useFileActions() {
             const points: [number, number][] = [];
     
             for (let i = 0; i < trackPoints.length; i++) {
-              const lat = parseFloat(trackPoints[i].getAttribute("lat") || "0");
-              const lon = parseFloat(trackPoints[i].getAttribute("lon") || "0");
-              if (lat && lon) points.push([lat, lon]);
+              const latAttr = trackPoints[i].getAttribute("lat");
+              const lonAttr = trackPoints[i].getAttribute("lon");
+              if (latAttr === null || lonAttr === null) continue;
+              const lat = Number.parseFloat(latAttr);
+              const lon = Number.parseFloat(lonAttr);
+              if (Number.isFinite(lat) && Number.isFinite(lon))
+                points.push([lat, lon]);
             }
     
             setRoutePoints(points);

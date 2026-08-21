@@ -114,7 +114,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         throw new Error("Invalid Navivi project file format.");
       }
 
-      setRoutingCache(data.routingCache || {});
+      setRoutingCache(data.routing_cache || {});
 
       // Sync React State
       setMetadata({

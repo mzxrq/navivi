@@ -31,7 +31,7 @@ export const saveProjectData = async (
   if (projId && !asDuplicate && !safeFolderName) {
     projectDir = await join(projectRoot, projId);
   } else {
-    let safeName = safeFolderName || projName.toLowerCase().replace(/[^a-z0-9]+/g, "_") || "untitled_" + new Date().toISOString();
+    let safeName = safeFolderName || projName.toLowerCase().replace(/[^a-z0-9]+/g, "_") || `untitled_${new Date().toISOString()}`.toLowerCase().replace(/[^a-z0-9]+/g, "_");
     projId = safeName;
     projectDir = await join(projectRoot, projId);
 
