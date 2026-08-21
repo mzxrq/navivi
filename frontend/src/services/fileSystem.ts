@@ -11,6 +11,7 @@ export const saveProjectData = async (
   routingCache: Record<string, [number, number][]>,
   overrideName?: string,
   asDuplicate?: boolean,
+  safeFolderName?: string,
 ) => {
   const docsPath = await documentDir();
   const projectRoot = await join(docsPath, fileSystem.rootFolder, fileSystem.projectsFolder);
@@ -19,28 +20,50 @@ export const saveProjectData = async (
     await mkdir(projectRoot, { recursive: true });
   }
 
-  let projName = overrideName || metadata.projName || appConfig.defaultProjectName;
-  let projId = asDuplicate ? "" : metadata.projId;
+  let projName = overrideName || metadata.project_name || appConfig.defaultProjectName;
+  let projId = asDuplicate ? "" : metadata.project_id;
   let projectDir = "";
 
-  if (projId) {
+  if (safeFolderName) {
+    projId = safeFolderName;
+  }
+
+  if (projId && !asDuplicate && !safeFolderName) {
     projectDir = await join(projectRoot, projId);
   } else {
-    let safeName = projName.toLowerCase().replace(/[^a-z0-9]+/g, "_") || "untitled";
-    let baseProjId = `proj_${new Date().getFullYear()}_${safeName}`;
-
-    projId = baseProjId;
+    let safeName = safeFolderName || projName.toLowerCase().replace(/[^a-z0-9]+/g, "_") || "untitled_" + new Date().toISOString();
+    projId = safeName;
     projectDir = await join(projectRoot, projId);
 
-    let counter = 1;
-    while (await exists(projectDir)) {
-      counter++;
-      projName = `${overrideName || metadata.project_name || appConfig.defaultProjectName} (${counter})`;
-      safeName = projName.toLowerCase().replace(/[^a-z0-9]+/g, "_");
-      projId = `${baseProjId}_${counter}`;
-      projectDir = await join(projectRoot, projId);
+    if (!safeFolderName) {
+      let counter = 1;
+      while (await exists(projectDir)) {
+        counter++;
+        projName = `${overrideName || metadata.project_name || appConfig.defaultProjectName} (${counter})`;
+        safeName = projName.toLowerCase().replace(/[^a-z0-9]+/g, "_");
+        projId = `${safeName}_${counter}`;
+        projectDir = await join(projectRoot, projId);
+      }
     }
   }
+  // if (projId) {
+  //   projectDir = await join(projectRoot, projId);
+  // } else {
+  //   let safeName = projName.toLowerCase().replace(/[^a-z0-9]+/g, "_") || "untitled";
+  //   let baseProjId = `${safeName}`;
+
+  //   projId = baseProjId;
+  //   projectDir = await join(projectRoot, projId);
+
+  //   let counter = 1;
+  //   while (await exists(projectDir)) {
+  //     counter++;
+  //     projName = `${overrideName || metadata.project_name || appConfig.defaultProjectName} (${counter})`;
+  //     safeName = projName.toLowerCase().replace(/[^a-z0-9]+/g, "_");
+  //     projId = `${baseProjId}_${counter}`;
+  //     projectDir = await join(projectRoot, projId);
+  //   }
+  // }
 
   const assetsDir = await join(projectDir, "assets");
   const gpxPath = await join(projectDir, "raw_track.gpx");

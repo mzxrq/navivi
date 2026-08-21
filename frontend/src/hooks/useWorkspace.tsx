@@ -65,7 +65,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     setIsDirty(true);
   }, []);
 
-  const saveProject = async (overrideName?: string, asDuplicate?: boolean) => {
+  const saveProject = async (overrideName?: string, asDuplicate?: boolean, safeFolderName?: string) => {
     if (waypoints.length === 0) {
       console.warn("No waypoints to save.");
       return;
@@ -79,7 +79,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         settings,
         routingCache,
         overrideName,
-        asDuplicate
+        asDuplicate,
+        safeFolderName
       );
 
       updateMetadata({

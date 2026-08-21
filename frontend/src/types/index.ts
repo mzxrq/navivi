@@ -79,7 +79,7 @@ export interface WorkspaceState {
   setSettings: React.Dispatch<React.SetStateAction<ProjectSettings>>;
   updateSettings: (data: Partial<ProjectSettings>) => void;
 
-  saveProject: (overrideName?: string, asDuplicate?: boolean) => Promise<string | undefined>;
+  saveProject: (overrideName?: string, asDuplicate?: boolean, safeFolderName?: string) => Promise<string | undefined>;
   recentProjects: RecentProjects[];
   loadProject: (forcePath?: string) => Promise<boolean>;
   resetWorkspace: () => void;

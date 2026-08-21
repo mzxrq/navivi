@@ -1,7 +1,6 @@
-import { useState } from "react";
-import { Search, Loader2, MapPin } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Search, Loader2, MapPin, X } from "lucide-react";
 import { useWorkspace } from "../../hooks/useWorkspace";
-import { downloadDir } from "@tauri-apps/api/path";
 
 interface SearchResult {
     place_id: number;
@@ -17,25 +16,39 @@ export function LocationSearch() {
     const [isOpen, setIsOpen] = useState(false);
     const { setWaypoints, setIsDirty } = useWorkspace();
 
-    const handleSearch = async (e: React.SubmitEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!query.trim()) return;
+    const currentLang = "en";
+
+useEffect(() => {
+    if(!query.trim()) {
+        setResults([]);
+        setIsOpen(false);
+        setIsSearching(false);
+        return;
+    }
 
     setIsSearching(true);
-    setIsOpen(true);
+    const delayDebounceFn = setTimeout(async () => {
+        try {
+            const res = await fetch(
+                `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
+                    query
+                )}&limit=5&accept-language=${currentLang}`
+            );
 
-    try {
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5`
-      );
-      const data = await res.json();
-      setResults(data);
-    } catch (error) {
-      console.error("Search failed:", error);
-    } finally {
-      setIsSearching(false);
-    }
-  };
+            if (!res.ok) throw new Error("No Internet Connection.");
+
+            const data = await res.json();
+            setResults(data);
+            setIsOpen(true);           
+        } catch (error) {
+            console.error("Search failed:", error);
+        } finally {
+            setIsSearching(false);
+        }
+    }, 600);
+
+    return () => clearTimeout(delayDebounceFn);
+}, [query, currentLang]);
 
   const handleSelectPlace = (place: SearchResult) => {
     const lat = parseFloat(place.lat);
@@ -63,25 +76,35 @@ export function LocationSearch() {
 
   return (
     <div className="relative mb-2 shrink-0">
-        <form onSubmit={handleSearch} className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Search className="h-3.5 w-3.5 text-zinc-400" />
-            </div>
+        <div className="relative">
+        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+          <Search className="h-3.5 w-3.5 text-zinc-400" />
+        </div>
 
-            <input 
-                type="text"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search location..."
-                className="w-full bg-zinc-100 dark:bg-zinc-900 border border-transparent focus:border-emerald-500 focus:bg-white dark:focus:bg-zinc-950 text-xs rounded-xl pl-8 pr-8 py-2 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none transition-all shadow-sm"
-            />
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search location..."
+          className="w-full bg-zinc-100 dark:bg-zinc-900 border border-transparent focus:border-emerald-500 focus:bg-white dark:focus:bg-zinc-950 text-xs rounded-xl pl-8 pr-8 py-2 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none transition-all shadow-sm"
+        />
 
-            {isSearching && (
-                <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                    <Loader2 className="h-3.5 w-3.5 text-emerald-500 animate-spin" />
-                </div>
-            )}
-        </form>
+        {/* Dynamic Right Icon: Loading spinner OR Clear button */}
+        <div className="absolute inset-y-0 right-0 pr-2 flex items-center">
+          {isSearching ? (
+            <Loader2 className="h-3.5 w-3.5 text-emerald-500 animate-spin" />
+          ) : (
+            query && (
+              <button
+                onClick={() => setQuery("")}
+                className="p-1 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-md text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )
+          )}
+        </div>
+      </div>
 
         {/* Results */}
         {isOpen && results.length > 0 && (

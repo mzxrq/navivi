@@ -26,13 +26,8 @@ export function TitleBar() {
     setShowAppSettings,
   } = useUI();
 
-  const {
-    saveProject,
-    metadata,
-    loadProject,
-    isDirty,
-    setIsDirty,
-  } = useWorkspace();
+  const { saveProject, metadata, loadProject, isDirty, setIsDirty } =
+    useWorkspace();
   const { importRouteFile } = useFileActions();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [showSaveAs, setShowSaveAs] = useState(false);
@@ -93,21 +88,27 @@ export function TitleBar() {
     }
   };
 
-  const submitSaveAs = async (newName: string) => {
+  const submitSaveAs = async (newName: string, safeFolderName: string) => {
     if (!newName.trim()) return;
     setShowSaveAs(false);
 
     try {
       const isDuplicate = saveMode === "duplicate";
-      const path = await saveProject(newName, isDuplicate);
+      const path = await saveProject(newName, isDuplicate, safeFolderName);
       if (path) {
-        showToast(isDuplicate ? "Project duplicated successfully." : "Project saved", "success");
+        showToast(
+          isDuplicate ? "Project duplicated successfully." : "Project saved",
+          "success",
+        );
 
         if (pendingNavigation) {
           if (pendingNavigation === "close") {
             const appWindow = new Window("main");
             await appWindow.close();
-          } else if (pendingNavigation === "title_screen" || pendingNavigation === "new_project") {
+          } else if (
+            pendingNavigation === "title_screen" ||
+            pendingNavigation === "new_project"
+          ) {
             setCurrentView(pendingNavigation);
           }
           setPendingNavigation(null);
@@ -149,19 +150,19 @@ export function TitleBar() {
                   <span>New Project</span>
                 </button>
                 <div className="h-px bg-zinc-200 dark:bg-white/5 my-1 mx-2" />
-                <button 
+                <button
                   onClick={async () => {
                     setIsMenuOpen(false);
                     try {
                       const success = await loadProject();
                       if (success) {
-                        setCurrentView('editor');
+                        setCurrentView("editor");
                         showToast("Project loaded successfully.", "success");
                       }
                     } catch (err) {
                       showToast("Failed to read project file.", "error");
                     }
-                  }} 
+                  }}
                   className="w-full flex items-center justify-between px-4 py-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-700/50 transition-colors"
                 >
                   <span>Open Project...</span>
@@ -169,54 +170,62 @@ export function TitleBar() {
                 </button>
 
                 <div className="h-px bg-zinc-200 dark:bg-white/5 my-1 mx-2" />
-                <button 
+                <button
                   onClick={async () => {
                     setIsMenuOpen(false);
                     await importRouteFile();
-                  }} 
+                  }}
                   className="w-full flex items-center justify-between px-4 py-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-700/50 transition-colors"
                 >
                   <span>Import GPX...</span>
                   {/* Optional: Add an icon or shortcut here if you want */}
                 </button>
-                
+
                 {/* Save options only visible when in the editor */}
                 {currentView === "editor" && (
                   <>
                     <div className="h-px bg-zinc-200 dark:bg-white/5 my-1 mx-2" />
-                    <button 
+                    <button
                       onClick={() => {
                         setIsMenuOpen(false);
                         // Intercept First Save
-                        if (!metadata.project_id && metadata.project_name === "Untitled Project") {
+                        if (
+                          !metadata.project_id &&
+                          metadata.project_name === "Untitled Project"
+                        ) {
                           setSaveMode("initial");
                           setShowSaveAs(true);
                         } else {
                           handleSave();
                         }
-                      }} 
+                      }}
                       className="w-full flex items-center justify-between px-4 py-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-700/50 transition-colors"
                     >
                       <span>Save Project</span>
                       <span className="text-xs text-zinc-400">Ctrl+S</span>
                     </button>
-                    
-                    <button 
-                      onClick={() => { 
-                        setIsMenuOpen(false); 
+
+                    <button
+                      onClick={() => {
+                        setIsMenuOpen(false);
                         setSaveMode("duplicate");
-                        setShowSaveAs(true); 
-                      }} 
+                        setShowSaveAs(true);
+                      }}
                       className="w-full flex items-center justify-between px-4 py-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-700/50 transition-colors"
                     >
                       <span>Save As...</span>
-                      <span className="text-xs text-zinc-400">Ctrl+Shift+S</span>
+                      <span className="text-xs text-zinc-400">
+                        Ctrl+Shift+S
+                      </span>
                     </button>
                   </>
                 )}
 
                 <div className="h-px bg-zinc-200 dark:bg-white/5 my-1 mx-2" />
-                <button onClick={() => handleWindow("close")} className="w-full flex items-center justify-between px-4 py-1.5 hover:bg-red-50 hover:text-red-600 transition-colors">
+                <button
+                  onClick={() => handleWindow("close")}
+                  className="w-full flex items-center justify-between px-4 py-1.5 hover:bg-red-50 hover:text-red-600 transition-colors"
+                >
                   <span>Exit</span>
                 </button>
               </div>
@@ -225,18 +234,21 @@ export function TitleBar() {
 
           <div className="flex items-center gap-2 px-3 text-xs font-medium text-zinc-500 dark:text-zinc-400 pointer-events-none">
             <Map className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-500" />
-            <span className="text-zinc-800 dark:text-zinc-300">
-              Navivi
-            </span>
+            <span className="text-zinc-800 dark:text-zinc-300">Navivi</span>
             <ChevronRight className="w-3 h-3 opacity-50" />
             <span className="text-zinc-600 dark:text-zinc-200">
-              {currentView === "title_screen" ? "Project Manager" : currentView === "new_project" ? "Setup" : metadata.project_name}
+              {currentView === "title_screen"
+                ? "Project Manager"
+                : currentView === "new_project"
+                  ? "Setup"
+                  : metadata.project_name}
               {currentView === "editor" && isDirty && "*"}
             </span>
           </div>
         </div>
 
         <div className="flex h-full text-zinc-600 dark:text-zinc-400">
+          
           {currentView === "editor" && (
             <button
               onClick={() => setShowVideoPanel(!showVideoPanel)}
@@ -288,18 +300,24 @@ export function TitleBar() {
         projectName={metadata.project_name}
         onCancel={() => setPendingNavigation(null)}
         onDiscard={async () => {
-          setIsDirty(false); 
+          setIsDirty(false);
           if (pendingNavigation === "close") {
             const appWindow = new Window("main");
             await appWindow.close();
-          } else if (pendingNavigation === "title_screen" || pendingNavigation === "new_project") {
+          } else if (
+            pendingNavigation === "title_screen" ||
+            pendingNavigation === "new_project"
+          ) {
             setCurrentView(pendingNavigation); // TypeScript is now 100% happy
           }
           setPendingNavigation(null);
         }}
         onSave={async () => {
           // Intercept First Save from the warning modal
-          if (!metadata.project_id && metadata.project_name === "Untitled Project") {
+          if (
+            !metadata.project_id &&
+            metadata.project_name === "Untitled Project"
+          ) {
             setSaveMode("initial");
             setShowSaveAs(true);
             // Do NOT navigate yet. Navigation will resume inside submitSaveAs.
@@ -312,7 +330,10 @@ export function TitleBar() {
             if (pendingNavigation === "close") {
               const appWindow = new Window("main");
               await appWindow.close();
-            } else if (pendingNavigation === "title_screen" || pendingNavigation === "new_project") {
+            } else if (
+              pendingNavigation === "title_screen" ||
+              pendingNavigation === "new_project"
+            ) {
               setCurrentView(pendingNavigation);
             }
             setPendingNavigation(null);
