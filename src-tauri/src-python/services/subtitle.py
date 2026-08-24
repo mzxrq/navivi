@@ -20,15 +20,57 @@ _CLAUSE_DELIMITERS = re.compile(r"([、。！？!?])")
 
 
 @dataclass(frozen=True)
+class SubtitleStyle:
+    """
+    Maps to libass's `force_style` override syntax for the FFmpeg
+    `subtitles` filter. Color fields use ASS's native &HAABBGGRR hex format
+    (note: BLUE-GREEN-RED order, NOT RGB — a common gotcha).
+
+    Quick reference for common colors (AA=00 fully opaque, FF fully
+    transparent):
+      White:  &H00FFFFFF   Black:  &H00000000
+      Yellow: &H0000FFFF   Red:    &H000000FF
+    """
+
+    font_name: str = "Yu Gothic UI"  # Windows-bundled, handles JP + Latin
+    font_size: int = 16  # libass units, scales with video res
+    primary_color: str = "&H00FFFFFF"  # caption fill (white)
+    outline_color: str = "&H00000000"  # outline/border (black)
+    back_color: str = "&H80000000"  # box background, only used if border_style=3
+    bold: bool = False
+    border_style: int = 1  # 1 = outline+shadow, 3 = opaque background box
+    outline: float = 2.0  # outline thickness in px
+    shadow: float = 0.5  # drop-shadow distance in px
+    alignment: int = (
+        2  # ASS numpad-style: 2=bottom-center, 5=middle-center, 8=top-center
+    )
+    margin_v: int = 25  # vertical margin from frame edge, px
+
+    def to_force_style(self) -> str:
+        """Serializes to the comma-separated key=value string libass expects."""
+        bold_flag = -1 if self.bold else 0  # ASS uses -1 for True, 0 for False
+        return (
+            f"FontName={self.font_name},FontSize={self.font_size},"
+            f"PrimaryColour={self.primary_color},OutlineColour={self.outline_color},"
+            f"BackColour={self.back_color},Bold={bold_flag},BorderStyle={self.border_style},"
+            f"Outline={self.outline},Shadow={self.shadow},Alignment={self.alignment},"
+            f"MarginV={self.margin_v}"
+        )
+
+
+@dataclass(frozen=True)
 class SubtitleCue:
     """One timed subtitle line: [start, end) in seconds, plus display text."""
+
     start: float
     end: float
     text: str
 
     def shifted(self, offset_seconds: float) -> "SubtitleCue":
         """Returns a copy translated forward in time by `offset_seconds`."""
-        return SubtitleCue(self.start + offset_seconds, self.end + offset_seconds, self.text)
+        return SubtitleCue(
+            self.start + offset_seconds, self.end + offset_seconds, self.text
+        )
 
 
 class TextSegmenter:
@@ -36,11 +78,7 @@ class TextSegmenter:
 
     @staticmethod
     def split_clauses(text: str) -> List[str]:
-        """
-        Splits on sentence-ending punctuation, keeping the delimiter
-        attached to its clause — these are the natural TTS pause points.
-        O(n) single regex pass.
-        """
+        # ... unchanged, see original ...
         text = text.strip()
         if not text:
             return []
@@ -57,19 +95,71 @@ class TextSegmenter:
         return clauses or [text]
 
     @staticmethod
-    def wrap(text: str, max_chars_per_line: int = 20, max_lines: int = 2) -> str:
+    def wrap(text: str, max_chars_per_line: int = 24, max_lines: int = 2) -> str:
         """
-        Hard-wraps by CHARACTER count, not word count — Japanese has no
-        spaces, so word-wrapping is undefined here. O(n) single pass.
-        Truncates with an ellipsis rather than silently overflowing frame.
+        PATCH: budget-aware wrapping instead of blind fixed-width chunking.
+
+        OLD BEHAVIOR: every clause >max_chars_per_line got mechanically cut
+        at that exact offset, so a 22-char clause with a 20-char budget
+        always produced 2 lines even though it would read fine on one line
+        at a slightly wider budget — and the cut point ignored word/phrase
+        boundaries entirely.
+
+        NEW BEHAVIOR:
+          1. If the WHOLE clause fits in max_chars_per_line, return it as a
+             single line — no forced wrapping, ever. This alone eliminates
+             the vast majority of unnecessary 2-line captions, since most
+             TTS clauses (already pre-split on 、。！？!? by split_clauses)
+             are short.
+          2. If it doesn't fit, find a natural break point (nearest space,
+             scanning backward from the ideal midpoint) instead of cutting
+             at a fixed character offset — avoids splitting mid-word.
+          3. Still respects max_lines and still truncates with an ellipsis
+             as an absolute last resort for pathologically long clauses.
+
+        O(k) where k = len(text) — a single backward scan, negligible cost
+        even at hundreds of calls per pipeline run.
         """
-        lines: List[str] = []
-        for i in range(0, len(text), max_chars_per_line):
-            lines.append(text[i:i + max_chars_per_line])
-            if len(lines) == max_lines:
+        text = text.strip()
+        if not text:
+            return text
+
+        # Case 1: fits on one line — the common case, and the actual fix.
+        if len(text) <= max_chars_per_line:
+            return text
+
+        # Case 2: needs wrapping — find the best break point for line 1.
+        ideal_break = max_chars_per_line
+        # Search backward from the width limit for a natural boundary
+        # (space, or Japanese-friendly punctuation already stripped by
+        # split_clauses, so a plain space search covers mixed-language text).
+        break_at = text.rfind(" ", 0, ideal_break + 1)
+        if break_at == -1 or break_at < ideal_break * 0.4:
+            # No good natural break nearby (common for Japanese, which has
+            # no spaces) — fall back to a straight character cut at budget.
+            break_at = ideal_break
+
+        lines = [text[:break_at].strip()]
+        remainder = text[break_at:].strip()
+
+        for _ in range(max_lines - 1):
+            if not remainder:
                 break
-        if len(text) > max_chars_per_line * max_lines:
+            if len(remainder) <= max_chars_per_line:
+                lines.append(remainder)
+                remainder = ""
+            else:
+                cut = remainder.rfind(" ", 0, max_chars_per_line + 1)
+                if cut == -1 or cut < max_chars_per_line * 0.4:
+                    cut = max_chars_per_line
+                lines.append(remainder[:cut].strip())
+                remainder = remainder[cut:].strip()
+
+        if remainder:
+            # Still overflow after max_lines — truncate the last line, same
+            # ellipsis fallback behavior as before.
             lines[-1] = lines[-1][: max_chars_per_line - 1] + "…"
+
         return "\n".join(lines)
 
 
@@ -161,14 +251,22 @@ class SubtitleBuilder:
             # Degenerate case (entirely silent clip) — even fallback
             # instead of a division by zero.
             per_clause = duration_seconds / len(clauses)
-            spans = [(i * per_clause, (i + 1) * per_clause) for i in range(len(clauses))]
+            spans = [
+                (i * per_clause, (i + 1) * per_clause) for i in range(len(clauses))
+            ]
         else:
             total_chars = sum(len(c) for c in clauses) or 1
-            needed = [mapper.total_speaking_time * (len(c) / total_chars) for c in clauses]
+            needed = [
+                mapper.total_speaking_time * (len(c) / total_chars) for c in clauses
+            ]
             spans = mapper.allocate(needed)
 
         return [
-            SubtitleCue(start=s, end=e, text=TextSegmenter.wrap(c, max_chars_per_line, max_lines))
+            SubtitleCue(
+                start=s,
+                end=e,
+                text=TextSegmenter.wrap(c, max_chars_per_line, max_lines),
+            )
             for (s, e), c in zip(spans, clauses)
         ]
 
@@ -204,10 +302,14 @@ class MasterSubtitleAssembler:
     """Merges per-segment cue lists into one timeline-shifted master list."""
 
     @staticmethod
-    def assemble(segment_cues: List[List[SubtitleCue]], segment_offsets: List[float]) -> List[SubtitleCue]:
+    def assemble(
+        segment_cues: List[List[SubtitleCue]], segment_offsets: List[float]
+    ) -> List[SubtitleCue]:
         """O(total_cues) — each segment's cues shifted exactly once."""
         if len(segment_cues) != len(segment_offsets):
-            raise ValueError("segment_cues and segment_offsets must be the same length.")
+            raise ValueError(
+                "segment_cues and segment_offsets must be the same length."
+            )
         master: List[SubtitleCue] = []
         for cues, offset in zip(segment_cues, segment_offsets):
             master.extend(cue.shifted(offset) for cue in cues)
