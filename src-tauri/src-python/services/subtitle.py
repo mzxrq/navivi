@@ -10,13 +10,15 @@ Standalone, reusable — no dependency on VideoEditor/JobConfig/ComfyUI.
 from __future__ import annotations
 
 import re
+import textwrap
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 # Clause delimiters TTS engines (and human speech) naturally pause on.
 # Class-level constant so it's swappable for other languages.
-_CLAUSE_DELIMITERS = re.compile(r"([、。！？!?])")
+# Added standard English/Western punctuation (, .) to the regex
+_CLAUSE_DELIMITERS = re.compile(r"([、。！？!?,.])")
 
 
 @dataclass(frozen=True)
@@ -33,7 +35,7 @@ class SubtitleStyle:
     """
 
     font_name: str = "Yu Gothic UI"  # Windows-bundled, handles JP + Latin
-    font_size: int = 16  # libass units, scales with video res
+    font_size: int = 14  # libass units, scales with video res
     primary_color: str = "&H00FFFFFF"  # caption fill (white)
     outline_color: str = "&H00000000"  # outline/border (black)
     back_color: str = "&H80000000"  # box background, only used if border_style=3
@@ -44,7 +46,7 @@ class SubtitleStyle:
     alignment: int = (
         2  # ASS numpad-style: 2=bottom-center, 5=middle-center, 8=top-center
     )
-    margin_v: int = 25  # vertical margin from frame edge, px
+    margin_v: int = 10  # vertical margin from frame edge, px
 
     def to_force_style(self) -> str:
         """Serializes to the comma-separated key=value string libass expects."""

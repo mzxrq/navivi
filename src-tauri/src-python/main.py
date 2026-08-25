@@ -15,8 +15,12 @@ import traceback  # PATCH: needed for full stack traces in the CLI exception han
 from pathlib import Path
 from typing import Any, Optional
 
+from services.translator import ScriptTranslator  # PATCH: added for translation support
+from services.romaji import RomajiConverter
+
 import numpy as np
 import pyproj
+
 
 # Local Services
 from services.gpsparser import (
@@ -91,6 +95,50 @@ POST_NARRATION_HOLD_SECONDS: float = (
 DEFAULT_CLIP_SUMMARY_FADE: float = 0.5  # matches route2vdo.py's fade_sec default
 DEFAULT_CLIP_SUMMARY_HOLD: float = 2.0  # matches route2vdo.py's clip_hold_sec default
 
+import re
+from services.romaji import RomajiConverter
+
+def is_japanese(text: str) -> bool:
+    """Checks if a string contains Japanese characters (Kanji, Hiragana, Katakana)."""
+    if not text:
+        return False
+    # Unicode ranges for Hiragana, Katakana, and CJK Unified Ideographs (Kanji)
+    japanese_pattern = re.compile(r'[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]')
+    return bool(japanese_pattern.search(text))
+
+def format_waypoint_label(raw_label: str, target_lang: str = "en") -> str:
+    """
+    Checks if the label is in Japanese. If target language is romaji/translation 
+    and it contains Japanese, converts it. Otherwise, leaves English labels alone.
+    """
+    if not raw_label:
+        return ""
+    
+    # If the user requested romaji and the label has Japanese text, convert it to Romaji
+    if target_lang.lower() in ("romaji", "roman", "ja-romaji", "hepburn") and is_japanese(raw_label):
+        return RomajiConverter.to_romaji(raw_label)
+        
+    return raw_label
+
+def build_display_text(original_jp: str, target_lang: Any) -> str:
+    if not isinstance(target_lang, str) or not target_lang.strip():
+        target_lang = "en"
+    normalized_target = target_lang.strip().lower()
+
+    if normalized_target in ("romaji", "roman", "ja-romaji", "hepburn"):
+        return RomajiConverter.to_romaji(original_jp)
+
+    translated = ScriptTranslator.translate(original_jp, target_lang=target_lang)
+
+    # Check the explicit failure flag to gracefully fall back to Romaji if offline models fail
+    if ScriptTranslator.last_call_failed:
+        print(
+            f"⚠️  Translation to '{target_lang}' FAILED — falling back to Romaji for: {original_jp[:30]!r}...",
+            file=sys.stderr,
+        )
+        return RomajiConverter.to_romaji(original_jp)
+
+    return translated
 
 def _build_subtitle_style(job_config: "JobConfigManager") -> SubtitleStyle:
     settings = job_config.get_settings()
@@ -283,18 +331,23 @@ def generate_navigation_video(
     waypoints = project_config.get("waypoints", []) if project_config else []
     wp_indices = MapFetcher.build_waypoint_index(route_df, waypoints)
 
+    settings = project_config.get("settings", {})
+    subtitle_lang = settings.get("subtitle_language", "en")
+
     if waypoints:
         print(f"🗺️ Injecting {len(waypoints)} custom waypoints from JSON config...")
         for idx, wp in enumerate(waypoints):
             closest_idx = wp_indices[idx]
             raw_label = wp.get("label", "Waypoint")
 
+            formatted_label = format_waypoint_label(raw_label, subtitle_lang)
+
             if idx == 0:
-                wp_label = f"Start: {raw_label}" if raw_label else "Start"
+                wp_label = f"Start: {formatted_label}" if formatted_label else "Start"
             elif idx == len(waypoints) - 1:
-                wp_label = f"Stop: {raw_label}" if raw_label else "Stop"
+                wp_label = f"Stop: {formatted_label}" if formatted_label else "Stop"
             else:
-                wp_label = raw_label
+                wp_label = formatted_label
 
             route_labels[closest_idx] = wp_label
 
@@ -451,14 +504,25 @@ async def run_synced_tts_pipeline(
     audio_durations = []
     audio_pauses = []
     segment_cues_list = []
+    display_text = "" 
+    duration = 0.0
+    pauses = []
 
-    # 1. Handle Overview Narration First (from 'overview_narration' key)
-    overview_text = job_config.get("overview_narration", "").strip()
+    # Optional: Read target language from your job_config settings, default to English
+    target_lang = job_config.get("settings", {}).get("subtitle_language", "en")
+
+    # 1. Handle Overview Narration First
+    overview_text_jp = job_config.get("overview_narration", "").strip()
     print("🎙️ Generating Irodori-TTS audio for Overview...", file=sys.stderr)
 
-    if overview_text:
-        path = await tts_client.generate_speech(overview_text)
-        audio_paths.append(path)
+    if overview_text_jp:
+        # Generate Japanese Audio
+        path = await tts_client.generate_speech(overview_text_jp)
+        audio_paths.append(path)   # PATCH: this line was missing — without it,
+                                    # every audio_paths[i] downstream referred to
+                                    # the WRONG waypoint's narration (off-by-one),
+                                    # and the final video segment lost its audio
+                                    # entirely once the list ran short.
 
         analysis = audio_processor.analyze_pauses(path)
         duration = analysis["duration_seconds"]
@@ -467,12 +531,11 @@ async def run_synced_tts_pipeline(
         audio_durations.append(duration)
         audio_pauses.append(pauses)
 
-        cues = SubtitleBuilder.build(
-            overview_text,
-            duration,
-            pauses,
-            max_chars_per_line=SUBTITLE_MAX_CHARS_PER_LINE,  # PATCH
-        )
+        # TRANSLATE HERE
+        display_text = build_display_text(overview_text_jp, target_lang)
+
+        # Build subtitles using the translated text (bump max chars to 40 for English words)
+        cues = SubtitleBuilder.build(display_text, duration, pauses, max_chars_per_line=40)
         segment_cues_list.append(cues)
 
         srt_path = Path(path).with_suffix(".srt")
@@ -482,17 +545,23 @@ async def run_synced_tts_pipeline(
         audio_durations.append(0.0)
         audio_pauses.append([])
         segment_cues_list.append([])
+        path = Path("")
+
+        # Build subtitles using the translated text (bump max chars to 40 for English words)
+        cues = SubtitleBuilder.build(display_text, duration, pauses, max_chars_per_line=40)
+        segment_cues_list.append(cues)
+
+        srt_path = Path(path).with_suffix(".srt")
+        SRTDocument.write(cues, str(srt_path))
 
     # 2. Handle Waypoint Narrations
     waypoints = job_config.get_waypoints()
-    print(
-        "🎙️ Generating Irodori-TTS narration audio and subtitles for waypoints...",
-        file=sys.stderr,
-    )
+    print("🎙️ Generating Irodori-TTS narration audio and subtitles for waypoints...", file=sys.stderr)
     for wp in waypoints:
-        text = wp.get("narration", "").strip()
-        if text:
-            path = await tts_client.generate_speech(text)
+        text_jp = wp.get("narration", "").strip()
+        if text_jp:
+            # Generate Japanese Audio
+            path = await tts_client.generate_speech(text_jp)
             audio_paths.append(path)
 
             analysis = audio_processor.analyze_pauses(path)
@@ -502,19 +571,24 @@ async def run_synced_tts_pipeline(
             audio_durations.append(duration)
             audio_pauses.append(pauses)
 
-            cues = SubtitleBuilder.build(text, duration, pauses)
+            # 🌐 TRANSLATE HERE
+            display_text = ScriptTranslator.translate(text_jp, target_lang=target_lang)
+
+            # Build subtitles using the translated text
+            cues = SubtitleBuilder.build(display_text, duration, pauses, max_chars_per_line=40)
             segment_cues_list.append(cues)
 
             srt_path = Path(path).with_suffix(".srt")
             SRTDocument.write(cues, str(srt_path))
 
-            print(f"   -> Generated {path} & subtitles ({duration}s)", file=sys.stderr)
+            print(f"   -> Generated {path} & translated subtitles ({duration}s)", file=sys.stderr)
         else:
             audio_paths.append(None)
             audio_durations.append(0.0)
             audio_pauses.append([])
             segment_cues_list.append([])
 
+        
     valid_audio_paths = [p for p in audio_paths if p]
     master_audio = None
     if valid_audio_paths:
