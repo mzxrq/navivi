@@ -1,5 +1,5 @@
 """
-Logger.py (Refactored)
+Logging Service (logger.py)
 ---------------------------------------------------------------------------
 This module provides a standardized logging setup for the application, ensuring
 that logs are consistently formatted and directed
@@ -16,6 +16,7 @@ LOG_DIR.mkdir(parents=True, exist_ok=True)
 LOG_FILE = LOG_DIR / "app.log"
 
 
+# [Core] Setup a standardized logger for the application
 def setup_logger(name: str) -> logging.Logger:
     """
     Configures and returns a standardized logger instance.
@@ -25,7 +26,7 @@ def setup_logger(name: str) -> logging.Logger:
             The name of the logger, typically the module name.
     """
 
-    # 1. Create a logger with the specified name
+    # Create a logger with the specified name
     logger = logging.getLogger(name)
 
     # Only add handlers if they haven't been added yet to avoid duplicate logs
@@ -45,5 +46,5 @@ def setup_logger(name: str) -> logging.Logger:
         stream_handler.setFormatter(formatter)
         logger.addHandler(stream_handler)
 
-    # 2. Return the configured logger instance
+    # Return the configured logger instance
     return logger

@@ -1,5 +1,5 @@
 """
-services/subtitle.py
+Subtitle Service (subtitle.py)
 ---------------------------------------------------------------------------
 Builds sound-synchronized subtitle cues (.srt) from TTS narration text and
 its already-computed pause/duration analysis (see tts.AudioProcessor).
@@ -10,17 +10,20 @@ Standalone, reusable — no dependency on VideoEditor/JobConfig/ComfyUI.
 from __future__ import annotations
 
 import re
-import textwrap
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Dict, List, Tuple
+
+from services.logger import setup_logger
+
+# Logging configuration
+logger = setup_logger("SubtitleService")
 
 # Clause delimiters TTS engines (and human speech) naturally pause on.
-# Class-level constant so it's swappable for other languages.
-# Added standard English/Western punctuation (, .) to the regex
 _CLAUSE_DELIMITERS = re.compile(r"([、。！？!?,.])")
 
 
+# [Config] Default subtitle style for libass/FFmpeg `force_style` override
 @dataclass(frozen=True)
 class SubtitleStyle:
     """
@@ -60,6 +63,7 @@ class SubtitleStyle:
         )
 
 
+# [Core] SubtitleCue and SubtitleBuilder
 @dataclass(frozen=True)
 class SubtitleCue:
     """One timed subtitle line: [start, end) in seconds, plus display text."""
@@ -75,6 +79,7 @@ class SubtitleCue:
         )
 
 
+# [Subtitle] TextSegmenter: splits raw narration text into display-sized subtitle chunks
 class TextSegmenter:
     """Splits raw narration text into display-sized subtitle chunks."""
 
@@ -165,6 +170,7 @@ class TextSegmenter:
         return "\n".join(lines)
 
 
+# [Subtitle] SpeakingTimelineMapper: maps pure speaking-time onto real timeline
 class SpeakingTimelineMapper:
     """
     Maps a budget of pure speaking-time (excluding silent pauses) onto the
@@ -233,9 +239,11 @@ class SpeakingTimelineMapper:
         return results
 
 
+# [Subtitle] SubtitleBuilder: builds timed SubtitleCue list from raw text + pause analysis
 class SubtitleBuilder:
     """Facade: raw narration text + audio analysis -> timed SubtitleCue list."""
 
+    # [Core/Subtitle] Main entry point: builds a list of SubtitleCue objects from text and pause data
     @staticmethod
     def build(
         text: str,
@@ -273,9 +281,11 @@ class SubtitleBuilder:
         ]
 
 
+# [Subtitle] SRTDocument: serializes SubtitleCue lists to .srt format
 class SRTDocument:
     """Serializes SubtitleCue lists to standard .srt format."""
 
+    # [Util] Formats a timestamp in seconds to the SRT timestamp format (HH:MM:SS,mmm)
     @staticmethod
     def _format_timestamp(seconds: float) -> str:
         millis_total = max(0, round(seconds * 1000))
@@ -284,6 +294,7 @@ class SRTDocument:
         ss, ms = divmod(rem, 1000)
         return f"{hh:02d}:{mm:02d}:{ss:02d},{ms:03d}"
 
+    # [Core/Subtitle] Converts a list of SubtitleCue objects to a string in .srt format
     @classmethod
     def to_string(cls, cues: List[SubtitleCue]) -> str:
         blocks = [
@@ -292,6 +303,7 @@ class SRTDocument:
         ]
         return "\n".join(blocks)
 
+    # [Core/Subtitle] Writes a list of SubtitleCue objects to a .srt file at the specified output path
     @classmethod
     def write(cls, cues: List[SubtitleCue], output_path: str) -> str:
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
@@ -300,9 +312,11 @@ class SRTDocument:
         return output_path
 
 
+# [Subtitle] MasterSubtitleAssembler: merges per-segment cue lists into one timeline-shifted master list
 class MasterSubtitleAssembler:
     """Merges per-segment cue lists into one timeline-shifted master list."""
 
+    # [Core/Subtitle] Assembles multiple segments of SubtitleCue lists into a single master list, applying offsets to each segment
     @staticmethod
     def assemble(
         segment_cues: List[List[SubtitleCue]], segment_offsets: List[float]
