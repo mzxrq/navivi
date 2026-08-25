@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { useWorkspace } from "./useWorkspace";
 import { useUI } from "./useUI";
 import { getCurve } from "../utils/mapUtils";
@@ -14,132 +14,142 @@ export function useMapRouting() {
   } = useWorkspace();
   const { showToast } = useUI();
 
-  useEffect(() => {
-    if (waypoints.length < 2) {
-      setRouteSegments([]);
-      return;
-    }
+useEffect(() => {
+  if (waypoints.length < 2) {
+    setRouteSegments([]);
+    return;
+  }
 
-    const sleep = (ms: number) =>
-      new Promise((resolve) => setTimeout(resolve, ms));
+  const fetchAllSegments = async () => {
+    const newSegments: { positions: [number, number][]; mode: string }[] = [];
+    const newCacheEntries: Record<string, [number, number][]> = {};
+    const apiKey = settings.ors_api_key || import.meta.env.VITE_ORS_API_KEY;
+    let warnedApiLimit = false;
 
-    const fetchAllSegments = async () => {
-      const newSegments: { positions: [number, number][]; mode: string }[] = [];
-      const newCacheEntries: Record<string, [number, number][]> = {}; // hold new routes
+    for (let i = 0; i < waypoints.length - 1; i++) {
+      const wp1 = waypoints[i];
+      const wp2 = waypoints[i + 1];
+      const mode = wp1.routeMode || "driving";
 
-      const apiKey = settings.ors_api_key || import.meta.env.VITE_ORS_API_KEY;
+      const cacheKey = `${wp1.lat.toFixed(5)},${wp1.lng.toFixed(5)}|${wp2.lat.toFixed(5)},${wp2.lng.toFixed(5)}|${mode}`;
 
-      let warnedApiLimit = false;
-      let warnedNoRoute = false;
+      if (routingCache[cacheKey]) {
+        newSegments.push({ positions: routingCache[cacheKey], mode });
+        continue;
+      }
 
-      for (let i = 0; i < waypoints.length - 1; i++) {
-        const wp1 = waypoints[i];
-        const wp2 = waypoints[i + 1];
-        const mode = wp1.routeMode || "driving";
+      let positions: [number, number][] = [];
 
-        const cacheKey = `${wp1.lat.toFixed(5)},${wp1.lng.toFixed(5)}|${wp2.lat.toFixed(5)},${wp2.lng.toFixed(5)}|${mode}`;
+      if (mode === "direct") {
+        positions = [
+          [wp1.lat, wp1.lng],
+          [wp2.lat, wp2.lng],
+        ];
+      } else if (mode === "curve") {
+        positions = getCurve([wp1.lat, wp1.lng], [wp2.lat, wp2.lng]);
+      } else if (mode === "ferry") {
+        // 1. FERRY MODE: Fetch raw OSM Ferry geometry from Overpass API
+        try {
+          const minLat = Math.min(wp1.lat, wp2.lat) - 0.02;
+          const maxLat = Math.max(wp1.lat, wp2.lat) + 0.02;
+          const minLng = Math.min(wp1.lng, wp2.lng) - 0.02;
+          const maxLng = Math.max(wp1.lng, wp2.lng) + 0.02;
 
-        if (routingCache[cacheKey]) {
-          newSegments.push({ positions: routingCache[cacheKey], mode });
-          continue; // Skip API calculation completely
+          const overpassQuery = `[out:json];way["route"="ferry"](${minLat},${minLng},${maxLat},${maxLng});out geom;`;
+          const overpassUrl = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(overpassQuery)}`;
+
+          const res = await fetch(overpassUrl, {
+            headers: { "User-Agent": "NaviviApp/1.0" },
+          });
+          const data = await res.json();
+
+          if (data.elements && data.elements.length > 0) {
+            const ferryCoords: [number, number][] = [];
+            data.elements.forEach((element: any) => {
+              if (element.geometry) {
+                element.geometry.forEach((pt: { lat: number; lon: number }) => {
+                  ferryCoords.push([pt.lat, pt.lon]);
+                });
+              }
+            });
+            positions = [[wp1.lat, wp1.lng], ...ferryCoords, [wp2.lat, wp2.lng]];
+          } else {
+            throw new Error("No ferry geometry");
+          }
+        } catch (err) {
+          console.warn("[Ferry] Overpass fetch failed, using straight line:", err);
+          positions = [[wp1.lat, wp1.lng], [wp2.lat, wp2.lng]];
         }
+      } else if (mode === "walking") {
+        // 2. WALKING MODE: High-accuracy footpaths via OpenRouteService (foot-hiking)
+        try {
+          if (!apiKey) throw new Error("missing_api_key");
 
-        let positions: [number, number][] = [];
+          const url = `${apiEndpoints.orsBase}/foot-hiking?api_key=${apiKey}&start=${wp1.lng},${wp1.lat}&end=${wp2.lng},${wp2.lat}`;
+          const response = await fetch(url);
 
-        if (mode === "direct") {
-          positions = [
-            [wp1.lat, wp1.lng],
-            [wp2.lat, wp2.lng],
-          ];
-        } else if (mode === "curve") {
-          positions = getCurve([wp1.lat, wp1.lng], [wp2.lat, wp2.lng]);
-        } else {
-          const profile = mode === "walking" ? "foot-hiking" : "driving-car";
+          if (!response.ok) throw new Error(`HTTP_${response.status}`);
 
+          const data = await response.json();
+          if (data.features && data.features.length > 0) {
+            positions = data.features[0].geometry.coordinates.map(
+              (coord: [number, number]) => [coord[1], coord[0]]
+            );
+          } else {
+            throw new Error("no_route");
+          }
+        } catch (error) {
+          console.warn("[ORS Walking] Failed, falling back to OSRM foot:", error);
+          if (!warnedApiLimit && String(error).includes("missing_api_key")) {
+            showToast("Missing ORS API Key for walking route. Using standard foot routing.", "warning");
+            warnedApiLimit = true;
+          }
+
+          // Fallback to OSRM foot profile if ORS key is missing/limited
           try {
-            if (!apiKey) throw new Error("missing_api_key");
-
-            await sleep(1000);
-
-            const url = `${apiEndpoints.orsBase}/${profile}?api_key=${apiKey}&start=${wp1.lng},${wp1.lat}&end=${wp2.lng},${wp2.lat}`;
-            const response = await fetch(url);
-
-            if (!response.ok) {
-              if (response.status === 404) throw new Error("no_route");
-              if (response.status === 429 || response.status === 403)
-                throw new Error("quota_limit");
-              throw new Error(`HTTP_${response.status}`);
-            }
-
-            const data = await response.json();
-            if (data.features && data.features.length > 0) {
-              positions = data.features[0].geometry.coordinates.map(
-                (coord: [number, number]) => [coord[1], coord[0]],
+            const osrmUrl = `https://router.project-osrm.org/route/v1/foot/${wp1.lng},${wp1.lat};${wp2.lng},${wp2.lat}?overview=full&geometries=geojson`;
+            const osrmRes = await fetch(osrmUrl);
+            const osrmData = await osrmRes.json();
+            if (osrmData.routes && osrmData.routes.length > 0) {
+              positions = osrmData.routes[0].geometry.coordinates.map(
+                (coord: [number, number]) => [coord[1], coord[0]]
               );
             } else {
-              throw new Error("no_route");
+              positions = [[wp1.lat, wp1.lng], [wp2.lat, wp2.lng]];
             }
-          } catch (error) {
-            console.warn(
-              `[ORS] Failed for segment ${i + 1}. Falling back to direct line.`,
-              error,
-            );
-
-            const errMsg =
-              error instanceof Error ? error.message : String(error);
-
-            if (errMsg.includes("missing_api_key")) {
-              if (!warnedApiLimit) {
-                showToast(
-                  "Missing ORS API Key. Please add your API Key in Settings.",
-                  "warning",
-                );
-                warnedApiLimit = true;
-              }
-            } else if (
-              errMsg.includes("Failed to fetch") ||
-              errMsg.includes("quota_limit")
-            ) {
-              if (!warnedApiLimit) {
-                showToast(
-                  "Routing limit reached or invalid key. Failling back to direct lines.",
-                  "error",
-                );
-                warnedApiLimit = true;
-              }
-            } else if (
-              errMsg.includes("no_route") ||
-              errMsg.includes("HTTP_")
-            ) {
-              if (!warnedNoRoute) {
-                const modeName = mode.charAt(0).toUpperCase() + mode.slice(1);
-                showToast(
-                  `${modeName} route unavailable for some segments. Using direct lines.`,
-                  "info",
-                );
-                warnedNoRoute = true;
-              }
-            }
-
-            positions = [
-              [wp1.lat, wp1.lng],
-              [wp2.lat, wp2.lng],
-            ];
+          } catch {
+            positions = [[wp1.lat, wp1.lng], [wp2.lat, wp2.lng]];
           }
         }
-        
-        if (mode !== "direct" && mode !== "curve") {
-          newCacheEntries[cacheKey] = positions;
+      } else {
+        // 3. DRIVING MODE: Fast, keyless routing via OSRM
+        try {
+          const url = `https://router.project-osrm.org/route/v1/driving/${wp1.lng},${wp1.lat};${wp2.lng},${wp2.lat}?overview=full&geometries=geojson`;
+          const response = await fetch(url);
+          const data = await response.json();
+
+          if (data.routes && data.routes.length > 0) {
+            positions = data.routes[0].geometry.coordinates.map(
+              (coord: [number, number]) => [coord[1], coord[0]]
+            );
+          } else {
+            positions = [[wp1.lat, wp1.lng], [wp2.lat, wp2.lng]];
+          }
+        } catch (error) {
+          positions = [[wp1.lat, wp1.lng], [wp2.lat, wp2.lng]];
         }
-        newSegments.push({ positions, mode });
       }
-      setRouteSegments(newSegments);
 
-      if (Object.keys(newCacheEntries).length > 0) {
-        setRoutingCache((prev) => ({ ...prev, ...newCacheEntries }));
-      }
-    };
+      newCacheEntries[cacheKey] = positions;
+      newSegments.push({ positions, mode });
+    }
 
-    fetchAllSegments();
-  }, [waypoints, setRouteSegments, showToast, settings.ors_api_key]);
+    setRouteSegments(newSegments);
+    if (Object.keys(newCacheEntries).length > 0) {
+      setRoutingCache((prev) => ({ ...prev, ...newCacheEntries }));
+    }
+  };
+
+  fetchAllSegments();
+}, [waypoints, setRouteSegments, showToast, routingCache, setRoutingCache, settings.ors_api_key]);
 }

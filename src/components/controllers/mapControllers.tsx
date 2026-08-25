@@ -4,11 +4,14 @@ import { Waypoint } from "../../types";
 
 export function MapAutoZoom({ waypoints, projectId }: { waypoints: any[], projectId?: string }) {
   const map = useMap();
+  const lastProjectIdRef = useRef<string | undefined>(undefined);
+
   useEffect(() => {
     setTimeout(() => map.invalidateSize(), 100);
-    if (waypoints.length > 0) {
+    if (projectId && projectId !== lastProjectIdRef.current && waypoints.length > 0) {
+      lastProjectIdRef.current = projectId;
       const bounds = waypoints.map(wp => [wp.lat, wp.lng] as [number, number]);
-      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14, animate: true, duration: 1 });
+      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16, animate: true, duration: 1 });
     }
   }, [projectId, waypoints, map]);
   return null;
@@ -48,7 +51,7 @@ export function MapPreviewer({ waypoints, routePoints }: { waypoints: Waypoint[]
 
       // follow route line
       if (routePoints && routePoints.length > 0) {
-        map.flyTo(routePoints[0], 15, {duration: 1.5});
+        map.flyTo(routePoints[0], 16, {duration: 1.5});
         await new Promise((res) => setTimeout(res, 1500));
 
         let currentIndex = 0;
@@ -72,7 +75,6 @@ export function MapPreviewer({ waypoints, routePoints }: { waypoints: Waypoint[]
           currentIndex += step;
           requestAnimationFrame(animateCamera);
         };
-        console.log("if");
         animateCamera();
       } else {
           for (let i = 0; i < waypoints.length; i++) {
@@ -80,13 +82,12 @@ export function MapPreviewer({ waypoints, routePoints }: { waypoints: Waypoint[]
 
           const wp = waypoints[i];
 
-          map.flyTo([wp.lat, wp.lng], 15, {
+          map.flyTo([wp.lat, wp.lng], 16, {
             duration: 2,
             easeLinearity: 0.25,
           });
 
           await new Promise((resolve) => setTimeout(resolve, 3500));
-          console.log("else");
         }
 
         isPreviewingRef.current = false;

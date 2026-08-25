@@ -31,15 +31,12 @@ from services.tts import (
 from services.job_config import JobConfigManager
 from services.vdoeditor import VideoEditor
 from typing import List, Dict, Any, Optional
-from services.llmscript import analyze_travel_image
+from services.llmscript import analyze_travel_image, generate_voiceover_script, generate_overview_script
 # In main.py
 from services.img2vdo import AttractionVideoGenerator
 
 async def generate_attraction_videos(project_config_path: str, audio_paths: list, audio_durations: list) -> list[str]:
-"""
-    Generates TTS audio in WAV format, analyzes pauses, and triggers ComfyUI 
-    to generate, scale, and mux attraction videos for all waypoints.
-    """
+
     from services.tts import IrodoriTTSClient, AudioProcessor
     from services.img2vdo import WaypointVideoGenerator
     from services.job_config import JobConfigManager
@@ -526,7 +523,26 @@ if __name__ == "__main__":
                 video_outputs = asyncio.run(process_attraction_videos_command(payload))
                 
                 print(json.dumps({"success": True, "video_outputs": video_outputs}, ensure_ascii=False))
-                
+            
+            elif command == "generate_script":
+                data = json.loads(payload)
+                script = generate_voiceover_script(
+                    prompt=data.get("prompt", ""),
+                    location_name=data.get("locationName", ""),
+                    lat=data.get("lat", 0.0),
+                    lng=data.get("lng", 0.0),
+                    engine=data.get("engine", "ollama")
+                )
+                print(json.dumps({"success": True, "script": script}, ensure_ascii=False))
+            
+            elif command == "generate_overview":
+                data = json.loads(payload)
+                script = generate_overview_script(
+                    waypoints=data.get("waypoints", []),
+                    engine=data.get("engine", "ollama")
+                )
+                print(json.dumps({"success": True, "script": script}, ensure_ascii=False))
+            
             else:
                 error_res = {"success": False, "error": f"Unknown command '{command}'"}
                 print(json.dumps(error_res, ensure_ascii=False))

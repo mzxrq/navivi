@@ -14,6 +14,7 @@ export function useWaypointActions() {
         lng,
         name: "Locating...",
         images: [],
+        imagePans: [],
         narration: "",
         routeMode: "driving",
       },

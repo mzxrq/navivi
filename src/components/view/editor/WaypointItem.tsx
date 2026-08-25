@@ -41,12 +41,12 @@ export function WaypointItem({
         <div className="relative flex flex-col items-center w-10 shrink-0">
           {/* Top connecting line (from top of container to center of node) */}
           {!isFirst && (
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-0.5 h-[18px] bg-zinc-200 dark:bg-zinc-800 transition-colors" />
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-0.5 h-4.5 bg-zinc-200 dark:bg-zinc-800 transition-colors" />
           )}
           
           {/* Bottom connecting line (from center of node to bottom of container) */}
           {!isLast && (
-            <div className="absolute top-[18px] bottom-0 left-1/2 -translate-x-1/2 w-0.5 bg-zinc-200 dark:bg-zinc-800 transition-colors" />
+            <div className="absolute top-4.5 bottom-0 left-1/2 -translate-x-1/2 w-0.5 bg-zinc-200 dark:bg-zinc-800 transition-colors" />
           )}
           
           {/* The Node */}

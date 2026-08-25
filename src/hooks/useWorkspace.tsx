@@ -1,7 +1,8 @@
 import { saveProjectData, loadProjectData } from "../services/fileSystem";
-import { createContext, useContext, useState, useCallback, ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from "react";
 import { Waypoint, ProjectMetadata, ProjectSettings, RouteSegment, RecentProjects, WorkspaceState } from "../types";
 import { appConfig, defaultProjectSettings, mapDefaults } from "../config/constants";
+import { useHistory } from "./useHistory";
 
 const WorkspaceContext = createContext<WorkspaceState | undefined>(undefined);
 
@@ -20,9 +21,18 @@ const DefaultMetadata: ProjectMetadata = {
 };
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
-  const [waypoints, setWaypoints] = useState<Waypoint[]>([]);
+  const {
+    state: waypoints,
+    set: setWaypoints,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
+    resetHistory: resetWaypointHistory,
+  } = useHistory<Waypoint[]>([]);
   const [routeSegments, setRouteSegments] = useState<RouteSegment[]>([]);
   const [routePoints, setRoutePoints] = useState<[number, number][]>([]);
+  const [activeWaypointId, setActiveWaypointId] = useState<string | null>(null);
   const [metadata, setMetadata] = useState<ProjectMetadata>(() => ({
     ...DefaultMetadata,
     created_at: new Date().toISOString()
@@ -152,7 +162,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   };
 
   const resetWorkspace = () => {
-    setWaypoints([]);
+    setActiveWaypointId(null);
+    resetWaypointHistory([]);
     setRouteSegments([]);
     setMetadata({
       ...DefaultMetadata,
@@ -163,14 +174,51 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     setIsDirty(false);
   }
 
+  useEffect(() => {
+  const handleKeyDown = (e: KeyboardEvent) => {
+    // Ignore keypresses inside input fields or textareas so typing doesn't trigger undo
+    const activeEl = document.activeElement;
+    const isTyping =
+      activeEl?.tagName === "INPUT" ||
+      activeEl?.tagName === "TEXTAREA" ||
+      activeEl?.getAttribute("contenteditable") === "true";
+
+    if (isTyping) return;
+
+    const isCmdOrCtrl = e.metaKey || e.ctrlKey;
+
+    if (isCmdOrCtrl && e.key.toLowerCase() === "z") {
+      if (e.shiftKey) {
+        e.preventDefault();
+        redo();
+      } else {
+        e.preventDefault();
+        undo();
+      }
+    } else if (isCmdOrCtrl && e.key.toLowerCase() === "y") {
+      e.preventDefault();
+      redo();
+    }
+  };
+
+  window.addEventListener("keydown", handleKeyDown);
+  return () => window.removeEventListener("keydown", handleKeyDown);
+}, [undo, redo]);
+
   return (
     <WorkspaceContext.Provider
       value={{
         waypoints,
         setWaypoints,
+        undo,
+        redo,
+        canUndo,
+        canRedo,
         updateWaypoint,
         routeSegments,
         setRouteSegments,
+        activeWaypointId,
+        setActiveWaypointId,
         routePoints,
         setRoutePoints,
         metadata,

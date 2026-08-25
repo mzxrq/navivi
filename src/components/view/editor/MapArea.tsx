@@ -101,6 +101,7 @@ export function MapArea() {
         lng,
         name: "Locating...",
         images: [],
+        imagePans: [],
         narration: "",
         routeMode: "driving",
       },
@@ -129,9 +130,6 @@ export function MapArea() {
     }
   };
 
-  
-  // const isGpx = droppedFile?.toLowerCase().endsWith(".gpx");
-
   return (
     <main 
       className="flex-1 relative bg-zinc-100 dark:bg-[#09090b] overflow-hidden transition-colors"
@@ -143,16 +141,22 @@ export function MapArea() {
         <MapContainer
           center={settings.start_coords || [34.6937, 135.5023]}
           zoom={10}
+          maxZoom={19}
           zoomControl={false}
           style={{ height: "100%", width: "100%", background: "transparent" }}
         >
           <TileLayer
             key={isDarkMap ? "dark-map" : "light-map"}
-            attribution="&copy; OpenStreetMap contributors &copy; CARTO"
+            maxZoom={19}
+            attribution={
+              isDarkMap 
+                ? '&copy; <a href="https://carto.com/">CARTO</a>'
+                : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            }
             url={
               isDarkMap
-                ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-                : "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+                ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" // Keeps dark mode sleek
+                : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" // Vibrant, full of POIs, parks, and depth!
             }
           />
 
@@ -216,7 +220,6 @@ export function MapArea() {
             >
               <MapPin className="w-4 h-4" /> Add Waypoint Here
             </button>
-            {/* Future option: Add "Search nearby..." or "Paste Coordinates" here */}
           </div>
         </div>
       )}

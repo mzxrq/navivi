@@ -10,6 +10,8 @@ import {
   ChevronRight,
   PanelBottom,
   Settings2,
+  Undo2,
+  Redo2,
 } from "lucide-react";
 import { Window } from "@tauri-apps/api/window";
 import { SaveAs } from "../modal/SaveAs";
@@ -26,8 +28,18 @@ export function TitleBar() {
     setShowAppSettings,
   } = useUI();
 
-  const { saveProject, metadata, loadProject, isDirty, setIsDirty } =
-    useWorkspace();
+  const {
+    saveProject,
+    metadata,
+    loadProject,
+    isDirty,
+    setIsDirty,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
+  } = useWorkspace();
+
   const { importRouteFile } = useFileActions();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [showSaveAs, setShowSaveAs] = useState(false);
@@ -178,8 +190,41 @@ export function TitleBar() {
                   className="w-full flex items-center justify-between px-4 py-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-700/50 transition-colors"
                 >
                   <span>Import GPX...</span>
-                  {/* Optional: Add an icon or shortcut here if you want */}
                 </button>
+
+                {/* Undo/Redo Menu Options */}
+                {currentView === "editor" && (
+                  <>
+                    <div className="h-px bg-zinc-200 dark:bg-white/5 my-1 mx-2" />
+                    <button
+                      disabled={!canUndo}
+                      onClick={() => {
+                        setIsMenuOpen(false);
+                        undo();
+                      }}
+                      className="w-full flex items-center justify-between px-4 py-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-700/50 transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
+                    >
+                      <span className="flex items-center gap-2">
+                        <Undo2 className="w-3.5 h-3.5" /> Undo
+                      </span>
+                      <span className="text-xs text-zinc-400">Ctrl+Z</span>
+                    </button>
+
+                    <button
+                      disabled={!canRedo}
+                      onClick={() => {
+                        setIsMenuOpen(false);
+                        redo();
+                      }}
+                      className="w-full flex items-center justify-between px-4 py-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-700/50 transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
+                    >
+                      <span className="flex items-center gap-2">
+                        <Redo2 className="w-3.5 h-3.5" /> Redo
+                      </span>
+                      <span className="text-xs text-zinc-400">Ctrl+Y</span>
+                    </button>
+                  </>
+                )}
 
                 {/* Save options only visible when in the editor */}
                 {currentView === "editor" && (
@@ -188,7 +233,6 @@ export function TitleBar() {
                     <button
                       onClick={() => {
                         setIsMenuOpen(false);
-                        // Intercept First Save
                         if (
                           !metadata.project_id &&
                           metadata.project_name === "Untitled Project"
@@ -247,8 +291,30 @@ export function TitleBar() {
           </div>
         </div>
 
+        {/* Right-side Action Controls */}
         <div className="flex h-full text-zinc-600 dark:text-zinc-400">
-          
+          {currentView === "editor" && (
+            <div className="flex items-center border-r border-zinc-200 dark:border-white/5 pr-1 mr-1 h-full">
+              <button
+                onClick={undo}
+                disabled={!canUndo}
+                className="h-full px-2.5 flex items-center hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors disabled:opacity-30 disabled:hover:bg-transparent"
+                title="Undo (Ctrl+Z)"
+              >
+                <Undo2 className="w-3.5 h-3.5" />
+              </button>
+
+              <button
+                onClick={redo}
+                disabled={!canRedo}
+                className="h-full px-2.5 flex items-center hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors disabled:opacity-30 disabled:hover:bg-transparent"
+                title="Redo (Ctrl+Y / Ctrl+Shift+Z)"
+              >
+                <Redo2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
           {currentView === "editor" && (
             <button
               onClick={() => setShowVideoPanel(!showVideoPanel)}
@@ -258,6 +324,7 @@ export function TitleBar() {
               <PanelBottom className="w-4 h-4" />
             </button>
           )}
+
           <button
             onClick={() => setShowAppSettings(true)}
             className="h-full px-4 hover:bg-zinc-100 hover:text-zinc-900 transition-colors"
@@ -265,7 +332,9 @@ export function TitleBar() {
           >
             <Settings2 className="w-4 h-4" />
           </button>
+
           <div className="w-px h-4 my-auto bg-zinc-200 dark:bg-white/10 mx-1"></div>
+
           <button
             onClick={() => handleWindow("minimize")}
             className="h-full px-4 hover:bg-zinc-100 transition-colors"
@@ -308,23 +377,20 @@ export function TitleBar() {
             pendingNavigation === "title_screen" ||
             pendingNavigation === "new_project"
           ) {
-            setCurrentView(pendingNavigation); // TypeScript is now 100% happy
+            setCurrentView(pendingNavigation);
           }
           setPendingNavigation(null);
         }}
         onSave={async () => {
-          // Intercept First Save from the warning modal
           if (
             !metadata.project_id &&
             metadata.project_name === "Untitled Project"
           ) {
             setSaveMode("initial");
             setShowSaveAs(true);
-            // Do NOT navigate yet. Navigation will resume inside submitSaveAs.
             return;
           }
 
-          // Normal save flow
           const saved = await handleSave();
           if (saved && pendingNavigation) {
             if (pendingNavigation === "close") {

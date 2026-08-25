@@ -1,6 +1,6 @@
 import type { Dispatch, SetStateAction, } from "react";
 
-export type RouteMode = "driving" | "walking" | "direct" | "curve";
+export type RouteMode = "driving" | "walking" | "direct" | "curve" | "ferry";
 
 export interface Waypoint {
   id: string;
@@ -9,10 +9,12 @@ export interface Waypoint {
   name: string;
   images: string[];
   imageDisplay?: "pip" | "fullscreen";
+  imagePans: string[];
   narration: string;
   routeMode: RouteMode;
   duration?: number;
   fps?: number;
+  isGeneratingScript?: boolean;
 }
 
 export interface RouteSegment {
@@ -89,4 +91,12 @@ export interface WorkspaceState {
 
   routingCache: Record<string, [number, number][]>;
   setRoutingCache: Dispatch<SetStateAction<Record<string, [number, number][]>>>;
+
+  activeWaypointId: string | null;
+  setActiveWaypointId: (id: string | null) => void;
+
+  undo: () => void;
+  redo: () => void;
+  canUndo: boolean;
+  canRedo: boolean;
 }
