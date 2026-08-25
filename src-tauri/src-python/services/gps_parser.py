@@ -1,9 +1,8 @@
 """
-gpsparser.py (OOP Refactored)
+GPS Parser (gpsparser.py)
 ---------------------------------------------------------------------------
-Stage 1 of the pipeline: converts a raw GPS device file (GPX/KML/NMEA/FIT/
-TCX/LOC/TXT) into CSV via the bundled GPSBabel binary, cleans data, 
-detects stops/landmarks, and exports to frontend-compatible JSON.
+Cleans GPS data, detects stops/landmarks, and exports to JSON.
+Imports conversion and math logic from gps_converter.py.
 ---------------------------------------------------------------------------
 """
 
@@ -11,189 +10,20 @@ from __future__ import annotations
 
 import json
 import logging
-import shutil
-import subprocess
 from datetime import datetime
 from pathlib import Path
-from typing import Final, Optional, Dict, Any, List
+from typing import Final, Optional, Dict, Any
 
 import numpy as np
 import pandas as pd
 
-from services.job_config import JobConfigManager
+from services.gps_converter import GPSMath, GPSBabelConverter
+from services.logger import setup_logger
 
-logger = logging.getLogger(__name__)
-
-# =============================================================================
-# GEOMETRY & MATH UTILITIES
-# =============================================================================
-
-class GPSMath:
-    """Handles vector-based spatial and geographic calculations."""
-
-    @staticmethod
-    def haversine_vectorized(lat1: np.ndarray, lon1: np.ndarray, lat2: np.ndarray, lon2: np.ndarray) -> np.ndarray:
-        """Calculate the great circle distance between points using NumPy."""
-        R = 6371.0
-        lat1, lon1, lat2, lon2 = map(np.radians, [lat1, lon1, lat2, lon2])
-        
-        dlat = lat2 - lat1
-        dlon = lon2 - lon1
-        a = np.sin(dlat / 2.0)**2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2.0)**2
-        c = 2 * np.arcsin(np.sqrt(a))
-        return R * c
-
-    @staticmethod
-    def compute_route_summary(route_df: pd.DataFrame, waypoints_df: pd.DataFrame) -> Dict[str, Any]:
-        """Single source of truth for route-level distance and duration metrics."""
-        total_distance_km = 0.0
-        total_duration_seconds = 0.0
-
-        if not route_df.empty:
-            if "timestamp" in route_df.columns:
-                ordered = route_df.sort_values("timestamp")
-                total_duration_seconds = (
-                    ordered["timestamp"].max() - ordered["timestamp"].min()
-                ).total_seconds()
-
-            if "latitude" in route_df.columns and "longitude" in route_df.columns:
-                lat1, lon1 = route_df["latitude"], route_df["longitude"]
-                lat2, lon2 = route_df["latitude"].shift(-1), route_df["longitude"].shift(-1)
-                total_distance_km = float(
-                    np.nansum(GPSMath.haversine_vectorized(
-                                                            lat1.to_numpy(), 
-                                                            lon1.to_numpy(), 
-                                                            lat2.to_numpy(), 
-                                                            lon2.to_numpy()
-                                                        ))
-                )
-
-        duration_td = pd.Timedelta(seconds=total_duration_seconds)
-
-        return {
-            "total_route_points": len(route_df),
-            "total_waypoints": len(waypoints_df),
-            "total_landmarked_stops": (
-                int(route_df["is_landmarked"].sum()) if "is_landmarked" in route_df.columns else 0
-            ),
-            "total_distance_km": round(total_distance_km, 3),
-            "total_duration_seconds": total_duration_seconds,
-            "total_distance_km_formatted": f"{total_distance_km:.2f} km",
-            "total_duration_formatted": str(duration_td),
-        }
-
+logger = setup_logger("GPSDataCleaner")
 
 # =============================================================================
-# GPSBABEL CONVERTER ENGINE
-# =============================================================================
-
-class GPSBabelConverter:
-    """Manages binary execution, format detection, and file conversion via GPSBabel."""
-
-    GPSBABEL_BIN: Final[Path] = (
-        Path(__file__).resolve().parent.parent / "bin" / "GPSBabel" / "gpsbabel.exe"
-    )
-
-    EXTENSION_TO_FORMAT: Final[Dict[str, str]] = {
-        ".gpx": "gpx",
-        ".kml": "kml",
-        ".nmea": "nmea",
-        ".fit": "garmin_fit",
-        ".tcx": "gtrnctr",
-        ".loc": "geo",
-        ".txt": "nmea",
-    }
-
-    TIMEOUT_SECONDS: Final[int] = 120
-
-    def __init__(self, binary_path: Optional[Path] = None, job_config=None):
-        self.binary_path = binary_path if binary_path else self.GPSBABEL_BIN
-        # Bring in the dynamic JobConfigManager just like mapfetcher
-        self.config = job_config or JobConfigManager()
-
-    def resolve_binary(self) -> str:
-        if self.binary_path.exists():
-            return str(self.binary_path)
-
-        system_binary = shutil.which("gpsbabel")
-        if system_binary is None:
-            raise FileNotFoundError(
-                f"gpsbabel not found. Expected bundled binary at '{self.binary_path}' or a PATH install."
-            )
-        return system_binary
-
-    def detect_input_format(self, input_path: Path) -> str:
-        ext = input_path.suffix.lower()
-        fmt = self.EXTENSION_TO_FORMAT.get(ext)
-        if fmt is None:
-            raise ValueError(
-                f"Could not auto-detect format for extension '{ext}'. "
-                f"Supported: {sorted(self.EXTENSION_TO_FORMAT)}."
-            )
-        return fmt
-
-    def generate_unique_output_path(self, target_dir: Path, stem: str, suffix: str) -> Path:
-        target_dir.mkdir(parents=True, exist_ok=True)
-        datetime_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-
-        for sequence in range(1, 100):
-            candidate = target_dir / f"{stem}_raw_{datetime_str}_{sequence:02d}{suffix}"
-            if not candidate.exists():
-                return candidate
-
-        raise FileExistsError(f"Could not generate unique filename; 99 files already exist for {datetime_str}.")
-
-    def convert(self, input_file: str, output_filename: str, output_format: str, input_format: Optional[str] = None, extra_args: Optional[List[str]] = None) -> str:
-        gpsbabel_cmd = self.resolve_binary()
-        input_path = Path(input_file)
-        
-        if not input_path.exists():
-            raise FileNotFoundError(f"Input file not found: {input_file}")
-
-        if input_format is None:
-            input_format = self.detect_input_format(input_path)
-
-        # ---------------------------------------------------------------------
-        # DYNAMIC PATH FIX: 
-        # Resolves the base path from JobConfigManager, then appends "csv"
-        # ---------------------------------------------------------------------
-        base_path = Path(self.config.get("directory_path", "assets"))
-        target_dir = (base_path / "csv").resolve()
-        
-        requested = Path(output_filename)
-        output_path = self.generate_unique_output_path(target_dir, requested.stem, requested.suffix)
-
-        cmd = [gpsbabel_cmd, "-i", input_format, "-f", str(input_path.resolve())]
-        if extra_args:
-            cmd.extend(extra_args)
-
-        dummy_bin: Optional[Path] = None
-        if output_format.lower() == "mtk-bin" and output_path.suffix.lower() == ".csv":
-            cmd.extend(["-o", f"mtk-bin,csv={output_path.resolve()}"])
-            dummy_bin = output_path.parent / "dummy.bin"
-            cmd.extend(["-F", str(dummy_bin.resolve())])
-        else:
-            cmd.extend(["-o", output_format, "-F", str(output_path.resolve())])
-
-        logger.info("Running gpsbabel: %s", " ".join(cmd))
-
-        try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=self.TIMEOUT_SECONDS)
-        except subprocess.TimeoutExpired as exc:
-            raise RuntimeError(f"gpsbabel timed out after {self.TIMEOUT_SECONDS}s for {input_file}") from exc
-        finally:
-            if dummy_bin and dummy_bin.exists():
-                dummy_bin.unlink()
-
-        if result.returncode != 0:
-            raise RuntimeError(f"gpsbabel failed (exit {result.returncode}):\n{result.stderr.strip()}")
-
-        logger.info("Converted '%s' -> '%s'", input_file, output_path)
-        return str(output_path)
-
-
-# =============================================================================
-# DATA CLEANING & LANDMARK PROCESSOR
+# [Core] DATA CLEANING & LANDMARK PROCESSOR
 # =============================================================================
 
 class GPSDataCleaner:
@@ -202,11 +32,13 @@ class GPSDataCleaner:
     STOP_DETECTION_PRECISION: Final[int] = 5
     LANDMARK_MIN_STOP_SECONDS: Final[int] = 300
 
+    # [Config/IO] Initialize with precision, minimum stop duration, and fallback speed
     def __init__(self, precision: int = STOP_DETECTION_PRECISION, min_stop_sec: int = LANDMARK_MIN_STOP_SECONDS, fallback_speed_m_s: float = 1.4):
         self.precision = precision
         self.min_stop_sec = min_stop_sec
         self.fallback_speed_m_s = fallback_speed_m_s
 
+    # [GPS] Cleans a GPS CSV file, detects stops, and optionally saves cleaned data and waypoints
     def clean_file(self, csv_path: str, save_output: bool = True) -> Dict[str, Any]:
         df = pd.read_csv(csv_path)
         df.columns = [col.strip().lower() for col in df.columns]
@@ -383,12 +215,13 @@ class GPSDataCleaner:
 
 
 # =============================================================================
-# FRONTEND JSON EXPORTER
+# [Util] FRONTEND JSON EXPORTER
 # =============================================================================
 
 class GPSJsonExporter:
     """Handles serialization of cleaned GPS data into frontend-ready JSON configurations."""
 
+    # [Util/IO] Exports cleaned GPS data and waypoints to a structured JSON format for frontend consumption
     @staticmethod
     def export(cleaned_data: Dict[str, Any], original_input_path: str, project_name: str = "Untitled Project", save_json: bool = True) -> Dict[str, Any]:
         route_df = cleaned_data.get("route", pd.DataFrame())
@@ -451,7 +284,7 @@ class GPSJsonExporter:
 
 
 # =============================================================================
-# BACKWARDS-COMPATIBLE MODULE-LEVEL FUNCTIONS (FACADE)
+# [Config] BACKWARDS-COMPATIBLE MODULE-LEVEL FUNCTIONS (FACADE)
 # =============================================================================
 
 def convert_gps_file(*args, **kwargs) -> str:
@@ -459,9 +292,6 @@ def convert_gps_file(*args, **kwargs) -> str:
 
 def haversine_vectorized(*args, **kwargs):
     return GPSMath.haversine_vectorized(*args, **kwargs)
-
-def _compute_route_summary(*args, **kwargs):
-    return GPSMath.compute_route_summary(*args, **kwargs)
 
 def clean_gps_data(*args, **kwargs):
     return GPSDataCleaner().clean_file(*args, **kwargs)
@@ -475,6 +305,7 @@ def summarize_gps_data(cleaned_data: dict) -> dict:
 def export_to_frontend_json(*args, **kwargs):
     return GPSJsonExporter.export(*args, **kwargs)
 
+# [Core] GPSParser class provides a unified interface for GPS data operations
 class GPSParser:
     @staticmethod
     def detect_format(input_path: Path) -> str:
