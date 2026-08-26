@@ -16,8 +16,7 @@ from services.data_upload_pipeline import (
     handle_incoming_gps_upload,
     generate_attraction_videos,
 )
-from services.video_pipeline import run_full_pipeline
-from services.tts_pipeline import run_synced_tts_pipeline
+from services.video_pipeline import run_full_pipeline, render_from_timeline
 
 from services.file_handler import (
     initialize_new_project,
@@ -87,15 +86,6 @@ if __name__ == "__main__":
                     )
                 )
 
-            elif command == "synced_tts_pipeline":
-                output_arg = sys.argv[3] if len(sys.argv) > 3 else None
-                result = asyncio.run(
-                    run_synced_tts_pipeline(
-                        project_config_path=payload, output_video_dir=output_arg
-                    )
-                )
-                print(json.dumps({"success": True, **result}, ensure_ascii=False))
-
             elif command == "save_config":
                 config = JobConfigManager(payload)
                 config.save()
@@ -139,6 +129,18 @@ if __name__ == "__main__":
                 )
                 print(
                     json.dumps({"success": True, "script": script}, ensure_ascii=False)
+                )
+
+            elif command == "render_timeline":
+                output_arg = sys.argv[3] if len(sys.argv) > 3 else None
+                rendered_path = render_from_timeline(
+                    payload, output_video_path=output_arg
+                )
+                print(
+                    json.dumps(
+                        {"success": True, "final_video_path": rendered_path},
+                        ensure_ascii=False,
+                    )
                 )
 
             else:

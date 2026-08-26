@@ -1,191 +1,15 @@
-"""
-VDO engine service (video_engine.py)
----------------------------------------------------------------------------
-Handles low-level Graphics (OpenCV/PIL), Video Exporting (FFmpeg), and Math.
-Now includes Cinematic Transitions and B-Roll playback logic.
----------------------------------------------------------------------------
-"""
-
-import math
 import os
-import shutil
-import subprocess
-import tempfile
-from pathlib import Path
-from typing import Final, Dict, Any, List, Optional, Tuple
+from typing import Final, Dict, List, Tuple, Optional
 
 import cv2
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
 from PIL.ImageFont import truetype, load_default, FreeTypeFont
 
-from services.logger import setup_logger
-
-# Logging configuration
-logger = setup_logger("VideoEngine")
-
-# [Config] FFMPEG binary path (Windows-specific)
-FFMPEG_BIN = (
-    Path(__file__).resolve().parent.parent / "bin" / "FFmpeg" / "bin" / "ffmpeg.exe"
-)
-
-
-class MathUtils:
-    """Static utility methods for geometry and math."""
-
-    @staticmethod
-    def point_to_segment_distance(
-        px: float, py: float, ax: float, ay: float, bx: float, by: float
-    ) -> float:
-        abx, aby = bx - ax, by - ay
-        seg_len_sq = abx * abx + aby * aby
-        if seg_len_sq < 1e-9:
-            return float(np.hypot(px - ax, py - ay))
-        t = max(0.0, min(1.0, ((px - ax) * abx + (py - ay) * aby) / seg_len_sq))
-        closest_x, closest_y = ax + t * abx, ay + t * aby
-        return float(np.hypot(px - closest_x, py - closest_y))
-
-    @staticmethod
-    def is_real_label(lbl: Any) -> bool:
-        if lbl is None:
-            return False
-        if isinstance(lbl, float) and math.isnan(lbl):
-            return False
-        return str(lbl).strip() != ""
-
-
-class VideoExporter:
-    """Handles writing frames to video files using FFmpeg or OpenCV fallback."""
-
-    def __init__(self, output_path: str, width: int, height: int, fps: int):
-        self.width = width
-        self.height = height
-        self.fps = fps
-        self.proc = self._open_ffmpeg_writer(output_path)
-        self._fallback_path = None
-        self._fallback_writer = None
-
-        if self.proc is None:
-            self._fallback_path = tempfile.mktemp(suffix=".avi")
-            self._fallback_writer = cv2.VideoWriter(
-                self._fallback_path,
-                cv2.VideoWriter.fourcc(*"XVID"),
-                self.fps,
-                (self.width, self.height),
-            )
-            if not self._fallback_writer.isOpened():
-                raise RuntimeError(
-                    "Neither ffmpeg nor OpenCV VideoWriter is available."
-                )
-
-    @staticmethod
-    def resolve_ffmpeg() -> Optional[str]:
-        if FFMPEG_BIN.exists():
-            return str(FFMPEG_BIN)
-        return shutil.which("ffmpeg")
-
-    def _open_ffmpeg_writer(self, output_path: str) -> Optional[subprocess.Popen]:
-        ffmpeg_cmd = self.resolve_ffmpeg()
-        if ffmpeg_cmd is None:
-            return None
-
-        cmd = [
-            ffmpeg_cmd,
-            "-y",
-            "-f",
-            "rawvideo",
-            "-vcodec",
-            "rawvideo",
-            "-pix_fmt",
-            "bgr24",
-            "-s",
-            f"{self.width}x{self.height}",
-            "-r",
-            str(self.fps),
-            "-i",
-            "-",
-            "-an",
-            "-vcodec",
-            "libx264",
-            "-crf",
-            "18",
-            "-preset",
-            "fast",
-            "-pix_fmt",
-            "yuv420p",
-            output_path,
-        ]
-        return subprocess.Popen(
-            cmd,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            bufsize=0,
-        )
-
-    def write(self, frame: np.ndarray) -> None:
-        if self.proc is not None and self.proc.stdin:
-            self.proc.stdin.write(frame.tobytes())
-        elif self._fallback_writer:
-            self._fallback_writer.write(frame)
-
-    def release(self, output_path: str) -> str:
-        if self.proc is not None:
-            if self.proc.stdin:
-                self.proc.stdin.close()
-            self.proc.wait()
-            return output_path
-
-        if self._fallback_writer:
-            self._fallback_writer.release()
-
-        if (
-            output_path.lower().endswith(".mp4")
-            and self._fallback_path
-            and self._reencode_to_h264(self._fallback_path, output_path)
-        ):
-            if self._fallback_path and os.path.exists(self._fallback_path):
-                os.remove(self._fallback_path)
-            return output_path
-
-        avi_path = str(Path(output_path).with_suffix(".avi"))
-        if self._fallback_path:
-            os.rename(self._fallback_path, avi_path)
-        return avi_path
-
-    @staticmethod
-    def _reencode_to_h264(src: str, dst: str) -> bool:
-        ffmpeg_cmd = VideoExporter.resolve_ffmpeg()
-        if ffmpeg_cmd is None:
-            return False
-        try:
-            r = subprocess.run(
-                [
-                    ffmpeg_cmd,
-                    "-y",
-                    "-i",
-                    src,
-                    "-vcodec",
-                    "libx264",
-                    "-crf",
-                    "18",
-                    "-preset",
-                    "fast",
-                    "-pix_fmt",
-                    "yuv420p",
-                    dst,
-                ],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-            return r.returncode == 0
-        except FileNotFoundError:
-            return False
+from services.math_util import MathUtils
 
 
 class GraphicsEngine:
-    """Handles all drawing, UI composites, image manipulations, and transitions."""
-
     FONT_CANDIDATES_REGULAR: Final[List[str]] = [
         "NotoSansJP-Regular.ttf",
         "NotoSansJP-Regular.otf",
@@ -230,11 +54,12 @@ class GraphicsEngine:
             img_array = np.frombuffer(chunk, dtype=np.uint8)
             return cv2.imdecode(img_array, cv2.IMREAD_COLOR)
         except Exception as e:
-            logger.warning(f"Failed to load image {path}: {e}")
+            logger.warning(f"⚠️ Failed to load image {path}: {e}")
             return None
 
     def draw_path(self, frame: np.ndarray, path_history: List[Tuple[int, int]]):
         if len(path_history) > 1:
+            # Subtle outer glow effect for the route line
             cv2.polylines(
                 frame,
                 [np.array(path_history, dtype=np.int32)],
@@ -243,6 +68,7 @@ class GraphicsEngine:
                 self.line_thickness + 6,
                 cv2.LINE_AA,
             )
+            # Main route line
             cv2.polylines(
                 frame,
                 [np.array(path_history, dtype=np.int32)],
@@ -253,6 +79,7 @@ class GraphicsEngine:
             )
 
     def draw_marker(self, frame: np.ndarray, cx: int, cy: int):
+        # Modern Apple-style map pin (Clean white core with vibrant indicator ring)
         cv2.circle(
             frame, (cx, cy), self.marker_radius + 6, (255, 255, 255), -1, cv2.LINE_AA
         )
@@ -302,6 +129,7 @@ class GraphicsEngine:
             1,
             cv2.LINE_AA,
         )
+
         return sprite, (cx, cy)
 
     def blit_sprite(
@@ -349,6 +177,7 @@ class GraphicsEngine:
                     offset = (ph - new_h) // 2
                     pop_img = pop_img[offset : offset + new_h, :]
 
+                # Uniform size for all popup images
                 target_img_w = 340
                 target_img_h = int(target_img_w / target_ratio)
                 pop_img = cv2.resize(pop_img, (target_img_w, target_img_h))
@@ -357,6 +186,7 @@ class GraphicsEngine:
                 border = 14
                 label_text = popup_info.get("label")
                 font = self._load_font(self.FONT_CANDIDATES_REGULAR, self.font_size)
+
                 has_label = MathUtils.is_real_label(label_text)
 
                 if has_label:
@@ -375,11 +205,14 @@ class GraphicsEngine:
                 else:
                     point_x = int(popup_info["x"])
                     point_y = int(popup_info["y"])
+
                     if point_x > w * 0.5:
                         box_x = point_x - total_w - 40
                     else:
                         box_x = point_x + 40
+
                     box_y = point_y - (total_h // 2)
+
                     box_x = max(margin, min(box_x, w - total_w - margin))
                     box_y = max(margin, min(box_y, h - total_h - margin))
 
@@ -421,13 +254,19 @@ class GraphicsEngine:
                     draw_text_layer = ImageDraw.Draw(base_pil)
                     text_bbox = draw_text_layer.textbbox((0, 0), label_text, font=font)
                     text_w = text_bbox[2] - text_bbox[0]
+
                     text_x = box_x + (total_w - text_w) // 2
                     text_y = photo_y + ph + 10
+
                     draw_text_layer.text(
-                        (text_x, text_y), label_text, font=font, fill=(40, 40, 40, 255)
+                        (text_x, text_y),
+                        label_text,
+                        font=font,
+                        fill=(40, 40, 40, 255),
                     )
 
                 f_frame = cv2.cvtColor(np.array(base_pil), cv2.COLOR_RGBA2BGR)
+
         return f_frame
 
     def generate_fullscreen_popup_transition(
@@ -491,15 +330,18 @@ class GraphicsEngine:
         box_x = max(margin, min(box_x, w - total_w - margin))
         box_y = max(margin, min(box_y, h - total_h - margin))
 
-        start_x, start_y = box_x + border, box_y + border
+        start_x = box_x + border
+        start_y = box_y + border
+        start_w = target_img_w
+        start_h = target_img_h
 
         scale_frames = max(1, int(duration_sec * fps))
         for t in range(scale_frames):
             progress = t / float(scale_frames - 1) if scale_frames > 1 else 1.0
             ease = 1 - (1 - progress) ** 3
 
-            curr_w = int(target_img_w + (w - target_img_w) * ease)
-            curr_h = int(target_img_h + (h - target_img_h) * ease)
+            curr_w = int(start_w + (w - start_w) * ease)
+            curr_h = int(start_h + (h - start_h) * ease)
             curr_x = int(start_x + (0 - start_x) * ease)
             curr_y = int(start_y + (0 - start_y) * ease)
 
@@ -528,6 +370,7 @@ class GraphicsEngine:
         for t in range(fade_frames):
             progress = t / float(fade_frames - 1) if fade_frames > 1 else 1.0
             alpha = 1.0 - progress
+
             blended = cv2.addWeighted(
                 full_screen_frame, alpha, base_frame, 1 - alpha, 0
             )
@@ -535,6 +378,7 @@ class GraphicsEngine:
 
         return frames
 
+    # 💡 NEW: Handles Fade IO logic globally for all renderers
     def write_fade_clip(
         self,
         video_out: VideoExporter,
@@ -561,6 +405,7 @@ class GraphicsEngine:
             else:
                 video_out.write(fg_frame)
 
+    # 💡 NEW: Handles Video Playback logic globally for all renderers
     def play_fullscreen_video(
         self,
         video_path: str,
@@ -573,7 +418,7 @@ class GraphicsEngine:
         if isinstance(video_path, list):
             video_path = video_path[0] if video_path else ""
 
-        if not video_path or not Path(video_path).exists():
+        if not video_path or not os.path.exists(video_path):
             logger.warning(f"Video file not found: {video_path}")
             return
 

@@ -143,13 +143,16 @@ def concatenate_audio_files(
 ) -> str:
     return _default_manager.concatenate_audio(audio_paths, final_output_path)
 
+
 # [Validate] Convenience function to assemble the final deliverable
 def resolve_ffmpeg_bin() -> str:
     return FFmpegManager.resolve_ffmpeg_bin()
 
+
 # [TTS/Util] Convenience function to get audio format (sample rate and channels) from a file
 def get_audio_format(path: str) -> tuple[int, int]:
     return FFmpegManager.get_audio_format(path)
+
 
 # [TTS/Animation] Convenience function to assemble the final deliverable
 def assemble_final_deliverable(
@@ -194,10 +197,14 @@ def assemble_final_deliverable(
         normalized_paths, final_output_path=f"{output_dir}/final_navigation_video.mp4"
     )
 
+    correct_audio_path = str(
+        Path(output_dir).parent / "audio" / "master_full_timeline_audio.wav"
+    )
+
     full_audio_path = _default_manager.audio_processor.build_full_narration_master(
         segment_durations=segment_durations,
         segment_narration_audio=segment_narration_audio,
-        final_output_path=f"{output_dir}/master_full_timeline_audio.wav",
+        final_output_path=correct_audio_path,
     )
 
     # Pass the subtitle path into combine_video_and_audio so FFmpeg burns it
@@ -227,6 +234,7 @@ def assemble_final_deliverable(
         "full_audio_path": full_audio_path,
         "final_combined_path": final_combined_path,
     }
+
 
 # [Core] TTSService Class for use in legacy tests and external scripts
 class TTSService:

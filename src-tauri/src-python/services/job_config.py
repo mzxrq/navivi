@@ -146,8 +146,8 @@ class JobConfigManager:
         self.data["settings"].update(new_settings)
 
     # [Util/Config] Retrieve the entire configuration data
-    def get_all(self) -> Dict[str, Any]:
+    def to_dict(self) -> Dict[str, Any]:
         """
-        Retrieve the entire configuration data.
+        Convert the JobConfigManager instance to a dictionary representation.
         """
         return self.data
