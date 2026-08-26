@@ -5,6 +5,7 @@ from typing import Optional, Any, Dict
 
 import numpy as np
 import pyproj
+import asyncio
 
 from services.gps_parser import convert_gps_file, clean_gps_data, haversine_vectorized
 from services.mapfetcher import MapFetcher
@@ -105,16 +106,101 @@ def process_gps(raw_source_path: str) -> dict:
 def generate_audio(cleaned_route: dict, project_config_path: str) -> dict:
     """
     Generates Irodori TTS audio based on the parsed route.
-    Note: Link this to your tts_pipeline.py generator.
+    Uses the local TTSPipelineManager from tts.py to generate and analyze clips.
     """
-    print("Step 2: Generating TTS Audio...")
+    print("Step 2: Generating TTS Audio via tts.py...")
     logger.info("Step 2: Generating TTS audio for config: %s", project_config_path)
-    # NOTE: In the future, you will import your TTS orchestrator here:
-    # from services.tts_pipeline import run_synced_tts_pipeline
-    # audio_data = asyncio.run(run_synced_tts_pipeline(project_config_path, ...))
-    # return audio_data
 
-    return {"audio_durations": [], "audio_pauses": []}
+    audio_durations = []
+    audio_pauses = []
+    audio_paths = []
+    subtitle_paths = []
+
+    try:
+        config_path = Path(project_config_path)
+        if not config_path.exists():
+            logger.warning("Step 2: No project config found. Skipping TTS.")
+            return {
+                "audio_durations": [],
+                "audio_pauses": [],
+                "audio_paths": [],
+                "subtitle_paths": [],
+            }
+
+        with open(config_path, "r", encoding="utf-8") as f:
+            project_config = json.load(f)
+
+        waypoints = project_config.get("waypoints", [])
+
+        # Import the unified manager from your new tts.py file
+        from services.tts import TTSPipelineManager
+
+        tts_manager = TTSPipelineManager()
+
+        # Create an async worker to process all TTS tasks
+        async def _generate_all_speech():
+            for idx, wp in enumerate(waypoints):
+                # Look for narration text in standard keys
+                script = wp.get("script") or wp.get("narration") or wp.get("voiceover")
+
+                if not script:
+                    # If there's no script for this waypoint, append empty defaults
+                    audio_durations.append(0.0)
+                    audio_pauses.append([])
+                    audio_paths.append(None)
+                    subtitle_paths.append(None)
+                    continue
+
+                logger.info(
+                    f"Step 2: [%d/%d] Generating audio for: '%s'",
+                    idx + 1,
+                    len(waypoints),
+                    wp.get("label", f"Waypoint {idx}"),
+                )
+
+                # 1. Generate Speech via IrodoriTTSClient
+                wav_path = await tts_manager.get_speech(script)
+
+                # 2. Analyze pauses via AudioProcessor
+                analysis = tts_manager.analyze_pauses(wav_path)
+
+                audio_durations.append(analysis.get("total_duration", 0.0))
+                audio_pauses.append(analysis.get("pauses", []))
+                audio_paths.append(wav_path)
+
+                # Subtitles can be injected here later if your TTS engine outputs them
+                subtitle_paths.append(None)
+
+        # Execute the async function synchronously within the pipeline
+        asyncio.run(_generate_all_speech())
+
+        logger.info("Step 2 complete: TTS audio successfully generated.")
+        return {
+            "audio_durations": audio_durations,
+            "audio_pauses": audio_pauses,
+            "audio_paths": audio_paths,
+            "subtitle_paths": subtitle_paths,
+        }
+
+    except ImportError as e:
+        logger.error(
+            "Step 2 failed: Could not import TTSPipelineManager from services.tts. %s",
+            e,
+        )
+        return {
+            "audio_durations": [],
+            "audio_pauses": [],
+            "audio_paths": [],
+            "subtitle_paths": [],
+        }
+    except Exception as e:
+        logger.error("Step 2 failed: TTS Audio generation encountered an error: %s", e)
+        return {
+            "audio_durations": [],
+            "audio_pauses": [],
+            "audio_paths": [],
+            "subtitle_paths": [],
+        }
 
 
 # =========================================================================

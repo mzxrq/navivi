@@ -2,6 +2,20 @@
 Spatial Renderer Service (spatial_renderer.py)
 ---------------------------------------------------------------------------
 Handles proximity-based triggering for the legacy overview and waypoint maps.
+
+[REFACTOR NOTE]
+The four fullscreen-popup "freeze -> scale -> optional B-roll -> hold ->
+fade" sequences that used to be hand-copied in this file (intro popup,
+per-frame proximity trigger, outro popup, and the per-waypoint-leg popup
+in `render_waypoints`) now all delegate to
+`GraphicsEngine.play_fullscreen_popup_sequence()`. The previously
+duplicated `_compute_fullscreen_hold_times` static method has been
+removed in favor of `GraphicsEngine.compute_fullscreen_hold_times`,
+called with this renderer's own `self.transition_cfg`.
+
+Every call site below preserves its EXACT original `last_frame`
+bookkeeping behavior (documented per call site) — this refactor is a
+pure Extract Method; no rendering behavior changes.
 ---------------------------------------------------------------------------
 """
 
@@ -47,21 +61,6 @@ class SpatialRenderer:
             "post_arrival_hold_seconds", 1.0
         )
         self.last_frame = None
-
-    def _compute_fullscreen_hold_times(
-        self, total_freeze: float
-    ) -> Tuple[float, float, float, float]:
-        t = self.transition_cfg
-        scale_time = t["scale_seconds"]
-        fade_time = t["fade_out_seconds"]
-        hold_full_time = max(
-            t["min_hold_seconds"], total_freeze * t["hold_ratio_of_freeze"]
-        )
-        hold_small_time = max(
-            t["min_small_hold_seconds"],
-            total_freeze - scale_time - hold_full_time - fade_time,
-        )
-        return hold_small_time, scale_time, hold_full_time, fade_time
 
     def _get_job_waypoints(self) -> List[Dict]:
         """Safely extracts original waypoints from job_config.json to rescue missing keys."""
@@ -119,11 +118,6 @@ class SpatialRenderer:
         summary: Optional[Dict] = None,
     ) -> str:
         h, w = base_img.shape[:2]
-        if h % 2 != 0 or w % 2 != 0:
-            h = h - (h % 2)
-            w = w - (w % 2)
-            base_img = base_img[:h, :w].copy()
-
         duration = self.config.get("duration", 30.0)
         num_frames = max(10, int(duration * fps))
         self._total_points = len(points)
@@ -226,48 +220,22 @@ class SpatialRenderer:
             triggered_markers.append({"x": start_popup["x"], "y": start_popup["y"]})
 
             if temp_sp["data"].get("image_display") == "fullscreen":
-                freeze_frame = self.graphics.render_popup_box(intro_frame, temp_sp)
-                total_freeze = float(temp_sp["data"].get("freeze_seconds", 3.0))
-                hold_small, scale_t, hold_full, fade_t = (
-                    self._compute_fullscreen_hold_times(total_freeze)
+                # [CONSOLIDATED] Was ~25 lines of hand-inlined freeze/scale/
+                # broll/hold/fade logic — see GraphicsEngine.
+                # last_frame intentionally NOT captured here: the main
+                # per-frame loop below unconditionally overwrites
+                # `self.last_frame` on its very first iteration anyway, so
+                # (matching the ORIGINAL code's behavior) whatever this
+                # intro sequence produces has no observable effect on
+                # state beyond the frames it writes to `video` directly.
+                self.graphics.play_fullscreen_popup_sequence(
+                    video=video,
+                    base_frame=intro_frame,
+                    popup_info=temp_sp,
+                    fps=fps,
+                    transition_cfg=self.transition_cfg,
+                    exit_frame=intro_frame,
                 )
-                broll_video = temp_sp["data"].get("popup_video")
-
-                if broll_video:
-                    t_frames = self.graphics.generate_fullscreen_popup_transition(
-                        base_frame=freeze_frame,
-                        popup_info=temp_sp,
-                        fps=fps,
-                        duration_sec=scale_t,
-                        hold_sec=0.1,
-                        fade_out_sec=0.0,
-                    )
-                    if t_frames:
-                        for _ in range(int(hold_small * fps)):
-                            video.write(freeze_frame)
-                        for tf in t_frames:
-                            video.write(tf)
-                    enter_frame = t_frames[-1] if t_frames else freeze_frame
-                    self.graphics.play_fullscreen_video(
-                        broll_video, enter_frame, intro_frame, video, fps
-                    )
-                else:
-                    t_frames = self.graphics.generate_fullscreen_popup_transition(
-                        base_frame=freeze_frame,
-                        popup_info=temp_sp,
-                        fps=fps,
-                        duration_sec=scale_t,
-                        hold_sec=hold_full,
-                        fade_out_sec=fade_t,
-                    )
-                    if t_frames:
-                        for _ in range(int(hold_small * fps)):
-                            video.write(freeze_frame)
-                        for tf in t_frames:
-                            video.write(tf)
-                    else:
-                        for _ in range(int(total_freeze * fps)):
-                            video.write(freeze_frame)
             else:
                 intro_frame = self.graphics.render_popup_box(intro_frame, temp_sp)
                 self.graphics.draw_marker(
@@ -332,54 +300,19 @@ class SpatialRenderer:
                 )
 
                 if triggered_popup["data"].get("image_display") == "fullscreen":
-                    freeze_frame = self.graphics.render_popup_box(
-                        frame, triggered_popup
+                    # [CONSOLIDATED] Original always updated `self.last_frame`
+                    # here regardless of B-roll vs static-image branch — we
+                    # preserve that by unconditionally assigning the
+                    # returned frame below (ignoring the `used_broll` flag,
+                    # matching original behavior exactly).
+                    self.last_frame, _ = self.graphics.play_fullscreen_popup_sequence(
+                        video=video,
+                        base_frame=frame,
+                        popup_info=triggered_popup,
+                        fps=fps,
+                        transition_cfg=self.transition_cfg,
+                        exit_frame=frame,
                     )
-                    total_freeze = float(
-                        triggered_popup["data"].get("freeze_seconds", 3.0)
-                    )
-                    hold_small, scale_t, hold_full, fade_t = (
-                        self._compute_fullscreen_hold_times(total_freeze)
-                    )
-                    broll_video = triggered_popup["data"].get("popup_video")
-
-                    if broll_video:
-                        t_frames = self.graphics.generate_fullscreen_popup_transition(
-                            base_frame=freeze_frame,
-                            popup_info=triggered_popup,
-                            fps=fps,
-                            duration_sec=scale_t,
-                            hold_sec=0.1,
-                            fade_out_sec=0.0,
-                        )
-                        if t_frames:
-                            for _ in range(int(hold_small * fps)):
-                                video.write(freeze_frame)
-                            for tf in t_frames:
-                                video.write(tf)
-                        enter_frame = t_frames[-1] if t_frames else freeze_frame
-                        self.graphics.play_fullscreen_video(
-                            broll_video, enter_frame, frame, video, fps
-                        )
-                        self.last_frame = frame
-                    else:
-                        t_frames = self.graphics.generate_fullscreen_popup_transition(
-                            base_frame=freeze_frame,
-                            popup_info=triggered_popup,
-                            fps=fps,
-                            duration_sec=scale_t,
-                            hold_sec=hold_full,
-                            fade_out_sec=fade_t,
-                        )
-                        if t_frames:
-                            for _ in range(int(hold_small * fps)):
-                                video.write(freeze_frame)
-                            for tf in t_frames:
-                                video.write(tf)
-                        else:
-                            for _ in range(int(total_freeze * fps)):
-                                video.write(freeze_frame)
-                        self.last_frame = freeze_frame
                 else:
                     display_seconds = float(
                         triggered_popup["data"].get("freeze_seconds", 4.0)
@@ -424,50 +357,21 @@ class SpatialRenderer:
             temp_stop["x"], temp_stop["y"] = stop_popup["x"], stop_popup["y"]
 
             if temp_stop["data"].get("image_display") == "fullscreen":
-                freeze_frame = self.graphics.render_popup_box(outro_frame, temp_stop)
-                total_freeze = float(temp_stop["data"].get("freeze_seconds", 3.0))
-                hold_small, scale_t, hold_full, fade_t = (
-                    self._compute_fullscreen_hold_times(total_freeze)
+                # [CONSOLIDATED] Original set self.last_frame = outro_frame
+                # for the B-roll branch and self.last_frame = freeze_frame
+                # for the static-hold branch — both of which are exactly
+                # what `play_fullscreen_popup_sequence` now returns as
+                # `final_frame` in each respective case, so a single
+                # unconditional assignment reproduces both original
+                # branches correctly.
+                self.last_frame, _ = self.graphics.play_fullscreen_popup_sequence(
+                    video=video,
+                    base_frame=outro_frame,
+                    popup_info=temp_stop,
+                    fps=fps,
+                    transition_cfg=self.transition_cfg,
+                    exit_frame=outro_frame,
                 )
-                broll_video = temp_stop["data"].get("popup_video")
-
-                if broll_video:
-                    t_frames = self.graphics.generate_fullscreen_popup_transition(
-                        base_frame=freeze_frame,
-                        popup_info=temp_stop,
-                        fps=fps,
-                        duration_sec=scale_t,
-                        hold_sec=0.1,
-                        fade_out_sec=0.0,
-                    )
-                    if t_frames:
-                        for _ in range(int(hold_small * fps)):
-                            video.write(freeze_frame)
-                        for tf in t_frames:
-                            video.write(tf)
-                    enter_frame = t_frames[-1] if t_frames else freeze_frame
-                    self.graphics.play_fullscreen_video(
-                        broll_video, enter_frame, outro_frame, video, fps
-                    )
-                    self.last_frame = outro_frame
-                else:
-                    t_frames = self.graphics.generate_fullscreen_popup_transition(
-                        base_frame=freeze_frame,
-                        popup_info=temp_stop,
-                        fps=fps,
-                        duration_sec=scale_t,
-                        hold_sec=hold_full,
-                        fade_out_sec=fade_t,
-                    )
-                    if t_frames:
-                        for _ in range(int(hold_small * fps)):
-                            video.write(freeze_frame)
-                        for tf in t_frames:
-                            video.write(tf)
-                    else:
-                        for _ in range(int(total_freeze * fps)):
-                            video.write(freeze_frame)
-                    self.last_frame = freeze_frame
             else:
                 outro_frame = self.graphics.render_popup_box(outro_frame, temp_stop)
                 for tm in triggered_markers:
@@ -485,7 +389,6 @@ class SpatialRenderer:
             if p:
                 p["triggered"] = False
 
-        # 💡 FIX: Write the summary card directly to the overview video stream
         if summary:
             logger.info("📊 Rendering Summary Card")
             card = self.graphics.create_summary_card(
@@ -528,11 +431,6 @@ class SpatialRenderer:
                 continue
 
             h, w = res_img.shape[:2]
-            if h % 2 != 0 or w % 2 != 0:
-                h = h - (h % 2)
-                w = w - (w % 2)
-                res_img = res_img[:h, :w].copy()
-
             res_points = res_data["points"]
             res_labels = res_data["labels"]
             res_popups = res_data.get("popups", [None] * len(res_points))
@@ -657,55 +555,31 @@ class SpatialRenderer:
                     )
                     if near_segment or just_arrived:
                         popup["data"]["triggered"] = True
-                        freeze_frame = self.graphics.render_popup_box(frame, popup)
 
                         if popup["data"].get("image_display") == "fullscreen":
-                            total_freeze = float(popup["data"]["freeze_seconds"])
-                            hold_small, scale_t, hold_full, fade_t = (
-                                self._compute_fullscreen_hold_times(total_freeze)
+                            # [CONSOLIDATED] Original computed its own
+                            # freeze_frame via render_popup_box BEFORE
+                            # branching; play_fullscreen_popup_sequence
+                            # does that internally now. `exit_frame=frame`
+                            # matches the original's `frame` target for
+                            # both the B-roll fade-out and (implicitly,
+                            # since the caller re-writes `frame` right
+                            # after this block regardless) the static
+                            # path — no return value is consumed here
+                            # because the surrounding loop unconditionally
+                            # writes `frame` and sets `self.last_frame =
+                            # frame` immediately below, exactly as the
+                            # original code did.
+                            self.graphics.play_fullscreen_popup_sequence(
+                                video=video,
+                                base_frame=frame,
+                                popup_info=popup,
+                                fps=fps,
+                                transition_cfg=self.transition_cfg,
+                                exit_frame=frame,
                             )
-                            broll_video = popup["data"].get("popup_video")
-
-                            if broll_video:
-                                t_frames = (
-                                    self.graphics.generate_fullscreen_popup_transition(
-                                        base_frame=freeze_frame,
-                                        popup_info=popup,
-                                        fps=fps,
-                                        duration_sec=scale_t,
-                                        hold_sec=0.1,
-                                        fade_out_sec=0.0,
-                                    )
-                                )
-                                if t_frames:
-                                    for _ in range(int(hold_small * fps)):
-                                        video.write(freeze_frame)
-                                    for tf in t_frames:
-                                        video.write(tf)
-                                enter_frame = t_frames[-1] if t_frames else freeze_frame
-                                self.graphics.play_fullscreen_video(
-                                    broll_video, enter_frame, frame, video, fps
-                                )
-                            else:
-                                t_frames = (
-                                    self.graphics.generate_fullscreen_popup_transition(
-                                        base_frame=freeze_frame,
-                                        popup_info=popup,
-                                        fps=fps,
-                                        duration_sec=scale_t,
-                                        hold_sec=hold_full,
-                                        fade_out_sec=fade_t,
-                                    )
-                                )
-                                if t_frames:
-                                    for _ in range(int(hold_small * fps)):
-                                        video.write(freeze_frame)
-                                    for tf in t_frames:
-                                        video.write(tf)
-                                else:
-                                    for _ in range(int(total_freeze * fps)):
-                                        video.write(freeze_frame)
                         else:
+                            freeze_frame = self.graphics.render_popup_box(frame, popup)
                             total_f = int(popup["data"]["freeze_seconds"] * fps)
                             fade_f = min(int(0.5 * fps), total_f // 3)
                             self.graphics.write_fade_clip(

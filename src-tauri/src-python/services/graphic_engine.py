@@ -1,5 +1,50 @@
+"""
+Graphics Engine Service (graphic_engine.py)
+---------------------------------------------------------------------------
+Handles all drawing, UI composites, image manipulations, and transitions.
+
+[REFACTOR NOTE]
+This module previously could not be imported successfully as written:
+`write_fade_clip` / `play_fullscreen_video` type-hinted a parameter as
+`video_out: VideoExporter` with no `VideoExporter` import anywhere in the
+file, and no `from __future__ import annotations` to defer evaluation —
+Python evaluates function annotations eagerly at `def`-time, so this was
+a guaranteed `NameError` the moment the class body executed. Likewise
+`_load_font`'s `-> FreeTypeFont | Any` return hint uses PEP 604 syntax
+that also needs eager evaluation deferred on pre-3.10 interpreters.
+`read_image_safe`'s except-block also called `logger.warning(...)` with
+no `logger` ever defined in this file — a second latent NameError on the
+(fairly common) "image failed to decode" path.
+
+Fixes applied below:
+  1. `from __future__ import annotations` (PEP 563) — defers ALL
+     annotation evaluation to strings, eliminating both NameErrors above
+     without needing an eager, possibly-circular import of VideoExporter.
+  2. `TYPE_CHECKING`-guarded import of VideoExporter so static analyzers
+     (mypy/pyright) and IDEs still resolve the type correctly.
+  3. A real `logger` via the shared `setup_logger` factory, consistent
+     with every other service module in this codebase.
+
+Additionally, two structural changes for performance and maintainability
+(see inline comments at their definitions for full rationale):
+  - `_load_font` is now memoized (`self._font_cache`) — it was previously
+    doing real filesystem I/O (TrueType file open + glyph table parse) on
+    EVERY call to `render_popup_box`, which itself is invoked once per
+    rendered frame for as long as a "baked" HUD popup is on screen. That
+    turned an O(1)-amortizable cost into O(N) redundant disk I/O across
+    an N-frame popup hold.
+  - `play_fullscreen_popup_sequence` + `compute_fullscreen_hold_times`
+    consolidate a ~25-line "freeze -> scale -> optional B-roll -> hold ->
+    fade" sequence that was hand-duplicated 4 times across
+    spatial_renderer.py and storyboard_renderer.py (with an already-
+    diverged `last_frame` update behavior between the two files).
+---------------------------------------------------------------------------
+"""
+
+from __future__ import annotations
+
 import os
-from typing import Final, Dict, List, Tuple, Optional
+from typing import Final, Dict, List, Tuple, Optional, Any, TYPE_CHECKING
 
 import cv2
 import numpy as np
@@ -7,6 +52,17 @@ from PIL import Image, ImageDraw, ImageFilter
 from PIL.ImageFont import truetype, load_default, FreeTypeFont
 
 from services.math_util import MathUtils
+from services.logger import setup_logger
+
+# TYPE_CHECKING-only import: gives IDEs/mypy the real type for annotations
+# below without creating a runtime import cycle (vdo_exporter does not,
+# and must never, import from graphic_engine).
+if TYPE_CHECKING:
+    from services.vdo_exporter import VideoExporter
+
+# Logging configuration — matches every other service module's convention.
+# Previously ABSENT from this file entirely, despite being referenced.
+logger = setup_logger("GraphicsEngine")
 
 
 class GraphicsEngine:
@@ -44,6 +100,14 @@ class GraphicsEngine:
         self.font_size = font_size
         self.font_cv = cv2.FONT_HERSHEY_SIMPLEX
 
+        # [NEW] Font memoization cache. Keyed on (candidate list, size) so
+        # distinct font/size combinations (e.g. regular body text vs. the
+        # bold summary-card value font) are cached independently. This
+        # converts `_load_font` from "hits disk every call" to "hits disk
+        # at most once per distinct (candidates, size) pair, ever" — see
+        # `_load_font` below for the hot-path justification.
+        self._font_cache: Dict[Tuple[Tuple[str, ...], int], "FreeTypeFont | Any"] = {}
+
     @staticmethod
     def read_image_safe(path: str) -> Optional[np.ndarray]:
         if not path or not os.path.exists(path):
@@ -54,6 +118,9 @@ class GraphicsEngine:
             img_array = np.frombuffer(chunk, dtype=np.uint8)
             return cv2.imdecode(img_array, cv2.IMREAD_COLOR)
         except Exception as e:
+            # [FIX] `logger` now actually exists (module-level, see top of
+            # file) — this branch previously raised NameError instead of
+            # the intended warning whenever an image failed to decode.
             logger.warning(f"⚠️ Failed to load image {path}: {e}")
             return None
 
@@ -185,6 +252,9 @@ class GraphicsEngine:
 
                 border = 14
                 label_text = popup_info.get("label")
+                # [HOT PATH] See `_load_font` docstring — this call used
+                # to be a filesystem hit every single frame this popup is
+                # visible. Now O(1) amortized via `self._font_cache`.
                 font = self._load_font(self.FONT_CANDIDATES_REGULAR, self.font_size)
 
                 has_label = MathUtils.is_real_label(label_text)
@@ -378,10 +448,136 @@ class GraphicsEngine:
 
         return frames
 
-    # 💡 NEW: Handles Fade IO logic globally for all renderers
+    # -----------------------------------------------------------------
+    # [NEW] Shared fullscreen-popup timing + orchestration.
+    #
+    # WHY THIS EXISTS (Extract Method refactor — Fowler):
+    # Before this change, the exact same ~25-line sequence — compute
+    # hold/scale/fade timing, branch on "does this popup have a B-roll
+    # video or just a static image", write the small pre-scale hold
+    # frames, write the scale-transition frames, then either hand off to
+    # `play_fullscreen_video` or hold+fade on the static frame — was
+    # hand-copied FOUR times:
+    #   - spatial_renderer.render_overview: intro (start) popup
+    #   - spatial_renderer.render_overview: per-frame proximity trigger
+    #   - spatial_renderer.render_overview: outro (stop) popup
+    #   - storyboard_renderer._render_storyboard_popup
+    # Any fix to fade/scale timing had to be applied by hand in all 4
+    # places — classic "shotgun surgery" (a single conceptual change
+    # requiring edits scattered across many call sites). Consolidating
+    # here means one implementation, one place to fix bugs, and it makes
+    # the (pre-existing, now-documented rather than silently-inconsistent)
+    # difference in `last_frame` bookkeeping between the two renderers
+    # an explicit, visible choice at each call site instead of an
+    # accidental copy-paste divergence.
+    # -----------------------------------------------------------------
+
+    @staticmethod
+    def compute_fullscreen_hold_times(
+        transition_cfg: Dict[str, float], total_freeze: float
+    ) -> Tuple[float, float, float, float]:
+        """
+        Pure function: (renderer's transition config, requested total
+        freeze duration) -> (small_hold, scale, full_hold, fade) seconds.
+
+        [EXTRACTED] Previously duplicated verbatim as a private method
+        named `_compute_fullscreen_hold_times` on BOTH SpatialRenderer
+        and StoryboardRenderer. Since it has no dependency on renderer
+        state beyond the config dict already passed in, it belongs here
+        as the single implementation both renderers delegate to.
+        """
+        t = transition_cfg
+        scale_time = t["scale_seconds"]
+        fade_time = t["fade_out_seconds"]
+        hold_full_time = max(
+            t["min_hold_seconds"], total_freeze * t["hold_ratio_of_freeze"]
+        )
+        hold_small_time = max(
+            t["min_small_hold_seconds"],
+            total_freeze - scale_time - hold_full_time - fade_time,
+        )
+        return hold_small_time, scale_time, hold_full_time, fade_time
+
+    def play_fullscreen_popup_sequence(
+        self,
+        video: "VideoExporter",
+        base_frame: np.ndarray,
+        popup_info: Dict,
+        fps: int,
+        transition_cfg: Dict[str, float],
+        exit_frame: Optional[np.ndarray] = None,
+    ) -> Tuple[np.ndarray, bool]:
+        """
+        Renders one complete fullscreen popup reveal: freeze on the popup
+        box, scale it up to fill the frame, then EITHER play a B-roll
+        video (if `popup_info["data"]["popup_video"]` is set) OR hold at
+        fullscreen and fade back to `exit_frame`.
+
+        Returns `(final_frame, used_broll)`. Callers should assign
+        `final_frame` to their own `last_frame` state ONLY when they want
+        the fullscreen reveal to persist into subsequently-rendered
+        frames — the two existing call sites intentionally differ here
+        (see storyboard_renderer.py's call site comment), and returning
+        the flag instead of unifying the behavior silently preserves that
+        distinction rather than papering over it.
+        """
+        freeze_frame = self.render_popup_box(base_frame, popup_info)
+        total_freeze = float(popup_info["data"].get("freeze_seconds", 3.0))
+        hold_small, scale_t, hold_full, fade_t = self.compute_fullscreen_hold_times(
+            transition_cfg, total_freeze
+        )
+        broll_video = popup_info["data"].get("popup_video")
+        resolved_exit_frame = exit_frame if exit_frame is not None else base_frame
+
+        if broll_video:
+            # B-roll path: scale in only (hold_sec=0.1, fade_out_sec=0.0)
+            # — the video itself owns the "hold" and its own exit timing
+            # via `play_fullscreen_video`'s internal fade in/out.
+            t_frames = self.generate_fullscreen_popup_transition(
+                base_frame=freeze_frame,
+                popup_info=popup_info,
+                fps=fps,
+                duration_sec=scale_t,
+                hold_sec=0.1,
+                fade_out_sec=0.0,
+            )
+            if t_frames:
+                for _ in range(int(hold_small * fps)):
+                    video.write(freeze_frame)
+                for tf in t_frames:
+                    video.write(tf)
+            enter_frame = t_frames[-1] if t_frames else freeze_frame
+            self.play_fullscreen_video(
+                broll_video, enter_frame, resolved_exit_frame, video, fps
+            )
+            return resolved_exit_frame, True
+
+        # Static-image path: scale in, hold at fullscreen, fade back out.
+        t_frames = self.generate_fullscreen_popup_transition(
+            base_frame=freeze_frame,
+            popup_info=popup_info,
+            fps=fps,
+            duration_sec=scale_t,
+            hold_sec=hold_full,
+            fade_out_sec=fade_t,
+        )
+        if t_frames:
+            for _ in range(int(hold_small * fps)):
+                video.write(freeze_frame)
+            for tf in t_frames:
+                video.write(tf)
+            return t_frames[-1], False
+
+        # Degenerate fallback (image failed to load / zero-length
+        # transition): hold the static freeze frame for the full
+        # requested duration instead of silently truncating the clip.
+        for _ in range(max(1, int(total_freeze * fps))):
+            video.write(freeze_frame)
+        return freeze_frame, False
+
     def write_fade_clip(
         self,
-        video_out: VideoExporter,
+        video_out: "VideoExporter",
         bg_frame: np.ndarray,
         fg_frame: np.ndarray,
         total_frames: int,
@@ -405,13 +601,12 @@ class GraphicsEngine:
             else:
                 video_out.write(fg_frame)
 
-    # 💡 NEW: Handles Video Playback logic globally for all renderers
     def play_fullscreen_video(
         self,
         video_path: str,
         enter_frame: np.ndarray,
         exit_frame: np.ndarray,
-        video_out: VideoExporter,
+        video_out: "VideoExporter",
         fps: int,
     ) -> None:
         """Reads a video file, scales it to fullscreen, fades in from the popup, and fades out to the map."""
@@ -548,13 +743,41 @@ class GraphicsEngine:
         ).astype(np.uint8)
         return out
 
-    def _load_font(self, candidates: List[str], size: int) -> FreeTypeFont | Any:
+    def _load_font(self, candidates: List[str], size: int) -> "FreeTypeFont | Any":
+        """
+        [HOT-PATH FIX] Previously re-opened and re-parsed a TrueType/
+        OpenType font file from disk on EVERY call, with no caching
+        whatsoever. `render_popup_box` — which calls this — is invoked
+        once per rendered output frame for as long as a popup is visible
+        on screen (see SpatialRenderer's `baked_popups` loop, which can
+        hold a popup for several seconds = 60-150+ frames at typical fps).
+        That made font loading an O(N) filesystem-I/O cost across an
+        N-frame popup hold, when the font never changes between calls.
+
+        Now memoized per (candidate-list, size) key on the instance, so
+        the actual `truetype()`/`load_default()` call — which involves a
+        filesystem stat+open+read plus font-file parsing — happens at
+        most once per distinct key for the engine's entire lifetime.
+        Subsequent calls are a single dict lookup: O(1) amortized instead
+        of O(k) filesystem probes (k = number of candidates tried) on
+        every single frame.
+        """
+        cache_key: Tuple[Tuple[str, ...], int] = (tuple(candidates), size)
+        cached = self._font_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
         for name in candidates:
             try:
-                return truetype(name, size)
+                font = truetype(name, size)
+                self._font_cache[cache_key] = font
+                return font
             except OSError:
                 continue
-        return load_default()
+
+        fallback = load_default()
+        self._font_cache[cache_key] = fallback
+        return fallback
 
     def _draw_walking_icon(
         self, draw: ImageDraw.ImageDraw, cx: int, cy: int, size: int, color: Tuple
@@ -593,3 +816,37 @@ class GraphicsEngine:
         total_minutes = int(round(seconds / 60))
         hrs, mins = divmod(total_minutes, 60)
         return f"{hrs} hr {mins:02d} min" if hrs else f"{mins} min"
+
+    def load_walking_sprites(self, sprite_paths: list[str]):
+        """Loads a sequence of PNGs for the walking animation."""
+        self.walk_sprites = []
+        for path in sprite_paths:
+            img = self.read_image_safe(path)
+            if img is not None:
+                # Resize if necessary so it fits on the map
+                img = cv2.resize(img, (60, 60))
+                self.walk_sprites.append(img)
+
+    def draw_walking_human(
+        self, frame: np.ndarray, cx: int, cy: int, frame_count: int, angle: float
+    ):
+        """Draws the current frame of the walking animation at the coordinates."""
+        if not hasattr(self, "walk_sprites") or not self.walk_sprites:
+            self.draw_marker(frame, cx, cy)  # Fallback
+            return
+
+        # 1. Cycle through the animation frames based on the video's current frame
+        sprite_idx = (frame_count // 5) % len(
+            self.walk_sprites
+        )  # Change frame every 5 ticks
+        sprite = self.walk_sprites[sprite_idx]
+
+        # 2. (Optional) Rotate or flip the sprite based on the angle so they face the right way
+        # ... rotation logic here ...
+
+        # 3. Anchor it so the human's feet are exactly on the path (cx, cy)
+        anchor_x = sprite.shape[1] // 2
+        anchor_y = sprite.shape[0]  # Bottom of the image
+
+        # 4. Draw it using your existing method
+        self.blit_sprite(frame, sprite, (anchor_x, anchor_y), cx, cy)

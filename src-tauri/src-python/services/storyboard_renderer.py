@@ -2,6 +2,27 @@
 Storyboard Renderer Service (storyboard_renderer.py)
 ---------------------------------------------------------------------------
 Handles JSON-driven atomic clip generation and NLE timeline concatenation.
+
+[REFACTOR NOTE]
+`_render_storyboard_popup`'s fullscreen branch now delegates to
+`GraphicsEngine.play_fullscreen_popup_sequence()` instead of duplicating
+the freeze/scale/broll/hold/fade sequence inline. The previously
+duplicated `_compute_fullscreen_hold_times` static method has been
+removed in favor of `GraphicsEngine.compute_fullscreen_hold_times`.
+
+One deliberate behavior is preserved and now explicitly documented
+rather than silently baked into copy-pasted code: in the ORIGINAL
+implementation, `self.last_frame` was updated after a static-image
+fullscreen popup (`self.last_frame = freeze_frame`) but was NOT updated
+after a B-roll fullscreen popup finished playing. That means a
+static-image fullscreen popup persists into the background of whatever
+`draw_route` action comes next, while a B-roll fullscreen popup does
+not — the map animation resumes from the frame as it stood before the
+B-roll played. This asymmetry looks intentional (a full-motion B-roll
+clip is a one-off cutaway; a static image popup is closer to a
+"stamped" annotation on the map) so it is preserved exactly, just made
+visible via the `used_broll` flag instead of being an invisible
+side-effect of duplicated code.
 ---------------------------------------------------------------------------
 """
 
@@ -48,21 +69,6 @@ class StoryboardRenderer:
         # (e.g. RouteAnimator) should read this instead of touching the
         # filesystem — it's a direct, race-free, always-in-sync reference.
         self.last_timeline_tracks: List[Dict[str, str]] = []
-
-    def _compute_fullscreen_hold_times(
-        self, total_freeze: float
-    ) -> Tuple[float, float, float, float]:
-        t = self.transition_cfg
-        scale_time = t["scale_seconds"]
-        fade_time = t["fade_out_seconds"]
-        hold_full_time = max(
-            t["min_hold_seconds"], total_freeze * t["hold_ratio_of_freeze"]
-        )
-        hold_small_time = max(
-            t["min_small_hold_seconds"],
-            total_freeze - scale_time - hold_full_time - fade_time,
-        )
-        return hold_small_time, scale_time, hold_full_time, fade_time
 
     @staticmethod
     def _validate_storyboard(storyboard: Dict[str, Any]) -> None:
@@ -126,48 +132,21 @@ class StoryboardRenderer:
         video, clip_path, clip_id = start_new_clip("popup", action.get("id", "popup"))
 
         if display == "fullscreen":
-            freeze_frame = self.graphics.render_popup_box(self.last_frame, popup_info)
-            hold_small, scale_t, hold_full, fade_t = (
-                self._compute_fullscreen_hold_times(duration)
+            # [CONSOLIDATED] See GraphicsEngine.play_fullscreen_popup_sequence
+            # and the module-level docstring above for why `used_broll`
+            # gates the `self.last_frame` update below — this reproduces
+            # the ORIGINAL asymmetric behavior exactly (static popups
+            # persist into the background; B-roll popups do not).
+            final_frame, used_broll = self.graphics.play_fullscreen_popup_sequence(
+                video=video,
+                base_frame=self.last_frame,
+                popup_info=popup_info,
+                fps=fps,
+                transition_cfg=self.transition_cfg,
+                exit_frame=self.last_frame,
             )
-            broll_video = popup_info["data"].get("popup_video")
-
-            if broll_video:
-                t_frames = self.graphics.generate_fullscreen_popup_transition(
-                    base_frame=freeze_frame,
-                    popup_info=popup_info,
-                    fps=fps,
-                    duration_sec=scale_t,
-                    hold_sec=0.1,
-                    fade_out_sec=0.0,
-                )
-                if t_frames:
-                    for _ in range(int(hold_small * fps)):
-                        video.write(freeze_frame)
-                    for tf in t_frames:
-                        video.write(tf)
-                enter_frame = t_frames[-1] if t_frames else freeze_frame
-                self.graphics.play_fullscreen_video(
-                    broll_video, enter_frame, self.last_frame, video, fps
-                )
-            else:
-                t_frames = self.graphics.generate_fullscreen_popup_transition(
-                    base_frame=freeze_frame,
-                    popup_info=popup_info,
-                    fps=fps,
-                    duration_sec=scale_t,
-                    hold_sec=hold_full,
-                    fade_out_sec=fade_t,
-                )
-                if t_frames:
-                    for _ in range(int(hold_small * fps)):
-                        video.write(freeze_frame)
-                    for tf in t_frames:
-                        video.write(tf)
-                else:
-                    for _ in range(max(1, int(duration * fps))):
-                        video.write(freeze_frame)
-                self.last_frame = freeze_frame
+            if not used_broll:
+                self.last_frame = final_frame
             clip_type = "fullscreen_cinematic"
         else:
             freeze_frame = self.graphics.render_popup_box(self.last_frame, popup_info)
