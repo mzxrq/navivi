@@ -51,9 +51,12 @@ class MapFetcher:
         # Override the filename path to sit correctly in the png folder
         final_filename = str(png_dir / Path(output_filename).name)
 
-        return self.downloader.fetch_overview_image(
+        logger.info("Fetching overview map tile (zoom<=%d)...", max_zoom)
+        result = self.downloader.fetch_overview_image(
             bounding_box, final_filename, output_size, max_zoom
         )
+        logger.info("Overview map tile saved -> %s", result[0])
+        return result
 
     # [Map] Process a residential sequence based on route DataFrame and waypoints
     def process_residential_sequence(
@@ -92,7 +95,32 @@ class MapFetcher:
             for i in range(len(wp_indices) - 1)
         ]
 
-        for seg_start, seg_end, wp in segments:
+        # [NEW] Total leg count known up front — lets every per-leg log line
+        # show "[i/total]" progress instead of an unbounded counter.
+        total_legs = len(segments)
+        logger.info(
+            "process_residential_sequence: %d leg(s) to process (max_chunk=%s m).",
+            total_legs,
+            (
+                "inf"
+                if math.isinf(max_chunk_distance_meters)
+                else f"{max_chunk_distance_meters:.0f}"
+            ),
+        )
+
+        for leg_idx, (seg_start, seg_end, wp) in enumerate(segments):
+            place_label = wp.get("label") or f"leg_{leg_idx + 1}"
+
+            # [NEW] Tracking log — names the exact place this leg's
+            # residential map/video segment is being generated FOR, before
+            # any (potentially slow) tile-download or chunking work starts.
+            logger.info(
+                "[%d/%d] Building residential leg -> arriving at: '%s'",
+                leg_idx + 1,
+                total_legs,
+                place_label,
+            )
+
             chunk_starts = [seg_start]
             accumulated_distance = 0.0
 
@@ -115,7 +143,18 @@ class MapFetcher:
             if chunk_starts[-1] != seg_end:
                 chunk_starts.append(seg_end)
 
-            for chunk_idx in range(len(chunk_starts) - 1):
+            num_chunks_this_leg = len(chunk_starts) - 1
+            if num_chunks_this_leg > 1:
+                # Only worth logging when a leg actually gets split into
+                # multiple map tiles — the common case (max_chunk=inf) has
+                # exactly 1 chunk per leg and this would just be noise.
+                logger.info(
+                    "  -> '%s' split into %d sub-chunk(s) (long leg).",
+                    place_label,
+                    num_chunks_this_leg,
+                )
+
+            for chunk_idx in range(num_chunks_this_leg):
                 chunk_start, chunk_end = (
                     chunk_starts[chunk_idx],
                     chunk_starts[chunk_idx + 1],
@@ -138,8 +177,23 @@ class MapFetcher:
                 # Update file path to use the absolute, centralized png directory
                 res_map_path = str(png_dir / f"res_map_{lbl}.png")
 
+                # [NEW] This is the actual slow step — a live network call
+                # to the map tile provider via contextily. Logging
+                # immediately before it fires means a stall here is
+                # visibly attributable to "waiting on map tiles for X",
+                # not a silent hang somewhere unidentifiable.
+                logger.info(
+                    "  -> [%d/%d] Downloading map tile for '%s' -> %s",
+                    leg_idx + 1,
+                    total_legs,
+                    lbl,
+                    res_map_path,
+                )
                 res_extent = self.downloader.fetch_residential_chunk(
                     chunk, res_map_path, output_size
+                )
+                logger.info(
+                    "  -> [%d/%d] '%s' tile ready.", leg_idx + 1, total_legs, lbl
                 )
 
                 chunk_points, chunk_labels, chunk_popups = [], [], []
@@ -180,6 +234,11 @@ class MapFetcher:
                     }
                 )
 
+        logger.info(
+            "process_residential_sequence complete: %d chunk(s) generated across %d leg(s).",
+            len(sequence_data),
+            total_legs,
+        )
         return sequence_data
 
     # [Util/Map] Static method wrappers for RouteGeometry and RoutePacing functionalities

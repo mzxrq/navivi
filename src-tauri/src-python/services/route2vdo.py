@@ -9,6 +9,7 @@ the drawing commands to either the Spatial or Storyboard renderers.
 from __future__ import annotations
 
 import argparse
+from html import parser
 import json
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple
@@ -17,6 +18,7 @@ from services.graphic_engine import GraphicsEngine
 from services.logger import setup_logger
 from services.spatial_renderer import SpatialRenderer
 from services.storyboard_renderer import StoryboardRenderer
+from services.vdo_exporter import VideoExporter
 
 # Logging configuration
 logger = setup_logger("RouteAnimator")
@@ -115,7 +117,6 @@ class RouteAnimator:
 
         output_paths = []
 
-        # 💡 Route to Storyboard Renderer if the timeline strategy is enabled
         if self.config.get("use_leg_storyboard", False) and wp_indices:
             storyboard = self.storyboard_renderer.build_storyboard_from_route(
                 points=points,
@@ -129,6 +130,13 @@ class RouteAnimator:
                 video_id="overview",
                 output_filename="01_overview.mp4",
             )
+
+            # --------------------------------------------------------------
+            # SINGLE render pass. The previous implementation called
+            # render_storyboard() a second time further down with identical
+            # arguments, doubling every FFmpeg subprocess spawn and frame
+            # write for a result that was immediately discarded. Removed.
+            # --------------------------------------------------------------
             overview_path = self.storyboard_renderer.render_storyboard(
                 img_path=img_path,
                 points=points,
@@ -139,14 +147,78 @@ class RouteAnimator:
             # Sync the last frame state back for downstream usage
             self.spatial_renderer.last_frame = self.storyboard_renderer.last_frame
 
+            with open(
+                self.out_dir / "auto_storyboard.json", "w", encoding="utf-8"
+            ) as f:
+                json.dump(storyboard, f, indent=2, ensure_ascii=False)
+
+            # --------------------------------------------------------------
+            # POINT-TO-POINT LEG SLICING (bug fix)
+            # --------------------------------------------------------------
+            # OLD: globbed self.out_dir for "01_overview_part_*.mp4" — a
+            # filename pattern StoryboardRenderer never actually produces
+            # (it writes "story_{idx}_{phase}_{action_id}.mp4"), so this
+            # glob ALWAYS returned an empty list and the leg-combination
+            # branch below was dead code — it could never execute.
+            #
+            # NEW: pull the authoritative, in-order clip manifest directly
+            # off the renderer that just built it (in-memory, no filesystem
+            # pattern matching, no race conditions).
+            # --------------------------------------------------------------
+            actions = storyboard.get("actions", [])
+            timeline_tracks = self.storyboard_renderer.last_timeline_tracks
+
+            if timeline_tracks and len(timeline_tracks) == len(actions):
+                combined_clips = []
+                current_group: List[str] = []
+                leg_idx = 0
+
+                # Single O(A) pass: partition the flat clip list into
+                # per-leg groups every time a new "draw_route" action starts.
+                for track, action in zip(timeline_tracks, actions):
+                    a_type = action.get("type", "")
+
+                    # Whenever a new drawing route starts, finalize and
+                    # merge the PREVIOUS group into one point-to-point leg.
+                    if a_type == "draw_route" and current_group:
+                        out_name = str(
+                            self.out_dir / f"01_overview_leg_{leg_idx:02d}.mp4"
+                        )
+                        VideoExporter.concat_clips(current_group, out_name)
+                        combined_clips.append(out_name)
+                        current_group = []
+                        leg_idx += 1
+
+                    # Add the current clip (route, popup, or hold) to the
+                    # active group.
+                    current_group.append(track["file_path"])
+
+                # Flush and merge the final group (last leg + summary/popup)
+                if current_group:
+                    out_name = str(self.out_dir / f"01_overview_leg_{leg_idx:02d}.mp4")
+                    VideoExporter.concat_clips(current_group, out_name)
+                    combined_clips.append(out_name)
+
+                # Output the combined point-to-point files
+                output_paths.extend(combined_clips)
+
+            elif overview_path:
+                # Graceful degradation only — should be rare now that the
+                # manifest is populated deterministically on every
+                # successful render_storyboard() call.
+                logger.warning(
+                    "Storyboard timeline manifest missing/mismatched — "
+                    "falling back to single stitched overview file."
+                )
+                output_paths.append(overview_path)
+
         # 💡 Fallback to the Legacy Proximity Renderer
         else:
             overview_path = self.spatial_renderer.render_overview(
                 base_img, points, labels, popups, fps, summary=summary
             )
-
-        if overview_path:
-            output_paths.append(overview_path)
+            if overview_path:
+                output_paths.append(overview_path)
 
         # 💡 Always render waypoints using the spatial engine
         if res_sequence:
@@ -172,6 +244,9 @@ def main():
     parser.add_argument("--summary-json", default=None)
     parser.add_argument("--summary-hold", type=float, default=4.0)
     parser.add_argument("--summary-fade", type=float, default=0.5)
+    parser.add_argument(
+        "--use-storyboard", action="store_true", help="Slice the overview video"
+    )
 
     args = parser.parse_args()
 
@@ -181,6 +256,7 @@ def main():
         "summary_hold": args.summary_hold,
         "summary_fade": args.summary_fade,
         "res_duration": args.res_duration,
+        "use_leg_storyboard": args.use_storyboard,
     }
 
     animator = RouteAnimator(config)
@@ -195,9 +271,43 @@ def main():
 
     res_sequence = None
     if args.res_route and args.res_map:
-        res_points, res_labels, _, _ = animator.load_route_data(args.res_route)
+        # 1. Load popups as well instead of ignoring them with `_`
+        res_points, res_labels, res_popups, _ = animator.load_route_data(args.res_route)
+
+        # 2. Try to fetch custom Start/End labels from job_config.json
+        try:
+            out_path = Path(args.output)
+            job_paths = [
+                out_path / "job_config.json",
+                out_path.parent / "job_config.json",
+            ]
+
+            for jp in job_paths:
+                if jp.exists():
+                    with open(jp, "r", encoding="utf-8") as f:
+                        job_data = json.load(f)
+                        start_lbl = job_data.get("start_point", {}).get("label")
+                        end_lbl = job_data.get("end_point", {}).get("label")
+
+                        # Apply to the first and last labels
+                        if start_lbl and len(res_labels) > 0:
+                            res_labels[0] = start_lbl
+                        if end_lbl and len(res_labels) > 1:
+                            res_labels[-1] = end_lbl
+                    break  # Stop checking paths once we find the config
+        except Exception as e:
+            logger.warning(
+                f"Could not read labels from job_config.json for residential map: {e}"
+            )
+
+        # 3. Create the sequence with the new labels and popups included
         res_sequence = [
-            {"img_path": args.res_map, "points": res_points, "labels": res_labels}
+            {
+                "img_path": args.res_map,
+                "points": res_points,
+                "labels": res_labels,
+                "popups": res_popups,
+            }
         ]
 
     summary = (
@@ -206,6 +316,15 @@ def main():
         else None
     )
 
+    # Calculate which points on the route have popups/transitions
+    wp_indices = [i for i, pop in enumerate(popups) if pop is not None]
+
+    # Ensure start and end points are always included in the indices
+    if 0 not in wp_indices:
+        wp_indices.insert(0, 0)
+    if len(points) - 1 not in wp_indices:
+        wp_indices.append(len(points) - 1)
+
     output_files = animator.render(
         img_path=args.map,
         points=points,
@@ -213,6 +332,7 @@ def main():
         popups=popups,
         res_sequence=res_sequence,
         summary=summary,
+        wp_indices=wp_indices,
     )
 
     print(f"✅ Rendered {len(output_files)} file(s):")

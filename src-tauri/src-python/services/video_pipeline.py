@@ -13,6 +13,14 @@ from services.localization import format_waypoint_label
 from services.job_config import JobConfigManager
 from services.vdo_exporter import VideoExporter
 from services.img2vdo import AttractionVideoGenerator
+from services.logger import setup_logger
+
+# [NEW] Standardized logger — writes to logs/app.log AND stderr, matching
+# every other service module in this codebase (job_config, gps_parser,
+# mapfetcher, etc). Using the same logger name convention keeps step-3
+# tracking lines interleaved correctly with the low-level tile-download
+# logs already emitted inside mapfetcher.py.
+logger = setup_logger("VideoPipeline")
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DEFAULT_FRONTEND_CONFIG = (
@@ -54,6 +62,7 @@ def _project_route_to_pixels(
 def process_gps(raw_source_path: str) -> dict:
     """Extracts the GPS path from job_config.json, then converts and cleans the data."""
     print("Step 1: Processing GPS Data from config...")
+    logger.info("Step 1: Processing GPS data from config: %s", raw_source_path)
 
     config_path = Path(raw_source_path)
     if not config_path.exists():
@@ -79,7 +88,15 @@ def process_gps(raw_source_path: str) -> dict:
         output_filename=source_path.with_suffix(".csv").name,
         output_format="iblue747",
     )
-    return clean_gps_data(csv_path)
+    cleaned = clean_gps_data(csv_path)
+    summary = cleaned.get("summary", {})
+    logger.info(
+        "Step 1 complete: %d route points, %.2f km, %s",
+        summary.get("total_route_points", 0),
+        summary.get("total_distance_km", 0.0),
+        summary.get("total_duration_formatted", "N/A"),
+    )
+    return cleaned
 
 
 # =========================================================================
@@ -91,6 +108,7 @@ def generate_audio(cleaned_route: dict, project_config_path: str) -> dict:
     Note: Link this to your tts_pipeline.py generator.
     """
     print("Step 2: Generating TTS Audio...")
+    logger.info("Step 2: Generating TTS audio for config: %s", project_config_path)
     # NOTE: In the future, you will import your TTS orchestrator here:
     # from services.tts_pipeline import run_synced_tts_pipeline
     # audio_data = asyncio.run(run_synced_tts_pipeline(project_config_path, ...))
@@ -112,6 +130,7 @@ def render_route_video(
 ) -> list[str]:
     """Generates the visual map animation using synced audio timing."""
     print("Step 3: Rendering Video Engine...")
+    logger.info("Step 3: Rendering Video Engine — starting.")
 
     audio_durations = audio_durations or []
     audio_pauses = audio_pauses or []
@@ -121,6 +140,7 @@ def render_route_video(
     if route_df.empty:
         raise ValueError("Cannot render a navigation video from an empty route.")
 
+    logger.info("Step 3: Computing bounding box and fetching overview map tile...")
     fetcher = MapFetcher()
     bbox = fetcher.get_bounding_box(route_df, padding_factor=0.15)
     map_output_path, extent, (img_w, img_h) = fetcher.fetch_image(
@@ -131,6 +151,7 @@ def render_route_video(
         raise RuntimeError(
             "Map fetch failed - cannot render video without background map."
         )
+    logger.info("Step 3: Overview map tile ready -> %s", map_output_path)
 
     route_points = _project_route_to_pixels(
         route_df["latitude"].to_numpy(),
@@ -161,9 +182,25 @@ def render_route_video(
 
     if waypoints:
         print(f"Injecting {len(waypoints)} custom waypoints from JSON config...")
+        logger.info(
+            "Step 3: Injecting %d custom waypoints from job_config.json.",
+            len(waypoints),
+        )
+
+        # See earlier fix: prefer the canonical start_point/end_point labels
+        # over waypoints[0]/[-1]'s own (often placeholder) label field.
+        start_point_label = project_config.get("start_point", {}).get("label")
+        end_point_label = project_config.get("end_point", {}).get("label")
+
         for idx, wp in enumerate(waypoints):
             closest_idx = wp_indices[idx]
             raw_label = wp.get("label", "Waypoint")
+
+            if idx == 0 and start_point_label:
+                raw_label = start_point_label
+            elif idx == len(waypoints) - 1 and end_point_label:
+                raw_label = end_point_label
+
             formatted_label = format_waypoint_label(raw_label, subtitle_lang)
 
             if idx == 0:
@@ -174,6 +211,17 @@ def render_route_video(
                 wp_label = formatted_label
 
             route_labels[closest_idx] = wp_label
+
+            # [NEW] Per-waypoint tracking log — tells you exactly which
+            # place name got resolved and where on the route it landed,
+            # BEFORE any expensive map/video rendering for it happens.
+            logger.info(
+                "Step 3: [%d/%d] Waypoint resolved -> '%s' (route index %d)",
+                idx + 1,
+                len(waypoints),
+                wp_label,
+                closest_idx,
+            )
 
             raw_popup = wp.get("popup_image")
             popup_img = (
@@ -190,6 +238,11 @@ def render_route_video(
             }
 
     image_output_dir = BASE_DIR / "data" / "inputs" / "res_images"
+
+    logger.info(
+        "Step 3: Generating residential map sequence for %d waypoint(s)...",
+        len(waypoints),
+    )
     sequence_data = MapFetcher.generate_residential_sequence(
         route_df,
         waypoints,
@@ -197,6 +250,10 @@ def render_route_video(
         (img_w, img_h),
         max_chunk_distance_meters=math.inf,
         precomputed_indices=wp_indices,
+    )
+    logger.info(
+        "Step 3: Residential map sequence complete — %d chunk(s) generated.",
+        len(sequence_data),
     )
 
     seg_durations = (
@@ -208,9 +265,25 @@ def render_route_video(
     )
 
     res_sequence = []
+    total_segments = len(sequence_data)
     for seq_idx, item in enumerate(sequence_data):
         start_idx, end_idx = item["start_idx"], item["end_idx"]
         chunk = route_df.iloc[start_idx : end_idx + 1]
+
+        # [NEW] Resolve the human-readable place name this leg is heading
+        # toward, straight from the SAME route_labels list the video will
+        # actually render — so the log is a truthful reflection of what
+        # you'll see on screen, not a re-derived guess.
+        place_name = route_labels[end_idx] if end_idx < len(route_labels) else None
+        display_name = place_name or f"segment_{seq_idx + 1}"
+
+        logger.info(
+            "Step 3: [%d/%d] Generating residential leg video -> arriving at: '%s'",
+            seq_idx + 1,
+            total_segments,
+            display_name,
+        )
+
         chunk_points = _project_route_to_pixels(
             chunk["latitude"].to_numpy(),
             chunk["longitude"].to_numpy(),
@@ -261,6 +334,20 @@ def render_route_video(
             else str(raw_img_path) if raw_img_path else None
         )
 
+        logger.info(
+            "Step 3: [%d/%d] '%s' -> distance %.2f km, planned duration %.1fs%s",
+            seq_idx + 1,
+            total_segments,
+            display_name,
+            seg_distance_km,
+            total_time,
+            (
+                " (synced to narration audio)"
+                if has_audio
+                else " (distance-based fallback)"
+            ),
+        )
+
         res_sequence.append(
             {
                 "img_path": res_img,
@@ -302,8 +389,12 @@ def render_route_video(
         ),
     }
 
+    logger.info(
+        "Step 3: Starting final render pass (overview%s)...",
+        " + storyboard legs" if animator_config["use_leg_storyboard"] else "",
+    )
     animator = RouteAnimator(animator_config)
-    return animator.render(
+    output_paths = animator.render(
         img_path=map_output_path,
         points=route_points,
         labels=route_labels,
@@ -312,6 +403,8 @@ def render_route_video(
         summary=summary,
         wp_indices=wp_indices,
     )
+    logger.info("Step 3 complete: %d video file(s) produced.", len(output_paths))
+    return output_paths
 
 
 # =========================================================================
@@ -324,10 +417,12 @@ def render_attraction_videos(
 ) -> list[str]:
     """Step 4: Generates AI videos for individual attractions using ComfyUI."""
     print("Step 4: Generating Attraction Videos via ComfyUI...")
+    logger.info("Step 4: Generating attraction videos via ComfyUI.")
 
     config_path = Path(project_config_path)
     if not config_path.exists():
         print("No project config found. Skipping attraction videos.")
+        logger.warning("Step 4: No project config found at %s — skipping.", config_path)
         return []
 
     job_config = JobConfigManager(config_path)
@@ -341,9 +436,16 @@ def render_attraction_videos(
 
     for idx, wp in enumerate(waypoints):
         popup_image_entry = wp.get("popup_image")
+        place_label = wp.get("label", f"waypoint_{idx}")
 
         # The generator safely handles if this is a single string or a list of strings[cite: 5]
         if not popup_image_entry:
+            logger.info(
+                "Step 4: [%d/%d] Skipping '%s' — no popup image configured.",
+                idx + 1,
+                len(waypoints),
+                place_label,
+            )
             continue
 
         # Look for a specific prompt, fallback to the label, or use a default
@@ -363,6 +465,12 @@ def render_attraction_videos(
         print(
             f"   -> Processing attraction {idx + 1}/{len(waypoints)}: {wp.get('label')}"
         )
+        logger.info(
+            "Step 4: [%d/%d] Generating attraction video for: '%s'",
+            idx + 1,
+            len(waypoints),
+            place_label,
+        )
 
         # This will batch process, concatenate, scale to audio, and mux the final file[cite: 5]
         result_path = generator.process_attraction_video(
@@ -374,8 +482,25 @@ def render_attraction_videos(
         )
 
         if result_path:
+            logger.info(
+                "Step 4: [%d/%d] '%s' complete -> %s",
+                idx + 1,
+                len(waypoints),
+                place_label,
+                result_path,
+            )
             generated_videos.append(result_path)
+        else:
+            logger.warning(
+                "Step 4: [%d/%d] '%s' FAILED to produce a video.",
+                idx + 1,
+                len(waypoints),
+                place_label,
+            )
 
+    logger.info(
+        "Step 4 complete: %d attraction video(s) produced.", len(generated_videos)
+    )
     return generated_videos
 
 
@@ -387,22 +512,30 @@ def burn_subtitles(
 ) -> list[str]:
     """Step 5: Permanently burns SRT subtitles onto the finished video files."""
     print("Step 5: Burning Subtitles into Videos...")
+    logger.info("Step 5: Burning subtitles into %d video(s).", len(video_paths))
 
     final_videos = []
 
     # Ensure we only process if we have matching subtitle files
     for idx, video_path in enumerate(video_paths):
+        original_file = Path(video_path)
+
         if idx < len(subtitle_paths) and subtitle_paths[idx]:
             sub_path = subtitle_paths[idx]
 
             # Create a new filename for the subtitled version
-            original_file = Path(video_path)
             subtitled_output = str(
                 Path(output_dir)
                 / f"{original_file.stem}_subtitled{original_file.suffix}"
             )
 
             print(f"   -> Burning subtitles onto: {original_file.name}")
+            logger.info(
+                "Step 5: [%d/%d] Burning subtitles onto '%s'.",
+                idx + 1,
+                len(video_paths),
+                original_file.name,
+            )
             try:
                 result = VideoExporter.burn_subtitles(
                     input_video_path=video_path,
@@ -412,12 +545,26 @@ def burn_subtitles(
                 final_videos.append(result)
             except Exception as e:
                 print(f"     Failed to burn subtitle for {original_file.name}: {e}")
+                logger.error(
+                    "Step 5: [%d/%d] Failed to burn subtitle for '%s': %s",
+                    idx + 1,
+                    len(video_paths),
+                    original_file.name,
+                    e,
+                )
                 # Fallback to the original video if burning fails
                 final_videos.append(video_path)
         else:
             # If no subtitle file exists for this video, just pass the original through
+            logger.info(
+                "Step 5: [%d/%d] No subtitle file for '%s' — passing through unchanged.",
+                idx + 1,
+                len(video_paths),
+                original_file.name,
+            )
             final_videos.append(video_path)
 
+    logger.info("Step 5 complete: %d video(s) processed.", len(final_videos))
     return final_videos
 
 
@@ -429,6 +576,9 @@ def run_full_pipeline(
 ) -> dict:
     """Executes all steps sequentially for a one-click full generation."""
     print("Starting Full Automated Pipeline...")
+    logger.info("=" * 60)
+    logger.info("Starting Full Automated Pipeline for: %s", raw_source_path)
+    logger.info("=" * 60)
 
     source_path = Path(raw_source_path)
     project_dir = source_path.parent
@@ -462,7 +612,7 @@ def run_full_pipeline(
     # )
 
     # --- STEP 4.5 ---
-    all_videos = video_paths # +  attraction_videos
+    all_videos = video_paths  # +  attraction_videos
 
     # --- STEP 5 ---
     final_videos = burn_subtitles(
@@ -472,6 +622,9 @@ def run_full_pipeline(
     )
 
     print("Full Pipeline Complete!")
+    logger.info("=" * 60)
+    logger.info("Full Pipeline Complete! %d final video(s).", len(final_videos))
+    logger.info("=" * 60)
     return {"video_paths": final_videos, "summary": cleaned_route.get("summary", {})}
 
 
@@ -494,10 +647,12 @@ def render_from_timeline(
         output_video_path = str(project_dir / "video" / "01_overview_rerendered.mp4")
 
     print(f"NLE Engine: Re-rendering video from {timeline_path.name}...")
+    logger.info("NLE Engine: Re-rendering video from %s...", timeline_path.name)
 
     final_path = VideoExporter.concat_from_timeline(
         timeline_data=timeline_data, output_path=output_video_path, save_json_path=None
     )
 
     print(f"Fast re-render complete: {final_path}")
+    logger.info("NLE Engine: Fast re-render complete -> %s", final_path)
     return final_path

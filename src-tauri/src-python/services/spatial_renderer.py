@@ -119,6 +119,11 @@ class SpatialRenderer:
         summary: Optional[Dict] = None,
     ) -> str:
         h, w = base_img.shape[:2]
+        if h % 2 != 0 or w % 2 != 0:
+            h = h - (h % 2)
+            w = w - (w % 2)
+            base_img = base_img[:h, :w].copy()
+
         duration = self.config.get("duration", 30.0)
         num_frames = max(10, int(duration * fps))
         self._total_points = len(points)
@@ -480,8 +485,29 @@ class SpatialRenderer:
             if p:
                 p["triggered"] = False
 
+        # 💡 FIX: Write the summary card directly to the overview video stream
         if summary:
-            self.render_summary(summary, fps)
+            logger.info("📊 Rendering Summary Card")
+            card = self.graphics.create_summary_card(
+                distance_km=summary.get("total_distance_km", 0.0),
+                duration_seconds=summary.get("total_duration_seconds", 0.0),
+            )
+            fade_sec = self.config.get("summary_fade", 0.5)
+            hold_sec = self.config.get("summary_hold", 4.0)
+            fade_frames = max(1, int(fade_sec * fps))
+            hold_frames = max(0, int(hold_sec * fps) - fade_frames)
+
+            for i in range(fade_frames):
+                video.write(
+                    self.graphics.composite_card_on_frame(
+                        self.last_frame, card, alpha=(i + 1) / fade_frames
+                    )
+                )
+            held_frame = self.graphics.composite_card_on_frame(
+                self.last_frame, card, alpha=1.0
+            )
+            for _ in range(hold_frames):
+                video.write(held_frame)
         else:
             for _ in range(int(self.config.get("pause", 2.0) * fps)):
                 video.write(self.last_frame)
@@ -502,6 +528,11 @@ class SpatialRenderer:
                 continue
 
             h, w = res_img.shape[:2]
+            if h % 2 != 0 or w % 2 != 0:
+                h = h - (h % 2)
+                w = w - (w % 2)
+                res_img = res_img[:h, :w].copy()
+
             res_points = res_data["points"]
             res_labels = res_data["labels"]
             res_popups = res_data.get("popups", [None] * len(res_points))
@@ -711,31 +742,3 @@ class SpatialRenderer:
             output_paths.append(video.release(str(self.out_dir / chunk_filename)))
 
         return output_paths
-
-    def render_summary(self, summary: Dict, fps: int) -> str:
-        logger.info("Rendering End-of-Route Summary Card")
-        h, w = self.last_frame.shape[:2]
-        video = VideoExporter(str(self.out_dir / "03_summary.mp4"), w, h, fps)
-
-        card = self.graphics.create_summary_card(
-            distance_km=summary.get("total_distance_km", 0.0),
-            duration_seconds=summary.get("total_duration_seconds", 0.0),
-        )
-        fade_frames = max(1, int(self.config.get("summary_fade", 0.5) * fps))
-        hold_frames = max(
-            0, int(self.config.get("summary_hold", 4.0) * fps) - fade_frames
-        )
-
-        for i in range(fade_frames):
-            video.write(
-                self.graphics.composite_card_on_frame(
-                    self.last_frame, card, alpha=(i + 1) / fade_frames
-                )
-            )
-        held_frame = self.graphics.composite_card_on_frame(
-            self.last_frame, card, alpha=1.0
-        )
-        for _ in range(hold_frames):
-            video.write(held_frame)
-
-        return video.release(str(self.out_dir / "03_summary.mp4"))

@@ -40,6 +40,15 @@ class StoryboardRenderer:
         }
         self.last_frame = None
 
+        # [NEW] Explicit, in-memory record of every atomic clip produced by
+        # the most recent render_storyboard() call, in action order. This
+        # replaces the old (broken) pattern of re-discovering clip paths by
+        # globbing the output directory for a filename convention that
+        # never actually matched what this class writes to disk. Consumers
+        # (e.g. RouteAnimator) should read this instead of touching the
+        # filesystem — it's a direct, race-free, always-in-sync reference.
+        self.last_timeline_tracks: List[Dict[str, str]] = []
+
     def _compute_fullscreen_hold_times(
         self, total_freeze: float
     ) -> Tuple[float, float, float, float]:
@@ -419,7 +428,7 @@ class StoryboardRenderer:
             self.out_dir.parent / f"{Path(output_filename).stem}_timeline.json"
         )
 
-        return VideoExporter.concat_from_timeline(
+        final_output = VideoExporter.concat_from_timeline(
             timeline_data={
                 "project_name": storyboard.get("video_id", "storyboard_video"),
                 "video_tracks": timeline_tracks,
@@ -427,3 +436,10 @@ class StoryboardRenderer:
             output_path=final_path,
             save_json_path=timeline_json_path,
         )
+
+        # [NEW] Publish the manifest AFTER a successful concat, so a partial
+        # or failed render never leaves stale/misleading state that a caller
+        # could read and mistakenly trust.
+        self.last_timeline_tracks = timeline_tracks
+
+        return final_output
