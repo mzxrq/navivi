@@ -5,9 +5,8 @@ import {
   SkipForward,
   Volume2,
   Maximize,
-  Settings2,
   PictureInPicture,
-} from "lucide-react";
+} from "../../ui/icons";
 import { useUI } from "../../../hooks/useUI";
 import { useRef, useState } from "react";
 
@@ -16,7 +15,7 @@ export function VideoArea() {
   const videoRef = useRef<HTMLVideoElement>(null);
 
   // This will hold the path to the final rendered video from Rust later
-  const [videoSource, setVideoSource] = useState<string | null>(null);
+  const [videoSource] = useState<string | null>(null);
 
   if (!showVideoPanel) return null;
 

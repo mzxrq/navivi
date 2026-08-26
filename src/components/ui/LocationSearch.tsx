@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Search, Loader2, MapPin, X } from "lucide-react";
+import { Search, Loader2, MapPin, X } from "../ui/icons";
 import { useWorkspace } from "../../hooks/useWorkspace";
 
 interface SearchResult {
@@ -62,6 +62,7 @@ useEffect(() => {
             lng,
             name: place.display_name.split(",")[0],
             images: [],
+            imagePans: [],
             narration: "",
             routeMode: "driving",
         },

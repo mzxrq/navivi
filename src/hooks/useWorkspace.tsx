@@ -133,7 +133,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         user_id: data.user_id,
         created_at: data.created_at,
         status: "saved",
-        directory_path: data.directory_path || ""
+        directory_path: data.directory_path || "",
+        overview_narration: data.overview_narration || ""
       });
 
       if (data.settings) setSettings(data.settings);

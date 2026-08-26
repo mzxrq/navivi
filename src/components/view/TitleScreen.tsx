@@ -1,6 +1,6 @@
 import { useUI } from "../../hooks/useUI";
 import { useWorkspace } from "../../hooks/useWorkspace";
-import { Plus, FolderOpen, Map, Clock } from "lucide-react";
+import { Plus, FolderOpen, Map, Clock } from "../ui/icons";
 
 export function TitleScreen() {
   const { setCurrentView, showToast } = useUI();

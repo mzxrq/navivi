@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { exists } from "@tauri-apps/plugin-fs";
 import { documentDir, join } from "@tauri-apps/api/path";
-import { Folder, Map, Loader2 } from "lucide-react";
+import { Folder, Map, Loader2 } from "../ui/icons";
 import { fileSystem } from "../../config/constants";
 
 interface SaveAsProps {
@@ -83,7 +83,7 @@ export function SaveAs({
   const isValid = saveAsName.trim().length > 0 && !isChecking;
 
   return (
-    <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/60 animate-in fade-in">
+    <div className="fixed inset-0 z-999 flex items-center justify-center bg-black/60 animate-in fade-in">
       <div className="w-96 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-white/10 rounded-xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
         {/* Header Section */}
         <div className="px-5 py-4 border-b border-zinc-100 dark:border-white/5 bg-zinc-50/50 dark:bg-zinc-900/50 flex items-center gap-3">

@@ -161,7 +161,7 @@ export const saveProjectData = async (
     source_files: { gps_route: gpxPath },
     settings: settings,
     routing_cache: routingCache,
-    overview_narration: metadata.overview_narration,
+    overview_narration: metadata.overview_narration || "",
     start_point: startWp ? { lat: startWp.lat, lng: startWp.lng, label: startWp.label } : null,
     end_point: endWp ? { lat: endWp.lat, lng: endWp.lng, label: endWp.label } : null,
     waypoints: processedWaypoints,

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Info } from "lucide-react";
+import { Info } from "../ui/icons";
 
 interface ScrubInputProps {
   label: string;

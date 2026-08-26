@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { Loader2, CheckCircle, XCircle, Info, AlertTriangle, PlayCircle } from "lucide-react";
+import { Loader2, CheckCircle, XCircle, Info, AlertTriangle, PlayCircle } from "../ui/icons";
 import { useUI } from "../../hooks/useUI";
 
 interface LogItem {
