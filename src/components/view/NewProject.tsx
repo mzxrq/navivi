@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { useUI } from "../../hooks/useUI";
-import { FolderPlus, MapPin, Monitor, ChevronRight, Clock } from "lucide-react";
+import { FolderPlus, MapPin, Monitor, ChevronRight, Clock } from "../ui/icons";
 
 const startingLocations = [
   { id: "osaka", name: "Osaka, Japan", coords: [34.6937, 135.5023] },
@@ -37,7 +37,7 @@ export function NewProject() {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-100 flex items-center justify-center bg-black/60 animate-in fade-in duration-200">
       <div className="w-full max-w-120 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-white/10 rounded-2xl shadow-xl p-8 animate-in fade-in zoom-in-95 duration-300">
         <div className="flex items-center gap-3 mb-8">
           <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center border border-emerald-200 dark:border-emerald-500/20">

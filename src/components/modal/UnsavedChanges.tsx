@@ -10,7 +10,7 @@ export function UnsavedChanges({ isOpen, projectName, onCancel, onDiscard, onSav
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/60 animate-in fade-in">
+        <div className="fixed inset-0 z-999 flex items-center justify-center bg-black/60 animate-in fade-in">
       <div className="w-96 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-white/10 rounded-xl shadow-xl p-6 animate-in zoom-in-95 duration-200">
         <h3 className="text-base font-bold text-zinc-900 dark:text-white mb-2">Unsaved Changes</h3>
         <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-6">

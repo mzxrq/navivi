@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Mic, Sparkles, Settings2, Loader } from "lucide-react";
+import { Mic, Sparkles, Settings2, Loader, Square, ChevronDown } from "../ui/icons";
 
 const thinkingSteps = [
   "Detecting context...",
@@ -14,9 +14,10 @@ interface ScriptInputProps {
   onChange: (v: string) => void;
   onGenerate: (prompt: string, engine: string) => void;
   isGenerating: boolean;
+  onCancel?: () => void;
 }
 
-export function ScriptInput({ value, onChange, onGenerate, isGenerating }: ScriptInputProps) {
+export function ScriptInput({ value, onChange, onGenerate, isGenerating, onCancel }: ScriptInputProps) {
   const [engine, setEngine] = useState("ollama"); 
   const [localPrompt, setLocalPrompt] = useState(value);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
@@ -47,28 +48,42 @@ export function ScriptInput({ value, onChange, onGenerate, isGenerating }: Scrip
         </label>
         
         <div className="flex items-center gap-2">
+          
+          {/* Sleek Tailwind Dropdown */}
           <div className="relative flex items-center">
-            <Settings2 className="w-3 h-3 text-zinc-400 absolute left-1.5 pointer-events-none" />
-            <select 
-              value={engine} 
+            <Settings2 className="w-3 h-3 text-emerald-500 absolute left-2 pointer-events-none z-10" />
+            <select
+              value={engine}
               onChange={(e) => setEngine(e.target.value)}
               disabled={isGenerating}
-              className="pl-5 pr-1 py-1 text-[10px] bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 rounded-md outline-none cursor-pointer disabled:opacity-50"
+              className="appearance-none pl-6 pr-5 py-1 text-[10px] font-bold bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800/80 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 rounded-lg border border-zinc-200 dark:border-white/10 outline-none cursor-pointer transition-all shadow-sm disabled:opacity-50"
             >
-              <option value="ollama">Ollama</option>
-              <option value="gemini">Gemini</option>
-              <option value="groq">Groq</option>
+              <option value="ollama" className="bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200">Ollama</option>
+              <option value="gemini" className="bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200">Gemini</option>
+              <option value="groq" className="bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200">Groq</option>
             </select>
+            <ChevronDown className="w-2.5 h-2.5 text-zinc-400 absolute right-1.5 pointer-events-none" />
           </div>
 
-          <button 
-            onClick={handleGenerateClick} 
-            disabled={isGenerating || !displayValue.trim()} 
-            className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed bg-green-50 dark:bg-green-500/10 text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-500/20 border border-green-200 dark:border-green-500/20 shadow-sm"
-          >
-            <Sparkles className={`w-3 h-3 ${isGenerating ? 'animate-pulse' : ''}`} /> 
-            {isGenerating ? 'Thinking...' : 'Magic Write'}
-          </button>
+          {/* Toggle between Magic Write and Cancel */}
+          {isGenerating ? (
+            <button 
+              onClick={onCancel}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-bold transition-all bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20 border border-red-200 dark:border-red-500/20 shadow-sm"
+            >
+              <Square className="w-3 h-3 fill-current" /> 
+              Cancel
+            </button>
+          ) : (
+            <button 
+              onClick={handleGenerateClick} 
+              disabled={!displayValue.trim()} 
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed bg-green-50 dark:bg-green-500/10 text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-500/20 border border-green-200 dark:border-green-500/20 shadow-sm"
+            >
+              <Sparkles className="w-3 h-3" /> 
+              Magic Write
+            </button>
+          )}
         </div>
       </div>
       
@@ -88,7 +103,7 @@ export function ScriptInput({ value, onChange, onGenerate, isGenerating }: Scrip
           <div className="absolute inset-0 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-sm flex flex-col items-center justify-center z-10 px-4">
             <div className="flex flex-col items-center gap-2.5 text-center">
               <div className="relative flex items-center justify-center">
-				        <Loader className="w-6 h-6 animate-pulse text-green-300 dark:text-green-400" />
+                <Loader className="w-6 h-6 animate-pulse text-green-300 dark:text-green-400" />
                 <div className="absolute w-8 h-8 rounded-full bg-emerald-600/20 animate-pulse" />
               </div>
 

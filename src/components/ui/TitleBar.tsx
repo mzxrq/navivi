@@ -12,7 +12,7 @@ import {
   Settings2,
   Undo2,
   Redo2,
-} from "lucide-react";
+} from "../ui/icons";
 import { Window } from "@tauri-apps/api/window";
 import { SaveAs } from "../modal/SaveAs";
 import { UnsavedChanges } from "../modal/UnsavedChanges";
@@ -147,7 +147,7 @@ export function TitleBar() {
             </button>
 
             {isMenuOpen && (
-              <div className="absolute top-10 left-2 w-56 bg-white dark:bg-[#1f1f22] border border-zinc-200 dark:border-white/10 rounded-md shadow-2xl py-1 z-200 text-sm text-zinc-700 dark:text-zinc-300">
+              <div className="absolute top-10 w-56 bg-white dark:bg-[#242427] border border-zinc-200 dark:border-white/10 rounded-md shadow-2xl py-1 z-200 text-sm text-zinc-700 dark:text-zinc-300">
                 <button
                   onClick={() => handleSafeNavigation("title_screen")}
                   className="w-full flex items-center justify-between px-4 py-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-700/50 transition-colors"

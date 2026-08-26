@@ -4,11 +4,8 @@ import { useTheme } from "../../../hooks/useTheme";
 import { useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { 
-  // Clock, 
   UploadCloud,  
-  // CheckCircle2,  
-  // FileCode, 
-  MapPin } from "lucide-react";
+  MapPin } from "../../ui/icons";
 import { MapContainer, TileLayer } from "react-leaflet";
 import { useMapRouting } from "../../../hooks/useMapRouting";
 import { MapAutoZoom, MapEventsHandler, MapPreviewer } from "../../controllers/mapControllers";
@@ -54,7 +51,7 @@ export function MapArea() {
   };
 
   useMapRouting();
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [isProcessing] = useState(false);
 
   const isDarkMap = mapTheme === "dark" || (mapTheme === "sync" && (theme === "dark" || (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches)));
 
@@ -130,6 +127,8 @@ export function MapArea() {
     }
   };
 
+
+
   return (
     <main 
       className="flex-1 relative bg-zinc-100 dark:bg-[#09090b] overflow-hidden transition-colors"
@@ -193,7 +192,7 @@ export function MapArea() {
       
       {/* Processing Overlay */}
       {isProcessing && (
-        <div className="absolute inset-0 z-[100] bg-white/50 dark:bg-zinc-950/50 backdrop-blur-sm flex flex-col items-center justify-center transition-all animate-in fade-in">
+        <div className="absolute inset-0 z-100 bg-white/50 dark:bg-zinc-950/50 backdrop-blur-sm flex flex-col items-center justify-center transition-all animate-in fade-in">
           <div className="w-12 h-12 border-4 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin mb-4" />
           <p className="text-zinc-900 dark:text-zinc-200 font-bold text-sm tracking-widest uppercase">
             Parsing Route Data...

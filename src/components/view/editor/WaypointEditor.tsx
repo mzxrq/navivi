@@ -1,12 +1,11 @@
 import {
   ChevronLeft,
-  Mic,
-  Image as ImageIcon,
+  ImageIcon,
   X,
   Trash2,
   MapPin,
   Settings2,
-} from "lucide-react";
+} from "../../ui/icons";
 import { ScrubInput } from "../../ui/ScrubInput";
 import { useWorkspace } from "../../../hooks/useWorkspace";
 import { useUI } from "../../../hooks/useUI";
@@ -21,7 +20,7 @@ export function WaypointEditor({
   wpId: string;
   onClose: () => void;
 }) {
-  const { waypoints, setWaypoints, updateWaypoint, settings } = useWorkspace();
+  const { waypoints, setWaypoints, updateWaypoint, settings, setActiveWaypointId } = useWorkspace();
   const { showToast } = useUI();
 
   const wp = waypoints.find((w) => w.id === wpId);
@@ -100,13 +99,17 @@ export function WaypointEditor({
           />
         </div>
 
-        {/* 2. AI Script Component (Background Enabled) */}
+        {/* 2. AI Script Component */}
         <ScriptInput
           value={wp.narration || ""}
           onChange={(v) => updateWaypoint(wp.id, { narration: v })}
           isGenerating={wp.isGeneratingScript || false}
+          onCancel={() => {
+            updateWaypoint(wp.id, { isGeneratingScript: false });
+            invoke("cancel_python_blueprint").catch(console.error);
+            showToast(`Canceled script generation for ${wp.name}`, "info");
+          }}
           onGenerate={async (prompt, engine) => {
-            // 1. Mark this specific waypoint as generating
             updateWaypoint(wp.id, { isGeneratingScript: true });
             showToast(`Started writing script for ${wp.name}...`, "info");
 
@@ -119,7 +122,6 @@ export function WaypointEditor({
                 engine: engine
               });
 
-              // 2. Fire the backend task (this runs detached in the background)
               const pythonResponse = await invoke<string>("run_python_blueprint", {
                 action: "generate_script",
                 payload: payload,
@@ -127,7 +129,6 @@ export function WaypointEditor({
 
               const parsed = JSON.parse(pythonResponse);
               if (parsed.success) {
-                // 3. Save the result and remove the loading flag globally
                 updateWaypoint(wp.id, { narration: parsed.script, isGeneratingScript: false });
                 showToast(`Script finished for ${wp.name}!`, "success");
               } else {
@@ -146,8 +147,7 @@ export function WaypointEditor({
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
-              <ImageIcon className="w-3.5 h-3.5 text-zinc-400" /> Pop-up
-              Pictures
+              <ImageIcon className="w-3.5 h-3.5 text-zinc-400" /> Pop-up Pictures
             </label>
             <span className="text-[10px] font-medium text-zinc-400 bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded-md">
               {wpImages.length} / 3
@@ -177,7 +177,6 @@ export function WaypointEditor({
                     </button>
                   </div>
 
-                  {/* Clean, uniform Hybrid Scrub Input! */}
                   <ScrubInput
                     label="Camera Pan"
                     value={currentPan}
@@ -253,6 +252,7 @@ export function WaypointEditor({
           onClick={() => {
             if (confirm(`Remove ${wp.name}?`)) {
               setWaypoints(waypoints.filter((w) => w.id !== wp.id));
+              setActiveWaypointId(null);
               onClose();
             }
           }}

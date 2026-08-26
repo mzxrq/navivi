@@ -1,16 +1,7 @@
 import { Marker, Popup } from "react-leaflet";
 import { createPortal } from "react-dom";
-import {
-  Car,
-  Footprints,
-  Ruler,
-  Plane,
-  Trash2,
-  Edit,
-  CopyPlus,
-  CornerDownLeft,
-  Ship,
-} from "lucide-react";
+import { Car, Footprints, Ruler, Plane, Trash2, Edit, CopyPlus, CornerDownLeft, Ship,
+} from "../../../ui/icons";
 import { useWorkspace } from "../../../../hooks/useWorkspace";
 import { useWaypointActions } from "../../../../hooks/useWaypointActions";
 import { waypointIcon } from "../../../../utils/mapUtils";

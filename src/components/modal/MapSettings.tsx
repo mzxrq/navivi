@@ -3,7 +3,7 @@ import { useWorkspace } from "../../hooks/useWorkspace";
 import {
   X,
   Palette,
-} from "lucide-react";
+} from "../ui/icons";
 
 export function MapSettings() {
   const [isOpen, setIsOpen] = useState(false);

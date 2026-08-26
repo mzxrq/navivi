@@ -4,6 +4,33 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+@theme {
+  --color-navi: #4287f5;
+  --color-navi-1100: #000BCC;
+  --color-navi-1000: #002DD9;
+  --color-navi-900: #134EE6;
+  --color-navi-800: #296CF2;
+  --color-navi-600: #66ABEF;
+  --color-navi-500: #88C5EB;
+  --color-navi-400: #A7D8EA;
+  --color-navi-300: #C2E6EC;
+  --color-navi-200: #DCF0F1;
+  --color-navi-100: #F2F8F8;
+  --color-navidark-900: #110F10;
+  --color-navidark-800: #131012;
+  --color-navidark-700: #141214;
+  --color-navidark-600: #151316;
+  --color-navidark-500: #161518;
+  --color-navidark-400: #171719;
+  --color-navidark-300: #18181b;
+  --color-navidark-200: #3B3B3D;
+  --color-navidark-175: #5D5E5F;
+  --color-navidark-150: #808182;
+  --color-navidark-125: #A3A4A4;
+  --color-navidark-100: #C5C6C6;
+}
+
+
 body {
   font-family: 'Inter', sans-serif;
   -webkit-font-smoothing: antialiased;

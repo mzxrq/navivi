@@ -1,6 +1,6 @@
 import { useUI } from "../../hooks/useUI";
 import { useTheme } from "../../hooks/useTheme";
-import { X, Key, ExternalLink, Moon, Sun, Monitor, Map } from "lucide-react";
+import { X, Key, ExternalLink, Moon, Sun, Monitor, Map } from "../ui/icons";
 import { useWorkspace } from "../../hooks/useWorkspace";
 
 export function AppSettings() {
@@ -11,7 +11,7 @@ export function AppSettings() {
   if (!showAppSettings) return null;
 
   return (
-    <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/60 animate-in fade-in">
+    <div className="fixed inset-0 z-999 flex items-center justify-center bg-black/60 animate-in fade-in">
       <div className="w-480px bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-white/10 rounded-xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
         
         {/* Header Section */}
