@@ -16,11 +16,8 @@ from services.vdo_exporter import VideoExporter
 from services.img2vdo import AttractionVideoGenerator
 from services.logger import setup_logger
 
-# [NEW] Standardized logger — writes to logs/app.log AND stderr, matching
-# every other service module in this codebase (job_config, gps_parser,
-# mapfetcher, etc). Using the same logger name convention keeps step-3
-# tracking lines interleaved correctly with the low-level tile-download
-# logs already emitted inside mapfetcher.py.
+# Standardized logger — writes to logs/app.log AND stderr, matching
+# every other service module in this codebase.
 logger = setup_logger("VideoPipeline")
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -273,8 +270,6 @@ def render_route_video(
             len(waypoints),
         )
 
-        # See earlier fix: prefer the canonical start_point/end_point labels
-        # over waypoints[0]/[-1]'s own (often placeholder) label field.
         start_point_label = project_config.get("start_point", {}).get("label")
         end_point_label = project_config.get("end_point", {}).get("label")
 
@@ -298,9 +293,6 @@ def render_route_video(
 
             route_labels[closest_idx] = wp_label
 
-            # [NEW] Per-waypoint tracking log — tells you exactly which
-            # place name got resolved and where on the route it landed,
-            # BEFORE any expensive map/video rendering for it happens.
             logger.info(
                 "Step 3: [%d/%d] Waypoint resolved -> '%s' (route index %d)",
                 idx + 1,
@@ -356,10 +348,6 @@ def render_route_video(
         start_idx, end_idx = item["start_idx"], item["end_idx"]
         chunk = route_df.iloc[start_idx : end_idx + 1]
 
-        # [NEW] Resolve the human-readable place name this leg is heading
-        # toward, straight from the SAME route_labels list the video will
-        # actually render — so the log is a truthful reflection of what
-        # you'll see on screen, not a re-derived guess.
         place_name = route_labels[end_idx] if end_idx < len(route_labels) else None
         display_name = place_name or f"segment_{seq_idx + 1}"
 
@@ -473,6 +461,9 @@ def render_route_video(
         "default_transition_hold_seconds": settings.get(
             "default_transition_hold_seconds", 1.5
         ),
+        # --- NEW FLAGS FOR 3D RESIDENTIAL ---
+        "use_3d_res": True,  # Forces route2vdo.py to use the PyDeck renderer
+        "res_route_path": project_config_path,
     }
 
     logger.info(
@@ -480,8 +471,27 @@ def render_route_video(
         " + storyboard legs" if animator_config["use_leg_storyboard"] else "",
     )
     animator = RouteAnimator(animator_config)
+
+    # 💡 NEW: Generate the 3D Video right here using the already-loaded project_config!
+    from services.pydeck_recorder import (
+        load_route_from_config,
+        build_pydeck_map,
+        record_headless_video,
+    )
+
+    logger.info("Step 3.5: Generating 3D Drone Background Video...")
+    try:
+        pydeck_route = load_route_from_config(project_config)
+        html_file = build_pydeck_map(pydeck_route)
+        video_background_path = record_headless_video(html_file, pydeck_route)
+    except Exception as e:
+        logger.error(
+            "Failed to generate 3D Pydeck video: %s. Falling back to 2D Map.", e
+        )
+        video_background_path = map_output_path
+
     output_paths = animator.render(
-        img_path=map_output_path,
+        img_path=video_background_path,
         points=route_points,
         labels=route_labels,
         popups=route_popups,
@@ -524,7 +534,6 @@ def render_attraction_videos(
         popup_image_entry = wp.get("popup_image")
         place_label = wp.get("label", f"waypoint_{idx}")
 
-        # The generator safely handles if this is a single string or a list of strings[cite: 5]
         if not popup_image_entry:
             logger.info(
                 "Step 4: [%d/%d] Skipping '%s' — no popup image configured.",
@@ -534,12 +543,10 @@ def render_attraction_videos(
             )
             continue
 
-        # Look for a specific prompt, fallback to the label, or use a default
         prompt_text = wp.get(
             "video_prompt", wp.get("label", "Beautiful Japanese scenery, high quality")
         )
 
-        # Safely extract matching audio data from Step 2
         target_audio_duration = (
             audio_durations[idx] if idx < len(audio_durations) else 0.0
         )
@@ -558,7 +565,6 @@ def render_attraction_videos(
             place_label,
         )
 
-        # This will batch process, concatenate, scale to audio, and mux the final file[cite: 5]
         result_path = generator.process_attraction_video(
             popup_image_entry=popup_image_entry,
             prompt_text=prompt_text,
@@ -602,14 +608,11 @@ def burn_subtitles(
 
     final_videos = []
 
-    # Ensure we only process if we have matching subtitle files
     for idx, video_path in enumerate(video_paths):
         original_file = Path(video_path)
 
         if idx < len(subtitle_paths) and subtitle_paths[idx]:
             sub_path = subtitle_paths[idx]
-
-            # Create a new filename for the subtitled version
             subtitled_output = str(
                 Path(output_dir)
                 / f"{original_file.stem}_subtitled{original_file.suffix}"
@@ -638,10 +641,8 @@ def burn_subtitles(
                     original_file.name,
                     e,
                 )
-                # Fallback to the original video if burning fails
                 final_videos.append(video_path)
         else:
-            # If no subtitle file exists for this video, just pass the original through
             logger.info(
                 "Step 5: [%d/%d] No subtitle file for '%s' — passing through unchanged.",
                 idx + 1,
@@ -690,15 +691,7 @@ def run_full_pipeline(
         audio_pauses=audio_data.get("audio_pauses"),
     )
 
-    # --- STEP 4 ---
-    # attraction_videos = render_attraction_videos(
-    #     project_config_path=str(config_file_path),
-    #     audio_durations=audio_data.get("audio_durations"),
-    #     audio_paths=audio_data.get("audio_paths"),
-    # )
-
-    # --- STEP 4.5 ---
-    all_videos = video_paths  # +  attraction_videos
+    all_videos = video_paths
 
     # --- STEP 5 ---
     final_videos = burn_subtitles(

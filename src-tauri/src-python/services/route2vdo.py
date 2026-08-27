@@ -11,6 +11,8 @@ from __future__ import annotations
 import argparse
 from html import parser
 import json
+import os
+import subprocess
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple
 
@@ -19,6 +21,7 @@ from services.logger import setup_logger
 from services.spatial_renderer import SpatialRenderer
 from services.storyboard_renderer import StoryboardRenderer
 from services.vdo_exporter import VideoExporter
+from services.pydeck_recorder import record_headless_video
 
 # Logging configuration
 logger = setup_logger("RouteAnimator")
@@ -96,6 +99,41 @@ class RouteAnimator:
 
         return points, labels, popups, settings
 
+    def _freeze_video_end(self, video_path: str, hold_seconds: float):
+        """Uses FFmpeg tpad filter to seamlessly clone and hold the final frame."""
+        if hold_seconds <= 0:
+            return
+
+        logger.info(
+            f"❄️ Freezing the final overview frame for {hold_seconds} seconds..."
+        )
+        temp_out = str(
+            Path(video_path).with_name(f"temp_frozen_{Path(video_path).name}")
+        )
+
+        # FFmpeg command to pad the end of the video by cloning the last frame
+        cmd = [
+            "ffmpeg",
+            "-y",
+            "-i",
+            video_path,
+            "-vf",
+            f"tpad=stop_mode=clone:stop_duration={hold_seconds}",
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            temp_out,
+        ]
+
+        result = subprocess.run(
+            cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        )
+        if result.returncode == 0 and os.path.exists(temp_out):
+            os.replace(temp_out, video_path)
+        else:
+            logger.warning("Failed to freeze video end. Skipping freeze frame.")
+
     def render(
         self,
         img_path: str,
@@ -131,14 +169,8 @@ class RouteAnimator:
                 output_filename="01_overview.mp4",
             )
 
-            # --------------------------------------------------------------
-            # SINGLE render pass. The previous implementation called
-            # render_storyboard() a second time further down with identical
-            # arguments, doubling every FFmpeg subprocess spawn and frame
-            # write for a result that was immediately discarded. Removed.
-            # --------------------------------------------------------------
             overview_path = self.storyboard_renderer.render_storyboard(
-                img_path=img_path,
+                bg_path=img_path,
                 points=points,
                 labels=labels,
                 storyboard=storyboard,
@@ -152,19 +184,6 @@ class RouteAnimator:
             ) as f:
                 json.dump(storyboard, f, indent=2, ensure_ascii=False)
 
-            # --------------------------------------------------------------
-            # POINT-TO-POINT LEG SLICING (bug fix)
-            # --------------------------------------------------------------
-            # OLD: globbed self.out_dir for "01_overview_part_*.mp4" — a
-            # filename pattern StoryboardRenderer never actually produces
-            # (it writes "story_{idx}_{phase}_{action_id}.mp4"), so this
-            # glob ALWAYS returned an empty list and the leg-combination
-            # branch below was dead code — it could never execute.
-            #
-            # NEW: pull the authoritative, in-order clip manifest directly
-            # off the renderer that just built it (in-memory, no filesystem
-            # pattern matching, no race conditions).
-            # --------------------------------------------------------------
             actions = storyboard.get("actions", [])
             timeline_tracks = self.storyboard_renderer.last_timeline_tracks
 
@@ -178,8 +197,6 @@ class RouteAnimator:
                 for track, action in zip(timeline_tracks, actions):
                     a_type = action.get("type", "")
 
-                    # Whenever a new drawing route starts, finalize and
-                    # merge the PREVIOUS group into one point-to-point leg.
                     if a_type == "draw_route" and current_group:
                         out_name = str(
                             self.out_dir / f"01_overview_leg_{leg_idx:02d}.mp4"
@@ -189,8 +206,6 @@ class RouteAnimator:
                         current_group = []
                         leg_idx += 1
 
-                    # Add the current clip (route, popup, or hold) to the
-                    # active group.
                     current_group.append(track["file_path"])
 
                 # Flush and merge the final group (last leg + summary/popup)
@@ -199,31 +214,63 @@ class RouteAnimator:
                     VideoExporter.concat_clips(current_group, out_name)
                     combined_clips.append(out_name)
 
-                # Output the combined point-to-point files
+                # -------------------------------------------------------------
+                # NEW: FREEZE THE VERY LAST OVERVIEW LEG
+                # -------------------------------------------------------------
+                if combined_clips:
+                    last_leg_path = combined_clips[-1]
+                    self._freeze_video_end(
+                        last_leg_path, hold_seconds=self.config.get("summary_hold", 4.0)
+                    )
+
                 output_paths.extend(combined_clips)
 
             elif overview_path:
-                # Graceful degradation only — should be rare now that the
-                # manifest is populated deterministically on every
-                # successful render_storyboard() call.
                 logger.warning(
                     "Storyboard timeline manifest missing/mismatched — "
                     "falling back to single stitched overview file."
+                )
+                self._freeze_video_end(
+                    overview_path, hold_seconds=self.config.get("summary_hold", 4.0)
                 )
                 output_paths.append(overview_path)
 
         # 💡 Fallback to the Legacy Proximity Renderer
         else:
             overview_path = self.spatial_renderer.render_overview(
-                base_img, points, labels, popups, fps, summary=summary
+                img_path, points, labels, popups, fps, summary=summary
             )
             if overview_path:
+                # -------------------------------------------------------------
+                # NEW: FREEZE THE LEGACY OVERVIEW VIDEO
+                # -------------------------------------------------------------
+                self._freeze_video_end(
+                    overview_path, hold_seconds=self.config.get("summary_hold", 4.0)
+                )
                 output_paths.append(overview_path)
 
-        # 💡 Always render waypoints using the spatial engine
+        # Always render waypoints using the spatial engine, OR PyDeck if requested
         if res_sequence:
-            res_paths = self.spatial_renderer.render_waypoints(res_sequence, fps)
-            output_paths.extend(res_paths)
+            if self.config.get("use_3d_res", False):
+                logger.info(
+                    "🚁 Rendering Residential Sequence using 2D PyDeck (Split by Leg)..."
+                )
+
+                res_route_path = self.config.get("res_route_path")
+                res_out_path = str(self.out_dir / "02_residential_map.mp4")
+
+                # Change: It now returns a LIST of paths, so we use extend()
+                audio_durs = [seg.get("segment_duration", 0.0) for seg in res_sequence]
+                final_res_paths = record_headless_video(
+                    res_route_path, res_out_path, audio_durations=audio_durs
+                )
+                output_paths.extend(final_res_paths)
+            else:
+                logger.info(
+                    "🗺️ Rendering Residential Sequence using 2D SpatialRenderer..."
+                )
+                res_paths = self.spatial_renderer.render_waypoints(res_sequence, fps)
+                output_paths.extend(res_paths)
 
         return output_paths
 
@@ -271,10 +318,8 @@ def main():
 
     res_sequence = None
     if args.res_route and args.res_map:
-        # 1. Load popups as well instead of ignoring them with `_`
         res_points, res_labels, res_popups, _ = animator.load_route_data(args.res_route)
 
-        # 2. Try to fetch custom Start/End labels from job_config.json
         try:
             out_path = Path(args.output)
             job_paths = [
@@ -289,18 +334,16 @@ def main():
                         start_lbl = job_data.get("start_point", {}).get("label")
                         end_lbl = job_data.get("end_point", {}).get("label")
 
-                        # Apply to the first and last labels
                         if start_lbl and len(res_labels) > 0:
                             res_labels[0] = start_lbl
                         if end_lbl and len(res_labels) > 1:
                             res_labels[-1] = end_lbl
-                    break  # Stop checking paths once we find the config
+                    break
         except Exception as e:
             logger.warning(
                 f"Could not read labels from job_config.json for residential map: {e}"
             )
 
-        # 3. Create the sequence with the new labels and popups included
         res_sequence = [
             {
                 "img_path": args.res_map,
@@ -316,10 +359,8 @@ def main():
         else None
     )
 
-    # Calculate which points on the route have popups/transitions
     wp_indices = [i for i, pop in enumerate(popups) if pop is not None]
 
-    # Ensure start and end points are always included in the indices
     if 0 not in wp_indices:
         wp_indices.insert(0, 0)
     if len(points) - 1 not in wp_indices:

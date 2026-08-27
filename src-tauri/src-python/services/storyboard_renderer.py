@@ -2,27 +2,6 @@
 Storyboard Renderer Service (storyboard_renderer.py)
 ---------------------------------------------------------------------------
 Handles JSON-driven atomic clip generation and NLE timeline concatenation.
-
-[REFACTOR NOTE]
-`_render_storyboard_popup`'s fullscreen branch now delegates to
-`GraphicsEngine.play_fullscreen_popup_sequence()` instead of duplicating
-the freeze/scale/broll/hold/fade sequence inline. The previously
-duplicated `_compute_fullscreen_hold_times` static method has been
-removed in favor of `GraphicsEngine.compute_fullscreen_hold_times`.
-
-One deliberate behavior is preserved and now explicitly documented
-rather than silently baked into copy-pasted code: in the ORIGINAL
-implementation, `self.last_frame` was updated after a static-image
-fullscreen popup (`self.last_frame = freeze_frame`) but was NOT updated
-after a B-roll fullscreen popup finished playing. That means a
-static-image fullscreen popup persists into the background of whatever
-`draw_route` action comes next, while a B-roll fullscreen popup does
-not — the map animation resumes from the frame as it stood before the
-B-roll played. This asymmetry looks intentional (a full-motion B-roll
-clip is a one-off cutaway; a static image popup is closer to a
-"stamped" annotation on the map) so it is preserved exactly, just made
-visible via the `used_broll` flag instead of being an invisible
-side-effect of duplicated code.
 ---------------------------------------------------------------------------
 """
 
@@ -60,14 +39,6 @@ class StoryboardRenderer:
             **config.get("fullscreen_transition", {}),
         }
         self.last_frame = None
-
-        # [NEW] Explicit, in-memory record of every atomic clip produced by
-        # the most recent render_storyboard() call, in action order. This
-        # replaces the old (broken) pattern of re-discovering clip paths by
-        # globbing the output directory for a filename convention that
-        # never actually matched what this class writes to disk. Consumers
-        # (e.g. RouteAnimator) should read this instead of touching the
-        # filesystem — it's a direct, race-free, always-in-sync reference.
         self.last_timeline_tracks: List[Dict[str, str]] = []
 
     @staticmethod
@@ -125,19 +96,14 @@ class StoryboardRenderer:
             },
         }
 
-        # 💡 Rescue video tag if it exists in the action
         if "popup_video" in action:
             popup_info["data"]["popup_video"] = action["popup_video"]
 
         video, clip_path, clip_id = start_new_clip("popup", action.get("id", "popup"))
 
         if display == "fullscreen":
-            # [CONSOLIDATED] See GraphicsEngine.play_fullscreen_popup_sequence
-            # and the module-level docstring above for why `used_broll`
-            # gates the `self.last_frame` update below — this reproduces
-            # the ORIGINAL asymmetric behavior exactly (static popups
-            # persist into the background; B-roll popups do not).
-            final_frame, used_broll = self.graphics.play_fullscreen_popup_sequence(
+            # Cap read is not called during this, achieving the Cinematic Pause organically!
+            self.last_frame, _ = self.graphics.play_fullscreen_popup_sequence(
                 video=video,
                 base_frame=self.last_frame,
                 popup_info=popup_info,
@@ -145,19 +111,17 @@ class StoryboardRenderer:
                 transition_cfg=self.transition_cfg,
                 exit_frame=self.last_frame,
             )
-            if not used_broll:
-                self.last_frame = final_frame
             clip_type = "fullscreen_cinematic"
         else:
-            freeze_frame = self.graphics.render_popup_box(self.last_frame, popup_info)
+            freeze_frame = self.graphics.render_cinematic_pause(
+                self.last_frame, popup_info
+            )
             total_frames = max(1, int(duration * fps))
             fade_frames = min(int(0.5 * fps), total_frames // 3)
-
             self.graphics.write_fade_clip(
                 video, self.last_frame, freeze_frame, total_frames, fade_frames
             )
-            self.last_frame = freeze_frame
-            clip_type = "static_popup"
+            clip_type = "cinematic_pause"
 
         video.release(clip_path)
         return {"clip_id": clip_id, "file_path": clip_path, "type": clip_type}
@@ -191,8 +155,8 @@ class StoryboardRenderer:
         )
         return {"type": "hold", "id": action_id, "duration_seconds": duration}
 
-    @staticmethod
     def build_storyboard_from_route(
+        self,
         points: List,
         labels: List,
         popups: List,
@@ -225,7 +189,7 @@ class StoryboardRenderer:
         start_idx = sorted_wp[0]
         start_popup = popups[start_idx] if start_idx < len(popups) else None
         actions.append(
-            StoryboardRenderer._transition_action_from_popup(
+            self._transition_action_from_popup(
                 start_idx, start_popup, "intro", default_transition_hold_seconds
             )
         )
@@ -246,10 +210,9 @@ class StoryboardRenderer:
                     "duration_seconds": duration,
                 }
             )
-
             end_popup = popups[leg_end] if leg_end < len(popups) else None
             actions.append(
-                StoryboardRenderer._transition_action_from_popup(
+                self._transition_action_from_popup(
                     leg_end,
                     end_popup,
                     f"transition_{i + 1}",
@@ -259,7 +222,6 @@ class StoryboardRenderer:
 
         if include_summary:
             actions.append({"type": "summary_card", "id": "summary"})
-
         return {
             "video_id": video_id,
             "output_filename": output_filename,
@@ -268,20 +230,36 @@ class StoryboardRenderer:
 
     def render_storyboard(
         self,
-        img_path: str,
+        bg_path: str,
         points: List,
         labels: List,
         storyboard: Dict[str, Any],
         summary: Optional[Dict] = None,
     ) -> str:
         self._validate_storyboard(storyboard)
-        base_img = self.graphics.read_image_safe(img_path)
-        if base_img is None:
-            raise FileNotFoundError(f"Cannot read background image: {img_path}")
 
-        h, w = base_img.shape[:2]
+        # 💡 NEW: Video parsing logic
+        is_video = (
+            str(bg_path).lower().endswith((".mp4", ".webm", ".avi", ".mov", ".mkv"))
+        )
+        if is_video:
+            cap = cv2.VideoCapture(str(bg_path))
+            ret, current_bg = cap.read()
+            if not ret:
+                raise FileNotFoundError(f"Cannot read video frames from: {bg_path}")
+        else:
+            current_bg = self.graphics.read_image_safe(str(bg_path))
+            if current_bg is None:
+                raise FileNotFoundError(f"Cannot read background image: {bg_path}")
+            cap = None
+
+        h, w = current_bg.shape[:2]
+        if h % 2 != 0 or w % 2 != 0:
+            h, w = h - (h % 2), w - (w % 2)
+            current_bg = current_bg[:h, :w].copy()
+
         fps = int(storyboard.get("fps", self.config.get("fps", 30)))
-        self.last_frame = base_img.copy()
+        self.last_frame = current_bg.copy()
 
         path_history: List[Tuple[int, int]] = []
         timeline_tracks: List[Dict[str, str]] = []
@@ -324,7 +302,15 @@ class StoryboardRenderer:
                 }
 
                 for p in smooth:
-                    frame = base_img.copy()
+                    # 💡 NEW: Advance the video background exactly 1 frame per point!
+                    if is_video:
+                        ret, vid_frame = cap.read()
+                        if ret:
+                            if vid_frame.shape[0] != h or vid_frame.shape[1] != w:
+                                vid_frame = vid_frame[:h, :w]
+                            current_bg = vid_frame
+
+                    frame = current_bg.copy()
                     path_history.append((int(p[0]), int(p[1])))
                     self.graphics.draw_path(frame, path_history)
                     for sx, sy, lbl in seg_named:
@@ -350,6 +336,7 @@ class StoryboardRenderer:
             elif a_type == "hold":
                 video, clip_path, clip_id = start_new_clip("hold", a_id)
                 duration = float(action.get("duration_seconds", 1.0))
+                # Video does not advance during a hold action, maintaining the pause!
                 for _ in range(max(1, int(duration * fps))):
                     video.write(self.last_frame)
                 video.release(clip_path)
@@ -396,8 +383,8 @@ class StoryboardRenderer:
                     {"clip_id": clip_id, "file_path": clip_path, "type": "summary_card"}
                 )
 
-            else:
-                raise ValueError(f"Unhandled storyboard action type: {a_type!r}")
+        if cap:
+            cap.release()
 
         output_filename = storyboard.get(
             "output_filename", f"{storyboard.get('video_id', 'story')}.mp4"
@@ -416,9 +403,5 @@ class StoryboardRenderer:
             save_json_path=timeline_json_path,
         )
 
-        # [NEW] Publish the manifest AFTER a successful concat, so a partial
-        # or failed render never leaves stale/misleading state that a caller
-        # could read and mistakenly trust.
         self.last_timeline_tracks = timeline_tracks
-
         return final_output

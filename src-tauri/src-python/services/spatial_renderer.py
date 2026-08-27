@@ -2,24 +2,11 @@
 Spatial Renderer Service (spatial_renderer.py)
 ---------------------------------------------------------------------------
 Handles proximity-based triggering for the legacy overview and waypoint maps.
-
-[REFACTOR NOTE]
-The four fullscreen-popup "freeze -> scale -> optional B-roll -> hold ->
-fade" sequences that used to be hand-copied in this file (intro popup,
-per-frame proximity trigger, outro popup, and the per-waypoint-leg popup
-in `render_waypoints`) now all delegate to
-`GraphicsEngine.play_fullscreen_popup_sequence()`. The previously
-duplicated `_compute_fullscreen_hold_times` static method has been
-removed in favor of `GraphicsEngine.compute_fullscreen_hold_times`,
-called with this renderer's own `self.transition_cfg`.
-
-Every call site below preserves its EXACT original `last_frame`
-bookkeeping behavior (documented per call site) — this refactor is a
-pure Extract Method; no rendering behavior changes.
 ---------------------------------------------------------------------------
 """
 
 import json
+import math
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple
 
@@ -36,8 +23,6 @@ logger = setup_logger("SpatialRenderer")
 
 
 class SpatialRenderer:
-    """Renders map animations triggered dynamically by marker distance."""
-
     def __init__(self, config: Dict[str, Any], graphics: GraphicsEngine, out_dir: Path):
         self.config = config
         self.graphics = graphics
@@ -63,7 +48,6 @@ class SpatialRenderer:
         self.last_frame = None
 
     def _get_job_waypoints(self) -> List[Dict]:
-        """Safely extracts original waypoints from job_config.json to rescue missing keys."""
         for p in [self.out_dir] + list(self.out_dir.parents):
             potential_path = p / "job_config.json"
             if potential_path.exists():
@@ -89,7 +73,6 @@ class SpatialRenderer:
             lbl = item.get("label")
             if not MathUtils.is_real_label(lbl) or lbl not in sprites_dict:
                 continue
-
             sprite, anchor = sprites_dict[lbl]
             x, y = int(item["x"]), int(item["y"])
             sh, sw = sprite.shape[:2]
@@ -110,21 +93,40 @@ class SpatialRenderer:
 
     def render_overview(
         self,
-        base_img: np.ndarray,
+        bg_path: str,
         points: List,
         labels: List,
         popups: List,
         fps: int,
         summary: Optional[Dict] = None,
     ) -> str:
-        h, w = base_img.shape[:2]
+
+        # 💡 Video Background Detection
+        is_video = (
+            str(bg_path).lower().endswith((".mp4", ".webm", ".avi", ".mov", ".mkv"))
+        )
+        if is_video:
+            cap = cv2.VideoCapture(str(bg_path))
+            ret, current_bg = cap.read()
+            if not ret:
+                raise FileNotFoundError(f"Cannot read video frames from: {bg_path}")
+        else:
+            current_bg = self.graphics.read_image_safe(str(bg_path))
+            if current_bg is None:
+                raise FileNotFoundError(f"Cannot read background image: {bg_path}")
+            cap = None
+
+        # Fix dimensions to be even for OpenCV video writers
+        h, w = current_bg.shape[:2]
+        if h % 2 != 0 or w % 2 != 0:
+            h, w = h - (h % 2), w - (w % 2)
+            current_bg = cv2.resize(current_bg, (w, h))
+
         duration = self.config.get("duration", 30.0)
         num_frames = max(10, int(duration * fps))
         self._total_points = len(points)
 
-        start_label = "開始"
-        end_label = "終点"
-
+        start_label, end_label = "開始", "終点"
         for p in [self.out_dir] + list(self.out_dir.parents):
             potential_path = p / "job_config.json"
             if potential_path.exists():
@@ -137,8 +139,8 @@ class SpatialRenderer:
                         end_label = job_data.get("end_point", {}).get(
                             "label", end_label
                         )
-                except Exception as e:
-                    logger.warning(f"Could not read labels from job_config.json: {e}")
+                except Exception:
+                    pass
                 break
 
         cleaned_labels = []
@@ -148,17 +150,15 @@ class SpatialRenderer:
             elif i == len(points) - 1:
                 cleaned_labels.append(end_label)
             else:
-                if lbl:
-                    clean = (
-                        lbl.replace("Start: ", "")
-                        .replace("Stop: ", "")
-                        .replace("Start", "")
-                        .replace("Stop", "")
-                        .strip()
-                    )
-                    cleaned_labels.append(clean if clean else None)
-                else:
-                    cleaned_labels.append(None)
+                cleaned_labels.append(
+                    lbl.replace("Start: ", "")
+                    .replace("Stop: ", "")
+                    .replace("Start", "")
+                    .replace("Stop", "")
+                    .strip()
+                    if lbl
+                    else None
+                )
 
         named = [
             (int(points[i][0]), int(points[i][1]), cleaned_labels[i])
@@ -197,10 +197,9 @@ class SpatialRenderer:
         logger.info(f"Rendering Overview Map ({duration}s)")
         overview_path = str(self.out_dir / "01_overview.mp4")
         video = VideoExporter(overview_path, w, h, fps)
-        baked_popups = []
-        triggered_markers = []
+        baked_popups, triggered_markers = [], []
 
-        intro_frame = base_img.copy()
+        intro_frame = current_bg.copy()
         start_popup = next((p for p in active_popups if p["index"] == 0), None)
         stop_popup = next(
             (p for p in active_popups if p["index"] == len(points) - 1), None
@@ -214,20 +213,15 @@ class SpatialRenderer:
             temp_sp = start_popup.copy()
             temp_sp["data"] = start_popup["data"].copy()
             temp_sp["data"]["triggered"] = True
-            temp_sp["hud_corner"] = "bottom_left"
-            temp_sp["x"], temp_sp["y"] = start_popup["x"], start_popup["y"]
+            temp_sp["hud_corner"], temp_sp["x"], temp_sp["y"] = (
+                "bottom_left",
+                start_popup["x"],
+                start_popup["y"],
+            )
             start_popup["data"]["triggered"] = True
             triggered_markers.append({"x": start_popup["x"], "y": start_popup["y"]})
 
             if temp_sp["data"].get("image_display") == "fullscreen":
-                # [CONSOLIDATED] Was ~25 lines of hand-inlined freeze/scale/
-                # broll/hold/fade logic — see GraphicsEngine.
-                # last_frame intentionally NOT captured here: the main
-                # per-frame loop below unconditionally overwrites
-                # `self.last_frame` on its very first iteration anyway, so
-                # (matching the ORIGINAL code's behavior) whatever this
-                # intro sequence produces has no observable effect on
-                # state beyond the frames it writes to `video` directly.
                 self.graphics.play_fullscreen_popup_sequence(
                     video=video,
                     base_frame=intro_frame,
@@ -238,24 +232,38 @@ class SpatialRenderer:
                 )
             else:
                 intro_frame = self.graphics.render_popup_box(intro_frame, temp_sp)
-                self.graphics.draw_marker(
-                    intro_frame, int(start_popup["x"]), int(start_popup["y"])
-                )
-                start_stop_list = [
-                    p for p in [start_popup, stop_popup] if p is not None
-                ]
-                self._draw_prioritized_sprites(
-                    intro_frame, start_stop_list, landmark_sprites
-                )
+                # 💡 HIDE static UI markers if background is video
+                if not is_video:
+                    self.graphics.draw_marker(
+                        intro_frame, int(start_popup["x"]), int(start_popup["y"])
+                    )
+                    start_stop_list = [
+                        p for p in [start_popup, stop_popup] if p is not None
+                    ]
+                    self._draw_prioritized_sprites(
+                        intro_frame, start_stop_list, landmark_sprites
+                    )
                 for _ in range(int(intro_freeze_sec * fps)):
                     video.write(intro_frame)
 
         path_history = []
-        for p in smooth_path:
-            frame = base_img.copy()
+        prev_cx, prev_cy = None, None
 
-            for tm in triggered_markers:
-                self.graphics.draw_marker(frame, int(tm["x"]), int(tm["y"]))
+        for current_frame, p in enumerate(smooth_path):
+            # Advance the video background exactly 1 frame per point!
+            if is_video:
+                ret, vid_frame = cap.read()
+                if ret:
+                    if vid_frame.shape[0] != h or vid_frame.shape[1] != w:
+                        vid_frame = cv2.resize(vid_frame, (w, h))
+                    current_bg = vid_frame
+
+            frame = current_bg.copy()
+
+            # Hide previous dot markers if video
+            if not is_video:
+                for tm in triggered_markers:
+                    self.graphics.draw_marker(frame, int(tm["x"]), int(tm["y"]))
 
             surviving_popups = []
             for bp in baked_popups:
@@ -268,8 +276,12 @@ class SpatialRenderer:
             baked_popups = surviving_popups
 
             path_history.append((int(p[0]), int(p[1])))
-            self.graphics.draw_path(frame, path_history)
 
+            # 💡 HIDE main 2D route line if video
+            if not is_video:
+                self.graphics.draw_path(frame, path_history)
+
+            # We still need these coordinates mathematically to trigger popups!
             cx, cy = path_history[-1]
             px, py = path_history[-2] if len(path_history) > 1 else path_history[-1]
 
@@ -280,15 +292,11 @@ class SpatialRenderer:
                 ):
                     continue
                 if not popup["data"]["triggered"]:
-                    trigger_radius = (
+                    if MathUtils.point_to_segment_distance(
+                        popup["x"], popup["y"], px, py, cx, cy
+                    ) < (
                         self.graphics.marker_radius
                         + self.trigger_radius_padding["overview"]
-                    )
-                    if (
-                        MathUtils.point_to_segment_distance(
-                            popup["x"], popup["y"], px, py, cx, cy
-                        )
-                        < trigger_radius
                     ):
                         popup["data"]["triggered"] = True
                         triggered_popup = popup
@@ -300,11 +308,7 @@ class SpatialRenderer:
                 )
 
                 if triggered_popup["data"].get("image_display") == "fullscreen":
-                    # [CONSOLIDATED] Original always updated `self.last_frame`
-                    # here regardless of B-roll vs static-image branch — we
-                    # preserve that by unconditionally assigning the
-                    # returned frame below (ignoring the `used_broll` flag,
-                    # matching original behavior exactly).
+                    # Video pauses here automatically because cap.read() is not called in the popup loops!
                     self.last_frame, _ = self.graphics.play_fullscreen_popup_sequence(
                         video=video,
                         base_frame=frame,
@@ -326,44 +330,57 @@ class SpatialRenderer:
                     hud_triggered = triggered_popup.copy()
                     hud_triggered["hud_corner"] = "bottom_left"
                     temp_frame = self.graphics.render_popup_box(frame, hud_triggered)
-                    for tm in triggered_markers:
-                        self.graphics.draw_marker(
-                            temp_frame, int(tm["x"]), int(tm["y"])
+
+                    # 💡 HIDE popups map marker + text if video
+                    if not is_video:
+                        for tm in triggered_markers:
+                            self.graphics.draw_marker(
+                                temp_frame, int(tm["x"]), int(tm["y"])
+                            )
+                        trig_popups = [
+                            ap for ap in active_popups if ap["data"]["triggered"]
+                        ]
+                        self._draw_prioritized_sprites(
+                            temp_frame, trig_popups, landmark_sprites
                         )
-                    trig_popups = [
-                        ap for ap in active_popups if ap["data"]["triggered"]
-                    ]
-                    self._draw_prioritized_sprites(
-                        temp_frame, trig_popups, landmark_sprites
-                    )
-                    self.graphics.draw_marker(temp_frame, cx, cy)
+                        self.graphics.draw_marker(temp_frame, cx, cy)
+
                     self.last_frame = temp_frame
                     video.write(temp_frame)
             else:
-                for tm in triggered_markers:
-                    self.graphics.draw_marker(frame, int(tm["x"]), int(tm["y"]))
-                trig_popups = [ap for ap in active_popups if ap["data"]["triggered"]]
-                self._draw_prioritized_sprites(frame, trig_popups, landmark_sprites)
-                self.graphics.draw_marker(frame, cx, cy)
+                # 💡 HIDE current dot, previous dots, and text if video
+                if not is_video:
+                    for tm in triggered_markers:
+                        self.graphics.draw_marker(frame, int(tm["x"]), int(tm["y"]))
+                    trig_popups = [
+                        ap for ap in active_popups if ap["data"]["triggered"]
+                    ]
+                    self._draw_prioritized_sprites(frame, trig_popups, landmark_sprites)
+
+                    angle = 0.0
+                    if prev_cx is not None and prev_cy is not None:
+                        angle = math.degrees(math.atan2(cy - prev_cy, cx - prev_cx))
+                    self.graphics.draw_walking_human(
+                        frame, cx, cy, current_frame, angle
+                    )
+
                 self.last_frame = frame
                 video.write(frame)
+
+            prev_cx, prev_cy = cx, cy
 
         if stop_popup:
             triggered_markers.append({"x": stop_popup["x"], "y": stop_popup["y"]})
             outro_frame = self.last_frame.copy()
             temp_stop = stop_popup.copy()
             temp_stop["data"] = stop_popup["data"].copy()
-            temp_stop["hud_corner"] = "bottom_left"
-            temp_stop["x"], temp_stop["y"] = stop_popup["x"], stop_popup["y"]
+            temp_stop["hud_corner"], temp_stop["x"], temp_stop["y"] = (
+                "bottom_left",
+                stop_popup["x"],
+                stop_popup["y"],
+            )
 
             if temp_stop["data"].get("image_display") == "fullscreen":
-                # [CONSOLIDATED] Original set self.last_frame = outro_frame
-                # for the B-roll branch and self.last_frame = freeze_frame
-                # for the static-hold branch — both of which are exactly
-                # what `play_fullscreen_popup_sequence` now returns as
-                # `final_frame` in each respective case, so a single
-                # unconditional assignment reproduces both original
-                # branches correctly.
                 self.last_frame, _ = self.graphics.play_fullscreen_popup_sequence(
                     video=video,
                     base_frame=outro_frame,
@@ -374,32 +391,33 @@ class SpatialRenderer:
                 )
             else:
                 outro_frame = self.graphics.render_popup_box(outro_frame, temp_stop)
-                for tm in triggered_markers:
-                    self.graphics.draw_marker(outro_frame, int(tm["x"]), int(tm["y"]))
+
+                # 💡 HIDE final map markers if video
+                if not is_video:
+                    for tm in triggered_markers:
+                        self.graphics.draw_marker(
+                            outro_frame, int(tm["x"]), int(tm["y"])
+                        )
                 stop_freeze_sec = float(stop_popup["data"].get("freeze_seconds", 3.0))
                 for _ in range(int(stop_freeze_sec * fps)):
                     video.write(outro_frame)
                 self.last_frame = outro_frame
 
-        pause_seconds = self.config.get("pause", 2.0)
-        for _ in range(int(pause_seconds * fps)):
+        for _ in range(int(self.config.get("pause", 2.0) * fps)):
             video.write(self.last_frame)
-
         for p in popups:
             if p:
                 p["triggered"] = False
 
         if summary:
-            logger.info("📊 Rendering Summary Card")
             card = self.graphics.create_summary_card(
                 distance_km=summary.get("total_distance_km", 0.0),
                 duration_seconds=summary.get("total_duration_seconds", 0.0),
             )
-            fade_sec = self.config.get("summary_fade", 0.5)
-            hold_sec = self.config.get("summary_hold", 4.0)
-            fade_frames = max(1, int(fade_sec * fps))
-            hold_frames = max(0, int(hold_sec * fps) - fade_frames)
-
+            fade_frames = max(1, int(self.config.get("summary_fade", 0.5) * fps))
+            hold_frames = max(
+                0, int(self.config.get("summary_hold", 4.0) * fps) - fade_frames
+            )
             for i in range(fade_frames):
                 video.write(
                     self.graphics.composite_card_on_frame(
@@ -415,6 +433,8 @@ class SpatialRenderer:
             for _ in range(int(self.config.get("pause", 2.0) * fps)):
                 video.write(self.last_frame)
 
+        if cap:
+            cap.release()
         return video.release(overview_path)
 
     def render_waypoints(self, res_sequence: List[Dict], fps: int) -> List[str]:
@@ -425,12 +445,28 @@ class SpatialRenderer:
         job_waypoints = self._get_job_waypoints()
 
         for i, res_data in enumerate(res_sequence):
-            logger.info(f"Rendering Waypoint Leg Map {i + 1}/{len(res_sequence)}")
-            res_img = self.graphics.read_image_safe(res_data["img_path"])
-            if res_img is None:
-                continue
+            bg_path = res_data["img_path"]
 
-            h, w = res_img.shape[:2]
+            # 💡 Video Background Detection
+            is_video = (
+                str(bg_path).lower().endswith((".mp4", ".webm", ".avi", ".mov", ".mkv"))
+            )
+            if is_video:
+                cap = cv2.VideoCapture(str(bg_path))
+                ret, current_bg = cap.read()
+                if not ret:
+                    continue
+            else:
+                current_bg = self.graphics.read_image_safe(str(bg_path))
+                if current_bg is None:
+                    continue
+                cap = None
+
+            h, w = current_bg.shape[:2]
+            if h % 2 != 0 or w % 2 != 0:
+                h, w = h - (h % 2), w - (w % 2)
+                current_bg = cv2.resize(current_bg, (w, h))
+
             res_points = res_data["points"]
             res_labels = res_data["labels"]
             res_popups = res_data.get("popups", [None] * len(res_points))
@@ -516,28 +552,45 @@ class SpatialRenderer:
                     if path_idx == len(res_smooth_path) - 1:
                         just_arrived = True
 
+                if is_video and not is_paused:
+                    ret, vid_frame = cap.read()
+                    if ret:
+                        if vid_frame.shape[0] != h or vid_frame.shape[1] != w:
+                            vid_frame = cv2.resize(vid_frame, (w, h))
+                        current_bg = vid_frame
+
                 p = res_smooth_path[path_idx]
-                frame = res_img.copy()
+                frame = current_bg.copy()
                 current_chunk_px = res_smooth_path[: path_idx + 1]
 
                 if len(current_chunk_px) > 1:
-                    cv2.polylines(
-                        frame,
-                        [current_chunk_px.astype(np.int32)],
-                        False,
-                        self.graphics.line_color,
-                        self.graphics.line_thickness,
-                        cv2.LINE_AA,
-                    )
                     cx, cy = int(current_chunk_px[-1][0]), int(current_chunk_px[-1][1])
                 else:
                     cx, cy = int(p[0]), int(p[1])
 
-                for x, y, lbl in res_named:
-                    sprite, anchor = res_landmark_sprites[lbl]
-                    self.graphics.blit_sprite(frame, sprite, anchor, x, y)
+                # 💡 HIDE 2D line, markers, sprites, and human if video
+                if not is_video:
+                    if len(current_chunk_px) > 1:
+                        cv2.polylines(
+                            frame,
+                            [current_chunk_px.astype(np.int32)],
+                            False,
+                            self.graphics.line_color,
+                            self.graphics.line_thickness,
+                            cv2.LINE_AA,
+                        )
 
-                self.graphics.draw_marker(frame, cx, cy)
+                    for x, y, lbl in res_named:
+                        sprite, anchor = res_landmark_sprites[lbl]
+                        self.graphics.blit_sprite(frame, sprite, anchor, x, y)
+
+                    angle = 0.0
+                    if prev_cx is not None and prev_cy is not None:
+                        angle = math.degrees(math.atan2(cy - prev_cy, cx - prev_cx))
+
+                    self.graphics.draw_walking_human(
+                        frame, cx, cy, current_frame, angle
+                    )
 
                 for popup in active_res_popups:
                     if popup["data"]["triggered"]:
@@ -555,21 +608,7 @@ class SpatialRenderer:
                     )
                     if near_segment or just_arrived:
                         popup["data"]["triggered"] = True
-
                         if popup["data"].get("image_display") == "fullscreen":
-                            # [CONSOLIDATED] Original computed its own
-                            # freeze_frame via render_popup_box BEFORE
-                            # branching; play_fullscreen_popup_sequence
-                            # does that internally now. `exit_frame=frame`
-                            # matches the original's `frame` target for
-                            # both the B-roll fade-out and (implicitly,
-                            # since the caller re-writes `frame` right
-                            # after this block regardless) the static
-                            # path — no return value is consumed here
-                            # because the surrounding loop unconditionally
-                            # writes `frame` and sets `self.last_frame =
-                            # frame` immediately below, exactly as the
-                            # original code did.
                             self.graphics.play_fullscreen_popup_sequence(
                                 video=video,
                                 base_frame=frame,
@@ -579,11 +618,13 @@ class SpatialRenderer:
                                 exit_frame=frame,
                             )
                         else:
-                            freeze_frame = self.graphics.render_popup_box(frame, popup)
                             total_f = int(popup["data"]["freeze_seconds"] * fps)
                             fade_f = min(int(0.5 * fps), total_f // 3)
+                            cinematic_frame = self.graphics.render_cinematic_pause(
+                                frame, popup
+                            )
                             self.graphics.write_fade_clip(
-                                video, frame, freeze_frame, total_f, fade_f
+                                video, frame, cinematic_frame, total_f, fade_f
                             )
 
                 video.write(frame)
@@ -614,5 +655,7 @@ class SpatialRenderer:
                     video.write(held_frame)
 
             output_paths.append(video.release(str(self.out_dir / chunk_filename)))
+            if cap:
+                cap.release()
 
         return output_paths

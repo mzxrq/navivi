@@ -41,10 +41,9 @@ Additionally, two structural changes for performance and maintainability
 ---------------------------------------------------------------------------
 """
 
-from __future__ import annotations
-
 import os
-from typing import Final, Dict, List, Tuple, Optional, Any, TYPE_CHECKING
+import math
+from typing import Final, Dict, List, Tuple, Optional, Any
 
 import cv2
 import numpy as np
@@ -52,16 +51,9 @@ from PIL import Image, ImageDraw, ImageFilter
 from PIL.ImageFont import truetype, load_default, FreeTypeFont
 
 from services.math_util import MathUtils
+from services.vdo_exporter import VideoExporter
 from services.logger import setup_logger
 
-# TYPE_CHECKING-only import: gives IDEs/mypy the real type for annotations
-# below without creating a runtime import cycle (vdo_exporter does not,
-# and must never, import from graphic_engine).
-if TYPE_CHECKING:
-    from services.vdo_exporter import VideoExporter
-
-# Logging configuration — matches every other service module's convention.
-# Previously ABSENT from this file entirely, despite being referenced.
 logger = setup_logger("GraphicsEngine")
 
 
@@ -100,14 +92,6 @@ class GraphicsEngine:
         self.font_size = font_size
         self.font_cv = cv2.FONT_HERSHEY_SIMPLEX
 
-        # [NEW] Font memoization cache. Keyed on (candidate list, size) so
-        # distinct font/size combinations (e.g. regular body text vs. the
-        # bold summary-card value font) are cached independently. This
-        # converts `_load_font` from "hits disk every call" to "hits disk
-        # at most once per distinct (candidates, size) pair, ever" — see
-        # `_load_font` below for the hot-path justification.
-        self._font_cache: Dict[Tuple[Tuple[str, ...], int], "FreeTypeFont | Any"] = {}
-
     @staticmethod
     def read_image_safe(path: str) -> Optional[np.ndarray]:
         if not path or not os.path.exists(path):
@@ -118,15 +102,11 @@ class GraphicsEngine:
             img_array = np.frombuffer(chunk, dtype=np.uint8)
             return cv2.imdecode(img_array, cv2.IMREAD_COLOR)
         except Exception as e:
-            # [FIX] `logger` now actually exists (module-level, see top of
-            # file) — this branch previously raised NameError instead of
-            # the intended warning whenever an image failed to decode.
             logger.warning(f"⚠️ Failed to load image {path}: {e}")
             return None
 
     def draw_path(self, frame: np.ndarray, path_history: List[Tuple[int, int]]):
         if len(path_history) > 1:
-            # Subtle outer glow effect for the route line
             cv2.polylines(
                 frame,
                 [np.array(path_history, dtype=np.int32)],
@@ -135,7 +115,6 @@ class GraphicsEngine:
                 self.line_thickness + 6,
                 cv2.LINE_AA,
             )
-            # Main route line
             cv2.polylines(
                 frame,
                 [np.array(path_history, dtype=np.int32)],
@@ -146,7 +125,6 @@ class GraphicsEngine:
             )
 
     def draw_marker(self, frame: np.ndarray, cx: int, cy: int):
-        # Modern Apple-style map pin (Clean white core with vibrant indicator ring)
         cv2.circle(
             frame, (cx, cy), self.marker_radius + 6, (255, 255, 255), -1, cv2.LINE_AA
         )
@@ -196,7 +174,6 @@ class GraphicsEngine:
             1,
             cv2.LINE_AA,
         )
-
         return sprite, (cx, cy)
 
     def blit_sprite(
@@ -221,6 +198,100 @@ class GraphicsEngine:
             region[:, :, :3] * alpha + frame[y0:y1, x0:x1] * (1 - alpha)
         ).astype(np.uint8)
 
+    # 💡 NEW: Cinematic Pause Blur and Center alignment
+    def render_cinematic_pause(
+        self, target_frame: np.ndarray, popup_info: Dict
+    ) -> np.ndarray:
+        """Applies a heavy depth-of-field blur to the background and perfectly centers the UI card."""
+        f_frame = target_frame.copy()
+        h, w = f_frame.shape[:2]
+
+        # Apply cinematic blur and dim the background
+        blurred = cv2.GaussianBlur(f_frame, (55, 55), 0)
+        f_frame = cv2.addWeighted(blurred, 0.75, np.zeros_like(blurred), 0.25, 0)
+
+        img_url = popup_info["data"].get("popup_image")
+        if not img_url or not os.path.exists(img_url):
+            return f_frame
+
+        pop_img = self.read_image_safe(img_url)
+        if pop_img is None:
+            return f_frame
+
+        # Ensure perfect 16:9 crop
+        ph, pw = pop_img.shape[:2]
+        target_ratio = 16.0 / 9.0
+        current_ratio = pw / float(ph)
+
+        if current_ratio > target_ratio:
+            new_w = int(ph * target_ratio)
+            offset = (pw - new_w) // 2
+            pop_img = pop_img[:, offset : offset + new_w]
+        elif current_ratio < target_ratio:
+            new_h = int(pw / target_ratio)
+            offset = (ph - new_h) // 2
+            pop_img = pop_img[offset : offset + new_h, :]
+
+        # Size up the card for the center focus
+        target_img_w = 420
+        target_img_h = int(target_img_w / target_ratio)
+        pop_img = cv2.resize(pop_img, (target_img_w, target_img_h))
+        ph, pw = pop_img.shape[:2]
+
+        border = 16
+        label_text = popup_info.get("label")
+        font = self._load_font(self.FONT_CANDIDATES_REGULAR, self.font_size + 4)
+        has_label = MathUtils.is_real_label(label_text)
+
+        text_block_h = (self.font_size + 24) if has_label else 0
+        total_h = ph + (border * 2) + text_block_h
+        total_w = pw + (border * 2)
+
+        # 💡 DEAD CENTER ALIGNMENT (Ignores X/Y tracking logic)
+        box_x = (w - total_w) // 2
+        box_y = (h - total_h) // 2
+
+        pil_canvas = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(pil_canvas)
+
+        shadow_box = [box_x - 6, box_y - 2, box_x + total_w + 6, box_y + total_h + 8]
+        draw.rounded_rectangle(shadow_box, radius=22, fill=(0, 0, 0, 50))
+        pil_canvas = pil_canvas.filter(ImageFilter.GaussianBlur(radius=8))
+        draw = ImageDraw.Draw(pil_canvas)
+
+        card_box = [box_x, box_y, box_x + total_w, box_y + total_h]
+        draw.rounded_rectangle(
+            card_box,
+            radius=16,
+            fill=(255, 255, 255, 250),
+            outline=(220, 220, 220, 255),
+            width=1,
+        )
+
+        base_pil = Image.fromarray(cv2.cvtColor(f_frame, cv2.COLOR_BGR2RGBA))
+        base_pil.paste(pil_canvas, (0, 0), pil_canvas)
+
+        pil_img = Image.fromarray(cv2.cvtColor(pop_img, cv2.COLOR_BGR2RGB))
+        mask = Image.new("L", (pw, ph), 255)
+        mask_draw = ImageDraw.Draw(mask)
+        mask_draw.rounded_rectangle([0, 0, pw, ph], radius=8, fill=255)
+
+        photo_x = box_x + border
+        photo_y = box_y + border
+        base_pil.paste(pil_img, (photo_x, photo_y), mask=mask)
+
+        if has_label:
+            draw_text_layer = ImageDraw.Draw(base_pil)
+            text_bbox = draw_text_layer.textbbox((0, 0), label_text, font=font)
+            text_w = text_bbox[2] - text_bbox[0]
+            text_x = box_x + (total_w - text_w) // 2
+            text_y = photo_y + ph + 12
+            draw_text_layer.text(
+                (text_x, text_y), label_text, font=font, fill=(40, 40, 40, 255)
+            )
+
+        return cv2.cvtColor(np.array(base_pil), cv2.COLOR_RGBA2BGR)
+
     def render_popup_box(
         self, target_frame: np.ndarray, popup_info: Dict
     ) -> np.ndarray:
@@ -244,7 +315,6 @@ class GraphicsEngine:
                     offset = (ph - new_h) // 2
                     pop_img = pop_img[offset : offset + new_h, :]
 
-                # Uniform size for all popup images
                 target_img_w = 340
                 target_img_h = int(target_img_w / target_ratio)
                 pop_img = cv2.resize(pop_img, (target_img_w, target_img_h))
@@ -252,20 +322,11 @@ class GraphicsEngine:
 
                 border = 14
                 label_text = popup_info.get("label")
-                # [HOT PATH] See `_load_font` docstring — this call used
-                # to be a filesystem hit every single frame this popup is
-                # visible. Now O(1) amortized via `self._font_cache`.
                 font = self._load_font(self.FONT_CANDIDATES_REGULAR, self.font_size)
 
                 has_label = MathUtils.is_real_label(label_text)
-
-                if has_label:
-                    text_block_h = self.font_size + 20
-                    total_h = ph + (border * 2) + text_block_h
-                else:
-                    text_block_h = 0
-                    total_h = ph + (border * 2)
-
+                text_block_h = self.font_size + 20 if has_label else 0
+                total_h = ph + (border * 2) + text_block_h
                 total_w = pw + (border * 2)
                 margin = 50
 
@@ -275,14 +336,10 @@ class GraphicsEngine:
                 else:
                     point_x = int(popup_info["x"])
                     point_y = int(popup_info["y"])
-
-                    if point_x > w * 0.5:
-                        box_x = point_x - total_w - 40
-                    else:
-                        box_x = point_x + 40
-
+                    box_x = (
+                        point_x - total_w - 40 if point_x > w * 0.5 else point_x + 40
+                    )
                     box_y = point_y - (total_h // 2)
-
                     box_x = max(margin, min(box_x, w - total_w - margin))
                     box_y = max(margin, min(box_y, h - total_h - margin))
 
@@ -324,15 +381,10 @@ class GraphicsEngine:
                     draw_text_layer = ImageDraw.Draw(base_pil)
                     text_bbox = draw_text_layer.textbbox((0, 0), label_text, font=font)
                     text_w = text_bbox[2] - text_bbox[0]
-
                     text_x = box_x + (total_w - text_w) // 2
                     text_y = photo_y + ph + 10
-
                     draw_text_layer.text(
-                        (text_x, text_y),
-                        label_text,
-                        font=font,
-                        fill=(40, 40, 40, 255),
+                        (text_x, text_y), label_text, font=font, fill=(40, 40, 40, 255)
                     )
 
                 f_frame = cv2.cvtColor(np.array(base_pil), cv2.COLOR_RGBA2BGR)
@@ -354,7 +406,6 @@ class GraphicsEngine:
 
         if not img_url or not os.path.exists(img_url):
             return frames
-
         pop_img = self.read_image_safe(img_url)
         if pop_img is None:
             return frames
@@ -385,7 +436,6 @@ class GraphicsEngine:
             else 0
         )
         total_w, total_h = target_img_w + (border * 2), target_img_h + (border * 2)
-
         margin = 40
         box_x = (
             int(popup_info["x"]) - total_w - self.marker_radius - 4
@@ -400,18 +450,14 @@ class GraphicsEngine:
         box_x = max(margin, min(box_x, w - total_w - margin))
         box_y = max(margin, min(box_y, h - total_h - margin))
 
-        start_x = box_x + border
-        start_y = box_y + border
-        start_w = target_img_w
-        start_h = target_img_h
+        start_x, start_y = box_x + border, box_y + border
 
         scale_frames = max(1, int(duration_sec * fps))
         for t in range(scale_frames):
             progress = t / float(scale_frames - 1) if scale_frames > 1 else 1.0
             ease = 1 - (1 - progress) ** 3
-
-            curr_w = int(start_w + (w - start_w) * ease)
-            curr_h = int(start_h + (h - start_h) * ease)
+            curr_w = int(target_img_w + (w - target_img_w) * ease)
+            curr_h = int(target_img_h + (h - target_img_h) * ease)
             curr_x = int(start_x + (0 - start_x) * ease)
             curr_y = int(start_y + (0 - start_y) * ease)
 
@@ -420,7 +466,6 @@ class GraphicsEngine:
             frame = (frame * bg_fade).astype(np.uint8)
 
             resized_popup = cv2.resize(hi_res_popup, (curr_w, curr_h))
-
             x0, y0 = max(0, curr_x), max(0, curr_y)
             x1, y1 = min(w, curr_x + curr_w), min(h, curr_y + curr_h)
             px0, py0 = x0 - curr_x, y0 - curr_y
@@ -428,7 +473,6 @@ class GraphicsEngine:
 
             if x0 < x1 and y0 < y1:
                 frame[y0:y1, x0:x1] = resized_popup[py0:py1, px0:px1]
-
             frames.append(frame)
 
         hold_frames_cnt = max(1, int(hold_sec * fps))
@@ -440,7 +484,6 @@ class GraphicsEngine:
         for t in range(fade_frames):
             progress = t / float(fade_frames - 1) if fade_frames > 1 else 1.0
             alpha = 1.0 - progress
-
             blended = cv2.addWeighted(
                 full_screen_frame, alpha, base_frame, 1 - alpha, 0
             )
@@ -448,142 +491,14 @@ class GraphicsEngine:
 
         return frames
 
-    # -----------------------------------------------------------------
-    # [NEW] Shared fullscreen-popup timing + orchestration.
-    #
-    # WHY THIS EXISTS (Extract Method refactor — Fowler):
-    # Before this change, the exact same ~25-line sequence — compute
-    # hold/scale/fade timing, branch on "does this popup have a B-roll
-    # video or just a static image", write the small pre-scale hold
-    # frames, write the scale-transition frames, then either hand off to
-    # `play_fullscreen_video` or hold+fade on the static frame — was
-    # hand-copied FOUR times:
-    #   - spatial_renderer.render_overview: intro (start) popup
-    #   - spatial_renderer.render_overview: per-frame proximity trigger
-    #   - spatial_renderer.render_overview: outro (stop) popup
-    #   - storyboard_renderer._render_storyboard_popup
-    # Any fix to fade/scale timing had to be applied by hand in all 4
-    # places — classic "shotgun surgery" (a single conceptual change
-    # requiring edits scattered across many call sites). Consolidating
-    # here means one implementation, one place to fix bugs, and it makes
-    # the (pre-existing, now-documented rather than silently-inconsistent)
-    # difference in `last_frame` bookkeeping between the two renderers
-    # an explicit, visible choice at each call site instead of an
-    # accidental copy-paste divergence.
-    # -----------------------------------------------------------------
-
-    @staticmethod
-    def compute_fullscreen_hold_times(
-        transition_cfg: Dict[str, float], total_freeze: float
-    ) -> Tuple[float, float, float, float]:
-        """
-        Pure function: (renderer's transition config, requested total
-        freeze duration) -> (small_hold, scale, full_hold, fade) seconds.
-
-        [EXTRACTED] Previously duplicated verbatim as a private method
-        named `_compute_fullscreen_hold_times` on BOTH SpatialRenderer
-        and StoryboardRenderer. Since it has no dependency on renderer
-        state beyond the config dict already passed in, it belongs here
-        as the single implementation both renderers delegate to.
-        """
-        t = transition_cfg
-        scale_time = t["scale_seconds"]
-        fade_time = t["fade_out_seconds"]
-        hold_full_time = max(
-            t["min_hold_seconds"], total_freeze * t["hold_ratio_of_freeze"]
-        )
-        hold_small_time = max(
-            t["min_small_hold_seconds"],
-            total_freeze - scale_time - hold_full_time - fade_time,
-        )
-        return hold_small_time, scale_time, hold_full_time, fade_time
-
-    def play_fullscreen_popup_sequence(
-        self,
-        video: "VideoExporter",
-        base_frame: np.ndarray,
-        popup_info: Dict,
-        fps: int,
-        transition_cfg: Dict[str, float],
-        exit_frame: Optional[np.ndarray] = None,
-    ) -> Tuple[np.ndarray, bool]:
-        """
-        Renders one complete fullscreen popup reveal: freeze on the popup
-        box, scale it up to fill the frame, then EITHER play a B-roll
-        video (if `popup_info["data"]["popup_video"]` is set) OR hold at
-        fullscreen and fade back to `exit_frame`.
-
-        Returns `(final_frame, used_broll)`. Callers should assign
-        `final_frame` to their own `last_frame` state ONLY when they want
-        the fullscreen reveal to persist into subsequently-rendered
-        frames — the two existing call sites intentionally differ here
-        (see storyboard_renderer.py's call site comment), and returning
-        the flag instead of unifying the behavior silently preserves that
-        distinction rather than papering over it.
-        """
-        freeze_frame = self.render_popup_box(base_frame, popup_info)
-        total_freeze = float(popup_info["data"].get("freeze_seconds", 3.0))
-        hold_small, scale_t, hold_full, fade_t = self.compute_fullscreen_hold_times(
-            transition_cfg, total_freeze
-        )
-        broll_video = popup_info["data"].get("popup_video")
-        resolved_exit_frame = exit_frame if exit_frame is not None else base_frame
-
-        if broll_video:
-            # B-roll path: scale in only (hold_sec=0.1, fade_out_sec=0.0)
-            # — the video itself owns the "hold" and its own exit timing
-            # via `play_fullscreen_video`'s internal fade in/out.
-            t_frames = self.generate_fullscreen_popup_transition(
-                base_frame=freeze_frame,
-                popup_info=popup_info,
-                fps=fps,
-                duration_sec=scale_t,
-                hold_sec=0.1,
-                fade_out_sec=0.0,
-            )
-            if t_frames:
-                for _ in range(int(hold_small * fps)):
-                    video.write(freeze_frame)
-                for tf in t_frames:
-                    video.write(tf)
-            enter_frame = t_frames[-1] if t_frames else freeze_frame
-            self.play_fullscreen_video(
-                broll_video, enter_frame, resolved_exit_frame, video, fps
-            )
-            return resolved_exit_frame, True
-
-        # Static-image path: scale in, hold at fullscreen, fade back out.
-        t_frames = self.generate_fullscreen_popup_transition(
-            base_frame=freeze_frame,
-            popup_info=popup_info,
-            fps=fps,
-            duration_sec=scale_t,
-            hold_sec=hold_full,
-            fade_out_sec=fade_t,
-        )
-        if t_frames:
-            for _ in range(int(hold_small * fps)):
-                video.write(freeze_frame)
-            for tf in t_frames:
-                video.write(tf)
-            return t_frames[-1], False
-
-        # Degenerate fallback (image failed to load / zero-length
-        # transition): hold the static freeze frame for the full
-        # requested duration instead of silently truncating the clip.
-        for _ in range(max(1, int(total_freeze * fps))):
-            video.write(freeze_frame)
-        return freeze_frame, False
-
     def write_fade_clip(
         self,
-        video_out: "VideoExporter",
+        video_out: VideoExporter,
         bg_frame: np.ndarray,
         fg_frame: np.ndarray,
         total_frames: int,
         fade_frames: int,
     ) -> None:
-        """Helper to write a static frame transition with a cinematic crossfade in and out."""
         if fade_frames <= 0:
             for _ in range(total_frames):
                 video_out.write(fg_frame)
@@ -606,10 +521,9 @@ class GraphicsEngine:
         video_path: str,
         enter_frame: np.ndarray,
         exit_frame: np.ndarray,
-        video_out: "VideoExporter",
+        video_out: VideoExporter,
         fps: int,
     ) -> None:
-        """Reads a video file, scales it to fullscreen, fades in from the popup, and fades out to the map."""
         if isinstance(video_path, list):
             video_path = video_path[0] if video_path else ""
 
@@ -674,7 +588,6 @@ class GraphicsEngine:
             outline=(220, 220, 220, 255),
             width=2,
         )
-
         font_label = self._load_font(self.FONT_CANDIDATES_REGULAR, 14 * scale)
         font_value = self._load_font(self.FONT_CANDIDATES_BOLD, 22 * scale)
 
@@ -682,7 +595,6 @@ class GraphicsEngine:
         self._draw_walking_icon(
             draw, pad + icon_size // 2, h * scale // 2, icon_size, (50, 50, 50, 255)
         )
-
         text_x = pad + icon_size + 14 * scale
         draw.text((text_x, 24 * scale), "Total Time", font=font_label, fill=label_color)
         draw.text(
@@ -698,12 +610,10 @@ class GraphicsEngine:
             fill=divider_color,
             width=2 * scale,
         )
-
         icon_cx2 = div_x + 32 * scale + icon_size // 2
         self._draw_ruler_icon(
             draw, icon_cx2, h * scale // 2, icon_size, (50, 50, 50, 255)
         )
-
         text_x2 = icon_cx2 + icon_size // 2 + 14 * scale
         distance_str = (
             f"{distance_km * 1000:.0f} m"
@@ -722,7 +632,6 @@ class GraphicsEngine:
         out = frame.copy()
         h, w = out.shape[:2]
         ch, cw = card_bgra.shape[:2]
-
         if cw > w - 2 * margin or ch > h - 2 * margin:
             shrink = min((w - 2 * margin) / cw, (h - 2 * margin) / ch)
             card_bgra = cv2.resize(
@@ -731,7 +640,6 @@ class GraphicsEngine:
                 interpolation=cv2.INTER_AREA,
             )
             ch, cw = card_bgra.shape[:2]
-
         x0, y0 = w - cw - margin, h - ch - margin
         card_bgr, card_alpha = (
             card_bgra[:, :, :3].astype(np.float32),
@@ -743,41 +651,13 @@ class GraphicsEngine:
         ).astype(np.uint8)
         return out
 
-    def _load_font(self, candidates: List[str], size: int) -> "FreeTypeFont | Any":
-        """
-        [HOT-PATH FIX] Previously re-opened and re-parsed a TrueType/
-        OpenType font file from disk on EVERY call, with no caching
-        whatsoever. `render_popup_box` — which calls this — is invoked
-        once per rendered output frame for as long as a popup is visible
-        on screen (see SpatialRenderer's `baked_popups` loop, which can
-        hold a popup for several seconds = 60-150+ frames at typical fps).
-        That made font loading an O(N) filesystem-I/O cost across an
-        N-frame popup hold, when the font never changes between calls.
-
-        Now memoized per (candidate-list, size) key on the instance, so
-        the actual `truetype()`/`load_default()` call — which involves a
-        filesystem stat+open+read plus font-file parsing — happens at
-        most once per distinct key for the engine's entire lifetime.
-        Subsequent calls are a single dict lookup: O(1) amortized instead
-        of O(k) filesystem probes (k = number of candidates tried) on
-        every single frame.
-        """
-        cache_key: Tuple[Tuple[str, ...], int] = (tuple(candidates), size)
-        cached = self._font_cache.get(cache_key)
-        if cached is not None:
-            return cached
-
+    def _load_font(self, candidates: List[str], size: int) -> FreeTypeFont | Any:
         for name in candidates:
             try:
-                font = truetype(name, size)
-                self._font_cache[cache_key] = font
-                return font
+                return truetype(name, size)
             except OSError:
                 continue
-
-        fallback = load_default()
-        self._font_cache[cache_key] = fallback
-        return fallback
+        return load_default()
 
     def _draw_walking_icon(
         self, draw: ImageDraw.ImageDraw, cx: int, cy: int, size: int, color: Tuple
@@ -808,45 +688,98 @@ class GraphicsEngine:
         p2 = (cx + half, cy - half // 2)
         draw.line([p1, p2], fill=color, width=max(3, size // 10))
         for t in (0.25, 0.5, 0.75):
-            tx = p1[0] + (p2[0] - p1[0]) * t
-            ty = p1[1] + (p2[1] - p1[1]) * t
+            tx, ty = p1[0] + (p2[0] - p1[0]) * t, p1[1] + (p2[1] - p1[1]) * t
             draw.line([(tx - 4, ty - 6), (tx + 4, ty + 6)], fill=color, width=2)
 
     def _format_duration_short(self, seconds: float) -> str:
-        total_minutes = int(round(seconds / 60))
-        hrs, mins = divmod(total_minutes, 60)
+        hrs, mins = divmod(int(round(seconds / 60)), 60)
         return f"{hrs} hr {mins:02d} min" if hrs else f"{mins} min"
 
     def load_walking_sprites(self, sprite_paths: list[str]):
-        """Loads a sequence of PNGs for the walking animation."""
         self.walk_sprites = []
         for path in sprite_paths:
             img = self.read_image_safe(path)
             if img is not None:
-                # Resize if necessary so it fits on the map
                 img = cv2.resize(img, (60, 60))
                 self.walk_sprites.append(img)
 
     def draw_walking_human(
         self, frame: np.ndarray, cx: int, cy: int, frame_count: int, angle: float
     ):
-        """Draws the current frame of the walking animation at the coordinates."""
         if not hasattr(self, "walk_sprites") or not self.walk_sprites:
-            self.draw_marker(frame, cx, cy)  # Fallback
+            self.draw_marker(frame, cx, cy)
             return
 
-        # 1. Cycle through the animation frames based on the video's current frame
-        sprite_idx = (frame_count // 5) % len(
-            self.walk_sprites
-        )  # Change frame every 5 ticks
+        sprite_idx = (frame_count // 5) % len(self.walk_sprites)
         sprite = self.walk_sprites[sprite_idx]
-
-        # 2. (Optional) Rotate or flip the sprite based on the angle so they face the right way
-        # ... rotation logic here ...
-
-        # 3. Anchor it so the human's feet are exactly on the path (cx, cy)
-        anchor_x = sprite.shape[1] // 2
-        anchor_y = sprite.shape[0]  # Bottom of the image
-
-        # 4. Draw it using your existing method
+        anchor_x, anchor_y = sprite.shape[1] // 2, sprite.shape[0]
         self.blit_sprite(frame, sprite, (anchor_x, anchor_y), cx, cy)
+
+    def compute_fullscreen_hold_times(
+        self, total_freeze: float, transition_cfg: Dict[str, float]
+    ) -> Tuple[float, float, float, float]:
+        """Calculates the exact frame durations for the 4 phases of a cinematic popup."""
+        scale_time = transition_cfg["scale_seconds"]
+        fade_time = transition_cfg["fade_out_seconds"]
+        hold_full_time = max(
+            transition_cfg["min_hold_seconds"], total_freeze * transition_cfg["hold_ratio_of_freeze"]
+        )
+        hold_small_time = max(
+            transition_cfg["min_small_hold_seconds"],
+            total_freeze - scale_time - hold_full_time - fade_time,
+        )
+        return hold_small_time, scale_time, hold_full_time, fade_time
+
+    def play_fullscreen_popup_sequence(
+        self,
+        video: VideoExporter,
+        base_frame: np.ndarray,
+        popup_info: Dict,
+        fps: int,
+        transition_cfg: Dict[str, float],
+        exit_frame: np.ndarray,
+    ) -> Tuple[np.ndarray, bool]:
+        """Consolidated logic for freeze -> scale -> optional B-roll -> hold -> fade."""
+        freeze_frame = self.render_popup_box(base_frame, popup_info)
+        total_freeze = float(popup_info["data"].get("freeze_seconds", 3.0))
+        hold_small, scale_t, hold_full, fade_t = self.compute_fullscreen_hold_times(total_freeze, transition_cfg)
+        
+        broll_video = popup_info["data"].get("popup_video")
+        
+        if broll_video:
+            t_frames = self.generate_fullscreen_popup_transition(
+                base_frame=freeze_frame,
+                popup_info=popup_info,
+                fps=fps,
+                duration_sec=scale_t,
+                hold_sec=0.1,
+                fade_out_sec=0.0,
+            )
+            if t_frames:
+                for _ in range(int(hold_small * fps)):
+                    video.write(freeze_frame)
+                for tf in t_frames:
+                    video.write(tf)
+            enter_frame = t_frames[-1] if t_frames else freeze_frame
+            self.play_fullscreen_video(broll_video, enter_frame, exit_frame, video, fps)
+            return exit_frame, True
+        else:
+            t_frames = self.generate_fullscreen_popup_transition(
+                base_frame=freeze_frame,
+                popup_info=popup_info,
+                fps=fps,
+                duration_sec=scale_t,
+                hold_sec=hold_full,
+                fade_out_sec=fade_t,
+            )
+            if t_frames:
+                for _ in range(int(hold_small * fps)):
+                    video.write(freeze_frame)
+                for tf in t_frames:
+                    video.write(tf)
+            else:
+                for _ in range(int(total_freeze * fps)):
+                    video.write(freeze_frame)
+            return freeze_frame, False
+
+        
