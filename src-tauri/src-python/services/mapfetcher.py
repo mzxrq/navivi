@@ -38,7 +38,7 @@ class MapFetcher:
         bounding_box: Dict[str, float],
         output_filename: str,
         output_size: Tuple[int, int] = (1920, 1080),
-        max_zoom: int = 19,
+        max_zoom: int = 20,
     ):
         """Instance method mapping for overview maps."""
         # ---------------------------------------------------------------------

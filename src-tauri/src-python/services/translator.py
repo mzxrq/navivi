@@ -123,11 +123,11 @@ class ScriptTranslator:
             except Exception:
                 # 2. If it's not downloaded yet, fall back to downloading it
                 logger.info(
-                    f"📥 Model not found locally. Downloading {model_name} (internet required for first run)..."
+                    f"Model not found locally. Downloading {model_name} (internet required for first run)..."
                 )
                 cls._tokenizers[lang_code] = AutoTokenizer.from_pretrained(model_name, local_files_only=False)  # type: ignore
                 cls._models[lang_code] = AutoModelForSeq2SeqLM.from_pretrained(model_name, local_files_only=False)  # type: ignore
-                print(f"Download complete and cached locally.")
+                logger.info(f"Download complete and cached locally.")
 
         return cls._tokenizers[lang_code], cls._models[lang_code]
 

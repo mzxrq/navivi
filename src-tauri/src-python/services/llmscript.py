@@ -16,6 +16,10 @@ import urllib.parse
 from pydantic import BaseModel
 from typing import Literal, Dict, Any
 
+from services.logger import setup_logger
+
+logger = setup_logger("AI Recommender")
+
 
 class TravelRecommendation(BaseModel):
     image_type: Literal["map", "attraction_photo", "unknown"]
@@ -33,7 +37,7 @@ def save_to_training_dataset(
     with open(dataset_path, "a", encoding="utf-8") as f:
         f.write(json.dumps(training_entry, ensure_ascii=False) + "\n")
 
-    print(f"[Kaizen] Saved result to training dataset: {dataset_path}", file=sys.stderr)
+    logger.info(f"[Kaizen] Saved result to training dataset: {dataset_path}")
 
 
 def analyze_travel_image(
@@ -53,9 +57,8 @@ def analyze_travel_image(
         "   - 不明な場合：見えるものを説明し、一般的な旅行のアドバイスを提供してください。"
     )
 
-    print(
-        f"[Ollama] Analyzing image '{image_path}' using custom model '{model_name}'...",
-        file=sys.stderr,
+    logger.info(
+        f"[Ollama] Analyzing image '{image_path}' using custom model '{model_name}'..."
     )
 
     response = ollama.chat(
@@ -75,10 +78,10 @@ def analyze_travel_image(
 
     for chunk in response:
         token = chunk["message"]["content"]
-        print(token, end="", flush=True)  # Streams live to stdout
+        logger.info(token, end="", flush=True)  # Streams live to stdout
         full_content_builder.append(token)
 
-    print("", file=sys.stderr)
+    logger.info("", file=sys.stderr)
 
     complete_response_text = "".join(full_content_builder)
     validated_data = TravelRecommendation.model_validate_json(complete_response_text)
@@ -154,7 +157,7 @@ def get_wikipedia_facts(
                         facts_list.append(f"【Article: {title}】\n{extract}")
                 return "\n\n".join(facts_list)
         except Exception as e:
-            print(f"[Wiki {search_lang}] Error: {e}", file=sys.stderr)
+            logger.error(f"[Wiki {search_lang}] Error: {e}", file=sys.stderr)
             return ""
 
     # Try user's language first
@@ -293,7 +296,7 @@ def generate_voiceover_script(
                 return clean_text.strip()
 
     except Exception as e:
-        print(f"[AI Error] Engine {engine} failed: {e}", file=sys.stderr)
+        logger.error(f"[AI Error] Engine {engine} failed: {e}", file=sys.stderr)
         return fallback_text
 
 
@@ -385,5 +388,5 @@ def generate_overview_script(waypoints: list[str], engine: str = "ollama") -> st
                 ).strip()
 
     except Exception as e:
-        print(f"[Error (LLM)] Engine {engine} failed: {e}", file=sys.stderr)
+        logger.error(f"[Error (LLM)] Engine {engine} failed: {e}")
         return fallback

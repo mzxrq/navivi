@@ -278,7 +278,7 @@ class GPSJsonExporter:
             with open(json_filename, "w", encoding="utf-8") as f:
                 json.dump(payload, f, indent=2, ensure_ascii=False)
                 
-            print(f"JSON config saved to: {json_filename}")
+            logger.info(f"JSON config saved to: {json_filename}")
 
         return payload
 

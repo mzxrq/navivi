@@ -12,6 +12,9 @@ from services.file_handler import store_raw_file_with_datetime, generate_and_sav
 from services.job_config import JobConfigManager
 from services.tts import IrodoriTTSClient, AudioProcessor
 from services.img2vdo import AttractionVideoGenerator
+from services.logger import setup_logger
+
+logger = setup_logger("Data Upload Pipeline")
 
 
 async def generate_attraction_videos(project_config_path: str) -> list[Optional[str]]:
@@ -29,9 +32,8 @@ async def generate_attraction_videos(project_config_path: str) -> list[Optional[
     waypoints = job_config.get_waypoints()
     audio_paths, audio_durations = [], []
 
-    print(
-        "Step 1: Generating Irodori-TTS narration audio for attractions...",
-        file=sys.stderr,
+    logger.info(
+        "Step 1: Generating Irodori-TTS narration audio for attractions..."
     )
     for i, wp in enumerate(waypoints):
         text = wp.get("video_narration") or wp.get("narration") or ""
@@ -40,16 +42,16 @@ async def generate_attraction_videos(project_config_path: str) -> list[Optional[
             audio_paths.append(audio_path)
             analysis = audio_processor.analyze_pauses(audio_path)
             audio_durations.append(analysis["duration_seconds"])
-            print(
+            logger.info(
                 f"   -> Waypoint {i}: Audio generated ({analysis['duration_seconds']}s)",
                 file=sys.stderr,
             )
         else:
             audio_paths.append(None)
             audio_durations.append(0.0)
-            print(f"   -> Waypoint {i}: No narration text provided.", file=sys.stderr)
+            logger.info(f"   -> Waypoint {i}: No narration text provided.", file=sys.stderr)
 
-    print("\n Step 2: Generating AI Video Clips from Images...", file=sys.stderr)
+    logger.info("\n Step 2: Generating AI Video Clips from Images...", file=sys.stderr)
     waypoint_video_outputs = []
     for i, wp in enumerate(waypoints):
         popup_image = wp.get("popup_image")
@@ -65,7 +67,7 @@ async def generate_attraction_videos(project_config_path: str) -> list[Optional[
 
         if popup_image:
             out_filename = f"attraction_wp_{i:02d}.mp4"
-            print(f"\n--- Processing Waypoint {i} ---", file=sys.stderr)
+            logger.info(f"\n--- Processing Waypoint {i} ---", file=sys.stderr)
             video_result = video_generator.process_attraction_video(
                 popup_image_entry=popup_image,
                 prompt_text=prompt,
@@ -75,14 +77,14 @@ async def generate_attraction_videos(project_config_path: str) -> list[Optional[
             )
             waypoint_video_outputs.append(video_result)
         else:
-            print(f"Skipping Waypoint {i}: No popup image found.", file=sys.stderr)
+            logger.info(f"Skipping Waypoint {i}: No popup image found.", file=sys.stderr)
             waypoint_video_outputs.append(None)
 
     return waypoint_video_outputs
 
 
 def data_pipeline_process(input_file: str, output_format: str = "iblue747") -> str:
-    print(f"Processing file: {input_file}")
+    logger.info(f"Processing file: {input_file}")
     route = convert_gps_file(
         input_file=input_file,
         output_filename=input_file.replace(".TXT", ".csv"),
@@ -92,7 +94,7 @@ def data_pipeline_process(input_file: str, output_format: str = "iblue747") -> s
     json_route = export_to_frontend_json(
         cleaned_route, original_input_path=input_file, project_name="Untitled Project"
     )
-    print("Pipeline completed successfully!")
+    logger.info("Pipeline completed successfully!")
     return json.dumps(json_route, ensure_ascii=False)
 
 
@@ -103,9 +105,9 @@ def generate_audio_tts(text: str, output_path: str = "output.mp3") -> Optional[s
 def store_raw_file(input_file: str) -> Optional[str]:
     stored_file_path = store_raw_file_with_datetime(input_file)
     if stored_file_path:
-        print(f"Raw file stored at: {stored_file_path}")
+        logger.info(f"Raw file stored at: {stored_file_path}")
     else:
-        print("Failed to store raw file.")
+        logger.error("Failed to store raw file.")
     return stored_file_path
 
 

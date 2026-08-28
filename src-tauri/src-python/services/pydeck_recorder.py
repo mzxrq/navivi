@@ -21,6 +21,9 @@ project_root = current_dir if current_dir.name == "src-python" else current_dir.
 sys.path.append(str(project_root))
 
 from services.vdoeditor import VideoEditor
+from services.logger import setup_logger
+
+logger = setup_logger("3D Video Recorder")
 
 
 # ---------------------------------------------------------
@@ -230,7 +233,7 @@ async def render_leg_animation(
     output_filename,
     port,
     model_url,
-    trail_color,
+    active_color,
     line_thickness,
     marker_color,
     marker_radius,
@@ -272,9 +275,10 @@ async def render_leg_animation(
         *ffmpeg_cmd, stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.DEVNULL
     )
 
-    c_trail = json.dumps(trail_color)
-    c_glow = json.dumps(trail_color + [90])
+    c_trail = json.dumps(active_color)
+    c_glow = json.dumps(active_color + [90])
     c_halo = json.dumps(marker_color + [80])
+
     waypoints_json = json.dumps(waypoint_markers or [])
 
     async with async_playwright() as p:
@@ -289,24 +293,32 @@ async def render_leg_animation(
         )
         context = await browser.new_context(viewport={"width": 1920, "height": 1080})
         page = await context.new_page()
-        page.on("pageerror", lambda exc: print(f"  [PAGE ERROR] {exc}"))
+        page.on("pageerror", lambda exc: logger.error(f"  [PAGE ERROR] {exc}"))
 
         rel_path = os.path.relpath(base_html_path, project_root).replace("\\", "/")
         await page.goto(f"http://127.0.0.1:{port}/{rel_path}")
 
-        print("  ... Pre-loading map and 3D models (Fast load...)")
+        logger.info("  ... Pre-loading map and 3D models (Fast load...)")
         try:
             await page.wait_for_load_state("load", timeout=2000)
         except Exception:
-            pass
+            logger.warning("  ... Failed to wait for page load.")
         await page.wait_for_timeout(2000)
 
         for index, row in df.iterrows():
-            full_trail = (
-                accumulated_trail + df.iloc[: index + 1][["lon", "lat"]].values.tolist()
-            )
+            active_trail = df.iloc[: index + 1][["lon", "lat"]].values.tolist()
 
-            trail_json = json.dumps([{"path": full_trail}])
+            if accumulated_trail:
+                active_trail.insert(0, accumulated_trail[-1])
+
+            trail_json = json.dumps([{"path": active_trail}])
+
+            # full_trail = (
+            #     accumulated_trail + df.iloc[: index + 1][["lon", "lat"]].values.tolist()
+            # )
+
+            # trail_json = json.dumps([{"path": full_trail}])
+
             car_json = json.dumps(
                 [{"lon": row["lon"], "lat": row["lat"], "yaw": row["yaw"]}]
             )
@@ -378,14 +390,14 @@ async def render_leg_animation(
                 proc.stdin.write(png_bytes)
                 await proc.stdin.drain()
             except Exception as e:
-                print(f"\n[ERROR] FFmpeg crashed: {e}")
+                logger.error(f"\n[ERROR] FFmpeg crashed: {e}")
                 break
 
         # ---------------------------------------------------------
         # FREEZE FRAME / POPUP LOGIC
         # ---------------------------------------------------------
         if freeze_frames > 0:
-            print(
+            logger.info(
                 f"  ... Arrived at waypoint! Freezing final frame for {freeze_frames} frames..."
             )
             if popup_url:
@@ -425,7 +437,7 @@ async def render_leg_animation(
 
     proc.stdin.close()
     await proc.wait()
-    print(f"\nSUCCESS! High-speed animation saved to: {output_filename}")
+    logger.info(f"\nSUCCESS! High-speed animation saved to: {output_filename}")
 
 
 def record_headless_video(
@@ -454,16 +466,20 @@ def record_headless_video(
     )
     target_speed = speed_kmh if speed_kmh is not None else settings.get("speed_kmh")
 
-    print(f"Rendering at {render_fps} FPS")
+    logger.info(f"Rendering at {render_fps} FPS")
     if target_speed:
-        print(f"Using constant speed: {target_speed} km/h")
+        logger.info(f"Using constant speed: {target_speed} km/h")
 
     # Display Styles
-    line_color = settings.get("line_color", [0, 200, 255])
-    history_color = settings.get("history_color", [255, 100, 100])
+    line_color = settings.get("line_color", [255, 0, 0])
+
+    # Change default to Dark Grey: [80, 80, 80]
+    history_color = settings.get("history_color", [80, 80, 80])
+
     line_thickness = settings.get("line_thickness", 10)
     marker_color = settings.get("marker_color", [0, 0, 255])
     marker_radius = settings.get("marker_radius", 10)
+    line_thickness = settings.get("line_thickness", 10)
 
     # Server initialization
     server, port = start_local_server(str(project_root))
@@ -494,7 +510,14 @@ def record_headless_video(
 
     try:
         for leg_idx, (route_key, coords) in enumerate(routing_cache.items()):
-            print(f"\n--- Processing Leg {leg_idx + 1}/{num_legs} ---")
+            logger.info(f"\n--- Processing Leg {leg_idx + 1}/{num_legs} ---")
+
+            wp_idx = leg_idx + 1
+            place_name = "Destination"
+            if wp_idx < len(waypoints):
+                place_name = waypoints[wp_idx].get("label", f"Place {wp_idx}")
+
+            print(f"    Rendering route to: '{place_name}' ({leg_idx + 1}/{num_legs})")
 
             # Model Selection
             leg_mode = (
@@ -676,7 +699,7 @@ def record_headless_video(
                     leg_output_path,
                     port,
                     model_url,
-                    history_color,
+                    line_color,
                     line_thickness,
                     marker_color,
                     marker_radius,

@@ -249,7 +249,7 @@ class RouteAnimator:
         if res_sequence:
             if self.config.get("use_3d_res", True):
                 logger.info(
-                    "🚁 Attempting Residential Sequence using 3D PyDeck (Split by Leg)..."
+                    "Attempting Residential Sequence using 3D PyDeck (Split by Leg)..."
                 )
                 try:
                     res_route_path = self.config.get("res_route_path")
@@ -259,7 +259,10 @@ class RouteAnimator:
                         seg.get("segment_duration", 0.0) for seg in res_sequence
                     ]
                     final_res_paths = record_headless_video(
-                        res_route_path, res_out_path, audio_durations=audio_durs
+                        res_route_path,
+                        res_out_path,
+                        audio_durations=audio_durs,
+                        speed_kmh=60,
                     )
 
                     if not final_res_paths:
@@ -271,18 +274,18 @@ class RouteAnimator:
 
                 except Exception as e:
                     logger.warning(
-                        f"⚠️ 3D Rendering failed ({e}). Attempting 2D Fallback..."
+                        f"3D Rendering failed ({e}). Attempting 2D Fallback..."
                     )
-                    # FIX 2: Protect the fallback by checking if 2D images were actually generated
-                    if res_sequence and res_sequence[0].get("img_path"):
-                        res_paths = self.spatial_renderer.render_waypoints(
-                            res_sequence, fps
-                        )
-                        output_paths.extend(res_paths)
-                    else:
-                        logger.error(
-                            "❌ 2D fallback skipped because 2D map images were bypassed to save time."
-                        )
+
+                if res_sequence and res_sequence[0].get("img_path"):
+                    res_paths = self.spatial_renderer.render_waypoints(
+                        res_sequence, fps
+                    )
+                    output_paths.extend(res_paths)
+                else:
+                    logger.error(
+                        "2D fallback skipped because 2D map images were bypassed to save time."
+                    )
             else:
                 logger.info(
                     "🗺️ Rendering Residential Sequence using 2D SpatialRenderer..."
@@ -394,9 +397,9 @@ def main():
         wp_indices=wp_indices,
     )
 
-    print(f"✅ Rendered {len(output_files)} file(s):")
+    logger.info(f"Rendered {len(output_files)} file(s):")
     for f in output_files:
-        print(f"   {f}")
+        logger.info(f"   {f}")
 
 
 if __name__ == "__main__":

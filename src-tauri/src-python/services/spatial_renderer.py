@@ -100,11 +100,12 @@ class SpatialRenderer:
         fps: int,
         summary: Optional[Dict] = None,
     ) -> str:
+        is_video = False
 
         # 💡 Video Background Detection
-        is_video = (
-            str(bg_path).lower().endswith((".mp4", ".webm", ".avi", ".mov", ".mkv"))
-        )
+        # is_video = (
+        #     str(bg_path).lower().endswith((".mp4", ".webm", ".avi", ".mov", ".mkv"))
+        # )
         if is_video:
             cap = cv2.VideoCapture(str(bg_path))
             ret, current_bg = cap.read()
@@ -346,7 +347,10 @@ class SpatialRenderer:
                         self.graphics.draw_marker(temp_frame, cx, cy)
 
                     self.last_frame = temp_frame
-                    video.write(temp_frame)
+                    
+                    for _ in range(int(display_seconds * fps)):
+                        video.write(temp_frame)
+
             else:
                 # 💡 HIDE current dot, previous dots, and text if video
                 if not is_video:

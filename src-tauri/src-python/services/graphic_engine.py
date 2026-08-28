@@ -88,7 +88,7 @@ class GraphicsEngine:
         self.line_color = line_color
         self.line_thickness = line_thickness
         self.marker_color = marker_color
-        self.marker_radius = marker_radius
+        self.marker_radius = int(marker_radius)
         self.font_size = font_size
         self.font_cv = cv2.FONT_HERSHEY_SIMPLEX
 
@@ -125,18 +125,12 @@ class GraphicsEngine:
             )
 
     def draw_marker(self, frame: np.ndarray, cx: int, cy: int):
-        cv2.circle(
-            frame, (cx, cy), self.marker_radius + 6, (255, 255, 255), -1, cv2.LINE_AA
-        )
-        cv2.circle(
-            frame, (cx, cy), self.marker_radius + 6, (200, 200, 200), 1, cv2.LINE_AA
-        )
-        cv2.circle(
-            frame, (cx, cy), self.marker_radius, self.marker_color, -1, cv2.LINE_AA
-        )
-        cv2.circle(
-            frame, (cx, cy), self.marker_radius // 2, (255, 255, 255), -1, cv2.LINE_AA
-        )
+        radius = int(self.marker_radius)
+
+        cv2.circle(frame, (cx, cy), radius + 6, (255, 255, 255), -1, cv2.LINE_AA)
+        cv2.circle(frame, (cx, cy), radius + 6, (200, 200, 200), 1, cv2.LINE_AA)
+        cv2.circle(frame, (cx, cy), radius, self.marker_color, -1, cv2.LINE_AA)
+        cv2.circle(frame, (cx, cy), radius // 2, (255, 255, 255), -1, cv2.LINE_AA)
 
     def prebake_landmark_sprite(self, label: str) -> Tuple[np.ndarray, Tuple[int, int]]:
         (tw, th), _ = cv2.getTextSize(label, self.font_cv, 0.6, 1)

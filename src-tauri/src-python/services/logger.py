@@ -16,35 +16,35 @@ LOG_DIR.mkdir(parents=True, exist_ok=True)
 LOG_FILE = LOG_DIR / "app.log"
 
 
-# [Core] Setup a standardized logger for the application
-def setup_logger(name: str) -> logging.Logger:
-    """
-    Configures and returns a standardized logger instance.
+import logging
+import sys
+from pathlib import Path
 
-    [PARAMETERS]
-        name: str
-            The name of the logger, typically the module name.
-    """
 
-    # Create a logger with the specified name
+def setup_logger(name: str):
     logger = logging.getLogger(name)
+    logger.setLevel(logging.INFO)  # Keeps capturing info internally
 
-    # Only add handlers if they haven't been added yet to avoid duplicate logs
+    # Prevent adding duplicate handlers if setup is called multiple times
     if not logger.handlers:
-        logger.setLevel(logging.INFO)
-        formatter = logging.Formatter(
+        # 1. File Handler (Keeps saving everything to logs/app.log)
+        log_dir = Path("logs")
+        log_dir.mkdir(parents=True, exist_ok=True)
+        file_handler = logging.FileHandler(log_dir / "app.log", encoding="utf-8")
+        file_handler.setLevel(logging.INFO)
+        file_formatter = logging.Formatter(
             "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
         )
-
-        # File handler (saves logs to disk)
-        file_handler = logging.FileHandler(LOG_FILE, encoding="utf-8")
-        file_handler.setFormatter(formatter)
+        file_handler.setFormatter(file_formatter)
         logger.addHandler(file_handler)
 
-        # Stream handler (sends logs to stderr so Tauri/CLI can catch them)
-        stream_handler = logging.StreamHandler(sys.stderr)
-        stream_handler.setFormatter(formatter)
-        logger.addHandler(stream_handler)
+        # 2. Console / Stream Handler (HIDDEN from terminal unless it's a WARNING or ERROR)
+        console_handler = logging.StreamHandler(sys.stderr)
+        console_handler.setLevel(logging.ERROR)
+        console_formatter = logging.Formatter(
+            "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+        )
+        console_handler.setFormatter(console_formatter)
+        logger.addHandler(console_handler)
 
-    # Return the configured logger instance
     return logger

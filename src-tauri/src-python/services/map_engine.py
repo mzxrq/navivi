@@ -281,7 +281,7 @@ class TileDownloader:
 
         cx.set_cache_dir(str(self.cache_dir))
         self.provider = (
-            provider if provider else cx.providers.CartoDB.Voyager  # type: ignore
+            provider if provider else cx.providers.Esri.WorldStreetMap  # type: ignore
         )  # pyright: ignore[reportAttributeAccessIssue]
 
     # [Map] Ensure the output file is saved in a 'png' directory
@@ -330,7 +330,7 @@ class TileDownloader:
         # Optimal zoom calculation
         optimal_zoom = max_zoom
         for z in range(max_zoom, 0, -1):
-            if cx.howmany(w, s, e, n, z, ll=True) <= 30:
+            if cx.howmany(w, s, e, n, z, ll=True, verbose=False) <= 30:
                 optimal_zoom = z
                 break
 

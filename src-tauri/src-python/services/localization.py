@@ -5,6 +5,9 @@ from services.romaji import RomajiConverter
 from services.translator import ScriptTranslator
 from services.job_config import JobConfigManager
 from services.subtitle import SubtitleStyle
+from services.logger import setup_logger
+
+logger = setup_logger("Localization Service")
 
 
 def is_japanese(text: str) -> bool:
@@ -40,8 +43,8 @@ def build_display_text(original_jp: str, target_lang: Any) -> str:
     translated = ScriptTranslator.translate(original_jp, target_lang=target_lang)
 
     if ScriptTranslator.last_call_failed:
-        print(
-            f"⚠️  Translation to '{target_lang}' FAILED — falling back to Romaji for: {original_jp[:30]!r}...",
+        logger.error(
+            f"Translation to '{target_lang}' FAILED — falling back to Romaji for: {original_jp[:30]!r}...",
             file=sys.stderr,
         )
         return RomajiConverter.to_romaji(original_jp)
