@@ -12,11 +12,11 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <ErrorBoundary>
       <ThemeProvider defaultTheme="system">
-        <WorkspaceProvider>
-          <UIProvider>
+        <UIProvider>
+          <WorkspaceProvider>
             <App />
-          </UIProvider>
-        </WorkspaceProvider>
+          </WorkspaceProvider>
+        </UIProvider>
       </ThemeProvider>
     </ErrorBoundary>
   </React.StrictMode>,

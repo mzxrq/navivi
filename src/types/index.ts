@@ -1,6 +1,7 @@
 import type { Dispatch, SetStateAction, } from "react";
 
 export type RouteMode = "driving" | "walking" | "direct" | "curve" | "ferry";
+export type TrackType = "video" | "audio" | "image" | "text";
 
 export interface Waypoint {
   id: string;
@@ -58,45 +59,81 @@ export interface RecentProjects {
   lastOpened: number;
 }
 
+export interface TimelineTrack {
+  id: string;
+  name: string;
+  type: TrackType;
+}
+
+export interface TimelineClipData {
+  id: string;
+  trackId: string;
+  label: string;
+  source?: string;
+  startTime: number;
+  duration: number;
+  color?: string;
+}
+
+export interface TimelineData {
+  tracks: TimelineTrack[];
+  clips: TimelineClipData[];
+  zoomMultiplier: number;
+}
+
+export interface ManifestClip {
+  clip_id: string;
+  file_path: string;
+  duration: number;
+  type: string;
+}
+
+export interface TimelineManifest {
+  project_name: string;
+  total_duration_seconds: number;
+  video_tracks: ManifestClip[];
+  audio_track?: string;
+}
+
 // Global State Interface
 export interface WorkspaceState {
   // Waypoints
   waypoints: Waypoint[];
   setWaypoints: Dispatch<SetStateAction<Waypoint[]>>;
   updateWaypoint: (id: string, data: Partial<Waypoint>) => void;
-
+  undoMap: () => void;
+  redoMap: () => void;
+  canUndoMap: boolean;
+  canRedoMap: boolean;
+  // Timeline History (NEWest Feature as of right now (2026-08-26 15:52:49))
+  timeline: TimelineData;
+  setTimeline: (data: TimelineData) => void;
+  updateClip: (id: string, startTime: number, duration: number) => void;
+  undoTimeline: () => void;
+  redoTimeline: () => void;
+  canUndoTimeline: boolean;
+  canRedoTimeline: boolean;
   // Routing Engine
   routeSegments: RouteSegment[];
   setRouteSegments: Dispatch<SetStateAction<RouteSegment[]>>;
-
+  activeWaypointId: string | null;
+  setActiveWaypointId: (id: string | null) => void;
   routePoints: [number, number][];
   setRoutePoints: Dispatch<SetStateAction<[number, number][]>>;
-
   // Project Config
   metadata: ProjectMetadata;
   setMetadata: Dispatch<SetStateAction<ProjectMetadata>>;
   updateMetadata: (data: Partial<ProjectMetadata>) => void;
-
   settings: ProjectSettings;
   setSettings: Dispatch<SetStateAction<ProjectSettings>>;
   updateSettings: (data: Partial<ProjectSettings>) => void;
-
+  // FileSystem thingy
   saveProject: (overrideName?: string, asDuplicate?: boolean, safeFolderName?: string) => Promise<string | undefined>;
-  recentProjects: RecentProjects[];
   loadProject: (forcePath?: string) => Promise<boolean>;
-  resetWorkspace: () => void;
-
+  recentProjects: RecentProjects[];
   isDirty: boolean;
   setIsDirty: (val: boolean) => void;
-
+  resetWorkspace: () => void;
   routingCache: Record<string, [number, number][]>;
   setRoutingCache: Dispatch<SetStateAction<Record<string, [number, number][]>>>;
-
-  activeWaypointId: string | null;
-  setActiveWaypointId: (id: string | null) => void;
-
-  undo: () => void;
-  redo: () => void;
-  canUndo: boolean;
-  canRedo: boolean;
 }

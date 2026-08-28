@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState } from "react";
 
 export type AppView = "title_screen" | "editor" | "new_project";
+export type EditorMode = "map" | "timeline";
 
 export type AppTheme = "light" | "dark" | "system";
 export type MapTheme = "light" | "dark" | "sync";
@@ -10,8 +11,8 @@ interface UIState {
   // nav
   currentView: AppView;
   setCurrentView: (view: AppView) => void;
-  showVideoPanel: boolean;
-  setShowVideoPanel: (show: boolean) => void;
+  editorMode: EditorMode;
+  setEditorMode: (mode: EditorMode) => void;
   // render overlay
   isRendering: boolean;
   setIsRendering: (isRendering: boolean) => void;
@@ -38,7 +39,7 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
   const [currentView, setCurrentView] = useState<AppView>("title_screen");
-  const [showVideoPanel, setShowVideoPanel] = useState(false);
+  const [editorMode, setEditorMode] = useState<EditorMode>("map");
   const [toast, setToast] = useState<{
     message: string;
     type: "success" | "error" | "warning" | "info";
@@ -71,8 +72,8 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({
       value={{
         currentView,
         setCurrentView,
-        showVideoPanel,
-        setShowVideoPanel,
+        editorMode,
+        setEditorMode,
         isRendering,
         setIsRendering,
         renderLogs,

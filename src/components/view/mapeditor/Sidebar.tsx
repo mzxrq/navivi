@@ -1,7 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
 import { useState, useEffect, useRef } from "react";
-import { ChevronRight, Trash2,Car,Footprints,Route,Ruler,  Plane,Play,  Square, Ship,  } from "../../ui/icons";
+import { ChevronRight, Trash2,Car,Footprints,Route,Ruler,  Plane,Play,  Square, Ship, Edit,  } from "../../ui/icons";
 import { DragDropContext, Droppable, Draggable, DropResult,} from "@hello-pangea/dnd";
 import { useWorkspace } from "../../../hooks/useWorkspace";
 import { useUI } from "../../../hooks/useUI";
@@ -11,12 +10,11 @@ import { LocationSearch } from "../../ui/LocationSearch";
 import { OverviewPanel } from "./OverviewPanel";
 
 export function Sidebar() {
-  const { showToast } = useUI();
+  const { showToast, setEditorMode } = useUI();
   const { waypoints, setWaypoints, metadata, saveProject, activeWaypointId, setActiveWaypointId, } = useWorkspace();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isListEditMode, setIsListEditMode] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
-  const [logs, setLogs] = useState<string[]>([]);
   const [isRendering, setIsRendering] = useState(false);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const sidebarRef = useRef<HTMLElement>(null);
@@ -62,47 +60,17 @@ export function Sidebar() {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
-
-  useEffect(() => {
-    const setupListeners = async () => {
-      const unlistenLog = await listen<string>("render-log", (event) => {
-        setLogs((prev) => [...prev, event.payload]);
-        console.log("Python Log:", event.payload);
-      });
-
-      const unlistenError = await listen<string>("render-error", (event) => {
-        setLogs((prev) => [...prev, `Error: ${event.payload}`]);
-        console.error("Python Error:", event.payload);
-      });
-
-      const unlistenFinish = await listen<string>("render-finish", (event) => {
-        setIsRendering(false);
-        alert(`Render process finished with status: ${event.payload}`);
-      });
-
-      return () => {
-        unlistenLog();
-        unlistenError();
-        unlistenFinish();
-      };
-    };
-
-    const cleanupPromise = setupListeners();
-    return () => {
-      cleanupPromise.then((cleanup) => cleanup());
-    };
-  }, []);
-
-  // handleRenderVideo
-  const handleRenderVideo = async () => {
+  // Renamed to better reflect its new purpose!
+  const handleGenerate = async () => {
     if (waypoints.length === 0) {
-      showToast("Cannot render: Please add at least one waypoint.", "error");
+      showToast("Cannot generate: Please add at least one waypoint.", "error");
       return;
     }
 
     const invalidWps = waypoints.filter(
       (wp) => !wp.narration.trim() || !wp.images || wp.images.length === 0,
     );
+    
     if (invalidWps.length > 0) {
       const names = invalidWps.map((w) => w.name).join(", ");
       showToast(
@@ -112,29 +80,31 @@ export function Sidebar() {
       return;
     }
 
-    if (
-      !confirm(
-        "Ready to render? This will generate the configuration for the backend.",
-      )
-    )
+    if (!confirm("Ready to generate assets? This will create your voiceovers and map videos before opening the timeline.")) {
       return;
+    }
 
     await saveProject();
 
     try {
-      setIsRendering(true);
-      setLogs([]);
+      setIsRendering(true); // Shows your RenderOverlay
 
       const configPath = `${metadata.directory_path}/job_config.json`;
 
-      const response = await invoke("start_render", {
+      // Kicks off src-tauri/src-python/main.py
+      const res = await invoke("start_render", {
         configPath: configPath,
       });
 
-      showToast(response as string, "info");
+      showToast("Assets generated successfully!", "success");
+      console.log("OK", res);
+      // THE MAGIC BRIDGE: Switch to timeline view once Python is done!
+      setEditorMode('timeline'); 
+      
     } catch (error) {
-      setIsRendering(false);
       showToast(`Error from Rust: ${error}`, "error");
+    } finally {
+      setIsRendering(false);
     }
   };
 
@@ -162,6 +132,31 @@ export function Sidebar() {
       <div className="sticky top-0 z-30 bg-white/95 dark:bg-navidark-800/95 backdrop-blur-md border-b border-zinc-200 dark:border-white/5 p-5 shrink-0 flex flex-col gap-4">
         <LocationSearch />
         <OverviewPanel />
+
+        {waypoints.length > 0 && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                setIsListEditMode(!isListEditMode);
+                setShowClearConfirm(false);
+              }}
+              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors shadow-sm ${
+                isListEditMode
+                  ? "bg-navi-100 text-navi dark:bg-navi/20 dark:text-navi-200 border border-navi-200 dark:border-navi/30"
+                  : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 border border-transparent"
+              }`}
+            >
+              {isListEditMode ? 
+                <span className="inline-flex items-center gap-1.5">
+                  <Edit className="w-2.5 h-2.5"/> Done Editing
+                </span> : 
+                <span className="inline-flex items-baseline gap-1.5">
+                  <Edit className="w-2.5 h-2.5"/> Edit List
+                </span>
+              }
+            </button>
+          </div>
+        )}
       </div>
 
       {/* --- SCROLLABLE TIMELINE --- */}
@@ -320,7 +315,7 @@ export function Sidebar() {
 
         {/* Right: Render Video Button */}
         <button
-          onClick={handleRenderVideo}
+          onClick={handleGenerate}
           disabled={
             waypoints.length === 0 ||
             isListEditMode ||

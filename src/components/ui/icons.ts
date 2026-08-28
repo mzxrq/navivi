@@ -17,4 +17,8 @@ export {
     FolderPlus, Clock, // MapPin, Monitor, ChevronRight, //NewProject
     Plus, FolderOpen, //Map, Clock //TitleScreen
     Cpu, Check, // EngineSelect
+    Pause, Scissors, Magnet, MousePointer2, Type, Video, Download, Subtitles, // TimelineView
+    File, FileAudio, FolderSync, // MediaPool
+    ZoomIn, ZoomOut, // TimelineView
+    Layers, //TimelineTrack
 } from "lucide-react";

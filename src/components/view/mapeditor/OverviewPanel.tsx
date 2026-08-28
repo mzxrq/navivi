@@ -65,16 +65,12 @@ export function OverviewPanel() {
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between">
-        <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
-          <Sparkles className="w-3.5 h-3.5 text-emerald-500" /> 
-          
-        </label>
-        <div className="flex items-center gap-2 text-[9px] font-medium text-zinc-400">
-          <span className="flex items-center gap-1">
-            <MapIcon className="w-2.5 h-2.5" /> {waypoints.length}
+        <div className="flex items-center gap-2 text-[12px] font-medium text-zinc-400">
+          <span className="flex items-center gap-1 text-navidark-200 dark:text-navidark-100">
+            <MapIcon className="w-3.5 h-3.5 text-navi" /> {waypoints.length}
           </span>
-          <span className="flex items-center gap-1">
-            <FileVideo className="w-2.5 h-2.5" /> ~{estimatedTime}s
+          <span className="flex items-center gap-1 text-navidark-200 dark:text-navidark-100">
+            <FileVideo className="w-3.5 h-3.5 text-navi" /> ~{estimatedTime}s
           </span>
         </div>
        <div className="space-y-1.5">
@@ -98,7 +94,7 @@ export function OverviewPanel() {
                     <button
                         onClick={handleGenerateOverview}
                         disabled={isGeneratingOverview || waypoints.length === 0}
-                        className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed bg-emerald-50 dark:bg-zinc-200/10 text-navi-300 dark:text-navi-300 hover:bg-emerald-100 dark:hover:bg-zinc-200/20 border border-emerald-200 dark:border-zinc-200/20 shadow-sm"
+                        className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed bg-navi-800/40 dark:bg-navi-500/10 text-navi-900 dark:text-navi-200 hover:text-navi-100 hover:bg-navi dark:hover:bg-navi-200/20 dark:hover:text-navi-400 border border-navi-600 dark:border-navi-200/20 shadow-sm"
                     >
                         <PencilSparkles className={`w-3 h-3 ${isGeneratingOverview ? "animate-pulse" : ""}`} />
                         Write

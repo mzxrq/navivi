@@ -87,13 +87,13 @@ useEffect(() => {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search location..."
-          className="w-full bg-zinc-100 dark:bg-zinc-900 border border-transparent focus:border-emerald-500 focus:bg-white dark:focus:bg-zinc-950 text-xs rounded-xl pl-8 pr-8 py-2 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none transition-all shadow-sm"
+          className="w-full bg-zinc-100 dark:bg-zinc-900 border border-transparent focus:border-navi-800 focus:bg-white dark:focus:bg-zinc-950 text-xs rounded-xl pl-8 pr-8 py-2 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none transition-all shadow-sm"
         />
 
         {/* Dynamic Right Icon: Loading spinner OR Clear button */}
         <div className="absolute inset-y-0 right-0 pr-2 flex items-center">
           {isSearching ? (
-            <Loader2 className="h-3.5 w-3.5 text-emerald-500 animate-spin" />
+            <Loader2 className="h-3.5 w-3.5 text-navi-800 animate-spin" />
           ) : (
             query && (
               <button

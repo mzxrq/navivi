@@ -1,9 +1,10 @@
+use std::net::TcpStream;
 use std::process::{Child, Command, Stdio};
 use std::io::{BufRead, BufReader, Read};
 use std::sync::Mutex;
-use std::thread;
-use tauri::{AppHandle, Emitter, Manager, State};
-
+use std::{thread};
+use std::time::Duration;
+use tauri::{AppHandle, Emitter, State};
 struct BlueprintState {
     process: Mutex<Option<Child>>,
 }
@@ -132,6 +133,31 @@ fn start_render(app: AppHandle, config_path: String) -> Result<String, String> {
     Ok("Rendering".to_string())
 }
 
+fn is_ollama_running() -> bool {
+    TcpStream::connect_timeout(
+        &"127.0.0.1:11434".parse().unwrap(), 
+        Duration::from_millis(500)
+    ).is_ok()
+}
+
+#[tauri::command]
+fn wake_up_ollama() -> Result<String, String> {
+    if is_ollama_running() {
+        return Ok("Ollama OK".to_string());
+    }
+
+    let result = Command::new("ollama")
+        .arg("serve")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn();
+
+    match result {
+        Ok(_) => Ok("Ollama server started.".to_string()),
+        Err(e) => Err(format!("Failed to start Ollama, is it installed? Error: {}", e)),
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -144,7 +170,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             run_python_blueprint,
             cancel_python_blueprint, // Register the new command
-            start_render
+            start_render,
+            wake_up_ollama,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

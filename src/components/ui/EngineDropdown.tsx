@@ -37,16 +37,16 @@ export function EngineDropdown({ value, onChange, disabled }: EngineDropdownProp
         type="button"
         disabled={disabled}
         onClick={() => setIsOpen(!isOpen)}
-        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-semibold transition-all duration-150 border shadow-xs select-none ${
+        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-semibold transition-all duration-150 border select-none ${
           isOpen
             ? "bg-zinc-200 dark:bg-zinc-800 text-zinc-900 dark:text-white border-navi-500/50 ring-2 ring-navi-500/20"
             : "bg-zinc-100/80 dark:bg-zinc-900/80 hover:bg-zinc-200/80 dark:hover:bg-zinc-800/80 text-zinc-700 dark:text-zinc-300 border-zinc-200/80 dark:border-white/10"
         } ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
       >
-        <ToolCase className="w-3 h-3 text-emerald-500 shrink-0" />
+        <ToolCase className="w-3 h-3 text-navi shrink-0" />
         <span>{selectedEngine.label}</span>
         <ChevronDown
-          className={`w-3 h-3 text-zinc-400 transition-transform duration-200 ${
+          className={`w-3 h-3 text-navidark-200 dark:text-navidark-100 transition-transform duration-200 ${
             isOpen ? "rotate-180" : ""
           }`}
         />
@@ -55,8 +55,8 @@ export function EngineDropdown({ value, onChange, disabled }: EngineDropdownProp
       {/* Floating Glassmorphic Menu */}
       {isOpen && (
         <div className="absolute left-0 mt-1.5 w-36 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl border border-zinc-200/80 dark:border-white/10 rounded-xl shadow-xl py-1 z-50 animate-in fade-in zoom-in-95 duration-100 overflow-hidden">
-          <div className="px-2 py-1 text-[9px] font-bold text-zinc-400 uppercase tracking-wider">
-            AI Engine
+          <div className="px-2 py-1 text-[9px] font-bold text-navidark-150 dark:text-navidark-100 uppercase tracking-wider">
+            Engine
           </div>
           {llmEngines.map((engine) => {
             const isSelected = engine.id === value;
@@ -69,13 +69,13 @@ export function EngineDropdown({ value, onChange, disabled }: EngineDropdownProp
                 }}
                 className={`w-full flex items-center justify-between px-2.5 py-1.5 text-[11px] font-medium transition-colors text-left ${
                   isSelected
-                    ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold"
+                    ? "bg-navi-800/10 text-navi-600 dark:text-navi-400 font-semibold"
                     : "text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-white/5"
                 }`}
               >
                 <div className="flex items-center gap-1.5">
                   {isSelected ? (
-                    <Check className="w-3 h-3 text-emerald-500 shrink-0" />
+                    <Check className="w-3 h-3 text-navi-500 shrink-0" />
                   ) : (
                     <span className="w-3" />
                   )}

@@ -98,3 +98,11 @@ body {
 }
 
 .no-spinners::-webkit-inner-spin-button, .no-spinners::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+
+@layer components {
+  .ctx-btn {
+    @apply flex items-center gap-2 px-3 py-2 rounded-lg text-left w-full transition-colors;
+    @apply hover:bg-zinc-100 hover:text-zinc-900;
+    @apply dark:hover:bg-zinc-800 dark:hover:text-zinc-100;
+  }
+}

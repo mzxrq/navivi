@@ -1,17 +1,37 @@
-import { Sidebar } from "./components/view/editor/Sidebar";
-import { MapArea } from "./components/view/editor/MapArea";
-import { VideoArea } from "./components/view/editor/VideoArea";
+import { Sidebar } from "./components/view/mapeditor/Sidebar";
+import { MapArea } from "./components/view/mapeditor/MapArea";
+import { TimelineView } from "./components/view/videoeditor/TimelineView";
 import { TitleBar } from "./components/ui/TitleBar";
 import { RenderOverlay } from "./components/ui/RenderOverlay";
 import { TitleScreen } from "./components/view/TitleScreen";
 import { NewProject } from "./components/view/NewProject";
 import { AppSettings } from "./components/modal/AppSettings";
-import {  CheckCircle2,  AlertCircle,  Info, } from "lucide-react";
+import { CheckCircle2, AlertCircle, Info } from "lucide-react";
 import { useUI } from "./hooks/useUI";
 import "./App.css";
+import { useEffect } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { StatusBar } from "./components/ui/StatusBar";
+import { ContextMenu } from "./components/ui/ContextMenu";
 
 export default function App() {
-  const { currentView, showVideoPanel, toast } = useUI();
+  const { currentView, editorMode, toast, showToast } = useUI();
+
+  useEffect(() => {
+    const initializeOllama = async () => {
+      try {
+        const res = await invoke<string>("wake_up_ollama");
+        console.log(res);
+      } catch (error) {
+        console.warn(error);
+        showToast(
+          "△ Ollama not found. If you wish to use Auto Write function, please install Ollama from App Settings.",
+          "warning",
+        );
+      }
+    };
+    initializeOllama();
+  }, [showToast]);
 
   return (
     <div
@@ -25,25 +45,27 @@ export default function App() {
       <RenderOverlay />
       <AppSettings />
 
-      {(currentView === "title_screen" || currentView === "new_project") && <TitleScreen />}
+      {(currentView === "title_screen" || currentView === "new_project") && (
+        <TitleScreen />
+      )}
 
       {currentView === "new_project" && <NewProject />}
 
-      {(currentView === "editor") && (
+      {currentView === "editor" && (
         <div className="flex flex-1 overflow-hidden relative animate-in fade-in zoom-in-95 duration-300">
-          <Sidebar />
-          <div className="flex flex-col flex-1 h-full relative">
-            <MapArea />
-
-            {showVideoPanel && (
-              <div className="h-1/3 flex flex-col border-t border-zinc-200 dark:border-white/10 animate-in slide-in-from-bottom-2">
-                <VideoArea />
+          {editorMode === "map" ? (
+            <>
+              <Sidebar />
+              <div className="flex flex-col flex-1 h-full relative">
+                <MapArea />
               </div>
-            )}
-          </div>
+            </>
+          ) : (
+            <TimelineView />
+          )}
         </div>
       )}
-      
+
       {/* Toast */}
       {toast.visible && (
         <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-999 animate-in slide-in-from-bottom-6 fade-in zoom-in-95 duration-300 pointer-events-none">
@@ -65,6 +87,8 @@ export default function App() {
           </div>
         </div>
       )}
+      <ContextMenu />
+      <StatusBar />
     </div>
   );
 }

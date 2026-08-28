@@ -1,6 +1,6 @@
 import { documentDir, join, basename } from "@tauri-apps/api/path";
-import { writeTextFile, mkdir, exists, copyFile, readTextFile } from "@tauri-apps/plugin-fs";
-import { open } from "@tauri-apps/plugin-dialog";
+import { writeTextFile, mkdir, exists, copyFile, readTextFile, BaseDirectory, open as fsOpen } from "@tauri-apps/plugin-fs";
+import { open as dialogOpen } from "@tauri-apps/plugin-dialog";
 import { appConfig, fileSystem } from "../config/constants";
 
 export const saveProjectData = async (
@@ -123,7 +123,8 @@ export const saveProjectData = async (
   const processedWaypoints = await Promise.all(
     waypoints.map(async (wp) => {
       const absoluteImagePaths: string[] = [];
-      if (wp.images) {
+      
+      if (wp.images && wp.images.length > 0) {
         for (const imgPath of wp.images) {
           const fileName = await basename(imgPath);
           const absoluteDest = await join(assetsDir, fileName);
@@ -133,6 +134,7 @@ export const saveProjectData = async (
           absoluteImagePaths.push(absoluteDest);
         }
       }
+
       return {
         lat: wp.lat,
         lng: wp.lng,
@@ -140,9 +142,12 @@ export const saveProjectData = async (
         freeze_seconds: wp.duration || settings.duration_seconds,
         fps: wp.fps || settings.fps,
         popup_image: absoluteImagePaths,
-        camera_pans: absoluteImagePaths.map((_, i) => (wp.imagePans && wp.imagePan[i])) || "panright",
+        // Safely check imagePans (plural) and fallback to "panright" for each image
+        camera_pans: absoluteImagePaths.length > 0 
+          ? absoluteImagePaths.map((_, i) => (wp.imagePans && wp.imagePans[i] ? wp.imagePans[i] : "panright"))
+          : [],
         image_display: wp.imageDisplay || "pip",
-        narration: wp.narration,
+        narration: wp.narration || "", // Prevent undefined
         routeMode: wp.routeMode || "driving",
       };
     })
@@ -178,7 +183,7 @@ export const loadProjectData = async (forcePath?: string) => {
   let selectedPath = forcePath;
 
   if (!selectedPath) {
-    const res = await open({
+    const res = await dialogOpen({
       multiple: false,
       filters: [{ name: `${appConfig.name} Project`, extensions: [fileSystem.extensions.project] }],
     });
@@ -190,4 +195,30 @@ export const loadProjectData = async (forcePath?: string) => {
   const data = JSON.parse(fileContent);
 
   return { data, selectedPath };
+}
+
+export async function appendToRenderLog(message: string) {
+  try {
+    const hasDir = await exists('', { baseDir: BaseDirectory.AppLog });
+    if (!hasDir) {
+      await mkdir('', { baseDir: BaseDirectory.AppLog, recursive: true });
+    }
+
+    const timestamp = new Date().toISOString();
+    const logEntry = `[${timestamp}] ${message}\n`;
+
+    const file = await fsOpen('render.log', {
+      write: true,
+      append: true,
+      create: true,
+      baseDir: BaseDirectory.AppLog,
+    });
+
+    const encoder = new TextEncoder();
+    await file.write(encoder.encode(logEntry));
+    await file.close();
+  
+  } catch (error) {
+    console.error("Failed to write to render.log:", error);
+  }
 }

@@ -1,8 +1,9 @@
 import { saveProjectData, loadProjectData } from "../services/fileSystem";
-import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from "react";
-import { Waypoint, ProjectMetadata, ProjectSettings, RouteSegment, RecentProjects, WorkspaceState } from "../types";
+import { createContext, useContext, useState, useCallback, useEffect, ReactNode, } from "react";
+import { Waypoint, ProjectMetadata, ProjectSettings, RouteSegment, RecentProjects, WorkspaceState, TimelineData } from "../types";
 import { appConfig, defaultProjectSettings, mapDefaults } from "../config/constants";
 import { useHistory } from "./useHistory";
+import { useUI } from "./useUI";
 
 const WorkspaceContext = createContext<WorkspaceState | undefined>(undefined);
 
@@ -20,16 +21,40 @@ const DefaultMetadata: ProjectMetadata = {
   directory_path: "",
 };
 
+const DefaultTimeline: TimelineData = {
+  tracks: [
+    { id: "t-subtitles", name: "Subtiles", type: "text" },
+    { id: "t-popups", name: "Popups", type: "image" },
+    { id: "t-mapvideo", name: "Video", type: "video" },
+    { id: "t-voiceover", name: "Voiceover", type: "audio" },
+  ],
+  clips: [],
+  zoomMultiplier: 1.0,
+}
+
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
+  const { editorMode } = useUI();
+
   const {
     state: waypoints,
     set: setWaypoints,
-    undo,
-    redo,
-    canUndo,
-    canRedo,
-    resetHistory: resetWaypointHistory,
-  } = useHistory<Waypoint[]>([]);
+    undo: undoMap,
+    redo: redoMap,
+    canUndo: canUndoMap,
+    canRedo: canRedoMap,
+    reset: resetWaypointHistory,
+  } = useHistory<Waypoint[]>([], 50);
+
+  const {
+    state: timeline,
+    set: setTimeline,
+    undo: undoTimeline,
+    redo: redoTimeline,
+    canUndo: canUndoTimeline,
+    canRedo: canRedoTimeline,
+    reset: resetTimelineHistory,
+  } = useHistory<TimelineData>(DefaultTimeline, 50);
+
   const [routeSegments, setRouteSegments] = useState<RouteSegment[]>([]);
   const [routePoints, setRoutePoints] = useState<[number, number][]>([]);
   const [activeWaypointId, setActiveWaypointId] = useState<string | null>(null);
@@ -48,7 +73,6 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const addToRecents = useCallback((name: string, path: string) => {
     setRecentProjects((prev) => {
       const filtered = prev.filter((p) => p.path !== path);
-
       const updated = [
         { name, path, lastOpened: Date.now() },
         ...filtered,
@@ -64,6 +88,16 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     );
     setIsDirty(true);
   }, []);
+
+  const updateClip = useCallback((id: string, startTime: number, duration: number) => {
+    setTimeline({
+      ...timeline,
+      clips: timeline.clips.map(clip =>
+        clip.id === id ? { ...clip, startTime, duration } : clip
+      )
+    });
+    setIsDirty(true);
+  }, [timeline, setTimeline]);
 
   const updateMetadata = useCallback((data: Partial<ProjectMetadata>) => {
     setMetadata((prev) => ({ ...prev, ...data }));
@@ -139,7 +173,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
       if (data.settings) setSettings(data.settings);
 
-      setWaypoints(data.waypoints.map((wp: any) => ({
+      resetWaypointHistory(data.waypoints.map((wp: any) => ({
         id: crypto.randomUUID(),
         lat: wp.lat,
         lng: wp.lng,
@@ -151,6 +185,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         narration: wp.narration || "",
         routeMode: wp.routeMode || "driving"
       })));
+      resetTimelineHistory(DefaultTimeline);
 
       setIsDirty(false);
       addToRecents(data.project_name || appConfig.defaultProjectName, selectedPath);
@@ -165,6 +200,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const resetWorkspace = () => {
     setActiveWaypointId(null);
     resetWaypointHistory([]);
+    resetTimelineHistory(DefaultTimeline);
     setRouteSegments([]);
     setMetadata({
       ...DefaultMetadata,
@@ -189,32 +225,40 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     const isCmdOrCtrl = e.metaKey || e.ctrlKey;
 
     if (isCmdOrCtrl && e.key.toLowerCase() === "z") {
+      e.preventDefault();
       if (e.shiftKey) {
-        e.preventDefault();
-        redo();
+        editorMode === "map" ? redoMap() : redoTimeline();
       } else {
-        e.preventDefault();
-        undo();
+        editorMode === "map" ? undoMap() : undoTimeline();
       }
     } else if (isCmdOrCtrl && e.key.toLowerCase() === "y") {
       e.preventDefault();
-      redo();
+      editorMode === "map" ? redoMap() : redoTimeline()
     }
   };
 
   window.addEventListener("keydown", handleKeyDown);
   return () => window.removeEventListener("keydown", handleKeyDown);
-}, [undo, redo]);
+}, [editorMode, undoMap, redoMap, undoTimeline, redoTimeline]);
 
   return (
     <WorkspaceContext.Provider
       value={{
+        // map history
         waypoints,
         setWaypoints,
-        undo,
-        redo,
-        canUndo,
-        canRedo,
+        undoMap,
+        redoMap,
+        canUndoMap,
+        canRedoMap,
+        // timeline history
+        timeline,
+        setTimeline,
+        updateClip,
+        undoTimeline,
+        redoTimeline,
+        canUndoTimeline,
+        canRedoTimeline,
         updateWaypoint,
         routeSegments,
         setRouteSegments,
@@ -232,7 +276,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         loadProject,
         isDirty,
         setIsDirty,
-        recentProjects: recentProjects,
+        recentProjects,
         resetWorkspace,
         routingCache,
         setRoutingCache,

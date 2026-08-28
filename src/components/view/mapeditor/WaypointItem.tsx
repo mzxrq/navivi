@@ -130,7 +130,7 @@ export function WaypointItem({
                 e.stopPropagation();
                 handleSelect();
               }} 
-              className="p-1.5 hover:bg-navi/60 dark:hover:bg-zinc-800 rounded-md text-zinc-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"
+              className="p-1.5 hover:bg-navi/60 dark:hover:bg-zinc-800 rounded-md text-zinc-400 hover:text-navi-600 dark:hover:text-navi transition-colors"
               title="Edit Stop"
             >
               <Edit2 className="w-3.5 h-3.5" />

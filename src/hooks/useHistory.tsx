@@ -1,65 +1,54 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, SetStateAction } from "react";
 
-export function useHistory<T>(initialPresent: T) {
+export function useHistory<T>(initialState: T, maxHistory: number = 50) {
   const [past, setPast] = useState<T[]>([]);
-  const [present, setPresent] = useState<T>(initialPresent);
+  const [present, setPresent] = useState<T>(initialState);
   const [future, setFuture] = useState<T[]>([]);
 
-  const presentRef = useRef<T>(present);
-  presentRef.current = present;
-
-  const canUndo = past.length > 0;
-  const canRedo = future.length > 0;
-
-  const set = useCallback((newPresent: T | ((prev: T) => T)) => {
-    const current = presentRef.current;
-    const resolved =
-      typeof newPresent === "function"
-        ? (newPresent as (prev: T) => T)(current)
-        : newPresent;
-
-    if (JSON.stringify(resolved) === JSON.stringify(current)) return;
-
-    setPast((prev) => [...prev, current]);
-    setPresent(resolved);
-    presentRef.current = resolved;
-    setFuture([]); 
-  }, []);
+  const set = useCallback((action: SetStateAction<T>) => {
+    setPresent((prevPresent) => {
+      // Resolve the functional update if the user passed a function
+      const newState = typeof action === 'function' 
+        ? (action as (prevState: T) => T)(prevPresent) 
+        : action;
+      
+      setPast((prevPast) => {
+        const newPast = [...prevPast, prevPresent];
+        // Cap the history array to prevent memory leaks!
+        if (newPast.length > maxHistory) {
+          return newPast.slice(newPast.length - maxHistory);
+        }
+        return newPast;
+      });
+      setFuture([]); // Editing clears the redo future
+      
+      return newState;
+    });
+  }, [maxHistory]);
 
   const undo = useCallback(() => {
-    setPast((prevPast) => {
-      if (prevPast.length === 0) return prevPast;
-
-      const previous = prevPast[prevPast.length - 1];
-      const newPast = prevPast.slice(0, prevPast.length - 1);
-
-      setFuture((prevFuture) => [presentRef.current, ...prevFuture]);
-      setPresent(previous);
-      presentRef.current = previous;
-
-      return newPast;
-    });
-  }, []);
+    if (past.length === 0) return;
+    const previous = past[past.length - 1];
+    const newPast = past.slice(0, past.length - 1);
+    
+    setPast(newPast);
+    setFuture([present, ...future]);
+    setPresent(previous);
+  }, [past, present, future]);
 
   const redo = useCallback(() => {
-    setFuture((prevFuture) => {
-      if (prevFuture.length === 0) return prevFuture;
+    if (future.length === 0) return;
+    const next = future[0];
+    const newFuture = future.slice(1);
+    
+    setPast((prev) => [...prev, present]);
+    setPresent(next);
+    setFuture(newFuture);
+  }, [future, present]);
 
-      const next = prevFuture[0];
-      const newFuture = prevFuture.slice(1);
-
-      setPast((prevPast) => [...prevPast, presentRef.current]);
-      setPresent(next);
-      presentRef.current = next;
-
-      return newFuture;
-    });
-  }, []);
-
-  const resetHistory = useCallback((newInitialState: T) => {
+  const reset = useCallback((newState: T) => {
     setPast([]);
-    setPresent(newInitialState);
-    presentRef.current = newInitialState;
+    setPresent(newState);
     setFuture([]);
   }, []);
 
@@ -68,8 +57,8 @@ export function useHistory<T>(initialPresent: T) {
     set,
     undo,
     redo,
-    canUndo,
-    canRedo,
-    resetHistory,
+    reset,
+    canUndo: past.length > 0,
+    canRedo: future.length > 0,
   };
 }
