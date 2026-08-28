@@ -102,7 +102,7 @@ class GraphicsEngine:
             img_array = np.frombuffer(chunk, dtype=np.uint8)
             return cv2.imdecode(img_array, cv2.IMREAD_COLOR)
         except Exception as e:
-            logger.warning(f"⚠️ Failed to load image {path}: {e}")
+            logger.warning(f"Failed to load image {path}: {e}")
             return None
 
     def draw_path(self, frame: np.ndarray, path_history: List[Tuple[int, int]]):
@@ -141,24 +141,34 @@ class GraphicsEngine:
     def prebake_landmark_sprite(self, label: str) -> Tuple[np.ndarray, Tuple[int, int]]:
         (tw, th), _ = cv2.getTextSize(label, self.font_cv, 0.6, 1)
         pad = 8
-        sprite_w = self.marker_radius + 4 + tw + pad * 2 + self.marker_radius + 4
-        sprite_h = max(2 * (self.marker_radius + 3), th + pad * 2) + 8
+
+        # --- FIX: Force dimensions to be whole integers ---
+        sprite_w = int(self.marker_radius + 4 + tw + pad * 2 + self.marker_radius + 4)
+        sprite_h = int(max(2 * (self.marker_radius + 3), th + pad * 2) + 8)
         sprite = np.zeros((sprite_h, sprite_w, 4), dtype=np.uint8)
 
-        cx, cy = self.marker_radius + 4, sprite_h // 2
+        # --- FIX: Force coordinates to be integers for cv2 drawing ---
+        cx = int(self.marker_radius + 4)
+        cy = int(sprite_h // 2)
+
         cv2.circle(
-            sprite, (cx, cy), self.marker_radius, (255, 80, 0, 255), -1, cv2.LINE_AA
+            sprite,
+            (cx, cy),
+            int(self.marker_radius),
+            (255, 80, 0, 255),
+            -1,
+            cv2.LINE_AA,
         )
         cv2.circle(
             sprite,
             (cx, cy),
-            self.marker_radius + 3,
+            int(self.marker_radius + 3),
             (255, 255, 255, 255),
             2,
             cv2.LINE_AA,
         )
 
-        bx1, by1 = cx + self.marker_radius + 4, cy - th - pad
+        bx1, by1 = cx + int(self.marker_radius + 4), cy - th - pad
         bx2, by2 = bx1 + tw + pad * 2, cy + pad
         cv2.rectangle(
             sprite, (bx1 - 1, by1 - 1), (bx2 + 1, by2 + 1), (50, 50, 50, 255), -1
@@ -198,7 +208,6 @@ class GraphicsEngine:
             region[:, :, :3] * alpha + frame[y0:y1, x0:x1] * (1 - alpha)
         ).astype(np.uint8)
 
-    # 💡 NEW: Cinematic Pause Blur and Center alignment
     def render_cinematic_pause(
         self, target_frame: np.ndarray, popup_info: Dict
     ) -> np.ndarray:
@@ -722,7 +731,8 @@ class GraphicsEngine:
         scale_time = transition_cfg["scale_seconds"]
         fade_time = transition_cfg["fade_out_seconds"]
         hold_full_time = max(
-            transition_cfg["min_hold_seconds"], total_freeze * transition_cfg["hold_ratio_of_freeze"]
+            transition_cfg["min_hold_seconds"],
+            total_freeze * transition_cfg["hold_ratio_of_freeze"],
         )
         hold_small_time = max(
             transition_cfg["min_small_hold_seconds"],
@@ -742,10 +752,12 @@ class GraphicsEngine:
         """Consolidated logic for freeze -> scale -> optional B-roll -> hold -> fade."""
         freeze_frame = self.render_popup_box(base_frame, popup_info)
         total_freeze = float(popup_info["data"].get("freeze_seconds", 3.0))
-        hold_small, scale_t, hold_full, fade_t = self.compute_fullscreen_hold_times(total_freeze, transition_cfg)
-        
+        hold_small, scale_t, hold_full, fade_t = self.compute_fullscreen_hold_times(
+            total_freeze, transition_cfg
+        )
+
         broll_video = popup_info["data"].get("popup_video")
-        
+
         if broll_video:
             t_frames = self.generate_fullscreen_popup_transition(
                 base_frame=freeze_frame,
@@ -781,5 +793,3 @@ class GraphicsEngine:
                 for _ in range(int(total_freeze * fps)):
                     video.write(freeze_frame)
             return freeze_frame, False
-
-        

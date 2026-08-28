@@ -76,10 +76,12 @@ class RouteAnimator:
             elif isinstance(item, dict):
                 points.append([float(item["x"]), float(item["y"])])
                 labels.append(item.get("label"))
+                # ADDED: Check for 'transition' key in the JSON configuration
                 if (
                     "freeze_seconds" in item
                     or "popup_image" in item
                     or "popup_video" in item
+                    or "transition" in item
                 ):
                     popups.append(
                         {
@@ -89,6 +91,8 @@ class RouteAnimator:
                             "image_display": item.get(
                                 "image_display", item.get("image display", "box")
                             ),
+                            # ADDED: Store the transition type (e.g., 'pop up', 'fullscreen')
+                            "transition": item.get("transition", "popup"),
                             "triggered": False,
                         }
                     )
@@ -147,11 +151,9 @@ class RouteAnimator:
         **kwargs,
     ) -> List[str]:
         """Main rendering orchestrator. Decides which rendering engine to use."""
-
-        base_img = self.graphics.read_image_safe(img_path)
-        if base_img is None:
-            logger.error(f"Cannot read: {img_path}")
-            raise FileNotFoundError(f"Cannot read: {img_path}")
+        if not os.path.exists(img_path):
+            logger.error(f"Background path does not exist: {img_path}")
+            raise FileNotFoundError(f"Background path does not exist: {img_path}")
 
         output_paths = []
 
@@ -214,9 +216,6 @@ class RouteAnimator:
                     VideoExporter.concat_clips(current_group, out_name)
                     combined_clips.append(out_name)
 
-                # -------------------------------------------------------------
-                # NEW: FREEZE THE VERY LAST OVERVIEW LEG
-                # -------------------------------------------------------------
                 if combined_clips:
                     last_leg_path = combined_clips[-1]
                     self._freeze_video_end(
@@ -235,15 +234,12 @@ class RouteAnimator:
                 )
                 output_paths.append(overview_path)
 
-        # 💡 Fallback to the Legacy Proximity Renderer
+        # Fallback to the Legacy Proximity Renderer
         else:
             overview_path = self.spatial_renderer.render_overview(
                 img_path, points, labels, popups, fps, summary=summary
             )
             if overview_path:
-                # -------------------------------------------------------------
-                # NEW: FREEZE THE LEGACY OVERVIEW VIDEO
-                # -------------------------------------------------------------
                 self._freeze_video_end(
                     overview_path, hold_seconds=self.config.get("summary_hold", 4.0)
                 )
@@ -251,20 +247,42 @@ class RouteAnimator:
 
         # Always render waypoints using the spatial engine, OR PyDeck if requested
         if res_sequence:
-            if self.config.get("use_3d_res", False):
+            if self.config.get("use_3d_res", True):
                 logger.info(
-                    "🚁 Rendering Residential Sequence using 2D PyDeck (Split by Leg)..."
+                    "🚁 Attempting Residential Sequence using 3D PyDeck (Split by Leg)..."
                 )
+                try:
+                    res_route_path = self.config.get("res_route_path")
+                    res_out_path = str(self.out_dir / "02_residential_map.mp4")
 
-                res_route_path = self.config.get("res_route_path")
-                res_out_path = str(self.out_dir / "02_residential_map.mp4")
+                    audio_durs = [
+                        seg.get("segment_duration", 0.0) for seg in res_sequence
+                    ]
+                    final_res_paths = record_headless_video(
+                        res_route_path, res_out_path, audio_durations=audio_durs
+                    )
 
-                # Change: It now returns a LIST of paths, so we use extend()
-                audio_durs = [seg.get("segment_duration", 0.0) for seg in res_sequence]
-                final_res_paths = record_headless_video(
-                    res_route_path, res_out_path, audio_durations=audio_durs
-                )
-                output_paths.extend(final_res_paths)
+                    if not final_res_paths:
+                        raise RuntimeError(
+                            "3D rendering generated an empty output sequence."
+                        )
+
+                    output_paths.extend(final_res_paths)
+
+                except Exception as e:
+                    logger.warning(
+                        f"⚠️ 3D Rendering failed ({e}). Attempting 2D Fallback..."
+                    )
+                    # FIX 2: Protect the fallback by checking if 2D images were actually generated
+                    if res_sequence and res_sequence[0].get("img_path"):
+                        res_paths = self.spatial_renderer.render_waypoints(
+                            res_sequence, fps
+                        )
+                        output_paths.extend(res_paths)
+                    else:
+                        logger.error(
+                            "❌ 2D fallback skipped because 2D map images were bypassed to save time."
+                        )
             else:
                 logger.info(
                     "🗺️ Rendering Residential Sequence using 2D SpatialRenderer..."
