@@ -1,4 +1,5 @@
 import L from "leaflet";
+import { Waypoint } from "../types";
 
 export const waypointIcon = (number: number, hexColor: string) => {
     return L.divIcon({
@@ -36,4 +37,50 @@ export const getCurve = (
         curve.push([lat, lon]);
     }
     return curve;
+};
+
+export function pruneRouteCache(
+    waypoints: Waypoint[],
+    routeCache: Record<string, [number, number][]>,
+): Record<string, [number, number][]> {
+    const activeKeys = new Set<string>();
+
+    for (let i = 0; i < waypoints.length - 1; i++) {
+        const wp1 = waypoints[i];
+        const wp2 = waypoints[i + 1];
+        const mode = wp1.routeMode || "driving";
+
+        const key = `${wp1.lat},${wp1.lng}|${wp2.lat},${wp2.lng}|${mode}`;
+        activeKeys.add(key);
+    }
+
+    const cleanCache: Record<string, [number, number][]> = {};
+    let deletedCount = 0;
+
+    for (const [key, routeData] of Object.entries(routeCache)) {
+        if (activeKeys.has(key)) {
+            cleanCache[key] = routeData;
+        } else {
+            deletedCount++;
+        }
+    }
+
+    if (deletedCount > 0) {
+        console.log(`Garbage Collector removed ${deletedCount} unused ghost routes.`);
+    }
+
+    return cleanCache;
+}
+
+export interface OsmNode {
+    lat: number;
+    lon: number;
+}
+
+export const getDistanceKm = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371; // earth radius
+    const dLat = (lat2 - lat1) * (Math.PI / 180);
+    const dLon = (lon2 - lon1) * (Math.PI / 180);
+    const a = Math.sin(dLat/2) * Math.sin(dLat / 2) + Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
 };

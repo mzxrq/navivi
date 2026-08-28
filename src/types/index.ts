@@ -108,6 +108,7 @@ export interface WorkspaceState {
   // Timeline History (NEWest Feature as of right now (2026-08-26 15:52:49))
   timeline: TimelineData;
   setTimeline: (data: TimelineData) => void;
+  autoLoadTimeline: (projectDir: string) => Promise<void>;
   updateClip: (id: string, startTime: number, duration: number) => void;
   undoTimeline: () => void;
   redoTimeline: () => void;

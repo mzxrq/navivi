@@ -2,6 +2,8 @@ import { saveProjectData, loadProjectData } from "../services/fileSystem";
 import { createContext, useContext, useState, useCallback, useEffect, ReactNode, } from "react";
 import { Waypoint, ProjectMetadata, ProjectSettings, RouteSegment, RecentProjects, WorkspaceState, TimelineData } from "../types";
 import { appConfig, defaultProjectSettings, mapDefaults } from "../config/constants";
+import { loadTimelineManifest } from "../services/fileSystem";
+import { TimelineClipData, TimelineTrack } from "../types";
 import { useHistory } from "./useHistory";
 import { useUI } from "./useUI";
 
@@ -33,7 +35,7 @@ const DefaultTimeline: TimelineData = {
 }
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
-  const { editorMode } = useUI();
+  const { editorMode } = useUI(); // editorMode : Map <-> Timeline
 
   const {
     state: waypoints,
@@ -43,7 +45,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     canUndo: canUndoMap,
     canRedo: canRedoMap,
     reset: resetWaypointHistory,
-  } = useHistory<Waypoint[]>([], 50);
+  } = useHistory<Waypoint[]>([], 50); // Waypoint management and undo/redo history for MapEditor
 
   const {
     state: timeline,
@@ -53,22 +55,22 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     canUndo: canUndoTimeline,
     canRedo: canRedoTimeline,
     reset: resetTimelineHistory,
-  } = useHistory<TimelineData>(DefaultTimeline, 50);
+  } = useHistory<TimelineData>(DefaultTimeline, 50); // Timeline management and undo/redo history for VideoEditor
 
-  const [routeSegments, setRouteSegments] = useState<RouteSegment[]>([]);
-  const [routePoints, setRoutePoints] = useState<[number, number][]>([]);
-  const [activeWaypointId, setActiveWaypointId] = useState<string | null>(null);
+  const [routeSegments, setRouteSegments] = useState<RouteSegment[]>([]); // RouteSegments
+  const [routePoints, setRoutePoints] = useState<[number, number][]>([]); // MapPin Route points
+  const [activeWaypointId, setActiveWaypointId] = useState<string | null>(null); // Selected waypoint (for context menu)
   const [metadata, setMetadata] = useState<ProjectMetadata>(() => ({
     ...DefaultMetadata,
     created_at: new Date().toISOString()
-  }));
-  const [settings, setSettings] = useState<ProjectSettings>(DefaultSettings);
-  const [routingCache, setRoutingCache] = useState<Record<string, [number, number][]>>({});
-  const [isDirty, setIsDirty] = useState(false);
+  })); // Project metadata (see ../services/index.ts for more)
+  const [settings, setSettings] = useState<ProjectSettings>(DefaultSettings); // Project setting (see ../services/index.ts for more)
+  const [routingCache, setRoutingCache] = useState<Record<string, [number, number][]>>({}); // Read routingCache from project's job_config.json
+  const [isDirty, setIsDirty] = useState(false); // check if save or unsaved state
   const [recentProjects, setRecentProjects] = useState<RecentProjects[]>(() => {
     const saved = localStorage.getItem("navivi-recents");
     return saved ? JSON.parse(saved) : [];
-  });
+  }); // Recent Project for TitleScreen.tsx
 
   const addToRecents = useCallback((name: string, path: string) => {
     setRecentProjects((prev) => {
@@ -80,14 +82,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       localStorage.setItem("navivi-recents", JSON.stringify(updated));
       return updated;
     });
-  }, []);
+  }, []); // add recent project to TitleScreen
 
   const updateWaypoint = useCallback((id: string, data: Partial<Waypoint>) => {
     setWaypoints((prev) =>
       prev.map((wp) => (wp.id === id ? { ...wp, ...data } : wp)),
     );
     setIsDirty(true);
-  }, []);
+  }, []); // update waypoint when is moved or its information like narration or image were updated
 
   const updateClip = useCallback((id: string, startTime: number, duration: number) => {
     setTimeline({
@@ -97,17 +99,17 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       )
     });
     setIsDirty(true);
-  }, [timeline, setTimeline]);
+  }, [timeline, setTimeline]); // update clip/timeline track when clip is added or its information were updated
 
   const updateMetadata = useCallback((data: Partial<ProjectMetadata>) => {
     setMetadata((prev) => ({ ...prev, ...data }));
     setIsDirty(true);
-  }, []);
+  }, []); // update metadata such as project renaming
 
   const updateSettings = useCallback((data: Partial<ProjectSettings>) => {
     setSettings((prev) => ({ ...prev, ...data }));
     setIsDirty(true);
-  }, []);
+  }, []); // update setting (see index.ts for more)
 
   const saveProject = async (overrideName?: string, asDuplicate?: boolean, safeFolderName?: string) => {
     if (waypoints.length === 0) {
@@ -143,7 +145,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       console.error("Failed to save Navivi project:", error);
       throw error;
     }
-  };
+  }; // see fileSystem.ts for more
 
   const loadProject = async (forcePath?: string): Promise<boolean> => {
     try {
@@ -195,7 +197,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       console.error("Failed to load project:", error);
       throw error;
     }
-  };
+  }; // see fileSystem.ts for more
 
   const resetWorkspace = () => {
     setActiveWaypointId(null);
@@ -209,37 +211,93 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     setSettings(DefaultSettings);
     setRoutingCache({});
     setIsDirty(false);
-  }
+  }; // reset entire workspace
 
+  // undo/redo shortcut
   useEffect(() => {
-  const handleKeyDown = (e: KeyboardEvent) => {
-    // Ignore keypresses inside input fields or textareas so typing doesn't trigger undo
-    const activeEl = document.activeElement;
-    const isTyping =
-      activeEl?.tagName === "INPUT" ||
-      activeEl?.tagName === "TEXTAREA" ||
-      activeEl?.getAttribute("contenteditable") === "true";
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore keypresses inside input fields or textareas so typing doesn't trigger undo
+      const activeEl = document.activeElement;
+      const isTyping =
+        activeEl?.tagName === "INPUT" ||
+        activeEl?.tagName === "TEXTAREA" ||
+        activeEl?.getAttribute("contenteditable") === "true";
 
-    if (isTyping) return;
+      if (isTyping) return;
 
-    const isCmdOrCtrl = e.metaKey || e.ctrlKey;
+      const isCmdOrCtrl = e.metaKey || e.ctrlKey;
 
-    if (isCmdOrCtrl && e.key.toLowerCase() === "z") {
-      e.preventDefault();
-      if (e.shiftKey) {
-        editorMode === "map" ? redoMap() : redoTimeline();
-      } else {
-        editorMode === "map" ? undoMap() : undoTimeline();
+      if (isCmdOrCtrl && e.key.toLowerCase() === "z") {
+        e.preventDefault();
+        if (e.shiftKey) {
+          editorMode === "map" ? redoMap() : redoTimeline();
+        } else {
+          editorMode === "map" ? undoMap() : undoTimeline();
+        }
+      } else if (isCmdOrCtrl && e.key.toLowerCase() === "y") {
+        e.preventDefault();
+        editorMode === "map" ? redoMap() : redoTimeline()
       }
-    } else if (isCmdOrCtrl && e.key.toLowerCase() === "y") {
-      e.preventDefault();
-      editorMode === "map" ? redoMap() : redoTimeline()
-    }
-  };
+    };
 
-  window.addEventListener("keydown", handleKeyDown);
-  return () => window.removeEventListener("keydown", handleKeyDown);
-}, [editorMode, undoMap, redoMap, undoTimeline, redoTimeline]);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [editorMode, undoMap, redoMap, undoTimeline, redoTimeline]);
+
+  // auto-loader logic for TimelineManifest
+  const autoLoadTimeline = async (projectDir: string) => {
+    const manifest = await loadTimelineManifest(projectDir);
+    if (!manifest) return; // no manifest -> exit
+
+    // ensure standard base tracks ready
+    const videoTrackId = crypto.randomUUID();
+    const popupTrackId = crypto.randomUUID();
+    const audioTrackId = crypto.randomUUID();
+
+    const defaultTracks: TimelineTrack[] = [
+      { id: popupTrackId, name: "Popups", type: "video" },
+      { id: videoTrackId, name: "Video", type: "video" },
+      { id: audioTrackId, name: "Voiceover", type: "audio"},
+    ];
+
+    // convert python manifest clips into ui timeline clips
+    let runningTime = 0;
+    const generatedClips: TimelineClipData[] = [];
+
+    manifest.video_tracks.forEach((item) => {
+      const targetTrackId = item.type === "static_popup" ? popupTrackId : videoTrackId;
+
+      generatedClips.push({
+        id: item.clip_id,
+        trackId: targetTrackId,
+        label: item.file_path.split('/').pop() || item.clip_id, //Extract filename for UI
+        startTime: runningTime,
+        duration: item.duration,
+        source: item.file_path,
+      });
+      // advance running time so next clip starts exactly when this one ends
+      runningTime += item.duration;
+    });
+
+    // add master audio track if it exists
+    if (manifest.audio_track) {
+      generatedClips.push({
+        id: "master_audio",
+        trackId: audioTrackId,
+        label: manifest.audio_track.split('/').pop() || "Master Audio",
+        startTime: 0,
+        duration: manifest.total_duration_seconds,
+        source: manifest.audio_track,
+      });
+    }
+
+    // overwrite the timeline state with generated data
+    setTimeline({
+      tracks: defaultTracks,
+      clips: generatedClips,
+      zoomMultiplier: 1,
+    });
+  };
 
   return (
     <WorkspaceContext.Provider
@@ -254,6 +312,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         // timeline history
         timeline,
         setTimeline,
+        autoLoadTimeline,
         updateClip,
         undoTimeline,
         redoTimeline,

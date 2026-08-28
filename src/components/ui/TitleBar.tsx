@@ -8,7 +8,6 @@ import {
   Square,
   Map,
   ChevronRight,
-  PanelBottom,
   Settings2,
   Undo2,
   Redo2,
@@ -295,7 +294,7 @@ export function TitleBar() {
           >
             {/* Breadcrumbs (Click-through so it drags the window) */}
             <div data-tauri-drag-region className="flex items-center gap-2 text-xs font-medium text-zinc-500 dark:text-zinc-400">
-              <Map className="w-3.5 h-3.5 text-navi-600 dark:text-navi-500 pointer-events-none" />
+              <Map className="w-4.5 h-4.5 text-navi dark:text-navi pointer-events-none" />
               <span className="text-zinc-800 dark:text-zinc-300 pointer-events-none">Navivi</span>
               <ChevronRight className="w-3 h-3 opacity-50 pointer-events-none" />
               <span className="text-zinc-600 dark:text-zinc-200 pointer-events-none">
@@ -315,7 +314,7 @@ export function TitleBar() {
                   onClick={() => setEditorMode('map')}
                   className={`flex items-center gap-2 px-2 py-1 text-xs font-bold rounded-md transition-all ${
                     editorMode === 'map' 
-                      ? "bg-white dark:bg-navidark-500 text-navi-900 dark:text-navi-400 shadow-sm" 
+                      ? "bg-white dark:bg-navidark-500 text-navi dark:text-navi shadow-sm" 
                       : "text-zinc-500 hover:text-zinc-700 dark:text-navidark-125 dark:hover:text-white"
                   }`}
                 >
@@ -326,7 +325,7 @@ export function TitleBar() {
                   onClick={() => setEditorMode('timeline')}
                   className={`flex items-center gap-2 px-2 py-1 text-xs font-bold rounded-md transition-all ${
                     editorMode === 'timeline' 
-                      ? "bg-white dark:bg-navidark-500 text-navi-900 dark:text-navi-400 shadow-sm" 
+                      ? "bg-white dark:bg-navidark-500 text-navi dark:text-navi shadow-sm" 
                       : "text-zinc-500 hover:text-zinc-700 dark:text-navidark-125 dark:hover:text-white"
                   }`}
                 >

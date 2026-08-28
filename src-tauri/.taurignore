@@ -1,4 +1,13 @@
 src-python/data/
 src-python/data/**/*
-
+src-python/frames/**/*
+src-python/frames/
+src-python/**/*.mp4
+src-python/**/*.wav
+src-python/**/*.jpg
+src-python/**/*.png
+src-python/logs
+src-python/logs/*.log
+src-python/logs/*
+data/
 src-python/services/__pycache__
