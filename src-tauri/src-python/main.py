@@ -96,18 +96,6 @@ def _cmd_generate_speech(argv: List[str]) -> Dict[str, Any]:
     return {"success": True, "audio_path": saved_path}
 
 
-def _cmd_synced_tts_pipeline(argv: List[str]) -> Dict[str, Any]:
-    """Runs the full audio-synced TTS + video generation pipeline."""
-    payload = argv[2] if len(argv) > 2 else ""
-    output_arg = argv[3] if len(argv) > 3 else None
-    result = asyncio.run(
-        run_synced_tts_pipeline(
-            project_config_path=payload, output_video_dir=output_arg
-        )
-    )
-    return {"success": True, **result}
-
-
 def _cmd_save_config(argv: List[str]) -> Dict[str, Any]:
     """Persists the current JobConfigManager singleton state to disk."""
     payload = argv[2] if len(argv) > 2 else ""
@@ -240,7 +228,6 @@ COMMAND_REGISTRY: Dict[str, Callable[[List[str]], Dict[str, Any]]] = {
     "init_project": _cmd_init_project,
     "save_asset": _cmd_save_asset,
     "generate_speech": _cmd_generate_speech,
-    "synced_tts_pipeline": _cmd_synced_tts_pipeline,
     "save_config": _cmd_save_config,
     "analyze_image": _cmd_analyze_image,
     "generate_attraction_videos": _cmd_generate_attraction_videos,

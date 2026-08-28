@@ -2,6 +2,30 @@
 services/video_exporter.py
 ---------------------------------------------------------------------------
 Handles writing frames to video files using FFmpeg or OpenCV fallback.
+
+[REFACTOR NOTE]
+Two silent-failure bugs fixed in this pass:
+
+  1. `release()` previously called `self.proc.wait()` and returned
+     `output_path` unconditionally — NEVER checking `returncode`. If
+     ffmpeg died (bad codec params, disk full, malformed frame stream),
+     the caller received a "successful" path pointing at a missing or
+     truncated file. The failure would then only surface several stages
+     later (e.g. during `concat_from_timeline`'s pre-flight existence
+     check, or worse, a downstream ffmpeg concat silently producing a
+     corrupt final video) with no link back to the real root cause.
+
+  2. Both stdout AND stderr were piped to `DEVNULL`, so even if we HAD
+     checked the exit code, there was no diagnostic text to report.
+
+Fix: stderr is now captured via `subprocess.PIPE` and drained with
+`Popen.communicate()` rather than a bare `.wait()`. This matters: per the
+Python docs, calling `.wait()` while a child process has a PIPE'd stream
+you haven't read risks a classic pipe-full deadlock (child blocks writing
+to stderr once the OS pipe buffer is full; you're blocked in `.wait()`
+waiting for it to exit; neither side ever proceeds). `communicate()`
+reads and waits atomically, so this can't happen. Non-zero exit codes now
+raise immediately with the stderr tail attached.
 ---------------------------------------------------------------------------
 """
 
@@ -17,9 +41,22 @@ import uuid
 import cv2
 import numpy as np
 
+from services.logger import setup_logger
+
 FFMPEG_BIN = (
     Path(__file__).resolve().parent.parent / "bin" / "FFmpeg" / "bin" / "ffmpeg.exe"
 )
+
+# [NEW] This module previously had no logger at all — every ffmpeg
+# failure was either swallowed (DEVNULL) or surfaced as a bare exception
+# with no context. Matches the `setup_logger` convention used everywhere
+# else in this codebase.
+logger = setup_logger("VideoExporter")
+
+# Cap on how much stderr tail we keep in memory/log per failure. Ffmpeg
+# verbose logs can run to megabytes; we only need the last chunk (where
+# the fatal error line lives) for diagnostics, not the entire stream.
+_STDERR_TAIL_BYTES = 4000
 
 
 class VideoExporter:
@@ -27,6 +64,7 @@ class VideoExporter:
         self.width = width
         self.height = height
         self.fps = fps
+        self.output_path = output_path
         self.proc = self._open_ffmpeg_writer(output_path)
         self._fallback_path = None
         self._fallback_writer = None
@@ -85,21 +123,74 @@ class VideoExporter:
             cmd,
             stdin=subprocess.PIPE,
             stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            # [CHANGED] was DEVNULL — now captured so failures are
+            # diagnosable. Drained exclusively via communicate() (never
+            # a bare .wait()) to avoid the pipe-full deadlock described
+            # in the module docstring.
+            stderr=subprocess.PIPE,
             bufsize=0,
         )
 
     def write(self, frame: np.ndarray) -> None:
         if self.proc is not None and self.proc.stdin:
-            self.proc.stdin.write(frame.tobytes())
+            try:
+                self.proc.stdin.write(frame.tobytes())
+            except (BrokenPipeError, OSError) as exc:
+                # [NEW] ffmpeg died mid-stream. Previously this exception
+                # would propagate bare (or, in FrameSink's variant, get
+                # silently swallowed) with zero indication of *why* the
+                # encoder process exited. `communicate()` here safely
+                # drains any buffered stderr and reaps the process so we
+                # can attach the real ffmpeg error message instead of
+                # letting every subsequent frame re-raise the same
+                # uninformative BrokenPipeError.
+                _, stderr_bytes = self.proc.communicate()
+                stderr_text = self._decode_tail(stderr_bytes)
+                logger.error(
+                    "FFmpeg pipe broke mid-render for '%s': %s\n%s",
+                    self.output_path,
+                    exc,
+                    stderr_text,
+                )
+                self.proc = None  # stop trying to write to a dead process
+                raise RuntimeError(
+                    f"FFmpeg process died mid-render while writing '{self.output_path}': "
+                    f"{exc}\n--- ffmpeg stderr (tail) ---\n{stderr_text}"
+                ) from exc
         elif self._fallback_writer:
             self._fallback_writer.write(frame)
+        else:
+            raise RuntimeError(
+                "No active video writer available (ffmpeg died and no OpenCV fallback configured)."
+            )
 
     def release(self, output_path: str) -> str:
         if self.proc is not None:
             if self.proc.stdin:
-                self.proc.stdin.close()
-            self.proc.wait()
+                try:
+                    self.proc.stdin.close()
+                except (BrokenPipeError, OSError):
+                    pass  # already dead; communicate() below still reaps it safely
+
+            # [FIX] communicate() instead of wait() — deadlock-safe stderr
+            # drain, see module docstring.
+            _, stderr_bytes = self.proc.communicate()
+
+            # [FIX] Actually check the exit code. This was previously
+            # ignored entirely, so a failed encode looked identical to a
+            # successful one to every caller downstream.
+            if self.proc.returncode != 0:
+                stderr_text = self._decode_tail(stderr_bytes)
+                logger.error(
+                    "FFmpeg exited %d while producing '%s'\n%s",
+                    self.proc.returncode,
+                    output_path,
+                    stderr_text,
+                )
+                raise RuntimeError(
+                    f"FFmpeg failed (exit {self.proc.returncode}) while producing "
+                    f"'{output_path}'.\n--- ffmpeg stderr (tail) ---\n{stderr_text}"
+                )
             return output_path
 
         if self._fallback_writer:
@@ -118,6 +209,13 @@ class VideoExporter:
         if self._fallback_path:
             os.rename(self._fallback_path, avi_path)
         return avi_path
+
+    @staticmethod
+    def _decode_tail(stderr_bytes: Optional[bytes]) -> str:
+        """Small helper: safely decode + truncate ffmpeg's stderr for logging."""
+        if not stderr_bytes:
+            return "(no stderr captured)"
+        return stderr_bytes[-_STDERR_TAIL_BYTES:].decode("utf-8", errors="replace")
 
     @staticmethod
     def _reencode_to_h264(src: str, dst: str) -> bool:
@@ -141,9 +239,15 @@ class VideoExporter:
                     "yuv420p",
                     dst,
                 ],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+                capture_output=True,
             )
+            if r.returncode != 0:
+                logger.error(
+                    "H.264 re-encode failed for '%s' -> '%s': %s",
+                    src,
+                    dst,
+                    VideoExporter._decode_tail(r.stderr),
+                )
             return r.returncode == 0
         except FileNotFoundError:
             return False
@@ -161,7 +265,14 @@ class VideoExporter:
 
         ffmpeg_cmd = VideoExporter.resolve_ffmpeg()
         if ffmpeg_cmd:
-            subprocess.run(
+            # [FIX] Previously ran with stdout/stderr=DEVNULL and NEVER
+            # inspected the CompletedProcess result at all — a failed
+            # concat (e.g. one clip has mismatched codec params) silently
+            # produced no output file (or a truncated one) while the
+            # caller happily continued as if it had succeeded. Now
+            # captured and checked, matching `concat_from_timeline`'s
+            # (already-correct) error handling below.
+            result = subprocess.run(
                 [
                     ffmpeg_cmd,
                     "-y",
@@ -175,11 +286,26 @@ class VideoExporter:
                     "copy",
                     output_path,
                 ],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+                capture_output=True,
             )
+            concat_txt.unlink(missing_ok=True)
 
-        concat_txt.unlink(missing_ok=True)
+            if result.returncode != 0:
+                stderr_text = VideoExporter._decode_tail(result.stderr)
+                logger.error(
+                    "concat_clips failed (exit %d) for -> %s\n%s",
+                    result.returncode,
+                    output_path,
+                    stderr_text,
+                )
+                raise RuntimeError(
+                    f"FFmpeg concat_clips failed (exit {result.returncode}) "
+                    f"producing '{output_path}'.\n{stderr_text}"
+                )
+        else:
+            concat_txt.unlink(missing_ok=True)
+            raise RuntimeError("FFmpeg binary not found; cannot concatenate clips.")
+
         return output_path
 
     @staticmethod
@@ -187,8 +313,6 @@ class VideoExporter:
         timeline_data: dict, output_path: str, save_json_path: Optional[str] = None
     ) -> str:
         """NLE Engine: Stitches atomic clips using strict absolute paths and pre-flight file checks."""
-        import json
-
         # 1. Save the timeline.json file to the disk
         if save_json_path:
             with open(save_json_path, "w", encoding="utf-8") as f:
@@ -247,6 +371,7 @@ class VideoExporter:
 
         # 4. Strict Post-flight Check
         if result.returncode != 0:
+            logger.error("concat_from_timeline failed: %s", result.stderr)
             raise RuntimeError(f"FFmpeg concat failed: {result.stderr}")
 
         final_file = Path(output_path)
@@ -305,6 +430,7 @@ class VideoExporter:
         )
 
         if result.returncode != 0:
+            logger.error("burn_subtitles failed: %s", result.stderr)
             raise RuntimeError(f"FFmpeg subtitle burn failed: {result.stderr}")
 
         return str(out_path)

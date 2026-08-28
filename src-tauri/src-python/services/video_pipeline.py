@@ -5,6 +5,7 @@ from typing import Optional, Any, Dict
 
 import numpy as np
 import pyproj
+import asyncio
 
 from services.gps_parser import convert_gps_file, clean_gps_data, haversine_vectorized
 from services.mapfetcher import MapFetcher
@@ -15,11 +16,8 @@ from services.vdo_exporter import VideoExporter
 from services.img2vdo import AttractionVideoGenerator
 from services.logger import setup_logger
 
-# [NEW] Standardized logger — writes to logs/app.log AND stderr, matching
-# every other service module in this codebase (job_config, gps_parser,
-# mapfetcher, etc). Using the same logger name convention keeps step-3
-# tracking lines interleaved correctly with the low-level tile-download
-# logs already emitted inside mapfetcher.py.
+# Standardized logger — writes to logs/app.log AND stderr, matching
+# every other service module in this codebase.
 logger = setup_logger("VideoPipeline")
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -105,16 +103,101 @@ def process_gps(raw_source_path: str) -> dict:
 def generate_audio(cleaned_route: dict, project_config_path: str) -> dict:
     """
     Generates Irodori TTS audio based on the parsed route.
-    Note: Link this to your tts_pipeline.py generator.
+    Uses the local TTSPipelineManager from tts.py to generate and analyze clips.
     """
-    print("Step 2: Generating TTS Audio...")
+    print("Step 2: Generating TTS Audio via tts.py...")
     logger.info("Step 2: Generating TTS audio for config: %s", project_config_path)
-    # NOTE: In the future, you will import your TTS orchestrator here:
-    # from services.tts_pipeline import run_synced_tts_pipeline
-    # audio_data = asyncio.run(run_synced_tts_pipeline(project_config_path, ...))
-    # return audio_data
 
-    return {"audio_durations": [], "audio_pauses": []}
+    audio_durations = []
+    audio_pauses = []
+    audio_paths = []
+    subtitle_paths = []
+
+    try:
+        config_path = Path(project_config_path)
+        if not config_path.exists():
+            logger.warning("Step 2: No project config found. Skipping TTS.")
+            return {
+                "audio_durations": [],
+                "audio_pauses": [],
+                "audio_paths": [],
+                "subtitle_paths": [],
+            }
+
+        with open(config_path, "r", encoding="utf-8") as f:
+            project_config = json.load(f)
+
+        waypoints = project_config.get("waypoints", [])
+
+        # Import the unified manager from your new tts.py file
+        from services.tts import TTSPipelineManager
+
+        tts_manager = TTSPipelineManager()
+
+        # Create an async worker to process all TTS tasks
+        async def _generate_all_speech():
+            for idx, wp in enumerate(waypoints):
+                # Look for narration text in standard keys
+                script = wp.get("script") or wp.get("narration") or wp.get("voiceover")
+
+                if not script:
+                    # If there's no script for this waypoint, append empty defaults
+                    audio_durations.append(0.0)
+                    audio_pauses.append([])
+                    audio_paths.append(None)
+                    subtitle_paths.append(None)
+                    continue
+
+                logger.info(
+                    f"Step 2: [%d/%d] Generating audio for: '%s'",
+                    idx + 1,
+                    len(waypoints),
+                    wp.get("label", f"Waypoint {idx}"),
+                )
+
+                # 1. Generate Speech via IrodoriTTSClient
+                wav_path = await tts_manager.get_speech(script)
+
+                # 2. Analyze pauses via AudioProcessor
+                analysis = tts_manager.analyze_pauses(wav_path)
+
+                audio_durations.append(analysis.get("total_duration", 0.0))
+                audio_pauses.append(analysis.get("pauses", []))
+                audio_paths.append(wav_path)
+
+                # Subtitles can be injected here later if your TTS engine outputs them
+                subtitle_paths.append(None)
+
+        # Execute the async function synchronously within the pipeline
+        asyncio.run(_generate_all_speech())
+
+        logger.info("Step 2 complete: TTS audio successfully generated.")
+        return {
+            "audio_durations": audio_durations,
+            "audio_pauses": audio_pauses,
+            "audio_paths": audio_paths,
+            "subtitle_paths": subtitle_paths,
+        }
+
+    except ImportError as e:
+        logger.error(
+            "Step 2 failed: Could not import TTSPipelineManager from services.tts. %s",
+            e,
+        )
+        return {
+            "audio_durations": [],
+            "audio_pauses": [],
+            "audio_paths": [],
+            "subtitle_paths": [],
+        }
+    except Exception as e:
+        logger.error("Step 2 failed: TTS Audio generation encountered an error: %s", e)
+        return {
+            "audio_durations": [],
+            "audio_pauses": [],
+            "audio_paths": [],
+            "subtitle_paths": [],
+        }
 
 
 # =========================================================================
@@ -132,14 +215,26 @@ def render_route_video(
     print("Step 3: Rendering Video Engine...")
     logger.info("Step 3: Rendering Video Engine — starting.")
 
-    audio_durations = audio_durations or []
-    audio_pauses = audio_pauses or []
-    route_df = cleaned_route["route"]
-    summary = cleaned_route.get("summary", {})
-
-    if route_df.empty:
+    route_df = cleaned_route.get("route")
+    if route_df is None or route_df.empty:
         raise ValueError("Cannot render a navigation video from an empty route.")
 
+    # 1. Load Config & Settings Early
+    project_config = {}
+    config_path = Path(project_config_path)
+    if config_path.exists():
+        with open(config_path, "r", encoding="utf-8") as f:
+            project_config = json.load(f)
+
+    settings = project_config.get("settings", {})
+    waypoints = project_config.get("waypoints", [])
+    use_3d_res = settings.get("use_3d_res", True)
+    subtitle_lang = settings.get("subtitle_language", "en")
+
+    audio_durations = audio_durations or []
+    audio_pauses = audio_pauses or []
+
+    # 2. Fetch Base Map & Project Pixels
     logger.info("Step 3: Computing bounding box and fetching overview map tile...")
     fetcher = MapFetcher()
     bbox = fetcher.get_bounding_box(route_df, padding_factor=0.15)
@@ -147,11 +242,10 @@ def render_route_video(
         bbox, output_filename=map_output_path
     )
 
-    if map_output_path is None:
+    if not map_output_path:
         raise RuntimeError(
             "Map fetch failed - cannot render video without background map."
         )
-    logger.info("Step 3: Overview map tile ready -> %s", map_output_path)
 
     route_points = _project_route_to_pixels(
         route_df["latitude"].to_numpy(),
@@ -160,249 +254,222 @@ def render_route_video(
         img_w,
         img_h,
     )
+
     route_labels = [
-        (row["store_name"] if row.get("is_landmarked") else None)
+        row["store_name"] if row.get("is_landmarked") else None
         for _, row in route_df.iterrows()
     ]
     route_popups = [None] * len(route_points)
-
-    project_config = {}
-    config_path = Path(project_config_path)
-    if config_path.exists():
-        with open(config_path, "r", encoding="utf-8") as f:
-            project_config = json.load(f)
-
-    waypoints = project_config.get("waypoints", []) if project_config else []
     wp_indices = MapFetcher.build_waypoint_index(route_df, waypoints)
 
-    settings: Dict[str, Any] = (
-        project_config.get("settings", {}) if project_config else {}
-    )
-    subtitle_lang = settings.get("subtitle_language", "en")
-
+    # 3. Inject Waypoints
     if waypoints:
-        print(f"Injecting {len(waypoints)} custom waypoints from JSON config...")
-        logger.info(
-            "Step 3: Injecting %d custom waypoints from job_config.json.",
-            len(waypoints),
-        )
-
-        # See earlier fix: prefer the canonical start_point/end_point labels
-        # over waypoints[0]/[-1]'s own (often placeholder) label field.
-        start_point_label = project_config.get("start_point", {}).get("label")
-        end_point_label = project_config.get("end_point", {}).get("label")
+        logger.info("Step 3: Injecting %d custom waypoints.", len(waypoints))
+        start_label = project_config.get("start_point", {}).get("label")
+        end_label = project_config.get("end_point", {}).get("label")
 
         for idx, wp in enumerate(waypoints):
-            closest_idx = wp_indices[idx]
+            c_idx = wp_indices[idx]
             raw_label = wp.get("label", "Waypoint")
 
-            if idx == 0 and start_point_label:
-                raw_label = start_point_label
-            elif idx == len(waypoints) - 1 and end_point_label:
-                raw_label = end_point_label
+            if idx == 0 and start_label:
+                raw_label = start_label
+            elif idx == len(waypoints) - 1 and end_label:
+                raw_label = end_label
 
-            formatted_label = format_waypoint_label(raw_label, subtitle_lang)
-
-            if idx == 0:
-                wp_label = f"Start: {formatted_label}" if formatted_label else "Start"
-            elif idx == len(waypoints) - 1:
-                wp_label = f"Stop: {formatted_label}" if formatted_label else "Stop"
-            else:
-                wp_label = formatted_label
-
-            route_labels[closest_idx] = wp_label
-
-            # [NEW] Per-waypoint tracking log — tells you exactly which
-            # place name got resolved and where on the route it landed,
-            # BEFORE any expensive map/video rendering for it happens.
-            logger.info(
-                "Step 3: [%d/%d] Waypoint resolved -> '%s' (route index %d)",
-                idx + 1,
-                len(waypoints),
-                wp_label,
-                closest_idx,
+            formatted = format_waypoint_label(raw_label, subtitle_lang)
+            prefix = (
+                "Start: " if idx == 0 else "Stop: " if idx == len(waypoints) - 1 else ""
+            )
+            route_labels[c_idx] = (
+                f"{prefix}{formatted}" if formatted else prefix.strip(": ")
             )
 
-            raw_popup = wp.get("popup_image")
-            popup_img = (
-                str(raw_popup[0])
-                if isinstance(raw_popup, list) and raw_popup
-                else str(raw_popup) if raw_popup else None
-            )
-
-            route_popups[closest_idx] = {  # type: ignore
+            popup_img = wp.get("popup_image")
+            route_popups[c_idx] = {
                 "freeze_seconds": float(wp.get("freeze_seconds", 3.0)),
-                "popup_image": popup_img,
+                "popup_image": (
+                    str(popup_img[0])
+                    if isinstance(popup_img, list) and popup_img
+                    else (str(popup_img) if popup_img else None)
+                ),
                 "image display": wp.get("image display", "none").lower(),
                 "triggered": False,
             }
 
-    image_output_dir = BASE_DIR / "data" / "inputs" / "res_images"
-
-    logger.info(
-        "Step 3: Generating residential map sequence for %d waypoint(s)...",
-        len(waypoints),
-    )
-    sequence_data = MapFetcher.generate_residential_sequence(
-        route_df,
-        waypoints,
-        image_output_dir,
-        (img_w, img_h),
-        max_chunk_distance_meters=math.inf,
-        precomputed_indices=wp_indices,
-    )
-    logger.info(
-        "Step 3: Residential map sequence complete — %d chunk(s) generated.",
-        len(sequence_data),
-    )
-
+    # 4. Process Residential Sequence (3D Bypass vs 2D Generation)
+    res_sequence = []
     seg_durations = (
         MapFetcher.compute_segment_durations(
             wp_indices, route_df, target_avg_seconds=20.0
         )
-        if waypoints and len(wp_indices) > 1
+        if len(wp_indices) > 1
         else []
     )
 
-    res_sequence = []
-    total_segments = len(sequence_data)
-    for seq_idx, item in enumerate(sequence_data):
-        start_idx, end_idx = item["start_idx"], item["end_idx"]
-        chunk = route_df.iloc[start_idx : end_idx + 1]
-
-        # [NEW] Resolve the human-readable place name this leg is heading
-        # toward, straight from the SAME route_labels list the video will
-        # actually render — so the log is a truthful reflection of what
-        # you'll see on screen, not a re-derived guess.
-        place_name = route_labels[end_idx] if end_idx < len(route_labels) else None
-        display_name = place_name or f"segment_{seq_idx + 1}"
-
+    if use_3d_res:
         logger.info(
-            "Step 3: [%d/%d] Generating residential leg video -> arriving at: '%s'",
-            seq_idx + 1,
-            total_segments,
-            display_name,
+            "Step 3: 3D residential rendering is enabled. Bypassing 2D map fetch."
+        )
+        for seq_idx in range(max(0, len(wp_indices) - 1)):
+            has_audio = seq_idx < len(audio_durations) and audio_durations[seq_idx] > 0
+            total_time = (
+                audio_durations[seq_idx]
+                if has_audio
+                else (seg_durations[seq_idx] if seq_idx < len(seg_durations) else 10.0)
+            )
+            res_sequence.append({"segment_duration": total_time})
+    else:
+        logger.info("Step 3: Generating 2D residential map sequence...")
+        img_out_dir = BASE_DIR / "data" / "inputs" / "res_images"
+        sequence_data = MapFetcher.generate_residential_sequence(
+            route_df,
+            waypoints,
+            img_out_dir,
+            (img_w, img_h),
+            max_chunk_distance_meters=math.inf,
+            precomputed_indices=wp_indices,
         )
 
-        chunk_points = _project_route_to_pixels(
-            chunk["latitude"].to_numpy(),
-            chunk["longitude"].to_numpy(),
-            item["extent"],
-            img_w,
-            img_h,
-        )
+        for seq_idx, item in enumerate(sequence_data):
+            start_idx, end_idx = item["start_idx"], item["end_idx"]
+            chunk = route_df.iloc[start_idx : end_idx + 1]
 
-        real_time_sec = (
-            (chunk["timestamp"].iloc[-1] - chunk["timestamp"].iloc[0]).total_seconds()
-            if "timestamp" in chunk.columns and len(chunk) > 1
-            else 0.0
-        )
-        lats_arr, lons_arr = item["lats"], item["lons"]
-        seg_distance_km = (
-            float(
-                np.nansum(
-                    haversine_vectorized(
-                        lats_arr[:-1], lons_arr[:-1], lats_arr[1:], lons_arr[1:]
+            # Extract safe variables
+            has_audio = seq_idx < len(audio_durations) and audio_durations[seq_idx] > 0
+            distance_fallback = (
+                seg_durations[seq_idx] if seq_idx < len(seg_durations) else 10.0
+            )
+            total_time = audio_durations[seq_idx] if has_audio else distance_fallback
+
+            lats_arr, lons_arr = item["lats"], item["lons"]
+            seg_dist = (
+                float(
+                    np.nansum(
+                        haversine_vectorized(
+                            lats_arr[:-1], lons_arr[:-1], lats_arr[1:], lons_arr[1:]
+                        )
                     )
                 )
+                if len(lats_arr) > 1
+                else 0.0
             )
-            if len(lats_arr) > 1
-            else 0.0
-        )
 
-        distance_fallback = (
-            seg_durations[seq_idx] if seq_idx < len(seg_durations) else 10.0
-        )
-        has_audio = (
-            bool(audio_durations)
-            and seq_idx < len(audio_durations)
-            and audio_durations[seq_idx] > 0
-        )
-        active_pauses = (
-            audio_pauses[seq_idx]
-            if audio_pauses and seq_idx < len(audio_pauses)
-            else []
-        )
+            raw_img = item.get("img_path")
 
-        travel_duration = total_time = (
-            audio_durations[seq_idx] if has_audio else distance_fallback
-        )
-        raw_img_path = item.get("img_path")
-        res_img = (
-            str(raw_img_path[0])
-            if isinstance(raw_img_path, list) and raw_img_path
-            else str(raw_img_path) if raw_img_path else None
-        )
+            res_sequence.append(
+                {
+                    "img_path": (
+                        str(raw_img[0])
+                        if isinstance(raw_img, list) and raw_img
+                        else (str(raw_img) if raw_img else None)
+                    ),
+                    "extent": item["extent"],
+                    "lats": lats_arr,
+                    "lons": lons_arr,
+                    "points": _project_route_to_pixels(
+                        chunk["latitude"].to_numpy(),
+                        chunk["longitude"].to_numpy(),
+                        item["extent"],
+                        img_w,
+                        img_h,
+                    ),
+                    "labels": route_labels[start_idx : end_idx + 1],
+                    "popups": route_popups[start_idx : end_idx + 1],
+                    "travel_duration": total_time,
+                    "segment_duration": total_time,
+                    "real_duration_seconds": (
+                        (
+                            chunk["timestamp"].iloc[-1] - chunk["timestamp"].iloc[0]
+                        ).total_seconds()
+                        if "timestamp" in chunk.columns and len(chunk) > 1
+                        else 0.0
+                    ),
+                    "distance_km": seg_dist,
+                    "pauses": (
+                        audio_pauses[seq_idx] if seq_idx < len(audio_pauses) else []
+                    ),
+                }
+            )
 
-        logger.info(
-            "Step 3: [%d/%d] '%s' -> distance %.2f km, planned duration %.1fs%s",
-            seq_idx + 1,
-            total_segments,
-            display_name,
-            seg_distance_km,
-            total_time,
-            (
-                " (synced to narration audio)"
-                if has_audio
-                else " (distance-based fallback)"
-            ),
-        )
-
-        res_sequence.append(
-            {
-                "img_path": res_img,
-                "extent": item["extent"],
-                "lats": item["lats"],
-                "lons": item["lons"],
-                "points": chunk_points,
-                "labels": route_labels[start_idx : end_idx + 1],
-                "popups": route_popups[start_idx : end_idx + 1],
-                "travel_duration": travel_duration,
-                "segment_duration": total_time,
-                "real_duration_seconds": real_time_sec,
-                "distance_km": seg_distance_km,
-                "pauses": active_pauses,
-            }
-        )
-
+    # 5. Final Rendering Orchestration
     animator_config = {
         "output_dir": output_video_dir,
-        "fps": settings.get("fps", 30),
-        "duration": settings.get("duration_seconds", 8.0),
+        "use_3d_res": use_3d_res,
+        "res_route_path": project_config_path,
+        "leg_durations": seg_durations or None,
+        **{
+            k: settings.get(k, default)
+            for k, default in [
+                ("fps", 30),
+                ("duration", 8.0),
+                ("line_thickness", 10),
+                ("marker_radius", 18),
+                ("pause", 2.0),
+                ("summary_hold", 4.0),
+                ("summary_fade", 0.5),
+                ("clip_summary_hold", 2.0),
+                ("show_segment_summary", True),
+                ("res_duration", 12.0),
+                ("post_arrival_hold_seconds", 1.0),
+                ("use_leg_storyboard", False),
+                ("default_transition_hold_seconds", 1.5),
+            ]
+        },
         "line_color": tuple(settings.get("line_color", (0, 200, 255))),
-        "line_thickness": settings.get("line_thickness", 10),
         "marker_color": tuple(settings.get("marker_color", (0, 0, 255))),
-        "marker_radius": settings.get("marker_radius", 18),
-        "pause": settings.get("pause_seconds", 2.0),
-        "summary_hold": settings.get("summary_hold", 4.0),
-        "summary_fade": settings.get("summary_fade", 0.5),
-        "clip_summary_hold": settings.get("clip_summary_hold", 2.0),
-        "show_segment_summary": settings.get("show_segment_summary", True),
-        "res_duration": settings.get("res_duration", 12.0),
-        "post_arrival_hold_seconds": settings.get("post_arrival_hold_seconds", 1.0),
         "trigger_radius_padding": settings.get("trigger_radius_padding", {}),
         "fullscreen_transition": settings.get("fullscreen_transition", {}),
-        "use_leg_storyboard": settings.get("use_leg_storyboard", False),
-        "leg_durations": seg_durations if seg_durations else None,
-        "default_transition_hold_seconds": settings.get(
-            "default_transition_hold_seconds", 1.5
-        ),
     }
 
-    logger.info(
-        "Step 3: Starting final render pass (overview%s)...",
-        " + storyboard legs" if animator_config["use_leg_storyboard"] else "",
-    )
     animator = RouteAnimator(animator_config)
+
+    # 6. PyDeck 3D Background Generation
+    video_background_path = map_output_path
+    if use_3d_res:
+        from services.pydeck_recorder import (
+            load_route_from_config,
+            build_pydeck_map,
+            record_headless_video,
+        )
+
+        logger.info("Step 3.5: Generating 3D Drone Background Video...")
+        try:
+            # FIX 1: Pass the string path, not the parsed dictionary
+            pydeck_route = load_route_from_config(project_config_path)
+            html_file = build_pydeck_map(pydeck_route)
+
+            # FIX 2: Provide proper string paths for both arguments
+            bg_output_target = str(
+                Path(output_video_dir) / "01_3d_drone_background.mp4"
+            )
+            rendered_videos = record_headless_video(
+                project_config_path, bg_output_target
+            )
+
+            # FIX 3: record_headless_video returns a list of paths.
+            # We need to extract the first one to use as the background, or fallback if empty.
+            if rendered_videos and len(rendered_videos) > 0:
+                video_background_path = rendered_videos[0]
+            else:
+                logger.warning("PyDeck returned no videos. Falling back to 2D Map.")
+
+        except Exception as e:
+            logger.error(
+                "Failed to generate 3D Pydeck video: %s. Falling back to 2D Map.", e
+            )
+            video_background_path = map_output_path
+
     output_paths = animator.render(
-        img_path=map_output_path,
+        img_path=video_background_path,
         points=route_points,
         labels=route_labels,
         popups=route_popups,
         res_sequence=res_sequence,
-        summary=summary,
+        summary=cleaned_route.get("summary", {}),
         wp_indices=wp_indices,
     )
+
     logger.info("Step 3 complete: %d video file(s) produced.", len(output_paths))
     return output_paths
 
@@ -438,7 +505,6 @@ def render_attraction_videos(
         popup_image_entry = wp.get("popup_image")
         place_label = wp.get("label", f"waypoint_{idx}")
 
-        # The generator safely handles if this is a single string or a list of strings[cite: 5]
         if not popup_image_entry:
             logger.info(
                 "Step 4: [%d/%d] Skipping '%s' — no popup image configured.",
@@ -448,12 +514,10 @@ def render_attraction_videos(
             )
             continue
 
-        # Look for a specific prompt, fallback to the label, or use a default
         prompt_text = wp.get(
             "video_prompt", wp.get("label", "Beautiful Japanese scenery, high quality")
         )
 
-        # Safely extract matching audio data from Step 2
         target_audio_duration = (
             audio_durations[idx] if idx < len(audio_durations) else 0.0
         )
@@ -472,7 +536,6 @@ def render_attraction_videos(
             place_label,
         )
 
-        # This will batch process, concatenate, scale to audio, and mux the final file[cite: 5]
         result_path = generator.process_attraction_video(
             popup_image_entry=popup_image_entry,
             prompt_text=prompt_text,
@@ -516,14 +579,11 @@ def burn_subtitles(
 
     final_videos = []
 
-    # Ensure we only process if we have matching subtitle files
     for idx, video_path in enumerate(video_paths):
         original_file = Path(video_path)
 
         if idx < len(subtitle_paths) and subtitle_paths[idx]:
             sub_path = subtitle_paths[idx]
-
-            # Create a new filename for the subtitled version
             subtitled_output = str(
                 Path(output_dir)
                 / f"{original_file.stem}_subtitled{original_file.suffix}"
@@ -552,10 +612,8 @@ def burn_subtitles(
                     original_file.name,
                     e,
                 )
-                # Fallback to the original video if burning fails
                 final_videos.append(video_path)
         else:
-            # If no subtitle file exists for this video, just pass the original through
             logger.info(
                 "Step 5: [%d/%d] No subtitle file for '%s' — passing through unchanged.",
                 idx + 1,
@@ -604,15 +662,7 @@ def run_full_pipeline(
         audio_pauses=audio_data.get("audio_pauses"),
     )
 
-    # --- STEP 4 ---
-    # attraction_videos = render_attraction_videos(
-    #     project_config_path=str(config_file_path),
-    #     audio_durations=audio_data.get("audio_durations"),
-    #     audio_paths=audio_data.get("audio_paths"),
-    # )
-
-    # --- STEP 4.5 ---
-    all_videos = video_paths  # +  attraction_videos
+    all_videos = video_paths
 
     # --- STEP 5 ---
     final_videos = burn_subtitles(
