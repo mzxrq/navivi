@@ -85,7 +85,6 @@ class TextSegmenter:
 
     @staticmethod
     def split_clauses(text: str) -> List[str]:
-        # ... unchanged, see original ...
         text = text.strip()
         if not text:
             return []
