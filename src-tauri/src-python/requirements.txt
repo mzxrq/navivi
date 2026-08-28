@@ -12,3 +12,6 @@ ollama
 pydantic
 deep-translator
 pykakasi
+tqdm 
+pydeck
+playwright

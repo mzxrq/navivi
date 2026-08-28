@@ -125,7 +125,23 @@ def cumulative_distance_km(lons, lats):
 # ---------------------------------------------------------
 def load_route_from_config(config_path: str):
     with open(config_path, "r", encoding="utf-8") as f:
-        return json.load(f)
+        data = json.load(f)
+
+    # --- NEW: Support isolated .routecache.json file ---
+    cache_file = Path(config_path).parent / ".routecache.json"
+    if cache_file.exists():
+        try:
+            with open(cache_file, "r", encoding="utf-8") as cf:
+                cache_data = json.load(cf)
+                # Check if it has a wrapping "routing_cache" key, or if it is the raw dictionary
+                if isinstance(cache_data, dict) and "routing_cache" in cache_data:
+                    data["routing_cache"] = cache_data["routing_cache"]
+                else:
+                    data["routing_cache"] = cache_data
+        except Exception as e:
+            logger.warning(f"Failed to read .routecache.json: {e}")
+
+    return data
 
 
 def build_pydeck_map(
@@ -173,6 +189,11 @@ def interpolate_route_data(
         df_raw["time_sec"] = [(d / total_leg_km) * leg_duration for d in leg_dist_km]
     else:
         df_raw["time_sec"] = np.linspace(0, leg_duration, num=len(df_raw))
+
+    # --- FIX 3: Drop duplicate time segments to prevent strictly-linear zig-zags ---
+    df_raw = df_raw.drop_duplicates(subset=["time_sec"], keep="first").reset_index(
+        drop=True
+    )
 
     interp_lon = interp1d(
         df_raw["time_sec"],
@@ -246,10 +267,18 @@ async def render_leg_animation(
 ):
     """Opens a single HTML file and uses JavaScript injection to rapidly animate the route."""
     from playwright.async_api import async_playwright
+    from services.vdoeditor import FFmpegEngine
 
-    editor = VideoEditor()
+    # --- BULLETPROOF COLOR CHECK FIX ---
+    if not isinstance(active_color, list):
+        active_color = [255, 0, 0]  # Default to Red
+    if not isinstance(marker_color, list):
+        marker_color = [0, 0, 255]  # Default to Blue
+
+    # --- BINARY FFMPEG RESOLVER FIX ---
+    editor = FFmpegEngine()
     ffmpeg_cmd = [
-        editor.engine.resolve_binary(),
+        editor.resolve_binary(),
         "-hide_banner",
         "-loglevel",
         "error",
@@ -283,7 +312,7 @@ async def render_leg_animation(
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(
-            headless=True,
+            headless=False,
             args=[
                 "--disable-web-security",
                 "--ignore-gpu-blocklist",
@@ -312,12 +341,6 @@ async def render_leg_animation(
                 active_trail.insert(0, accumulated_trail[-1])
 
             trail_json = json.dumps([{"path": active_trail}])
-
-            # full_trail = (
-            #     accumulated_trail + df.iloc[: index + 1][["lon", "lat"]].values.tolist()
-            # )
-
-            # trail_json = json.dumps([{"path": full_trail}])
 
             car_json = json.dumps(
                 [{"lon": row["lon"], "lat": row["lat"], "yaw": row["yaw"]}]
@@ -437,6 +460,10 @@ async def render_leg_animation(
 
     proc.stdin.close()
     await proc.wait()
+
+    # --- WINDOWS ASYNCIO PIPE GLITCH FIX ---
+    await asyncio.sleep(0.2)
+
     logger.info(f"\nSUCCESS! High-speed animation saved to: {output_filename}")
 
 
@@ -519,7 +546,7 @@ def record_headless_video(
 
             print(f"    Rendering route to: '{place_name}' ({leg_idx + 1}/{num_legs})")
 
-            # Model Selection
+            # --- MODEL SELECTION & SCALING FIX ---
             leg_mode = (
                 route_key.split("|")[-1].strip().lower()
                 if "|" in route_key
@@ -530,12 +557,20 @@ def record_headless_video(
 
             if leg_mode == "walking":
                 model_filename = "human.glb"
+                camera_config["car_size"] = 2.0  # Human default
             elif leg_mode == "ferry":
                 model_filename = "ferry.glb"
+                camera_config["car_size"] = 5.0  # Ferry default
             elif leg_mode == "airplane":
                 model_filename = "airplane.glb"
+                camera_config["car_size"] = 10.0  # Airplane default
             else:
                 model_filename = "car.glb"
+                camera_config["car_size"] = 3.0  # Car default
+
+            # Override with custom leg_size if defined in the waypoint
+            if leg_idx < len(waypoints) and "leg_size" in waypoints[leg_idx]:
+                camera_config["car_size"] = float(waypoints[leg_idx]["leg_size"])
 
             model_url = (
                 f"http://127.0.0.1:{port}/assets/{urllib.parse.quote(model_filename)}"
@@ -725,3 +760,8 @@ def record_headless_video(
     finally:
         server.shutdown()
         server.server_close()
+
+
+if __name__ == "__main__":
+    config_path = r"C:\Users\user1\Documents\Navivi\Projects\proj_2026_very_cool_tomogashima_islands\job_config.json"
+    record_headless_video(config_path)
