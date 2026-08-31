@@ -2,7 +2,7 @@ import { saveProjectData, loadProjectData } from "../services/fileSystem";
 import { createContext, useContext, useState, useCallback, useEffect, ReactNode, } from "react";
 import { Waypoint, ProjectMetadata, ProjectSettings, RouteSegment, RecentProjects, WorkspaceState, TimelineData } from "../types";
 import { appConfig, defaultProjectSettings, mapDefaults } from "../config/constants";
-import { loadTimelineManifest } from "../services/fileSystem";
+import { loadTimelineManifest, loadRouteCache } from "../services/fileSystem";
 import { TimelineClipData, TimelineTrack } from "../types";
 import { useHistory } from "./useHistory";
 import { useUI } from "./useUI";
@@ -25,7 +25,7 @@ const DefaultMetadata: ProjectMetadata = {
 
 const DefaultTimeline: TimelineData = {
   tracks: [
-    { id: "t-subtitles", name: "Subtiles", type: "text" },
+    { id: "t-subtitles", name: "Subtitles", type: "text" },
     { id: "t-popups", name: "Popups", type: "image" },
     { id: "t-mapvideo", name: "Video", type: "video" },
     { id: "t-voiceover", name: "Voiceover", type: "audio" },
@@ -154,6 +154,15 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       if (!result) return false; // User cancelled dialog
 
       const { data, selectedPath } = result;
+      if (data.directory_path) {
+        const recoveredCache = await loadRouteCache(data.directory_path);
+        setRoutingCache(recoveredCache);
+        console.log(`Recovered ${Object.keys(recoveredCache).length} routes from cache!`);
+    } else {
+        // Fallback just in case
+        setRoutingCache({}); 
+    }
+
 
       // Ensure the file is valid before updating state
       if (!data.project_id || !data.waypoints) {

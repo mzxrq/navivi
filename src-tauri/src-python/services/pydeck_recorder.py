@@ -283,7 +283,7 @@ async def render_leg_animation(
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(
-            headless=True,
+            headless=False,
             args=[
                 "--disable-web-security",
                 "--ignore-gpu-blocklist",
@@ -454,10 +454,21 @@ def record_headless_video(
     project_data = load_route_from_config(config_path)
     settings = project_data.get("settings", {})
     waypoints = project_data.get("waypoints", [])
-    routing_cache = project_data.get("routing_cache", {})
+    
+    config_dir = os.path.dirname(config_path)
+    cache_path = os.path.join(config_dir, ".routecache.json")
+
+    if os.path.exists(cache_path):
+        with open(cache_path, "r", encoding="utf-8") as f:
+            routing_cache = json.load(f)
+    else:
+        # Fallback just in case it's an old project
+        routing_cache = project_data.get("routing_cache", {})
 
     num_legs = len(routing_cache)
     if num_legs == 0:
+        logger.warning("No routing cache found! Exiting silently.")
+        print("Error: Could not find any routes in .routecache.json!")
         return []
 
     # Settings
@@ -725,3 +736,7 @@ def record_headless_video(
     finally:
         server.shutdown()
         server.server_close()
+
+if __name__ == "__main__":
+    config_path = r"C:\Users\user2\Documents\Navivi\Projects\q\.routecache.json"
+    record_headless_video(config_path)

@@ -1,7 +1,8 @@
 src-python/data/
 src-python/data/**/*
 src-python/frames/**/*
-src-python/frames/
+src-python/frames/*.html
+src-python/frames/**
 src-python/**/*.mp4
 src-python/**/*.wav
 src-python/**/*.jpg
@@ -11,3 +12,7 @@ src-python/logs/*.log
 src-python/logs/*
 data/
 src-python/services/__pycache__
+src-python/services/*
+src-python/services/logs/
+src-python/services/logs/*.log
+src-python/services/logs/*
