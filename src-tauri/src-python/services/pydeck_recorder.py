@@ -10,6 +10,7 @@ import pandas as pd
 import numpy as np
 import pydeck as pdk
 from scipy.interpolate import interp1d
+from typing import Optional, Dict, Any, List, Tuple
 
 import urllib.parse
 import threading
@@ -56,7 +57,6 @@ def start_local_server(directory):
 # MATH & GEO HELPERS
 # ---------------------------------------------------------
 def calculate_bearing(lon1, lat1, lon2, lat2):
-    """Calculates the compass bearing angle between two GPS coordinates."""
     lon1, lat1, lon2, lat2 = map(math.radians, [lon1, lat1, lon2, lat2])
     dlon = lon2 - lon1
     x = math.sin(dlon) * math.cos(lat2)
@@ -68,7 +68,6 @@ def calculate_bearing(lon1, lat1, lon2, lat2):
 
 
 def smooth_bearings(bearings, alpha=0.15):
-    """Circular exponential smoothing for a list of compass bearings (0-360)."""
     if not bearings:
         return []
     smoothed = [bearings[0]]
@@ -81,7 +80,6 @@ def smooth_bearings(bearings, alpha=0.15):
 
 
 def offset_point(lon, lat, bearing_deg, distance_m):
-    """Returns a new (lon, lat) point `distance_m` meters away."""
     R = 6371000.0
     bearing_rad = math.radians(bearing_deg)
     lat_rad = math.radians(lat)
@@ -100,7 +98,6 @@ def offset_point(lon, lat, bearing_deg, distance_m):
 
 
 def haversine_km(lon1, lat1, lon2, lat2):
-    """Great-circle distance in km between two points."""
     R = 6371.0
     lon1, lat1, lon2, lat2 = map(math.radians, [lon1, lat1, lon2, lat2])
     dlon = lon2 - lon1
@@ -113,7 +110,6 @@ def haversine_km(lon1, lat1, lon2, lat2):
 
 
 def cumulative_distance_km(lons, lats):
-    """Cumulative traveled distance (km) at each point along a route."""
     cum = [0.0]
     for i in range(1, len(lons)):
         cum.append(cum[-1] + haversine_km(lons[i - 1], lats[i - 1], lons[i], lats[i]))
@@ -127,13 +123,11 @@ def load_route_from_config(config_path: str):
     with open(config_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    # --- NEW: Support isolated .routecache.json file ---
     cache_file = Path(config_path).parent / ".routecache.json"
     if cache_file.exists():
         try:
             with open(cache_file, "r", encoding="utf-8") as cf:
                 cache_data = json.load(cf)
-                # Check if it has a wrapping "routing_cache" key, or if it is the raw dictionary
                 if isinstance(cache_data, dict) and "routing_cache" in cache_data:
                     data["routing_cache"] = cache_data["routing_cache"]
                 else:
@@ -147,7 +141,6 @@ def load_route_from_config(config_path: str):
 def build_pydeck_map(
     project_data: dict, output_html_path: str = "frames/temp_map.html"
 ):
-    """Helper function required by video_pipeline.py to generate map configurations."""
     os.makedirs(os.path.dirname(output_html_path), exist_ok=True)
 
     raw_coords = []
@@ -171,7 +164,8 @@ def build_pydeck_map(
         layers=[],
         initial_view_state=view_state,
         map_provider="carto",
-        map_style=pdk.map_styles.DARK,
+        map_style="https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json",
+        views=[pdk.View(type="MapView", controller=True)],
     )
     r.to_html(output_html_path)
     return output_html_path
@@ -184,13 +178,11 @@ def interpolate_route_data(
     total_leg_km: float,
     leg_dist_km: list,
 ) -> pd.DataFrame:
-    """Interpolates coordinates across frames to ensure smooth animation."""
     if total_leg_km > 0:
         df_raw["time_sec"] = [(d / total_leg_km) * leg_duration for d in leg_dist_km]
     else:
         df_raw["time_sec"] = np.linspace(0, leg_duration, num=len(df_raw))
 
-    # --- FIX 3: Drop duplicate time segments to prevent strictly-linear zig-zags ---
     df_raw = df_raw.drop_duplicates(subset=["time_sec"], keep="first").reset_index(
         drop=True
     )
@@ -221,7 +213,7 @@ def interpolate_route_data(
 
 
 def patch_pydeck_html(html_path: str):
-    """Exposes deckgl to the window object and injects missing CSS."""
+    """Exposes deckgl to window. No more Mapbox/OSM hacks here."""
     with open(html_path, "r", encoding="utf-8") as f:
         content = f.read()
 
@@ -241,6 +233,192 @@ def patch_pydeck_html(html_path: str):
 
     with open(html_path, "w", encoding="utf-8") as f:
         f.write(content)
+
+
+# ---------------------------------------------------------
+# [FIX] SHARED PAINT-FLUSH HELPER
+# ---------------------------------------------------------
+async def _wait_for_paint(page) -> None:
+    await page.evaluate(
+        "() => new Promise(resolve => "
+        "requestAnimationFrame(() => requestAnimationFrame(resolve)))"
+    )
+
+
+# ---------------------------------------------------------
+# [FIX] SHARED POPUP FREEZE/SCALE/FADE SEQUENCE
+# ---------------------------------------------------------
+async def _run_popup_freeze_sequence(
+    page,
+    proc,
+    fps: int,
+    freeze_frames: int,
+    popup_url: Optional[str],
+    image_display: str,
+    debug_dump_dir: Optional[str] = None,
+) -> None:
+    if freeze_frames <= 0:
+        return
+
+    if not popup_url:
+        frozen_png = await page.screenshot()
+        for _ in range(freeze_frames):
+            proc.stdin.write(frozen_png)
+            await proc.stdin.drain()
+        return
+
+    safe_display = str(image_display).strip().lower()
+
+    await page.evaluate(
+        """([url, displayType]) => {
+            return new Promise((resolve) => {
+                // 1. PIP Element (Always created first)
+                const pipDiv = document.createElement('div');
+                pipDiv.id = 'my-popup-pip';
+                Object.assign(pipDiv.style, {
+                    position: 'absolute', zIndex: '9998',
+                    top: '50px', right: '50px', width: '500px',
+                    backgroundColor: 'white', padding: '15px', borderRadius: '15px',
+                    boxShadow: '0 15px 35px rgba(0,0,0,0.4)', opacity: '0'
+                });
+                const pipImg = document.createElement('img');
+                pipImg.src = url;
+                Object.assign(pipImg.style, { width: '100%', borderRadius: '10px', display: 'block' });
+                pipDiv.appendChild(pipImg);
+                document.body.appendChild(pipDiv);
+
+                // 2. Fullscreen Element (Hidden in the background, only created if needed)
+                if (displayType === 'fullscreen') {
+                    const fullDiv = document.createElement('div');
+                    fullDiv.id = 'my-popup-full';
+                    Object.assign(fullDiv.style, {
+                        position: 'absolute', zIndex: '9999',
+                        top: '0', left: '0', width: '100vw', height: '100vh',
+                        backgroundColor: 'rgba(0, 0, 0, 0)',
+                        display: 'flex', justifyContent: 'center', alignItems: 'center'
+                    });
+                    const fullImg = document.createElement('img');
+                    fullImg.id = 'my-popup-img-full';
+                    fullImg.src = url;
+                    Object.assign(fullImg.style, {
+                        width: '100vw', height: '100vh', objectFit: 'cover',
+                        borderRadius: '0px', boxShadow: 'none',
+                        transform: 'scale(0)', transformOrigin: 'center center',
+                        willChange: 'transform, opacity'
+                    });
+                    fullDiv.appendChild(fullImg);
+                    document.body.appendChild(fullDiv);
+                }
+
+                if (pipImg.decode) {
+                    pipImg.decode().then(resolve).catch(resolve);
+                } else {
+                    pipImg.onload = resolve;
+                    pipImg.onerror = resolve;
+                }
+                setTimeout(resolve, 2000); // hard failsafe
+            });
+        }""",
+        [popup_url, safe_display],
+    )
+
+    await _wait_for_paint(page)
+
+    async def force_render_and_shoot() -> None:
+        await _wait_for_paint(page)
+        png_bytes = await page.screenshot()
+        proc.stdin.write(png_bytes)
+        await proc.stdin.drain()
+
+    # --- 1. PRE-HOLD MAP FOR 1.5 SECONDS ---
+    pre_hold_frames = int(fps * 1.5)
+    for _ in range(pre_hold_frames):
+        await force_render_and_shoot()
+
+    if safe_display == "fullscreen":
+        # --- TIMINGS FOR FULLSCREEN MODE ---
+        pip_fade_frames = min(int(fps * 0.4), freeze_frames)
+        pip_hold_frames = max(0, freeze_frames - pip_fade_frames)
+
+        full_scale_frames = int(fps * 1.0)
+        full_hold_frames = int(fps * 1.5)
+        full_fade_frames = int(fps * 0.5)
+
+        # Phase 2: Fade PIP In
+        for i in range(pip_fade_frames):
+            progress = i / float(pip_fade_frames - 1) if pip_fade_frames > 1 else 1.0
+            await page.evaluate(
+                "([prog]) => document.getElementById('my-popup-pip').style.opacity = prog;",
+                [progress],
+            )
+            await force_render_and_shoot()
+
+        # Phase 3: Hold PIP
+        for _ in range(pip_hold_frames):
+            await force_render_and_shoot()
+
+        # Phase 4: Scale Fullscreen UP & Fade PIP OUT
+        for i in range(full_scale_frames):
+            progress = (
+                i / float(full_scale_frames - 1) if full_scale_frames > 1 else 1.0
+            )
+            ease = 1 - (1 - progress) ** 3
+            pip_fade = 1.0 - progress
+            await page.evaluate(
+                """([easeVal, pipFade]) => {
+                document.getElementById('my-popup-pip').style.opacity = pipFade;
+                document.getElementById('my-popup-img-full').style.transform = `scale(${easeVal})`;
+                document.getElementById('my-popup-full').style.backgroundColor = `rgba(0,0,0,${easeVal * 0.85})`;
+            }""",
+                [ease, pip_fade],
+            )
+            await force_render_and_shoot()
+
+        # Phase 5: Hold Fullscreen
+        for _ in range(full_hold_frames):
+            await force_render_and_shoot()
+
+        # Phase 6: Fade Fullscreen Out
+        for i in range(full_fade_frames):
+            progress = i / float(full_fade_frames - 1) if full_fade_frames > 1 else 1.0
+            alpha = 1.0 - progress
+            await page.evaluate(
+                """([alphaVal]) => {
+                document.getElementById('my-popup-img-full').style.opacity = alphaVal;
+                document.getElementById('my-popup-full').style.backgroundColor = `rgba(0,0,0,${alphaVal * 0.85})`;
+            }""",
+                [alpha],
+            )
+            await force_render_and_shoot()
+
+    else:
+        # --- TIMINGS FOR NORMAL PIP MODE ---
+        scale_frames = min(int(fps * 0.4), freeze_frames)
+        fade_frames = min(int(fps * 0.5), freeze_frames - scale_frames)
+        hold_frames = max(0, freeze_frames - scale_frames - fade_frames)
+
+        # Phase 2: Fade PIP In
+        for i in range(scale_frames):
+            progress = i / float(scale_frames - 1) if scale_frames > 1 else 1.0
+            await page.evaluate(
+                "([prog]) => document.getElementById('my-popup-pip').style.opacity = prog;",
+                [progress],
+            )
+            await force_render_and_shoot()
+
+        # Phase 3: Hold PIP
+        for _ in range(hold_frames):
+            await force_render_and_shoot()
+
+        # Phase 4: Fade PIP Out
+        for i in range(fade_frames):
+            progress = i / float(fade_frames - 1) if fade_frames > 1 else 1.0
+            alpha = 1.0 - progress
+            await page.evaluate(
+                "([alphaVal]) => document.getElementById('my-popup-pip').style.opacity = alphaVal;",
+                [alpha],
+            )
+            await force_render_and_shoot()
 
 
 # ---------------------------------------------------------
@@ -264,18 +442,17 @@ async def render_leg_animation(
     marker_url=None,
     waypoint_markers=None,
     image_display="pip",
+    intro_popup: Optional[Dict[str, Any]] = None,
+    debug_dump_dir: Optional[str] = None,
 ):
-    """Opens a single HTML file and uses JavaScript injection to rapidly animate the route."""
     from playwright.async_api import async_playwright
     from services.vdoeditor import FFmpegEngine
 
-    # --- BULLETPROOF COLOR CHECK FIX ---
     if not isinstance(active_color, list):
-        active_color = [255, 0, 0]  # Default to Red
+        active_color = [255, 0, 0]
     if not isinstance(marker_color, list):
-        marker_color = [0, 0, 255]  # Default to Blue
+        marker_color = [0, 0, 255]
 
-    # --- BINARY FFMPEG RESOLVER FIX ---
     editor = FFmpegEngine()
     ffmpeg_cmd = [
         editor.resolve_binary(),
@@ -334,6 +511,28 @@ async def render_leg_animation(
             logger.warning("  ... Failed to wait for page load.")
         await page.wait_for_timeout(2000)
 
+        await page.evaluate("""
+            const mapCanvas = document.querySelector('.mapboxgl-canvas');
+            if (mapCanvas) {
+                mapCanvas.style.filter = 'brightness(0.82) contrast(1.3) saturate(3.5)';
+            }
+        """)
+
+        if intro_popup and intro_popup.get("freeze_frames", 0) > 0:
+            logger.info(
+                "  ... Playing intro popup (display=%s) before driving frames.",
+                intro_popup.get("image_display", "pip"),
+            )
+            await _run_popup_freeze_sequence(
+                page=page,
+                proc=proc,
+                fps=fps,
+                freeze_frames=intro_popup["freeze_frames"],
+                popup_url=intro_popup.get("popup_url"),
+                image_display=intro_popup.get("image_display", "pip"),
+                debug_dump_dir=debug_dump_dir,
+            )
+
         for index, row in df.iterrows():
             active_trail = df.iloc[: index + 1][["lon", "lat"]].values.tolist()
 
@@ -351,7 +550,7 @@ async def render_leg_animation(
             if (window.deckgl) {{
                 const currentLayers = window.deckgl.props.layers || [];
                 const staticLayers = currentLayers.filter(l => 
-                    !['vehicle-layer', 'halo-layer', 'trail-layer', 'trail-glow', 'waypoint-3d-markers'].includes(l.id)
+                    !['vehicle-layer', 'halo-layer', 'trail-layer', 'trail-glow', 'waypoint-3d-markers', 'waypoint-labels', 'waypoint-labels-shadow'].includes(l.id)
                 );
                 
                 const newGlow = new deck.PathLayer({{
@@ -390,6 +589,34 @@ async def render_leg_animation(
                     getOrientation: [0, 0, 90],
                     sizeScale: 5
                 }});
+
+                const textShadows = new deck.TextLayer({{
+                    id: 'waypoint-labels-shadow',
+                    data: {waypoints_json},
+                    getPosition: d => [d.lon, d.lat, 25],
+                    getText: d => d.name,
+                    getSize: 24,
+                    getColor: [0, 0, 0, 255],
+                    fontFamily: '"Noto Sans JP", sans-serif',
+                    fontWeight: 'bold',
+                    characterSet: 'auto',
+                    getAlignmentBaseline: 'bottom',
+                    getPixelOffset: [2, -28]
+                }});
+
+                const textLabels = new deck.TextLayer({{
+                    id: 'waypoint-labels',
+                    data: {waypoints_json},
+                    getPosition: d => [d.lon, d.lat, 25],
+                    getText: d => d.name,
+                    getSize: 24,
+                    getColor: [255, 255, 255, 255],
+                    fontFamily: '"Noto Sans JP", sans-serif',
+                    fontWeight: 'bold',
+                    characterSet: 'auto',
+                    getAlignmentBaseline: 'bottom',
+                    getPixelOffset: [0, -30] 
+                }});
                 
                 window.deckgl.setProps({{ 
                     viewState: {{
@@ -400,7 +627,7 @@ async def render_leg_animation(
                         bearing: {row["bearing"]},
                         transitionDuration: 0
                     }},
-                    layers: [...staticLayers, newGlow, newTrail, newHalo, static3DMarkers, newVehicle] 
+                    layers: [...staticLayers, newGlow, newTrail, newHalo, static3DMarkers, textShadows, textLabels, newVehicle] 
                 }});
             }}
             """
@@ -417,53 +644,29 @@ async def render_leg_animation(
                 break
 
         # ---------------------------------------------------------
-        # FREEZE FRAME / POPUP LOGIC
+        # END-OF-LEG ARRIVAL FREEZE / POPUP
         # ---------------------------------------------------------
         if freeze_frames > 0:
             logger.info(
                 f"  ... Arrived at waypoint! Freezing final frame for {freeze_frames} frames..."
             )
             if popup_url:
-                js_popup = f"""
-                const popupDiv = document.createElement('div');
-                popupDiv.style.position = 'absolute';
-                popupDiv.style.zIndex = '9999';
-                
-                if ('{image_display}' === 'fullscreen') {{
-                    Object.assign(popupDiv.style, {{ top: '0', left: '0', width: '100vw', height: '100vh', backgroundColor: 'rgba(0, 0, 0, 0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center' }});
-                    const img = document.createElement('img');
-                    img.src = '{popup_url}';
-                    Object.assign(img.style, {{ maxWidth: '90%', maxHeight: '90%', objectFit: 'contain', borderRadius: '20px', boxShadow: '0 20px 50px rgba(0,0,0,0.5)' }});
-                    popupDiv.appendChild(img);
-                }} else {{
-                    Object.assign(popupDiv.style, {{ top: '50px', right: '50px', width: '500px', backgroundColor: 'white', padding: '15px', borderRadius: '15px', boxShadow: '0 15px 35px rgba(0,0,0,0.4)' }});
-                    const img = document.createElement('img');
-                    img.src = '{popup_url}';
-                    Object.assign(img.style, {{ width: '100%', borderRadius: '10px', display: 'block' }});
-                    popupDiv.appendChild(img);
-                }}
-                document.body.appendChild(popupDiv);
-                """
-                await page.evaluate(js_popup)
-                await page.wait_for_timeout(800)
-
-            frozen_png = await page.screenshot()
-            for _ in range(freeze_frames):
-                try:
+                await _run_popup_freeze_sequence(
+                    page=page,
+                    proc=proc,
+                    fps=fps,
+                    freeze_frames=freeze_frames,
+                    popup_url=popup_url,
+                    image_display=image_display,
+                    debug_dump_dir=debug_dump_dir,
+                )
+            else:
+                frozen_png = await page.screenshot()
+                for _ in range(freeze_frames):
                     proc.stdin.write(frozen_png)
                     await proc.stdin.drain()
-                except Exception:
-                    break
 
-        await page.close()
-        await browser.close()
-
-    proc.stdin.close()
-    await proc.wait()
-
-    # --- WINDOWS ASYNCIO PIPE GLITCH FIX ---
     await asyncio.sleep(0.2)
-
     logger.info(f"\nSUCCESS! High-speed animation saved to: {output_filename}")
 
 
@@ -487,7 +690,6 @@ def record_headless_video(
     if num_legs == 0:
         return []
 
-    # Settings
     render_fps = max(
         10, min(60, int(fps if fps is not None else settings.get("fps", 30)))
     )
@@ -497,25 +699,23 @@ def record_headless_video(
     if target_speed:
         logger.info(f"Using constant speed: {target_speed} km/h")
 
-    # Display Styles
     line_color = settings.get("line_color", [255, 0, 0])
-
-    # Change default to Dark Grey: [80, 80, 80]
     history_color = settings.get("history_color", [80, 80, 80])
-
     line_thickness = settings.get("line_thickness", 10)
     marker_color = settings.get("marker_color", [0, 0, 255])
     marker_radius = settings.get("marker_radius", 10)
-    line_thickness = settings.get("line_thickness", 10)
 
-    # Server initialization
     server, port = start_local_server(str(project_root))
 
-    # Static Marker Setup
-    marker_filename = settings.get("marker_filename", "marker.glb")
+    # Static Marker Setup (Added "name" property for labels)
+    marker_filename = settings.get("marker_filename", "Sticker_08.glb")
     marker_url = f"http://127.0.0.1:{port}/assets/{urllib.parse.quote(marker_filename)}"
     waypoint_markers = [
-        {"lon": float(wp.get("lng", wp.get("lon"))), "lat": float(wp["lat"])}
+        {
+            "lon": float(wp.get("lng", wp.get("lon"))),
+            "lat": float(wp["lat"]),
+            "name": wp.get("label", ""),
+        }
         for wp in waypoints
         if wp.get("lat")
     ]
@@ -539,14 +739,14 @@ def record_headless_video(
         for leg_idx, (route_key, coords) in enumerate(routing_cache.items()):
             logger.info(f"\n--- Processing Leg {leg_idx + 1}/{num_legs} ---")
 
-            wp_idx = leg_idx + 1
+            wp_idx = min(leg_idx + 1, len(waypoints) - 1) if waypoints else leg_idx + 1
+
             place_name = "Destination"
             if wp_idx < len(waypoints):
                 place_name = waypoints[wp_idx].get("label", f"Place {wp_idx}")
 
             print(f"    Rendering route to: '{place_name}' ({leg_idx + 1}/{num_legs})")
 
-            # --- MODEL SELECTION & SCALING FIX ---
             leg_mode = (
                 route_key.split("|")[-1].strip().lower()
                 if "|" in route_key
@@ -557,18 +757,17 @@ def record_headless_video(
 
             if leg_mode == "walking":
                 model_filename = "human.glb"
-                camera_config["car_size"] = 2.0  # Human default
+                camera_config["car_size"] = 2.0
             elif leg_mode == "ferry":
                 model_filename = "ferry.glb"
-                camera_config["car_size"] = 5.0  # Ferry default
+                camera_config["car_size"] = 5.0
             elif leg_mode == "airplane":
                 model_filename = "airplane.glb"
-                camera_config["car_size"] = 10.0  # Airplane default
+                camera_config["car_size"] = 10.0
             else:
                 model_filename = "car.glb"
-                camera_config["car_size"] = 3.0  # Car default
+                camera_config["car_size"] = 3.0
 
-            # Override with custom leg_size if defined in the waypoint
             if leg_idx < len(waypoints) and "leg_size" in waypoints[leg_idx]:
                 camera_config["car_size"] = float(waypoints[leg_idx]["leg_size"])
 
@@ -580,7 +779,6 @@ def record_headless_video(
             safe_marker = urllib.parse.quote(marker_filename)
             marker_url = f"http://127.0.0.1:{port}/assets/{safe_marker}"
 
-            # Data Processing
             df_raw = (
                 pd.DataFrame([{"lat": c[0], "lon": c[1]} for c in coords])
                 .drop_duplicates()
@@ -604,7 +802,6 @@ def record_headless_video(
                 df_raw, leg_duration, total_frames, total_leg_km, leg_dist_km
             )
 
-            # Bearings & Camera Follow Points
             raw_bearings = [
                 calculate_bearing(
                     smooth_df.iloc[i]["lon"],
@@ -633,13 +830,7 @@ def record_headless_video(
             smooth_df["cam_lon"] = [c[0] for c in cam_coords]
             smooth_df["cam_lat"] = [c[1] for c in cam_coords]
 
-            # Popups & Freeze Frames
-            wp_idx, popup_url, freeze_frames, image_display = (
-                leg_idx + 1,
-                None,
-                0,
-                "pip",
-            )
+            popup_url, freeze_frames, image_display = None, 0, "pip"
             if wp_idx < len(waypoints):
                 wp = waypoints[wp_idx]
                 freeze_frames = int(float(wp.get("freeze_seconds", 0.0)) * render_fps)
@@ -662,7 +853,6 @@ def record_headless_video(
                         f"http://127.0.0.1:{port}/frames/popup_{leg_idx}{img_ext}"
                     )
 
-            # Initial Map State
             center_lon = (df_raw["lon"].min() + df_raw["lon"].max()) / 2.0
             center_lat = (df_raw["lat"].min() + df_raw["lat"].max()) / 2.0
             max_diff = max(
@@ -680,6 +870,21 @@ def record_headless_video(
             )
 
             base_layers = []
+
+            # --- OPTIONAL: 3D BUILDING LAYER ---
+            # If you want extruded 3D buildings on your map:
+            building_layer = pdk.Layer(
+                "GeoJsonLayer",
+                id="building-layer",
+                data="path_to_your_buildings.geojson",  # Path to your building data file
+                extruded=True,
+                get_elevation="properties.height",  # Height attribute from your data
+                get_fill_color=[220, 200, 180, 200],  # Building color
+                get_line_color=[100, 100, 100],
+            )
+            base_layers.append(building_layer)
+            # -----------------------------------
+
             if accumulated_trail:
                 base_layers.extend(
                     [
@@ -704,22 +909,46 @@ def record_headless_video(
                     ]
                 )
 
-            pdk.settings.custom_libraries = [
-                {
-                    "name": "MapboxGL",
-                    "css_url": "https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css",
-                }
-            ]
-
             base_html_path = os.path.join(html_dir, f"base_leg_{leg_idx}.html")
             pdk.Deck(
                 layers=base_layers,
                 initial_view_state=view_state,
                 map_provider="carto",
-                map_style=pdk.map_styles.ROAD,
+                map_style="https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json",
                 views=[pdk.View(type="MapView", controller=False)],
             ).to_html(base_html_path)
             patch_pydeck_html(base_html_path)
+
+            intro_popup_spec = None
+            if leg_idx == 0 and waypoints:
+                intro_wp = waypoints[0]
+                intro_freeze_frames = int(
+                    float(intro_wp.get("freeze_seconds", 0.0)) * render_fps
+                )
+                if intro_freeze_frames > 0:
+                    intro_display = intro_wp.get(
+                        "image_display", wp.get("image display", "pip")
+                    ).lower()
+                    raw_intro_popup = intro_wp.get("popup_image")
+                    intro_popup_img = (
+                        str(raw_intro_popup[0])
+                        if isinstance(raw_intro_popup, list) and raw_intro_popup
+                        else (str(raw_intro_popup) if raw_intro_popup else None)
+                    )
+                    intro_popup_url = None
+                    if intro_popup_img and os.path.exists(intro_popup_img):
+                        img_ext = os.path.splitext(intro_popup_img)[1] or ".png"
+                        temp_img_path = os.path.join(html_dir, f"popup_intro{img_ext}")
+                        shutil.copy2(intro_popup_img, temp_img_path)
+                        intro_popup_url = (
+                            f"http://127.0.0.1:{port}/frames/popup_intro{img_ext}"
+                        )
+
+                    intro_popup_spec = {
+                        "freeze_frames": intro_freeze_frames,
+                        "popup_url": intro_popup_url,
+                        "image_display": intro_display,
+                    }
 
             leg_output_path = os.path.join(
                 base_dir, f"{base_name}_leg_{leg_idx:02d}{ext}"
@@ -744,6 +973,12 @@ def record_headless_video(
                     marker_url=marker_url,
                     waypoint_markers=waypoint_markers,
                     image_display=image_display,
+                    intro_popup=intro_popup_spec,
+                    debug_dump_dir=(
+                        os.path.join(html_dir, "debug_intro_frames")
+                        if leg_idx == 0
+                        else None
+                    ),
                 )
             )
 
@@ -764,4 +999,4 @@ def record_headless_video(
 
 if __name__ == "__main__":
     config_path = r"C:\Users\user1\Documents\Navivi\Projects\proj_2026_very_cool_tomogashima_islands\job_config.json"
-    record_headless_video(config_path)
+    record_headless_video(config_path, speed_kmh=120, fps=30)
