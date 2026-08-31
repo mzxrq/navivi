@@ -1,6 +1,6 @@
 import type { Dispatch, SetStateAction, } from "react";
 
-export type RouteMode = "driving" | "walking" | "direct" | "curve" | "ferry";
+export type RouteMode = "driving" | "walking" | "direct" | "curve" | "ferry" | "calculating";
 export type TrackType = "video" | "audio" | "image" | "text";
 
 export interface Waypoint {
@@ -8,10 +8,10 @@ export interface Waypoint {
   lat: number;
   lng: number;
   name: string;
-  images: string[];
+  images?: string[];
   imageDisplay?: "pip" | "fullscreen";
-  imagePans: string[];
-  narration: string;
+  imagePans?: string[];
+  narration?: string;
   routeMode: RouteMode;
   duration?: number;
   fps?: number;
@@ -73,6 +73,11 @@ export interface TimelineClipData {
   startTime: number;
   duration: number;
   color?: string;
+  x?: number;
+  y?: number;
+  scaleX?: number;
+  scaleY?: number;
+  rotation?: number;
 }
 
 export interface TimelineData {

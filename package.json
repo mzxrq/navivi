@@ -14,13 +14,17 @@
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-dialog": "^2.7.2",
     "@tauri-apps/plugin-fs": "^2.5.1",
+    "@tauri-apps/plugin-http": "^2.5.9",
     "@tauri-apps/plugin-opener": "^2",
+    "konva": "^10.3.2",
     "leaflet": "^1.9.4",
     "lucide-react": "^1.28.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "react-konva": "^19.2.5",
     "react-leaflet": "^5.0.0",
-    "react-rnd": "^10.5.3"
+    "react-rnd": "^10.5.3",
+    "use-image": "^1.1.4"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",

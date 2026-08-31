@@ -1,5 +1,12 @@
 import { useEffect, useState } from "react";
-import { Mic, Sparkles, Settings2, Loader, Square, ChevronDown } from "../ui/icons";
+import {
+  Mic,
+  Sparkles,
+  Settings2,
+  Loader,
+  Square,
+  ChevronDown,
+} from "../ui/icons";
 
 const thinkingSteps = [
   "Detecting context...",
@@ -12,15 +19,22 @@ const thinkingSteps = [
 interface ScriptInputProps {
   value: string;
   onChange: (v: string) => void;
-  onGenerate: (prompt: string, engine: string) => void;
+  onGenerate: (prompt: string, engine: string, language: string) => void;
   isGenerating: boolean;
   onCancel?: () => void;
 }
 
-export function ScriptInput({ value, onChange, onGenerate, isGenerating, onCancel }: ScriptInputProps) {
-  const [engine, setEngine] = useState("ollama"); 
+export function ScriptInput({
+  value,
+  onChange,
+  onGenerate,
+  isGenerating,
+  onCancel,
+}: ScriptInputProps) {
+  const [engine, setEngine] = useState("ollama");
   const [localPrompt, setLocalPrompt] = useState(value);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
+  const language = "English";
 
   useEffect(() => {
     if (!isGenerating) {
@@ -28,7 +42,9 @@ export function ScriptInput({ value, onChange, onGenerate, isGenerating, onCance
       return;
     }
     const interval = setInterval(() => {
-      setCurrentStepIndex((prev) => (prev < thinkingSteps.length - 1 ? prev + 1 : prev));
+      setCurrentStepIndex((prev) =>
+        prev < thinkingSteps.length - 1 ? prev + 1 : prev,
+      );
     }, 1800);
     return () => clearInterval(interval);
   }, [isGenerating]);
@@ -37,7 +53,7 @@ export function ScriptInput({ value, onChange, onGenerate, isGenerating, onCance
 
   const handleGenerateClick = () => {
     if (!displayValue.trim()) return;
-    onGenerate(displayValue, engine);
+    onGenerate(displayValue, engine, language);
   };
 
   return (
@@ -46,9 +62,8 @@ export function ScriptInput({ value, onChange, onGenerate, isGenerating, onCance
         <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
           <Mic className="w-3.5 h-3.5 text-zinc-400" /> AI Script
         </label>
-        
+
         <div className="flex items-center gap-2">
-          
           {/* Sleek Tailwind Dropdown */}
           <div className="relative flex items-center">
             <Settings2 className="w-3 h-3 text-emerald-500 absolute left-2 pointer-events-none z-10" />
@@ -58,41 +73,56 @@ export function ScriptInput({ value, onChange, onGenerate, isGenerating, onCance
               disabled={isGenerating}
               className="appearance-none pl-6 pr-5 py-1 text-[10px] font-bold bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800/80 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 rounded-lg border border-zinc-200 dark:border-white/10 outline-none cursor-pointer transition-all shadow-sm disabled:opacity-50"
             >
-              <option value="ollama" className="bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200">Ollama</option>
-              <option value="gemini" className="bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200">Gemini</option>
-              <option value="groq" className="bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200">Groq</option>
+              <option
+                value="ollama"
+                className="bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200"
+              >
+                Ollama
+              </option>
+              <option
+                value="gemini"
+                className="bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200"
+              >
+                Gemini
+              </option>
+              <option
+                value="groq"
+                className="bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200"
+              >
+                Groq
+              </option>
             </select>
             <ChevronDown className="w-2.5 h-2.5 text-zinc-400 absolute right-1.5 pointer-events-none" />
           </div>
 
           {/* Toggle between Magic Write and Cancel */}
           {isGenerating ? (
-            <button 
+            <button
               onClick={onCancel}
               className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-bold transition-all bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20 border border-red-200 dark:border-red-500/20 shadow-sm"
             >
-              <Square className="w-3 h-3 fill-current" /> 
+              <Square className="w-3 h-3 fill-current" />
               Cancel
             </button>
           ) : (
-            <button 
-              onClick={handleGenerateClick} 
-              disabled={!displayValue.trim()} 
+            <button
+              onClick={handleGenerateClick}
+              disabled={!displayValue.trim()}
               className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed bg-green-50 dark:bg-green-500/10 text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-500/20 border border-green-200 dark:border-green-500/20 shadow-sm"
             >
-              <Sparkles className="w-3 h-3" /> 
+              <Sparkles className="w-3 h-3" />
               Magic Write
             </button>
           )}
         </div>
       </div>
-      
+
       <div className="relative w-full h-28 rounded-xl overflow-hidden shadow-sm border border-zinc-200 dark:border-white/10 group focus-within:border-green-500 dark:focus-within:border-green-500/50 transition-colors">
         <textarea
           value={displayValue}
           onChange={(e) => {
-             setLocalPrompt(e.target.value);
-             onChange(e.target.value);
+            setLocalPrompt(e.target.value);
+            onChange(e.target.value);
           }}
           disabled={isGenerating}
           placeholder="Type a prompt (e.g., 'Tell me about the history') and click Magic Write..."
@@ -118,9 +148,11 @@ export function ScriptInput({ value, onChange, onGenerate, isGenerating, onCance
 
               {/* Progress bar matching step index */}
               <div className="w-32 h-1.5 bg-green-100 dark:bg-green-950 rounded-full overflow-hidden p-0.5">
-                <div 
+                <div
                   className="h-full bg-green-500 rounded-full transition-all duration-500 ease-out"
-                  style={{ width: `${((currentStepIndex + 1) / thinkingSteps.length) * 100}%` }}
+                  style={{
+                    width: `${((currentStepIndex + 1) / thinkingSteps.length) * 100}%`,
+                  }}
                 />
               </div>
             </div>

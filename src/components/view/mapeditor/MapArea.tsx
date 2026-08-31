@@ -115,7 +115,8 @@ export function MapArea() {
       <div className="absolute inset-0 z-0">
         <MapContainer
           center={settings.start_coords || [34.6937, 135.5023]}
-          zoom={10} maxZoom={19} zoomControl={false}
+          zoom={13} maxZoom={19} zoomControl={false}
+          preferCanvas={true}
           style={{ height: "100%", width: "100%", background: "transparent" }}
         >
           <TileLayer

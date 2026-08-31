@@ -12,6 +12,7 @@ import { useUI } from "../../../hooks/useUI";
 import { invoke } from "@tauri-apps/api/core";
 import { ScriptInput } from "../../ui/ScriptInput";
 import { open } from "@tauri-apps/plugin-dialog";
+import { checkModelExists, generateWaypointScriptStream } from "../../../services/ollamaApi";
 
 export function WaypointEditor({
   wpId,
@@ -22,7 +23,7 @@ export function WaypointEditor({
 }) {
   const { waypoints, setWaypoints, updateWaypoint, settings, setActiveWaypointId } = useWorkspace();
   const { showToast } = useUI();
-
+  
   const wp = waypoints.find((w) => w.id === wpId);
   if (!wp) return null;
 
@@ -110,35 +111,24 @@ export function WaypointEditor({
             showToast(`Canceled script generation for ${wp.name}`, "info");
           }}
           onGenerate={async (prompt, engine) => {
+            const hasModel = await checkModelExists(engine);
+            if (!hasModel) {
+              showToast(`Model "${engine}" not found! Please open your terminal and run: ollama run ${engine}`, "error");
+              return;
+            }
             updateWaypoint(wp.id, { isGeneratingScript: true });
-            showToast(`Started writing script for ${wp.name}...`, "info");
+            showToast(`Researching and writing script for ${wp.name}...`, "info");
 
             try {
-              const payload = JSON.stringify({
-                prompt: prompt,
-                lat: wp.lat,
-                lng: wp.lng,
-                locationName: wp.name,
-                engine: engine
-              });
-
-              const pythonResponse = await invoke<string>("run_python_blueprint", {
-                action: "generate_script",
-                payload: payload,
-              });
-
-              const parsed = JSON.parse(pythonResponse);
-              if (parsed.success) {
-                updateWaypoint(wp.id, { narration: parsed.script, isGeneratingScript: false });
+                await generateWaypointScriptStream(wp.name, prompt, engine, (chunk) => {
+                  updateWaypoint(wp.id, { narration: chunk });
+                });
                 showToast(`Script finished for ${wp.name}!`, "success");
-              } else {
-                console.error(parsed.error);
-                throw new Error(parsed.error);
-              }
-            } catch (error) {
+              } catch (error) {
+                console.error(error);
+                showToast(`Generation failed: ${error}`, "error");
+              } finally {
               updateWaypoint(wp.id, { isGeneratingScript: false });
-              console.log("Error: ", error);
-              showToast(`Generation failed for ${wp.name}: ${error}`, "error");
             }
           }}
         />

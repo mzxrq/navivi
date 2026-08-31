@@ -148,6 +148,7 @@ fn wake_up_ollama() -> Result<String, String> {
     }
 
     let result = Command::new("ollama")
+        .env("OLLAMA_ORIGINS", "*")
         .arg("serve")
         .stdout(Stdio::null())
         .stderr(Stdio::null())

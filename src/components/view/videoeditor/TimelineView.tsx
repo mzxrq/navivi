@@ -1,5 +1,5 @@
 import { listen } from "@tauri-apps/api/event";
-import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { invoke } from "@tauri-apps/api/core";
 import React, { useState, useEffect, useRef } from "react";
 import { useWorkspace } from "../../../hooks/useWorkspace";
 import { MediaPool } from "./MediaPool";
@@ -7,11 +7,25 @@ import { TimelineTrack } from "./TimelineTrack";
 import { TimelineTrack as TrackType } from "../../../types";
 import { Inspector } from "./Inspector";
 import { saveTimelineManifest } from "../../../services/fileSystem";
-import { ZoomIn, ZoomOut, Play, Pause, SkipBack, SkipForward, MousePointer2, Scissors, Sparkles } from "../../ui/icons";
+import {
+  ZoomIn,
+  ZoomOut,
+  Play,
+  Pause,
+  SkipBack,
+  SkipForward,
+  MousePointer2,
+  Scissors,
+  Sparkles,
+} from "../../ui/icons";
+import { PreviewMonitor } from "./PreviewMonitor";
 
 export function TimelineView() {
   const { timeline, setTimeline, autoLoadTimeline, metadata } = useWorkspace();
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
+  const [activeTool, setActiveTool] = useState<"pointer" | "razor" | "magic">(
+    "pointer",
+  );
   
   // Playback & Scrubbing
   const [isPlaying, setIsPlaying] = useState(false);
@@ -27,6 +41,18 @@ export function TimelineView() {
     setTimeline({ ...timeline, zoomMultiplier: newZoom });
   };
 
+  const handleSplitClip = (clipId: string, splitTime: number) => {
+    const clip = timeline.clips.find(c => c.id === clipId);
+    if (!clip || splitTime <= clip.startTime || splitTime >= clip.startTime + clip.duration) return;
+
+    const clip1 = { ...clip, duration: splitTime - clip.startTime };
+    const clip2 = { ...clip, id: crypto.randomUUID(), startTime: splitTime, duration: clip.duration - clip1.duration };
+    setTimeline({
+      ...timeline,
+      clips: [...timeline.clips.filter(c => c.id !== clipId), clip1, clip2]
+    });
+  }
+
   // Playback Engine
   useEffect(() => {
     let animationFrameId: number;
@@ -36,7 +62,10 @@ export function TimelineView() {
       if (isPlaying) {
         const deltaTime = (time - lastTime) / 1000;
         setCurrentTime((prevTime) => {
-          const totalDuration = timeline.clips.reduce((max, clip) => Math.max(max, clip.startTime + clip.duration), 0);
+          const totalDuration = timeline.clips.reduce(
+            (max, clip) => Math.max(max, clip.startTime + clip.duration),
+            0,
+          );
           const nextTime = prevTime + deltaTime;
           if (nextTime >= totalDuration && totalDuration > 0) {
             setIsPlaying(false);
@@ -67,7 +96,10 @@ export function TimelineView() {
   // Zoom Check for Scrub
   useEffect(() => {
     if (!isScrubbing) return;
-    const onMouseMove = (e: MouseEvent) => { e.preventDefault(); handleScrub(e.clientX); };
+    const onMouseMove = (e: MouseEvent) => {
+      e.preventDefault();
+      handleScrub(e.clientX);
+    };
     const onMouseUp = () => setIsScrubbing(false);
     window.addEventListener("mousemove", onMouseMove);
     window.addEventListener("mouseup", onMouseUp);
@@ -79,9 +111,14 @@ export function TimelineView() {
 
   // Track Renaming Handler
   useEffect(() => {
-    const handleRenameEvent = (e: CustomEvent<{ trackId: string }>) => setEditingTrackId(e.detail.trackId);
+    const handleRenameEvent = (e: CustomEvent<{ trackId: string }>) =>
+      setEditingTrackId(e.detail.trackId);
     window.addEventListener("start-rename-track" as any, handleRenameEvent);
-    return () => window.removeEventListener("start-rename-track" as any, handleRenameEvent);
+    return () =>
+      window.removeEventListener(
+        "start-rename-track" as any,
+        handleRenameEvent,
+      );
   }, []);
 
   const handleUpdateTrackName = (trackId: string, newName: string) => {
@@ -89,7 +126,18 @@ export function TimelineView() {
     if (!newName.trim()) return;
     setTimeline({
       ...timeline,
-      tracks: timeline.tracks.map((t) => (t.id === trackId ? { ...t, name: newName.trim() } : t)),
+      tracks: timeline.tracks.map((t) =>
+        t.id === trackId ? { ...t, name: newName.trim() } : t,
+      ),
+    });
+  };
+
+  const handleUpdateClip = (id: string, updates: any) => {
+    setTimeline({
+      ...timeline,
+      clips: timeline.clips.map((c) =>
+        c.id === id ? { ...c, ...updates } : c,
+      ),
     });
   };
 
@@ -97,10 +145,16 @@ export function TimelineView() {
   const activeVisualClip = timeline.clips.find((clip) => {
     const track = timeline.tracks.find((t) => t.id === clip.trackId);
     if (!track) return false;
-    const isVisualTrack = track.name.toLowerCase().includes("video") || track.name.toLowerCase().includes("popup");
-    const isUnderPlayhead = currentTime >= clip.startTime && currentTime < clip.startTime + clip.duration;
-    return isVisualTrack && isUnderPlayhead;
+    const isVisual =
+      track.name.toLowerCase().includes("video") ||
+      track.name.toLowerCase().includes("popup");
+    return (
+      isVisual &&
+      currentTime >= clip.startTime &&
+      currentTime < clip.startTime + clip.duration
+    );
   });
+  const activeVisualClips = activeVisualClip ? [activeVisualClip] : [];
 
   // Automatic Manifest Loader
   useEffect(() => {
@@ -128,7 +182,7 @@ export function TimelineView() {
     }
     // force html video to match react isPlaying state
     if (isPlaying && video.paused) {
-      video.play().catch(e => console.warn("Browser prevented playback:", e));
+      video.play().catch((e) => console.warn("Browser prevented playback:", e));
     } else if (!isPlaying && !video.paused) {
       video.pause();
     }
@@ -140,10 +194,10 @@ export function TimelineView() {
     const success = await saveTimelineManifest(
       metadata.directory_path,
       metadata.project_name || "Project",
-      timeline
+      timeline,
     );
     if (success) {
-      console.log("Triggering Render engine...")
+      console.log("Triggering Render engine...");
       try {
         await invoke("export_video", { projectDir: metadata.directory_path });
       } catch (error) {
@@ -152,119 +206,227 @@ export function TimelineView() {
     }
   };
 
-  // Ruler Math
+  // 🛠️ UPGRADED RULER MATH: Calculate the exact timeline pixel width
   const pixelsPerSecond = 20 * timeline.zoomMultiplier;
-  const maxClipEnd = timeline.clips.reduce((max, clip) => Math.max(max, clip.startTime + clip.duration), 0);
-  const rulerDuration = Math.max(600, maxClipEnd + 120); 
+  const maxClipEnd = timeline.clips.reduce(
+    (max, clip) => Math.max(max, clip.startTime + clip.duration),
+    0,
+  );
+  const rulerDuration = Math.max(600, maxClipEnd + 120);
+  const timelinePixelWidth = rulerDuration * pixelsPerSecond; // <-- This is the magic variable
 
-  let majorStep = 10; let minorStep = 2;
-  if (timeline.zoomMultiplier < 0.5) { majorStep = 30; minorStep = 10; }
-  else if (timeline.zoomMultiplier > 2.5) { majorStep = 2; minorStep = 0.5; }
-  else if (timeline.zoomMultiplier > 1.2) { majorStep = 5; minorStep = 1; }
+  let majorStep = 10;
+  let minorStep = 2;
+  if (timeline.zoomMultiplier < 0.5) {
+    majorStep = 30;
+    minorStep = 10;
+  } else if (timeline.zoomMultiplier > 2.5) {
+    majorStep = 2;
+    minorStep = 0.5;
+  } else if (timeline.zoomMultiplier > 1.2) {
+    majorStep = 5;
+    minorStep = 1;
+  }
 
   return (
     <div className="flex flex-col flex-1 h-full bg-white dark:bg-[#09090b] overflow-hidden select-none">
-      
       {/* TOP HALF: Panels & Preview */}
       <div className="flex-1 flex min-h-0 border-b border-zinc-200 dark:border-white/5">
         <MediaPool />
 
         <div className="flex-1 p-4 md:p-6 flex flex-col items-center justify-center bg-zinc-50/50 dark:bg-navidark-800 min-h-0 relative">
           <div className="w-full max-w-2xl aspect-video bg-black rounded-lg shadow-xl border border-zinc-800 flex items-center justify-center relative overflow-hidden group">
-          {activeVisualClip ? (
-              <video
-                ref={videoRef}
-                // convertFileSrc securely bridges Python's local files to the React frontend!
-                src={activeVisualClip.source ? convertFileSrc(activeVisualClip.source) : ""}
-                className="w-full h-full object-contain bg-black animate-in fade-in duration-200"
-                muted // Muted by default so browser autoplay policies don't yell at us
-                // We hide default controls because your custom UI buttons control it!
-                controls={false} 
-              />
+            {activeVisualClip ? (
+              <div className="flex-1 p-4 md:p-6 flex flex-col items-center justify-center bg-zinc-50/50 dark:bg-navidark-800 min-h-0 relative">
+                {/* 🛠️ Swapped video for Konva Monitor */}
+                <PreviewMonitor
+                  activeClips={activeVisualClips}
+                  currentTime={currentTime}
+                  isPlaying={isPlaying}
+                  selectedClipId={selectedClipId}
+                  onSelectClip={setSelectedClipId}
+                  onUpdateClip={handleUpdateClip}
+                />
+                <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-4 bg-zinc-900/80 backdrop-blur px-6 py-2 rounded-full border border-white/10 text-white z-10">
+                  <button
+                    onClick={() => setCurrentTime(0)}
+                    className="hover:text-navi transition-colors"
+                  >
+                    <SkipBack className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => setIsPlaying(!isPlaying)}
+                    className="w-8 h-8 flex items-center justify-center bg-white text-black rounded-full hover:bg-navi hover:text-white transition-colors"
+                  >
+                    {isPlaying ? (
+                      <Pause className="w-4 h-4" fill="currentColor" />
+                    ) : (
+                      <Play className="w-4 h-4 ml-0.5" fill="currentColor" />
+                    )}
+                  </button>
+                  <button className="hover:text-navi transition-colors">
+                    <SkipForward className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
             ) : (
               <span className="text-zinc-600 font-mono text-sm">No visual</span>
             )}
-            
+
             <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-4 bg-zinc-900/80 backdrop-blur px-6 py-2 rounded-full border border-white/10 text-white z-10 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button onClick={() => setCurrentTime(0)} className="hover:text-navi transition-colors"><SkipBack className="w-4 h-4" /></button>
-              <button onClick={() => setIsPlaying(!isPlaying)} className="w-8 h-8 flex items-center justify-center bg-white text-black rounded-full hover:bg-navi hover:text-white transition-colors">
-                {isPlaying ? <Pause className="w-4 h-4" fill="currentColor" /> : <Play className="w-4 h-4 ml-0.5" fill="currentColor" />}
+              <button
+                onClick={() => setCurrentTime(0)}
+                className="hover:text-navi transition-colors"
+              >
+                <SkipBack className="w-4 h-4" />
               </button>
-              <button className="hover:text-navi transition-colors"><SkipForward className="w-4 h-4" /></button>
+              <button
+                onClick={() => setIsPlaying(!isPlaying)}
+                className="w-8 h-8 flex items-center justify-center bg-white text-black rounded-full hover:bg-navi hover:text-white transition-colors"
+              >
+                {isPlaying ? (
+                  <Pause className="w-4 h-4" fill="currentColor" />
+                ) : (
+                  <Play className="w-4 h-4 ml-0.5" fill="currentColor" />
+                )}
+              </button>
+              <button className="hover:text-navi transition-colors">
+                <SkipForward className="w-4 h-4" />
+              </button>
             </div>
           </div>
         </div>
 
         <div className="w-80 bg-white dark:bg-navidark-800 border-l border-zinc-200 dark:border-navidark-400 flex flex-col shrink-0 p-4">
-          <h3 className="text-[10px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-wider mb-4 pb-2 border-b border-zinc-100 dark:border-navidark-700">Inspector</h3>
-          <Inspector selectedClipId={selectedClipId} onClearSelection={() => setSelectedClipId(null)} />
+          <h3 className="text-[10px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-wider mb-4 pb-2 border-b border-zinc-100 dark:border-navidark-700">
+            Inspector
+          </h3>
+          <Inspector
+            selectedClipId={selectedClipId}
+            onClearSelection={() => setSelectedClipId(null)}
+          />
           <div className="mt-auto pt-4">
-            <button 
-            onClick={handleExportVideo}
-            className="w-full py-2 bg-navi hover:bg-navi-600 text-white text-sm font-bold rounded-md shadow-md transition-colors">Export Video</button>
+            <button
+              onClick={handleExportVideo}
+              className="w-full py-2 bg-navi hover:bg-navi-600 text-white text-sm font-bold rounded-md shadow-md transition-colors"
+            >
+              Export Video
+            </button>
           </div>
         </div>
       </div>
 
       {/* BOTTOM HALF: Timeline */}
       <div className="h-80 shrink-0 flex flex-col bg-zinc-100 dark:bg-navidark-900 relative border-t border-zinc-300 dark:border-black shadow-[0_-4px_20px_rgba(0,0,0,0.1)] min-h-0">
-        
-        {/* Toolbar */}
+        {/* 🛠️ Functional Toolbar */}
         <div className="h-11 bg-white dark:bg-navidark-800 border-b border-zinc-200 dark:border-navidark-400 flex items-center justify-between px-4 shrink-0 z-30">
           <div className="flex items-center gap-1 bg-zinc-100 dark:bg-navidark-900 p-1 rounded-md border border-zinc-200 dark:border-navidark-700">
-            <button className="p-1.5 bg-white dark:bg-navidark-700 text-navi rounded shadow-sm"><MousePointer2 className="w-4 h-4" /></button>
-            <button className="p-1.5 text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white transition-colors rounded"><Scissors className="w-4 h-4" /></button>
-            <button className="p-1.5 text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white transition-colors rounded"><Sparkles className="w-4 h-4" /></button>
+            <button
+              onClick={() => setActiveTool("pointer")}
+              className={`p-1.5 rounded transition-colors ${activeTool === "pointer" ? "bg-white dark:bg-navidark-700 text-navi shadow-sm" : "text-zinc-500 hover:text-zinc-900"}`}
+            >
+              <MousePointer2 className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setActiveTool("razor")}
+              className={`p-1.5 rounded transition-colors ${activeTool === "razor" ? "bg-white dark:bg-navidark-700 text-navi shadow-sm" : "text-zinc-500 hover:text-zinc-900"}`}
+            >
+              <Scissors className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setActiveTool("magic")}
+              className={`p-1.5 rounded transition-colors ${activeTool === "magic" ? "bg-white dark:bg-navidark-700 text-navi shadow-sm" : "text-zinc-500 hover:text-zinc-900"}`}
+            >
+              <Sparkles className="w-4 h-4" />
+            </button>
           </div>
           <div className="text-xs font-mono font-medium text-zinc-600 dark:text-zinc-300 bg-zinc-100 dark:bg-navidark-900 px-3 py-1 rounded-md border border-zinc-200 dark:border-navidark-700">
-            {new Date(currentTime * 1000).toISOString().substring(11, 23).replace('.', ':')}
+            {new Date(currentTime * 1000)
+              .toISOString()
+              .substring(11, 23)
+              .replace(".", ":")}
           </div>
           <div className="flex items-center gap-2">
             <ZoomOut className="w-3.5 h-3.5 text-zinc-400" />
-            <input type="range" min="0.2" max="5" step="0.1" value={timeline.zoomMultiplier} onChange={(e) => handleZoom(parseFloat(e.target.value))} className="w-24 accent-navi cursor-ew-resize" />
+            <input
+              type="range"
+              min="0.2"
+              max="5"
+              step="0.1"
+              value={timeline.zoomMultiplier}
+              onChange={(e) => handleZoom(parseFloat(e.target.value))}
+              className="w-24 accent-navi cursor-ew-resize"
+            />
             <ZoomIn className="w-3.5 h-3.5 text-zinc-400" />
           </div>
         </div>
 
         {/* Scrollable Tracks Area */}
-        <div ref={timelineRef} className="flex-1 overflow-auto custom-scrollbar relative min-h-0">
+        <div
+          ref={timelineRef}
+          className="flex-1 overflow-auto custom-scrollbar relative min-h-0"
+        >
           <div className="flex flex-col min-w-max pb-12 relative">
-            
             {/* THE TIME RULER (Sticky Vertical) */}
             <div className="sticky top-0 w-full h-8 bg-zinc-200/90 dark:bg-navidark-800/90 backdrop-blur-md border-b border-zinc-300 dark:border-navidark-400 z-45 flex items-center">
-              
               {/* Z-[60] left spacer guarantees the triangle slides UNDER this element when scrolling */}
               <div className="sticky left-0 w-32 h-full bg-zinc-100 dark:bg-navidark-800 border-r border-zinc-300 dark:border-navidark-400 shrink-0 z-60 flex items-center px-3 shadow-[2px_0_5px_rgba(0,0,0,0.02)]">
-                <span className="text-[9px] font-bold text-zinc-400 dark:text-zinc-500 tracking-widest">TIMELINE</span>
+                <span className="text-[9px] font-bold text-zinc-400 dark:text-zinc-500 tracking-widest">
+                  TIMELINE
+                </span>
               </div>
-              
-              <div 
-                className="flex-1 h-full cursor-ew-resize relative overflow-hidden"
-                onMouseDown={(e) => { if (isPlaying) setIsPlaying(false); setIsScrubbing(true); handleScrub(e.clientX); }}
+
+              {/* 🛠️ Dynamic width applied here, changed flex-1 to shrink-0 */}
+              <div
+                className="h-full cursor-ew-resize relative overflow-hidden shrink-0"
+                style={{ width: `${timelinePixelWidth}px` }}
+                onMouseDown={(e) => {
+                  if (isPlaying) setIsPlaying(false);
+                  setIsScrubbing(true);
+                  handleScrub(e.clientX);
+                }}
               >
-                {Array.from({ length: Math.ceil(rulerDuration / minorStep) }).map((_, i) => {
+                {Array.from({
+                  length: Math.ceil(rulerDuration / minorStep),
+                }).map((_, i) => {
                   const time = i * minorStep;
                   const isMajor = time % majorStep === 0;
                   return (
-                    <div key={time} className="absolute bottom-0" style={{ left: `${time * pixelsPerSecond}px` }}>
-                      <div className={`w-px bg-zinc-400 dark:bg-zinc-600 ${isMajor ? 'h-2.5' : 'h-1.5'}`} />
-                      {isMajor && <span className="absolute bottom-3 -translate-x-1/2 text-[9px] text-zinc-500 dark:text-zinc-400 font-mono select-none pointer-events-none">{Math.floor(time / 60).toString().padStart(2, '0')}:{Math.floor(time % 60).toString().padStart(2, '0')}</span>}
+                    <div
+                      key={time}
+                      className="absolute bottom-0"
+                      style={{ left: `${time * pixelsPerSecond}px` }}
+                    >
+                      <div
+                        className={`w-px bg-zinc-400 dark:bg-zinc-600 ${isMajor ? "h-2.5" : "h-1.5"}`}
+                      />
+                      {isMajor && (
+                        <span className="absolute bottom-3 -translate-x-1/2 text-[9px] text-zinc-500 dark:text-zinc-400 font-mono select-none pointer-events-none">
+                          {Math.floor(time / 60)
+                            .toString()
+                            .padStart(2, "0")}
+                          :
+                          {Math.floor(time % 60)
+                            .toString()
+                            .padStart(2, "0")}
+                        </span>
+                      )}
                     </div>
                   );
                 })}
 
                 {/* THE PLAYHEAD TRIANGLE (Z-[50]: Stuck to the sticky ruler so it never scrolls out of view!) */}
-                <div 
-                  className="absolute bottom-0 -translate-x-1/2 w-3 h-3 bg-red-500 [clip-path:polygon(50%_100%,0_0,100%_0)] z-50 pointer-events-none" 
-                  style={{ left: `${currentTime * pixelsPerSecond}px` }} 
+                <div
+                  className="absolute bottom-0 -translate-x-1/2 w-3 h-3 bg-red-500 [clip-path:polygon(50%_100%,0_0,100%_0)] z-50 pointer-events-none"
+                  style={{ left: `${currentTime * pixelsPerSecond}px` }}
                 />
               </div>
             </div>
 
             {/* THE PLAYHEAD LINE (Z-[35]: Stretches 100% height, and slides UNDER the Z-40 track headers!) */}
-            <div 
-              className="absolute top-0 bottom-0 w-[1.5px] bg-red-500 z-35 pointer-events-none shadow-[0_0_10px_rgba(239,68,68,0.5)]" 
-              style={{ left: `${127 + (currentTime * pixelsPerSecond)}px` }} 
+            <div
+              className="absolute top-0 bottom-0 w-[1.5px] bg-red-500 z-35 pointer-events-none shadow-[0_0_10px_rgba(239,68,68,0.5)]"
+              style={{ left: `${127 + currentTime * pixelsPerSecond}px` }}
             />
 
             {/* Tracks List */}
@@ -273,15 +435,21 @@ export function TimelineView() {
               const trackHeight = isMainTrack ? "h-20" : "h-14";
 
               return (
-                <div key={track.id} className="flex w-full group">
-                  
+                <div key={track.id} className="flex w-max group"> {/* 🛠️ Changed w-full to w-max so track drops zone can stretch */}
                   {/* Sticky Header (Z-40) */}
                   <div
                     onContextMenu={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
                       window.dispatchEvent(
-                        new CustomEvent("open-context-menu", { detail: { x: e.clientX, y: e.clientY, type: "track-header", targetId: track.id } }),
+                        new CustomEvent("open-context-menu", {
+                          detail: {
+                            x: e.clientX,
+                            y: e.clientY,
+                            type: "track-header",
+                            targetId: track.id,
+                          },
+                        }),
                       );
                     }}
                     onDoubleClick={() => setEditingTrackId(track.id)}
@@ -289,14 +457,20 @@ export function TimelineView() {
                   >
                     {/* The Rename Input */}
                     {editingTrackId === track.id ? (
-                      <input 
+                      <input
                         type="text"
                         autoFocus
                         defaultValue={track.name}
-                        onBlur={(e) => handleUpdateTrackName(track.id, e.target.value)}
+                        onBlur={(e) =>
+                          handleUpdateTrackName(track.id, e.target.value)
+                        }
                         onKeyDown={(e) => {
-                          if (e.key === 'Enter') handleUpdateTrackName(track.id, e.currentTarget.value);
-                          if (e.key === 'Escape') setEditingTrackId(null);
+                          if (e.key === "Enter")
+                            handleUpdateTrackName(
+                              track.id,
+                              e.currentTarget.value,
+                            );
+                          if (e.key === "Escape") setEditingTrackId(null);
                         }}
                         className="w-full bg-white dark:bg-navidark-900 text-[10px] font-bold text-zinc-900 dark:text-zinc-100 px-1.5 py-1 rounded outline-none border-2 border-navi"
                       />
@@ -312,6 +486,9 @@ export function TimelineView() {
                     track={track}
                     selectedClipId={selectedClipId}
                     onSelectClip={setSelectedClipId}
+                    activeTool={activeTool}
+                    onSplit={handleSplitClip}
+                    trackWidth={timelinePixelWidth}
                   />
                 </div>
               );

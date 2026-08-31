@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { MapIcon, FileVideo, Sparkles, PencilSparkles, Loader, Square } from "../../ui/icons";
+import { MapIcon, FileVideo, Sparkles, PencilSparkles, Square } from "../../ui/icons";
 import { useWorkspace } from "../../../hooks/useWorkspace";
 import { useUI } from "../../../hooks/useUI";
 import { EngineDropdown } from "../../ui/EngineDropdown";
+import { generateOverviewScript } from "../../../services/ollamaApi";
 // Import your EngineSelect component if you used Option 1 from earlier!
 
 export function OverviewPanel() {
@@ -22,33 +23,16 @@ export function OverviewPanel() {
   const estimatedTime = totalDuration.toFixed(1);
 
   const handleGenerateOverview = async () => {
-    const waypointNames = waypoints
-      .map((wp) => wp.name)
-      .filter((name) => name && name !== "Locating...");
-    if (waypointNames.length === 0)
-      return showToast("Please add some waypoints!", "info");
-
+    const waypointNames = waypoints.map((wp) => wp.name).filter((name) => name && name !== "Locating...");
+    if (waypointNames.length === 0) return showToast("Please add some waypoints!", "info");
     setIsGeneratingOverview(true);
     showToast("Synthesizing route overview...", "info");
 
     try {
-      const payload = JSON.stringify({
-        waypoints: waypointNames,
-        engine: overviewEngine,
-      });
-      const pythonResponse = await invoke<string>("run_python_blueprint", {
-        action: "generate_overview",
-        payload: payload,
-      });
-
-      const parsed = JSON.parse(pythonResponse);
-      if (parsed.success) {
-        updateMetadata({ overview_narration: parsed.script });
-        setIsDirty(true);
-        showToast("Overview script compiled!", "success");
-      } else {
-        throw new Error(parsed.error);
-      }
+      const script = await generateOverviewScript(waypointNames, overviewEngine);
+      updateMetadata({ overview_narration: script });
+      setIsDirty(true);
+      showToast("Overview script compiled!", "success");
     } catch (error) {
       showToast(`Overview generation failed: ${error}`, "error");
     } finally {
