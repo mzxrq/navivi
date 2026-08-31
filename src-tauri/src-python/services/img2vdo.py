@@ -125,7 +125,7 @@ class AttractionVideoGenerator:
     def process_attraction_video(
         self,
         popup_image_entry: Union[str, List[str], None],
-        prompt_text: str,
+        prompt_text: Union[str, List[str]],
         target_audio_duration: float,
         audio_path: Optional[str] = None,
         output_filename: str = "waypoint_final.mp4",
@@ -133,7 +133,7 @@ class AttractionVideoGenerator:
         """
         Main processor:
         1. Checks if popup_image is a list or single string.
-        2. Generates clips for all images.
+        2. Generates clips for all images using paired prompts.
         3. Combines multi-image clips via VideoEditor.
         4. Scales playback speed to match target_audio_duration.
         5. Muxes audio if provided.
@@ -142,7 +142,7 @@ class AttractionVideoGenerator:
             logger.warning("No popup image provided for waypoint.")
             return None
 
-        # --- Check list vs string ---
+        # --- Check list vs string for images ---
         if isinstance(popup_image_entry, list):
             image_list = [
                 img for img in popup_image_entry if img and os.path.exists(img)
@@ -156,15 +156,30 @@ class AttractionVideoGenerator:
         if not image_list:
             return None
 
+        # --- Check list vs string for prompts ---
+        if isinstance(prompt_text, str):
+            prompt_list = [prompt_text]
+        elif isinstance(prompt_text, list):
+            prompt_list = prompt_text
+        else:
+            prompt_list = [""]
+
         logger.info(f"Processing waypoint with {len(image_list)} image(s)...")
 
         # 1. Generate video clips for each image
         generated_clips = []
         for idx, img_path in enumerate(image_list):
-            logger.info(
-                f"   -> Rendering image {idx + 1}/{len(image_list)}: {img_path}"
+            # Match image index to prompt index (fallback to the last prompt if we run out)
+            current_prompt = (
+                prompt_list[idx]
+                if idx < len(prompt_list)
+                else (prompt_list[-1] if prompt_list else "")
             )
-            clip = self._generate_single_clip(img_path, prompt_text)
+
+            logger.info(
+                f"   -> Rendering image {idx + 1}/{len(image_list)}: {img_path} with prompt: '{current_prompt}'"
+            )
+            clip = self._generate_single_clip(img_path, current_prompt)
             if clip:
                 generated_clips.append(clip)
 
