@@ -753,6 +753,14 @@ def run_full_pipeline(
         pbar.update(8)
 
         # --- STEP 3 ---
+        attraction_videos = render_attraction_videos(
+            str(config_file_path),
+            audio_durations=audio_data.get("audio_durations"),
+            audio_paths=audio_data.get("audio_paths"),
+        )
+        pbar.update(60)
+
+        # --- STEP 4 ---
         video_paths = render_route_video(
             cleaned_route=cleaned_route,
             project_config_path=str(config_file_path),
@@ -763,9 +771,9 @@ def run_full_pipeline(
         )
         pbar.update(85)
 
-        all_videos = video_paths
+        all_videos = video_paths + attraction_videos
 
-        # --- STEP 4 ---
+        # --- STEP 5 ---
         final_videos = burn_subtitles(
             video_paths=all_videos,
             subtitle_paths=audio_data.get("subtitle_paths", []),

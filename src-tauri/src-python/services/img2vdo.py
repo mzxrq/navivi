@@ -135,7 +135,7 @@ class AttractionVideoGenerator:
         1. Checks if popup_image is a list or single string.
         2. Generates clips for all images using paired prompts.
         3. Combines multi-image clips via VideoEditor.
-        4. Scales playback speed to match target_audio_duration.
+        4. Scales playback speed to match target_audio_duration (only if shorter).
         5. Muxes audio if provided.
         """
         if not popup_image_entry:
@@ -199,17 +199,26 @@ class AttractionVideoGenerator:
         else:
             combined_video = generated_clips[0]
 
-        # 3. Consider audio length: Scale combined video to fit audio duration
+        # 3. Consider audio length: Ensure combined video is >= audio duration
         if target_audio_duration > 0:
-            logger.info(
-                f"Adjusting video duration to match audio length ({target_audio_duration:.2f}s)..."
-            )
-            scaled_name = f"temp_scaled_{uuid.uuid4().hex[:8]}.mp4"
-            fitted_video = self.editor.adjust_video_duration(
-                video_path=combined_video,
-                target_duration=target_audio_duration,
-                output_filename=scaled_name,
-            )
+            # Check current video duration before attempting to stretch it
+            current_duration = self.editor.get_video_duration(combined_video)
+
+            if current_duration < target_audio_duration:
+                logger.info(
+                    f"Video ({current_duration:.2f}s) is shorter than audio ({target_audio_duration:.2f}s). Adjusting duration..."
+                )
+                scaled_name = f"temp_scaled_{uuid.uuid4().hex[:8]}.mp4"
+                fitted_video = self.editor.adjust_video_duration(
+                    video_path=combined_video,
+                    target_duration=target_audio_duration,
+                    output_filename=scaled_name,
+                )
+            else:
+                logger.info(
+                    f"Video ({current_duration:.2f}s) is already longer than or equal to audio. No scaling needed."
+                )
+                fitted_video = combined_video
         else:
             fitted_video = combined_video
 
