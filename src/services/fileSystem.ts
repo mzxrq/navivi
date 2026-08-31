@@ -2,6 +2,20 @@ import { documentDir, join, basename } from "@tauri-apps/api/path";
 import { writeTextFile, mkdir, exists, copyFile, readTextFile, BaseDirectory, open as fsOpen } from "@tauri-apps/plugin-fs";
 import { open as dialogOpen } from "@tauri-apps/plugin-dialog";
 import { appConfig, fileSystem } from "../config/constants";
+import { TimelineData, TimelineManifest, ManifestClip } from "../types";
+
+/**
+ * 
+ * @param waypoints 
+ * @param routeSegments 
+ * @param metadata 
+ * @param settings 
+ * @param routingCache 
+ * @param overrideName 
+ * @param asDuplicate 
+ * @param safeFolderName 
+ * @returns 
+ */
 
 export const saveProjectData = async (
   waypoints: any[],
@@ -165,7 +179,6 @@ export const saveProjectData = async (
     directory_path: projectDir,
     source_files: { gps_route: gpxPath },
     settings: settings,
-    routing_cache: routingCache,
     overview_narration: metadata.overview_narration || "",
     start_point: startWp ? { lat: startWp.lat, lng: startWp.lng, label: startWp.label } : null,
     end_point: endWp ? { lat: endWp.lat, lng: endWp.lng, label: endWp.label } : null,
@@ -176,8 +189,38 @@ export const saveProjectData = async (
   await writeTextFile(nvvPath, payload);
   await writeTextFile(jsonPath, payload);
 
+  const activeKeys = new Set<string>();
+  for (let i = 0; i < waypoints.length - 1; i++) {
+    const wp1 = waypoints[i];
+    const wp2 = waypoints[i + 1];
+    const mode = wp1.routeMode || "driving";
+
+    activeKeys.add(`${wp1.lat.toFixed(5)},${wp1.lng.toFixed(5)}|${wp2.lat.toFixed(5)},${wp2.lng.toFixed(5)}|${mode}`);
+  }
+  const cleanCache: Record<string, [number, number][]> = {};
+  let deletedCount = 0;
+  for (const [key, routeData] of Object.entries(routingCache)) {
+    if (activeKeys.has(key)) {
+      cleanCache[key] = routeData;
+    } else {
+      deletedCount++;
+    }
+  }
+
+  if (deletedCount > 0) {
+    console.log(`Garbage Collector pruned ${deletedCount} ghost routes.`);
+  }
+  const routeCachePath = await join(projectDir, ".routecache.json");
+  await writeTextFile(routeCachePath, JSON.stringify(cleanCache));
+
   return { projectDir, projId, projName, nvvPath };
 };
+
+/**
+ * 
+ * @param forcePath 
+ * @returns 
+ */
 
 export const loadProjectData = async (forcePath?: string) => {
   let selectedPath = forcePath;
@@ -195,7 +238,12 @@ export const loadProjectData = async (forcePath?: string) => {
   const data = JSON.parse(fileContent);
 
   return { data, selectedPath };
-}
+};
+
+/**
+ * 
+ * @param message 
+ */
 
 export async function appendToRenderLog(message: string) {
   try {
@@ -221,4 +269,118 @@ export async function appendToRenderLog(message: string) {
   } catch (error) {
     console.error("Failed to write to render.log:", error);
   }
+};
+
+/**
+ * 
+ * @param projectDir 
+ * @param projectName 
+ * @param timeline 
+ * @returns 
+ */
+
+export async function saveTimelineManifest(projectDir: string, projectName: string, timeline: TimelineData): Promise<boolean> {
+  /**
+   * convert react timeline state into timeline.json manifest
+   * and saves it for python backend to process
+   */
+  try {
+    const manifestPath = await join(projectDir, "timeline.json");
+    // find master audio track
+    const audioTrack = timeline.tracks.find(t => t.type === "audio");
+    const audioClip = audioTrack ? timeline.clips.find(c => c.trackId === audioTrack.id) : null;
+    // map visual clips
+    const videoTracks: ManifestClip[] = [];
+    // Sort clips by start time so python receives them in order
+    const visualClips = timeline.clips.filter(c => c.trackId !== audioTrack?.id).sort((a, b) => a.startTime - b.startTime);
+
+    for (const clip of visualClips) {
+      const track = timeline.tracks.find(t => t.id === clip.trackId);
+      videoTracks.push({
+        clip_id: clip.id,
+        file_path: clip.source || "",
+        duration: clip.duration,
+        type: track?.name.toLowerCase().includes("popup") ? "static_popup" : "video"
+      });
+    }
+    // calculate total duration (end of last clip)
+    const totalDuration = timeline.clips.reduce((max, clip) => Math.max(max, clip.startTime + clip.duration), 0);
+    // build final json body
+    const manifest: TimelineManifest = {
+      project_name: projectName,
+      total_duration_seconds: totalDuration,
+      video_tracks: videoTracks,
+      audio_track: audioClip?.source || undefined
+    };
+    // write to disk
+    await writeTextFile(manifestPath, JSON.stringify(manifest, null, 2));
+    console.log("✓ timeline.json successfully saved.")
+    return true;
+  } catch (error) {
+    console.error("Failed to save timeline.json:", error);
+    return false;
+  }
+};
+
+/**
+ * 
+ * @param projectDir 
+ * @returns 
+ */
+
+export async function loadTimelineManifest(projectDir: string): Promise<TimelineManifest | null> {
+  try {
+    // construct absolute path to manifest file
+    const manifestPath = await join(projectDir, "timeline.json");
+    // check if file exist
+    const fileExists = await exists(manifestPath);
+    if (!fileExists) {
+      console.warn(`Manifest not found at: ${manifestPath}`);
+      return null;
+    }
+    // read and parse json
+    const fileContents = await readTextFile(manifestPath);
+    const manifest: TimelineManifest = JSON.parse(fileContents);
+    return manifest;
+  } catch (error) {
+    console.error("Failed to load or parse timeline manifest:", error);
+    return null;
+  }
+};
+
+/**
+ * 
+ * @param projectDir 
+ * @returns 
+ */
+
+export async function loadRouteCache(projectDir: string): Promise<Record<string, [number, number][]>> {
+  try {
+    const cachePath = await join(projectDir, ".routecache.json");
+    if (await exists(cachePath)) {
+      const contents = await readTextFile(cachePath);
+      return JSON.parse(contents);
+    }
+  } catch (error) {
+    console.error("Failed to load route cache:", error);
+  }
+  return {};
 }
+
+/**
+ * 
+ * @param projectDir 
+ * @param cacheData 
+ * @returns 
+ */
+
+export async function saveRouteCache(projectDir: string, cacheData: Record<string, [number, number][]>): Promise<boolean> {
+  try {
+    const cachePath = await join(projectDir, ".routecache.json");
+    await writeTextFile(cachePath, JSON.stringify(cacheData));
+    return true;
+  } catch (error) {
+    console.error("Failed to save route cache:", error);
+    return false;
+  }
+};

@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useWorkspace } from "./useWorkspace";
 import { useUI } from "./useUI";
-import { getCurve } from "../utils/mapUtils";
+import { getCurve, OsmNode, getDistanceKm } from "../utils/mapUtils";
 import { apiEndpoints } from "../config/constants";
 
 export function useMapRouting() {
@@ -48,39 +48,68 @@ useEffect(() => {
       } else if (mode === "curve") {
         positions = getCurve([wp1.lat, wp1.lng], [wp2.lat, wp2.lng]);
       } else if (mode === "ferry") {
-        // 1. FERRY MODE: Fetch raw OSM Ferry geometry from Overpass API
-        try {
-          const minLat = Math.min(wp1.lat, wp2.lat) - 0.02;
-          const maxLat = Math.max(wp1.lat, wp2.lat) + 0.02;
-          const minLng = Math.min(wp1.lng, wp2.lng) - 0.02;
-          const maxLng = Math.max(wp1.lng, wp2.lng) + 0.02;
+          // 1. FERRY MODE: Smart Overpass parsing
+          try {
+            const minLat = Math.min(wp1.lat, wp2.lat) - 0.05;
+            const maxLat = Math.max(wp1.lat, wp2.lat) + 0.05;
+            const minLng = Math.min(wp1.lng, wp2.lng) - 0.05;
+            const maxLng = Math.max(wp1.lng, wp2.lng) + 0.05;
 
-          const overpassQuery = `[out:json];way["route"="ferry"](${minLat},${minLng},${maxLat},${maxLng});out geom;`;
-          const overpassUrl = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(overpassQuery)}`;
+            const overpassQuery = `[out:json];way["route"="ferry"](${minLat},${minLng},${maxLat},${maxLng});out geom;`;
+            const overpassUrl = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(overpassQuery)}`;
 
-          const res = await fetch(overpassUrl, {
-            headers: { "User-Agent": "NaviviApp/1.0" },
-          });
-          const data = await res.json();
-
-          if (data.elements && data.elements.length > 0) {
-            const ferryCoords: [number, number][] = [];
-            data.elements.forEach((element: any) => {
-              if (element.geometry) {
-                element.geometry.forEach((pt: { lat: number; lon: number }) => {
-                  ferryCoords.push([pt.lat, pt.lon]);
-                });
-              }
+            const res = await fetch(overpassUrl, {
+              headers: { "User-Agent": "NaviviApp/1.0" },
             });
-            positions = [[wp1.lat, wp1.lng], ...ferryCoords, [wp2.lat, wp2.lng]];
-          } else {
-            throw new Error("No ferry geometry");
+            const data = await res.json();
+
+            if (data.elements && data.elements.length > 0) {
+              // FORCE TYPESCRIPT TO UNDERSTAND THE TYPE
+              let bestWay: OsmNode[] | null = null;
+              let bestScore = Infinity;
+
+              data.elements.forEach((element: any) => {
+                if (element.type === "way" && element.geometry) {
+                  const geom = element.geometry as OsmNode[];
+
+                  const distToStart = Math.min(...geom.map((pt) => getDistanceKm(wp1.lat, wp1.lng, pt.lat, pt.lon)));
+                  const distToEnd = Math.min(...geom.map((pt) => getDistanceKm(wp2.lat, wp2.lng, pt.lat, pt.lon)));
+                  
+                  const score = distToStart + distToEnd;
+
+                  if (score < bestScore) {
+                    bestScore = score;
+                    bestWay = geom;
+                  }
+                }
+              });
+
+              // The strict null check reassures the compiler
+              if (bestWay !== null && bestScore < 15) {
+                // Lock it into a guaranteed non-null variable
+                const validWay: OsmNode[] = bestWay;
+                
+                const startDist = getDistanceKm(wp1.lat, wp1.lng, validWay[0].lat, validWay[0].lon);
+                const endDist = getDistanceKm(wp1.lat, wp1.lng, validWay[validWay.length - 1].lat, validWay[validWay.length - 1].lon);
+
+                let formattedFerry: [number, number][] = validWay.map(pt => [pt.lat, pt.lon]);
+                
+                if (endDist < startDist) {
+                  formattedFerry.reverse();
+                }
+
+                positions = [[wp1.lat, wp1.lng], ...formattedFerry, [wp2.lat, wp2.lng]];
+              } else {
+                throw new Error("No suitable ferry connecting these points.");
+              }
+            } else {
+              throw new Error("No ferry geometry found");
+            }
+          } catch (err) {
+            console.warn("[Ferry] Overpass fetch failed, using straight line:", err);
+            positions = [[wp1.lat, wp1.lng], [wp2.lat, wp2.lng]];
           }
-        } catch (err) {
-          console.warn("[Ferry] Overpass fetch failed, using straight line:", err);
-          positions = [[wp1.lat, wp1.lng], [wp2.lat, wp2.lng]];
-        }
-      } else if (mode === "walking") {
+        } else if (mode === "walking") {
         // 2. WALKING MODE: High-accuracy footpaths via OpenRouteService (foot-hiking)
         try {
           if (!apiKey) throw new Error("missing_api_key");

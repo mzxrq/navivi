@@ -19,12 +19,12 @@ export function StatusBar() {
       <div className="flex items-center gap-4">
         {editorMode === "map" ? (
           <>
-            <span className="flex items-center gap-1.5"><Map className="w-3 h-3 text-navi-400" /> {waypoints.length} Waypoints</span>
+            <span className="flex items-center gap-1.5"><Map className="w-3 h-3 text-navi" /> {waypoints.length} Waypoints</span>
             <span className="flex items-center gap-1.5"><Clock className="w-3 h-3" /> Est. Gen: {waypoints.length * 5}s</span>
           </>
         ) : (
           <>
-            <span className="flex items-center gap-1.5"><Clock className="w-3 h-3 text-navi-400" /> Timeline Duration: {totalDuration.toFixed(1)}s</span>
+            <span className="flex items-center gap-1.5"><Clock className="w-3 h-3 text-navi" /> Timeline Duration: {totalDuration.toFixed(1)}s</span>
             <span>Tracks: {timeline.tracks.length}</span>
           </>
         )}

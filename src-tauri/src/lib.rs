@@ -90,8 +90,9 @@ fn cancel_python_blueprint(state: State<'_, BlueprintState>) -> Result<String, S
 #[tauri::command]
 fn start_render(app: AppHandle, config_path: String) -> Result<String, String> {
     let mut child = Command::new("python")
+        .env("PYTHONIOENCODING", "utf-8")
         .arg("src-python/main.py")
-        .arg("--config")
+        .arg("full_pipeline")
         .arg(&config_path)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -158,20 +159,45 @@ fn wake_up_ollama() -> Result<String, String> {
     }
 }
 
+#[tauri::command]
+async fn export_video(app: tauri::AppHandle, project_dir: String) -> Result<(), String> {
+    println!("Starting video export for: {}", project_dir);
+
+    // Build the path to timeline.json that React just saved
+    let timeline_path = format!("{}/timeline.json", project_dir);
+
+    // Call Dev 1's specific command registry handler
+    let output = std::process::Command::new("python")
+        .arg("src-python/main.py")
+        .arg("render_timeline") 
+        .arg(&timeline_path)    
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if output.status.success() {
+        // TAURI V2 SYNTAX: Broadcast on our custom channel so React knows it is done!
+        app.emit("render-complete", ()).map_err(|e| e.to_string())?;
+        Ok(())
+    } else {
+        let err = String::from_utf8_lossy(&output.stderr).into_owned();
+        Err(err)
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
-        // 7. Inject our state into the Tauri app lifecycle
         .manage(BlueprintState {
             process: Mutex::new(None),
         })
         .invoke_handler(tauri::generate_handler![
             run_python_blueprint,
-            cancel_python_blueprint, // Register the new command
+            cancel_python_blueprint,
             start_render,
             wake_up_ollama,
+            export_video,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

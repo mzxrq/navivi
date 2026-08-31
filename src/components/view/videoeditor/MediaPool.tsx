@@ -1,4 +1,5 @@
-import { useState, useMemo } from "react";
+import { useState, useEffect } from "react";
+import { join } from "@tauri-apps/api/path";
 import { useWorkspace } from "../../../hooks/useWorkspace";
 import { Search, Film, ImageIcon, Mic, FileAudio, FolderSync } from "../../ui/icons"
 
@@ -9,33 +10,81 @@ interface MediaAsset {
     name: string;
     type: "video" | "audio" | "image";
     duration?: string;
+    source: string;
 }
 
 export function MediaPool() {
     const { waypoints, metadata } = useWorkspace();
     const [filter, setFilter] = useState<MediaType>("all");
     const [searchQuery, setSearchQuery] = useState("");
+    const [assets, setAssets] = useState<MediaAsset[]>([]);
 
-    const assets = useMemo(() => {
-        const generated: MediaAsset[] = [];
+    useEffect(() => {
+        const buildAssets = async () => {
+            if (!metadata?.directory_path) return;
 
-        generated.push({ id: "global-vid", name: "overview_flythrough.mp4", type: "video", duration: "00:15" });
-        if (metadata.overview_narration) {
-            generated.push({ id: "global-aud", name: "overview_voice.wav", type: "audio", duration: "00:10" });
-        }
-
-        waypoints.forEach((wp, index) => {
-            generated.push({ id: `wp${index}-vid`, name: `${wp.name}_map.mp4`, type: "video", duration: "00:08"});
-
-            if (wp.narration.trim()) {
-                generated.push({ id: `wp${index}-aud`, name: `${wp.name}_script.wav`, type: "audio", duration: "00:12" });
-            }
-            wp.images.forEach((img, imgIndex) => {
-                generated.push({ id: `wp${index}-img${imgIndex}`, name: img.split(/[\\]/).pop() || `image_${imgIndex}.jpg`, type: "image" });
+            const projectDir = metadata.directory_path;
+            const videoDir = await join(projectDir, "video");
+            const generated: MediaAsset[] = [];
+            // global assets
+            generated.push({
+                id: "global-vid",
+                name: "overview_flythrough.mp4",
+                type: "video",
+                duration: "00:15",
+                source: await join(videoDir, "01_overview.mp4")
             });
-        });
-        return generated;
-    }, [waypoints, metadata.overview_narration]);
+
+            if (metadata.overview_narration) {
+                generated.push({
+                    id: "global-aud",
+                    name: "overview_voice.wav",
+                    type: "audio",
+                    duration: "00:10",
+                    source: await join(videoDir, "overview_voice.wav")
+                });
+            }
+
+            // waypoint assets
+            for (let index = 0; index < waypoints.length; index++) {
+                const wp = waypoints[index];
+
+                const safeLabel = wp.name.replace(/[^a-zA-Z0-9]/g, "_");
+                // route video
+                generated.push({
+                    id: `wp${index}-vid`,
+                    name: `${wp.name}_map.mp4`,
+                    type: "video",
+                    duration: "00:08",
+                    source: await join(videoDir, `04_attraction_${String(index).padStart(2,'0')}_${safeLabel}.mp4`)
+                });
+                // narration audio
+                if (wp.narration && wp.narration.trim()) {
+                    generated.push({
+                        id: `wp${index}-aud`,
+                        name: `${wp.name}_script.wav`,
+                        type: "audio",
+                        duration: "00:12",
+                        source: await join(videoDir, `${safeLabel}_script.wav`)
+                    });
+                }
+                // uploaded images
+                if (wp.images) {
+                    for (let imgIndex = 0; imgIndex < wp.images.length; imgIndex++) {
+                        const imgPath = wp.images[imgIndex];
+                        generated.push({
+                            id: `wp${index}-img${imgIndex}`,
+                            name: imgPath.split(/[\/\\]/).pop() || `image_${imgIndex}.jpg`,
+                            type: "image",
+                            source: imgPath
+                        });
+                    }
+                }
+            }
+            setAssets(generated);
+        };
+        buildAssets();
+    }, [waypoints, metadata]);
 
     const filteredAssets = assets.filter(asset => {
         const matchesType = filter === "all" || asset.type === filter;
@@ -105,7 +154,8 @@ export function MediaPool() {
                             draggable="true"
                             onDragStart={(e) => {
                                 e.stopPropagation();
-                                e.dataTransfer.setData("text", JSON.stringify(asset));
+                                // CRITICAL: This now includes the absolute 'source' path!
+                                e.dataTransfer.setData("text", JSON.stringify(asset)); 
                                 e.dataTransfer.effectAllowed = "copy";
                             }}
                             className="flex items-center gap-3 p-2 rounded-md hover:bg-zinc-100 dark:hover:bg-navidark-600 cursor-grab active:cursor-grabbing border border-transparent hover:border-zinc-200 dark:hover:border-navidark-400 transition-colors group"

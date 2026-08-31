@@ -1,13 +1,16 @@
-import React, { useState, useEffect } from "react";
+import { listen } from "@tauri-apps/api/event";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import React, { useState, useEffect, useRef } from "react";
 import { useWorkspace } from "../../../hooks/useWorkspace";
 import { MediaPool } from "./MediaPool";
 import { TimelineTrack } from "./TimelineTrack";
 import { TimelineTrack as TrackType } from "../../../types";
 import { Inspector } from "./Inspector";
+import { saveTimelineManifest } from "../../../services/fileSystem";
 import { ZoomIn, ZoomOut, Play, Pause, SkipBack, SkipForward, MousePointer2, Scissors, Sparkles } from "../../ui/icons";
 
 export function TimelineView() {
-  const { timeline, setTimeline } = useWorkspace();
+  const { timeline, setTimeline, autoLoadTimeline, metadata } = useWorkspace();
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
   
   // Playback & Scrubbing
@@ -16,14 +19,15 @@ export function TimelineView() {
   const [isScrubbing, setIsScrubbing] = useState(false);
   const timelineRef = React.useRef<HTMLDivElement>(null);
 
-  // --- NEW: Track Renaming State ---
+  // Track Renaming State ---
   const [editingTrackId, setEditingTrackId] = useState<string | null>(null);
 
+  // Timeline Zoom
   const handleZoom = (newZoom: number) => {
     setTimeline({ ...timeline, zoomMultiplier: newZoom });
   };
 
-  // --- PLAYBACK ENGINE ---
+  // Playback Engine
   useEffect(() => {
     let animationFrameId: number;
     let lastTime = performance.now();
@@ -49,7 +53,7 @@ export function TimelineView() {
     return () => cancelAnimationFrame(animationFrameId);
   }, [isPlaying, timeline.clips]);
 
-  // --- SCRUBBING ENGINE ---
+  // Scrubbing Engine
   const handleScrub = (clientX: number) => {
     if (!timelineRef.current) return;
     const rect = timelineRef.current.getBoundingClientRect();
@@ -60,6 +64,7 @@ export function TimelineView() {
     setCurrentTime(Math.max(0, pixelsFromZero / pixelsPerSecond));
   };
 
+  // Zoom Check for Scrub
   useEffect(() => {
     if (!isScrubbing) return;
     const onMouseMove = (e: MouseEvent) => { e.preventDefault(); handleScrub(e.clientX); };
@@ -72,7 +77,7 @@ export function TimelineView() {
     };
   }, [isScrubbing, timeline.zoomMultiplier]);
 
-  // --- RENAME LISTENER & HANDLER ---
+  // Track Renaming Handler
   useEffect(() => {
     const handleRenameEvent = (e: CustomEvent<{ trackId: string }>) => setEditingTrackId(e.detail.trackId);
     window.addEventListener("start-rename-track" as any, handleRenameEvent);
@@ -97,6 +102,56 @@ export function TimelineView() {
     return isVisualTrack && isUnderPlayhead;
   });
 
+  // Automatic Manifest Loader
+  useEffect(() => {
+    const unlisten = listen("render-complete", async (_event) => {
+      console.log("Python render complete! Loading timeline...");
+      // Assuming metadata contains the current project dir path
+      if (metadata?.directory_path) {
+        await autoLoadTimeline(metadata.directory_path);
+      }
+    });
+    return () => {
+      unlisten.then((f) => f());
+    };
+  }, [metadata]);
+
+  const videoRef = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    if (!videoRef.current || !activeVisualClip) return;
+    const video = videoRef.current;
+    // calculate where video should be based on the red playhead
+    const expectedTime = currentTime - activeVisualClip.startTime;
+    // if video is out of sync by more than 0.1s we should snap it
+    if (Math.abs(video.currentTime - expectedTime) > 0.1) {
+      video.currentTime = expectedTime;
+    }
+    // force html video to match react isPlaying state
+    if (isPlaying && video.paused) {
+      video.play().catch(e => console.warn("Browser prevented playback:", e));
+    } else if (!isPlaying && !video.paused) {
+      video.pause();
+    }
+  }, [currentTime, isPlaying, activeVisualClip]);
+
+  const handleExportVideo = async () => {
+    if (!metadata?.directory_path) return;
+    // save timeline state to timeline.json
+    const success = await saveTimelineManifest(
+      metadata.directory_path,
+      metadata.project_name || "Project",
+      timeline
+    );
+    if (success) {
+      console.log("Triggering Render engine...")
+      try {
+        await invoke("export_video", { projectDir: metadata.directory_path });
+      } catch (error) {
+        console.error("Render failed:", error);
+      }
+    }
+  };
+
   // Ruler Math
   const pixelsPerSecond = 20 * timeline.zoomMultiplier;
   const maxClipEnd = timeline.clips.reduce((max, clip) => Math.max(max, clip.startTime + clip.duration), 0);
@@ -116,16 +171,18 @@ export function TimelineView() {
 
         <div className="flex-1 p-4 md:p-6 flex flex-col items-center justify-center bg-zinc-50/50 dark:bg-navidark-800 min-h-0 relative">
           <div className="w-full max-w-2xl aspect-video bg-black rounded-lg shadow-xl border border-zinc-800 flex items-center justify-center relative overflow-hidden group">
-            {activeVisualClip ? (
-              <div className="w-full h-full flex flex-col items-center justify-center">
-                <div className="text-white/50 animate-in fade-in duration-200 flex flex-col items-center">
-                  <span className="text-sm font-mono opacity-50 mb-2">Playing Media:</span>
-                  <span className="text-xl font-bold text-navi-300">{activeVisualClip.label}</span>
-                  <span className="text-xs font-mono mt-2">Clip Time: {(currentTime - activeVisualClip.startTime).toFixed(2)}s</span>
-                </div>
-              </div>
+          {activeVisualClip ? (
+              <video
+                ref={videoRef}
+                // convertFileSrc securely bridges Python's local files to the React frontend!
+                src={activeVisualClip.source ? convertFileSrc(activeVisualClip.source) : ""}
+                className="w-full h-full object-contain bg-black animate-in fade-in duration-200"
+                muted // Muted by default so browser autoplay policies don't yell at us
+                // We hide default controls because your custom UI buttons control it!
+                controls={false} 
+              />
             ) : (
-              <span className="text-zinc-600 font-mono text-sm">No visual media at this time.</span>
+              <span className="text-zinc-600 font-mono text-sm">No visual</span>
             )}
             
             <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-4 bg-zinc-900/80 backdrop-blur px-6 py-2 rounded-full border border-white/10 text-white z-10 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -142,7 +199,9 @@ export function TimelineView() {
           <h3 className="text-[10px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-wider mb-4 pb-2 border-b border-zinc-100 dark:border-navidark-700">Inspector</h3>
           <Inspector selectedClipId={selectedClipId} onClearSelection={() => setSelectedClipId(null)} />
           <div className="mt-auto pt-4">
-            <button className="w-full py-2 bg-navi hover:bg-navi-600 text-white text-sm font-bold rounded-md shadow-md transition-colors">Export Video</button>
+            <button 
+            onClick={handleExportVideo}
+            className="w-full py-2 bg-navi hover:bg-navi-600 text-white text-sm font-bold rounded-md shadow-md transition-colors">Export Video</button>
           </div>
         </div>
       </div>
@@ -172,10 +231,10 @@ export function TimelineView() {
           <div className="flex flex-col min-w-max pb-12 relative">
             
             {/* THE TIME RULER (Sticky Vertical) */}
-            <div className="sticky top-0 w-full h-8 bg-zinc-200/90 dark:bg-navidark-800/90 backdrop-blur-md border-b border-zinc-300 dark:border-navidark-400 z-[45] flex items-center">
+            <div className="sticky top-0 w-full h-8 bg-zinc-200/90 dark:bg-navidark-800/90 backdrop-blur-md border-b border-zinc-300 dark:border-navidark-400 z-45 flex items-center">
               
               {/* Z-[60] left spacer guarantees the triangle slides UNDER this element when scrolling */}
-              <div className="sticky left-0 w-32 h-full bg-zinc-100 dark:bg-navidark-800 border-r border-zinc-300 dark:border-navidark-400 shrink-0 z-[60] flex items-center px-3 shadow-[2px_0_5px_rgba(0,0,0,0.02)]">
+              <div className="sticky left-0 w-32 h-full bg-zinc-100 dark:bg-navidark-800 border-r border-zinc-300 dark:border-navidark-400 shrink-0 z-60 flex items-center px-3 shadow-[2px_0_5px_rgba(0,0,0,0.02)]">
                 <span className="text-[9px] font-bold text-zinc-400 dark:text-zinc-500 tracking-widest">TIMELINE</span>
               </div>
               
@@ -196,7 +255,7 @@ export function TimelineView() {
 
                 {/* THE PLAYHEAD TRIANGLE (Z-[50]: Stuck to the sticky ruler so it never scrolls out of view!) */}
                 <div 
-                  className="absolute bottom-0 -translate-x-1/2 w-3 h-3 bg-red-500 [clip-path:polygon(50%_100%,0_0,100%_0)] z-[50] pointer-events-none" 
+                  className="absolute bottom-0 -translate-x-1/2 w-3 h-3 bg-red-500 [clip-path:polygon(50%_100%,0_0,100%_0)] z-50 pointer-events-none" 
                   style={{ left: `${currentTime * pixelsPerSecond}px` }} 
                 />
               </div>
@@ -204,7 +263,7 @@ export function TimelineView() {
 
             {/* THE PLAYHEAD LINE (Z-[35]: Stretches 100% height, and slides UNDER the Z-40 track headers!) */}
             <div 
-              className="absolute top-0 bottom-0 w-[1.5px] bg-red-500 z-[35] pointer-events-none shadow-[0_0_10px_rgba(239,68,68,0.5)]" 
+              className="absolute top-0 bottom-0 w-[1.5px] bg-red-500 z-35 pointer-events-none shadow-[0_0_10px_rgba(239,68,68,0.5)]" 
               style={{ left: `${127 + (currentTime * pixelsPerSecond)}px` }} 
             />
 

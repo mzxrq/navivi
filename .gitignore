@@ -95,3 +95,15 @@ src-tauri/gen/schemas
 
 src-tauri/src-python/bin/
 data/
+
+src-tauri/src-python/data/
+src-tauri/src-python/frames/
+src-tauri/src-python/frames/*
+src-tauri/src-python/**/*.mp4
+src-tauri/src-python/**/*.wav
+src-tauri/src-python/**/*.jpg
+src-tauri/src-python/**/*.png
+src-tauri/src-python/logs
+src-tauri/src-python/services/__pycache__
+src-tauri/src-python/services/*
+src-tauri/src-python/services/logs/
