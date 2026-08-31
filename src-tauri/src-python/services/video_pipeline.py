@@ -112,9 +112,9 @@ def process_gps(raw_source_path: str) -> dict:
 #  [Core] GENERATE AUDIO (TTS)
 # =========================================================================
 def generate_audio(
-    cleaned_route: dict, 
-    project_config_path: str, 
-    output_audio_dir: Optional[str] = None
+    cleaned_route: dict,
+    project_config_path: str,
+    output_audio_dir: Optional[str] = None,
 ) -> dict:
     """
     Generates Irodori TTS audio based on the parsed route.
@@ -222,7 +222,8 @@ def generate_audio(
             "audio_paths": [],
             "subtitle_paths": [],
         }
-    
+
+
 # =========================================================================
 #  [Core] RENDER ROUTE VIDEO
 # =========================================================================
@@ -505,15 +506,19 @@ def render_route_video(
         muxed_paths = []
 
         logger.info("Muxing TTS narration audio into video segments...")
-        
+
         # We need a separate counter just for the residential audio
-        audio_idx = 0 
-        
+        audio_idx = 0
+
         for v_path in output_paths:
             filename = Path(v_path).name
-            
+
             # Only mux audio if the file is a residential leg (skip the overview map)
-            if "02_" in filename or "leg" in filename.lower() or "waypoint" in filename.lower():
+            if (
+                "02_" in filename
+                or "leg" in filename.lower()
+                or "waypoint" in filename.lower()
+            ):
                 if (
                     audio_idx < len(audio_paths)
                     and audio_paths[audio_idx]
@@ -531,13 +536,13 @@ def render_route_video(
                         muxed_paths.append(v_path)
                 else:
                     muxed_paths.append(v_path)
-                
+
                 # Move to the next audio file for the next residential leg
-                audio_idx += 1  
+                audio_idx += 1
             else:
                 # This is the 01_overview map, pass it through silently!
                 muxed_paths.append(v_path)
-                
+
         output_paths = muxed_paths
     logger.info("Step 3 complete: %d video file(s) produced.", len(output_paths))
     print(f"    Successfully generated {len(output_paths)} video segment(s).")
@@ -583,9 +588,16 @@ def render_attraction_videos(
             )
             continue
 
-        prompt_text = wp.get(
-            "video_prompt", wp.get("label", "Beautiful Japanese scenery, high quality")
-        )
+        # --- MODIFIED PROMPT EXTRACTION ---
+        # Extract the full list of camera pans from the waypoint config
+        camera_pans = wp.get("camera_pans", [])
+
+        # Pass the whole list, or fallback to a default list if empty
+        if camera_pans and len(camera_pans) > 0:
+            prompt_text = camera_pans
+        else:
+            prompt_text = [wp.get("label", "Beautiful Japanese scenery, high quality")]
+        # ----------------------------------
 
         target_audio_duration = (
             audio_durations[idx] if idx < len(audio_durations) else 0.0
@@ -741,6 +753,14 @@ def run_full_pipeline(
         pbar.update(8)
 
         # --- STEP 3 ---
+        attraction_videos = render_attraction_videos(
+            str(config_file_path),
+            audio_durations=audio_data.get("audio_durations"),
+            audio_paths=audio_data.get("audio_paths"),
+        )
+        pbar.update(60)
+
+        # --- STEP 4 ---
         video_paths = render_route_video(
             cleaned_route=cleaned_route,
             project_config_path=str(config_file_path),
@@ -751,9 +771,9 @@ def run_full_pipeline(
         )
         pbar.update(85)
 
-        all_videos = video_paths
+        all_videos = video_paths + attraction_videos
 
-        # --- STEP 4 ---
+        # --- STEP 5 ---
         final_videos = burn_subtitles(
             video_paths=all_videos,
             subtitle_paths=audio_data.get("subtitle_paths", []),

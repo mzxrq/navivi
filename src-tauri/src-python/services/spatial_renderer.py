@@ -102,10 +102,6 @@ class SpatialRenderer:
     ) -> str:
         is_video = False
 
-        # 💡 Video Background Detection
-        # is_video = (
-        #     str(bg_path).lower().endswith((".mp4", ".webm", ".avi", ".mov", ".mkv"))
-        # )
         if is_video:
             cap = cv2.VideoCapture(str(bg_path))
             ret, current_bg = cap.read()
@@ -117,7 +113,6 @@ class SpatialRenderer:
                 raise FileNotFoundError(f"Cannot read background image: {bg_path}")
             cap = None
 
-        # Fix dimensions to be even for OpenCV video writers
         h, w = current_bg.shape[:2]
         if h % 2 != 0 or w % 2 != 0:
             h, w = h - (h % 2), w - (w % 2)
@@ -169,7 +164,23 @@ class SpatialRenderer:
         landmark_sprites = {
             lbl: self.graphics.prebake_landmark_sprite(lbl) for _, _, lbl in named
         }
-        smooth_path = MapFetcher.get_smooth_path(points, num_frames, ease=True)
+
+        # --- FIX 1: Prevent wild spline curves by filtering clustered GPS points ---
+        filtered_points = [points[0]]
+        for pt in points[1:]:
+            # Keep point only if it's at least 3 pixels away from the last one
+            if (
+                math.hypot(
+                    pt[0] - filtered_points[-1][0], pt[1] - filtered_points[-1][1]
+                )
+                > 3.0
+            ):
+                filtered_points.append(pt)
+        # Ensure the final destination is always included
+        if filtered_points[-1] != points[-1]:
+            filtered_points.append(points[-1])
+
+        smooth_path = MapFetcher.get_smooth_path(filtered_points, num_frames, ease=True)
 
         active_popups = [
             {
@@ -233,7 +244,6 @@ class SpatialRenderer:
                 )
             else:
                 intro_frame = self.graphics.render_popup_box(intro_frame, temp_sp)
-                # 💡 HIDE static UI markers if background is video
                 if not is_video:
                     self.graphics.draw_marker(
                         intro_frame, int(start_popup["x"]), int(start_popup["y"])
@@ -251,7 +261,6 @@ class SpatialRenderer:
         prev_cx, prev_cy = None, None
 
         for current_frame, p in enumerate(smooth_path):
-            # Advance the video background exactly 1 frame per point!
             if is_video:
                 ret, vid_frame = cap.read()
                 if ret:
@@ -261,7 +270,6 @@ class SpatialRenderer:
 
             frame = current_bg.copy()
 
-            # Hide previous dot markers if video
             if not is_video:
                 for tm in triggered_markers:
                     self.graphics.draw_marker(frame, int(tm["x"]), int(tm["y"]))
@@ -278,11 +286,9 @@ class SpatialRenderer:
 
             path_history.append((int(p[0]), int(p[1])))
 
-            # 💡 HIDE main 2D route line if video
             if not is_video:
                 self.graphics.draw_path(frame, path_history)
 
-            # We still need these coordinates mathematically to trigger popups!
             cx, cy = path_history[-1]
             px, py = path_history[-2] if len(path_history) > 1 else path_history[-1]
 
@@ -309,7 +315,6 @@ class SpatialRenderer:
                 )
 
                 if triggered_popup["data"].get("image_display") == "fullscreen":
-                    # Video pauses here automatically because cap.read() is not called in the popup loops!
                     self.last_frame, _ = self.graphics.play_fullscreen_popup_sequence(
                         video=video,
                         base_frame=frame,
@@ -332,7 +337,6 @@ class SpatialRenderer:
                     hud_triggered["hud_corner"] = "bottom_left"
                     temp_frame = self.graphics.render_popup_box(frame, hud_triggered)
 
-                    # 💡 HIDE popups map marker + text if video
                     if not is_video:
                         for tm in triggered_markers:
                             self.graphics.draw_marker(
@@ -347,12 +351,11 @@ class SpatialRenderer:
                         self.graphics.draw_marker(temp_frame, cx, cy)
 
                     self.last_frame = temp_frame
-                    
+
                     for _ in range(int(display_seconds * fps)):
                         video.write(temp_frame)
 
             else:
-                # 💡 HIDE current dot, previous dots, and text if video
                 if not is_video:
                     for tm in triggered_markers:
                         self.graphics.draw_marker(frame, int(tm["x"]), int(tm["y"]))
@@ -396,7 +399,6 @@ class SpatialRenderer:
             else:
                 outro_frame = self.graphics.render_popup_box(outro_frame, temp_stop)
 
-                # 💡 HIDE final map markers if video
                 if not is_video:
                     for tm in triggered_markers:
                         self.graphics.draw_marker(
@@ -451,7 +453,6 @@ class SpatialRenderer:
         for i, res_data in enumerate(res_sequence):
             bg_path = res_data["img_path"]
 
-            # 💡 Video Background Detection
             is_video = (
                 str(bg_path).lower().endswith((".mp4", ".webm", ".avi", ".mov", ".mkv"))
             )
@@ -492,9 +493,22 @@ class SpatialRenderer:
             ]
 
             total_pause_seconds = sum(p["duration"] for p in pauses) if pauses else 0.0
+
+            # --- FIX 2: Apply the same pixel filter to the residential maps ---
+            filtered_res = [res_points[0]]
+            for pt in res_points[1:]:
+                if (
+                    math.hypot(pt[0] - filtered_res[-1][0], pt[1] - filtered_res[-1][1])
+                    > 3.0
+                ):
+                    filtered_res.append(pt)
+            if filtered_res[-1] != res_points[-1]:
+                filtered_res.append(res_points[-1])
+
             actual_travel_seconds = max(1.0, travel_duration - total_pause_seconds)
+
             res_smooth_path = MapFetcher.get_smooth_path(
-                res_points, max(2, int(actual_travel_seconds * fps)), ease=True
+                filtered_res, max(2, int(actual_travel_seconds * fps)), ease=True
             )
 
             res_named = [
@@ -572,7 +586,6 @@ class SpatialRenderer:
                 else:
                     cx, cy = int(p[0]), int(p[1])
 
-                # 💡 HIDE 2D line, markers, sprites, and human if video
                 if not is_video:
                     if len(current_chunk_px) > 1:
                         cv2.polylines(

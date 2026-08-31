@@ -409,3 +409,31 @@ class VideoEditor:
             output_path,
         )
         return str(output_path)
+
+    # [Core/Util] Fetches the exact duration of a video file using ffprobe.
+    def get_video_duration(self, video_path: str) -> float:
+        """Returns the duration of a video in seconds."""
+        vid_p = Path(video_path)
+        if not vid_p.exists():
+            raise FileNotFoundError(f"Video file not found: {vid_p}")
+
+        probe_cmd = [
+            "ffprobe",
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
+            str(vid_p),
+        ]
+        
+        try:
+            probe_res = subprocess.run(
+                probe_cmd, capture_output=True, text=True, timeout=10
+            )
+            return float(probe_res.stdout.strip())
+        except (subprocess.TimeoutExpired, ValueError) as exc:
+            raise RuntimeError(
+                f"Could not determine duration for '{vid_p}' via ffprobe: {exc}"
+            ) from exc
