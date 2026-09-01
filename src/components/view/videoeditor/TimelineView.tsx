@@ -1,11 +1,12 @@
 import { listen } from "@tauri-apps/api/event";
-import { invoke } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import React, { useState, useEffect, useRef } from "react";
 import { useWorkspace } from "../../../hooks/useWorkspace";
 import { MediaPool } from "./MediaPool";
 import { TimelineTrack } from "./TimelineTrack";
 import { TimelineTrack as TrackType } from "../../../types";
 import { Inspector } from "./Inspector";
+import { ExportPanel } from "./ExportPanel"; // 🛠️ Added ExportPanel import
 import { saveTimelineManifest } from "../../../services/fileSystem";
 import {
   ZoomIn,
@@ -17,6 +18,7 @@ import {
   MousePointer2,
   Scissors,
   Sparkles,
+  Magnet,
 } from "../../ui/icons";
 import { PreviewMonitor } from "./PreviewMonitor";
 
@@ -27,6 +29,10 @@ export function TimelineView() {
     "pointer",
   );
   
+  // 🛠️ Added new states for Tabs and Ripple Mode
+  const [rightPanelTab, setRightPanelTab] = useState<"inspector" | "export">("inspector");
+  const [isRippleMode, setIsRippleMode] = useState(true);
+
   // Playback & Scrubbing
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -160,7 +166,6 @@ export function TimelineView() {
   useEffect(() => {
     const unlisten = listen("render-complete", async (_event) => {
       console.log("Python render complete! Loading timeline...");
-      // Assuming metadata contains the current project dir path
       if (metadata?.directory_path) {
         await autoLoadTimeline(metadata.directory_path);
       }
@@ -174,13 +179,10 @@ export function TimelineView() {
   useEffect(() => {
     if (!videoRef.current || !activeVisualClip) return;
     const video = videoRef.current;
-    // calculate where video should be based on the red playhead
     const expectedTime = currentTime - activeVisualClip.startTime;
-    // if video is out of sync by more than 0.1s we should snap it
     if (Math.abs(video.currentTime - expectedTime) > 0.1) {
       video.currentTime = expectedTime;
     }
-    // force html video to match react isPlaying state
     if (isPlaying && video.paused) {
       video.play().catch((e) => console.warn("Browser prevented playback:", e));
     } else if (!isPlaying && !video.paused) {
@@ -190,7 +192,6 @@ export function TimelineView() {
 
   const handleExportVideo = async () => {
     if (!metadata?.directory_path) return;
-    // save timeline state to timeline.json
     const success = await saveTimelineManifest(
       metadata.directory_path,
       metadata.project_name || "Project",
@@ -213,7 +214,7 @@ export function TimelineView() {
     0,
   );
   const rulerDuration = Math.max(600, maxClipEnd + 120);
-  const timelinePixelWidth = rulerDuration * pixelsPerSecond; // <-- This is the magic variable
+  const timelinePixelWidth = rulerDuration * pixelsPerSecond;
 
   let majorStep = 10;
   let minorStep = 2;
@@ -234,149 +235,124 @@ export function TimelineView() {
       <div className="flex-1 flex min-h-0 border-b border-zinc-200 dark:border-white/5">
         <MediaPool />
 
-        <div className="flex-1 p-4 md:p-6 flex flex-col items-center justify-center bg-zinc-50/50 dark:bg-navidark-800 min-h-0 relative">
-          <div className="w-full max-w-2xl aspect-video bg-black rounded-lg shadow-xl border border-zinc-800 flex items-center justify-center relative overflow-hidden group">
-            {activeVisualClip ? (
-              <div className="flex-1 p-4 md:p-6 flex flex-col items-center justify-center bg-zinc-50/50 dark:bg-navidark-800 min-h-0 relative">
-                {/* 🛠️ Swapped video for Konva Monitor */}
-                <PreviewMonitor
-                  activeClips={activeVisualClips}
-                  currentTime={currentTime}
-                  isPlaying={isPlaying}
-                  selectedClipId={selectedClipId}
-                  onSelectClip={setSelectedClipId}
-                  onUpdateClip={handleUpdateClip}
-                />
-                <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-4 bg-zinc-900/80 backdrop-blur px-6 py-2 rounded-full border border-white/10 text-white z-10">
-                  <button
-                    onClick={() => setCurrentTime(0)}
-                    className="hover:text-navi transition-colors"
-                  >
-                    <SkipBack className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => setIsPlaying(!isPlaying)}
-                    className="w-8 h-8 flex items-center justify-center bg-white text-black rounded-full hover:bg-navi hover:text-white transition-colors"
-                  >
-                    {isPlaying ? (
-                      <Pause className="w-4 h-4" fill="currentColor" />
-                    ) : (
-                      <Play className="w-4 h-4 ml-0.5" fill="currentColor" />
-                    )}
-                  </button>
-                  <button className="hover:text-navi transition-colors">
-                    <SkipForward className="w-4 h-4" />
-                  </button>
+        {/* 🛠️ UI FIX: Added min-w-0 to constrain the preview container */}
+        <div className="flex-1 p-4 md:p-6 flex flex-col items-center justify-center bg-zinc-50/50 dark:bg-navidark-800 min-w-0 min-h-0 relative overflow-hidden">
+          {/* 🛠️ Constrain the monitor so it never pushes the inspector */}
+          <div className="w-full h-full max-w-4xl max-h-full flex items-center justify-center">
+            <div className="w-full aspect-video bg-black rounded-lg shadow-xl border border-zinc-800 relative overflow-hidden group">
+              {activeVisualClip ? (
+                <div className="absolute inset-0">
+                  <PreviewMonitor
+                    activeClips={activeVisualClips}
+                    currentTime={currentTime}
+                    isPlaying={isPlaying}
+                    selectedClipId={selectedClipId}
+                    onSelectClip={setSelectedClipId}
+                    onUpdateClip={handleUpdateClip}
+                  />
+                  <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-4 bg-zinc-900/80 backdrop-blur px-6 py-2 rounded-full border border-white/10 text-white z-10">
+                    <button onClick={() => setCurrentTime(0)} className="hover:text-navi transition-colors">
+                      <SkipBack className="w-4 h-4" />
+                    </button>
+                    <button onClick={() => setIsPlaying(!isPlaying)} className="w-8 h-8 flex items-center justify-center bg-white text-black rounded-full hover:bg-navi hover:text-white transition-colors">
+                      {isPlaying ? <Pause className="w-4 h-4" fill="currentColor" /> : <Play className="w-4 h-4 ml-0.5" fill="currentColor" />}
+                    </button>
+                    <button className="hover:text-navi transition-colors">
+                      <SkipForward className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ) : (
-              <span className="text-zinc-600 font-mono text-sm">No visual</span>
-            )}
+              ) : (
+                <div className="flex items-center justify-center h-full">
+                  <span className="text-zinc-600 font-mono text-sm">No visual</span>
+                </div>
+              )}
 
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-4 bg-zinc-900/80 backdrop-blur px-6 py-2 rounded-full border border-white/10 text-white z-10 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button
-                onClick={() => setCurrentTime(0)}
-                className="hover:text-navi transition-colors"
-              >
-                <SkipBack className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => setIsPlaying(!isPlaying)}
-                className="w-8 h-8 flex items-center justify-center bg-white text-black rounded-full hover:bg-navi hover:text-white transition-colors"
-              >
-                {isPlaying ? (
-                  <Pause className="w-4 h-4" fill="currentColor" />
-                ) : (
-                  <Play className="w-4 h-4 ml-0.5" fill="currentColor" />
-                )}
-              </button>
-              <button className="hover:text-navi transition-colors">
-                <SkipForward className="w-4 h-4" />
-              </button>
+              {/* Hover state controls when there is NO visual clip active */}
+              {!activeVisualClip && (
+                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-4 bg-zinc-900/80 backdrop-blur px-6 py-2 rounded-full border border-white/10 text-white z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button onClick={() => setCurrentTime(0)} className="hover:text-navi transition-colors"><SkipBack className="w-4 h-4" /></button>
+                  <button onClick={() => setIsPlaying(!isPlaying)} className="w-8 h-8 flex items-center justify-center bg-white text-black rounded-full hover:bg-navi hover:text-white transition-colors">
+                    {isPlaying ? <Pause className="w-4 h-4" fill="currentColor" /> : <Play className="w-4 h-4 ml-0.5" fill="currentColor" />}
+                  </button>
+                  <button className="hover:text-navi transition-colors"><SkipForward className="w-4 h-4" /></button>
+                </div>
+              )}
             </div>
           </div>
         </div>
 
-        <div className="w-80 bg-white dark:bg-navidark-800 border-l border-zinc-200 dark:border-navidark-400 flex flex-col shrink-0 p-4">
-          <h3 className="text-[10px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-wider mb-4 pb-2 border-b border-zinc-100 dark:border-navidark-700">
-            Inspector
-          </h3>
-          <Inspector
-            selectedClipId={selectedClipId}
-            onClearSelection={() => setSelectedClipId(null)}
-          />
-          <div className="mt-auto pt-4">
-            <button
-              onClick={handleExportVideo}
-              className="w-full py-2 bg-navi hover:bg-navi-600 text-white text-sm font-bold rounded-md shadow-md transition-colors"
+        {/* 🛠️ THE NEW RIGHT PANEL (Tabs) */}
+        <div className="w-80 bg-white dark:bg-navidark-800 border-l border-zinc-200 dark:border-navidark-400 flex flex-col shrink-0">
+          {/* Tab Header */}
+          <div className="flex border-b border-zinc-200 dark:border-navidark-700 bg-zinc-50 dark:bg-navidark-900/50">
+            <button 
+              onClick={() => setRightPanelTab("inspector")}
+              className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider transition-colors ${rightPanelTab === "inspector" ? "border-b-2 border-navi text-navi" : "text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200"}`}
             >
-              Export Video
+              Inspector
             </button>
+            <button 
+              onClick={() => setRightPanelTab("export")}
+              className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider transition-colors ${rightPanelTab === "export" ? "border-b-2 border-navi text-navi" : "text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200"}`}
+            >
+              Export
+            </button>
+          </div>
+
+          {/* Tab Content */}
+          <div className="flex-1 overflow-y-auto custom-scrollbar p-4">
+            {rightPanelTab === "inspector" ? (
+              <Inspector selectedClipId={selectedClipId} onClearSelection={() => setSelectedClipId(null)} />
+            ) : (
+              <ExportPanel onExport={handleExportVideo} />
+            )}
           </div>
         </div>
       </div>
 
       {/* BOTTOM HALF: Timeline */}
       <div className="h-80 shrink-0 flex flex-col bg-zinc-100 dark:bg-navidark-900 relative border-t border-zinc-300 dark:border-black shadow-[0_-4px_20px_rgba(0,0,0,0.1)] min-h-0">
-        {/* 🛠️ Functional Toolbar */}
+        
+        {/* 🛠️ UPGRADED TOOLBAR */}
         <div className="h-11 bg-white dark:bg-navidark-800 border-b border-zinc-200 dark:border-navidark-400 flex items-center justify-between px-4 shrink-0 z-30">
           <div className="flex items-center gap-1 bg-zinc-100 dark:bg-navidark-900 p-1 rounded-md border border-zinc-200 dark:border-navidark-700">
-            <button
-              onClick={() => setActiveTool("pointer")}
-              className={`p-1.5 rounded transition-colors ${activeTool === "pointer" ? "bg-white dark:bg-navidark-700 text-navi shadow-sm" : "text-zinc-500 hover:text-zinc-900"}`}
-            >
+            <button onClick={() => setActiveTool("pointer")} className={`p-1.5 rounded transition-colors ${activeTool === "pointer" ? "bg-white dark:bg-navidark-700 text-navi shadow-sm" : "text-zinc-500 hover:text-zinc-900"}`} title="Selection Tool">
               <MousePointer2 className="w-4 h-4" />
             </button>
-            <button
-              onClick={() => setActiveTool("razor")}
-              className={`p-1.5 rounded transition-colors ${activeTool === "razor" ? "bg-white dark:bg-navidark-700 text-navi shadow-sm" : "text-zinc-500 hover:text-zinc-900"}`}
-            >
+            <button onClick={() => setActiveTool("razor")} className={`p-1.5 rounded transition-colors ${activeTool === "razor" ? "bg-white dark:bg-navidark-700 text-navi shadow-sm" : "text-zinc-500 hover:text-zinc-900"}`} title="Razor Tool">
               <Scissors className="w-4 h-4" />
             </button>
-            <button
-              onClick={() => setActiveTool("magic")}
-              className={`p-1.5 rounded transition-colors ${activeTool === "magic" ? "bg-white dark:bg-navidark-700 text-navi shadow-sm" : "text-zinc-500 hover:text-zinc-900"}`}
-            >
+            
+            {/* The Magnet / Ripple Toggle */}
+            <div className="w-px h-4 bg-zinc-300 dark:bg-navidark-400 mx-1" />
+            <button onClick={() => setIsRippleMode(!isRippleMode)} className={`p-1.5 rounded transition-colors ${isRippleMode ? "bg-navi text-white shadow-sm" : "text-zinc-500 hover:text-zinc-900"}`} title="Ripple Insert Mode">
+              <Magnet className="w-4 h-4" />
+            </button>
+            <button onClick={() => setActiveTool("magic")} className={`p-1.5 rounded transition-colors ${activeTool === "magic" ? "bg-white dark:bg-navidark-700 text-navi shadow-sm" : "text-zinc-500 hover:text-zinc-900"}`} title="Auto-Transitions">
               <Sparkles className="w-4 h-4" />
             </button>
           </div>
+          
           <div className="text-xs font-mono font-medium text-zinc-600 dark:text-zinc-300 bg-zinc-100 dark:bg-navidark-900 px-3 py-1 rounded-md border border-zinc-200 dark:border-navidark-700">
-            {new Date(currentTime * 1000)
-              .toISOString()
-              .substring(11, 23)
-              .replace(".", ":")}
+            {new Date(currentTime * 1000).toISOString().substring(11, 23).replace(".", ":")}
           </div>
           <div className="flex items-center gap-2">
             <ZoomOut className="w-3.5 h-3.5 text-zinc-400" />
-            <input
-              type="range"
-              min="0.2"
-              max="5"
-              step="0.1"
-              value={timeline.zoomMultiplier}
-              onChange={(e) => handleZoom(parseFloat(e.target.value))}
-              className="w-24 accent-navi cursor-ew-resize"
-            />
+            <input type="range" min="0.2" max="5" step="0.1" value={timeline.zoomMultiplier} onChange={(e) => handleZoom(parseFloat(e.target.value))} className="w-24 accent-navi cursor-ew-resize" />
             <ZoomIn className="w-3.5 h-3.5 text-zinc-400" />
           </div>
         </div>
 
         {/* Scrollable Tracks Area */}
-        <div
-          ref={timelineRef}
-          className="flex-1 overflow-auto custom-scrollbar relative min-h-0"
-        >
+        <div ref={timelineRef} className="flex-1 overflow-auto custom-scrollbar relative min-h-0">
           <div className="flex flex-col min-w-max pb-12 relative">
             {/* THE TIME RULER (Sticky Vertical) */}
             <div className="sticky top-0 w-full h-8 bg-zinc-200/90 dark:bg-navidark-800/90 backdrop-blur-md border-b border-zinc-300 dark:border-navidark-400 z-45 flex items-center">
-              {/* Z-[60] left spacer guarantees the triangle slides UNDER this element when scrolling */}
               <div className="sticky left-0 w-32 h-full bg-zinc-100 dark:bg-navidark-800 border-r border-zinc-300 dark:border-navidark-400 shrink-0 z-60 flex items-center px-3 shadow-[2px_0_5px_rgba(0,0,0,0.02)]">
-                <span className="text-[9px] font-bold text-zinc-400 dark:text-zinc-500 tracking-widest">
-                  TIMELINE
-                </span>
+                <span className="text-[9px] font-bold text-zinc-400 dark:text-zinc-500 tracking-widest">TIMELINE</span>
               </div>
 
-              {/* 🛠️ Dynamic width applied here, changed flex-1 to shrink-0 */}
               <div
                 className="h-full cursor-ew-resize relative overflow-hidden shrink-0"
                 style={{ width: `${timelinePixelWidth}px` }}
@@ -386,36 +362,21 @@ export function TimelineView() {
                   handleScrub(e.clientX);
                 }}
               >
-                {Array.from({
-                  length: Math.ceil(rulerDuration / minorStep),
-                }).map((_, i) => {
+                {Array.from({ length: Math.ceil(rulerDuration / minorStep) }).map((_, i) => {
                   const time = i * minorStep;
                   const isMajor = time % majorStep === 0;
                   return (
-                    <div
-                      key={time}
-                      className="absolute bottom-0"
-                      style={{ left: `${time * pixelsPerSecond}px` }}
-                    >
-                      <div
-                        className={`w-px bg-zinc-400 dark:bg-zinc-600 ${isMajor ? "h-2.5" : "h-1.5"}`}
-                      />
+                    <div key={time} className="absolute bottom-0" style={{ left: `${time * pixelsPerSecond}px` }}>
+                      <div className={`w-px bg-zinc-400 dark:bg-zinc-600 ${isMajor ? "h-2.5" : "h-1.5"}`} />
                       {isMajor && (
                         <span className="absolute bottom-3 -translate-x-1/2 text-[9px] text-zinc-500 dark:text-zinc-400 font-mono select-none pointer-events-none">
-                          {Math.floor(time / 60)
-                            .toString()
-                            .padStart(2, "0")}
-                          :
-                          {Math.floor(time % 60)
-                            .toString()
-                            .padStart(2, "0")}
+                          {Math.floor(time / 60).toString().padStart(2, "0")}:{Math.floor(time % 60).toString().padStart(2, "0")}
                         </span>
                       )}
                     </div>
                   );
                 })}
 
-                {/* THE PLAYHEAD TRIANGLE (Z-[50]: Stuck to the sticky ruler so it never scrolls out of view!) */}
                 <div
                   className="absolute bottom-0 -translate-x-1/2 w-3 h-3 bg-red-500 [clip-path:polygon(50%_100%,0_0,100%_0)] z-50 pointer-events-none"
                   style={{ left: `${currentTime * pixelsPerSecond}px` }}
@@ -423,7 +384,6 @@ export function TimelineView() {
               </div>
             </div>
 
-            {/* THE PLAYHEAD LINE (Z-[35]: Stretches 100% height, and slides UNDER the Z-40 track headers!) */}
             <div
               className="absolute top-0 bottom-0 w-[1.5px] bg-red-500 z-35 pointer-events-none shadow-[0_0_10px_rgba(239,68,68,0.5)]"
               style={{ left: `${127 + currentTime * pixelsPerSecond}px` }}
@@ -435,41 +395,24 @@ export function TimelineView() {
               const trackHeight = isMainTrack ? "h-20" : "h-14";
 
               return (
-                <div key={track.id} className="flex w-max group"> {/* 🛠️ Changed w-full to w-max so track drops zone can stretch */}
-                  {/* Sticky Header (Z-40) */}
+                <div key={track.id} className="flex w-max group">
                   <div
                     onContextMenu={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
-                      window.dispatchEvent(
-                        new CustomEvent("open-context-menu", {
-                          detail: {
-                            x: e.clientX,
-                            y: e.clientY,
-                            type: "track-header",
-                            targetId: track.id,
-                          },
-                        }),
-                      );
+                      window.dispatchEvent(new CustomEvent("open-context-menu", { detail: { x: e.clientX, y: e.clientY, type: "track-header", targetId: track.id } }));
                     }}
                     onDoubleClick={() => setEditingTrackId(track.id)}
                     className={`sticky left-0 shrink-0 w-32 bg-zinc-50 dark:bg-navidark-700 border-r border-b border-zinc-200 dark:border-navidark-400 flex items-center justify-between px-3 z-40 ${editingTrackId === track.id ? "" : "cursor-context-menu"} ${trackHeight}`}
                   >
-                    {/* The Rename Input */}
                     {editingTrackId === track.id ? (
                       <input
                         type="text"
                         autoFocus
                         defaultValue={track.name}
-                        onBlur={(e) =>
-                          handleUpdateTrackName(track.id, e.target.value)
-                        }
+                        onBlur={(e) => handleUpdateTrackName(track.id, e.target.value)}
                         onKeyDown={(e) => {
-                          if (e.key === "Enter")
-                            handleUpdateTrackName(
-                              track.id,
-                              e.currentTarget.value,
-                            );
+                          if (e.key === "Enter") handleUpdateTrackName(track.id, e.currentTarget.value);
                           if (e.key === "Escape") setEditingTrackId(null);
                         }}
                         className="w-full bg-white dark:bg-navidark-900 text-[10px] font-bold text-zinc-900 dark:text-zinc-100 px-1.5 py-1 rounded outline-none border-2 border-navi"
@@ -481,13 +424,13 @@ export function TimelineView() {
                     )}
                   </div>
 
-                  {/* Track Drop Lane */}
                   <TimelineTrack
                     track={track}
                     selectedClipId={selectedClipId}
                     onSelectClip={setSelectedClipId}
                     activeTool={activeTool}
                     onSplit={handleSplitClip}
+                    isRippleMode={isRippleMode} // 🛠️ Passed the ripple mode state!
                     trackWidth={timelinePixelWidth}
                   />
                 </div>

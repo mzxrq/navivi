@@ -13,6 +13,8 @@ interface ClipProps {
   onSelect?: () => void;
 }
 
+
+
 export function TimelineClip({
   clip,
   isMainTrack,

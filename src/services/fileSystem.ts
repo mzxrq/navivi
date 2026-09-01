@@ -60,24 +60,6 @@ export const saveProjectData = async (
       }
     }
   }
-  // if (projId) {
-  //   projectDir = await join(projectRoot, projId);
-  // } else {
-  //   let safeName = projName.toLowerCase().replace(/[^a-z0-9]+/g, "_") || "untitled";
-  //   let baseProjId = `${safeName}`;
-
-  //   projId = baseProjId;
-  //   projectDir = await join(projectRoot, projId);
-
-  //   let counter = 1;
-  //   while (await exists(projectDir)) {
-  //     counter++;
-  //     projName = `${overrideName || metadata.project_name || appConfig.defaultProjectName} (${counter})`;
-  //     safeName = projName.toLowerCase().replace(/[^a-z0-9]+/g, "_");
-  //     projId = `${baseProjId}_${counter}`;
-  //     projectDir = await join(projectRoot, projId);
-  //   }
-  // }
 
   const assetsDir = await join(projectDir, "assets");
   const gpxPath = await join(projectDir, "raw_track.gpx");

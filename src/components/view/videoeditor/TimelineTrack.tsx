@@ -10,7 +10,8 @@ interface TrackProps {
   activeTool: string;
   onSplit: (id: string, time: number) => void;
   onSelectClip?: (id: string | null) => void;
-  trackWidth: number; // 🛠️ Added new prop for dynamic infinite width
+  trackWidth: number;
+  isRippleMode: boolean;
 }
 
 const pxPs = 20;

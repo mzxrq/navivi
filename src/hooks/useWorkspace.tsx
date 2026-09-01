@@ -1,8 +1,7 @@
-import { saveProjectData, loadProjectData } from "../services/fileSystem";
 import { createContext, useContext, useState, useCallback, useEffect, ReactNode, } from "react";
 import { Waypoint, ProjectMetadata, ProjectSettings, RouteSegment, RecentProjects, WorkspaceState, TimelineData } from "../types";
 import { appConfig, defaultProjectSettings, mapDefaults } from "../config/constants";
-import { loadTimelineManifest, loadRouteCache } from "../services/fileSystem";
+import { saveProjectData, loadProjectData, loadTimelineManifest, loadRouteCache, saveTimelineManifest } from "../services/fileSystem";
 import { TimelineClipData, TimelineTrack } from "../types";
 import { useHistory } from "./useHistory";
 import { useUI } from "./useUI";
@@ -118,6 +117,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     }
 
     try {
+      // 1. Save all the Map/Route/Settings data
       const result = await saveProjectData(
         waypoints,
         routeSegments,
@@ -129,6 +129,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         safeFolderName
       );
 
+      // 🛠️ 2. NEW: Instantly save the Timeline Manifest into that exact same folder!
+      await saveTimelineManifest(
+        result.projectDir,
+        result.projName,
+        timeline
+      );
+
+      // 3. Update UI state
       updateMetadata({
         project_name: result.projName,
         status: "saved",

@@ -40,5 +40,6 @@ export const defaultProjectSettings = {
     summary_fade: 0.5,
     resolution: "1080p",
     ors_api_key: "",
+    auto_save_interval: 3,
 };
 

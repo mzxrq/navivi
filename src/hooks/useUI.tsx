@@ -1,10 +1,17 @@
-import React, { createContext, useContext, useState } from "react";
+import React, { createContext, useContext, useState, useRef } from "react";
 
 export type AppView = "title_screen" | "editor" | "new_project";
 export type EditorMode = "map" | "timeline";
 
 export type AppTheme = "light" | "dark" | "system";
 export type MapTheme = "light" | "dark" | "sync";
+
+export interface AppNotification {
+  id: string;
+  message: string;
+  type: "success" | "error" | "warning" | "info";
+  timestamp: Date;
+}
 
 // define global ui state
 interface UIState {
@@ -29,7 +36,9 @@ interface UIState {
   showToast: (message: string, type?: "success" | "error" | "warning" | "info") => void;
   showAppSettings: boolean;
   setShowAppSettings: (show: boolean) => void;
+  notifications: AppNotification[];
 }
+
 
 // create context
 const UIContext = createContext<UIState | undefined>(undefined);
@@ -49,7 +58,8 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({
     type: "info",
     visible: false,
   });
-
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showAppSettings, setShowAppSettings] = useState(false);
   const [isRendering, setIsRendering] = useState(false);
   const [renderLogs, setRenderLogs] = useState("");
@@ -57,15 +67,22 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({
 
   // han
 
-  const showToast = (
-    message: string,
-    type: "success" | "error" | "warning" | "info" = "info",
-  ) => {
+  const showToast = (message: string, type: "success" | "error" | "warning" | "info" = "info") => {
+    const newNotif: AppNotification = {
+      id: crypto.randomUUID(),
+      message, type, timestamp: new Date(),
+    };
+    setNotifications((prev) => [newNotif, ...prev].slice(0,50));
     setToast({ message, type, visible: true });
-    setTimeout(() => {
+    if (toastTimeoutRef.current) {
+      clearTimeout(toastTimeoutRef.current);
+    }
+
+    toastTimeoutRef.current = setTimeout(() => {
       setToast((prev) => ({ ...prev, visible: false }));
     }, 4000);
   };
+  
 
   return (
     <UIContext.Provider
@@ -84,6 +101,7 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({
         showToast,
         showAppSettings,
         setShowAppSettings,
+        notifications,
       }}
     >
       {children}

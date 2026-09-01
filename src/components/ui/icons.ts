@@ -21,4 +21,7 @@ export {
     File, FileAudio, FolderSync, // MediaPool
     ZoomIn, ZoomOut, // TimelineView
     Layers, //TimelineTrack
+    MonitorPlay, //ExportPanel
+    CheckCircle2, AlertCircle, // Toast
+    CircleDashed, History, Bell // StatusBar
 } from "lucide-react";

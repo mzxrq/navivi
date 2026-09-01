@@ -40,6 +40,7 @@ export interface ProjectSettings {
   ors_api_key: string;
   is_round_trip?: boolean;
   return_route_mode?: "driving" | "walking" | "direct" | "curve";
+  auto_save_interval: number;
 }
 
 export interface ProjectMetadata {
@@ -99,6 +100,8 @@ export interface TimelineManifest {
   video_tracks: ManifestClip[];
   audio_track?: string;
 }
+
+
 
 // Global State Interface
 export interface WorkspaceState {
