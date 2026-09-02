@@ -116,6 +116,40 @@ class SpatialRenderer:
                 )
         return base
 
+    def _layout_beside_popups(
+        self,
+        group: List[Dict],
+        w: int,
+        h: int,
+        card_w: int = 368,
+        card_h: int = 300,
+    ) -> None:
+        """For waypoints flowing through without a freeze, their popup cards
+        sit beside their own pin (see render_popup_box's non-HUD-corner
+        branch) instead of a screen corner. When more than one is visible
+        at once (nearby waypoints triggering close together in time), their
+        default positions can overlap — this stacks the later one below the
+        earlier one until they clear, storing the vertical push as
+        "beside_nudge_y" on each popup for render_popup_box to apply."""
+        placed: List[Tuple[float, float, float, float]] = []
+        for bp in sorted(group, key=lambda b: b["popup"]["y"]):
+            popup = bp["popup"]
+            x, y = popup["x"], popup["y"]
+            box_x = x - card_w - 40 if x > w * 0.5 else x + 40
+            box_x = max(40, min(box_x, w - card_w - 40))
+            box_y = max(40, min(y - card_h / 2, h - card_h - 40))
+
+            nudge = 0.0
+            for (px0, py0, px1, py1) in placed:
+                if box_x < px1 and box_x + card_w > px0:
+                    top, bottom = box_y + nudge, box_y + nudge + card_h
+                    if top < py1 and bottom > py0:
+                        nudge = py1 - box_y + 12
+
+            final_y = max(40, min(box_y + nudge, h - card_h - 40))
+            popup["beside_nudge_y"] = final_y - box_y
+            placed.append((box_x, final_y, box_x + card_w, final_y + card_h))
+
     def _pin_color(self, wp: Dict):
         """Arrived waypoints get GraphicsEngine.arrived_marker_color; ones
         still ahead keep the default marker_color (return None so
@@ -372,6 +406,14 @@ class SpatialRenderer:
                     popup["data"]["image_display"] = jw["image_display"]
                 if "popup_video" in jw and not popup["data"].get("popup_video"):
                     popup["data"]["popup_video"] = jw["popup_video"]
+                # Waypoints flow through by default (the traveler never
+                # stops, all the way to the end) — set "freeze_frame": true
+                # on a waypoint in job_config.json to opt IT back into the
+                # old held-frame arrival pause. Flow-through popup cards
+                # ride along beside the pin (see _layout_beside_popups)
+                # rather than holding the frame.
+                if "freeze_frame" in jw:
+                    popup["data"]["freeze_frame"] = bool(jw["freeze_frame"])
 
         # Static footprint (the full route line + every pin) used to pick a
         # HUD corner that the popup card won't sit on top of. Computed once
@@ -497,10 +539,21 @@ class SpatialRenderer:
                         number=order, color=self._pin_color(wp),
                     )
 
+            flowing_group = [
+                bp for bp in baked_popups
+                if not bp["popup"]["data"].get("freeze_frame", False)
+            ]
+            if flowing_group:
+                self._layout_beside_popups(flowing_group, w, h)
+
             surviving_popups = []
             for bp in baked_popups:
                 hud_popup = bp["popup"].copy()
-                hud_popup.setdefault("hud_corner", "bottom_left")
+                if hud_popup["data"].get("freeze_frame", False):
+                    hud_popup.setdefault("hud_corner", "bottom_left")
+                else:
+                    hud_popup["hud_corner"] = None
+                    hud_popup["draw_leader_line"] = True
                 frame = self.graphics.render_popup_box(frame, hud_popup)
                 bp["frames_left"] -= 1
                 if bp["frames_left"] > 0:
@@ -561,6 +614,54 @@ class SpatialRenderer:
                         popup_base_frame, leg_stats[leg_idx], triggered_popup["hud_corner"]
                     )
 
+                # Fullscreen popups are an inherent full-screen takeover —
+                # they always freeze regardless of the waypoint's
+                # freeze_frame setting, since "flow through" wouldn't mean
+                # anything for a shot that covers the whole frame. Every
+                # other waypoint now flows through by default — the
+                # traveler continues moving past each stop all the way to
+                # the end; a waypoint only freezes if it opts in with
+                # "freeze_frame": true in job_config.json.
+                is_fullscreen = (
+                    self.enable_fullscreen_popups
+                    and triggered_popup["data"].get("image_display") == "fullscreen"
+                )
+                freeze_frame_on = (
+                    triggered_popup["data"].get("freeze_frame", False) or is_fullscreen
+                )
+
+                if not freeze_frame_on:
+                    # Flow-through: the traveler keeps moving — no held
+                    # frame, no arrival pause. The popup card rides along as
+                    # a HUD overlay beside the waypoint's own pin (with a
+                    # leader line back to it, drawn in render_popup_box) for
+                    # freeze_seconds, exactly like the frozen case but
+                    # without ever stopping the camera.
+                    display_seconds = float(
+                        triggered_popup["data"].get("freeze_seconds", 4.0)
+                    )
+                    baked_popups.append(
+                        {
+                            "popup": triggered_popup,
+                            "frames_left": int(display_seconds * fps),
+                        }
+                    )
+                    frame = popup_base_frame
+                    if not is_video:
+                        self._draw_prioritized_sprites(
+                            frame, active_popups, landmark_sprites
+                        )
+                        smoothed_angle = self._smoothed_heading(
+                            smoothed_angle, cx, cy, prev_cx, prev_cy
+                        )
+                        self.graphics.draw_transport_icon(
+                            frame, cx, cy, current_frame, smoothed_angle, mode=current_mode
+                        )
+                    self.last_frame = frame
+                    video.write(frame)
+                    prev_cx, prev_cy = cx, cy
+                    continue
+
                 # Hold on the traveler having just reached the pin for a
                 # beat before the fullscreen/pip transition kicks in — but
                 # the popup photo itself is already visible (as its small
@@ -579,10 +680,7 @@ class SpatialRenderer:
                     for _ in range(int(self.post_arrival_hold_seconds * fps)):
                         video.write(pause_frame)
 
-                if (
-                    self.enable_fullscreen_popups
-                    and triggered_popup["data"].get("image_display") == "fullscreen"
-                ):
+                if is_fullscreen:
                     self.last_frame, _ = self.graphics.play_fullscreen_popup_sequence(
                         video=video,
                         base_frame=popup_base_frame,
@@ -615,7 +713,6 @@ class SpatialRenderer:
                         self._draw_prioritized_sprites(
                             temp_frame, sprite_popups, landmark_sprites
                         )
-                        self.graphics.draw_marker(temp_frame, cx, cy)
 
                     self.last_frame = temp_frame
 

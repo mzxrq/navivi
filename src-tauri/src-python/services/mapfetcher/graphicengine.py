@@ -474,9 +474,33 @@ class GraphicsEngine:
                     box_x = (
                         point_x - total_w - 40 if point_x > w * 0.5 else point_x + 40
                     )
-                    box_y = point_y - (total_h // 2)
+                    box_y = point_y - (total_h // 2) + int(
+                        popup_info.get("beside_nudge_y", 0)
+                    )
                     box_x = max(margin, min(box_x, w - total_w - margin))
                     box_y = max(margin, min(box_y, h - total_h - margin))
+
+                    if popup_info.get("draw_leader_line"):
+                        # Connects the card back to the waypoint's own pin —
+                        # used when the card is riding beside a waypoint the
+                        # traveler is flowing through rather than sitting in
+                        # a fixed HUD corner, so it's still clear which stop
+                        # it belongs to.
+                        anchor_x = box_x if point_x > w * 0.5 else box_x + total_w
+                        anchor_y = max(
+                            box_y + 16, min(point_y, box_y + total_h - 16)
+                        )
+                        cv2.line(
+                            f_frame,
+                            (point_x, point_y),
+                            (anchor_x, anchor_y),
+                            (130, 130, 130),
+                            2,
+                            cv2.LINE_AA,
+                        )
+                        cv2.circle(
+                            f_frame, (point_x, point_y), 4, (130, 130, 130), -1, cv2.LINE_AA
+                        )
 
                 pil_canvas = Image.new("RGBA", (w, h), (0, 0, 0, 0))
                 draw = ImageDraw.Draw(pil_canvas)
