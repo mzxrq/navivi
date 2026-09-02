@@ -58,6 +58,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
   const [routeSegments, setRouteSegments] = useState<RouteSegment[]>([]); // RouteSegments
   const [routePoints, setRoutePoints] = useState<[number, number][]>([]); // MapPin Route points
+  const [drawnRoute, setDrawnRoute] = useState<[number, number][]>([]);
   const [activeWaypointId, setActiveWaypointId] = useState<string | null>(null); // Selected waypoint (for context menu)
   const [metadata, setMetadata] = useState<ProjectMetadata>(() => ({
     ...DefaultMetadata,
@@ -176,8 +177,6 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       if (!data.project_id || !data.waypoints) {
         throw new Error("Invalid Navivi project file format.");
       }
-
-      setRoutingCache(data.routing_cache || {});
 
       // Sync React State
       setMetadata({
@@ -316,6 +315,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     });
   };
 
+  const forceReroute = () => {
+    setRoutingCache({});
+  };
+
   return (
     <WorkspaceContext.Provider
       value={{
@@ -356,6 +359,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         resetWorkspace,
         routingCache,
         setRoutingCache,
+        forceReroute,
+        drawnRoute,
+        setDrawnRoute,
       }}
     >
       {children}

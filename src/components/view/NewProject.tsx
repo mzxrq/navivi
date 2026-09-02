@@ -10,7 +10,7 @@ const startingLocations = [
 
 export function NewProject() {
   const { setCurrentView } = useUI();
-  const { updateMetadata, updateSettings } = useWorkspace();
+  const { updateMetadata, updateSettings, resetWorkspace } = useWorkspace();
 
   const [projectName, setProjectName] = useState("Untitled Project");
   const [location, setLocation] = useState(startingLocations[0].id);
@@ -18,6 +18,7 @@ export function NewProject() {
   const [fps, setFps] = useState(30);
 
   const handleCreate = () => {
+    resetWorkspace();
     const selectedLoc = startingLocations.find((loc) => loc.id === location);
     const coords = selectedLoc ? selectedLoc.coords : [34.6937, 135.5023];
 
@@ -32,7 +33,7 @@ export function NewProject() {
       resolution: resolution,
       fps: fps,
     });
-
+    
     setCurrentView("editor");
   };
 

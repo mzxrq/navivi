@@ -66,8 +66,8 @@ export function WaypointLayer({ isGeneratingOverview = false }: WaypointLayerPro
                 <div className="flex items-center gap-1 bg-zinc-100 p-1 rounded-lg border border-zinc-200">
                   <button
                     disabled={isGeneratingOverview}
-                    onClick={(e) => { e.stopPropagation(); updateWaypoint(wp.id, { routeMode: "driving" }); }}
-                    className={`flex-1 flex justify-center p-1.5 rounded-md transition-all ${!wp.routeMode || wp.routeMode === "driving" ? "bg-white shadow-sm text-emerald-600 ring-1 ring-zinc-200" : "text-zinc-500 hover:text-zinc-800 hover:bg-zinc-200/50"}`}
+                    onClick={(e) => { e.stopPropagation(); updateWaypoint(wp.id, { routeMode: "walking" }); }}
+                    className={`flex-1 flex justify-center p-1.5 rounded-md transition-all ${!wp.routeMode || wp.routeMode === "walking" ? "bg-white shadow-sm text-emerald-600 ring-1 ring-zinc-200" : "text-zinc-500 hover:text-zinc-800 hover:bg-zinc-200/50"}`}
                     title="Drive"
                   ><Car className="w-4 h-4" /></button>
                   <button

@@ -1,5 +1,5 @@
 import { listen } from "@tauri-apps/api/event";
-import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { invoke } from "@tauri-apps/api/core";
 import React, { useState, useEffect, useRef } from "react";
 import { useWorkspace } from "../../../hooks/useWorkspace";
 import { MediaPool } from "./MediaPool";

@@ -1,38 +1,38 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-@import url('https://unpkg.com/leaflet@1.9.4/dist/leaflet.css');
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+@import "mapbox-gl/dist/mapbox-gl.css";
 @import "tailwindcss";
+@plugin "tailwindcss-animate";
 
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
   --color-navi: #4287f5;
-  --color-navi-1100: #000BCC;
-  --color-navi-1000: #002DD9;
-  --color-navi-900: #134EE6;
-  --color-navi-800: #296CF2;
-  --color-navi-600: #66ABEF;
-  --color-navi-500: #88C5EB;
-  --color-navi-400: #A7D8EA;
-  --color-navi-300: #C2E6EC;
-  --color-navi-200: #DCF0F1;
-  --color-navi-100: #F2F8F8;
-  --color-navidark-900: #110F10;
+  --color-navi-1100: #000bcc;
+  --color-navi-1000: #002dd9;
+  --color-navi-900: #134ee6;
+  --color-navi-800: #296cf2;
+  --color-navi-600: #66abef;
+  --color-navi-500: #88c5eb;
+  --color-navi-400: #a7d8ea;
+  --color-navi-300: #c2e6ec;
+  --color-navi-200: #dcf0f1;
+  --color-navi-100: #f2f8f8;
+  --color-navidark-900: #110f10;
   --color-navidark-800: #131012;
   --color-navidark-700: #141214;
   --color-navidark-600: #151316;
   --color-navidark-500: #161518;
   --color-navidark-400: #171719;
   --color-navidark-300: #18181b;
-  --color-navidark-200: #3B3B3D;
-  --color-navidark-175: #5D5E5F;
+  --color-navidark-200: #3b3b3d;
+  --color-navidark-175: #5d5e5f;
   --color-navidark-150: #808182;
-  --color-navidark-125: #A3A4A4;
-  --color-navidark-100: #C5C6C6;
+  --color-navidark-125: #a3a4a4;
+  --color-navidark-100: #c5c6c6;
 }
 
-
 body {
-  font-family: 'Inter', sans-serif;
+  font-family: "Inter", sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background-color: #09090b; /* Fallback for the zinc-950 dark mode */
@@ -97,7 +97,11 @@ body {
   border-bottom-color: rgba(255, 255, 255, 0.1) !important;
 }
 
-.no-spinners::-webkit-inner-spin-button, .no-spinners::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.no-spinners::-webkit-inner-spin-button,
+.no-spinners::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
 
 @layer components {
   .ctx-btn {

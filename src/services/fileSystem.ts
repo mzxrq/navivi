@@ -136,7 +136,6 @@ export const saveProjectData = async (
         lng: wp.lng,
         label: wp.name,
         freeze_seconds: wp.duration || settings.duration_seconds,
-        fps: wp.fps || settings.fps,
         popup_image: absoluteImagePaths,
         // Safely check imagePans (plural) and fallback to "panright" for each image
         camera_pans: absoluteImagePaths.length > 0 

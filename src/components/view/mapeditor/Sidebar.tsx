@@ -1,8 +1,26 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useState, useEffect, useRef } from "react";
-import { ChevronRight, Trash2,Car,Footprints,Route,Ruler,  Plane,Play,  Square, Ship, Edit,  } from "../../ui/icons";
-import { DragDropContext, Droppable, Draggable, DropResult,} from "@hello-pangea/dnd";
+import {
+  ChevronRight,
+  Trash2,
+  Car,
+  Footprints,
+  Route,
+  Ruler,
+  Plane,
+  Play,
+  Square,
+  Ship,
+  Edit,
+  RefreshCw,
+} from "../../ui/icons";
+import {
+  DragDropContext,
+  Droppable,
+  Draggable,
+  DropResult,
+} from "@hello-pangea/dnd";
 import { useWorkspace } from "../../../hooks/useWorkspace";
 import { useUI } from "../../../hooks/useUI";
 import { WaypointItem } from "./WaypointItem";
@@ -12,7 +30,15 @@ import { OverviewPanel } from "./OverviewPanel";
 
 export function Sidebar() {
   const { showToast, setEditorMode } = useUI();
-  const { waypoints, setWaypoints, metadata, saveProject, activeWaypointId, setActiveWaypointId, } = useWorkspace();
+  const {
+    waypoints,
+    setWaypoints,
+    metadata,
+    saveProject,
+    activeWaypointId,
+    setActiveWaypointId,
+    forceReroute,
+  } = useWorkspace();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isListEditMode, setIsListEditMode] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
@@ -67,8 +93,12 @@ export function Sidebar() {
       showToast("Cannot generate: Please add at least one waypoint.", "error");
       return;
     }
-    
-    if (!confirm("Ready to generate assets? This will create your voiceovers and map videos before opening the timeline.")) {
+
+    if (
+      !confirm(
+        "Ready to generate assets? This will create your voiceovers and map videos before opening the timeline.",
+      )
+    ) {
       return;
     }
 
@@ -87,26 +117,26 @@ export function Sidebar() {
 
         // Listen for standard logs
         listen<string>("render-log", (event) => {
-           console.log("[Python]:", event.payload);
-        }).then(un => unlistenLog = un);
+          console.log("[Python]:", event.payload);
+        }).then((un) => (unlistenLog = un));
 
         // 🛠️ ADD THIS: Listen to stderr (This is where tqdm progress bars and errors actually go!)
         listen<string>("render-error", (event) => {
-           console.log("[Progress/Error]:", event.payload);
-        }).then(un => unlistenErr = un);
+          console.log("[Progress/Error]:", event.payload);
+        }).then((un) => (unlistenErr = un));
 
         // Listen for the actual Finish line
         listen<string>("render-finish", (event) => {
           if (event.payload === "Success") {
-            resolve(); 
+            resolve();
           } else {
             reject("Python pipeline failed. Check the console.");
           }
-          
+
           if (unlistenFinish) unlistenFinish();
           if (unlistenLog) unlistenLog();
           if (unlistenErr) unlistenErr(); // Clean it up
-        }).then(un => unlistenFinish = un);
+        }).then((un) => (unlistenFinish = un));
 
         // 2. Start the process
         invoke("start_render", { configPath: configPath }).catch((err) => {
@@ -116,8 +146,7 @@ export function Sidebar() {
 
       // 3. THIS ONLY RUNS WHEN PYTHON IS 100% DONE NOW!
       showToast("Assets generated successfully!", "success");
-      setEditorMode('timeline'); 
-      
+      setEditorMode("timeline");
     } catch (error) {
       showToast(`Render Error: ${error}`, "error");
     } finally {
@@ -149,31 +178,6 @@ export function Sidebar() {
       <div className="sticky top-0 z-30 bg-white/95 dark:bg-navidark-800/95 backdrop-blur-md border-b border-zinc-200 dark:border-white/5 p-5 shrink-0 flex flex-col gap-4">
         <LocationSearch />
         <OverviewPanel />
-
-        {waypoints.length > 0 && (
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                setIsListEditMode(!isListEditMode);
-                setShowClearConfirm(false);
-              }}
-              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors shadow-sm ${
-                isListEditMode
-                  ? "bg-navi-100 text-navi dark:bg-navi/20 dark:text-navi-200 border border-navi-200 dark:border-navi/30"
-                  : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 border border-transparent"
-              }`}
-            >
-              {isListEditMode ? 
-                <span className="inline-flex items-center gap-1.5">
-                  <Edit className="w-2.5 h-2.5"/> Done Editing
-                </span> : 
-                <span className="inline-flex items-baseline gap-1.5">
-                  <Edit className="w-2.5 h-2.5"/> Edit List
-                </span>
-              }
-            </button>
-          </div>
-        )}
       </div>
 
       {/* --- SCROLLABLE TIMELINE --- */}
@@ -308,12 +312,12 @@ export function Sidebar() {
       </div>
 
       {/* --- FOOTER / ACTION AREA --- */}
-      <div className="shrink-0 px-4 py-3 flex items-center justify-between bg-white dark:bg-zinc-950 border-t border-zinc-100 dark:border-white/5 z-30">
+      <div className="shrink-0 px-2.5 py-1.75 flex items-center justify-between bg-white dark:bg-zinc-950 border-t border-zinc-100 dark:border-white/5 z-30">
         {/* Left: Preview Animation Button */}
-        <button
+        {/* <button
           onClick={togglePreview}
           disabled={waypoints.length === 0 || isListEditMode || isRendering}
-          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md font-bold text-[10px] transition-all disabled:opacity-40 disabled:pointer-events-none ${
+          className={`flex items-center gap-1 px-2 py-1 rounded-md font-bold text-[10px] transition-all disabled:opacity-40 disabled:pointer-events-none ${
             isPreviewing
               ? "bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400"
               : "text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800"
@@ -328,7 +332,40 @@ export function Sidebar() {
               <Play className="w-3 h-3 fill-current" /> Preview
             </>
           )}
-        </button>
+        </button> */}
+        {waypoints.length > 0 && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                setIsListEditMode(!isListEditMode);
+                setShowClearConfirm(false);
+              }}
+              disabled={
+                waypoints.length === 0 ||
+                isRendering ||
+                isPreviewing
+              }
+              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors shadow-sm ${
+                isListEditMode
+                  ? "bg-navi-100 text-navi dark:bg-navi/20 dark:text-navi-200 border border-navi-200 dark:border-navi/30"
+                  : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 border border-transparent"
+              }`}
+            >
+              {isListEditMode ? (
+                <span className="inline-flex items-center gap-1.5 text-[12px]">
+                  <Edit className="w-2.5 h-2.5" /> Done Editing
+                </span>
+              ) : (
+                <span className="inline-flex items-baseline gap-1.5 text-[12px]">
+                  <Edit className="w-2.5 h-2.5" /> Edit List
+                </span>
+              )}
+            </button>
+            <button onClick={forceReroute} title="Refresh waypoint">
+              <RefreshCw className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
 
         {/* Right: Render Video Button */}
         <button
@@ -339,17 +376,16 @@ export function Sidebar() {
             isRendering ||
             isPreviewing
           }
-          className="flex items-center justify-center py-1.5 px-3 rounded-md bg-zinc-900 dark:bg-zinc-100 hover:bg-zinc-800 dark:hover:bg-white text-white dark:text-zinc-900 font-bold text-[10px] transition-all disabled:opacity-40 disabled:pointer-events-none shadow-sm"
+          className="flex items-center justify-center py-1 px-1.5 rounded-md bg-zinc-900 dark:bg-zinc-100 hover:bg-zinc-800 dark:hover:bg-white text-white dark:text-zinc-900 font-bold text-[10px] transition-all disabled:opacity-40 disabled:pointer-events-none shadow-sm"
         >
           {isRendering ? (
             <span className="flex items-center gap-1.5">
-              <div className="w-3 h-3 border-[1.5px] border-zinc-500 border-t-zinc-200 dark:border-zinc-400 dark:border-t-zinc-800 rounded-full animate-spin" />
+              <div className="w-1.5 h-1.5 border-[1.5px] border-zinc-500 border-t-zinc-200 dark:border-zinc-400 dark:border-t-zinc-800 rounded-sm animate-spin" />
               Rendering...
             </span>
           ) : (
             <>
-              Render Video{" "}
-              <ChevronRight className="w-3 h-3 opacity-60 ml-0.5" />
+              Generate <ChevronRight className="w-3 h-3 opacity-60 ml-0.5" />
             </>
           )}
         </button>

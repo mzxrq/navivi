@@ -1,4 +1,4 @@
-import { Settings2, Film, MonitorPlay } from "../../ui/icons";
+import { Film, MonitorPlay } from "../../ui/icons";
 
 interface ExportPanelProps {
     onExport: () => void;

@@ -23,5 +23,7 @@ export {
     Layers, //TimelineTrack
     MonitorPlay, //ExportPanel
     CheckCircle2, AlertCircle, // Toast
-    CircleDashed, History, Bell // StatusBar
+    Copy, CircleDashed, History, Bell, // StatusBar
+    Settings, Save, // AppSettings
+    Pencil, // MapArea
 } from "lucide-react";

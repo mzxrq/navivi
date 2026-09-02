@@ -1,6 +1,6 @@
 import type { Dispatch, SetStateAction, } from "react";
 
-export type RouteMode = "driving" | "walking" | "direct" | "curve" | "ferry" | "calculating";
+export type RouteMode = "driving" | "walking" | "direct" | "curve" | "ferry" | "calculating" | "draw";
 export type TrackType = "video" | "audio" | "image" | "text";
 
 export interface Waypoint {
@@ -14,7 +14,7 @@ export interface Waypoint {
   narration?: string;
   routeMode: RouteMode;
   duration?: number;
-  fps?: number;
+  customRoute?: [number, number][];
   isGeneratingScript?: boolean;
 }
 
@@ -37,6 +37,7 @@ export interface ProjectSettings {
   summary_fade: number;
   start_coords?: [number, number];
   resolution: string;
+  mapbox_api_key: string;
   ors_api_key: string;
   is_round_trip?: boolean;
   return_route_mode?: "driving" | "walking" | "direct" | "curve";
@@ -129,6 +130,8 @@ export interface WorkspaceState {
   setActiveWaypointId: (id: string | null) => void;
   routePoints: [number, number][];
   setRoutePoints: Dispatch<SetStateAction<[number, number][]>>;
+  drawnRoute: [number, number][];
+  setDrawnRoute: Dispatch<SetStateAction<[number, number][]>>;
   // Project Config
   metadata: ProjectMetadata;
   setMetadata: Dispatch<SetStateAction<ProjectMetadata>>;
@@ -145,4 +148,5 @@ export interface WorkspaceState {
   resetWorkspace: () => void;
   routingCache: Record<string, [number, number][]>;
   setRoutingCache: Dispatch<SetStateAction<Record<string, [number, number][]>>>;
+  forceReroute: () => void;
 }

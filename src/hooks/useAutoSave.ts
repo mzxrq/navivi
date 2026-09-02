@@ -1,10 +1,9 @@
 import { useEffect, useRef } from "react";
 import { useWorkspace } from "./useWorkspace";
-import { saveTimelineManifest } from "../services/fileSystem";
 import { useUI } from "./useUI";
 
 export function useAutoSave() {
-    const { timeline, settings, metadata, isDirty, setIsDirty, saveProject } = useWorkspace();
+    const { settings, metadata, isDirty, setIsDirty, saveProject } = useWorkspace();
     const { showToast } = useUI();
     const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 

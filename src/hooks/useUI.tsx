@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useRef } from "react";
+import React, { createContext, useContext, useState } from "react";
 
 export type AppView = "title_screen" | "editor" | "new_project";
 export type EditorMode = "map" | "timeline";
@@ -28,17 +28,17 @@ interface UIState {
   // global modal
   isSettingsOpen: boolean;
   setIsSettingsOpen: (isOpen: boolean) => void;
-  toast: {
-    message: string;
-    type: "success" | "error" | "warning" | "info";
-    visible: boolean;
-  };
-  showToast: (message: string, type?: "success" | "error" | "warning" | "info") => void;
+  showToast: (
+    message: string,
+    type?: "success" | "error" | "warning" | "info",
+  ) => void;
   showAppSettings: boolean;
   setShowAppSettings: (show: boolean) => void;
   notifications: AppNotification[];
+  clearNotifications: () => void;
+  hideToast: (id: string) => void;
+  activeToasts: AppNotification[];
 }
-
 
 // create context
 const UIContext = createContext<UIState | undefined>(undefined);
@@ -49,40 +49,44 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({
 }) => {
   const [currentView, setCurrentView] = useState<AppView>("title_screen");
   const [editorMode, setEditorMode] = useState<EditorMode>("map");
-  const [toast, setToast] = useState<{
-    message: string;
-    type: "success" | "error" | "warning" | "info";
-    visible: boolean;
-  }>({
-    message: "",
-    type: "info",
-    visible: false,
-  });
+  const [activeToasts, setActiveToasts] = useState<AppNotification[]>([]);
+  // const [toast, setToast] = useState<{
+  //   message: string;
+  //   type: "success" | "error" | "warning" | "info";
+  //   visible: boolean;
+  // }>({
+  //   message: "",
+  //   type: "info",
+  //   visible: false,
+  // });
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
-  const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showAppSettings, setShowAppSettings] = useState(false);
   const [isRendering, setIsRendering] = useState(false);
   const [renderLogs, setRenderLogs] = useState("");
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   // han
-
-  const showToast = (message: string, type: "success" | "error" | "warning" | "info" = "info") => {
-    const newNotif: AppNotification = {
-      id: crypto.randomUUID(),
-      message, type, timestamp: new Date(),
-    };
-    setNotifications((prev) => [newNotif, ...prev].slice(0,50));
-    setToast({ message, type, visible: true });
-    if (toastTimeoutRef.current) {
-      clearTimeout(toastTimeoutRef.current);
-    }
-
-    toastTimeoutRef.current = setTimeout(() => {
-      setToast((prev) => ({ ...prev, visible: false }));
-    }, 4000);
+  const clearNotifications = () => {
+    setNotifications([]);
   };
-  
+  const showToast = (
+    message: string,
+    type: "success" | "error" | "warning" | "info" = "info",
+  ) => {
+    const id = crypto.randomUUID();
+    const newNotif: AppNotification = {
+      id,
+      message,
+      type,
+      timestamp: new Date(),
+    };
+    setNotifications((prev) => [newNotif, ...prev].slice(0, 50));
+    setActiveToasts((prev) => [...prev, newNotif]);
+  };
+
+  const hideToast = (id: string) => {
+    setActiveToasts((prev) => prev.filter((t) => t.id !== id));
+  };
 
   return (
     <UIContext.Provider
@@ -97,11 +101,13 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({
         setRenderLogs,
         isSettingsOpen,
         setIsSettingsOpen,
-        toast,
+        activeToasts,
         showToast,
+        hideToast,
         showAppSettings,
         setShowAppSettings,
         notifications,
+        clearNotifications,
       }}
     >
       {children}

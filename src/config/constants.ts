@@ -39,6 +39,7 @@ export const defaultProjectSettings = {
     summary_hold: 4.0,
     summary_fade: 0.5,
     resolution: "1080p",
+    mapbox_api_key: "",
     ors_api_key: "",
     auto_save_interval: 3,
 };
