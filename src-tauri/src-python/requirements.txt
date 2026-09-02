@@ -1,0 +1,17 @@
+numpy
+pandas
+pyproj
+contextily
+scipy
+Pillow
+opencv-python
+httpx
+requests
+websocket-client
+ollama
+pydantic
+deep-translator
+pykakasi
+tqdm 
+pydeck
+playwright
