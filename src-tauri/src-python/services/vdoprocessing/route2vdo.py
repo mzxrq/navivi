@@ -40,6 +40,7 @@ class RouteAnimator:
             line_color=self.config.get("line_color", (0, 200, 255)),
             line_thickness=self.config.get("line_thickness", 10),
             marker_color=self.config.get("marker_color", (0, 0, 255)),
+            arrived_marker_color=self.config.get("arrived_marker_color", (0, 0, 220)),
             marker_radius=self.config.get("marker_radius", 18),
             font_size=map_font_size,
         )

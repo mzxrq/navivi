@@ -45,10 +45,116 @@ class SpatialRenderer:
         self.post_arrival_hold_seconds: float = config.get(
             "post_arrival_hold_seconds", 1.0
         )
+        # Global kill switch for the "scale up to fill the screen" popup
+        # style — when off, every waypoint (regardless of its own
+        # image_display setting) uses the small pip card instead.
+        self.enable_fullscreen_popups: bool = bool(
+            config.get("enable_fullscreen_popups", True)
+        )
         # When True, the route line is hidden (only pins/points stay visible)
         # for the duration a popup card is frozen on screen.
         self.hide_route_on_popup: bool = bool(config.get("hide_route_on_popup", False))
+        # When True, only already-arrived waypoint pins are drawn during the
+        # arrival pause/popup — with many stops on screen, every not-yet-
+        # reached pin competing for attention makes it hard to tell which
+        # one just triggered.
+        self.hide_upcoming_pins_on_popup: bool = bool(
+            config.get("hide_upcoming_pins_on_popup", False)
+        )
         self.last_frame = None
+
+    # Opposite corner for each HUD corner — the segment-stat card always
+    # sits diagonally across from the arrival popup so the two never overlap.
+    _OPPOSITE_CORNER = {
+        "bottom_left": "top_right",
+        "bottom_right": "top_left",
+        "top_left": "bottom_right",
+        "top_right": "bottom_left",
+    }
+
+    def _composite_leg_stat_card(
+        self, frame: np.ndarray, leg_stat: Dict, popup_corner: str
+    ) -> np.ndarray:
+        """Draws this leg's distance/time as a small summary-style card
+        (matching the end-of-video summary card) in the corner diagonally
+        opposite the arrival popup."""
+        card = self.graphics.create_summary_card(
+            distance_km=leg_stat.get("distance_km", 0.0),
+            duration_seconds=leg_stat.get("duration_seconds", 0.0),
+            card_size=(360, 90),
+        )
+        corner = self._OPPOSITE_CORNER.get(popup_corner, "top_right")
+        return self.graphics.composite_card_on_frame(frame, card, alpha=1.0, corner=corner)
+
+    def _build_freeze_frame(
+        self,
+        current_bg: np.ndarray,
+        path_history: List,
+        mode_history: List[str],
+        last_leg_boundary: int,
+        active_popups: List[Dict],
+    ) -> np.ndarray:
+        """Background + route line (respecting hide_route_on_popup) + pins
+        for ONLY already-arrived waypoints — used for the arrival pause and
+        popup when hide_upcoming_pins_on_popup is on, so a route with many
+        stops doesn't bury the one that just triggered under a scatter of
+        still-ahead pins."""
+        base = current_bg.copy()
+        if self.hide_route_on_popup:
+            self.graphics.draw_path(
+                base,
+                path_history[: last_leg_boundary + 1],
+                mode_history[: last_leg_boundary + 1],
+            )
+        else:
+            self.graphics.draw_path(base, path_history, mode_history)
+        for order, wp in enumerate(active_popups, start=1):
+            if wp["data"].get("triggered"):
+                self.graphics.draw_marker(
+                    base, int(wp["x"]), int(wp["y"]),
+                    number=order, color=self._pin_color(wp),
+                )
+        return base
+
+    def _pin_color(self, wp: Dict):
+        """Arrived waypoints get GraphicsEngine.arrived_marker_color; ones
+        still ahead keep the default marker_color (return None so
+        draw_marker falls back to it)."""
+        return self.graphics.arrived_marker_color if wp["data"].get("triggered") else None
+
+    @staticmethod
+    def _smoothed_heading(
+        prev_angle: float,
+        cx: int,
+        cy: int,
+        prev_cx: Optional[int],
+        prev_cy: Optional[int],
+        min_dist: float = 1.5,
+        alpha: float = 0.35,
+    ) -> float:
+        """Blends the new frame-to-frame heading into the previous smoothed
+        heading, and ignores movement smaller than `min_dist` outright.
+
+        The animated path is now straight-line interpolation between the
+        real (simplified) route points, so through a winding, non-straight
+        stretch the true heading changes abruptly at every vertex — and
+        `path_history` stores rounded integer pixel coordinates, so on a
+        short step the raw atan2 direction is dominated by rounding noise
+        rather than the actual travel direction. Both together make the
+        travel icon visibly shake as it moves. Blending (circularly, via
+        the sin/cos components — angles can't be linearly averaged across
+        the 359°/0° wrap) trades a little turning responsiveness for a
+        stable-looking heading.
+        """
+        if prev_cx is None or prev_cy is None:
+            return prev_angle
+        if math.hypot(cx - prev_cx, cy - prev_cy) < min_dist:
+            return prev_angle
+        raw_angle = math.degrees(math.atan2(cy - prev_cy, cx - prev_cx))
+        prev_rad, raw_rad = math.radians(prev_angle), math.radians(raw_angle)
+        x = math.cos(prev_rad) * (1 - alpha) + math.cos(raw_rad) * alpha
+        y = math.sin(prev_rad) * (1 - alpha) + math.sin(raw_rad) * alpha
+        return math.degrees(math.atan2(y, x))
 
     def _get_job_waypoints(self) -> List[Dict]:
         for p in [self.out_dir] + list(self.out_dir.parents):
@@ -248,6 +354,12 @@ class SpatialRenderer:
             for i in range(len(points))
             if popups and popups[i] is not None
         ]
+        # 1-based visit order — also used to look up this waypoint's leg
+        # (leg_stats[order - 2], since the leg arriving at order N left
+        # order N-1) and to number its pin.
+        for order, ap in enumerate(active_popups, start=1):
+            ap["order"] = order
+        leg_stats: List[Dict] = (summary or {}).get("leg_stats", [])
 
         job_waypoints = self._get_job_waypoints()
         for i, popup in enumerate(active_popups):
@@ -296,7 +408,7 @@ class SpatialRenderer:
             )
             start_popup["data"]["triggered"] = True
 
-            if temp_sp["data"].get("image_display") == "fullscreen":
+            if self.enable_fullscreen_popups and temp_sp["data"].get("image_display") == "fullscreen":
                 self.graphics.play_fullscreen_popup_sequence(
                     video=video,
                     base_frame=intro_frame,
@@ -313,7 +425,8 @@ class SpatialRenderer:
                     # are visible before the animation begins.
                     for order, wp in enumerate(active_popups, start=1):
                         self.graphics.draw_marker(
-                            intro_frame, int(wp["x"]), int(wp["y"]), number=order
+                            intro_frame, int(wp["x"]), int(wp["y"]),
+                            number=order, color=self._pin_color(wp),
                         )
                     self._draw_prioritized_sprites(
                         intro_frame, active_popups, landmark_sprites
@@ -324,6 +437,12 @@ class SpatialRenderer:
         path_history = []
         mode_history = []
         prev_cx, prev_cy = None, None
+        smoothed_angle = 0.0
+        # path_history index where the most recently reached waypoint sits —
+        # marks the boundary between "earlier, completed legs" (always kept
+        # visible) and "the current leg" (the only part hidden while its
+        # arrival popup is showing).
+        last_leg_boundary = 0
 
         for current_frame, p in enumerate(smooth_path):
             if is_video:
@@ -347,16 +466,25 @@ class SpatialRenderer:
             if not is_video:
                 self.graphics.draw_path(frame, path_history, mode_history)
 
-            # "Point to point" snapshot for hide_route_on_popup — background
-            # + pins, no route line. Built separately (rather than copying
-            # `frame` before the line is drawn) because pins still need to
-            # render on top of the route line for normal display below.
+            # "Point to point" snapshot for hide_route_on_popup — every
+            # earlier, already-completed leg stays drawn; only the CURRENT
+            # leg (since the last waypoint reached) is left off, so arriving
+            # at a stop doesn't erase the whole route travelled so far.
+            # Built separately (rather than copying `frame` before the line
+            # is drawn) because pins still need to render on top of the
+            # route line for normal display below.
             frame_no_route = None
             if not is_video and self.hide_route_on_popup:
                 frame_no_route = current_bg.copy()
+                self.graphics.draw_path(
+                    frame_no_route,
+                    path_history[: last_leg_boundary + 1],
+                    mode_history[: last_leg_boundary + 1],
+                )
                 for order, wp in enumerate(active_popups, start=1):
                     self.graphics.draw_marker(
-                        frame_no_route, int(wp["x"]), int(wp["y"]), number=order
+                        frame_no_route, int(wp["x"]), int(wp["y"]),
+                        number=order, color=self._pin_color(wp),
                     )
 
             if not is_video:
@@ -365,7 +493,8 @@ class SpatialRenderer:
                 # numbered so the visit order is readable at a glance.
                 for order, wp in enumerate(active_popups, start=1):
                     self.graphics.draw_marker(
-                        frame, int(wp["x"]), int(wp["y"]), number=order
+                        frame, int(wp["x"]), int(wp["y"]),
+                        number=order, color=self._pin_color(wp),
                     )
 
             surviving_popups = []
@@ -402,15 +531,58 @@ class SpatialRenderer:
                         break
 
             if triggered_popup:
+                # Everything up to (and including) this point becomes part
+                # of an "earlier leg" for the NEXT popup's hide effect.
+                last_leg_boundary = len(path_history) - 1
+
                 # Pick a corner clear of the route/pins once, and keep it on
                 # the popup itself so the lingering baked-popup HUD (below)
                 # doesn't jump to a different corner mid-display.
                 triggered_popup["hud_corner"] = self.graphics.pick_hud_corner(
                     w, h, route_avoid_points
                 )
-                popup_base_frame = frame_no_route if self.hide_route_on_popup else frame
+                leg_idx = triggered_popup["order"] - 2
 
-                if triggered_popup["data"].get("image_display") == "fullscreen":
+                # Shared base for BOTH the arrival-hold pause and the popup
+                # itself — decluttered to only already-arrived pins when
+                # requested, and with the per-leg stat card baked in up
+                # front so the pause and the popup read as one continuous
+                # "you arrived" beat instead of the card popping in only
+                # once the popup shows.
+                if self.hide_upcoming_pins_on_popup:
+                    popup_base_frame = self._build_freeze_frame(
+                        current_bg, path_history, mode_history,
+                        last_leg_boundary, active_popups,
+                    )
+                else:
+                    popup_base_frame = frame_no_route if self.hide_route_on_popup else frame
+                if 0 <= leg_idx < len(leg_stats):
+                    popup_base_frame = self._composite_leg_stat_card(
+                        popup_base_frame, leg_stats[leg_idx], triggered_popup["hud_corner"]
+                    )
+
+                # Hold on the traveler having just reached the pin for a
+                # beat before the fullscreen/pip transition kicks in — but
+                # the popup photo itself is already visible (as its small
+                # pip card) through this hold, so the pause reads as "the
+                # popup has arrived and is settling in" rather than a gap
+                # with nothing shown yet.
+                if not is_video and self.post_arrival_hold_seconds > 0:
+                    pause_frame = popup_base_frame.copy()
+                    smoothed_angle = self._smoothed_heading(
+                        smoothed_angle, cx, cy, prev_cx, prev_cy
+                    )
+                    self.graphics.draw_transport_icon(
+                        pause_frame, cx, cy, current_frame, smoothed_angle, mode=current_mode
+                    )
+                    pause_frame = self.graphics.render_popup_box(pause_frame, triggered_popup)
+                    for _ in range(int(self.post_arrival_hold_seconds * fps)):
+                        video.write(pause_frame)
+
+                if (
+                    self.enable_fullscreen_popups
+                    and triggered_popup["data"].get("image_display") == "fullscreen"
+                ):
                     self.last_frame, _ = self.graphics.play_fullscreen_popup_sequence(
                         video=video,
                         base_frame=popup_base_frame,
@@ -435,8 +607,13 @@ class SpatialRenderer:
                     )
 
                     if not is_video:
+                        sprite_popups = (
+                            [ap for ap in active_popups if ap["data"].get("triggered")]
+                            if self.hide_upcoming_pins_on_popup
+                            else active_popups
+                        )
                         self._draw_prioritized_sprites(
-                            temp_frame, active_popups, landmark_sprites
+                            temp_frame, sprite_popups, landmark_sprites
                         )
                         self.graphics.draw_marker(temp_frame, cx, cy)
 
@@ -449,11 +626,11 @@ class SpatialRenderer:
                 if not is_video:
                     self._draw_prioritized_sprites(frame, active_popups, landmark_sprites)
 
-                    angle = 0.0
-                    if prev_cx is not None and prev_cy is not None:
-                        angle = math.degrees(math.atan2(cy - prev_cy, cx - prev_cx))
+                    smoothed_angle = self._smoothed_heading(
+                        smoothed_angle, cx, cy, prev_cx, prev_cy
+                    )
                     self.graphics.draw_transport_icon(
-                        frame, cx, cy, current_frame, angle, mode=current_mode
+                        frame, cx, cy, current_frame, smoothed_angle, mode=current_mode
                     )
 
                 self.last_frame = frame
@@ -470,8 +647,13 @@ class SpatialRenderer:
                 stop_popup["x"],
                 stop_popup["y"],
             )
+            stop_leg_idx = stop_popup["order"] - 2
+            if 0 <= stop_leg_idx < len(leg_stats):
+                outro_frame = self._composite_leg_stat_card(
+                    outro_frame, leg_stats[stop_leg_idx], temp_stop["hud_corner"]
+                )
 
-            if temp_stop["data"].get("image_display") == "fullscreen":
+            if self.enable_fullscreen_popups and temp_stop["data"].get("image_display") == "fullscreen":
                 self.last_frame, _ = self.graphics.play_fullscreen_popup_sequence(
                     video=video,
                     base_frame=outro_frame,
@@ -645,6 +827,7 @@ class SpatialRenderer:
             video = VideoExporter(str(self.out_dir / chunk_filename), w, h, fps)
             path_idx = 0
             prev_cx, prev_cy = None, None
+            smoothed_angle = 0.0
 
             for current_frame in range(total_frames):
                 is_paused = is_paused_per_frame[current_frame]
@@ -686,12 +869,12 @@ class SpatialRenderer:
                         sprite, anchor = res_landmark_sprites[lbl]
                         self.graphics.blit_sprite(frame, sprite, anchor, x, y)
 
-                    angle = 0.0
-                    if prev_cx is not None and prev_cy is not None:
-                        angle = math.degrees(math.atan2(cy - prev_cy, cx - prev_cx))
+                    smoothed_angle = self._smoothed_heading(
+                        smoothed_angle, cx, cy, prev_cx, prev_cy
+                    )
 
                     self.graphics.draw_transport_icon(
-                        frame, cx, cy, current_frame, angle, mode=res_mode
+                        frame, cx, cy, current_frame, smoothed_angle, mode=res_mode
                     )
 
                 for popup in active_res_popups:

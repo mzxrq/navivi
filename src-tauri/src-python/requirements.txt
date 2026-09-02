@@ -15,3 +15,4 @@ pykakasi
 tqdm 
 pydeck
 playwright
+python-dotenv

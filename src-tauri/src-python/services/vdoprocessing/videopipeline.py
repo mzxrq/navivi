@@ -61,24 +61,86 @@ def _project_route_to_pixels(
     return [[float(x), float(y)] for x, y in zip(px, py)]
 
 
+def _resolve_leg_mode_from_cache(
+    from_wp: dict, to_wp: dict, routing_cache: dict
+) -> Optional[str]:
+    """Finds the .routecache.json entry for the leg from_wp -> to_wp (by
+    nearest-coordinate match on the key's own start/end points, tolerant of
+    the key's 5-decimal rounding) and returns its mode suffix.
+
+    job_config.json's waypoints no longer carry `routeMode` — the frontend
+    now leaves that field off entirely and the cache key (the only place
+    that still records "...|walking"/"...|ferry"/etc per leg) is the sole
+    source of truth for what mode a leg was actually computed with.
+    """
+    if not routing_cache:
+        return None
+    from_lat, from_lng = from_wp.get("lat"), from_wp.get("lng", from_wp.get("lon"))
+    to_lat, to_lng = to_wp.get("lat"), to_wp.get("lng", to_wp.get("lon"))
+    if from_lat is None or to_lat is None:
+        return None
+
+    best_key, best_dist = None, float("inf")
+    for route_key in routing_cache:
+        try:
+            start_str, end_str, _mode = route_key.split("|")
+            s_lat, s_lng = (float(v) for v in start_str.split(","))
+            e_lat, e_lng = (float(v) for v in end_str.split(","))
+        except ValueError:
+            continue
+        dist = (
+            (s_lat - from_lat) ** 2 + (s_lng - from_lng) ** 2
+            + (e_lat - to_lat) ** 2 + (e_lng - to_lng) ** 2
+        )
+        if dist < best_dist:
+            best_dist, best_key = dist, route_key
+
+    # ~0.0005 in summed-squared-degrees is well under a city block — reject
+    # anything looser so an unrelated cache entry never gets matched.
+    if best_key is None or best_dist > 0.0005:
+        return None
+    return best_key.rsplit("|", 1)[-1].strip().lower()
+
+
 def _build_point_modes(
-    num_points: int, wp_indices: list[int], waypoints: list[dict]
+    num_points: int,
+    wp_indices: list[int],
+    waypoints: list[dict],
+    routing_cache: Optional[dict] = None,
 ) -> list[str]:
-    """Assigns a travel mode ("walking"/"ferry"/"airplane"/...) to every route point,
-    using each waypoint's `routeMode` for the leg ending at that waypoint (mirrors the
-    leg-indexing convention used by pydeckrecorder.record_headless_video). The mode
-    carries forward past the last waypoint for the final leg to the destination."""
+    """Assigns a travel mode ("walking"/"ferry"/"airplane"/...) to every
+    route point. Each leg's mode is resolved primarily from
+    `routing_cache` (.routecache.json, keyed "lat,lon|lat,lon|mode" by the
+    DEPARTING waypoint — matches the frontend's own routing/cache-pruning
+    convention), falling back to that waypoint's own `routeMode` field only
+    for older projects that still have it set. The mode carries forward
+    past the last waypoint for the final leg to the destination."""
     modes = ["walking"] * num_points
     if num_points == 0:
         return modes
+
+    # "direct" is a straight-line routing choice, not a distinct travel
+    # mode — render/report it as walking rather than falling through to the
+    # generic colored-marker fallback icon.
+    mode_aliases = {"direct": "walking"}
 
     boundaries = list(wp_indices) + [num_points - 1]
     prev_end = 0
     current_mode = "walking"
     for leg_idx, end_idx in enumerate(boundaries):
-        leg_mode = waypoints[leg_idx].get("routeMode") if leg_idx < len(waypoints) else None
-        if leg_mode:
-            current_mode = str(leg_mode).lower()
+        # boundaries[leg_idx] is where waypoint `leg_idx` sits; the leg
+        # ending there departs from waypoint `leg_idx - 1`. leg_idx == 0 has
+        # no real leg before it, and leg_idx == len(waypoints) is the
+        # trailing stretch past the last waypoint — both just keep
+        # whatever current_mode already is.
+        if 0 < leg_idx < len(waypoints):
+            from_wp, to_wp = waypoints[leg_idx - 1], waypoints[leg_idx]
+            leg_mode = _resolve_leg_mode_from_cache(from_wp, to_wp, routing_cache)
+            if not leg_mode:
+                leg_mode = from_wp.get("routeMode")
+            if leg_mode:
+                leg_mode = str(leg_mode).lower()
+                current_mode = mode_aliases.get(leg_mode, leg_mode)
         for i in range(prev_end, min(end_idx + 1, num_points)):
             modes[i] = current_mode
         prev_end = end_idx + 1
@@ -273,7 +335,12 @@ def render_route_video(
     # 2. Fetch Base Map & Project Pixels
     logger.info("Step 3: Computing bounding box and fetching overview map tile...")
 
-    fetcher = MapFetcher()
+    # Pass the job_config explicitly (rather than relying on whatever state
+    # the JobConfigManager singleton happens to already be in) so the tile
+    # cache always lands under THIS project's directory_path/cache, even
+    # when render_route_video runs as its own process/command without
+    # process_gps having initialized the singleton first.
+    fetcher = MapFetcher(job_config=JobConfigManager(str(config_path)))
 
     bbox = fetcher.get_bounding_box(route_df, padding_factor=0.10)
 
@@ -300,7 +367,17 @@ def render_route_video(
     ]
     route_popups = [None] * len(route_points)
     wp_indices = MapFetcher.build_waypoint_index(route_df, waypoints)
-    point_modes = _build_point_modes(len(route_points), wp_indices, waypoints)
+
+    routing_cache = {}
+    routecache_path = config_path.parent / ".routecache.json"
+    if routecache_path.exists():
+        try:
+            with open(routecache_path, "r", encoding="utf-8") as f:
+                routing_cache = json.load(f)
+        except (json.JSONDecodeError, OSError) as e:
+            logger.warning("Step 3: Failed to read %s: %s", routecache_path, e)
+
+    point_modes = _build_point_modes(len(route_points), wp_indices, waypoints, routing_cache)
 
     mode_breakdown: dict[str, float] = {}
     if len(route_df) > 1:
@@ -311,6 +388,40 @@ def render_route_video(
         )
         for dist, mode in zip(seg_dist_km, point_modes[1:]):
             mode_breakdown[mode] = mode_breakdown.get(mode, 0.0) + float(dist)
+
+    # Per-leg (waypoint-to-waypoint) distance/duration, so the overview can
+    # show "this segment: X km, Y min" at each arrival instead of only a
+    # single end-of-video total. leg_stats[i] is the leg arriving AT
+    # waypoints[i + 1] (i.e. leaving waypoints[i]).
+    leg_stats: list[dict] = []
+    has_timestamp = "timestamp" in route_df.columns
+    for leg_idx in range(len(wp_indices) - 1):
+        start_i, end_i = wp_indices[leg_idx], wp_indices[leg_idx + 1]
+        if end_i <= start_i:
+            leg_stats.append({"distance_km": 0.0, "duration_seconds": 0.0})
+            continue
+        seg_lat = route_df["latitude"].to_numpy()[start_i : end_i + 1]
+        seg_lon = route_df["longitude"].to_numpy()[start_i : end_i + 1]
+        seg_dist_km = float(
+            np.nansum(
+                GPSMath.haversine_vectorized(
+                    seg_lat[:-1], seg_lon[:-1], seg_lat[1:], seg_lon[1:]
+                )
+            )
+        )
+        duration_seconds = (
+            float(
+                (
+                    route_df["timestamp"].iloc[end_i]
+                    - route_df["timestamp"].iloc[start_i]
+                ).total_seconds()
+            )
+            if has_timestamp
+            else 0.0
+        )
+        leg_stats.append(
+            {"distance_km": seg_dist_km, "duration_seconds": duration_seconds}
+        )
 
     # 3. Inject Waypoints
     if waypoints:
@@ -448,11 +559,15 @@ def render_route_video(
         "use_3d_res": use_3d_res,
         "res_route_path": project_config_path,
         "leg_durations": seg_durations or None,
+        # The frontend saves this as "duration_seconds" (see
+        # src/config/constants.ts / src/types/index.ts) — read that key so
+        # the UI's duration control actually takes effect, instead of
+        # silently falling back to the default every time.
+        "duration": settings.get("duration_seconds", settings.get("duration", 15.0)),
         **{
             k: settings.get(k, default)
             for k, default in [
                 ("fps", 30),
-                ("duration", 8.0),
                 ("line_thickness", 10),
                 ("marker_radius", 18),
                 ("pause", 2.0),
@@ -465,10 +580,13 @@ def render_route_video(
                 ("use_leg_storyboard", False),
                 ("default_transition_hold_seconds", 1.5),
                 ("hide_route_on_popup", False),
+                ("enable_fullscreen_popups", True),
+                ("hide_upcoming_pins_on_popup", False),
             ]
         },
         "line_color": tuple(settings.get("line_color", (0, 200, 255))),
         "marker_color": tuple(settings.get("marker_color", (0, 0, 255))),
+        "arrived_marker_color": tuple(settings.get("arrived_marker_color", (0, 0, 220))),
         "trigger_radius_padding": settings.get("trigger_radius_padding", {}),
         "fullscreen_transition": settings.get("fullscreen_transition", {}),
     }
@@ -511,6 +629,8 @@ def render_route_video(
     summary = dict(cleaned_route.get("summary", {}))
     if mode_breakdown:
         summary["mode_breakdown"] = mode_breakdown
+    if leg_stats:
+        summary["leg_stats"] = leg_stats
 
     output_paths = animator.render(
         img_path=map_output_path,

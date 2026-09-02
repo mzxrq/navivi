@@ -6,8 +6,10 @@ Handles downloading map tiles and fetching map images for route visualization.
 """
 
 # [I/O] Import libraries for map tile downloading and fetching
+import os
 from pathlib import Path
 import contextily as cx  # type: ignore
+from dotenv import load_dotenv
 from PIL import Image
 import math
 from typing import Dict, Tuple
@@ -20,22 +22,75 @@ from services.logger.logger import setup_logger
 # [Utility] Log setup for debugging and monitoring
 logger = setup_logger("MapTile")
 
+# Load src-python/.env (MAPBOX_API_KEY, etc.) into the process environment.
+# Explicit path rather than dotenv's auto-search, since the CWD this runs
+# from (launched by the Tauri sidecar) isn't guaranteed to be src-python.
+load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env")
+
 class TileDownloader:
     """Handles downloading map tiles and fetching map images for route visualization."""
 
     # [Final] Constants for map tile downloading and geometry processing
     PROVIDER = cx.providers.Esri.WorldStreetMap  # type: ignore
-    MAX_ZOOM_LEVEL = 19 
+    MAX_ZOOM_LEVEL = 19
+    MAPBOX_DEFAULT_STYLE = "mapbox/streets-v12"
 
     # [Initialization] Initialize the TileDownloader with job configuration
     def __init__(self, job_config, provider=None):
         self.job_config = job_config
-        self.provider = provider or self.PROVIDER
+        settings = (job_config.get("settings", {}) if job_config else {}) or {}
+
+        if provider is not None:
+            self.provider = provider
+        else:
+            self.provider = self._build_provider(settings)
 
         base_path = Path(self.job_config.get("directory_path", "data/caches/contextily"))
-        self.cache_dir = (base_path / "cache").resolve()
+        # settings.tile_cache_dir lets a project point the cache somewhere
+        # else (e.g. a cache shared across projects); relative paths are
+        # resolved against directory_path so they still land inside the
+        # project folder by default. Otherwise: <directory_path>/cache.
+        cache_override = settings.get("tile_cache_dir")
+        if cache_override:
+            override_path = Path(cache_override)
+            self.cache_dir = (
+                override_path if override_path.is_absolute() else base_path / override_path
+            ).resolve()
+        else:
+            self.cache_dir = (base_path / "cache").resolve()
         self.cache_dir.mkdir(parents=True, exist_ok=True)
+        # Tiles are cached to disk here keyed by (provider, z, x, y) — every
+        # subsequent fetch of an already-seen tile (any provider, Mapbox
+        # included) is served from disk instead of hitting the network again.
         cx.set_cache_dir(str(self.cache_dir))
+
+    # [Map/Util] Picks Mapbox (higher-resolution, retina-capable tiles) when
+    # an access token is configured, falling back to the free Esri tiles
+    # otherwise. Mapbox token can come from job_config settings, or from
+    # src-python/.env (MAPBOX_API_KEY / MAPBOX_ACCESS_TOKEN).
+    def _build_provider(self, settings: Dict):
+        token = (
+            settings.get("mapbox_access_token")
+            or os.environ.get("MAPBOX_API_KEY")
+            or os.environ.get("MAPBOX_ACCESS_TOKEN")
+        )
+        if not token:
+            return self.PROVIDER
+
+        provider = cx.providers.MapBox.copy()  # type: ignore
+        provider["accessToken"] = token
+        provider["id"] = settings.get("mapbox_style_id", self.MAPBOX_DEFAULT_STYLE)
+        # @2x pulls double-density (retina) tiles — same geographic coverage
+        # per tile, roughly 4x the pixels — for a visibly sharper map at the
+        # same zoom level. Off by default only if explicitly disabled.
+        provider["r"] = "@2x" if settings.get("mapbox_retina", True) else ""
+        self.MAX_ZOOM_LEVEL = min(self.MAX_ZOOM_LEVEL, provider.get("max_zoom", 18))
+        logger.info(
+            "Using Mapbox tiles (style=%s, retina=%s) for higher-resolution maps.",
+            provider["id"],
+            bool(provider["r"]),
+        )
+        return provider
 
     # [Map/Util] Ensure an output path has a .png extension (cx.bounds2img output is saved as PNG)
     @staticmethod

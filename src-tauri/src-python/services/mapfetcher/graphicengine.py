@@ -82,16 +82,23 @@ class GraphicsEngine:
         line_color=(0, 200, 255),
         line_thickness=10,
         marker_color=(0, 0, 255),
+        arrived_marker_color=(0, 0, 220),
         marker_radius=18,
         font_size: int = 18,
     ):
         self.line_color = line_color
         # Clamp to a sane minimum: a sub-pixel radius/thickness (e.g. a
         # stray 0.25 from a malformed settings file) would otherwise
-        # render the marker/path as an invisible sliver.
+        # render the marker/path as an invisible sliver. The pin needs
+        # enough room for its teardrop shape AND a legible number inside —
+        # 6px reads as a bare dot, so the marker floor is higher than the
+        # line-thickness floor.
         self.line_thickness = max(2, int(round(line_thickness)))
         self.marker_color = marker_color
-        self.marker_radius = max(6, int(round(marker_radius)))
+        # Color a pin switches to once its waypoint has been reached, so
+        # visited stops read differently from ones still ahead.
+        self.arrived_marker_color = arrived_marker_color
+        self.marker_radius = max(16, int(round(marker_radius)))
         self.font_size = font_size
         self.font_cv = cv2.FONT_HERSHEY_SIMPLEX
 
@@ -166,17 +173,29 @@ class GraphicsEngine:
             )
 
     def draw_marker(
-        self, frame: np.ndarray, cx: int, cy: int, number: Optional[int] = None
+        self,
+        frame: np.ndarray,
+        cx: int,
+        cy: int,
+        number: Optional[int] = None,
+        color: Optional[Tuple[int, int, int]] = None,
     ):
         """Draws a classic map-pin (teardrop) marker with its TIP anchored at
         (cx, cy) — the actual waypoint coordinate — and the round head above
         it, matching standard map-pin iconography. Pass `number` (1-based
         visit order) to print it inside the head instead of a plain hole,
-        so the route's stop sequence is readable at a glance."""
+        so the route's stop sequence is readable at a glance. Pass `color`
+        to override self.marker_color for this pin only (e.g. arrived
+        waypoints)."""
+        pin_color = color if color is not None else self.marker_color
         radius = int(self.marker_radius)
-        head_cy = cy - radius
-        neck_y = head_cy + int(radius * 0.25)
-        tail_half = max(2, int(radius * 0.55))
+        # The head sits fully above the anchor point, with the tail
+        # protruding radius*0.5 below the head's own bottom edge — without
+        # that gap the "tail" triangle sits flush inside the circle and the
+        # pin reads as a plain dot no matter how big radius is.
+        head_cy = cy - int(radius * 1.5)
+        neck_y = head_cy + radius
+        tail_half = max(2, int(radius * 0.45))
 
         def _pin_poly(tail_w: int, tip_pad: int) -> np.ndarray:
             return np.array(
@@ -193,8 +212,8 @@ class GraphicsEngine:
         cv2.fillPoly(frame, [_pin_poly(tail_half + 3, 3)], (255, 255, 255), cv2.LINE_AA)
 
         # Colored pin body.
-        cv2.circle(frame, (cx, head_cy), radius, self.marker_color, -1, cv2.LINE_AA)
-        cv2.fillPoly(frame, [_pin_poly(tail_half, 0)], self.marker_color, cv2.LINE_AA)
+        cv2.circle(frame, (cx, head_cy), radius, pin_color, -1, cv2.LINE_AA)
+        cv2.fillPoly(frame, [_pin_poly(tail_half, 0)], pin_color, cv2.LINE_AA)
 
         if number is None:
             # Plain white center hole.
@@ -218,6 +237,9 @@ class GraphicsEngine:
             )
 
     def prebake_landmark_sprite(self, label: str) -> Tuple[np.ndarray, Tuple[int, int]]:
+        """Builds just the label textbox for a waypoint — draw_marker()
+        already draws the actual numbered pin at this same anchor point, so
+        this no longer duplicates it with its own circle."""
         (tw, th), _ = cv2.getTextSize(label, self.font_cv, 0.6, 1)
         pad = 8
 
@@ -227,25 +249,10 @@ class GraphicsEngine:
         sprite = np.zeros((sprite_h, sprite_w, 4), dtype=np.uint8)
 
         # --- FIX: Force coordinates to be integers for cv2 drawing ---
+        # cx/cy is the pin's own anchor point (kept for spacing math below,
+        # and as the sprite's blit anchor so it still lines up with the pin).
         cx = int(self.marker_radius + 4)
         cy = int(sprite_h // 2)
-
-        cv2.circle(
-            sprite,
-            (cx, cy),
-            int(self.marker_radius),
-            (255, 80, 0, 255),
-            -1,
-            cv2.LINE_AA,
-        )
-        cv2.circle(
-            sprite,
-            (cx, cy),
-            int(self.marker_radius + 3),
-            (255, 255, 255, 255),
-            2,
-            cv2.LINE_AA,
-        )
 
         bx1, by1 = cx + int(self.marker_radius + 4), cy - th - pad
         bx2, by2 = bx1 + tw + pad * 2, cy + pad
@@ -803,7 +810,12 @@ class GraphicsEngine:
         return np.array(canvas)[:, :, [2, 1, 0, 3]]
 
     def composite_card_on_frame(
-        self, frame: np.ndarray, card_bgra: np.ndarray, alpha: float, margin: int = 40
+        self,
+        frame: np.ndarray,
+        card_bgra: np.ndarray,
+        alpha: float,
+        margin: int = 40,
+        corner: str = "bottom_right",
     ) -> np.ndarray:
         out = frame.copy()
         h, w = out.shape[:2]
@@ -816,7 +828,9 @@ class GraphicsEngine:
                 interpolation=cv2.INTER_AREA,
             )
             ch, cw = card_bgra.shape[:2]
-        x0, y0 = w - cw - margin, h - ch - margin
+        x = margin if "left" in corner else w - cw - margin
+        y = margin if "top" in corner else h - ch - margin
+        x0, y0 = x, y
         card_bgr, card_alpha = (
             card_bgra[:, :, :3].astype(np.float32),
             (card_bgra[:, :, 3].astype(np.float32) / 255.0) * alpha,
@@ -963,7 +977,7 @@ class GraphicsEngine:
                 ],
                 dtype=np.int32,
             )
-        else:  # ferry / boat — pointed bow, flat stern
+        elif mode == "ferry":  # boat — pointed bow, flat stern
             body = np.array(
                 [
                     [cx + int(size * 0.45), cy],
@@ -974,10 +988,36 @@ class GraphicsEngine:
                 ],
                 dtype=np.int32,
             )
+        else:  # car / driving — top-down rounded-rectangle silhouette
+            body = np.array(
+                [
+                    [cx + int(size * 0.42), cy - int(size * 0.10)],
+                    [cx + int(size * 0.32), cy - int(size * 0.22)],
+                    [cx - int(size * 0.32), cy - int(size * 0.22)],
+                    [cx - int(size * 0.42), cy - int(size * 0.10)],
+                    [cx - int(size * 0.42), cy + int(size * 0.10)],
+                    [cx - int(size * 0.32), cy + int(size * 0.22)],
+                    [cx + int(size * 0.32), cy + int(size * 0.22)],
+                    [cx + int(size * 0.42), cy + int(size * 0.10)],
+                ],
+                dtype=np.int32,
+            )
 
         outline = ((body - [cx, cy]) * 1.22 + [cx, cy]).astype(np.int32)
         cv2.fillPoly(canvas, [outline], white, cv2.LINE_AA)
         cv2.fillPoly(canvas, [body], color, cv2.LINE_AA)
+
+        if mode not in ("airplane", "ferry"):
+            # Windshield accent so the car silhouette doesn't read as just
+            # a generic rounded rectangle.
+            cv2.rectangle(
+                canvas,
+                (cx + int(size * 0.06), cy - int(size * 0.16)),
+                (cx + int(size * 0.24), cy + int(size * 0.16)),
+                white,
+                -1,
+                cv2.LINE_AA,
+            )
 
         cache[mode] = canvas
         return canvas
@@ -1006,14 +1046,15 @@ class GraphicsEngine:
     ):
         """Draws the traveler marker for the current leg's travel mode: an
         animated stick-figure walker for walking, and a heading-rotated
-        vehicle silhouette for airplane/ferry legs. Unrecognized modes fall
-        back to a mode-colored marker with a heading arrow."""
+        vehicle silhouette for airplane/ferry/car(driving) legs. Any other
+        unrecognized mode falls back to a mode-colored marker with a
+        heading arrow."""
         mode = (mode or "walking").lower()
         if mode == "walking":
             self.draw_walking_human(frame, cx, cy, frame_count, angle)
             return
 
-        if mode in ("airplane", "ferry"):
+        if mode in ("airplane", "ferry", "car", "driving"):
             sprite = self._rotate_sprite(self._get_vehicle_sprite(mode), angle)
             anchor = (sprite.shape[1] // 2, sprite.shape[0] // 2)
             self.blit_sprite(frame, sprite, anchor, cx, cy)
