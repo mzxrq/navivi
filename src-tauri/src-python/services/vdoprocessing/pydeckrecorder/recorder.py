@@ -17,6 +17,25 @@ from .legresolve import _MODE_ALIASES, _resolve_leg
 from .renderer import render_leg_animation
 from .routedata import interpolate_route_data, load_route_from_config, patch_pydeck_html
 
+# sizeScale is calibrated per model against its OWN measured glTF bounding
+# box (full scene-graph node transforms included, not just raw mesh
+# accessor bounds) so each vehicle renders at a real-world-plausible length,
+# rather than a guessed constant. ferry.glb in particular is authored at a
+# wildly larger raw scale than the others (~1180 units on its long axis, vs
+# ~1.6 for car.glb) -- a shared/guessed sizeScale (previously 5.0, same
+# order of magnitude as car's 3.0) rendered it kilometers across, filling
+# the frame with one blown-out flat surface instead of a boat.
+# real_length_m is the resulting real-world length this sizeScale produces;
+# it drives the chase-camera follow distance in the main loop below instead
+# of sizeScale itself, so distance-to-length framing stays consistent
+# across modes.
+_VEHICLE_PROFILES = {
+    "walking": {"model": "human.glb", "size_scale": 0.9, "real_length_m": 1.7},
+    "ferry": {"model": "ferry.glb", "size_scale": 0.03, "real_length_m": 35.0},
+    "airplane": {"model": "airplane.glb", "size_scale": 6.8, "real_length_m": 25.0},
+    "driving": {"model": "car.glb", "size_scale": 2.8, "real_length_m": 4.5},
+}
+
 
 def record_headless_video(
     config_path: str,
@@ -69,10 +88,15 @@ def record_headless_video(
     marker_color = settings.get("marker_color", [0, 0, 255])
     marker_radius = settings.get("marker_radius", 10)
 
-    server, port = start_local_server(str(project_root))
+    # Served at '/': config_dir (this project's own folder, holding the
+    # per-leg HTML + copied popup images under html_dir/frames). Served at
+    # '/assets/': project_root/assets (the app's bundled .glb models) --
+    # the two are different directory trees, so both need their own root
+    # (see httpserver.start_local_server).
+    server, port = start_local_server(config_dir, assets_dir=str(project_root))
 
     # Static Marker Setup (Added "name" property for labels)
-    marker_filename = settings.get("marker_filename", "Sticker_08.glb")
+    marker_filename = settings.get("marker_filename", "marker.glb")
     marker_url = f"http://127.0.0.1:{port}/assets/{urllib.parse.quote(marker_filename)}"
     waypoint_markers = [
         {
@@ -93,9 +117,10 @@ def record_headless_video(
     ext = os.path.splitext(output_video_path)[1]
 
     camera_config = {
-        "car_size": 3,
+        "car_size": 100,
+        "vehicle_length_m": 4.5,
         "yaw_offset": 180,
-        "follow_zoom": 19,
+        "follow_zoom": 17,
         "follow_pitch": 60,
     }
 
@@ -119,30 +144,24 @@ def record_headless_video(
             )
             leg_mode = resolved_mode or _MODE_ALIASES.get(fallback_mode, fallback_mode)
 
-            if leg_mode == "walking":
-                model_filename = "human.glb"
-                camera_config["car_size"] = 2.0
-            elif leg_mode == "ferry":
-                model_filename = "ferry.glb"
-                camera_config["car_size"] = 5.0
-            elif leg_mode == "airplane":
-                model_filename = "airplane.glb"
-                camera_config["car_size"] = 10.0
-            else:
-                # driving, or any other/unrecognized mode.
-                model_filename = "car.glb"
-                camera_config["car_size"] = 3.0
+            profile = _VEHICLE_PROFILES.get(leg_mode, _VEHICLE_PROFILES["driving"])
+            model_filename = profile["model"]
+            camera_config["car_size"] = profile["size_scale"]
+            camera_config["vehicle_length_m"] = profile["real_length_m"]
 
             if from_wp is not None and "leg_size" in from_wp:
-                camera_config["car_size"] = float(from_wp["leg_size"])
+                override_scale = float(from_wp["leg_size"])
+                # Keep the chase distance proportional to the ACTUAL
+                # rendered size under a manual per-leg override too, rather
+                # than leaving it keyed to the mode's default length.
+                camera_config["vehicle_length_m"] = profile["real_length_m"] * (
+                    override_scale / profile["size_scale"]
+                )
+                camera_config["car_size"] = override_scale
 
             model_url = (
                 f"http://127.0.0.1:{port}/assets/{urllib.parse.quote(model_filename)}"
             )
-
-            marker_filename = "Sticker_08.glb"
-            safe_marker = urllib.parse.quote(marker_filename)
-            marker_url = f"http://127.0.0.1:{port}/assets/{safe_marker}"
 
             df_raw = (
                 pd.DataFrame([{"lat": c[0], "lon": c[1]} for c in coords])
@@ -182,7 +201,18 @@ def record_headless_video(
                 raw_bearings, alpha=settings.get("bearing_smoothing", 0.15)
             )
 
-            cam_follow_dist = settings.get("camera_follow_distance_m", 14)
+            # Scale the chase distance with the vehicle's REAL rendered
+            # length (see _VEHICLE_PROFILES), not sizeScale -- sizeScale
+            # alone isn't a valid proxy for on-screen size once it's
+            # calibrated per model (ferry.glb's sizeScale is ~0.03, tiny
+            # compared to car's ~2.8, precisely because its raw mesh is
+            # ~1180 units vs car's ~1.6; distance still needs to scale UP
+            # for it, not down). driving's 4.5m is the baseline the default
+            # distance was tuned for.
+            cam_follow_dist_base = settings.get("camera_follow_distance_m", 14)
+            cam_follow_dist = cam_follow_dist_base * (
+                camera_config["vehicle_length_m"] / 4.5
+            )
             cam_coords = [
                 offset_point(lon, lat, (b + 180) % 360, cam_follow_dist)
                 for lon, lat, b in zip(
@@ -195,13 +225,20 @@ def record_headless_video(
             smooth_df["cam_lon"] = [c[0] for c in cam_coords]
             smooth_df["cam_lat"] = [c[1] for c in cam_coords]
 
+            is_final_leg = leg_idx == num_legs - 1
+
             popup_url, freeze_frames, image_display = None, 0, "pip"
+            coin_target = None
             if wp_idx < len(waypoints):
                 wp = waypoints[wp_idx]
                 freeze_frames = int(float(wp.get("freeze_seconds", 0.0)) * render_fps)
                 image_display = wp.get(
                     "image_display", wp.get("image display", "pip")
                 ).lower()
+                coin_target = {
+                    "lon": float(wp.get("lng", wp.get("lon"))),
+                    "lat": float(wp["lat"]),
+                }
 
                 raw_popup = wp.get("popup_image")
                 popup_img = (
@@ -217,6 +254,12 @@ def record_headless_video(
                     popup_url = (
                         f"http://127.0.0.1:{port}/frames/popup_{leg_idx}{img_ext}"
                     )
+
+            # The picture becomes an in-world "coin" prop at every waypoint
+            # (see coinprop.py); the screen-space PIP/fullscreen reveal in
+            # popupsequence.py is reserved for the actual final destination.
+            coin_image_url = popup_url
+            screen_popup_url = popup_url if is_final_leg else None
 
             center_lon = (df_raw["lon"].min() + df_raw["lon"].max()) / 2.0
             center_lat = (df_raw["lat"].min() + df_raw["lat"].max()) / 2.0
@@ -234,21 +277,33 @@ def record_headless_video(
                 bearing=30,
             )
 
-            base_layers = []
+            mapbox_key = settings.get("mapbox_token", MAPBOX_API_KEY)
 
-            # --- OPTIONAL: 3D BUILDING LAYER ---
-            # If you want extruded 3D buildings on your map:
-            building_layer = pdk.Layer(
-                "GeoJsonLayer",
-                id="building-layer",
-                data="path_to_your_buildings.geojson",  # Path to your building data file
-                extruded=True,
-                get_elevation="properties.height",  # Height attribute from your data
-                get_fill_color=[220, 200, 180, 200],  # Building color
-                get_line_color=[100, 100, 100],
-            )
-            base_layers.append(building_layer)
-            # -----------------------------------
+            # Reverted the deck.gl TerrainLayer 3D-elevation experiment --
+            # across several fix attempts (zoom/strategy mismatch, texture
+            # coverage gaps over water, then a tile-cache bug that replayed
+            # stale error tiles forever) it kept producing new failure
+            # modes in the real pipeline faster than they could be run down
+            # from isolated tests alone. Back to the flat 2D Mapbox basemap
+            # (still `outdoors-v12`, set below), which was reliable before
+            # any of this. See git history if elevation is worth revisiting.
+            #
+            # Route trace: the upcoming path for THIS leg, drawn faint on
+            # the static base map so the route is visible before the
+            # vehicle animates over it, instead of only appearing as the
+            # driving loop draws it frame by frame.
+            route_preview_path = df_raw[["lon", "lat"]].values.tolist()
+            base_layers = [
+                pdk.Layer(
+                    "PathLayer",
+                    id="route-preview",
+                    data=[{"path": route_preview_path}],
+                    get_path="path",
+                    get_color=[255, 255, 255, 130],
+                    width_scale=1,
+                    width_min_pixels=max(2, line_thickness // 3),
+                ),
+            ]
 
             if accumulated_trail:
                 base_layers.extend(
@@ -274,8 +329,6 @@ def record_headless_video(
                     ]
                 )
 
-            mapbox_key = settings.get("mapbox_token", MAPBOX_API_KEY)
-
             base_html_path = os.path.join(html_dir, f"base_leg_{leg_idx}.html")
             pdk.Deck(
                 layers=base_layers,
@@ -294,9 +347,6 @@ def record_headless_video(
                     float(intro_wp.get("freeze_seconds", 0.0)) * render_fps
                 )
                 if intro_freeze_frames > 0:
-                    intro_display = intro_wp.get(
-                        "image_display", wp.get("image display", "pip")
-                    ).lower()
                     raw_intro_popup = intro_wp.get("popup_image")
                     intro_popup_img = (
                         str(raw_intro_popup[0])
@@ -312,10 +362,17 @@ def record_headless_video(
                             f"http://127.0.0.1:{port}/frames/popup_intro{img_ext}"
                         )
 
+                    # No screen-space popup box for the intro anymore -- it's
+                    # shown as the same in-world spinning coin as every other
+                    # waypoint's arrival (see coinprop.play_intro_coin_hold),
+                    # so it needs the start waypoint's coordinates too.
                     intro_popup_spec = {
                         "freeze_frames": intro_freeze_frames,
                         "popup_url": intro_popup_url,
-                        "image_display": intro_display,
+                        "coin_target": {
+                            "lon": float(intro_wp.get("lng", intro_wp.get("lon"))),
+                            "lat": float(intro_wp["lat"]),
+                        },
                     }
 
             leg_output_path = os.path.join(
@@ -330,13 +387,14 @@ def record_headless_video(
                     render_fps,
                     leg_output_path,
                     port,
+                    config_dir,
                     model_url,
                     line_color,
                     line_thickness,
                     marker_color,
                     marker_radius,
                     camera_config,
-                    popup_url=popup_url,
+                    popup_url=screen_popup_url,
                     freeze_frames=freeze_frames,
                     marker_url=marker_url,
                     waypoint_markers=waypoint_markers,
@@ -347,6 +405,9 @@ def record_headless_video(
                         if leg_idx == 0
                         else None
                     ),
+                    coin_image_url=coin_image_url,
+                    coin_target=coin_target,
+                    mapbox_key=mapbox_key,
                 )
             )
 

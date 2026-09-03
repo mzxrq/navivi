@@ -5,7 +5,8 @@
 - geomath.py: bearing/offset/haversine helpers
 - routedata.py: project/route loading and pydeck HTML generation
 - legresolve.py: current routeMode/place-name resolution per cached leg
-- popupsequence.py: shared arrival popup freeze/spin/scale/fade animation
+- popupsequence.py: final-destination-only PIP/fullscreen photo reveal
+- coinprop.py: in-world "Mario coin" waypoint prop + collect animation
 - renderer.py: per-leg Playwright/deck.gl frame renderer
 - recorder.py: top-level orchestrator (record_headless_video)
 """

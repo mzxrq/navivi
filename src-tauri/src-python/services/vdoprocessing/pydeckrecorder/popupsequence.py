@@ -183,7 +183,6 @@ async def _run_popup_freeze_sequence(
 
         full_scale_frames = int(fps * 1.0)
         full_hold_frames = int(fps * 1.5)
-        full_fade_frames = int(fps * 0.5)
 
         # Phase 2: Coin pop-in (scale + Y-axis spin + bounce)
         spin_deg = await _coin_pop_in(page, force_render_and_shoot, pip_pop_frames)
@@ -212,16 +211,23 @@ async def _run_popup_freeze_sequence(
         for _ in range(full_hold_frames):
             await force_render_and_shoot()
 
-        # Phase 6: Fade Fullscreen Out
-        for i in range(full_fade_frames):
-            progress = i / float(full_fade_frames - 1) if full_fade_frames > 1 else 1.0
+        # Phase 6: Fast blur-out to end the clip on the final destination's
+        # photo, rather than a plain fade -- blur ramps in quickly
+        # (accelerating, not linear) alongside the fade so the very last
+        # frames read as a deliberate cinematic close, not a cut.
+        full_blur_frames = max(1, int(fps * 0.4))
+        for i in range(full_blur_frames):
+            progress = i / float(full_blur_frames - 1) if full_blur_frames > 1 else 1.0
+            ease = progress**2
+            blur_px = ease * 40.0
             alpha = 1.0 - progress
             await page.evaluate(
-                """([alphaVal]) => {
+                """([blurVal, alphaVal]) => {
+                document.getElementById('my-popup-img-full').style.filter = `blur(${blurVal}px)`;
                 document.getElementById('my-popup-img-full').style.opacity = alphaVal;
                 document.getElementById('my-popup-full').style.backgroundColor = `rgba(0,0,0,${alphaVal * 0.85})`;
             }""",
-                [alpha],
+                [blur_px, alpha],
             )
             await force_render_and_shoot()
 
