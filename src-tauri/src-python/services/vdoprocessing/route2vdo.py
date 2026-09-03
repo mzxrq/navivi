@@ -238,9 +238,15 @@ class RouteAnimator:
                 img_path, points, labels, popups, fps, summary=summary, point_modes=point_modes
             )
             if overview_path:
-                self._freeze_video_end(
-                    overview_path, hold_seconds=self.config.get("summary_hold", 4.0)
-                )
+                # Skip the extra hold when the clip already ended itself on
+                # a blur-out (see SpatialRenderer._render_ending_highlight) —
+                # that blur is meant to be the video's actual last frame, so
+                # freezing on top of it just makes playback linger instead
+                # of ending right when the blur finishes.
+                if not self.spatial_renderer.last_ending_hard_ended:
+                    self._freeze_video_end(
+                        overview_path, hold_seconds=self.config.get("summary_hold", 4.0)
+                    )
                 output_paths.append(overview_path)
 
         # Always render waypoints using the spatial engine, OR PyDeck if requested
