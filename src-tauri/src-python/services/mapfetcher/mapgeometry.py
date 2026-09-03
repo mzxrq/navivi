@@ -30,7 +30,7 @@ class RouteGeometryProcessor:
 
     # [Utility] Get bounding box for a set of lat/lon points
     @staticmethod
-    def get_bounding_box(df : pd.DataFrame, padding_factor : float = 0.05, **kwargs) -> Dict[str, float]:
+    def get_bounding_box(df : pd.DataFrame, padding_factor : float = 0.15, **kwargs) -> Dict[str, float]:
         """Calculate the bounding box with optional padding."""
 
         min_lat, max_lat = df["latitude"].min(), df["latitude"].max()

@@ -37,7 +37,7 @@ class RouteAnimator:
 
         # 1. Initialize the Core Graphics Engine
         self.graphics = GraphicsEngine(
-            line_color=self.config.get("line_color", (0, 200, 255)),
+            line_color=self.config.get("line_color", (243, 150, 33)),  # BGR blue
             line_thickness=self.config.get("line_thickness", 10),
             marker_color=self.config.get("marker_color", (0, 0, 255)),
             arrived_marker_color=self.config.get("arrived_marker_color", (0, 0, 220)),

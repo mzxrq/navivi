@@ -98,7 +98,7 @@ class GraphicsEngine:
         # Color a pin switches to once its waypoint has been reached, so
         # visited stops read differently from ones still ahead.
         self.arrived_marker_color = arrived_marker_color
-        self.marker_radius = max(16, int(round(marker_radius)))
+        self.marker_radius = max(16, int(round(marker_radius))) + 3
         self.font_size = font_size
         self.font_cv = cv2.FONT_HERSHEY_SIMPLEX
 
@@ -118,7 +118,8 @@ class GraphicsEngine:
     # Per-travel-mode line colors (BGR). Modes without an entry fall back to
     # self.line_color (the existing single-color behavior).
     MODE_COLORS: Final[Dict[str, Tuple[int, int, int]]] = {
-        "ferry": (255, 144, 30),  # dodger blue
+        "ferry": (0, 140, 255),  # orange — the old dodger-blue nearly
+        # vanished against blue ocean water; orange reads clearly on it.
         "airplane": (180, 60, 220),  # magenta/purple
         "car": (60, 180, 60),  # green
         "driving": (60, 180, 60),
@@ -177,16 +178,17 @@ class GraphicsEngine:
         frame: np.ndarray,
         cx: int,
         cy: int,
-        number: Optional[int] = None,
+        number: Optional[Any] = None,
         color: Optional[Tuple[int, int, int]] = None,
     ):
         """Draws a classic map-pin (teardrop) marker with its TIP anchored at
         (cx, cy) — the actual waypoint coordinate — and the round head above
-        it, matching standard map-pin iconography. Pass `number` (1-based
-        visit order) to print it inside the head instead of a plain hole,
-        so the route's stop sequence is readable at a glance. Pass `color`
-        to override self.marker_color for this pin only (e.g. arrived
-        waypoints)."""
+        it, matching standard map-pin iconography. Pass `number` (usually a
+        1-based visit order, but any int/str — e.g. "S"/"E" for the route's
+        actual start/end) to print it inside the head instead of a plain
+        hole, so the route's stop sequence is readable at a glance. Pass
+        `color` to override self.marker_color for this pin only (e.g.
+        arrived waypoints)."""
         pin_color = color if color is not None else self.marker_color
         radius = int(self.marker_radius)
         # The head sits fully above the anchor point, with the tail
@@ -428,8 +430,12 @@ class GraphicsEngine:
         return preference[0]
 
     def render_popup_box(
-        self, target_frame: np.ndarray, popup_info: Dict
+        self, target_frame: np.ndarray, popup_info: Dict, alpha: float = 1.0
     ) -> np.ndarray:
+        """`alpha` (0-1) fades the whole card — image, caption, leader
+        line, shadow — as one unit by blending the fully-composited result
+        back with `target_frame`, rather than needing every drawn piece to
+        carry its own opacity."""
         f_frame = target_frame.copy()
         img_url = popup_info["data"].get("popup_image")
         h, w = f_frame.shape[:2]
@@ -450,33 +456,51 @@ class GraphicsEngine:
                     offset = (ph - new_h) // 2
                     pop_img = pop_img[offset : offset + new_h, :]
 
-                target_img_w = 340
+                hud_corner = popup_info.get("hud_corner")
+                is_beside = hud_corner not in self.HUD_CORNERS
+
+                # Flow-through ("beside the pin") cards are drawn much
+                # smaller than the HUD-corner ones — several can be on
+                # screen at once (nearby waypoints triggering close
+                # together), so keeping them small is what lets the grid
+                # layout in _layout_beside_popups fit them without overlap.
+                # `card_scale` bumps a specific beside-style card back up
+                # (e.g. the end-of-video recap's start/end pair, which get
+                # a dedicated fixed corner instead of competing for space).
+                card_scale = float(popup_info.get("card_scale", 1.0)) if is_beside else 1.0
+                target_img_w = int(160 * card_scale) if is_beside else 340
                 target_img_h = int(target_img_w / target_ratio)
                 pop_img = cv2.resize(pop_img, (target_img_w, target_img_h))
                 ph, pw = pop_img.shape[:2]
 
-                border = 14
+                border = int(10 * card_scale) if is_beside else 14
                 label_text = popup_info.get("label")
-                font = self._load_font(self.FONT_CANDIDATES_REGULAR, self.font_size)
+                font_size = (
+                    max(11, int(self.font_size * 0.6 * card_scale))
+                    if is_beside
+                    else self.font_size
+                )
+                font = self._load_font(self.FONT_CANDIDATES_REGULAR, font_size)
 
                 has_label = RouteGeometryProcessor.is_real_label(label_text)
-                text_block_h = self.font_size + 20 if has_label else 0
+                text_block_h = (font_size + 14) if has_label else 0
                 total_h = ph + (border * 2) + text_block_h
                 total_w = pw + (border * 2)
                 margin = 50
 
-                hud_corner = popup_info.get("hud_corner")
-                if hud_corner in self.HUD_CORNERS:
+                if not is_beside:
                     box_x, box_y = self._hud_corner_box(hud_corner, w, h, total_w, total_h)
                 else:
                     point_x = int(popup_info["x"])
                     point_y = int(popup_info["y"])
-                    box_x = (
-                        point_x - total_w - 40 if point_x > w * 0.5 else point_x + 40
-                    )
-                    box_y = point_y - (total_h // 2) + int(
-                        popup_info.get("beside_nudge_y", 0)
-                    )
+                    beside_box = popup_info.get("beside_box")
+                    if beside_box:
+                        box_x, box_y = beside_box
+                    else:
+                        box_x = (
+                            point_x - total_w - 40 if point_x > w * 0.5 else point_x + 40
+                        )
+                        box_y = point_y - (total_h // 2)
                     box_x = max(margin, min(box_x, w - total_w - margin))
                     box_y = max(margin, min(box_y, h - total_h - margin))
 
@@ -485,11 +509,11 @@ class GraphicsEngine:
                         # used when the card is riding beside a waypoint the
                         # traveler is flowing through rather than sitting in
                         # a fixed HUD corner, so it's still clear which stop
-                        # it belongs to.
-                        anchor_x = box_x if point_x > w * 0.5 else box_x + total_w
-                        anchor_y = max(
-                            box_y + 16, min(point_y, box_y + total_h - 16)
-                        )
+                        # it belongs to. The grid layout can place the card
+                        # anywhere, so pick whichever edge (or corner) of
+                        # the box is actually nearest the pin.
+                        anchor_x = min(max(point_x, box_x), box_x + total_w)
+                        anchor_y = min(max(point_y, box_y), box_y + total_h)
                         cv2.line(
                             f_frame,
                             (point_x, point_y),
@@ -548,6 +572,9 @@ class GraphicsEngine:
 
                 f_frame = cv2.cvtColor(np.array(base_pil), cv2.COLOR_RGBA2BGR)
 
+        if alpha < 1.0:
+            a = max(0.0, alpha)
+            f_frame = cv2.addWeighted(f_frame, a, target_frame, 1 - a, 0)
         return f_frame
 
     def generate_fullscreen_popup_transition(
@@ -741,94 +768,94 @@ class GraphicsEngine:
         distance_km: float,
         duration_seconds: float,
         mode_breakdown: Optional[Dict[str, float]] = None,
-        card_size=(480, 110),
+        mode_duration: Optional[Dict[str, float]] = None,
+        card_size=(560, 130),
     ) -> np.ndarray:
-        # A breakdown row only adds value when the trip actually mixes modes
-        # (e.g. walking + ferry) — a single-mode breakdown just repeats the
-        # Distance field above it.
-        show_breakdown = bool(mode_breakdown) and len(mode_breakdown) > 1
-        w, top_h = card_size
-        h = top_h + 34 if show_breakdown else top_h
+        """A dark glass stat card for the end of the overview video: one
+        column per travel mode actually used (icon, distance, time), plus a
+        final Total column. A single-mode trip only shows Total, since one
+        mode column would just repeat it."""
+        w, h = card_size
         scale = 2
         canvas = Image.new("RGBA", (w * scale, h * scale), (0, 0, 0, 0))
         draw = ImageDraw.Draw(canvas)
 
-        bg_color, text_color = (255, 255, 255, 245), (20, 20, 20, 255)
-        label_color, divider_color = (120, 120, 120, 255), (230, 230, 230, 255)
+        bg_color = (18, 18, 20, 225)
+        text_color, label_color = (255, 255, 255, 255), (185, 185, 185, 255)
+        divider_color = (255, 255, 255, 45)
+        # The canvas is RGB<->BGR swapped as a whole at the end (see the
+        # final `[2, 1, 0, 3]` reindex below), so a color already in BGR
+        # (line_color, shared with the cv2 path drawing) must be
+        # pre-reversed here to come out correct after that swap — ties the
+        # card's border to the route line's own color.
+        accent = tuple(reversed(self.line_color)) + (255,)
 
         draw.rounded_rectangle(
             [0, 0, w * scale - 1, h * scale - 1],
-            radius=16 * scale,
+            radius=18 * scale,
             fill=bg_color,
-            outline=(220, 220, 220, 255),
-            width=2,
-        )
-        font_label = self._load_font(self.FONT_CANDIDATES_REGULAR, 14 * scale)
-        font_value = self._load_font(self.FONT_CANDIDATES_BOLD, 22 * scale)
-
-        icon_size, pad = 40 * scale, 30 * scale
-        self._draw_walking_icon(
-            draw, pad + icon_size // 2, top_h * scale // 2, icon_size, (50, 50, 50, 255)
-        )
-        text_x = pad + icon_size + 14 * scale
-        draw.text((text_x, 24 * scale), "Total Time", font=font_label, fill=label_color)
-        draw.text(
-            (text_x, 46 * scale),
-            self._format_duration_short(duration_seconds),
-            font=font_value,
-            fill=text_color,
+            outline=accent,
+            width=3 * scale,
         )
 
-        div_x = w * scale // 2
-        draw.line(
-            [(div_x, 22 * scale), (div_x, top_h * scale - 22 * scale)],
-            fill=divider_color,
-            width=2 * scale,
-        )
-        icon_cx2 = div_x + 32 * scale + icon_size // 2
-        self._draw_ruler_icon(
-            draw, icon_cx2, top_h * scale // 2, icon_size, (50, 50, 50, 255)
-        )
-        text_x2 = icon_cx2 + icon_size // 2 + 14 * scale
-        distance_str = (
-            f"{distance_km * 1000:.0f} m"
-            if distance_km < 1
-            else f"{distance_km:.2f} km"
-        )
-        draw.text((text_x2, 24 * scale), "Distance", font=font_label, fill=label_color)
-        draw.text((text_x2, 46 * scale), distance_str, font=font_value, fill=text_color)
+        font_label = self._load_font(self.FONT_CANDIDATES_REGULAR, 13 * scale)
+        font_value = self._load_font(self.FONT_CANDIDATES_BOLD, 23 * scale)
+        font_sub = self._load_font(self.FONT_CANDIDATES_REGULAR, 12 * scale)
 
-        if show_breakdown:
-            draw.line(
-                [(pad, top_h * scale), (w * scale - pad, top_h * scale)],
-                fill=divider_color,
-                width=2 * scale,
+        mode_duration = mode_duration or {}
+        columns: List[Tuple[str, str, float, float]] = []
+        if mode_breakdown and len(mode_breakdown) > 1:
+            for mode, dist in sorted(mode_breakdown.items(), key=lambda kv: -kv[1]):
+                columns.append(
+                    (mode.capitalize(), mode.lower(), dist, mode_duration.get(mode, 0.0))
+                )
+        columns.append(("Total", "total", distance_km, duration_seconds))
+
+        n = len(columns)
+        col_w = (w * scale) / n
+        icon_size = 30 * scale
+        icon_cy = 36 * scale
+
+        for i, (label, mode, dist, dur) in enumerate(columns):
+            col_cx = col_w * i + col_w / 2
+            if i > 0:
+                x_div = col_w * i
+                draw.line(
+                    [(x_div, 22 * scale), (x_div, h * scale - 22 * scale)],
+                    fill=divider_color,
+                    width=2 * scale,
+                )
+
+            if mode == "total":
+                self._draw_ruler_icon(draw, col_cx, icon_cy, icon_size, text_color)
+            else:
+                self._draw_mode_icon(draw, mode, col_cx, icon_cy, icon_size, text_color)
+
+            label_w = draw.textlength(label, font=font_label)
+            label_y = icon_cy + icon_size // 2 + 8 * scale
+            draw.text(
+                (col_cx - label_w / 2, label_y), label, font=font_label, fill=label_color
             )
-            font_breakdown = self._load_font(self.FONT_CANDIDATES_REGULAR, 13 * scale)
-            row_cy = top_h * scale + 17 * scale
-            dot_r = 5 * scale
-            entries = sorted(mode_breakdown.items(), key=lambda kv: -kv[1])
-            # The canvas is BGR<->RGB swapped as a whole at the end (see the
-            # final `[2, 1, 0, 3]` reindex below), so colors already in BGR
-            # (MODE_COLORS / line_color, shared with the cv2 path drawing)
-            # must be pre-reversed here to come out correct after that swap.
-            x = pad
-            for mode, dist in entries:
-                color_bgr = self.MODE_COLORS.get(mode.lower(), self.line_color)
-                dot_color = tuple(reversed(color_bgr)) + (255,)
-                draw.ellipse(
-                    [x, row_cy - dot_r, x + 2 * dot_r, row_cy + dot_r], fill=dot_color
-                )
-                label = f"{mode.capitalize()} {dist:.1f} km"
+
+            distance_str = f"{dist * 1000:.0f} m" if dist < 1 else f"{dist:.1f} km"
+            value_w = draw.textlength(distance_str, font=font_value)
+            value_y = label_y + 20 * scale
+            draw.text(
+                (col_cx - value_w / 2, value_y),
+                distance_str,
+                font=font_value,
+                fill=text_color,
+            )
+
+            if dur > 0:
+                dur_str = self._format_duration_short(dur)
+                dur_w = draw.textlength(dur_str, font=font_sub)
                 draw.text(
-                    (x + 2 * dot_r + 8 * scale, row_cy - 8 * scale),
-                    label,
-                    font=font_breakdown,
-                    fill=text_color,
+                    (col_cx - dur_w / 2, value_y + 30 * scale),
+                    dur_str,
+                    font=font_sub,
+                    fill=label_color,
                 )
-                x += (2 * dot_r + 8 * scale) + int(
-                    draw.textlength(label, font=font_breakdown)
-                ) + 20 * scale
 
         canvas = canvas.resize((w, h), Image.Resampling.LANCZOS)
         return np.array(canvas)[:, :, [2, 1, 0, 3]]
@@ -904,6 +931,86 @@ class GraphicsEngine:
         for t in (0.25, 0.5, 0.75):
             tx, ty = p1[0] + (p2[0] - p1[0]) * t, p1[1] + (p2[1] - p1[1]) * t
             draw.line([(tx - 4, ty - 6), (tx + 4, ty + 6)], fill=color, width=2)
+
+    def _draw_ship_icon(
+        self, draw: ImageDraw.ImageDraw, cx: int, cy: int, size: int, color: Tuple
+    ):
+        half = size / 2
+        width = max(2, size // 12)
+        hull = [
+            (cx - half, cy + half * 0.3),
+            (cx - half * 0.6, cy + half * 0.8),
+            (cx + half * 0.6, cy + half * 0.8),
+            (cx + half, cy + half * 0.3),
+        ]
+        draw.line(hull + [hull[0]], fill=color, width=width, joint="curve")
+        draw.line(
+            [(cx, cy + half * 0.3), (cx, cy - half)], fill=color, width=width
+        )
+        draw.polygon(
+            [(cx, cy - half), (cx, cy - half * 0.1), (cx + half * 0.6, cy - half * 0.3)],
+            fill=color,
+        )
+
+    def _draw_car_icon(
+        self, draw: ImageDraw.ImageDraw, cx: int, cy: int, size: int, color: Tuple
+    ):
+        half = size / 2
+        width = max(2, size // 12)
+        draw.rounded_rectangle(
+            [cx - half, cy - half * 0.2, cx + half, cy + half * 0.4],
+            radius=size // 8,
+            outline=color,
+            width=width,
+        )
+        wheel_r = size / 8
+        for wx in (cx - half * 0.55, cx + half * 0.55):
+            draw.ellipse(
+                [
+                    wx - wheel_r, cy + half * 0.4 - wheel_r,
+                    wx + wheel_r, cy + half * 0.4 + wheel_r,
+                ],
+                fill=color,
+            )
+
+    def _draw_plane_icon(
+        self, draw: ImageDraw.ImageDraw, cx: int, cy: int, size: int, color: Tuple
+    ):
+        half = size / 2
+        width = max(2, size // 12)
+        draw.line([(cx - half, cy), (cx + half * 0.6, cy)], fill=color, width=width)
+        draw.line(
+            [(cx - half * 0.1, cy - half * 0.7), (cx - half * 0.1, cy + half * 0.7)],
+            fill=color,
+            width=width,
+        )
+        draw.polygon(
+            [
+                (cx + half, cy),
+                (cx + half * 0.45, cy - half * 0.35),
+                (cx + half * 0.45, cy + half * 0.35),
+            ],
+            fill=color,
+        )
+
+    def _draw_mode_icon(
+        self,
+        draw: ImageDraw.ImageDraw,
+        mode: str,
+        cx: int,
+        cy: int,
+        size: int,
+        color: Tuple,
+    ):
+        key = (mode or "").lower()
+        if key in ("ferry", "ship", "boat"):
+            self._draw_ship_icon(draw, cx, cy, size, color)
+        elif key in ("car", "driving"):
+            self._draw_car_icon(draw, cx, cy, size, color)
+        elif key == "airplane":
+            self._draw_plane_icon(draw, cx, cy, size, color)
+        else:
+            self._draw_walking_icon(draw, cx, cy, size, color)
 
     def _format_duration_short(self, seconds: float) -> str:
         hrs, mins = divmod(int(round(seconds / 60)), 60)
@@ -1031,7 +1138,30 @@ class GraphicsEngine:
         cv2.fillPoly(canvas, [outline], white, cv2.LINE_AA)
         cv2.fillPoly(canvas, [body], color, cv2.LINE_AA)
 
-        if mode not in ("airplane", "ferry"):
+        if mode == "ferry":
+            # A deckhouse + funnel on top of the hull, so it silhouettes as
+            # an actual ferry rather than a generic pointed hull that could
+            # as easily read as a canoe or sailboat.
+            cabin = np.array(
+                [
+                    [cx - int(size * 0.05), cy - int(size * 0.14)],
+                    [cx + int(size * 0.20), cy - int(size * 0.14)],
+                    [cx + int(size * 0.20), cy + int(size * 0.14)],
+                    [cx - int(size * 0.05), cy + int(size * 0.14)],
+                ],
+                dtype=np.int32,
+            )
+            cv2.fillPoly(canvas, [cabin], white, cv2.LINE_AA)
+            mast_x = cx - int(size * 0.08)
+            cv2.line(
+                canvas,
+                (mast_x, cy - int(size * 0.14)),
+                (mast_x, cy - int(size * 0.32)),
+                white,
+                max(2, size // 14),
+                cv2.LINE_AA,
+            )
+        elif mode != "airplane":
             # Windshield accent so the car silhouette doesn't read as just
             # a generic rounded rectangle.
             cv2.rectangle(

@@ -2,8 +2,7 @@ import math
 import json
 import os
 from pathlib import Path
-import sys
-from typing import Optional, Any, Dict
+from typing import Optional, Any
 
 import numpy as np
 import pyproj
@@ -14,6 +13,7 @@ from services.gpsparser.gpsparser import GPSParser
 from services.gpsparser.gpscalculator import GPSMath
 from services.mapfetcher.mapfetcher import MapFetcher
 from services.vdoprocessing.route2vdo import RouteAnimator
+from services.vdoprocessing.spatial_renderer import SpatialRenderer
 from services.localization.localization import format_waypoint_label
 from services.config.job_config import JobConfigManager
 from services.vdoprocessing.vdoexporter import VideoExporter
@@ -380,21 +380,47 @@ def render_route_video(
     point_modes = _build_point_modes(len(route_points), wp_indices, waypoints, routing_cache)
 
     mode_breakdown: dict[str, float] = {}
+    mode_duration: dict[str, float] = {}
+    total_distance_km = 0.0
     if len(route_df) > 1:
         lat_arr = route_df["latitude"].to_numpy()
         lon_arr = route_df["longitude"].to_numpy()
         seg_dist_km = GPSMath.haversine_vectorized(
             lat_arr[:-1], lon_arr[:-1], lat_arr[1:], lon_arr[1:]
         )
+        total_distance_km = float(np.nansum(seg_dist_km))
         for dist, mode in zip(seg_dist_km, point_modes[1:]):
             mode_breakdown[mode] = mode_breakdown.get(mode, 0.0) + float(dist)
+
+        # Per-mode time is derived from configured mode_speeds_kmh
+        # (distance / speed), not raw GPS timestamps — the recorded track
+        # often has stops/pauses baked into its timestamps (e.g. a long
+        # lunch break during "walking") that would otherwise inflate the
+        # summary card's duration well past what the video's own
+        # mode-based animation speed implies. This keeps the on-screen
+        # numbers consistent with the same speeds driving playback pacing
+        # (see SpatialRenderer._mode_speed_factor).
+        mode_speed_kmh = {
+            **SpatialRenderer._DEFAULT_MODE_SPEED_KMH,
+            **{
+                str(k).lower(): float(v)
+                for k, v in (settings.get("mode_speeds_kmh") or {}).items()
+            },
+        }
+        for mode, dist_km in mode_breakdown.items():
+            speed = mode_speed_kmh.get(mode) or mode_speed_kmh.get("car", 70.0)
+            if speed > 0:
+                mode_duration[mode] = (dist_km / speed) * 3600.0
 
     # Per-leg (waypoint-to-waypoint) distance/duration, so the overview can
     # show "this segment: X km, Y min" at each arrival instead of only a
     # single end-of-video total. leg_stats[i] is the leg arriving AT
-    # waypoints[i + 1] (i.e. leaving waypoints[i]).
-    leg_stats: list[dict] = []
+    # waypoints[i + 1] (i.e. leaving waypoints[i]). Kept on raw GPS
+    # timestamps (unlike mode_duration above) since these are shown
+    # per-arrival right after the actual recorded leg, not folded into
+    # the mode-speed-driven end summary.
     has_timestamp = "timestamp" in route_df.columns
+    leg_stats: list[dict] = []
     for leg_idx in range(len(wp_indices) - 1):
         start_i, end_i = wp_indices[leg_idx], wp_indices[leg_idx + 1]
         if end_i <= start_i:
@@ -454,7 +480,7 @@ def render_route_video(
                     if isinstance(popup_img, list) and popup_img
                     else (str(popup_img) if popup_img else None)
                 ),
-                "image display": wp.get("image display", "none").lower(),
+                "image_display": str(wp.get("image_display", "none")).lower(),
                 "triggered": False,
             }
 
@@ -554,16 +580,33 @@ def render_route_video(
             )
 
     # 5. Final Rendering Orchestration
+
+    # "duration_seconds" is the per-waypoint HOLD/freeze duration default
+    # (see WaypointEditor's "Hold Duration" field, a 1-8s range) — it used
+    # to also be read here as the length of the ENTIRE overview animation,
+    # which made any real route fly by its stops in a few seconds flat.
+    # Pace the overview off the route itself instead: a baseline per leg
+    # (so a burst of nearby popups has a chance to clear before the next
+    # one triggers) plus time proportional to the distance actually
+    # covered, clamped to a sane range either way.
+    num_legs = max(1, len(wp_indices) - 1) if wp_indices else 1
+    base_overview_duration = max(
+        24.0, min(180.0, num_legs * 8.0 + total_distance_km * 1.5)
+    )
+    # Overall playback speed for the overview — 2x by default (i.e. half
+    # the paced-out duration above), tunable via job_config.json's
+    # settings.overview_speed_multiplier. This scales everything uniformly
+    # (mode-to-mode ratios from mode_speeds_kmh are unaffected), unlike
+    # that setting which only controls relative pacing between modes.
+    overview_speed_multiplier = float(settings.get("overview_speed_multiplier", 2.0))
+    overview_duration = max(10.0, base_overview_duration / overview_speed_multiplier)
+
     animator_config = {
         "output_dir": output_video_dir,
         "use_3d_res": use_3d_res,
         "res_route_path": project_config_path,
         "leg_durations": seg_durations or None,
-        # The frontend saves this as "duration_seconds" (see
-        # src/config/constants.ts / src/types/index.ts) — read that key so
-        # the UI's duration control actually takes effect, instead of
-        # silently falling back to the default every time.
-        "duration": settings.get("duration_seconds", settings.get("duration", 15.0)),
+        "duration": settings.get("duration", overview_duration),
         **{
             k: settings.get(k, default)
             for k, default in [
@@ -584,11 +627,18 @@ def render_route_video(
                 ("hide_upcoming_pins_on_popup", False),
             ]
         },
-        "line_color": tuple(settings.get("line_color", (0, 200, 255))),
+        "line_color": tuple(settings.get("line_color", (243, 150, 33))),  # BGR blue
         "marker_color": tuple(settings.get("marker_color", (0, 0, 255))),
         "arrived_marker_color": tuple(settings.get("arrived_marker_color", (0, 0, 220))),
         "trigger_radius_padding": settings.get("trigger_radius_padding", {}),
         "fullscreen_transition": settings.get("fullscreen_transition", {}),
+        # Real-world average speed (km/h) per travel mode — how much
+        # faster a car/ferry/etc. leg animates on screen relative to a
+        # walking one is derived from these ratios (see SpatialRenderer's
+        # _DEFAULT_MODE_SPEED_KMH for the fallback values). Set e.g.
+        # {"walking": 3, "car": 70, "ferry": 36} in job_config.json's
+        # settings to override per project.
+        "mode_speeds_kmh": settings.get("mode_speeds_kmh", {}),
     }
 
     animator = RouteAnimator(animator_config)
@@ -629,6 +679,12 @@ def render_route_video(
     summary = dict(cleaned_route.get("summary", {}))
     if mode_breakdown:
         summary["mode_breakdown"] = mode_breakdown
+    if mode_duration:
+        summary["mode_duration"] = mode_duration
+        # Keep the card's "Total" consistent with the per-mode durations
+        # sitting right next to it, instead of mixing a mode-speed-derived
+        # breakdown with a raw-GPS-timestamp total.
+        summary["total_duration_seconds"] = sum(mode_duration.values())
     if leg_stats:
         summary["leg_stats"] = leg_stats
 
@@ -966,8 +1022,6 @@ def estimate_step_durations(project_config: dict, cleaned_route: dict) -> dict:
     """Estimates the duration (in seconds) for each pipeline step."""
     waypoints = project_config.get("waypoints", [])
     num_waypoints = len(waypoints)
-
-    total_points = cleaned_route.get("summary", {}).get("total_route_points", 100)
 
     # Heuristics based on standard local rendering speeds
     est_gps = 1.0  # GPS parsing is very fast

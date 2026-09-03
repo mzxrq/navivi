@@ -7,6 +7,7 @@ Handles downloading map tiles and fetching map images for route visualization.
 
 # [I/O] Import libraries for map tile downloading and fetching
 import os
+import time
 from pathlib import Path
 import contextily as cx  # type: ignore
 from dotenv import load_dotenv
@@ -34,6 +35,17 @@ class TileDownloader:
     PROVIDER = cx.providers.Esri.WorldStreetMap  # type: ignore
     MAX_ZOOM_LEVEL = 19
     MAPBOX_DEFAULT_STYLE = "mapbox/streets-v12"
+
+    # contextily's own defaults (wait=0, max_retries=2) retry a rate-limited
+    # tile request twice with NO delay between attempts, then raise — which
+    # our zoom-decrement fallback below would just answer by firing off yet
+    # more requests at a different zoom, immediately, into the same
+    # rate-limited API. Passing an actual wait here makes contextily's
+    # built-in retry (see `_retryer` in contextily.tile) pause before each
+    # retry instead, so a transient 429 has a real chance to clear before
+    # we hit the API again.
+    TILE_FETCH_WAIT_SECONDS = 1.5
+    TILE_FETCH_MAX_RETRIES = 3
 
     # [Initialization] Initialize the TileDownloader with job configuration
     def __init__(self, job_config, provider=None):
@@ -84,13 +96,39 @@ class TileDownloader:
         # per tile, roughly 4x the pixels — for a visibly sharper map at the
         # same zoom level. Off by default only if explicitly disabled.
         provider["r"] = "@2x" if settings.get("mapbox_retina", True) else ""
-        self.MAX_ZOOM_LEVEL = min(self.MAX_ZOOM_LEVEL, provider.get("max_zoom", 18))
+        self.MAX_ZOOM_LEVEL = min(self.MAX_ZOOM_LEVEL, provider.get("max_zoom", 20))
         logger.info(
             "Using Mapbox tiles (style=%s, retina=%s) for higher-resolution maps.",
             provider["id"],
             bool(provider["r"]),
         )
         return provider
+
+    # [Map/Util] cx.bounds2img wrapper: passes an actual wait/retry budget
+    # (see TILE_FETCH_WAIT_SECONDS above) so a rate-limited response gets a
+    # real backoff instead of contextily's default instant double-retry.
+    # On top of that, this file's own zoom-decrement loop (in
+    # fetch_overview_image / fetch_residential_chunk) also backs off for a
+    # beat before trying the next zoom specifically when the failure looks
+    # rate-limit-shaped (HTTP 429 / "too many requests") — an unavailable
+    # zoom level (a normal, non-rate-limit failure) still falls straight
+    # through to the next zoom with no added delay.
+    def _bounds2img_safe(self, w, s, e, n, zoom):
+        try:
+            return cx.bounds2img(
+                w, s, e, n, ll=True, source=self.provider,
+                zoom=zoom, use_cache=str(self.cache_dir),
+                wait=self.TILE_FETCH_WAIT_SECONDS,
+                max_retries=self.TILE_FETCH_MAX_RETRIES,
+            )
+        except Exception as e:
+            if "429" in str(e) or "too many requests" in str(e).lower():
+                logger.warning(
+                    "Tile provider rate-limited us at zoom=%d; backing off %.1fs before falling back.",
+                    zoom, self.TILE_FETCH_WAIT_SECONDS,
+                )
+                time.sleep(self.TILE_FETCH_WAIT_SECONDS)
+            raise
 
     # [Map/Util] Ensure an output path has a .png extension (cx.bounds2img output is saved as PNG)
     @staticmethod
@@ -106,14 +144,15 @@ class TileDownloader:
     @staticmethod
     def _optimal_zoom_for_span(span_meters: float) -> int:
         return (
-            19 if span_meters <= 300 else
-            18 if span_meters <= 600 else
-            17 if span_meters <= 1200 else
-            16 if span_meters <= 2500 else
-            15 if span_meters <= 5000 else
-            14 if span_meters <= 10000 else
-            13 if span_meters <= 20000 else
-            12 if span_meters <= 40000 else
+            20 if span_meters <= 300 else
+            19 if span_meters <= 600 else
+            18 if span_meters <= 1200 else
+            17 if span_meters <= 2500 else
+            16 if span_meters <= 5000 else
+            15 if span_meters <= 10000 else
+            14 if span_meters <= 20000 else
+            13 if span_meters <= 40000 else
+            12 if span_meters <= 80000 else
             11
         )
 
@@ -123,7 +162,7 @@ class TileDownloader:
         bounding_box: Dict[str, float],
         output_filename: str,
         output_size: Tuple[int, int] = (1920, 1080),
-        max_zoom: int = 20,
+        max_zoom: int = 18,
     ) -> Tuple[str, Tuple[float, float, float, float], Tuple[int, int]]:
         """Fetches a single map image covering `bounding_box`, cropped/resized to `output_size`."""
         w, s, e, n = (
@@ -153,10 +192,7 @@ class TileDownloader:
         img, extent = None, None
         while zoom > 0:
             try:
-                img, extent = cx.bounds2img(
-                    w, s, e, n, ll=True, source=self.provider,
-                    zoom=zoom, use_cache=str(self.cache_dir)
-                )
+                img, extent = self._bounds2img_safe(w, s, e, n, zoom)
                 break
             except Exception:
                 zoom -= 1
@@ -207,7 +243,13 @@ class TileDownloader:
             19 if span_meters <= 300 else
             18 if span_meters <= 600 else
             17 if span_meters <= 1200 else
-            16 if span_meters <= 2500 else 15
+            16 if span_meters <= 2500 else
+            15 if span_meters <= 5000 else
+            14 if span_meters <= 10000 else
+            13 if span_meters <= 20000 else
+            12 if span_meters <= 40000 else
+            11 if span_meters <= 80000 else
+            10
         )
 
         # 3. Adjust Bounding Box to Target Aspect Ratio
@@ -227,10 +269,7 @@ class TileDownloader:
         img, extent = None, None
         while optimal_zoom > 0:
             try:
-                img, extent = cx.bounds2img(
-                    w, s, e, n, ll=True, source=self.provider, 
-                    zoom=optimal_zoom, use_cache=str(self.cache_dir)
-                )
+                img, extent = self._bounds2img_safe(w, s, e, n, optimal_zoom)
                 break
             except Exception:
                 optimal_zoom -= 1
