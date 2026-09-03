@@ -112,7 +112,7 @@ async def _run_popup_freeze_sequence(
                 pipDiv.id = 'my-popup-pip';
                 Object.assign(pipDiv.style, {
                     position: 'absolute', zIndex: '9998',
-                    top: '50px', right: '50px', width: '500px',
+                    top: '50px', right: '50px', width: '600px',
                     backgroundColor: 'white', padding: '15px', borderRadius: '15px',
                     boxShadow: '0 15px 35px rgba(0,0,0,0.4)', opacity: '0',
                     perspective: '1400px'

@@ -161,10 +161,12 @@ class IrodoriTTSClient:
             return response.content
 
     # [TTS] Generates speech audio for the given text and saves it to a local WAV file, returning the file path
-    async def generate_speech(self, text: str) -> str:
-        """Generates speech audio for the given text and saves it to a local WAV file."""
-        file_id = str(uuid.uuid4())
-        file_path = self.output_dir / f"{file_id}.wav"
+    async def generate_speech(
+        self, text: str, output_filename: Optional[str] = None
+    ) -> str:
+        """Generates speech audio and saves it to a local WAV file."""
+        filename = output_filename or f"{uuid.uuid4()}.wav"
+        file_path = self.output_dir / filename
 
         audio_content = await self.call_api(text)
 

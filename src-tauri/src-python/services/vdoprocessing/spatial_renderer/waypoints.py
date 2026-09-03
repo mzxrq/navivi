@@ -12,6 +12,58 @@ from services.vdoprocessing.vdoexporter import VideoExporter
 
 
 class _WaypointRenderMixin:
+    def _draw_reference_hud(
+        self,
+        frame: np.ndarray,
+        destination_label: str,
+        destination_image: str,
+    ) -> None:
+        """Draw the compact destination banner and thumbnail used by 2D legs."""
+        h, w = frame.shape[:2]
+        label = str(destination_label or "Destination")
+        font_scale = max(0.55, self.graphics.font_size / 32.0)
+        text_size, _ = cv2.getTextSize(label, self.graphics.font_cv, font_scale, 2)
+        pill_w = min(w - 40, max(220, text_size[0] + 90))
+        pill_h = 58
+        pill_x = (w - pill_w) // 2
+        pill_y = 18
+        cv2.rectangle(
+            frame,
+            (pill_x + pill_h // 2, pill_y),
+            (pill_x + pill_w - pill_h // 2, pill_y + pill_h),
+            (35, 55, 225),
+            -1,
+            cv2.LINE_AA,
+        )
+        cv2.circle(frame, (pill_x + pill_h // 2, pill_y + pill_h // 2), pill_h // 2, (35, 55, 225), -1)
+        cv2.circle(
+            frame,
+            (pill_x + pill_w - pill_h // 2, pill_y + pill_h // 2),
+            pill_h // 2,
+            (35, 55, 225),
+            -1,
+        )
+        cv2.putText(
+            frame,
+            label,
+            (pill_x + (pill_w - text_size[0]) // 2, pill_y + 37),
+            self.graphics.font_cv,
+            font_scale,
+            (255, 255, 255),
+            2,
+            cv2.LINE_AA,
+        )
+
+        if destination_image:
+            image = self.graphics.read_image_safe(destination_image)
+            if image is not None:
+                thumb_w, thumb_h = 112, 76
+                image = cv2.resize(image, (thumb_w, thumb_h))
+                x, y = 34, 34
+                cv2.rectangle(frame, (x - 4, y - 4), (x + thumb_w + 4, y + thumb_h + 4), (255, 255, 255), -1)
+                cv2.rectangle(frame, (x - 5, y - 5), (x + thumb_w + 5, y + thumb_h + 5), (35, 55, 225), 2)
+                frame[y : y + thumb_h, x : x + thumb_w] = image
+
     def render_waypoints(self, res_sequence: List[Dict], fps: int) -> List[str]:
         output_paths = []
         show_segment_summary = self.config.get("show_segment_summary", True)
@@ -45,6 +97,15 @@ class _WaypointRenderMixin:
             res_labels = res_data["labels"]
             res_popups = res_data.get("popups", [None] * len(res_points))
             res_mode = str(res_data.get("mode", "walking")).lower()
+            destination_popup = next(
+                (popup for popup in reversed(res_popups) if popup is not None), None
+            )
+            destination_label = res_labels[-1] if res_labels else "Destination"
+            destination_image = (
+                str(destination_popup.get("popup_image"))
+                if destination_popup and destination_popup.get("popup_image")
+                else ""
+            )
 
             total_duration = res_data.get(
                 "segment_duration", self.config.get("res_duration", 12.0)
@@ -131,6 +192,10 @@ class _WaypointRenderMixin:
             path_idx = 0
             prev_cx, prev_cy = None, None
             smoothed_angle = 0.0
+            ended_at_destination = False
+            arrival_hold_seconds = max(
+                1.0, min(2.0, float(self.post_arrival_hold_seconds))
+            )
 
             for current_frame in range(total_frames):
                 is_paused = is_paused_per_frame[current_frame]
@@ -179,6 +244,25 @@ class _WaypointRenderMixin:
                     self.graphics.draw_transport_icon(
                         frame, cx, cy, current_frame, smoothed_angle, mode=res_mode
                     )
+                    if res_points:
+                        self.graphics.draw_marker(
+                            frame,
+                            int(res_points[0][0]),
+                            int(res_points[0][1]),
+                            number="S",
+                            color=self._START_PIN_COLOR,
+                        )
+                        self.graphics.draw_marker(
+                            frame,
+                            int(res_points[-1][0]),
+                            int(res_points[-1][1]),
+                            number="E",
+                            color=self._END_PIN_COLOR,
+                        )
+
+                    self._draw_reference_hud(
+                        frame, destination_label, destination_image
+                    )
 
                 for popup in active_res_popups:
                     if popup["data"]["triggered"]:
@@ -197,30 +281,52 @@ class _WaypointRenderMixin:
                     if near_segment or just_arrived:
                         popup["data"]["triggered"] = True
                         if popup["data"].get("image_display") == "fullscreen":
+                            fullscreen_popup = {
+                                **popup,
+                                "data": {
+                                    **popup["data"],
+                                    # Keep the destination beat short and make
+                                    # the fullscreen reveal the clip ending.
+                                    "freeze_seconds": arrival_hold_seconds,
+                                },
+                            }
                             self.graphics.play_fullscreen_popup_sequence(
                                 video=video,
                                 base_frame=frame,
-                                popup_info=popup,
+                                popup_info=fullscreen_popup,
                                 fps=fps,
                                 transition_cfg=self.transition_cfg,
                                 exit_frame=frame,
                             )
+                            ended_at_destination = True
                         else:
-                            total_f = int(popup["data"]["freeze_seconds"] * fps)
-                            fade_f = min(int(0.5 * fps), total_f // 3)
+                            total_f = max(1, int(arrival_hold_seconds * fps))
+                            fade_f = min(int(0.25 * fps), total_f // 3)
                             cinematic_frame = self.graphics.render_cinematic_pause(
                                 frame, popup
                             )
                             self.graphics.write_fade_clip(
                                 video, frame, cinematic_frame, total_f, fade_f
                             )
+                            ended_at_destination = True
 
-                video.write(frame)
+                if not ended_at_destination:
+                    video.write(frame)
                 self.last_frame = frame
                 prev_cx, prev_cy = cx, cy
+                if ended_at_destination:
+                    break
 
-            for _ in range(int(self.post_arrival_hold_seconds * fps)):
-                video.write(self.last_frame)
+            if not ended_at_destination:
+                for _ in range(int(arrival_hold_seconds * fps)):
+                    video.write(self.last_frame)
+
+            if ended_at_destination:
+                video_path = video.release(str(self.out_dir / chunk_filename))
+                output_paths.append(video_path)
+                if cap:
+                    cap.release()
+                continue
 
             if show_segment_summary:
                 seg_card = self.graphics.create_summary_card(
@@ -246,3 +352,5 @@ class _WaypointRenderMixin:
             output_paths.append(video.release(str(self.out_dir / chunk_filename)))
             if cap:
                 cap.release()
+
+        return output_paths

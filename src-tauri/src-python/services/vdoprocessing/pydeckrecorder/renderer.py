@@ -157,7 +157,7 @@ async def render_leg_animation(
         await page.evaluate("""
             const mapCanvas = document.querySelector('.mapboxgl-canvas');
             if (mapCanvas) {
-                mapCanvas.style.filter = 'brightness(0.82) contrast(1.3) saturate(3.5)';
+                mapCanvas.style.filter = 'brightness(0.82) contrast(1.3) saturate(1)';
             }
         """)
 
@@ -177,7 +177,7 @@ async def render_leg_animation(
                         id: 'buildings-3d',
                         data: `https://api.mapbox.com/v4/mapbox.mapbox-streets-v8/{z}/{x}/{y}.vector.pbf?access_token=${token}`,
                         minZoom: 13,
-                        maxZoom: 18,
+                        maxZoom: 20,
                         binary: false,
                         dataTransform: (data) => data.filter(f => f.properties && f.properties.layerName === 'building'),
                         extruded: true,

@@ -249,53 +249,32 @@ class RouteAnimator:
                     )
                 output_paths.append(overview_path)
 
-        # Always render waypoints using the spatial engine, OR PyDeck if requested
-        # if res_sequence:
-        #     if self.config.get("use_3d_res", True):
-        #         logger.info(
-        #             "Attempting Residential Sequence using 3D PyDeck (Split by Leg)..."
-        #         )
-        #         try:
-        #             res_route_path = self.config.get("res_route_path")
-        #             res_out_path = str(self.out_dir / "02_residential_map.mp4")
-
-        #             audio_durs = [
-        #                 seg.get("segment_duration", 0.0) for seg in res_sequence
-        #             ]
-        #             final_res_paths = record_headless_video(
-        #                 res_route_path,
-        #                 res_out_path,
-        #                 audio_durations=audio_durs,
-        #                 speed_kmh=60,
-        #             )
-
-        #             if not final_res_paths:
-        #                 raise RuntimeError(
-        #                     "3D rendering generated an empty output sequence."
-        #                 )
-
-        #             output_paths.extend(final_res_paths)
-
-        #         except Exception as e:
-        #             logger.warning(
-        #                 f"3D Rendering failed ({e}). Attempting 2D Fallback..."
-        #             )
-
-        #         if res_sequence and res_sequence[0].get("img_path"):
-        #             res_paths = self.spatial_renderer.render_waypoints(
-        #                 res_sequence, fps
-        #             )
-        #             output_paths.extend(res_paths)
-        #         else:
-        #             logger.error(
-        #                 "2D fallback skipped because 2D map images were bypassed to save time."
-        #             )
-        #     else:
-        #         logger.info(
-        #             "🗺️ Rendering Residential Sequence using 2D SpatialRenderer..."
-        #         )
-        #         res_paths = self.spatial_renderer.render_waypoints(res_sequence, fps)
-        #         output_paths.extend(res_paths)
+        # Render each waypoint-to-waypoint leg. 3D is deliberately opt-in;
+        # projects with use_3d_res=false use the fetched, bounded 2D map tiles.
+        if res_sequence:
+            if self.config.get("use_3d_res", False):
+                logger.info(
+                    "Attempting Residential Sequence using 3D PyDeck (Split by Leg)..."
+                )
+                res_route_path = self.config.get("res_route_path")
+                res_out_path = str(self.out_dir / "02_residential_map.mp4")
+                audio_durs = [
+                    seg.get("segment_duration", 0.0) for seg in res_sequence
+                ]
+                final_res_paths = record_headless_video(
+                    res_route_path,
+                    res_out_path,
+                    audio_durations=audio_durs,
+                    speed_kmh=60,
+                )
+                if not final_res_paths:
+                    raise RuntimeError("3D rendering generated an empty output sequence.")
+                output_paths.extend(final_res_paths)
+            else:
+                logger.info(
+                    "Rendering Residential Sequence using 2D SpatialRenderer..."
+                )
+                output_paths.extend(self.spatial_renderer.render_waypoints(res_sequence, fps))
 
         return output_paths
 

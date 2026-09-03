@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 import numpy as np
+import pandas as pd
 
 from services.gpsparser.gpscalculator import GPSMath
 from services.mapfetcher.mapfetcher import MapFetcher
@@ -54,7 +55,9 @@ def render_route_video(
 
     settings = project_config.get("settings", {})
     waypoints = project_config.get("waypoints", [])
-    use_3d_res = settings.get("use_3d_res", True)
+    # 3D residential rendering is opt-in. The 2D spatial renderer is the
+    # reliable fallback and remains the default for existing projects.
+    use_3d_res = bool(settings.get("use_3d_res", False))
     subtitle_lang = settings.get("subtitle_language", "en")
 
     audio_durations = audio_durations or []
@@ -209,6 +212,9 @@ def render_route_video(
                     else (str(popup_img) if popup_img else None)
                 ),
                 "image_display": str(wp.get("image_display", "none")).lower(),
+                "image_display": str(
+                    wp.get("image_display", "pip")
+                ).lower(),
                 "triggered": False,
             }
 
@@ -237,11 +243,10 @@ def render_route_video(
     else:
         logger.info("Step 3: Generating 2D residential map sequence...")
         img_out_dir = BASE_DIR / "data" / "inputs" / "res_images"
-        sequence_data = MapFetcher.generate_residential_sequence(
+        sequence_data = fetcher.process_residential_sequence(
             route_df,
             waypoints,
-            img_out_dir,
-            (img_w, img_h),
+            output_size=(img_w, img_h),
             max_chunk_distance_meters=math.inf,
             precomputed_indices=wp_indices,
         )
@@ -249,6 +254,36 @@ def render_route_video(
         for seq_idx, item in enumerate(sequence_data):
             start_idx, end_idx = item["start_idx"], item["end_idx"]
             chunk = route_df.iloc[start_idx : end_idx + 1]
+            leg_mode = (
+                str(waypoints[seq_idx].get("routeMode", "")).lower()
+                if seq_idx < len(waypoints)
+                else ""
+            )
+            if not leg_mode and start_idx + 1 < len(point_modes):
+                leg_mode = point_modes[start_idx + 1]
+            leg_mode = leg_mode or "walking"
+            if str(leg_mode).lower() == "ferry" and seq_idx + 1 < len(waypoints):
+                # Ferry routes returned by routing providers can snap to
+                # nearby roads. For the 2D residential view, represent a
+                # ferry crossing as the direct water crossing between stops.
+                start_wp, end_wp = waypoints[seq_idx], waypoints[seq_idx + 1]
+                ferry_count = max(2, min(120, end_idx - start_idx + 1))
+                ferry_lats = np.linspace(
+                    float(start_wp["lat"]), float(end_wp["lat"]), ferry_count
+                )
+                ferry_lons = np.linspace(
+                    float(start_wp["lng"]), float(end_wp["lng"]), ferry_count
+                )
+                chunk = pd.DataFrame(
+                    {"latitude": ferry_lats, "longitude": ferry_lons}
+                )
+                ferry_map_path = str(
+                    Path(item["img_path"]).with_name(f"res_map_ferry_{seq_idx + 1}.png")
+                )
+                item["img_path"] = ferry_map_path
+                item["extent"] = fetcher.downloader.fetch_residential_chunk(
+                    chunk, ferry_map_path, (img_w, img_h)
+                )
 
             # Extract safe variables
             has_audio = seq_idx < len(audio_durations) and audio_durations[seq_idx] > 0
@@ -271,6 +306,9 @@ def render_route_video(
             )
 
             raw_img = item.get("img_path")
+            leg_popups = [None] * len(chunk)
+            if len(leg_popups) > 0:
+                leg_popups[-1] = route_popups[end_idx]
 
             res_sequence.append(
                 {
@@ -290,7 +328,12 @@ def render_route_video(
                         img_h,
                     ),
                     "labels": route_labels[start_idx : end_idx + 1],
-                    "popups": route_popups[start_idx : end_idx + 1],
+                    # A residential clip starts at the previous waypoint,
+                    # so only the destination popup may end its route
+                    # animation. Including the start popup makes the renderer
+                    # terminate on the first frame of every leg.
+                    "popups": leg_popups,
+                    "mode": leg_mode,
                     "travel_duration": total_time,
                     "segment_duration": total_time,
                     "real_duration_seconds": (

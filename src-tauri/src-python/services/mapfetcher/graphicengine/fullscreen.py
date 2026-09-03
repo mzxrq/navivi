@@ -48,7 +48,7 @@ class _FullscreenMixin:
 
         hi_res_popup = cv2.resize(pop_img, (w, h))
 
-        target_img_w = 350
+        target_img_w = 450
         target_img_h = int(target_img_w / target_ratio)
         border = 6
         label_text = popup_info.get("label")

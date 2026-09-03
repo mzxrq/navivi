@@ -30,9 +30,9 @@ from .routedata import interpolate_route_data, load_route_from_config, patch_pyd
 # of sizeScale itself, so distance-to-length framing stays consistent
 # across modes.
 _VEHICLE_PROFILES = {
-    "walking": {"model": "human.glb", "size_scale": 0.9, "real_length_m": 1.7},
-    "ferry": {"model": "ferry.glb", "size_scale": 0.03, "real_length_m": 35.0},
-    "airplane": {"model": "airplane.glb", "size_scale": 6.8, "real_length_m": 25.0},
+    "walking": {"model": "car.glb", "size_scale": 0.9, "real_length_m": 1.7},
+    "ferry": {"model": "car.glb", "size_scale": 0.03, "real_length_m": 35.0},
+    "airplane": {"model": "car.glb", "size_scale": 6.8, "real_length_m": 25.0},
     "driving": {"model": "car.glb", "size_scale": 2.8, "real_length_m": 4.5},
 }
 
@@ -272,7 +272,7 @@ def record_headless_video(
             view_state = pdk.ViewState(
                 longitude=center_lon,
                 latitude=center_lat,
-                zoom=min(17.5, max(13.0, 11.0 - np.log2(max_diff))) - 0.5,
+                zoom=min(19.5, max(13.0, 11.0 - np.log2(max_diff))) - 0.5,
                 pitch=60,
                 bearing=30,
             )

@@ -67,7 +67,7 @@ class _SpatialRendererBase:
         }
         self.transition_cfg = {
             **{
-                "scale_seconds": 0.8,
+                "scale_seconds": 0.25,
                 "fade_out_seconds": 0.5,
                 "hold_ratio_of_freeze": 0.4,
                 "min_hold_seconds": 0.5,

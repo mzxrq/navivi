@@ -47,7 +47,7 @@ class _PopupBoxMixin:
             pop_img = pop_img[offset : offset + new_h, :]
 
         # Size up the card for the center focus
-        target_img_w = 420
+        target_img_w = 520
         target_img_h = int(target_img_w / target_ratio)
         pop_img = cv2.resize(pop_img, (target_img_w, target_img_h))
         ph, pw = pop_img.shape[:2]
@@ -171,7 +171,7 @@ class _PopupBoxMixin:
                 # (e.g. the end-of-video recap's start/end pair, which get
                 # a dedicated fixed corner instead of competing for space).
                 card_scale = float(popup_info.get("card_scale", 1.0)) if is_beside else 1.0
-                target_img_w = int(160 * card_scale) if is_beside else 340
+                target_img_w = int(260 * card_scale) if is_beside else 440
                 target_img_h = int(target_img_w / target_ratio)
                 pop_img = cv2.resize(pop_img, (target_img_w, target_img_h))
                 ph, pw = pop_img.shape[:2]
