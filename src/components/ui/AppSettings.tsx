@@ -12,7 +12,7 @@ import {
   Settings,
   Palette,
   Save,
-} from "../ui/icons";
+} from "./icons";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { useAnimatedUnmount } from "../../hooks/useAnimatedUnmount";
 

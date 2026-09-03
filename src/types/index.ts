@@ -16,6 +16,8 @@ export interface Waypoint {
   duration?: number;
   customRoute?: [number, number][];
   isGeneratingScript?: boolean;
+  isStopBy?: boolean;
+  drawStyle?: "linear" | "spline";
 }
 
 export interface RouteSegment {
@@ -101,8 +103,6 @@ export interface TimelineManifest {
   video_tracks: ManifestClip[];
   audio_track?: string;
 }
-
-
 
 // Global State Interface
 export interface WorkspaceState {

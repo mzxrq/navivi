@@ -14,8 +14,8 @@ import {
   Film,
 } from "../ui/icons";
 import { Window } from "@tauri-apps/api/window";
-import { SaveAs } from "../modal/SaveAs";
-import { UnsavedChanges } from "../modal/UnsavedChanges";
+import { SaveAs } from "./SaveAs";
+import { UnsavedChanges } from "./UnsavedChanges";
 import { useFileActions } from "../../hooks/useFileActions";
 
 export function TitleBar() {

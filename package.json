@@ -16,6 +16,8 @@
     "@tauri-apps/plugin-fs": "^2.5.1",
     "@tauri-apps/plugin-http": "^2.5.9",
     "@tauri-apps/plugin-opener": "^2",
+    "@turf/bezier-spline": "^7.4.0",
+    "@turf/helpers": "^7.4.0",
     "konva": "^10.3.2",
     "leaflet": "^1.9.4",
     "lucide-react": "^1.28.0",

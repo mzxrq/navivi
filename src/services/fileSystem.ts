@@ -70,16 +70,27 @@ export const saveProjectData = async (
   if (!(await exists(assetsDir))) await mkdir(assetsDir, { recursive: true });
 
   // Initialize GPX String with GPSBabel expected headers
-  let gpxStr = `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.0" creator="${appConfig.name}" xmlns="http://www.topografix.com/GPX/1/0">\n`;
+  let gpxStr = `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="${appConfig.name}" xmlns="http://www.topografix.com/GPX/1/1">\n`;
   gpxStr += `  <time>${new Date().toISOString()}</time>\n`;
+
+  // export waypoints
+  waypoints.forEach((wp) => {
+    gpxStr += ` <wpt lat="${wp.lat}" lon="${wp.lng}">\n`;
+    const safeName = (wp.name || "Navivi Stop").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    gpxStr += `   <name>${safeName}</name>\n`;
+    gpxStr += ` </wpt>\n`;
+  });
+
+  // track segments
   gpxStr += `  <trk>\n    <name>${projName}</name>\n    <trkseg>\n`;
 
   let currentTime = new Date();
   let lastPos: [number, number] | null = null;
 
+  // export tracks
   routeSegments.forEach((segment) => {
-    // Rough speed estimates: 15 m/s (~54 km/h) for driving/direct, 1.4 m/s (~5 km/h) for walking
-    const speedMs = (segment.mode === "walking" || segment.mode === "direct") ? 1.4 : 15.0;
+    // Rough speed estimates: 15 m/s (~54 km/h) for driving, 1.4 m/s (~5 km/h) for walking
+    const speedMs = (segment.mode === "walking" || segment.mode === "direct" || segment.mode === "draw") ? 1.4 : 15.0;
 
     segment.positions.forEach((pos: [number, number]) => {
       let dist = 0;
@@ -119,7 +130,7 @@ export const saveProjectData = async (
   const processedWaypoints = await Promise.all(
     waypoints.map(async (wp) => {
       const absoluteImagePaths: string[] = [];
-      
+
       if (wp.images && wp.images.length > 0) {
         for (const imgPath of wp.images) {
           const fileName = await basename(imgPath);
@@ -132,18 +143,22 @@ export const saveProjectData = async (
       }
 
       return {
+        id: wp.id,
         lat: wp.lat,
         lng: wp.lng,
         label: wp.name,
-        freeze_seconds: wp.duration || settings.duration_seconds,
+        name: wp.name,
         popup_image: absoluteImagePaths,
         // Safely check imagePans (plural) and fallback to "panright" for each image
-        camera_pans: absoluteImagePaths.length > 0 
+        camera_pans: absoluteImagePaths.length > 0
           ? absoluteImagePaths.map((_, i) => (wp.imagePans && wp.imagePans[i] ? wp.imagePans[i] : "panright"))
           : [],
         image_display: wp.imageDisplay || "pip",
         narration: wp.narration || "", // Prevent undefined
         routeMode: wp.routeMode || "driving",
+        customRoute: wp.customRoute || [],
+        drawStyle: wp.drawStyle || "linear",
+        isStopBy: wp.isStopBy || false,
       };
     })
   );
@@ -246,7 +261,7 @@ export async function appendToRenderLog(message: string) {
     const encoder = new TextEncoder();
     await file.write(encoder.encode(logEntry));
     await file.close();
-  
+
   } catch (error) {
     console.error("Failed to write to render.log:", error);
   }

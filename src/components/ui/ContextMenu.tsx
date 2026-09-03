@@ -49,7 +49,6 @@ export function ContextMenu() {
     window.addEventListener("contextmenu", handleGlobalContextMenu);
     window.addEventListener("open-context-menu" as any, handleOpenMenu);
     window.addEventListener("mousedown", handleMouseDown); 
-    window.addEventListener("click", handleCloseMenu);
     window.addEventListener("close-context-menus", handleCloseMenu);
     
     // Catch window resizes and timeline/map scrolling!
@@ -60,7 +59,6 @@ export function ContextMenu() {
       window.removeEventListener("contextmenu", handleGlobalContextMenu);
       window.removeEventListener("open-context-menu" as any, handleOpenMenu);
       window.removeEventListener("mousedown", handleMouseDown);
-      window.removeEventListener("click", handleCloseMenu);
       window.removeEventListener("close-context-menus", handleCloseMenu);
       window.removeEventListener("resize", handleCloseMenu);
       window.removeEventListener("scroll", handleCloseMenu, { capture: true });

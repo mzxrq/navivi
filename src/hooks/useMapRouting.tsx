@@ -1,6 +1,8 @@
 import { useRef, useEffect } from "react";
 import { useWorkspace } from "./useWorkspace";
-import { getCurve, OsmNode, getDistanceKm } from "../utils/mapUtils";
+import { getCurve, OsmNode, getDistanceKm, fillRouteCoordinates } from "../utils/mapUtils";
+import bezierSpline from "@turf/bezier-spline";
+import { lineString } from "@turf/helpers";
 
 // kill switch fetcher
 const fetchWithTimeout = async (
@@ -37,10 +39,12 @@ const fetchSingleSegment = async (
     ];
   } else if (mode === "draw") {
     const customNodes = wp1.customRoute || [];
-    positions = [[wp1.lat, wp1.lng], ...customNodes, [wp2.lat,wp2.lng]];
+    positions = [[wp1.lat, wp1.lng], ...customNodes, [wp2.lat, wp2.lng]];
   } else if (mode === "curve") {
+    // curve
     positions = getCurve([wp1.lat, wp1.lng], [wp2.lat, wp2.lng]);
   } else if (mode === "ferry") {
+    // ferry (very fallback: deprecatedd)
     try {
       const minLat = Math.min(wp1.lat, wp2.lat) - 0.05;
       const maxLat = Math.max(wp1.lat, wp2.lat) + 0.05;
@@ -129,6 +133,7 @@ const fetchSingleSegment = async (
       ];
     }
   } else if (mode === "walking") {
+    // walking + ferry
     try {
       if (!apiKey) throw new Error("missing_api_key");
       const url = `https://api.openrouteservice.org/v2/directions/foot-hiking?api_key=${apiKey}&start=${wp1.lng},${wp1.lat}&end=${wp2.lng},${wp2.lat}`;
@@ -170,6 +175,7 @@ const fetchSingleSegment = async (
       }
     }
   } else {
+    // driving
     try {
       const url = `https://router.project-osrm.org/route/v1/driving/${wp1.lng},${wp1.lat};${wp2.lng},${wp2.lat}?overview=full&geometries=geojson`;
       const response = await fetchWithTimeout(url);
@@ -228,9 +234,10 @@ export function useMapRouting() {
       const wp1 = waypoints[i];
       const wp2 = waypoints[i + 1];
       const mode = wp1.routeMode || "walking";
-      const customHash = mode === "draw" ? JSON.stringify(wp1.customRoute || []) : "";
+      const customHash =
+        mode === "draw" ? JSON.stringify(wp1.customRoute || []) : "";
       const cacheKey = `${wp1.lat.toFixed(5)},${wp1.lng.toFixed(5)}|${wp2.lat.toFixed(5)},${wp2.lng.toFixed(5)}|${mode}|${customHash}`;
-      
+
       // straight line but mode is neither Direct or Draw, ignore cache
       const cachedData = routingCache[cacheKey];
       const isFailedCache =
@@ -241,6 +248,34 @@ export function useMapRouting() {
 
       if (cachedData && !isFailedCache) {
         newSegments[i] = { positions: cachedData, mode };
+      } else if (mode === "draw" || mode === "direct") {
+        let rawPoints: [number, number][] = [
+          [wp1.lat, wp1.lng],
+          [wp2.lat, wp2.lng],
+        ];
+
+        if (mode === "draw") {
+          const customNodes = wp1.customRoute || [];
+          rawPoints = [[wp1.lat, wp1.lng], ...customNodes, [wp2.lat, wp2.lng]];
+        }
+        let dense: [number, number][] = [];
+
+        if (
+          mode === "draw" &&
+          wp1.drawStyle === "spline" &&
+          rawPoints.length >= 3
+        ) {
+          const turfLine = lineString(rawPoints.map((p) => [p[1], p[0]]));
+          const curvedDraw = bezierSpline(turfLine, {
+            resolution: 10000,
+            sharpness: 0.85,
+          });
+          dense = curvedDraw.geometry.coordinates.map((c: any) => [c[1], c[0]]);
+        } else {
+          dense = fillRouteCoordinates(rawPoints, 0.01);
+        }
+        newSegments[i] = { positions: dense, mode };
+        setRoutingCache((prev) => ({ ...prev, [cacheKey]: dense }));
       } else {
         newSegments[i] = {
           positions: [

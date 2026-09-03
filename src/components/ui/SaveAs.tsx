@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { exists } from "@tauri-apps/plugin-fs";
 import { documentDir, join } from "@tauri-apps/api/path";
-import { Folder, Map, Loader2 } from "../ui/icons";
+import { Folder, Map, Loader2 } from "./icons";
 import { fileSystem } from "../../config/constants";
 
 interface SaveAsProps {

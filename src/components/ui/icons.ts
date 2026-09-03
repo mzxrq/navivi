@@ -25,5 +25,5 @@ export {
     CheckCircle2, AlertCircle, // Toast
     Copy, CircleDashed, History, Bell, // StatusBar
     Settings, Save, // AppSettings
-    Pencil, // MapArea
+    Pencil, SplinePointer, Undo, Eraser  // MapArea
 } from "lucide-react";
