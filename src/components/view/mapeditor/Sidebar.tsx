@@ -9,8 +9,6 @@ import {
   Route,
   Ruler,
   Plane,
-  Play,
-  Square,
   Ship,
   Edit,
   RefreshCw,
@@ -63,16 +61,6 @@ export function Sidebar() {
     return () =>
       window.removeEventListener("preview-finished", handlePreviewFinish);
   }, []);
-
-  const togglePreview = () => {
-    if (isPreviewing) {
-      window.dispatchEvent(new Event("stop-preview"));
-      setIsPreviewing(false);
-    } else {
-      window.dispatchEvent(new Event("start-preview"));
-      setIsPreviewing(true);
-    }
-  };
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {

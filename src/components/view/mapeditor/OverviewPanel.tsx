@@ -1,8 +1,6 @@
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import {
-  MapIcon,
-  FileVideo,
   Sparkles,
   PencilSparkles,
   Square,
@@ -14,19 +12,12 @@ import { generateOverviewScript } from "../../../services/ollamaApi";
 // Import your EngineSelect component if you used Option 1 from earlier!
 
 export function OverviewPanel() {
-  const { waypoints, metadata, updateMetadata, settings, setIsDirty } =
+  const { waypoints, metadata, updateMetadata, setIsDirty } =
     useWorkspace();
   const { showToast } = useUI();
 
   const [isGeneratingOverview, setIsGeneratingOverview] = useState(false);
   const [overviewEngine, setOverviewEngine] = useState("ollama");
-
-  // Calculations
-  const totalDuration = waypoints.reduce(
-    (acc, wp) => acc + (wp.duration || settings?.duration_seconds || 3),
-    0,
-  );
-  const estimatedTime = totalDuration.toFixed(1);
 
   const handleGenerateOverview = async () => {
     const waypointNames = waypoints

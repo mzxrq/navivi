@@ -15,7 +15,7 @@ export {
     ChevronLeft, Image as ImageIcon, // X, Trash2, MapPin, Settings2,Mic, //WaypointEditor
     GripVertical, Edit2, //X, Image as ImageIcon, Mic //WaypointItem
     FolderPlus, Clock, // MapPin, Monitor, ChevronRight, //NewProject
-    Plus, FolderOpen, //Map, Clock //TitleScreen
+    Plus, FolderOpen, LayoutGrid, List, //Map, Clock //TitleScreen
     Cpu, Check, // EngineSelect
     Pause, Scissors, Magnet, MousePointer2, Type, Video, Download, Subtitles, // TimelineView
     File, FileAudio, FolderSync, // MediaPool
@@ -25,5 +25,5 @@ export {
     CheckCircle2, AlertCircle, // Toast
     Copy, CircleDashed, History, Bell, // StatusBar
     Settings, Save, // AppSettings
-    Pencil, SplinePointer, Undo, Eraser  // MapArea
+    Pencil, SplinePointer, Undo, Eraser, MapPinPen  // MapArea 
 } from "lucide-react";

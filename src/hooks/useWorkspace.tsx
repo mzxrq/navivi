@@ -1,7 +1,32 @@
-import { createContext, useContext, useState, useCallback, useEffect, ReactNode, } from "react";
-import { Waypoint, ProjectMetadata, ProjectSettings, RouteSegment, RecentProjects, WorkspaceState, TimelineData } from "../types";
-import { appConfig, defaultProjectSettings, mapDefaults } from "../config/constants";
-import { saveProjectData, loadProjectData, loadTimelineManifest, loadRouteCache, saveTimelineManifest } from "../services/fileSystem";
+import {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useEffect,
+  ReactNode,
+} from "react";
+import {
+  Waypoint,
+  ProjectMetadata,
+  ProjectSettings,
+  RouteSegment,
+  RecentProjects,
+  WorkspaceState,
+  TimelineData,
+} from "../types";
+import {
+  appConfig,
+  defaultProjectSettings,
+  mapDefaults,
+} from "../config/constants";
+import {
+  saveProjectData,
+  loadProjectData,
+  loadTimelineManifest,
+  loadRouteCache,
+  saveTimelineManifest,
+} from "../services/fileSystem";
 import { TimelineClipData, TimelineTrack } from "../types";
 import { useHistory } from "./useHistory";
 import { useUI } from "./useUI";
@@ -31,7 +56,7 @@ const DefaultTimeline: TimelineData = {
   ],
   clips: [],
   zoomMultiplier: 1.0,
-}
+};
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const { editorMode } = useUI(); // editorMode : Map <-> Timeline
@@ -62,10 +87,12 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [activeWaypointId, setActiveWaypointId] = useState<string | null>(null); // Selected waypoint (for context menu)
   const [metadata, setMetadata] = useState<ProjectMetadata>(() => ({
     ...DefaultMetadata,
-    created_at: new Date().toISOString()
+    created_at: new Date().toISOString(),
   })); // Project metadata (see ../services/index.ts for more)
   const [settings, setSettings] = useState<ProjectSettings>(DefaultSettings); // Project setting (see ../services/index.ts for more)
-  const [routingCache, setRoutingCache] = useState<Record<string, [number, number][]>>({}); // Read routingCache from project's job_config.json
+  const [routingCache, setRoutingCache] = useState<
+    Record<string, [number, number][]>
+  >({}); // Read routingCache from project's job_config.json
   const [isDirty, setIsDirty] = useState(false); // check if save or unsaved state
   const [recentProjects, setRecentProjects] = useState<RecentProjects[]>(() => {
     const saved = localStorage.getItem("navivi-recents");
@@ -91,15 +118,18 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     setIsDirty(true);
   }, []); // update waypoint when is moved or its information like narration or image were updated
 
-  const updateClip = useCallback((id: string, startTime: number, duration: number) => {
-    setTimeline({
-      ...timeline,
-      clips: timeline.clips.map(clip =>
-        clip.id === id ? { ...clip, startTime, duration } : clip
-      )
-    });
-    setIsDirty(true);
-  }, [timeline, setTimeline]); // update clip/timeline track when clip is added or its information were updated
+  const updateClip = useCallback(
+    (id: string, startTime: number, duration: number) => {
+      setTimeline({
+        ...timeline,
+        clips: timeline.clips.map((clip) =>
+          clip.id === id ? { ...clip, startTime, duration } : clip,
+        ),
+      });
+      setIsDirty(true);
+    },
+    [timeline, setTimeline],
+  ); // update clip/timeline track when clip is added or its information were updated
 
   const updateMetadata = useCallback((data: Partial<ProjectMetadata>) => {
     setMetadata((prev) => ({ ...prev, ...data }));
@@ -111,7 +141,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     setIsDirty(true);
   }, []); // update setting (see index.ts for more)
 
-  const saveProject = async (overrideName?: string, asDuplicate?: boolean, safeFolderName?: string) => {
+  const saveProject = async (
+    overrideName?: string,
+    asDuplicate?: boolean,
+    safeFolderName?: string,
+  ) => {
     if (waypoints.length === 0) {
       console.warn("No waypoints to save.");
       return;
@@ -127,15 +161,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         routingCache,
         overrideName,
         asDuplicate,
-        safeFolderName
+        safeFolderName,
       );
 
       // 🛠️ 2. NEW: Instantly save the Timeline Manifest into that exact same folder!
-      await saveTimelineManifest(
-        result.projectDir,
-        result.projName,
-        timeline
-      );
+      await saveTimelineManifest(result.projectDir, result.projName, timeline);
 
       // 3. Update UI state
       updateMetadata({
@@ -148,7 +178,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
       console.log(`Saved successfully to: ${result.projectDir}`);
       addToRecents(result.projName, result.nvvPath);
-      
+
       return result.projectDir;
     } catch (error) {
       console.error("Failed to save Navivi project:", error);
@@ -166,12 +196,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       if (data.directory_path) {
         const recoveredCache = await loadRouteCache(data.directory_path);
         setRoutingCache(recoveredCache);
-        console.log(`Recovered ${Object.keys(recoveredCache).length} routes from cache!`);
-    } else {
+        console.log(
+          `Recovered ${Object.keys(recoveredCache).length} routes from cache!`,
+        );
+      } else {
         // Fallback just in case
-        setRoutingCache({}); 
-    }
-
+        setRoutingCache({});
+      }
 
       // Ensure the file is valid before updating state
       if (!data.project_id || !data.waypoints) {
@@ -186,27 +217,33 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         created_at: data.created_at,
         status: "saved",
         directory_path: data.directory_path || "",
-        overview_narration: data.overview_narration || ""
+        overview_narration: data.overview_narration || "",
       });
 
       if (data.settings) setSettings(data.settings);
 
-      resetWaypointHistory(data.waypoints.map((wp: any) => ({
-        id: crypto.randomUUID(),
-        lat: wp.lat,
-        lng: wp.lng,
-        name: wp.label,
-        duration: wp.freeze_seconds,
-        fps: wp.fps,
-        images: wp.popup_image || [],
-        imageDisplay: wp.image_display || "pip",
-        narration: wp.narration || "",
-        routeMode: wp.routeMode || "driving"
-      })));
+      resetWaypointHistory(
+        data.waypoints.map((wp: any) => ({
+          id: wp.id || crypto.randomUUID(),
+          lat: wp.lat,
+          lng: wp.lng,
+          name: wp.label,
+          images: wp.popup_image || [],
+          imageDisplay: wp.image_display || "pip",
+          narration: wp.narration || "",
+          routeMode: wp.routeMode || "walking",
+          customRoute: wp.customRoute || [],
+          drawStyle: wp.drawStyle || "linear",
+          isStopBy: wp.isStopBy || false,
+        })),
+      );
       resetTimelineHistory(DefaultTimeline);
 
       setIsDirty(false);
-      addToRecents(data.project_name || appConfig.defaultProjectName, selectedPath);
+      addToRecents(
+        data.project_name || appConfig.defaultProjectName,
+        selectedPath,
+      );
 
       return true;
     } catch (error) {
@@ -223,7 +260,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     setMetadata({
       ...DefaultMetadata,
       created_at: new Date().toISOString(),
-    })
+    });
     setSettings(DefaultSettings);
     setRoutingCache({});
     setIsDirty(false);
@@ -252,7 +289,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         }
       } else if (isCmdOrCtrl && e.key.toLowerCase() === "y") {
         e.preventDefault();
-        editorMode === "map" ? redoMap() : redoTimeline()
+        editorMode === "map" ? redoMap() : redoTimeline();
       }
     };
 
@@ -273,7 +310,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     const defaultTracks: TimelineTrack[] = [
       { id: popupTrackId, name: "Popups", type: "video" },
       { id: videoTrackId, name: "Video", type: "video" },
-      { id: audioTrackId, name: "Voiceover", type: "audio"},
+      { id: audioTrackId, name: "Voiceover", type: "audio" },
     ];
 
     // convert python manifest clips into ui timeline clips
@@ -281,12 +318,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     const generatedClips: TimelineClipData[] = [];
 
     manifest.video_tracks.forEach((item) => {
-      const targetTrackId = item.type === "static_popup" ? popupTrackId : videoTrackId;
+      const targetTrackId =
+        item.type === "static_popup" ? popupTrackId : videoTrackId;
 
       generatedClips.push({
         id: item.clip_id,
         trackId: targetTrackId,
-        label: item.file_path.split('/').pop() || item.clip_id, //Extract filename for UI
+        label: item.file_path.split("/").pop() || item.clip_id, //Extract filename for UI
         startTime: runningTime,
         duration: item.duration,
         source: item.file_path,
@@ -300,7 +338,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       generatedClips.push({
         id: "master_audio",
         trackId: audioTrackId,
-        label: manifest.audio_track.split('/').pop() || "Master Audio",
+        label: manifest.audio_track.split("/").pop() || "Master Audio",
         startTime: 0,
         duration: manifest.total_duration_seconds,
         source: manifest.audio_track,

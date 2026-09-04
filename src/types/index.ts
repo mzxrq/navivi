@@ -11,13 +11,16 @@ export interface Waypoint {
   images?: string[];
   imageDisplay?: "pip" | "fullscreen";
   imagePans?: string[];
+  imageTransitions?: string[];
   narration?: string;
+  arrivingNarration?: string;
+  attractionNarration?: string;
   routeMode: RouteMode;
-  duration?: number;
   customRoute?: [number, number][];
   isGeneratingScript?: boolean;
   isStopBy?: boolean;
   drawStyle?: "linear" | "spline";
+  curveOffset?: number;
 }
 
 export interface RouteSegment {
