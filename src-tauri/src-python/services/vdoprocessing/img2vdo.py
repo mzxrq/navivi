@@ -8,13 +8,16 @@ concatenation via VideoEditor, and audio synchronization.
 
 import os
 import json
+import subprocess
+import time
 import uuid
 import requests
 import websocket
 from pathlib import Path
-from typing import List, Union, Optional
+from typing import Any, Dict, Final, List, Union, Optional
 
 from services.vdoprocessing.vdoeditor import VideoEditor
+from services.vdoprocessing.vdoexporter import VideoExporter
 from services.config.job_config import JobConfigManager
 from services.logger.logger import setup_logger
 
@@ -43,6 +46,107 @@ class AttractionVideoGenerator:
         self.output_dir = (base_dir / "video").resolve()
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
+    # bin/ComfyUI now has its actual application files checked out (plus its
+    # own already-synced .venv), same shape as bin/Irodori-TTS-Server — so
+    # it can be auto-started the same way instead of just failing with a
+    # "start it yourself" error.
+    _COMFY_DIR: Final[Path] = (
+        Path(__file__).resolve().parents[2] / "bin" / "ComfyUI"
+    )
+    _COMFY_VENV_PYTHON: Final[Path] = _COMFY_DIR / ".venv" / (
+        "Scripts/python.exe" if os.name == "nt" else "bin/python"
+    )
+    # Generous: first run also loads custom nodes / models, which can take
+    # a while — giving up too early on a legitimately slow first start is a
+    # worse failure mode than this just taking longer.
+    _COMFY_START_TIMEOUT_SECONDS: Final[float] = 300.0
+    _COMFY_POLL_INTERVAL_SECONDS: Final[float] = 1.0
+
+    # Class-level: one ComfyUI subprocess is enough for every
+    # AttractionVideoGenerator instance in this process.
+    _comfy_process: Optional[subprocess.Popen] = None
+
+    # Matches mapfetcher.py's MapFetcher.fetch_image/process_residential_sequence
+    # default output_size — the resolution the map/waypoint clips actually
+    # render at. ComfyUI attraction clips are generated smaller (currently
+    # 1280x704) to fit the 8GB VRAM budget; upscaling here keeps every clip
+    # the same resolution before subtitle burning, since nothing downstream
+    # in the pipeline reconciles mismatched clip sizes.
+    _TARGET_WIDTH: Final[int] = 1920
+    _TARGET_HEIGHT: Final[int] = 1080
+
+    @staticmethod
+    def _is_comfy_up() -> bool:
+        try:
+            requests.get(f"{COMFY_API_URL}/system_stats", timeout=3.0)
+            return True
+        except requests.exceptions.RequestException:
+            return False
+
+    # [IO] Starts ComfyUI as a subprocess if it isn't already reachable, and
+    # waits for it to come up, instead of failing outright.
+    def _ensure_comfy_reachable(self) -> None:
+        """Checked once up front (before generating any clips) so a
+        missing/not-yet-started ComfyUI is handled here — auto-started and
+        waited for — instead of surfacing later as a raw connection-refused
+        error from partway through an image upload or an open websocket."""
+        if self._is_comfy_up():
+            return
+
+        if not self._COMFY_VENV_PYTHON.exists():
+            raise RuntimeError(
+                f"ComfyUI isn't reachable at {COMFY_API_URL} and its bundled "
+                f"venv wasn't found at {self._COMFY_VENV_PYTHON} to auto-start "
+                "it. Set it up (see bin/ComfyUI), or start it manually."
+            )
+
+        if (
+            AttractionVideoGenerator._comfy_process is None
+            or AttractionVideoGenerator._comfy_process.poll() is not None
+        ):
+            logger.info(
+                "ComfyUI not reachable at %s — starting it as a subprocess "
+                "(this can take a while on first run while it loads custom "
+                "nodes/models)...",
+                COMFY_API_URL,
+            )
+            popen_kwargs: Dict[str, Any] = {}
+            if os.name == "nt":
+                # Detached from this console/process group so it outlives a
+                # short-lived pipeline run instead of being torn down (or
+                # fighting over Ctrl+C) with it — same as IrodoriTTSClient.
+                popen_kwargs["creationflags"] = (
+                    subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
+                )
+            else:
+                popen_kwargs["start_new_session"] = True
+            log_path = self._COMFY_DIR / "server.log"
+            log_file = open(log_path, "ab")
+            AttractionVideoGenerator._comfy_process = subprocess.Popen(
+                [str(self._COMFY_VENV_PYTHON), "main.py"],
+                cwd=str(self._COMFY_DIR),
+                stdout=log_file,
+                stderr=subprocess.STDOUT,
+                **popen_kwargs,
+            )
+
+        deadline = time.monotonic() + self._COMFY_START_TIMEOUT_SECONDS
+        while time.monotonic() < deadline:
+            if self._is_comfy_up():
+                logger.info("ComfyUI is up at %s.", COMFY_API_URL)
+                return
+            if AttractionVideoGenerator._comfy_process.poll() is not None:
+                raise RuntimeError(
+                    "ComfyUI subprocess exited while starting up — see "
+                    f"{self._COMFY_DIR / 'server.log'} for details."
+                )
+            time.sleep(self._COMFY_POLL_INTERVAL_SECONDS)
+
+        raise RuntimeError(
+            f"ComfyUI did not become reachable within "
+            f"{self._COMFY_START_TIMEOUT_SECONDS:.0f}s of starting."
+        )
+
     # [IO] Uploads an image to ComfyUI server input directory
     def _upload_image(self, local_path: str) -> str:
         """Uploads an image to ComfyUI server input directory."""
@@ -64,9 +168,29 @@ class AttractionVideoGenerator:
         with open(self.workflow_config_path, "r", encoding="utf-8") as f:
             workflow = json.load(f)
 
-        # Inject dynamic parameters
-        workflow["11"]["inputs"]["image"] = comfy_filename
-        workflow["69:56"]["inputs"]["text"] = prompt_text
+        # Inject dynamic parameters — node IDs specific to
+        # assets/config/img2vdo-api.json's current LTX-2 image+audio-to-
+        # video graph: "269" is its only LoadImage node, and "320:319"
+        # (PrimitiveStringMultiline) is the raw prompt text that feeds BOTH
+        # the direct path and 320:325's LLM prompt-enhancer, so it takes
+        # effect regardless of "320:328" (the "Enable Prompt Enhance"
+        # switch's) current state — unlike injecting into 320:325 itself,
+        # which only has any effect when that switch is on. Enhancement is
+        # off by default here: the gemma-3-12b enhancer model doesn't fit
+        # in 8GB VRAM either, so each token of its output takes ~2s+ from
+        # the same CPU/GPU swap-thrashing as the video model — turning it
+        # back on (320:328 -> true) costs several extra minutes per clip.
+        workflow["269"]["inputs"]["image"] = comfy_filename
+        # Force visible camera motion on every clip: at low step counts /
+        # Q2_K quantization the model defaults to near-static output unless
+        # the prompt explicitly demands movement (confirmed by comparing
+        # frames of a generated clip — statue/background were frozen aside
+        # from mist drift). Appended rather than left to each prompt source
+        # (waypoint camera_pans, fallback label) so it applies unconditionally.
+        workflow["320:319"]["inputs"]["value"] = (
+            f"{prompt_text} Camera must pan smoothly and continuously "
+            f"throughout the shot, clearly visible motion, not a static shot."
+        )
 
         client_id = str(uuid.uuid4())
         ws = websocket.WebSocket()
@@ -103,7 +227,17 @@ class AttractionVideoGenerator:
 
         outputs = history[prompt_id]["outputs"]
         for node_id in outputs:
-            for media in outputs[node_id].get("videos", []):
+            node_output = outputs[node_id]
+            # ComfyUI's SaveVideo node (see comfy_api/latest/_ui.py's
+            # PreviewVideo.as_dict, used by assets/config/img2vdo-api.json's
+            # "333" SaveVideo node) reports its result under "images" (with
+            # "animated": true) — NOT "videos", which some older/other
+            # video-producing nodes use instead. Checking "videos" alone
+            # silently returned no clip at all even though ComfyUI had
+            # actually rendered one successfully. Checked in this order
+            # since "images" is what the currently bundled workflow uses.
+            media_list = node_output.get("images") or node_output.get("videos") or []
+            for media in media_list:
                 view_url = f"{COMFY_API_URL}/view"
                 params = {
                     "filename": media["filename"],
@@ -155,6 +289,8 @@ class AttractionVideoGenerator:
 
         if not image_list:
             return None
+
+        self._ensure_comfy_reachable()
 
         # --- Check list vs string for prompts ---
         if isinstance(prompt_text, str):
@@ -232,6 +368,28 @@ class AttractionVideoGenerator:
             )
         else:
             final_output = fitted_video
+
+        # 5. Upscale to match the map/waypoint clips' resolution (CPU-only
+        # ffmpeg lanczos scale — no VRAM cost, so this is safe on 8GB cards
+        # regardless of what generation already used). Written to a temp
+        # file then swapped in, since ffmpeg can't write to its own input.
+        try:
+            upscale_tmp = str(
+                Path(final_output).with_name(f"upscaled_{uuid.uuid4().hex[:6]}.mp4")
+            )
+            VideoExporter.upscale_video(
+                input_video_path=final_output,
+                output_video_path=upscale_tmp,
+                target_width=self._TARGET_WIDTH,
+                target_height=self._TARGET_HEIGHT,
+            )
+            os.replace(upscale_tmp, final_output)
+        except Exception as exc:
+            logger.warning(
+                "Upscale failed for %s (%s) — keeping original resolution.",
+                final_output,
+                exc,
+            )
 
         # Cleanup intermediate raw clips
         for clip in generated_clips:

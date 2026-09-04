@@ -9,6 +9,7 @@ from tqdm import tqdm
 from services.config.job_config import JobConfigManager
 from services.vdoprocessing.vdoexporter import VideoExporter
 
+from .attraction_step import render_attraction_videos
 from .audio_step import generate_audio
 from .gps_step import process_gps
 from .helpers import logger
@@ -50,12 +51,12 @@ def run_full_pipeline(
         pbar.update(8)
 
         # --- STEP 3 ---
-        # attraction_videos = render_attraction_videos(
-        #     str(config_file_path),
-        #     audio_durations=audio_data.get("audio_durations"),
-        #     audio_paths=audio_data.get("audio_paths"),
-        # )
-        # pbar.update(60)
+        attraction_videos = render_attraction_videos(
+            str(config_file_path),
+            audio_durations=audio_data.get("audio_durations"),
+            audio_paths=audio_data.get("audio_paths"),
+        )
+        pbar.update(60)
 
         # --- STEP 4 ---
         video_paths = render_route_video(
@@ -68,7 +69,7 @@ def run_full_pipeline(
         )
         pbar.update(85)
 
-        all_videos = video_paths # + attraction_videos
+        all_videos = video_paths + attraction_videos
 
         # --- STEP 5 ---
         final_videos = burn_subtitles(

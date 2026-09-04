@@ -25,6 +25,29 @@ def _video_safe_label(label: Any, fallback: str) -> str:
     return safe_label or fallback
 
 
+def test_gps(job_config_path: str) -> Dict[str, Any]:
+    """Runs GPS parsing only (pipeline Step 1) — isolated so editing just
+    raw_track.gpx/job_config.json's GPS-related settings can be checked
+    without paying for TTS/attraction/video/subtitle stages. Every other
+    test_* function here (test_tts_all, test_attraction_videos,
+    test_overview_video/test_residential_video, test_subtitles) is this
+    same one-step-only shape for its own pipeline step — together they
+    cover all 5 of run_full_pipeline's steps individually, so a change
+    scoped to one step/file doesn't require re-running the whole pipeline
+    to check it."""
+    from services.vdoprocessing.videopipeline import process_gps
+
+    config_path = Path(job_config_path)
+    if not config_path.exists():
+        raise FileNotFoundError(f"job_config.json not found: {config_path}")
+
+    cleaned_route = process_gps(str(config_path))
+    return {
+        "success": True,
+        "summary": cleaned_route.get("summary", {}),
+    }
+
+
 def test_overview_video(job_config_path: str, output_video_dir: str = None) -> Dict[str, Any]:
     """Runs GPS parsing + route video rendering only, to sanity-check the
     overview map animation without paying for TTS/attraction/subtitle stages."""
@@ -482,9 +505,29 @@ def test_all(
     subtitle_result = test_subtitles(str(config_path), str(subtitle_dir))
     transition_result = test_transition_editor(str(config_path), str(video_dir))
 
+    # test_transition_editor (-> test_overview_video -> render_route_video)
+    # already produces the residential/per-leg clips too when the project
+    # is in 2D mode (render_route_video generates overview + residential
+    # together in that path) — but NOT when use_3d_res is set, since 3D
+    # residential rendering runs through a separate pydeck/Playwright call
+    # that render_route_video's 2D branch skips entirely. Only run that
+    # separate call here, so 3D projects don't end up missing their
+    # residential clips from "all" — and 2D ones don't pay to render the
+    # same clips twice.
+    with config_path.open("r", encoding="utf-8") as config_file:
+        use_3d_res = bool(
+            json.load(config_file).get("settings", {}).get("use_3d_res", False)
+        )
+    residential_result = (
+        test_residential_video(str(config_path), str(video_dir))
+        if use_3d_res
+        else None
+    )
+
     videos_to_concat = [
         *attraction_result["video_paths"],
         *transition_result["video_paths"],
+        *(residential_result["video_paths"] if residential_result else []),
     ]
     concat_result = test_video_concat(
         str(config_path), str(video_dir), videos_to_concat
@@ -496,6 +539,7 @@ def test_all(
         "attractions": attraction_result,
         "subtitles": subtitle_result,
         "transition": transition_result,
+        "residential": residential_result,
         "concat": concat_result,
     }
 
@@ -504,7 +548,7 @@ if __name__ == "__main__":
     if len(sys.argv) < 2:
         print(
             "Usage: python main.py <path/to/job_config.json> [output_dir] "
-            "[overview|residential|tts|tts-all|attraction|attraction-all|"
+            "[gps|overview|residential|tts|tts-all|attraction|attraction-all|"
             "subtitle|subtitle-all|concat|transition|all] [waypoint_index]\n"
             "       python main.py full_pipeline <source_path> [output_dir]\n"
             "       python main.py render_timeline <timeline.json> [output_video]",
@@ -535,7 +579,9 @@ if __name__ == "__main__":
             output_dir_arg = sys.argv[2] if len(sys.argv) > 2 else None
             mode_arg = sys.argv[3] if len(sys.argv) > 3 else "overview"
 
-            if mode_arg == "residential":
+            if mode_arg == "gps":
+                result = test_gps(job_config_arg)
+            elif mode_arg == "residential":
                 result = test_residential_video(job_config_arg, output_dir_arg)
             elif mode_arg == "tts":
                 waypoint_index_arg = int(sys.argv[4]) if len(sys.argv) > 4 else 0

@@ -8,9 +8,13 @@ Extracted from tts.py to improve modularity.
 
 from __future__ import annotations
 
+import asyncio
 import httpx
+import sys
+import time
 import uuid
 from pathlib import Path
+from urllib.parse import urlsplit
 import wave
 import numpy as np
 import subprocess
@@ -134,6 +138,47 @@ class FFmpegManager:
 class IrodoriTTSClient:
     """Handles communication with the local Irodori TTS service."""
 
+    # The server this client talks to is a separate, bundled process (see
+    # bin/Irodori-TTS-Server/README.md) that has to be started by hand
+    # before any TTS call would work — normally `uv run python -m
+    # irodori_openai_tts` from that directory. Auto-started as a subprocess
+    # instead, the first time a request finds the connection refused/closed
+    # (server not running yet), using its own already-synced .venv so
+    # nothing here depends on `uv` being on PATH. Kept running afterward
+    # (not torn down when this process exits) since it's slow to start —
+    # it loads a real model — and every later call in the same session, or
+    # a later main.py invocation, should find it already warm.
+    _SERVER_DIR: Final[Path] = (
+        Path(__file__).resolve().parents[2] / "bin" / "Irodori-TTS-Server"
+    )
+    _SERVER_VENV_PYTHON: Final[Path] = _SERVER_DIR / ".venv" / (
+        "Scripts/python.exe" if os.name == "nt" else "bin/python"
+    )
+    # The server's own IRODORI_MODEL_LOAD_TIMEOUT defaults to 300s for
+    # loading an already-downloaded model — and the FIRST run also has to
+    # download the model from Hugging Face before that even starts, which
+    # isn't bounded by that setting at all. Generous on purpose: giving up
+    # too early on a legitimately slow first-time download/load is a much
+    # worse failure mode than this function just taking a while.
+    _SERVER_START_TIMEOUT_SECONDS: Final[float] = 600.0
+    _SERVER_POLL_INTERVAL_SECONDS: Final[float] = 1.0
+
+    # How long the server can sit unused before the watchdog (see
+    # idle_watchdog.py) shuts it down. Auto-starting it is only worth doing
+    # if it doesn't also sit there forever afterward, especially since it
+    # holds a loaded model — 10 minutes is generous enough to cover the gaps
+    # between waypoints in a single pipeline run without shutting down
+    # mid-job, short enough not to waste resources long after the last run
+    # finished.
+    _IDLE_TIMEOUT_SECONDS: Final[float] = 600.0
+    _ACTIVITY_FILE: Final[Path] = _SERVER_DIR / ".last_active"
+
+    # Class-level: one server subprocess (and one watchdog) is enough for
+    # every client instance/every caller in this process (main.py's
+    # tts/tts-all/attraction commands, and the real audio_step.py pipeline,
+    # can each construct their own IrodoriTTSClient).
+    _server_process: Optional[subprocess.Popen] = None
+
     # [Config] Initializes the TTS client with output directory and API base URL
     def __init__(
         self,
@@ -144,11 +189,126 @@ class IrodoriTTSClient:
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.base_url = base_url
 
-    # [TTS] Makes an HTTP POST request to the local Irodori TTS API to generate speech and returns the raw audio bytes
-    async def call_api(self, text: str) -> bytes:
-        """Makes an HTTP POST request to the local Irodori TTS API to generate speech."""
-        payload = {"model": "irodori-tts", "input": text, "voice": "string"}
+    def _health_url(self) -> str:
+        parts = urlsplit(self.base_url)
+        return f"{parts.scheme}://{parts.netloc}/health"
 
+    async def _is_server_up(self) -> bool:
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(self._health_url(), timeout=3.0)
+                return response.status_code == 200
+        except httpx.HTTPError:
+            return False
+
+    async def _ensure_server_running(self) -> None:
+        """Starts the local Irodori TTS server as a subprocess if it isn't
+        already reachable, then waits for its /health endpoint to come up.
+        Raises RuntimeError if it can't be found/started or never becomes
+        healthy in time — callers should let that propagate rather than
+        silently continuing to a request that would just fail the same way."""
+        if not self._SERVER_VENV_PYTHON.exists():
+            raise RuntimeError(
+                f"Irodori TTS server isn't reachable at {self.base_url} and its "
+                f"bundled venv wasn't found at {self._SERVER_VENV_PYTHON} to "
+                "auto-start it. Set it up per bin/Irodori-TTS-Server/README.md "
+                "(uv sync), or start it manually."
+            )
+
+        if (
+            IrodoriTTSClient._server_process is None
+            or IrodoriTTSClient._server_process.poll() is not None
+        ):
+            logger.info(
+                "Irodori TTS server not reachable at %s — starting it as a "
+                "subprocess (this can take a while on first run while it "
+                "downloads/loads the model)...",
+                self.base_url,
+            )
+            port = urlsplit(self.base_url).port or 8088
+            popen_kwargs: Dict[str, Any] = {}
+            if os.name == "nt":
+                # Detached from this console/process group so it outlives a
+                # short-lived `python main.py ...` CLI invocation instead of
+                # being torn down (or fighting over Ctrl+C) with it.
+                popen_kwargs["creationflags"] = (
+                    subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
+                )
+            else:
+                popen_kwargs["start_new_session"] = True
+            log_path = self._SERVER_DIR / "server.log"
+            log_file = open(log_path, "ab")
+            IrodoriTTSClient._server_process = subprocess.Popen(
+                [
+                    str(self._SERVER_VENV_PYTHON), "-m", "irodori_openai_tts",
+                    "--host", "127.0.0.1", "--port", str(port),
+                ],
+                cwd=str(self._SERVER_DIR),
+                stdout=log_file,
+                stderr=subprocess.STDOUT,
+                **popen_kwargs,
+            )
+            # Baseline activity timestamp so the watchdog's idle clock
+            # starts from "just launched", not from whatever this file's
+            # mtime happened to be left at by a previous run.
+            self._touch_activity()
+            self._start_idle_watchdog(IrodoriTTSClient._server_process.pid)
+
+        deadline = time.monotonic() + self._SERVER_START_TIMEOUT_SECONDS
+        while time.monotonic() < deadline:
+            if await self._is_server_up():
+                logger.info("Irodori TTS server is up at %s.", self.base_url)
+                return
+            if IrodoriTTSClient._server_process.poll() is not None:
+                raise RuntimeError(
+                    "Irodori TTS server subprocess exited while starting up — "
+                    f"see {self._SERVER_DIR / 'server.log'} for details."
+                )
+            await asyncio.sleep(self._SERVER_POLL_INTERVAL_SECONDS)
+
+        raise RuntimeError(
+            f"Irodori TTS server did not become healthy within "
+            f"{self._SERVER_START_TIMEOUT_SECONDS:.0f}s of starting."
+        )
+
+    def _touch_activity(self) -> None:
+        """Marks the server as just-used — read by idle_watchdog.py (as the
+        activity file's mtime) to decide whether it's been idle long enough
+        to shut down. Failure here (e.g. read-only filesystem) shouldn't
+        break an otherwise-successful TTS call, just the idle-shutdown
+        feature, so it's swallowed rather than raised."""
+        try:
+            self._ACTIVITY_FILE.touch()
+        except OSError:
+            pass
+
+    def _start_idle_watchdog(self, server_pid: int) -> None:
+        """Spawns idle_watchdog.py as its own detached process — not a
+        thread or asyncio task in THIS process, because this process (a
+        `python main.py ...` CLI invocation) is typically short-lived and
+        exits long before 10 minutes of idle TTS server time would ever
+        elapse; the watchdog has to keep running independently of whatever
+        started the server to actually catch that."""
+        popen_kwargs: Dict[str, Any] = {}
+        if os.name == "nt":
+            popen_kwargs["creationflags"] = (
+                subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
+            )
+        else:
+            popen_kwargs["start_new_session"] = True
+        watchdog_script = Path(__file__).resolve().parent / "idle_watchdog.py"
+        subprocess.Popen(
+            [
+                sys.executable, str(watchdog_script),
+                str(server_pid), str(self._ACTIVITY_FILE),
+                str(self._IDLE_TIMEOUT_SECONDS),
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            **popen_kwargs,
+        )
+
+    async def _post_speech(self, payload: Dict[str, Any]) -> bytes:
         async with httpx.AsyncClient() as client:
             response = await client.post(self.base_url, json=payload, timeout=300.0)
 
@@ -158,7 +318,21 @@ class IrodoriTTSClient:
                     f"API request failed with status {response.status_code}"
                 )
 
+            self._touch_activity()
             return response.content
+
+    # [TTS] Makes an HTTP POST request to the local Irodori TTS API to generate speech and returns the raw audio bytes
+    async def call_api(self, text: str) -> bytes:
+        """Makes an HTTP POST request to the local Irodori TTS API to generate speech.
+        If the connection is refused/closed (server not running), starts it
+        as a subprocess and retries once it's healthy."""
+        payload = {"model": "irodori-tts", "input": text, "voice": "string"}
+
+        try:
+            return await self._post_speech(payload)
+        except httpx.ConnectError:
+            await self._ensure_server_running()
+            return await self._post_speech(payload)
 
     # [TTS] Generates speech audio for the given text and saves it to a local WAV file, returning the file path
     async def generate_speech(

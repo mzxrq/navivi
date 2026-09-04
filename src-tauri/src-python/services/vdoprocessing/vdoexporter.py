@@ -434,3 +434,51 @@ class VideoExporter:
             raise RuntimeError(f"FFmpeg subtitle burn failed: {result.stderr}")
 
         return str(out_path)
+
+    @staticmethod
+    def upscale_video(
+        input_video_path: str,
+        output_video_path: str,
+        target_width: int = 1920,
+        target_height: int = 1080,
+    ) -> str:
+        """Scales a clip up to target_width x target_height via ffmpeg's CPU
+        lanczos filter (no GPU/VRAM cost — unlike ComfyUI's own upscaler,
+        this doesn't compete with attraction-video generation for the 8GB
+        VRAM budget). Used to bring ComfyUI attraction clips (rendered at a
+        lower resolution to fit VRAM) up to match the 1920x1080 map/waypoint
+        clips before they're combined, since nothing else in the pipeline
+        reconciles mismatched clip resolutions.
+        """
+        video_path = Path(input_video_path)
+        if not video_path.exists():
+            raise FileNotFoundError(f"Cannot upscale: video missing {video_path}")
+
+        out_path = Path(output_video_path)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+
+        ffmpeg_cmd = VideoExporter.resolve_ffmpeg()
+        if not ffmpeg_cmd:
+            raise RuntimeError("FFmpeg binary not found.")
+
+        result = subprocess.run(
+            [
+                ffmpeg_cmd,
+                "-y",
+                "-i",
+                str(video_path),
+                "-vf",
+                f"scale={target_width}:{target_height}:flags=lanczos",
+                "-c:a",
+                "copy",
+                str(out_path),
+            ],
+            capture_output=True,
+            text=True,
+        )
+
+        if result.returncode != 0:
+            logger.error("upscale_video failed: %s", result.stderr)
+            raise RuntimeError(f"FFmpeg upscale failed: {result.stderr}")
+
+        return str(out_path)

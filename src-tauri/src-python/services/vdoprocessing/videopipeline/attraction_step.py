@@ -29,6 +29,23 @@ def render_attraction_videos(
     waypoints = job_config.get("waypoints", [])
     generated_videos = []
 
+    # Checked once, up front, rather than letting it surface from inside
+    # the loop below (where it would abort the whole pipeline — Steps 1/2
+    # already done, and Steps 4/5 don't depend on this one at all) — a
+    # broken/missing ComfyUI install should only cost this one step's
+    # output, not the rest of an otherwise-working render.
+    try:
+        generator._ensure_comfy_reachable()
+    except RuntimeError as exc:
+        logger.warning(
+            "Step 4: ComfyUI isn't available (%s) — skipping attraction "
+            "video generation for all %d waypoint(s). The rest of the "
+            "pipeline will continue without them.",
+            exc,
+            len(waypoints),
+        )
+        return []
+
     audio_durations = audio_durations or []
     audio_paths = audio_paths or []
 
