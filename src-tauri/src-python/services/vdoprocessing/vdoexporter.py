@@ -363,7 +363,8 @@ class VideoExporter:
                 str(output_path),
             ],
             capture_output=True,
-            text=True,
+            encoding="utf-8",
+            errors="replace",
         )
 
         # Clean up the temporary FFmpeg text file
@@ -426,7 +427,8 @@ class VideoExporter:
                 str(out_path),
             ],
             capture_output=True,
-            text=True,
+            encoding="utf-8",
+            errors="replace",
         )
 
         if result.returncode != 0:
@@ -474,7 +476,8 @@ class VideoExporter:
                 str(out_path),
             ],
             capture_output=True,
-            text=True,
+            encoding="utf-8",
+            errors="replace",
         )
 
         if result.returncode != 0:

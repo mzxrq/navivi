@@ -89,7 +89,8 @@ class FFmpegManager:
                 path,
             ],
             capture_output=True,
-            text=True,
+            encoding="utf-8",
+            errors="replace",
         )
         if result.returncode != 0 or not result.stdout.strip():
             raise RuntimeError(f"ffprobe failed on '{path}': {result.stderr.strip()}")
@@ -119,7 +120,8 @@ class FFmpegManager:
                 path,
             ],
             capture_output=True,
-            text=True,
+            encoding="utf-8",
+            errors="replace",
         )
         if result.returncode != 0 or not result.stdout.strip():
             raise RuntimeError(
@@ -495,7 +497,9 @@ class AudioProcessor:
             *codec_args,
             output_path,
         ]
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        result = subprocess.run(
+            cmd, capture_output=True, encoding="utf-8", errors="replace"
+        )
         if result.returncode != 0:
             raise RuntimeError(
                 f"Failed to synthesize silent audio '{output_path}': {result.stderr.strip()}"
@@ -619,7 +623,9 @@ class VideoProcessor:
             "-shortest",
             muxed_path,
         ]
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        result = subprocess.run(
+            cmd, capture_output=True, encoding="utf-8", errors="replace"
+        )
 
         if os.path.exists(silent_aac):
             os.remove(silent_aac)
@@ -667,7 +673,9 @@ class VideoProcessor:
             "copy",
             final_output_path,
         ]
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        result = subprocess.run(
+            cmd, capture_output=True, encoding="utf-8", errors="replace"
+        )
         concat_list_path.unlink(missing_ok=True)
 
         if result.returncode != 0:
@@ -748,7 +756,9 @@ class VideoProcessor:
             ]
         )
 
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        result = subprocess.run(
+            cmd, capture_output=True, encoding="utf-8", errors="replace"
+        )
         if result.returncode != 0:
             raise RuntimeError(
                 f"Final audio/video/subtitle burn failed: {result.stderr.strip()}"

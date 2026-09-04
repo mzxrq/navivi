@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 from typing import Optional
 
+from tqdm import tqdm
+
 from .helpers import logger
 
 
@@ -52,8 +54,8 @@ def generate_audio(
             project_config = json.load(f)
 
         waypoints = project_config.get("waypoints", [])
-        print(
-            f"\n[Step 2/5] Generating Narration Audio for {len(waypoints)} Waypoints..."
+        tqdm.write(
+            f"[Step 2/5] Generating Narration Audio for {len(waypoints)} Waypoints..."
         )
 
         from services.tts.ttsengine import AudioProcessor, IrodoriTTSClient
@@ -77,7 +79,7 @@ def generate_audio(
                     subtitle_paths.append(None)
                     continue
 
-                print(f"   Synthesizing audio [{idx + 1}/{len(waypoints)}]: '{label}'")
+                tqdm.write(f"   -> Synthesizing audio [{idx + 1}/{len(waypoints)}]: '{label}'")
 
                 logger.info(
                     f"Step 2: [%d/%d] Generating audio for: '%s'",

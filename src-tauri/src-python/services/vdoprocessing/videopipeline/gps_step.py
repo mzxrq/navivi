@@ -3,6 +3,8 @@
 import json
 from pathlib import Path
 
+from tqdm import tqdm
+
 from services.gpsparser.gpsparser import GPSParser
 from services.config.job_config import JobConfigManager
 
@@ -21,7 +23,7 @@ def process_gps(raw_source_path: str) -> dict:
         config_data = json.load(f)
 
     gps_route_file = config_data.get("source_files", {}).get("gps_route", "N/A")
-    print(f"\n[Step 1/5] Processing GPS Data from: {Path(gps_route_file).name}")
+    tqdm.write(f"[Step 1/5] Processing GPS Data from: {Path(gps_route_file).name}")
 
     job_config = JobConfigManager(str(config_path))
     cleaned = GPSParser(job_config=job_config).clean_data()

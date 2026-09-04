@@ -8,6 +8,7 @@ concatenation via VideoEditor, and audio synchronization.
 
 import os
 import json
+import shutil
 import subprocess
 import time
 import uuid
@@ -74,6 +75,70 @@ class AttractionVideoGenerator:
     # in the pipeline reconciles mismatched clip sizes.
     _TARGET_WIDTH: Final[int] = 1920
     _TARGET_HEIGHT: Final[int] = 1080
+
+    # Audio/video duration mismatch tolerance. Multi-image waypoints
+    # concatenate several fixed-length ComfyUI clips together (e.g. 2 x 7s
+    # = 14s), which can run far past a short narration — left uncorrected,
+    # that mismatch reaches the downstream timeline/NLE step, which pads
+    # the gap by freezing on the last frame until the narration ends.
+    # Single-image waypoints get the same general tolerance; multi-image
+    # ones get a tighter overshoot cap since concatenation compounds error.
+    _AUDIO_DURATION_TOLERANCE_SECONDS: Final[float] = 3.0
+    _MULTI_IMAGE_OVERSHOOT_TOLERANCE_SECONDS: Final[float] = 2.0
+
+    # Multi-image waypoints (2+ popup images -> 2+ generated clips) are no
+    # longer auto-combined here — combining is deferred until the frontend
+    # explicitly approves it (via finalize_pending_video), so a user gets a
+    # chance to review the individual clips first. Raw clip paths + the
+    # info needed to finish the job are parked here as a small manifest.
+    _PENDING_SUBDIR: Final[str] = "pending_attraction"
+
+    def _pending_manifest_path(self, output_filename: str) -> Path:
+        pending_dir = self.output_dir / self._PENDING_SUBDIR
+        pending_dir.mkdir(parents=True, exist_ok=True)
+        return pending_dir / f"{Path(output_filename).stem}.json"
+
+    # [Core] Called at the start of a fresh generate for a waypoint (the
+    # user re-running it). Removes anything a previous run left behind for
+    # the same output_filename — the finalized deliverable itself, and any
+    # pending manifest + its now-superseded raw clips — so regenerating
+    # doesn't silently leak old files that nothing else will ever clean up.
+    def _clear_stale_outputs(self, output_filename: str) -> None:
+        final_path = self.editor._resolve_output_path(output_filename, "video")
+        if final_path.exists():
+            try:
+                final_path.unlink()
+                logger.info(
+                    "Removed previous deliverable before regenerating: %s", final_path
+                )
+            except OSError as exc:
+                logger.warning("Could not remove old deliverable %s: %s", final_path, exc)
+
+        manifest_path = self._pending_manifest_path(output_filename)
+        if not manifest_path.exists():
+            return
+
+        try:
+            with open(manifest_path, "r", encoding="utf-8") as f:
+                old_manifest = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            old_manifest = {}
+
+        for clip in old_manifest.get("clip_paths", []):
+            if clip and os.path.exists(clip):
+                try:
+                    os.remove(clip)
+                except OSError:
+                    pass
+
+        try:
+            manifest_path.unlink()
+        except OSError:
+            pass
+        logger.info(
+            "Cleared stale pending manifest/clips for %s before regenerating.",
+            output_filename,
+        )
 
     @staticmethod
     def _is_comfy_up() -> bool:
@@ -255,6 +320,146 @@ class AttractionVideoGenerator:
 
         return None
 
+    # [Core] Shared tail end of clip processing: fit duration, place at the
+    # project's output path, and upscale. Used by both the single-image path
+    # in process_attraction_video and finalize_pending_video's multi-image
+    # path, so the two stay in sync instead of drifting apart.
+    def _fit_and_finalize(
+        self,
+        video_path: str,
+        target_audio_duration: float,
+        output_filename: str,
+        overshoot_tolerance: float,
+    ) -> str:
+        """Trims/stretches video_path to within tolerance of
+        target_audio_duration, writes the result to output_filename in the
+        project's video directory, then upscales it. Narration audio is
+        intentionally NOT muxed in here — see process_attraction_video's
+        docstring for why."""
+        if target_audio_duration > 0:
+            current_duration = self.editor.get_video_duration(video_path)
+            diff = current_duration - target_audio_duration
+
+            if diff > overshoot_tolerance:
+                logger.info(
+                    f"Video ({current_duration:.2f}s) exceeds audio ({target_audio_duration:.2f}s) "
+                    f"by more than {overshoot_tolerance:.1f}s. Trimming to fit..."
+                )
+                trimmed_name = f"temp_trimmed_{uuid.uuid4().hex[:8]}.mp4"
+                fitted_video = self.editor.trim_video_duration(
+                    video_path=video_path,
+                    target_duration=target_audio_duration,
+                    output_filename=trimmed_name,
+                )
+            elif -diff > self._AUDIO_DURATION_TOLERANCE_SECONDS:
+                logger.info(
+                    f"Video ({current_duration:.2f}s) is shorter than audio ({target_audio_duration:.2f}s) "
+                    f"by more than {self._AUDIO_DURATION_TOLERANCE_SECONDS:.1f}s. Adjusting duration..."
+                )
+                scaled_name = f"temp_scaled_{uuid.uuid4().hex[:8]}.mp4"
+                fitted_video = self.editor.adjust_video_duration(
+                    video_path=video_path,
+                    target_duration=target_audio_duration,
+                    output_filename=scaled_name,
+                )
+            else:
+                logger.info(
+                    f"Video ({current_duration:.2f}s) is within tolerance of audio "
+                    f"({target_audio_duration:.2f}s). No adjustment needed."
+                )
+                fitted_video = video_path
+        else:
+            fitted_video = video_path
+
+        # Place at the proper output_filename path — previously this was a
+        # side effect of mux_audio_to_video; now done explicitly since
+        # muxing narration audio in is deferred (see docstring above).
+        final_path = self.editor._resolve_output_path(output_filename, "video")
+        if Path(fitted_video).resolve() != final_path.resolve():
+            if final_path.exists():
+                final_path.unlink()
+            shutil.copy2(fitted_video, final_path)
+        final_output = str(final_path)
+
+        # Upscale to match the map/waypoint clips' resolution (CPU-only
+        # ffmpeg lanczos scale — no VRAM cost, so this is safe on 8GB cards
+        # regardless of what generation already used). Written to a temp
+        # file then swapped in, since ffmpeg can't write to its own input.
+        try:
+            upscale_tmp = str(
+                Path(final_output).with_name(f"upscaled_{uuid.uuid4().hex[:6]}.mp4")
+            )
+            VideoExporter.upscale_video(
+                input_video_path=final_output,
+                output_video_path=upscale_tmp,
+                target_width=self._TARGET_WIDTH,
+                target_height=self._TARGET_HEIGHT,
+            )
+            os.replace(upscale_tmp, final_output)
+        except Exception as exc:
+            logger.warning(
+                "Upscale failed for %s (%s) — keeping original resolution.",
+                final_output,
+                exc,
+            )
+
+        return final_output
+
+    # [Core/Animation] Combines previously-generated attraction clips into
+    # one waypoint video, once the frontend has reviewed and approved them.
+    def finalize_pending_video(
+        self,
+        clip_paths: List[str],
+        target_audio_duration: float,
+        output_filename: str,
+    ) -> Optional[str]:
+        """
+        Call this once the frontend confirms it's okay to combine a
+        waypoint's clips (the ones process_attraction_video parked in a
+        pending-manifest instead of auto-combining). Mirrors the tail end
+        of process_attraction_video, starting from already-rendered clips
+        instead of generating new ones. Narration audio is still not muxed
+        in here — same deferral as process_attraction_video.
+        """
+        valid_clips = [c for c in clip_paths if c and os.path.exists(c)]
+        if not valid_clips:
+            logger.error("finalize_pending_video: no valid clip paths given.")
+            return None
+
+        if len(valid_clips) > 1:
+            logger.info(
+                f"Combining {len(valid_clips)} approved clips into a sequence..."
+            )
+            temp_combined_name = f"temp_concat_{uuid.uuid4().hex[:8]}.mp4"
+            combined_video = self.editor.concatenate_videos(
+                input_paths=valid_clips, output_filename=temp_combined_name
+            )
+            overshoot_tolerance = self._MULTI_IMAGE_OVERSHOOT_TOLERANCE_SECONDS
+        else:
+            combined_video = valid_clips[0]
+            overshoot_tolerance = self._AUDIO_DURATION_TOLERANCE_SECONDS
+
+        final_output = self._fit_and_finalize(
+            combined_video, target_audio_duration, output_filename, overshoot_tolerance
+        )
+
+        for clip in valid_clips:
+            if os.path.exists(clip) and clip != final_output:
+                try:
+                    os.remove(clip)
+                except OSError:
+                    pass
+
+        manifest_path = self._pending_manifest_path(output_filename)
+        if manifest_path.exists():
+            try:
+                manifest_path.unlink()
+            except OSError:
+                pass
+
+        logger.info(f"Waypoint video deliverable complete (finalized): {final_output}")
+        return final_output
+
     # [Core/Animation] Main processing function for attraction video generation
     def process_attraction_video(
         self,
@@ -268,9 +473,14 @@ class AttractionVideoGenerator:
         Main processor:
         1. Checks if popup_image is a list or single string.
         2. Generates clips for all images using paired prompts.
-        3. Combines multi-image clips via VideoEditor.
-        4. Scales playback speed to match target_audio_duration (only if shorter).
-        5. Muxes audio if provided.
+        3. Single image: fits duration, upscales, returns the finished
+           (audio-less) clip. Multi-image: does NOT auto-combine — writes a
+           pending manifest and returns None; call finalize_pending_video()
+           once the frontend approves combining the clips.
+        4. Narration audio is deliberately NOT muxed in — subtitles still
+           get burned onto whatever's returned via the normal pipeline
+           subtitle step, but audio muxing is a separate, later step so a
+           human gets a chance to review the clip(s) first.
         """
         if not popup_image_entry:
             logger.warning("No popup image provided for waypoint.")
@@ -289,6 +499,11 @@ class AttractionVideoGenerator:
 
         if not image_list:
             return None
+
+        # Regenerating this waypoint — clear out whatever a previous run
+        # left behind (old deliverable, old pending manifest + its clips)
+        # before doing any fresh work.
+        self._clear_stale_outputs(output_filename)
 
         self._ensure_comfy_reachable()
 
@@ -323,81 +538,42 @@ class AttractionVideoGenerator:
             logger.error("Failed to generate any video clips.")
             return None
 
-        # 2. Combine together if there are multiple images in the list
+        # 2. Multiple images -> don't auto-combine. Park the raw clips in a
+        # pending manifest and stop here; finalize_pending_video() combines
+        # them once the frontend has reviewed and approved the set.
         if len(generated_clips) > 1:
+            manifest_path = self._pending_manifest_path(output_filename)
+            manifest = {
+                "clip_paths": generated_clips,
+                "target_audio_duration": target_audio_duration,
+                "audio_path": audio_path,
+                "output_filename": output_filename,
+            }
+            with open(manifest_path, "w", encoding="utf-8") as f:
+                json.dump(manifest, f, ensure_ascii=False, indent=2)
             logger.info(
-                f"Combining {len(generated_clips)} clips into a sequence using VideoEditor..."
+                "Waypoint has %d clips — combining deferred pending approval. "
+                "Manifest written to %s. Call finalize_pending_video() once ready.",
+                len(generated_clips),
+                manifest_path,
             )
-            temp_combined_name = f"temp_concat_{uuid.uuid4().hex[:8]}.mp4"
-            combined_video = self.editor.concatenate_videos(
-                input_paths=generated_clips, output_filename=temp_combined_name
-            )
-        else:
-            combined_video = generated_clips[0]
+            return None
 
-        # 3. Consider audio length: Ensure combined video is >= audio duration
-        if target_audio_duration > 0:
-            # Check current video duration before attempting to stretch it
-            current_duration = self.editor.get_video_duration(combined_video)
+        # 3. Single image: fit duration, place at output_filename, upscale.
+        # Narration audio is NOT muxed in here — see docstring.
+        final_output = self._fit_and_finalize(
+            generated_clips[0],
+            target_audio_duration,
+            output_filename,
+            overshoot_tolerance=self._AUDIO_DURATION_TOLERANCE_SECONDS,
+        )
 
-            if current_duration < target_audio_duration:
-                logger.info(
-                    f"Video ({current_duration:.2f}s) is shorter than audio ({target_audio_duration:.2f}s). Adjusting duration..."
-                )
-                scaled_name = f"temp_scaled_{uuid.uuid4().hex[:8]}.mp4"
-                fitted_video = self.editor.adjust_video_duration(
-                    video_path=combined_video,
-                    target_duration=target_audio_duration,
-                    output_filename=scaled_name,
-                )
-            else:
-                logger.info(
-                    f"Video ({current_duration:.2f}s) is already longer than or equal to audio. No scaling needed."
-                )
-                fitted_video = combined_video
-        else:
-            fitted_video = combined_video
-
-        # 4. Mux Audio track if provided
-        if audio_path and os.path.exists(audio_path):
-            logger.info("Muxing narration audio into waypoint video...")
-            final_output = self.editor.mux_audio_to_video(
-                video_path=fitted_video,
-                audio_path=audio_path,
-                output_filename=output_filename,
-            )
-        else:
-            final_output = fitted_video
-
-        # 5. Upscale to match the map/waypoint clips' resolution (CPU-only
-        # ffmpeg lanczos scale — no VRAM cost, so this is safe on 8GB cards
-        # regardless of what generation already used). Written to a temp
-        # file then swapped in, since ffmpeg can't write to its own input.
-        try:
-            upscale_tmp = str(
-                Path(final_output).with_name(f"upscaled_{uuid.uuid4().hex[:6]}.mp4")
-            )
-            VideoExporter.upscale_video(
-                input_video_path=final_output,
-                output_video_path=upscale_tmp,
-                target_width=self._TARGET_WIDTH,
-                target_height=self._TARGET_HEIGHT,
-            )
-            os.replace(upscale_tmp, final_output)
-        except Exception as exc:
-            logger.warning(
-                "Upscale failed for %s (%s) — keeping original resolution.",
-                final_output,
-                exc,
-            )
-
-        # Cleanup intermediate raw clips
-        for clip in generated_clips:
-            if os.path.exists(clip) and clip != final_output:
-                try:
-                    os.remove(clip)
-                except OSError:
-                    pass
+        # Cleanup intermediate raw clip
+        if os.path.exists(generated_clips[0]) and generated_clips[0] != final_output:
+            try:
+                os.remove(generated_clips[0])
+            except OSError:
+                pass
 
         logger.info(f"Waypoint video deliverable complete: {final_output}")
         return final_output

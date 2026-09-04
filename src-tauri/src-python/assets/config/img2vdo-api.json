@@ -203,7 +203,7 @@
   },
   "320:288": {
     "inputs": {
-      "strength": 1,
+      "strength": 0.75,
       "bypass": [
         "320:302",
         0

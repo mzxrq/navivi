@@ -58,7 +58,11 @@ class FFmpegEngine:
 
         try:
             result = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=self.TIMEOUT_SECONDS
+                cmd,
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=self.TIMEOUT_SECONDS,
             )
         except subprocess.TimeoutExpired as exc:
             raise RuntimeError(
@@ -238,7 +242,11 @@ class VideoEditor:
         ]
         try:
             probe_res = subprocess.run(
-                probe_cmd, capture_output=True, text=True, timeout=5
+                probe_cmd,
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=5,
             )
             lines = probe_res.stdout.strip().splitlines()
             src_rate = lines[0] if len(lines) > 0 else "44100"
@@ -308,7 +316,11 @@ class VideoEditor:
         ]
         try:
             probe_res = subprocess.run(
-                probe_cmd, capture_output=True, text=True, timeout=10
+                probe_cmd,
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=10,
             )
             current_duration = float(probe_res.stdout.strip())
         except (subprocess.TimeoutExpired, ValueError) as exc:
@@ -360,6 +372,61 @@ class VideoEditor:
             target_duration,
             pts_factor,
             output_path,
+        )
+        return str(output_path)
+
+    # [Core/Util] Cuts a video down to a target duration (hard trim, no speed change).
+    def trim_video_duration(
+        self, video_path: str, target_duration: float, output_filename: str
+    ) -> str:
+        """
+        Cuts a video's tail off so it lasts exactly target_duration, at
+        normal playback speed (unlike adjust_video_duration, which changes
+        speed via PTS scaling). Used when a clip runs longer than its
+        narration audio by more than the allowed tolerance — trimming here
+        keeps duration mismatches from reaching later pipeline/timeline
+        steps, which would otherwise pad the gap with a frozen last frame.
+        """
+        vid_p = Path(video_path)
+        if not vid_p.exists():
+            raise FileNotFoundError(f"Video file not found for trim: {vid_p}")
+
+        if target_duration <= 0:
+            raise ValueError(
+                f"target_duration must be positive, got {target_duration!r}."
+            )
+
+        output_path = self._resolve_output_path(output_filename, "video")
+        if output_path.exists():
+            output_path.unlink()
+
+        ffmpeg_cmd = self.engine.resolve_binary()
+        cmd = [
+            ffmpeg_cmd,
+            "-y",
+            "-i",
+            str(vid_p),
+            "-t",
+            f"{target_duration:.3f}",
+            # Re-encoded rather than "-c copy": a stream copy can only cut
+            # at keyframe boundaries, and these short (~7s) generated clips
+            # may have only one keyframe at the very start — a copy-trim
+            # would then not actually shorten the file at all.
+            "-c:v",
+            "libx264",
+            "-preset",
+            "fast",
+            "-crf",
+            "18",
+            "-pix_fmt",
+            "yuv420p",
+            "-an",  # audio deliberately dropped — muxed in later from narration
+            str(output_path),
+        ]
+
+        self.engine.run_command(cmd)
+        logger.info(
+            "Trimmed '%s' to %.3fs: %s", vid_p, target_duration, output_path
         )
         return str(output_path)
 
@@ -430,7 +497,11 @@ class VideoEditor:
         
         try:
             probe_res = subprocess.run(
-                probe_cmd, capture_output=True, text=True, timeout=10
+                probe_cmd,
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=10,
             )
             return float(probe_res.stdout.strip())
         except (subprocess.TimeoutExpired, ValueError) as exc:

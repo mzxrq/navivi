@@ -15,6 +15,7 @@ from .gps_step import process_gps
 from .helpers import logger
 from .render_step import render_route_video
 from .subtitle_step import burn_subtitles
+from .timeline_step import build_timeline
 
 
 def run_full_pipeline(
@@ -79,8 +80,22 @@ def run_full_pipeline(
         )
         pbar.update(5)
 
+        # --- STEP 6 ---
+        timeline_path = build_timeline(
+            video_paths=video_paths,
+            attraction_videos=attraction_videos,
+            final_videos=final_videos,
+            audio_paths=audio_data.get("audio_paths"),
+            subtitle_paths=audio_data.get("subtitle_paths"),
+            project_dir=str(project_dir),
+        )
+
     print("\nProject Rendering Successfully Completed!")
-    return {"video_paths": final_videos, "summary": cleaned_route.get("summary", {})}
+    return {
+        "video_paths": final_videos,
+        "summary": cleaned_route.get("summary", {}),
+        "timeline_path": timeline_path,
+    }
 
 
 def render_from_timeline(

@@ -1,4 +1,4 @@
-"""Step 3: Render the visual map animation, synced to audio timing."""
+"""Step 4: Render the visual map animation, synced to audio timing."""
 
 import json
 import math
@@ -8,6 +8,7 @@ from typing import Any, Optional
 
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
 
 from services.gpsparser.gpscalculator import GPSMath
 from services.mapfetcher.mapfetcher import MapFetcher
@@ -37,7 +38,7 @@ def render_route_video(
     audio_pauses: Optional[list[Any]] = None,
 ) -> list[str]:
     """Generates the visual map animation using synced audio timing."""
-    logger.info("Step 3: Rendering Video Engine — starting.")
+    logger.info("Step 4: Rendering Video Engine — starting.")
 
     route_df = cleaned_route.get("route")
     if route_df is None or route_df.empty:
@@ -52,7 +53,7 @@ def render_route_video(
 
     project_name = project_config.get("project_name", "Navigation Project")
 
-    print(f"\n[Step 3/5] Rendering Video Engine for Project: '{project_name}'")
+    tqdm.write(f"[Step 4/5] Rendering Video Engine for Project: '{project_name}'")
 
     settings = project_config.get("settings", {})
     waypoints = project_config.get("waypoints", [])
@@ -65,7 +66,7 @@ def render_route_video(
     audio_pauses = audio_pauses or []
 
     # 2. Fetch Base Map & Project Pixels
-    logger.info("Step 3: Computing bounding box and fetching overview map tile...")
+    logger.info("Step 4: Computing bounding box and fetching overview map tile...")
 
     # Pass the job_config explicitly (rather than relying on whatever state
     # the JobConfigManager singleton happens to already be in) so the tile
@@ -107,7 +108,7 @@ def render_route_video(
             with open(routecache_path, "r", encoding="utf-8") as f:
                 routing_cache = json.load(f)
         except (json.JSONDecodeError, OSError) as e:
-            logger.warning("Step 3: Failed to read %s: %s", routecache_path, e)
+            logger.warning("Step 4: Failed to read %s: %s", routecache_path, e)
 
     point_modes = _build_point_modes(len(route_points), wp_indices, waypoints, routing_cache)
 
@@ -204,7 +205,7 @@ def render_route_video(
 
     # 3. Inject Waypoints
     if waypoints:
-        logger.info("Step 3: Injecting %d custom waypoints.", len(waypoints))
+        logger.info("Step 4: Injecting %d custom waypoints.", len(waypoints))
         start_label = project_config.get("start_point", {}).get("label")
         end_label = project_config.get("end_point", {}).get("label")
 
@@ -281,7 +282,7 @@ def render_route_video(
 
     if use_3d_res:
         logger.info(
-            "Step 3: 3D residential rendering is enabled. Bypassing 2D map fetch."
+            "Step 4: 3D residential rendering is enabled. Bypassing 2D map fetch."
         )
         for seq_idx in range(max(0, len(wp_indices) - 1)):
             has_audio = seq_idx < len(audio_durations) and audio_durations[seq_idx] > 0
@@ -292,7 +293,7 @@ def render_route_video(
             )
             res_sequence.append({"segment_duration": total_time})
     else:
-        logger.info("Step 3: Generating 2D residential map sequence...")
+        logger.info("Step 4: Generating 2D residential map sequence...")
         img_out_dir = BASE_DIR / "data" / "inputs" / "res_images"
         sequence_data = fetcher.process_residential_sequence(
             route_df,
@@ -550,7 +551,7 @@ def render_route_video(
                 muxed_paths.append(v_path)
 
         output_paths = muxed_paths
-    logger.info("Step 3 complete: %d video file(s) produced.", len(output_paths))
-    print(f"    Successfully generated {len(output_paths)} video segment(s).")
+    logger.info("Step 4 complete: %d video file(s) produced.", len(output_paths))
+    tqdm.write(f"   -> Successfully generated {len(output_paths)} video segment(s).")
 
     return output_paths

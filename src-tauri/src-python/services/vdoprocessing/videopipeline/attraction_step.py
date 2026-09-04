@@ -1,7 +1,9 @@
-"""Step 4: Generate AI videos for individual attractions via ComfyUI."""
+"""Step 3: Generate AI videos for individual attractions via ComfyUI."""
 
 from pathlib import Path
 from typing import Optional
+
+from tqdm import tqdm
 
 from services.config.job_config import JobConfigManager
 
@@ -13,12 +15,12 @@ def render_attraction_videos(
     audio_durations: Optional[list[float]] = None,
     audio_paths: Optional[list[str]] = None,
 ) -> list[str]:
-    """Step 4: Generates AI videos for individual attractions using ComfyUI."""
-    logger.info("Step 4: Generating attraction videos via ComfyUI.")
+    """Step 3: Generates AI videos for individual attractions using ComfyUI."""
+    logger.info("Step 3: Generating attraction videos via ComfyUI.")
 
     config_path = Path(project_config_path)
     if not config_path.exists():
-        logger.warning("Step 4: No project config found at %s — skipping.", config_path)
+        logger.warning("Step 3: No project config found at %s — skipping.", config_path)
         return []
 
     from services.vdoprocessing.img2vdo import AttractionVideoGenerator
@@ -38,7 +40,7 @@ def render_attraction_videos(
         generator._ensure_comfy_reachable()
     except RuntimeError as exc:
         logger.warning(
-            "Step 4: ComfyUI isn't available (%s) — skipping attraction "
+            "Step 3: ComfyUI isn't available (%s) — skipping attraction "
             "video generation for all %d waypoint(s). The rest of the "
             "pipeline will continue without them.",
             exc,
@@ -55,7 +57,7 @@ def render_attraction_videos(
 
         if not popup_image_entry:
             logger.info(
-                "Step 4: [%d/%d] Skipping '%s' — no popup image configured.",
+                "Step 3: [%d/%d] Skipping '%s' — no popup image configured.",
                 idx + 1,
                 len(waypoints),
                 place_label,
@@ -81,12 +83,12 @@ def render_attraction_videos(
         safe_label = str(wp.get("label", f"waypoint_{idx}")).replace(" ", "_")
         output_filename = f"04_attraction_{idx:02d}_{safe_label}.mp4"
 
-        print(
-            f"\n[Step 4/5] Generating AI Video for Attraction [{idx + 1}/{len(waypoints)}]: '{wp.get('label')}'"
+        tqdm.write(
+            f"[Step 3/5] Generating AI Video for Attraction [{idx + 1}/{len(waypoints)}]: '{wp.get('label')}'"
         )
 
         logger.info(
-            "Step 4: [%d/%d] Generating attraction video for: '%s'",
+            "Step 3: [%d/%d] Generating attraction video for: '%s'",
             idx + 1,
             len(waypoints),
             place_label,
@@ -102,22 +104,33 @@ def render_attraction_videos(
 
         if result_path:
             logger.info(
-                "Step 4: [%d/%d] '%s' complete -> %s",
+                "Step 3: [%d/%d] '%s' complete -> %s",
                 idx + 1,
                 len(waypoints),
                 place_label,
                 result_path,
             )
             generated_videos.append(result_path)
+        elif generator._pending_manifest_path(output_filename).exists():
+            # Multiple popup images -> clips were generated but not
+            # auto-combined (deferred until the frontend approves them via
+            # the attraction-finalize CLI mode). Not a failure.
+            logger.info(
+                "Step 3: [%d/%d] '%s' has multiple clips pending approval — "
+                "combining deferred, call attraction-finalize once ready.",
+                idx + 1,
+                len(waypoints),
+                place_label,
+            )
         else:
             logger.warning(
-                "Step 4: [%d/%d] '%s' FAILED to produce a video.",
+                "Step 3: [%d/%d] '%s' FAILED to produce a video.",
                 idx + 1,
                 len(waypoints),
                 place_label,
             )
 
     logger.info(
-        "Step 4 complete: %d attraction video(s) produced.", len(generated_videos)
+        "Step 3 complete: %d attraction video(s) produced.", len(generated_videos)
     )
     return generated_videos

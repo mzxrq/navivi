@@ -101,7 +101,13 @@ class GPSParser:
         ])
 
         try:
-            result = subprocess.run(command, capture_output=True, text=True, timeout=self.TIMEOUT_SECONDS)
+            result = subprocess.run(
+                command,
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=self.TIMEOUT_SECONDS,
+            )
         except subprocess.TimeoutExpired: 
             logger.error(f"GPSBabel conversion timed out for file: {input_file}")
             raise TimeoutError(f"GPSBabel conversion timed out for file: {input_file}")

@@ -313,8 +313,28 @@ def test_attraction_video(
         output_filename=output_filename,
     )
     if not result_path:
+        # A waypoint with multiple popup images doesn't auto-combine
+        # anymore — process_attraction_video parks the raw clips in a
+        # pending manifest instead and returns None. That's not a failure;
+        # distinguish it from a real one by checking whether the manifest
+        # actually exists.
+        manifest_path = generator._pending_manifest_path(output_filename)
+        if manifest_path.exists():
+            with open(manifest_path, "r", encoding="utf-8") as f:
+                manifest = json.load(f)
+            return {
+                "success": True,
+                "pending": True,
+                "clip_paths": manifest.get("clip_paths", []),
+                "output_filename": output_filename,
+                "audio_path": audio_path,
+                "message": (
+                    "Multiple clips generated but not yet combined — call "
+                    "attraction-finalize once approved."
+                ),
+            }
         raise RuntimeError(f"Attraction video generation failed for waypoint {waypoint_index}")
-    return {"success": True, "video_path": result_path, "audio_path": audio_path}
+    return {"success": True, "pending": False, "video_path": result_path, "audio_path": audio_path}
 
 
 def test_attraction_videos(
@@ -331,7 +351,70 @@ def test_attraction_videos(
             str(config_path), output_video_dir, waypoint_index=index
         )
         results.append({"index": index, **result})
-    return {"success": True, "video_paths": [item["video_path"] for item in results], "results": results}
+    return {
+        "success": True,
+        "video_paths": [
+            item["video_path"] for item in results if not item.get("pending")
+        ],
+        "pending_indices": [
+            item["index"] for item in results if item.get("pending")
+        ],
+        "results": results,
+    }
+
+
+def test_attraction_finalize(
+    job_config_path: str,
+    output_video_dir: str = None,
+    waypoint_index: int = 0,
+) -> Dict[str, Any]:
+    """Combines a waypoint's pending (already-generated but not yet
+    combined) attraction clips into the final deliverable. Call this once
+    the frontend has reviewed the individual clips and approved combining
+    them — the automatic pipeline / test_attraction_video no longer does
+    this on its own for multi-image waypoints."""
+    config_path, waypoints = _load_tts_waypoints(job_config_path)
+    if waypoint_index < 0 or waypoint_index >= len(waypoints):
+        raise IndexError(
+            f"waypoint_index must be between 0 and {len(waypoints) - 1}, "
+            f"got {waypoint_index}"
+        )
+
+    waypoint = waypoints[waypoint_index]
+    label = waypoint.get("label", f"Waypoint {waypoint_index + 1}") if isinstance(waypoint, dict) else f"Waypoint {waypoint_index + 1}"
+
+    from services.config.job_config import JobConfigManager
+    from services.vdoprocessing.img2vdo import AttractionVideoGenerator
+
+    output_dir = Path(output_video_dir or (config_path.parent / "video"))
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_filename = (
+        f"04_attraction_{waypoint_index:02d}_"
+        f"{_video_safe_label(label, f'waypoint_{waypoint_index}')}.mp4"
+    )
+
+    generator = AttractionVideoGenerator(JobConfigManager(config_path))
+    generator.output_dir = output_dir
+
+    manifest_path = generator._pending_manifest_path(output_filename)
+    if not manifest_path.exists():
+        raise FileNotFoundError(
+            f"No pending clips found for waypoint {waypoint_index} "
+            f"(expected manifest at {manifest_path}). Generate it first via "
+            f"the 'attraction' mode."
+        )
+
+    with open(manifest_path, "r", encoding="utf-8") as f:
+        manifest = json.load(f)
+
+    result_path = generator.finalize_pending_video(
+        clip_paths=manifest.get("clip_paths", []),
+        target_audio_duration=manifest.get("target_audio_duration", 0.0),
+        output_filename=manifest.get("output_filename", output_filename),
+    )
+    if not result_path:
+        raise RuntimeError(f"Finalizing attraction video failed for waypoint {waypoint_index}")
+    return {"success": True, "video_path": result_path, "audio_path": manifest.get("audio_path")}
 
 
 def _subtitle_audio_path(config_path: Path, waypoint_index: int, label: Any) -> Path:
@@ -549,7 +632,8 @@ if __name__ == "__main__":
         print(
             "Usage: python main.py <path/to/job_config.json> [output_dir] "
             "[gps|overview|residential|tts|tts-all|attraction|attraction-all|"
-            "subtitle|subtitle-all|concat|transition|all] [waypoint_index]\n"
+            "attraction-finalize|subtitle|subtitle-all|concat|transition|all] "
+            "[waypoint_index]\n"
             "       python main.py full_pipeline <source_path> [output_dir]\n"
             "       python main.py render_timeline <timeline.json> [output_video]",
             file=sys.stderr,
@@ -595,6 +679,11 @@ if __name__ == "__main__":
                 )
             elif mode_arg == "attraction-all":
                 result = test_attraction_videos(job_config_arg, output_dir_arg)
+            elif mode_arg == "attraction-finalize":
+                waypoint_index_arg = int(sys.argv[4]) if len(sys.argv) > 4 else 0
+                result = test_attraction_finalize(
+                    job_config_arg, output_dir_arg, waypoint_index_arg
+                )
             elif mode_arg == "subtitle":
                 waypoint_index_arg = int(sys.argv[4]) if len(sys.argv) > 4 else 0
                 result = test_subtitle(

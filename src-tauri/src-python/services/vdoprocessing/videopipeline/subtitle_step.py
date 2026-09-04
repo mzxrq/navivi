@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+from tqdm import tqdm
+
 from services.vdoprocessing.vdoexporter import VideoExporter
 
 from .helpers import logger
@@ -12,7 +14,7 @@ def burn_subtitles(
 ) -> list[str]:
     """Step 5: Permanently burns SRT subtitles onto the finished video files."""
     logger.info("Step 5: Burning subtitles into %d video(s).", len(video_paths))
-    print(f"\n[Step 5/5] Burning Subtitles and Finalizing Videos...")
+    tqdm.write(f"[Step 5/5] Burning Subtitles and Finalizing Videos...")
 
     final_videos = []
 
@@ -26,8 +28,8 @@ def burn_subtitles(
                 / f"{original_file.stem}_subtitled{original_file.suffix}"
             )
 
-            print(
-                f"    Processing file [{idx + 1}/{len(video_paths)}]: {original_file.name}"
+            tqdm.write(
+                f"   -> Processing file [{idx + 1}/{len(video_paths)}]: {original_file.name}"
             )
 
             logger.info(
@@ -44,7 +46,7 @@ def burn_subtitles(
                 )
                 final_videos.append(result)
             except Exception as e:
-                print(f"     Failed to burn subtitle for {original_file.name}: {e}")
+                tqdm.write(f"   !! Failed to burn subtitle for {original_file.name}: {e}")
 
                 logger.error(
                     "Step 5: [%d/%d] Failed to burn subtitle for '%s': %s",
@@ -55,8 +57,8 @@ def burn_subtitles(
                 )
                 final_videos.append(video_path)
         else:
-            print(
-                f"    Passing through video file [{idx + 1}/{len(video_paths)}]: {original_file.name}"
+            tqdm.write(
+                f"   -> Passing through video file [{idx + 1}/{len(video_paths)}]: {original_file.name}"
             )
 
             logger.info(
