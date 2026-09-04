@@ -5,7 +5,9 @@ overview and waypoint maps, split by concern:
 - pins.py: waypoint pin coloring, declutter fan-out, drawing (_PinMixin)
 - popups.py: flow-through popup layout, baked-popup lifecycle, recap frame (_PopupMixin)
 - transitions.py: cut/fade + blur-out transitions, recap/summary, ending highlight (_TransitionMixin)
-- overview.py: render_overview — the full-route animation entry point (_OverviewRenderMixin)
+- overview_pacing.py: mode-breakpoint lookup + speed-weighted path building (_OverviewPacingMixin)
+- overview_animation.py: the overview's frame-by-frame animation loop (_OverviewAnimationMixin)
+- overview.py: render_overview — setup + wrap-up orchestration around the above (_OverviewRenderMixin)
 - waypoints.py: render_waypoints — the per-residential-leg entry point (_WaypointRenderMixin)
 
 `SpatialRenderer` composes all of the above, preserving the exact same
@@ -14,6 +16,8 @@ method set/behavior as the original single-file class.
 
 from .base import _SpatialRendererBase
 from .overview import _OverviewRenderMixin
+from .overview_animation import _OverviewAnimationMixin
+from .overview_pacing import _OverviewPacingMixin
 from .pins import _PinMixin
 from .popups import _PopupMixin
 from .transitions import _TransitionMixin
@@ -22,6 +26,8 @@ from .waypoints import _WaypointRenderMixin
 
 class SpatialRenderer(
     _OverviewRenderMixin,
+    _OverviewAnimationMixin,
+    _OverviewPacingMixin,
     _WaypointRenderMixin,
     _TransitionMixin,
     _PinMixin,

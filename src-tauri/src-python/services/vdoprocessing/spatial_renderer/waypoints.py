@@ -12,58 +12,6 @@ from services.vdoprocessing.vdoexporter import VideoExporter
 
 
 class _WaypointRenderMixin:
-    def _draw_reference_hud(
-        self,
-        frame: np.ndarray,
-        destination_label: str,
-        destination_image: str,
-    ) -> None:
-        """Draw the compact destination banner and thumbnail used by 2D legs."""
-        h, w = frame.shape[:2]
-        label = str(destination_label or "Destination")
-        font_scale = max(0.55, self.graphics.font_size / 32.0)
-        text_size, _ = cv2.getTextSize(label, self.graphics.font_cv, font_scale, 2)
-        pill_w = min(w - 40, max(220, text_size[0] + 90))
-        pill_h = 58
-        pill_x = (w - pill_w) // 2
-        pill_y = 18
-        cv2.rectangle(
-            frame,
-            (pill_x + pill_h // 2, pill_y),
-            (pill_x + pill_w - pill_h // 2, pill_y + pill_h),
-            (35, 55, 225),
-            -1,
-            cv2.LINE_AA,
-        )
-        cv2.circle(frame, (pill_x + pill_h // 2, pill_y + pill_h // 2), pill_h // 2, (35, 55, 225), -1)
-        cv2.circle(
-            frame,
-            (pill_x + pill_w - pill_h // 2, pill_y + pill_h // 2),
-            pill_h // 2,
-            (35, 55, 225),
-            -1,
-        )
-        cv2.putText(
-            frame,
-            label,
-            (pill_x + (pill_w - text_size[0]) // 2, pill_y + 37),
-            self.graphics.font_cv,
-            font_scale,
-            (255, 255, 255),
-            2,
-            cv2.LINE_AA,
-        )
-
-        if destination_image:
-            image = self.graphics.read_image_safe(destination_image)
-            if image is not None:
-                thumb_w, thumb_h = 112, 76
-                image = cv2.resize(image, (thumb_w, thumb_h))
-                x, y = 34, 34
-                cv2.rectangle(frame, (x - 4, y - 4), (x + thumb_w + 4, y + thumb_h + 4), (255, 255, 255), -1)
-                cv2.rectangle(frame, (x - 5, y - 5), (x + thumb_w + 5, y + thumb_h + 5), (35, 55, 225), 2)
-                frame[y : y + thumb_h, x : x + thumb_w] = image
-
     def render_waypoints(self, res_sequence: List[Dict], fps: int) -> List[str]:
         output_paths = []
         show_segment_summary = self.config.get("show_segment_summary", True)
@@ -93,24 +41,39 @@ class _WaypointRenderMixin:
                 h, w = h - (h % 2), w - (w % 2)
                 current_bg = cv2.resize(current_bg, (w, h))
 
+            show_map_border = self.config.get("waypoint_map_border", True)
+            if show_map_border:
+                self.graphics.draw_frame_border(current_bg)
+
             res_points = res_data["points"]
             res_labels = res_data["labels"]
             res_popups = res_data.get("popups", [None] * len(res_points))
             res_mode = str(res_data.get("mode", "walking")).lower()
-            destination_popup = next(
-                (popup for popup in reversed(res_popups) if popup is not None), None
-            )
-            destination_label = res_labels[-1] if res_labels else "Destination"
-            destination_image = (
-                str(destination_popup.get("popup_image"))
-                if destination_popup and destination_popup.get("popup_image")
-                else ""
-            )
 
             total_duration = res_data.get(
                 "segment_duration", self.config.get("res_duration", 12.0)
             )
             travel_duration = res_data.get("travel_duration", total_duration)
+            # "real_duration_seconds" is explicitly 0.0 (not absent) when
+            # the chunk has no timestamp data — showed no time at all on
+            # the summary card. Falling back to total_duration/
+            # travel_duration would be wrong here: those are the leg's
+            # ANIMATION length in video-seconds, not a real-world travel
+            # time, and showing e.g. "6 sec" for a real ferry ride (or the
+            # nonsense speed that implies) is worse than an estimate.
+            # Instead, estimate real-world time from this leg's own
+            # distance and its mode's configured speed — the same
+            # distance/speed relationship the rest of the pipeline already
+            # uses for mode-aware pacing.
+            seg_real_duration = res_data.get("real_duration_seconds") or 0.0
+            if seg_real_duration <= 0:
+                seg_distance_km = res_data.get("distance_km", 0.0)
+                if seg_distance_km > 0:
+                    fallback_speed = self.mode_speed_kmh.get("walking", 5.0) or 5.0
+                    speed_kmh = self.mode_speed_kmh.get(res_mode, fallback_speed) or fallback_speed
+                    seg_real_duration = (seg_distance_km / speed_kmh) * 3600.0
+                else:
+                    seg_real_duration = total_duration
             pauses = res_data.get("pauses", [])
 
             total_frames = max(10, int(total_duration * fps))
@@ -139,7 +102,14 @@ class _WaypointRenderMixin:
             actual_travel_seconds = max(1.0, travel_duration - total_pause_seconds)
 
             res_smooth_path = MapFetcher.get_smooth_path(
-                filtered_res, max(2, int(actual_travel_seconds * fps)), ease=True
+                filtered_res,
+                max(2, int(actual_travel_seconds * fps)),
+                ease=True,
+                # Real routed geometry (e.g. from .routecache.json) carries
+                # small GPS/routing jitter that the default 3px tolerance
+                # barely touches — a noticeably looser tolerance smooths
+                # that out into a cleaner line without cutting real turns.
+                simplify_tolerance_px=6.0,
             )
 
             res_named = [
@@ -153,6 +123,7 @@ class _WaypointRenderMixin:
                     "y": res_points[j][1],
                     "data": res_popups[j],
                     "label": res_labels[j],
+                    "index": j,
                 }
                 for j in range(len(res_points))
                 if res_popups[j] is not None
@@ -189,10 +160,47 @@ class _WaypointRenderMixin:
             chunk_filename = f"02_waypoint_{i + 1:02d}_{safe_suffix}.mp4"
 
             video = VideoExporter(str(self.out_dir / chunk_filename), w, h, fps)
+
+            # Intro beat: show the departure and arrival pins (each with a
+            # leader-lined popup card, when they have a photo) together on
+            # the still, zoomed-in leg map before the route animates —
+            # mirrors render_overview()'s "preview every stop up front"
+            # intro, scoped to this leg's own start/end.
+            waypoint_intro_freeze = float(self.config.get("waypoint_intro_freeze", 2.0))
+            if waypoint_intro_freeze > 0 and len(res_points) >= 2:
+                intro_frame = current_bg.copy()
+                end_idx = len(res_points) - 1
+                start_wp = {
+                    "x": res_points[0][0],
+                    "y": res_points[0][1],
+                    "index": 0,
+                    "label": res_labels[0] if res_labels else "",
+                    "data": res_popups[0] or {},
+                }
+                end_wp = {
+                    "x": res_points[-1][0],
+                    "y": res_points[-1][1],
+                    "index": end_idx,
+                    "label": res_labels[-1] if res_labels else "",
+                    "data": res_popups[-1] or {},
+                }
+                self._draw_pin(intro_frame, start_wp, 1, len(res_points))
+                self._draw_pin(intro_frame, end_wp, 2, len(res_points))
+                for wp in (start_wp, end_wp):
+                    if wp["data"].get("popup_image"):
+                        popup_card = dict(wp)
+                        popup_card["hud_corner"] = None
+                        popup_card["draw_leader_line"] = True
+                        intro_frame = self.graphics.render_popup_box(intro_frame, popup_card)
+                for _ in range(int(waypoint_intro_freeze * fps)):
+                    video.write(intro_frame)
+                self.last_frame = intro_frame
+
             path_idx = 0
             prev_cx, prev_cy = None, None
-            smoothed_angle = 0.0
+            smoothed_angle = self._initial_heading(res_smooth_path)
             ended_at_destination = False
+            summary_shown_inline = False
             arrival_hold_seconds = max(
                 1.0, min(2.0, float(self.post_arrival_hold_seconds))
             )
@@ -212,6 +220,8 @@ class _WaypointRenderMixin:
                         if vid_frame.shape[0] != h or vid_frame.shape[1] != w:
                             vid_frame = cv2.resize(vid_frame, (w, h))
                         current_bg = vid_frame
+                        if show_map_border:
+                            self.graphics.draw_frame_border(current_bg)
 
                 p = res_smooth_path[path_idx]
                 frame = current_bg.copy()
@@ -260,12 +270,17 @@ class _WaypointRenderMixin:
                             color=self._END_PIN_COLOR,
                         )
 
-                    self._draw_reference_hud(
-                        frame, destination_label, destination_image
-                    )
-
                 for popup in active_res_popups:
                     if popup["data"]["triggered"]:
+                        continue
+                    # The departure pin's popup was already shown in the
+                    # intro beat before the animation started — without
+                    # this, the traveler starting right on top of it
+                    # triggers it again within the first few frames (it's
+                    # well inside the trigger radius from frame 1), ending
+                    # the clip almost immediately instead of animating to
+                    # the actual destination.
+                    if popup["index"] == 0:
                         continue
                     near_segment = (
                         prev_cx is not None
@@ -280,39 +295,81 @@ class _WaypointRenderMixin:
                     )
                     if near_segment or just_arrived:
                         popup["data"]["triggered"] = True
-                        if popup["data"].get("image_display") == "fullscreen":
-                            fullscreen_popup = {
-                                **popup,
-                                "data": {
-                                    **popup["data"],
-                                    # Keep the destination beat short and make
-                                    # the fullscreen reveal the clip ending.
-                                    "freeze_seconds": arrival_hold_seconds,
+                        # Hold plain on the arrival frame for a beat before
+                        # any fade/scale transition starts — without this,
+                        # the fullscreen scale-up (or the cinematic-pause
+                        # fade) kicked in the instant the traveler reached
+                        # the pin, reading as an abrupt cut rather than
+                        # "arrived, then transitioning".
+                        for _ in range(max(1, int(arrival_hold_seconds * fps))):
+                            video.write(frame)
+
+                        # Show the segment summary (this leg's own travel
+                        # mode, distance, and time spent) on the plain
+                        # arrival frame first, hold it, then fade it back
+                        # off — BEFORE the popup/fullscreen transition, not
+                        # composited onto the destination photo afterward.
+                        if show_segment_summary:
+                            summary_shown_inline = True
+                            seg_card = self.graphics.create_summary_card(
+                                distance_km=res_data.get("distance_km", 0.0),
+                                duration_seconds=seg_real_duration,
+                                mode_breakdown={
+                                    res_mode: res_data.get("distance_km", 0.0)
                                 },
-                            }
-                            self.graphics.play_fullscreen_popup_sequence(
-                                video=video,
-                                base_frame=frame,
-                                popup_info=fullscreen_popup,
-                                fps=fps,
-                                transition_cfg=self.transition_cfg,
-                                exit_frame=frame,
+                                mode_duration={res_mode: seg_real_duration},
+                                card_size=(480, 170),
                             )
-                            ended_at_destination = True
-                        else:
-                            total_f = max(1, int(arrival_hold_seconds * fps))
-                            fade_f = min(int(0.25 * fps), total_f // 3)
-                            cinematic_frame = self.graphics.render_cinematic_pause(
-                                frame, popup
+                            card_fade_frames = max(1, int(fade_sec * fps))
+                            for f in range(card_fade_frames):
+                                video.write(
+                                    self.graphics.composite_card_on_frame(
+                                        frame, seg_card, alpha=(f + 1) / card_fade_frames
+                                    )
+                                )
+                            card_frame = self.graphics.composite_card_on_frame(
+                                frame, seg_card, alpha=1.0
                             )
-                            self.graphics.write_fade_clip(
-                                video, frame, cinematic_frame, total_f, fade_f
-                            )
-                            ended_at_destination = True
+                            for _ in range(
+                                max(0, int(clip_hold_sec * fps) - card_fade_frames)
+                            ):
+                                video.write(card_frame)
+                            for f in range(card_fade_frames):
+                                video.write(
+                                    self.graphics.composite_card_on_frame(
+                                        frame,
+                                        seg_card,
+                                        alpha=1.0 - (f + 1) / card_fade_frames,
+                                    )
+                                )
+
+                        # Every arrival now transitions the same way —
+                        # scale-up-with-blur straight to fullscreen, then
+                        # cut — regardless of this waypoint's own
+                        # image_display setting. The old "box" style
+                        # (blurred-background cinematic pause + fade) is
+                        # gone; only the freeze_seconds duration differs.
+                        arrival_popup = {
+                            **popup,
+                            "data": {
+                                **popup["data"],
+                                "freeze_seconds": arrival_hold_seconds,
+                            },
+                        }
+                        end_frame, _ = self.graphics.play_fullscreen_popup_sequence(
+                            video=video,
+                            base_frame=frame,
+                            popup_info=arrival_popup,
+                            fps=fps,
+                            transition_cfg=self.transition_cfg,
+                            exit_frame=frame,
+                        )
+                        self.last_frame = end_frame
+                        ended_at_destination = True
 
                 if not ended_at_destination:
                     video.write(frame)
-                self.last_frame = frame
+                    self.last_frame = frame
                 prev_cx, prev_cy = cx, cy
                 if ended_at_destination:
                     break
@@ -321,20 +378,17 @@ class _WaypointRenderMixin:
                 for _ in range(int(arrival_hold_seconds * fps)):
                     video.write(self.last_frame)
 
-            if ended_at_destination:
-                video_path = video.release(str(self.out_dir / chunk_filename))
-                output_paths.append(video_path)
-                if cap:
-                    cap.release()
-                continue
-
-            if show_segment_summary:
+            # Fallback for a leg whose destination has no popup at all (so
+            # the block above never ran) — same summary card, shown once
+            # at the very end instead of before a transition that doesn't
+            # happen here.
+            if show_segment_summary and not summary_shown_inline:
                 seg_card = self.graphics.create_summary_card(
                     distance_km=res_data.get("distance_km", 0.0),
-                    duration_seconds=res_data.get(
-                        "real_duration_seconds", total_duration
-                    ),
-                    card_size=(480, 110),
+                    duration_seconds=seg_real_duration,
+                    mode_breakdown={res_mode: res_data.get("distance_km", 0.0)},
+                    mode_duration={res_mode: seg_real_duration},
+                    card_size=(480, 170),
                 )
                 fade_frames = max(1, int(fade_sec * fps))
                 for f in range(fade_frames):

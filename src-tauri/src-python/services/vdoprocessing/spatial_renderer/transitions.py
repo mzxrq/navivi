@@ -8,27 +8,49 @@ import numpy as np
 
 from services.mapfetcher.mapgeometry import RouteGeometryProcessor
 from services.vdoprocessing.vdoexporter import VideoExporter
+from services import tuning
 
 
 class _TransitionMixin:
     @staticmethod
-    def _cut_fade_transition(
+    def _ken_burns_hold(
         video: VideoExporter,
-        from_frame: np.ndarray,
-        to_frame: np.ndarray,
+        frame: np.ndarray,
         fps: int,
-        duration_sec: float = 0.8,
-    ) -> None:
-        """Jump cut then fade: writes `from_frame` once more (the cut),
-        then a plain crossfade dissolve into `to_frame` — no push/zoom
-        motion, since `to_frame` is a different, non-geo-aligned image
-        (a freshly fetched higher-zoom map) that a zoom/pan would not
-        actually be zooming "into"."""
-        video.write(from_frame)
+        duration_sec: float,
+        zoom_cx: float,
+        zoom_cy: float,
+        zoom_from: float = 1.0,
+        zoom_to: float = 1.18,
+    ) -> np.ndarray:
+        """Slow, continuous zoom-in on `frame` itself while it's held on
+        screen (the classic Ken Burns photo effect), toward (zoom_cx,
+        zoom_cy), instead of holding one static frame. No second image
+        involved and no cut/fade to build or align — `frame` is already
+        the genuinely higher-zoom, freshly fetched tile, so this is just
+        motion added to what's already on screen. Kept to a modest zoom
+        range (well under 2x) so the source stays crisp — it's magnifying
+        pixels that are already there, so a large zoom would soften
+        visibly, but this range doesn't. Returns the final (most-zoomed)
+        frame written, so a later hold can continue the zoom from there."""
+        h, w = frame.shape[:2]
         n = max(1, int(duration_sec * fps))
+        last = frame
         for i in range(n):
-            alpha = (i + 1) / n
-            video.write(cv2.addWeighted(to_frame, alpha, from_frame, 1 - alpha, 0))
+            progress = i / max(1, n - 1)
+            zoom = zoom_from + (zoom_to - zoom_from) * progress
+            crop_w, crop_h = w / zoom, h / zoom
+            cx = min(max(zoom_cx, crop_w / 2), w - crop_w / 2)
+            cy = min(max(zoom_cy, crop_h / 2), h - crop_h / 2)
+            x0, y0 = int(cx - crop_w / 2), int(cy - crop_h / 2)
+            x1, y1 = int(x0 + crop_w), int(y0 + crop_h)
+            x0, y0 = max(0, x0), max(0, y0)
+            x1, y1 = min(w, x1), min(h, y1)
+            last = cv2.resize(
+                frame[y0:y1, x0:x1], (w, h), interpolation=cv2.INTER_CUBIC
+            )
+            video.write(last)
+        return last
 
     def _blur_out(
         self, video: VideoExporter, frame: np.ndarray, fps: int, duration_sec: float = 0.5
@@ -114,7 +136,23 @@ class _TransitionMixin:
     # How long to hold the higher-zoom map (with its marker + leader-lined
     # popup) before handing off to the fullscreen photo transition — the
     # "switch to higher map, then wait a bit" beat.
-    _ENDING_HIGHLIGHT_WAIT_SECONDS = 1.5
+    # Timing/zoom values below live in services/tuning.py — the shared home
+    # for hand-tunable constants across spatial_renderer + graphicengine.
+    _ENDING_HIGHLIGHT_WAIT_SECONDS = tuning.ENDING_HIGHLIGHT_WAIT_SECONDS
+
+    # How long to push in on the CURRENT wide map (before cutting to the
+    # freshly fetched close-up tile) so the highlight beat reads as
+    # "zooming FROM the big map INTO the start point" rather than a
+    # close-up simply appearing. Longer duration = smaller per-frame zoom
+    # step at the same fps = a smoother push, less of a "skip" feel right
+    # up to the cut.
+    _BIG_MAP_ZOOM_LEAD_SECONDS = tuning.BIG_MAP_ZOOM_LEAD_SECONDS
+    # How far that lead-in push zooms in, before the cut — pushed further
+    # in than before (1.9x) so the map is already close to the residential
+    # sequence's own zoom level by the time it cuts, rather than stopping
+    # at a middling zoom and leaving a second, more noticeable jump for the
+    # residential clip that follows this video.
+    _BIG_MAP_ZOOM_TARGET = tuning.BIG_MAP_ZOOM_TARGET
 
     def _render_ending_highlight(
         self,
@@ -124,17 +162,30 @@ class _TransitionMixin:
         fps: int,
         stop_popup: Dict,
         start_popup: Optional[Dict] = None,
+        clean_map_frame: Optional[np.ndarray] = None,
     ) -> bool:
-        """End-of-video highlight: cut+fade from the recap into a freshly
-        fetched, genuinely higher-zoom map centered on the trip's START
-        point — with its own marker and a leader-lined popup, featuring
-        the start waypoint's own photo — then, after a short hold, hand
-        off to a fullscreen photo transition (if that waypoint's
+        """End-of-video highlight: a hard cut (no transition) from the
+        recap straight to a freshly fetched, genuinely higher-zoom map
+        centered on the trip's START point — with its own marker and a
+        leader-lined popup, featuring the start waypoint's own photo —
+        then, while it's held, a slow continuous Ken Burns zoom-in on that
+        same image (rather than a static freeze), before handing off to a
+        fullscreen photo transition (if that waypoint's
         image_display is "fullscreen") or just hold on the pip card. A
         "callback to where the journey began" reveal to close the video,
         rather than repeating the end waypoint's own photo (already shown
         in the recap). Falls back to the end waypoint/point if there's no
         start one available.
+
+        The highlight beat itself opens with a lead-in push toward the same
+        point on `clean_map_frame` — a plain map+route+pins plate with no
+        popup cards or the summary stat card baked in (pass the recap's own
+        pre-popup-card frame here; falls back to self.last_frame, cards and
+        all, if not given) — before the hard cut to the freshly fetched
+        close-up tile. Zooming on the clean plate rather than self.last_frame
+        (which by this point has every waypoint's leader-lined photo card
+        AND the summary card composited on top) keeps that lead-in a plain
+        map push instead of dragging a screenful of cards along with it.
 
         Returns True if the fullscreen photo transition played and the
         caller should treat this as the video's hard ending (write nothing
@@ -172,6 +223,19 @@ class _TransitionMixin:
         )
 
         featured_popup = start_popup or stop_popup
+
+        # Lead-in: push in on the clean map plate (no cards on it — see the
+        # docstring above), toward the same point, BEFORE cutting to the
+        # close-up tile — this is the "zoom from the big map" half of the
+        # beat; the cut below and the _ken_burns_hold after it are the
+        # "into the waypoint start" half.
+        lead_in_source = clean_map_frame if clean_map_frame is not None else self.last_frame
+        self.last_frame = self._ken_burns_hold(
+            video, lead_in_source, fps, self._BIG_MAP_ZOOM_LEAD_SECONDS,
+            featured_popup["x"], featured_popup["y"],
+            zoom_from=1.0, zoom_to=self._BIG_MAP_ZOOM_TARGET,
+        )
+
         highlight_popup = featured_popup.copy()
         highlight_popup["data"] = featured_popup["data"].copy()
         highlight_popup["x"], highlight_popup["y"] = px, py
@@ -185,10 +249,18 @@ class _TransitionMixin:
         self._layout_beside_popups([{"popup": highlight_popup, "frames_left": 1}], w, h)
         highlight_frame = self.graphics.render_popup_box(highlight_bg, highlight_popup)
 
-        self._cut_fade_transition(video, self.last_frame, highlight_frame, fps)
-        for _ in range(int(self._ENDING_HIGHLIGHT_WAIT_SECONDS * fps)):
-            video.write(highlight_frame)
-        self.last_frame = highlight_frame
+        # Hard cut straight to the highlight — no transition connecting
+        # the two shots — then a slow Ken Burns zoom-in while it's held,
+        # toward the same point (featured_popup's own x/y, untouched by
+        # highlight_popup's copy above, which overwrites its OWN x/y with
+        # px/py in the new highlight image's space) rather than a static
+        # freeze.
+        zoomed_end = self._ken_burns_hold(
+            video, highlight_frame, fps, self._ENDING_HIGHLIGHT_WAIT_SECONDS,
+            featured_popup["x"], featured_popup["y"],
+            zoom_from=1.0, zoom_to=1.18,
+        )
+        self.last_frame = zoomed_end
 
         if (
             self.enable_fullscreen_popups
@@ -197,7 +269,7 @@ class _TransitionMixin:
             scale_sec = self.transition_cfg["scale_seconds"]
             hold_sec = self.transition_cfg["min_hold_seconds"]
             t_frames = self.graphics.generate_fullscreen_popup_transition(
-                base_frame=highlight_frame,
+                base_frame=zoomed_end,
                 popup_info=highlight_popup,
                 fps=fps,
                 duration_sec=scale_sec,
@@ -221,6 +293,12 @@ class _TransitionMixin:
                 return True
         else:
             highlight_hold_sec = float(highlight_popup["data"].get("freeze_seconds", 3.0))
-            for _ in range(int(highlight_hold_sec * fps)):
-                video.write(highlight_frame)
+            # Continue the same zoom further rather than resetting to a
+            # static hold — one continuous push for the whole highlight
+            # beat instead of a moving bit followed by a frozen bit.
+            self.last_frame = self._ken_burns_hold(
+                video, highlight_frame, fps, highlight_hold_sec,
+                featured_popup["x"], featured_popup["y"],
+                zoom_from=1.18, zoom_to=1.35,
+            )
         return False

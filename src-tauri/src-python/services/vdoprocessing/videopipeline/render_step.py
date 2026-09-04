@@ -22,6 +22,7 @@ from .helpers import (
     DEFAULT_MAP_BACKGROUND,
     _build_point_modes,
     _project_route_to_pixels,
+    _resolve_leg_geometry_from_cache,
     logger,
 )
 
@@ -110,6 +111,33 @@ def render_route_video(
 
     point_modes = _build_point_modes(len(route_points), wp_indices, waypoints, routing_cache)
 
+    # Real-world REPORTED speed per travel mode — what the summary card's
+    # per-mode duration breakdown is estimated from. Kept separate from
+    # animation_speed_kmh below (used to weight on-screen time) so a
+    # realistic, honest walking speed here doesn't also drag the walking
+    # leg's on-screen animation out longer — see SpatialRenderer's
+    # _DEFAULT_ANIMATION_SPEED_KMH for why those need to differ.
+    mode_speed_kmh = {
+        **SpatialRenderer._DEFAULT_MODE_SPEED_KMH,
+        **{
+            str(k).lower(): float(v)
+            for k, v in (settings.get("mode_speeds_kmh") or {}).items()
+        },
+    }
+    # Speed used only to weight each residential leg's ON-SCREEN duration
+    # (see seg_durations further down) — not shown anywhere as a stat, so
+    # it's free to run faster than the reported speed above for modes
+    # (walking) that would otherwise visibly crawl relative to a fast
+    # ferry/car leg.
+    animation_speed_kmh = {
+        **mode_speed_kmh,
+        **SpatialRenderer._DEFAULT_ANIMATION_SPEED_KMH,
+        **{
+            str(k).lower(): float(v)
+            for k, v in (settings.get("animation_speeds_kmh") or {}).items()
+        },
+    }
+
     mode_breakdown: dict[str, float] = {}
     mode_duration: dict[str, float] = {}
     total_distance_km = 0.0
@@ -127,17 +155,11 @@ def render_route_video(
         # (distance / speed), not raw GPS timestamps — the recorded track
         # often has stops/pauses baked into its timestamps (e.g. a long
         # lunch break during "walking") that would otherwise inflate the
-        # summary card's duration well past what the video's own
-        # mode-based animation speed implies. This keeps the on-screen
-        # numbers consistent with the same speeds driving playback pacing
-        # (see SpatialRenderer._mode_speed_factor).
-        mode_speed_kmh = {
-            **SpatialRenderer._DEFAULT_MODE_SPEED_KMH,
-            **{
-                str(k).lower(): float(v)
-                for k, v in (settings.get("mode_speeds_kmh") or {}).items()
-            },
-        }
+        # summary card's duration well past a realistic estimate. Uses
+        # mode_speed_kmh (the REPORTED speed), not animation_speed_kmh —
+        # the on-screen pace (SpatialRenderer._mode_speed_factor) is
+        # allowed to run faster than this for modes like walking, so the
+        # two intentionally diverge rather than staying "consistent".
         for mode, dist_km in mode_breakdown.items():
             speed = mode_speed_kmh.get(mode) or mode_speed_kmh.get("car", 70.0)
             if speed > 0:
@@ -220,9 +242,38 @@ def render_route_video(
 
     # 4. Process Residential Sequence (3D Bypass vs 2D Generation)
     res_sequence = []
+    # One travel mode per leg (same resolution order render_route_video
+    # itself uses further down for each res_sequence entry: the waypoint's
+    # own routeMode, else the GPS-derived point_modes at that leg's start)
+    # so compute_segment_durations can weight each leg's on-screen time by
+    # real-world speed instead of raw distance alone — otherwise a long,
+    # fast ferry crossing gets allocated MORE screen time than a short
+    # walking leg, the opposite of how it should feel.
+    seg_modes = []
+    for seg_i in range(max(0, len(wp_indices) - 1)):
+        leg_mode = (
+            str(waypoints[seg_i].get("routeMode", "")).lower()
+            if seg_i < len(waypoints)
+            else ""
+        )
+        if not leg_mode and wp_indices[seg_i] + 1 < len(point_modes):
+            leg_mode = point_modes[wp_indices[seg_i] + 1]
+        seg_modes.append(leg_mode or "walking")
+
     seg_durations = (
         MapFetcher.compute_segment_durations(
-            wp_indices, route_df, target_avg_seconds=20.0
+            wp_indices,
+            route_df,
+            target_avg_seconds=settings.get("res_target_avg_seconds", 14.0),
+            # Caps any single leg's on-screen time regardless of how long
+            # it is relative to its neighbors — without this, one
+            # unusually long-distance leg (e.g. several km of walking)
+            # could still drag on for a long time even after mode-speed
+            # weighting, since that weighting is only relative to the
+            # OTHER legs in the route.
+            max_segment_seconds=settings.get("res_max_segment_seconds", 16.0),
+            seg_modes=seg_modes,
+            mode_speeds_kmh=animation_speed_kmh,
         )
         if len(wp_indices) > 1
         else []
@@ -263,17 +314,32 @@ def render_route_video(
                 leg_mode = point_modes[start_idx + 1]
             leg_mode = leg_mode or "walking"
             if str(leg_mode).lower() == "ferry" and seq_idx + 1 < len(waypoints):
-                # Ferry routes returned by routing providers can snap to
-                # nearby roads. For the 2D residential view, represent a
-                # ferry crossing as the direct water crossing between stops.
                 start_wp, end_wp = waypoints[seq_idx], waypoints[seq_idx + 1]
-                ferry_count = max(2, min(120, end_idx - start_idx + 1))
-                ferry_lats = np.linspace(
-                    float(start_wp["lat"]), float(end_wp["lat"]), ferry_count
+                cached_geometry = _resolve_leg_geometry_from_cache(
+                    start_wp, end_wp, routing_cache
                 )
-                ferry_lons = np.linspace(
-                    float(start_wp["lng"]), float(end_wp["lng"]), ferry_count
-                )
+                if cached_geometry:
+                    # Use the actual routed ferry line from .routecache.json
+                    # (the same polyline the map UI itself draws) instead of
+                    # route_df's own GPS track for this leg, which for a
+                    # ferry crossing may be sparse/inaccurate.
+                    ferry_lats = np.asarray(
+                        [float(pt[0]) for pt in cached_geometry]
+                    )
+                    ferry_lons = np.asarray(
+                        [float(pt[1]) for pt in cached_geometry]
+                    )
+                else:
+                    # No cached route for this leg — fall back to the direct
+                    # water crossing between stops rather than whatever
+                    # (possibly road-snapped) path route_df happens to have.
+                    ferry_count = max(2, min(120, end_idx - start_idx + 1))
+                    ferry_lats = np.linspace(
+                        float(start_wp["lat"]), float(end_wp["lat"]), ferry_count
+                    )
+                    ferry_lons = np.linspace(
+                        float(start_wp["lng"]), float(end_wp["lng"]), ferry_count
+                    )
                 chunk = pd.DataFrame(
                     {"latitude": ferry_lats, "longitude": ferry_lons}
                 )
@@ -399,8 +465,8 @@ def render_route_video(
             ]
         },
         "line_color": tuple(settings.get("line_color", (243, 150, 33))),  # BGR blue
-        "marker_color": tuple(settings.get("marker_color", (0, 0, 255))),
-        "arrived_marker_color": tuple(settings.get("arrived_marker_color", (0, 0, 220))),
+        "marker_color": tuple(settings.get("marker_color", (235, 150, 60))),  # blue (BGR)
+        "arrived_marker_color": tuple(settings.get("arrived_marker_color", (200, 110, 30))),
         "trigger_radius_padding": settings.get("trigger_radius_padding", {}),
         "fullscreen_transition": settings.get("fullscreen_transition", {}),
         # Real-world average speed (km/h) per travel mode — how much
@@ -410,6 +476,7 @@ def render_route_video(
         # {"walking": 3, "car": 70, "ferry": 36} in job_config.json's
         # settings to override per project.
         "mode_speeds_kmh": settings.get("mode_speeds_kmh", {}),
+        "animation_speeds_kmh": settings.get("animation_speeds_kmh", {}),
     }
 
     animator = RouteAnimator(animator_config)

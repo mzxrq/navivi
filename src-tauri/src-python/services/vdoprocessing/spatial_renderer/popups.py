@@ -6,6 +6,8 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
+from services import tuning
+
 from .base import logger
 
 
@@ -15,9 +17,9 @@ class _PopupMixin:
         group: List[Dict],
         w: int,
         h: int,
-        card_w: int = 190,
-        card_h: int = 150,
-        margin: int = 30,
+        card_w: Optional[int] = None,
+        card_h: Optional[int] = None,
+        margin: int = 20,
         route_obstacles: Optional[np.ndarray] = None,
         max_radius: float = 260.0,
         reserved_boxes: Optional[List[Tuple[float, float, float, float]]] = None,
@@ -58,6 +60,14 @@ class _PopupMixin:
         would all seed from nearby positions and only fan out once they
         collide, leaving whole sides of the frame empty; ranking spreads
         them across the full width from the start."""
+        if card_w is None or card_h is None:
+            # Matches render_popup_box's actual drawn card size exactly
+            # (see beside_card_footprint) — a mismatch here is what let
+            # concurrently-visible cards visually overlap despite this
+            # layout step believing they didn't.
+            footprint_w, footprint_h = self.graphics.beside_card_footprint()
+            card_w = card_w if card_w is not None else footprint_w
+            card_h = card_h if card_h is not None else footprint_h
         placed: List[Tuple[float, float, float, float]] = list(reserved_boxes or [])
         route_x = route_obstacles[:, 0] if route_obstacles is not None else None
         route_y = route_obstacles[:, 1] if route_obstacles is not None else None
@@ -194,7 +204,7 @@ class _PopupMixin:
     # either an abrupt snap or a slow dissolve. Still capped per-popup (see
     # _make_baked_popup) to at most 40% of that popup's OWN display time on
     # each end, so a short leg doesn't end up all-fade with no solid hold.
-    _POPUP_FADE_SECONDS = 1.5
+    _POPUP_FADE_SECONDS = tuning.POPUP_FADE_SECONDS
 
     @classmethod
     def _make_baked_popup(cls, popup: Dict, display_seconds: float, fps: int) -> Dict:

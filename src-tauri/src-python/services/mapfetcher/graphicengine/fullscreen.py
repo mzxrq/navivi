@@ -7,7 +7,6 @@ from typing import Dict, List, Tuple
 import cv2
 import numpy as np
 
-from services.mapfetcher.mapgeometry import RouteGeometryProcessor
 from services.vdoprocessing.vdoexporter import VideoExporter
 
 from .base import logger
@@ -48,37 +47,17 @@ class _FullscreenMixin:
 
         hi_res_popup = cv2.resize(pop_img, (w, h))
 
-        target_img_w = 450
-        target_img_h = int(target_img_w / target_ratio)
-        border = 6
-        label_text = popup_info.get("label")
-
-        text_offset = (
-            cv2.getTextSize(label_text or "", self.font_cv, 0.6, 1)[0][1] + 15
-            if RouteGeometryProcessor.is_real_label(label_text)
-            else 0
+        # Same geometry render_popup_box itself used to draw the card this
+        # is scaling up from (including its beside_box, when the card was
+        # placed by _layout_beside_popups) — using a different box here
+        # (as this used to, with its own hardcoded size/position guesses)
+        # let the growing image start from a visibly different spot than
+        # the small card actually sat at.
+        box_x, box_y, total_w, total_h, border = self.popup_card_geometry(
+            popup_info, w, h
         )
-        total_w, total_h = target_img_w + (border * 2), target_img_h + (border * 2)
-        margin = 40
-        hud_corner = popup_info.get("hud_corner")
-        if hud_corner in self.HUD_CORNERS:
-            # Match render_popup_box's placement so the scale-up animation
-            # grows from the same spot the preceding pip card sat in,
-            # instead of jumping to a position near the map marker.
-            box_x, box_y = self._hud_corner_box(hud_corner, w, h, total_w, total_h)
-        else:
-            box_x = (
-                int(popup_info["x"]) - total_w - self.marker_radius - 4
-                if popup_info["x"] > w * 0.6
-                else int(popup_info["x"]) + self.marker_radius + 4
-            )
-            box_y = (
-                int(popup_info["y"]) + self.marker_radius + 10
-                if int(popup_info["y"]) - total_h - text_offset - 10 < margin
-                else int(popup_info["y"]) - total_h - text_offset - 10
-            )
-        box_x = max(margin, min(box_x, w - total_w - margin))
-        box_y = max(margin, min(box_y, h - total_h - margin))
+        target_img_w = total_w - border * 2
+        target_img_h = int(target_img_w / target_ratio)
 
         start_x, start_y = box_x + border, box_y + border
 
@@ -96,6 +75,16 @@ class _FullscreenMixin:
             frame = (frame * bg_fade).astype(np.uint8)
 
             resized_popup = cv2.resize(hi_res_popup, (curr_w, curr_h))
+
+            # Rack-focus blur: sharp at rest, blurred while mid-scale — the
+            # snap from small card to fullscreen reads as a deliberate
+            # whip/zoom rather than a plain resize. Blur strength eases out
+            # to 0 as the scale-up finishes.
+            blur_amount = int(31 * (1.0 - ease))
+            if blur_amount > 0:
+                k = blur_amount | 1  # cv2.GaussianBlur needs an odd kernel size
+                resized_popup = cv2.GaussianBlur(resized_popup, (k, k), 0)
+
             x0, y0 = max(0, curr_x), max(0, curr_y)
             x1, y1 = min(w, curr_x + curr_w), min(h, curr_y + curr_h)
             px0, py0 = x0 - curr_x, y0 - curr_y
@@ -105,12 +94,13 @@ class _FullscreenMixin:
                 frame[y0:y1, x0:x1] = resized_popup[py0:py1, px0:px1]
             frames.append(frame)
 
-        hold_frames_cnt = max(1, int(hold_sec * fps))
         full_screen_frame = frames[-1].copy() if frames else hi_res_popup.copy()
+
+        hold_frames_cnt = max(0, int(hold_sec * fps))
         for _ in range(hold_frames_cnt):
             frames.append(full_screen_frame)
 
-        fade_frames = max(1, int(fade_out_sec * fps))
+        fade_frames = max(0, int(fade_out_sec * fps))
         for t in range(fade_frames):
             progress = t / float(fade_frames - 1) if fade_frames > 1 else 1.0
             alpha = 1.0 - progress
@@ -120,31 +110,6 @@ class _FullscreenMixin:
             frames.append(blended)
 
         return frames
-
-    def write_fade_clip(
-        self,
-        video_out: VideoExporter,
-        bg_frame: np.ndarray,
-        fg_frame: np.ndarray,
-        total_frames: int,
-        fade_frames: int,
-    ) -> None:
-        if fade_frames <= 0:
-            for _ in range(total_frames):
-                video_out.write(fg_frame)
-            return
-
-        for f_idx in range(total_frames):
-            if f_idx < fade_frames:
-                alpha = f_idx / fade_frames
-                blended = cv2.addWeighted(fg_frame, alpha, bg_frame, 1 - alpha, 0)
-                video_out.write(blended)
-            elif f_idx > total_frames - fade_frames:
-                alpha = (total_frames - f_idx) / fade_frames
-                blended = cv2.addWeighted(fg_frame, alpha, bg_frame, 1 - alpha, 0)
-                video_out.write(blended)
-            else:
-                video_out.write(fg_frame)
 
     def play_fullscreen_video(
         self,
@@ -200,22 +165,6 @@ class _FullscreenMixin:
             else:
                 video_out.write(f)
 
-    def compute_fullscreen_hold_times(
-        self, total_freeze: float, transition_cfg: Dict[str, float]
-    ) -> Tuple[float, float, float, float]:
-        """Calculates the exact frame durations for the 4 phases of a cinematic popup."""
-        scale_time = transition_cfg["scale_seconds"]
-        fade_time = transition_cfg["fade_out_seconds"]
-        hold_full_time = max(
-            transition_cfg["min_hold_seconds"],
-            total_freeze * transition_cfg["hold_ratio_of_freeze"],
-        )
-        hold_small_time = max(
-            transition_cfg["min_small_hold_seconds"],
-            total_freeze - scale_time - hold_full_time - fade_time,
-        )
-        return hold_small_time, scale_time, hold_full_time, fade_time
-
     def play_fullscreen_popup_sequence(
         self,
         video: VideoExporter,
@@ -225,47 +174,52 @@ class _FullscreenMixin:
         transition_cfg: Dict[str, float],
         exit_frame: np.ndarray,
     ) -> Tuple[np.ndarray, bool]:
-        """Consolidated logic for freeze -> scale -> optional B-roll -> hold -> fade."""
+        """Confirm the popup's current position and photo (a brief static
+        hold on the small card, confirm_seconds) -> gradually resize it to
+        fill the screen (scale_seconds, ~2-3s by default — slow and
+        deliberate rather than a snap cut) -> progressive blur, then cut
+        (blur_seconds, ~0.5s). A B-roll video (popup_video), when set,
+        takes over immediately once the scale finishes instead of the
+        blur-and-cut; otherwise the caller's own next beat follows the
+        blur."""
         freeze_frame = self.render_popup_box(base_frame, popup_info)
-        total_freeze = float(popup_info["data"].get("freeze_seconds", 3.0))
-        hold_small, scale_t, hold_full, fade_t = self.compute_fullscreen_hold_times(
-            total_freeze, transition_cfg
-        )
-
+        confirm_t = transition_cfg.get("confirm_seconds", 0.4)
+        scale_t = transition_cfg.get("scale_seconds", 2.5)
+        blur_t = transition_cfg.get("blur_seconds", 0.5)
         broll_video = popup_info["data"].get("popup_video")
 
+        for _ in range(max(1, int(confirm_t * fps))):
+            video.write(freeze_frame)
+
+        t_frames = self.generate_fullscreen_popup_transition(
+            base_frame=freeze_frame,
+            popup_info=popup_info,
+            fps=fps,
+            duration_sec=scale_t,
+            hold_sec=0.0,
+            fade_out_sec=0.0,
+        )
+        for tf in t_frames:
+            video.write(tf)
+
         if broll_video:
-            t_frames = self.generate_fullscreen_popup_transition(
-                base_frame=freeze_frame,
-                popup_info=popup_info,
-                fps=fps,
-                duration_sec=scale_t,
-                hold_sec=0.1,
-                fade_out_sec=0.0,
-            )
-            if t_frames:
-                for _ in range(int(hold_small * fps)):
-                    video.write(freeze_frame)
-                for tf in t_frames:
-                    video.write(tf)
             enter_frame = t_frames[-1] if t_frames else freeze_frame
             self.play_fullscreen_video(broll_video, enter_frame, exit_frame, video, fps)
             return exit_frame, True
-        else:
-            t_frames = self.generate_fullscreen_popup_transition(
-                base_frame=freeze_frame,
-                popup_info=popup_info,
-                fps=fps,
-                duration_sec=scale_t,
-                hold_sec=hold_full,
-                fade_out_sec=fade_t,
-            )
-            if t_frames:
-                for _ in range(int(hold_small * fps)):
-                    video.write(freeze_frame)
-                for tf in t_frames:
-                    video.write(tf)
-            else:
-                for _ in range(int(total_freeze * fps)):
-                    video.write(freeze_frame)
+
+        if not t_frames:
+            total_freeze = float(popup_info["data"].get("freeze_seconds", 3.0))
+            for _ in range(int(total_freeze * fps)):
+                video.write(freeze_frame)
             return freeze_frame, False
+
+        full_frame = t_frames[-1]
+        blur_frames = max(1, int(blur_t * fps))
+        max_ksize = max(3, (min(full_frame.shape[:2]) // 20) | 1)
+        blurred = full_frame
+        for i in range(blur_frames):
+            ksize = max(1, round((i + 1) / blur_frames * max_ksize)) | 1
+            blurred = cv2.GaussianBlur(full_frame, (ksize, ksize), 0)
+            video.write(blurred)
+
+        return blurred, False

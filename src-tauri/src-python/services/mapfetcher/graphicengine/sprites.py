@@ -5,43 +5,55 @@ from typing import Dict, Tuple
 
 import cv2
 import numpy as np
+from PIL import Image, ImageDraw, ImageFilter
 
 
 class _SpriteMixin:
     def prebake_landmark_sprite(self, label: str) -> Tuple[np.ndarray, Tuple[int, int]]:
-        """Builds just the label textbox for a waypoint — draw_marker()
+        """Builds just the label chip for a waypoint — draw_marker()
         already draws the actual numbered pin at this same anchor point, so
-        this no longer duplicates it with its own circle."""
-        (tw, th), _ = cv2.getTextSize(label, self.font_cv, 0.6, 1)
-        pad = 8
+        this no longer duplicates it with its own circle. Drawn as a small
+        rounded, soft-shadowed card (matching the popup cards' look)
+        instead of a plain hard-edged rectangle."""
+        font_size = max(13, int(self.font_size * 0.6))
+        font = self._load_font(self.FONT_CANDIDATES_REGULAR, font_size)
+        measure_draw = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+        bbox = measure_draw.textbbox((0, 0), label, font=font)
+        tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+        pad_x, pad_y = 10, 6
 
-        # --- FIX: Force dimensions to be whole integers ---
-        sprite_w = int(self.marker_radius + 4 + tw + pad * 2 + self.marker_radius + 4)
-        sprite_h = int(max(2 * (self.marker_radius + 3), th + pad * 2) + 8)
-        sprite = np.zeros((sprite_h, sprite_w, 4), dtype=np.uint8)
+        sprite_w = int(self.marker_radius + 4 + tw + pad_x * 2 + self.marker_radius + 4)
+        sprite_h = int(max(2 * (self.marker_radius + 3), th + pad_y * 2) + 8)
 
-        # --- FIX: Force coordinates to be integers for cv2 drawing ---
         # cx/cy is the pin's own anchor point (kept for spacing math below,
         # and as the sprite's blit anchor so it still lines up with the pin).
         cx = int(self.marker_radius + 4)
-        cy = int(sprite_h // 2)
+        cy = sprite_h // 2
 
-        bx1, by1 = cx + int(self.marker_radius + 4), cy - th - pad
-        bx2, by2 = bx1 + tw + pad * 2, cy + pad
-        cv2.rectangle(
-            sprite, (bx1 - 1, by1 - 1), (bx2 + 1, by2 + 1), (50, 50, 50, 255), -1
+        bx1 = cx + int(self.marker_radius + 4)
+        by1 = cy - (th // 2) - pad_y
+        bx2 = bx1 + tw + pad_x * 2
+        by2 = cy + (th // 2) + pad_y
+
+        canvas = Image.new("RGBA", (sprite_w, sprite_h), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(canvas)
+        draw.rounded_rectangle(
+            [bx1 - 2, by1, bx2 + 2, by2 + 4], radius=8, fill=(0, 0, 0, 40)
         )
-        cv2.rectangle(sprite, (bx1, by1), (bx2, by2), (255, 255, 255, 255), -1)
-        cv2.putText(
-            sprite,
-            label,
-            (bx1 + pad, cy - 2),
-            self.font_cv,
-            0.6,
-            (30, 30, 30, 255),
-            1,
-            cv2.LINE_AA,
+        canvas = canvas.filter(ImageFilter.GaussianBlur(radius=2))
+        draw = ImageDraw.Draw(canvas)
+        draw.rounded_rectangle(
+            [bx1, by1, bx2, by2],
+            radius=8,
+            fill=(255, 255, 255, 235),
+            outline=(220, 220, 220, 255),
+            width=1,
         )
+        draw.text(
+            (bx1 + pad_x, by1 + pad_y - bbox[1]), label, font=font, fill=(45, 45, 45, 255)
+        )
+
+        sprite = cv2.cvtColor(np.array(canvas), cv2.COLOR_RGBA2BGRA)
         return sprite, (cx, cy)
 
     def blit_sprite(

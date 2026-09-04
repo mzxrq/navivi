@@ -57,30 +57,50 @@ def test_residential_video(
     fps: Optional[int] = None,
     speed_kmh: Optional[float] = None,
 ) -> Dict[str, Any]:
-    """Runs the 3D per-waypoint (pydeck/Playwright) leg-by-leg render only,
-    to sanity-check the vehicle/marker/popup animation without paying for
-    the 2D overview, TTS, or subtitle stages.
-
-    Uses the same job_config.json as the overview render -- the 3D renderer
-    reads its own waypoints/.routecache.json straight from that project
-    directory, there's no separate "residential" config file.
+    """Runs the per-waypoint leg-by-leg render only, to sanity-check the
+    residential animation without paying for the overview, TTS, or subtitle
+    stages. Honors job_config.json's settings.use_3d_res (default False):
+    2D (SpatialRenderer.render_waypoints, via the same render_route_video
+    path test_overview_video uses) unless the project has explicitly opted
+    into the 3D pydeck/Playwright renderer.
     """
     config_path = Path(job_config_path)
     if not config_path.exists():
         raise FileNotFoundError(f"job_config.json not found: {config_path}")
 
+    with config_path.open("r", encoding="utf-8") as config_file:
+        project_config = json.load(config_file)
+    use_3d_res = bool(project_config.get("settings", {}).get("use_3d_res", False))
+
     output_video_dir = Path(output_video_dir or (config_path.parent / "video"))
     output_video_dir.mkdir(parents=True, exist_ok=True)
-    output_video_path = str(output_video_dir / "02_residential_map.mp4")
 
-    from services.vdoprocessing.pydeckrecorder import record_headless_video
+    if use_3d_res:
+        output_video_path = str(output_video_dir / "02_residential_map.mp4")
 
-    video_paths = record_headless_video(
-        str(config_path),
-        output_video_path,
-        fps=fps,
-        speed_kmh=speed_kmh,
-    )
+        from services.vdoprocessing.pydeckrecorder import record_headless_video
+
+        video_paths = record_headless_video(
+            str(config_path),
+            output_video_path,
+            fps=fps,
+            speed_kmh=speed_kmh,
+        )
+    else:
+        from services.vdoprocessing.videopipeline import process_gps, render_route_video
+
+        cleaned_route = process_gps(str(config_path))
+        all_paths = render_route_video(
+            cleaned_route=cleaned_route,
+            project_config_path=str(config_path),
+            output_video_dir=str(output_video_dir),
+        )
+        # render_route_video also produces "01_overview.mp4" — this entry
+        # point is scoped to the residential/per-leg clips only, matching
+        # what the 3D branch above returns.
+        video_paths = [
+            p for p in all_paths if Path(p).name != "01_overview.mp4"
+        ]
 
     return {
         "success": bool(video_paths),

@@ -119,3 +119,25 @@ class _DrawingMixin:
                 thickness,
                 cv2.LINE_AA,
             )
+
+    def draw_frame_border(
+        self,
+        frame: np.ndarray,
+        color: Tuple[int, int, int] = (255, 255, 255),
+        thickness: int = 4,
+    ) -> None:
+        """Draws a solid frame border inset from the image edges — used to
+        give a zoomed-in residential map a distinct "picture frame" look
+        rather than bleeding to the video's own edges. Drawn in-place,
+        directly on the background, so it's automatically present on every
+        frame copied from it afterward."""
+        h, w = frame.shape[:2]
+        half = max(1, thickness // 2)
+        cv2.rectangle(
+            frame,
+            (half, half),
+            (w - half - 1, h - half - 1),
+            color,
+            thickness,
+            cv2.LINE_AA,
+        )

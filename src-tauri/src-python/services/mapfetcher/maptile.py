@@ -221,36 +221,68 @@ class TileDownloader:
         if chunk_df.empty:
             raise ValueError("Chunk DataFrame is empty.")
 
-        # 1. Calculate Bounding Box with Padding
+        # 1. Calculate a Bounding Box Centered on the Leg's Start/End
+        #
+        # Centering on the whole path's own min/max (the old approach)
+        # put the start/end pins whereever the path's OWN shape happened
+        # to place them — a detour or switchback loop off to one side (a
+        # scenic side-trail, a zigzag) skews that bbox's center away from
+        # the pins themselves, so even generous padding on "whichever edge
+        # is closest" wasn't reliably enough once the fetch-then-crop
+        # steps below shave a further, not-precisely-predictable slice off
+        # an edge. Centering on the *midpoint of start and end* instead
+        # guarantees both pins sit at an equal, symmetric distance from
+        # the frame's center — a loop or detour can still make the map
+        # less tightly zoomed (more empty space on the side it bulges
+        # toward), but it can no longer push either pin toward one edge.
         min_lat = min(chunk_df["latitude"].min(), chunk_df["latitude"].iloc[0], chunk_df["latitude"].iloc[-1])
         max_lat = max(chunk_df["latitude"].max(), chunk_df["latitude"].iloc[0], chunk_df["latitude"].iloc[-1])
         min_lon = min(chunk_df["longitude"].min(), chunk_df["longitude"].iloc[0], chunk_df["longitude"].iloc[-1])
         max_lon = max(chunk_df["longitude"].max(), chunk_df["longitude"].iloc[0], chunk_df["longitude"].iloc[-1])
 
-        lat_span, lon_span = max_lat - min_lat, max_lon - min_lon
-        center_lat = (min_lat + max_lat) / 2.0
+        start_lat, end_lat = chunk_df["latitude"].iloc[0], chunk_df["latitude"].iloc[-1]
+        start_lon, end_lon = chunk_df["longitude"].iloc[0], chunk_df["longitude"].iloc[-1]
+        center_lat = (start_lat + end_lat) / 2.0
+        center_lon = (start_lon + end_lon) / 2.0
 
-        # Apply 3% padding around the route segment
-        s, n = min_lat - lat_span * 0.03, max_lat + lat_span * 0.03
-        w, e = min_lon - lon_span * 0.03, max_lon + lon_span * 0.03
+        # Half-extent needed, from that center, to still cover the whole
+        # path (every point stays within [min_lat, max_lat] x
+        # [min_lon, max_lon], so measuring the center's distance to those
+        # is enough — no need to scan every point individually).
+        half_lat = max(max_lat - center_lat, center_lat - min_lat, 1e-9)
+        half_lon = max(max_lon - center_lon, center_lon - min_lon, 1e-9)
 
-        # 2. Determine Optimal Zoom based on physical span
+        # 20% breathing room on top of that half-extent — covers both the
+        # pin+label graphic (which extends past its anchor point) and the
+        # further, not-precisely-predictable trim the fetch-then-crop
+        # steps below (tile-grid snapping, then _crop_to_aspect_ratio) can
+        # each add on any edge.
+        _PAD = 0.20
+        s, n = center_lat - half_lat * (1 + _PAD), center_lat + half_lat * (1 + _PAD)
+        w, e = center_lon - half_lon * (1 + _PAD), center_lon + half_lon * (1 + _PAD)
+        lat_span, lon_span = n - s, e - w
+
+        # 2. Determine Optimal Zoom based on physical span — thresholds
+        # shifted down (vs. the overview's table) so the same physical span
+        # picks a higher zoom level here, capped by the provider's own
+        # MAX_ZOOM_LEVEL just like fetch_overview_image does.
         meters_per_deg_lat = 111_320.0
         meters_per_deg_lon = 111_320.0 * math.cos(math.radians(center_lat))
         span_meters = max(lat_span * meters_per_deg_lat, lon_span * meters_per_deg_lon)
 
         optimal_zoom = (
-            19 if span_meters <= 300 else
-            18 if span_meters <= 600 else
-            17 if span_meters <= 1200 else
-            16 if span_meters <= 2500 else
-            15 if span_meters <= 5000 else
-            14 if span_meters <= 10000 else
-            13 if span_meters <= 20000 else
-            12 if span_meters <= 40000 else
-            11 if span_meters <= 80000 else
-            10
+            20 if span_meters <= 150 else
+            19 if span_meters <= 350 else
+            18 if span_meters <= 700 else
+            17 if span_meters <= 1400 else
+            16 if span_meters <= 3000 else
+            15 if span_meters <= 6000 else
+            14 if span_meters <= 12000 else
+            13 if span_meters <= 25000 else
+            12 if span_meters <= 50000 else
+            11
         )
+        optimal_zoom = min(optimal_zoom, self.MAX_ZOOM_LEVEL)
 
         # 3. Adjust Bounding Box to Target Aspect Ratio
         out_w, out_h = output_size

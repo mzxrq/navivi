@@ -37,12 +37,23 @@ import numpy as np
 from PIL.ImageFont import FreeTypeFont, load_default, truetype
 
 from services.logger.logger import setup_logger
+from services import tuning
 
 logger = setup_logger("GraphicsEngine")
+
+# Bundled in the repo (services/mapfetcher/graphicengine/ -> up to src-python/
+# -> assets/fonts/) rather than relied on as a system font — Kosugi Maru
+# isn't preinstalled on Windows the way meiryo/msgothic are, so a bare
+# filename candidate would silently fall through to those instead unless
+# it's actually findable on disk.
+_BUNDLED_FONTS_DIR = os.path.join(
+    os.path.dirname(__file__), "..", "..", "..", "assets", "fonts"
+)
 
 
 class _GraphicsEngineBase:
     FONT_CANDIDATES_REGULAR: Final[List[str]] = [
+        os.path.join(_BUNDLED_FONTS_DIR, "KosugiMaru-Regular.ttf"),
         "NotoSansJP-Regular.ttf",
         "NotoSansJP-Regular.otf",
         "meiryo.ttc",
@@ -51,7 +62,11 @@ class _GraphicsEngineBase:
         "segoeui.ttf",
         "DejaVuSans.ttf",
     ]
+    # Kosugi Maru only ships one weight (no dedicated bold cut) — listed
+    # here too so bold text still renders in the same rounded style
+    # instead of jumping to a different typeface for headings/values.
     FONT_CANDIDATES_BOLD: Final[List[str]] = [
+        os.path.join(_BUNDLED_FONTS_DIR, "KosugiMaru-Regular.ttf"),
         "NotoSansJP-Bold.ttf",
         "NotoSansJP-Bold.otf",
         "meiryob.ttc",
@@ -65,8 +80,8 @@ class _GraphicsEngineBase:
         self,
         line_color=(0, 200, 255),
         line_thickness=10,
-        marker_color=(0, 0, 255),
-        arrived_marker_color=(0, 0, 220),
+        marker_color=tuning.DEFAULT_MARKER_COLOR,  # blue (BGR) — every pin except S/E
+        arrived_marker_color=tuning.DEFAULT_ARRIVED_MARKER_COLOR,  # deeper blue once visited
         marker_radius=18,
         font_size: int = 18,
     ):
@@ -100,14 +115,10 @@ class _GraphicsEngineBase:
             return None
 
     # Per-travel-mode line colors (BGR). Modes without an entry fall back to
-    # self.line_color (the existing single-color behavior).
-    MODE_COLORS: Final[Dict[str, Tuple[int, int, int]]] = {
-        "ferry": (0, 140, 255),  # orange — the old dodger-blue nearly
-        # vanished against blue ocean water; orange reads clearly on it.
-        "airplane": (180, 60, 220),  # magenta/purple
-        "car": (60, 180, 60),  # green
-        "driving": (60, 180, 60),
-    }
+    # self.line_color (the existing single-color behavior). Also used by
+    # the summary card (cards.py) so each mode's stat column matches its
+    # own route-line color. Values live in services/tuning.py.
+    MODE_COLORS: Final[Dict[str, Tuple[int, int, int]]] = tuning.MODE_LINE_COLORS
 
     # Supported fixed corners for popup/HUD cards. Order is the default
     # fallback preference when picking a corner automatically. Shared by
@@ -121,8 +132,8 @@ class _GraphicsEngineBase:
     def _hud_corner_box(
         corner: str, w: int, h: int, total_w: int, total_h: int
     ) -> Tuple[int, int]:
-        x = 60 if "left" in corner else w - total_w - 60
-        y = h - total_h - 75 if "bottom" in corner else 75
+        x = 40 if "left" in corner else w - total_w - 40
+        y = h - total_h - 40 if "bottom" in corner else 40
         return x, y
 
     def _load_font(self, candidates: List[str], size: int) -> FreeTypeFont | Any:

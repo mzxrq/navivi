@@ -51,18 +51,13 @@ def _project_route_to_pixels(
     return [[float(x), float(y)] for x, y in zip(px, py)]
 
 
-def _resolve_leg_mode_from_cache(
+def _find_leg_cache_key(
     from_wp: dict, to_wp: dict, routing_cache: dict
 ) -> Optional[str]:
-    """Finds the .routecache.json entry for the leg from_wp -> to_wp (by
-    nearest-coordinate match on the key's own start/end points, tolerant of
-    the key's 5-decimal rounding) and returns its mode suffix.
-
-    job_config.json's waypoints no longer carry `routeMode` — the frontend
-    now leaves that field off entirely and the cache key (the only place
-    that still records "...|walking"/"...|ferry"/etc per leg) is the sole
-    source of truth for what mode a leg was actually computed with.
-    """
+    """Finds the .routecache.json entry for the leg from_wp -> to_wp, by
+    nearest-coordinate match on the key's own start/end points (tolerant of
+    the key's 5-decimal rounding). Shared by the mode and geometry lookups
+    below so both agree on exactly the same cache entry for a given leg."""
     if not routing_cache:
         return None
     from_lat, from_lng = from_wp.get("lat"), from_wp.get("lng", from_wp.get("lon"))
@@ -89,7 +84,42 @@ def _resolve_leg_mode_from_cache(
     # anything looser so an unrelated cache entry never gets matched.
     if best_key is None or best_dist > 0.0005:
         return None
+    return best_key
+
+
+def _resolve_leg_mode_from_cache(
+    from_wp: dict, to_wp: dict, routing_cache: dict
+) -> Optional[str]:
+    """Returns the leg's mode suffix ("walking"/"ferry"/...) from its
+    .routecache.json entry.
+
+    job_config.json's waypoints no longer carry `routeMode` — the frontend
+    now leaves that field off entirely and the cache key (the only place
+    that still records "...|walking"/"...|ferry"/etc per leg) is the sole
+    source of truth for what mode a leg was actually computed with.
+    """
+    best_key = _find_leg_cache_key(from_wp, to_wp, routing_cache)
+    if best_key is None:
+        return None
     return best_key.rsplit("|", 1)[-1].strip().lower()
+
+
+def _resolve_leg_geometry_from_cache(
+    from_wp: dict, to_wp: dict, routing_cache: dict
+) -> Optional[list[list[float]]]:
+    """Returns the leg's actual routed polyline (a list of [lat, lon] pairs,
+    ordered from_wp -> to_wp) from its .routecache.json entry, or None if no
+    matching entry exists. This is the same path the map UI itself draws
+    (see src/utils/mapUtils.ts's routeCache), as opposed to route_df's own
+    GPS track, which for some travel modes (e.g. a ferry crossing) may not
+    reflect the real route at all."""
+    best_key = _find_leg_cache_key(from_wp, to_wp, routing_cache)
+    if best_key is None:
+        return None
+    geometry = routing_cache.get(best_key)
+    if not isinstance(geometry, list) or len(geometry) < 2:
+        return None
+    return geometry
 
 
 def _build_point_modes(

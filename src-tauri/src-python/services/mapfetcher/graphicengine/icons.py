@@ -119,5 +119,13 @@ class _IconMixin:
             self._draw_walking_icon(draw, cx, cy, size, color)
 
     def _format_duration_short(self, seconds: float) -> str:
+        # Anything under a minute used to always round UP to "1 min" (or
+        # down to a misleading "0 min") — a short leg like a 315m hop
+        # estimated at ~32s read as "1 min", nearly double the real value.
+        # Showing seconds directly below that threshold keeps short legs
+        # honest instead of rounding them into a whole minute they don't
+        # actually take.
+        if seconds < 60:
+            return f"{max(1, int(round(seconds)))} sec"
         hrs, mins = divmod(int(round(seconds / 60)), 60)
         return f"{hrs} hr {mins:02d} min" if hrs else f"{mins} min"
