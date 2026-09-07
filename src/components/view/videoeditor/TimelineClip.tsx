@@ -1,19 +1,20 @@
-import { useState } from "react";
+
 import { Rnd } from "react-rnd";
-import { TimelineClipData } from "../../../types";
+import { ClipData } from "../../../types";
 import { useWorkspace } from "../../../hooks/useWorkspace";
 
 interface ClipProps {
-  clip: TimelineClipData;
+  clip: ClipData;
   isMainTrack: boolean;
   pixelsPerSecond: number;
   isSelected?: boolean;
   activeTool?: string;
+  isRippleMode: boolean; // ✨ NEW
+  currentTime: number;
   onSplit?: (id: string, time: number) => void;
-  onSelect?: () => void;
+  onSelect?: (multi: boolean) => void;
+  isLocked: boolean;
 }
-
-
 
 export function TimelineClip({
   clip,
@@ -21,217 +22,262 @@ export function TimelineClip({
   pixelsPerSecond,
   isSelected,
   activeTool = "pointer",
+  isRippleMode, // ✨ NEW
+  currentTime,
   onSplit,
   onSelect,
+  isLocked,
 }: ClipProps) {
   const { timeline, setTimeline } = useWorkspace();
-  const [_contextMenu, setContextMenu] = useState<{
-    x: number;
-    y: number;
-  } | null>(null);
 
   const xPos = clip.startTime * pixelsPerSecond;
-  const clipWidth = clip.duration * pixelsPerSecond;
-  const height = isMainTrack ? 64 : 32;
-  const topPadding = isMainTrack ? 8 : 8;
+  const clipWidth = Math.max(clip.duration * pixelsPerSecond, 10);
+  const height = isMainTrack ? 80 : 56;
 
-  const colorClass = isMainTrack
-    ? "bg-zinc-900 border-zinc-700 text-white"
-    : "bg-cyan-200 dark:bg-cyan-900 border-cyan-300 dark:border-cyan-700 text-cyan-900 dark:text-cyan-100";
+  const isMedia = clip.type === "video" || clip.type === "audio";
+  const maxClipWidth = isMedia && clip.sourceDuration ? clip.sourceDuration * pixelsPerSecond : undefined;
+
+  let colorClass = "bg-zinc-800 border-zinc-600 text-white";
+  if (clip.type === 'audio') colorClass = "bg-purple-900/80 border-purple-700 text-purple-100";
+  if (clip.type === 'image' || clip.type === 'static_popup') colorClass = "bg-amber-900/80 border-amber-700 text-amber-100";
+  if (clip.type === 'text' || clip.type === 'subtitle') colorClass = "bg-blue-900/80 border-blue-700 text-blue-100";
 
   const selectedClass = isSelected
-    ? "ring-2 ring-navi shadow-[0_0_15px_rgba(var(--navi-rgb),0.5)] z-30 brightness-110"
-    : "opacity-95 hover:opacity-100 z-10";
+    ? "ring-2 ring-white shadow-lg z-30 brightness-110"
+    : "opacity-90 hover:opacity-100 z-10";
+
+  const transitionPixelWidth = 1.0 * pixelsPerSecond;
 
   const updateClipDimensions = (
     proposedStart: number,
     proposedDuration: number,
     targetTrackId: string = clip.trackId,
-    isResize: boolean = false
+    isResize: boolean = false,
+    isLeftResize: boolean = false
   ) => {
-    let finalStart = Math.max(0, proposedStart);
-    let finalDuration = Math.max(0.1, proposedDuration);
-    const finalEnd = finalStart + finalDuration;
+    
+    // 🧲 THE MAGNETIC SNAP ENGINE 
+    const SNAP_PIXELS = 15;
+    const snapThreshold = SNAP_PIXELS / pixelsPerSecond;
+
+    const snapPoints = new Set<number>([0, currentTime]);
+    timeline.clips.forEach(c => {
+      if (c.id !== clip.id) {
+        snapPoints.add(c.startTime);
+        snapPoints.add(c.startTime + c.duration);
+      }
+    });
+    const snaps = Array.from(snapPoints);
+
+    let finalStart = proposedStart;
+    let finalDuration = proposedDuration;
+    let finalEnd = finalStart + finalDuration;
 
     if (isResize) {
-      // 🛠️ 1. STRICT BOUNDARIES FOR RESIZING
-      const targetNeighbors = timeline.clips.filter(
-        (c) => c.trackId === targetTrackId && c.id !== clip.id
-      );
+      if (isLeftResize) {
+        const closest = snaps.reduce((a, b) => Math.abs(b - finalStart) < Math.abs(a - finalStart) ? b : a);
+        if (Math.abs(closest - finalStart) < snapThreshold) {
+          const originalEnd = clip.startTime + clip.duration;
+          finalStart = closest;
+          finalDuration = originalEnd - finalStart;
+        }
+      } else {
+        const closest = snaps.reduce((a, b) => Math.abs(b - finalEnd) < Math.abs(a - finalEnd) ? b : a);
+        if (Math.abs(closest - finalEnd) < snapThreshold) {
+          finalEnd = closest;
+          finalDuration = finalEnd - finalStart;
+        }
+      }
+    } else {
+      const closestStart = snaps.reduce((a, b) => Math.abs(b - finalStart) < Math.abs(a - finalStart) ? b : a);
+      const closestEnd = snaps.reduce((a, b) => Math.abs(b - finalEnd) < Math.abs(a - finalEnd) ? b : a);
 
-      // Find where our neighbors are relative to our ORIGINAL position
+      const distStart = Math.abs(closestStart - finalStart);
+      const distEnd = Math.abs(closestEnd - finalEnd);
+
+      if (distStart < snapThreshold && distStart <= distEnd) {
+        finalStart = closestStart;
+      } else if (distEnd < snapThreshold && distEnd < distStart) {
+        finalStart = closestEnd - finalDuration;
+      }
+    }
+
+    finalStart = Math.max(0, finalStart);
+    finalDuration = Math.max(0.1, finalDuration);
+
+    if (isMedia && clip.sourceDuration && finalDuration > clip.sourceDuration) {
+      finalDuration = clip.sourceDuration;
+    }
+
+    finalEnd = finalStart + finalDuration;
+
+    // --- TIMELINE MATH ENGINE ---
+    if (isResize) {
+      // Wall Mode: Prevents resizing over other clips
+      const targetNeighbors = timeline.clips.filter((c) => c.trackId === targetTrackId && c.id !== clip.id);
       const leftNeighbors = targetNeighbors.filter((n) => n.startTime < clip.startTime);
       const rightNeighbors = targetNeighbors.filter((n) => n.startTime > clip.startTime);
 
-      const minStart = leftNeighbors.length > 0 
-          ? Math.max(...leftNeighbors.map((n) => n.startTime + n.duration)) 
-          : 0;
-          
-      const maxEnd = rightNeighbors.length > 0 
-          ? Math.min(...rightNeighbors.map((n) => n.startTime)) 
-          : Infinity;
+      const minStart = leftNeighbors.length > 0 ? Math.max(...leftNeighbors.map((n) => n.startTime + n.duration)) : 0;
+      const maxEnd = rightNeighbors.length > 0 ? Math.min(...rightNeighbors.map((n) => n.startTime)) : Infinity;
 
-      // Hit a wall on the left
       if (finalStart < minStart) {
-        const diff = minStart - finalStart;
+        finalDuration -= (minStart - finalStart);
         finalStart = minStart;
-        finalDuration -= diff;
       }
-
-      // Hit a wall on the right
       if (finalStart + finalDuration > maxEnd) {
         finalDuration = maxEnd - finalStart;
       }
 
       setTimeline({
         ...timeline,
-        clips: timeline.clips.map((c) =>
-          c.id === clip.id
-            ? { ...c, startTime: finalStart, duration: finalDuration }
-            : c
-        ),
+        clips: timeline.clips.map((c) => c.id === clip.id ? { ...c, startTime: finalStart, duration: finalDuration } : c),
       });
       
     } else {
-      // 🛠️ 2. THE OVERWRITE ENGINE FOR DRAGGING
-      let newClips = [...timeline.clips];
+      let newClips = [...timeline.clips].filter((c) => c.id !== clip.id);
 
-      // 1. Remove the dragged clip temporarily so we don't calculate against it
-      newClips = newClips.filter((c) => c.id !== clip.id);
+      if (isRippleMode) {
+        // ✨ RIPPLE MODE
+        // 1. Close the gap on the original track left by lifting the clip
+        newClips = newClips.map((c) => {
+          if (c.trackId === clip.trackId && c.startTime > clip.startTime) {
+            return { ...c, startTime: Math.max(0, c.startTime - clip.duration) };
+          }
+          return c;
+        });
 
-      // 2. Map through the timeline and dynamically slice anything that got dropped on
-      newClips = newClips.flatMap((c) => {
-        // Leave clips on other tracks completely alone
-        if (c.trackId !== targetTrackId) return [c];
-
-        const cEnd = c.startTime + c.duration;
-
-        // Condition 1: Completely engulfed -> Delete it
-        if (c.startTime >= finalStart && cEnd <= finalEnd) return [];
-
-        // Condition 2: Engulfs the drop -> Split it down the middle!
-        if (c.startTime < finalStart && cEnd > finalEnd) {
-          const leftHalf = { ...c, duration: finalStart - c.startTime };
-          const rightHalf = {
-            ...c,
-            id: crypto.randomUUID(), // Ensure the split half has a unique ID
-            startTime: finalEnd,
-            duration: cEnd - finalEnd,
-          };
-          return [leftHalf, rightHalf];
+        // Calculate visual drop point (if we dragged on the same track, closing the gap shifts our drop target!)
+        let effectiveStart = finalStart;
+        if (clip.trackId === targetTrackId && finalStart > clip.startTime) {
+           effectiveStart = Math.max(0, finalStart - clip.duration);
         }
 
-        // Condition 3: Overlaps on the left -> Trim the tail
-        if (c.startTime < finalStart && cEnd > finalStart && cEnd <= finalEnd) {
-          return [{ ...c, duration: finalStart - c.startTime }];
-        }
+        // 2. Open a new gap on the target track
+        newClips = newClips.flatMap((c) => {
+          if (c.trackId !== targetTrackId) return [c];
 
-        // Condition 4: Overlaps on the right -> Trim the head
-        if (c.startTime >= finalStart && c.startTime < finalEnd && cEnd > finalEnd) {
-          return [{ ...c, startTime: finalEnd, duration: cEnd - finalEnd }];
-        }
+          // Push it right
+          if (c.startTime >= effectiveStart) {
+            return [{ ...c, startTime: c.startTime + finalDuration }];
+          }
 
-        // Safe! No overlap.
-        return [c];
-      });
+          // If dropped in the exact middle of a clip, split it and push the right half!
+          const cEnd = c.startTime + c.duration;
+          if (c.startTime < effectiveStart && cEnd > effectiveStart) {
+             return [
+               { ...c, duration: effectiveStart - c.startTime },
+               { ...c, id: crypto.randomUUID(), startTime: effectiveStart + finalDuration, duration: cEnd - effectiveStart }
+             ];
+          }
 
-      // 3. Insert the dragged clip safely into its new kingdom
-      newClips.push({
-        ...clip,
-        startTime: finalStart,
-        duration: finalDuration,
-        trackId: targetTrackId,
-      });
+          return [c];
+        });
 
-      setTimeline({ ...timeline, clips: newClips });
+        newClips.push({ ...clip, startTime: effectiveStart, duration: finalDuration, trackId: targetTrackId });
+        setTimeline({ ...timeline, clips: newClips });
+
+      } else {
+        // 🔥 OVERWRITE MODE
+        newClips = newClips.flatMap((c) => {
+          if (c.trackId !== targetTrackId) return [c];
+
+          const cEnd = c.startTime + c.duration;
+          if (c.startTime >= finalStart && cEnd <= finalEnd) return [];
+          if (c.startTime < finalStart && cEnd > finalEnd) {
+            return [
+              { ...c, duration: finalStart - c.startTime },
+              { ...c, id: crypto.randomUUID(), startTime: finalEnd, duration: cEnd - finalEnd }
+            ];
+          }
+          if (c.startTime < finalStart && cEnd > finalStart && cEnd <= finalEnd) {
+            return [{ ...c, duration: finalStart - c.startTime }];
+          }
+          if (c.startTime >= finalStart && c.startTime < finalEnd && cEnd > finalEnd) {
+            return [{ ...c, startTime: finalEnd, duration: cEnd - finalEnd }];
+          }
+          return [c];
+        });
+
+        newClips.push({ ...clip, startTime: finalStart, duration: finalDuration, trackId: targetTrackId });
+        setTimeline({ ...timeline, clips: newClips });
+      }
     }
   };
 
+  const formatTransitionLabel = (type: string) => {
+    if (type.includes('crossfade')) return 'FADE';
+    if (type.includes('black')) return 'BLACK';
+    if (type.includes('white')) return 'WHITE';
+    return 'TRANS';
+  };
+
   return (
-    <>
-      <Rnd
-        position={{ x: xPos, y: topPadding }}
-        size={{ width: clipWidth, height: height }}
-        enableResizing={{
-          left: true,
-          right: true,
-          top: false,
-          bottom: false,
-          topLeft: false,
-          topRight: false,
-          bottomLeft: false,
-          bottomRight: false,
-        }}
-        minWidth={10}
-        dragAxis="both"
-        bounds="parent" // 🛠️ 3. This physically prevents dragging to the left of 0:00!
-        onMouseDownCapture={(e: React.MouseEvent) => {
-          if (activeTool === "razor" && onSplit) {
-            e.stopPropagation();
-            e.preventDefault();
-            const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-            const clickX = e.clientX - rect.left;
-            const splitTime = clip.startTime + clickX / pixelsPerSecond;
-            onSplit(clip.id, splitTime);
-            return;
-          }
+    <Rnd
+      position={{ x: xPos, y: 0 }}
+      size={{ width: clipWidth, height: height }}
+      maxWidth={maxClipWidth}
+      disableDragging={isLocked} 
+      enableResizing={{
+        left: !isLocked, right: !isLocked,
+        top: false, bottom: false,
+        topLeft: false, topRight: false, bottomLeft: false, bottomRight: false,
+      }}
+      resizeHandleClasses={{
+        left: "hover:bg-white/30 transition-colors z-50",
+        right: "hover:bg-white/30 transition-colors z-50"
+      }}
+      minWidth={10}
+      dragAxis="both"
+      bounds="parent"
+      onMouseDownCapture={(e: React.MouseEvent) => {
+        if (activeTool === "razor" && onSplit) {
+          e.stopPropagation(); e.preventDefault();
+          const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+          onSplit(clip.id, clip.startTime + (e.clientX - rect.left) / pixelsPerSecond);
+          return;
+        }
+        if (onSelect) onSelect(e.shiftKey || e.ctrlKey || e.metaKey);
+      }}
+      onContextMenu={(e: React.MouseEvent) => {
+        e.stopPropagation(); e.preventDefault();
+        if (onSelect) onSelect(e.shiftKey || e.ctrlKey || e.metaKey);
+        window.dispatchEvent(new CustomEvent("open-context-menu", { detail: { x: e.clientX, y: e.clientY, type: "timeline-clip", targetId: clip.id } }));
+      }}
+      onDragStop={(_e, data) => {
+        const newStartTime = Math.max(0, data.x / pixelsPerSecond);
+        updateClipDimensions(newStartTime, clip.duration, clip.trackId, false);
+      }}
+      onResizeStop={(_e, dir, ref, _delta, position) => {
+        const newDuration = parseFloat(ref.style.width) / pixelsPerSecond;
+        const newStartTime = Math.max(0, position.x / pixelsPerSecond);
+        const isLeftResize = dir === "left" || dir === "topLeft" || dir === "bottomLeft";
+        updateClipDimensions(newStartTime, newDuration, clip.trackId, true, isLeftResize);
+      }}
+      className={`absolute top-0 bottom-0 rounded-md border-2 overflow-hidden flex flex-col justify-center px-2 transition-[filter,box-shadow,opacity] group ${isLocked ? "" : "hover:z-20 cursor-pointer"} ${colorClass} ${selectedClass} ${isLocked ? "opacity-50 grayscale" : ""}`}
+    >
+      <span className="text-[10px] font-bold tracking-wide truncate pointer-events-none select-none relative z-20 drop-shadow-md">
+        {clip.label}
+      </span>
+      
+      {clip.transitionIn && clip.transitionIn !== "none" && (
+         <div className="absolute left-0 top-0 bottom-0 border-r border-white/40 pointer-events-none flex items-center justify-center overflow-hidden bg-[repeating-linear-gradient(45deg,transparent,transparent_4px,rgba(255,255,255,0.15)_4px,rgba(255,255,255,0.15)_8px)]" style={{ width: Math.min(transitionPixelWidth, clipWidth / 2) }}>
+           <span className="text-[8px] font-black text-white/80 -rotate-90 tracking-widest">{formatTransitionLabel(clip.transitionIn)}</span>
+         </div>
+      )}
 
-          if (onSelect) onSelect();
-          setContextMenu(null);
-        }}
-        onContextMenu={(e: React.MouseEvent) => {
-          e.preventDefault();
-          e.stopPropagation();
-          if (onSelect) onSelect();
-          window.dispatchEvent(
-            new CustomEvent("open-context-menu", {
-              detail: {
-                x: e.clientX,
-                y: e.clientY,
-                type: "timeline-clip",
-                targetId: clip.id,
-              },
-            })
-          );
-        }}
-        onDragStop={(e, data) => {
-          const clientX = "clientX" in e ? e.clientX : (e as any).touches?.[0]?.clientX || 0;
-          const clientY = "clientY" in e ? e.clientY : (e as any).touches?.[0]?.clientY || 0;
-          
-          const elements = document.elementsFromPoint(clientX, clientY);
-          const targetTrack = elements.find((el) => el.hasAttribute("data-track-id"));
-
-          let newTrackId = clip.trackId;
-
-          if (targetTrack) {
-            const hoveredTrackId = targetTrack.getAttribute("data-track-id");
-            const hoveredTrackType = targetTrack.getAttribute("data-track-type");
-            const currentTrack = timeline.tracks.find((t) => t.id === clip.trackId);
-
-            if (hoveredTrackId && hoveredTrackType === currentTrack?.type) {
-              newTrackId = hoveredTrackId;
-            }
-          }
-
-          const newStartTime = Math.max(0, data.x / pixelsPerSecond);
-          updateClipDimensions(newStartTime, clip.duration, newTrackId, false); // FALSE = Drag/Overwrite Mode
-        }}
-        onResizeStop={(_e, _direction, ref, _delta, position) => {
-          const newDuration = parseInt(ref.style.width, 10) / pixelsPerSecond;
-          const newStartTime = Math.max(0, position.x / pixelsPerSecond);
-          updateClipDimensions(newStartTime, newDuration, clip.trackId, true); // TRUE = Resize/Wall Mode
-        }}
-        className={`absolute ${
-          isMainTrack ? "rounded-xl" : "rounded-full"
-        } ${colorClass} border flex items-center px-3 cursor-pointer transition-[filter,box-shadow,opacity] group hover:z-20 ${selectedClass}`}
-      >
-        <span className="text-[10px] font-bold tracking-wide truncate pointer-events-none select-none">
-          {clip.label}
-        </span>
-
-        <div className="absolute left-0 top-0 bottom-0 w-3 cursor-ew-resize group-hover:bg-white/20 rounded-l-full transition-colors" />
-        <div className="absolute right-0 top-0 bottom-0 w-3 cursor-ew-resize group-hover:bg-white/20 rounded-r-full transition-colors" />
-      </Rnd>
-    </>
+      {clip.transitionOut && clip.transitionOut !== "none" && (
+         <div className="absolute right-0 top-0 bottom-0 border-l border-white/40 pointer-events-none flex items-center justify-center overflow-hidden bg-[repeating-linear-gradient(-45deg,transparent,transparent_4px,rgba(255,255,255,0.15)_4px,rgba(255,255,255,0.15)_8px)]" style={{ width: Math.min(transitionPixelWidth, clipWidth / 2) }}>
+           <span className="text-[8px] font-black text-white/80 rotate-90 tracking-widest">{formatTransitionLabel(clip.transitionOut)}</span>
+         </div>
+      )}
+      
+      {!isLocked && (
+        <>
+          <div className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-white/30 transition-colors z-30" />
+          <div className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-white/30 transition-colors z-30" />
+        </>
+      )}
+    </Rnd>
   );
 }

@@ -27,7 +27,7 @@ import {
   loadRouteCache,
   saveTimelineManifest,
 } from "../services/fileSystem";
-import { TimelineClipData, TimelineTrack } from "../types";
+import { ClipData, TimelineTrack } from "../types";
 import { useHistory } from "./useHistory";
 import { useUI } from "./useUI";
 
@@ -315,7 +315,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
     // convert python manifest clips into ui timeline clips
     let runningTime = 0;
-    const generatedClips: TimelineClipData[] = [];
+    const generatedClips: ClipData[] = [];
 
     manifest.video_tracks.forEach((item) => {
       const targetTrackId =

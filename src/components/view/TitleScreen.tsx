@@ -106,7 +106,7 @@ export function TitleScreen() {
               onClick={() => handleOpenProject(project.path)}
               className="group flex flex-col text-left bg-white dark:bg-navidark-700 border border-zinc-200 dark:border-white/10 rounded-2xl overflow-hidden hover:border-navi dark:hover:border-navi transition-all duration-300 hover:shadow-xl hover:-translate-y-1 focus:outline-none focus:ring-2 focus:ring-navi focus:ring-offset-2 dark:focus:ring-offset-navidark-800"
             >
-              <div className="w-full h-24 bg-gradient-to-br from-zinc-100 to-zinc-200 dark:from-navidark-600 dark:to-navidark-800 flex items-center justify-center relative overflow-hidden">
+              <div className="w-full h-24 bg-linear-to-br from-zinc-100 to-zinc-200 dark:from-navidark-600 dark:to-navidark-800 flex items-center justify-center relative overflow-hidden">
                 <Map className="w-12 h-12 text-zinc-300 dark:text-white/5 group-hover:scale-110 group-hover:text-navi/20 transition-all duration-500" />
                 <div className="absolute inset-0 bg-navi/0 group-hover:bg-navi/5 transition-colors duration-300" />
               </div>
@@ -151,7 +151,7 @@ export function TitleScreen() {
               </div>
               
               <div className="flex items-center gap-6 shrink-0 pl-4">
-                <div className="flex items-center gap-2 text-xs font-medium text-zinc-500 dark:text-zinc-400 bg-zinc-50 dark:bg-navidark-800 px-3 py-1.5 rounded-md hidden sm:flex">
+                <div className="items-center gap-2 text-xs font-medium text-zinc-500 dark:text-zinc-400 bg-zinc-50 dark:bg-navidark-800 px-3 py-1.5 rounded-md hidden sm:flex">
                   <Clock className="w-3.5 h-3.5" />
                   <span>{new Date(project.lastOpened).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
                 </div>

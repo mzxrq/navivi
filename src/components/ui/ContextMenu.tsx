@@ -4,17 +4,20 @@ import { useWaypointActions } from "../../hooks/useWaypointActions";
 import {
   Plus,
   Trash2,
-  MapPin,
+  WP,
+  MapPinned,
+  MapPinPlus,
   CornerDownLeft,
   Edit,
   CopyPlus,
-  MapPinPen
+  MapPinPen,
+  ChevronRight // ✨ Imported for the submenu arrow
 } from "../ui/icons";
 
 export interface ContextMenuState {
   x: number;
   y: number;
-  type: "track-header" | "timeline-clip" | "map-canvas" | "waypoint-marker";
+  type: "track-header" | "timeline-clip" | "map-canvas" | "waypoint-marker" | "empty-track";
   targetId?: string;
   data?: any;
 }
@@ -27,7 +30,6 @@ export function ContextMenu() {
     waypoints,
     setWaypoints,
     setActiveWaypointId,
-    updateWaypoint,
   } = useWorkspace();
   const { addReturnStop } = useWaypointActions();
 
@@ -44,15 +46,11 @@ export function ContextMenu() {
 
     const handleCloseMenu = () => setMenu(null);
 
-    // FIX: Catch Middle Clicks and Outside Clicks instantly before 'click' event
     const handleMouseDown = (e: MouseEvent) => {
-      // If it's a middle click (scroll wheel), kill the menu instantly
       if (e.button === 1) {
         setMenu(null);
         return;
       }
-      // If it's a left click OUTSIDE the menu, kill it.
-      // (We let clicks INSIDE the menu pass through so the button onClick can fire)
       if (!(e.target as Element).closest("#global-context-menu")) {
         setMenu(null);
       }
@@ -62,8 +60,6 @@ export function ContextMenu() {
     window.addEventListener("open-context-menu" as any, handleOpenMenu);
     window.addEventListener("mousedown", handleMouseDown);
     window.addEventListener("close-context-menus", handleCloseMenu);
-
-    // Catch window resizes and timeline/map scrolling!
     window.addEventListener("resize", handleCloseMenu);
     window.addEventListener("scroll", handleCloseMenu, { capture: true });
 
@@ -143,41 +139,73 @@ export function ContextMenu() {
     setMenu(null);
   };
 
-  const handleToggleStopBy = (wpId?: string) => {
+  const handleSetWaypointType = (wpId: string | undefined, type: "start" | "end" | "stopby" | "normal") => {
     if (!wpId) return;
-    const wp = waypoints.find((w) => w.id === wpId);
-    if (wp) {
-      updateWaypoint(wpId, { isStopBy: !wp.isStopBy });
+    
+    const newWaypoints = [...waypoints];
+    const currentIndex = newWaypoints.findIndex(w => w.id === wpId);
+    if (currentIndex === -1) return;
+    
+    const wp = newWaypoints[currentIndex];
+    
+    if (type === "start") {
+      newWaypoints.splice(currentIndex, 1);
+      newWaypoints.unshift({ ...wp, isStopBy: false }); // Move to front, force normal
+    } else if (type === "end") {
+      newWaypoints.splice(currentIndex, 1);
+      newWaypoints.push({ ...wp, isStopBy: false }); // Move to back, force normal
+    } else if (type === "stopby") {
+      newWaypoints[currentIndex] = { ...wp, isStopBy: true };
+    } else if (type === "normal") {
+      newWaypoints[currentIndex] = { ...wp, isStopBy: false };
     }
+    
+    setWaypoints(newWaypoints);
+    setMenu(null);
+  };
+
+  const handleDuplicateClip = (clipId?: string) => {
+    if (!clipId) return;
+    const targetClip = timeline.clips.find(c => c.id === clipId);
+    if (!targetClip) return;
+
+    const newClip = {
+      ...targetClip,
+      id: crypto.randomUUID(),
+      startTime: targetClip.startTime + targetClip.duration,
+    };
+
+    setTimeline({
+      ...timeline,
+      clips: [...timeline.clips, newClip]
+    });
     setMenu(null);
   };
 
   const menuWidth = 192;
   let estimatedHeight = 200;
 
-  if (menu.type === "timeline-clip" || menu.type === "map-canvas")
-    estimatedHeight = 50;
+  if (menu.type === "timeline-clip" || menu.type === "map-canvas") estimatedHeight = 50;
   if (menu.type === "track-header") estimatedHeight = 120;
   if (menu.type === "waypoint-marker") estimatedHeight = 175;
 
   let top = menu.y;
   let left = menu.x;
 
-  // 1. If it hits the bottom of the screen, flip it so it renders UPWARDS from the cursor!
   if (top + estimatedHeight > window.innerHeight) {
     top = menu.y - estimatedHeight;
-    // Safety clamp in case flipping it pushes it off the top of the screen
     if (top < 0) top = window.innerHeight - estimatedHeight - 12;
   }
 
-  // 2. Slide left if it hits the right edge
   if (left + menuWidth > window.innerWidth) {
     left = window.innerWidth - menuWidth - 8;
   }
 
+  const popSubmenuLeft = left + (menuWidth * 2) > window.innerWidth;
+
   return (
     <div
-      id="global-context-menu" // Added ID so the mousedown listener can detect it!
+      id="global-context-menu"
       key={`${menu.x}-${menu.y}`}
       className="fixed z-1000 w-48 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl border border-zinc-200 dark:border-white/10 rounded-xl shadow-2xl p-1 animate-in fade-in zoom-in-95 duration-100"
       style={{ top, left }}
@@ -217,12 +245,21 @@ export function ContextMenu() {
         )}
 
         {menu.type === "timeline-clip" && (
+          <>
+          <button
+            onClick={() => handleDuplicateClip(menu.targetId)}
+            className="ctx-btn"
+          >
+            <CopyPlus className="w-3.5 h-3.5"/> Duplicate Clip
+          </button>
+          <div className="my-1 border-t border-zinc-200 dark:border-white/10" />
           <button
             onClick={() => handleDeleteClip(menu.targetId)}
             className="ctx-btn text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10"
           >
             <Trash2 className="w-3.5 h-3.5" /> Delete Clip
           </button>
+        </>
         )}
 
         {menu.type === "map-canvas" && (
@@ -234,7 +271,7 @@ export function ContextMenu() {
               }}
               className="ctx-btn"
             >
-              Set as Start
+              <MapPinned className="w-3.5 h-3.5" />Set as Start
             </button>
             <button
               onClick={() => {
@@ -243,7 +280,7 @@ export function ContextMenu() {
               }}
               className="ctx-btn"
             >
-              Set as Destination
+              <div className="w-3.5 h-3.5" />Set as Destination
             </button>
             <button
               onClick={() => {
@@ -252,17 +289,17 @@ export function ContextMenu() {
               }}
               className="ctx-btn text-amber-600 dark:text-amber-500"
             >
-              Add 'Stop By' Here
+              <div className="w-3.5 h-3.5" />Add Stop By
             </button>
             <div className="my-1 border-t border-zinc-200 dark:border-white/10" />
             <button
               onClick={() => {
-                if (menu.data?.addWaypoint) menu.data.addWaypoint(); // Fixed typo!
+                if (menu.data?.addWaypoint) menu.data.addWaypoint();
                 setMenu(null);
               }}
               className="ctx-btn"
             >
-              <MapPin className="w-3.5 h-3.5" /> Add Waypoint Here
+              <WP className="w-3.5 h-3.5" /> Add Waypoint Here
             </button>
           </>
         )}
@@ -273,10 +310,29 @@ export function ContextMenu() {
               <CornerDownLeft className="w-3.5 h-3.5"/> Add Return Stop
             </button>
             
-            {/* New Toggle Button */}
-            <button onClick={() => handleToggleStopBy(menu.targetId)} className="ctx-btn text-amber-600 dark:text-amber-500">
-              <MapPinPen className="w-3.5 h-3.5" />Waypoint Type
-            </button>
+            {/* ✨ NEW: The Submenu Implementation */}
+            <div className="relative group">
+              <button className="ctx-btn w-full flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <MapPinPen className="w-3.5 h-3.5" /> Waypoint Type
+                </span>
+                <ChevronRight className="w-3.5 h-3.5 opacity-50" />
+              </button>
+              
+              {/* Flyout Menu */}
+              <div 
+                className={`absolute top-0 hidden group-hover:flex flex-col w-40 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl border border-zinc-200 dark:border-white/10 rounded-xl shadow-2xl p-1 animate-in fade-in zoom-in-95 duration-100 ${
+                  popSubmenuLeft ? "right-full mr-1" : "left-full ml-1"
+                }`}
+              >
+                <button onClick={() => handleSetWaypointType(menu.targetId, "start")} className="ctx-btn"><MapPinned className="w-3.5 h-3.5" />Set as Start</button>
+                <button onClick={() => handleSetWaypointType(menu.targetId, "end")} className="ctx-btn"><div className="w-3.5 h-3.5" />Set as Destination</button>
+                <div className="my-1 border-t border-zinc-200 dark:border-white/10" />
+                <button onClick={() => handleSetWaypointType(menu.targetId, "normal")} className="ctx-btn text-blue-600 dark:text-blue-400"><MapPinPlus className="w-3.5 h-3.5" />Normal Node</button>
+                <button onClick={() => handleSetWaypointType(menu.targetId, "stopby")} className="ctx-btn text-amber-600 dark:text-amber-500"><div className="w-3.5 h-3.5" />Stop By</button>
+              </div>
+            </div>
+
             <div className="my-1 border-t border-zinc-200 dark:border-white/10" />
             <button
               onClick={() => handleEditWaypoint(menu.targetId)}
@@ -297,6 +353,28 @@ export function ContextMenu() {
             >
               <Trash2 className="w-3.5 h-3.5" /> Delete Waypoint
             </button>
+          </>
+        )}
+
+        {menu.type === "empty-track" && (
+          <>
+            <button onClick={() => handleAddTrack("video")} className="ctx-btn">
+              <Plus className="w-3.5 h-3.5" /> Add Video Track
+            </button>
+            <button onClick={() => handleAddTrack("audio")} className="ctx-btn">
+              <Plus className="w-3.5 h-3.5" /> Add Audio Track
+            </button>
+            <div className="my-1 border-t border-zinc-200 dark:border-white/10"/>
+            {menu.targetId && (
+            <>
+              <button
+                onClick={() => handleDeleteTrack(menu.targetId)}
+                className="ctx-btn text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10"
+              >
+                <Trash2 className="w-3.5 h-3.5" /> Delete Empty Track
+              </button>
+            </>
+          )}
           </>
         )}
       </div>
