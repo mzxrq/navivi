@@ -11,13 +11,16 @@ export interface Waypoint {
   images?: string[];
   imageDisplay?: "pip" | "fullscreen";
   imagePans?: string[];
+  imageTransitions?: string[];
   narration?: string;
+  arrivingNarration?: string;
+  attractionNarration?: string;
   routeMode: RouteMode;
-  duration?: number;
   customRoute?: [number, number][];
   isGeneratingScript?: boolean;
   isStopBy?: boolean;
   drawStyle?: "linear" | "spline";
+  curveOffset?: number;
 }
 
 export interface RouteSegment {
@@ -66,27 +69,43 @@ export interface RecentProjects {
 export interface TimelineTrack {
   id: string;
   name: string;
-  type: TrackType;
+  type: string;
+  isHidden?: boolean;
+  isMuted?: boolean;
+  isLocked?: boolean;
 }
 
-export interface TimelineClipData {
+export interface ClipData {
   id: string;
   trackId: string;
   label: string;
-  source?: string;
   startTime: number;
   duration: number;
-  color?: string;
+  sourceDuration?: number;
+  source?: string;
+  sourceOffset?: number;
+
+  type?: string;
+
   x?: number;
   y?: number;
   scaleX?: number;
   scaleY?: number;
   rotation?: number;
+
+  text?: string;
+  fontSize?: number;
+  color?: string;
+  stroke?: string;
+  strokeWidth?: number;
+
+  transitionIn?: string;
+  transitionOut?: string;
 }
 
 export interface TimelineData {
   tracks: TimelineTrack[];
-  clips: TimelineClipData[];
+  clips: ClipData[];
   zoomMultiplier: number;
 }
 

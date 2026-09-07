@@ -42,6 +42,9 @@ export function TitleBar() {
     redoTimeline,
     canUndoTimeline,
     canRedoTimeline,
+    setActiveWaypointId,
+    setWaypoints,
+    setMetadata
   } = useWorkspace();
 
   const { importRouteFile } = useFileActions();
@@ -63,6 +66,22 @@ export function TitleBar() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  const clearProjectState = () => {
+    if (setActiveWaypointId) setActiveWaypointId(null);
+    if (setWaypoints) setWaypoints([]);
+    if (setMetadata) {
+      setMetadata(prevMetadata => ({
+        ...prevMetadata,
+        project_name: "Untitled Project",
+        project_id: undefined,
+        directory_path: "", 
+        created_at: new Date().toISOString(),
+        status: "draft"
+      }));
+    }
+    setIsDirty(false);
+  };
+
   const handleSafeNavigation = async (
     targetView: "title_screen" | "new_project",
   ) => {
@@ -72,6 +91,7 @@ export function TitleBar() {
       setPendingNavigation(targetView);
       return;
     }
+    clearProjectState();
     setCurrentView(targetView);
   };
 

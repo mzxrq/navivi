@@ -36,6 +36,10 @@ export function MapArea() {
   const [isHovering, setIsHovering] = useState(false);
   const [isAddMode, setIsAddMode] = useState(false);
   const [isDrawMode, setIsDrawMode] = useState(false);
+  const [addType, setAddType] = useState<"normal" | "start" | "end" | "stopby">(
+    "normal",
+  );
+
   const [isProcessing] = useState(false);
   const [uploadedRouteLine] = useState<[number, number][]>([]);
   const mapRef = useRef<MapRef>(null);
@@ -86,20 +90,17 @@ export function MapArea() {
     }
 
     if (!isAddMode) return;
-    handleAddWaypoint(e.lngLat.lat, e.lngLat.lng);
-  };
 
-  if (isDrawMode && activeWaypointId) {
-    setWaypoints((prev) =>
-      prev.map((wp) => {
-        if (wp.id === activeWaypointId && wp.customRoute?.length) {
-          return { ...wp, customRoute: wp.customRoute.slice(0, -1) };
-        }
-        return wp;
-      }),
-    );
-    return;
-  }
+    if (addType === "start") {
+      handleAddSpWaypoint(e.lngLat.lat, e.lngLat.lng, "start");
+    } else if (addType === "end") {
+      handleAddSpWaypoint(e.lngLat.lat, e.lngLat.lng, "end");
+    } else if (addType === "stopby") {
+      handleAddStopByWaypoint(e.lngLat.lat, e.lngLat.lng);
+    } else {
+      handleAddWaypoint(e.lngLat.lat, e.lngLat.lng);
+    }
+  };
 
   const handleUndoDraw = () => {
     if (!activeWaypointId) return;
@@ -124,6 +125,7 @@ export function MapArea() {
 
   const handleMapContextMenu = (e: any) => {
     e.originalEvent.preventDefault();
+    e.originalEvent.stopPropagation();
 
     // context menu payload
     window.dispatchEvent(
@@ -139,8 +141,26 @@ export function MapArea() {
               handleAddSpWaypoint(e.lngLat.lat, e.lngLat.lng, "start"),
             setAsDestination: () =>
               handleAddSpWaypoint(e.lngLat.lat, e.lngLat.lng, "end"),
+            setAsStopBy: () =>
+              handleAddStopByWaypoint(e.lngLat.lat, e.lngLat.lng),
             addWaypoint: () => handleAddWaypoint(e.lngLat.lat, e.lngLat.lng),
           },
+        },
+      }),
+    );
+  };
+
+  const handleMarkerContextMenu = (e: React.MouseEvent, wpId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    window.dispatchEvent(
+      new CustomEvent("open-context-menu", {
+        detail: {
+          x: e.clientX,
+          y: e.clientY,
+          type: "waypoint-marker",
+          targetId: wpId,
         },
       }),
     );
@@ -229,6 +249,44 @@ export function MapArea() {
     }
   };
 
+  const handleAddStopByWaypoint = async (lat: number, lng: number) => {
+    const newId = Math.random().toString(36).substring(7);
+
+    setWaypoints((prev) => [
+      ...prev,
+      {
+        id: newId,
+        lat,
+        lng,
+        name: "Locating...",
+        images: [],
+        imagePans: [],
+        narration: "",
+        routeMode: "walking",
+        isStopBy: true,
+      },
+    ]);
+    setIsDirty(true);
+
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`,
+      );
+      const data = await res.json();
+      const placeName =
+        data.name || data.address?.road || data.address?.city || `Stop By`;
+      setWaypoints((prev) =>
+        prev.map((wp) => (wp.id === newId ? { ...wp, name: placeName } : wp)),
+      );
+    } catch {
+      setWaypoints((prev) =>
+        prev.map((wp) =>
+          wp.id === newId ? { ...wp, name: `Unknown Location` } : wp,
+        ),
+      );
+    }
+  };
+
   // Drag and Drop Listeners
   useEffect(() => {
     const unlistenHover = listen("tauri://drag-enter", () =>
@@ -275,10 +333,10 @@ export function MapArea() {
   return (
     <main className="flex-1 relative bg-zinc-100 dark:bg-[#09090b] overflow-hidden transition-colors">
       <div className="absolute top-4 right-4 z-500 flex items-center gap-2">
+        {/* --- DRAW TOOLBAR --- */}
         <div
           className={`flex items-center rounded-full drop-shadow-xl transition-all duration-300 ease-out bg-white dark:bg-zinc-800`}
         >
-          {/* THE REVEALED TOOLS (Hidden when not drawing) */}
           <div
             className={`flex items-center overflow-hidden transition-all duration-300 ease-out ${isDrawMode ? "max-w-50 opacity-100 px-2" : "max-w-0 opacity-0 px-0"}`}
           >
@@ -312,7 +370,6 @@ export function MapArea() {
             </button>
           </div>
 
-          {/* THE MAIN TOGGLE BUTTON */}
           <button
             onClick={() => {
               const nextState = !isDrawMode;
@@ -325,40 +382,75 @@ export function MapArea() {
               }
             }}
             title="Draw Custom Route"
-            className={`flex items-center justify-center w-10 h-10 rounded-full transition-colors ${
-              isDrawMode
-                ? "bg-navi-600 text-white"
-                : "text-zinc-700 dark:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-700"
-            }`}
+            className={`flex items-center justify-center w-10 h-10 rounded-full transition-colors ${isDrawMode ? "bg-navi-600 text-white" : "text-zinc-700 dark:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-700"}`}
           >
             <Pencil className="w-3.5 h-3.5" />
           </button>
         </div>
 
-        {/* Existing Add Pin Button */}
-        <button
-          onClick={() => {
-            setIsAddMode(!isAddMode);
-            if (!isAddMode) setIsDrawMode(false);
-          }}
-          title="Add Pin"
-          className={`flex items-center justify-center w-10 h-10 rounded-full transition-all drop-shadow-xl font-bold ${
-            isAddMode
-              ? "bg-red-500 hover:bg-red-600 text-white"
-              : "bg-white dark:bg-zinc-800 text-zinc-700 hover:bg-zinc-200 dark:text-zinc-200 dark:hover:bg-zinc-500"
-          }`}
+        {/* --- ✨ NEW: WAYPOINT TOOLBAR --- */}
+        <div
+          className={`flex items-center rounded-full drop-shadow-xl transition-all duration-300 ease-out ${isAddMode ? "bg-white dark:bg-zinc-800" : ""}`}
         >
-          <MapPin className="w-3.5 h-3.5" />
-        </button>
+          {/* The Expanded Options */}
+          <div
+            className={`flex items-center overflow-hidden transition-all duration-300 ease-out ${isAddMode ? "max-w-62.5 opacity-100 px-2 gap-1" : "max-w-0 opacity-0 px-0 gap-0"}`}
+          >
+            <button
+              onClick={() => setAddType("start")}
+              className={`px-2 py-1 text-[10px] font-bold uppercase tracking-wider rounded transition-colors ${addType === "start" ? "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-white"}`}
+            >
+              Start
+            </button>
+            <button
+              onClick={() => setAddType("normal")}
+              className={`px-2 py-1 text-[10px] font-bold uppercase tracking-wider rounded transition-colors ${addType === "normal" ? "bg-blue-500/20 text-blue-600 dark:text-blue-400" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-white"}`}
+            >
+              Node
+            </button>
+            <button
+              onClick={() => setAddType("stopby")}
+              className={`px-2 py-1 text-[10px] font-bold uppercase tracking-wider rounded transition-colors ${addType === "stopby" ? "bg-amber-500/20 text-amber-600 dark:text-amber-400" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-white"}`}
+            >
+              Stop By
+            </button>
+            <button
+              onClick={() => setAddType("end")}
+              className={`px-2 py-1 text-[10px] font-bold uppercase tracking-wider rounded transition-colors ${addType === "end" ? "bg-red-500/20 text-red-600 dark:text-red-400" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-white"}`}
+            >
+              End
+            </button>
+            <div className="w-px h-4 bg-zinc-200 dark:bg-zinc-700 ml-1 mr-1" />
+          </div>
+
+          {/* The Main Toggle Button */}
+          <button
+            onClick={() => {
+              setIsAddMode(!isAddMode);
+              if (!isAddMode) {
+                setIsDrawMode(false);
+                setAddType("normal");
+              }
+            }}
+            title="Add Pin"
+            className={`flex items-center justify-center w-10 h-10 rounded-full transition-all font-bold ${
+              isAddMode
+                ? "bg-red-500 hover:bg-red-600 text-white"
+                : "bg-white dark:bg-zinc-800 text-zinc-700 hover:bg-zinc-200 dark:text-zinc-200 dark:hover:bg-zinc-500"
+            }`}
+          >
+            <MapPin className="w-3.5 h-3.5" />
+          </button>
+        </div>
 
         <RouteStyling />
       </div>
 
       {isDrawMode && activeWp && nextWp && (
-        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-500 bg-zinc-900/95 dark:bg-zinc-100/95 text-white dark:text-zinc-900 px-5 py-2.5 rounded-full shadow-2xl flex items-center gap-3 backdrop-blur-md animate-in slide-in-from-top-4 border border-white/10 dark:border-black/10">
+        <div className="absolute top-4 left-5 -translate-x-1 z-250 dark:bg-zinc-900/95 bg-zinc-100/95 dark:text-white text-zinc-900 px-4 py-2 rounded-full shadow-2xl flex items-center gap-3 backdrop-blur-md animate-in slide-in-from-top-4 border border-white/10 dark:border-black/10">
           <span className="flex items-center gap-2 text-[10px] font-black tracking-widest text-amber-400 dark:text-amber-600 uppercase">
             <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-            Layer Active
+            Active
           </span>
           <div className="w-px h-4 bg-white/20 dark:bg-black/20" />
           <span
@@ -426,46 +518,15 @@ export function MapArea() {
             const isEnd =
               index === waypoints.length - 1 && waypoints.length > 1;
 
-            // If the start and end coordinates are exactly the same, it's a Round Trip (S/E)!
-            const isRoundTrip =
-              isStart &&
-              waypoints.length > 1 &&
-              wp.lat === waypoints[waypoints.length - 1].lat &&
-              wp.lng === waypoints[waypoints.length - 1].lng;
-
-            // 🛠️ Calculate the numbering (ignoring StopBys)
             let normalIndex = 1;
             for (let i = 1; i < index; i++) {
               if (!waypoints[i].isStopBy) normalIndex++;
             }
 
-            // 🛠️ 1. IF IT IS A STOPBY: Render the dark dot!
-            if (wp.isStopBy) {
-              return (
-                <Marker
-                  key={wp.id}
-                  longitude={wp.lng}
-                  latitude={wp.lat}
-                  anchor="center"
-                >
-                  <div className="relative group cursor-pointer">
-                    <div className="w-3.5 h-3.5 bg-[#33261c] border-[2.5px] border-white rounded-full shadow-md hover:scale-150 transition-transform" />
-                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 opacity-0 group-hover:opacity-100 transition-opacity bg-zinc-900 text-white text-[10px] font-bold px-2 py-0.5 rounded pointer-events-none whitespace-nowrap">
-                      Stopby: {wp.name}
-                    </div>
-                  </div>
-                </Marker>
-              );
-            }
-
-            // 🛠️ 2. IF IT IS A NORMAL/START/END: Determine Type and Label
-            let pinType: "start" | "end" | "start-end" | "normal" = "normal";
+            let pinType: "start" | "end" | "stopby" | "normal" = "normal";
             let label = normalIndex.toString();
 
-            if (isRoundTrip) {
-              pinType = "start-end";
-              label = "S/E";
-            } else if (isStart) {
+            if (isStart) {
               pinType = "start";
               label = "S";
             } else if (isEnd) {
@@ -473,9 +534,26 @@ export function MapArea() {
               label = "E";
             }
 
-            // (Optional) Hide the final "E" marker entirely if it's a Round Trip,
-            // since the Start marker is already rendering the "S/E" pin at those coordinates!
-            if (isEnd && isRoundTrip) return null;
+            if (wp.isStopBy) {
+              return (
+                <Marker
+                  key={wp.id}
+                  longitude={wp.lng}
+                  latitude={wp.lat}
+                  anchor="bottom"
+                >
+                  <div
+                    className="flex flex-col items-center group cursor-grab active:cursor-grabbing hover:-translate-y-1 transition-transform"
+                    onContextMenu={(e) => handleMarkerContextMenu(e, wp.id)}
+                  >
+                    <div className="bg-zinc-900 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-lg border border-white/20 mb-1 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                      {wp.name || `Waypoint`}
+                    </div>
+                    <NaviPin className="w-8 h-8" label="・" pinType="stopby" />
+                  </div>
+                </Marker>
+              );
+            }
 
             return (
               <Marker
@@ -491,7 +569,10 @@ export function MapArea() {
                 }}
                 anchor="bottom"
               >
-                <div className="flex flex-col items-center group cursor-grab active:cursor-grabbing hover:-translate-y-1 transition-transform">
+                <div
+                  className="flex flex-col items-center group cursor-grab active:cursor-grabbing hover:-translate-y-1 transition-transform"
+                  onContextMenu={(e) => handleMarkerContextMenu(e, wp.id)}
+                >
                   <div className="bg-zinc-900 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-lg border border-white/20 mb-1 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
                     {wp.name || `Waypoint`}
                   </div>

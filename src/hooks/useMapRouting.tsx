@@ -329,25 +329,6 @@ export function useMapRouting() {
           await new Promise((resolve) => setTimeout(resolve, 400));
         }
       }
-
-      // const promises = fetchQueue.map((item) =>
-      //   fetchSingleSegment(item.index, item.wp1, item.wp2, item.mode, item.cacheKey, apiKey)
-      // );
-
-      // const results = await Promise.all(promises);
-      // const newCacheEntries: Record<string, [number, number][]> = {};
-      // const updatedSegments = [...latestSegmentsRef.current];
-
-      // results.forEach((res) => {
-      //   updatedSegments[res.index] = { positions: res.positions, mode: res.mode };
-
-      //   if (res.positions.length > 2 || res.mode === "direct") {
-      //     newCacheEntries[res.cacheKey] = res.positions;
-      //   }
-      // });
-
-      // setRouteSegments(updatedSegments);
-      // setRoutingCache((prev) => ({ ...prev, ...newCacheEntries }));
     }, 800);
 
     return () => {

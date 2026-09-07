@@ -156,9 +156,13 @@ export const saveProjectData = async (
         image_display: wp.imageDisplay || "pip",
         narration: wp.narration || "", // Prevent undefined
         routeMode: wp.routeMode || "driving",
-        customRoute: wp.customRoute || [],
-        drawStyle: wp.drawStyle || "linear",
-        isStopBy: wp.isStopBy || false,
+        ...(wp.customRoute && wp.customRoute.length > 0 && {
+          customRoute: wp.customRoute,
+          drawStyle: wp.drawStyle || "linear",
+        }),
+        ...(wp.isStopBy && {
+          isStopBy: true
+        })
       };
     })
   );
@@ -190,8 +194,8 @@ export const saveProjectData = async (
     const wp1 = waypoints[i];
     const wp2 = waypoints[i + 1];
     const mode = wp1.routeMode || "driving";
-
-    activeKeys.add(`${wp1.lat.toFixed(5)},${wp1.lng.toFixed(5)}|${wp2.lat.toFixed(5)},${wp2.lng.toFixed(5)}|${mode}`);
+    const customHash = mode === "draw" ? JSON.stringify(wp1.customRoute || []) : "";
+    activeKeys.add(`${wp1.lat.toFixed(5)},${wp1.lng.toFixed(5)}|${wp2.lat.toFixed(5)},${wp2.lng.toFixed(5)}|${mode}|${customHash}`);
   }
   const cleanCache: Record<string, [number, number][]> = {};
   let deletedCount = 0;

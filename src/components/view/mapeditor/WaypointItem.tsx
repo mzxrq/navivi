@@ -33,7 +33,8 @@ export function WaypointItem({
   onEdit,
   onDelete,
 }: WaypointItemProps) {
-  const { activeWaypointId, setActiveWaypointId, updateWaypoint } =
+  // ✨ Added `waypoints` to calculate relative indexing
+  const { activeWaypointId, setActiveWaypointId, updateWaypoint, waypoints } =
     useWorkspace();
   const itemRef = useRef<HTMLDivElement>(null);
   const isActive = activeWaypointId === wp.id;
@@ -48,6 +49,30 @@ export function WaypointItem({
     setActiveWaypointId(wp.id);
     onEdit();
   };
+
+  let displayLabel = "";
+  if (wp.isStopBy) {
+    let stopByIndex = 0;
+    for (let i = index; i >= 0; i--) {
+      if (waypoints[i].isStopBy) stopByIndex++;
+      else break;
+    }
+    displayLabel = `+${stopByIndex}`;
+  } else {
+    // Count normal waypoints
+    let normalIndex = 0;
+    for (let i = 0; i <= index; i++) {
+      if (!waypoints[i].isStopBy) normalIndex++;
+    }
+    displayLabel = normalIndex.toString();
+
+    // Catch Start/End/RoundTrip logic
+    const isStart = index === 0;
+    const isEnd = index === waypoints.length - 1 && waypoints.length > 1;
+
+    if (isStart) displayLabel = "S";
+    else if (isEnd) displayLabel = "E";
+  }
 
   return (
     <div
@@ -86,20 +111,22 @@ export function WaypointItem({
             <div className="absolute top-4.5 bottom-0 left-1/2 -translate-x-1/2 w-0.5 bg-navi dark:bg-zinc-800 transition-colors" />
           )}
 
-          {/* The Node */}
+          {/* ✨ The Node: Dynamic Styling for Stop Bys */}
           <div
-            className={`relative z-10 w-5 h-5 mt-2 rounded-full border-[2.5px] bg-navi dark:bg-navi flex items-center justify-center shadow-sm transition-colors ${
-              isActive ? "border-navi bg-navi dark:bg-navi" : "border-navi"
+            className={`relative z-10 w-5 h-5 mt-1.75 rounded-full border-[2.5px] flex items-center justify-center shadow-sm transition-colors ${
+              wp.isStopBy
+                ? "bg-[#33261c] border-[#33261c]"
+                : isActive
+                ? "border-navi bg-navi dark:bg-navi" 
+                : "border-navi bg-navi dark:bg-navi" 
             }`}
           >
             <span
-              className={`text-[9px] font-bold ${
-                isActive
-                  ? "text-white dark:text-white"
-                  : "text-white dark:text-white"
+              className={`text-white ${
+                wp.isStopBy ? "text-[8px]" : "text-[9px]"
               }`}
             >
-              {index + 1}
+              {displayLabel}
             </span>
           </div>
         </div>
@@ -110,7 +137,11 @@ export function WaypointItem({
         <div className="flex flex-col min-w-0 flex-1">
           {/* Location Name */}
           <span
-            className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate pr-4 transition-colors"
+            className={`text-sm font-semibold truncate pr-4 transition-colors ${
+              wp.isStopBy
+                ? "text-zinc-600 dark:text-zinc-400"
+                : "text-zinc-900 dark:text-zinc-100"
+            }`}
             title={wp.name}
           >
             {wp.name}

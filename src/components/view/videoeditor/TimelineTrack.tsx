@@ -6,23 +6,28 @@ import { TimelineClip } from "./TimelineClip";
 
 interface TrackProps {
   track: TrackType;
-  selectedClipId?: string | null;
-  activeTool: string;
   onSplit: (id: string, time: number) => void;
-  onSelectClip?: (id: string | null) => void;
+  selectedClipIds?: string[];
+  onSelectClip?: (id: string | null, multi?: boolean) => void;
+  activeTool: string;
   trackWidth: number;
   isRippleMode: boolean;
+  currentTime: number;
+  isLocked?: boolean;
 }
 
 const pxPs = 20;
 
 export function TimelineTrack({
   track,
-  selectedClipId,
+  selectedClipIds,
   activeTool,
   onSelectClip,
   onSplit,
-  trackWidth, // 🛠️ Added to destructuring
+  trackWidth,
+  isRippleMode,
+  currentTime,
+  isLocked,
 }: TrackProps) {
   const { timeline, setTimeline } = useWorkspace();
   const { showToast } = useUI();
@@ -35,23 +40,27 @@ export function TimelineTrack({
   const trackHeight = isMainTrack ? "h-20" : "h-14";
 
   const handleDragEnter = (e: React.DragEvent) => {
+    if (isLocked) return;
     e.preventDefault();
     dragCounter.current += 1;
     if (dragCounter.current === 1) setIsDragOver(true);
   };
 
   const handleDragOver = (e: React.DragEvent) => {
+    if (isLocked) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = "copy";
   };
 
   const handleDragLeave = (e: React.DragEvent) => {
+    if (isLocked) return;
     e.preventDefault();
     dragCounter.current -= 1;
     if (dragCounter.current === 0) setIsDragOver(false);
   };
 
   const handleDrop = (e: React.DragEvent) => {
+    if (isLocked) return;
     e.preventDefault();
     dragCounter.current = 0;
     setIsDragOver(false);
@@ -62,7 +71,6 @@ export function TimelineTrack({
     const asset = JSON.parse(assetData);
     const trackName = track.name.toLowerCase();
 
-    // --- STRICT TRACK RULES ---
     if (trackName.includes("video") && asset.type === "audio") {
       showToast("Cannot place Audio on the Video track.", "error");
       return;
@@ -82,55 +90,93 @@ export function TimelineTrack({
 
     const trackRect = e.currentTarget.getBoundingClientRect();
     const dropX = e.clientX - trackRect.left;
-
     const zoomRatio = pxPs * timeline.zoomMultiplier;
-    
-    // Parse duration
+
     const durationParts = asset.duration
       ? asset.duration.split(":")
       : ["00", "05"];
     const durationSeconds =
       parseInt(durationParts[0]) * 60 + parseInt(durationParts[1]);
 
-    // 🛠️ THE COLLISION AVOIDANCE ENGINE
-    let finalStart = Math.max(0, dropX / zoomRatio);
-    let hasOverlap = true;
-
-    while (hasOverlap) {
-      const overlappingClip = trackClips.find((neighbor) => {
-        const neighborEnd = neighbor.startTime + neighbor.duration;
-        const currentEnd = finalStart + durationSeconds;
-        // The 0.01 epsilon prevents false overlaps from floating-point math
-        return (
-          (finalStart >= neighbor.startTime && finalStart < neighborEnd - 0.01) ||
-          (currentEnd > neighbor.startTime + 0.01 && currentEnd <= neighborEnd) ||
-          (finalStart <= neighbor.startTime && currentEnd >= neighborEnd)
-        );
-      });
-
-      if (overlappingClip) {
-        // Slide it exactly to the end of the clip it hit, and check loop again!
-        finalStart = overlappingClip.startTime + overlappingClip.duration;
-      } else {
-        hasOverlap = false; // It fits! Break the loop.
-      }
-    }
+    const finalStart = Math.max(0, dropX / zoomRatio);
+    const finalEnd = finalStart + durationSeconds;
 
     const newClip = {
       id: crypto.randomUUID(),
       trackId: track.id,
       label: asset.name,
-      source: asset.source || asset.id, 
-      type: asset.type, 
+      source: asset.source || asset.id,
+      type: asset.type,
       startTime: finalStart,
       duration: durationSeconds,
+      sourceDuration: durationSeconds,
+      sourceOffset: 0,
     };
 
-    setTimeline({
-      ...timeline,
-      clips: [...timeline.clips, newClip],
-    });
+    let newClips = [...timeline.clips];
 
+    if (isRippleMode) {
+      newClips = newClips.flatMap((c) => {
+        if (c.trackId !== track.id) return [c];
+        if (c.startTime >= finalStart)
+          return [{ ...c, startTime: c.startTime + durationSeconds }];
+
+        const cEnd = c.startTime + c.duration;
+        if (c.startTime < finalStart && cEnd > finalStart) {
+          return [
+            { ...c, duration: finalStart - c.startTime },
+            {
+              ...c,
+              id: crypto.randomUUID(),
+              startTime: finalEnd,
+              duration: cEnd - finalStart,
+              sourceOffset: (c.sourceOffset || 0) + (finalStart - c.startTime),
+            },
+          ];
+        }
+        return [c];
+      });
+    } else {
+      newClips = newClips.flatMap((c) => {
+        if (c.trackId !== track.id) return [c];
+
+        const cEnd = c.startTime + c.duration;
+        if (c.startTime >= finalStart && cEnd <= finalEnd) return [];
+        if (c.startTime < finalStart && cEnd > finalEnd) {
+          return [
+            { ...c, duration: finalStart - c.startTime },
+            {
+              ...c,
+              id: crypto.randomUUID(),
+              startTime: finalEnd,
+              duration: cEnd - finalEnd,
+              sourceOffset: (c.sourceOffset || 0) + (finalEnd - c.startTime),
+            },
+          ];
+        }
+        if (c.startTime < finalStart && cEnd > finalStart && cEnd <= finalEnd) {
+          return [{ ...c, duration: finalStart - c.startTime }];
+        }
+        if (
+          c.startTime >= finalStart &&
+          c.startTime < finalEnd &&
+          cEnd > finalEnd
+        ) {
+          return [
+            {
+              ...c,
+              startTime: finalEnd,
+              duration: cEnd - finalEnd,
+              sourceOffset: (c.sourceOffset || 0) + (finalEnd - c.startTime),
+            },
+          ];
+        }
+        return [c];
+      });
+    }
+
+    newClips.push(newClip);
+    setTimeline({ ...timeline, clips: newClips });
     if (onSelectClip) onSelectClip(newClip.id);
   };
 
@@ -142,15 +188,32 @@ export function TimelineTrack({
       onDrop={handleDrop}
       data-track-id={track.id}
       data-track-type={track.type}
-      style={{ width: `${trackWidth}px` }} // 🛠️ Applied the dynamic width!
+      style={{ width: `${trackWidth}px` }}
       className={`relative border-b border-zinc-200 dark:border-navidark-400 transition-colors ${
         isDragOver
           ? "bg-navi-50/50 dark:bg-navi-900/30 border-navi/50"
-          : "bg-white dark:bg-navidark-800 hover:bg-zinc-50 dark:hover:bg-navidark-700"
+          : "hover:bg-zinc-100/50 dark:hover:bg-navidark-700/50"
       } ${trackHeight} shrink-0`}
     >
+      {isLocked && (
+        <div className="absolute inset-0 bg-[repeating-linear-gradient(45deg,transparent,transparent_10px,rgba(0,0,0,0.03)_10px,rgba(0,0,0,0.03)_20px)] dark:bg-[repeating-linear-gradient(45deg,transparent,transparent_10px,rgba(255,255,255,0.02)_10px,rgba(255,255,255,0.02)_20px)] pointer-events-none z-10" />
+      )}
+
       <div
         className={`w-full h-full ${isDragOver ? "pointer-events-none" : ""}`}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          window.dispatchEvent(
+            new CustomEvent("open-context-menu", {
+              detail: {
+                x: e.clientX,
+                y: e.clientY,
+                type: "empty-track",
+                targetId: track.id,
+              },
+            }),
+          );
+        }}
       >
         {trackClips.map((clip) => (
           <TimelineClip
@@ -159,9 +222,12 @@ export function TimelineTrack({
             activeTool={activeTool}
             onSplit={onSplit}
             isMainTrack={isMainTrack}
+            isRippleMode={isRippleMode}
             pixelsPerSecond={pxPs * timeline.zoomMultiplier}
-            isSelected={selectedClipId === clip.id}
-            onSelect={() => onSelectClip && onSelectClip(clip.id)}
+            isSelected={selectedClipIds?.includes(clip.id)}
+            onSelect={(multi) => onSelectClip && onSelectClip(clip.id, multi)}
+            currentTime={currentTime}
+            isLocked={isLocked ?? false}
           />
         ))}
       </div>

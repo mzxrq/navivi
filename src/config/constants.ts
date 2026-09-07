@@ -31,7 +31,7 @@ export const defaultProjectSettings = {
     fps: 30,
     duration_seconds: 8.0,
     line_color: [0, 200, 255] as [number, number, number],
-    line_thickness: 10,
+    line_thickness: 6,
     marker_color: [0, 0, 255] as [number, number, number],
     marker_radius: 10,
     res_duration: 12.0,
