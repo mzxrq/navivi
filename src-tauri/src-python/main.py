@@ -1,271 +1,731 @@
 """
-main.py (Clean Architecture — Command Registry Edition)
+main.py
 ---------------------------------------------------------------------------
-Lightweight CLI Entry point for the GPS-to-navigation-video pipeline.
-Each pipeline operation is an isolated, independently-editable handler
-function registered in COMMAND_REGISTRY. To add or modify a step, touch
-only that step's function — nothing else in this file needs to change.
+CLI entry point for the GPS-to-navigation-video pipeline.
+
+Supports isolated tests for overview rendering, residential rendering, and
+TTS narration generation and attraction video generation.
 ---------------------------------------------------------------------------
 """
 
+import asyncio
+import shutil
 import sys
 import json
-import asyncio
 import traceback
 from pathlib import Path
-from typing import Callable, Dict, Any, List
-
-from services.data_upload_pipeline import (
-    handle_incoming_gps_upload,
-    generate_attraction_videos,
-)
-from services.video_pipeline import (
-    run_full_pipeline,
-    render_from_timeline,
-    process_gps as vp_process_gps,
-    render_route_video,
-    render_attraction_videos as vp_render_attraction_videos,
-    burn_subtitles as vp_burn_subtitles,
-)
-
-from services.file_handler import (
-    initialize_new_project,
-    save_project_asset_image,
-    generate_and_save_audio,
-)
-from services.job_config import JobConfigManager
-from services.llmscript import (
-    analyze_travel_image,
-    generate_voiceover_script,
-    generate_overview_script,
-)
-
-# =============================================================================
-# [Core] PER-OPERATION HANDLERS
-# -----------------------------------------------------------------------------
-# Contract: every handler takes the raw `argv` list (sys.argv) and returns a
-# JSON-serializable dict. The __main__ block below is responsible ONLY for
-# dispatch + printing + the top-level error envelope — it has zero knowledge
-# of any individual step's internals. This isolates blast radius: editing
-# "render_route_video" behavior can never accidentally break dispatch logic
-# or any unrelated command.
-# =============================================================================
+from typing import Any, Dict, Optional
 
 
-def _cmd_process_gps(argv: List[str]) -> Dict[str, Any]:
-    """Full raw-file ingestion: store raw GPS upload, convert, clean, export JSON."""
-    payload = argv[2] if len(argv) > 2 else ""
-    return {"success": True, "data": handle_incoming_gps_upload(payload)}
+def _video_safe_label(label: Any, fallback: str) -> str:
+    """Match the residential renderer's label sanitization for shared basenames."""
+    safe_label = "".join(
+        char for char in str(label) if char.isalnum() or char in (" ", "_", "-")
+    ).strip().replace(" ", "_")
+    return safe_label or fallback
 
 
-def _cmd_full_pipeline(argv: List[str]) -> Dict[str, Any]:
-    """Runs the entire GPS -> video pipeline end to end in one call."""
-    payload = argv[2] if len(argv) > 2 else ""
-    output_arg = argv[3] if len(argv) > 3 else None
-    result = run_full_pipeline(payload, output_video_dir=output_arg)
+def test_gps(job_config_path: str) -> Dict[str, Any]:
+    """Runs GPS parsing only (pipeline Step 1) — isolated so editing just
+    raw_track.gpx/job_config.json's GPS-related settings can be checked
+    without paying for TTS/attraction/video/subtitle stages. Every other
+    test_* function here (test_tts_all, test_attraction_videos,
+    test_overview_video/test_residential_video, test_subtitles) is this
+    same one-step-only shape for its own pipeline step — together they
+    cover all 5 of run_full_pipeline's steps individually, so a change
+    scoped to one step/file doesn't require re-running the whole pipeline
+    to check it."""
+    from services.vdoprocessing.videopipeline import process_gps
+
+    config_path = Path(job_config_path)
+    if not config_path.exists():
+        raise FileNotFoundError(f"job_config.json not found: {config_path}")
+
+    cleaned_route = process_gps(str(config_path))
     return {
         "success": True,
-        "video_paths": result["video_paths"],
-        "summary": result["summary"],
+        "summary": cleaned_route.get("summary", {}),
     }
 
 
-def _cmd_init_project(argv: List[str]) -> Dict[str, Any]:
-    """Creates a new project folder structure and initial job_config.json."""
-    payload = argv[2] if len(argv) > 2 else ""
-    project_name = argv[3] if len(argv) > 3 else "Untitled Project"
-    config_path = initialize_new_project(user_id=payload, project_name=project_name)
-    return {"success": True, "config_path": config_path}
+def test_overview_video(job_config_path: str, output_video_dir: str = None) -> Dict[str, Any]:
+    """Runs GPS parsing + route video rendering only, to sanity-check the
+    overview map animation without paying for TTS/attraction/subtitle stages."""
+    from services.vdoprocessing.videopipeline import process_gps, render_route_video
 
+    config_path = Path(job_config_path)
+    if not config_path.exists():
+        raise FileNotFoundError(f"job_config.json not found: {config_path}")
 
-def _cmd_save_asset(argv: List[str]) -> Dict[str, Any]:
-    """Copies an uploaded image into the project's assets directory."""
-    payload = argv[2] if len(argv) > 2 else ""
-    source_image_path = argv[3] if len(argv) > 3 else ""
-    asset_path = save_project_asset_image(
-        project_dir=payload, source_image_path=source_image_path
-    )
-    return {"success": True, "asset_path": asset_path}
+    output_video_dir = output_video_dir or str(config_path.parent / "video")
 
-
-def _cmd_generate_speech(argv: List[str]) -> Dict[str, Any]:
-    """Generates a single TTS audio file from raw text."""
-    payload = argv[2] if len(argv) > 2 else ""
-    output_path = argv[3] if len(argv) > 3 else "output.mp3"
-    saved_path = generate_and_save_audio(text=payload, output_path=output_path)
-    return {"success": True, "audio_path": saved_path}
-
-
-def _cmd_save_config(argv: List[str]) -> Dict[str, Any]:
-    """Persists the current JobConfigManager singleton state to disk."""
-    payload = argv[2] if len(argv) > 2 else ""
-    config = JobConfigManager(payload)
-    config.save()
-    return {"success": True}
-
-
-def _cmd_analyze_image(argv: List[str]) -> Dict[str, Any]:
-    """Runs the Ollama vision model over a map/attraction image."""
-    payload = argv[2] if len(argv) > 2 else ""
-    return {"success": True, "data": analyze_travel_image(payload)}
-
-
-def _cmd_generate_attraction_videos(argv: List[str]) -> Dict[str, Any]:
-    """Generates ComfyUI attraction clips via the data_upload_pipeline path."""
-    payload = argv[2] if len(argv) > 2 else ""
-    video_outputs = asyncio.run(generate_attraction_videos(payload))
-    return {"success": True, "video_outputs": video_outputs}
-
-
-def _cmd_generate_script(argv: List[str]) -> Dict[str, Any]:
-    """Generates a single-waypoint voiceover script via the configured LLM engine."""
-    payload = argv[2] if len(argv) > 2 else ""
-    data = json.loads(payload)
-    script = generate_voiceover_script(
-        prompt=data.get("prompt", ""),
-        location_name=data.get("locationName", ""),
-        lat=data.get("lat", 0.0),
-        lng=data.get("lng", 0.0),
-        engine=data.get("engine", "ollama"),
-    )
-    return {"success": True, "script": script}
-
-
-def _cmd_generate_overview(argv: List[str]) -> Dict[str, Any]:
-    """Generates the opening/overview narration script for the whole route."""
-    payload = argv[2] if len(argv) > 2 else ""
-    data = json.loads(payload)
-    script = generate_overview_script(
-        waypoints=data.get("waypoints", []), engine=data.get("engine", "ollama")
-    )
-    return {"success": True, "script": script}
-
-
-def _cmd_render_timeline(argv: List[str]) -> Dict[str, Any]:
-    """Fast NLE re-render: rebuilds a final video from an existing timeline.json."""
-    payload = argv[2] if len(argv) > 2 else ""
-    output_arg = argv[3] if len(argv) > 3 else None
-    rendered_path = render_from_timeline(payload, output_video_path=output_arg)
-    return {"success": True, "final_video_path": rendered_path}
-
-
-# -----------------------------------------------------------------------------
-# [NEW] Granular per-stage commands.
-# These expose each stage of run_full_pipeline() individually, so you can
-# re-run or debug ONE step (e.g. re-render the map video after tuning
-# line_color) without re-parsing GPS or re-generating attraction clips every
-# single time. Edit one function here to change one stage's behavior.
-# -----------------------------------------------------------------------------
-
-
-def _cmd_process_gps_config(argv: List[str]) -> Dict[str, Any]:
-    """Stage 1 only: parse+clean GPS data referenced inside a job_config.json."""
-    payload = argv[2] if len(argv) > 2 else ""
-    cleaned = vp_process_gps(payload)
-    return {
-        "success": True,
-        "summary": cleaned.get("summary", {}),
-        "route_rows": len(cleaned.get("route", [])),
-    }
-
-
-def _cmd_render_route_video(argv: List[str]) -> Dict[str, Any]:
-    """Stage 3 only: render the map/route animation from a job_config.json."""
-    config_payload = argv[2] if len(argv) > 2 else ""
-    output_arg = argv[3] if len(argv) > 3 else None
-
-    cleaned_route = vp_process_gps(config_payload)
-    output_dir = output_arg or str(Path(config_payload).parent / "video")
+    cleaned_route = process_gps(str(config_path))
 
     video_paths = render_route_video(
         cleaned_route=cleaned_route,
-        project_config_path=config_payload,
-        output_video_dir=output_dir,
+        project_config_path=str(config_path),
+        output_video_dir=output_video_dir,
     )
-    return {"success": True, "video_paths": video_paths}
+
+    return {
+        "success": True,
+        "video_paths": video_paths,
+        "summary": cleaned_route.get("summary", {}),
+    }
 
 
-def _cmd_render_attraction_videos_full(argv: List[str]) -> Dict[str, Any]:
-    """Stage 4 only: ComfyUI attraction clips via video_pipeline's variant."""
-    payload = argv[2] if len(argv) > 2 else ""
-    video_paths = vp_render_attraction_videos(project_config_path=payload)
-    return {"success": True, "video_paths": video_paths}
-
-
-def _cmd_burn_subtitles(argv: List[str]) -> Dict[str, Any]:
-    """Stage 5 only: burn pre-existing .srt files onto already-rendered videos.
-
-    Expects payload JSON shape:
-        {
-          "video_paths": [...],
-          "subtitle_paths": [...],
-          "output_dir": "..."
-        }
+def test_residential_video(
+    job_config_path: str,
+    output_video_dir: str = None,
+    fps: Optional[int] = None,
+    speed_kmh: Optional[float] = None,
+) -> Dict[str, Any]:
+    """Runs the per-waypoint leg-by-leg render only, to sanity-check the
+    residential animation without paying for the overview, TTS, or subtitle
+    stages. Honors job_config.json's settings.use_3d_res (default False):
+    2D (SpatialRenderer.render_waypoints, via the same render_route_video
+    path test_overview_video uses) unless the project has explicitly opted
+    into the 3D pydeck/Playwright renderer.
     """
-    payload = argv[2] if len(argv) > 2 else ""
-    data = json.loads(payload)
-    final_videos = vp_burn_subtitles(
-        video_paths=data.get("video_paths", []),
-        subtitle_paths=data.get("subtitle_paths", []),
-        output_dir=data.get("output_dir", "."),
+    config_path = Path(job_config_path)
+    if not config_path.exists():
+        raise FileNotFoundError(f"job_config.json not found: {config_path}")
+
+    with config_path.open("r", encoding="utf-8") as config_file:
+        project_config = json.load(config_file)
+    use_3d_res = bool(project_config.get("settings", {}).get("use_3d_res", False))
+
+    output_video_dir = Path(output_video_dir or (config_path.parent / "video"))
+    output_video_dir.mkdir(parents=True, exist_ok=True)
+
+    if use_3d_res:
+        output_video_path = str(output_video_dir / "02_residential_map.mp4")
+
+        from services.vdoprocessing.pydeckrecorder import record_headless_video
+
+        video_paths = record_headless_video(
+            str(config_path),
+            output_video_path,
+            fps=fps,
+            speed_kmh=speed_kmh,
+        )
+    else:
+        from services.vdoprocessing.videopipeline import process_gps, render_route_video
+
+        cleaned_route = process_gps(str(config_path))
+        all_paths = render_route_video(
+            cleaned_route=cleaned_route,
+            project_config_path=str(config_path),
+            output_video_dir=str(output_video_dir),
+        )
+        # render_route_video also produces "01_overview.mp4" — this entry
+        # point is scoped to the residential/per-leg clips only, matching
+        # what the 3D branch above returns.
+        video_paths = [
+            p for p in all_paths if Path(p).name != "01_overview.mp4"
+        ]
+
+    return {
+        "success": bool(video_paths),
+        "video_paths": video_paths,
+    }
+
+
+def _load_tts_waypoints(job_config_path: str) -> tuple[Path, list]:
+    config_path = Path(job_config_path)
+    if not config_path.exists():
+        raise FileNotFoundError(f"job_config.json not found: {config_path}")
+
+    with config_path.open("r", encoding="utf-8") as config_file:
+        project_config = json.load(config_file)
+
+    waypoints = project_config.get("waypoints", [])
+    if not isinstance(waypoints, list):
+        raise ValueError("job_config.json 'waypoints' must be a list")
+
+    return config_path, waypoints
+
+
+async def _generate_tts_clip(
+    client: Any,
+    processor: Any,
+    waypoint: Dict[str, Any],
+    waypoint_index: int,
+) -> Dict[str, Any]:
+    if not isinstance(waypoint, dict):
+        raise ValueError(f"Waypoint {waypoint_index} must be an object")
+
+    script = (
+        waypoint.get("script")
+        or waypoint.get("narration")
+        or waypoint.get("voiceover")
     )
-    return {"success": True, "video_paths": final_videos}
+    if not isinstance(script, str) or not script.strip():
+        raise ValueError(
+            f"Waypoint {waypoint_index} has no script, narration, or voiceover text"
+        )
+
+    label = waypoint.get("label", f"Waypoint {waypoint_index + 1}")
+    audio_filename = (
+        f"02_waypoint_{waypoint_index + 1:02d}_"
+        f"{_video_safe_label(label, f'leg{waypoint_index + 1}')}.wav"
+    )
+    audio_path = await client.generate_speech(
+        script.strip(), output_filename=audio_filename
+    )
+    analysis = processor.analyze_pauses(audio_path)
+    return {
+        "index": waypoint_index,
+        "label": label,
+        "text": script.strip(),
+        "audio_path": audio_path,
+        "duration_seconds": analysis["duration_seconds"],
+        "pauses": analysis["pauses"],
+    }
 
 
-# =============================================================================
-# [Core] DISPATCH TABLE
-# -----------------------------------------------------------------------------
-# O(1) average-case command lookup versus an O(k) if/elif ladder, and —
-# more importantly for maintenance — a single, obvious place to register a
-# new operation. To add a new pipeline step:
-#   1. Write one `_cmd_...` handler function above.
-#   2. Add one line to this dict.
-# No other code in this file needs to change.
-# =============================================================================
-COMMAND_REGISTRY: Dict[str, Callable[[List[str]], Dict[str, Any]]] = {
-    "process_gps": _cmd_process_gps,
-    "full_pipeline": _cmd_full_pipeline,
-    "init_project": _cmd_init_project,
-    "save_asset": _cmd_save_asset,
-    "generate_speech": _cmd_generate_speech,
-    "save_config": _cmd_save_config,
-    "analyze_image": _cmd_analyze_image,
-    "generate_attraction_videos": _cmd_generate_attraction_videos,
-    "generate_script": _cmd_generate_script,
-    "generate_overview": _cmd_generate_overview,
-    "render_timeline": _cmd_render_timeline,
-    # Granular, single-responsibility pipeline-stage commands:
-    "process_gps_config": _cmd_process_gps_config,
-    "render_route_video": _cmd_render_route_video,
-    "render_attraction_videos_full": _cmd_render_attraction_videos_full,
-    "burn_subtitles": _cmd_burn_subtitles,
-}
+def test_tts(
+    job_config_path: str,
+    output_audio_dir: str = None,
+    waypoint_index: int = 0,
+) -> Dict[str, Any]:
+    """Generate and inspect TTS audio for one narrated waypoint."""
+    config_path, waypoints = _load_tts_waypoints(job_config_path)
+    if waypoint_index < 0 or waypoint_index >= len(waypoints):
+        raise IndexError(
+            f"waypoint_index must be between 0 and {len(waypoints) - 1}, "
+            f"got {waypoint_index}"
+        )
+
+    output_dir = Path(output_audio_dir or (config_path.parent / "audio"))
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    from services.tts.ttsengine import AudioProcessor, IrodoriTTSClient
+
+    client = IrodoriTTSClient(output_dir=output_dir)
+    processor = AudioProcessor(output_dir=output_dir)
+
+    async def generate_speech() -> str:
+        return await _generate_tts_clip(
+            client, processor, waypoints[waypoint_index], waypoint_index
+        )
+
+    clip = asyncio.run(generate_speech())
+    return {
+        "success": True,
+        "audio_dir": str(output_dir),
+        "clip": clip,
+    }
+
+
+def test_tts_all(
+    job_config_path: str,
+    output_audio_dir: str = None,
+) -> Dict[str, Any]:
+    """Generate and inspect TTS audio for every narrated waypoint."""
+    config_path, waypoints = _load_tts_waypoints(job_config_path)
+    output_dir = Path(output_audio_dir or (config_path.parent / "audio"))
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    from services.tts.ttsengine import AudioProcessor, IrodoriTTSClient
+
+    client = IrodoriTTSClient(output_dir=output_dir)
+    processor = AudioProcessor(output_dir=output_dir)
+
+    async def generate_all() -> list:
+        return [
+            await _generate_tts_clip(client, processor, waypoint, index)
+            for index, waypoint in enumerate(waypoints)
+        ]
+
+    clips = asyncio.run(generate_all())
+    return {
+        "success": True,
+        "audio_dir": str(output_dir),
+        "clips": clips,
+    }
+
+
+def _attraction_prompt(waypoint: Dict[str, Any]) -> list:
+    camera_pans = waypoint.get("camera_pans", [])
+    if isinstance(camera_pans, list) and camera_pans:
+        return camera_pans
+    return [waypoint.get("label", "Beautiful Japanese scenery, high quality")]
+
+
+def _attraction_audio_path(
+    config_path: Path, waypoint_index: int, label: Any
+) -> Optional[str]:
+    audio_path = (
+        config_path.parent
+        / "audio"
+        / (
+            f"02_waypoint_{waypoint_index + 1:02d}_"
+            f"{_video_safe_label(label, f'leg{waypoint_index + 1}')}.wav"
+        )
+    )
+    return str(audio_path) if audio_path.exists() else None
+
+
+def test_attraction_video(
+    job_config_path: str,
+    output_video_dir: str = None,
+    waypoint_index: int = 0,
+) -> Dict[str, Any]:
+    """Generate one attraction video from one waypoint's popup image."""
+    config_path, waypoints = _load_tts_waypoints(job_config_path)
+    if waypoint_index < 0 or waypoint_index >= len(waypoints):
+        raise IndexError(
+            f"waypoint_index must be between 0 and {len(waypoints) - 1}, "
+            f"got {waypoint_index}"
+        )
+
+    waypoint = waypoints[waypoint_index]
+    if not isinstance(waypoint, dict):
+        raise ValueError(f"Waypoint {waypoint_index} must be an object")
+    if not waypoint.get("popup_image"):
+        raise ValueError(f"Waypoint {waypoint_index} has no popup_image")
+
+    from services.config.job_config import JobConfigManager
+    from services.vdoprocessing.img2vdo import AttractionVideoGenerator
+    from services.tts.ttsengine import AudioProcessor
+
+    output_dir = Path(output_video_dir or (config_path.parent / "video"))
+    output_dir.mkdir(parents=True, exist_ok=True)
+    label = waypoint.get("label", f"Waypoint {waypoint_index + 1}")
+    audio_path = _attraction_audio_path(config_path, waypoint_index, label)
+    audio_duration = (
+        AudioProcessor().analyze_pauses(audio_path)["duration_seconds"]
+        if audio_path
+        else 0.0
+    )
+    generator = AttractionVideoGenerator(JobConfigManager(config_path))
+    generator.output_dir = output_dir
+    output_filename = (
+        f"04_attraction_{waypoint_index:02d}_"
+        f"{_video_safe_label(label, f'waypoint_{waypoint_index}')}.mp4"
+    )
+    result_path = generator.process_attraction_video(
+        popup_image_entry=waypoint["popup_image"],
+        prompt_text=_attraction_prompt(waypoint),
+        target_audio_duration=audio_duration,
+        audio_path=audio_path,
+        output_filename=output_filename,
+    )
+    if not result_path:
+        # A waypoint with multiple popup images doesn't auto-combine
+        # anymore — process_attraction_video parks the raw clips in a
+        # pending manifest instead and returns None. That's not a failure;
+        # distinguish it from a real one by checking whether the manifest
+        # actually exists.
+        manifest_path = generator._pending_manifest_path(output_filename)
+        if manifest_path.exists():
+            with open(manifest_path, "r", encoding="utf-8") as f:
+                manifest = json.load(f)
+            return {
+                "success": True,
+                "pending": True,
+                "clip_paths": manifest.get("clip_paths", []),
+                "output_filename": output_filename,
+                "audio_path": audio_path,
+                "message": (
+                    "Multiple clips generated but not yet combined — call "
+                    "attraction-finalize once approved."
+                ),
+            }
+        raise RuntimeError(f"Attraction video generation failed for waypoint {waypoint_index}")
+    return {"success": True, "pending": False, "video_path": result_path, "audio_path": audio_path}
+
+
+def test_attraction_videos(
+    job_config_path: str,
+    output_video_dir: str = None,
+) -> Dict[str, Any]:
+    """Generate attraction videos for every waypoint with a popup image."""
+    config_path, waypoints = _load_tts_waypoints(job_config_path)
+    results = []
+    for index, waypoint in enumerate(waypoints):
+        if not isinstance(waypoint, dict) or not waypoint.get("popup_image"):
+            continue
+        result = test_attraction_video(
+            str(config_path), output_video_dir, waypoint_index=index
+        )
+        results.append({"index": index, **result})
+    return {
+        "success": True,
+        "video_paths": [
+            item["video_path"] for item in results if not item.get("pending")
+        ],
+        "pending_indices": [
+            item["index"] for item in results if item.get("pending")
+        ],
+        "results": results,
+    }
+
+
+def test_attraction_finalize(
+    job_config_path: str,
+    output_video_dir: str = None,
+    waypoint_index: int = 0,
+) -> Dict[str, Any]:
+    """Combines a waypoint's pending (already-generated but not yet
+    combined) attraction clips into the final deliverable. Call this once
+    the frontend has reviewed the individual clips and approved combining
+    them — the automatic pipeline / test_attraction_video no longer does
+    this on its own for multi-image waypoints."""
+    config_path, waypoints = _load_tts_waypoints(job_config_path)
+    if waypoint_index < 0 or waypoint_index >= len(waypoints):
+        raise IndexError(
+            f"waypoint_index must be between 0 and {len(waypoints) - 1}, "
+            f"got {waypoint_index}"
+        )
+
+    waypoint = waypoints[waypoint_index]
+    label = waypoint.get("label", f"Waypoint {waypoint_index + 1}") if isinstance(waypoint, dict) else f"Waypoint {waypoint_index + 1}"
+
+    from services.config.job_config import JobConfigManager
+    from services.vdoprocessing.img2vdo import AttractionVideoGenerator
+
+    output_dir = Path(output_video_dir or (config_path.parent / "video"))
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_filename = (
+        f"04_attraction_{waypoint_index:02d}_"
+        f"{_video_safe_label(label, f'waypoint_{waypoint_index}')}.mp4"
+    )
+
+    generator = AttractionVideoGenerator(JobConfigManager(config_path))
+    generator.output_dir = output_dir
+
+    manifest_path = generator._pending_manifest_path(output_filename)
+    if not manifest_path.exists():
+        raise FileNotFoundError(
+            f"No pending clips found for waypoint {waypoint_index} "
+            f"(expected manifest at {manifest_path}). Generate it first via "
+            f"the 'attraction' mode."
+        )
+
+    with open(manifest_path, "r", encoding="utf-8") as f:
+        manifest = json.load(f)
+
+    result_path = generator.finalize_pending_video(
+        clip_paths=manifest.get("clip_paths", []),
+        target_audio_duration=manifest.get("target_audio_duration", 0.0),
+        output_filename=manifest.get("output_filename", output_filename),
+    )
+    if not result_path:
+        raise RuntimeError(f"Finalizing attraction video failed for waypoint {waypoint_index}")
+    return {"success": True, "video_path": result_path, "audio_path": manifest.get("audio_path")}
+
+
+def _subtitle_audio_path(config_path: Path, waypoint_index: int, label: Any) -> Path:
+    return (
+        config_path.parent
+        / "audio"
+        / (
+            f"02_waypoint_{waypoint_index + 1:02d}_"
+            f"{_video_safe_label(label, f'leg{waypoint_index + 1}')}.wav"
+        )
+    )
+
+
+def _build_subtitle(
+    config_path: Path,
+    waypoint: Dict[str, Any],
+    waypoint_index: int,
+    output_subtitle_dir: Path,
+) -> Dict[str, Any]:
+    if not isinstance(waypoint, dict):
+        raise ValueError(f"Waypoint {waypoint_index} must be an object")
+
+    script = (
+        waypoint.get("script")
+        or waypoint.get("narration")
+        or waypoint.get("voiceover")
+    )
+    if not isinstance(script, str) or not script.strip():
+        raise ValueError(
+            f"Waypoint {waypoint_index} has no script, narration, or voiceover text"
+        )
+
+    label = waypoint.get("label", f"Waypoint {waypoint_index + 1}")
+    audio_path = _subtitle_audio_path(config_path, waypoint_index, label)
+    if not audio_path.exists():
+        raise FileNotFoundError(
+            f"TTS audio not found for waypoint {waypoint_index}: {audio_path}"
+        )
+
+    from services.localization.subtitle import SRTDocument, SubtitleBuilder
+    from services.tts.ttsengine import AudioProcessor
+
+    analysis = AudioProcessor().analyze_pauses(str(audio_path))
+    cues = SubtitleBuilder.build(
+        text=script.strip(),
+        duration_seconds=analysis["duration_seconds"],
+        pauses=analysis["pauses"],
+    )
+    output_subtitle_dir.mkdir(parents=True, exist_ok=True)
+    subtitle_path = output_subtitle_dir / f"{audio_path.stem}.srt"
+    SRTDocument.write(cues, str(subtitle_path))
+    return {
+        "index": waypoint_index,
+        "label": label,
+        "audio_path": str(audio_path),
+        "subtitle_path": str(subtitle_path),
+        "cue_count": len(cues),
+    }
+
+
+def test_subtitle(
+    job_config_path: str,
+    output_subtitle_dir: str = None,
+    waypoint_index: int = 0,
+) -> Dict[str, Any]:
+    """Generate subtitles for one waypoint from its matching TTS audio."""
+    config_path, waypoints = _load_tts_waypoints(job_config_path)
+    if waypoint_index < 0 or waypoint_index >= len(waypoints):
+        raise IndexError(
+            f"waypoint_index must be between 0 and {len(waypoints) - 1}, "
+            f"got {waypoint_index}"
+        )
+    output_dir = Path(output_subtitle_dir or (config_path.parent / "subtitles"))
+    result = _build_subtitle(
+        config_path, waypoints[waypoint_index], waypoint_index, output_dir
+    )
+    return {"success": True, **result}
+
+
+def test_subtitles(
+    job_config_path: str,
+    output_subtitle_dir: str = None,
+) -> Dict[str, Any]:
+    """Generate subtitles for every waypoint from matching TTS audio."""
+    config_path, waypoints = _load_tts_waypoints(job_config_path)
+    output_dir = Path(output_subtitle_dir or (config_path.parent / "subtitles"))
+    results = [
+        _build_subtitle(config_path, waypoint, index, output_dir)
+        for index, waypoint in enumerate(waypoints)
+    ]
+    return {
+        "success": True,
+        "subtitle_dir": str(output_dir),
+        "subtitle_paths": [result["subtitle_path"] for result in results],
+        "results": results,
+    }
+
+
+def test_video_concat(
+    job_config_path: str,
+    output_video_dir: str = None,
+    clip_paths: Optional[list[str]] = None,
+) -> Dict[str, Any]:
+    """Concatenate selected project videos, allowing a single clip as a no-op copy."""
+    config_path = Path(job_config_path)
+    if not config_path.exists():
+        raise FileNotFoundError(f"job_config.json not found: {config_path}")
+
+    output_dir = Path(output_video_dir or (config_path.parent / "video"))
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_path = output_dir / "03_concat.mp4"
+    inputs = [Path(path) for path in clip_paths] if clip_paths else sorted(
+        path for path in output_dir.glob("*.mp4") if path.name != output_path.name
+    )
+    if not inputs:
+        raise ValueError(f"No video clips found in {output_dir}")
+    missing = [str(path) for path in inputs if not path.exists()]
+    if missing:
+        raise FileNotFoundError(f"Video clip(s) not found: {', '.join(missing)}")
+
+    if len(inputs) == 1:
+        shutil.copyfile(inputs[0], output_path)
+    else:
+        from services.config.job_config import JobConfigManager
+        from services.vdoprocessing.vdoeditor import VideoEditor
+
+        generated_path = Path(
+            VideoEditor(JobConfigManager(config_path)).concatenate_videos(
+            [str(path) for path in inputs], output_path.name
+        )
+        )
+        if generated_path.resolve() != output_path.resolve():
+            shutil.copyfile(generated_path, output_path)
+
+    return {
+        "success": True,
+        "video_path": str(output_path),
+        "input_paths": [str(path) for path in inputs],
+    }
+
+
+def test_transition_editor(
+    job_config_path: str,
+    output_video_dir: str = None,
+) -> Dict[str, Any]:
+    """Run the overview/storyboard renderer, including configured transitions."""
+    result = test_overview_video(job_config_path, output_video_dir)
+    return {
+        "success": result["success"],
+        "video_paths": result["video_paths"],
+        "summary": result.get("summary", {}),
+    }
+
+
+def test_all(
+    job_config_path: str,
+    output_dir: str = None,
+) -> Dict[str, Any]:
+    """Run all isolated media stages as one project test."""
+    config_path = Path(job_config_path)
+    if not config_path.exists():
+        raise FileNotFoundError(f"job_config.json not found: {config_path}")
+
+    project_dir = config_path.parent
+    audio_dir = project_dir / "audio"
+    video_dir = Path(output_dir or (project_dir / "video"))
+    subtitle_dir = project_dir / "subtitles"
+
+    tts_result = test_tts_all(str(config_path), str(audio_dir))
+
+    # The TTS server's idle timeout (see ttsengine.py) is sized for gaps
+    # BETWEEN waypoints within one job, not for immediately handing the GPU
+    # to a different consumer — left alone here it stays fully loaded for
+    # up to 10 more minutes, fighting attraction generation's SDXL pipeline
+    # for VRAM (observed: one generation went from ~20s to ~8 minutes from
+    # this exact contention). Stop it now that TTS is done for this job.
+    from services.tts.ttsengine import IrodoriTTSClient
+    IrodoriTTSClient.stop_server()
+
+    attraction_result = test_attraction_videos(str(config_path), str(video_dir))
+    subtitle_result = test_subtitles(str(config_path), str(subtitle_dir))
+    transition_result = test_transition_editor(str(config_path), str(video_dir))
+
+    # test_transition_editor (-> test_overview_video -> render_route_video)
+    # already produces the residential/per-leg clips too when the project
+    # is in 2D mode (render_route_video generates overview + residential
+    # together in that path) — but NOT when use_3d_res is set, since 3D
+    # residential rendering runs through a separate pydeck/Playwright call
+    # that render_route_video's 2D branch skips entirely. Only run that
+    # separate call here, so 3D projects don't end up missing their
+    # residential clips from "all" — and 2D ones don't pay to render the
+    # same clips twice.
+    with config_path.open("r", encoding="utf-8") as config_file:
+        use_3d_res = bool(
+            json.load(config_file).get("settings", {}).get("use_3d_res", False)
+        )
+    residential_result = (
+        test_residential_video(str(config_path), str(video_dir))
+        if use_3d_res
+        else None
+    )
+
+    videos_to_concat = [
+        *attraction_result["video_paths"],
+        *transition_result["video_paths"],
+        *(residential_result["video_paths"] if residential_result else []),
+    ]
+    concat_result = test_video_concat(
+        str(config_path), str(video_dir), videos_to_concat
+    )
+
+    return {
+        "success": True,
+        "tts": tts_result,
+        "attractions": attraction_result,
+        "subtitles": subtitle_result,
+        "transition": transition_result,
+        "residential": residential_result,
+        "concat": concat_result,
+    }
 
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        command = sys.argv[1]
-        handler = COMMAND_REGISTRY.get(command)
+    if len(sys.argv) < 2:
+        print(
+            "Usage: python main.py <path/to/job_config.json> [output_dir] "
+            "[gps|overview|residential|tts|tts-all|attraction|attraction-all|"
+            "attraction-finalize|subtitle|subtitle-all|concat|transition|all] "
+            "[waypoint_index]\n"
+            "       python main.py full_pipeline <source_path> [output_dir]\n"
+            "       python main.py render_timeline <timeline.json> [output_video]",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
-        if handler is None:
-            print(
-                json.dumps(
-                    {"success": False, "error": f"Unknown command '{command}'"},
-                    ensure_ascii=False,
-                )
+    try:
+        command_arg = sys.argv[1]
+        if command_arg == "full_pipeline":
+            if len(sys.argv) < 3:
+                raise ValueError("full_pipeline requires a source path")
+            from services.vdoprocessing.videopipeline import run_full_pipeline
+
+            result = run_full_pipeline(
+                sys.argv[2], sys.argv[3] if len(sys.argv) > 3 else None
             )
-            sys.exit(1)
+        elif command_arg == "render_timeline":
+            if len(sys.argv) < 3:
+                raise ValueError("render_timeline requires a timeline path")
+            from services.vdoprocessing.videopipeline import render_from_timeline
 
-        try:
-            result = handler(sys.argv)
-            print(json.dumps(result, ensure_ascii=False))
+            result = render_from_timeline(
+                sys.argv[2], sys.argv[3] if len(sys.argv) > 3 else None
+            )
+        else:
+            job_config_arg = command_arg
+            output_dir_arg = sys.argv[2] if len(sys.argv) > 2 else None
+            mode_arg = sys.argv[3] if len(sys.argv) > 3 else "overview"
 
-        except Exception as e:
-            error_res = {
-                "success": False,
-                "error": str(e),
-                "error_type": type(e).__name__,
-                "traceback": traceback.format_exc(),
-            }
-            print(json.dumps(error_res, ensure_ascii=False))
-            sys.exit(1)
+            if mode_arg == "gps":
+                result = test_gps(job_config_arg)
+            elif mode_arg == "residential":
+                result = test_residential_video(job_config_arg, output_dir_arg)
+            elif mode_arg == "tts":
+                waypoint_index_arg = int(sys.argv[4]) if len(sys.argv) > 4 else 0
+                result = test_tts(job_config_arg, output_dir_arg, waypoint_index_arg)
+            elif mode_arg == "tts-all":
+                result = test_tts_all(job_config_arg, output_dir_arg)
+            elif mode_arg == "attraction":
+                waypoint_index_arg = int(sys.argv[4]) if len(sys.argv) > 4 else 0
+                result = test_attraction_video(
+                    job_config_arg, output_dir_arg, waypoint_index_arg
+                )
+            elif mode_arg == "attraction-all":
+                result = test_attraction_videos(job_config_arg, output_dir_arg)
+            elif mode_arg == "attraction-finalize":
+                waypoint_index_arg = int(sys.argv[4]) if len(sys.argv) > 4 else 0
+                result = test_attraction_finalize(
+                    job_config_arg, output_dir_arg, waypoint_index_arg
+                )
+            elif mode_arg == "subtitle":
+                waypoint_index_arg = int(sys.argv[4]) if len(sys.argv) > 4 else 0
+                result = test_subtitle(
+                    job_config_arg, output_dir_arg, waypoint_index_arg
+                )
+            elif mode_arg == "subtitle-all":
+                result = test_subtitles(job_config_arg, output_dir_arg)
+            elif mode_arg == "concat":
+                clip_paths_arg = sys.argv[4:] if len(sys.argv) > 4 else None
+                result = test_video_concat(
+                    job_config_arg, output_dir_arg, clip_paths_arg
+                )
+            elif mode_arg == "transition":
+                result = test_transition_editor(job_config_arg, output_dir_arg)
+            elif mode_arg == "all":
+                result = test_all(job_config_arg, output_dir_arg)
+            else:
+                result = test_overview_video(job_config_arg, output_dir_arg)
+
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        
+    except Exception as e:
+        error_result = {
+            "success": False,
+            "error": str(e),
+            "error_type": type(e).__name__,
+            "traceback": traceback.format_exc(),
+        }
+        
+        # Printing the error as JSON to stdout allows parent processes to parse it easily
+        print(json.dumps(error_result, ensure_ascii=False, indent=2))
+        
+        # Exit with a non-zero status code to indicate failure to the OS
+        sys.exit(1)
+        

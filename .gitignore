@@ -105,5 +105,5 @@ src-tauri/src-python/**/*.jpg
 src-tauri/src-python/**/*.png
 src-tauri/src-python/logs
 src-tauri/src-python/services/__pycache__
-src-tauri/src-python/services/*
-src-tauri/src-python/services/logs/
+# src-tauri/src-python/services/*
+# src-tauri/src-python/services/logs/
