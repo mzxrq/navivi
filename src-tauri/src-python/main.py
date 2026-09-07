@@ -584,6 +584,16 @@ def test_all(
     subtitle_dir = project_dir / "subtitles"
 
     tts_result = test_tts_all(str(config_path), str(audio_dir))
+
+    # The TTS server's idle timeout (see ttsengine.py) is sized for gaps
+    # BETWEEN waypoints within one job, not for immediately handing the GPU
+    # to a different consumer — left alone here it stays fully loaded for
+    # up to 10 more minutes, fighting attraction generation's SDXL pipeline
+    # for VRAM (observed: one generation went from ~20s to ~8 minutes from
+    # this exact contention). Stop it now that TTS is done for this job.
+    from services.tts.ttsengine import IrodoriTTSClient
+    IrodoriTTSClient.stop_server()
+
     attraction_result = test_attraction_videos(str(config_path), str(video_dir))
     subtitle_result = test_subtitles(str(config_path), str(subtitle_dir))
     transition_result = test_transition_editor(str(config_path), str(video_dir))

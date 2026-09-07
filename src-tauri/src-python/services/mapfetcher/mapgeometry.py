@@ -6,7 +6,7 @@ Extracted from mapfetcher.py to improve modularity.
 ---------------------------------------------------------------------------
 """
 # [I/O] Import libraries for map fetching and geometry processing
-from typing import Final, Tuple, List, Dict
+from typing import Any, Final, Tuple, List, Dict
 import numpy as np
 import pandas as pd
 from scipy.spatial import cKDTree  # type: ignore

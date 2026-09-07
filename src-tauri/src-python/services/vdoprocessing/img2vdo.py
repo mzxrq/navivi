@@ -1,21 +1,17 @@
 """
 Image-to-Video Service for Attractions
 ----------------------------------------------------------------------------
-Handles ComfyUI image-to-video batching, multi-image list detection,
-concatenation via VideoEditor, and audio synchronization.
+Handles local (AI-outpaint + pan) image-to-video generation, multi-image
+list detection, concatenation via VideoEditor, and audio synchronization.
 ----------------------------------------------------------------------------
 """
 
 import os
 import json
 import shutil
-import subprocess
-import time
 import uuid
-import requests
-import websocket
 from pathlib import Path
-from typing import Any, Dict, Final, List, Union, Optional
+from typing import Final, List, Union, Optional
 
 from services.vdoprocessing.vdoeditor import VideoEditor
 from services.vdoprocessing.vdoexporter import VideoExporter
@@ -25,47 +21,20 @@ from services.logger.logger import setup_logger
 # Logging configuration
 logger = setup_logger("AttractionVideoGenerator")
 
-COMFY_API_URL = "http://127.0.0.1:8188"
-
 
 # [Core] AttractionVideoGenerator Class
 class AttractionVideoGenerator:
     """Manages Image-to-Video generation and synchronization for attractions."""
 
-    # [Config] Initialize with JobConfigManager and workflow configuration
-    def __init__(
-        self,
-        job_config: Optional[JobConfigManager] = None,
-        workflow_config_path: str = "assets/config/img2vdo-api.json",
-    ):
+    # [Config] Initialize with JobConfigManager
+    def __init__(self, job_config: Optional[JobConfigManager] = None):
         self.config = job_config or JobConfigManager()
         self.editor = VideoEditor(job_config=self.config)
-        self.workflow_config_path = workflow_config_path
 
         # Route outputs to project video directory
         base_dir = Path(self.config.get("directory_path", "assets"))
         self.output_dir = (base_dir / "video").resolve()
         self.output_dir.mkdir(parents=True, exist_ok=True)
-
-    # bin/ComfyUI now has its actual application files checked out (plus its
-    # own already-synced .venv), same shape as bin/Irodori-TTS-Server — so
-    # it can be auto-started the same way instead of just failing with a
-    # "start it yourself" error.
-    _COMFY_DIR: Final[Path] = (
-        Path(__file__).resolve().parents[2] / "bin" / "ComfyUI"
-    )
-    _COMFY_VENV_PYTHON: Final[Path] = _COMFY_DIR / ".venv" / (
-        "Scripts/python.exe" if os.name == "nt" else "bin/python"
-    )
-    # Generous: first run also loads custom nodes / models, which can take
-    # a while — giving up too early on a legitimately slow first start is a
-    # worse failure mode than this just taking longer.
-    _COMFY_START_TIMEOUT_SECONDS: Final[float] = 300.0
-    _COMFY_POLL_INTERVAL_SECONDS: Final[float] = 1.0
-
-    # Class-level: one ComfyUI subprocess is enough for every
-    # AttractionVideoGenerator instance in this process.
-    _comfy_process: Optional[subprocess.Popen] = None
 
     # Matches mapfetcher.py's MapFetcher.fetch_image/process_residential_sequence
     # default output_size — the resolution the map/waypoint clips actually
@@ -140,185 +109,33 @@ class AttractionVideoGenerator:
             output_filename,
         )
 
-    @staticmethod
-    def _is_comfy_up() -> bool:
-        try:
-            requests.get(f"{COMFY_API_URL}/system_stats", timeout=3.0)
-            return True
-        except requests.exceptions.RequestException:
-            return False
-
-    # [IO] Starts ComfyUI as a subprocess if it isn't already reachable, and
-    # waits for it to come up, instead of failing outright.
-    def _ensure_comfy_reachable(self) -> None:
-        """Checked once up front (before generating any clips) so a
-        missing/not-yet-started ComfyUI is handled here — auto-started and
-        waited for — instead of surfacing later as a raw connection-refused
-        error from partway through an image upload or an open websocket."""
-        if self._is_comfy_up():
-            return
-
-        if not self._COMFY_VENV_PYTHON.exists():
-            raise RuntimeError(
-                f"ComfyUI isn't reachable at {COMFY_API_URL} and its bundled "
-                f"venv wasn't found at {self._COMFY_VENV_PYTHON} to auto-start "
-                "it. Set it up (see bin/ComfyUI), or start it manually."
-            )
-
-        if (
-            AttractionVideoGenerator._comfy_process is None
-            or AttractionVideoGenerator._comfy_process.poll() is not None
-        ):
-            logger.info(
-                "ComfyUI not reachable at %s — starting it as a subprocess "
-                "(this can take a while on first run while it loads custom "
-                "nodes/models)...",
-                COMFY_API_URL,
-            )
-            popen_kwargs: Dict[str, Any] = {}
-            if os.name == "nt":
-                # Detached from this console/process group so it outlives a
-                # short-lived pipeline run instead of being torn down (or
-                # fighting over Ctrl+C) with it — same as IrodoriTTSClient.
-                popen_kwargs["creationflags"] = (
-                    subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
-                )
-            else:
-                popen_kwargs["start_new_session"] = True
-            log_path = self._COMFY_DIR / "server.log"
-            log_file = open(log_path, "ab")
-            AttractionVideoGenerator._comfy_process = subprocess.Popen(
-                [str(self._COMFY_VENV_PYTHON), "main.py"],
-                cwd=str(self._COMFY_DIR),
-                stdout=log_file,
-                stderr=subprocess.STDOUT,
-                **popen_kwargs,
-            )
-
-        deadline = time.monotonic() + self._COMFY_START_TIMEOUT_SECONDS
-        while time.monotonic() < deadline:
-            if self._is_comfy_up():
-                logger.info("ComfyUI is up at %s.", COMFY_API_URL)
-                return
-            if AttractionVideoGenerator._comfy_process.poll() is not None:
-                raise RuntimeError(
-                    "ComfyUI subprocess exited while starting up — see "
-                    f"{self._COMFY_DIR / 'server.log'} for details."
-                )
-            time.sleep(self._COMFY_POLL_INTERVAL_SECONDS)
-
-        raise RuntimeError(
-            f"ComfyUI did not become reachable within "
-            f"{self._COMFY_START_TIMEOUT_SECONDS:.0f}s of starting."
-        )
-
-    # [IO] Uploads an image to ComfyUI server input directory
-    def _upload_image(self, local_path: str) -> str:
-        """Uploads an image to ComfyUI server input directory."""
-        url = f"{COMFY_API_URL}/upload/image"
-        with open(local_path, "rb") as f:
-            files = {"image": f}
-            data = {"type": "input", "overwrite": "true"}
-            response = requests.post(url, files=files, data=data)
-            response.raise_for_status()
-            return response.json()["name"]
-
-    # [Core/Animation] Generates a single video clip from an image and prompt using ComfyUI
+    # [Core/Animation] Generates a single video clip from an image and prompt.
+    #
+    # Was: uploads to ComfyUI, runs its LTX-2 image+audio-to-video graph over
+    # a websocket, downloads the result. Replaced with a local generator
+    # (AI-outpaint the frame's edges + deterministic pan/zoom) — LTX-2 at the
+    # step counts/quantization an 8GB card forces was unreliable (near-static
+    # output unless heavily prompted, prone to "melting" over longer clips).
+    # See services/model/ for the exploration that led to this; ComfyUI is no
+    # longer required for this step at all.
     def _generate_single_clip(
-        self, local_image_path: str, prompt_text: str
+        self, local_image_path: str, prompt_text: str, duration_sec: float = 6.0
     ) -> Optional[str]:
-        """Runs the ComfyUI workflow for a single image and downloads the resulting clip."""
-        comfy_filename = self._upload_image(local_image_path)
+        """Generates a clip locally (no ComfyUI) and returns its raw path."""
+        from services.vdoprocessing.local_pan_generator import generate_local_clip
 
-        with open(self.workflow_config_path, "r", encoding="utf-8") as f:
-            workflow = json.load(f)
-
-        # Inject dynamic parameters — node IDs specific to
-        # assets/config/img2vdo-api.json's current LTX-2 image+audio-to-
-        # video graph: "269" is its only LoadImage node, and "320:319"
-        # (PrimitiveStringMultiline) is the raw prompt text that feeds BOTH
-        # the direct path and 320:325's LLM prompt-enhancer, so it takes
-        # effect regardless of "320:328" (the "Enable Prompt Enhance"
-        # switch's) current state — unlike injecting into 320:325 itself,
-        # which only has any effect when that switch is on. Enhancement is
-        # off by default here: the gemma-3-12b enhancer model doesn't fit
-        # in 8GB VRAM either, so each token of its output takes ~2s+ from
-        # the same CPU/GPU swap-thrashing as the video model — turning it
-        # back on (320:328 -> true) costs several extra minutes per clip.
-        workflow["269"]["inputs"]["image"] = comfy_filename
-        # Force visible camera motion on every clip: at low step counts /
-        # Q2_K quantization the model defaults to near-static output unless
-        # the prompt explicitly demands movement (confirmed by comparing
-        # frames of a generated clip — statue/background were frozen aside
-        # from mist drift). Appended rather than left to each prompt source
-        # (waypoint camera_pans, fallback label) so it applies unconditionally.
-        workflow["320:319"]["inputs"]["value"] = (
-            f"{prompt_text} Camera must pan smoothly and continuously "
-            f"throughout the shot, clearly visible motion, not a static shot."
-        )
-
-        client_id = str(uuid.uuid4())
-        ws = websocket.WebSocket()
-        ws.connect(f"ws://127.0.0.1:8188/ws?clientId={client_id}")
-
-        payload = {"prompt": workflow, "client_id": client_id}
-        res = requests.post(f"{COMFY_API_URL}/prompt", json=payload).json()
-
-        if "error" in res:
-            logger.error(f"ComfyUI Error: {res['error']}")
-            ws.close()
+        save_path = self.output_dir / f"raw_{uuid.uuid4().hex[:6]}.mp4"
+        try:
+            generate_local_clip(
+                image_path=local_image_path,
+                output_path=str(save_path),
+                duration_sec=duration_sec,
+                camera_pan_hint=prompt_text,
+            )
+            return str(save_path)
+        except Exception as exc:
+            logger.error("Local clip generation failed for %s: %s", local_image_path, exc)
             return None
-
-        prompt_id = res.get("prompt_id")
-
-        while True:
-            out = ws.recv()
-            if isinstance(out, str):
-                msg = json.loads(out)
-                if msg["type"] == "executing":
-                    data = msg["data"]
-                    if data["node"] is None and data.get("prompt_id") == prompt_id:
-                        break
-                elif msg["type"] == "execution_error":
-                    if msg["data"].get("prompt_id") == prompt_id:
-                        logger.error(f"Execution Error: {msg['data']}")
-                        break
-        ws.close()
-
-        # Download result
-        history = requests.get(f"{COMFY_API_URL}/history/{prompt_id}").json()
-        if prompt_id not in history:
-            return None
-
-        outputs = history[prompt_id]["outputs"]
-        for node_id in outputs:
-            node_output = outputs[node_id]
-            # ComfyUI's SaveVideo node (see comfy_api/latest/_ui.py's
-            # PreviewVideo.as_dict, used by assets/config/img2vdo-api.json's
-            # "333" SaveVideo node) reports its result under "images" (with
-            # "animated": true) — NOT "videos", which some older/other
-            # video-producing nodes use instead. Checking "videos" alone
-            # silently returned no clip at all even though ComfyUI had
-            # actually rendered one successfully. Checked in this order
-            # since "images" is what the currently bundled workflow uses.
-            media_list = node_output.get("images") or node_output.get("videos") or []
-            for media in media_list:
-                view_url = f"{COMFY_API_URL}/view"
-                params = {
-                    "filename": media["filename"],
-                    "subfolder": media.get("subfolder", ""),
-                    "type": "output",
-                }
-                resp = requests.get(view_url, params=params)
-
-                save_path = (
-                    self.output_dir / f"raw_{uuid.uuid4().hex[:6]}_{media['filename']}"
-                )
-                with open(save_path, "wb") as f:
-                    f.write(resp.content)
-                return str(save_path)
-
-        return None
 
     # [Core] Shared tail end of clip processing: fit duration, place at the
     # project's output path, and upscale. Used by both the single-image path
@@ -505,8 +322,6 @@ class AttractionVideoGenerator:
         # before doing any fresh work.
         self._clear_stale_outputs(output_filename)
 
-        self._ensure_comfy_reachable()
-
         # --- Check list vs string for prompts ---
         if isinstance(prompt_text, str):
             prompt_list = [prompt_text]
@@ -518,6 +333,17 @@ class AttractionVideoGenerator:
         logger.info(f"Processing waypoint with {len(image_list)} image(s)...")
 
         # 1. Generate video clips for each image
+        # Split the target narration duration evenly across multiple images
+        # in one waypoint (so the concatenated result lands near the target
+        # instead of badly overshooting); fall back to a reasonable default
+        # when there's no narration yet to size against.
+        _DEFAULT_CLIP_SECONDS = 6.0
+        per_clip_duration = (
+            (target_audio_duration / len(image_list))
+            if target_audio_duration > 0
+            else _DEFAULT_CLIP_SECONDS
+        )
+
         generated_clips = []
         for idx, img_path in enumerate(image_list):
             # Match image index to prompt index (fallback to the last prompt if we run out)
@@ -530,7 +356,7 @@ class AttractionVideoGenerator:
             logger.info(
                 f"   -> Rendering image {idx + 1}/{len(image_list)}: {img_path} with prompt: '{current_prompt}'"
             )
-            clip = self._generate_single_clip(img_path, current_prompt)
+            clip = self._generate_single_clip(img_path, current_prompt, per_clip_duration)
             if clip:
                 generated_clips.append(clip)
 

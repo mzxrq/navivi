@@ -30,6 +30,20 @@ from services.logger.logger import setup_logger
 logger = setup_logger("TTSEngine")
 
 
+def _kill_process_tree(pid: int) -> None:
+    """Same approach as idle_watchdog.py's _kill — /T also takes down the
+    child process(es) a server subprocess may have spawned, not just the
+    immediate PID."""
+    if os.name == "nt":
+        subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], capture_output=True)
+    else:
+        import signal
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+
+
 # [Core/Util] FFmpegManager : Encapsulates binary resolution and direct media probing via FFmpeg/FFprobe.
 class FFmpegManager:
     """Encapsulates binary resolution and direct media probing via FFmpeg/FFprobe."""
@@ -272,6 +286,24 @@ class IrodoriTTSClient:
             f"Irodori TTS server did not become healthy within "
             f"{self._SERVER_START_TIMEOUT_SECONDS:.0f}s of starting."
         )
+
+    @classmethod
+    def stop_server(cls) -> None:
+        """Explicitly terminates the TTS server now, rather than waiting on
+        its idle timeout. For a single process/job that runs TTS generation
+        fully up front and then a separate GPU-heavy step afterward (see
+        main.py's test_all) — the 10-minute idle timeout was sized for gaps
+        BETWEEN waypoints within one job, not for handing the GPU off to a
+        different consumer right after TTS finishes, so left alone the
+        server stays fully loaded and fights that next step for VRAM for
+        most/all of the idle window. Only effective if THIS process is the
+        one that started the server (holds the live subprocess handle) — a
+        server left running from an earlier process can't be reached here;
+        it'll fall back to its own idle-timeout watchdog as before."""
+        if cls._server_process is not None and cls._server_process.poll() is None:
+            logger.info("Stopping Irodori TTS server (%s) to free its resources for the next step.", cls._server_process.pid)
+            _kill_process_tree(cls._server_process.pid)
+            cls._server_process = None
 
     def _touch_activity(self) -> None:
         """Marks the server as just-used — read by idle_watchdog.py (as the
