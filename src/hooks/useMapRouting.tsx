@@ -91,18 +91,21 @@ const fetchSingleSegment = async (
         console.warn("[ORS Walking] Failed, falling back to OSRM foot:", error);
 
         try {
-          const osrmUrl = `https://router.project-osrm.org/route/v1/foot${wp1.lng},${wp1.lat};${wp2.lng},${wp2.lat}?overview=full&geometries=geojson`;
+          const osrmUrl = `https://router.project-osrm.org/route/v1/foot/${wp1.lng},${wp1.lat};${wp2.lng},${wp2.lat}?overview=full&geometries=geojson`;
           const osrmRes = await fetch(osrmUrl);
+          if (!osrmRes.ok) throw new Error(`HTTP_${osrmRes.status}`);
           const osrmData = await osrmRes.json();
           if (osrmData.routes && osrmData.routes.length > 0) {
             positions = osrmData.routes[0].geometry.coordinates.map(
               (coord: [number, number]) => [coord[1], coord[0]]
             );
           } else {
-            positions = [[wp1.lat, wp1.lng], [wp2.lat, wp2.lng]];
+            throw new Error("no_route");
           }
-        } catch {
+        } catch (osrmError) {
+          console.warn("[OSRM Foot] Failed, falling back to straight line:", osrmError);
           positions = [[wp1.lat, wp1.lng], [wp2.lat, wp2.lng]];
+          return { index, positions, mode: "walking-failed", cacheKey };
         }
     }
   }  else {
@@ -110,6 +113,7 @@ const fetchSingleSegment = async (
     try {
       const url = `https://router.project-osrm.org/route/v1/driving/${wp1.lng},${wp1.lat};${wp2.lng},${wp2.lat}?overview=full&geometries=geojson`;
       const response = await fetch(url);
+      if (!response.ok) throw new Error(`HTTP_${response.status}`);
       const data = await response.json();
 
       if (data.routes && data.routes.length > 0) {
@@ -117,14 +121,42 @@ const fetchSingleSegment = async (
           (coord: [number, number]) => [coord[1], coord[0]]
         );
       } else {
-        positions = [[wp1.lat, wp1.lng], [wp2.lat, wp2.lng]];
+        throw new Error("no_route");
       }
     } catch (error) {
+      console.warn("[OSRM Driving] Failed, falling back to straight line:", error);
       positions = [[wp1.lat, wp1.lng], [wp2.lat, wp2.lng]];
+      return { index, positions, mode: "driving-failed", cacheKey };
     }
   }
 
   return { index, positions, mode, cacheKey };
+}
+
+// Public OSRM/ORS instances rate-limit bursts of concurrent requests — a
+// route with many legs firing them all via Promise.all at once causes
+// several to fail and silently fall back to straight lines. Cap how many
+// segment fetches are in flight at a time.
+const ROUTING_CONCURRENCY = 3;
+
+async function runWithConcurrencyLimit<T>(
+  tasks: (() => Promise<T>)[],
+  limit: number
+): Promise<T[]> {
+  const results: T[] = new Array(tasks.length);
+  let nextIndex = 0;
+
+  async function worker() {
+    while (nextIndex < tasks.length) {
+      const current = nextIndex++;
+      results[current] = await tasks[current]();
+    }
+  }
+
+  await Promise.all(
+    Array.from({ length: Math.min(limit, tasks.length) }, () => worker())
+  );
+  return results;
 }
 
 export function useMapRouting() {
@@ -151,7 +183,7 @@ useEffect(() => {
 
     const apiKey = settings?.ors_api_key || import.meta.env.VITE_ORS_API_KEY;
     const newSegments: { positions: [number, number][]; mode: string }[] = [];
-    const promises: Promise<{ index: number; positions: [number, number][]; mode: string; cacheKey: string }>[] = [];
+    const tasks: (() => Promise<{ index: number; positions: [number, number][]; mode: string; cacheKey: string }>)[] = [];
 
     // s1 loop through and instantly draw cached or ghost line
     for (let i = 0; i < waypoints.length - 1; i++) {
@@ -164,20 +196,27 @@ useEffect(() => {
         newSegments[i] = { positions: routingCache[cacheKey], mode };
       } else {
         newSegments[i] = { positions: [[wp1.lat, wp1.lng], [wp2.lat, wp2.lng]], mode: "calculating" };
-        promises.push(fetchSingleSegment(i, wp1, wp2, mode, cacheKey, apiKey));
+        tasks.push(() => fetchSingleSegment(i, wp1, wp2, mode, cacheKey, apiKey));
       }
     }
     // push ui update
     setRouteSegments([...newSegments]);
 
-    // s2 resolve missing routes at the same time
-    if (promises.length > 0) {
-      const results = await Promise.all(promises);
+    // s2 resolve missing routes, throttled so we don't slam the public
+    // routing servers with a burst of parallel requests (which causes
+    // some legs to get rate-limited and silently fall back to straight lines)
+    if (tasks.length > 0) {
+      const results = await runWithConcurrencyLimit(tasks, ROUTING_CONCURRENCY);
       const newCacheEntries: Record<string, [number, number][]> = {};
 
       results.forEach((res) => {
         newSegments[res.index] = { positions: res.positions, mode: res.mode };
-        newCacheEntries[res.cacheKey] = res.positions;
+        // Don't cache failed lookups as if they were real routes — leave
+        // the cache key empty so a later render retries the request
+        // instead of being stuck showing a straight line forever.
+        if (!res.mode.endsWith("-failed")) {
+          newCacheEntries[res.cacheKey] = res.positions;
+        }
       });
 
       setRouteSegments([...newSegments]);

@@ -42,6 +42,18 @@ export function RouteLayer({
 
       {/* 3. Dynamic Generated Segments */}
       {routeSegments.map((segment, idx) => {
+        if (segment.mode === "driving-failed" || segment.mode === "walking-failed") {
+          // Routing API call failed and fell back to a straight line —
+          // style distinctly (red dashed) instead of looking like a real
+          // road-following route, so the failure is visible.
+          return (
+            <Polyline
+              key={`fail-${idx}`}
+              positions={segment.positions}
+              pathOptions={{ color: "#ef4444", weight: 3, dashArray: "4, 8" }}
+            />
+          );
+        }
         if (segment.mode === "direct") {
           return (
             <Polyline

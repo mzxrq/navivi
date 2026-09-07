@@ -120,19 +120,6 @@ class _PopupBoxMixin:
         if img_url and os.path.exists(img_url):
             pop_img = self.read_image_safe(img_url)
             if pop_img is not None:
-                ph, pw = pop_img.shape[:2]
-                target_ratio = 16.0 / 9.0
-                current_ratio = pw / float(ph)
-
-                if current_ratio > target_ratio:
-                    new_w = int(ph * target_ratio)
-                    offset = (pw - new_w) // 2
-                    pop_img = pop_img[:, offset : offset + new_w]
-                elif current_ratio < target_ratio:
-                    new_h = int(pw / target_ratio)
-                    offset = (ph - new_h) // 2
-                    pop_img = pop_img[offset : offset + new_h, :]
-
                 hud_corner = popup_info.get("hud_corner")
                 is_beside = hud_corner not in self.HUD_CORNERS
                 card_scale = float(popup_info.get("card_scale", 1.0))
@@ -140,9 +127,23 @@ class _PopupBoxMixin:
                 box_x, box_y, total_w, total_h, border = self.popup_card_geometry(
                     popup_info, w, h
                 )
+                target_ratio = 16.0 / 9.0
                 target_img_w = total_w - border * 2
                 target_img_h = int(target_img_w / target_ratio)
-                pop_img = cv2.resize(pop_img, (target_img_w, target_img_h))
+
+                # Fit the whole photo within the box (never crop it) and
+                # letterbox any leftover space instead of center-cropping,
+                # which was cutting off large parts of non-16:9 photos.
+                src_h, src_w = pop_img.shape[:2]
+                scale = min(target_img_w / src_w, target_img_h / src_h)
+                fit_w, fit_h = max(1, int(src_w * scale)), max(1, int(src_h * scale))
+                resized = cv2.resize(pop_img, (fit_w, fit_h))
+
+                canvas = np.full((target_img_h, target_img_w, 3), 245, dtype=np.uint8)
+                paste_x = (target_img_w - fit_w) // 2
+                paste_y = (target_img_h - fit_h) // 2
+                canvas[paste_y : paste_y + fit_h, paste_x : paste_x + fit_w] = resized
+                pop_img = canvas
                 ph, pw = pop_img.shape[:2]
 
                 label_text = popup_info.get("label")
@@ -154,8 +155,14 @@ class _PopupBoxMixin:
                 has_label = RouteGeometryProcessor.is_real_label(label_text)
 
                 if is_beside:
-                    point_x = int(popup_info["x"])
-                    point_y = int(popup_info["y"])
+                    # Anchor to the pin's actual on-screen position — when
+                    # waypoints cluster, _declutter_pins fans the drawn
+                    # marker out to "pin_x"/"pin_y", separate from the
+                    # waypoint's true "x"/"y". Anchoring here to the raw
+                    # x/y points the leader line at empty space instead of
+                    # the pin it's meant to connect to.
+                    point_x = int(popup_info.get("pin_x", popup_info["x"]))
+                    point_y = int(popup_info.get("pin_y", popup_info["y"]))
                     if popup_info.get("draw_leader_line"):
                         # Connects the card back to the waypoint's own pin —
                         # used when the card is riding beside a waypoint the
