@@ -6,6 +6,9 @@ using the pykakasi library. It includes lazy loading of the converter and error 
 ---------------------------------------------------------------------------
 """
 
+import json
+import re
+
 from services.logger.logger import setup_logger
 from pathlib import Path
 
@@ -35,6 +38,7 @@ _DEFAULT_GLOSSARY_PATH = (
 # [Core] RomajiConverter Class
 class RomajiConverter:
     _kks = None
+    _glossary = None
 
     @classmethod
     def load_glossary(cls, glossary_path: Path = _DEFAULT_GLOSSARY_PATH):
