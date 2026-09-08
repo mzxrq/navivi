@@ -13,6 +13,8 @@ from .attraction_step import render_attraction_videos
 from .audio_step import generate_audio
 from .gps_step import process_gps
 from .helpers import logger
+from .intro_step import render_intro_clip
+from .outro_step import render_outro_clip
 from .render_step import render_route_video
 from .subtitle_step import burn_subtitles
 from .timeline_step import build_timeline
@@ -51,6 +53,11 @@ def run_full_pipeline(
         audio_data = generate_audio(cleaned_route, str(config_file_path))
         pbar.update(8)
 
+        # --- INTRO --- only needs job_config's waypoints (a random popup
+        # image), no dependency on any other step's rendered output — see
+        # intro_step.py.
+        intro_path = render_intro_clip(str(config_file_path))
+
         # --- STEP 3 ---
         attraction_videos = render_attraction_videos(
             str(config_file_path),
@@ -70,12 +77,27 @@ def run_full_pipeline(
         )
         pbar.update(85)
 
+        # --- OUTRO (post-Step 4) --- appended last, after every route and
+        # attraction clip — see outro_step.py.
+        outro_path = render_outro_clip(str(config_file_path))
+
+        # [NOTE] [Editor] burn_subtitles indexes subtitle_paths positionally against
+        # all_videos — a None placeholder for the intro/outro slots keeps everything
+        # else's existing alignment untouched (neither clip has its own subtitle).
+        subtitle_paths_for_burn = list(audio_data.get("subtitle_paths", []))
+        if intro_path:
+            video_paths = [intro_path] + video_paths
+            subtitle_paths_for_burn = [None] + subtitle_paths_for_burn
+
         all_videos = video_paths + attraction_videos
+        if outro_path:
+            all_videos = all_videos + [outro_path]
+            subtitle_paths_for_burn = subtitle_paths_for_burn + [None]
 
         # --- STEP 5 ---
         final_videos = burn_subtitles(
             video_paths=all_videos,
-            subtitle_paths=audio_data.get("subtitle_paths", []),
+            subtitle_paths=subtitle_paths_for_burn,
             output_dir=output_video_dir,
         )
         pbar.update(5)

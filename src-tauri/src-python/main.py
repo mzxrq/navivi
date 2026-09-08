@@ -435,6 +435,69 @@ def test_attraction_finalize(
     return {"success": True, "video_path": result_path, "audio_path": manifest.get("audio_path")}
 
 
+def test_intro_video(job_config_path: str, output_video_dir: str = None) -> Dict[str, Any]:
+    """Builds the project's intro clip on demand: a randomly-chosen waypoint
+    popup image (a fresh random pick every time this is called, not cached)
+    animated with a gradual zoom-in and the project's name burned in,
+    centered. Requires at least one waypoint with a popup_image set."""
+    config_path = Path(job_config_path)
+    if not config_path.exists():
+        raise FileNotFoundError(f"job_config.json not found at {config_path}")
+
+    from services.vdoprocessing.introclip import generate_intro_clip
+    from services.config.job_config import JobConfigManager
+
+    job_config = JobConfigManager(config_path)
+    project_name = job_config.get("project_name", "")
+    waypoints = job_config.get("waypoints", [])
+    video_dir = Path(
+        output_video_dir or (job_config.get("directory_path", config_path.parent))
+    )
+    if output_video_dir is None:
+        video_dir = video_dir / "video"
+
+    result_path = generate_intro_clip(
+        video_dir=str(video_dir), project_name=project_name, waypoints=waypoints
+    )
+    if not result_path:
+        raise RuntimeError(
+            "Intro generation failed — check that at least one waypoint has "
+            "a popup_image set."
+        )
+    return {"success": True, "video_path": result_path}
+
+
+def test_outro_video(job_config_path: str, output_video_dir: str = None) -> Dict[str, Any]:
+    """Builds the project's end-of-video card grid on demand: the project
+    name plus a numbered thumbnail grid of every waypoint with a popup
+    image. Requires at least one waypoint with a popup_image set."""
+    config_path = Path(job_config_path)
+    if not config_path.exists():
+        raise FileNotFoundError(f"job_config.json not found at {config_path}")
+
+    from services.vdoprocessing.outrocard import generate_outro_clip
+    from services.config.job_config import JobConfigManager
+
+    job_config = JobConfigManager(config_path)
+    project_name = job_config.get("project_name", "")
+    waypoints = job_config.get("waypoints", [])
+    video_dir = Path(
+        output_video_dir or (job_config.get("directory_path", config_path.parent))
+    )
+    if output_video_dir is None:
+        video_dir = video_dir / "video"
+
+    result_path = generate_outro_clip(
+        video_dir=str(video_dir), project_name=project_name, waypoints=waypoints
+    )
+    if not result_path:
+        raise RuntimeError(
+            "Outro generation failed — check that at least one waypoint has "
+            "a popup_image set."
+        )
+    return {"success": True, "video_path": result_path}
+
+
 def _subtitle_audio_path(config_path: Path, waypoint_index: int, label: Any) -> Path:
     return (
         config_path.parent
@@ -672,7 +735,7 @@ if __name__ == "__main__":
         print(
             "Usage: python main.py <path/to/job_config.json> "
             "[gps|overview|residential|tts|tts-all|attraction|attraction-all|"
-            "attraction-finalize|subtitle|subtitle-all|concat|transition|all] "
+            "attraction-finalize|intro|outro|subtitle|subtitle-all|concat|transition|all] "
             "[waypoint_index]\n"
             "       (output dir is always <job_config's directory_path>/video)\n"
             "       python main.py full_pipeline <source_path> [output_dir]\n"
@@ -725,6 +788,12 @@ if __name__ == "__main__":
                 result = test_attraction_finalize(
                     job_config_arg, output_dir_arg, waypoint_index_arg
                 )
+            # [NOTE] [Core] intro/outro are on-demand CLI test hooks mirroring the
+            # pipeline's own render_intro_clip/render_outro_clip steps.
+            elif mode_arg == "intro":
+                result = test_intro_video(job_config_arg, output_dir_arg)
+            elif mode_arg == "outro":
+                result = test_outro_video(job_config_arg, output_dir_arg)
             elif mode_arg == "subtitle":
                 waypoint_index_arg = int(sys.argv[3]) if len(sys.argv) > 3 else 0
                 result = test_subtitle(

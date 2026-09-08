@@ -134,3 +134,57 @@ COMFYUI_IDLE_TIMEOUT_SECONDS = 600.0
 # minutes in testing.
 COMFYUI_SERVER_START_TIMEOUT_SECONDS = 180.0
 COMFYUI_GENERATION_TIMEOUT_SECONDS = 1200.0
+
+# --- Intro clip (multi-image slideshow + centered project title) -----------
+# A slideshow of INTRO_IMAGE_COUNT random waypoint images (a fresh pick
+# every call), each with its own slow zoom-in, crossfaded into the next —
+# see services/vdoprocessing/introclip.py.
+INTRO_IMAGE_COUNT = 3
+# Each picture's own on-screen time INCLUDING the crossfade overlap into/out
+# of it — total intro length = COUNT*PER_IMAGE - (COUNT-1)*CROSSFADE.
+INTRO_PER_IMAGE_SECONDS = 3.5
+INTRO_CROSSFADE_SECONDS = 0.8
+INTRO_TITLE_FONT_SIZE = 48
+INTRO_TITLE_OUTLINE = 3.0
+INTRO_OUTPUT_FILENAME = "00_intro.mp4"
+INTRO_WIDTH = 1280
+INTRO_HEIGHT = 704
+INTRO_FPS = 30
+# Ken Burns zoom-in: 1.0 = the widest cover-fit crop (whole frame), smaller
+# = a tighter/more zoomed-in crop — see local_pan_generator.py's identical
+# zoom<1-means-zoomed-in convention (_CAMERA_PAN_PRESETS' "zoomin"). Slower
+# than a single-image intro would use, since each picture now gets more
+# on-screen time before crossfading away.
+INTRO_ZOOM_START = 1.0
+INTRO_ZOOM_END = 0.88
+# Fade to/from black at the very start/end of the WHOLE slideshow, so the
+# intro doesn't hard-cut into the rest of the video.
+INTRO_FADE_SECONDS = 0.5
+
+# --- Outro card grid (end-of-video "places visited" summary) ---------------
+# A single composited frame (project title + a thumbnail grid of every
+# waypoint with a popup image) held for a fixed duration as the closing
+# clip — see services/vdoprocessing/outrocard.py.
+OUTRO_DURATION_SECONDS = 5.0
+OUTRO_OUTPUT_FILENAME = "99_outro.mp4"
+# {count} is substituted with the number of waypoint cards shown.
+OUTRO_SUBTITLE_TEMPLATE = "訪れた{count}か所"
+OUTRO_BG_COLOR: Tuple[int, int, int] = (19, 28, 46)  # RGB dark navy
+OUTRO_TITLE_COLOR: Tuple[int, int, int] = (255, 255, 255)
+OUTRO_SUBTITLE_COLOR: Tuple[int, int, int] = (150, 158, 173)
+OUTRO_LABEL_COLOR: Tuple[int, int, int] = (225, 228, 235)
+OUTRO_TITLE_FONT_SIZE = 34
+OUTRO_SUBTITLE_FONT_SIZE = 15
+OUTRO_LABEL_FONT_SIZE = 14
+OUTRO_BADGE_FONT_SIZE = 15
+# [HACK] [Config] BGR DEFAULT_MARKER_COLOR flipped to RGB for PIL compositing — keeps
+# the outro's numbered badges the same blue as every other numbered pin (map pins,
+# popup cards) instead of introducing a fourth color.
+OUTRO_BADGE_COLOR: Tuple[int, int, int] = tuple(reversed(DEFAULT_MARKER_COLOR))
+# Caps how many waypoint cards can appear before the grid gets illegibly
+# small — a project with more attractions than this just shows the first
+# OUTRO_MAX_CARDS in route order.
+OUTRO_MAX_CARDS = 20
+OUTRO_GRID_COLS_MAX = 5
+OUTRO_CARD_MARGIN = 18
+OUTRO_CARD_ASPECT = 4 / 3  # thumbnail width:height

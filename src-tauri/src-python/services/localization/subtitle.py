@@ -46,9 +46,13 @@ class SubtitleStyle:
     border_style: int = 1  # 1 = outline+shadow, 3 = opaque background box
     outline: float = 2.0  # outline thickness in px
     shadow: float = 0.5  # drop-shadow distance in px
-    alignment: int = (
-        2  # ASS numpad-style: 2=bottom-center, 5=middle-center, 8=top-center
-    )
+    # [HACK] [Subtitle] FFmpeg's `subtitles` filter converts .srt to an old-style SSA
+    # script (v4.00, not v4.00+/ASS), so this uses OLD SSA \a numbering, NOT the modern
+    # ASS \an numpad convention most references describe — they only agree on the
+    # bottom row: bottom 1/2/3, top 5/6/7 (ASS numpad would be 7/8/9), middle
+    # 9/10/11 (ASS numpad would be 4/5/6). Verified empirically: introclip.py's
+    # centered title needed 10, not 5, to actually land center-screen.
+    alignment: int = 2  # bottom-center
     margin_v: int = 10  # vertical margin from frame edge, px
 
     def to_force_style(self) -> str:
