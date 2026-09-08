@@ -184,8 +184,8 @@ class _WaypointRenderMixin:
                     "label": res_labels[-1] if res_labels else "",
                     "data": res_popups[-1] or {},
                 }
-                self._draw_pin(intro_frame, start_wp, 1, len(res_points))
-                self._draw_pin(intro_frame, end_wp, 2, len(res_points))
+                self._draw_pin(intro_frame, start_wp, len(res_points))
+                self._draw_pin(intro_frame, end_wp, len(res_points))
                 for wp in (start_wp, end_wp):
                     if wp["data"].get("popup_image"):
                         popup_card = dict(wp)

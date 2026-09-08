@@ -31,9 +31,9 @@ class _PinMixin:
             )
         else:
             self.graphics.draw_path(base, path_history, mode_history)
-        for order, wp in enumerate(active_popups, start=1):
+        for wp in active_popups:
             if wp["data"].get("triggered"):
-                self._draw_pin(base, wp, order, total_points)
+                self._draw_pin(base, wp, total_points)
         return base
 
     def _pin_color(self, wp: Dict):
@@ -97,23 +97,34 @@ class _PinMixin:
                 active_popups[idx]["pin_y"] = cy + fan_radius * math.sin(angle)
 
     def _draw_pin(
-        self, frame: np.ndarray, wp: Dict, order: int, total_points: int
+        self, frame: np.ndarray, wp: Dict, total_points: int
     ) -> None:
         """Draws one waypoint's pin at its (possibly decluttered) position,
         with a thin connector line back to its true spot when the two
-        differ — see _declutter_pins. The very first and last points of the
-        route (the trip's actual start/end) are labeled "S"/"E" instead of
-        a visit number, even when a waypoint happens to share that exact
-        coordinate with the configured start_point/end_point."""
-        pin_color = self._pin_color(wp)
-        if wp["index"] == 0:
-            label: Any = "S"
+        differ — see _declutter_pins.
+
+        Label/color precedence matches the map editor's own MapArea.tsx
+        exactly: a stop-by waypoint (wp["data"]["is_stopby"]) ALWAYS renders
+        as a "・" dot in STOPBY_PIN_COLOR — even if it happens to be the
+        route's literal first/last point — since the frontend's isStopBy
+        branch is checked before start/end labeling and returns
+        unconditionally. Otherwise the very first/last points of the route
+        (the trip's actual start/end) are labeled "S"/"E"; every other pin
+        shows its precomputed visit order (wp["order"] — assigned once in
+        overview.py's active_popups setup, skipping stop-by waypoints in the
+        count the same way MapArea.tsx's normalIndex does)."""
+        if wp["data"].get("is_stopby"):
+            label: Any = "・"
+            pin_color = self._STOPBY_PIN_COLOR
+        elif wp["index"] == 0:
+            label = "S"
             pin_color = self._START_PIN_COLOR
         elif wp["index"] == total_points - 1:
             label = "E"
             pin_color = self._END_PIN_COLOR
         else:
-            label = order
+            label = wp.get("order")
+            pin_color = self._pin_color(wp)
         px, py = int(wp.get("pin_x", wp["x"])), int(wp.get("pin_y", wp["y"]))
         tx, ty = int(wp["x"]), int(wp["y"])
         if (px, py) != (tx, ty):

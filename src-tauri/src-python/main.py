@@ -17,6 +17,24 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 
+def _output_dir_from_config(job_config_path: str) -> str:
+    """Every job_config.json carries its own project folder as
+    "directory_path" (set once, at project creation) — so the video/audio/
+    subtitle output dirs never need to be passed on the command line
+    separately from the config path itself. Falls back to the config
+    file's own parent directory for a job_config.json that predates the
+    "directory_path" field."""
+    config_path = Path(job_config_path)
+    directory_path = None
+    try:
+        with config_path.open("r", encoding="utf-8") as config_file:
+            directory_path = json.load(config_file).get("directory_path")
+    except (OSError, json.JSONDecodeError):
+        pass
+    base_dir = Path(directory_path) if directory_path else config_path.parent
+    return str(base_dir / "video")
+
+
 def _video_safe_label(label: Any, fallback: str) -> str:
     """Match the residential renderer's label sanitization for shared basenames."""
     safe_label = "".join(
@@ -583,6 +601,18 @@ def test_all(
     video_dir = Path(output_dir or (project_dir / "video"))
     subtitle_dir = project_dir / "subtitles"
 
+    # A full "all" run regenerates every deliverable from scratch — clear
+    # each output directory first rather than layering new files over old
+    # ones. Per-waypoint cleanup elsewhere (e.g. AttractionVideoGenerator's
+    # _clear_stale_outputs) only removes a file whose name exactly matches
+    # what's about to be regenerated, so a waypoint whose label/order
+    # changed between runs (or one removed from job_config.json entirely)
+    # left its old video/audio/subtitle file behind forever otherwise.
+    for stale_dir in (audio_dir, video_dir, subtitle_dir):
+        if stale_dir.exists():
+            shutil.rmtree(stale_dir)
+        stale_dir.mkdir(parents=True, exist_ok=True)
+
     tts_result = test_tts_all(str(config_path), str(audio_dir))
 
     # The TTS server's idle timeout (see ttsengine.py) is sized for gaps
@@ -640,10 +670,11 @@ def test_all(
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print(
-            "Usage: python main.py <path/to/job_config.json> [output_dir] "
+            "Usage: python main.py <path/to/job_config.json> "
             "[gps|overview|residential|tts|tts-all|attraction|attraction-all|"
             "attraction-finalize|subtitle|subtitle-all|concat|transition|all] "
             "[waypoint_index]\n"
+            "       (output dir is always <job_config's directory_path>/video)\n"
             "       python main.py full_pipeline <source_path> [output_dir]\n"
             "       python main.py render_timeline <timeline.json> [output_video]",
             file=sys.stderr,
@@ -670,39 +701,39 @@ if __name__ == "__main__":
             )
         else:
             job_config_arg = command_arg
-            output_dir_arg = sys.argv[2] if len(sys.argv) > 2 else None
-            mode_arg = sys.argv[3] if len(sys.argv) > 3 else "overview"
+            output_dir_arg = _output_dir_from_config(job_config_arg)
+            mode_arg = sys.argv[2] if len(sys.argv) > 2 else "overview"
 
             if mode_arg == "gps":
                 result = test_gps(job_config_arg)
             elif mode_arg == "residential":
                 result = test_residential_video(job_config_arg, output_dir_arg)
             elif mode_arg == "tts":
-                waypoint_index_arg = int(sys.argv[4]) if len(sys.argv) > 4 else 0
+                waypoint_index_arg = int(sys.argv[3]) if len(sys.argv) > 3 else 0
                 result = test_tts(job_config_arg, output_dir_arg, waypoint_index_arg)
             elif mode_arg == "tts-all":
                 result = test_tts_all(job_config_arg, output_dir_arg)
             elif mode_arg == "attraction":
-                waypoint_index_arg = int(sys.argv[4]) if len(sys.argv) > 4 else 0
+                waypoint_index_arg = int(sys.argv[3]) if len(sys.argv) > 3 else 0
                 result = test_attraction_video(
                     job_config_arg, output_dir_arg, waypoint_index_arg
                 )
             elif mode_arg == "attraction-all":
                 result = test_attraction_videos(job_config_arg, output_dir_arg)
             elif mode_arg == "attraction-finalize":
-                waypoint_index_arg = int(sys.argv[4]) if len(sys.argv) > 4 else 0
+                waypoint_index_arg = int(sys.argv[3]) if len(sys.argv) > 3 else 0
                 result = test_attraction_finalize(
                     job_config_arg, output_dir_arg, waypoint_index_arg
                 )
             elif mode_arg == "subtitle":
-                waypoint_index_arg = int(sys.argv[4]) if len(sys.argv) > 4 else 0
+                waypoint_index_arg = int(sys.argv[3]) if len(sys.argv) > 3 else 0
                 result = test_subtitle(
                     job_config_arg, output_dir_arg, waypoint_index_arg
                 )
             elif mode_arg == "subtitle-all":
                 result = test_subtitles(job_config_arg, output_dir_arg)
             elif mode_arg == "concat":
-                clip_paths_arg = sys.argv[4:] if len(sys.argv) > 4 else None
+                clip_paths_arg = sys.argv[3:] if len(sys.argv) > 3 else None
                 result = test_video_concat(
                     job_config_arg, output_dir_arg, clip_paths_arg
                 )

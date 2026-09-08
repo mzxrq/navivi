@@ -234,11 +234,16 @@ def render_route_video(
                     if isinstance(popup_img, list) and popup_img
                     else (str(popup_img) if popup_img else None)
                 ),
-                "image_display": str(wp.get("image_display", "none")).lower(),
                 "image_display": str(
                     wp.get("image_display", "pip")
                 ).lower(),
                 "triggered": False,
+                # Matches the map editor's own MapArea.tsx: a stop-by
+                # waypoint always renders as pinType="stopby" (dark brown, a
+                # "・" dot instead of a number) and is skipped entirely by
+                # the OTHER waypoints' sequential numbering — see
+                # spatial_renderer/pins.py's _draw_pin/_pin_color.
+                "is_stopby": bool(wp.get("isStopBy", False)),
             }
 
     # 4. Process Residential Sequence (3D Bypass vs 2D Generation)
