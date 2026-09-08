@@ -35,7 +35,7 @@ import shutil
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional, Tuple
 import uuid
 
 import cv2
@@ -554,3 +554,119 @@ class VideoExporter:
         minutes, rem_ms = divmod(rem_ms, 60_000)
         secs, ms = divmod(rem_ms, 1000)
         return f"{hours:02d}:{minutes:02d}:{secs:02d},{ms:03d}"
+
+    # [Core/Animation] Fuses duration-fit + upscale + label burn into one ffmpeg pass
+    @staticmethod
+    def finalize_clip(
+        input_video_path: str,
+        output_video_path: str,
+        *,
+        trim_to: Optional[float] = None,
+        stretch_to: Optional[float] = None,
+        scale_to: Optional[Tuple[int, int]] = None,
+        sharpen: bool = False,
+        label_text: Optional[str] = None,
+        label_style: Optional[SubtitleStyle] = None,
+    ) -> str:
+        """Combines what used to be up to three sequential ffmpeg re-encodes
+        — trim_video_duration/adjust_video_duration, upscale_video, and
+        burn_static_label, each a full decode+encode pass over the same
+        clip — into a single filter graph and a single encode. Pass only
+        the stages actually needed; omitting all of them is just a
+        (still single-pass) re-encode/copy.
+
+        trim_to and stretch_to are mutually exclusive: trim_to hard-cuts
+        the tail (same as trim_video_duration), stretch_to time-scales via
+        setpts (same as adjust_video_duration). scale_to applies a lanczos
+        resize; sharpen adds a mild unsharp pass right after it to claw
+        back some of the perceived softness a lanczos upscale introduces.
+        label_text burns a full-duration top-left caption (see
+        burn_static_label) using the SAME output duration as trim_to/
+        stretch_to, so the label's .srt cue doesn't have to be probed
+        against a not-yet-written file.
+        """
+        if trim_to is not None and stretch_to is not None:
+            raise ValueError(
+                "finalize_clip: pass at most one of trim_to/stretch_to, not both."
+            )
+
+        video_path = Path(input_video_path)
+        if not video_path.exists():
+            raise FileNotFoundError(f"Cannot finalize clip: video missing {video_path}")
+
+        out_path = Path(output_video_path)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+
+        ffmpeg_cmd = VideoExporter.resolve_ffmpeg()
+        if not ffmpeg_cmd:
+            raise RuntimeError("FFmpeg binary not found.")
+
+        from services.tts.ttsengine import FFmpegManager
+
+        vf_parts: List[str] = []
+
+        if stretch_to is not None:
+            current_duration = FFmpegManager.get_media_duration(str(video_path))
+            if current_duration <= 0:
+                raise RuntimeError(
+                    f"ffprobe reported non-positive duration for '{video_path}'"
+                )
+            pts_factor = stretch_to / current_duration
+            vf_parts.append(f"setpts={pts_factor:.6f}*PTS")
+
+        if scale_to is not None:
+            target_width, target_height = scale_to
+            vf_parts.append(f"scale={target_width}:{target_height}:flags=lanczos")
+            if sharpen:
+                # Mild luma-only unsharp mask — just enough to counter a
+                # lanczos upscale's softening, not a stylistic sharpen.
+                vf_parts.append("unsharp=5:5:0.5:5:5:0.0")
+
+        srt_path: Optional[Path] = None
+        if label_text:
+            output_duration = trim_to or stretch_to
+            if output_duration is None:
+                output_duration = FFmpegManager.get_media_duration(str(video_path))
+
+            style = label_style or SubtitleStyle(
+                font_size=tuning.ATTRACTION_LABEL_FONT_SIZE,
+                bold=True,
+                alignment=5,  # old-SSA top-left — see SubtitleStyle.alignment's note
+                outline=tuning.ATTRACTION_LABEL_OUTLINE,
+                shadow=1.0,
+                margin_v=tuning.ATTRACTION_LABEL_MARGIN,
+            )
+            srt_path = out_path.parent / f".label_{uuid.uuid4().hex[:8]}.srt"
+            end_ts = VideoExporter._format_srt_timestamp(output_duration)
+            srt_path.write_text(
+                f"1\n00:00:00,000 --> {end_ts}\n{label_text}\n", encoding="utf-8"
+            )
+            escaped_srt = str(srt_path.resolve()).replace("\\", "/").replace(":", r"\:")
+            vf_parts.append(
+                f"subtitles=filename='{escaped_srt}':force_style='{style.to_force_style()}'"
+            )
+
+        cmd = [ffmpeg_cmd, "-y", "-i", str(video_path)]
+        if vf_parts:
+            cmd += ["-vf", ",".join(vf_parts)]
+        if trim_to is not None:
+            cmd += ["-t", f"{trim_to:.3f}"]
+        cmd += [
+            "-c:v", "libx264", "-preset", "fast", "-crf", "18", "-pix_fmt", "yuv420p",
+            "-c:a", "copy",
+            str(out_path),
+        ]
+
+        try:
+            result = subprocess.run(
+                cmd, capture_output=True, encoding="utf-8", errors="replace"
+            )
+        finally:
+            if srt_path is not None:
+                srt_path.unlink(missing_ok=True)
+
+        if result.returncode != 0:
+            logger.error("finalize_clip failed: %s", result.stderr)
+            raise RuntimeError(f"FFmpeg finalize_clip failed: {result.stderr}")
+
+        return str(out_path)

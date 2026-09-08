@@ -98,6 +98,8 @@ def _render_zoom_in(image_bgr: np.ndarray, raw_output_path: str, duration_sec: f
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     writer = cv2.VideoWriter(raw_output_path, fourcc, tuning.INTRO_FPS, (out_w, out_h))
 
+    dim = tuning.INTRO_IMAGE_DIM_FACTOR
+
     for i in range(num_frames):
         t = _ease_in_out(i / max(1, num_frames - 1))
         zoom = tuning.INTRO_ZOOM_START + (tuning.INTRO_ZOOM_END - tuning.INTRO_ZOOM_START) * t
@@ -105,6 +107,8 @@ def _render_zoom_in(image_bgr: np.ndarray, raw_output_path: str, duration_sec: f
         x0, y0, x1, y1 = _crop_rect(cx, cy, half_w, half_h, sw, sh)
         crop = image_bgr[y0:y1, x0:x1]
         frame = cv2.resize(crop, (out_w, out_h), interpolation=cv2.INTER_LANCZOS4)
+        if dim < 1.0:
+            frame = cv2.convertScaleAbs(frame, alpha=dim, beta=0)
         writer.write(frame)
 
     writer.release()
@@ -155,25 +159,63 @@ def _crossfade_chain(
         raise RuntimeError(f"Crossfade chain failed: {result.stderr.strip()}")
 
 
-def _format_srt_timestamp(seconds: float) -> str:
-    total_ms = max(0, int(round(seconds * 1000)))
-    hours, rem_ms = divmod(total_ms, 3_600_000)
-    minutes, rem_ms = divmod(rem_ms, 60_000)
-    secs, ms = divmod(rem_ms, 1000)
-    return f"{hours:02d}:{minutes:02d}:{secs:02d},{ms:03d}"
+def _format_ass_timestamp(seconds: float) -> str:
+    total_cs = max(0, int(round(seconds * 100)))
+    hours, rem_cs = divmod(total_cs, 360_000)
+    minutes, rem_cs = divmod(rem_cs, 6_000)
+    secs, cs = divmod(rem_cs, 100)
+    return f"{hours}:{minutes:02d}:{secs:02d}.{cs:02d}"
 
 
-def _write_title_srt(text: str, duration_sec: float, tmp_dir: Path) -> Path:
-    """Writes a throwaway single-cue .srt spanning the whole intro so the
-    existing `subtitles` ffmpeg filter can burn it in centered, exactly like
-    a normal caption — just one big centered cue instead of many timed
-    ones."""
-    srt_path = tmp_dir / f"intro_title_{uuid.uuid4().hex[:8]}.srt"
-    end_ts = _format_srt_timestamp(duration_sec)
-    srt_path.write_text(
-        f"1\n00:00:00,000 --> {end_ts}\n{text}\n", encoding="utf-8"
+def _write_title_ass(text: str, duration_sec: float, tmp_dir: Path) -> Path:
+    """Writes a throwaway single-line .ass (not .srt) spanning the whole
+    intro, with inline ASS override tags on the dialogue line itself giving
+    the TITLE TEXT its own "pop in" transition — a combined scale-up +
+    fade-in on the way in, and the reverse on the way out — independent of
+    the whole-frame fade applied later in the same ffmpeg pass. force_style
+    (applied via the `subtitles` filter, same as before) still controls
+    font/size/color/position; the Style line below just needs to exist and
+    be named "Default" for that to have something to override."""
+    fade_ms = int(round(tuning.INTRO_LABEL_FADE_SECONDS * 1000))
+    duration_ms = int(round(duration_sec * 1000))
+    fade_out_start_ms = max(0, duration_ms - fade_ms)
+    scale_start = tuning.INTRO_LABEL_SCALE_START_PCT
+    # \fad handles the opacity half of the transition; \t animates \fscx/
+    # \fscy (ASS's font-scale override) across the same windows for the
+    # scale half — \fscx60\fscy60 sets the STARTING scale (t=0), then each
+    # \t(start,end,...) animates toward the scale given inside it over that
+    # window, in timeline order: pop up to 100% during the fade-in window,
+    # hold, then shrink back down during the fade-out window.
+    override = (
+        f"{{\\fad({fade_ms},{fade_ms})"
+        f"\\fscx{scale_start}\\fscy{scale_start}"
+        f"\\t(0,{fade_ms},\\fscx100\\fscy100)"
+        f"\\t({fade_out_start_ms},{duration_ms},\\fscx{scale_start}\\fscy{scale_start})}}"
     )
-    return srt_path
+    # Braces would be parsed as an ASS override-tag delimiter if left in —
+    # strip them from arbitrary project-name text rather than escaping.
+    safe_text = (text or "").replace("{", "").replace("}", "")
+    end_ts = _format_ass_timestamp(duration_sec)
+
+    ass_path = tmp_dir / f"intro_title_{uuid.uuid4().hex[:8]}.ass"
+    ass_path.write_text(
+        "[Script Info]\n"
+        "ScriptType: v4.00\n"
+        f"PlayResX: {tuning.INTRO_WIDTH}\n"
+        f"PlayResY: {tuning.INTRO_HEIGHT}\n\n"
+        "[V4 Styles]\n"
+        "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, "
+        "TertiaryColour, BackColour, Bold, Italic, BorderStyle, Outline, "
+        "Shadow, Alignment, MarginL, MarginR, MarginV, AlphaLevel, Encoding\n"
+        "Style: Default,Arial,20,16777215,65535,0,0,0,0,1,2,2,2,10,10,10,0,1\n\n"
+        "[Events]\n"
+        "Format: Marked, Start, End, Style, Name, MarginL, MarginR, MarginV, "
+        "Effect, Text\n"
+        f"Dialogue: Marked=0,0:00:00.00,{end_ts},Default,,0000,0000,0000,,"
+        f"{override}{safe_text}\n",
+        encoding="utf-8",
+    )
+    return ass_path
 
 
 def _pick_random_images(waypoints: List[Dict[str, Any]], count: int) -> List[str]:
@@ -221,7 +263,7 @@ def generate_intro_clip(
     run_id = uuid.uuid4().hex[:8]
     per_clip_raw_paths: List[str] = []
     combined_path = video_dir_path / f".intro_combined_{run_id}.mp4"
-    srt_path: Optional[Path] = None
+    title_path: Optional[Path] = None
 
     per_clip_sec = tuning.INTRO_PER_IMAGE_SECONDS
     crossfade_sec = tuning.INTRO_CROSSFADE_SECONDS
@@ -250,14 +292,14 @@ def generate_intro_clip(
         )
         _crossfade_chain(per_clip_raw_paths, per_clip_sec, crossfade_sec, str(combined_path))
 
-        srt_path = _write_title_srt(project_name or "", total_sec, video_dir_path)
+        title_path = _write_title_ass(project_name or "", total_sec, video_dir_path)
 
         # [HACK] [Subtitle] Absolute, forward-slashed, colon-escaped path — libass's
         # subtitles filter needs this exact escaping, same as combine_video_and_audio.
-        escaped_srt = str(srt_path.resolve()).replace("\\", "/").replace(":", r"\:")
+        escaped_title_path = str(title_path.resolve()).replace("\\", "/").replace(":", r"\:")
         fade_sec = tuning.INTRO_FADE_SECONDS
         vf_filter = (
-            f"subtitles=filename='{escaped_srt}':force_style='{_TITLE_STYLE.to_force_style()}',"
+            f"subtitles=filename='{escaped_title_path}':force_style='{_TITLE_STYLE.to_force_style()}',"
             f"fade=t=in:st=0:d={fade_sec:.2f},"
             f"fade=t=out:st={max(0.0, total_sec - fade_sec):.2f}:d={fade_sec:.2f}"
         )
@@ -281,8 +323,8 @@ def generate_intro_clip(
         logger.error("Intro generation failed: %s", exc)
         return None
     finally:
-        if srt_path is not None:
-            srt_path.unlink(missing_ok=True)
+        if title_path is not None:
+            title_path.unlink(missing_ok=True)
         combined_path.unlink(missing_ok=True)
         for p in per_clip_raw_paths:
             Path(p).unlink(missing_ok=True)

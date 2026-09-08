@@ -160,6 +160,19 @@ INTRO_ZOOM_END = 0.88
 # Fade to/from black at the very start/end of the WHOLE slideshow, so the
 # intro doesn't hard-cut into the rest of the video.
 INTRO_FADE_SECONDS = 0.5
+# Darkens each source picture before the title is burned on top — plain
+# multiply on pixel values (1.0 = untouched, 0.0 = black) so the white
+# centered title stays readable over a bright/busy photo.
+INTRO_IMAGE_DIM_FACTOR = 0.55
+# The title text gets its OWN transition — a combined scale-up + fade-in
+# (and the reverse on the way out), via ASS `\fad`/`\t`/`\fscx`/`\fscy`
+# override tags — separate from the whole-frame fade above, and deliberately
+# slower/more pronounced so it reads as a distinct "reveal", not just the
+# background's own fade bleeding through the text.
+INTRO_LABEL_FADE_SECONDS = 1.1
+# Starting/ending scale (percent of normal size) the title pops in from /
+# shrinks back to — 100 would be a plain fade with no scale motion.
+INTRO_LABEL_SCALE_START_PCT = 65
 
 # --- Outro card grid (end-of-video "places visited" summary) ---------------
 # A single composited frame (project title + a thumbnail grid of every
@@ -209,3 +222,9 @@ TTS_RESPONSE_FORMAT = None  # None = let the server use its own default (wav)
 ATTRACTION_LABEL_FONT_SIZE = 26
 ATTRACTION_LABEL_OUTLINE = 2.5
 ATTRACTION_LABEL_MARGIN = 20
+# [Config] Attraction clips render below the map/waypoint clips' resolution to fit
+# VRAM (see VideoExporter.finalize_clip), then get lanczos-upscaled to match — a
+# mild unsharp pass right after that upscale claws back some of the softness the
+# resize itself introduces. Off by default elsewhere since it's tuned for exactly
+# this upscale ratio, not a general-purpose sharpen.
+ATTRACTION_UPSCALE_SHARPEN = True

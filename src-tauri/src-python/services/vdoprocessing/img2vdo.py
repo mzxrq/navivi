@@ -12,8 +12,9 @@ import json
 import shutil
 import uuid
 from pathlib import Path
-from typing import Final, List, Union, Optional
+from typing import Final, List, Optional, Tuple, Union
 
+from services import tuning
 from services.vdoprocessing.vdoeditor import VideoEditor
 from services.vdoprocessing.vdoexporter import VideoExporter
 from services.config.job_config import JobConfigManager
@@ -172,10 +173,43 @@ class AttractionVideoGenerator:
             logger.error("Local clip generation failed for %s: %s", local_image_path, exc)
             return None
 
+    # [Util] Decides whether video_path needs trimming/stretching to land within
+    # tolerance of target_audio_duration. Returns (trim_to, stretch_to) — at
+    # most one is non-None. Shared by both the fused fast path and the
+    # per-stage fallback in _fit_and_finalize so the decision logic exists once.
+    def _resolve_duration_fit(
+        self, video_path: str, target_audio_duration: float, overshoot_tolerance: float
+    ) -> Tuple[Optional[float], Optional[float]]:
+        if target_audio_duration <= 0:
+            return None, None
+
+        current_duration = self.editor.get_video_duration(video_path)
+        diff = current_duration - target_audio_duration
+
+        if diff > overshoot_tolerance:
+            logger.info(
+                f"Video ({current_duration:.2f}s) exceeds audio ({target_audio_duration:.2f}s) "
+                f"by more than {overshoot_tolerance:.1f}s. Trimming to fit..."
+            )
+            return target_audio_duration, None
+        elif -diff > self._AUDIO_DURATION_TOLERANCE_SECONDS:
+            logger.info(
+                f"Video ({current_duration:.2f}s) is shorter than audio ({target_audio_duration:.2f}s) "
+                f"by more than {self._AUDIO_DURATION_TOLERANCE_SECONDS:.1f}s. Adjusting duration..."
+            )
+            return None, target_audio_duration
+        else:
+            logger.info(
+                f"Video ({current_duration:.2f}s) is within tolerance of audio "
+                f"({target_audio_duration:.2f}s). No adjustment needed."
+            )
+            return None, None
+
     # [Core] Shared tail end of clip processing: fit duration, place at the
-    # project's output path, and upscale. Used by both the single-image path
-    # in process_attraction_video and finalize_pending_video's multi-image
-    # path, so the two stay in sync instead of drifting apart.
+    # project's output path, upscale, and burn the place label. Used by both
+    # the single-image path in process_attraction_video and
+    # finalize_pending_video's multi-image path, so the two stay in sync
+    # instead of drifting apart.
     def _fit_and_finalize(
         self,
         video_path: str,
@@ -185,60 +219,85 @@ class AttractionVideoGenerator:
         place_label: Optional[str] = None,
     ) -> str:
         """Trims/stretches video_path to within tolerance of
-        target_audio_duration, writes the result to output_filename in the
-        project's video directory, upscales it, then (if place_label is
-        given) burns it into the top-left corner for the clip's whole
-        duration. Narration audio is intentionally NOT muxed in here — see
-        process_attraction_video's docstring for why."""
-        if target_audio_duration > 0:
-            current_duration = self.editor.get_video_duration(video_path)
-            diff = current_duration - target_audio_duration
+        target_audio_duration, upscales it, and (if place_label is given)
+        burns it into the top-left corner — all in a single ffmpeg pass via
+        VideoExporter.finalize_clip, falling back to the old three-pass
+        per-stage pipeline only if that fused pass itself fails outright
+        (kept as a safety net; each stage there can fail independently
+        without losing the whole clip). Narration audio is intentionally
+        NOT muxed in here — see process_attraction_video's docstring for
+        why."""
+        trim_to, stretch_to = self._resolve_duration_fit(
+            video_path, target_audio_duration, overshoot_tolerance
+        )
 
-            if diff > overshoot_tolerance:
-                logger.info(
-                    f"Video ({current_duration:.2f}s) exceeds audio ({target_audio_duration:.2f}s) "
-                    f"by more than {overshoot_tolerance:.1f}s. Trimming to fit..."
-                )
-                trimmed_name = f"temp_trimmed_{uuid.uuid4().hex[:8]}.mp4"
-                fitted_video = self.editor.trim_video_duration(
-                    video_path=video_path,
-                    target_duration=target_audio_duration,
-                    output_filename=trimmed_name,
-                )
-            elif -diff > self._AUDIO_DURATION_TOLERANCE_SECONDS:
-                logger.info(
-                    f"Video ({current_duration:.2f}s) is shorter than audio ({target_audio_duration:.2f}s) "
-                    f"by more than {self._AUDIO_DURATION_TOLERANCE_SECONDS:.1f}s. Adjusting duration..."
-                )
-                scaled_name = f"temp_scaled_{uuid.uuid4().hex[:8]}.mp4"
-                fitted_video = self.editor.adjust_video_duration(
-                    video_path=video_path,
-                    target_duration=target_audio_duration,
-                    output_filename=scaled_name,
-                )
-            else:
-                logger.info(
-                    f"Video ({current_duration:.2f}s) is within tolerance of audio "
-                    f"({target_audio_duration:.2f}s). No adjustment needed."
-                )
-                fitted_video = video_path
+        final_path = self.editor._resolve_output_path(output_filename, "video")
+        if final_path.exists():
+            final_path.unlink()
+
+        # [NOTE] [Editor] Duration-fit + upscale + label burn used to be three
+        # sequential ffmpeg re-encodes (trim/adjust, then a separate upscale
+        # pass, then a separate label-burn pass) — three full decode/encode
+        # passes over the same clip. finalize_clip fuses whichever of those
+        # are actually needed into one filter graph and one encode.
+        try:
+            VideoExporter.finalize_clip(
+                input_video_path=video_path,
+                output_video_path=str(final_path),
+                trim_to=trim_to,
+                stretch_to=stretch_to,
+                scale_to=(self._TARGET_WIDTH, self._TARGET_HEIGHT),
+                sharpen=tuning.ATTRACTION_UPSCALE_SHARPEN,
+                label_text=place_label,
+            )
+            return str(final_path)
+        except Exception as exc:
+            logger.warning(
+                "Fused finalize (trim/scale/label in one pass) failed for %s "
+                "(%s: %s) — falling back to the slower per-stage pipeline.",
+                video_path, type(exc).__name__, exc,
+            )
+
+        return self._fit_and_finalize_stagewise(
+            video_path, trim_to, stretch_to, final_path, place_label
+        )
+
+    # [Core] Slow-path fallback for _fit_and_finalize: the original
+    # three-separate-ffmpeg-passes implementation, kept so a fused-pass
+    # failure (e.g. an unusual filter-graph edge case) degrades to something
+    # slower rather than losing the clip — each stage here fails
+    # independently (a label or upscale problem doesn't sink the clip).
+    def _fit_and_finalize_stagewise(
+        self,
+        video_path: str,
+        trim_to: Optional[float],
+        stretch_to: Optional[float],
+        final_path: Path,
+        place_label: Optional[str] = None,
+    ) -> str:
+        if trim_to is not None:
+            trimmed_name = f"temp_trimmed_{uuid.uuid4().hex[:8]}.mp4"
+            fitted_video = self.editor.trim_video_duration(
+                video_path=video_path,
+                target_duration=trim_to,
+                output_filename=trimmed_name,
+            )
+        elif stretch_to is not None:
+            scaled_name = f"temp_scaled_{uuid.uuid4().hex[:8]}.mp4"
+            fitted_video = self.editor.adjust_video_duration(
+                video_path=video_path,
+                target_duration=stretch_to,
+                output_filename=scaled_name,
+            )
         else:
             fitted_video = video_path
 
-        # Place at the proper output_filename path — previously this was a
-        # side effect of mux_audio_to_video; now done explicitly since
-        # muxing narration audio in is deferred (see docstring above).
-        final_path = self.editor._resolve_output_path(output_filename, "video")
         if Path(fitted_video).resolve() != final_path.resolve():
             if final_path.exists():
                 final_path.unlink()
             shutil.copy2(fitted_video, final_path)
         final_output = str(final_path)
 
-        # Upscale to match the map/waypoint clips' resolution (CPU-only
-        # ffmpeg lanczos scale — no VRAM cost, so this is safe on 8GB cards
-        # regardless of what generation already used). Written to a temp
-        # file then swapped in, since ffmpeg can't write to its own input.
         try:
             upscale_tmp = str(
                 Path(final_output).with_name(f"upscaled_{uuid.uuid4().hex[:6]}.mp4")
@@ -257,9 +316,6 @@ class AttractionVideoGenerator:
                 exc,
             )
 
-        # [NOTE] [Animation] Burned in last, after upscaling, so the label text itself
-        # is crisp at the final resolution instead of being scaled with the rest of the
-        # frame. A label failure shouldn't sink an otherwise-good clip.
         if place_label:
             try:
                 labeled_tmp = str(
