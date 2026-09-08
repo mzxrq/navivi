@@ -27,5 +27,5 @@ export {
     Settings, Save, // AppSettings
     Pencil, SplinePointer, Undo, Eraser, MapPinPen,  // MapArea 
     MapPinPlus, MapPinned, Waypoints as WP,
-    Eye, EyeOff, VolumeX, Lock, Unlock, //TimelineView
+    Eye, EyeOff, VolumeX, Lock, Unlock, LinkIcon, UnlinkIcon, Edit3, FileText, ArrowRight //TimelineView
 } from "lucide-react";

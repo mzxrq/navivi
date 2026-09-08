@@ -238,6 +238,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         })),
       );
       resetTimelineHistory(DefaultTimeline);
+      await autoLoadTimeline(data.directory_path);
 
       setIsDirty(false);
       addToRecents(
@@ -300,7 +301,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   // auto-loader logic for TimelineManifest
   const autoLoadTimeline = async (projectDir: string) => {
     const manifest = await loadTimelineManifest(projectDir);
-    if (!manifest) return; // no manifest -> exit
+    if (!manifest) {
+      resetTimelineHistory(DefaultTimeline);
+      return;
+    } // no manifest -> exit
+    if (manifest.ui_state) {
+      resetTimelineHistory(manifest.ui_state);
+      return;
+    }
 
     // ensure standard base tracks ready
     const videoTrackId = crypto.randomUUID();
