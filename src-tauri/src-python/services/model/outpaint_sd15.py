@@ -41,6 +41,7 @@ NEGATIVE_PROMPT = (
 )
 
 
+# [NOTE] [Animation] Prepares the ControlNet conditioning tensor; -1 (not 0/black) marks masked pixels since black is a valid, meaningful pixel value
 def make_inpaint_condition(image: Image.Image, mask: Image.Image) -> torch.Tensor:
     """Standard preprocessing for lllyasviel/control_v11p_sd15_inpaint: the
     control image is the real photo with masked pixels set to -1 (not 0/black
@@ -54,8 +55,11 @@ def make_inpaint_condition(image: Image.Image, mask: Image.Image) -> torch.Tenso
     return torch.from_numpy(image_np)
 
 
+# [Core] [Animation] Runs the SD1.5 + ControlNet-inpaint pipeline as a lighter-VRAM outpaint alternative to SDXL
 def outpaint_sd15(src_image: str) -> Image.Image:
     if torch.cuda.is_available():
+        # [HACK] [Animation] Caps the CUDA allocator so overflow raises a catchable OOM instead of
+        # silently spilling into slow/unstable shared system memory under Windows WDDM.
         torch.cuda.set_per_process_memory_fraction(MEMORY_FRACTION, 0)
 
     raw = Image.open(src_image).convert("RGB")
@@ -73,7 +77,7 @@ def outpaint_sd15(src_image: str) -> Image.Image:
     canvas_w = fit_w + ext * 2
     canvas_h = fit_h
 
-    # Mirror-seed the extension (same reasoning as outpaint_pan.py: a flat
+    # [HACK] [Animation] Mirror-seed the extension (same reasoning as outpaint_pan.py: a flat
     # fill color reads as "wall" to the model) — still worth doing even with
     # ControlNet guidance, it's a cheap extra nudge toward real texture.
     fitted_np = np.array(fitted)
@@ -123,6 +127,7 @@ def outpaint_sd15(src_image: str) -> Image.Image:
     return result
 
 
+# [Core] [Animation] Tries the lighter SD1.5+ControlNet outpaint first, falling back to SDXL on failure
 def outpaint_safe(src_image: str) -> Image.Image:
     """Try the lighter SD1.5+ControlNet outpaint first; on any OOM or other
     failure, fall back to the confirmed-working SDXL mirror-seed approach

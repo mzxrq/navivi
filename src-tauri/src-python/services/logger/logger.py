@@ -34,6 +34,8 @@ def setup_logger(name: str):
         file_handler.setFormatter(file_formatter)
         logger.addHandler(file_handler)
 
+        # [NOTE] [Core] Console only surfaces ERROR+ (stderr feeds Tauri's error stream/stdout JSON parsing),
+        # while the file handler above keeps the full INFO+ history.
         console_handler = logging.StreamHandler(sys.stderr)
         console_handler.setLevel(logging.ERROR)
         console_formatter = logging.Formatter(

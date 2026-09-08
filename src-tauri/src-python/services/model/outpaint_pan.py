@@ -73,6 +73,7 @@ NEGATIVE_PROMPT = (
 )
 
 
+# [Core] [Translation] Auto-captions the source photo (BLIP) so the outpaint prompt is grounded in its actual content
 def describe_scene(pil_img: Image.Image) -> str:
     """One-shot image captioning (BLIP) so the outpaint prompt is grounded in
     whatever is actually in THIS photo, instead of a hand-written prompt that
@@ -103,6 +104,7 @@ EASE = True
 ZOOM = 1.0                     # 1.0 = no crop-in; pan uses only the extra outpainted width
 
 
+# [Core] [Animation] Runs the SDXL inpainting pipeline to widen the source photo's canvas for panning across
 def outpaint(src_image: str) -> Image.Image:
     raw = Image.open(src_image).convert("RGB")
 
@@ -127,7 +129,7 @@ def outpaint(src_image: str) -> Image.Image:
     canvas_w = fit_w + ext_l + ext_r
     canvas_h = fit_h
 
-    # Seed the extension area with mirrored real content instead of flat
+    # [HACK] [Animation] Seed the extension area with mirrored real content instead of flat
     # gray. A large flat-colored rectangle reads as a "wall" to the diffusion
     # model regardless of prompt/negative-prompt/guidance — that's what was
     # producing pillar hallucinations even at very high guidance_scale. A
@@ -143,7 +145,7 @@ def outpaint(src_image: str) -> Image.Image:
     canvas_np = np.concatenate(parts, axis=1)
     canvas = Image.fromarray(canvas_np)
 
-    # Mask: white = generate, black = keep as-is. A fixed (not extend-width-
+    # [NOTE] [Animation] Mask: white = generate, black = keep as-is. A fixed (not extend-width-
     # proportional) feather radius gives the model a gradual transition band
     # instead of a hard edge.
     mask = Image.new("L", (canvas_w, canvas_h), 255)
@@ -181,6 +183,7 @@ def ease_in_out(t: float) -> float:
     return 0.5 - 0.5 * np.cos(np.pi * t)
 
 
+# [Core] [Animation] Pans a crop window across the outpainted, widened image and encodes it to video
 def pan(image: Image.Image) -> None:
     src = np.array(image.convert("RGB"))
     sh, sw = src.shape[:2]

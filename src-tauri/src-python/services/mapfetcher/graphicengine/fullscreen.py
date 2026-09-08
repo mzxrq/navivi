@@ -36,6 +36,7 @@ class _FullscreenMixin:
         target_ratio = 16.0 / 9.0
         current_ratio = pw / float(ph)
 
+        # [NOTE] [Animation] Center-crops the popup image to a fixed 16:9 ratio (trimming whichever axis is oversized) so it fills the frame with no letterboxing once scaled up.
         if current_ratio > target_ratio:
             new_w = int(ph * target_ratio)
             offset = (pw - new_w) // 2
@@ -62,6 +63,7 @@ class _FullscreenMixin:
         start_x, start_y = box_x + border, box_y + border
 
         scale_frames = max(1, int(duration_sec * fps))
+        # [NOTE] [Animation] Cubic ease-out (1 - (1-progress)^3): fast at the start, settling gently into the fullscreen size instead of a linear, mechanical-feeling scale.
         for t in range(scale_frames):
             progress = t / float(scale_frames - 1) if scale_frames > 1 else 1.0
             ease = 1 - (1 - progress) ** 3
@@ -136,6 +138,7 @@ class _FullscreenMixin:
                 break
 
             fh, fw = frame.shape[:2]
+            # [NOTE] [Animation] "Cover" scaling: scales by the LARGER of the two ratios so the frame fully fills target_w x target_h with no letterboxing, then center-crops the overflow off whichever axis ends up oversized.
             scale = max(target_w / fw, target_h / fh)
             new_w, new_h = int(fw * scale), int(fh * scale)
             resized = cv2.resize(frame, (new_w, new_h))
@@ -152,6 +155,7 @@ class _FullscreenMixin:
         if not frames:
             return
 
+        # [NOTE] [Animation] Cross-fades the B-roll's own first/last third of frames into the enter/exit frame it's sandwiched between, so the cut to/from the video isn't a hard jump. Capped at len(frames)//3 so a very short clip doesn't fade across its entire runtime.
         fade_frames = min(int(0.5 * fps), len(frames) // 3)
         for i, f in enumerate(frames):
             if i < fade_frames:
@@ -215,6 +219,7 @@ class _FullscreenMixin:
 
         full_frame = t_frames[-1]
         blur_frames = max(1, int(blur_t * fps))
+        # [NOTE] [Animation] Kernel size scales with the frame's shorter dimension so the blur reads consistently regardless of output resolution; `| 1` forces it odd, which cv2.GaussianBlur requires.
         max_ksize = max(3, (min(full_frame.shape[:2]) // 20) | 1)
         blurred = full_frame
         for i in range(blur_frames):

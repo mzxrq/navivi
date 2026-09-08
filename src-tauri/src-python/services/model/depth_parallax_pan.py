@@ -30,6 +30,7 @@ def ease_in_out(t: float) -> float:
     return 0.5 - 0.5 * np.cos(np.pi * t)
 
 
+# [Core] [Animation] Runs a monocular depth model once and returns a normalized 0-1 depth map (0=far, 1=near)
 def estimate_depth(pil_img: Image.Image) -> np.ndarray:
     print("Loading depth model...")
     depth_pipe = pipeline(
@@ -53,7 +54,7 @@ def build_layers(rgb: np.ndarray, depth: np.ndarray, num_layers: int):
     filled via classical inpainting); each mask is where that layer's real
     content actually is."""
     h, w = depth.shape
-    # Bin edges from percentiles so each layer covers a similar amount of area.
+    # [NOTE] [Animation] Bin edges from percentiles so each layer covers a similar amount of area.
     edges = np.quantile(depth, np.linspace(0, 1, num_layers + 1))
     layers = []
     for i in range(num_layers):
@@ -65,6 +66,9 @@ def build_layers(rgb: np.ndarray, depth: np.ndarray, num_layers: int):
         else:
             mask = ((depth >= lo) & (depth <= hi)).astype(np.uint8) * 255
 
+        # [NOTE] [Animation] Classical inpainting (not AI generation) fills each layer's
+        # occluded areas so every layer is a complete texture that can be shifted
+        # independently without exposing holes where another layer used to cover it.
         inpaint_mask = cv2.bitwise_not(mask)
         texture = cv2.inpaint(rgb, inpaint_mask, 15, cv2.INPAINT_TELEA)
 
@@ -118,7 +122,10 @@ def main():
             t = ease_in_out(t)
         global_dx = (t - 0.5) * 2 * pan_px  # sweep from -pan_px to +pan_px
 
-        # Composite back-to-front with per-layer speed.
+        # [NOTE] [Animation] Composite back-to-front with per-layer speed: each layer shifts
+        # by global_dx scaled by its own LAYER_SPEEDS multiplier, so near layers move more
+        # than far ones — that differential creates the parallax depth illusion. Alpha-blends
+        # (via each layer's feathered mask) over whatever the farther layers already drew.
         composite = None
         for i in range(NUM_LAYERS - 1, -1, -1):
             texture, mask = layers[i]

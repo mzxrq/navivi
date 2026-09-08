@@ -256,6 +256,8 @@ class SubtitleBuilder:
             return []
 
         mapper = SpeakingTimelineMapper(duration_seconds, pauses)
+        # [NOTE] [Subtitle] Falls back to even per-clause division when the mapper finds no non-pause
+        # (speaking) intervals at all, avoiding a divide-by-zero in the char-proportional allocation below.
         if mapper.total_speaking_time <= 0:
             # Degenerate case (entirely silent clip) — even fallback
             # instead of a division by zero.

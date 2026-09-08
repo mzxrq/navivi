@@ -9,7 +9,6 @@ the drawing commands to either the Spatial or Storyboard renderers.
 from __future__ import annotations
 
 import argparse
-from html import parser
 import json
 import os
 import subprocess
@@ -18,8 +17,8 @@ from typing import Dict, Any, List, Optional, Tuple
 
 from services.mapfetcher.graphicengine import GraphicsEngine
 from services.logger.logger import setup_logger
+from services import tuning
 from services.vdoprocessing.spatial_renderer import SpatialRenderer
-from services.vdoprocessing.vdoexporter import VideoExporter
 from services.vdoprocessing.pydeckrecorder import record_headless_video
 
 # Logging configuration
@@ -32,8 +31,13 @@ class RouteAnimator:
     def __init__(self, config: Dict[str, Any]):
         self.config = config
 
-        settings = self.config.get("settings", {}) if self.config else {}
-        map_font_size = settings.get("map_font_size", 20)
+        # NOTE: `self.config` here is already the flattened settings dict
+        # render_route_video builds (animator_config) — it has no nested
+        # "settings" key of its own, so a `self.config.get("settings", {})`
+        # lookup (the old code) always fell through to `{}` and silently
+        # discarded whatever settings.map_font_size/card_border_* a project
+        # actually configured. Read the keys directly off self.config.
+        map_font_size = self.config.get("map_font_size", 24) if self.config else 24
 
         # 1. Initialize the Core Graphics Engine
         self.graphics = GraphicsEngine(
@@ -41,8 +45,20 @@ class RouteAnimator:
             line_thickness=self.config.get("line_thickness", 10),
             marker_color=self.config.get("marker_color", (0, 0, 255)),
             arrived_marker_color=self.config.get("arrived_marker_color", (0, 0, 220)),
-            marker_radius=self.config.get("marker_radius", 18),
+            marker_radius=self.config.get("marker_radius", 24),
             font_size=map_font_size,
+            card_border_color=tuple(
+                self.config.get("card_border_color", tuning.DEFAULT_CARD_BORDER_COLOR)
+            ),
+            card_border_thickness=self.config.get(
+                "card_border_thickness", tuning.DEFAULT_CARD_BORDER_THICKNESS
+            ),
+            line_border_color=tuple(
+                self.config.get("route_line_border_color", tuning.DEFAULT_LINE_BORDER_COLOR)
+            ),
+            line_border_thickness=self.config.get(
+                "route_line_border_thickness", tuning.DEFAULT_LINE_BORDER_THICKNESS
+            ),
         )
 
         self.out_dir = Path(config.get("output_dir", ""))
@@ -112,7 +128,9 @@ class RouteAnimator:
             Path(video_path).with_name(f"temp_frozen_{Path(video_path).name}")
         )
 
-        # FFmpeg command to pad the end of the video by cloning the last frame
+        # [HACK] [Editor] FFmpeg has no native "hold last frame" operation on
+        # an already-encoded clip, so tpad's clone mode re-encodes the whole
+        # file just to duplicate the final frame for hold_seconds.
         cmd = [
             "ffmpeg",
             "-y",
@@ -155,101 +173,29 @@ class RouteAnimator:
 
         output_paths = []
 
+        # [HACK] [Core] No StoryboardRenderer implementation exists anywhere in this codebase, so use_leg_storyboard can never actually run — fail loudly here instead of an opaque AttributeError deep in a dead branch.
         if self.config.get("use_leg_storyboard", False) and wp_indices:
-            storyboard = self.storyboard_renderer.build_storyboard_from_route(
-                points=points,
-                labels=labels,
-                popups=popups,
-                wp_indices=wp_indices,
-                leg_durations=self.config.get("leg_durations"),
-                default_transition_hold_seconds=self.config.get(
-                    "default_transition_hold_seconds", 1.5
-                ),
-                video_id="overview",
-                output_filename="01_overview.mp4",
+            raise NotImplementedError(
+                "use_leg_storyboard is enabled but no StoryboardRenderer is "
+                "implemented — use the default spatial renderer instead."
             )
 
-            overview_path = self.storyboard_renderer.render_storyboard(
-                bg_path=img_path,
-                points=points,
-                labels=labels,
-                storyboard=storyboard,
-                summary=summary,
-            )
-            # Sync the last frame state back for downstream usage
-            self.spatial_renderer.last_frame = self.storyboard_renderer.last_frame
-
-            with open(
-                self.out_dir / "auto_storyboard.json", "w", encoding="utf-8"
-            ) as f:
-                json.dump(storyboard, f, indent=2, ensure_ascii=False)
-
-            actions = storyboard.get("actions", [])
-            timeline_tracks = self.storyboard_renderer.last_timeline_tracks
-
-            if timeline_tracks and len(timeline_tracks) == len(actions):
-                combined_clips = []
-                current_group: List[str] = []
-                leg_idx = 0
-
-                # Single O(A) pass: partition the flat clip list into
-                # per-leg groups every time a new "draw_route" action starts.
-                for track, action in zip(timeline_tracks, actions):
-                    a_type = action.get("type", "")
-
-                    if a_type == "draw_route" and current_group:
-                        out_name = str(
-                            self.out_dir / f"01_overview_leg_{leg_idx:02d}.mp4"
-                        )
-                        VideoExporter.concat_clips(current_group, out_name)
-                        combined_clips.append(out_name)
-                        current_group = []
-                        leg_idx += 1
-
-                    current_group.append(track["file_path"])
-
-                # Flush and merge the final group (last leg + summary/popup)
-                if current_group:
-                    out_name = str(self.out_dir / f"01_overview_leg_{leg_idx:02d}.mp4")
-                    VideoExporter.concat_clips(current_group, out_name)
-                    combined_clips.append(out_name)
-
-                if combined_clips:
-                    last_leg_path = combined_clips[-1]
-                    self._freeze_video_end(
-                        last_leg_path, hold_seconds=self.config.get("summary_hold", 4.0)
-                    )
-
-                output_paths.extend(combined_clips)
-
-            elif overview_path:
-                logger.warning(
-                    "Storyboard timeline manifest missing/mismatched — "
-                    "falling back to single stitched overview file."
-                )
+        overview_path = self.spatial_renderer.render_overview(
+            img_path, points, labels, popups, fps, summary=summary, point_modes=point_modes
+        )
+        if overview_path:
+            # Skip the extra hold when the clip already ended itself on
+            # a blur-out (see SpatialRenderer._render_ending_highlight) —
+            # that blur is meant to be the video's actual last frame, so
+            # freezing on top of it just makes playback linger instead
+            # of ending right when the blur finishes.
+            if not self.spatial_renderer.last_ending_hard_ended:
                 self._freeze_video_end(
                     overview_path, hold_seconds=self.config.get("summary_hold", 4.0)
                 )
-                output_paths.append(overview_path)
+            output_paths.append(overview_path)
 
-        # Fallback to the Legacy Proximity Renderer
-        else:
-            overview_path = self.spatial_renderer.render_overview(
-                img_path, points, labels, popups, fps, summary=summary, point_modes=point_modes
-            )
-            if overview_path:
-                # Skip the extra hold when the clip already ended itself on
-                # a blur-out (see SpatialRenderer._render_ending_highlight) —
-                # that blur is meant to be the video's actual last frame, so
-                # freezing on top of it just makes playback linger instead
-                # of ending right when the blur finishes.
-                if not self.spatial_renderer.last_ending_hard_ended:
-                    self._freeze_video_end(
-                        overview_path, hold_seconds=self.config.get("summary_hold", 4.0)
-                    )
-                output_paths.append(overview_path)
-
-        # Render each waypoint-to-waypoint leg. 3D is deliberately opt-in;
+        # [NOTE] [Core] Render each waypoint-to-waypoint leg. 3D is deliberately opt-in;
         # projects with use_3d_res=false use the fetched, bounded 2D map tiles.
         if res_sequence:
             if self.config.get("use_3d_res", False):
@@ -318,12 +264,15 @@ def main():
     animator.graphics.line_thickness = args.thickness or settings.get(
         "line_thickness", 10
     )
-    animator.graphics.marker_radius = args.radius or settings.get("marker_radius", 18)
+    animator.graphics.marker_radius = args.radius or settings.get("marker_radius", 24)
 
     res_sequence = None
     if args.res_route and args.res_map:
         res_points, res_labels, res_popups, _ = animator.load_route_data(args.res_route)
 
+        # [HACK] [IO] Walks up from the output dir looking for job_config.json
+        # since this CLI has no direct reference to the job — swallows any
+        # read failure and just falls back to the raw route labels.
         try:
             out_path = Path(args.output)
             job_paths = [
@@ -363,6 +312,7 @@ def main():
         else None
     )
 
+    # [NOTE] [Core] Forces the route's first/last points into wp_indices even without a popup so storyboard slicing always has a defined start/end leg.
     wp_indices = [i for i, pop in enumerate(popups) if pop is not None]
 
     if 0 not in wp_indices:

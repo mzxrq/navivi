@@ -33,6 +33,10 @@ names) changes, so no call site elsewhere needs to be touched.
 ---------------------------------------------------------------------------
 """
 
+# [NOTE] [Core] Re-exports rather than re-implements: keeps a single import
+# path (services.video_engine) working for existing callers while ensuring
+# there is only ever one implementation of each class in the codebase — see
+# the module docstring above for why that matters.
 from services.math_util import MathUtils
 from services.vdoprocessing.vdoexporter import VideoExporter
 from services.graphic_engine import GraphicsEngine

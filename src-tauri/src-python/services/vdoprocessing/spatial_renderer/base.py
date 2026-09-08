@@ -14,7 +14,7 @@ logger = setup_logger("SpatialRenderer")
 
 
 class _SpatialRendererBase:
-    # Fallback real-world average speed (km/h) per travel mode — overridable
+    # [NOTE] [Config] Fallback real-world average speed (km/h) per travel mode — overridable
     # per-project via job_config.json's settings.mode_speeds_kmh, e.g.
     # {"walking": 3, "car": 70, "ferry": 36}. This is the REPORTED speed —
     # what a leg's summary-card "time" is estimated from when real GPS
@@ -23,7 +23,7 @@ class _SpatialRendererBase:
     # services/tuning.py, the shared home for every hand-tunable constant
     # across spatial_renderer + graphicengine.
     _DEFAULT_MODE_SPEED_KMH = tuning.REPORTED_MODE_SPEED_KMH
-    # Speeds that drive the on-screen ANIMATION pace (_mode_speed_factor),
+    # [NOTE] [Animation] Speeds that drive the on-screen ANIMATION pace (_mode_speed_factor),
     # kept deliberately separate from the reported speeds above. Walking's
     # honest real-world pace (~3 km/h) reads fine as a stat on a card, but
     # animating literally at that pace relative to a 70+ km/h ferry/car
@@ -77,7 +77,7 @@ class _SpatialRendererBase:
         }
 
         self.trigger_radius_padding = {
-            # "overview" was generous enough (marker_radius + 25px) that a
+            # [NOTE] [Animation] "overview" was generous enough (marker_radius + 25px) that a
             # waypoint's pin/popup could fire while the traveler was still
             # visibly short of it — tightened so arrival reads as actually
             # reaching the pin, not just passing near it. Both remain
@@ -85,7 +85,7 @@ class _SpatialRendererBase:
             **tuning.TRIGGER_RADIUS_PADDING_DEFAULTS,
             **config.get("trigger_radius_padding", {}),
         }
-        # How long the popup card takes to confirm its position (a brief
+        # [NOTE] [Animation] How long the popup card takes to confirm its position (a brief
         # static hold on the small card) before it starts growing, then how
         # long the grow-to-fullscreen itself takes — slow and deliberate
         # (2-3s) rather than a snap cut, so the viewer can actually track
@@ -136,6 +136,9 @@ class _SpatialRendererBase:
 
     @staticmethod
     def _initial_heading(path: List) -> float:
+        # [NOTE] [Animation] Uses the path's own geometry rather than a fixed
+        # default so the initial heading is already correct before
+        # _smoothed_heading has any history to blend from.
         """Bearing to start _smoothed_heading's blend from, computed from
         the path itself (first point to the first later point far enough
         away for a stable direction, falling back to point 0 -> the last

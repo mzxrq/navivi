@@ -82,6 +82,7 @@ class RouteGeometryProcessor:
         pts = np.array(points)
         keep = {0, len(points) - 1}
 
+        # [NOTE] [Map] Recursively keeps only the point farthest from the start-end chord when it exceeds tolerance, discarding the rest of the segment as redundant.
         def _dp(start, end):
             if end - start <= 1:
                 return
@@ -90,6 +91,10 @@ class RouteGeometryProcessor:
             if line_len == 0:
                 dists = np.hypot(*(pts[start + 1 : end] - pts[start]).T)
             else:
+                # Perpendicular distance from each point to the chord via
+                # the 2D cross product (dot with the chord's unit normal),
+                # not a full point-to-segment distance — points can project
+                # outside [start, end] and still get a meaningful distance.
                 norm = np.array([-line[1], line[0]]) / line_len
                 dists = np.abs((pts[start + 1 : end] - pts[start]) @ norm)
 
@@ -213,6 +218,7 @@ class RouteGeometryProcessor:
 
         return [float(px), float(py)]
 
+    # [NOTE] [Map] Projects point P onto segment AB, clamping t to [0, 1] so the closest point stays within the segment's endpoints rather than the infinite line through them.
     @staticmethod
     def point_to_segment_distance(
         px: float, py: float, ax: float, ay: float, bx: float, by: float

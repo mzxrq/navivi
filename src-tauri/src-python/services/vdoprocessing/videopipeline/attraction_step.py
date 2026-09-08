@@ -3,9 +3,8 @@
 from pathlib import Path
 from typing import Optional
 
-from tqdm import tqdm
-
 from services.config.job_config import JobConfigManager
+from services.logger.progress import tracker
 
 from .helpers import logger
 
@@ -48,16 +47,13 @@ def render_attraction_videos(
             )
             continue
 
-        # --- MODIFIED PROMPT EXTRACTION ---
-        # Extract the full list of camera pans from the waypoint config
+        # [NOTE] [Animation] Passes the full camera_pans list (not just one) so the generator can chain multiple pans per attraction, falling back to a label-based prompt when none are configured.
         camera_pans = wp.get("camera_pans", [])
 
-        # Pass the whole list, or fallback to a default list if empty
         if camera_pans and len(camera_pans) > 0:
             prompt_text = camera_pans
         else:
             prompt_text = [wp.get("label", "Beautiful Japanese scenery, high quality")]
-        # ----------------------------------
 
         target_audio_duration = (
             audio_durations[idx] if idx < len(audio_durations) else 0.0
@@ -67,8 +63,8 @@ def render_attraction_videos(
         safe_label = str(wp.get("label", f"waypoint_{idx}")).replace(" ", "_")
         output_filename = f"04_attraction_{idx:02d}_{safe_label}.mp4"
 
-        tqdm.write(
-            f"[Step 3/5] Generating AI Video for Attraction [{idx + 1}/{len(waypoints)}]: '{wp.get('label')}'"
+        tracker.show(
+            f"Generating attraction video {idx + 1}/{len(waypoints)}: {wp.get('label')}"
         )
 
         logger.info(
@@ -95,10 +91,8 @@ def render_attraction_videos(
                 result_path,
             )
             generated_videos.append(result_path)
+        # [NOTE] [Core] A None result here isn't necessarily a failure — a pending manifest means clips were generated but await frontend approval via attraction-finalize.
         elif generator._pending_manifest_path(output_filename).exists():
-            # Multiple popup images -> clips were generated but not
-            # auto-combined (deferred until the frontend approves them via
-            # the attraction-finalize CLI mode). Not a failure.
             logger.info(
                 "Step 3: [%d/%d] '%s' has multiple clips pending approval — "
                 "combining deferred, call attraction-finalize once ready.",
@@ -114,6 +108,7 @@ def render_attraction_videos(
                 place_label,
             )
 
+    tracker.clear()
     logger.info(
         "Step 3 complete: %d attraction video(s) produced.", len(generated_videos)
     )

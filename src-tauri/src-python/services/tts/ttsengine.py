@@ -30,6 +30,7 @@ from services.logger.logger import setup_logger
 logger = setup_logger("TTSEngine")
 
 
+# [HACK] [Util] Force-kills a process and its children; Windows has no SIGTERM equivalent, so taskkill /T/F is the only reliable way to reap a subprocess tree
 def _kill_process_tree(pid: int) -> None:
     """Same approach as idle_watchdog.py's _kill — /T also takes down the
     child process(es) a server subprocess may have spawned, not just the
@@ -420,6 +421,9 @@ class AudioProcessor:
         in_pause = False
         pause_start = 0.0
 
+        # [NOTE] [TTS] Sliding-window peak-amplitude scan: a chunk below silence_threshold
+        # opens a pause, the first chunk back above it closes one — only pauses
+        # meeting min_pause_duration are kept, so brief dips in loudness don't register.
         for i in range(0, len(audio_np), chunk_size):
             chunk = audio_np[i : i + chunk_size]
             if len(chunk) == 0:

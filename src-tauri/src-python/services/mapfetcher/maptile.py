@@ -175,9 +175,14 @@ class TileDownloader:
         out_w, out_h = output_size
         target_ratio = out_w / out_h
         center_lat = (s + n) / 2.0
+        # lon_scale corrects for the Mercator projection's east-west
+        # compression away from the equator, so degrees of longitude are
+        # compared to degrees of latitude on the same physical (meters)
+        # footing rather than raw degree counts.
         lon_scale = math.cos(math.radians(center_lat))
         current_ratio = ((e - w) * lon_scale) / (n - s)
 
+        # [NOTE] [Map] Grows whichever axis (lon or lat span) is too narrow for the target aspect ratio, centered on the existing bbox, rather than cropping the wider axis down.
         if current_ratio < target_ratio:
             expansion = (((n - s) * target_ratio) / lon_scale - (e - w)) / 2.0
             w, e = w - expansion, e + expansion
@@ -190,6 +195,7 @@ class TileDownloader:
         span_meters = max((n - s) * meters_per_deg_lat, (e - w) * meters_per_deg_lon)
         zoom = min(max_zoom, self.MAX_ZOOM_LEVEL, self._optimal_zoom_for_span(span_meters))
         img, extent = None, None
+        # [HACK] [Map] Swallows any fetch failure (rate-limit, unavailable zoom, network error alike) and just steps down a zoom level until one succeeds — masks the real cause of a failure that isn't zoom-related.
         while zoom > 0:
             try:
                 img, extent = self._bounds2img_safe(w, s, e, n, zoom)

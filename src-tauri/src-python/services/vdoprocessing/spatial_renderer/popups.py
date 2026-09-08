@@ -127,6 +127,7 @@ class _PopupMixin:
             if not overlaps(bx, by):
                 return bx, by
 
+            # [NOTE] [Animation] Archimedean-spiral search outward from the pin until a non-overlapping spot is found or max_radius is exhausted.
             angle, radius = 0.0, 0.0
             while radius < max_radius:
                 radius += 5.0
@@ -144,7 +145,15 @@ class _PopupMixin:
         # the order the traveler actually reaches them.
         for bp in sorted(group, key=lambda b: b["popup"].get("order", 0)):
             popup = bp["popup"]
-            spot = free_spot(popup["x"], popup["y"], id(popup))
+            # The card's leader line actually anchors on pin_x/pin_y when
+            # set (render_popup_box's own preference — see its docstring)
+            # — searching for a spot relative to the true x/y instead
+            # would start the search from a different point than where
+            # the line will actually connect, for any waypoint whose pin
+            # got fanned out by _declutter_pins.
+            spot = free_spot(
+                popup.get("pin_x", popup["x"]), popup.get("pin_y", popup["y"]), id(popup)
+            )
             if spot is None:
                 # Clear any position from a previous frame — don't let it
                 # keep rendering at a now-stale spot that may itself have
@@ -190,20 +199,55 @@ class _PopupMixin:
             spread=True,
         )
 
+        total_points = 1 + max((ap["index"] for ap in active_popups), default=0)
+        hud_popups = []
         for ap in recap_popups:
             if not ap.get("beside_box"):
                 continue
             hud_popup = ap.copy()
             hud_popup["hud_corner"] = None
             hud_popup["draw_leader_line"] = True
-            recap_frame = self.graphics.render_popup_box(recap_frame, hud_popup)
+            # With every waypoint's card shown at once, their leader lines
+            # cross each other constantly — coloring each line to match its
+            # own pin (rather than one flat gray for all of them) makes it
+            # possible to actually trace a given card back to its pin
+            # despite the crossings.
+            _, pin_color = self._pin_label_and_color(ap, total_points)
+            hud_popup["leader_line_color"] = pin_color or self.graphics.marker_color
+            hud_popups.append(hud_popup)
+
+        # Three passes — every line, then every pin, then every card —
+        # rather than each card's line+box together in one pass per
+        # popup: with several cards on screen at once, a later popup's
+        # line drawn together with its own card would otherwise land on
+        # top of an earlier popup's already-drawn card (or pin) whenever
+        # it happened to cross it. This guarantees every line sits behind
+        # every pin AND every card, regardless of draw order — the pins
+        # are already baked into `recap_frame` from the main animation
+        # loop, so without redrawing them here on top of the lines, a
+        # line whose path crosses near a DIFFERENT waypoint's pin would
+        # visually run right through/over it.
+        for hud_popup in hud_popups:
+            recap_frame = self.graphics.render_popup_box(
+                recap_frame, hud_popup, line_only=True
+            )
+        for ap in active_popups:
+            self._draw_pin(recap_frame, ap, total_points)
+        for hud_popup in hud_popups:
+            recap_frame = self.graphics.render_popup_box(
+                recap_frame, hud_popup, skip_line=True
+            )
         return recap_frame
 
     # Target fade in/out duration for a popup, in seconds — kept within a
     # 1-3s window so it reads as a deliberate soft transition rather than
     # either an abrupt snap or a slow dissolve. Still capped per-popup (see
-    # _make_baked_popup) to at most 40% of that popup's OWN display time on
-    # each end, so a short leg doesn't end up all-fade with no solid hold.
+    # _make_baked_popup) to at most 25% of that popup's OWN display time on
+    # each end (was 40% — for a short leg, fading in and out ate up to 80%
+    # of its total display time, leaving the card looking half-transparent
+    # for most of a quick, closely-spaced-waypoint stretch), so a short leg
+    # still gets a solid, mostly-opaque hold rather than being dominated by
+    # the fade.
     _POPUP_FADE_SECONDS = tuning.POPUP_FADE_SECONDS
 
     @classmethod
@@ -218,7 +262,7 @@ class _PopupMixin:
         _composite_baked_popups) before giving up rather than finally
         appearing long after the traveler has moved on."""
         total_frames = max(1, int(display_seconds * fps))
-        fade_frames = max(1, min(int(cls._POPUP_FADE_SECONDS * fps), total_frames * 2 // 5))
+        fade_frames = max(1, min(int(cls._POPUP_FADE_SECONDS * fps), total_frames // 4))
         return {
             "popup": popup,
             "frames_left": total_frames,
@@ -246,6 +290,8 @@ class _PopupMixin:
         w: int,
         h: int,
         route_obstacles: Optional[np.ndarray],
+        active_popups: Optional[List[Dict]] = None,
+        total_points: int = 0,
     ) -> Tuple[np.ndarray, List[Dict]]:
         """Draws every currently-active popup (flow-through or lingering
         frozen) onto `frame` for this one frame, fading each in/out per
@@ -257,12 +303,22 @@ class _PopupMixin:
         oldest-triggered first, and already-visible ones keep priority
         over any new arrival so a shown popup is never evicted early — see
         _layout_beside_popups for how each one's position is found. Frozen
-        ones always draw, in their fixed HUD corner, uncapped."""
+        ones always draw, in their fixed HUD corner, uncapped.
+
+        Leader-lined (beside_box) cards are drawn line-first, then every
+        already-triggered pin in `active_popups` is redrawn on top, then
+        the cards themselves — same three-pass ordering as the recap and
+        the per-leg intro — so a card's own leader line (or one it merely
+        crosses on its way to a differently-placed pin) never renders on
+        top of any pin. `active_popups` is optional only so callers that
+        never have leader-lined cards (none currently) don't need to pass
+        it; every real caller does."""
         MAX_CONCURRENT_FLOW_POPUPS = 3
 
         flowing = [
             bp for bp in baked_popups if not bp["popup"]["data"].get("freeze_frame", False)
         ]
+        # [NOTE] [Animation] Already-visible cards (beside_box set) sort first so the concurrency cap slices them off last, keeping a shown popup from being evicted mid-display.
         flowing.sort(
             key=lambda b: (
                 0 if b["popup"].get("beside_box") else 1,
@@ -277,23 +333,46 @@ class _PopupMixin:
                 flowing_visible, w, h, route_obstacles=route_obstacles
             )
 
-        survivors = []
-        for bp in baked_popups:
+        hud_popups: List[Optional[Dict]] = [None] * len(baked_popups)
+        for i, bp in enumerate(baked_popups):
             hud_popup = bp["popup"].copy()
-            drawn = False
             if hud_popup["data"].get("freeze_frame", False):
                 hud_popup.setdefault("hud_corner", "bottom_left")
-                frame = self.graphics.render_popup_box(
-                    frame, hud_popup, alpha=self._popup_fade_alpha(bp)
-                )
-                drawn = True
             elif hud_popup.get("beside_box"):
                 hud_popup["hud_corner"] = None
                 hud_popup["draw_leader_line"] = True
+            else:
+                continue  # no free spot this frame — nothing to draw
+            hud_popups[i] = hud_popup
+
+        any_leader_line = False
+        for i, bp in enumerate(baked_popups):
+            hud_popup = hud_popups[i]
+            if hud_popup is not None and hud_popup.get("draw_leader_line"):
+                any_leader_line = True
                 frame = self.graphics.render_popup_box(
-                    frame, hud_popup, alpha=self._popup_fade_alpha(bp)
+                    frame, hud_popup, alpha=self._popup_fade_alpha(bp), line_only=True
                 )
-                drawn = True
+
+        # Pins were already drawn once this frame, before this function
+        # ran (see overview_animation.py) — only worth redrawing them here
+        # (on top of the line(s) just drawn above) when there's actually a
+        # leader line that could have crossed one; skip the redundant
+        # redraw on every other frame.
+        if any_leader_line:
+            for wp in active_popups or []:
+                if wp["data"].get("triggered") or wp["index"] == 0:
+                    self._draw_pin(frame, wp, total_points)
+
+        survivors = []
+        for i, bp in enumerate(baked_popups):
+            hud_popup = hud_popups[i]
+            drawn = hud_popup is not None
+            if drawn:
+                frame = self.graphics.render_popup_box(
+                    frame, hud_popup, alpha=self._popup_fade_alpha(bp),
+                    skip_line=bool(hud_popup.get("draw_leader_line")),
+                )
 
             # A popup's countdown only ticks while it's actually being
             # shown — one sitting out this frame (no free spot/no

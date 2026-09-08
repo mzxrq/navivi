@@ -72,6 +72,7 @@ class GPSParser:
 
     def convert(self, output_format: str = "csv", extra_args: Optional[List[str]] = None) -> Path:
         """ Convert raw GPS data into standard format using GPSBabel. """
+        # [NOTE] [GPS] Shells out to the bundled GPSBabel binary to normalize arbitrary GPS formats into CSV.
         input_file = self.get_input_file_path()
         if not input_file or not input_file.exists():
             raise FileNotFoundError(f"Input file could not be resolved or found: {input_file}")
@@ -129,6 +130,7 @@ class GPSParser:
 
             dataframe = pd.read_csv(target_path)
 
+            # [NOTE] [GPS] GPSBabel output column names vary by source device/format, so aliases are normalized here.
             # Normalize columns and map coordinate aliases
             dataframe.columns = [col.strip().lower() for col in dataframe.columns]
             dataframe = dataframe.rename(columns={
@@ -151,7 +153,8 @@ class GPSParser:
             if "timestamp" in route_df.columns:
                 route_df = route_df.sort_values(by="timestamp").reset_index(drop=True)
 
-            # Timestamps & Time-by-Distance Fallbacks
+            # [HACK] [GPS] Timestamps & Time-by-Distance Fallbacks: when a GPS log has no usable timestamps,
+            # a synthetic timeline is derived from point-to-point distance and a fixed walking speed.
             if "timestamp" not in route_df.columns or route_df["timestamp"].isnull().all():
                 logger.warning("No timestamps found! Generating timeline based on physical distance...")
                 lat1, lon1 = route_df["latitude"].shift().fillna(route_df["latitude"]).to_numpy(), route_df["longitude"].shift().fillna(route_df["longitude"]).to_numpy()
@@ -164,6 +167,8 @@ class GPSParser:
                 route_df["timestamp"] = route_df["timestamp"].ffill()
                 dt = route_df["timestamp"].diff().dt.total_seconds().fillna(1.0)
 
+                # [HACK] [GPS] Some devices log duplicate/out-of-order timestamps producing zero or negative deltas;
+                # those gaps are patched using an average speed derived from the rest of the valid samples.
                 if (dt <= 0).any():
                     logger.warning("Detected 0 or negative time deltas. Averaging time by distance...")
                     lat1, lon1 = route_df["latitude"].shift().fillna(route_df["latitude"]).to_numpy(), route_df["longitude"].shift().fillna(route_df["longitude"]).to_numpy()
@@ -178,7 +183,8 @@ class GPSParser:
                     dt[dt <= 0] = (distances_m[dt <= 0] / avg_speed_m_s).clip(1.0)
                     route_df["timestamp"] = route_df["timestamp"].iloc[0] + pd.to_timedelta(dt.cumsum() - dt.iloc[0], unit="s")
 
-            # Detect Stops and Landmarks
+            # [NOTE] [GPS] Detect Stops and Landmarks: coordinates are rounded to a fixed precision so that
+            # consecutive points at effectively the same spot collapse into one "stop block" for duration checks.
             if "latitude" in route_df.columns and "longitude" in route_df.columns:
                 route_df["lat_round"] = route_df["latitude"].round(self.precision)
                 route_df["lon_round"] = route_df["longitude"].round(self.precision)

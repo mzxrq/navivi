@@ -67,6 +67,8 @@ class GPSMath:
 
         duration_td = pd.Timedelta(seconds=total_duration_seconds)
 
+        # [NOTE] [GPS] Distance is summed pairwise over consecutive points (last point's shift(-1) is NaN,
+        # so np.nansum silently drops that trailing leg instead of erroring).
         return {
             "total_route_points": len(route_df),
             "total_waypoints": len(waypoints_df),
