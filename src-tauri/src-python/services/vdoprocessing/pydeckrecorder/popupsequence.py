@@ -19,6 +19,11 @@ async def _coin_pop_in(page, force_render_and_shoot, pop_frames: int) -> float:
     Returns the ending rotation in degrees (0-360) so a following hold can
     continue the spin seamlessly instead of snapping.
     """
+    # [NOTE] [Transition] Cubic ease-out on scale, a single sine-arc bounce
+    # on Y translation, and a linear spin all driven off the same `ease`
+    # progress -- landing on a whole multiple of 360deg is what keeps the
+    # image facing the camera flat once the pop-in ends, instead of at an
+    # arbitrary rotation.
     spins = 1.5  # full rotations completed during the pop-in
     end_deg = spins * 360.0
 
@@ -94,6 +99,9 @@ async def _run_popup_freeze_sequence(
         return
 
     if not popup_url:
+        # [NOTE] [Transition] No popup image for this waypoint -- just hold
+        # the last driving frame for freeze_frames instead of running the
+        # coin pop/spin/fade sequence below.
         frozen_png = await page.screenshot()
         for _ in range(freeze_frames):
             proc.stdin.write(frozen_png)
@@ -211,10 +219,10 @@ async def _run_popup_freeze_sequence(
         for _ in range(full_hold_frames):
             await force_render_and_shoot()
 
-        # Phase 6: Fast blur-out to end the clip on the final destination's
-        # photo, rather than a plain fade -- blur ramps in quickly
-        # (accelerating, not linear) alongside the fade so the very last
-        # frames read as a deliberate cinematic close, not a cut.
+        # [NOTE] [Transition] Phase 6: Fast blur-out to end the clip on the
+        # final destination's photo, rather than a plain fade -- blur ramps
+        # in quickly (accelerating, not linear) alongside the fade so the
+        # very last frames read as a deliberate cinematic close, not a cut.
         full_blur_frames = max(1, int(fps * 0.4))
         for i in range(full_blur_frames):
             progress = i / float(full_blur_frames - 1) if full_blur_frames > 1 else 1.0

@@ -31,6 +31,7 @@ NEGATIVE_PROMPT = (
 )
 
 
+# [TODO] [Animation] Quick manual smoke-test script — hardcoded prompt/photo, no CLI args; superseded by outpaint_pan.py's describe_scene-driven prompt for real runs
 def main():
     print("Loading SDXL inpainting pipeline...")
     pipe = AutoPipelineForInpainting.from_pretrained(
@@ -50,6 +51,9 @@ def main():
     canvas_w = fit_w + ext * 2
     canvas_h = fit_h
 
+    # [HACK] [Animation] Flat gray fill for the extension (unlike outpaint_pan.py's mirror-seed
+    # approach) — this is the naive version that tends to hallucinate walls/pillars,
+    # kept here as the baseline this test script was used to diagnose against.
     canvas = Image.new("RGB", (canvas_w, canvas_h), (128, 128, 128))
     canvas.paste(fitted, (ext, 0))
 

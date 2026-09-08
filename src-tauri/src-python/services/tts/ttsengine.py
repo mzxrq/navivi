@@ -32,48 +32,7 @@ from services.logger.logger import setup_logger
 logger = setup_logger("TTSEngine")
 
 
-# [Config] TTSConfig: every knob the Irodori TTS request payload accepts, with tuning.py defaults
-@dataclass(frozen=True)
-class TTSConfig:
-    """Narration-synthesis parameters sent to the Irodori TTS server.
-
-    Covers the request's named fields (model/voice/speed/response_format)
-    directly; anything beyond that — the server's ~30 advanced sampling
-    knobs (cfg_scale, seed, chunking, ...) — goes through `extra_options`
-    and is forwarded verbatim as the request's `irodori` sub-object, so this
-    class doesn't have to mirror each one by hand to stay "fully configurable".
-    Built once per client/call (frozen, validated up front) rather than
-    re-validated on every request.
-    """
-
-    model: str = tuning.TTS_MODEL
-    voice: str = tuning.TTS_VOICE
-    speed: float = tuning.TTS_SPEED
-    response_format: Optional[str] = tuning.TTS_RESPONSE_FORMAT
-    extra_options: Dict[str, Any] = field(default_factory=dict)
-
-    def __post_init__(self) -> None:
-        if not (tuning.TTS_MIN_SPEED <= self.speed <= tuning.TTS_MAX_SPEED):
-            raise ValueError(
-                f"TTS speed must be between {tuning.TTS_MIN_SPEED} and "
-                f"{tuning.TTS_MAX_SPEED}, got {self.speed}"
-            )
-
-    # [Util] Serializes this config + the narration text into the request body IrodoriTTSClient posts
-    def to_payload(self, text: str) -> Dict[str, Any]:
-        payload: Dict[str, Any] = {
-            "model": self.model,
-            "input": text,
-            "voice": self.voice,
-            "speed": self.speed,
-        }
-        if self.response_format:
-            payload["response_format"] = self.response_format
-        if self.extra_options:
-            payload["irodori"] = self.extra_options
-        return payload
-
-
+# [HACK] [Util] Force-kills a process and its children; Windows has no SIGTERM equivalent, so taskkill /T/F is the only reliable way to reap a subprocess tree
 def _kill_process_tree(pid: int) -> None:
     """Same approach as idle_watchdog.py's _kill — /T also takes down the
     child process(es) a server subprocess may have spawned, not just the
@@ -469,6 +428,9 @@ class AudioProcessor:
         in_pause = False
         pause_start = 0.0
 
+        # [NOTE] [TTS] Sliding-window peak-amplitude scan: a chunk below silence_threshold
+        # opens a pause, the first chunk back above it closes one — only pauses
+        # meeting min_pause_duration are kept, so brief dips in loudness don't register.
         for i in range(0, len(audio_np), chunk_size):
             chunk = audio_np[i : i + chunk_size]
             if len(chunk) == 0:

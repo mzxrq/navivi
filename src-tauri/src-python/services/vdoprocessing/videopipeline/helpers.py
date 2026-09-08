@@ -44,6 +44,7 @@ def _project_route_to_pixels(
     img_height_px: int,
 ) -> list[list[float]]:
     """Helper to convert GPS coordinates to pixel space on the map."""
+    # [NOTE] [Map] extent is (west, east, south, north) in Web Mercator meters — unpack order must match contextily's own extent convention or pixels land mirrored/flipped.
     w, e, s, n = extent
     merc_x, merc_y = _WGS84_TO_WEBMERCATOR.transform(lons, lats)
     px = (np.asarray(merc_x) - w) / (e - w) * img_width_px
@@ -80,8 +81,7 @@ def _find_leg_cache_key(
         if dist < best_dist:
             best_dist, best_key = dist, route_key
 
-    # ~0.0005 in summed-squared-degrees is well under a city block — reject
-    # anything looser so an unrelated cache entry never gets matched.
+    # [NOTE] [Util] ~0.0005 in summed-squared-degrees is well under a city block — reject anything looser so an unrelated cache entry never gets matched.
     if best_key is None or best_dist > 0.0005:
         return None
     return best_key
@@ -139,20 +139,14 @@ def _build_point_modes(
     if num_points == 0:
         return modes
 
-    # "direct" is a straight-line routing choice, not a distinct travel
-    # mode — render/report it as walking rather than falling through to the
-    # generic colored-marker fallback icon.
+    # [NOTE] [Animation] "direct" is a straight-line routing choice, not a distinct travel mode — render/report it as walking rather than falling through to the generic colored-marker fallback icon.
     mode_aliases = {"direct": "walking"}
 
     boundaries = list(wp_indices) + [num_points - 1]
     prev_end = 0
     current_mode = "walking"
     for leg_idx, end_idx in enumerate(boundaries):
-        # boundaries[leg_idx] is where waypoint `leg_idx` sits; the leg
-        # ending there departs from waypoint `leg_idx - 1`. leg_idx == 0 has
-        # no real leg before it, and leg_idx == len(waypoints) is the
-        # trailing stretch past the last waypoint — both just keep
-        # whatever current_mode already is.
+        # [NOTE] [Animation] boundaries[leg_idx] is where waypoint `leg_idx` sits; the leg ending there departs from waypoint `leg_idx - 1`. leg_idx == 0 has no real leg before it, and leg_idx == len(waypoints) is the trailing stretch past the last waypoint — both just keep whatever current_mode already is.
         if 0 < leg_idx < len(waypoints):
             from_wp, to_wp = waypoints[leg_idx - 1], waypoints[leg_idx]
             leg_mode = _resolve_leg_mode_from_cache(from_wp, to_wp, routing_cache)

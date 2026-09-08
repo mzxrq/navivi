@@ -25,6 +25,8 @@ def ease_in_out(t: float) -> float:
     return 0.5 - 0.5 * np.cos(np.pi * t)
 
 
+# [NOTE] [Animation] Estimates a subject-of-interest point via edge-energy centroid, blended
+# toward image center so a busy corner doesn't drag the framing off-center entirely.
 def find_focus_point(gray: np.ndarray) -> tuple:
     gx = cv2.Sobel(gray, cv2.CV_32F, 1, 0, ksize=3)
     gy = cv2.Sobel(gray, cv2.CV_32F, 0, 1, ksize=3)
@@ -58,6 +60,8 @@ def crop_rect(cx: float, cy: float, half_w: float, half_h: float, sw: int, sh: i
     return int(cx - half_w), int(cy - half_h), int(cx + half_w), int(cy + half_h)
 
 
+# [NOTE] [Animation] Lazily generates and caches the outpainted wide canvas so repeated runs
+# against the same source photo skip the expensive SDXL outpaint step.
 def get_wide_source() -> np.ndarray:
     if not os.path.exists(OUTPAINT_IMAGE):
         print("No outpainted canvas cached yet - generating one (SDXL mirror-seed outpaint)...")
@@ -71,6 +75,7 @@ def get_wide_source() -> np.ndarray:
     return np.array(Image.open(OUTPAINT_IMAGE).convert("RGB"))
 
 
+# [Core] [Animation] Entry point: zooms out from the original photo's framing to reveal the outpainted wide canvas while panning
 def main():
     out_aspect = OUT_W / OUT_H
 
@@ -82,7 +87,7 @@ def main():
     fit_w, fit_h = contain_fit(sw, sh, out_aspect)
     focus = find_focus_point(cv2.cvtColor(wide_src, cv2.COLOR_RGB2GRAY)) if USE_FOCUS else (sw / 2, sh / 2)
 
-    # The outpaint canvas is the original photo resized to this same height
+    # [NOTE] [Animation] The outpaint canvas is the original photo resized to this same height
     # (sh) and then extended sideways, so the original photo's full width —
     # in the wide canvas's own pixel space — is exactly sh * base_aspect.
     # (Comparing base_fit_w, computed from the original's own resolution,
@@ -98,6 +103,9 @@ def main():
     os.makedirs("output_videos", exist_ok=True)
     writer = cv2.VideoWriter(raw_path, fourcc, FPS, (OUT_W, OUT_H))
 
+    # [NOTE] [Animation] zoom interpolates from the plain photo's normal framing (zoom_start)
+    # to the fully-zoomed-out wide canvas (ZOOM_END), while cx drifts by pan_dx — one
+    # continuous eased motion, no cuts/crossfades.
     for i in range(num_frames):
         t = ease_in_out(i / max(1, num_frames - 1))
         zoom = zoom_start + (ZOOM_END - zoom_start) * t

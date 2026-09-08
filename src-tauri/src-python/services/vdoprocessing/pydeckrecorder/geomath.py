@@ -15,6 +15,10 @@ def calculate_bearing(lon1, lat1, lon2, lat2):
 
 
 def smooth_bearings(bearings, alpha=0.15):
+    # [NOTE] [Animation] Exponential smoothing over an angle, not a plain
+    # value -- diff is normalized into (-180, 180] first so the chase camera
+    # always turns the SHORT way around the compass (e.g. 350deg -> 10deg
+    # blends as +20, not as a near-full spin backwards through 180).
     if not bearings:
         return []
     smoothed = [bearings[0]]
@@ -27,6 +31,9 @@ def smooth_bearings(bearings, alpha=0.15):
 
 
 def offset_point(lon, lat, bearing_deg, distance_m):
+    # [NOTE] [Animation] Standard destination-point formula (given a start
+    # point, bearing, and distance) -- used to place the chase camera a
+    # fixed distance behind the vehicle along its current heading.
     R = 6371000.0
     bearing_rad = math.radians(bearing_deg)
     lat_rad = math.radians(lat)

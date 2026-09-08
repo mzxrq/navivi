@@ -24,6 +24,11 @@ from .transitions import _TransitionMixin
 from .waypoints import _WaypointRenderMixin
 
 
+# [NOTE] [Core] MRO order matters here: Python resolves same-named methods
+# left-to-right, and _SpatialRendererBase (providing __init__ and shared
+# state) is listed last deliberately so every mixin's own methods take
+# priority over it while all mixins still see the base's attributes via
+# super()/self.
 class SpatialRenderer(
     _OverviewRenderMixin,
     _OverviewAnimationMixin,

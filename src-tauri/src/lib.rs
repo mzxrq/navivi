@@ -5,9 +5,13 @@ use std::sync::Mutex;
 use std::{thread};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, State};
+use std::path::Path;
+use std::fs;
+
 struct BlueprintState {
     process: Mutex<Option<Child>>,
 }
+
 
 #[tauri::command]
 async fn run_python_blueprint(
@@ -185,6 +189,28 @@ async fn export_video(app: tauri::AppHandle, project_dir: String) -> Result<(), 
     }
 }
 
+#[tauri::command]
+async fn copy_asset_file(source_path: String, target_dir: String) -> Result<String, String> {
+    let source = Path::new(&source_path);
+    
+    // Extract the filename from the source path
+    let file_name = source.file_name().ok_or("Invalid file name")?;
+    
+    // Build the final destination path
+    let target = Path::new(&target_dir).join(file_name);
+    
+    // Ensure the target directory exists
+    if let Err(e) = fs::create_dir_all(&target_dir) {
+        return Err(format!("Failed to create directory: {}", e));
+    }
+
+    // Copy the file
+    match fs::copy(&source, &target) {
+        Ok(_) => Ok(target.to_string_lossy().to_string()),
+        Err(e) => Err(format!("Failed to copy file: {}", e)),
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -199,6 +225,7 @@ pub fn run() {
             start_render,
             wake_up_ollama,
             export_video,
+            copy_asset_file,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

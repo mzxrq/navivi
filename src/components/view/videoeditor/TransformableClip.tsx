@@ -1,9 +1,9 @@
-import { useRef, useEffect, useState } from 'react';
-import { Image as KonvaImage, Text as KonvaText, Transformer } from 'react-konva';
-import { convertFileSrc } from '@tauri-apps/api/core';
-import useImage from 'use-image';
+import { useEffect, useRef, useState } from "react";
+import Konva from 'konva';
+import { Image as KonvaImage, Text as KonvaText, Transformer } from "react-konva";
+import { convertFileSrc } from "@tauri-apps/api/core";
 
-interface ClipProps {
+interface TransformableClipProps {
   clip: any;
   isSelected: boolean;
   isPlaying: boolean;
@@ -12,134 +12,171 @@ interface ClipProps {
   onChange: (newAttrs: any) => void;
 }
 
-export function TransformableClip({ clip, isSelected, isPlaying, currentTime, onSelect, onChange }: ClipProps) {
+export function TransformableClip({ clip, isSelected, isPlaying, currentTime, onSelect, onChange }: TransformableClipProps) {
   const shapeRef = useRef<any>(null);
   const trRef = useRef<any>(null);
-  const animRef = useRef<number>(0);
 
-  const safeUrl = clip.source ? convertFileSrc(clip.source) : '';
-  const [image] = useImage((clip.type === 'image' || clip.type === 'static_popup') ? safeUrl : '');
-  const [videoElement, setVideoElement] = useState<HTMLVideoElement | null>(null);
+  const [videoSize, setVideoSize] = useState({ width: 1920, height: 1080 });
 
-  useEffect(() => {
-    if (clip.type !== 'video') return;
-    const vid = document.createElement('video');
-    vid.src = safeUrl;
-    vid.crossOrigin = "anonymous";
-    vid.muted = true;
-    vid.loop = false;
-    
-    vid.addEventListener('loadeddata', () => {
-      setVideoElement(vid);
-      shapeRef.current?.getLayer()?.batchDraw();
-    });
-    vid.load();
-    
-    return () => { vid.removeAttribute('src'); };
-  }, [safeUrl, clip.type]);
-
-  useEffect(() => {
-    if (!videoElement) return;
-    const isWithinClip = currentTime >= clip.startTime && currentTime <= clip.startTime + clip.duration;
-    const expectedTime = Math.max(0, currentTime - clip.startTime);
-
-    if (Math.abs(videoElement.currentTime - expectedTime) > 0.1) {
-      videoElement.currentTime = expectedTime;
+  // Create Media Elements
+  const [videoElement] = useState(() => {
+    if (clip.type === 'video') {
+      const vid = document.createElement('video');
+      vid.playsInline = true;
+      vid.crossOrigin = "anonymous";
+      return vid;
     }
+    if (clip.type === 'audio') {
+      return new window.Audio();
+    }
+    return null;
+  });
 
-    if (isPlaying && isWithinClip) {
-      videoElement.play().catch(() => {});
-      const anim = () => {
+  const [imageElement] = useState(() => {
+    if (clip.type === 'image') return new window.Image();
+    return null;
+  });
+
+  // Load sources
+  useEffect(() => {
+    if (!clip.source) return;
+    const safeUrl = convertFileSrc(clip.source);
+
+    if (clip.type === 'image' && imageElement) {
+      imageElement.onload = () => shapeRef.current?.getLayer()?.batchDraw();
+      imageElement.src = safeUrl;
+    } 
+    else if (clip.type === 'video' && videoElement instanceof HTMLVideoElement) {
+      const handleMetadata = () => {
+        setVideoSize({ width: videoElement.videoWidth, height: videoElement.videoHeight });
         shapeRef.current?.getLayer()?.batchDraw();
-        animRef.current = requestAnimationFrame(anim);
       };
-      animRef.current = requestAnimationFrame(anim);
-    } else {
-      videoElement.pause();
-      if (animRef.current) cancelAnimationFrame(animRef.current);
-      shapeRef.current?.getLayer()?.batchDraw(); 
+      
+      videoElement.addEventListener('loadedmetadata', handleMetadata);
+      videoElement.src = safeUrl;
+      
+      // Force load to grab metadata
+      videoElement.load();
+
+      return () => videoElement.removeEventListener('loadedmetadata', handleMetadata);
     }
-    return () => { if (animRef.current) cancelAnimationFrame(animRef.current); };
-  }, [isPlaying, currentTime, videoElement, clip.startTime, clip.duration]);
+  }, [clip.source, clip.type, videoElement, imageElement]);
 
+  // Animation Loop
   useEffect(() => {
-    if (!videoElement) return;
-    const handleSeeked = () => shapeRef.current?.getLayer()?.batchDraw();
-    videoElement.addEventListener('seeked', handleSeeked);
-    return () => videoElement.removeEventListener('seeked', handleSeeked);
-  }, [videoElement]);
+    if (clip.type !== 'video' || !shapeRef.current) return;
+    const layer = shapeRef.current.getLayer();
+    if (!layer) return;
 
-  const mediaSource = clip.type === 'video' ? videoElement : image;
-  const isWithinClip = currentTime >= clip.startTime && currentTime <= clip.startTime + clip.duration; // Add this line!
+    const anim = new Konva.Animation(() => {}, layer);
+    anim.start();
 
+    return () => {
+      anim.stop();
+    };
+  }, [clip.type]);
+
+  // Playhead
+  useEffect(() => {
+    if (clip.type !== "video" || !videoElement) return;
+
+    const localTime = currentTime - clip.startTime + (clip.sourceOffset || 0);
+
+    if (isPlaying) {
+      if (videoElement.paused) videoElement.play().catch(() => {});
+      if (Math.abs(videoElement.currentTime - localTime) > 0.25) {
+        videoElement.currentTime = Math.max(0, localTime);
+      }
+    } else {
+      if (!videoElement.paused) videoElement.pause();
+      if (Math.abs(videoElement.currentTime - localTime) > 0.05) {
+        videoElement.currentTime = Math.max(0, localTime);
+        shapeRef.current?.getLayer()?.batchDraw();
+      }
+    }
+  }, [currentTime, isPlaying, clip.startTime, clip.sourceOffset, clip.type, videoElement]);
+
+  // Transform Controls
   useEffect(() => {
     if (isSelected && trRef.current && shapeRef.current) {
       trRef.current.nodes([shapeRef.current]);
-      trRef.current.getLayer().batchDraw();
+      trRef.current.getLayer()?.batchDraw();
     }
-  }, [isSelected, mediaSource, clip.type, clip.text]);
+  }, [isSelected]);
 
-  const handleTransformEnd = () => {
-    const node = shapeRef.current;
-    onChange({
-      ...clip,
-      x: node.x(),
-      y: node.y(),
-      scaleX: node.scaleX(),
-      scaleY: node.scaleY(),
-      rotation: node.rotation(),
-    });
-  };
+  const x = clip.x || 0;
+  const y = clip.y || 0;
+  const scaleX = clip.scaleX || 1;
+  const scaleY = clip.scaleY || 1;
+  const rotation = clip.rotation || 0;
 
-  if (clip.type === 'text' || clip.type === 'subtitle') {
-    const isWithinClip = currentTime >= clip.startTime && currentTime <= clip.startTime + clip.duration;
-    return (
-      <>
-        <KonvaText
-          visible={isWithinClip}
-          text={clip.text || 'Sample Text'}
-          x={clip.x || 1920 / 2 - 100}
-          y={clip.y || 1080 - 150}
-          fontSize={clip.fontSize || 48}
-          fill={clip.color || '#ffffff'}
-          fontFamily="Arial"
-          stroke={clip.stroke || '#000000'}
-          strokeWidth={clip.strokeWidth || 2}
-          scaleX={clip.scaleX || 1}
-          scaleY={clip.scaleY || 1}
-          rotation={clip.rotation || 0}
-          draggable={isSelected}
-          onClick={onSelect}
-          onTap={onSelect}
-          ref={shapeRef}
-          onDragEnd={(e) => onChange({ ...clip, x: e.target.x(), y: e.target.y() })}
-          onTransformEnd={handleTransformEnd}
-        />
-        {isSelected && <Transformer ref={trRef} boundBoxFunc={(oldBox, newBox) => (newBox.width < 10 || newBox.height < 10 ? oldBox : newBox)} />}
-      </>
-    );
+  let currentOpacity = 1;
+  const clipTime = currentTime - clip.startTime;
+  if (clip.fadein && clipTime < clip.fadeIn) {
+    currentOpacity = clipTime / clip.fadeIn;
+  } else if (clip.fadeOut && clipTime > clip.duration - clip.fadeOut) {
+    currentOpacity = (clip.duration - clipTime) / clip.fadeOut;
   }
+  currentOpacity = Math.max(0, Math.min(1, currentOpacity));
 
-  if (!mediaSource) return null;
+
+  if (clip.type === 'audio') {
+    return null;
+  }
+  const activeMedia = (clip.type === 'video' && videoElement instanceof HTMLVideoElement) ? videoElement : (imageElement || undefined);
 
   return (
     <>
-      <KonvaImage
-        visible={isWithinClip}
-        image={mediaSource}
-        x={clip.x || 0}
-        y={clip.y || 0}
-        scaleX={clip.scaleX || 1}
-        scaleY={clip.scaleY || 1}
-        rotation={clip.rotation || 0}
-        draggable={isSelected}
-        onClick={onSelect}
-        onTap={onSelect}
-        ref={shapeRef}
-        onDragEnd={(e) => onChange({ ...clip, x: e.target.x(), y: e.target.y() })}
-        onTransformEnd={handleTransformEnd}
-      />
-      {isSelected && <Transformer ref={trRef} boundBoxFunc={(oldBox, newBox) => (newBox.width < 10 || newBox.height < 10 ? oldBox : newBox)} />}
+      {clip.type === "text" || clip.type === "subtitle" ? (
+        <KonvaText
+          ref={shapeRef}
+          text={clip.text || "New Text"}
+          x={x}
+          y={y}
+          opacity={currentOpacity}
+          fontSize={clip.fontSize || 48}
+          fill={clip.color || "#ffffff"}
+          scaleX={scaleX}
+          scaleY={scaleY}
+          rotation={rotation}
+          draggable={isSelected}
+          onClick={onSelect}
+          onTap={onSelect}
+          onDragEnd={(e) => onChange({ x: e.target.x(), y: e.target.y() })}
+          onTransformEnd={() => {
+            const node = shapeRef.current;
+            onChange({ x: node.x(), y: node.y(), scaleX: node.scaleX(), scaleY: node.scaleY(), rotation: node.rotation() });
+          }}
+        />
+      ) : (
+        <KonvaImage
+          ref={shapeRef}
+          image={activeMedia}
+          x={x}
+          y={y}
+          opacity={currentOpacity}
+          width={clip.type === 'video' ? videoSize.width : undefined}
+          height={clip.type === 'video' ? videoSize.height : undefined}
+          scaleX={scaleX}
+          scaleY={scaleY}
+          rotation={rotation}
+          draggable={isSelected}
+          onClick={onSelect}
+          onTap={onSelect}
+          onDragEnd={(e) => onChange({ x: e.target.x(), y: e.target.y() })}
+          onTransformEnd={() => {
+            const node = shapeRef.current;
+            onChange({ x: node.x(), y: node.y(), scaleX: node.scaleX(), scaleY: node.scaleY(), rotation: node.rotation() });
+          }}
+        />
+      )}
+
+      {isSelected && (
+        <Transformer
+          ref={trRef}
+          boundBoxFunc={(oldBox, newBox) => (newBox.width < 5 || newBox.height < 5) ? oldBox : newBox}
+        />
+      )}
     </>
   );
 }

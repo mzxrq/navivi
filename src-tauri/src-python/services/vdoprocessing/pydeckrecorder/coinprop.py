@@ -11,11 +11,12 @@ for the true final destination only; every other waypoint uses this instead.
 import json
 import math
 
-# Vertical quad (2 triangles, 6 non-indexed vertices) authored in meters,
-# directly in deck.gl's Z-up local space. Because we author the geometry
-# ourselves, getOrientation's yaw alone spins it around its vertical axis
-# like a coin -- unlike the GLB vehicle/marker models, which need an extra
-# 90deg roll to stand upright since their own "up" axis doesn't match.
+# [NOTE] [Animation] Vertical quad (2 triangles, 6 non-indexed vertices)
+# authored in meters, directly in deck.gl's Z-up local space. Because we
+# author the geometry ourselves, getOrientation's yaw alone spins it around
+# its vertical axis like a coin -- unlike the GLB vehicle/marker models,
+# which need an extra 90deg roll to stand upright since their own "up" axis
+# doesn't match.
 _COIN_MESH_SETUP_JS = """
 () => {
     const W = 22, H = 22;
@@ -87,6 +88,10 @@ async def play_coin_collect(
     driving frame set it, by filtering+replacing on deck.gl's own current
     layers instead of rebuilding the whole scene from scratch.
     """
+    # [NOTE] [Animation] Cubic ease-out drives scale (grows past 1.0 for a
+    # "pop"), a power-1.5 curve fades alpha out faster near the end than
+    # linear would, and spin keeps accelerating through two full turns --
+    # together this reads as a quick, punchy collect rather than a plain fade.
     burst_frames = max(1, int(fps * 0.5))
     for i in range(burst_frames):
         progress = i / float(burst_frames - 1) if burst_frames > 1 else 1.0
@@ -101,10 +106,10 @@ async def play_coin_collect(
         () => {{
             if (!window.deckgl) return;
             const current = window.deckgl.props.layers || [];
-            // The marker (waypoint-3d-markers/labels) must stay drawn AFTER
-            // the coin, or it loses its "always on top" guarantee during
-            // the burst -- simply appending the coin last (as the id-filter
-            // alone would) would put it back over the marker.
+            // [NOTE] [Animation] The marker (waypoint-3d-markers/labels) must
+            // stay drawn AFTER the coin, or it loses its "always on top"
+            // guarantee during the burst -- simply appending the coin last
+            // (as the id-filter alone would) would put it back over the marker.
             const isMarkerLayer = l => ['waypoint-3d-markers', 'waypoint-labels', 'waypoint-labels-shadow'].includes(l.id);
             const others = current.filter(l => l.id !== 'popup-coin' && !isMarkerLayer(l));
             const markerLayers = current.filter(isMarkerLayer);
@@ -175,10 +180,10 @@ async def play_intro_coin_hold(
                 getOrientation: [0, 0, 90],
                 getColor: [46, 160, 67, 255],
                 sizeScale: 8,
-                // Always draws above the coin regardless of actual 3D
-                // depth -- combined with being added to the layers array
-                // AFTER the coin below, this guarantees the pin is never
-                // hidden behind the photo.
+                // [HACK] [Animation] Always draws above the coin regardless
+                // of actual 3D depth -- combined with being added to the
+                // layers array AFTER the coin below, this guarantees the pin
+                // is never hidden behind the photo.
                 parameters: {{ depthTest: false }}
             }});
             const textShadows = new deck.TextLayer({{

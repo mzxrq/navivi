@@ -112,6 +112,22 @@ class _OverviewRenderMixin:
             ap["order"] = order
         self._declutter_pins(active_popups)
 
+        # Popup card border matches this waypoint's own pin color (S=green,
+        # E=red, stop-by=brown, everything else=the default marker color)
+        # — set once here, on the source active_popups entries, rather
+        # than at every individual card-building call site downstream,
+        # since virtually all of them start from a .copy() of one of
+        # these and would otherwise need to recompute/thread it through
+        # separately.
+        total_points_for_color = len(points)
+        for ap in active_popups:
+            _, pin_color_for_border = self._pin_label_and_color(ap, total_points_for_color)
+            # _pin_label_and_color can return None for a plain numbered pin
+            # not yet "arrived" (see _pin_color) — fall back to the base
+            # marker color rather than letting popup_box's border draw
+            # None through.
+            ap["border_color"] = pin_color_for_border or self.graphics.marker_color
+
         job_waypoints = self._get_job_waypoints()
         for i, popup in enumerate(active_popups):
             if i < len(job_waypoints):
@@ -137,8 +153,15 @@ class _OverviewRenderMixin:
         # from the whole route rather than the animated path-so-far, so a
         # given waypoint's card always lands in the same corner regardless
         # of when in the animation it triggers.
+        # Uses each popup's DRAWN pin position (pin_x/pin_y, from
+        # _declutter_pins' fan-out above) rather than its true x/y — for a
+        # cluster of nearby waypoints, several entries can share nearly
+        # the same true x/y while their actual pins are fanned out around
+        # it; avoiding only the un-fanned point left the real, fanned-out
+        # pin positions unprotected, letting a card land right on top of
+        # one.
         route_avoid_points = list(points) + [
-            (p["x"], p["y"]) for p in active_popups
+            (p.get("pin_x", p["x"]), p.get("pin_y", p["y"])) for p in active_popups
         ]
 
         # Same footprint, as a decimated numpy array — lets

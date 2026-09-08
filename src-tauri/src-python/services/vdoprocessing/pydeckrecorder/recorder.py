@@ -17,9 +17,9 @@ from .legresolve import _MODE_ALIASES, _resolve_leg
 from .renderer import render_leg_animation
 from .routedata import interpolate_route_data, load_route_from_config, patch_pydeck_html
 
-# sizeScale is calibrated per model against its OWN measured glTF bounding
-# box (full scene-graph node transforms included, not just raw mesh
-# accessor bounds) so each vehicle renders at a real-world-plausible length,
+# [HACK] [Animation] sizeScale is calibrated per model against its OWN
+# measured glTF bounding box (full scene-graph node transforms included, not
+# just raw mesh accessor bounds) so each vehicle renders at a real-world-plausible length,
 # rather than a guessed constant. ferry.glb in particular is authored at a
 # wildly larger raw scale than the others (~1180 units on its long axis, vs
 # ~1.6 for car.glb) -- a shared/guessed sizeScale (previously 5.0, same
@@ -209,6 +209,10 @@ def record_headless_video(
             # ~1180 units vs car's ~1.6; distance still needs to scale UP
             # for it, not down). driving's 4.5m is the baseline the default
             # distance was tuned for.
+            # [NOTE] [Animation] Scale the chase distance with the vehicle's
+            # REAL rendered length (see _VEHICLE_PROFILES), not sizeScale --
+            # sizeScale alone isn't a valid proxy for on-screen size once
+            # it's calibrated per model.
             cam_follow_dist_base = settings.get("camera_follow_distance_m", 14)
             cam_follow_dist = cam_follow_dist_base * (
                 camera_config["vehicle_length_m"] / 4.5
@@ -279,7 +283,7 @@ def record_headless_video(
 
             mapbox_key = settings.get("mapbox_token", MAPBOX_API_KEY)
 
-            # Reverted the deck.gl TerrainLayer 3D-elevation experiment --
+            # [HACK] [Animation] Reverted the deck.gl TerrainLayer 3D-elevation experiment --
             # across several fix attempts (zoom/strategy mismatch, texture
             # coverage gaps over water, then a tile-cache bug that replayed
             # stale error tiles forever) it kept producing new failure
@@ -426,6 +430,9 @@ def record_headless_video(
         server.server_close()
 
 
+# [TODO] [Core] Hardcoded machine-specific path used only for manual local
+# debugging of this module in isolation -- not part of the app's actual
+# call path (the Tauri sidecar calls record_headless_video directly).
 if __name__ == "__main__":
     config_path = r"C:\Users\user1\Documents\Navivi\Projects\proj_2026_very_cool_tomogashima_islands\job_config.json"
     record_headless_video(config_path, speed_kmh=120, fps=30)

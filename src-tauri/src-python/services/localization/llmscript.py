@@ -76,12 +76,16 @@ def analyze_travel_image(
 
     full_content_builder = []
 
+    # [NOTE] [Translation] Uses print(), not logger — the point is a live,
+    # unbuffered token-by-token stream to stdout (end="" / flush=True),
+    # which Logger.info() doesn't support (no end=/flush= kwargs, and it
+    # always appends its own newline/formatting).
     for chunk in response:
         token = chunk["message"]["content"]
-        logger.info(token, end="", flush=True)  # Streams live to stdout
+        print(token, end="", flush=True)
         full_content_builder.append(token)
 
-    logger.info("", file=sys.stderr)
+    print(file=sys.stderr)
 
     complete_response_text = "".join(full_content_builder)
     validated_data = TravelRecommendation.model_validate_json(complete_response_text)
@@ -157,13 +161,15 @@ def get_wikipedia_facts(
                         facts_list.append(f"【Article: {title}】\n{extract}")
                 return "\n\n".join(facts_list)
         except Exception as e:
-            logger.error(f"[Wiki {search_lang}] Error: {e}", file=sys.stderr)
+            logger.error(f"[Wiki {search_lang}] Error: {e}")
             return ""
 
     # Try user's language first
     facts = fetch_from_wiki(lang)
 
-    # THE MAGIC TRICK: If nothing was found, quietly search Japanese Wikipedia!
+    # [HACK] [Translation] THE MAGIC TRICK: many Navivi destinations are Japan-only locations with
+    # sparse English Wikipedia coverage, so a silent fallback to Japanese Wikipedia recovers facts
+    # that a straight English-only search would miss.
     if not facts and lang != "ja":
         facts = fetch_from_wiki("ja")
 
@@ -216,6 +222,15 @@ def generate_voiceover_script(
     else:
         # Name bad, prompt empty go search
         subject_header = f"■ 目的地の座標: ({lat:.4f}, {lng:.4f})"
+
+    # [NOTE] [Translation] system_instruction's own rule #3 already tells
+    # the model to use reference info "if available" — this is what makes
+    # it actually available, appending the fetched Wikipedia extract onto
+    # the same subject_header both language branches build their prompt
+    # from below.
+    if facts:
+        ref_label = "■ 参考情報:" if lang == "ja" else "■ Reference info:"
+        subject_header = f"{subject_header}\n{ref_label}\n{facts}"
 
     if lang == "ja":
         system_instruction = f"""あなたは旅番組のプロの音声ガイドナレーターです。
@@ -295,8 +310,15 @@ def generate_voiceover_script(
                 )
                 return clean_text.strip()
 
+        else:
+            # [NOTE] [Translation] Routes an unrecognized engine into the
+            # except block below (rather than falling through to an
+            # implicit `None`), so it gets the same logged-error +
+            # fallback_text behavior as a genuine API failure.
+            raise ValueError(f"Unknown engine: {engine!r}")
+
     except Exception as e:
-        logger.error(f"[AI Error] Engine {engine} failed: {e}", file=sys.stderr)
+        logger.error(f"[AI Error] Engine {engine} failed: {e}")
         return fallback_text
 
 
@@ -386,6 +408,12 @@ def generate_overview_script(waypoints: list[str], engine: str = "ollama") -> st
                 return re.sub(
                     r"（.*?）|\(.*?\)", "", data["choices"][0]["message"]["content"]
                 ).strip()
+
+        else:
+            # [NOTE] [Translation] Routes an unrecognized engine into the
+            # except block below instead of falling through to an
+            # implicit `None` — same fix as generate_voiceover_script.
+            raise ValueError(f"Unknown engine: {engine!r}")
 
     except Exception as e:
         logger.error(f"[Error (LLM)] Engine {engine} failed: {e}")

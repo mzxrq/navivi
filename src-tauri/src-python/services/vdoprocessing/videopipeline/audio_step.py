@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import Optional
 
-from tqdm import tqdm
+from services.logger.progress import tracker
 
 from .helpers import logger
 
@@ -38,6 +38,7 @@ def generate_audio(
     audio_pauses = []
     audio_paths = []
     subtitle_paths = []
+    waypoints = []
 
     try:
         config_path = Path(project_config_path)
@@ -54,9 +55,6 @@ def generate_audio(
             project_config = json.load(f)
 
         waypoints = project_config.get("waypoints", [])
-        tqdm.write(
-            f"[Step 2/5] Generating Narration Audio for {len(waypoints)} Waypoints..."
-        )
 
         from services.tts.ttsengine import AudioProcessor, IrodoriTTSClient
 
@@ -65,7 +63,7 @@ def generate_audio(
         client = IrodoriTTSClient(output_dir=output_dir)
         processor = AudioProcessor(output_dir=output_dir)
 
-        # Create an async worker to process all TTS tasks
+        # [NOTE] [TTS] Awaits each waypoint in order inside this loop, so despite being async the TTS calls run fully sequentially, not concurrently.
         async def _generate_all_speech():
             for idx, wp in enumerate(waypoints):
                 # Look for narration text in standard keys
@@ -79,7 +77,7 @@ def generate_audio(
                     subtitle_paths.append(None)
                     continue
 
-                tqdm.write(f"   -> Synthesizing audio [{idx + 1}/{len(waypoints)}]: '{label}'")
+                tracker.show(f"Generating TTS {idx + 1}/{len(waypoints)}: {label}")
 
                 logger.info(
                     f"Step 2: [%d/%d] Generating audio for: '%s'",
@@ -111,6 +109,7 @@ def generate_audio(
 
         # Execute the async function synchronously within the pipeline
         asyncio.run(_generate_all_speech())
+        tracker.clear()
 
         logger.info("Step 2 complete: TTS audio successfully generated.")
         return {
@@ -134,9 +133,15 @@ def generate_audio(
         }
     except Exception as e:
         logger.error("Step 2 failed: TTS Audio generation encountered an error: %s", e)
+        # [NOTE] [TTS] Pad out to one entry per waypoint (rather than discarding) so a mid-loop failure still returns whatever audio was already generated, index-aligned with waypoints.
+        pad_count = max(0, len(waypoints) - len(audio_durations))
+        audio_durations.extend([0.0] * pad_count)
+        audio_pauses.extend([[]] * pad_count)
+        audio_paths.extend([None] * pad_count)
+        subtitle_paths.extend([None] * pad_count)
         return {
-            "audio_durations": [],
-            "audio_pauses": [],
-            "audio_paths": [],
-            "subtitle_paths": [],
+            "audio_durations": audio_durations,
+            "audio_pauses": audio_pauses,
+            "audio_paths": audio_paths,
+            "subtitle_paths": subtitle_paths,
         }

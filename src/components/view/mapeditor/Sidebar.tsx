@@ -1,5 +1,3 @@
-import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
 import { useState, useEffect, useRef } from "react";
 import {
   ChevronRight,
@@ -27,11 +25,13 @@ import { LocationSearch } from "../../ui/LocationSearch";
 import { OverviewPanel } from "./OverviewPanel";
 
 export function Sidebar() {
-  const { showToast, setEditorMode } = useUI();
+  const { showToast, 
+    //setEditorMode
+   } = useUI();
   const {
     waypoints,
     setWaypoints,
-    metadata,
+    //metadata,
     saveProject,
     activeWaypointId,
     setActiveWaypointId,
@@ -75,71 +75,18 @@ export function Sidebar() {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
-  // Renamed to better reflect its new purpose!
+
   const handleGenerate = async () => {
     if (waypoints.length === 0) {
       showToast("Cannot generate: Please add at least one waypoint.", "error");
       return;
     }
 
-    if (
-      !confirm(
-        "Ready to generate assets? This will create your voiceovers and map videos before opening the timeline.",
-      )
-    ) {
+    if (!confirm("Ready to generate assets? This will create your voiceovers and map videos before opening the timeline.")) {
       return;
     }
-
     await saveProject();
-
-    try {
-      setIsRendering(true); // Overlay turns ON
-
-      const configPath = `${metadata.directory_path}/job_config.json`;
-
-      // 1. Set up listeners for the background events BEFORE we start the render
-      await new Promise<void>((resolve, reject) => {
-        let unlistenFinish: () => void;
-        let unlistenLog: () => void;
-        let unlistenErr: () => void; // Add this!
-
-        // Listen for standard logs
-        listen<string>("render-log", (event) => {
-          console.log("[Python]:", event.payload);
-        }).then((un) => (unlistenLog = un));
-
-        // 🛠️ ADD THIS: Listen to stderr (This is where tqdm progress bars and errors actually go!)
-        listen<string>("render-error", (event) => {
-          console.log("[Progress/Error]:", event.payload);
-        }).then((un) => (unlistenErr = un));
-
-        // Listen for the actual Finish line
-        listen<string>("render-finish", (event) => {
-          if (event.payload === "Success") {
-            resolve();
-          } else {
-            reject("Python pipeline failed. Check the console.");
-          }
-
-          if (unlistenFinish) unlistenFinish();
-          if (unlistenLog) unlistenLog();
-          if (unlistenErr) unlistenErr(); // Clean it up
-        }).then((un) => (unlistenFinish = un));
-
-        // 2. Start the process
-        invoke("start_render", { configPath: configPath }).catch((err) => {
-          reject(err);
-        });
-      });
-
-      // 3. THIS ONLY RUNS WHEN PYTHON IS 100% DONE NOW!
-      showToast("Assets generated successfully!", "success");
-      setEditorMode("timeline");
-    } catch (error) {
-      showToast(`Render Error: ${error}`, "error");
-    } finally {
-      setIsRendering(false); // Overlay turns OFF
-    }
+    setIsRendering(true);
   };
 
   const handleDragEnd = (result: DropResult) => {

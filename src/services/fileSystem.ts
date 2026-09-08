@@ -4,18 +4,6 @@ import { open as dialogOpen } from "@tauri-apps/plugin-dialog";
 import { appConfig, fileSystem } from "../config/constants";
 import { TimelineData, TimelineManifest, ManifestClip } from "../types";
 
-/**
- * 
- * @param waypoints 
- * @param routeSegments 
- * @param metadata 
- * @param settings 
- * @param routingCache 
- * @param overrideName 
- * @param asDuplicate 
- * @param safeFolderName 
- * @returns 
- */
 
 export const saveProjectData = async (
   waypoints: any[],
@@ -216,12 +204,6 @@ export const saveProjectData = async (
   return { projectDir, projId, projName, nvvPath };
 };
 
-/**
- * 
- * @param forcePath 
- * @returns 
- */
-
 export const loadProjectData = async (forcePath?: string) => {
   let selectedPath = forcePath;
 
@@ -239,11 +221,6 @@ export const loadProjectData = async (forcePath?: string) => {
 
   return { data, selectedPath };
 };
-
-/**
- * 
- * @param message 
- */
 
 export async function appendToRenderLog(message: string) {
   try {
@@ -270,14 +247,6 @@ export async function appendToRenderLog(message: string) {
     console.error("Failed to write to render.log:", error);
   }
 };
-
-/**
- * 
- * @param projectDir 
- * @param projectName 
- * @param timeline 
- * @returns 
- */
 
 export async function saveTimelineManifest(projectDir: string, projectName: string, timeline: TimelineData): Promise<boolean> {
   /**
@@ -310,7 +279,8 @@ export async function saveTimelineManifest(projectDir: string, projectName: stri
       project_name: projectName,
       total_duration_seconds: totalDuration,
       video_tracks: videoTracks,
-      audio_track: audioClip?.source || undefined
+      audio_track: audioClip?.source || undefined,
+      ui_state: timeline,
     };
     // write to disk
     await writeTextFile(manifestPath, JSON.stringify(manifest, null, 2));
@@ -321,12 +291,6 @@ export async function saveTimelineManifest(projectDir: string, projectName: stri
     return false;
   }
 };
-
-/**
- * 
- * @param projectDir 
- * @returns 
- */
 
 export async function loadTimelineManifest(projectDir: string): Promise<TimelineManifest | null> {
   try {
@@ -348,12 +312,6 @@ export async function loadTimelineManifest(projectDir: string): Promise<Timeline
   }
 };
 
-/**
- * 
- * @param projectDir 
- * @returns 
- */
-
 export async function loadRouteCache(projectDir: string): Promise<Record<string, [number, number][]>> {
   try {
     const cachePath = await join(projectDir, ".routecache.json");
@@ -366,13 +324,6 @@ export async function loadRouteCache(projectDir: string): Promise<Record<string,
   }
   return {};
 }
-
-/**
- * 
- * @param projectDir 
- * @param cacheData 
- * @returns 
- */
 
 export async function saveRouteCache(projectDir: string, cacheData: Record<string, [number, number][]>): Promise<boolean> {
   try {

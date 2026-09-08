@@ -1,6 +1,6 @@
 export const appConfig = {
     name: "Navivi",
-    version: "0.1.0", // await syncing with package.json
+    version: "1.0.0", // await syncing with package.json
     defaultProjectName: "Untitled Project",
     defaultUserId: "local",
 };

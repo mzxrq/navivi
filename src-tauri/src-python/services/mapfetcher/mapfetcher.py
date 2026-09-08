@@ -230,6 +230,19 @@ class MapFetcher:
                         "points": chunk_points,
                         "labels": chunk_labels,
                         "popups": chunk_popups,
+                        # This leg's real departure/arrival waypoint ids
+                        # (job_config's own "id" field) — several
+                        # waypoints in the same project can share a label
+                        # (e.g. a route that passes through "大阪市"
+                        # multiple times), so matching a leg's endpoint
+                        # back to its true position in the whole route
+                        # by id is unambiguous where label text alone
+                        # isn't. `waypoints` here is this leg's own
+                        # departure/arrival pair — index leg_idx is the
+                        # one being LEFT, leg_idx + 1 (== wp) is the one
+                        # being ARRIVED at.
+                        "start_waypoint_id": waypoints[leg_idx].get("id"),
+                        "end_waypoint_id": wp.get("id"),
                     }
                 )
 

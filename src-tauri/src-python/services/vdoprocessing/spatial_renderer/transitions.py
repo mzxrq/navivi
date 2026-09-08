@@ -1,6 +1,7 @@
 """Cut/fade and blur-out transition primitives, plus the end-of-video recap,
 summary card, and higher-zoom "callback to where the journey began" highlight."""
 
+import math
 from typing import Dict, List, Optional, Tuple
 
 import cv2
@@ -154,6 +155,42 @@ class _TransitionMixin:
     # residential clip that follows this video.
     _BIG_MAP_ZOOM_TARGET = tuning.BIG_MAP_ZOOM_TARGET
 
+    def _draw_nearby_waypoints(
+        self,
+        frame: np.ndarray,
+        w: int,
+        h: int,
+        extent: Tuple[float, float, float, float],
+        exclude_px: int,
+        exclude_py: int,
+    ) -> None:
+        """Draws a pin for every OTHER job_config waypoint that happens to
+        fall inside this freshly fetched close-up tile — the featured
+        waypoint (at exclude_px/exclude_py) gets its own dedicated marker
+        drawn separately by the caller, so it's skipped here. Uses the
+        same S/E/stop-by/number precedence as everywhere else (via
+        _pin_label_and_color), computed from each waypoint's real
+        position in job_config's own waypoints list."""
+        job_waypoints = (self._get_job_config() or {}).get("waypoints", [])
+        total_wp = len(job_waypoints)
+        order = 0
+        for pos, jw in enumerate(job_waypoints):
+            is_stopby = bool(jw.get("isStopBy", False))
+            if not is_stopby:
+                order += 1
+            lat, lng = jw.get("lat"), jw.get("lng", jw.get("lon"))
+            if lat is None or lng is None:
+                continue
+            px, py = RouteGeometryProcessor.project_latlon_to_pixel(lat, lng, extent, w, h)
+            px, py = int(px), int(py)
+            if not (0 <= px <= w and 0 <= py <= h):
+                continue
+            if math.hypot(px - exclude_px, py - exclude_py) < self.graphics.marker_radius * 2:
+                continue  # the featured waypoint itself
+            wp = {"index": pos, "order": order, "data": {"is_stopby": is_stopby}}
+            label, color = self._pin_label_and_color(wp, total_wp)
+            self.graphics.draw_marker(frame, px, py, number=label, color=color)
+
     def _render_ending_highlight(
         self,
         video: VideoExporter,
@@ -216,11 +253,14 @@ class _TransitionMixin:
             lat, lng, highlight_extent, w, h
         )
         px, py = int(px), int(py)
-        self.graphics.draw_marker(
-            highlight_bg, px, py,
-            number="S" if is_start else "E",
-            color=self._START_PIN_COLOR if is_start else self._END_PIN_COLOR,
-        )
+
+        # The close-up tile is genuinely zoomed in, but at this scale a
+        # nearby waypoint can easily fall inside the same small area —
+        # without this they'd be invisible even though they're physically
+        # on screen. Drawn with the same S/E/stop-by/number labeling as
+        # everywhere else, so a stop that happens to land in frame reads
+        # exactly like it does on the main overview map.
+        self._draw_nearby_waypoints(highlight_bg, w, h, highlight_extent, px, py)
 
         featured_popup = start_popup or stop_popup
 
@@ -239,6 +279,15 @@ class _TransitionMixin:
         highlight_popup = featured_popup.copy()
         highlight_popup["data"] = featured_popup["data"].copy()
         highlight_popup["x"], highlight_popup["y"] = px, py
+        # render_popup_box's leader line prefers "pin_x"/"pin_y" over
+        # "x"/"y" when present (see pins.py's declutter fan-out) — a
+        # leftover fanned-out position from the main overview render, in
+        # that image's own coordinate space, means nothing on this
+        # freshly fetched close-up tile. Without clearing it here the
+        # leader line anchors on that stale spot instead of the marker
+        # actually drawn at (px, py) above.
+        highlight_popup.pop("pin_x", None)
+        highlight_popup.pop("pin_y", None)
         highlight_popup["hud_corner"] = None  # forces the leader-lined "beside" card style
         highlight_popup["draw_leader_line"] = True
         # Same short-leader-line placement flow-through popups use
@@ -247,7 +296,23 @@ class _TransitionMixin:
         # placement (meant for corner-avoidance, not a tight leader line)
         # can land the card far across the frame.
         self._layout_beside_popups([{"popup": highlight_popup, "frames_left": 1}], w, h)
-        highlight_frame = self.graphics.render_popup_box(highlight_bg, highlight_popup)
+
+        # Line, then marker, then card — in that order — so the leader
+        # line sits BEHIND both the marker pin and the card it connects,
+        # instead of potentially drawing on top of the pin (drawing the
+        # marker first, as before, put the line above it whenever
+        # render_popup_box ran afterward).
+        highlight_bg = self.graphics.render_popup_box(
+            highlight_bg, highlight_popup, line_only=True
+        )
+        self.graphics.draw_marker(
+            highlight_bg, px, py,
+            number="S" if is_start else "E",
+            color=self._START_PIN_COLOR if is_start else self._END_PIN_COLOR,
+        )
+        highlight_frame = self.graphics.render_popup_box(
+            highlight_bg, highlight_popup, skip_line=True
+        )
 
         # Hard cut straight to the highlight — no transition connecting
         # the two shots — then a slow Ken Burns zoom-in while it's held,

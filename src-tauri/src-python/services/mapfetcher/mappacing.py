@@ -107,6 +107,7 @@ class RoutePacingProcessor:
             return []
 
         chunk_distances = []
+        # [NOTE] [GPS] Reimplements the haversine formula inline (rather than reusing GPSMath.haversine_vectorized) since chunks arrive as raw lat/lon lists, not a route_df.
         for item in sequence_data:
             lats, lons = item.get("lats"), item.get("lons")
             if lats is not None and len(lats) > 1:

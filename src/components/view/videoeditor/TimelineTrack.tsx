@@ -101,6 +101,9 @@ export function TimelineTrack({
     const finalStart = Math.max(0, dropX / zoomRatio);
     const finalEnd = finalStart + durationSeconds;
 
+    const isVideoFile = asset.type === "video";
+    const newGroupId = isVideoFile ? crypto.randomUUID() : undefined;
+
     const newClip = {
       id: crypto.randomUUID(),
       trackId: track.id,
@@ -111,9 +114,25 @@ export function TimelineTrack({
       duration: durationSeconds,
       sourceDuration: durationSeconds,
       sourceOffset: 0,
+      groupId: newGroupId,
     };
 
     let newClips = [...timeline.clips];
+
+    if (isVideoFile) {
+      const audioTrack = timeline.tracks.find((t) => t.type === "audio");
+      if (audioTrack) {
+        newClips.push({
+          ...newClip,
+          id: crypto.randomUUID(),
+          trackId: audioTrack.id,
+          type: "audio",
+          label: `${asset.name} (Audio)`,
+        });
+      } else {
+        showToast("No Audio track available to spawn video audio.", "warning");
+      }
+    }
 
     if (isRippleMode) {
       newClips = newClips.flatMap((c) => {
@@ -122,15 +141,16 @@ export function TimelineTrack({
           return [{ ...c, startTime: c.startTime + durationSeconds }];
 
         const cEnd = c.startTime + c.duration;
-        if (c.startTime < finalStart && cEnd > finalStart) {
+        if (c.startTime < finalStart && cEnd > finalEnd) {
           return [
-            { ...c, duration: finalStart - c.startTime },
+            { ...c, id: crypto.randomUUID(), duration: finalStart - c.startTime, groupId: undefined }, 
             {
               ...c,
               id: crypto.randomUUID(),
               startTime: finalEnd,
-              duration: cEnd - finalStart,
-              sourceOffset: (c.sourceOffset || 0) + (finalStart - c.startTime),
+              duration: cEnd - finalEnd,
+              sourceOffset: (c.sourceOffset || 0) + (finalEnd - c.startTime),
+              groupId: undefined
             },
           ];
         }
@@ -151,6 +171,7 @@ export function TimelineTrack({
               startTime: finalEnd,
               duration: cEnd - finalEnd,
               sourceOffset: (c.sourceOffset || 0) + (finalEnd - c.startTime),
+              groupId: undefined,
             },
           ];
         }
@@ -168,6 +189,7 @@ export function TimelineTrack({
               startTime: finalEnd,
               duration: cEnd - finalEnd,
               sourceOffset: (c.sourceOffset || 0) + (finalEnd - c.startTime),
+              groupId: undefined,
             },
           ];
         }
@@ -203,6 +225,7 @@ export function TimelineTrack({
         className={`w-full h-full ${isDragOver ? "pointer-events-none" : ""}`}
         onContextMenu={(e) => {
           e.preventDefault();
+          e.stopPropagation();
           window.dispatchEvent(
             new CustomEvent("open-context-menu", {
               detail: {

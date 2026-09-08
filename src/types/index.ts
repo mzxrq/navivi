@@ -86,6 +86,7 @@ export interface ClipData {
   sourceOffset?: number;
 
   type?: string;
+  groupId?: string;
 
   x?: number;
   y?: number;
@@ -99,6 +100,8 @@ export interface ClipData {
   stroke?: string;
   strokeWidth?: number;
 
+  fadeIn?: number;
+  fadeOut?: number;
   transitionIn?: string;
   transitionOut?: string;
 }
@@ -121,6 +124,7 @@ export interface TimelineManifest {
   total_duration_seconds: number;
   video_tracks: ManifestClip[];
   audio_track?: string;
+  ui_state?: TimelineData;
 }
 
 // Global State Interface

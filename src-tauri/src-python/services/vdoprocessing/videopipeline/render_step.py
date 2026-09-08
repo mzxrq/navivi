@@ -8,14 +8,15 @@ from typing import Any, Optional
 
 import numpy as np
 import pandas as pd
-from tqdm import tqdm
 
 from services.gpsparser.gpscalculator import GPSMath
+from services.logger.progress import tracker
 from services.mapfetcher.mapfetcher import MapFetcher
 from services.vdoprocessing.route2vdo import RouteAnimator
 from services.vdoprocessing.spatial_renderer import SpatialRenderer
 from services.localization.localization import format_waypoint_label
 from services.config.job_config import JobConfigManager
+from services import tuning
 
 from .helpers import (
     BASE_DIR,
@@ -26,6 +27,46 @@ from .helpers import (
     _resolve_leg_geometry_from_cache,
     logger,
 )
+
+
+# Overview map padding, scaled to how physically big the route actually
+# is (bounding-box diagonal, in km) — a flat percentage padding looks
+# right at one scale and wrong at another: 10% margin around a route that
+# spans 40km is a lot of genuinely useful breathing room, but the same
+# 10% around a route that spans 800m is still a huge, mostly-empty gap
+# with the pins clustered tiny in the middle. Smaller routes get a
+# tighter (more zoomed-in) crop; bigger ones get a bit more room so nearby
+# pins/labels don't crowd the frame edge.
+_OVERVIEW_PADDING_BY_SPAN_KM = (
+    (1.5, 0.06),
+    (5.0, 0.08),
+    (15.0, 0.10),
+    (40.0, 0.13),
+)
+_OVERVIEW_PADDING_MAX_SPAN = 0.16
+
+
+def _adaptive_overview_padding(route_df: pd.DataFrame) -> float:
+    """Picks the overview map's padding_factor from the route's own
+    bounding-box diagonal distance (km) — see _OVERVIEW_PADDING_BY_SPAN_KM
+    above. Falls back to the old flat 10% if the span can't be computed
+    (e.g. a single-point route)."""
+    try:
+        min_lat, max_lat = route_df["latitude"].min(), route_df["latitude"].max()
+        min_lon, max_lon = route_df["longitude"].min(), route_df["longitude"].max()
+        span_km = float(
+            GPSMath.haversine_vectorized(
+                np.array([min_lat]), np.array([min_lon]),
+                np.array([max_lat]), np.array([max_lon]),
+            )[0]
+        )
+    except (KeyError, ValueError, IndexError):
+        return 0.10
+
+    for max_span, padding in _OVERVIEW_PADDING_BY_SPAN_KM:
+        if span_km <= max_span:
+            return padding
+    return _OVERVIEW_PADDING_MAX_SPAN
 
 
 def render_route_video(
@@ -53,7 +94,7 @@ def render_route_video(
 
     project_name = project_config.get("project_name", "Navigation Project")
 
-    tqdm.write(f"[Step 4/5] Rendering Video Engine for Project: '{project_name}'")
+    tracker.show(f"Rendering overview & residential video: {project_name}")
 
     settings = project_config.get("settings", {})
     waypoints = project_config.get("waypoints", [])
@@ -75,7 +116,9 @@ def render_route_video(
     # process_gps having initialized the singleton first.
     fetcher = MapFetcher(job_config=JobConfigManager(str(config_path)))
 
-    bbox = fetcher.get_bounding_box(route_df, padding_factor=0.10)
+    bbox = fetcher.get_bounding_box(
+        route_df, padding_factor=_adaptive_overview_padding(route_df)
+    )
 
     map_output_path, extent, (img_w, img_h) = fetcher.fetch_image(
         bounding_box=bbox, output_filename=map_output_path
@@ -455,7 +498,10 @@ def render_route_video(
             for k, default in [
                 ("fps", 30),
                 ("line_thickness", 10),
-                ("marker_radius", 18),
+                ("marker_radius", 24),
+                ("map_font_size", 24),
+                ("card_border_thickness", tuning.DEFAULT_CARD_BORDER_THICKNESS),
+                ("route_line_border_thickness", tuning.DEFAULT_LINE_BORDER_THICKNESS),
                 ("pause", 2.0),
                 ("summary_hold", 4.0),
                 ("summary_fade", 0.5),
@@ -473,6 +519,12 @@ def render_route_video(
         "line_color": tuple(settings.get("line_color", (243, 150, 33))),  # BGR blue
         "marker_color": tuple(settings.get("marker_color", (235, 150, 60))),  # blue (BGR)
         "arrived_marker_color": tuple(settings.get("arrived_marker_color", (200, 110, 30))),
+        "card_border_color": tuple(
+            settings.get("card_border_color", tuning.DEFAULT_CARD_BORDER_COLOR)
+        ),
+        "route_line_border_color": tuple(
+            settings.get("route_line_border_color", tuning.DEFAULT_LINE_BORDER_COLOR)
+        ),
         "trigger_radius_padding": settings.get("trigger_radius_padding", {}),
         "fullscreen_transition": settings.get("fullscreen_transition", {}),
         # Real-world average speed (km/h) per travel mode — how much
@@ -525,7 +577,7 @@ def render_route_video(
         for v_path in output_paths:
             filename = Path(v_path).name
 
-            # Only mux audio if the file is a residential leg (skip the overview map)
+            # [HACK] [Editor] Distinguishes residential-leg clips from the overview map purely by filename substring — renaming output files elsewhere in the pipeline would silently break this audio-muxing match.
             if (
                 "02_" in filename
                 or "leg" in filename.lower()
@@ -543,6 +595,7 @@ def render_route_video(
                             output_filename=filename,
                         )
                         muxed_paths.append(muxed)
+                    # [NOTE] [Editor] Falls back to the unmuxed video on any mux failure rather than aborting the whole pipeline over one leg's audio.
                     except Exception as e:
                         logger.error(f"Failed to mux audio for {v_path}: {e}")
                         muxed_paths.append(v_path)
@@ -556,7 +609,7 @@ def render_route_video(
                 muxed_paths.append(v_path)
 
         output_paths = muxed_paths
+    tracker.clear()
     logger.info("Step 4 complete: %d video file(s) produced.", len(output_paths))
-    tqdm.write(f"   -> Successfully generated {len(output_paths)} video segment(s).")
 
     return output_paths

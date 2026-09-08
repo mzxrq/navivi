@@ -35,6 +35,9 @@ class JobConfigManager:
 
     # [Config] Initialize the JobConfigManager with a configuration path
     def __init__(self, config_path: Optional[Union[str, Path]] = None) -> None:
+        # [NOTE] [Config] Because __new__ always returns the same singleton instance, __init__ runs on
+        # every JobConfigManager(...) call too — this guard skips re-initializing (and re-loading) an
+        # already-initialized instance unless a new config_path is explicitly passed in.
         if getattr(self, "_initialized", False) and not config_path:
             return
 

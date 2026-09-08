@@ -88,54 +88,56 @@ export function RouteLayer({ uploadedRouteLine, routePoints }: RouteLayerProps) 
             "line-width": 9,
           }}
         />
-      )}
 
-      {/* 3. Dynamic Generated Segments */}
-      {routeSegments.map((segment, idx) => {
-        if (segment.mode === "direct") {
-          return (
-            <Polyline
-              key={`dir-${idx}`}
-              positions={segment.positions}
-              pathOptions={{ color: "#a1a1aa", weight: 4, dashArray: "8, 8" }}
-            />
-          );
-        }
-        if (segment.mode === "curve") {
-          return (
-            <Polyline
-              key={`crv-${idx}`}
-              positions={segment.positions}
-              pathOptions={{ color: "#a855f7", weight: 4, dashArray: "10, 10" }}
-            />
-          );
-        }
-        if (segment.mode === "walking") {
-          return (
-            <Polyline
-              key={`wlk-${idx}`}
-              positions={segment.positions}
-              pathOptions={{
-                color: hexLineColor,
-                weight: settings.line_thickness,
-                dashArray: "2, 6",
-                lineCap: "round",
-              }}
-            />
-          );
-        }
-        // Default Driving
-        return (
-          <Polyline
-            key={`drv-${idx}`}
-            positions={segment.positions}
-            pathOptions={{
-              color: hexLineColor,
-              weight: settings.line_thickness,
-            }}
-          />
-        );
-      })}
+        {/* 🛠️ NORMAL ROUTES */}
+        <Layer
+          id="route-driving"
+          type="line"
+          filter={["==", "mode", "driving"]}
+          layout={{ "line-join": "round", "line-cap": "round" }}
+          paint={{ "line-color": hexLineColor, "line-width": lineWidth }}
+        />
+        <Layer
+          id="route-walking"
+          type="line"
+          filter={["==", "mode", "walking"]}
+          layout={{ "line-join": "round", "line-cap": "round" }}
+          paint={{ "line-color": hexLineColor, "line-width": lineWidth, "line-dasharray": [1, 2] }}
+        />
+        <Layer
+          id="route-ferry"
+          type="line"
+          filter={["==", "mode", "ferry"]}
+          layout={{ "line-join": "round", "line-cap": "round" }}
+          paint={{ "line-color": "#2563eb", "line-width": lineWidth, "line-dasharray": [2, 2] }}
+        />
+        <Layer
+          id="route-direct"
+          type="line"
+          filter={["==", "mode", "direct"]}
+          layout={{ "line-join": "round", "line-cap": "round" }}
+          paint={{ "line-color": "#a1a1aa", "line-width": 4, "line-dasharray": [2, 2] }}
+        />
+        <Layer
+          id="route-curve"
+          type="line"
+          filter={["==", "mode", "curve"]}
+          layout={{ "line-join": "round", "line-cap": "round" }}
+          paint={{ "line-color": "#a855f7", "line-width": 4, "line-dasharray": [2, 3] }}
+        />
+
+        {/* 🛠️ DRAW FILL (Orange, dashed, renders on top) */}
+        <Layer
+          id="route-draw-fill"
+          type="line"
+          filter={["==", "mode", "draw"]}
+          layout={{ "line-join": "round", "line-cap": "round" }}
+          paint={{
+            "line-color": "#ff790c",
+            "line-width": 5,
+          }}
+        />
+      </Source>
     </>
   );
 }

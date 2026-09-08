@@ -11,7 +11,9 @@ import {
   Edit,
   CopyPlus,
   MapPinPen,
-  ChevronRight // ✨ Imported for the submenu arrow
+  ChevronRight,
+  LinkIcon,
+  UnlinkIcon
 } from "../ui/icons";
 
 export interface ContextMenuState {
@@ -258,6 +260,14 @@ export function ContextMenu() {
             className="ctx-btn text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10"
           >
             <Trash2 className="w-3.5 h-3.5" /> Delete Clip
+          </button>
+          <div className="my-1 border-t border-zinc-200 dark:border-white/10" />          
+          <button onClick={() => { window.dispatchEvent(new CustomEvent('trigger-link-clips')); setMenu(null); }} className="ctx-btn">
+            <LinkIcon className="w-3.5 h-3.5" /> Link Clips
+          </button>
+
+          <button onClick={() => { window.dispatchEvent(new CustomEvent('trigger-unlink-clips')); setMenu(null); }} className="ctx-btn">
+            <UnlinkIcon className="w-3.5 h-3.5" /> Unlink Clips
           </button>
         </>
         )}

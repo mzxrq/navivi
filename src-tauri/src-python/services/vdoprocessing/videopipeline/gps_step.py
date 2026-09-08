@@ -3,10 +3,9 @@
 import json
 from pathlib import Path
 
-from tqdm import tqdm
-
 from services.gpsparser.gpsparser import GPSParser
 from services.config.job_config import JobConfigManager
+from services.logger.progress import tracker
 
 from .helpers import logger
 
@@ -22,8 +21,9 @@ def process_gps(raw_source_path: str) -> dict:
     with open(config_path, "r", encoding="utf-8") as f:
         config_data = json.load(f)
 
+    # [NOTE] [GPS] Falls back to the literal string "N/A" (not None) so Path(...).name below never raises on a missing source path.
     gps_route_file = config_data.get("source_files", {}).get("gps_route", "N/A")
-    tqdm.write(f"[Step 1/5] Processing GPS Data from: {Path(gps_route_file).name}")
+    tracker.show(f"Parsing GPS track: {Path(gps_route_file).name}")
 
     job_config = JobConfigManager(str(config_path))
     cleaned = GPSParser(job_config=job_config).clean_data()

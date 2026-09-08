@@ -34,6 +34,10 @@ def _resolve_leg(
     except (ValueError, AttributeError):
         return None, None, None
 
+    # [NOTE] [Util] Plain squared-degree distance, not haversine -- this
+    # only needs to pick the nearest of a handful of waypoints to a cached
+    # leg endpoint, not a real-world distance, so the cheaper approximation
+    # is fine at this scale.
     def _closest(lat: float, lng: float) -> Optional[Dict]:
         best, best_dist = None, float("inf")
         for wp in waypoints:

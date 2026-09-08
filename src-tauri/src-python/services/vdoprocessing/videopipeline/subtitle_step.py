@@ -2,8 +2,7 @@
 
 from pathlib import Path
 
-from tqdm import tqdm
-
+from services.logger.progress import tracker
 from services.vdoprocessing.vdoexporter import VideoExporter
 
 from .helpers import logger
@@ -14,10 +13,10 @@ def burn_subtitles(
 ) -> list[str]:
     """Step 5: Permanently burns SRT subtitles onto the finished video files."""
     logger.info("Step 5: Burning subtitles into %d video(s).", len(video_paths))
-    tqdm.write(f"[Step 5/5] Burning Subtitles and Finalizing Videos...")
 
     final_videos = []
 
+    # [NOTE] [Subtitle] Matches subtitle_paths[idx] to video_paths[idx] purely by list position — the two lists must stay in the same order upstream or subtitles land on the wrong clip.
     for idx, video_path in enumerate(video_paths):
         original_file = Path(video_path)
 
@@ -28,8 +27,8 @@ def burn_subtitles(
                 / f"{original_file.stem}_subtitled{original_file.suffix}"
             )
 
-            tqdm.write(
-                f"   -> Processing file [{idx + 1}/{len(video_paths)}]: {original_file.name}"
+            tracker.show(
+                f"Burning subtitle {idx + 1}/{len(video_paths)}: {original_file.name}"
             )
 
             logger.info(
@@ -46,8 +45,6 @@ def burn_subtitles(
                 )
                 final_videos.append(result)
             except Exception as e:
-                tqdm.write(f"   !! Failed to burn subtitle for {original_file.name}: {e}")
-
                 logger.error(
                     "Step 5: [%d/%d] Failed to burn subtitle for '%s': %s",
                     idx + 1,
@@ -57,8 +54,8 @@ def burn_subtitles(
                 )
                 final_videos.append(video_path)
         else:
-            tqdm.write(
-                f"   -> Passing through video file [{idx + 1}/{len(video_paths)}]: {original_file.name}"
+            tracker.show(
+                f"Passing through video {idx + 1}/{len(video_paths)}: {original_file.name}"
             )
 
             logger.info(
@@ -69,5 +66,6 @@ def burn_subtitles(
             )
             final_videos.append(video_path)
 
+    tracker.clear()
     logger.info("Step 5 complete: %d video(s) processed.", len(final_videos))
     return final_videos

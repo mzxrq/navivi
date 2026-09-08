@@ -24,7 +24,7 @@ from services.logger.logger import setup_logger
 logger = setup_logger("AttractionVideoGenerator")
 
 
-# [Core] AttractionVideoGenerator Class
+# [NOTE] [Animation] AttractionVideoGenerator manages Image-to-Video generation and synchronization for attractions.
 class AttractionVideoGenerator:
     """Manages Image-to-Video generation and synchronization for attractions."""
 
@@ -38,7 +38,7 @@ class AttractionVideoGenerator:
         self.output_dir = (base_dir / "video").resolve()
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Matches mapfetcher.py's MapFetcher.fetch_image/process_residential_sequence
+    # [NOTE] [Config] Matches mapfetcher.py's MapFetcher.fetch_image/process_residential_sequence
     # default output_size — the resolution the map/waypoint clips actually
     # render at. ComfyUI attraction clips are generated smaller (currently
     # 1280x704) to fit the 8GB VRAM budget; upscaling here keeps every clip
@@ -47,7 +47,7 @@ class AttractionVideoGenerator:
     _TARGET_WIDTH: Final[int] = 1920
     _TARGET_HEIGHT: Final[int] = 1080
 
-    # Audio/video duration mismatch tolerance. Multi-image waypoints
+    # [NOTE] [Editor] Audio/video duration mismatch tolerance. Multi-image waypoints
     # concatenate several fixed-length ComfyUI clips together (e.g. 2 x 7s
     # = 14s), which can run far past a short narration — left uncorrected,
     # that mismatch reaches the downstream timeline/NLE step, which pads
@@ -69,7 +69,7 @@ class AttractionVideoGenerator:
         pending_dir.mkdir(parents=True, exist_ok=True)
         return pending_dir / f"{Path(output_filename).stem}.json"
 
-    # [Core] Called at the start of a fresh generate for a waypoint (the
+    # [NOTE] [IO] Called at the start of a fresh generate for a waypoint (the
     # user re-running it). Removes anything a previous run left behind for
     # the same output_filename — the finalized deliverable itself, and any
     # pending manifest + its now-superseded raw clips — so regenerating
@@ -111,7 +111,7 @@ class AttractionVideoGenerator:
             output_filename,
         )
 
-    # [Core/Animation] Generates a single video clip from an image and prompt.
+    # [NOTE] [Animation] Generates a single video clip from an image and prompt.
     #
     # Default path: the bundled ComfyUI server running Wan2.2-TI2V-5B-Turbo
     # (GGUF, Q6_K quant) — see comfyui_i2v_client.py. Earlier LTX-2 attempts
@@ -173,43 +173,10 @@ class AttractionVideoGenerator:
             logger.error("Local clip generation failed for %s: %s", local_image_path, exc)
             return None
 
-    # [Util] Decides whether video_path needs trimming/stretching to land within
-    # tolerance of target_audio_duration. Returns (trim_to, stretch_to) — at
-    # most one is non-None. Shared by both the fused fast path and the
-    # per-stage fallback in _fit_and_finalize so the decision logic exists once.
-    def _resolve_duration_fit(
-        self, video_path: str, target_audio_duration: float, overshoot_tolerance: float
-    ) -> Tuple[Optional[float], Optional[float]]:
-        if target_audio_duration <= 0:
-            return None, None
-
-        current_duration = self.editor.get_video_duration(video_path)
-        diff = current_duration - target_audio_duration
-
-        if diff > overshoot_tolerance:
-            logger.info(
-                f"Video ({current_duration:.2f}s) exceeds audio ({target_audio_duration:.2f}s) "
-                f"by more than {overshoot_tolerance:.1f}s. Trimming to fit..."
-            )
-            return target_audio_duration, None
-        elif -diff > self._AUDIO_DURATION_TOLERANCE_SECONDS:
-            logger.info(
-                f"Video ({current_duration:.2f}s) is shorter than audio ({target_audio_duration:.2f}s) "
-                f"by more than {self._AUDIO_DURATION_TOLERANCE_SECONDS:.1f}s. Adjusting duration..."
-            )
-            return None, target_audio_duration
-        else:
-            logger.info(
-                f"Video ({current_duration:.2f}s) is within tolerance of audio "
-                f"({target_audio_duration:.2f}s). No adjustment needed."
-            )
-            return None, None
-
-    # [Core] Shared tail end of clip processing: fit duration, place at the
-    # project's output path, upscale, and burn the place label. Used by both
-    # the single-image path in process_attraction_video and
-    # finalize_pending_video's multi-image path, so the two stay in sync
-    # instead of drifting apart.
+    # [NOTE] [Editor] Shared tail end of clip processing: fit duration, place at the
+    # project's output path, and upscale. Used by both the single-image path
+    # in process_attraction_video and finalize_pending_video's multi-image
+    # path, so the two stay in sync instead of drifting apart.
     def _fit_and_finalize(
         self,
         video_path: str,
@@ -336,7 +303,7 @@ class AttractionVideoGenerator:
 
         return final_output
 
-    # [Core/Animation] Combines previously-generated attraction clips into
+    # [NOTE] [Animation] Combines previously-generated attraction clips into
     # one waypoint video, once the frontend has reviewed and approved them.
     def finalize_pending_video(
         self,
@@ -393,7 +360,7 @@ class AttractionVideoGenerator:
         logger.info(f"Waypoint video deliverable complete (finalized): {final_output}")
         return final_output
 
-    # [Core/Animation] Main processing function for attraction video generation
+    # [NOTE] [Animation] Main processing function for attraction video generation
     def process_attraction_video(
         self,
         popup_image_entry: Union[str, List[str], None],

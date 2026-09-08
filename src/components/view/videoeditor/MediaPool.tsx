@@ -1,7 +1,9 @@
 import { useState, useEffect } from "react";
 import { join } from "@tauri-apps/api/path";
+import { open } from '@tauri-apps/plugin-dialog';
+import { convertFileSrc } from '@tauri-apps/api/core';
 import { useWorkspace } from "../../../hooks/useWorkspace";
-import { Search, Film, ImageIcon, Mic, FileAudio, FolderSync } from "../../ui/icons"
+import { Search, Film, ImageIcon, Mic, FileAudio, FolderSync } from "../../ui/icons";
 
 type MediaType = "all" | "video" | "audio" | "image";
 
@@ -17,7 +19,34 @@ export function MediaPool() {
     const { waypoints, metadata } = useWorkspace();
     const [filter, setFilter] = useState<MediaType>("all");
     const [searchQuery, setSearchQuery] = useState("");
+    
     const [assets, setAssets] = useState<MediaAsset[]>([]);
+    const [importedAssets, setImportedAssets] = useState<MediaAsset[]>([]);
+    
+    // ✨ NEW: The Loading Lock. This prevents React from accidentally wiping 
+    // your saved files with an empty array during the very first render!
+    const [isLoaded, setIsLoaded] = useState(false);
+
+    // ✨ AUTO-LOAD SYSTEM
+    useEffect(() => {
+        const savedAssets = localStorage.getItem('nle_media_pool');
+        if (savedAssets) {
+            try {
+                setImportedAssets(JSON.parse(savedAssets));
+            } catch (error) {
+                console.error("Failed to parse saved media pool:", error);
+            }
+        }
+        setIsLoaded(true); // Unlock the saving mechanism
+    }, []);
+
+    // ✨ AUTO-SAVE SYSTEM
+    useEffect(() => {
+        // Only save if we have finished loading the initial data
+        if (isLoaded) {
+            localStorage.setItem('nle_media_pool', JSON.stringify(importedAssets));
+        }
+    }, [importedAssets, isLoaded]);
 
     useEffect(() => {
         const buildAssets = async () => {
@@ -26,6 +55,7 @@ export function MediaPool() {
             const projectDir = metadata.directory_path;
             const videoDir = await join(projectDir, "video");
             const generated: MediaAsset[] = [];
+            
             // global assets
             generated.push({
                 id: "global-vid",
@@ -48,8 +78,8 @@ export function MediaPool() {
             // waypoint assets
             for (let index = 0; index < waypoints.length; index++) {
                 const wp = waypoints[index];
-
                 const safeLabel = wp.name.replace(/[^a-zA-Z0-9]/g, "_");
+                
                 // route video
                 generated.push({
                     id: `wp${index}-vid`,
@@ -58,6 +88,7 @@ export function MediaPool() {
                     duration: "00:08",
                     source: await join(videoDir, `04_attraction_${String(index).padStart(2,'0')}_${safeLabel}.mp4`)
                 });
+                
                 // narration audio
                 if (wp.narration && wp.narration.trim()) {
                     generated.push({
@@ -68,6 +99,7 @@ export function MediaPool() {
                         source: await join(videoDir, `${safeLabel}_script.wav`)
                     });
                 }
+                
                 // uploaded images
                 if (wp.images) {
                     for (let imgIndex = 0; imgIndex < wp.images.length; imgIndex++) {
@@ -86,7 +118,62 @@ export function MediaPool() {
         buildAssets();
     }, [waypoints, metadata]);
 
-    const filteredAssets = assets.filter(asset => {
+    const handleImportMedia = async () => {
+        try {
+            const selected = await open({
+                multiple: true,
+                filters: [{
+                    name: 'Media',
+                    extensions: ['mp4', 'mov', 'webm', 'mp3', 'wav', 'png', 'jpg', 'jpeg']
+                }]
+            });
+
+            if (!selected) return;
+
+            const filePaths = Array.isArray(selected) ? selected : [selected];
+            const newAssets: MediaAsset[] = [];
+
+            for (const path of filePaths) {
+                const ext = path.split('.').pop()?.toLowerCase() || '';
+                let type: "video" | "audio" | "image" = 'image';
+                if (['mp4', 'mov', 'webm'].includes(ext)) type = 'video';
+                if (['mp3', 'wav'].includes(ext)) type = 'audio';
+
+                const name = path.split(/[\\/]/).pop() || 'Unknown File';
+                let durationStr = "00:05"; // Default for images
+
+                if (type !== 'image') {
+                    const safeUrl = convertFileSrc(path);
+                    const durationSeconds = await new Promise<number>((resolve) => {
+                        const media = document.createElement(type === 'audio' ? 'audio' : 'video');
+                        media.onloadedmetadata = () => resolve(media.duration);
+                        media.onerror = () => resolve(5); 
+                        media.src = safeUrl;
+                    });
+
+                    const mins = Math.floor(durationSeconds / 60).toString().padStart(2, '0');
+                    const secs = Math.floor(durationSeconds % 60).toString().padStart(2, '0');
+                    durationStr = `${mins}:${secs}`;
+                }
+
+                newAssets.push({
+                    id: crypto.randomUUID(),
+                    name: name,
+                    source: path, 
+                    type: type,
+                    duration: durationStr
+                });
+            }
+
+            setImportedAssets(prev => [...prev, ...newAssets]);
+        } catch (error) {
+            console.error("Failed to import media:", error);
+        }
+    };
+
+    const allAssets = [...assets, ...importedAssets];
+
+    const filteredAssets = allAssets.filter(asset => {
         const matchesType = filter === "all" || asset.type === filter;
         const matchesSearch = asset.name.toLowerCase().includes(searchQuery.toLowerCase());
         return matchesType && matchesSearch;
@@ -107,9 +194,23 @@ export function MediaPool() {
             <div className="p-3 border-b border-zinc-200 dark:border-navidark-300 space-y-3">
                 <div className="flex items-center justify-between text-xs font-bold text-zinc-700 dark:text-zinc-200 uppercase tracking-wider">
                     <span>Media Pool</span>
-                    <button className="text-zinc-400 hover:text-navi transition-colors" title="Refresh Assets">
-                        <FolderSync className="w-3.5 h-3.5" />
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <button 
+                            onClick={handleImportMedia} 
+                            className="bg-navi hover:bg-navi-600 text-white text-[10px] px-2 py-1 rounded transition-colors flex items-center gap-1 shadow-sm"
+                            title="Import External Media"
+                        >
+                            <span className="text-sm leading-none">+</span> Import
+                        </button>
+                        <button 
+                            // ✨ Added a manual clear function just in case they want to wipe their bin!
+                            onClick={() => setImportedAssets([])} 
+                            className="text-zinc-400 hover:text-red-500 transition-colors" 
+                            title="Clear Imported Media"
+                        >
+                            <FolderSync className="w-3.5 h-3.5" />
+                        </button>
+                    </div>
                 </div>
                 
                 <div className="relative">
@@ -154,7 +255,6 @@ export function MediaPool() {
                             draggable="true"
                             onDragStart={(e) => {
                                 e.stopPropagation();
-                                // CRITICAL: This now includes the absolute 'source' path!
                                 e.dataTransfer.setData("text", JSON.stringify(asset)); 
                                 e.dataTransfer.effectAllowed = "copy";
                             }}
@@ -163,7 +263,7 @@ export function MediaPool() {
                             <div className="shrink-0 bg-zinc-100 dark:bg-navidark-900 p-1.5 rounded pointer-events-none">
                                 {getIcon(asset.type)}
                             </div>
-                            <div className="flex-1 min-w-0">
+                            <div className="flex-1 min-w-0 pointer-events-none">
                                 <p className="text-xs font-medium text-zinc-700 dark:text-zinc-200 truncate select-none">
                                     {asset.name}
                                 </p>

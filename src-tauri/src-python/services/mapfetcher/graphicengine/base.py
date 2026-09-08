@@ -52,23 +52,31 @@ _BUNDLED_FONTS_DIR = os.path.join(
 
 
 class _GraphicsEngineBase:
+    # Kosugi Maru first — it's bundled (see _BUNDLED_FONTS_DIR above), so
+    # it's the one candidate guaranteed to actually be found on disk,
+    # rather than depending on whatever CJK font (if any) happens to be
+    # installed on the machine this renders on. Kosugi Maru only ships a
+    # single regular weight, so the bold list reuses it too — _load_font
+    # falls through the rest of each list only if the bundled file is
+    # somehow missing.
     FONT_CANDIDATES_REGULAR: Final[List[str]] = [
         os.path.join(_BUNDLED_FONTS_DIR, "KosugiMaru-Regular.ttf"),
+        "NotoSansJP-VF.ttf",
         "NotoSansJP-Regular.ttf",
         "NotoSansJP-Regular.otf",
+        "NotoSansCJKjp-Regular.otf",
         "meiryo.ttc",
         "msgothic.ttc",
         "YuGothic.ttc",
         "segoeui.ttf",
         "DejaVuSans.ttf",
     ]
-    # Kosugi Maru only ships one weight (no dedicated bold cut) — listed
-    # here too so bold text still renders in the same rounded style
-    # instead of jumping to a different typeface for headings/values.
     FONT_CANDIDATES_BOLD: Final[List[str]] = [
         os.path.join(_BUNDLED_FONTS_DIR, "KosugiMaru-Regular.ttf"),
+        "NotoSansJP-VF.ttf",
         "NotoSansJP-Bold.ttf",
         "NotoSansJP-Bold.otf",
+        "NotoSansCJKjp-Bold.otf",
         "meiryob.ttc",
         "msgothic.ttc",
         "YuGothic-Bold.ttc",
@@ -82,10 +90,16 @@ class _GraphicsEngineBase:
         line_thickness=10,
         marker_color=tuning.DEFAULT_MARKER_COLOR,  # blue (BGR) — every pin except S/E
         arrived_marker_color=tuning.DEFAULT_ARRIVED_MARKER_COLOR,  # deeper blue once visited
-        marker_radius=18,
+        marker_radius=24,
         font_size: int = 18,
+        card_border_color=tuning.DEFAULT_CARD_BORDER_COLOR,
+        card_border_thickness=tuning.DEFAULT_CARD_BORDER_THICKNESS,
+        line_border_color=tuning.DEFAULT_LINE_BORDER_COLOR,
+        line_border_thickness=tuning.DEFAULT_LINE_BORDER_THICKNESS,
     ):
         self.line_color = line_color
+        self.line_border_color = line_border_color
+        self.line_border_thickness = max(0, int(round(line_border_thickness)))
         # Clamp to a sane minimum: a sub-pixel radius/thickness (e.g. a
         # stray 0.25 from a malformed settings file) would otherwise
         # render the marker/path as an invisible sliver. The pin needs
@@ -100,19 +114,44 @@ class _GraphicsEngineBase:
         self.marker_radius = max(16, int(round(marker_radius))) + 3
         self.font_size = font_size
         self.font_cv = cv2.FONT_HERSHEY_SIMPLEX
+        # Popup/summary card outline — configurable via job_config.json's
+        # settings.card_border_color (BGR) / settings.card_border_thickness.
+        self.card_border_color = card_border_color
+        self.card_border_thickness = max(0, int(round(card_border_thickness)))
+        # See _load_font below — every popup card, summary card, and
+        # landmark label chip loads a font on every frame it's drawn, so
+        # without this a multi-second held card re-opens and re-parses
+        # the same TrueType file from disk dozens of times over.
+        self._font_cache: Dict[Tuple[Tuple[str, ...], float], Any] = {}
+        # See read_image_safe below — a popup's own photo is re-read and
+        # re-decoded from disk on every single frame it's held on screen
+        # otherwise (render_popup_box calls this fresh each frame to
+        # support its alpha fade), for however many frames that hold
+        # lasts. Keyed by path only (render output files aren't touched
+        # mid-render, so no mtime check needed) and always returns a copy
+        # (see below) so a caller that draws directly onto its own result
+        # — background map frames, unlike popup thumbnails, commonly do —
+        # can't corrupt the cached array for the next read.
+        self._image_cache: Dict[str, np.ndarray] = {}
 
-    @staticmethod
-    def read_image_safe(path: str) -> Optional[np.ndarray]:
+    def read_image_safe(self, path: str) -> Optional[np.ndarray]:
         if not path or not os.path.exists(path):
             return None
+        cached = self._image_cache.get(path)
+        if cached is not None:
+            return cached.copy()
         try:
             with open(path, "rb") as f:
                 chunk = f.read()
             img_array = np.frombuffer(chunk, dtype=np.uint8)
-            return cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+            img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
         except Exception as e:
             logger.warning(f"Failed to load image {path}: {e}")
             return None
+        if img is not None:
+            self._image_cache[path] = img
+            return img.copy()
+        return None
 
     # Per-travel-mode line colors (BGR). Modes without an entry fall back to
     # self.line_color (the existing single-color behavior). Also used by
@@ -137,9 +176,23 @@ class _GraphicsEngineBase:
         return x, y
 
     def _load_font(self, candidates: List[str], size: int) -> FreeTypeFont | Any:
+        # Memoized — without this, every popup card / summary card /
+        # landmark label chip re-opens and re-parses the same TrueType
+        # file from disk on every single frame it's drawn, for however
+        # many frames that card is held on screen.
+        key = (tuple(candidates), size)
+        cached = self._font_cache.get(key)
+        if cached is not None:
+            return cached
+
         for name in candidates:
             try:
-                return truetype(name, size)
+                font = truetype(name, size)
+                break
             except OSError:
                 continue
-        return load_default()
+        else:
+            font = load_default()
+
+        self._font_cache[key] = font
+        return font

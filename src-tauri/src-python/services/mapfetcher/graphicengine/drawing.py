@@ -1,11 +1,28 @@
 """Route line and waypoint pin drawing."""
 
+import math
 from typing import Any, List, Optional, Tuple
 
 import cv2
 import numpy as np
 
 from services import tuning
+
+
+def _pin_silhouette(cx: int, head_cy: int, radius: float, tip_y: int) -> np.ndarray:
+    """A classic teardrop/balloon-pin outline: the round head plus the two
+    lines TANGENT to it down to the tip, rather than a separate triangle
+    drawn from the head's bottom edge — a tangent-line tail meets the
+    circle smoothly (no visible seam/notch at the neck), reading as one
+    continuous teardrop shape instead of a circle with a triangle stuck
+    onto it."""
+    d = max(tip_y - head_cy, radius + 1)
+    angle_c = math.degrees(math.acos(radius / d))
+    arc_pts = cv2.ellipse2Poly(
+        (cx, head_cy), (int(radius), int(radius)), 0,
+        int(90 + angle_c), int(90 - angle_c + 360), 2,
+    )
+    return np.array(list(arc_pts) + [(cx, tip_y)], dtype=np.int32)
 
 
 class _DrawingMixin:
@@ -21,6 +38,7 @@ class _DrawingMixin:
         # Group consecutive points into same-mode runs so each leg (e.g. a
         # ferry crossing) can be drawn in its own color, matching the
         # transport icon shown for that leg.
+        # [NOTE] [Animation] Groups consecutive same-mode points into segments so each leg (e.g. a ferry crossing) draws in its own color.
         if mode_history and len(mode_history) == len(path_history):
             segments: List[Tuple[str, List[Tuple[int, int]]]] = []
             for point, mode in zip(path_history, mode_history):
@@ -40,14 +58,15 @@ class _DrawingMixin:
                 continue
             color = self.MODE_COLORS.get(mode, self.line_color)
             pts = np.array(seg_points, dtype=np.int32)
-            cv2.polylines(
-                frame,
-                [pts],
-                False,
-                (255, 255, 255),
-                self.line_thickness + 6,
-                cv2.LINE_AA,
-            )
+            if self.line_border_thickness:
+                cv2.polylines(
+                    frame,
+                    [pts],
+                    False,
+                    self.line_border_color,
+                    self.line_thickness + self.line_border_thickness * 2,
+                    cv2.LINE_AA,
+                )
             cv2.polylines(
                 frame,
                 [pts],
@@ -65,63 +84,72 @@ class _DrawingMixin:
         number: Optional[Any] = None,
         color: Optional[Tuple[int, int, int]] = None,
     ):
-        """Draws a classic map-pin (teardrop) marker with its TIP anchored at
-        (cx, cy) — the actual waypoint coordinate — and the round head above
-        it, matching standard map-pin iconography — proportioned to match
-        the frontend's NaviPin.tsx (src/components/view/mapeditor/MapLayers/
-        NaviPin.tsx: viewBox 191x275, head r=62 at cy=90, so tail length is
-        ~2.98x the head radius) rather than an arbitrary shorter teardrop, so
-        backend-rendered pins read as the same marker shape the map editor
-        shows live. Pass `number` (usually a 1-based visit order, but any
-        int/str — e.g. "S"/"E" for the route's actual start/end) to print it
-        inside the head instead of a plain hole, so the route's stop
-        sequence is readable at a glance. Pass `color` to override
-        self.marker_color for this pin only (e.g. arrived waypoints, or one
-        of tuning.py's START/END/DRAWN/STOPBY_PIN_COLOR)."""
+        """Draws a classic Google-Maps-style teardrop map-pin marker with
+        its TIP anchored at (cx, cy) — the actual waypoint coordinate —
+        and the round head above it: one continuous teardrop silhouette
+        (round head + tail TANGENT to it, see _pin_silhouette) rather than
+        a circle with a separate triangle stuck onto it. The head's
+        center always shows a white circle with `number` (if given —
+        usually a 1-based visit order, or "S"/"E" for the route's actual
+        start/end) drawn inside it in dark, readable text. Pass `color`
+        to override self.marker_color for this pin only (e.g. arrived
+        waypoints, or one of tuning.py's
+        START/END/DRAWN/STOPBY_PIN_COLOR)."""
         pin_color = color if color is not None else self.marker_color
         radius = int(self.marker_radius)
-        head_cy = cy - int(radius * 2.98)
-        neck_y = head_cy + radius
-        tail_half = max(2, int(radius * 0.45))
+        head_cy = cy - int(radius * 1.5)
 
-        def _pin_poly(tail_w: int, tip_pad: int) -> np.ndarray:
-            return np.array(
-                [
-                    [cx - tail_w, neck_y],
-                    [cx + tail_w, neck_y],
-                    [cx, cy + tip_pad],
-                ],
-                dtype=np.int32,
-            )
-
-        # White halo (slightly larger) so the pin reads against busy map tiles.
-        cv2.circle(frame, (cx, head_cy), radius + 4, (255, 255, 255), -1, cv2.LINE_AA)
-        cv2.fillPoly(frame, [_pin_poly(tail_half + 3, 3)], (255, 255, 255), cv2.LINE_AA)
+        # White halo (slightly larger all round, including a bit past the
+        # tip) so the pin reads against busy map tiles.
+        cv2.fillPoly(
+            frame, [_pin_silhouette(cx, head_cy, radius + 4, cy + 4)],
+            (255, 255, 255), cv2.LINE_AA,
+        )
 
         # Colored pin body.
-        cv2.circle(frame, (cx, head_cy), radius, pin_color, -1, cv2.LINE_AA)
-        cv2.fillPoly(frame, [_pin_poly(tail_half, 0)], pin_color, cv2.LINE_AA)
+        cv2.fillPoly(
+            frame, [_pin_silhouette(cx, head_cy, radius, cy)],
+            pin_color, cv2.LINE_AA,
+        )
 
-        # NaviPin.tsx's head isn't a solid disc — its path is an evenodd
-        # teardrop with a circular hole cut out of the middle (radius
-        # ~63.06 against a ~95.5 head), revealing the white circle sat
-        # behind it. That leaves only a thin colored ring, with the
-        # number/letter (near-black #111) sitting on the white center
-        # rather than white-on-color. Reproduced here as a white center
-        # circle at the same ~0.66 ratio, drawn every time (not just when
-        # there's no label) so numbered pins get the same ring look.
-        hole_radius = max(2, int(radius * 0.66))
+        # White center — always drawn (not just when there's no number) so
+        # every numbered pin gets the same dark-on-white number. Smaller
+        # than before (0.65 vs 0.8) so more of the pin's own color shows
+        # through around it.
+        # [HACK] [Animation] Hole/font ratios (0.65, radius/26.0) are hand-tuned magic numbers to keep two-digit labels and "S"/"E" from overflowing the white center.
+        hole_radius = max(2, int(radius * 0.65))
         cv2.circle(frame, (cx, head_cy), hole_radius, (255, 255, 255), -1, cv2.LINE_AA)
 
         if number is not None:
             label = str(number)
-            font_scale = max(0.35, radius / 24.0)
-            thickness = max(2, round(radius / 11))
-            (tw, th), _ = cv2.getTextSize(label, self.font_cv, font_scale, thickness)
+            # radius/26 — sized back down to fit the smaller white center
+            # above (was radius/22, tuned for the previous 0.8 hole).
+            font_scale = max(0.45, radius / 26.0)
+            thickness = max(2, round(radius / 7))
+            # Two-plus-character labels ("10", "11", ...) are visibly
+            # wider than a single digit/letter at the same font_scale —
+            # shrinking both a notch keeps them from crowding the white
+            # center's edge the way a single character never does.
+            if len(label) > 1:
+                font_scale *= 0.82
+                thickness = max(2, round(thickness * 0.85))
+            (tw, th), baseline = cv2.getTextSize(label, self.font_cv, font_scale, thickness)
+            # Center on the glyph's own visual bounding box (th tall, plus
+            # baseline for any descenders) rather than assuming no
+            # descenders — round() instead of integer-divide keeps this
+            # accurate at small radii too. getTextSize's box alone still
+            # measurably undershoots upward — cv2.LINE_AA's stroke
+            # rendering bleeds the visible ink down by roughly half the
+            # stroke thickness beyond what getTextSize accounts for
+            # (verified empirically across marker sizes 14-44px: without
+            # this the number sits ~1-5px below true center, scaling with
+            # thickness) — so pull it back up by that amount too.
+            text_x = cx - round(tw / 2)
+            text_y = head_cy + round((th - baseline) / 2) - round(thickness / 2)
             cv2.putText(
                 frame,
                 label,
-                (cx - tw // 2, head_cy + th // 2),
+                (text_x, text_y),
                 self.font_cv,
                 font_scale,
                 tuning.PIN_NUMBER_TEXT_COLOR,
