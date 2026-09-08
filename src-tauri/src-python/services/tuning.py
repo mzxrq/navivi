@@ -78,3 +78,59 @@ FULLSCREEN_TRANSITION_DEFAULTS: Dict[str, float] = {
     "min_small_hold_seconds": 0.1,
 }
 TRIGGER_RADIUS_PADDING_DEFAULTS: Dict[str, float] = {"overview": 10, "waypoint": 15}
+
+# --- ComfyUI attraction image-to-video (Wan2.2-TI2V-5B-Turbo-GGUF) ----------
+# Drives services/vdoprocessing/comfyui_i2v_client.py. Bundled ComfyUI lives
+# at src-python/bin/ComfyUI with its own venv + ComfyUI-GGUF node already
+# installed. Port is deliberately NOT ComfyUI's common default (8188) so this
+# bundled instance never collides with a developer's own separately-running
+# ComfyUI on the same machine.
+COMFYUI_BASE_URL = "http://127.0.0.1:8189"
+COMFYUI_UNET_NAME = "Wan2_2-TI2V-5B-Turbo-Q6_K.gguf"
+COMFYUI_CLIP_NAME = "umt5_xxl_fp8_e4m3fn_scaled.safetensors"
+COMFYUI_VAE_NAME = "wan2.2_vae.safetensors"
+# 1280x704 fits comfortably in an 8GB VRAM budget at this quant (see
+# img2vdo.py's _TARGET_WIDTH/_TARGET_HEIGHT comment — upscaled to 1920x1080
+# after generation to match the rest of the pipeline's clips).
+COMFYUI_WIDTH = 1280
+COMFYUI_HEIGHT = 704
+COMFYUI_FPS = 24
+# Turbo-model recommended settings (see the model card): 4 steps is enough
+# at CFG 1, euler/simple is a safe default sampler+scheduler pair.
+COMFYUI_STEPS = 4
+COMFYUI_CFG = 1.0
+COMFYUI_SAMPLER = "euler"
+COMFYUI_SCHEDULER = "simple"
+COMFYUI_MODEL_SHIFT = 8.0
+# Wan wants frame counts of the form 4k+1; clamp generated length into a
+# sane range so a very long/short narration duration can't request a
+# pathological (near-zero or excessively slow) clip.
+COMFYUI_MIN_FRAMES = 25   # ~1s @ 24fps
+COMFYUI_MAX_FRAMES = 121  # ~5s @ 24fps — the template's own default length
+COMFYUI_NEGATIVE_PROMPT = (
+    "色调艳丽，过曝，静态，细节模糊不清，字幕，风格，作品，画作，画面，静止，"
+    "整体发灰，最差质量，低质量，JPEG压缩残留，丑陋的，残缺的，多余的手指，"
+    "画得不好的手部，画得不好的脸部，畸形的，毁容的，形态畸形的肢体，手指融合，"
+    "静止不动的画面，杂乱的背景，三条腿，背景人很多，倒着走"
+)
+# Maps attraction_step.py's camera_pans vocabulary (also used by
+# local_pan_generator.py's _CAMERA_PAN_PRESETS) to an English motion prompt
+# Wan responds to — camera_pans entries are otherwise just short keywords,
+# not descriptive prose.
+COMFYUI_CAMERA_PAN_PROMPTS: Dict[str, str] = {
+    "panright": "smooth cinematic camera pan to the right across the scene, natural motion",
+    "panleft": "smooth cinematic camera pan to the left across the scene, natural motion",
+    "zoomin": "slow cinematic zoom in on the scene, natural motion",
+    "zoomout": "slow cinematic zoom out from the scene, natural motion",
+    "none": "subtle natural ambient motion, gentle cinematic movement",
+}
+COMFYUI_DEFAULT_MOTION_PROMPT = "subtle natural ambient motion, gentle cinematic movement"
+# How long the bundled server can sit unused before idle_watchdog.py shuts
+# it down — mirrors IrodoriTTSClient's reasoning (10 min covers gaps between
+# waypoints in one run without wasting VRAM/RAM long after the job ends).
+COMFYUI_IDLE_TIMEOUT_SECONDS = 600.0
+# Generous: first call after a cold start pays for node/import startup, and
+# a Q6_K/8GB-class generation at up to 121 frames has taken up to ~15
+# minutes in testing.
+COMFYUI_SERVER_START_TIMEOUT_SECONDS = 180.0
+COMFYUI_GENERATION_TIMEOUT_SECONDS = 1200.0

@@ -1,4 +1,5 @@
-"""Step 3: Generate AI videos for individual attractions (local outpaint+pan)."""
+"""Step 3: Generate AI videos for individual attractions (ComfyUI/Wan2.2
+image-to-video, falling back to local outpaint+pan on failure)."""
 
 from pathlib import Path
 from typing import Optional
@@ -15,9 +16,10 @@ def render_attraction_videos(
     audio_durations: Optional[list[float]] = None,
     audio_paths: Optional[list[str]] = None,
 ) -> list[str]:
-    """Step 3: Generates AI videos for individual attractions (local
-    outpaint+pan generator — no external ComfyUI server required)."""
-    logger.info("Step 3: Generating attraction videos (local outpaint+pan).")
+    """Step 3: Generates AI videos for individual attractions via the
+    bundled ComfyUI server (Wan2.2 image-to-video), falling back to the
+    local outpaint+pan generator per-clip on failure."""
+    logger.info("Step 3: Generating attraction videos (ComfyUI/Wan2.2 I2V).")
 
     config_path = Path(project_config_path)
     if not config_path.exists():

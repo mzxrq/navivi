@@ -1,8 +1,9 @@
 """
 Image-to-Video Service for Attractions
 ----------------------------------------------------------------------------
-Handles local (AI-outpaint + pan) image-to-video generation, multi-image
-list detection, concatenation via VideoEditor, and audio synchronization.
+Handles image-to-video generation (ComfyUI/Wan2.2, falling back to local
+AI-outpaint + pan on failure), multi-image list detection, concatenation
+via VideoEditor, and audio synchronization.
 ----------------------------------------------------------------------------
 """
 
@@ -111,20 +112,42 @@ class AttractionVideoGenerator:
 
     # [Core/Animation] Generates a single video clip from an image and prompt.
     #
-    # Was: uploads to ComfyUI, runs its LTX-2 image+audio-to-video graph over
-    # a websocket, downloads the result. Replaced with a local generator
-    # (AI-outpaint the frame's edges + deterministic pan/zoom) — LTX-2 at the
-    # step counts/quantization an 8GB card forces was unreliable (near-static
-    # output unless heavily prompted, prone to "melting" over longer clips).
-    # See services/model/ for the exploration that led to this; ComfyUI is no
-    # longer required for this step at all.
+    # Default path: the bundled ComfyUI server running Wan2.2-TI2V-5B-Turbo
+    # (GGUF, Q6_K quant) — see comfyui_i2v_client.py. Earlier LTX-2 attempts
+    # at the step counts/quantization an 8GB card forces were unreliable
+    # (near-static output unless heavily prompted, prone to "melting" over
+    # longer clips); Wan2.2's turbo checkpoint at 4 steps doesn't have that
+    # problem. If the ComfyUI server can't be reached or a generation fails
+    # for any reason, falls back to the local AI-outpaint + deterministic
+    # pan/zoom generator (local_pan_generator.py) so a waypoint never
+    # hard-fails just because the local GPU service had a bad run. See
+    # services/model/ for the exploration that led to the local fallback.
     def _generate_single_clip(
         self, local_image_path: str, prompt_text: str, duration_sec: float = 6.0
     ) -> Optional[str]:
-        """Generates a clip locally (no ComfyUI) and returns its raw path."""
+        """Generates a clip via ComfyUI (Wan2.2 I2V), falling back to the
+        local pan/zoom generator on failure. Returns the raw clip path."""
+        save_path = self.output_dir / f"raw_{uuid.uuid4().hex[:6]}.mp4"
+
+        from services.vdoprocessing.comfyui_i2v_client import ComfyUII2VClient
+
+        try:
+            ComfyUII2VClient().generate_clip(
+                image_path=local_image_path,
+                output_path=str(save_path),
+                duration_sec=duration_sec,
+                camera_pan_hint=prompt_text,
+            )
+            return str(save_path)
+        except Exception as exc:
+            logger.warning(
+                "ComfyUI clip generation failed for %s (%s: %s) — falling back "
+                "to local pan/zoom generator.",
+                local_image_path, type(exc).__name__, exc,
+            )
+
         from services.vdoprocessing.local_pan_generator import generate_local_clip
 
-        save_path = self.output_dir / f"raw_{uuid.uuid4().hex[:6]}.mp4"
         try:
             generate_local_clip(
                 image_path=local_image_path,
