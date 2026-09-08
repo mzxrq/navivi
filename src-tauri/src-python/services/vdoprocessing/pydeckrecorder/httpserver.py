@@ -31,6 +31,11 @@ def start_local_server(directory, assets_dir=None):
             super().__init__(*args, directory=directory, **kwargs)
 
         def translate_path(self, path):
+            # [HACK] [IO] Overrides SimpleHTTPRequestHandler's own path
+            # resolution rather than symlinking: '/assets/*' is rerouted to
+            # assets_root while everything else still resolves under
+            # `directory`, letting one server expose two unrelated
+            # directory trees without either being nested inside the other.
             if assets_root and (path == "/assets" or path.startswith("/assets/")):
                 rel = urllib.parse.unquote(path[len("/assets/"):] if path.startswith("/assets/") else "")
                 rel = rel.split("?", 1)[0].split("#", 1)[0]

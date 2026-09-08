@@ -47,7 +47,7 @@ FFMPEG_BIN = (
     Path(__file__).resolve().parent.parent / "bin" / "FFmpeg" / "bin" / "ffmpeg.exe"
 )
 
-# [NEW] This module previously had no logger at all — every ffmpeg
+# [NOTE] [Editor] This module previously had no logger at all — every ffmpeg
 # failure was either swallowed (DEVNULL) or surfaced as a bare exception
 # with no context. Matches the `setup_logger` convention used everywhere
 # else in this codebase.
@@ -123,7 +123,7 @@ class VideoExporter:
             cmd,
             stdin=subprocess.PIPE,
             stdout=subprocess.DEVNULL,
-            # [CHANGED] was DEVNULL — now captured so failures are
+            # [NOTE] [Editor] was DEVNULL — now captured so failures are
             # diagnosable. Drained exclusively via communicate() (never
             # a bare .wait()) to avoid the pipe-full deadlock described
             # in the module docstring.
@@ -136,7 +136,7 @@ class VideoExporter:
             try:
                 self.proc.stdin.write(frame.tobytes())
             except (BrokenPipeError, OSError) as exc:
-                # [NEW] ffmpeg died mid-stream. Previously this exception
+                # [NOTE] [Editor] ffmpeg died mid-stream. Previously this exception
                 # would propagate bare (or, in FrameSink's variant, get
                 # silently swallowed) with zero indication of *why* the
                 # encoder process exited. `communicate()` here safely
@@ -172,11 +172,11 @@ class VideoExporter:
                 except (BrokenPipeError, OSError):
                     pass  # already dead; communicate() below still reaps it safely
 
-            # [FIX] communicate() instead of wait() — deadlock-safe stderr
+            # [NOTE] [Editor] communicate() instead of wait() — deadlock-safe stderr
             # drain, see module docstring.
             _, stderr_bytes = self.proc.communicate()
 
-            # [FIX] Actually check the exit code. This was previously
+            # [NOTE] [Editor] Actually check the exit code. This was previously
             # ignored entirely, so a failed encode looked identical to a
             # successful one to every caller downstream.
             if self.proc.returncode != 0:
@@ -265,7 +265,7 @@ class VideoExporter:
 
         ffmpeg_cmd = VideoExporter.resolve_ffmpeg()
         if ffmpeg_cmd:
-            # [FIX] Previously ran with stdout/stderr=DEVNULL and NEVER
+            # [NOTE] [Editor] Previously ran with stdout/stderr=DEVNULL and NEVER
             # inspected the CompletedProcess result at all — a failed
             # concat (e.g. one clip has mismatched codec params) silently
             # produced no output file (or a truncated one) while the
@@ -322,7 +322,9 @@ class VideoExporter:
         if not tracks:
             raise ValueError("Timeline data has no 'video_tracks' to stitch.")
 
-        # 💡 FIX: Run the strict pre-flight check BEFORE opening any files!
+        # [NOTE] [Editor] Run the strict pre-flight check BEFORE opening any files —
+        # catching a missing clip early gives a clear error instead of a
+        # partially-built concat manifest pointing at a file that doesn't exist.
         for track in tracks:
             clip_path = Path(track["file_path"]).resolve()
             if not clip_path.exists():
@@ -408,8 +410,7 @@ class VideoExporter:
         if not ffmpeg_cmd:
             raise RuntimeError("FFmpeg binary not found.")
 
-        # 💡 CROSS-PLATFORM SECRET:
-        # FFmpeg's subtitle filter crashes on Windows absolute paths (e.g., C:\).
+        # [HACK] [Editor] FFmpeg's subtitle filter crashes on Windows absolute paths (e.g., C:\).
         # We must format the path with forward slashes and escape the colon for the filter.
         # e.g., 'C\:/Users/...' -> safely parsed by the FFmpeg filter graph.
         safe_sub_path = sub_path.as_posix().replace(":", "\\:")

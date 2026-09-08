@@ -23,7 +23,7 @@ from services.logger.logger import setup_logger
 logger = setup_logger("VideoEditor")
 
 
-# [Core] FFmpegEngine : Manages discovery and execution of the FFmpeg binary.
+# [NOTE] [Editor] FFmpegEngine manages discovery and execution of the FFmpeg binary.
 class FFmpegEngine:
     """Manages the discovery and execution of the FFmpeg binary."""
 
@@ -75,7 +75,7 @@ class FFmpegEngine:
             )
 
 
-# [Util] ConcatListManager : Handles creation and cleanup of FFmpeg concat demuxer manifest files.
+# [NOTE] [Util] ConcatListManager handles creation and cleanup of FFmpeg concat demuxer manifest files.
 class ConcatListManager:
     """Handles the creation and cleanup of FFmpeg concat demuxer manifest files."""
 
@@ -120,7 +120,7 @@ class ConcatListManager:
                 )
 
 
-# [Core] VideoEditor : High-level API for editing, combining, and exporting media files.
+# [NOTE] [Editor] VideoEditor is the high-level API for editing, combining, and exporting media files.
 class VideoEditor:
     """High-level API for editing, combining, and exporting media files."""
 
@@ -227,7 +227,10 @@ class VideoEditor:
 
         ffmpeg_cmd = self.engine.resolve_binary()
 
-        # Query source audio format to lock down -ar and -ac (prevents chipmunk bugs)
+        # [HACK] [Editor] Query source audio format to lock down -ar and -ac
+        # explicitly — without pinning them, ffmpeg's AAC encoder can pick a
+        # different sample rate/channel layout than the source, which plays
+        # back pitch-shifted ("chipmunk") audio.
         probe_cmd = [
             "ffprobe",
             "-v",

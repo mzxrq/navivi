@@ -19,6 +19,7 @@ import sys
 import time
 
 
+# [NOTE] [Util] No cross-platform "is pid alive" API; Windows checks tasklist output, POSIX probes with signal 0
 def _process_alive(pid: int) -> bool:
     if os.name == "nt":
         result = subprocess.run(
@@ -36,6 +37,7 @@ def _process_alive(pid: int) -> bool:
     return True
 
 
+# [HACK] [Util] Force-kills the process tree; taskkill /T/F is the Windows equivalent of a hard SIGTERM to a whole process group
 def _kill(pid: int) -> None:
     if os.name == "nt":
         subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], capture_output=True)
@@ -52,11 +54,13 @@ def main() -> None:
     pid = int(sys.argv[1])
     activity_file = sys.argv[2]
     idle_timeout = float(sys.argv[3])
-    # Frequent enough to shut down close to the deadline, infrequent enough
+    # [NOTE] [TTS] Frequent enough to shut down close to the deadline, infrequent enough
     # not to matter as background overhead — never faster than 5s, never
     # slower than 30s regardless of how long idle_timeout itself is.
     poll_interval = min(30.0, max(5.0, idle_timeout / 10))
 
+    # [NOTE] [Core] Runs forever as its own detached process until either the watched
+    # server dies on its own or this loop kills it for being idle too long.
     while True:
         time.sleep(poll_interval)
 

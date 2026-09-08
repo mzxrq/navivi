@@ -114,7 +114,7 @@ async def render_leg_animation(
                     return
 
                 response = await route.fetch()
-                # Only cache successful responses -- a failed request (a
+                # [NOTE] [Map] Only cache successful responses -- a failed request (a
                 # tile that legitimately doesn't exist yet, a transient
                 # network error, a bad URL from an earlier bug) would
                 # otherwise get written to disk and then replayed forever
@@ -149,9 +149,10 @@ async def render_leg_animation(
             await page.wait_for_load_state("load", timeout=2000)
         except Exception:
             logger.warning("  ... Failed to wait for page load.")
-        # 3D vehicle/marker models (.glb) load asynchronously over the
-        # network after this point; give them real time to land before the
-        # first frame is captured, or they show up missing on early frames.
+        # [NOTE] [IO] 3D vehicle/marker models (.glb) load asynchronously
+        # over the network after this point; give them real time to land
+        # before the first frame is captured, or they show up missing on
+        # early frames.
         await page.wait_for_timeout(2500)
 
         await page.evaluate("""
@@ -162,14 +163,14 @@ async def render_leg_animation(
         """)
 
         if mapbox_key:
-            # Extruded 3D buildings from Mapbox's own building footprint
-            # vector tiles (mapbox-streets-v8's 'building' source-layer,
-            # which carries a real `height` in meters per building) --
-            # verified live over a dense city area before wiring this in.
-            # Uses raw deck.gl MVTLayer construction (not pydeck's
-            # declarative pdk.Layer) because `dataTransform` is a JS
-            # function, which pydeck's JSON-based layer serialization can't
-            # carry through faithfully.
+            # [HACK] [Animation] Extruded 3D buildings from Mapbox's own
+            # building footprint vector tiles (mapbox-streets-v8's
+            # 'building' source-layer, which carries a real `height` in
+            # meters per building) -- verified live over a dense city area
+            # before wiring this in. Uses raw deck.gl MVTLayer construction
+            # (not pydeck's declarative pdk.Layer) because `dataTransform`
+            # is a JS function, which pydeck's JSON-based layer
+            # serialization can't carry through faithfully.
             await page.evaluate(
                 """([token]) => {
                     if (!window.deckgl) return;
@@ -254,9 +255,10 @@ async def render_leg_animation(
                     proc.stdin.write(frozen_png)
                     await proc.stdin.drain()
 
-        # The coin spins in place at the destination for the whole drive-in
-        # (~1 rotation every 1.4s), so it reads as "a coin waiting there"
-        # rather than something that only appears on arrival.
+        # [NOTE] [Animation] The coin spins in place at the destination for
+        # the whole drive-in (~1 rotation every 1.4s), so it reads as "a
+        # coin waiting there" rather than something that only appears on
+        # arrival.
         coin_deg_per_frame = 360.0 / max(1, fps * 1.4)
         last_coin_spin = 0.0
 
@@ -331,13 +333,14 @@ async def render_leg_animation(
                     getOrientation: [0, 0, 90],
                     getColor: [46, 160, 67, 255],
                     sizeScale: 8,
-                    // Always draws above the coin regardless of its actual
-                    // 3D depth (the coin grows well past the marker's own
-                    // height during its collect burst) -- combined with
-                    // being added to the layers array AFTER coinLayer
-                    // below, this guarantees the pin is never hidden behind
-                    // the photo. Verified in isolation: no self-occlusion
-                    // artifacts on this model with depth testing off.
+                    // [HACK] [Animation] Always draws above the coin
+                    // regardless of its actual 3D depth (the coin grows
+                    // well past the marker's own height during its collect
+                    // burst) -- combined with being added to the layers
+                    // array AFTER coinLayer below, this guarantees the pin
+                    // is never hidden behind the photo. Verified in
+                    // isolation: no self-occlusion artifacts on this model
+                    // with depth testing off.
                     parameters: {{ depthTest: false }}
                 }});
 

@@ -44,6 +44,9 @@ def build_pydeck_map(
             raw_coords.append({"lat": coord[0], "lon": coord[1]})
 
     if not raw_coords:
+        # [NOTE] [Map] Falls back to Tokyo so pydeck always has a valid
+        # centroid to build a ViewState from, even when routing_cache is
+        # empty (e.g. an early preview call before any leg has been routed).
         raw_coords = [{"lat": 35.6762, "lon": 139.6503}]
 
     df_raw = pd.DataFrame(raw_coords)
@@ -74,15 +77,26 @@ def interpolate_route_data(
     total_leg_km: float,
     leg_dist_km: list,
 ) -> pd.DataFrame:
+    # [NOTE] [Animation] Each raw route point gets a timestamp proportional
+    # to its cumulative distance along the leg (not evenly spaced in time),
+    # so a constant-speed vehicle really does move at constant speed once
+    # resampled below -- dense stretches of raw points don't slow the
+    # animation down relative to sparse ones.
     if total_leg_km > 0:
         df_raw["time_sec"] = [(d / total_leg_km) * leg_duration for d in leg_dist_km]
     else:
         df_raw["time_sec"] = np.linspace(0, leg_duration, num=len(df_raw))
 
+    # [NOTE] [Animation] interp1d requires strictly distinct x-values;
+    # duplicate lon/lat points (stationary GPS samples, or two points close
+    # enough to round to the same time_sec) would otherwise raise.
     df_raw = df_raw.drop_duplicates(subset=["time_sec"], keep="first").reset_index(
         drop=True
     )
 
+    # Resample onto a fixed number of evenly-spaced-in-TIME frames --
+    # this is what actually turns the raw route polyline into per-frame
+    # positions for the animation loop.
     interp_lon = interp1d(
         df_raw["time_sec"],
         df_raw["lon"],
@@ -113,6 +127,12 @@ def patch_pydeck_html(html_path: str):
     with open(html_path, "r", encoding="utf-8") as f:
         content = f.read()
 
+    # [HACK] [Map] pydeck's generated HTML keeps its Deck instance in a
+    # local const/let, unreachable from outside the inline script -- string
+    # patching the generated variable declaration is the only hook available
+    # to expose it as window.deckgl, which renderer.py's page.evaluate calls
+    # depend on for every frame. Three alternate patterns are covered since
+    # pydeck's own template has changed which one it emits across versions.
     content = content.replace("const deckgl =", "window.deckgl =")
     content = content.replace("let deckgl =", "window.deckgl =")
     content = content.replace(

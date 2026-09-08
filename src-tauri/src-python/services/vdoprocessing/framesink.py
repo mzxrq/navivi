@@ -21,7 +21,7 @@ from services.logger.logger import setup_logger
 logger = setup_logger("FrameSink")
 
 
-# [Core] FrameSink Class
+# [NOTE] [Editor] FrameSink writes frames to a video file via FFmpeg, falling back to OpenCV's VideoWriter if FFmpeg is unavailable.
 class FrameSink:
     """Handles writing frames to a video file using FFmpeg or OpenCV fallback."""
 
@@ -37,6 +37,9 @@ class FrameSink:
 
         if self.proc is None:
             self._fallback_path = tempfile.mktemp(suffix=".avi")
+            # [NOTE] [Editor] 0x44495658 is the raw FOURCC for "XVID" packed
+            # as a little-endian int — used directly instead of
+            # cv2.VideoWriter_fourcc(*"XVID") for the same result.
             self._fallback_writer = cv2.VideoWriter(
                 self._fallback_path, 0x44495658, fps, (w, h)
             )
@@ -55,10 +58,16 @@ class FrameSink:
                     frame = cv2.resize(frame, (self.w, self.h))
                 self.proc.stdin.write(frame.tobytes())
             except (BrokenPipeError, AttributeError) as e:
-                logger.error(f"FFmpeg pipe failed: {e}. Falling back to OpenCV.")
+                # [NOTE] [Editor] Raises instead of silently switching to
+                # _fallback_writer here — every frame written before this
+                # point went to the now-dead ffmpeg pipe, not to
+                # _fallback_writer, so a mid-stream switch would produce a
+                # video silently missing everything written so far rather
+                # than failing loudly. Matches VideoExporter.write's own
+                # behavior on a broken pipe.
+                logger.error(f"FFmpeg pipe failed: {e}")
                 self.proc = None  # Disable broken pipe
-                if self._fallback_writer is not None:
-                    self._fallback_writer.write(frame)
+                raise RuntimeError(f"FFmpeg pipe failed mid-stream: {e}") from e
         elif self._fallback_writer is not None:
             # Fallback to OpenCV writer if FFmpeg is None
             self._fallback_writer.write(frame)
@@ -67,7 +76,6 @@ class FrameSink:
                 "No active video writer available (both FFmpeg and OpenCV failed)."
             )
 
-    # [Editor] Release and cleanup operations
     def release(self, output_path: str) -> str:
         if self.proc is not None:
             try:
@@ -76,6 +84,14 @@ class FrameSink:
                 self.proc.wait()
             except Exception as e:
                 logger.warning(f"Error while closing FFmpeg stdin: {e}")
+            # [NOTE] [Editor] Checked after wait() (unlike before) — a
+            # non-zero exit means ffmpeg failed partway through encoding,
+            # so output_path is likely missing or truncated even though
+            # the process itself didn't raise.
+            if self.proc.returncode not in (0, None):
+                raise RuntimeError(
+                    f"FFmpeg exited with code {self.proc.returncode} while writing {output_path}"
+                )
             return output_path
 
         if self._fallback_writer:

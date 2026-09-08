@@ -25,7 +25,7 @@ from services.logger.logger import setup_logger
 
 logger = setup_logger("LocalPanGenerator")
 
-# Loaded once and reused across every waypoint in a batch, instead of a fresh
+# [HACK] [Animation] Loaded once and reused across every waypoint in a batch, instead of a fresh
 # from_pretrained() + del per call. Reloading per waypoint (the original
 # design) turned out to both balloon system RAM over a run — accelerate's
 # enable_model_cpu_offload() hooks leave reference cycles that `del` +
@@ -139,6 +139,11 @@ def _outpaint(raw: Image.Image) -> Image.Image:
     canvas_w = fit_w + ext_l + ext_r
     canvas_h = fit_h
 
+    # [NOTE] [Animation] Mirror-seeds the outpaint canvas by flipping strips
+    # taken from the image's own left/right edges outward — gives SDXL a
+    # coherent, non-blank starting point to inpaint from instead of a flat
+    # fill, which the model otherwise tends to render as a wall (see
+    # NEGATIVE_PROMPT above).
     fitted_np = np.array(fitted)
     parts = []
     if ext_l > 0:
@@ -169,7 +174,7 @@ def _outpaint(raw: Image.Image) -> Image.Image:
         strength=STRENGTH,
     ).images[0]
 
-    # Frees this generation's activations/latents (not the persistent pipe
+    # [NOTE] [Animation] Frees this generation's activations/latents (not the persistent pipe
     # itself) so peak VRAM doesn't creep up across waypoints.
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
@@ -199,7 +204,7 @@ def _crop_rect(cx: float, cy: float, half_w: float, half_h: float, sw: int, sh: 
     return int(cx - half_w), int(cy - half_h), int(cx + half_w), int(cy + half_h)
 
 
-# Maps the job config's "camera_pans" hint strings (currently used as raw
+# [NOTE] [Animation] Maps the job config's "camera_pans" hint strings (currently used as raw
 # ComfyUI prompt text, e.g. "panright") to (pan_dx_sign, zoom_start, zoom_end).
 # zoom<1 = zoomed in; zoom=1 = the widened canvas's own full "contain" fit.
 _CAMERA_PAN_PRESETS = {
@@ -232,7 +237,10 @@ def _render_pan(image: Image.Image, output_path: str, duration_sec: float, camer
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     writer = cv2.VideoWriter(raw_path, fourcc, FPS, (OUT_W, OUT_H))
 
-    pan_budget = (sw - fit_w * min(zoom_start, zoom_end)) * 0.4  # how far center can drift
+    # [NOTE] [Animation] How far the crop center can drift across the pan —
+    # scaled by the tightest zoom level so the crop rect never runs past the
+    # source image edges regardless of pan direction.
+    pan_budget = (sw - fit_w * min(zoom_start, zoom_end)) * 0.4
     cx0, cy0 = sw / 2, sh / 2
 
     for i in range(num_frames):

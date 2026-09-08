@@ -21,7 +21,7 @@ class _OverviewPacingMixin:
         if not points or not point_modes:
             return []
         if len(points) != len(point_modes):
-            # Resample by proportional index rather than bailing out
+            # [HACK] [Animation] Resample by proportional index rather than bailing out
             # entirely — a length mismatch here (points resampled/trimmed
             # somewhere upstream of this call) used to silently disable
             # per-mode line coloring for the WHOLE route, which read as
@@ -66,7 +66,7 @@ class _OverviewPacingMixin:
         Returns (smooth_path, mode_breakpoints, cum_smooth_dist,
         total_smooth_dist) — the latter two are None/1.0 when there's no
         mode data to weight by."""
-        # Light dedup only — drop literal near-duplicate points so the spline
+        # [NOTE] [Animation] Light dedup only — drop literal near-duplicate points so the spline
         # fit doesn't choke on zero-length segments. We deliberately do NOT
         # thin more aggressively than this by raw distance: a tight turn has
         # its points close together too, and stripping those is exactly what
@@ -90,7 +90,7 @@ class _OverviewPacingMixin:
         mode_breakpoints = self._build_mode_breakpoints(points, point_modes) if point_modes else []
 
         if mode_breakpoints:
-            # Faster real-world modes (ferry, car) should visually cover
+            # [NOTE] [Animation] Faster real-world modes (ferry, car) should visually cover
             # ground quicker on screen than a walking leg of the same
             # length — sample the path densely first, then pick out
             # `num_frames` of those samples spaced by "speed-weighted"

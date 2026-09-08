@@ -49,7 +49,7 @@ class _OverviewAnimationMixin:
         mode_history = []
         prev_cx, prev_cy = None, None
         smoothed_angle = self._initial_heading(smooth_path)
-        # path_history index where the most recently reached waypoint sits —
+        # [NOTE] [Animation] path_history index where the most recently reached waypoint sits —
         # marks the boundary between "earlier, completed legs" (always kept
         # visible) and "the current leg" (the only part hidden while its
         # arrival popup is showing).
@@ -87,7 +87,7 @@ class _OverviewAnimationMixin:
             if not is_video:
                 self.graphics.draw_path(frame, path_history, mode_history)
 
-            # Detected here, BEFORE the pin/popup drawing below, so a
+            # [NOTE] [Animation] Detected here, BEFORE the pin/popup drawing below, so a
             # waypoint's pin and its popup card appear on the very same
             # frame it's reached — detecting it after drawing (as this used
             # to) left the just-arrived pin (and, for a frozen waypoint,
@@ -96,7 +96,7 @@ class _OverviewAnimationMixin:
             cx, cy = path_history[-1]
             px, py = path_history[-2] if len(path_history) > 1 else path_history[-1]
 
-            # stop_popup (the destination "E" pin) is deliberately excluded
+            # [NOTE] [Animation] stop_popup (the destination "E" pin) is deliberately excluded
             # from the proximity-trigger loop below — its arrival is
             # handled separately, by _render_recap_and_summary /
             # _render_ending_highlight — but the per-frame pin-drawing
@@ -128,7 +128,7 @@ class _OverviewAnimationMixin:
                         triggered_popup = popup
                         break
 
-            # "Point to point" snapshot for hide_route_on_popup — every
+            # [NOTE] [Animation] "Point to point" snapshot for hide_route_on_popup — every
             # earlier, already-completed leg stays drawn; only the CURRENT
             # leg (since the last waypoint reached) is left off, so arriving
             # at a stop doesn't erase the whole route travelled so far.
@@ -157,7 +157,7 @@ class _OverviewAnimationMixin:
                     if wp["data"].get("triggered") or wp["index"] == 0:
                         self._draw_pin(frame, wp, len(points))
 
-            # Only the very last iteration's pre-popup frame is ever read
+            # [NOTE] [Animation] Only the very last iteration's pre-popup frame is ever read
             # (see the recap's use of it, below) — smooth_path's length is
             # fixed and known up front (no early-exit branch in this loop),
             # so skip the per-frame copy everywhere else instead of paying
@@ -166,7 +166,8 @@ class _OverviewAnimationMixin:
             if stop_popup and current_frame == len(smooth_path) - 1:
                 pre_popup_frame = frame.copy()
             frame, baked_popups = self._composite_baked_popups(
-                frame, baked_popups, w, h, route_obstacle_arr
+                frame, baked_popups, w, h, route_obstacle_arr,
+                active_popups=active_popups, total_points=len(points),
             )
 
             if frame_no_route is None:
@@ -198,7 +199,7 @@ class _OverviewAnimationMixin:
                 else:
                     popup_base_frame = frame_no_route if self.hide_route_on_popup else frame
 
-                # Fullscreen popups are an inherent full-screen takeover —
+                # [NOTE] [Animation] Fullscreen popups are an inherent full-screen takeover —
                 # they always freeze regardless of the waypoint's
                 # freeze_frame setting, since "flow through" wouldn't mean
                 # anything for a shot that covers the whole frame. Every
@@ -215,7 +216,7 @@ class _OverviewAnimationMixin:
                 )
 
                 if not freeze_frame_on:
-                    # Flow-through: the traveler keeps moving — no held
+                    # [NOTE] [Animation] Flow-through: the traveler keeps moving — no held
                     # frame, no arrival pause. The popup card rides along as
                     # a HUD overlay beside the waypoint's own pin (with a
                     # leader line back to it, drawn in render_popup_box) for

@@ -1,11 +1,12 @@
 """The per-residential-leg (waypoint chunk) video render entry point."""
 
 import math
-from typing import Dict, List
+from typing import Dict, List, Optional, Tuple
 
 import cv2
 import numpy as np
 
+from services.logger.progress import tracker
 from services.mapfetcher.mapfetcher import MapFetcher
 from services.mapfetcher.mapgeometry import RouteGeometryProcessor
 from services.vdoprocessing.vdoexporter import VideoExporter
@@ -19,6 +20,55 @@ class _WaypointRenderMixin:
         clip_hold_sec = self.config.get("clip_summary_hold", 2.0)
         job_waypoints = self._get_job_waypoints()
 
+        # 1-based visit order per position (skipping stop-by entries,
+        # matching overview.py's own numbering), keyed by job_config's own
+        # "id" field where present — the reliable way to find a leg
+        # endpoint's real position in the WHOLE route. Label text alone is
+        # NOT reliable for this: the same place name can legitimately
+        # appear at several different waypoints in one project (e.g. a
+        # route that passes through "大阪市" multiple times), so matching
+        # by label would collapse them all onto whichever one happens to
+        # come first in job_waypoints.
+        _wp_by_id: Dict[str, Tuple[int, int, bool]] = {}
+        _order = 0
+        for _pos, _jw in enumerate(job_waypoints):
+            # job_config.json's own key is "isStopBy" (camelCase, as saved
+            # by the frontend) — "is_stopby" only exists on the NORMALIZED
+            # dicts built downstream (see render_step.py), never on these
+            # raw job_waypoints entries.
+            _is_stopby = bool(_jw.get("isStopBy", False))
+            if not _is_stopby:
+                _order += 1
+            _wp_id = _jw.get("id")
+            if _wp_id:
+                _wp_by_id[_wp_id] = (_pos, _order, _is_stopby)
+
+        def _resolve_global_waypoint(waypoint_id: Optional[str], label: str):
+            """Finds this leg endpoint's real position in the whole
+            route's waypoint list and its 1-based visit order — by exact
+            "id" match when available (see _wp_by_id above), falling back
+            to a fuzzy label match (ambiguous when a label repeats, but
+            better than nothing) for older data saved before waypoints
+            carried an id. Needed because a leg's OWN first/last point
+            (index 0 / len-1 within just that leg) is not the trip's
+            actual start/end — using those local indices directly would
+            mislabel every leg's arrival pin "E" (and every leg's
+            departure pin "S"), not just the true first and last legs of
+            the whole route."""
+            if waypoint_id and waypoint_id in _wp_by_id:
+                return _wp_by_id[waypoint_id]
+            if not label:
+                return None
+            order = 0
+            for pos, jw in enumerate(job_waypoints):
+                is_stopby = bool(jw.get("isStopBy", False))
+                if not is_stopby:
+                    order += 1
+                jw_lbl = str(jw.get("label", ""))
+                if jw_lbl and (jw_lbl in label or label in jw_lbl):
+                    return pos, order, is_stopby
+            return None
+
         for i, res_data in enumerate(res_sequence):
             bg_path = res_data["img_path"]
 
@@ -29,6 +79,8 @@ class _WaypointRenderMixin:
                 cap = cv2.VideoCapture(str(bg_path))
                 ret, current_bg = cap.read()
                 if not ret:
+                    # [NOTE] [IO] Release the handle before skipping this leg — otherwise it leaks for the rest of the render.
+                    cap.release()
                     continue
             else:
                 current_bg = self.graphics.read_image_safe(str(bg_path))
@@ -76,6 +128,7 @@ class _WaypointRenderMixin:
                     seg_real_duration = total_duration
             pauses = res_data.get("pauses", [])
 
+            # [NOTE] [Animation] Floors total_frames at 10 so a very short/near-zero-duration leg still produces a playable clip instead of 0-1 frames.
             total_frames = max(10, int(total_duration * fps))
             is_paused_per_frame = [
                 (
@@ -117,6 +170,14 @@ class _WaypointRenderMixin:
                 for j in range(len(res_points))
                 if RouteGeometryProcessor.is_real_label(res_labels[j])
             ]
+            leg_label = (
+                res_named[-1][2]
+                if res_named
+                else (res_labels[-1] if res_labels else f"Leg {i + 1}")
+            )
+            tracker.show(
+                f"Rendering waypoint leg {i + 1}/{len(res_sequence)}: {leg_label}"
+            )
             active_res_popups = [
                 {
                     "x": res_points[j][0],
@@ -161,6 +222,50 @@ class _WaypointRenderMixin:
 
             video = VideoExporter(str(self.out_dir / chunk_filename), w, h, fps)
 
+            # This leg's departure/arrival waypoints, resolved to their
+            # REAL position in the whole route (see _resolve_global_waypoint
+            # above) — computed once and reused by both the intro beat
+            # below AND the main animation loop's own start/end markers,
+            # so a leg passing through a repeated place name (e.g. a route
+            # that visits "大阪市" several times) shows the same correct
+            # S/E/stop-by/number label in both places, instead of the
+            # intro getting it right and the animated drive-through
+            # falling back to a hardcoded "S"/"E" regardless of whether
+            # this leg is actually the trip's true first/last one.
+            start_label = res_labels[0] if res_labels else ""
+            end_label = res_labels[-1] if res_labels else ""
+            start_match = _resolve_global_waypoint(
+                res_data.get("start_waypoint_id"), start_label
+            )
+            end_match = _resolve_global_waypoint(
+                res_data.get("end_waypoint_id"), end_label
+            )
+            total_wp = len(job_waypoints)
+
+            def _leg_pin(x, y, label, data, match):
+                # A resolved match carries this waypoint's real position
+                # in the WHOLE route, so _draw_pin's / _pin_label_and_color's
+                # S/E/stop-by/number precedence reflects the trip as a
+                # whole — not just this one leg's own endpoints.
+                # Unresolved (shouldn't normally happen — these labels
+                # come from the same job_waypoints in the first place)
+                # falls back to a plain number-less pin rather than
+                # risking a wrong S/E/number label.
+                index, order, is_stopby = match if match else (-1, None, False)
+                return {
+                    "x": x, "y": y, "index": index, "order": order,
+                    "label": label, "data": {**(data or {}), "is_stopby": is_stopby},
+                }
+
+            start_wp = _leg_pin(
+                res_points[0][0], res_points[0][1], start_label, res_popups[0], start_match
+            )
+            end_wp = _leg_pin(
+                res_points[-1][0], res_points[-1][1], end_label, res_popups[-1], end_match
+            )
+            start_pin_label, start_pin_color = self._pin_label_and_color(start_wp, total_wp)
+            end_pin_label, end_pin_color = self._pin_label_and_color(end_wp, total_wp)
+
             # Intro beat: show the departure and arrival pins (each with a
             # leader-lined popup card, when they have a photo) together on
             # the still, zoomed-in leg map before the route animates —
@@ -169,29 +274,32 @@ class _WaypointRenderMixin:
             waypoint_intro_freeze = float(self.config.get("waypoint_intro_freeze", 2.0))
             if waypoint_intro_freeze > 0 and len(res_points) >= 2:
                 intro_frame = current_bg.copy()
-                end_idx = len(res_points) - 1
-                start_wp = {
-                    "x": res_points[0][0],
-                    "y": res_points[0][1],
-                    "index": 0,
-                    "label": res_labels[0] if res_labels else "",
-                    "data": res_popups[0] or {},
-                }
-                end_wp = {
-                    "x": res_points[-1][0],
-                    "y": res_points[-1][1],
-                    "index": end_idx,
-                    "label": res_labels[-1] if res_labels else "",
-                    "data": res_popups[-1] or {},
-                }
-                self._draw_pin(intro_frame, start_wp, len(res_points))
-                self._draw_pin(intro_frame, end_wp, len(res_points))
-                for wp in (start_wp, end_wp):
+                popup_cards = []
+                for wp, wp_color in ((start_wp, start_pin_color), (end_wp, end_pin_color)):
                     if wp["data"].get("popup_image"):
                         popup_card = dict(wp)
                         popup_card["hud_corner"] = None
                         popup_card["draw_leader_line"] = True
-                        intro_frame = self.graphics.render_popup_box(intro_frame, popup_card)
+                        # Card border matches this waypoint's own pin
+                        # color (S=green, E=red, stop-by=brown, etc).
+                        popup_card["border_color"] = wp_color or self.graphics.marker_color
+                        popup_cards.append(popup_card)
+
+                # Line, then pin, then card — in that order — so each
+                # leader line sits BEHIND both its own pin and its card,
+                # instead of drawing the pins first and letting the lines
+                # (drawn afterward, as part of the card) land on top of
+                # them.
+                for popup_card in popup_cards:
+                    intro_frame = self.graphics.render_popup_box(
+                        intro_frame, popup_card, line_only=True
+                    )
+                self._draw_pin(intro_frame, start_wp, total_wp)
+                self._draw_pin(intro_frame, end_wp, total_wp)
+                for popup_card in popup_cards:
+                    intro_frame = self.graphics.render_popup_box(
+                        intro_frame, popup_card, skip_line=True
+                    )
                 for _ in range(int(waypoint_intro_freeze * fps)):
                     video.write(intro_frame)
                 self.last_frame = intro_frame
@@ -255,19 +363,23 @@ class _WaypointRenderMixin:
                         frame, cx, cy, current_frame, smoothed_angle, mode=res_mode
                     )
                     if res_points:
+                        # Same resolved label/color as the intro beat
+                        # above (start_pin_label/end_pin_label) — this
+                        # leg's own departure/arrival aren't necessarily
+                        # the trip's true start/end.
                         self.graphics.draw_marker(
                             frame,
                             int(res_points[0][0]),
                             int(res_points[0][1]),
-                            number="S",
-                            color=self._START_PIN_COLOR,
+                            number=start_pin_label,
+                            color=start_pin_color,
                         )
                         self.graphics.draw_marker(
                             frame,
                             int(res_points[-1][0]),
                             int(res_points[-1][1]),
-                            number="E",
-                            color=self._END_PIN_COLOR,
+                            number=end_pin_label,
+                            color=end_pin_color,
                         )
 
                 for popup in active_res_popups:
@@ -407,4 +519,5 @@ class _WaypointRenderMixin:
             if cap:
                 cap.release()
 
+        tracker.clear()
         return output_paths

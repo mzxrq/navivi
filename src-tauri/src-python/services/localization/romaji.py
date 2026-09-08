@@ -6,8 +6,11 @@ using the pykakasi library. It includes lazy loading of the converter and error 
 ---------------------------------------------------------------------------
 """
 
-from services.logger.logger import setup_logger
+import json
+import re
 from pathlib import Path
+
+from services.logger.logger import setup_logger
 
 # Logging configuration
 logger = setup_logger("RomajiConverter")
@@ -35,6 +38,7 @@ _DEFAULT_GLOSSARY_PATH = (
 # [Core] RomajiConverter Class
 class RomajiConverter:
     _kks = None
+    _glossary = None
 
     @classmethod
     def load_glossary(cls, glossary_path: Path = _DEFAULT_GLOSSARY_PATH):
@@ -71,6 +75,8 @@ class RomajiConverter:
             processed_text = text
             placeholder_map = {}
 
+            # [NOTE] [Translation] Glossary terms are swapped for placeholder tokens before pykakasi runs,
+            # since pykakasi would otherwise transliterate proper nouns phonetically instead of using the curated romaji/en value.
             # Pre-process: Swap glossary terms with placeholders
             for i, (jp_name, raw_value) in enumerate(glossary.items()):
                 if jp_name in processed_text:
@@ -100,6 +106,8 @@ class RomajiConverter:
                 # Force a space before and after the protected word
                 return f" {replacement} "
 
+            # [HACK] [Translation] Pattern tolerates pykakasi inserting stray spaces inside the
+            # "__PLACE_i__" placeholder token (e.g. "p l a c e") when it transliterates it character-by-character.
             pattern = re.compile(
                 r"_*\s*p\s*l\s*a\s*c\s*e\s*_*\s*(\d+)\s*_*", re.IGNORECASE
             )

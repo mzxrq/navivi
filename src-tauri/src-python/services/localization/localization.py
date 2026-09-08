@@ -1,5 +1,4 @@
 import re
-import sys
 from typing import Any
 from services.localization.romaji import RomajiConverter
 from services.config.job_config import JobConfigManager
@@ -39,6 +38,8 @@ def build_display_text(original_jp: str, target_lang: Any) -> str:
     if normalized_target in ("romaji", "roman", "ja-romaji", "hepburn"):
         return RomajiConverter.to_romaji(original_jp)
 
+    # [TODO] [Translation] services/translator.py doesn't exist yet — only the "romaji" target is
+    # actually supported; any other target_lang raises until a real translator module is added.
     try:
         from services.translator import ScriptTranslator
     except ModuleNotFoundError:
@@ -51,8 +52,7 @@ def build_display_text(original_jp: str, target_lang: Any) -> str:
 
     if ScriptTranslator.last_call_failed:
         logger.error(
-            f"Translation to '{target_lang}' FAILED — falling back to Romaji for: {original_jp[:30]!r}...",
-            file=sys.stderr,
+            f"Translation to '{target_lang}' FAILED — falling back to Romaji for: {original_jp[:30]!r}..."
         )
         return RomajiConverter.to_romaji(original_jp)
     return translated

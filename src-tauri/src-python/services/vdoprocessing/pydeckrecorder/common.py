@@ -11,13 +11,14 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-# Walk up from this file until we hit the `src-python/` dir (this file
-# lives 3 levels under it: src-python/services/vdoprocessing/pydeckrecorder/).
-# A fixed `.parent.parent` here previously landed one level short, on
-# `src-python/services/` instead -- which silently broke both the '/assets/'
-# 3D model URLs (recorder.py serves them from project_root/assets) and the
-# .env lookup below (MAPBOX_API_KEY never loaded, models 404'd as a result).
-# Walking up by name instead of a fixed depth survives future re-nesting.
+# [NOTE] [IO] Walk up from this file until we hit the `src-python/` dir
+# (this file lives 3 levels under it:
+# src-python/services/vdoprocessing/pydeckrecorder/). A fixed `.parent.parent`
+# here previously landed one level short, on `src-python/services/` instead
+# -- which silently broke both the '/assets/' 3D model URLs (recorder.py
+# serves them from project_root/assets) and the .env lookup below
+# (MAPBOX_API_KEY never loaded, models 404'd as a result). Walking up by
+# name instead of a fixed depth survives future re-nesting.
 project_root = Path(__file__).resolve().parent
 while project_root.name != "src-python" and project_root.parent != project_root:
     project_root = project_root.parent

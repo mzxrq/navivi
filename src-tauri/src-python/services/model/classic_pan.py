@@ -29,6 +29,7 @@ def ease_in_out(t: float) -> float:
     return 0.5 - 0.5 * np.cos(np.pi * t)
 
 
+# [Core] [Animation] Entry point: crops a sliding window from the source photo per-frame and encodes it to video
 def main():
     img = Image.open(SRC_IMAGE).convert("RGB")
     src = np.array(img)  # H, W, 3 (RGB)
@@ -37,7 +38,7 @@ def main():
     out_aspect = OUT_W / OUT_H
     ZOOM = 0.6  # zoomed in a bit to leave real travel room for the pan
 
-    # "Contain" fit: the largest window with out_aspect that fits inside the source.
+    # [NOTE] [Animation] "Contain" fit: the largest window with out_aspect that fits inside the source.
     if sw / sh > out_aspect:
         fit_h = sh
         fit_w = int(fit_h * out_aspect)
@@ -53,7 +54,7 @@ def main():
 
     max_x = sw - win_w   # how far the window can travel horizontally
     max_y = sh - win_h   # how far the window can travel vertically
-    # Pan along whichever axis actually has room; the other stays at
+    # [NOTE] [Animation] Pan along whichever axis actually has room; the other stays at
     # CROSS_AXIS_BIAS, unless PAN_AXIS_OVERRIDE forces a specific axis.
     if PAN_AXIS_OVERRIDE in ("x", "y"):
         pan_axis = PAN_AXIS_OVERRIDE

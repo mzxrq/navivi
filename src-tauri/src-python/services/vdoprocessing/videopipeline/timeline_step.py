@@ -7,9 +7,7 @@ from typing import Optional
 
 from .helpers import logger
 
-# Waypoint index embedded in attraction clip filenames, e.g.
-# "04_attraction_03_Kabutoyama.mp4" -> waypoint index 3 (matches attraction_step.py's
-# `f"04_attraction_{idx:02d}_{safe_label}.mp4"`).
+# [NOTE] [Core] Waypoint index embedded in attraction clip filenames, e.g. "04_attraction_03_Kabutoyama.mp4" -> waypoint index 3 (matches attraction_step.py's `f"04_attraction_{idx:02d}_{safe_label}.mp4"`).
 _ATTRACTION_RE = re.compile(r"04_attraction_(\d+)_")
 
 
@@ -17,6 +15,7 @@ def _is_residential_leg(filename: str) -> bool:
     """Same membership test render_step.py's audio-muxing block uses, so the
     audio_path recorded here always matches whatever audio is actually
     already baked into that clip."""
+    # [HACK] [Core] Filename substring matching, not a structured field — any renamed/relabeled clip that loses "02_"/"leg"/"waypoint" from its name silently falls out of audio pairing.
     return "02_" in filename or "leg" in filename.lower() or "waypoint" in filename.lower()
 
 
@@ -50,10 +49,7 @@ def build_timeline(
     subtitles_dir = Path(project_dir) / "subtitles"
 
     num_route_videos = len(video_paths)
-    # Sequential counter mirroring render_route_video's own audio-mux loop
-    # (Step 4), which walks video_paths in order and advances one audio
-    # index per residential-leg clip encountered — not the same as its
-    # position in the array.
+    # [NOTE] [Core] Sequential counter mirroring render_route_video's own audio-mux loop (Step 4), which walks video_paths in order and advances one audio index per residential-leg clip encountered — not the same as its position in the array.
     leg_audio_idx = 0
 
     tracks = []
@@ -82,6 +78,7 @@ def build_timeline(
                     )
                 leg_audio_idx += 1
         else:
+            # [NOTE] [Core] Attraction clips index audio/subtitles directly by the waypoint index parsed from the filename (not a running counter like the residential-leg branch), since attraction videos aren't necessarily produced in waypoint order.
             match = _ATTRACTION_RE.search(source_name)
             if match:
                 wp_idx = int(match.group(1))

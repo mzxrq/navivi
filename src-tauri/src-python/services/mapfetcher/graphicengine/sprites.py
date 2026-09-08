@@ -16,7 +16,9 @@ class _SpriteMixin:
         rounded, soft-shadowed card (matching the popup cards' look)
         instead of a plain hard-edged rectangle."""
         font_size = max(13, int(self.font_size * 0.6))
-        font = self._load_font(self.FONT_CANDIDATES_REGULAR, font_size)
+        # Bold, not regular — at this small a size on a busy map tile,
+        # Noto Sans's regular weight reads as too thin/hard to make out.
+        font = self._load_font(self.FONT_CANDIDATES_BOLD, font_size)
         measure_draw = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
         bbox = measure_draw.textbbox((0, 0), label, font=font)
         tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
@@ -64,6 +66,7 @@ class _SpriteMixin:
         x: int,
         y: int,
     ):
+        # [NOTE] [Animation] Clips the sprite rect to the frame bounds first so a sprite anchored near an edge doesn't index out of range below.
         h, w = frame.shape[:2]
         sh, sw = sprite_bgra.shape[:2]
         ox, oy = x - anchor[0], y - anchor[1]
@@ -111,6 +114,7 @@ class _SpriteMixin:
     def _get_walking_sprite(self, frame_count: int) -> np.ndarray:
         """Builds (and caches per walk-cycle phase) a simple stick-figure
         walker with alternating leg spread, upright regardless of heading."""
+        # [NOTE] [Animation] Caches by walk-cycle phase (0/1) rather than per-call so the same two poses are reused across every frame/marker.
         cache = self._mode_icon_cache()
         phase = (frame_count // 6) % 2
         key = f"walking_{phase}"
@@ -196,6 +200,7 @@ class _SpriteMixin:
                 dtype=np.int32,
             )
 
+        # [NOTE] [Animation] Draws a white halo by scaling the same body polygon up 22% from its own centroid, then draws the real (smaller) colored body on top — cheaper than a stroke/outline pass and keeps the halo's shape identical to the body's.
         outline = ((body - [cx, cy]) * 1.22 + [cx, cy]).astype(np.int32)
         cv2.fillPoly(canvas, [outline], white, cv2.LINE_AA)
         cv2.fillPoly(canvas, [body], color, cv2.LINE_AA)
@@ -276,6 +281,7 @@ class _SpriteMixin:
             self.blit_sprite(frame, sprite, anchor, cx, cy)
             return
 
+        # [NOTE] [Animation] Any mode not walking/airplane/ferry/car/driving falls back to a plain colored dot with a heading arrow instead of a dedicated sprite.
         color = self.MODE_COLORS.get(mode, self.marker_color)
         radius = int(self.marker_radius)
 
