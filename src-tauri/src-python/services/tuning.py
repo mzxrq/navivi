@@ -36,10 +36,17 @@ ANIMATION_MODE_SPEED_KMH: Dict[str, float] = {
 REFERENCE_SPEED_KMH = 3.0
 
 # --- Pin / line colors (BGR) ------------------------------------------------
-START_PIN_COLOR: Tuple[int, int, int] = (60, 180, 60)  # green
-END_PIN_COLOR: Tuple[int, int, int] = (0, 0, 220)  # red
-DEFAULT_MARKER_COLOR: Tuple[int, int, int] = (235, 150, 60)  # blue — every pin except S/E
+# Matched to the frontend's NaviPin.tsx (src/components/view/mapeditor/
+# MapLayers/NaviPin.tsx) so backend-rendered map pins are the same colors as
+# the ones shown live in the map editor — each is that component's hex fill
+# converted to BGR.
+START_PIN_COLOR: Tuple[int, int, int] = (3, 136, 19)  # #038813 green
+END_PIN_COLOR: Tuple[int, int, int] = (81, 15, 217)  # #d90f51 red/pink
+DRAWN_PIN_COLOR: Tuple[int, int, int] = (12, 121, 255)  # #ff790c orange — drawn-route waypoints
+STOPBY_PIN_COLOR: Tuple[int, int, int] = (28, 38, 51)  # #33261c dark brown — stop-by waypoints
+DEFAULT_MARKER_COLOR: Tuple[int, int, int] = (245, 135, 66)  # #4287f5 blue — every other numbered pin
 DEFAULT_ARRIVED_MARKER_COLOR: Tuple[int, int, int] = (200, 110, 30)  # deeper blue once visited
+PIN_NUMBER_TEXT_COLOR: Tuple[int, int, int] = (17, 17, 17)  # #111 — NaviPin's number/letter fill
 # Per-travel-mode ROUTE LINE colors. Modes without an entry (e.g. walking)
 # fall back to the renderer's own line_color.
 MODE_LINE_COLORS: Dict[str, Tuple[int, int, int]] = {

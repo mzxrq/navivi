@@ -131,6 +131,8 @@ class _SpatialRendererBase:
     # either leaf mixin.
     _START_PIN_COLOR = tuning.START_PIN_COLOR
     _END_PIN_COLOR = tuning.END_PIN_COLOR
+    _DRAWN_PIN_COLOR = tuning.DRAWN_PIN_COLOR
+    _STOPBY_PIN_COLOR = tuning.STOPBY_PIN_COLOR
 
     @staticmethod
     def _initial_heading(path: List) -> float:

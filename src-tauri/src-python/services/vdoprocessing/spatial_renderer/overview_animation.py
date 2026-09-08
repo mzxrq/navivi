@@ -143,9 +143,9 @@ class _OverviewAnimationMixin:
                     path_history[: last_leg_boundary + 1],
                     mode_history[: last_leg_boundary + 1],
                 )
-                for order, wp in enumerate(active_popups, start=1):
+                for wp in active_popups:
                     if wp["data"].get("triggered") or wp["index"] == 0:
-                        self._draw_pin(frame_no_route, wp, order, len(points))
+                        self._draw_pin(frame_no_route, wp, len(points))
 
             if not is_video:
                 # Every waypoint is shown once up front on the intro frame
@@ -153,9 +153,9 @@ class _OverviewAnimationMixin:
                 # only reappears once the traveler actually reaches it —
                 # not-yet-visited stops stay hidden instead of cluttering
                 # the map with numbers for places not reached yet.
-                for order, wp in enumerate(active_popups, start=1):
+                for wp in active_popups:
                     if wp["data"].get("triggered") or wp["index"] == 0:
-                        self._draw_pin(frame, wp, order, len(points))
+                        self._draw_pin(frame, wp, len(points))
 
             # Only the very last iteration's pre-popup frame is ever read
             # (see the recap's use of it, below) — smooth_path's length is

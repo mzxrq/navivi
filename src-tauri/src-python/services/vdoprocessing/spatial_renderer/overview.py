@@ -99,8 +99,16 @@ class _OverviewRenderMixin:
             if popups and popups[i] is not None
         ]
         # 1-based visit order, used to number each waypoint's pin and to
-        # sort concurrently-visible popups in _layout_beside_popups.
-        for order, ap in enumerate(active_popups, start=1):
+        # sort concurrently-visible popups in _layout_beside_popups. Stop-by
+        # waypoints are skipped from the count (they show a "・" dot instead
+        # of a number — see pins.py's _draw_pin) — matches the map editor's
+        # own MapArea.tsx normalIndex, which only increments for waypoints
+        # that aren't isStopBy.
+        order = 0
+        for ap in active_popups:
+            if ap["data"].get("is_stopby"):
+                continue
+            order += 1
             ap["order"] = order
         self._declutter_pins(active_popups)
 
@@ -212,8 +220,8 @@ class _OverviewRenderMixin:
                 # Show every waypoint marker up front on the intro frame,
                 # not just the start point, so the whole route's stops are
                 # visible before the animation begins.
-                for order, wp in enumerate(active_popups, start=1):
-                    self._draw_pin(intro_frame, wp, order, len(points))
+                for wp in active_popups:
+                    self._draw_pin(intro_frame, wp, len(points))
 
             # The intro always opens as a plain pip card, regardless of
             # this waypoint's own image_display setting — "fullscreen"
