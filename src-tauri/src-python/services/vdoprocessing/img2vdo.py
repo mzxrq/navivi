@@ -146,9 +146,14 @@ class AttractionVideoGenerator:
                 local_image_path, type(exc).__name__, exc,
             )
 
-        from services.vdoprocessing.local_pan_generator import generate_local_clip
-
         try:
+            # [FIXME] [Animation] Import moved inside this try — it previously sat
+            # above it, so a missing torch/diffusers/transformers install (the local
+            # fallback's own dependencies, not bundled by default) raised
+            # ModuleNotFoundError uncaught, crashing the whole waypoint instead of
+            # the graceful None this function's docstring promises.
+            from services.vdoprocessing.local_pan_generator import generate_local_clip
+
             generate_local_clip(
                 image_path=local_image_path,
                 output_path=str(save_path),
@@ -156,6 +161,13 @@ class AttractionVideoGenerator:
                 camera_pan_hint=prompt_text,
             )
             return str(save_path)
+        except ModuleNotFoundError as exc:
+            logger.error(
+                "Local pan/zoom fallback unavailable for %s — its dependencies "
+                "(torch/diffusers/transformers) aren't installed: %s",
+                local_image_path, exc,
+            )
+            return None
         except Exception as exc:
             logger.error("Local clip generation failed for %s: %s", local_image_path, exc)
             return None
@@ -245,9 +257,9 @@ class AttractionVideoGenerator:
                 exc,
             )
 
-        # Burned in last, after upscaling, so the label text itself is
-        # crisp at the final resolution instead of being scaled with the rest
-        # of the frame. A label failure shouldn't sink an otherwise-good clip.
+        # [NOTE] [Animation] Burned in last, after upscaling, so the label text itself
+        # is crisp at the final resolution instead of being scaled with the rest of the
+        # frame. A label failure shouldn't sink an otherwise-good clip.
         if place_label:
             try:
                 labeled_tmp = str(
