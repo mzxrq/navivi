@@ -86,6 +86,7 @@ def render_attraction_videos(
             target_audio_duration=target_audio_duration,
             audio_path=audio_path,
             output_filename=output_filename,
+            place_label=place_label,
         )
 
         if result_path:

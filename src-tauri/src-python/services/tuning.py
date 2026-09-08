@@ -188,3 +188,24 @@ OUTRO_MAX_CARDS = 20
 OUTRO_GRID_COLS_MAX = 5
 OUTRO_CARD_MARGIN = 18
 OUTRO_CARD_ASPECT = 4 / 3  # thumbnail width:height
+
+# --- TTS narration (Irodori-TTS) --------------------------------------------
+# Fallback defaults for services.tts.ttsengine.TTSConfig — job_config.json
+# can still override per-project via settings.tts, same pattern as
+# settings.mode_speeds_kmh above.
+TTS_MODEL = "irodori-tts"
+TTS_VOICE = "string"  # Irodori's only bundled voice preset as of writing
+# [Config] Playback speed multiplier sent to the Irodori TTS server; 1.0 = the
+# model's natural pace. The server itself clamps to [0.25, 4.0], but TTSConfig
+# validates this too so a bad value fails fast with a readable message
+# instead of a 422 from the API after a network round-trip.
+TTS_SPEED = 1.0
+TTS_MIN_SPEED = 0.25
+TTS_MAX_SPEED = 4.0
+TTS_RESPONSE_FORMAT = None  # None = let the server use its own default (wav)
+
+# --- Attraction clip place-name label (top-left, burned for the whole clip) -
+# See services/vdoprocessing/img2vdo.py's AttractionVideoGenerator._fit_and_finalize.
+ATTRACTION_LABEL_FONT_SIZE = 26
+ATTRACTION_LABEL_OUTLINE = 2.5
+ATTRACTION_LABEL_MARGIN = 20

@@ -329,6 +329,7 @@ def test_attraction_video(
         target_audio_duration=audio_duration,
         audio_path=audio_path,
         output_filename=output_filename,
+        place_label=label,
     )
     if not result_path:
         # A waypoint with multiple popup images doesn't auto-combine
@@ -429,6 +430,7 @@ def test_attraction_finalize(
         clip_paths=manifest.get("clip_paths", []),
         target_audio_duration=manifest.get("target_audio_duration", 0.0),
         output_filename=manifest.get("output_filename", output_filename),
+        place_label=manifest.get("place_label", label),
     )
     if not result_path:
         raise RuntimeError(f"Finalizing attraction video failed for waypoint {waypoint_index}")

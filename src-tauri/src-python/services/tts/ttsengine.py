@@ -13,6 +13,7 @@ import httpx
 import sys
 import time
 import uuid
+from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import urlsplit
 import wave
@@ -23,11 +24,54 @@ import shutil
 import logging
 from typing import Final, Optional, Tuple, List, Dict, Any
 
+from services import tuning
 from services.localization.subtitle import SubtitleStyle
 from services.logger.logger import setup_logger
 
 # Logging configuration
 logger = setup_logger("TTSEngine")
+
+
+# [Config] TTSConfig: every knob the Irodori TTS request payload accepts, with tuning.py defaults
+@dataclass(frozen=True)
+class TTSConfig:
+    """Narration-synthesis parameters sent to the Irodori TTS server.
+
+    Covers the request's named fields (model/voice/speed/response_format)
+    directly; anything beyond that — the server's ~30 advanced sampling
+    knobs (cfg_scale, seed, chunking, ...) — goes through `extra_options`
+    and is forwarded verbatim as the request's `irodori` sub-object, so this
+    class doesn't have to mirror each one by hand to stay "fully configurable".
+    Built once per client/call (frozen, validated up front) rather than
+    re-validated on every request.
+    """
+
+    model: str = tuning.TTS_MODEL
+    voice: str = tuning.TTS_VOICE
+    speed: float = tuning.TTS_SPEED
+    response_format: Optional[str] = tuning.TTS_RESPONSE_FORMAT
+    extra_options: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if not (tuning.TTS_MIN_SPEED <= self.speed <= tuning.TTS_MAX_SPEED):
+            raise ValueError(
+                f"TTS speed must be between {tuning.TTS_MIN_SPEED} and "
+                f"{tuning.TTS_MAX_SPEED}, got {self.speed}"
+            )
+
+    # [Util] Serializes this config + the narration text into the request body IrodoriTTSClient posts
+    def to_payload(self, text: str) -> Dict[str, Any]:
+        payload: Dict[str, Any] = {
+            "model": self.model,
+            "input": text,
+            "voice": self.voice,
+            "speed": self.speed,
+        }
+        if self.response_format:
+            payload["response_format"] = self.response_format
+        if self.extra_options:
+            payload["irodori"] = self.extra_options
+        return payload
 
 
 def _kill_process_tree(pid: int) -> None:
@@ -195,15 +239,20 @@ class IrodoriTTSClient:
     # can each construct their own IrodoriTTSClient).
     _server_process: Optional[subprocess.Popen] = None
 
-    # [Config] Initializes the TTS client with output directory and API base URL
+    # [Config] Initializes the TTS client with output directory, API base URL, and synthesis config
     def __init__(
         self,
         output_dir: Path = Path("data/outputs/audio"),
         base_url: str = "http://127.0.0.1:8088/v1/audio/speech",
+        config: Optional[TTSConfig] = None,
     ):
         self.output_dir = output_dir
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.base_url = base_url
+        # Built once per client (not per call) — TTSConfig is frozen and
+        # validated in __post_init__, so every later generate_speech() call
+        # just reuses it instead of re-validating speed on every request.
+        self.config = config or TTSConfig()
 
     def _health_url(self) -> str:
         parts = urlsplit(self.base_url)
@@ -360,7 +409,7 @@ class IrodoriTTSClient:
         """Makes an HTTP POST request to the local Irodori TTS API to generate speech.
         If the connection is refused/closed (server not running), starts it
         as a subprocess and retries once it's healthy."""
-        payload = {"model": "irodori-tts", "input": text, "voice": "string"}
+        payload = self.config.to_payload(text)
 
         try:
             return await self._post_speech(payload)

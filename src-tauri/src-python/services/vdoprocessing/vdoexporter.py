@@ -41,6 +41,8 @@ import uuid
 import cv2
 import numpy as np
 
+from services import tuning
+from services.localization.subtitle import SubtitleStyle
 from services.logger.logger import setup_logger
 
 FFMPEG_BIN = (
@@ -473,3 +475,82 @@ class VideoExporter:
             raise RuntimeError(f"FFmpeg upscale failed: {result.stderr}")
 
         return str(out_path)
+
+    # [Core/Animation] Burns a persistent corner label (e.g. an attraction's place name) into a video
+    @staticmethod
+    def burn_static_label(
+        input_video_path: str,
+        text: str,
+        output_video_path: str,
+        style: Optional[SubtitleStyle] = None,
+    ) -> str:
+        """Burns a single always-on text label (e.g. an attraction clip's
+        place name) into a video for its entire duration. Reuses the same
+        subtitles-filter approach as burn_subtitles/introclip's title card —
+        one big single-cue .srt spanning the whole clip instead of many
+        timed lines — rather than introducing a second burn-in mechanism."""
+        video_path = Path(input_video_path)
+        if not video_path.exists():
+            raise FileNotFoundError(f"Cannot burn label: video missing {video_path}")
+        if not text:
+            raise ValueError("Cannot burn an empty label.")
+
+        out_path = Path(output_video_path)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+
+        ffmpeg_cmd = VideoExporter.resolve_ffmpeg()
+        if not ffmpeg_cmd:
+            raise RuntimeError("FFmpeg binary not found.")
+
+        from services.tts.ttsengine import FFmpegManager
+
+        duration = FFmpegManager.get_media_duration(str(video_path))
+
+        style = style or SubtitleStyle(
+            font_size=tuning.ATTRACTION_LABEL_FONT_SIZE,
+            bold=True,
+            alignment=5,  # old-SSA top-left — see SubtitleStyle.alignment's note
+            outline=tuning.ATTRACTION_LABEL_OUTLINE,
+            shadow=1.0,
+            margin_v=tuning.ATTRACTION_LABEL_MARGIN,
+        )
+
+        srt_path = out_path.parent / f".label_{uuid.uuid4().hex[:8]}.srt"
+        end_ts = VideoExporter._format_srt_timestamp(duration)
+        srt_path.write_text(f"1\n00:00:00,000 --> {end_ts}\n{text}\n", encoding="utf-8")
+
+        # [HACK] [Subtitle] Same absolute/forward-slashed/colon-escaped path
+        # normalization burn_subtitles uses — libass's own escaping rules.
+        escaped_srt = str(srt_path.resolve()).replace("\\", "/").replace(":", r"\:")
+
+        try:
+            result = subprocess.run(
+                [
+                    ffmpeg_cmd, "-y",
+                    "-i", str(video_path),
+                    "-vf",
+                    f"subtitles=filename='{escaped_srt}':force_style='{style.to_force_style()}'",
+                    "-c:a", "copy",
+                    str(out_path),
+                ],
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+        finally:
+            srt_path.unlink(missing_ok=True)
+
+        if result.returncode != 0:
+            logger.error("burn_static_label failed: %s", result.stderr)
+            raise RuntimeError(f"FFmpeg label burn failed: {result.stderr}")
+
+        return str(out_path)
+
+    # [Util] Formats a timestamp in seconds to the SRT timestamp format (HH:MM:SS,mmm)
+    @staticmethod
+    def _format_srt_timestamp(seconds: float) -> str:
+        total_ms = max(0, int(round(seconds * 1000)))
+        hours, rem_ms = divmod(total_ms, 3_600_000)
+        minutes, rem_ms = divmod(rem_ms, 60_000)
+        secs, ms = divmod(rem_ms, 1000)
+        return f"{hours:02d}:{minutes:02d}:{secs:02d},{ms:03d}"

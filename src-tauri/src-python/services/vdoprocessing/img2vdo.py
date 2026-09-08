@@ -170,12 +170,14 @@ class AttractionVideoGenerator:
         target_audio_duration: float,
         output_filename: str,
         overshoot_tolerance: float,
+        place_label: Optional[str] = None,
     ) -> str:
         """Trims/stretches video_path to within tolerance of
         target_audio_duration, writes the result to output_filename in the
-        project's video directory, then upscales it. Narration audio is
-        intentionally NOT muxed in here — see process_attraction_video's
-        docstring for why."""
+        project's video directory, upscales it, then (if place_label is
+        given) burns it into the top-left corner for the clip's whole
+        duration. Narration audio is intentionally NOT muxed in here — see
+        process_attraction_video's docstring for why."""
         if target_audio_duration > 0:
             current_duration = self.editor.get_video_duration(video_path)
             diff = current_duration - target_audio_duration
@@ -243,6 +245,27 @@ class AttractionVideoGenerator:
                 exc,
             )
 
+        # Burned in last, after upscaling, so the label text itself is
+        # crisp at the final resolution instead of being scaled with the rest
+        # of the frame. A label failure shouldn't sink an otherwise-good clip.
+        if place_label:
+            try:
+                labeled_tmp = str(
+                    Path(final_output).with_name(f"labeled_{uuid.uuid4().hex[:6]}.mp4")
+                )
+                VideoExporter.burn_static_label(
+                    input_video_path=final_output,
+                    text=place_label,
+                    output_video_path=labeled_tmp,
+                )
+                os.replace(labeled_tmp, final_output)
+            except Exception as exc:
+                logger.warning(
+                    "Place-name label burn failed for %s (%s) — keeping clip unlabeled.",
+                    final_output,
+                    exc,
+                )
+
         return final_output
 
     # [Core/Animation] Combines previously-generated attraction clips into
@@ -252,6 +275,7 @@ class AttractionVideoGenerator:
         clip_paths: List[str],
         target_audio_duration: float,
         output_filename: str,
+        place_label: Optional[str] = None,
     ) -> Optional[str]:
         """
         Call this once the frontend confirms it's okay to combine a
@@ -280,7 +304,8 @@ class AttractionVideoGenerator:
             overshoot_tolerance = self._AUDIO_DURATION_TOLERANCE_SECONDS
 
         final_output = self._fit_and_finalize(
-            combined_video, target_audio_duration, output_filename, overshoot_tolerance
+            combined_video, target_audio_duration, output_filename, overshoot_tolerance,
+            place_label=place_label,
         )
 
         for clip in valid_clips:
@@ -308,6 +333,7 @@ class AttractionVideoGenerator:
         target_audio_duration: float,
         audio_path: Optional[str] = None,
         output_filename: str = "waypoint_final.mp4",
+        place_label: Optional[str] = None,
     ) -> Optional[str]:
         """
         Main processor:
@@ -397,6 +423,7 @@ class AttractionVideoGenerator:
                 "target_audio_duration": target_audio_duration,
                 "audio_path": audio_path,
                 "output_filename": output_filename,
+                "place_label": place_label,
             }
             with open(manifest_path, "w", encoding="utf-8") as f:
                 json.dump(manifest, f, ensure_ascii=False, indent=2)
@@ -415,6 +442,7 @@ class AttractionVideoGenerator:
             target_audio_duration,
             output_filename,
             overshoot_tolerance=self._AUDIO_DURATION_TOLERANCE_SECONDS,
+            place_label=place_label,
         )
 
         # Cleanup intermediate raw clip
