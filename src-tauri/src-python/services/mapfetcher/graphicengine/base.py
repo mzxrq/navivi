@@ -52,15 +52,16 @@ _BUNDLED_FONTS_DIR = os.path.join(
 
 
 class _GraphicsEngineBase:
-    # Kosugi Maru first — it's bundled (see _BUNDLED_FONTS_DIR above), so
+    # LINE Seed JP first — it's bundled (see _BUNDLED_FONTS_DIR above), so
     # it's the one candidate guaranteed to actually be found on disk,
     # rather than depending on whatever CJK font (if any) happens to be
-    # installed on the machine this renders on. Kosugi Maru only ships a
-    # single regular weight, so the bold list reuses it too — _load_font
-    # falls through the rest of each list only if the bundled file is
-    # somehow missing.
+    # installed on the machine this renders on. Unlike the previous
+    # Kosugi Maru default, LINE Seed JP ships real separate weights, so
+    # regular/bold each point at their own bundled file instead of both
+    # falling back to the same one. _load_font falls through the rest of
+    # each list only if the bundled file is somehow missing.
     FONT_CANDIDATES_REGULAR: Final[List[str]] = [
-        os.path.join(_BUNDLED_FONTS_DIR, "KosugiMaru-Regular.ttf"),
+        os.path.join(_BUNDLED_FONTS_DIR, "LINESeedJP-Regular.ttf"),
         "NotoSansJP-VF.ttf",
         "NotoSansJP-Regular.ttf",
         "NotoSansJP-Regular.otf",
@@ -72,7 +73,7 @@ class _GraphicsEngineBase:
         "DejaVuSans.ttf",
     ]
     FONT_CANDIDATES_BOLD: Final[List[str]] = [
-        os.path.join(_BUNDLED_FONTS_DIR, "KosugiMaru-Regular.ttf"),
+        os.path.join(_BUNDLED_FONTS_DIR, "LINESeedJP-Bold.ttf"),
         "NotoSansJP-VF.ttf",
         "NotoSansJP-Bold.ttf",
         "NotoSansJP-Bold.otf",
@@ -82,6 +83,21 @@ class _GraphicsEngineBase:
         "YuGothic-Bold.ttc",
         "seguisb.ttf",
         "DejaVuSans-Bold.ttf",
+    ]
+    # Heaviest bundled weight — for spots that want extra emphasis (e.g. a
+    # title/badge) beyond plain bold. Falls back to the regular bold list's
+    # candidates since only LINE Seed JP itself ships this weight.
+    FONT_CANDIDATES_EXTRABOLD: Final[List[str]] = [
+        os.path.join(_BUNDLED_FONTS_DIR, "LINESeedJP-ExtraBold.ttf"),
+        *FONT_CANDIDATES_BOLD,
+    ]
+    # Lightest bundled weight — for secondary/caption text that should read
+    # as lower emphasis than the regular weight (e.g. the outro card's
+    # subtitle line). Falls back to the regular list's candidates since
+    # only LINE Seed JP itself ships this weight.
+    FONT_CANDIDATES_THIN: Final[List[str]] = [
+        os.path.join(_BUNDLED_FONTS_DIR, "LINESeedJP-Thin.ttf"),
+        *FONT_CANDIDATES_REGULAR,
     ]
 
     def __init__(

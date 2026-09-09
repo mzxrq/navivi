@@ -113,10 +113,10 @@ def _build_frame(project_name: str, waypoints: List[Dict[str, Any]]) -> Image.Im
 
     title_font = _load_font(_GraphicsEngineBase.FONT_CANDIDATES_BOLD, tuning.OUTRO_TITLE_FONT_SIZE)
     subtitle_font = _load_font(
-        _GraphicsEngineBase.FONT_CANDIDATES_REGULAR, tuning.OUTRO_SUBTITLE_FONT_SIZE
+        _GraphicsEngineBase.FONT_CANDIDATES_THIN, tuning.OUTRO_SUBTITLE_FONT_SIZE
     )
     label_font = _load_font(
-        _GraphicsEngineBase.FONT_CANDIDATES_REGULAR, tuning.OUTRO_LABEL_FONT_SIZE
+        _GraphicsEngineBase.FONT_CANDIDATES_THIN, tuning.OUTRO_LABEL_FONT_SIZE
     )
     badge_font = _load_font(
         _GraphicsEngineBase.FONT_CANDIDATES_BOLD, tuning.OUTRO_BADGE_FONT_SIZE

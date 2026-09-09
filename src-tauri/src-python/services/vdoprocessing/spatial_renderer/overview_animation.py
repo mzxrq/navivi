@@ -13,6 +13,8 @@ import numpy as np
 
 from services.mapfetcher.mapgeometry import RouteGeometryProcessor
 from services.vdoprocessing.vdoexporter import VideoExporter
+from services.logger.progress import tracker
+from services import tuning
 
 
 class _OverviewAnimationMixin:
@@ -65,6 +67,27 @@ class _OverviewAnimationMixin:
         # double-image for whichever popup happened to still be fading.
         pre_popup_frame = None
 
+        # Live CLI substep + ETA for this (often long, frame-by-frame)
+        # render — total_stops excludes the start pin (index 0), which
+        # never triggers an arrival of its own. See mapfetcher.py's
+        # identical begin_substeps/show_item use for the per-leg tile
+        # fetch stage.
+        total_stops = max(1, len(active_popups) - 1)
+        tracker.begin_substeps(total_stops)
+        arrival_count = 0
+
+        # Waypoints placed close together on the map (a common case —
+        # several stops within the same block) can otherwise trigger their
+        # popups back-to-back within a frame or two of real animation time,
+        # popping the current card back out again almost as soon as it
+        # appeared. This floor guarantees at least this many seconds of
+        # real time between one trigger and the next, regardless of how
+        # close the pins themselves are — set far enough in the past that
+        # it never blocks the very first trigger.
+        min_trigger_gap_frames = int(fps * tuning.OVERVIEW_POPUP_MIN_TRIGGER_GAP_SECONDS)
+        last_trigger_frame = -min_trigger_gap_frames
+        pending_popups: List[Dict] = []
+
         for current_frame, p in enumerate(smooth_path):
             if is_video:
                 ret, vid_frame = cap.read()
@@ -111,22 +134,39 @@ class _OverviewAnimationMixin:
             ):
                 stop_popup["data"]["triggered"] = True
 
-            triggered_popup = None
+            # Queue any not-yet-triggered, not-yet-queued popup the
+            # traveler is passing right now — queued (not triggered)
+            # immediately, so a popup is never missed just because the
+            # cooldown below hasn't elapsed yet: without this, gating the
+            # proximity check itself on the cooldown could let the
+            # traveler move past a clustered pin entirely during the wait,
+            # with no later frame ever close enough to catch it.
             for popup in active_popups:
                 if popup["index"] == 0 or (
                     stop_popup and popup["index"] == stop_popup["index"]
                 ):
                     continue
-                if not popup["data"]["triggered"]:
+                # Identity check, not `in` (which is value-equality on
+                # dicts) — these dicts keep mutating in place as the loop
+                # runs (e.g. "triggered" itself), so an equality-based
+                # membership test isn't reliable for "is this the same
+                # popup already queued".
+                if not popup["data"]["triggered"] and not any(
+                    p is popup for p in pending_popups
+                ):
                     if RouteGeometryProcessor.point_to_segment_distance(
                         popup["x"], popup["y"], px, py, cx, cy
                     ) < (
                         self.graphics.marker_radius
                         + self.trigger_radius_padding["overview"]
                     ):
-                        popup["data"]["triggered"] = True
-                        triggered_popup = popup
-                        break
+                        pending_popups.append(popup)
+
+            triggered_popup = None
+            if pending_popups and current_frame - last_trigger_frame >= min_trigger_gap_frames:
+                triggered_popup = pending_popups.pop(0)
+                triggered_popup["data"]["triggered"] = True
+                last_trigger_frame = current_frame
 
             # [NOTE] [Animation] "Point to point" snapshot for hide_route_on_popup — every
             # earlier, already-completed leg stays drawn; only the CURRENT
@@ -178,12 +218,30 @@ class _OverviewAnimationMixin:
                 # of an "earlier leg" for the NEXT popup's hide effect.
                 last_leg_boundary = len(path_history) - 1
 
-                # Pick a corner clear of the route/pins once, and keep it on
-                # the popup itself so the lingering baked-popup HUD (below)
-                # doesn't jump to a different corner mid-display.
-                triggered_popup["hud_corner"] = self.graphics.pick_hud_corner(
-                    w, h, route_avoid_points
+                arrival_count += 1
+                place_label = triggered_popup.get("label") or f"waypoint_{triggered_popup['index']}"
+                tracker.show_item(
+                    arrival_count,
+                    f"Rendering overview video {arrival_count}/{total_stops}: arriving at '{place_label}'",
                 )
+
+                # Anchored beside this waypoint's own pin with a leader line
+                # back to it (see render_popup_box's non-HUD-corner branch),
+                # computed once and kept on the popup itself so the arrival
+                # pause, the frozen hold, and the lingering baked-popup HUD
+                # (below) all reuse the identical spot instead of jumping
+                # around mid-display. A fixed screen corner (the old
+                # pick_hud_corner behavior) looked fine whenever it happened
+                # to land near the pin, but read as disconnected/"floating
+                # over there" for a stop on the opposite side of the frame —
+                # this ties every triggered popup, flow-through or frozen,
+                # back to its own pin the same way.
+                self._layout_beside_popups(
+                    [{"popup": triggered_popup, "frames_left": 1}], w, h,
+                    route_obstacles=route_obstacle_arr,
+                )
+                triggered_popup["hud_corner"] = None
+                triggered_popup["draw_leader_line"] = True
 
                 # Shared base for BOTH the arrival-hold pause and the popup
                 # itself — decluttered to only already-arrived pins when

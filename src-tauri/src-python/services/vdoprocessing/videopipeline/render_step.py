@@ -108,6 +108,7 @@ def render_route_video(
 
     # 2. Fetch Base Map & Project Pixels
     logger.info("Step 4: Computing bounding box and fetching overview map tile...")
+    tracker.show("Fetching overview map tile...")
 
     # Pass the job_config explicitly (rather than relying on whatever state
     # the JobConfigManager singleton happens to already be in) so the tile

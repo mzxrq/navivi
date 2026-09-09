@@ -80,7 +80,7 @@ class _CardMixin:
         duration_seconds: float,
         mode_breakdown: Optional[Dict[str, float]] = None,
         mode_duration: Optional[Dict[str, float]] = None,
-        card_size=(560, 150),
+        card_size=(560, 190),
     ) -> np.ndarray:
         """A dark glass stat card for the end of the overview video: one
         column per travel mode actually used (icon, distance, time), plus a
@@ -142,7 +142,7 @@ class _CardMixin:
 
             icon_size = 36 * scale
             icon_text_gap = 14 * scale
-            line_gap = 4 * scale
+            line_gap = 12 * scale
             group_gap = 46 * scale
             # Margin around the content — was a fixed 560x150 box regardless
             # of how little a 2-tile pill actually needs, reading as mostly
@@ -191,8 +191,6 @@ class _CardMixin:
                 )
                 x += group_w + group_gap
         else:
-            canvas = Image.new("RGBA", (w * scale, h * scale), (0, 0, 0, 0))
-            draw = ImageDraw.Draw(canvas)
             # Same light "residential" card theme as the single-mode pill
             # above (white glass, dark text, thin neutral border) rather
             # than a separate dark-glass/yellow-accent look — only the
@@ -218,30 +216,69 @@ class _CardMixin:
                     return accent
                 return tuple(reversed(self.MODE_COLORS.get(mode, self.line_color))) + (255,)
 
-            draw.rounded_rectangle(
-                [0, 0, w * scale - 1, h * scale - 1],
-                radius=18 * scale,
-                fill=bg_color,
-                outline=border_rgba if self.card_border_thickness else None,
-                width=self.card_border_thickness * scale,
-            )
-
-            # Bold, not regular — Noto Sans's regular weight read as too
-            # thin for this small a caption; size/color still separate it
-            # from the (also bold) value below it.
+            # Mode header ("Draw"/"Walking"/"Driving"/"Total") is Regular —
+            # LINE Seed JP's regular weight reads fine at this size, unlike
+            # the old Kosugi Maru default this comment used to justify Bold
+            # for. Kept bold for the per-column time caption below it
+            # (font_label_time) and the big distance value, so those two
+            # still stand out from the plain mode name above them.
             font_label = self._load_font(
+                self.FONT_CANDIDATES_REGULAR, tuning.SUMMARY_CARD_LABEL_FONT_SIZE * scale
+            )
+            font_label_time = self._load_font(
                 self.FONT_CANDIDATES_BOLD, tuning.SUMMARY_CARD_LABEL_FONT_SIZE * scale
             )
             font_value_2 = self._load_font(
                 self.FONT_CANDIDATES_BOLD, tuning.SUMMARY_CARD_VALUE_FONT_SIZE * scale
             )
 
-            col_w = (w * scale) / n
             icon_size = 26 * scale
+            icon_text_gap = 6 * scale
+            stat_icon_d = 15 * scale
+
+            # Card width used to be a fixed 560px split evenly across
+            # however many columns there were — fine for 2-3 columns, but a
+            # 4+ column trip (e.g. Draw/Walking/Driving/Total) squeezed each
+            # column well below what its own value/time text actually
+            # needed, so neighboring columns' text ran together with no gap
+            # between them. Size each column to fit its own widest line
+            # instead (same content-driven approach the single-mode pill
+            # card above already uses), then every column gets the same
+            # width — the widest one's — so the divider lines still land
+            # evenly.
+            probe_draw = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+            col_content_w = 0.0
+            for label, mode, dist, dur in columns:
+                distance_str = f"{dist * 1000:.0f} m" if dist < 1 else f"{dist:.1f} km"
+                dur_str = self._format_duration_short(dur) if dur > 0 else None
+                widths = [
+                    probe_draw.textlength(label, font=font_label),
+                    probe_draw.textlength(distance_str, font=font_value_2),
+                ]
+                if dur_str:
+                    widths.append(
+                        stat_icon_d + icon_text_gap
+                        + probe_draw.textlength(dur_str, font=font_label_time)
+                    )
+                col_content_w = max(col_content_w, *widths)
+
+            col_padding = 20 * scale
+            col_w = max((w * scale) / n, col_content_w + col_padding * 2)
+            card_w_px, card_h_px = int(col_w * n), h * scale
+
+            canvas = Image.new("RGBA", (card_w_px, card_h_px), (0, 0, 0, 0))
+            draw = ImageDraw.Draw(canvas)
+            draw.rounded_rectangle(
+                [0, 0, card_w_px - 1, card_h_px - 1],
+                radius=18 * scale,
+                fill=bg_color,
+                outline=border_rgba if self.card_border_thickness else None,
+                width=self.card_border_thickness * scale,
+            )
+            w = card_w_px // scale
             label_gap = 6 * scale
             value_gap = 18 * scale
             row_gap = 36 * scale
-            stat_icon_d = 15 * scale
 
             # The icon/label/value/time stack used to anchor near the top
             # (icon_cy fixed at 32*scale) regardless of the card's actual
@@ -292,10 +329,9 @@ class _CardMixin:
                 )
 
                 dur_str = self._format_duration_short(dur) if dur > 0 else None
-                icon_text_gap = 6 * scale
                 if dur_str:
                     row_y = value_y + row_gap
-                    dur_w = draw.textlength(dur_str, font=font_label)
+                    dur_w = draw.textlength(dur_str, font=font_label_time)
                     line_x = col_cx - (stat_icon_d + icon_text_gap + dur_w) / 2
                     self._draw_clock_icon(
                         draw, line_x + stat_icon_d / 2, row_y + stat_icon_d / 2,
@@ -303,7 +339,7 @@ class _CardMixin:
                     )
                     draw.text(
                         (line_x + stat_icon_d + icon_text_gap, row_y),
-                        dur_str, font=font_label, fill=label_color,
+                        dur_str, font=font_label_time, fill=label_color,
                     )
 
         # [NOTE] [Animation] Downscales the 2x supersampled canvas for anti-aliasing, then swaps RGBA -> BGRA to match OpenCV's channel order.

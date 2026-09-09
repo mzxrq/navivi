@@ -71,14 +71,45 @@ DEFAULT_CARD_BORDER_THICKNESS = 1
 # scaled-down card, e.g. the intro overview's card_scale). Bumped up from
 # the original 0.6x/1.0x, which read as too small next to the photo/pin
 # they're labeling.
-POPUP_LABEL_FONT_SCALE_BESIDE = 0.85  # "beside the pin" card (was 0.6x)
-POPUP_LABEL_FONT_SCALE_CORNER = 1.3  # fixed HUD-corner card (was 1.0x)
+POPUP_LABEL_FONT_SCALE_BESIDE = 1.15  # "beside the pin" card (was 0.6x, then 0.85x)
+POPUP_LABEL_FONT_SCALE_CORNER = 1.1  # fixed HUD-corner card (was 1.0x, then 1.3x)
+# Waypoint name chip drawn next to each numbered/lettered pin as the route
+# animates leg-to-leg (e.g. "S  大阪市") — see _SpriteMixin.prebake_landmark_sprite.
+# Bumped up from 0.6x, which read as too small to make out against a busy
+# map tile at video resolution.
+WAYPOINT_LABEL_FONT_SCALE = 0.85
 # Summary-card stat text — flat pixel sizes (at the card's internal 2x
 # render scale), independent of card_size since the card is always
 # resampled down to its target box afterward. Bumped up from the
 # original 14/24-26px, which read as too small for an end-of-video stat.
 SUMMARY_CARD_LABEL_FONT_SIZE = 20
 SUMMARY_CARD_VALUE_FONT_SIZE = 34
+# Floor on the residential-chunk zoom level computed from a leg's physical
+# span (see TileDownloader.fetch_residential_chunk) — a leg whose path
+# bulges or loops (e.g. a detour around a highway on-ramp) can inflate
+# that span well past what the leg's start/end distance suggests, picking
+# a lower zoom than the leg actually needs, which reads as street/place
+# labels becoming too small to make out. This floor keeps every SHORT
+# (local/residential-scale) leg at least this legible regardless of path
+# shape.
+#
+# Only applied when the leg's two pins are within
+# RESIDENTIAL_MIN_ZOOM_MAX_PIN_DISTANCE_M of each other — gated on the
+# straight-line pin distance rather than the (bulge-inflated) padded span,
+# since that's the one measure a detour/loop can't skew. Long car/ferry/
+# driving legs must NOT get this floor: forcing e.g. a 30km leg from its
+# natural zoom (~12) up to 17 multiplies the tile count roughly 4x per
+# zoom level jumped, which turned one real render into a multi-thousand-
+# tile download that never finished in reasonable time.
+RESIDENTIAL_MIN_ZOOM = 17
+RESIDENTIAL_MIN_ZOOM_MAX_PIN_DISTANCE_M = 2000
+# How many residential-leg map tiles MapFetcher.process_residential_sequence
+# fetches concurrently (thread pool — these are network-bound calls to the
+# tile provider via contextily, so they genuinely overlap instead of
+# competing for CPU). Kept modest rather than "as many legs as there are"
+# to stay well clear of the tile provider's own rate limiting; raise with
+# caution, and only alongside TileDownloader's wait/retry backoff settings.
+RESIDENTIAL_TILE_FETCH_WORKERS = 4
 # Per-travel-mode ROUTE LINE colors. Modes without an entry (e.g. walking)
 # fall back to the renderer's own line_color.
 # [NOTE] [Config] Modes missing here (e.g. walking) fall back to the renderer's own line_color rather than a hardcoded default.
@@ -101,6 +132,14 @@ BIG_MAP_ZOOM_TARGET = 2.6
 
 # --- Popup / transition timing ----------------------------------------------
 POPUP_FADE_SECONDS = 1.5
+# Minimum wall-clock gap between one waypoint popup triggering and the next
+# one being allowed to — a cluster of waypoints placed close together on
+# the map (a common case: several stops within the same block) could
+# otherwise trigger back-to-back within a frame or two of each other,
+# popping the current card out again almost as soon as it appeared, well
+# before it was actually readable. Applies regardless of how close the
+# pins are, on top of (not instead of) each popup's own display duration.
+OVERVIEW_POPUP_MIN_TRIGGER_GAP_SECONDS = 2.0
 # [NOTE] [Transition] Fullscreen photo transition plays as an ordered sequence: confirm (pin selected) -> scale (zoom into photo) -> blur -> fade_out; hold_ratio_of_freeze/min_hold_seconds/min_small_hold_seconds bound how long the fullscreen photo is held relative to its freeze duration before the next stage starts.
 FULLSCREEN_TRANSITION_DEFAULTS: Dict[str, float] = {
     "confirm_seconds": 0.4,

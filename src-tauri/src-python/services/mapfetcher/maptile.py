@@ -19,6 +19,7 @@ import numpy as np
 
 # [I/O] Import service dependencies for Integration
 from services.logger.logger import setup_logger
+from services import tuning
 
 # [Utility] Log setup for debugging and monitoring
 logger = setup_logger("MapTile")
@@ -241,22 +242,22 @@ class TileDownloader:
         # the frame's center — a loop or detour can still make the map
         # less tightly zoomed (more empty space on the side it bulges
         # toward), but it can no longer push either pin toward one edge.
-        min_lat = min(chunk_df["latitude"].min(), chunk_df["latitude"].iloc[0], chunk_df["latitude"].iloc[-1])
-        max_lat = max(chunk_df["latitude"].max(), chunk_df["latitude"].iloc[0], chunk_df["latitude"].iloc[-1])
-        min_lon = min(chunk_df["longitude"].min(), chunk_df["longitude"].iloc[0], chunk_df["longitude"].iloc[-1])
-        max_lon = max(chunk_df["longitude"].max(), chunk_df["longitude"].iloc[0], chunk_df["longitude"].iloc[-1])
-
         start_lat, end_lat = chunk_df["latitude"].iloc[0], chunk_df["latitude"].iloc[-1]
         start_lon, end_lon = chunk_df["longitude"].iloc[0], chunk_df["longitude"].iloc[-1]
         center_lat = (start_lat + end_lat) / 2.0
         center_lon = (start_lon + end_lon) / 2.0
 
-        # Half-extent needed, from that center, to still cover the whole
-        # path (every point stays within [min_lat, max_lat] x
-        # [min_lon, max_lon], so measuring the center's distance to those
-        # is enough — no need to scan every point individually).
-        half_lat = max(max_lat - center_lat, center_lat - min_lat, 1e-9)
-        half_lon = max(max_lon - center_lon, center_lon - min_lon, 1e-9)
+        # Half-extent from the straight-line distance between the two pins
+        # ONLY — not the path's own min/max. A leg whose path loops or
+        # bulges away from the direct line between its pins (a highway
+        # on/off-ramp is a common case) used to stretch this bbox to keep
+        # that whole loop in frame, which zoomed the pins themselves out
+        # far more than how close together they actually are. Staying
+        # tight on the two pins instead keeps them prominent; the animated
+        # route line may run briefly off-frame during a big loop, an
+        # accepted tradeoff for keeping the waypoints themselves zoomed in.
+        half_lat = max(abs(end_lat - center_lat), 1e-9)
+        half_lon = max(abs(end_lon - center_lon), 1e-9)
 
         # 20% breathing room on top of that half-extent — covers both the
         # pin+label graphic (which extends past its anchor point) and the
@@ -289,6 +290,18 @@ class TileDownloader:
             11
         )
         optimal_zoom = min(optimal_zoom, self.MAX_ZOOM_LEVEL)
+
+        # Zoom floor only for genuinely short/local legs — gated on the
+        # straight-line distance between the two pins (immune to a
+        # detour/loop inflating the padded span above) so a long car/ferry
+        # leg never gets dragged up to a street-level zoom, which would
+        # multiply its tile count ~4x per zoom level jumped.
+        pin_distance_meters = math.hypot(
+            (end_lat - start_lat) * meters_per_deg_lat,
+            (end_lon - start_lon) * meters_per_deg_lon,
+        )
+        if pin_distance_meters <= tuning.RESIDENTIAL_MIN_ZOOM_MAX_PIN_DISTANCE_M:
+            optimal_zoom = max(optimal_zoom, min(tuning.RESIDENTIAL_MIN_ZOOM, self.MAX_ZOOM_LEVEL))
 
         # 3. Adjust Bounding Box to Target Aspect Ratio
         out_w, out_h = output_size

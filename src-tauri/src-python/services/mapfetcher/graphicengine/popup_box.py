@@ -1,7 +1,7 @@
 """Cinematic pause overlay and popup/HUD card rendering."""
 
 import os
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 import cv2
 import numpy as np
@@ -29,7 +29,11 @@ class _PopupBoxMixin:
         actually draw for a "beside the pin" card at this card_scale —
         assumes a label is present (has_label=True), a safe upper-bound
         estimate for collision-avoidance sizing even on the rare card with
-        no real label."""
+        no real label. Sized for a WORST-CASE two-line label (see
+        _fit_label_caption) since this is called without knowing the
+        actual label text — a one-line label just leaves a little extra
+        clearance below its card instead of the two cards ever visually
+        overlapping because this estimate came in short."""
         target_ratio = 16.0 / 9.0
         target_img_w = int(self.BESIDE_CARD_BASE_W * card_scale)
         target_img_h = int(target_img_w / target_ratio)
@@ -37,8 +41,45 @@ class _PopupBoxMixin:
         font_size = max(
             11, int(self.font_size * tuning.POPUP_LABEL_FONT_SCALE_BESIDE * card_scale)
         )
-        text_block_h = font_size + 14
+        line_gap = 4
+        text_block_h = font_size * 2 + line_gap + 14
         return target_img_w + border * 2, target_img_h + border * 2 + text_block_h
+
+    # Minimum caption font size _fit_label_caption will shrink to before
+    # giving up and letting a still-too-wide second line clip — matches
+    # the floor every other font-size calc in this file already uses.
+    _LABEL_MIN_FONT_SIZE = 11
+
+    def _fit_label_caption(
+        self, draw: ImageDraw.ImageDraw, text: str, font: Any, font_candidates: List[str], max_width: float
+    ) -> Tuple[List[str], Any]:
+        """Fits a popup's label caption within max_width — one line if it
+        already fits, otherwise two, split at whichever character position
+        best balances the two resulting line widths (most labels here are
+        Japanese place names/addresses with no spaces to break on, so a
+        word-boundary wrap isn't an option). Shrinks the font (down to
+        _LABEL_MIN_FONT_SIZE) only if the longer of the two lines still
+        doesn't fit even after splitting. Returns (lines, font) — `font`
+        may be a smaller instance than the one passed in."""
+        if draw.textlength(text, font=font) <= max_width:
+            return [text], font
+
+        best_split, best_diff = 1, None
+        for i in range(1, len(text)):
+            diff = abs(
+                draw.textlength(text[:i], font=font) - draw.textlength(text[i:], font=font)
+            )
+            if best_diff is None or diff < best_diff:
+                best_diff, best_split = diff, i
+        lines = [text[:best_split], text[best_split:]]
+
+        size = font.size
+        longest = max(draw.textlength(line, font=font) for line in lines)
+        while longest > max_width and size > self._LABEL_MIN_FONT_SIZE:
+            size = max(self._LABEL_MIN_FONT_SIZE, int(size * 0.9))
+            font = self._load_font(font_candidates, size)
+            longest = max(draw.textlength(line, font=font) for line in lines)
+        return lines, font
 
     def popup_card_geometry(
         self, popup_info: Dict, w: int, h: int
@@ -64,10 +105,21 @@ class _PopupBoxMixin:
             else tuning.POPUP_LABEL_FONT_SCALE_CORNER
         )
         font_size = max(11, int(self.font_size * font_scale * card_scale))
-        has_label = RouteGeometryProcessor.is_real_label(popup_info.get("label"))
-        text_block_h = (font_size + 14) if has_label else 0
-        total_h = target_img_h + (border * 2) + text_block_h
         total_w = target_img_w + (border * 2)
+        has_label = RouteGeometryProcessor.is_real_label(popup_info.get("label"))
+        text_block_h = 0
+        if has_label:
+            probe_draw = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+            font = self._load_font(self.FONT_CANDIDATES_REGULAR, font_size)
+            label_lines, font = self._fit_label_caption(
+                probe_draw, popup_info["label"], font,
+                self.FONT_CANDIDATES_REGULAR, max(1, total_w - 16),
+            )
+            line_gap = 4
+            text_block_h = (
+                font.size * len(label_lines) + line_gap * (len(label_lines) - 1) + 14
+            )
+        total_h = target_img_h + (border * 2) + text_block_h
         margin = 24
 
         if not is_beside:
@@ -227,9 +279,11 @@ class _PopupBoxMixin:
                     else tuning.POPUP_LABEL_FONT_SCALE_CORNER
                 )
                 font_size = max(11, int(self.font_size * font_scale * card_scale))
-                # Bold, not regular — Noto Sans's regular weight reads too
-                # thin for a short caption at this size.
-                font = self._load_font(self.FONT_CANDIDATES_BOLD, font_size)
+                # Regular, not bold — LINE Seed JP's regular weight reads
+                # clearly enough at this size (unlike the old Kosugi Maru
+                # default this used to be bumped to bold for), and matches
+                # the smaller, lighter caption look under the photo.
+                font = self._load_font(self.FONT_CANDIDATES_REGULAR, font_size)
                 has_label = RouteGeometryProcessor.is_real_label(label_text)
 
                 pil_canvas = Image.new("RGBA", (w, h), (0, 0, 0, 0))
@@ -279,13 +333,22 @@ class _PopupBoxMixin:
 
                 if has_label:
                     draw_text_layer = ImageDraw.Draw(base_pil)
-                    text_bbox = draw_text_layer.textbbox((0, 0), label_text, font=font)
-                    text_w = text_bbox[2] - text_bbox[0]
-                    text_x = box_x + (total_w - text_w) // 2
-                    text_y = photo_y + ph + 10
-                    draw_text_layer.text(
-                        (text_x, text_y), label_text, font=font, fill=(40, 40, 40, 255)
+                    # Wraps to a second line (or shrinks the font, as a last
+                    # resort) rather than letting a long place name/address
+                    # run past the card's own edges — see _fit_label_caption.
+                    label_lines, label_font = self._fit_label_caption(
+                        draw_text_layer, label_text, font,
+                        self.FONT_CANDIDATES_REGULAR, max(1, total_w - 16),
                     )
+                    line_gap = 4
+                    line_y = photo_y + ph + 10
+                    for line in label_lines:
+                        line_w = draw_text_layer.textlength(line, font=label_font)
+                        draw_text_layer.text(
+                            (box_x + (total_w - line_w) // 2, line_y),
+                            line, font=label_font, fill=(40, 40, 40, 255),
+                        )
+                        line_y += label_font.size + line_gap
 
                 f_frame = cv2.cvtColor(np.array(base_pil), cv2.COLOR_RGBA2BGR)
 

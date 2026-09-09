@@ -228,15 +228,40 @@ class _OverviewRenderMixin:
             temp_sp = start_popup.copy()
             temp_sp["data"] = start_popup["data"].copy()
             temp_sp["data"]["triggered"] = True
-            temp_sp["hud_corner"], temp_sp["x"], temp_sp["y"] = (
-                self.graphics.pick_hud_corner(w, h, route_avoid_points),
-                start_popup["x"],
-                start_popup["y"],
+            # This scale now multiplies the smaller "beside" card's 210px
+            # base width (since switching this card to the beside/leader-
+            # line style above), not the old fixed-corner card's 440px — the
+            # previous 0.6 default (tuned for that 440px base, ~264px
+            # effective) shrank to a barely-legible ~126px once applied to
+            # the new, already-smaller base. ~1.3x on the new base lands
+            # close to that original effective size.
+            temp_sp["card_scale"] = self.config.get("overview_intro_card_scale", 1.3)
+            # Anchored beside the start pin with a leader line back to it
+            # (see render_popup_box's non-HUD-corner branch), matching every
+            # other waypoint's popup style, rather than a fixed screen
+            # corner picked independently of where this pin actually sits —
+            # which read as disconnected/"floating" whenever the picked
+            # corner landed on the opposite side of the frame from the pin.
+            footprint_w, footprint_h = self.graphics.beside_card_footprint(
+                temp_sp["card_scale"]
             )
-            # Smaller than the HUD-corner card's 440px default — full-size
-            # felt dominant sitting over the whole-route intro map, next to
-            # every waypoint pin already drawn on it.
-            temp_sp["card_scale"] = self.config.get("overview_intro_card_scale", 0.6)
+            # A wide search radius, not the ~260px default — this card sits
+            # over the intro's full-route overview, which usually has every
+            # waypoint's pin clustered somewhere on screen (as dense a
+            # cluster as the S/2/3/E group here). The default radius is
+            # tuned for flow-through cards that need to stay visually near
+            # their own pin; this one-off intro card has no such
+            # requirement, so it should keep spiraling outward — using any
+            # open area the frame actually has — rather than settling for
+            # a nearby spot that overlaps another waypoint's pin.
+            self._layout_beside_popups(
+                [{"popup": temp_sp, "frames_left": 1}], w, h,
+                card_w=footprint_w, card_h=footprint_h,
+                route_obstacles=route_obstacle_arr,
+                max_radius=float(max(w, h)),
+            )
+            temp_sp["hud_corner"] = None
+            temp_sp["draw_leader_line"] = True
             start_popup["data"]["triggered"] = True
 
             if not is_video:

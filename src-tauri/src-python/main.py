@@ -27,6 +27,8 @@ from services.cli import (
     test_attraction_finalize,
     test_subtitle,
     test_subtitles,
+    test_intro_video,
+    test_outro_video,
     test_video_concat,
     test_transition_editor,
     test_all,

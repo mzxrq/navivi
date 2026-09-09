@@ -17,6 +17,7 @@ from typing import Dict, Any, List, Optional, Tuple
 
 from services.mapfetcher.graphicengine import GraphicsEngine
 from services.logger.logger import setup_logger
+from services.logger.progress import tracker
 from services import tuning
 from services.vdoprocessing.spatial_renderer import SpatialRenderer
 from services.vdoprocessing.pydeckrecorder import record_headless_video
@@ -180,9 +181,11 @@ class RouteAnimator:
                 "implemented — use the default spatial renderer instead."
             )
 
+        tracker.show("Rendering overview video...")
         overview_path = self.spatial_renderer.render_overview(
             img_path, points, labels, popups, fps, summary=summary, point_modes=point_modes
         )
+        tracker.clear()
         if overview_path:
             # Skip the extra hold when the clip already ended itself on
             # a blur-out (see SpatialRenderer._render_ending_highlight) —
