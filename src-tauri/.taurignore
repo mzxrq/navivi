@@ -1,18 +1,19 @@
-src-python/data/
-src-python/data/**/*
-src-python/frames/**/*
-src-python/frames/*.html
+# Python Data & Assets
+src-python/data/**
 src-python/frames/**
 src-python/**/*.mp4
 src-python/**/*.wav
 src-python/**/*.jpg
 src-python/**/*.png
-src-python/logs
-src-python/logs/*.log
-src-python/logs/*
-data/
-src-python/services/__pycache__
-src-python/services/*
-src-python/services/logs/
+
+# Python Caches
+src-python/**/__pycache__/**
+
+# ✨ FIXED: Logger & Services Ignores (Use Forward Slashes!)
+services/logger/**
+services/logger/*.log
+src-python/services/logs/**
 src-python/services/logs/*.log
-src-python/services/logs/*
+
+# Blanket ignore all log files anywhere in the src-tauri directory just in case
+**/*.log

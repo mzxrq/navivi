@@ -109,9 +109,20 @@ export interface ClipData {
   transitionOut?: string;
 }
 
+export interface TimelineTransition {
+  id: string;
+  trackId: string;
+  fromClipId: string;
+  toClipId: string;
+  type: string;
+  startTime: number;
+  duration: number;
+}
+
 export interface TimelineData {
   tracks: TimelineTrack[];
   clips: ClipData[];
+  transitions: TimelineTransition[];
   zoomMultiplier: number;
 }
 

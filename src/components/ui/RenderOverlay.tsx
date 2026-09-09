@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { createPortal } from "react-dom"; // ✨ FIX: Teleport the overlay!
+import { createPortal } from "react-dom";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { convertFileSrc } from "@tauri-apps/api/core";
@@ -7,7 +7,7 @@ import { useUI } from "../../hooks/useUI";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { join } from "@tauri-apps/api/path";
 
-import { Loader2, CheckCircle, XCircle, AlertTriangle, Settings2, PlayCircle } from "./icons";
+import { Loader2, CheckCircle, XCircle, AlertTriangle, Settings2, PlayCircle, X } from "./icons";
 
 interface LogItem {
   id: string;
@@ -32,19 +32,23 @@ export function RenderOverlay() {
   const [step, setStep] = useState<WizardStep>("generating");
   const [progress, setProgress] = useState(0);
   const [logs, setLogs] = useState<LogItem[]>([]);
-  const [status, setStatus] = useState<"processing" | "success" | "error">("processing");
+  const [status, setStatus] = useState<"processing" | "success" | "error" | "cancelling">("processing");
 
   // Verification State
   const [reviewItems, setReviewItems] = useState<ScriptReviewItem[]>([]);
   const [activeAudioId, setActiveAudioId] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  
+  // ✨ FIX: The scrollRef needs to be on the container with overflow-y-auto!
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const skipVerification = (settings as any).skip_audio_verification === true;
 
-  // Auto-scroll logs terminal
+  // ✨ FIX: Auto-scroll terminal smoothly
   useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
   }, [logs]);
 
   // Main Generation Lifecycle
@@ -71,15 +75,28 @@ export function RenderOverlay() {
     const setupListeners = async () => {
       const unlistenLog = await listen<string>("render-log", (event) => {
         const text = event.payload;
-        const progressMatch = text.match(/PROGRESS:\s*(\d+)/);
-        if (progressMatch) {
-          setProgress(Math.min(99, Number(progressMatch[1])));
-          return;
+        
+        // ✨ FIX: Smart Progress Parser based on your ACTUAL Python logs!
+        if (text.includes("Step 1 complete")) setProgress(15);
+        else if (text.includes("Step 2:")) setProgress(20);
+        else if (text.includes("Step 3: [")) {
+          const match = text.match(/Step 3: \[(\d+)\/(\d+)\]/);
+          if (match) {
+            const current = parseInt(match[1]);
+            const total = parseInt(match[2]);
+            setProgress(20 + Math.floor((current / total) * 30)); // Maps to 20% -> 50%
+          }
         }
+        else if (text.includes("Step 4:")) setProgress(50);
+        else if (text.includes("Rendering Overview Map")) setProgress(60);
+        else if (text.includes("Rendering Residential Sequence")) setProgress(75);
+        else if (text.includes("Step 5:")) setProgress(90);
+        else if (text.includes("Step 6 complete")) setProgress(100);
+
         setLogs(prev => [...prev, {
           id: crypto.randomUUID(),
           message: text,
-          type: "info",
+          type: text.includes("[WARNING]") ? "error" : "info", // Highlight warnings slightly
           time: new Date().toLocaleTimeString([], { hour12: false })
         }]);
       });
@@ -94,7 +111,7 @@ export function RenderOverlay() {
       });
 
       const unlistenFinish = await listen<string>("render-finish", async (event) => {
-        if (event.payload === "Success") {
+        if (event.payload === "Success" || event.payload.includes("complete")) {
           setProgress(100);
           setLogs(prev => [...prev, {
             id: crypto.randomUUID(),
@@ -113,7 +130,7 @@ export function RenderOverlay() {
           setStatus("error");
           setLogs(prev => [...prev, {
             id: crypto.randomUUID(),
-            message: "Generation failed. Review error logs above.",
+            message: "Generation failed or was cancelled. Review logs above.",
             type: "error",
             time: new Date().toLocaleTimeString([], { hour12: false })
           }]);
@@ -150,7 +167,6 @@ export function RenderOverlay() {
     const videoDir = await join(metadata.directory_path, "video");
     const items: ScriptReviewItem[] = [];
 
-    // Overview Narration
     if (metadata.overview_narration) {
       items.push({
         id: "overview",
@@ -160,7 +176,6 @@ export function RenderOverlay() {
       });
     }
 
-    // Waypoint Narrations
     for (let i = 0; i < waypoints.length; i++) {
       const wp = waypoints[i];
       const safeLabel = wp.name.replace(/[^a-zA-Z0-9]/g, "_");
@@ -179,17 +194,13 @@ export function RenderOverlay() {
     setReviewItems(items);
   };
 
-  // Playback Handler for Audio Preview
   const handleTogglePlay = (item: ScriptReviewItem) => {
     if (activeAudioId === item.id) {
       audioRef.current?.pause();
       setActiveAudioId(null);
       return;
     }
-
-    if (audioRef.current) {
-      audioRef.current.pause();
-    }
+    if (audioRef.current) audioRef.current.pause();
 
     const safeUrl = convertFileSrc(item.audioPath);
     const newAudio = new Audio(safeUrl);
@@ -219,7 +230,6 @@ export function RenderOverlay() {
     setStatus("success");
     if (audioRef.current) audioRef.current.pause();
 
-    // Auto-populate the React-Konva timeline from generated assets
     if (metadata.directory_path) {
       await autoLoadTimeline(metadata.directory_path);
     }
@@ -230,22 +240,33 @@ export function RenderOverlay() {
     }, 1200);
   };
 
-  useEffect(() => {
-    const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && isRendering) {
-        setIsRendering(false);
-      }
-    };
-    window.addEventListener("keydown", handleEsc);
-    return () => window.removeEventListener("keydown", handleEsc);
-  }, [isRendering]);
+  // ✨ NEW: Cancel Hook!
+  const handleCancel = async () => {
+    setStatus("cancelling");
+    setLogs(prev => [...prev, {
+      id: crypto.randomUUID(),
+      message: "Sending cancellation signal to backend...",
+      type: "error",
+      time: new Date().toLocaleTimeString([], { hour12: false })
+    }]);
+
+    try {
+      await invoke("cancel_render"); // Make sure to add this handler in your Rust code!
+    } catch (err) {
+      console.warn("Cancellation invoke failed or not implemented in Rust:", err);
+    }
+
+    // Force close overlay after a short delay
+    setTimeout(() => {
+      setIsRendering(false);
+    }, 1000);
+  };
 
   if (!isRendering) return null;
 
-  // ✨ FIX: Use createPortal to teleport the overlay to the top level of the app!
   return createPortal(
-    <div style={{ zIndex: 99999 }} className="fixed inset-0 bg-zinc-950/50 backdrop-blur-[2px] flex items-center justify-center p-6 animate-in fade-in duration-200">
-      <div className="w-full max-w-2xl bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-white/10 rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-300">
+    <div style={{ zIndex: 99999 }} className="fixed inset-0 bg-zinc-950/70 backdrop-blur-sm flex items-center justify-center p-6 animate-in fade-in duration-200">
+      <div className="w-full max-w-3xl bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-white/10 rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-300">
         
         {/* Header & Stepper */}
         <div className="p-6 border-b border-zinc-100 dark:border-white/5 bg-zinc-50/50 dark:bg-zinc-900/50 shrink-0">
@@ -255,6 +276,15 @@ export function RenderOverlay() {
                 Generation Pipeline: {metadata.project_name}
               </h2>
             </div>
+            {/* ✨ NEW: Cancel Button in Header */}
+            {status === "processing" && step === "generating" && (
+              <button 
+                onClick={handleCancel}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 hover:bg-red-500 text-red-600 hover:text-white dark:bg-red-500/10 dark:hover:bg-red-500 dark:text-red-400 dark:hover:text-white text-xs font-bold rounded-md transition-colors"
+              >
+                <X className="w-3.5 h-3.5" /> Cancel
+              </button>
+            )}
             {status === "error" && <XCircle className="w-5 h-5 text-red-500" />}
           </div>
 
@@ -291,7 +321,7 @@ export function RenderOverlay() {
         </div>
 
         {/* Dynamic Wizard Body */}
-        <div className="p-6 bg-white dark:bg-[#09090b] min-h-65 max-h-[50vh] overflow-y-auto custom-scrollbar flex flex-col">
+        <div className="p-6 bg-white dark:bg-[#09090b] min-h-65 max-h-[45vh] overflow-y-auto custom-scrollbar flex flex-col">
           
           {/* STEP 1: GENERATING */}
           {step === "generating" && (
@@ -305,9 +335,17 @@ export function RenderOverlay() {
                   <p className="text-xs text-zinc-400 mt-1 max-w-sm">
                     Rendering map animations and synthesizing speech via Python.
                   </p>
-                  <div className="w-full max-w-md bg-zinc-100 dark:bg-zinc-800 h-2 rounded-full mt-6 overflow-hidden">
-                    <div className="h-full bg-navi-500 transition-all duration-300" style={{ width: `${progress}%` }} />
+                  
+                  {/* ✨ FIX: Dynamic Progress Bar */}
+                  <div className="w-full max-w-md bg-zinc-100 dark:bg-zinc-800 h-2 rounded-full mt-6 overflow-hidden relative">
+                    <div className="h-full bg-navi-500 transition-all duration-500 ease-out" style={{ width: `${progress}%` }} />
                   </div>
+                  <span className="text-[10px] font-bold text-zinc-500 mt-2">{progress}% Complete</span>
+                </>
+              ) : status === "cancelling" ? (
+                <>
+                  <Loader2 className="w-10 h-10 text-red-500 animate-spin mb-4" />
+                  <h3 className="text-sm font-bold text-zinc-800 dark:text-zinc-100">Cancelling...</h3>
                 </>
               ) : status === "error" ? (
                 <>
@@ -388,13 +426,13 @@ export function RenderOverlay() {
           )}
         </div>
 
-        {/* Real-Time Terminal Log Output */}
-        <div className="h-32 bg-[#09090b] p-3 overflow-y-auto custom-scrollbar font-mono text-[10px] leading-relaxed border-t border-zinc-800">
-          <div ref={scrollRef} className="space-y-1">
+        {/* ✨ FIX: Terminal Log Output (Ref moved to parent container) */}
+        <div ref={scrollRef} className="h-40 bg-[#09090b] p-4 overflow-y-auto custom-scrollbar font-mono text-[10px] leading-relaxed border-t border-zinc-800 shrink-0">
+          <div className="space-y-1.5">
             {logs.map((log) => (
               <div key={log.id} className="flex gap-2">
                 <span className="text-zinc-600 shrink-0">[{log.time}]</span>
-                <span className={`wrap-break-word ${
+                <span className={`wrap-break-word whitespace-pre-wrap ${
                   log.type === "error" ? "text-red-400" : 
                   log.type === "system" ? "text-emerald-400" : 
                   "text-zinc-400"

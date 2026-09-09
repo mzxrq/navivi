@@ -62,6 +62,7 @@ const DefaultTimeline: TimelineData = {
     { id: "track-audio-2", name: "A2: Music", type: "audio", orderIndex: 4 },
   ],
   clips: [],
+  transitions: [],
   zoomMultiplier: 1.0,
 };
 
@@ -356,18 +357,32 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       { id: "track-audio-2", name: "A2: Music", type: "audio", orderIndex: 4 },
     ];
 
+    const parseDuration = (val: any): number => {
+      if (typeof val === "number") return val;
+      if (typeof val === "string") {
+        if (val.includes(":")) {
+          const parts = val.split(":");
+          return parseInt(parts[0]) * 60 + parseFloat(parts[1]);
+        }
+        return parseFloat(val) || 5.0;
+      }
+      return 5.0; 
+    };
+
     let runningTime = 0;
     const newClips: ClipData[] = [];
 
     manifest.video_tracks.forEach((item) => {
       const targetTrackId = item.type === "static_popup" ? "track-video-2" : "track-video-1";
+      const safeDuration = parseDuration(item.duration);
 
       newClips.push({
         id: item.clip_id || crypto.randomUUID(),
         trackId: targetTrackId,
         label: item.file_path.split(/[/\\]/).pop() || "Video Clip", 
         startTime: runningTime,
-        duration: item.duration,
+        duration: safeDuration,
+        sourceDuration: safeDuration,
         source: item.file_path,
         type: "video",
       });
@@ -420,6 +435,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       tracks: defaultTracks,
       clips: newClips,
       zoomMultiplier: 1,
+      transitions: [],
     });
   };
 

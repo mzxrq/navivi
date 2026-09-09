@@ -3,6 +3,7 @@ import { useWorkspace } from "../../../hooks/useWorkspace";
 import { useUI } from "../../../hooks/useUI";
 import { TimelineTrack as TrackType } from "../../../types";
 import { TimelineClip } from "./TimelineClip";
+import { TransitionBlock } from "./elements/TransitionBlock";
 
 interface TrackProps {
   track: TrackType;
@@ -71,6 +72,11 @@ export function TimelineTrack({
 
     const asset = JSON.parse(assetData);
 
+    const trackRect = e.currentTarget.getBoundingClientRect();
+    const dropX = e.clientX - trackRect.left;
+    const zoomRatio = pxPs * timeline.zoomMultiplier;
+    const dropTime = Math.max(0, dropX / zoomRatio);
+
     // ✨ STRICT TRACK TYPE VALIDATION
     if (track.type === "video" && asset.type === "audio") {
       showToast("Cannot place Audio on a Video track.", "error");
@@ -85,10 +91,6 @@ export function TimelineTrack({
       if (asset.type !== "text") return;
     }
 
-    const trackRect = e.currentTarget.getBoundingClientRect();
-    const dropX = e.clientX - trackRect.left;
-    const zoomRatio = pxPs * timeline.zoomMultiplier;
-
     const durationParts = asset.duration
       ? asset.duration.split(":")
       : ["00", "05"];
@@ -100,6 +102,50 @@ export function TimelineTrack({
 
     const isVideoFile = asset.type === "video";
     const newGroupId = isVideoFile ? crypto.randomUUID() : undefined;
+
+    if (asset.type === "transition") {
+      const sortedClips = [...trackClips].sort((a, b) => a.startTime - b.startTime);
+      let bestCut = null;
+      let minDiff = Infinity;
+
+      // Find the closest "cut" between two adjacent clips
+      for (let i = 0; i < sortedClips.length - 1; i++) {
+        const leftClip = sortedClips[i];
+        const rightClip = sortedClips[i + 1];
+        const cutTime = leftClip.startTime + leftClip.duration;
+
+        // If they are physically touching (or close to it)
+        if (Math.abs(cutTime - rightClip.startTime) < 0.1) {
+          const diff = Math.abs(cutTime - dropTime);
+          if (diff < minDiff && diff < 1.5) { // Drop must be within 1.5s of the cut
+            minDiff = diff;
+            bestCut = { left: leftClip, right: rightClip, cutTime };
+          }
+        }
+      }
+
+      if (!bestCut) {
+        showToast("Drop transitions directly on the cut between two clips!", "warning");
+        return;
+      }
+
+      const transDuration = 1.0; // 1 second default transition
+      const newTransition = {
+        id: crypto.randomUUID(),
+        trackId: track.id,
+        fromClipId: bestCut.left.id,
+        toClipId: bestCut.right.id,
+        type: asset.shader, // e.g., "glsl-dreamy"
+        duration: transDuration,
+        startTime: bestCut.cutTime - (transDuration / 2), // Center it exactly on the cut!
+      };
+
+      setTimeline({
+        ...timeline,
+        transitions: [...(timeline.transitions || []), newTransition]
+      });
+      return;
+    }
 
     const newClip = {
       id: crypto.randomUUID(),
@@ -250,6 +296,16 @@ export function TimelineTrack({
             currentTime={currentTime}
             isLocked={isLocked ?? false}
           />
+        ))}
+
+{(timeline.transitions || [])
+          .filter(t => t.trackId === track.id)
+          .map(transition => (
+            <TransitionBlock 
+              key={transition.id} 
+              transition={transition} 
+              pixelsPerSecond={pxPs * timeline.zoomMultiplier} 
+            />
         ))}
       </div>
     </div>

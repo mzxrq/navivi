@@ -92,7 +92,7 @@ export function SaveAs({
   const isValid = saveAsName.trim().length > 0 && !isChecking;
 
   return createPortal(
-    <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-zinc-950/40 backdrop-blur-[2px] animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-99999 flex items-center justify-center bg-zinc-950/40 backdrop-blur-[2px] animate-in fade-in duration-200">
       <div className="w-96 bg-white dark:bg-navidark-900 border border-zinc-200 dark:border-navidark-400 rounded-xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
         {/* Header Section */}
         <div className="px-5 py-4 border-b border-zinc-100 dark:border-navidark-400 bg-zinc-50/50 dark:bg-navidark-800 flex items-center gap-3">
@@ -178,7 +178,7 @@ export function SaveAs({
           <button
             onClick={() => onSubmit(saveAsName, folderPreview)}
             disabled={!isValid}
-            className="flex items-center justify-center min-w-[70px] px-4 py-2 bg-navi disabled:bg-navi/50 disabled:cursor-not-allowed text-white text-xs font-bold rounded-lg hover:bg-navi-600 transition-colors shadow-sm"
+            className="flex items-center justify-center min-w-17.5 px-4 py-2 bg-navi disabled:bg-navi/50 disabled:cursor-not-allowed text-white text-xs font-bold rounded-lg hover:bg-navi-600 transition-colors shadow-sm"
           >
             {isChecking ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save"}
           </button>

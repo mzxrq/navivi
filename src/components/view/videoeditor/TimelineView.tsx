@@ -511,7 +511,7 @@ export function TimelineView() {
   const PRELOAD_SECONDS = 0.5;
   const activeClipsToRender = timeline.clips.filter((clip) => {
     const track = timeline.tracks.find((t) => t.id === clip.trackId);
-    if (!track || track.isHidden || track.isMuted) return false;
+    if (!track || track.isHidden) return false;
 
     return (
       currentTime >= clip.startTime - PRELOAD_SECONDS &&

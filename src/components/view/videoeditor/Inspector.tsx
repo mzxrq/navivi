@@ -71,7 +71,7 @@ export function Inspector({ selectedClipIds, onClearSelection }: InspectorProps)
         </div>
 
         {/* Text/Subtitle Controls */}
-        {(selectedClip.type === 'text' || selectedClip.type === 'subtitle') && (
+        {(selectedClip.type === 'text') && (
            <div className="space-y-3 pt-3 border-t border-zinc-200 dark:border-navidark-400">
              <h5 className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Text Properties</h5>
              <textarea value={selectedClip.text || ''} onChange={(e) => updateClip({ text: e.target.value })} className="w-full bg-zinc-50 dark:bg-navidark-900 border border-zinc-200 dark:border-navidark-400 rounded p-2 text-xs text-zinc-800 dark:text-zinc-200 h-20 custom-scrollbar" placeholder="Enter subtitle text..." />
