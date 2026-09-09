@@ -33,7 +33,6 @@ export function WaypointItem({
   onEdit,
   onDelete,
 }: WaypointItemProps) {
-  // ✨ Added `waypoints` to calculate relative indexing
   const { activeWaypointId, setActiveWaypointId, updateWaypoint, waypoints } =
     useWorkspace();
   const itemRef = useRef<HTMLDivElement>(null);
@@ -50,8 +49,16 @@ export function WaypointItem({
     onEdit();
   };
 
+  // ✨ PERFECTLY SYNCED COUNTING LOGIC
   let displayLabel = "";
-  if (wp.isStopBy) {
+  const isStart = index === 0;
+  const isEnd = index === waypoints.length - 1 && waypoints.length > 1;
+
+  if (isStart) {
+    displayLabel = "S";
+  } else if (isEnd) {
+    displayLabel = "E";
+  } else if (wp.isStopBy) {
     let stopByIndex = 0;
     for (let i = index; i >= 0; i--) {
       if (waypoints[i].isStopBy) stopByIndex++;
@@ -59,19 +66,11 @@ export function WaypointItem({
     }
     displayLabel = `+${stopByIndex}`;
   } else {
-    // Count normal waypoints
-    let normalIndex = 0;
-    for (let i = 0; i <= index; i++) {
+    let normalIndex = 1;
+    for (let i = 1; i < index; i++) {
       if (!waypoints[i].isStopBy) normalIndex++;
     }
     displayLabel = normalIndex.toString();
-
-    // Catch Start/End/RoundTrip logic
-    const isStart = index === 0;
-    const isEnd = index === waypoints.length - 1 && waypoints.length > 1;
-
-    if (isStart) displayLabel = "S";
-    else if (isEnd) displayLabel = "E";
   }
 
   return (

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { exists } from "@tauri-apps/plugin-fs";
 import { documentDir, join } from "@tauri-apps/api/path";
 import { Folder, Map, Loader2 } from "./icons";
@@ -26,6 +27,14 @@ export function SaveAs({
   useEffect(() => {
     if (isOpen) setSaveAsName(defaultName);
   }, [isOpen, defaultName]);
+
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isOpen) onClose();
+    };
+    window.addEventListener("keydown", handleEsc);
+    return () => window.removeEventListener("keydown", handleEsc);
+  }, [isOpen, onClose]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -82,19 +91,19 @@ export function SaveAs({
 
   const isValid = saveAsName.trim().length > 0 && !isChecking;
 
-  return (
-    <div className="fixed inset-0 z-999 flex items-center justify-center bg-black/60 animate-in fade-in">
-      <div className="w-96 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-white/10 rounded-xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+  return createPortal(
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-zinc-950/40 backdrop-blur-[2px] animate-in fade-in duration-200">
+      <div className="w-96 bg-white dark:bg-navidark-900 border border-zinc-200 dark:border-navidark-400 rounded-xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
         {/* Header Section */}
-        <div className="px-5 py-4 border-b border-zinc-100 dark:border-white/5 bg-zinc-50/50 dark:bg-zinc-900/50 flex items-center gap-3">
-          <div className="p-2 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-lg">
+        <div className="px-5 py-4 border-b border-zinc-100 dark:border-navidark-400 bg-zinc-50/50 dark:bg-navidark-800 flex items-center gap-3">
+          <div className="p-2 bg-navi-50 dark:bg-navi/10 text-navi-600 dark:text-navi-400 rounded-lg">
             <Map className="w-5 h-5" />
           </div>
           <div>
             <h3 className="text-sm font-bold text-zinc-900 dark:text-white">
               {mode === "initial" ? "Save New Project" : "Save Project As"}
             </h3>
-            <p className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-0.5">
+            <p className="text-[10px] text-zinc-500 dark:text-navidark-125 mt-0.5">
               {mode === "initial"
                 ? "Name your project to continue."
                 : "Create a copy of this workspace."}
@@ -116,28 +125,28 @@ export function SaveAs({
               isValid &&
               onSubmit(saveAsName, folderPreview)
             }
-            className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-white mb-5 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all"
+            className="w-full bg-zinc-50 dark:bg-navidark-800 border border-zinc-200 dark:border-navidark-400 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-white mb-5 outline-none focus:border-navi focus:ring-1 focus:ring-navi transition-all shadow-sm"
             autoFocus
             placeholder="Your Project Name Here"
             spellCheck={false}
           />
 
           {/* Contextual Path Preview */}
-          <div className="flex items-start gap-3 p-3 bg-zinc-50 dark:bg-zinc-900/50 rounded-lg border border-zinc-100 dark:border-white/5">
-            <Folder className="w-4 h-4 text-zinc-400 mt-0.5 shrink-0" />
+          <div className="flex items-start gap-3 p-3 bg-zinc-50 dark:bg-navidark-800 rounded-lg border border-zinc-100 dark:border-navidark-400 shadow-inner">
+            <Folder className="w-4 h-4 text-zinc-400 dark:text-navidark-150 mt-0.5 shrink-0" />
             <div className="overflow-hidden w-full">
               <div className="flex items-center justify-between mb-0.5">
                 <div className="text-[10px] font-semibold text-zinc-700 dark:text-zinc-300">
                   Save Location
                 </div>
                 {isChecking && (
-                  <div className="flex items-center gap-1 text-[9px] text-zinc-400 font-medium">
+                  <div className="flex items-center gap-1 text-[9px] text-zinc-400 dark:text-navidark-150 font-medium">
                     <Loader2 className="w-2.5 h-2.5 animate-spin" /> Checking...
                   </div>
                 )}
               </div>
               <div
-                className="text-[10px] text-zinc-500 dark:text-zinc-500 truncate flex items-center"
+                className="text-[10px] text-zinc-500 dark:text-navidark-125 truncate flex items-center"
                 title={`Documents/Navivi/Projects/${folderPreview}`}
               >
                 <span className="truncate shrink">
@@ -146,8 +155,8 @@ export function SaveAs({
                 <span
                   className={`font-medium shrink-0 ml-0.5 ${
                     folderPreview.includes("_")
-                      ? "text-zinc-600 dark:text-zinc-500"
-                      : "text-zinc-700 dark:text-zinc-400"
+                      ? "text-zinc-600 dark:text-navidark-100"
+                      : "text-zinc-700 dark:text-zinc-300"
                   }`}
                 >
                   {folderPreview}
@@ -158,10 +167,10 @@ export function SaveAs({
         </div>
 
         {/* Footer Section */}
-        <div className="px-5 py-4 border-t border-zinc-100 dark:border-white/5 bg-zinc-50/50 dark:bg-zinc-900/50 flex justify-end gap-2">
+        <div className="px-5 py-4 border-t border-zinc-100 dark:border-navidark-400 bg-zinc-50/50 dark:bg-navidark-800 flex justify-end gap-2">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-colors"
+            className="px-4 py-2 text-xs font-semibold text-zinc-600 dark:text-navidark-150 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-navidark-700 rounded-lg transition-colors"
           >
             Cancel
           </button>
@@ -169,12 +178,13 @@ export function SaveAs({
           <button
             onClick={() => onSubmit(saveAsName, folderPreview)}
             disabled={!isValid}
-            className="flex items-center justify-center min-w-17.5 px-4 py-2 bg-emerald-500 disabled:bg-emerald-500/50 disabled:cursor-not-allowed text-white text-xs font-bold rounded-lg hover:bg-emerald-600 transition-colors shadow-sm"
+            className="flex items-center justify-center min-w-[70px] px-4 py-2 bg-navi disabled:bg-navi/50 disabled:cursor-not-allowed text-white text-xs font-bold rounded-lg hover:bg-navi-600 transition-colors shadow-sm"
           >
             {isChecking ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save"}
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

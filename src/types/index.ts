@@ -1,7 +1,9 @@
 import type { Dispatch, SetStateAction, } from "react";
 
 export type RouteMode = "driving" | "walking" | "direct" | "curve" | "ferry" | "calculating" | "draw";
-export type TrackType = "video" | "audio" | "image" | "text";
+// export type TrackType = "video" | "audio" | "image" | "text";
+export type TrackKind = "video" | "overlay" | "subtitle" | "audio";
+export type ClipKind = "video" | "audio" | "image" | "text";
 
 export interface Waypoint {
   id: string;
@@ -69,7 +71,8 @@ export interface RecentProjects {
 export interface TimelineTrack {
   id: string;
   name: string;
-  type: string;
+  type: TrackKind;
+  orderIndex: number;
   isHidden?: boolean;
   isMuted?: boolean;
   isLocked?: boolean;
@@ -85,7 +88,7 @@ export interface ClipData {
   source?: string;
   sourceOffset?: number;
 
-  type?: string;
+  type?: ClipKind;
   groupId?: string;
 
   x?: number;
@@ -166,6 +169,7 @@ export interface WorkspaceState {
   saveProject: (overrideName?: string, asDuplicate?: boolean, safeFolderName?: string) => Promise<string | undefined>;
   loadProject: (forcePath?: string) => Promise<boolean>;
   recentProjects: RecentProjects[];
+  setRecentProjects: Dispatch<SetStateAction<RecentProjects[]>>;
   isDirty: boolean;
   setIsDirty: (val: boolean) => void;
   resetWorkspace: () => void;

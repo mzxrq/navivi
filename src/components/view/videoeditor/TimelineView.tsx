@@ -34,15 +34,11 @@ export function TimelineView() {
   const { timeline, setTimeline, autoLoadTimeline, metadata } = useWorkspace();
   const { showToast } = useUI();
 
-  const [selectedClipIds, setSelectedClipIds] = useState<string[]>([]); // ✨ Multi-select state
-  const [copiedClips, setCopiedClips] = useState<ClipData[]>([]); // ✨ Copy/Paste state
+  const [selectedClipIds, setSelectedClipIds] = useState<string[]>([]);
+  const [copiedClips, setCopiedClips] = useState<ClipData[]>([]);
 
-  const [activeTool, setActiveTool] = useState<"pointer" | "razor" | "magic">(
-    "pointer",
-  );
-  const [rightPanelTab, setRightPanelTab] = useState<"inspector" | "export">(
-    "inspector",
-  );
+  const [activeTool, setActiveTool] = useState<"pointer" | "razor" | "magic">("pointer");
+  const [rightPanelTab, setRightPanelTab] = useState<"inspector" | "export">("inspector");
   const [isRippleMode, setIsRippleMode] = useState(true);
 
   const [isPlaying, setIsPlaying] = useState(false);
@@ -55,7 +51,6 @@ export function TimelineView() {
 
   const [editingTrackId, setEditingTrackId] = useState<string | null>(null);
 
-  // ✨ MARQUEE SELECTION STATE
   const [marquee, setMarquee] = useState<{
     x1: number;
     y1: number;
@@ -65,18 +60,22 @@ export function TimelineView() {
 
   const pixelsPerSecond = 20 * timeline.zoomMultiplier;
 
-  // ✨ Calculate exact track vertical bounds for Marquee intersection
+  // ✨ SORT TRACKS BY ORDER INDEX
+  const sortedTracks = useMemo(() => {
+    return [...timeline.tracks].sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
+  }, [timeline.tracks]);
+
+  // ✨ Calculate track bounds using the SORTED tracks
   const trackBounds = useMemo(() => {
     let y = 0;
-    return timeline.tracks.map((t) => {
-      const h = t.name.toLowerCase().includes("video") ? 80 : 56;
+    return sortedTracks.map((t) => {
+      const h = t.type === "video" || t.name.toLowerCase().includes("video") ? 80 : 56;
       const bounds = { id: t.id, top: y, bottom: y + h };
       y += h;
       return bounds;
     });
-  }, [timeline.tracks]);
+  }, [sortedTracks]);
 
-  // ✨ Marquee Listeners
   useEffect(() => {
     if (!marquee) return;
     const handleMouseMove = (e: MouseEvent) => {
@@ -94,7 +93,6 @@ export function TimelineView() {
         const mTop = Math.min(marquee.y1, marquee.y2);
         const mBottom = Math.max(marquee.y1, marquee.y2);
 
-        // Only select if they actually dragged a box (not a misclick)
         if (mRight - mLeft > 5 || mBottom - mTop > 5) {
           const selected = timeline.clips.filter((clip) => {
             const cLeft = clip.startTime * pixelsPerSecond;
@@ -102,7 +100,6 @@ export function TimelineView() {
             const tb = trackBounds.find((t) => t.id === clip.trackId);
             if (!tb) return false;
 
-            // Check intersection (AABB)
             return !(
               cRight < mLeft ||
               cLeft > mRight ||
@@ -167,7 +164,6 @@ export function TimelineView() {
     }
   };
 
-  // ✨ MASSIVE HOTKEY UPGRADE
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const activeEl = document.activeElement as HTMLElement | null;
@@ -238,6 +234,7 @@ export function TimelineView() {
                   id: targetTrackId,
                   name: `${prefix} ${existingCount + 1}`,
                   type: originalTrack.type,
+                  orderIndex: originalTrack.orderIndex + 0.1, // Insert right below
                   isLocked: false,
                   isHidden: false,
                   isMuted: false,
@@ -277,7 +274,7 @@ export function TimelineView() {
           } else setActiveTool("razor");
           break;
 
-        case "x": // ✨ NEW: Cut
+        case "x":
           if (isCtrl) {
             e.preventDefault();
             const toCopy = timeline.clips.filter((c) =>
@@ -306,18 +303,17 @@ export function TimelineView() {
           }
           break;
 
-        case "a": // ✨ NEW: Select All
+        case "a":
           if (isCtrl) {
             e.preventDefault();
             setSelectedClipIds(timeline.clips.map((c) => c.id));
           }
           break;
 
-        case "l": // ✨ NEW: Link/Unlink
+        case "l":
           if (isCtrl) {
             e.preventDefault();
             if (e.shiftKey) {
-              // Unlink
               setTimeline({
                 ...timeline,
                 clips: timeline.clips.map((c) =>
@@ -328,7 +324,6 @@ export function TimelineView() {
               });
               showToast("Clips unlinked", "success");
             } else {
-              // Link
               if (selectedClipIds.length < 2) {
                 showToast("Select at least 2 clips to link", "warning");
                 return;
@@ -352,7 +347,7 @@ export function TimelineView() {
             selectedClipIds.forEach((id) => handleSplitClip(id, currentTime));
           break;
 
-        case "escape": // ✨ NEW: Deselect
+        case "escape":
           e.preventDefault();
           setSelectedClipIds([]);
           break;
@@ -672,7 +667,7 @@ export function TimelineView() {
             
             <button 
               onClick={() => {
-                const popupTrack = timeline.tracks.find(t => t.name.toLowerCase().includes("popup") || t.type === "video");
+                const popupTrack = sortedTracks.find(t => t.type === "video" || t.type === "overlay");
                 if (!popupTrack) return;
                 
                 const newTextClip: ClipData = {
@@ -682,8 +677,8 @@ export function TimelineView() {
                   label: "Custom Text",
                   text: "Enter text here...",
                   startTime: currentTime,
-                  duration: 5, // Default 5 seconds
-                  x: 960, // Center of 1920x1080
+                  duration: 5,
+                  x: 960,
                   y: 540,
                   fontSize: 64,
                   color: "#ffffff"
@@ -702,65 +697,23 @@ export function TimelineView() {
             <button onClick={() => setActiveTool("magic")} className={`p-1.5 rounded transition-colors ${activeTool === "magic" ? "bg-white dark:bg-navidark-700 text-navi shadow-sm" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"}`} title="Auto-Transitions"><Sparkles className="w-4 h-4" /></button>
           </div>
 
-          {/* ✨ NEW CENTER: Playback Controls & Timer */}
+          {/* CENTER: Playback Controls */}
           <div className="flex items-center gap-1 bg-zinc-100 dark:bg-navidark-900 p-1 rounded-md border border-zinc-200 dark:border-navidark-700">
-            <button
-              onClick={() => setCurrentTime(0)}
-              className="p-1.5 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors rounded hover:bg-zinc-200 dark:hover:bg-navidark-700"
-              title="Home"
-            >
-              <SkipBack className="w-4 h-4" />
+            <button onClick={() => setCurrentTime(0)} className="p-1.5 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors rounded hover:bg-zinc-200 dark:hover:bg-navidark-700" title="Home"><SkipBack className="w-4 h-4" /></button>
+            <button onClick={() => setIsPlaying(!isPlaying)} className="p-1.5 text-zinc-500 hover:text-navi transition-colors rounded hover:bg-zinc-200 dark:hover:bg-navidark-700" title="Play/Pause (Space)">
+              {isPlaying ? <Pause className="w-4 h-4" fill="currentColor" /> : <Play className="w-4 h-4" fill="currentColor" />}
             </button>
-
-            <button
-              onClick={() => setIsPlaying(!isPlaying)}
-              className="p-1.5 text-zinc-500 hover:text-navi transition-colors rounded hover:bg-zinc-200 dark:hover:bg-navidark-700"
-              title="Play/Pause (Space)"
-            >
-              {isPlaying ? (
-                <Pause className="w-4 h-4" fill="currentColor" />
-              ) : (
-                <Play className="w-4 h-4" fill="currentColor" />
-              )}
-            </button>
-
-            <button
-              onClick={() =>
-                setCurrentTime(
-                  timeline.clips.reduce(
-                    (max, c) => Math.max(max, c.startTime + c.duration),
-                    0,
-                  ),
-                )
-              }
-              className="p-1.5 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors rounded hover:bg-zinc-200 dark:hover:bg-navidark-700"
-              title="End"
-            >
-              <SkipForward className="w-4 h-4" />
-            </button>
-
+            <button onClick={() => setCurrentTime(timeline.clips.reduce((max, c) => Math.max(max, c.startTime + c.duration), 0))} className="p-1.5 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors rounded hover:bg-zinc-200 dark:hover:bg-navidark-700" title="End"><SkipForward className="w-4 h-4" /></button>
             <div className="w-px h-4 bg-zinc-300 dark:bg-navidark-400 mx-2" />
-
             <div className="text-xs font-mono font-medium text-zinc-600 dark:text-zinc-300 px-2 py-0.5 pointer-events-none">
-              {new Date(currentTime * 1000)
-                .toISOString()
-                .substring(11, 23)
-                .replace(".", ":")}
+              {new Date(currentTime * 1000).toISOString().substring(11, 23).replace(".", ":")}
             </div>
           </div>
 
           {/* RIGHT: Zoom Controls */}
           <div className="flex items-center gap-2">
             <ZoomOut className="w-3.5 h-3.5 text-zinc-400" />
-            <input
-              type="range"
-              min="0.2"
-              max="5"
-              step="0.1"
-              value={timeline.zoomMultiplier}
-              onChange={(e) => handleZoom(parseFloat(e.target.value))}
-              className="w-24 accent-navi cursor-ew-resize"
-            />
+            <input type="range" min="0.2" max="5" step="0.1" value={timeline.zoomMultiplier} onChange={(e) => handleZoom(parseFloat(e.target.value))} className="w-24 accent-navi cursor-ew-resize" />
             <ZoomIn className="w-3.5 h-3.5 text-zinc-400" />
           </div>
         </div>
@@ -785,10 +738,9 @@ export function TimelineView() {
               }}
             >
               <div className="pb-32">
-                {timeline.tracks.map((track) => {
-                  const isMainTrack = track.name
-                    .toLowerCase()
-                    .includes("video");
+                {/* ✨ MAPPING OVER SORTED TRACKS */}
+                {sortedTracks.map((track) => {
+                  const isMainTrack = track.type === "video" || track.name.toLowerCase().includes("video");
                   const isAudioTrack = track.type === "audio";
                   const trackHeight = isMainTrack ? "h-20" : "h-14";
                   return (
@@ -821,10 +773,7 @@ export function TimelineView() {
                           }
                           onKeyDown={(e) => {
                             if (e.key === "Enter")
-                              handleUpdateTrackName(
-                                track.id,
-                                e.currentTarget.value,
-                              );
+                              handleUpdateTrackName(track.id, e.currentTarget.value);
                             if (e.key === "Escape") setEditingTrackId(null);
                           }}
                           className="w-full bg-white dark:bg-navidark-900 text-[10px] font-bold text-zinc-900 dark:text-zinc-100 px-1.5 py-1 rounded outline-none border-2 border-navi"
@@ -837,42 +786,24 @@ export function TimelineView() {
                       <div className="flex items-center gap-2">
                         {!isAudioTrack ? (
                           <button
-                            onClick={() =>
-                              handleToggleTrackProp(track.id, "isHidden")
-                            }
+                            onClick={() => handleToggleTrackProp(track.id, "isHidden")}
                             className={`p-1 rounded transition-colors ${track.isHidden ? "text-red-500 bg-red-50 dark:bg-red-500/10" : "text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200"}`}
                           >
-                            {track.isHidden ? (
-                              <EyeOff className="w-3.5 h-3.5" />
-                            ) : (
-                              <Eye className="w-3.5 h-3.5" />
-                            )}
+                            {track.isHidden ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                           </button>
                         ) : (
                           <button
-                            onClick={() =>
-                              handleToggleTrackProp(track.id, "isMuted")
-                            }
+                            onClick={() => handleToggleTrackProp(track.id, "isMuted")}
                             className={`p-1 rounded transition-colors ${track.isMuted ? "text-red-500 bg-red-50 dark:bg-red-500/10" : "text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200"}`}
                           >
-                            {track.isMuted ? (
-                              <VolumeX className="w-3.5 h-3.5" />
-                            ) : (
-                              <Volume2 className="w-3.5 h-3.5" />
-                            )}
+                            {track.isMuted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
                           </button>
                         )}
                         <button
-                          onClick={() =>
-                            handleToggleTrackProp(track.id, "isLocked")
-                          }
+                          onClick={() => handleToggleTrackProp(track.id, "isLocked")}
                           className={`p-1 rounded transition-colors ${track.isLocked ? "text-red-500 bg-red-50 dark:bg-red-500/10" : "text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200"}`}
                         >
-                          {track.isLocked ? (
-                            <Lock className="w-3 h-3" />
-                          ) : (
-                            <Unlock className="w-3 h-3" />
-                          )}
+                          {track.isLocked ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
                         </button>
                       </div>
                     </div>
@@ -907,18 +838,10 @@ export function TimelineView() {
                       className="absolute bottom-0"
                       style={{ left: `${time * pixelsPerSecond}px` }}
                     >
-                      <div
-                        className={`w-px bg-zinc-400 dark:bg-zinc-600 ${isMajor ? "h-2.5" : "h-1.5"}`}
-                      />
+                      <div className={`w-px bg-zinc-400 dark:bg-zinc-600 ${isMajor ? "h-2.5" : "h-1.5"}`} />
                       {isMajor && (
                         <span className="absolute bottom-3 -translate-x-1/2 text-[9px] text-zinc-500 dark:text-zinc-400 font-mono select-none pointer-events-none">
-                          {Math.floor(time / 60)
-                            .toString()
-                            .padStart(2, "0")}
-                          :
-                          {Math.floor(time % 60)
-                            .toString()
-                            .padStart(2, "0")}
+                          {Math.floor(time / 60).toString().padStart(2, "0")}:{Math.floor(time % 60).toString().padStart(2, "0")}
                         </span>
                       )}
                     </div>
@@ -937,9 +860,7 @@ export function TimelineView() {
               className="flex-1 overflow-auto custom-scrollbar relative"
               onMouseDown={(e) => {
                 if (e.button === 2) return;
-
-                if ((e.target as HTMLElement).closest(".react-draggable"))
-                  return;
+                if ((e.target as HTMLElement).closest(".react-draggable")) return;
                 const rect = e.currentTarget.getBoundingClientRect();
                 const x = e.clientX - rect.left + e.currentTarget.scrollLeft;
                 const y = e.clientY - rect.top + e.currentTarget.scrollTop;
@@ -959,7 +880,6 @@ export function TimelineView() {
                   style={{ left: `${currentTime * pixelsPerSecond}px` }}
                 />
 
-                {/* ✨ THE MARQUEE BOX */}
                 {marquee && (
                   <div
                     className="absolute bg-navi-500/20 border border-navi-500 z-50 pointer-events-none"
@@ -972,11 +892,12 @@ export function TimelineView() {
                   />
                 )}
 
-                {timeline.tracks.map((track) => (
+                {/* ✨ MAPPING OVER SORTED TRACKS */}
+                {sortedTracks.map((track) => (
                   <TimelineTrack
                     key={track.id}
                     track={track}
-                    selectedClipIds={selectedClipIds} // ✨ Passed Array
+                    selectedClipIds={selectedClipIds}
                     onSelectClip={handleSelectClip}
                     activeTool={activeTool}
                     onSplit={handleSplitClip}

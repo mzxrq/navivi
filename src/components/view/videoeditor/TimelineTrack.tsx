@@ -36,7 +36,8 @@ export function TimelineTrack({
   const dragCounter = useRef(0);
 
   const trackClips = timeline.clips.filter((clip) => clip.trackId === track.id);
-  const isMainTrack = track.name.toLowerCase().includes("video");
+  // Support both strict types and fallback to name checking just in case
+  const isMainTrack = track.type === "video" || track.name.toLowerCase().includes("video");
   const trackHeight = isMainTrack ? "h-20" : "h-14";
 
   const handleDragEnter = (e: React.DragEvent) => {
@@ -69,23 +70,19 @@ export function TimelineTrack({
     if (!assetData) return;
 
     const asset = JSON.parse(assetData);
-    const trackName = track.name.toLowerCase();
 
-    if (trackName.includes("video") && asset.type === "audio") {
-      showToast("Cannot place Audio on the Video track.", "error");
+    // ✨ STRICT TRACK TYPE VALIDATION
+    if (track.type === "video" && asset.type === "audio") {
+      showToast("Cannot place Audio on a Video track.", "error");
       return;
     }
-    if (trackName.includes("voiceover") && asset.type !== "audio") {
-      showToast("The Voiceover track only accepts Audio files.", "error");
+    if (track.type === "audio" && asset.type !== "audio") {
+      showToast("Audio tracks only accept Audio files.", "error");
       return;
     }
-    if (trackName.includes("subtitle")) {
-      showToast("Subtitles are generated automatically.", "warning");
-      return;
-    }
-    if (trackName.includes("popup") && asset.type === "audio") {
-      showToast("Popup track is for Images and Videos only.", "error");
-      return;
+    if (track.type === "subtitle") {
+      showToast("Subtitles are managed automatically or via text clips.", "warning");
+      if (asset.type !== "text") return;
     }
 
     const trackRect = e.currentTarget.getBoundingClientRect();
@@ -119,6 +116,7 @@ export function TimelineTrack({
 
     let newClips = [...timeline.clips];
 
+    // If dropping a Video, automatically extract and drop the Audio onto an audio track
     if (isVideoFile) {
       const audioTrack = timeline.tracks.find((t) => t.type === "audio");
       if (audioTrack) {

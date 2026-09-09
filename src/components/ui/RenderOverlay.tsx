@@ -1,13 +1,13 @@
 import { useEffect, useState, useRef } from "react";
+import { createPortal } from "react-dom"; // ✨ FIX: Teleport the overlay!
 import { listen } from "@tauri-apps/api/event";
-import { invoke, convertFileSrc } from "@tauri-apps/api/core";
-import { 
-  Loader2, CheckCircle, XCircle, Info, AlertTriangle, 
-  Play, Pause, Mic, FileText, Settings2, ArrowRight 
-} from "./icons";
+import { invoke } from "@tauri-apps/api/core";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import { useUI } from "../../hooks/useUI";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { join } from "@tauri-apps/api/path";
+
+import { Loader2, CheckCircle, XCircle, AlertTriangle, Settings2, PlayCircle } from "./icons";
 
 interface LogItem {
   id: string;
@@ -230,17 +230,27 @@ export function RenderOverlay() {
     }, 1200);
   };
 
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isRendering) {
+        setIsRendering(false);
+      }
+    };
+    window.addEventListener("keydown", handleEsc);
+    return () => window.removeEventListener("keydown", handleEsc);
+  }, [isRendering]);
+
   if (!isRendering) return null;
 
-  return (
-    <div className="fixed inset-0 z-1000 bg-zinc-950/80 backdrop-blur-sm flex items-center justify-center p-6 animate-in fade-in duration-200">
+  // ✨ FIX: Use createPortal to teleport the overlay to the top level of the app!
+  return createPortal(
+    <div style={{ zIndex: 99999 }} className="fixed inset-0 bg-zinc-950/50 backdrop-blur-[2px] flex items-center justify-center p-6 animate-in fade-in duration-200">
       <div className="w-full max-w-2xl bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-white/10 rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-300">
         
         {/* Header & Stepper */}
         <div className="p-6 border-b border-zinc-100 dark:border-white/5 bg-zinc-50/50 dark:bg-zinc-900/50 shrink-0">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-2">
-              <Mic className="w-5 h-5 text-navi-500" />
               <h2 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
                 Generation Pipeline: {metadata.project_name}
               </h2>
@@ -332,18 +342,15 @@ export function RenderOverlay() {
                   reviewItems.map((item) => (
                     <div key={item.id} className="bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-white/5 rounded-xl p-3 space-y-2">
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-navi-600 dark:text-navi-400 flex items-center gap-1.5">
-                          <FileText className="w-3.5 h-3.5" /> {item.label}
+                        <span className="text-xs font-bold text-navi-600 dark:text-navi-400">
+                          {item.label}
                         </span>
                         <button 
                           onClick={() => handleTogglePlay(item)}
                           className="flex items-center gap-1 px-2.5 py-1 bg-navi-500 hover:bg-navi-600 text-white text-[10px] font-bold rounded-lg transition-colors shadow-sm"
                         >
-                          {activeAudioId === item.id ? (
-                            <><Pause className="w-3 h-3" /> Pause</>
-                          ) : (
-                            <><Play className="w-3 h-3" /> Listen</>
-                          )}
+                          <PlayCircle className="w-3 h-3" /> 
+                          {activeAudioId === item.id ? "Pause" : "Listen"}
                         </button>
                       </div>
 
@@ -411,6 +418,7 @@ export function RenderOverlay() {
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

@@ -13,13 +13,17 @@ import {
   MapPinPen,
   ChevronRight,
   LinkIcon,
-  UnlinkIcon
+  UnlinkIcon,
+  FolderOpen,
+  Edit3,
+  Copy, 
+  Settings2
 } from "../ui/icons";
 
 export interface ContextMenuState {
   x: number;
   y: number;
-  type: "track-header" | "timeline-clip" | "map-canvas" | "waypoint-marker" | "empty-track";
+  type: "track-header" | "timeline-clip" | "map-canvas" | "waypoint-marker" | "empty-track" | "project-card";
   targetId?: string;
   data?: any;
 }
@@ -77,8 +81,19 @@ export function ContextMenu() {
 
   if (!menu) return null;
 
+  // ✨ FIXED: Added orderIndex and strict type constraints
   const handleAddTrack = (type: "video" | "audio") => {
-    const trackCount = timeline.tracks.length + 1;
+    const existingTracksOfType = timeline.tracks.filter((t) => t.type === type);
+    const trackCount = existingTracksOfType.length + 1;
+    
+    // Group the new track neatly under the existing tracks of the same type
+    let newOrderIndex = 0;
+    if (existingTracksOfType.length > 0) {
+      newOrderIndex = Math.max(...existingTracksOfType.map(t => t.orderIndex)) + 0.1;
+    } else {
+      newOrderIndex = type === "video" ? 1.5 : 5; // Default safe zones
+    }
+
     setTimeline({
       ...timeline,
       tracks: [
@@ -87,6 +102,10 @@ export function ContextMenu() {
           id: crypto.randomUUID(),
           name: `${type.toUpperCase()} ${trackCount}`,
           type,
+          orderIndex: newOrderIndex,
+          isHidden: false,
+          isMuted: false,
+          isLocked: false
         },
       ],
     });
@@ -320,7 +339,6 @@ export function ContextMenu() {
               <CornerDownLeft className="w-3.5 h-3.5"/> Add Return Stop
             </button>
             
-            {/* ✨ NEW: The Submenu Implementation */}
             <div className="relative group">
               <button className="ctx-btn w-full flex items-center justify-between">
                 <span className="flex items-center gap-2">
@@ -385,6 +403,43 @@ export function ContextMenu() {
               </button>
             </>
           )}
+          </>
+        )}
+
+        {menu.type === "project-card" && (
+          <>
+            <button 
+              onClick={() => { if (menu.data?.onOpen) menu.data.onOpen(); setMenu(null); }} 
+              className="ctx-btn"
+            >
+              <FolderOpen className="w-3.5 h-3.5" /> Open Project
+            </button>
+            <div className="my-1 border-t border-zinc-200 dark:border-white/10" />
+            <button 
+              onClick={() => { if (menu.data?.onRename) menu.data.onRename(); setMenu(null); }} 
+              className="ctx-btn"
+            >
+              <Edit3 className="w-3.5 h-3.5" /> Rename
+            </button>
+            <button 
+              onClick={() => { if (menu.data?.onDuplicate) menu.data.onDuplicate(); setMenu(null); }} 
+              className="ctx-btn"
+            >
+              <Copy className="w-3.5 h-3.5" /> Duplicate
+            </button>
+            <button 
+              onClick={() => { if (menu.data?.onSettings) menu.data.onSettings(); setMenu(null); }} 
+              className="ctx-btn"
+            >
+              <Settings2 className="w-3.5 h-3.5" /> Advanced Settings
+            </button>
+            <div className="my-1 border-t border-zinc-200 dark:border-white/10" />
+            <button 
+              onClick={() => { if (menu.data?.onRemove) menu.data.onRemove(); setMenu(null); }} 
+              className="ctx-btn text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10"
+            >
+              <Trash2 className="w-3.5 h-3.5" /> Remove from list
+            </button>
           </>
         )}
       </div>

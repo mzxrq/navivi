@@ -4,7 +4,7 @@ import { TimelineView } from "./components/view/videoeditor/TimelineView";
 import { TitleBar } from "./components/ui/TitleBar";
 import { RenderOverlay } from "./components/ui/RenderOverlay";
 import { TitleScreen } from "./components/view/TitleScreen";
-import { NewProject } from "./components/view/NewProject";
+import { NewProject } from "./components/ui/NewProject";
 import { AppSettings } from "./components/ui/AppSettings";
 import { Toast } from "./components/ui/Toast";
 import { useUI } from "./hooks/useUI";

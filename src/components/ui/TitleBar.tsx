@@ -44,7 +44,7 @@ export function TitleBar() {
     canRedoTimeline,
     setActiveWaypointId,
     setWaypoints,
-    setMetadata
+    setMetadata,
   } = useWorkspace();
 
   const { importRouteFile } = useFileActions();
@@ -70,13 +70,13 @@ export function TitleBar() {
     if (setActiveWaypointId) setActiveWaypointId(null);
     if (setWaypoints) setWaypoints([]);
     if (setMetadata) {
-      setMetadata(prevMetadata => ({
+      setMetadata((prevMetadata) => ({
         ...prevMetadata,
         project_name: "Untitled Project",
         project_id: undefined,
-        directory_path: "", 
+        directory_path: "",
         created_at: new Date().toISOString(),
-        status: "draft"
+        status: "draft",
       }));
     }
     setIsDirty(false);
@@ -178,7 +178,7 @@ export function TitleBar() {
 
             {/* Dropdown Menu */}
             {isMenuOpen && (
-              <div className="absolute top-10 w-56 bg-white dark:bg-navidark-600 border border-zinc-200 dark:border-white/10 rounded-br-2xl shadow-2xl py-1 z-50 text-sm text-zinc-700 dark:text-zinc-300">
+              <div className="absolute top-10 w-56 bg-white dark:bg-navidark-600 border border-zinc-200 dark:border-white/10 rounded-br-2xl shadow-2xl py-1 z-800 text-sm text-zinc-700 dark:text-zinc-300">
                 {/* Save options */}
                 {currentView === "editor" && (
                   <>
@@ -214,16 +214,17 @@ export function TitleBar() {
                         Ctrl+Shift+S
                       </span>
                     </button>
+                    <div className="h-px bg-zinc-200 dark:bg-white/5 my-1 mx-2" />
+                    <button
+                      onClick={() => handleSafeNavigation("title_screen")}
+                      className="w-full flex items-center justify-between px-4 py-1.5 hover:bg-zinc-100 dark:hover:bg-navidark-400 transition-colors"
+                    >
+                      <span>Project Manager</span>
+                    </button>
+                    <div className="h-px bg-zinc-200 dark:bg-white/5 my-1 mx-2" />
                   </>
                 )}
-                <div className="h-px bg-zinc-200 dark:bg-white/5 my-1 mx-2" />
-                <button
-                  onClick={() => handleSafeNavigation("title_screen")}
-                  className="w-full flex items-center justify-between px-4 py-1.5 hover:bg-zinc-100 dark:hover:bg-navidark-400 transition-colors"
-                >
-                  <span>Project Manager</span>
-                </button>
-                <div className="h-px bg-zinc-200 dark:bg-white/5 my-1 mx-2" />
+
                 <button
                   onClick={() => handleSafeNavigation("new_project")}
                   className="w-full flex items-center justify-between px-4 py-1.5 hover:bg-zinc-100 dark:hover:bg-navidark-400 transition-colors"

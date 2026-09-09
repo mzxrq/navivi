@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import {
   ChevronRight,
   Trash2,
@@ -25,9 +26,12 @@ import { LocationSearch } from "../../ui/LocationSearch";
 import { OverviewPanel } from "./OverviewPanel";
 
 export function Sidebar() {
-  const { showToast, 
+  const {
+    showToast,
+    isRendering,
+    setIsRendering,
     //setEditorMode
-   } = useUI();
+  } = useUI();
   const {
     waypoints,
     setWaypoints,
@@ -40,7 +44,8 @@ export function Sidebar() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isListEditMode, setIsListEditMode] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
-  const [isRendering, setIsRendering] = useState(false);
+
+  const [showGenerateConfirm, setShowGenerateConfirm] = useState(false);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const sidebarRef = useRef<HTMLElement>(null);
 
@@ -76,15 +81,25 @@ export function Sidebar() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const handleGenerate = async () => {
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && showGenerateConfirm) {
+        setShowGenerateConfirm(false);
+      }
+    };
+    window.addEventListener("keydown", handleEsc);
+    return () => window.removeEventListener("keydown", handleEsc);
+  }, [showGenerateConfirm]);
+
+  const handleGenerateClick = async () => {
     if (waypoints.length === 0) {
       showToast("Cannot generate: Please add at least one waypoint.", "error");
       return;
     }
-
-    if (!confirm("Ready to generate assets? This will create your voiceovers and map videos before opening the timeline.")) {
-      return;
-    }
+    setShowGenerateConfirm(true);
+  };
+  const executeGenerate = async () => {
+    setShowGenerateConfirm(false);
     await saveProject();
     setIsRendering(true);
   };
@@ -108,7 +123,7 @@ export function Sidebar() {
   return (
     <aside
       ref={sidebarRef}
-      className="w-85 shrink-0 bg-white dark:bg-navidark-800 border-r border-zinc-200 dark:border-white/8 flex flex-col h-full select-none z-10 relative shadow-xl transition-colors"
+      className="w-85 shrink-0 bg-white dark:bg-navidark-800 border-r border-zinc-200 dark:border-white/8 flex flex-col h-full select-none z-100 relative shadow-xl transition-colors"
     >
       <div className="sticky top-0 z-30 bg-white/95 dark:bg-navidark-800/95 backdrop-blur-md border-b border-zinc-200 dark:border-white/5 p-5 shrink-0 flex flex-col gap-4">
         <LocationSearch />
@@ -275,11 +290,7 @@ export function Sidebar() {
                 setIsListEditMode(!isListEditMode);
                 setShowClearConfirm(false);
               }}
-              disabled={
-                waypoints.length === 0 ||
-                isRendering ||
-                isPreviewing
-              }
+              disabled={waypoints.length === 0 || isRendering || isPreviewing}
               className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors shadow-sm ${
                 isListEditMode
                   ? "bg-navi-100 text-navi dark:bg-navi/20 dark:text-navi-200 border border-navi-200 dark:border-navi/30"
@@ -304,7 +315,7 @@ export function Sidebar() {
 
         {/* Right: Render Video Button */}
         <button
-          onClick={handleGenerate}
+          onClick={handleGenerateClick}
           disabled={
             waypoints.length === 0 ||
             isListEditMode ||
@@ -325,6 +336,34 @@ export function Sidebar() {
           )}
         </button>
       </div>
+
+      {showGenerateConfirm && createPortal(
+        <div className="fixed inset-0 z-[99999] bg-zinc-950/40 backdrop-blur-[2px] flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-5">
+              <h3 className="text-base font-bold text-zinc-900 dark:text-white mb-2">Ready to Generate?</h3>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
+                This will save your project, synthesize AI voiceovers, and render map videos before opening the Timeline.
+              </p>
+            </div>
+            <div className="p-4 bg-zinc-50 dark:bg-black/20 border-t border-zinc-100 dark:border-white/5 flex items-center justify-end gap-3">
+              <button
+                onClick={() => setShowGenerateConfirm(false)}
+                className="px-4 py-2 text-xs font-bold text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={executeGenerate}
+                className="px-4 py-2 bg-navi hover:bg-navi-600 text-white text-xs font-bold rounded-lg shadow-md transition-colors"
+              >
+                Generate Assets
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </aside>
   );
 }

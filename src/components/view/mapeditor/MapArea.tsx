@@ -332,7 +332,7 @@ export function MapArea() {
 
   return (
     <main className="flex-1 relative bg-zinc-100 dark:bg-[#09090b] overflow-hidden transition-colors">
-      <div className="absolute top-4 right-4 z-500 flex items-center gap-2">
+      <div className="absolute top-4 right-4 z-200 flex items-center gap-2">
         {/* --- DRAW TOOLBAR --- */}
         <div
           className={`flex items-center rounded-full drop-shadow-xl transition-all duration-300 ease-out bg-white dark:bg-zinc-800`}
@@ -513,18 +513,13 @@ export function MapArea() {
             routePoints={routePoints}
           />
 
+          {/* ✨ PERFECTLY SYNCED MAP PINS */}
           {waypoints.map((wp, index) => {
             const isStart = index === 0;
-            const isEnd =
-              index === waypoints.length - 1 && waypoints.length > 1;
-
-            let normalIndex = 1;
-            for (let i = 1; i < index; i++) {
-              if (!waypoints[i].isStopBy) normalIndex++;
-            }
+            const isEnd = index === waypoints.length - 1 && waypoints.length > 1;
 
             let pinType: "start" | "end" | "stopby" | "normal" = "normal";
-            let label = normalIndex.toString();
+            let label = "";
 
             if (isStart) {
               pinType = "start";
@@ -532,6 +527,20 @@ export function MapArea() {
             } else if (isEnd) {
               pinType = "end";
               label = "E";
+            } else if (wp.isStopBy) {
+              pinType = "stopby";
+              let stopByIndex = 0;
+              for (let i = index; i >= 0; i--) {
+                if (waypoints[i].isStopBy) stopByIndex++;
+                else break;
+              }
+              label = `+${stopByIndex}`;
+            } else {
+              let normalIndex = 1;
+              for (let i = 1; i < index; i++) {
+                if (!waypoints[i].isStopBy) normalIndex++;
+              }
+              label = normalIndex.toString();
             }
 
             if (wp.isStopBy) {
@@ -549,7 +558,7 @@ export function MapArea() {
                     <div className="bg-zinc-900 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-lg border border-white/20 mb-1 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
                       {wp.name || `Waypoint`}
                     </div>
-                    <NaviPin className="w-8 h-8" label="・" pinType="stopby" />
+                    <NaviPin className="w-8 h-8" label={label} pinType="stopby" />
                   </div>
                 </Marker>
               );

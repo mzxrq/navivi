@@ -1,3 +1,6 @@
+import { readTextFile, exists } from "@tauri-apps/plugin-fs";
+import { getCurrentWindow } from "@tauri-apps/api/window"; // ✨ NEW: For App Close intercept
+import { parseSRT } from "../utils/srtParser";
 import {
   createContext,
   useContext,
@@ -31,6 +34,9 @@ import { ClipData, TimelineTrack } from "../types";
 import { useHistory } from "./useHistory";
 import { useUI } from "./useUI";
 
+// ✨ NEW: Import your Modal!
+import { UnsavedChanges } from "../components/ui/UnsavedChanges";
+
 const WorkspaceContext = createContext<WorkspaceState | undefined>(undefined);
 
 const DefaultSettings: ProjectSettings = {
@@ -49,55 +55,98 @@ const DefaultMetadata: ProjectMetadata = {
 
 const DefaultTimeline: TimelineData = {
   tracks: [
-    { id: "t-subtitles", name: "Subtitles", type: "text" },
-    { id: "t-popups", name: "Popups", type: "image" },
-    { id: "t-mapvideo", name: "Video", type: "video" },
-    { id: "t-voiceover", name: "Voiceover", type: "audio" },
+    { id: "track-video-2", name: "V2: Pop-ups", type: "video", orderIndex: 0 },
+    { id: "track-video-1", name: "V1: Main Video", type: "video", orderIndex: 1 },
+    { id: "track-subtitles", name: "T1: Subtitles", type: "subtitle", orderIndex: 2 },
+    { id: "track-audio-1", name: "A1: Voiceovers", type: "audio", orderIndex: 3 },
+    { id: "track-audio-2", name: "A2: Music", type: "audio", orderIndex: 4 },
   ],
   clips: [],
   zoomMultiplier: 1.0,
 };
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
-  const { editorMode } = useUI(); // editorMode : Map <-> Timeline
+  const { editorMode } = useUI();
+  const [isDirty, setIsDirty] = useState(false);
 
+  // ✨ FIX: Wrap Waypoint History to trigger isDirty
   const {
     state: waypoints,
-    set: setWaypoints,
-    undo: undoMap,
-    redo: redoMap,
+    set: _setWaypoints,
+    undo: _undoMap,
+    redo: _redoMap,
     canUndo: canUndoMap,
     canRedo: canRedoMap,
     reset: resetWaypointHistory,
-  } = useHistory<Waypoint[]>([], 50); // Waypoint management and undo/redo history for MapEditor
+  } = useHistory<Waypoint[]>([], 50);
 
+  const setWaypoints = useCallback((action: React.SetStateAction<Waypoint[]>) => {
+    _setWaypoints(action);
+    setIsDirty(true);
+  }, [_setWaypoints]);
+
+  const undoMap = useCallback(() => { _undoMap(); setIsDirty(true); }, [_undoMap]);
+  const redoMap = useCallback(() => { _redoMap(); setIsDirty(true); }, [_redoMap]);
+
+  // ✨ FIX: Wrap Timeline History to trigger isDirty! (Fixes Status Bar)
   const {
     state: timeline,
-    set: setTimeline,
-    undo: undoTimeline,
-    redo: redoTimeline,
+    set: _setTimeline,
+    undo: _undoTimeline,
+    redo: _redoTimeline,
     canUndo: canUndoTimeline,
     canRedo: canRedoTimeline,
     reset: resetTimelineHistory,
-  } = useHistory<TimelineData>(DefaultTimeline, 50); // Timeline management and undo/redo history for VideoEditor
+  } = useHistory<TimelineData>(DefaultTimeline, 50);
 
-  const [routeSegments, setRouteSegments] = useState<RouteSegment[]>([]); // RouteSegments
-  const [routePoints, setRoutePoints] = useState<[number, number][]>([]); // MapPin Route points
+  const setTimeline = useCallback((action: React.SetStateAction<TimelineData>) => {
+    _setTimeline(action);
+    setIsDirty(true);
+  }, [_setTimeline]);
+
+  const undoTimeline = useCallback(() => { _undoTimeline(); setIsDirty(true); }, [_undoTimeline]);
+  const redoTimeline = useCallback(() => { _redoTimeline(); setIsDirty(true); }, [_redoTimeline]);
+
+  const [routeSegments, setRouteSegments] = useState<RouteSegment[]>([]);
+  const [routePoints, setRoutePoints] = useState<[number, number][]>([]);
   const [drawnRoute, setDrawnRoute] = useState<[number, number][]>([]);
-  const [activeWaypointId, setActiveWaypointId] = useState<string | null>(null); // Selected waypoint (for context menu)
+  const [activeWaypointId, setActiveWaypointId] = useState<string | null>(null);
+  
   const [metadata, setMetadata] = useState<ProjectMetadata>(() => ({
     ...DefaultMetadata,
     created_at: new Date().toISOString(),
-  })); // Project metadata (see ../services/index.ts for more)
-  const [settings, setSettings] = useState<ProjectSettings>(DefaultSettings); // Project setting (see ../services/index.ts for more)
-  const [routingCache, setRoutingCache] = useState<
-    Record<string, [number, number][]>
-  >({}); // Read routingCache from project's job_config.json
-  const [isDirty, setIsDirty] = useState(false); // check if save or unsaved state
+  }));
+  
+  const [settings, setSettings] = useState<ProjectSettings>(DefaultSettings);
+  const [routingCache, setRoutingCache] = useState<Record<string, [number, number][]>>({});
+  
   const [recentProjects, setRecentProjects] = useState<RecentProjects[]>(() => {
     const saved = localStorage.getItem("navivi-recents");
     return saved ? JSON.parse(saved) : [];
-  }); // Recent Project for TitleScreen.tsx
+  });
+
+  // ✨ GLOBAL UNSAVED MODAL STATE
+  const [isUnsavedModalOpen, setIsUnsavedModalOpen] = useState(false);
+  const [unsavedAction, setUnsavedAction] = useState<(() => void) | null>(null);
+
+  // ✨ TAURI APP CLOSE INTERCEPTOR
+  useEffect(() => {
+    try {
+      const appWindow = getCurrentWindow();
+      const unlisten = appWindow.onCloseRequested(async (event) => {
+        if (isDirty) {
+          event.preventDefault(); // Stop app from closing immediately
+          setUnsavedAction(() => () => appWindow.destroy()); // Force close after choice
+          setIsUnsavedModalOpen(true);
+        }
+      });
+      return () => {
+        unlisten.then(f => f());
+      };
+    } catch (e) {
+      console.log("Tauri window API not available in browser mode");
+    }
+  }, [isDirty]);
 
   const addToRecents = useCallback((name: string, path: string) => {
     setRecentProjects((prev) => {
@@ -109,14 +158,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       localStorage.setItem("navivi-recents", JSON.stringify(updated));
       return updated;
     });
-  }, []); // add recent project to TitleScreen
+  }, []);
 
   const updateWaypoint = useCallback((id: string, data: Partial<Waypoint>) => {
     setWaypoints((prev) =>
       prev.map((wp) => (wp.id === id ? { ...wp, ...data } : wp)),
     );
-    setIsDirty(true);
-  }, []); // update waypoint when is moved or its information like narration or image were updated
+  }, [setWaypoints]);
 
   const updateClip = useCallback(
     (id: string, startTime: number, duration: number) => {
@@ -126,20 +174,19 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           clip.id === id ? { ...clip, startTime, duration } : clip,
         ),
       });
-      setIsDirty(true);
     },
     [timeline, setTimeline],
-  ); // update clip/timeline track when clip is added or its information were updated
+  );
 
   const updateMetadata = useCallback((data: Partial<ProjectMetadata>) => {
     setMetadata((prev) => ({ ...prev, ...data }));
     setIsDirty(true);
-  }, []); // update metadata such as project renaming
+  }, []);
 
   const updateSettings = useCallback((data: Partial<ProjectSettings>) => {
     setSettings((prev) => ({ ...prev, ...data }));
     setIsDirty(true);
-  }, []); // update setting (see index.ts for more)
+  }, []);
 
   const saveProject = async (
     overrideName?: string,
@@ -152,7 +199,6 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      // 1. Save all the Map/Route/Settings data
       const result = await saveProjectData(
         waypoints,
         routeSegments,
@@ -164,10 +210,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         safeFolderName,
       );
 
-      // 🛠️ 2. NEW: Instantly save the Timeline Manifest into that exact same folder!
       await saveTimelineManifest(result.projectDir, result.projName, timeline);
 
-      // 3. Update UI state
       updateMetadata({
         project_name: result.projName,
         status: "saved",
@@ -184,13 +228,12 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       console.error("Failed to save Navivi project:", error);
       throw error;
     }
-  }; // see fileSystem.ts for more
+  };
 
   const loadProject = async (forcePath?: string): Promise<boolean> => {
     try {
-      // Delegate the file selection and reading to the service
       const result = await loadProjectData(forcePath);
-      if (!result) return false; // User cancelled dialog
+      if (!result) return false;
 
       const { data, selectedPath } = result;
       if (data.directory_path) {
@@ -200,16 +243,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           `Recovered ${Object.keys(recoveredCache).length} routes from cache!`,
         );
       } else {
-        // Fallback just in case
         setRoutingCache({});
       }
 
-      // Ensure the file is valid before updating state
       if (!data.project_id || !data.waypoints) {
         throw new Error("Invalid Navivi project file format.");
       }
 
-      // Sync React State
       setMetadata({
         project_id: data.project_id,
         project_name: data.project_name || appConfig.defaultProjectName,
@@ -251,7 +291,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       console.error("Failed to load project:", error);
       throw error;
     }
-  }; // see fileSystem.ts for more
+  };
 
   const resetWorkspace = () => {
     setActiveWaypointId(null);
@@ -265,12 +305,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     setSettings(DefaultSettings);
     setRoutingCache({});
     setIsDirty(false);
-  }; // reset entire workspace
+  };
 
-  // undo/redo shortcut
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore keypresses inside input fields or textareas so typing doesn't trigger undo
       const activeEl = document.activeElement;
       const isTyping =
         activeEl?.tagName === "INPUT" ||
@@ -298,65 +336,89 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [editorMode, undoMap, redoMap, undoTimeline, redoTimeline]);
 
-  // auto-loader logic for TimelineManifest
   const autoLoadTimeline = async (projectDir: string) => {
     const manifest = await loadTimelineManifest(projectDir);
     if (!manifest) {
       resetTimelineHistory(DefaultTimeline);
       return;
-    } // no manifest -> exit
+    }
+    
     if (manifest.ui_state) {
       resetTimelineHistory(manifest.ui_state);
       return;
     }
 
-    // ensure standard base tracks ready
-    const videoTrackId = crypto.randomUUID();
-    const popupTrackId = crypto.randomUUID();
-    const audioTrackId = crypto.randomUUID();
-
     const defaultTracks: TimelineTrack[] = [
-      { id: popupTrackId, name: "Popups", type: "video" },
-      { id: videoTrackId, name: "Video", type: "video" },
-      { id: audioTrackId, name: "Voiceover", type: "audio" },
+      { id: "track-video-2", name: "V2: Pop-ups", type: "video", orderIndex: 0 },
+      { id: "track-video-1", name: "V1: Main Video", type: "video", orderIndex: 1 },
+      { id: "track-subtitles", name: "T1: Subtitles", type: "subtitle", orderIndex: 2 },
+      { id: "track-audio-1", name: "A1: Voiceovers", type: "audio", orderIndex: 3 },
+      { id: "track-audio-2", name: "A2: Music", type: "audio", orderIndex: 4 },
     ];
 
-    // convert python manifest clips into ui timeline clips
     let runningTime = 0;
-    const generatedClips: ClipData[] = [];
+    const newClips: ClipData[] = [];
 
     manifest.video_tracks.forEach((item) => {
-      const targetTrackId =
-        item.type === "static_popup" ? popupTrackId : videoTrackId;
+      const targetTrackId = item.type === "static_popup" ? "track-video-2" : "track-video-1";
 
-      generatedClips.push({
-        id: item.clip_id,
+      newClips.push({
+        id: item.clip_id || crypto.randomUUID(),
         trackId: targetTrackId,
-        label: item.file_path.split("/").pop() || item.clip_id, //Extract filename for UI
+        label: item.file_path.split(/[/\\]/).pop() || "Video Clip", 
         startTime: runningTime,
         duration: item.duration,
         source: item.file_path,
+        type: "video",
       });
-      // advance running time so next clip starts exactly when this one ends
+      
       runningTime += item.duration;
     });
 
-    // add master audio track if it exists
     if (manifest.audio_track) {
-      generatedClips.push({
-        id: "master_audio",
-        trackId: audioTrackId,
-        label: manifest.audio_track.split("/").pop() || "Master Audio",
+      newClips.push({
+        id: crypto.randomUUID(),
+        trackId: "track-audio-1",
+        label: manifest.audio_track.split(/[/\\]/).pop() || "Master Audio",
         startTime: 0,
         duration: manifest.total_duration_seconds,
         source: manifest.audio_track,
+        type: "audio",
       });
+
+      try {
+        const srtPath = manifest.audio_track.replace(/\.[^/.]+$/, ".srt"); 
+        
+        if (await exists(srtPath)) {
+          const srtContent = await readTextFile(srtPath);
+          const parsedSubtitles = parseSRT(srtContent);
+          
+          parsedSubtitles.forEach((sub) => {
+            newClips.push({
+              id: crypto.randomUUID(),
+              trackId: "track-subtitles",
+              label: `Sub: ${sub.text.substring(0, 15)}...`,
+              type: "text",
+              text: sub.text,
+              startTime: sub.startTime,
+              duration: sub.endTime - sub.startTime,
+              x: 960,
+              y: 900,
+              fontSize: 48,
+              color: "#ffffff",
+              stroke: "#000000",
+              strokeWidth: 2,
+            });
+          });
+        }
+      } catch (err) {
+        console.error("Failed to load or parse subtitles:", err);
+      }
     }
 
-    // overwrite the timeline state with generated data
     setTimeline({
       tracks: defaultTracks,
-      clips: generatedClips,
+      clips: newClips,
       zoomMultiplier: 1,
     });
   };
@@ -368,14 +430,12 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   return (
     <WorkspaceContext.Provider
       value={{
-        // map history
         waypoints,
         setWaypoints,
         undoMap,
         redoMap,
         canUndoMap,
         canRedoMap,
-        // timeline history
         timeline,
         setTimeline,
         autoLoadTimeline,
@@ -402,6 +462,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         isDirty,
         setIsDirty,
         recentProjects,
+        setRecentProjects,
         resetWorkspace,
         routingCache,
         setRoutingCache,
@@ -411,6 +472,27 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       }}
     >
       {children}
+      
+      {/* ✨ GLOBAL UNSAVED PROMPT */}
+      <UnsavedChanges
+        isOpen={isUnsavedModalOpen}
+        projectName={metadata.project_name || "Untitled Project"}
+        onCancel={() => {
+          setIsUnsavedModalOpen(false);
+          setUnsavedAction(null);
+        }}
+        onDiscard={() => {
+          setIsUnsavedModalOpen(false);
+          if (unsavedAction) unsavedAction();
+          setUnsavedAction(null);
+        }}
+        onSave={async () => {
+          await saveProject();
+          setIsUnsavedModalOpen(false);
+          if (unsavedAction) unsavedAction();
+          setUnsavedAction(null);
+        }}
+      />
     </WorkspaceContext.Provider>
   );
 }
