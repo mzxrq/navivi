@@ -276,7 +276,11 @@ class _CardMixin:
                 width=self.card_border_thickness * scale,
             )
             w = card_w_px // scale
-            label_gap = 6 * scale
+            # label_gap was 6*scale — the icon and the mode label ("Draw",
+            # "Walking", ...) sat almost touching with no visible breathing
+            # room, unlike the single-mode pill card's own label/value gap
+            # (line_gap = 12*scale) above. Matched to that same spacing.
+            label_gap = 12 * scale
             value_gap = 18 * scale
             row_gap = 36 * scale
 

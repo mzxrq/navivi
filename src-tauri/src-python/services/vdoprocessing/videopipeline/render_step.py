@@ -3,6 +3,7 @@
 import json
 import math
 import os
+import re
 from pathlib import Path
 from typing import Any, Optional
 
@@ -27,6 +28,16 @@ from .helpers import (
     _resolve_leg_geometry_from_cache,
     logger,
 )
+
+
+# Residential-leg clip filename's embedded 1-based departure-waypoint
+# position (see waypoints.py's chunk_filename: "02_waypoint_{N:02d}_...") —
+# used below (and by timeline_step.py's own mirrored match) to look up that
+# leg's narration by the waypoint's actual RAW position instead of a blind
+# per-clip counter, which stop-by leg-merging can throw out of sync (a
+# merged-away stop-by means consecutive leg clips no longer correspond to
+# consecutive audio_paths entries).
+RESIDENTIAL_LEG_RE = re.compile(r"02_waypoint_(\d+)_")
 
 
 # Overview map padding, scaled to how physically big the route actually
@@ -72,7 +83,7 @@ def _adaptive_overview_padding(route_df: pd.DataFrame) -> float:
 def render_route_video(
     cleaned_route: dict,
     project_config_path: str = str(DEFAULT_FRONTEND_CONFIG),
-    output_video_dir: str = str(BASE_DIR / "data" / "outputs" / "video"),
+    output_video_dir: Optional[str] = None,
     map_output_path: str = str(DEFAULT_MAP_BACKGROUND),
     audio_paths: Optional[list[str]] = None,
     audio_durations: Optional[list[float]] = None,
@@ -93,6 +104,16 @@ def render_route_video(
             project_config = json.load(f)
 
     project_name = project_config.get("project_name", "Navigation Project")
+
+    # Defaults to the project's OWN folder (job_config.json's directory_path
+    # — the same "video" subfolder every other stage already writes to:
+    # audio_step.py, subtitle_step.py, intro_step.py/outro_step.py) rather
+    # than a fixed install-relative path — a caller can still override this
+    # explicitly (every real caller currently does).
+    if output_video_dir is None:
+        output_video_dir = str(
+            Path(project_config.get("directory_path", BASE_DIR)) / "video"
+        )
 
     tracker.show(f"Rendering overview & residential video: {project_name}")
 
@@ -343,28 +364,62 @@ def render_route_video(
             res_sequence.append({"segment_duration": total_time})
     else:
         logger.info("Step 4: Generating 2D residential map sequence...")
-        img_out_dir = BASE_DIR / "data" / "inputs" / "res_images"
+        # Stop-by leg-merging is toggleable per project (default: merge —
+        # see tuning.DEFAULT_MERGE_STOPBY_WAYPOINTS); multi-tile chunk
+        # splitting is deliberately kept off here (math.inf) even though
+        # process_residential_sequence now supports it — enabling it would
+        # also require reworking the audio-mux/timeline position lookups
+        # below to handle several clips sharing one leg's narration, which
+        # is real follow-up work, not something to fold in silently here.
         sequence_data = fetcher.process_residential_sequence(
             route_df,
             waypoints,
             output_size=(img_w, img_h),
             max_chunk_distance_meters=math.inf,
             precomputed_indices=wp_indices,
+            merge_stopbys=bool(
+                settings.get("merge_stopby_waypoints", tuning.DEFAULT_MERGE_STOPBY_WAYPOINTS)
+            ),
         )
+
+        # Maps a waypoint's job_config "id" back to its RAW position in the
+        # (unfiltered, includes stop-bys) `waypoints` list — audio_durations/
+        # audio_pauses/seg_durations are all indexed by that raw position
+        # (see audio_step.py's `for idx, wp in enumerate(waypoints)`), but
+        # once stop-by merging can skip a waypoint as a leg boundary, a
+        # leg's position in `sequence_data` no longer equals its departure
+        # waypoint's raw position — every lookup below must resolve through
+        # this map instead of indexing by `seq_idx` directly.
+        id_to_position = {
+            wp.get("id"): pos for pos, wp in enumerate(waypoints) if wp.get("id")
+        }
 
         for seq_idx, item in enumerate(sequence_data):
             start_idx, end_idx = item["start_idx"], item["end_idx"]
             chunk = route_df.iloc[start_idx : end_idx + 1]
+
+            # This leg's departure/arrival RAW positions in `waypoints` —
+            # resolved by id (see id_to_position above), not by `seq_idx`,
+            # since a merged-away stop-by can make them diverge. Falls back
+            # to the old positional guess only if a waypoint is missing its
+            # "id" field (older data saved before ids were assigned).
+            start_pos = id_to_position.get(item.get("start_waypoint_id"))
+            if start_pos is None:
+                start_pos = seq_idx
+            end_pos = id_to_position.get(item.get("end_waypoint_id"))
+            if end_pos is None:
+                end_pos = seq_idx + 1
+
             leg_mode = (
-                str(waypoints[seq_idx].get("routeMode", "")).lower()
-                if seq_idx < len(waypoints)
+                str(waypoints[start_pos].get("routeMode", "")).lower()
+                if start_pos < len(waypoints)
                 else ""
             )
             if not leg_mode and start_idx + 1 < len(point_modes):
                 leg_mode = point_modes[start_idx + 1]
             leg_mode = leg_mode or "walking"
-            if str(leg_mode).lower() == "ferry" and seq_idx + 1 < len(waypoints):
-                start_wp, end_wp = waypoints[seq_idx], waypoints[seq_idx + 1]
+            if str(leg_mode).lower() == "ferry" and end_pos < len(waypoints):
+                start_wp, end_wp = waypoints[start_pos], waypoints[end_pos]
                 cached_geometry = _resolve_leg_geometry_from_cache(
                     start_wp, end_wp, routing_cache
                 )
@@ -401,12 +456,22 @@ def render_route_video(
                     chunk, ferry_map_path, (img_w, img_h)
                 )
 
-            # Extract safe variables
-            has_audio = seq_idx < len(audio_durations) and audio_durations[seq_idx] > 0
-            distance_fallback = (
-                seg_durations[seq_idx] if seq_idx < len(seg_durations) else 10.0
-            )
-            total_time = audio_durations[seq_idx] if has_audio else distance_fallback
+            # Extract safe variables — indexed by start_pos (this leg's
+            # departure waypoint's RAW position), not seq_idx: with stop-by
+            # merging, a leg can span MULTIPLE raw waypoint-to-waypoint
+            # gaps (e.g. real -> merged stop-by -> real), so its distance-
+            # fallback duration sums every raw gap's own seg_durations
+            # entry across [start_pos, end_pos) rather than reading a
+            # single seg_durations[seq_idx]. audio_durations/audio_pauses
+            # only ever come from the true departure waypoint itself
+            # (start_pos) — a merged-in stop-by's own narration, if any,
+            # is intentionally not played (no dedicated arrival moment for
+            # it anymore, matching "just show its pin as we pass").
+            has_audio = start_pos < len(audio_durations) and audio_durations[start_pos] > 0
+            distance_fallback = sum(
+                seg_durations[p] for p in range(start_pos, end_pos) if p < len(seg_durations)
+            ) or 10.0
+            total_time = audio_durations[start_pos] if has_audio else distance_fallback
 
             lats_arr, lons_arr = item["lats"], item["lons"]
             seg_dist = (
@@ -461,8 +526,25 @@ def render_route_video(
                     ),
                     "distance_km": seg_dist,
                     "pauses": (
-                        audio_pauses[seq_idx] if seq_idx < len(audio_pauses) else []
+                        audio_pauses[start_pos] if start_pos < len(audio_pauses) else []
                     ),
+                    # This leg's departure waypoint's RAW position — embedded
+                    # into the output clip's filename (see waypoints.py) so
+                    # the audio-mux loop below and timeline_step.py's own
+                    # mirrored lookup can resolve the correct narration by
+                    # position instead of a blind per-clip counter, which
+                    # stop-by merging would otherwise throw out of sync.
+                    "start_pos": start_pos,
+                    "wide_img_path": item.get("wide_img_path"),
+                    "wide_extent": item.get("wide_extent"),
+                    # "pos_in_chunk" (0-based index into this leg's own
+                    # `points`/res_points list, not the route_df row index)
+                    # is what waypoints.py actually needs to know when the
+                    # traveler has passed a merged-in stop-by along the way.
+                    "mid_markers": [
+                        {**m, "pos_in_chunk": m["row_idx"] - start_idx}
+                        for m in item.get("mid_markers", [])
+                    ],
                 }
             )
 
@@ -572,20 +654,16 @@ def render_route_video(
 
         logger.info("Muxing TTS narration audio into video segments...")
 
-        # We need a separate counter just for the residential audio
-        audio_idx = 0
-
         for v_path in output_paths:
             filename = Path(v_path).name
+            match = RESIDENTIAL_LEG_RE.search(filename)
 
-            # [HACK] [Editor] Distinguishes residential-leg clips from the overview map purely by filename substring — renaming output files elsewhere in the pipeline would silently break this audio-muxing match.
-            if (
-                "02_" in filename
-                or "leg" in filename.lower()
-                or "waypoint" in filename.lower()
-            ):
+            if match:
+                # 1-based in the filename (matches the "Waypoint N" numbering
+                # everywhere else); audio_durations/audio_paths are 0-based.
+                audio_idx = int(match.group(1)) - 1
                 if (
-                    audio_idx < len(audio_paths)
+                    0 <= audio_idx < len(audio_paths)
                     and audio_paths[audio_idx]
                     and os.path.exists(audio_paths[audio_idx])
                 ):
@@ -602,9 +680,6 @@ def render_route_video(
                         muxed_paths.append(v_path)
                 else:
                     muxed_paths.append(v_path)
-
-                # Move to the next audio file for the next residential leg
-                audio_idx += 1
             else:
                 # This is the 01_overview map, pass it through silently!
                 muxed_paths.append(v_path)

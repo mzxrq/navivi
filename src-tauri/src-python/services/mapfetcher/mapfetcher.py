@@ -67,10 +67,19 @@ class MapFetcher:
         route_df: pd.DataFrame,
         waypoints: List[Dict],
         output_size: Tuple[int, int] = (1920, 1080),
-        max_chunk_distance_meters: float = 1000.0,
+        max_chunk_distance_meters: float = tuning.RESIDENTIAL_DEFAULT_MAX_CHUNK_DISTANCE_M,
         precomputed_indices: Optional[List[int]] = None,
+        merge_stopbys: bool = tuning.DEFAULT_MERGE_STOPBY_WAYPOINTS,
     ) -> List[Dict]:
-        """Core orchestrator logic utilizing the dedicated Downloader and Geometry classes."""
+        """Core orchestrator logic utilizing the dedicated Downloader and Geometry classes.
+
+        `merge_stopbys` (default from tuning.DEFAULT_MERGE_STOPBY_WAYPOINTS):
+        when True, a stop-by waypoint ("isStopBy": true) does NOT get its own
+        leg/tile boundary — it merges into whichever real-to-real leg it
+        falls inside, surfacing only as a "mid_markers" entry on that leg's
+        first chunk's sequence_data (a pin drawn as the traveler passes, no
+        popup/summary-card). When False, every stop-by is a full leg
+        boundary exactly like a real waypoint (the old behavior)."""
         sequence_data = []
 
         # ---------------------------------------------------------------------
@@ -92,10 +101,42 @@ class MapFetcher:
         wp_indices = [x[0] for x in sorted_wps]
         waypoints = [x[1] for x in sorted_wps]
 
-        segments = [
-            (wp_indices[i], wp_indices[i + 1], waypoints[i + 1])
-            for i in range(len(wp_indices) - 1)
-        ]
+        # Which sorted-waypoint POSITIONS act as leg boundaries. With
+        # merge_stopbys on, a stop-by strictly between two boundaries is
+        # skipped here — it merges into the leg spanning those two
+        # boundaries instead of starting its own — but the trip's true
+        # first/last waypoint is always kept as a boundary even if
+        # (unusually) flagged stop-by, since "pass through" isn't a
+        # meaningful concept for the trip's own endpoints.
+        if merge_stopbys:
+            boundary_positions = [
+                i
+                for i, wp in enumerate(waypoints)
+                if i == 0 or i == len(waypoints) - 1 or not wp.get("isStopBy", False)
+            ]
+        else:
+            boundary_positions = list(range(len(waypoints)))
+
+        # Each segment carries its own departure/arrival waypoint dicts
+        # directly (rather than relying on positional indexing into the
+        # full `waypoints` list, which merging boundaries would otherwise
+        # break), plus any stop-bys that merged into it as mid-leg markers.
+        segments = []
+        for bi in range(len(boundary_positions) - 1):
+            start_pos, end_pos = boundary_positions[bi], boundary_positions[bi + 1]
+            stopby_markers = [
+                {"row_idx": wp_indices[p], "label": waypoints[p].get("label")}
+                for p in range(start_pos + 1, end_pos)
+            ]
+            segments.append(
+                (
+                    wp_indices[start_pos],
+                    wp_indices[end_pos],
+                    waypoints[end_pos],
+                    waypoints[start_pos],
+                    stopby_markers,
+                )
+            )
 
         # [NEW] Total leg count known up front — lets every per-leg log line
         # show "[i/total]" progress instead of an unbounded counter.
@@ -117,7 +158,7 @@ class MapFetcher:
         # so tile downloads — the actual slow, network-bound step — can run
         # several at once; nothing about the planning logic itself changed.
         jobs: List[Dict] = []
-        for leg_idx, (seg_start, seg_end, wp) in enumerate(segments):
+        for leg_idx, (seg_start, seg_end, wp, start_wp, stopby_markers) in enumerate(segments):
             place_label = wp.get("label") or f"leg_{leg_idx + 1}"
             logger.info(
                 "[%d/%d] Planning residential leg -> arriving at: '%s'",
@@ -125,6 +166,25 @@ class MapFetcher:
                 total_legs,
                 place_label,
             )
+
+            # Straight-line distance between the leg's own start/end pins —
+            # gates whether the wide establishing shot is worth showing at
+            # all (see tuning.RESIDENTIAL_WIDE_MIN_DISTANCE_M). Deliberately
+            # NOT the accumulated path distance below: a short/local leg can
+            # still have a long, winding path, but if its two pins are close
+            # together the wide and tight tiles land at nearly the same zoom
+            # anyway, so the "establishing shot" would add nothing.
+            leg_lat1, leg_lon1 = route_df.iloc[seg_start][["latitude", "longitude"]]
+            leg_lat2, leg_lon2 = route_df.iloc[seg_end][["latitude", "longitude"]]
+            leg_dlat, leg_dlon = math.radians(leg_lat2 - leg_lat1), math.radians(leg_lon2 - leg_lon1)
+            leg_a = (
+                math.sin(leg_dlat / 2.0) ** 2
+                + math.cos(math.radians(leg_lat1))
+                * math.cos(math.radians(leg_lat2))
+                * math.sin(leg_dlon / 2.0) ** 2
+            )
+            leg_pin_distance_m = 6371000.0 * (2.0 * math.asin(math.sqrt(leg_a)))
+            leg_wants_wide_shot = leg_pin_distance_m >= tuning.RESIDENTIAL_WIDE_MIN_DISTANCE_M
 
             chunk_starts = [seg_start]
             accumulated_distance = 0.0
@@ -179,6 +239,19 @@ class MapFetcher:
                     else lbl_base
                 )
 
+                # The wide establishing shot only plays once per LEG (before
+                # its first chunk), not once per chunk — a leg split into
+                # several tiles should still open with one wide shot, then
+                # hard-cut chunk to chunk as today.
+                is_first_chunk_of_leg = chunk_idx == 0 and leg_wants_wide_shot
+                # Any merged-in stop-by whose own route-row falls inside
+                # THIS chunk's span — drawn as a pass-through pin on this
+                # chunk's clip (see waypoints.py), never its own tile/leg.
+                chunk_markers = [
+                    m for m in stopby_markers
+                    if chunk_start <= m["row_idx"] <= chunk_end
+                ]
+
                 jobs.append(
                     {
                         "leg_idx": leg_idx,
@@ -188,8 +261,15 @@ class MapFetcher:
                         "lbl": lbl,
                         # Update file path to use the absolute, centralized png directory
                         "res_map_path": str(png_dir / f"res_map_{lbl}.png"),
+                        "res_map_path_wide": (
+                            str(png_dir / f"res_map_{lbl}_wide.png")
+                            if is_first_chunk_of_leg
+                            else None
+                        ),
                         "wp": wp,
+                        "start_wp": start_wp,
                         "seg_end": seg_end,
+                        "chunk_markers": chunk_markers,
                     }
                 )
 
@@ -208,20 +288,32 @@ class MapFetcher:
         total_jobs = len(jobs)
         tracker.begin_substeps(total_jobs)
         extents: List[Optional[Tuple[float, float, float, float]]] = [None] * total_jobs
+        wide_extents: List[Optional[Tuple[float, float, float, float]]] = [None] * total_jobs
         max_workers = max(1, min(tuning.RESIDENTIAL_TILE_FETCH_WORKERS, total_jobs))
 
         def _fetch(job_index: int):
             job = jobs[job_index]
-            return job_index, self.downloader.fetch_residential_chunk(
+            tight_extent = self.downloader.fetch_residential_chunk(
                 job["chunk"], job["res_map_path"], output_size
             )
+            wide_extent = None
+            # Fetched in the same pooled task (same thread) as its tight
+            # tile — one extra sequential network call per leg's FIRST
+            # chunk only, still overlapping with every other leg's fetches
+            # via the surrounding thread pool.
+            if job["res_map_path_wide"]:
+                wide_extent = self.downloader.fetch_residential_wide(
+                    job["chunk"], job["res_map_path_wide"], output_size
+                )
+            return job_index, tight_extent, wide_extent
 
         completed = 0
         with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = [executor.submit(_fetch, i) for i in range(total_jobs)]
             for future in concurrent.futures.as_completed(futures):
-                job_index, res_extent = future.result()
+                job_index, res_extent, wide_extent = future.result()
                 extents[job_index] = res_extent
+                wide_extents[job_index] = wide_extent
                 completed += 1
                 job = jobs[job_index]
                 logger.info(
@@ -268,12 +360,31 @@ class MapFetcher:
                     chunk_labels.append(None)
                     chunk_popups.append(None)
 
+            # Merged-in stop-bys whose route-row falls in THIS chunk — a
+            # pin drawn as the traveler passes it, never a popup/summary-
+            # card (that mechanism only ever reads chunk_labels/
+            # chunk_popups above, which this deliberately never touches).
+            mid_markers = [
+                {
+                    "row_idx": m["row_idx"],
+                    "label": m["label"],
+                    "px": chunk_points[m["row_idx"] - chunk_start],
+                }
+                for m in job["chunk_markers"]
+            ]
+
             sequence_data.append(
                 {
                     "start_idx": chunk_start,
                     "end_idx": chunk_end,
                     "img_path": job["res_map_path"],
                     "extent": res_extent,
+                    # Wide establishing-shot tile + its own geo extent —
+                    # only set on a leg's FIRST chunk (see is_first_chunk_of_leg
+                    # in Pass 1); None on every other chunk.
+                    "wide_img_path": job["res_map_path_wide"],
+                    "wide_extent": wide_extents[job_index],
+                    "mid_markers": mid_markers,
                     "lats": chunk["latitude"].to_numpy(),
                     "lons": chunk["longitude"].to_numpy(),
                     "points": chunk_points,
@@ -286,12 +397,13 @@ class MapFetcher:
                     # multiple times), so matching a leg's endpoint
                     # back to its true position in the whole route
                     # by id is unambiguous where label text alone
-                    # isn't. `waypoints` here is this leg's own
-                    # departure/arrival pair — index leg_idx is the
-                    # one being LEFT, leg_idx + 1 (== wp) is the one
-                    # being ARRIVED at.
-                    "start_waypoint_id": waypoints[leg_idx].get("id"),
+                    # isn't. Read directly off this job's own departure/
+                    # arrival waypoint dicts (not positional indexing into
+                    # `waypoints`, which merged-away stop-bys would throw
+                    # off) — see `start_wp`/`wp` set in Pass 1.
+                    "start_waypoint_id": job["start_wp"].get("id"),
                     "end_waypoint_id": wp.get("id"),
+                    "leg_idx": leg_idx,
                 }
             )
 

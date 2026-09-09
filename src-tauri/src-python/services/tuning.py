@@ -110,6 +110,37 @@ RESIDENTIAL_MIN_ZOOM_MAX_PIN_DISTANCE_M = 2000
 # to stay well clear of the tile provider's own rate limiting; raise with
 # caution, and only alongside TileDownloader's wait/retry backoff settings.
 RESIDENTIAL_TILE_FETCH_WORKERS = 4
+# Whether a stop-by waypoint (job_config.json's "isStopBy": true) merges
+# into the surrounding real-to-real leg (True — just shows its pin as the
+# traveler passes, no popup, no new map tile) instead of forcing its own
+# full leg/tile boundary and arrival-popup sequence like a real waypoint
+# (False — the old behavior). Overridable per project via job_config.json's
+# settings.merge_stopby_waypoints.
+DEFAULT_MERGE_STOPBY_WAYPOINTS = True
+# Every residential leg opens on a brief WIDE shot of the whole leg, then
+# zooms — a scale+crossfade between two separately-fetched static tiles,
+# not a continuous crop within one image — into the existing tight/close
+# framing before the traveler animation begins.
+RESIDENTIAL_WIDE_HOLD_SECONDS = 1.2
+RESIDENTIAL_WIDE_ZOOM_SECONDS = 1.0
+# Wide tile's bbox half-extent is the tight tile's own half-extent
+# (straight-line pin distance + its 20% pad) multiplied by this — loose
+# enough to read as "establishing". No RESIDENTIAL_MIN_ZOOM floor is
+# applied to the wide tile.
+RESIDENTIAL_WIDE_BBOX_MULTIPLIER = 2.5
+# A leg's wide establishing shot is only worth showing when its two pins
+# are far enough apart that the zoom-in actually reads as "zooming in" —
+# below this straight-line pin distance, the wide and tight tiles end up
+# at nearly the same zoom level anyway, so the extra shot is just a stall
+# before the traveler animation. Short legs skip straight to the tight
+# framing (no wide tile fetched, no crossfade played).
+RESIDENTIAL_WIDE_MIN_DISTANCE_M = 400.0
+# Default leg-splitting distance (replaces the old math.inf, which disabled
+# splitting entirely) — a leg longer than this becomes N sequential tight-
+# tile chunks, hard-cut between them (free — see VideoExporter's existing
+# per-chunk clip concatenation); the wide shot only plays before chunk 1 of
+# each leg, not before every chunk.
+RESIDENTIAL_DEFAULT_MAX_CHUNK_DISTANCE_M = 8000.0
 # Per-travel-mode ROUTE LINE colors. Modes without an entry (e.g. walking)
 # fall back to the renderer's own line_color.
 # [NOTE] [Config] Modes missing here (e.g. walking) fall back to the renderer's own line_color rather than a hardcoded default.

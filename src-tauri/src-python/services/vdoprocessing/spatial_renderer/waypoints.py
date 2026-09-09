@@ -10,9 +10,48 @@ from services.logger.progress import tracker
 from services.mapfetcher.mapfetcher import MapFetcher
 from services.mapfetcher.mapgeometry import RouteGeometryProcessor
 from services.vdoprocessing.vdoexporter import VideoExporter
+from services import tuning
 
 
 class _WaypointRenderMixin:
+    @staticmethod
+    def _ease_in_out(t: float) -> float:
+        """Same easing curve local_pan_generator.py uses for its Ken-Burns
+        pans — kept as its own copy rather than imported since that module
+        is coupled to its own photo pipeline/VideoWriter."""
+        return 0.5 - 0.5 * math.cos(math.pi * t)
+
+    def _play_leg_wide_intro(
+        self, video: VideoExporter, res_data: Dict, current_bg: np.ndarray, fps: int
+    ) -> None:
+        """Holds this leg's wide establishing shot, then crossfades (scale-
+        free — both tiles already share the same canvas size) into the
+        close/tight tile the rest of this leg's clip will animate on top
+        of. A no-op when this res_data has no wide tile (only a leg's
+        first chunk ever does — see mapfetcher.py's is_first_chunk_of_leg)
+        or the wide tile can't be read/doesn't match current_bg's size."""
+        wide_path = res_data.get("wide_img_path")
+        if not wide_path:
+            return
+        wide_bg = self.graphics.read_image_safe(str(wide_path))
+        if wide_bg is None:
+            return
+        if wide_bg.shape[:2] != current_bg.shape[:2]:
+            # Both tiles are fetched at the same output_size, but
+            # current_bg may have been snapped to even dimensions after
+            # the wide tile was already saved — resize rather than skip
+            # the whole intro over a 1px mismatch.
+            wide_bg = cv2.resize(wide_bg, (current_bg.shape[1], current_bg.shape[0]))
+
+        hold_frames = max(1, int(tuning.RESIDENTIAL_WIDE_HOLD_SECONDS * fps))
+        zoom_frames = max(1, int(tuning.RESIDENTIAL_WIDE_ZOOM_SECONDS * fps))
+        for _ in range(hold_frames):
+            video.write(wide_bg)
+        for frame_i in range(zoom_frames):
+            t = self._ease_in_out(frame_i / max(1, zoom_frames - 1))
+            blended = cv2.addWeighted(wide_bg, 1.0 - t, current_bg, t, 0.0)
+            video.write(blended)
+        self.last_frame = current_bg
     def render_waypoints(self, res_sequence: List[Dict], fps: int) -> List[str]:
         output_paths = []
         show_segment_summary = self.config.get("show_segment_summary", True)
@@ -218,9 +257,25 @@ class _WaypointRenderMixin:
                 .replace(" ", "_")
                 or f"leg{i+1}"
             )
-            chunk_filename = f"02_waypoint_{i + 1:02d}_{safe_suffix}.mp4"
+            # 1-based departure-waypoint RAW position when render_step.py
+            # supplies one (see its "start_pos" field) — falls back to the
+            # old purely-sequential `i` for any other caller that doesn't.
+            # render_step.py's audio-mux loop and timeline_step.py both
+            # parse this number back out of the filename (RESIDENTIAL_LEG_RE)
+            # to find this leg's correct narration by position rather than
+            # a blind per-clip counter, which stop-by leg-merging can throw
+            # out of sync with a purely sequential `i`.
+            leg_file_num = res_data.get("start_pos")
+            leg_file_num = (leg_file_num + 1) if leg_file_num is not None else (i + 1)
+            chunk_filename = f"02_waypoint_{leg_file_num:02d}_{safe_suffix}.mp4"
 
             video = VideoExporter(str(self.out_dir / chunk_filename), w, h, fps)
+
+            # Wide establishing shot -> zoom crossfade into this leg's
+            # close/tight tile — plays once per leg (only res_data entries
+            # for a leg's first chunk carry a wide_img_path at all), before
+            # anything else (pins, popups, animation) is drawn.
+            self._play_leg_wide_intro(video, res_data, current_bg, fps)
 
             # This leg's departure/arrival waypoints, resolved to their
             # REAL position in the whole route (see _resolve_global_waypoint
@@ -241,6 +296,19 @@ class _WaypointRenderMixin:
                 res_data.get("end_waypoint_id"), end_label
             )
             total_wp = len(job_waypoints)
+
+            # Merged-in stop-bys along this leg (see mapfetcher.py's
+            # merge_stopbys) — drawn as plain pins for the whole leg's
+            # clip, same as res_named's landmark sprites just below (always
+            # visible from frame 1, not gated on the traveler having
+            # actually reached them yet) — no popup, no arrival sequence.
+            mid_marker_pins = [
+                {
+                    "x": m["px"][0], "y": m["px"][1], "index": -1, "order": None,
+                    "label": m.get("label"), "data": {"is_stopby": True},
+                }
+                for m in res_data.get("mid_markers", [])
+            ]
 
             def _leg_pin(x, y, label, data, match):
                 # A resolved match carries this waypoint's real position
@@ -354,6 +422,9 @@ class _WaypointRenderMixin:
                     for x, y, lbl in res_named:
                         sprite, anchor = res_landmark_sprites[lbl]
                         self.graphics.blit_sprite(frame, sprite, anchor, x, y)
+
+                    for marker_pin in mid_marker_pins:
+                        self._draw_pin(frame, marker_pin, total_wp)
 
                     smoothed_angle = self._smoothed_heading(
                         smoothed_angle, cx, cy, prev_cx, prev_cy

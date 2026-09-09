@@ -216,15 +216,17 @@ class TileDownloader:
 
         return final_path, new_extent, output_size
 
-    # [Map] Fetch a residential chunk image based on a DataFrame of lat/lon points
-    def fetch_residential_chunk(
+    # [Map] Shared bbox/zoom computation for a residential chunk — split out
+    # of fetch_residential_chunk so fetch_residential_wide (the leg's wide
+    # establishing shot) can reuse the exact same logic with a looser
+    # bbox and no zoom floor, instead of duplicating it.
+    def _compute_residential_bbox(
         self,
         chunk_df: pd.DataFrame,
-        output_filename: str,
-        output_size: Tuple[int, int] = (1920, 1080),
-    ) -> Tuple[float, float, float, float]:
-        """Fetches and crops map tiles for a specific route segment, ensuring proper aspect ratio."""
-        
+        output_size: Tuple[int, int],
+        bbox_multiplier: float = 1.0,
+        apply_min_zoom: bool = True,
+    ) -> Tuple[float, float, float, float, int, float]:
         if chunk_df.empty:
             raise ValueError("Chunk DataFrame is empty.")
 
@@ -256,8 +258,10 @@ class TileDownloader:
         # tight on the two pins instead keeps them prominent; the animated
         # route line may run briefly off-frame during a big loop, an
         # accepted tradeoff for keeping the waypoints themselves zoomed in.
-        half_lat = max(abs(end_lat - center_lat), 1e-9)
-        half_lon = max(abs(end_lon - center_lon), 1e-9)
+        # `bbox_multiplier` widens this for the wide establishing shot
+        # (fetch_residential_wide) without duplicating any of this logic.
+        half_lat = max(abs(end_lat - center_lat), 1e-9) * bbox_multiplier
+        half_lon = max(abs(end_lon - center_lon), 1e-9) * bbox_multiplier
 
         # 20% breathing room on top of that half-extent — covers both the
         # pin+label graphic (which extends past its anchor point) and the
@@ -295,13 +299,19 @@ class TileDownloader:
         # straight-line distance between the two pins (immune to a
         # detour/loop inflating the padded span above) so a long car/ferry
         # leg never gets dragged up to a street-level zoom, which would
-        # multiply its tile count ~4x per zoom level jumped.
-        pin_distance_meters = math.hypot(
-            (end_lat - start_lat) * meters_per_deg_lat,
-            (end_lon - start_lon) * meters_per_deg_lon,
-        )
-        if pin_distance_meters <= tuning.RESIDENTIAL_MIN_ZOOM_MAX_PIN_DISTANCE_M:
-            optimal_zoom = max(optimal_zoom, min(tuning.RESIDENTIAL_MIN_ZOOM, self.MAX_ZOOM_LEVEL))
+        # multiply its tile count ~4x per zoom level jumped. Skipped
+        # entirely for the wide establishing shot (apply_min_zoom=False) —
+        # that tile is meant to look zoomed OUT, so a min-zoom floor would
+        # defeat its whole purpose.
+        if apply_min_zoom:
+            pin_distance_meters = math.hypot(
+                (end_lat - start_lat) * meters_per_deg_lat,
+                (end_lon - start_lon) * meters_per_deg_lon,
+            )
+            if pin_distance_meters <= tuning.RESIDENTIAL_MIN_ZOOM_MAX_PIN_DISTANCE_M:
+                optimal_zoom = max(
+                    optimal_zoom, min(tuning.RESIDENTIAL_MIN_ZOOM, self.MAX_ZOOM_LEVEL)
+                )
 
         # 3. Adjust Bounding Box to Target Aspect Ratio
         out_w, out_h = output_size
@@ -316,27 +326,67 @@ class TileDownloader:
             expansion = (((e - w) * lon_scale) / target_ratio - (n - s)) / 2.0
             s, n = s - expansion, n + expansion
 
-        # 4. Fetch Map Tiles with Fallback
+        return w, s, e, n, optimal_zoom, target_ratio
+
+    # [Map/Util] Fetch (with zoom-decrement fallback), crop, resize, and
+    # save — the actual network + image-IO half of a residential fetch,
+    # shared by fetch_residential_chunk and fetch_residential_wide.
+    def _fetch_and_save(
+        self,
+        w: float, s: float, e: float, n: float,
+        zoom: int,
+        target_ratio: float,
+        output_filename: str,
+        output_size: Tuple[int, int],
+    ) -> Tuple[float, float, float, float]:
         img, extent = None, None
-        while optimal_zoom > 0:
+        while zoom > 0:
             try:
-                img, extent = self._bounds2img_safe(w, s, e, n, optimal_zoom)
+                img, extent = self._bounds2img_safe(w, s, e, n, zoom)
                 break
             except Exception:
-                optimal_zoom -= 1
+                zoom -= 1
 
         if img is None or extent is None:
             raise RuntimeError("Failed to download map tiles for chunk.")
 
-        # 5. Crop, Resize, and Save Image
         final_path = self._force_png_path(output_filename)
         cropped_img, new_extent = self._crop_to_aspect_ratio(img, extent, target_ratio)
-        
+
         Image.fromarray(cropped_img).resize(
             output_size, Image.Resampling.LANCZOS
         ).convert("RGB").save(final_path)
 
         return new_extent
+
+    # [Map] Fetch a residential chunk image based on a DataFrame of lat/lon points
+    def fetch_residential_chunk(
+        self,
+        chunk_df: pd.DataFrame,
+        output_filename: str,
+        output_size: Tuple[int, int] = (1920, 1080),
+    ) -> Tuple[float, float, float, float]:
+        """Fetches and crops map tiles for a specific route segment, ensuring proper aspect ratio."""
+        w, s, e, n, zoom, target_ratio = self._compute_residential_bbox(chunk_df, output_size)
+        return self._fetch_and_save(w, s, e, n, zoom, target_ratio, output_filename, output_size)
+
+    # [Map] Wide establishing-shot variant of fetch_residential_chunk — same
+    # chunk, a looser bbox (tuning.RESIDENTIAL_WIDE_BBOX_MULTIPLIER) and no
+    # min-zoom floor, so it reads as "zoomed out" next to the tight tile
+    # it's cross-faded into (see waypoints.py's leg intro sequence).
+    def fetch_residential_wide(
+        self,
+        chunk_df: pd.DataFrame,
+        output_filename: str,
+        output_size: Tuple[int, int] = (1920, 1080),
+    ) -> Tuple[float, float, float, float]:
+        w, s, e, n, zoom, target_ratio = self._compute_residential_bbox(
+            chunk_df,
+            output_size,
+            bbox_multiplier=tuning.RESIDENTIAL_WIDE_BBOX_MULTIPLIER,
+            apply_min_zoom=False,
+        )
+        return self._fetch_and_save(w, s, e, n, zoom, target_ratio, output_filename, output_size)
 
     # [Map/Util] Crop an image to a specific aspect ratio and adjust the extent accordingly
     def _crop_to_aspect_ratio(
