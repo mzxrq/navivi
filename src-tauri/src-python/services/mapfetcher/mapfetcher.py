@@ -54,6 +54,24 @@ class MapFetcher:
         # Override the filename path to sit correctly in the png folder
         final_filename = str(png_dir / Path(output_filename).name)
 
+        settings = (self.config.get("settings", {}) if self.config else {}) or {}
+        # Opt-in per project (settings.overview_background: "pydeck" in
+        # job_config.json) — the default stays the existing contextily/Esri
+        # tile stitch, which needs no Mapbox token/headless-browser
+        # dependency. See pydeck_overview.py's own module docstring for why
+        # this is a separate top-down-only capture rather than reusing the
+        # residential mode's tilted pydeck camera.
+        if str(settings.get("overview_background", "")).lower() == "pydeck":
+            from services.mapfetcher.pydeck_overview import fetch_overview_image_pydeck
+
+            logger.info("Fetching overview map background via pydeck...")
+            result = fetch_overview_image_pydeck(
+                bounding_box, final_filename, output_size,
+                mapbox_key=settings.get("mapbox_token"),
+            )
+            logger.info("Overview map background saved -> %s", result[0])
+            return result
+
         logger.info("Fetching overview map tile (zoom<=%d)...", max_zoom)
         result = self.downloader.fetch_overview_image(
             bounding_box, final_filename, output_size, max_zoom

@@ -229,12 +229,26 @@ MODE_LINE_COLORS: Dict[str, Tuple[int, int, int]] = {
 # --- End-of-video "zoom to start point" highlight ---------------------------
 # How long the freshly-fetched close-up tile is held/zoomed after the hard
 # cut, before handing off to the fullscreen photo transition (or just
-# holding).
-ENDING_HIGHLIGHT_WAIT_SECONDS = 2.2
+# holding). Also drives the dynamic-pydeck path's own zoom pacing (see
+# ENDING_HIGHLIGHT_PYDECK_ZOOM_BOOST) — shortened together with
+# BIG_MAP_ZOOM_LEAD_SECONDS below so the SAME total zoom amount plays out
+# over less time, i.e. visibly faster, not just a shorter hold.
+ENDING_HIGHLIGHT_WAIT_SECONDS = 1.4
 # Lead-in: how long to push in on the CURRENT wide map (clean, no cards)
 # toward the same point BEFORE that hard cut, and how far.
-BIG_MAP_ZOOM_LEAD_SECONDS = 2.0
+BIG_MAP_ZOOM_LEAD_SECONDS = 1.3
 BIG_MAP_ZOOM_TARGET = 2.6
+# When settings.enable_gl_ending_zoom (or overview_background: "pydeck")
+# is on (see mapfetcher/pydeck_overview.py), the ending highlight's
+# lead-in push AND its cut to a separate fetched close-up tile are both
+# replaced by ONE continuous sequence of genuinely re-rendered deck.gl
+# frames zooming from the wide map all the way in — real map detail
+# revealed as it zooms, rather than a modest digital Ken Burns crop
+# followed by a hard cut to a second static image. In log2 zoom units
+# (each +1 doubles the visual scale) — 3.2 stops around street-label
+# level (road names legible) regardless of the base overview's own zoom,
+# rather than zooming in past that to individual-building/terrain detail.
+ENDING_HIGHLIGHT_PYDECK_ZOOM_BOOST = 3.2
 
 # --- Popup / transition timing ----------------------------------------------
 POPUP_FADE_SECONDS = 1.5

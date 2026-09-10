@@ -685,6 +685,12 @@ def render_route_video(
         wp_indices=wp_indices,
         point_modes=point_modes,
         render_mode=render_mode,
+        # Same bbox the overview background (map_output_path) was just
+        # fetched with — needed by the dynamic pydeck zoom-in intro (see
+        # overview.py) to re-render fresh, correctly-zoomed frames toward
+        # the start pin from the SAME base view the static background
+        # already shows, rather than an unrelated one.
+        overview_bounding_box=bbox,
     )
 
     # --- 2. ADD THIS AUDIO MUXING BLOCK ---

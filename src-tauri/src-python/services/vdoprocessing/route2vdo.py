@@ -198,7 +198,8 @@ class RouteAnimator:
         if render_mode != "residential":
             tracker.show("Rendering overview video...")
             overview_path = self.spatial_renderer.render_overview(
-                img_path, points, labels, popups, fps, summary=summary, point_modes=point_modes
+                img_path, points, labels, popups, fps, summary=summary, point_modes=point_modes,
+                bounding_box=kwargs.get("overview_bounding_box"),
             )
             tracker.clear()
             if overview_path:

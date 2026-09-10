@@ -27,6 +27,7 @@ class _OverviewRenderMixin:
         fps: int,
         summary: Optional[Dict] = None,
         point_modes: Optional[List[str]] = None,
+        bounding_box: Optional[Dict[str, float]] = None,
     ) -> str:
         is_video = False
 
@@ -441,6 +442,12 @@ class _OverviewRenderMixin:
                         c["beside_box"] = (box[0], int(box[1] + slide))
                 video.write(_draw_intro_cards(clean_frame, alpha))
 
+            # No zoom effect at the very start — the intro closes plainly
+            # on the clean pins-only frame, unzoomed, right before the
+            # traveler starts moving. The only zoom-toward-the-start-point
+            # beat in this video is the dynamic pydeck (or Ken Burns
+            # fallback) one at the very END, after the recap/summary card
+            # — see _render_ending_highlight.
             self.last_frame = clean_frame
 
         pre_popup_frame = self._animate_overview_frames(
@@ -487,6 +494,7 @@ class _OverviewRenderMixin:
             hard_ended = self._render_ending_highlight(
                 video, w, h, fps, stop_popup, start_popup,
                 clean_map_frame=pre_popup_frame,
+                bounding_box=bounding_box,
             )
 
         for p in popups:
