@@ -21,6 +21,7 @@ export interface Waypoint {
   customRoute?: [number, number][];
   isGeneratingScript?: boolean;
   isStopBy?: boolean;
+  connectToRoute?: boolean;
   drawStyle?: "linear" | "spline";
   curveOffset?: number;
 }

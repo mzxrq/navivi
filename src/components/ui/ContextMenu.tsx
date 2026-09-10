@@ -36,6 +36,7 @@ export function ContextMenu() {
     waypoints,
     setWaypoints,
     setActiveWaypointId,
+    setIsDirty // ✨ Added to safely trigger route re-calculations
   } = useWorkspace();
   const { addReturnStop } = useWaypointActions();
 
@@ -81,17 +82,15 @@ export function ContextMenu() {
 
   if (!menu) return null;
 
-  // ✨ FIXED: Added orderIndex and strict type constraints
   const handleAddTrack = (type: "video" | "audio") => {
     const existingTracksOfType = timeline.tracks.filter((t) => t.type === type);
     const trackCount = existingTracksOfType.length + 1;
     
-    // Group the new track neatly under the existing tracks of the same type
     let newOrderIndex = 0;
     if (existingTracksOfType.length > 0) {
       newOrderIndex = Math.max(...existingTracksOfType.map(t => t.orderIndex)) + 0.1;
     } else {
-      newOrderIndex = type === "video" ? 1.5 : 5; // Default safe zones
+      newOrderIndex = type === "video" ? 1.5 : 5;
     }
 
     setTimeline({
@@ -171,17 +170,18 @@ export function ContextMenu() {
     
     if (type === "start") {
       newWaypoints.splice(currentIndex, 1);
-      newWaypoints.unshift({ ...wp, isStopBy: false }); // Move to front, force normal
+      newWaypoints.unshift({ ...wp, isStopBy: false, connectToRoute: undefined });
     } else if (type === "end") {
       newWaypoints.splice(currentIndex, 1);
-      newWaypoints.push({ ...wp, isStopBy: false }); // Move to back, force normal
+      newWaypoints.push({ ...wp, isStopBy: false, connectToRoute: undefined });
     } else if (type === "stopby") {
-      newWaypoints[currentIndex] = { ...wp, isStopBy: true };
+      newWaypoints[currentIndex] = { ...wp, isStopBy: true, connectToRoute: false };
     } else if (type === "normal") {
-      newWaypoints[currentIndex] = { ...wp, isStopBy: false };
+      newWaypoints[currentIndex] = { ...wp, isStopBy: false, connectToRoute: undefined };
     }
     
     setWaypoints(newWaypoints);
+    if (setIsDirty) setIsDirty(true);
     setMenu(null);
   };
 
@@ -208,7 +208,7 @@ export function ContextMenu() {
 
   if (menu.type === "timeline-clip" || menu.type === "map-canvas") estimatedHeight = 50;
   if (menu.type === "track-header") estimatedHeight = 120;
-  if (menu.type === "waypoint-marker") estimatedHeight = 175;
+  if (menu.type === "waypoint-marker") estimatedHeight = 220; // ✨ Slightly increased for new option
 
   let top = menu.y;
   let left = menu.x;
@@ -223,6 +223,9 @@ export function ContextMenu() {
   }
 
   const popSubmenuLeft = left + (menuWidth * 2) > window.innerWidth;
+  
+  // Find the specific waypoint if we clicked on one
+  const targetWp = menu.type === "waypoint-marker" ? waypoints.find(w => w.id === menu.targetId) : null;
 
   return (
     <div
@@ -362,6 +365,28 @@ export function ContextMenu() {
             </div>
 
             <div className="my-1 border-t border-zinc-200 dark:border-white/10" />
+
+            {/* ✨ NEW: Stop-By Route Connection Toggle */}
+            {targetWp?.isStopBy && (
+              <>
+                <button
+                  onClick={() => {
+                    const newValue = !targetWp.connectToRoute;
+                    setWaypoints(waypoints.map(w => 
+                      w.id === menu.targetId ? { ...w, connectToRoute: newValue } : w
+                    ));
+                    if (setIsDirty) setIsDirty(true);
+                    setMenu(null);
+                  }}
+                  className={`ctx-btn ${targetWp.connectToRoute ? "text-amber-600 dark:text-amber-500" : "text-blue-600 dark:text-blue-400"}`}
+                >
+                  {targetWp.connectToRoute ? <UnlinkIcon className="w-3.5 h-3.5" /> : <LinkIcon className="w-3.5 h-3.5" />}
+                  {targetWp.connectToRoute ? "Disconnect Route" : "Connect to Route"}
+                </button>
+                <div className="my-1 border-t border-zinc-200 dark:border-white/10" />
+              </>
+            )}
+
             <button
               onClick={() => handleEditWaypoint(menu.targetId)}
               className="ctx-btn"

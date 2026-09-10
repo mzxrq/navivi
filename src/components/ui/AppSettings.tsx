@@ -47,7 +47,7 @@ export function AppSettings() {
 
   return createPortal(
     <div
-      className={`fixed inset-0 z-[99999] flex items-center justify-center bg-zinc-950/40 backdrop-blur-[2px] select-none ${isAnimatingOut ? "animate-out fade-out duration-200" : "animate-in fade-in duration-200"}`}
+      className={`fixed inset-0 z-99999 flex items-center justify-center bg-zinc-950/40 backdrop-blur-[2px] select-none ${isAnimatingOut ? "animate-out fade-out duration-200" : "animate-in fade-in duration-200"}`}
     >
       <div
         className={`w-135 bg-white dark:bg-navidark-900 border border-zinc-200 dark:border-navidark-400 rounded-xl shadow-2xl overflow-hidden flex flex-col ${isAnimatingOut ? "animate-out zoom-out-95 duration-200" : "animate-in zoom-in-95 duration-200"}`}
@@ -65,7 +65,7 @@ export function AppSettings() {
           </button>
         </div>
 
-        <div className="flex min-h-[360px]">
+        <div className="flex min-h-90">
           {/* Sidebar Tabs */}
           <div className="w-36 bg-zinc-50 dark:bg-navidark-800 border-r border-zinc-100 dark:border-navidark-400 p-2 flex flex-col gap-1 shrink-0">
             <TabButton
@@ -98,8 +98,7 @@ export function AppSettings() {
                     <Save className="w-3.5 h-3.5" /> Auto-Save Interval
                   </label>
                   <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                    How long should Navivi wait after your last edit before
-                    saving in the background?
+                    Controls auto save of editors that have unsaved changes
                   </p>
                   <select
                     value={autoSaveInterval}
@@ -110,11 +109,11 @@ export function AppSettings() {
                     }
                     className="w-full bg-zinc-50 dark:bg-navidark-800 border border-zinc-200 dark:border-navidark-400 rounded-lg px-3 py-2.5 text-sm text-zinc-900 dark:text-zinc-100 outline-none focus:border-navi focus:ring-1 focus:ring-navi transition-all"
                   >
-                    <option value={0}>Disabled (Manual Save Only)</option>
-                    <option value={3}>3 Seconds (Aggressive)</option>
-                    <option value={10}>10 Seconds (Standard)</option>
-                    <option value={30}>30 Seconds</option>
-                    <option value={60}>1 Minute (Relaxed)</option>
+                    <option value={0}>Off</option>
+                    <option value={3}>After Delay (3 seconds)</option>
+                    <option value={30}>30 seconds</option>
+                    <option value={60}>1 minute</option>
+                    <option value={600}>10 minutes</option>
                   </select>
                 </div>
               </div>

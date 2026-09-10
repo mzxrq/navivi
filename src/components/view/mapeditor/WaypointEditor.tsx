@@ -1,5 +1,17 @@
 import { useState } from "react";
-import { ChevronLeft, ImageIcon, X, Trash2, MapPin, Pencil } from "../../ui/icons";
+import { 
+  ChevronLeft, 
+  ImageIcon, 
+  X, 
+  Trash2, 
+  MapPin, 
+  Pencil,
+  MapPinned,      // ✨ NEW IMPORTS
+  MapPinPlus,
+  LinkIcon,
+  UnlinkIcon,
+  CornerDownLeft
+} from "../../ui/icons";
 import { useWorkspace } from "../../../hooks/useWorkspace";
 import { useUI } from "../../../hooks/useUI";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
@@ -27,7 +39,7 @@ const imageTransitions = [
   { value: "wipe-left", label: "Wipe Left" },
   { value: "wipe-right", label: "Wipe Right" },
   { value: "cut", label: "Hard Cut" },
-]
+];
 
 export function WaypointEditor({
   wpId,
@@ -36,7 +48,7 @@ export function WaypointEditor({
   wpId: string;
   onClose: () => void;
 }) {
-  const { waypoints, setWaypoints, updateWaypoint, setActiveWaypointId } =
+  const { waypoints, setWaypoints, updateWaypoint, setActiveWaypointId, setIsDirty } =
     useWorkspace();
   const { showToast } = useUI();
 
@@ -49,7 +61,8 @@ export function WaypointEditor({
 
   if (!wp) return null;
 
-  const isStart = index === 0; const isEnd = index === waypoints.length - 1 && waypoints.length > 1;
+  const isStart = index === 0; 
+  const isEnd = index === waypoints.length - 1 && waypoints.length > 1;
   
   const wpImages = wp.images || [];
   const wpImagePans = wp.imagePans || [];
@@ -134,6 +147,28 @@ export function WaypointEditor({
     }
   };
 
+  // ✨ NEW: Handles swapping the waypoint type directly from the sidebar
+  const handleSetWaypointType = (type: "start" | "end" | "stopby" | "normal") => {
+    const newWaypoints = [...waypoints];
+    const currentIndex = newWaypoints.findIndex(w => w.id === wp.id);
+    if (currentIndex === -1) return;
+    
+    if (type === "start") {
+      newWaypoints.splice(currentIndex, 1);
+      newWaypoints.unshift({ ...wp, isStopBy: false, connectToRoute: undefined });
+    } else if (type === "end") {
+      newWaypoints.splice(currentIndex, 1);
+      newWaypoints.push({ ...wp, isStopBy: false, connectToRoute: undefined });
+    } else if (type === "stopby") {
+      newWaypoints[currentIndex] = { ...wp, isStopBy: true, connectToRoute: false };
+    } else if (type === "normal") {
+      newWaypoints[currentIndex] = { ...wp, isStopBy: false, connectToRoute: undefined };
+    }
+    
+    setWaypoints(newWaypoints);
+    if (setIsDirty) setIsDirty(true);
+  };
+
   return (
     <aside className="w-85 shrink-0 bg-white dark:bg-navidark-600 border-r border-zinc-200 dark:border-white/5 flex flex-col h-full select-none z-10 relative shadow-xl transition-colors">
       {/* --- HEADER --- */}
@@ -157,7 +192,7 @@ export function WaypointEditor({
       {/* --- SCROLLABLE EDITOR CONTENT --- */}
       <div className="flex-1 flex flex-col min-h-0 space-y-6 overflow-y-auto custom-scrollbar p-5">
         
-        {/* 1. Location Details & Type Switcher */}
+        {/* 1. Location Details */}
         <div className="space-y-4">
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
@@ -243,7 +278,7 @@ export function WaypointEditor({
           )}
         </div>
 
-        {/* 3. Redesigned Images, Camera Pans & Transitions */}
+        {/* 3. Images, Camera Pans & Transitions */}
         <div className="space-y-3 pb-8">
           <div className="flex items-center justify-between">
             <label className="text-xs font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-wider flex items-center gap-1.5">
@@ -261,19 +296,16 @@ export function WaypointEditor({
 
               return (
                 <div key={idx} className="flex flex-col">
-                  {/* ✨ The Redesigned Image Card */}
                   <div className="flex flex-col bg-zinc-50 dark:bg-navidark-700/50 border border-zinc-200 dark:border-white/10 rounded-xl p-1.5 shadow-sm group">
                     <div className="relative w-full h-28 rounded-lg overflow-hidden bg-zinc-200 dark:bg-navidark-900 mb-1.5">
                       <img src={convertFileSrc(img)} alt="Preview" className="w-full h-full object-cover" />
                       
-                      {/* Filename Overlay */}
                       <div className="absolute bottom-2 left-2 right-8 pointer-events-none">
                         <div className="bg-black/60 backdrop-blur-md text-white text-[9px] font-medium px-2 py-1 rounded-md truncate shadow-sm">
                           {img.split(/[/\\]/).pop()}
                         </div>
                       </div>
 
-                      {/* Floating Remove Button */}
                       <button
                         onClick={() => handleRemoveImage(idx)}
                         className="absolute top-2 right-2 p-1.5 bg-black/50 hover:bg-red-500 text-white rounded-md backdrop-blur-md opacity-0 group-hover:opacity-100 transition-all shadow-md"
@@ -283,7 +315,6 @@ export function WaypointEditor({
                       </button>
                     </div>
 
-                    {/* Camera Pan Select */}
                     <div className="flex items-center gap-2 px-1">
                       <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-wider shrink-0">Cam Pan:</span>
                       <select
@@ -298,10 +329,8 @@ export function WaypointEditor({
                     </div>
                   </div>
 
-                  {/* ✨ Inter-Image Transition Selector (Fixed Spacing & Added Connector) */}
                   {idx < wpImages.length - 1 && (
                     <div className="flex justify-center py-2 relative z-10">
-                      {/* Subtle connecting line behind the pill */}
                       <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-zinc-200 dark:bg-white/10 -z-10" />
                       
                       <div className="bg-white dark:bg-navidark-600 border border-zinc-200 dark:border-white/10 rounded-full shadow-sm flex items-center pr-1 hover:border-navi-300 transition-colors">
@@ -376,8 +405,69 @@ export function WaypointEditor({
         </div>
       </div>
 
-      {/* --- FOOTER / DANGER ZONE --- */}
-      <div className="p-4 border-t border-zinc-200 dark:border-white/5 shrink-0 bg-zinc-50/50 dark:bg-navidark-700/50">
+      {/* --- ✨ REDESIGNED SETTINGS & DANGER ZONE --- */}
+      <div className="flex flex-col p-4 border-t border-zinc-200 dark:border-white/5 shrink-0 bg-zinc-50/80 dark:bg-navidark-700/80 gap-3">
+        
+        {/* Type Configuration Buttons */}
+        <div className="flex flex-col gap-1.5">
+          <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider px-1">
+            Waypoint Properties
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            {!isStart && (
+               <button
+                 onClick={() => handleSetWaypointType("start")}
+                 className="flex items-center justify-center gap-1.5 py-1.5 rounded-lg border border-emerald-200 dark:border-emerald-500/20 bg-emerald-50 dark:bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold hover:bg-emerald-100 dark:hover:bg-emerald-500/10 transition-colors"
+               >
+                 <MapPinned className="w-3.5 h-3.5" /> Set Start
+               </button>
+            )}
+            {!isEnd && (
+               <button
+                 onClick={() => handleSetWaypointType("end")}
+                 className="flex items-center justify-center gap-1.5 py-1.5 rounded-lg border border-red-200 dark:border-red-500/20 bg-red-50 dark:bg-red-500/5 text-red-600 dark:text-red-400 text-[10px] font-bold hover:bg-red-100 dark:hover:bg-red-500/10 transition-colors"
+               >
+                 <CornerDownLeft className="w-3.5 h-3.5" /> Set End
+               </button>
+            )}
+            {wp.isStopBy ? (
+               <button
+                 onClick={() => handleSetWaypointType("normal")}
+                 className="col-span-2 flex items-center justify-center gap-1.5 py-1.5 rounded-lg border border-blue-200 dark:border-blue-500/20 bg-blue-50 dark:bg-blue-500/5 text-blue-600 dark:text-blue-400 text-[10px] font-bold hover:bg-blue-100 dark:hover:bg-blue-500/10 transition-colors"
+               >
+                 <MapPinPlus className="w-3.5 h-3.5" /> Revert to Normal Stop
+               </button>
+            ) : (
+               <button
+                 onClick={() => handleSetWaypointType("stopby")}
+                 className="flex items-center justify-center gap-1.5 py-1.5 rounded-lg border border-amber-200 dark:border-amber-500/20 bg-amber-50 dark:bg-amber-500/5 text-amber-600 dark:text-amber-500 text-[10px] font-bold hover:bg-amber-100 dark:hover:bg-amber-500/10 transition-colors"
+               >
+                 <MapPin className="w-3.5 h-3.5" /> Set Stop-By
+               </button>
+            )}
+          </div>
+        </div>
+
+        {/* Connect to Route Toggle (Only visible if Stop-By) */}
+        {wp.isStopBy && (
+          <button
+            onClick={() => {
+              updateWaypoint(wp.id, { connectToRoute: !wp.connectToRoute });
+              if (setIsDirty) setIsDirty(true);
+            }}
+            className={`flex justify-center items-center gap-2 w-full py-2 rounded-lg border text-xs font-bold transition-all shadow-sm ${
+              wp.connectToRoute 
+                ? "border-amber-200 dark:border-amber-500/30 bg-amber-100/50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-500/20"
+                : "border-blue-200 dark:border-blue-500/30 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-500/20"
+            }`}
+          >
+            {wp.connectToRoute ? <UnlinkIcon className="w-4 h-4" /> : <LinkIcon className="w-4 h-4" />}
+            {wp.connectToRoute ? "Disconnect from Route" : "Connect to Route"}
+          </button>
+        )}
+
+        <div className="w-full h-px bg-zinc-200 dark:bg-white/10 my-1" />
+
         <button
           onClick={() => {
             if (confirm(`Remove ${wp.name}?`)) {
@@ -386,7 +476,7 @@ export function WaypointEditor({
               onClose();
             }
           }}
-          className="w-full py-2.5 rounded-xl border border-red-200 dark:border-red-500/20 bg-white dark:bg-navidark-600 text-red-600 dark:text-red-400 text-xs font-bold hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors flex justify-center items-center gap-2 shadow-sm"
+          className="w-full py-2 rounded-xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-navidark-600 text-red-600 dark:text-red-400 text-xs font-bold hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors flex justify-center items-center gap-2 shadow-sm"
         >
           <Trash2 className="w-4 h-4" /> Remove Waypoint
         </button>

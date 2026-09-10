@@ -1,5 +1,11 @@
 import { useEffect, useState, useRef } from "react";
-import Map, { ViewStateChangeEvent, Marker, MapRef } from "react-map-gl/mapbox";
+// ✨ NEW: Imported Source for the 3D Terrain Data
+import Map, {
+  ViewStateChangeEvent,
+  Marker,
+  MapRef,
+  Source,
+} from "react-map-gl/mapbox";
 import { listen } from "@tauri-apps/api/event";
 import {
   UploadCloud,
@@ -8,6 +14,7 @@ import {
   SplinePointer,
   Undo,
   Eraser,
+  Layers, // ✨ NEW: Icon for the Style Switcher
 } from "../../ui/icons";
 import { RouteStyling } from "./MapLayers/RouteStyling";
 import { useWorkspace } from "../../../hooks/useWorkspace";
@@ -17,6 +24,69 @@ import { useFileActions } from "../../../hooks/useFileActions";
 import { loadProjectData } from "../../../services/fileSystem";
 import { RouteLayer } from "./MapLayers/RouteLayer";
 import { NaviPin } from "./MapLayers/NaviPin";
+
+// ✨ NEW: Mapbox Style Definitions
+const mapStyles = [
+  {
+    id: "outdoors",
+    label: "Outdoors (3D Terrain)",
+    url: "mapbox://styles/mapbox/outdoors-v12",
+  },
+  {
+    id: "satellite",
+    label: "Satellite Streets",
+    url: "mapbox://styles/mapbox/satellite-streets-v12",
+  },
+  {
+    id: "dark",
+    label: "Cinematic Dark",
+    url: "mapbox://styles/mapbox/dark-v11",
+  },
+  {
+    id: "standard",
+    label: "Standard (Dynamic)",
+    url: "mapbox://styles/mapbox/standard",
+  },
+  {
+    id: "light",
+    label: "Light Streets",
+    url: "mapbox://styles/mapbox/streets-v12",
+  },
+  {
+    id: "osm",
+    label: "Classic OpenStreetMap",
+    url: {
+      version: 8,
+      sources: {
+        osm: {
+          type: "raster",
+          tiles: ["https://a.tile.openstreetmap.org/{z}/{x}/{y}.png"],
+          tileSize: 256,
+        },
+      },
+      layers: [
+        { id: "osm", type: "raster", source: "osm", minzoom: 0, maxzoom: 22 },
+      ],
+    } as any,
+  },
+  {
+    id: "gsi-japan",
+    label: "Japan GSI Topo (Hiking)",
+    url: {
+      version: 8,
+      sources: {
+        gsi: {
+          type: "raster",
+          tiles: ["https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png"],
+          tileSize: 256,
+        },
+      },
+      layers: [
+        { id: "gsi", type: "raster", source: "gsi", minzoom: 0, maxzoom: 18 },
+      ],
+    } as any,
+  },
+];
 
 export function MapArea() {
   const { theme, mapTheme } = useTheme();
@@ -43,11 +113,15 @@ export function MapArea() {
   const [isProcessing] = useState(false);
   const [uploadedRouteLine] = useState<[number, number][]>([]);
   const mapRef = useRef<MapRef>(null);
+  const rightClickStartRef = useRef<{ x: number; y: number } | null>(null);
+
   // Mapbox View State
   const [viewState, setViewState] = useState({
     longitude: settings.start_coords?.[1] || 135.5023,
     latitude: settings.start_coords?.[0] || 34.6937,
     zoom: 13,
+    pitch: 0, // ✨ Ensure pitch is tracked for 3D viewing
+    bearing: 0,
   });
 
   useMapRouting();
@@ -59,16 +133,18 @@ export function MapArea() {
         (theme === "system" &&
           window.matchMedia("(prefers-color-scheme: dark)").matches)));
 
+  // ✨ NEW: States for Style Switcher
+  const [selectedStyle, setSelectedStyle] = useState<string>(() =>
+    isDarkMap ? "dark" : "outdoors",
+  );
+  const [showStyleMenu, setShowStyleMenu] = useState(false);
+
   useEffect(() => {
     const timer = setTimeout(() => {
       mapRef.current?.resize();
     }, 150);
     return () => clearTimeout(timer);
   }, []);
-
-  const mapboxStyle = isDarkMap
-    ? "mapbox://styles/mapbox/dark-v11"
-    : "mapbox://styles/mapbox/streets-v12";
 
   const handleMapClick = (e: any) => {
     if (isDrawMode && activeWaypointId) {
@@ -126,6 +202,12 @@ export function MapArea() {
   const handleMapContextMenu = (e: any) => {
     e.originalEvent.preventDefault();
     e.originalEvent.stopPropagation();
+
+    if (rightClickStartRef.current) {
+      const dx = Math.abs(e.originalEvent.clientX - rightClickStartRef.current.x);
+      const dy = Math.abs(e.originalEvent.clientY - rightClickStartRef.current.y);
+      if (dx > 5 || dy > 5) return;
+    }
 
     // context menu payload
     window.dispatchEvent(
@@ -388,11 +470,10 @@ export function MapArea() {
           </button>
         </div>
 
-        {/* --- ✨ NEW: WAYPOINT TOOLBAR --- */}
+        {/* --- WAYPOINT TOOLBAR --- */}
         <div
           className={`flex items-center rounded-full drop-shadow-xl transition-all duration-300 ease-out ${isAddMode ? "bg-white dark:bg-zinc-800" : ""}`}
         >
-          {/* The Expanded Options */}
           <div
             className={`flex items-center overflow-hidden transition-all duration-300 ease-out ${isAddMode ? "max-w-62.5 opacity-100 px-2 gap-1" : "max-w-0 opacity-0 px-0 gap-0"}`}
           >
@@ -423,7 +504,6 @@ export function MapArea() {
             <div className="w-px h-4 bg-zinc-200 dark:bg-zinc-700 ml-1 mr-1" />
           </div>
 
-          {/* The Main Toggle Button */}
           <button
             onClick={() => {
               setIsAddMode(!isAddMode);
@@ -444,6 +524,40 @@ export function MapArea() {
         </div>
 
         <RouteStyling />
+
+        <div className="relative">
+          <button
+            onClick={() => setShowStyleMenu(!showStyleMenu)}
+            className="flex items-center justify-center w-10 h-10 rounded-full transition-all font-bold bg-white dark:bg-zinc-800 text-zinc-700 hover:bg-zinc-200 dark:text-zinc-200 dark:hover:bg-zinc-500 drop-shadow-xl"
+            title="Map Style & Terrain"
+          >
+            <Layers className="w-4 h-4" />
+          </button>
+
+          {showStyleMenu && (
+            <div className="absolute top-12 right-0 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl shadow-2xl p-2 flex flex-col gap-1 w-48 z-1000 animate-in slide-in-from-top-2">
+              <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider px-2 pt-1 pb-2">
+                Map Style
+              </span>
+              {mapStyles.map((style) => (
+                <button
+                  key={style.id}
+                  onClick={() => {
+                    setSelectedStyle(style.id);
+                    setShowStyleMenu(false);
+                  }}
+                  className={`text-left px-3 py-2 text-xs font-bold rounded-lg transition-colors ${
+                    selectedStyle === style.id
+                      ? "bg-navi-500 text-white"
+                      : "text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700"
+                  }`}
+                >
+                  {style.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {isDrawMode && activeWp && nextWp && (
@@ -467,7 +581,7 @@ export function MapArea() {
             {nextWp.name}
           </span>
 
-          {/* 🛠️ RETRACE PREVIOUS TRAIL BUTTON */}
+          {/* RETRACE PREVIOUS TRAIL BUTTON */}
           {activeIndex > 0 &&
           waypoints[activeIndex - 1]?.customRoute?.length ? (
             <>
@@ -494,6 +608,7 @@ export function MapArea() {
           ) : null}
         </div>
       )}
+
       {/* MAPBOX CANVAS */}
       <div className="absolute inset-0 z-0">
         <Map
@@ -502,21 +617,43 @@ export function MapArea() {
           onMove={(evt: ViewStateChangeEvent) => setViewState(evt.viewState)}
           onClick={handleMapClick}
           onContextMenu={handleMapContextMenu}
-          mapStyle={mapboxStyle}
+          onMouseDown={(e) => {
+            if (e.originalEvent.button === 2) {
+              rightClickStartRef.current = { 
+                x: e.originalEvent.clientX, 
+                y: e.originalEvent.clientY 
+              };
+            }
+          }}
+          mapStyle={
+            mapStyles.find((s) => s.id === selectedStyle)?.url ||
+            mapStyles[0].url
+          }
           mapboxAccessToken={mapboxToken}
           attributionControl={false}
           dragRotate={true}
           doubleClickZoom={!isDrawMode}
+          terrain={{ source: "mapbox-dem", exaggeration: 1.5 }} // ✨ INJECT 3D TERRAIN MULTIPLIER
         >
+          {/* ✨ NEW: SOURCE DATA FOR 3D TERRAIN */}
+          <Source
+            id="mapbox-dem"
+            type="raster-dem"
+            url="mapbox://mapbox.mapbox-terrain-dem-v1"
+            tileSize={512}
+            maxzoom={14}
+          />
+
           <RouteLayer
             uploadedRouteLine={uploadedRouteLine}
             routePoints={routePoints}
           />
 
-          {/* ✨ PERFECTLY SYNCED MAP PINS */}
+          {/* PERFECTLY SYNCED MAP PINS */}
           {waypoints.map((wp, index) => {
             const isStart = index === 0;
-            const isEnd = index === waypoints.length - 1 && waypoints.length > 1;
+            const isEnd =
+              index === waypoints.length - 1 && waypoints.length > 1;
 
             let pinType: "start" | "end" | "stopby" | "normal" = "normal";
             let label = "";
@@ -558,7 +695,11 @@ export function MapArea() {
                     <div className="bg-zinc-900 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-lg border border-white/20 mb-1 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
                       {wp.name || `Waypoint`}
                     </div>
-                    <NaviPin className="w-8 h-8" label={label} pinType="stopby" />
+                    <NaviPin
+                      className="w-8 h-8"
+                      label={label}
+                      pinType="stopby"
+                    />
                   </div>
                 </Marker>
               );

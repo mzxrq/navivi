@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { MapArea } from "../view/mapeditor/MapArea";
-import { Sidebar } from "../view/mapeditor/Sidebar";
-import { TimelineView } from "../view/videoeditor/TimelineView";
-import { MapIcon, Film } from "./icons";
+import { MapArea } from "./mapeditor/MapArea";
+import { Sidebar } from "./mapeditor/Sidebar";
+import { TimelineView } from "./videoeditor/TimelineView";
+import { MapIcon, Film } from "../ui/icons";
 
 export function EditorLayout() {
   // 'map' or 'timeline'

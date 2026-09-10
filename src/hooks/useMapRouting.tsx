@@ -215,7 +215,9 @@ export function useMapRouting() {
   >([]);
 
   useEffect(() => {
-    if (waypoints.length < 2) {
+    const routedWaypoints = waypoints.filter(wp => !wp.isStopBy || wp.connectToRoute);
+
+    if (routedWaypoints.length < 2) {
       setRouteSegments([]);
       return;
     }
@@ -230,9 +232,9 @@ export function useMapRouting() {
       cacheKey: string;
     }[] = [];
 
-    for (let i = 0; i < waypoints.length - 1; i++) {
-      const wp1 = waypoints[i];
-      const wp2 = waypoints[i + 1];
+    for (let i = 0; i < routedWaypoints.length - 1; i++) {
+      const wp1 = routedWaypoints[i];
+      const wp2 = routedWaypoints[i + 1];
       const mode = wp1.routeMode || "walking";
       const customHash =
         mode === "draw" ? JSON.stringify(wp1.customRoute || []) : "";

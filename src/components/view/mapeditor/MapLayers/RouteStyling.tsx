@@ -21,9 +21,9 @@ export function RouteStyling() {
       {/* 🛠️ The button never unmounts now! */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`flex items-center gap-2 px-4 py-2.5 rounded-full transition-all drop-shadow-xl font-bold ${
+        className={`flex items-center justify-center w-10 h-10 rounded-full transition-all font-bold bg-white dark:bg-zinc-800 text-zinc-700 hover:bg-zinc-200 dark:text-zinc-200 dark:hover:bg-zinc-500 ${
           isOpen
-            ? "bg-zinc-400 hover:bg-zinc-600 text-white shadow-zinc-200/25 border border-zinc-200"
+            ? "bg-zinc-400 hover:bg-zinc-600 text-white shadow-zinc-200/25"
             : "bg-white dark:bg-zinc-800 text-zinc-700 hover:bg-zinc-200 dark:text-zinc-200 dark:hover:bg-zinc-500"
         }`}
         title="Route Lines Config"

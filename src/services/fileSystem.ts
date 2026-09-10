@@ -149,7 +149,8 @@ export const saveProjectData = async (
           drawStyle: wp.drawStyle || "linear",
         }),
         ...(wp.isStopBy && {
-          isStopBy: true
+          isStopBy: true,
+          connectToRoute: wp.connectToRoute || false,
         })
       };
     })
@@ -178,9 +179,12 @@ export const saveProjectData = async (
   await writeTextFile(jsonPath, payload);
 
   const activeKeys = new Set<string>();
-  for (let i = 0; i < waypoints.length - 1; i++) {
-    const wp1 = waypoints[i];
-    const wp2 = waypoints[i + 1];
+
+  const routedWaypoints = waypoints.filter(wp => !wp.isStopBy || wp.connectToRoute);
+
+  for (let i = 0; i < routedWaypoints.length - 1; i++) {
+    const wp1 = routedWaypoints[i];
+    const wp2 = routedWaypoints[i + 1];
     const mode = wp1.routeMode || "driving";
     const customHash = mode === "draw" ? JSON.stringify(wp1.customRoute || []) : "";
     activeKeys.add(`${wp1.lat.toFixed(5)},${wp1.lng.toFixed(5)}|${wp2.lat.toFixed(5)},${wp2.lng.toFixed(5)}|${mode}|${customHash}`);

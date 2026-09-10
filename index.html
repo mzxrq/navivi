@@ -8,9 +8,9 @@
       http-equiv="Content-Security-Policy"
       content="
         default-src 'self'; 
-        connect-src 'self' ipc: http://ipc.localhost http://asset.localhost asset: https://router.project-osrm.org https://*.openstreetmap.org https://api.openrouteservice.org https://*.openrouteserivce.org https://overpass-api.de https://api.mapbox.com https://events.mapbox.com; 
+        connect-src 'self' ipc: http://ipc.localhost http://asset.localhost asset: https://router.project-osrm.org https://*.openstreetmap.org https://api.openrouteservice.org https://*.openrouteserivce.org https://overpass-api.de https://api.mapbox.com https://events.mapbox.com https://cyberjapandata.gsi.go.jp; 
         style-src 'self' 'unsafe-inline' https://unpkg.com https://fonts.googleapis.com; 
-        img-src 'self' data: blob: http://asset.localhost asset: https://*.cartocdn.com https://*.openstreetmap.org https://unpkg.com https://api.mapbox.com; 
+        img-src 'self' data: blob: http://asset.localhost asset: https://*.cartocdn.com https://*.openstreetmap.org https://unpkg.com https://api.mapbox.com https://cyberjapandata.gsi.go.jp; 
         media-src 'self' data: blob: http://asset.localhost asset:; 
         font-src 'self' https://fonts.gstatic.com;
         worker-src 'self' blob:;
