@@ -494,7 +494,7 @@ class _WaypointRenderMixin:
                         # composited onto the destination photo afterward.
                         if show_segment_summary:
                             summary_shown_inline = True
-                            seg_card = self.graphics.create_summary_card(
+                            seg_card = self.graphics.render_summary_card(
                                 distance_km=res_data.get("distance_km", 0.0),
                                 duration_seconds=seg_real_duration,
                                 mode_breakdown={
@@ -566,7 +566,7 @@ class _WaypointRenderMixin:
             # at the very end instead of before a transition that doesn't
             # happen here.
             if show_segment_summary and not summary_shown_inline:
-                seg_card = self.graphics.create_summary_card(
+                seg_card = self.graphics.render_summary_card(
                     distance_km=res_data.get("distance_km", 0.0),
                     duration_seconds=seg_real_duration,
                     mode_breakdown={res_mode: res_data.get("distance_km", 0.0)},

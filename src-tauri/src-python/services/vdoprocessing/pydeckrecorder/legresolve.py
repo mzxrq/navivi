@@ -2,9 +2,10 @@
 
 from typing import Dict, List, Optional, Tuple
 
-# "direct" is a straight-line routing choice, not a distinct travel mode —
-# render it as walking (matches the same alias in videopipeline.py).
-_MODE_ALIASES = {"direct": "walking"}
+# "direct" (a straight-line routing choice) and "draw" (a hand-drawn
+# custom-route leg) are both rendered as walking, not their own distinct
+# travel mode (matches tuning.MODE_ALIASES).
+_MODE_ALIASES = {"direct": "walking", "draw": "walking"}
 
 
 def _resolve_leg(

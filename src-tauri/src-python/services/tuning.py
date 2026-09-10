@@ -10,16 +10,87 @@ settings (e.g. settings.mode_speeds_kmh) — these are only the fallback
 defaults.
 """
 
+import json
+import os
 from typing import Dict, Tuple
+
+# --- On-video text labels (Japanese) -----------------------------------------
+# services/ -> up to src-python/ -> assets/config/ — same bundled-relative-
+# to-module convention graphicengine/base.py's _BUNDLED_FONTS_DIR uses. Every
+# piece of Japanese text drawn onto the rendered video lives in this one file
+# (assets/config/labels_ja.json) instead of scattered across modules:
+# - waypoint_fallback/start_prefix/stop_prefix: render_step.py's on-screen
+#   waypoint label chip (also outrocard.py's end-card grid fallback).
+# - mode_name/mode_duration_label/total_label/distance_label/
+#   taskbar_card_title: cards.py's summary cards (create_summary_card /
+#   create_summary_card_taskbar) — see cards.py's merge_summary_card_labels
+#   for how a project's job_config.json settings.summary_card_labels can
+#   still override a subset of just those keys.
+# A project can override any of these via job_config.json's
+# settings.pipeline_labels / settings.summary_card_labels without touching
+# this bundled file at all.
+_LABELS_JA_PATH = os.path.join(
+    os.path.dirname(__file__), "..", "assets", "config", "labels_ja.json",
+)
+_DEFAULT_LABELS_JA: Dict = {
+    "waypoint_fallback": "ウェイポイント",
+    "start_prefix": "出発: ",
+    "stop_prefix": "到着: ",
+    "mode_name": {
+        "walking": "歩く", "driving": "運転", "car": "運転",
+        "ferry": "乗船", "airplane": "飛行機",
+    },
+    "mode_duration_label": {
+        "walking": "歩く時間", "driving": "運転時間", "car": "運転時間",
+        "ferry": "乗船時間", "airplane": "飛行時間",
+    },
+    "total_label": "合計",
+    "distance_label": "距離",
+    "taskbar_card_title": "旅の概要",
+}
+
+
+def _load_labels_ja() -> Dict:
+    try:
+        with open(_LABELS_JA_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return _DEFAULT_LABELS_JA
+
+
+# Loaded once at import time — these are static display strings, not
+# something a render needs to re-read per frame/per card.
+LABELS_JA: Dict = _load_labels_ja()
+# Alias kept for the pipeline-label (waypoint_fallback/start_prefix/
+# stop_prefix) call sites that only ever needed those three keys —
+# render_step.py, overview.py, outrocard.py, and helpers.py's re-export.
+PIPELINE_LABELS: Dict = LABELS_JA
+
+# --- Mode aliases ------------------------------------------------------------
+# Route-mode strings that should be TREATED AS another mode everywhere a mode
+# drives behavior (speed lookup, animation icon, line/card color, duration
+# label) — rather than being a distinct identity that then falls through to
+# some generic fallback. "direct" (a straight-line routing choice, not a real
+# travel mode) already aliased to "walking"; "draw" (a hand-drawn custom-route
+# leg) is walking in every practical sense here too — same pace, same on-foot
+# icon — so it's folded into the same alias rather than getting its own
+# separate (and generic-fallback-flavored) identity. Apply via
+# `MODE_ALIASES.get(mode, mode)` at the point a mode string is first read off
+# job_config.json (routeMode / routing_cache), so every downstream lookup
+# just sees "walking" and never has to special-case "draw" itself.
+MODE_ALIASES: Dict[str, str] = {"direct": "walking", "draw": "walking"}
 
 # --- Mode speeds (km/h) -----------------------------------------------------
 # REPORTED is the real-world speed a leg's distance/time is estimated from
-# when no real GPS timestamp is available (drives the summary/per-leg
-# stat cards). ANIMATION is a separate, usually faster set of speeds that
-# drives the on-screen travel pace instead — kept apart so a realistic
-# (and often much slower) reported walking speed doesn't also drag the
-# walking leg's on-screen animation out longer. Modes not listed in
-# ANIMATION_MODE_SPEED_KMH reuse their REPORTED speed for animation too.
+# when no real GPS timestamp is available (drives the summary/per-leg stat
+# cards and every other real-world calculation) — unaffected by anything
+# below. ANIMATION_SPEED_KMH is the single on-screen travel pace EVERY mode
+# animates at by default (walking, driving, ferry, airplane — all the same),
+# so a fast car/ferry/flight leg doesn't visually zip by relative to a
+# walking one just because its real-world speed is so much higher; only the
+# real numbers above still vary per mode. A project can still opt a specific
+# mode into its own on-screen pace via job_config.json's
+# settings.animation_speeds_kmh (see SpatialRenderer.__init__).
 REPORTED_MODE_SPEED_KMH: Dict[str, float] = {
     "walking": 3.0,
     "ferry": 35.0,  # regular passenger ferry, not a high-speed jet ferry
@@ -27,13 +98,11 @@ REPORTED_MODE_SPEED_KMH: Dict[str, float] = {
     "driving": 70.0,
     "airplane": 500.0,
 }
-ANIMATION_MODE_SPEED_KMH: Dict[str, float] = {
-    "walking": 8.0,
-}
+ANIMATION_SPEED_KMH = 8.0
 # Fixed anchor "1x" pace every mode's on-screen speed-up factor is computed
-# against — not whatever "walking" happens to be configured as (see
-# SpatialRenderer._mode_speed_factor).
-# [NOTE] [Config] Kept independent of REPORTED/ANIMATION_MODE_SPEED_KMH["walking"] so changing walking speed doesn't silently rescale every other mode's speed-up factor.
+# against — not whatever ANIMATION_SPEED_KMH happens to be configured as
+# (see SpatialRenderer._mode_speed_factor).
+# [NOTE] [Config] Kept independent of REPORTED/ANIMATION_SPEED_KMH so changing either doesn't silently rescale every mode's speed-up factor.
 REFERENCE_SPEED_KMH = 3.0
 
 # --- Pin / line colors (BGR) ------------------------------------------------
@@ -84,6 +153,12 @@ WAYPOINT_LABEL_FONT_SCALE = 0.85
 # original 14/24-26px, which read as too small for an end-of-video stat.
 SUMMARY_CARD_LABEL_FONT_SIZE = 20
 SUMMARY_CARD_VALUE_FONT_SIZE = 34
+# Which summary-card template render_summary_card picks: "glass" (the
+# original wide stat pill/column card, cards.py's create_summary_card) or
+# "taskbar" (a narrow Windows-notification-flyout-style list,
+# create_summary_card_taskbar). Overridable per project via
+# job_config.json's settings.summary_card_style.
+DEFAULT_SUMMARY_CARD_STYLE = "glass"
 # Floor on the residential-chunk zoom level computed from a leg's physical
 # span (see TileDownloader.fetch_residential_chunk) — a leg whose path
 # bulges or loops (e.g. a detour around a highway on-ramp) can inflate
@@ -171,6 +246,20 @@ POPUP_FADE_SECONDS = 1.5
 # before it was actually readable. Applies regardless of how close the
 # pins are, on top of (not instead of) each popup's own display duration.
 OVERVIEW_POPUP_MIN_TRIGGER_GAP_SECONDS = 2.0
+# Floor on how long a flow-through popup is willing to sit queued for one
+# of MAX_CONCURRENT_FLOW_POPUPS's display slots (see
+# _composite_baked_popups) before giving up and never appearing at all.
+# This used to be exactly the popup's OWN display duration
+# (leg_display_seconds — itself floored short for a tightly-clustered
+# waypoint, since it's based on how soon the NEXT trigger follows) — for a
+# real cluster of 4+ nearby waypoints, a popup could easily need to wait
+# longer than its own short display time for one of only 3 concurrent
+# slots to free up, and be dropped having never been shown even though
+# the traveler had genuinely reached it. The wait budget is now the
+# LARGER of that and this floor, so a short-duration popup still gets a
+# real chance at a slot; still bounded (not infinite) so a popup doesn't
+# finally appear absurdly long after the traveler has moved on.
+POPUP_MIN_WAIT_SECONDS = 6.0
 # [NOTE] [Transition] Fullscreen photo transition plays as an ordered sequence: confirm (pin selected) -> scale (zoom into photo) -> blur -> fade_out; hold_ratio_of_freeze/min_hold_seconds/min_small_hold_seconds bound how long the fullscreen photo is held relative to its freeze duration before the next stage starts.
 FULLSCREEN_TRANSITION_DEFAULTS: Dict[str, float] = {
     "confirm_seconds": 0.4,

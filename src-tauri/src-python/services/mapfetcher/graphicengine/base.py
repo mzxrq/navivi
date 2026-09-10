@@ -39,6 +39,8 @@ from PIL.ImageFont import FreeTypeFont, load_default, truetype
 from services.logger.logger import setup_logger
 from services import tuning
 
+from .cards import merge_summary_card_labels
+
 logger = setup_logger("GraphicsEngine")
 
 # Bundled in the repo (services/mapfetcher/graphicengine/ -> up to src-python/
@@ -112,6 +114,8 @@ class _GraphicsEngineBase:
         card_border_thickness=tuning.DEFAULT_CARD_BORDER_THICKNESS,
         line_border_color=tuning.DEFAULT_LINE_BORDER_COLOR,
         line_border_thickness=tuning.DEFAULT_LINE_BORDER_THICKNESS,
+        summary_card_style=tuning.DEFAULT_SUMMARY_CARD_STYLE,
+        summary_card_labels: Optional[Dict] = None,
     ):
         self.line_color = line_color
         self.line_border_color = line_border_color
@@ -134,6 +138,16 @@ class _GraphicsEngineBase:
         # settings.card_border_color (BGR) / settings.card_border_thickness.
         self.card_border_color = card_border_color
         self.card_border_thickness = max(0, int(round(card_border_thickness)))
+        # Which summary-card template render_summary_card renders (see
+        # cards.py) — configurable via job_config.json's
+        # settings.summary_card_style ("glass" default, or "taskbar" for
+        # the new notification-flyout-style template).
+        self.summary_card_style = summary_card_style
+        # Every summary-card display string — bundled defaults from
+        # assets/config/labels_ja.json, layered with this project's own
+        # job_config.json settings.summary_card_labels override (any
+        # subset of keys) — see .cards.merge_summary_card_labels.
+        self.summary_card_labels = merge_summary_card_labels(summary_card_labels)
         # See _load_font below — every popup card, summary card, and
         # landmark label chip loads a font on every frame it's drawn, so
         # without this a multi-second held card re-opens and re-parses

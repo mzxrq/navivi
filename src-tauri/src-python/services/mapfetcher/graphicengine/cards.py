@@ -8,6 +8,35 @@ from PIL import Image, ImageDraw
 
 from services import tuning
 
+# The card-relevant labels (mode names, "distance"/"total", the taskbar
+# card's title) are a subset of tuning.LABELS_JA — the single combined
+# assets/config/labels_ja.json every on-video Japanese string lives in
+# (also used directly by render_step.py/overview.py/outrocard.py for their
+# own waypoint_fallback/start_prefix/stop_prefix keys).
+
+# The only two keys that are themselves dicts (mode -> label) — every other
+# key is a flat string, so a shallow "override replaces the whole value"
+# merge would let a project's settings.summary_card_labels override ONE
+# mode's name/duration label but silently drop every other mode's, unless
+# those two are merged one level deeper instead.
+_NESTED_LABEL_KEYS = ("mode_name", "mode_duration_label")
+
+
+def merge_summary_card_labels(overrides: Optional[Dict]) -> Dict:
+    """Merges a job_config.json settings.summary_card_labels override (any
+    subset of keys, including a partial mode_name/mode_duration_label) over
+    tuning.LABELS_JA's bundled/shared defaults — never mutates either
+    input."""
+    merged = dict(tuning.LABELS_JA)
+    if not overrides:
+        return merged
+    for key, value in overrides.items():
+        if key in _NESTED_LABEL_KEYS and isinstance(value, dict):
+            merged[key] = {**merged.get(key, {}), **value}
+        else:
+            merged[key] = value
+    return merged
+
 
 class _CardMixin:
     @staticmethod
@@ -55,17 +84,19 @@ class _CardMixin:
         )
         return icon_size + icon_text_gap + max(label_w, value_w)
 
-    _MODE_DURATION_LABEL = {
-        "walking": "歩く時間",
-        "driving": "運転時間",
-        "car": "運転時間",
-        "ferry": "乗船時間",
-        "airplane": "飛行時間",
-    }
+    # Every summary-card display string (mode names, "distance"/"total"
+    # labels, the taskbar card's title) lives in assets/config/labels_ja.json
+    # by default, layered with this project's own job_config.json
+    # settings.summary_card_labels override (see self.summary_card_labels,
+    # set in GraphicsEngineBase.__init__) — instance methods, not static, so
+    # they can actually see that per-project override.
+    def _mode_duration_label(self, mode: str) -> str:
+        labels = getattr(self, "summary_card_labels", tuning.LABELS_JA)
+        return labels["mode_duration_label"].get((mode or "").lower(), "時間")
 
-    @classmethod
-    def _mode_duration_label(cls, mode: str) -> str:
-        return cls._MODE_DURATION_LABEL.get((mode or "").lower(), "時間")
+    def _mode_name_ja(self, mode: str) -> str:
+        labels = getattr(self, "summary_card_labels", tuning.LABELS_JA)
+        return labels["mode_name"].get((mode or "").lower(), (mode or "").capitalize())
 
     @staticmethod
     def _format_duration_ja(seconds: float) -> str:
@@ -94,14 +125,14 @@ class _CardMixin:
         if mode_breakdown:
             for mode, dist in sorted(mode_breakdown.items(), key=lambda kv: -kv[1]):
                 columns.append(
-                    (mode.capitalize(), mode.lower(), dist, mode_duration.get(mode, 0.0))
+                    (self._mode_name_ja(mode), mode.lower(), dist, mode_duration.get(mode, 0.0))
                 )
         # A single mode's own column already IS the total (same distance,
         # same time) — appending "Total" too would just repeat it. Only
         # add it when there's more than one mode to actually total up, or
         # none at all (nothing else to show).
         if not mode_breakdown or len(mode_breakdown) > 1:
-            columns.append(("Total", "total", distance_km, duration_seconds))
+            columns.append((self.summary_card_labels["total_label"], "total", distance_km, duration_seconds))
 
         n = len(columns)
 
@@ -137,7 +168,7 @@ class _CardMixin:
 
             tiles = [
                 (time_icon, self._mode_duration_label(mode), dur_str),
-                (self._draw_ruler_icon, "距離", distance_str),
+                (self._draw_ruler_icon, self.summary_card_labels["distance_label"], distance_str),
             ]
 
             icon_size = 36 * scale
@@ -203,6 +234,10 @@ class _CardMixin:
             # whole at the end (see mode_accent's own comment below).
             border_rgba = tuple(reversed(self.card_border_color)) + (255,)
             accent = tuple(reversed(self.line_color)) + (255,)
+            # Total column always reads as blue rather than borrowing
+            # whichever mode happens to be self.line_color — it
+            # summarizes across modes, not one of them.
+            total_accent = (232, 115, 26, 255)  # BGR for RGB (26, 115, 232)
 
             def mode_accent(mode: str) -> Tuple:
                 """Same color the route line itself uses for this mode
@@ -211,9 +246,9 @@ class _CardMixin:
                 end — ties each mode's stat column back to its own line
                 color on the map instead of every column sharing one
                 generic accent. "total" isn't a real travel mode with a
-                line color of its own, so it keeps the generic accent."""
+                line color of its own, so it always gets a fixed blue."""
                 if mode == "total":
-                    return accent
+                    return total_accent
                 return tuple(reversed(self.MODE_COLORS.get(mode, self.line_color))) + (255,)
 
             # Mode header ("Draw"/"Walking"/"Driving"/"Total") is Regular —
@@ -250,7 +285,7 @@ class _CardMixin:
             col_content_w = 0.0
             for label, mode, dist, dur in columns:
                 distance_str = f"{dist * 1000:.0f} m" if dist < 1 else f"{dist:.1f} km"
-                dur_str = self._format_duration_short(dur) if dur > 0 else None
+                dur_str = self._format_duration_ja(dur) if dur > 0 else None
                 widths = [
                     probe_draw.textlength(label, font=font_label),
                     probe_draw.textlength(distance_str, font=font_value_2),
@@ -332,7 +367,7 @@ class _CardMixin:
                     fill=col_accent,
                 )
 
-                dur_str = self._format_duration_short(dur) if dur > 0 else None
+                dur_str = self._format_duration_ja(dur) if dur > 0 else None
                 if dur_str:
                     row_y = value_y + row_gap
                     dur_w = draw.textlength(dur_str, font=font_label_time)
@@ -349,6 +384,200 @@ class _CardMixin:
         # [NOTE] [Animation] Downscales the 2x supersampled canvas for anti-aliasing, then swaps RGBA -> BGRA to match OpenCV's channel order.
         canvas = canvas.resize((w, h), Image.Resampling.LANCZOS)
         return np.array(canvas)[:, :, [2, 1, 0, 3]]
+
+    def create_summary_card_taskbar(
+        self,
+        distance_km: float,
+        duration_seconds: float,
+        mode_breakdown: Optional[Dict[str, float]] = None,
+        mode_duration: Optional[Dict[str, float]] = None,
+        min_card_width: int = 260,
+    ) -> np.ndarray:
+        """Second summary-card template: a narrow vertical list styled like
+        a Windows taskbar/notification flyout (icon-badge header row, then
+        one label+value row per travel mode, ending in a Total row) rather
+        than create_summary_card's wide horizontal pill/column layout.
+        Sibling to create_summary_card, not a replacement for it — pick
+        between the two via GraphicsEngine.summary_card_style (see
+        tuning.DEFAULT_SUMMARY_CARD_STYLE / job_config.json's
+        settings.summary_card_style) through render_summary_card, the
+        shared dispatch point every call site should use instead of
+        calling either template directly.
+
+        Width is measured from the actual longest row (label + value text)
+        rather than a fixed card_width — a fixed width let a long value
+        string ("10.7 km · 3 hr 35 min") run past the card edge or
+        collide with its own row's label/icon on the left."""
+        mode_duration = mode_duration or {}
+        rows: List[Tuple[str, str, float, float]] = []
+        if mode_breakdown:
+            for mode, dist in sorted(mode_breakdown.items(), key=lambda kv: -kv[1]):
+                rows.append(
+                    (self._mode_name_ja(mode), mode.lower(), dist, mode_duration.get(mode, 0.0))
+                )
+        # Same "skip the redundant Total column for a single mode" rule as
+        # create_summary_card — a lone mode's own row already IS the total.
+        if not mode_breakdown or len(mode_breakdown) > 1:
+            rows.append((self.summary_card_labels["total_label"], "total", distance_km, duration_seconds))
+
+        # Light "white glass" flyout — same family as create_summary_card's
+        # own light palette (this project's actual card theme) rather than
+        # the dark mica look this template first shipped with.
+        bg_color = (255, 255, 255, 240)
+        header_color = (35, 35, 35, 255)
+        label_color = (110, 110, 110, 255)
+        value_color = (35, 35, 35, 255)
+        divider_color = (0, 0, 0, 24)
+        border_rgba = tuple(reversed(self.card_border_color)) + (255,)
+        # BGR, like every other color in job_config.json's settings —
+        # reversed here since the canvas is RGBA->BGR swapped as a whole
+        # at the end (same convention create_summary_card uses).
+        accent = tuple(reversed(self.line_color)) + (255,)
+        # Total row always reads as blue, distinct from any individual
+        # travel mode's own route-line color — it summarizes across
+        # modes rather than belonging to one, so it shouldn't visually
+        # borrow whichever mode happens to be self.line_color.
+        total_accent = (232, 115, 26, 255)  # BGR for RGB (26, 115, 232)
+
+        def mode_accent(mode: str) -> Tuple:
+            if mode == "total":
+                return total_accent
+            return tuple(reversed(self.MODE_COLORS.get(mode, self.line_color))) + (255,)
+
+        scale = 2
+        font_header = self._load_font(self.FONT_CANDIDATES_BOLD, 22 * scale)
+        font_label = self._load_font(
+            self.FONT_CANDIDATES_REGULAR, tuning.SUMMARY_CARD_LABEL_FONT_SIZE * scale
+        )
+        font_value = self._load_font(
+            self.FONT_CANDIDATES_BOLD, int(tuning.SUMMARY_CARD_LABEL_FONT_SIZE * 1.15) * scale
+        )
+
+        pad_x = 20 * scale
+        header_h = 52 * scale
+        row_h = 46 * scale
+        icon_size = 22 * scale
+        radius = 14 * scale
+        badge_r = 9 * scale
+        text_gap = 12 * scale
+        # Minimum breathing room between a row's label (left) and its value
+        # (right) — without this floor, a wide value could still be laid
+        # out flush against a barely-clipped label at the card's own
+        # measured minimum width.
+        label_value_gap = 16 * scale
+
+        probe_draw = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+        row_texts: List[Tuple[str, str, Tuple, float]] = []
+        content_w_px = 0.0
+        for label, mode, dist, dur in rows:
+            distance_str = f"{dist * 1000:.0f} m" if dist < 1 else f"{dist:.1f} km"
+            dur_str = self._format_duration_ja(dur) if dur > 0 else "--"
+            value_str = f"{distance_str} · {dur_str}"
+            col_accent = mode_accent(mode)
+            row_texts.append((label, value_str, col_accent, mode))
+            label_w = probe_draw.textlength(label, font=font_label)
+            value_w = probe_draw.textlength(value_str, font=font_value)
+            row_w = (
+                pad_x + icon_size + text_gap + label_w
+                + label_value_gap + value_w + pad_x
+            )
+            content_w_px = max(content_w_px, row_w)
+
+        title_w = probe_draw.textlength(self.summary_card_labels["taskbar_card_title"], font=font_header)
+        header_w_px = pad_x + badge_r * 2 + text_gap + title_w + pad_x
+        card_w_px = max(min_card_width * scale, content_w_px, header_w_px)
+
+        card_h_px = int(header_h + row_h * len(rows) + 14 * scale)
+        canvas = Image.new("RGBA", (int(card_w_px), card_h_px), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(canvas)
+
+        draw.rounded_rectangle(
+            [0, 0, card_w_px - 1, card_h_px - 1],
+            radius=radius,
+            fill=bg_color,
+            outline=border_rgba if self.card_border_thickness else None,
+            width=max(1, self.card_border_thickness) * scale,
+        )
+
+        # Header: small route badge + title, like a notification's own
+        # app-icon-and-name row.
+        badge_cx, badge_cy = pad_x + badge_r, header_h / 2
+        draw.ellipse(
+            [badge_cx - badge_r, badge_cy - badge_r, badge_cx + badge_r, badge_cy + badge_r],
+            fill=accent,
+        )
+        self._draw_ruler_icon(draw, badge_cx, badge_cy, badge_r * 1.1, (255, 255, 255, 255))
+        title_x = badge_cx + badge_r + text_gap
+        header_ascent, _ = font_header.getmetrics()
+        draw.text(
+            (title_x, header_h / 2 - header_ascent / 2),
+            self.summary_card_labels["taskbar_card_title"], font=font_header, fill=header_color,
+        )
+        draw.line(
+            [(pad_x, header_h), (card_w_px - pad_x, header_h)],
+            fill=divider_color, width=max(1, scale),
+        )
+
+        y = header_h
+        for i, (label, value_str, col_accent, mode) in enumerate(row_texts):
+            row_top = y
+            row_cy = row_top + row_h / 2
+            icon_cx = pad_x + icon_size / 2
+            if mode == "total":
+                self._draw_ruler_icon(draw, icon_cx, row_cy, icon_size, col_accent)
+            else:
+                self._draw_mode_icon(draw, mode, icon_cx, row_cy, icon_size, col_accent)
+
+            text_x = pad_x + icon_size + text_gap
+            label_ascent, _ = font_label.getmetrics()
+            # Label text now shares its row's own accent color (same one
+            # the icon and the route line for that mode use) rather than
+            # a flat gray — a row's label previously didn't visually tie
+            # back to its icon/line color at all, only the value did (and
+            # only for the total row).
+            draw.text(
+                (text_x, row_cy - label_ascent / 2), label, font=font_label,
+                fill=col_accent,
+            )
+
+            value_w = draw.textlength(value_str, font=font_value)
+            value_ascent, _ = font_value.getmetrics()
+            draw.text(
+                (card_w_px - pad_x - value_w, row_cy - value_ascent / 2),
+                value_str, font=font_value, fill=col_accent,
+            )
+
+            if i < len(row_texts) - 1:
+                draw.line(
+                    [(pad_x, row_top + row_h), (card_w_px - pad_x, row_top + row_h)],
+                    fill=divider_color, width=max(1, scale),
+                )
+            y += row_h
+
+        w_px = int(card_w_px // scale)
+        h_px = card_h_px // scale
+        canvas = canvas.resize((w_px, h_px), Image.Resampling.LANCZOS)
+        return np.array(canvas)[:, :, [2, 1, 0, 3]]
+
+    def render_summary_card(self, card_size: Optional[Tuple[int, int]] = None, **kwargs) -> np.ndarray:
+        """Shared dispatch point for every summary-card call site: picks
+        create_summary_card (the original wide pill/column card — kept
+        exactly as-is) vs create_summary_card_taskbar (the new narrow
+        notification-flyout template) based on self.summary_card_style,
+        which GraphicsEngine sets from job_config.json's
+        settings.summary_card_style (default "glass" — see
+        tuning.DEFAULT_SUMMARY_CARD_STYLE). Call sites should use this
+        instead of calling either create_summary_card* method directly, so
+        a project can opt into the new template without every call site
+        needing its own if/else."""
+        style = getattr(self, "summary_card_style", tuning.DEFAULT_SUMMARY_CARD_STYLE)
+        if style == "taskbar":
+            if card_size is not None:
+                kwargs.setdefault("min_card_width", card_size[0])
+            return self.create_summary_card_taskbar(**kwargs)
+        if card_size is not None:
+            kwargs["card_size"] = card_size
+        return self.create_summary_card(**kwargs)
 
     def composite_card_on_frame(
         self,

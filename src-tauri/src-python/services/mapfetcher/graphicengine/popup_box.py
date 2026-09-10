@@ -104,6 +104,11 @@ class _PopupBoxMixin:
             if is_beside
             else tuning.POPUP_LABEL_FONT_SCALE_CORNER
         )
+        # Caller override (e.g. the overview intro's preview cards, which
+        # want a larger photo via card_scale but NOT a proportionally
+        # larger caption) — defaults to 1.0, a no-op, for every ordinary
+        # popup.
+        font_scale *= float(popup_info.get("label_font_scale", 1.0))
         font_size = max(11, int(self.font_size * font_scale * card_scale))
         total_w = target_img_w + (border * 2)
         has_label = RouteGeometryProcessor.is_real_label(popup_info.get("label"))
@@ -278,6 +283,10 @@ class _PopupBoxMixin:
                     if is_beside
                     else tuning.POPUP_LABEL_FONT_SCALE_CORNER
                 )
+                # Must match popup_card_geometry's own font_scale exactly
+                # (that's what text_block_h/total_h were sized against) —
+                # see its own comment on label_font_scale.
+                font_scale *= float(popup_info.get("label_font_scale", 1.0))
                 font_size = max(11, int(self.font_size * font_scale * card_scale))
                 # Regular, not bold — LINE Seed JP's regular weight reads
                 # clearly enough at this size (unlike the old Kosugi Maru

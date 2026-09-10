@@ -131,8 +131,8 @@ class _DrawingMixin:
             # shrinking both a notch keeps them from crowding the white
             # center's edge the way a single character never does.
             if len(label) > 1:
-                font_scale *= 0.82
-                thickness = max(2, round(thickness * 0.85))
+                font_scale *= 0.7
+                thickness = max(2, round(thickness * 0.75))
             (tw, th), baseline = cv2.getTextSize(label, self.font_cv, font_scale, thickness)
             # Center on the glyph's own visual bounding box (th tall, plus
             # baseline for any descenders) rather than assuming no

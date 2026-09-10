@@ -180,7 +180,9 @@ def _build_frame(project_name: str, waypoints: List[Dict[str, Any]]) -> Image.Im
         _draw_badge(canvas, (int(thumb_x) + 4, int(thumb_y) + 4), idx + 1, badge_font)
 
         label = _truncate_to_width(
-            draw, str(wp.get("label", f"Waypoint {idx + 1}")), label_font, thumb_w
+            draw,
+            str(wp.get("label", f"{tuning.PIPELINE_LABELS['waypoint_fallback']} {idx + 1}")),
+            label_font, thumb_w,
         )
         _center_text(
             draw,

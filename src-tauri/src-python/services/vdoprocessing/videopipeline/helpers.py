@@ -8,10 +8,19 @@ import numpy as np
 import pyproj
 
 from services.logger.logger import setup_logger
+from services import tuning
 
 # Standardized logger — writes to logs/app.log AND stderr, matching
 # every other service module in this codebase.
 logger = setup_logger("VideoPipeline")
+
+# Re-exported so existing `from .helpers import PIPELINE_LABELS` call sites
+# don't need to know it actually lives in tuning.py — it's defined there
+# (not here) because spatial_renderer/overview.py also needs it and can't
+# import this videopipeline package without a circular import
+# (videopipeline/__init__.py eagerly imports render_step.py, which imports
+# spatial_renderer).
+PIPELINE_LABELS = tuning.PIPELINE_LABELS
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 DEFAULT_FRONTEND_CONFIG = (
@@ -139,8 +148,10 @@ def _build_point_modes(
     if num_points == 0:
         return modes
 
-    # [NOTE] [Animation] "direct" is a straight-line routing choice, not a distinct travel mode — render/report it as walking rather than falling through to the generic colored-marker fallback icon.
-    mode_aliases = {"direct": "walking"}
+    # "direct" (a straight-line routing choice) and "draw" (a hand-drawn
+    # custom-route leg) both render/report as walking rather than getting
+    # their own distinct identity — see tuning.MODE_ALIASES.
+    mode_aliases = tuning.MODE_ALIASES
 
     boundaries = list(wp_indices) + [num_points - 1]
     prev_end = 0

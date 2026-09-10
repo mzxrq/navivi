@@ -60,6 +60,10 @@ class RouteAnimator:
             line_border_thickness=self.config.get(
                 "route_line_border_thickness", tuning.DEFAULT_LINE_BORDER_THICKNESS
             ),
+            summary_card_style=self.config.get(
+                "summary_card_style", tuning.DEFAULT_SUMMARY_CARD_STYLE
+            ),
+            summary_card_labels=self.config.get("summary_card_labels"),
         )
 
         self.out_dir = Path(config.get("output_dir", ""))
@@ -165,9 +169,19 @@ class RouteAnimator:
         summary: Optional[Dict] = None,
         wp_indices: Optional[List[int]] = None,
         point_modes: Optional[List[str]] = None,
+        render_mode: str = "both",
         **kwargs,
     ) -> List[str]:
-        """Main rendering orchestrator. Decides which rendering engine to use."""
+        """Main rendering orchestrator. Decides which rendering engine to use.
+
+        render_mode ("both"/"overview"/"residential") gates which of the
+        two output videos actually gets rendered — "residential" skips the
+        overview animation entirely (render_overview is never even called,
+        so none of its compute is paid for); "overview" relies on
+        render_step.py having already left res_sequence empty, but is also
+        checked explicitly here so a caller that passes render_mode
+        without also gating res_sequence itself still gets isolated
+        output."""
         if not os.path.exists(img_path):
             logger.error(f"Background path does not exist: {img_path}")
             raise FileNotFoundError(f"Background path does not exist: {img_path}")
@@ -181,26 +195,27 @@ class RouteAnimator:
                 "implemented — use the default spatial renderer instead."
             )
 
-        tracker.show("Rendering overview video...")
-        overview_path = self.spatial_renderer.render_overview(
-            img_path, points, labels, popups, fps, summary=summary, point_modes=point_modes
-        )
-        tracker.clear()
-        if overview_path:
-            # Skip the extra hold when the clip already ended itself on
-            # a blur-out (see SpatialRenderer._render_ending_highlight) —
-            # that blur is meant to be the video's actual last frame, so
-            # freezing on top of it just makes playback linger instead
-            # of ending right when the blur finishes.
-            if not self.spatial_renderer.last_ending_hard_ended:
-                self._freeze_video_end(
-                    overview_path, hold_seconds=self.config.get("summary_hold", 4.0)
-                )
-            output_paths.append(overview_path)
+        if render_mode != "residential":
+            tracker.show("Rendering overview video...")
+            overview_path = self.spatial_renderer.render_overview(
+                img_path, points, labels, popups, fps, summary=summary, point_modes=point_modes
+            )
+            tracker.clear()
+            if overview_path:
+                # Skip the extra hold when the clip already ended itself on
+                # a blur-out (see SpatialRenderer._render_ending_highlight) —
+                # that blur is meant to be the video's actual last frame, so
+                # freezing on top of it just makes playback linger instead
+                # of ending right when the blur finishes.
+                if not self.spatial_renderer.last_ending_hard_ended:
+                    self._freeze_video_end(
+                        overview_path, hold_seconds=self.config.get("summary_hold", 4.0)
+                    )
+                output_paths.append(overview_path)
 
         # [NOTE] [Core] Render each waypoint-to-waypoint leg. 3D is deliberately opt-in;
         # projects with use_3d_res=false use the fetched, bounded 2D map tiles.
-        if res_sequence:
+        if res_sequence and render_mode != "overview":
             if self.config.get("use_3d_res", False):
                 logger.info(
                     "Attempting Residential Sequence using 3D PyDeck (Split by Leg)..."

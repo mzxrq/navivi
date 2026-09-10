@@ -23,6 +23,7 @@ from .helpers import (
     BASE_DIR,
     DEFAULT_FRONTEND_CONFIG,
     DEFAULT_MAP_BACKGROUND,
+    PIPELINE_LABELS,
     _build_point_modes,
     _project_route_to_pixels,
     _resolve_leg_geometry_from_cache,
@@ -88,8 +89,21 @@ def render_route_video(
     audio_paths: Optional[list[str]] = None,
     audio_durations: Optional[list[float]] = None,
     audio_pauses: Optional[list[Any]] = None,
+    render_mode: str = "both",
 ) -> list[str]:
-    """Generates the visual map animation using synced audio timing."""
+    """Generates the visual map animation using synced audio timing.
+
+    render_mode gates which OUTPUT video(s) actually get produced/written:
+    "overview" skips building the residential leg-by-leg sequence entirely
+    (no per-leg residential map tile fetches, no residential clips
+    rendered/returned); "residential" still fetches the overview background
+    tile (needed for route_points/img_w/img_h, shared by both outputs) but
+    skips rendering the overview animation itself; "both" (the default,
+    used by run_full_pipeline) renders everything, unchanged from before.
+    Lets services/cli/gps_commands.py's test_overview_video and
+    test_residential_video each produce ONLY the video their name promises,
+    instead of both always being bundled into one call regardless of which
+    was asked for."""
     logger.info("Step 4: Rendering Video Engine — starting.")
 
     route_df = cleaned_route.get("route")
@@ -179,10 +193,9 @@ def render_route_video(
 
     # Real-world REPORTED speed per travel mode — what the summary card's
     # per-mode duration breakdown is estimated from. Kept separate from
-    # animation_speed_kmh below (used to weight on-screen time) so a
-    # realistic, honest walking speed here doesn't also drag the walking
-    # leg's on-screen animation out longer — see SpatialRenderer's
-    # _DEFAULT_ANIMATION_SPEED_KMH for why those need to differ.
+    # animation_speed_kmh below (used to weight on-screen time) — that one
+    # is a single uniform pace for every mode instead (see SpatialRenderer's
+    # _DEFAULT_ANIMATION_SPEED_KMH).
     mode_speed_kmh = {
         **SpatialRenderer._DEFAULT_MODE_SPEED_KMH,
         **{
@@ -191,13 +204,13 @@ def render_route_video(
         },
     }
     # Speed used only to weight each residential leg's ON-SCREEN duration
-    # (see seg_durations further down) — not shown anywhere as a stat, so
-    # it's free to run faster than the reported speed above for modes
-    # (walking) that would otherwise visibly crawl relative to a fast
-    # ferry/car leg.
+    # (see seg_durations further down) — not shown anywhere as a stat.
+    # Every mode defaults to the SAME pace (SpatialRenderer's own uniform
+    # _DEFAULT_ANIMATION_SPEED_KMH, not a per-mode dict) so a real-world-fast
+    # car/ferry leg doesn't get allocated dramatically more/less on-screen
+    # time than a walking one purely from its real-world speed.
     animation_speed_kmh = {
-        **mode_speed_kmh,
-        **SpatialRenderer._DEFAULT_ANIMATION_SPEED_KMH,
+        **{mode: SpatialRenderer._DEFAULT_ANIMATION_SPEED_KMH for mode in mode_speed_kmh},
         **{
             str(k).lower(): float(v)
             for k, v in (settings.get("animation_speeds_kmh") or {}).items()
@@ -276,7 +289,7 @@ def render_route_video(
 
         for idx, wp in enumerate(waypoints):
             c_idx = wp_indices[idx]
-            raw_label = wp.get("label", "Waypoint")
+            raw_label = wp.get("label", PIPELINE_LABELS["waypoint_fallback"])
 
             if idx == 0 and start_label:
                 raw_label = start_label
@@ -285,7 +298,9 @@ def render_route_video(
 
             formatted = format_waypoint_label(raw_label, subtitle_lang)
             prefix = (
-                "Start: " if idx == 0 else "Stop: " if idx == len(waypoints) - 1 else ""
+                PIPELINE_LABELS["start_prefix"] if idx == 0
+                else PIPELINE_LABELS["stop_prefix"] if idx == len(waypoints) - 1
+                else ""
             )
             route_labels[c_idx] = (
                 f"{prefix}{formatted}" if formatted else prefix.strip(": ")
@@ -329,7 +344,8 @@ def render_route_video(
         )
         if not leg_mode and wp_indices[seg_i] + 1 < len(point_modes):
             leg_mode = point_modes[wp_indices[seg_i] + 1]
-        seg_modes.append(leg_mode or "walking")
+        leg_mode = leg_mode or "walking"
+        seg_modes.append(tuning.MODE_ALIASES.get(leg_mode, leg_mode))
 
     seg_durations = (
         MapFetcher.compute_segment_durations(
@@ -350,7 +366,14 @@ def render_route_video(
         else []
     )
 
-    if use_3d_res:
+    if render_mode == "overview":
+        # Overview-only: skip building the residential sequence entirely —
+        # no per-leg residential map tile fetches, no residential clips
+        # produced. res_sequence stays [] (set above), which
+        # RouteAnimator.render already treats as "nothing to render" for
+        # the residential side.
+        logger.info("Step 4: render_mode=overview — skipping residential sequence.")
+    elif use_3d_res:
         logger.info(
             "Step 4: 3D residential rendering is enabled. Bypassing 2D map fetch."
         )
@@ -418,6 +441,7 @@ def render_route_video(
             if not leg_mode and start_idx + 1 < len(point_modes):
                 leg_mode = point_modes[start_idx + 1]
             leg_mode = leg_mode or "walking"
+            leg_mode = tuning.MODE_ALIASES.get(leg_mode, leg_mode)
             if str(leg_mode).lower() == "ferry" and end_pos < len(waypoints):
                 start_wp, end_wp = waypoints[start_pos], waypoints[end_pos]
                 cached_geometry = _resolve_leg_geometry_from_cache(
@@ -618,6 +642,23 @@ def render_route_video(
         # settings to override per project.
         "mode_speeds_kmh": settings.get("mode_speeds_kmh", {}),
         "animation_speeds_kmh": settings.get("animation_speeds_kmh", {}),
+        # Which summary-card template the overview/per-leg cards render as
+        # ("glass" default, or "taskbar" for the notification-flyout-style
+        # template — see cards.py's render_summary_card). Was missing from
+        # this dict entirely, so job_config.json's settings.summary_card_style
+        # never reached RouteAnimator/GraphicsEngine no matter what a
+        # project set it to — self.config here IS this whole dict, not the
+        # raw settings (see RouteAnimator.__init__'s own note on that).
+        "summary_card_style": settings.get(
+            "summary_card_style", tuning.DEFAULT_SUMMARY_CARD_STYLE
+        ),
+        # Per-project override of any subset of assets/config/labels_ja.json's
+        # summary-card keys (mode_name, mode_duration_label, total_label,
+        # distance_label, taskbar_card_title) — see cards.py's
+        # merge_summary_card_labels. Same "must be forwarded through THIS
+        # dict, not just read off raw settings" requirement as
+        # summary_card_style above.
+        "summary_card_labels": settings.get("summary_card_labels"),
     }
 
     animator = RouteAnimator(animator_config)
@@ -643,6 +684,7 @@ def render_route_video(
         summary=summary,
         wp_indices=wp_indices,
         point_modes=point_modes,
+        render_mode=render_mode,
     )
 
     # --- 2. ADD THIS AUDIO MUXING BLOCK ---
