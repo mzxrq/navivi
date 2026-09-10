@@ -38,6 +38,7 @@ export function Sidebar() {
     activeWaypointId,
     setActiveWaypointId,
     forceReroute,
+    setIsDirty, // ✨ ADDED: Needed for Reverse Route
   } = useWorkspace();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isListEditMode, setIsListEditMode] = useState(false);
@@ -114,6 +115,14 @@ export function Sidebar() {
     setWaypoints(newWaypoints);
   };
 
+  // ✨ NEW: Flips the entire array and triggers a reroute
+  const handleReverseRoute = () => {
+    if (waypoints.length < 2) return;
+    setWaypoints([...waypoints].reverse());
+    if (setIsDirty) setIsDirty(true);
+    showToast("Route reversed successfully.", "info");
+  };
+
   if (editingId) {
     return <WaypointEditor wpId={editingId} onClose={handleCloseEditor} />;
   }
@@ -149,44 +158,6 @@ export function Sidebar() {
                   {...provided.droppableProps}
                   ref={provided.innerRef}
                 >
-                  {/* Clear All & Confirm UI */}
-                  {isListEditMode && (
-                    <div className="relative mb-4 shrink-0 z-20">
-                      {!showClearConfirm ? (
-                        <button
-                          onClick={() => setShowClearConfirm(true)}
-                          className="w-full py-2.5 rounded-xl border border-red-200 dark:border-red-500/20 bg-red-50 dark:bg-red-500/5 text-red-600 dark:text-red-400 text-xs font-bold hover:bg-red-100 dark:hover:bg-red-500/10 transition-colors flex items-center justify-center shadow-sm"
-                        >
-                          <Trash2 className="w-3.5 h-3.5 mr-2" /> Clear All
-                          Waypoints
-                        </button>
-                      ) : (
-                        <div className="w-full py-2 px-3 rounded-xl border border-red-300 dark:border-red-500/40 bg-white dark:bg-zinc-900 shadow-sm flex items-center justify-between animate-in fade-in zoom-in-95 duration-200">
-                          <span className="text-[11px] font-semibold text-zinc-800 dark:text-zinc-300">
-                            Are you sure?
-                          </span>
-                          <div className="flex items-center">
-                            <button
-                              onClick={() => setShowClearConfirm(false)}
-                              className="text-[10px] font-medium text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300 px-2 py-1"
-                            >
-                              Cancel
-                            </button>
-                            <button
-                              onClick={() => {
-                                setWaypoints([]);
-                                setIsListEditMode(false);
-                                setShowClearConfirm(false);
-                              }}
-                              className="text-[10px] font-bold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 px-2.5 py-1 rounded-md hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors"
-                            >
-                              Confirm
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
 
                   {waypoints.map((wp, i) => {
                     const isLast = i === waypoints.length - 1;
@@ -259,30 +230,79 @@ export function Sidebar() {
         )}
       </div>
 
-      {/* --- ✨ REDESIGNED FOOTER / ACTION AREA --- */}
-      <div className="shrink-0 p-4 flex flex-col gap-3 bg-white dark:bg-navidark-800 border-t border-zinc-200 dark:border-white/5 z-30 shadow-[0_-10px_30px_-15px_rgba(0,0,0,0.1)] dark:shadow-[0_-10px_30px_-15px_rgba(0,0,0,0.5)]">
+      {/* --- ✨ REDESIGNED FOOTER TOOLBAR --- */}
+      <div className="shrink-0 p-3 flex flex-col gap-2.5 bg-white dark:bg-navidark-800 border-t border-zinc-200 dark:border-white/5 z-30 shadow-[0_-10px_30px_-15px_rgba(0,0,0,0.1)] dark:shadow-[0_-10px_30px_-15px_rgba(0,0,0,0.5)]">
         
         {waypoints.length > 0 && (
           <div className="flex items-center justify-between w-full">
-            {/* List Tools Group */}
-            <div className="flex items-center bg-zinc-100 dark:bg-zinc-900/50 rounded-lg p-1 border border-zinc-200/50 dark:border-white/5">
+            
+            {/* Left Tools: Edit & Clear */}
+            <div className="flex items-center bg-zinc-100 dark:bg-zinc-900/50 rounded-lg p-0.5 border border-zinc-200/50 dark:border-white/5 transition-all">
               <button
                 onClick={() => {
                   setIsListEditMode(!isListEditMode);
                   setShowClearConfirm(false);
                 }}
                 disabled={waypoints.length === 0 || isRendering || isPreviewing}
-                className={`px-3 py-1.5 text-[11px] font-bold rounded-md transition-colors ${
+                title={isListEditMode ? "Done Editing" : "Edit List"}
+                className={`p-1.5 rounded-md transition-colors ${
                   isListEditMode
                     ? "bg-navi-100 text-navi-700 dark:bg-navi-500/20 dark:text-navi-300 shadow-sm"
                     : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200 hover:bg-white dark:hover:bg-zinc-800"
                 }`}
               >
-                <span className="flex items-center gap-1.5">
-                  <Edit className="w-3 h-3" /> {isListEditMode ? "Done" : "Edit List"}
-                </span>
+                <Edit className="w-3.5 h-3.5" />
               </button>
-              <div className="w-px h-4 bg-zinc-300 dark:bg-zinc-700 mx-1" />
+              
+              <div className="w-px h-3.5 bg-zinc-300 dark:bg-zinc-700 mx-0.5" />
+              
+              <div className={`flex items-center overflow-hidden transition-all duration-300 ease-out ${showClearConfirm ? "max-w-30 opacity-100" : "max-w-8"}`}>
+                {!showClearConfirm ? (
+                  <button
+                    onClick={() => setShowClearConfirm(true)}
+                    disabled={waypoints.length === 0 || isRendering || isPreviewing}
+                    title="Clear Entire Route"
+                    className="p-1.5 w-7 text-zinc-500 hover:text-red-600 dark:text-zinc-400 dark:hover:text-red-400 rounded-md hover:bg-white dark:hover:bg-zinc-800 transition-colors flex justify-center shrink-0"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-1 px-1 h-7 animate-in fade-in slide-in-from-right-2">
+                    <span className="text-[9px] font-black text-red-500 uppercase tracking-widest pl-1">Clear?</span>
+                    <button
+                      onClick={() => setShowClearConfirm(false)}
+                      className="px-1.5 py-1 text-[9px] font-bold text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded transition-colors"
+                    >
+                      No
+                    </button>
+                    <button
+                      onClick={() => {
+                        setWaypoints([]);
+                        setIsListEditMode(false);
+                        setShowClearConfirm(false);
+                      }}
+                      className="px-1.5 py-1 text-[9px] font-bold text-white bg-red-500 hover:bg-red-600 rounded transition-colors shadow-sm"
+                    >
+                      Yes
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Right Tools: Reverse & Refresh */}
+            <div className="flex items-center bg-zinc-100 dark:bg-zinc-900/50 rounded-lg p-0.5 border border-zinc-200/50 dark:border-white/5">
+              <button 
+                onClick={handleReverseRoute} 
+                disabled={waypoints.length < 2 || isRendering || isPreviewing}
+                title="Reverse Route Direction"
+                className="p-1.5 text-zinc-500 hover:text-navi-500 dark:text-zinc-400 dark:hover:text-navi-400 rounded-md hover:bg-white dark:hover:bg-zinc-800 transition-colors disabled:opacity-50"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="m21 8-4-4-4 4"/><path d="M17 4v16"/></svg>
+              </button>
+
+              <div className="w-px h-3.5 bg-zinc-300 dark:bg-zinc-700 mx-0.5" />
+              
               <button 
                 onClick={forceReroute} 
                 title="Refresh Map Routing"
@@ -291,10 +311,6 @@ export function Sidebar() {
                 <RefreshCw className="w-3.5 h-3.5" />
               </button>
             </div>
-            
-            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest px-2">
-              {waypoints.length} Stop{waypoints.length !== 1 ? 's' : ''}
-            </span>
           </div>
         )}
 
@@ -302,16 +318,16 @@ export function Sidebar() {
         <button
           onClick={handleGenerateClick}
           disabled={waypoints.length === 0 || isListEditMode || isRendering || isPreviewing}
-          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-navi-500 hover:bg-navi-600 text-white font-bold text-xs transition-all disabled:opacity-40 disabled:pointer-events-none shadow-md hover:shadow-lg focus:ring-2 focus:ring-navi-500/50 focus:outline-none"
+          className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-navi-500 hover:bg-navi-600 text-white font-bold text-[11px] transition-all disabled:opacity-40 disabled:pointer-events-none shadow-sm hover:shadow focus:ring-2 focus:ring-navi-500/50 focus:outline-none"
         >
           {isRendering ? (
             <>
-              <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
               Building Assets...
             </>
           ) : (
             <>
-              <Play className="w-3.5 h-3.5 fill-current" /> Build Video Timeline
+              <Play className="w-3 h-3 fill-current" /> Build Video Timeline
             </>
           )}
         </button>

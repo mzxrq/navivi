@@ -56,6 +56,7 @@ export interface ProjectMetadata {
   project_id?: string;
   user_id: string;
   project_name: string;
+  theme?: string;
   created_at: string;
   status: string;
   directory_path: string;

@@ -1,5 +1,5 @@
 import { readTextFile, exists } from "@tauri-apps/plugin-fs";
-import { getCurrentWindow } from "@tauri-apps/api/window"; // ✨ NEW: For App Close intercept
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { parseSRT } from "../utils/srtParser";
 import {
   createContext,
@@ -33,8 +33,6 @@ import {
 import { ClipData, TimelineTrack } from "../types";
 import { useHistory } from "./useHistory";
 import { useUI } from "./useUI";
-
-// ✨ NEW: Import your Modal!
 import { UnsavedChanges } from "../components/ui/UnsavedChanges";
 
 const WorkspaceContext = createContext<WorkspaceState | undefined>(undefined);
@@ -126,11 +124,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     return saved ? JSON.parse(saved) : [];
   });
 
-  // ✨ GLOBAL UNSAVED MODAL STATE
   const [isUnsavedModalOpen, setIsUnsavedModalOpen] = useState(false);
   const [unsavedAction, setUnsavedAction] = useState<(() => void) | null>(null);
 
-  // ✨ TAURI APP CLOSE INTERCEPTOR
   useEffect(() => {
     try {
       const appWindow = getCurrentWindow();
@@ -269,13 +265,19 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           lat: wp.lat,
           lng: wp.lng,
           name: wp.label,
-          images: wp.popup_image || [],
-          imageDisplay: wp.image_display || "pip",
-          narration: wp.narration || "",
           routeMode: wp.routeMode || "walking",
           customRoute: wp.customRoute || [],
           drawStyle: wp.drawStyle || "linear",
+          
           isStopBy: wp.isStopBy || false,
+          connectToRoute: wp.connectToRoute || false,
+          images: wp.popup_image || [],
+          imagePans: wp.imagePans || [],
+          imageTransitions: wp.imageTransitions || [],
+          imageDisplay: wp.image_display || "pip",
+          narration: wp.narration || "",
+          arrivingNarration: wp.arrivingNarration || "",
+          attractionNarration: wp.attractionNarration || "",          
         })),
       );
       resetTimelineHistory(DefaultTimeline);
@@ -489,7 +491,6 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     >
       {children}
       
-      {/* ✨ GLOBAL UNSAVED PROMPT */}
       <UnsavedChanges
         isOpen={isUnsavedModalOpen}
         projectName={metadata.project_name || "Untitled Project"}

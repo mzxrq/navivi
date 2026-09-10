@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Batch WebP to JPG Converter</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #f5f7fa; color: #333; margin: 0; padding: 40px 20px; display: flex; justify-content: center; }
+        .container { background: white; max-width: 600px; width: 100%; padding: 30px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05), 0 1px 3px rgba(0,0,0,0.1); }
+        h2 { margin-top: 0; color: #111; text-align: center; }
+        .setting-group { margin: 20px 0; background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; }
+        .setting-label { display: flex; justify-content: space-between; font-weight: 600; font-size: 14px; margin-bottom: 8px; }
+        input[type="range"] { width: 100%; margin: 10px 0; }
+        .dropzone { border: 2px dashed #cbd5e1; padding: 30px; text-align: center; border-radius: 8px; background: #f8fafc; cursor: pointer; transition: border-color 0.2s; }
+        .dropzone:hover { border-color: #3b82f6; background: #f0fdf4; }
+        input[type="file"] { display: none; }
+        .btn-convert { display: block; width: 100%; background: #2563eb; color: white; border: none; padding: 12px; font-size: 16px; font-weight: 600; border-radius: 6px; cursor: pointer; margin-top: 20px; transition: background 0.2s; }
+        .btn-convert:hover { background: #1d4ed8; }
+        .file-list { margin-top: 20px; max-height: 250px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 6px; display: none; }
+        .file-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 15px; border-bottom: 1px solid #e2e8f0; font-size: 14px; }
+        .file-item:last-child { border-bottom: none; }
+        .download-link { color: #2563eb; font-weight: 600; text-decoration: none; font-size: 13px; background: #eff6ff; padding: 4px 8px; border-radius: 4px; }
+        .download-link:hover { text-decoration: underline; background: #dbeafe; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Batch WebP to JPG Converter</h2>
+    
+    <!-- Quality Slider -->
+    <div class="setting-group">
+        <div class="setting-label">
+            <span>JPEG Output Quality</span>
+            <span id="quality-val">85%</span>
+        </div>
+        <input type="range" id="quality" min="10" max="100" value="85" oninput="document.getElementById('quality-val').innerText = this.value + '%'">
+    </div>
+
+    <!-- Drag and Drop Area -->
+    <div class="dropzone" onclick="document.getElementById('file-input').click()">
+        <p style="margin: 0; font-weight: 500;">Click to upload or drag WebP images here</p>
+        <p style="margin: 5px 0 0 0; font-size: 12px; color: #64748b;">Supports multiple file selection</p>
+        <input type="file" id="file-input" accept="image/webp" multiple onchange="handleFileSelect(this)">
+    </div>
+
+    <!-- Live File Processing List -->
+    <div class="file-list" id="file-list"></div>
+
+    <button class="btn-convert" id="convert-btn" onclick="processBatch()" style="display: none;">Convert All Images</button>
+</div>
+
+<script>
+    let selectedFiles = [];
+
+    function handleFileSelect(input) {
+        selectedFiles = Array.from(input.files);
+        const listContainer = document.getElementById('file-list');
+        const convertBtn = document.getElementById('convert-btn');
+        
+        listContainer.innerHTML = '';
+        if (selectedFiles.length === 0) {
+            listContainer.style.display = 'none';
+            convertBtn.style.display = 'none';
+            return;
+        }
+
+        listContainer.style.display = 'block';
+        convertBtn.style.display = 'block';
+
+        selectedFiles.forEach((file, index) => {
+            const item = document.createElement('div');
+            item.className = 'file-item';
+            item.innerHTML = `
+                <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 70%;">${file.name}</span>
+                <span id="status-${index}" style="color: #64748b; font-size: 13px;">Ready</span>
+            `;
+            listContainer.appendChild(item);
+        });
+    }
+
+    function processBatch() {
+        const quality = parseFloat(document.getElementById('quality').value) / 100;
+
+        selectedFiles.forEach((file, index) => {
+            const statusSpan = document.getElementById(`status-${index}`);
+            statusSpan.innerText = 'Converting...';
+            statusSpan.style.color = '#3b82f6';
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = new Image();
+                img.onload = function() {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0);
+
+                    // Apply custom compression quality setting
+                    const jpgUrl = canvas.toDataURL('image/jpeg', quality);
+                    
+                    // Generate standalone download link per file
+                    const downloadName = file.name.replace(/\.webp$/i, '') + '.jpg';
+                    statusSpan.innerHTML = `<a class="download-link" href="${jpgUrl}" download="${downloadName}">Download JPG</a>`;
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+    }
+</script>
+
+</body>
+</html>

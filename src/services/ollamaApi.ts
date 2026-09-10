@@ -40,11 +40,10 @@ async function fetchLocationContext(lat: number, lng: number): Promise<{ geo: st
     }
 }
 
-
 async function fetchKeylessWebContext(searchTerms: string): Promise<string> {
     if (!searchTerms) return "";
     try {
-        const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(searchTerms + "explain")}`;
+        const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(searchTerms + " explain")}`;
         const res = await fetch(url, { method: "GET" });
         const html = await res.text();
         const parser = new DOMParser();
@@ -58,41 +57,8 @@ async function fetchKeylessWebContext(searchTerms: string): Promise<string> {
     }
 }
 
-export async function generateOverviewScript(
-    waypoints: string[],
-    engine: string = "gemma2",
-): Promise<string> {
-    const detectedLang = detectLanguage(...waypoints);
-    const routeNames = waypoints.join(", then ");
-    const prompt = `You are a travel narrator. Write a short, exciting opening hook around 3-4 sentences summarizing a journey that stops at: ${routeNames}. Write the response in fluent ${detectedLang}. Do not include any sound effects narration.`;
-
-    const res = await fetch(`${OLLAMA_URL}/api/generate`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: engine, prompt, stream: true }),
-    });
-    if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);
-    const data = await res.json();
-    return data.response.trim();
-}
-
-export async function generateWaypointScriptStream(
-    locationName: string,
-    userPrompt: string,
-    engine: string = "gemma2",
-    onChunk: (text: string) => void,
-    lat: number = 0,
-    lng: number = 0,
-): Promise<void> {
-    const detectedLang = detectLanguage(locationName, userPrompt);
-    const { geo, searchTerms } = await fetchLocationContext(lat, lng);
-    const webContext = await fetchKeylessWebContext(searchTerms);
-
-    const prompt = `You are an enthusiastic travel guide. Write a brief, 2-sentence narration for our arrival at ${locationName}. ${geo}
-    ${webContext}
-    Incorporate this specific context: ${userPrompt}.
-    Keep it engaging, natural, and formatted as plain text meant to be spoken out loud. CRITICAL: Write the response in fluent ${detectedLang}. Do not include any sound effects narration.`;
-
+// ✨ NEW: Unified Streaming Engine
+async function streamLLM(prompt: string, engine: string, onChunk: (text: string) => void) {
     const res = await fetch(`${OLLAMA_URL}/api/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -123,4 +89,62 @@ export async function generateWaypointScriptStream(
             }
         }
     }
+}
+
+// ✨ Stream Overview Script
+export async function generateOverviewScriptStream(
+    waypoints: string[],
+    engine: string = "gemma2",
+    theme: string = "",
+    onChunk: (text: string) => void
+): Promise<void> {
+    const routeNames = waypoints.join("、");
+    const themeContext = theme ? `このコースの全体テーマは「${theme}」です。` : "";
+    
+    const prompt = `あなたは旅行番組のプロのナレーターです。
+${themeContext}
+以下の立ち寄り場所を巡る旅のオープニングナレーションを、視聴者を惹きつけるように3〜4文で作成してください。
+立ち寄り場所: ${routeNames}
+
+ルール:
+1. 日本語の「です・ます調」で、自然な話し言葉にすること。
+2. 音声合成で読み上げるため、効果音や映像の指示（例：[波の音]、[カメラがズーム]など）は絶対に書かないこと。
+3. 歓迎の挨拶から始めること。`;
+    
+    await streamLLM(prompt, engine, onChunk);
+}
+
+// ✨ Stream Waypoint Script
+export async function generateWaypointScriptStream(
+    locationName: string,
+    userPrompt: string,
+    engine: string = "gemma2",
+    theme: string = "",
+    onChunk: (text: string) => void,
+    lat: number = 0,
+    lng: number = 0,
+): Promise<void> {
+    let contextStr = "";
+    
+    if (lat !== 0 && lng !== 0) {
+        const { geo, searchTerms } = await fetchLocationContext(lat, lng);
+        const webContext = await fetchKeylessWebContext(searchTerms);
+        contextStr = `地理情報: ${geo}\n参考情報: ${webContext}`;
+    }
+
+    const themeContext = theme ? `この旅のテーマは「${theme}」です。` : "";
+
+    const prompt = `あなたは旅行番組のプロのナレーターです。
+${themeContext}
+現在地「${locationName}」に到着した際、または紹介する際のナレーションを2〜3文で作成してください。
+
+コンテキスト・要望: ${userPrompt}
+${contextStr}
+
+ルール:
+1. 日本語の「です・ます調」で、親しみやすい言葉遣いにすること。
+2. 音声合成で読み上げるため、括弧書きの指示（例：[笑顔で]など）は絶対に書かないこと。
+3. 簡潔に、その場所の魅力や歴史が伝わるようにすること。`;
+
+    await streamLLM(prompt, engine, onChunk);
 }

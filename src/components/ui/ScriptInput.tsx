@@ -2,10 +2,9 @@ import { useEffect, useState } from "react";
 import {
   Mic,
   Sparkles,
-  Settings2,
-  Loader,
   Square,
-  ChevronDown,
+  Check,
+  PencilSparkles // ✨ NEW: Using the matching icon from OverviewPanel
 } from "../ui/icons";
 
 const thinkingSteps = [
@@ -31,10 +30,14 @@ export function ScriptInput({
   isGenerating,
   onCancel,
 }: ScriptInputProps) {
-  const [engine, setEngine] = useState("ollama");
   const [localPrompt, setLocalPrompt] = useState(value);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const language = "English";
+
+  // Sync internal state when prop changes externally (e.g. generation finishes)
+  useEffect(() => {
+    setLocalPrompt(value);
+  }, [value]);
 
   useEffect(() => {
     if (!isGenerating) {
@@ -49,57 +52,31 @@ export function ScriptInput({
     return () => clearInterval(interval);
   }, [isGenerating]);
 
-  const displayValue = isGenerating ? localPrompt : value;
+  const hasUnsavedChanges = localPrompt !== value;
 
   const handleGenerateClick = () => {
-    if (!displayValue.trim()) return;
-    onGenerate(displayValue, engine, language);
+    if (!localPrompt.trim()) return;
+    // ✨ FIXED: Force gemma2 just like OverviewPanel
+    onGenerate(localPrompt, "gemma2", language); 
+  };
+
+  const handleSaveClick = () => {
+    onChange(localPrompt);
   };
 
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-2">
       <div className="flex items-center justify-between">
         <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
           <Mic className="w-3.5 h-3.5 text-zinc-400" /> AI Script
         </label>
 
         <div className="flex items-center gap-2">
-          {/* Sleek Tailwind Dropdown */}
-          <div className="relative flex items-center">
-            <Settings2 className="w-3 h-3 text-emerald-500 absolute left-2 pointer-events-none z-10" />
-            <select
-              value={engine}
-              onChange={(e) => setEngine(e.target.value)}
-              disabled={isGenerating}
-              className="appearance-none pl-6 pr-5 py-1 text-[10px] font-bold bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800/80 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 rounded-lg border border-zinc-200 dark:border-white/10 outline-none cursor-pointer transition-all shadow-sm disabled:opacity-50"
-            >
-              <option
-                value="ollama"
-                className="bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200"
-              >
-                Ollama
-              </option>
-              <option
-                value="gemini"
-                className="bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200"
-              >
-                Gemini
-              </option>
-              <option
-                value="groq"
-                className="bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200"
-              >
-                Groq
-              </option>
-            </select>
-            <ChevronDown className="w-2.5 h-2.5 text-zinc-400 absolute right-1.5 pointer-events-none" />
-          </div>
-
-          {/* Toggle between Magic Write and Cancel */}
+          {/* Toggle between Auto-Write and Cancel */}
           {isGenerating ? (
             <button
               onClick={onCancel}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-bold transition-all bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20 border border-red-200 dark:border-red-500/20 shadow-sm"
+              className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-bold transition-all bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20 border border-red-200 dark:border-red-500/20 shadow-sm"
             >
               <Square className="w-3 h-3 fill-current" />
               Cancel
@@ -107,53 +84,55 @@ export function ScriptInput({
           ) : (
             <button
               onClick={handleGenerateClick}
-              disabled={!displayValue.trim()}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed bg-green-50 dark:bg-green-500/10 text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-500/20 border border-green-200 dark:border-green-500/20 shadow-sm"
+              disabled={!localPrompt.trim()}
+              // ✨ FIXED: Match OverviewPanel styling exactly
+              className="shrink-0 flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed bg-navi-50 dark:bg-navi-500/10 text-navi-700 dark:text-navi-300 hover:bg-navi-100 dark:hover:bg-navi-500/20 border border-navi-200 dark:border-navi-500/20 shadow-sm"
             >
-              <Sparkles className="w-3 h-3" />
-              Magic Write
+              <PencilSparkles className="w-3 h-3" />
+              Auto-Write
             </button>
           )}
         </div>
       </div>
 
-      <div className="relative w-full h-28 rounded-xl overflow-hidden shadow-sm border border-zinc-200 dark:border-white/10 group focus-within:border-green-500 dark:focus-within:border-green-500/50 transition-colors">
+      <div className="relative w-full h-28 rounded-lg overflow-hidden shadow-inner border border-zinc-200 dark:border-navidark-300 group focus-within:border-navi-400 dark:focus-within:border-navi-500/50 transition-colors">
         <textarea
-          value={displayValue}
-          onChange={(e) => {
-            setLocalPrompt(e.target.value);
-            onChange(e.target.value);
-          }}
+          value={localPrompt}
+          onChange={(e) => setLocalPrompt(e.target.value)}
           disabled={isGenerating}
-          placeholder="Type a prompt (e.g., 'Tell me about the history') and click Magic Write..."
-          className="w-full h-full resize-none p-3 text-sm focus:outline-none custom-scrollbar bg-zinc-50 dark:bg-zinc-900/50 text-zinc-900 dark:text-zinc-100"
+          placeholder="Type a prompt or write your own script..."
+          className="w-full h-full resize-none p-3 text-xs custom-scrollbar bg-white dark:bg-navidark-800 text-zinc-900 dark:text-zinc-100 focus:outline-none disabled:opacity-50 pb-10"
         />
 
+        {!isGenerating && (
+          <div className="absolute bottom-2 right-2">
+            <button
+              onClick={handleSaveClick}
+              disabled={!hasUnsavedChanges}
+              className={`flex items-center gap-1 px-3 py-1 rounded-md text-[10px] font-bold transition-all shadow-sm ${
+                hasUnsavedChanges 
+                  ? "bg-navi hover:bg-navi-600 text-white" 
+                  : "bg-zinc-100 dark:bg-navidark-500 text-zinc-400 dark:text-zinc-500 cursor-default"
+              }`}
+            >
+              <Check className="w-3 h-3" />
+              {hasUnsavedChanges ? "Save" : "Saved"}
+            </button>
+          </div>
+        )}
+
         {isGenerating && (
-          <div className="absolute inset-0 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-sm flex flex-col items-center justify-center z-10 px-4">
-            <div className="flex flex-col items-center gap-2.5 text-center">
-              <div className="relative flex items-center justify-center">
-                <Loader className="w-6 h-6 animate-pulse text-green-300 dark:text-green-400" />
-                <div className="absolute w-8 h-8 rounded-full bg-emerald-600/20 animate-pulse" />
+          <div className="absolute inset-0 bg-white/70 dark:bg-navidark-900/70 backdrop-blur-[2px] flex flex-col items-center justify-center z-10">
+            <div className="flex flex-col items-center gap-2">
+              <Sparkles className="w-5 h-5 text-navi-400 animate-bounce" />
+              <div className="text-[10px] font-bold text-navi-600 dark:text-navi-300 tracking-wide uppercase">
+                AI is writing...
               </div>
-
-              <div className="space-y-0.5">
-                <div className="text-xs font-bold text-green-600 dark:text-green-400 tracking-wide uppercase">
-                  Thinking
-                </div>
-                <div className="text-[11px] font-medium text-zinc-600 dark:text-zinc-300 animate-fade-in transition-all">
-                  {thinkingSteps[currentStepIndex]}
-                </div>
+              <div className="text-[9px] font-medium text-zinc-500 dark:text-zinc-400 animate-fade-in text-center mb-1">
+                {thinkingSteps[currentStepIndex]}
               </div>
-
-              {/* Progress bar matching step index */}
-              <div className="w-32 h-1.5 bg-green-100 dark:bg-green-950 rounded-full overflow-hidden p-0.5">
-                <div
-                  className="h-full bg-green-500 rounded-full transition-all duration-500 ease-out"
-                  style={{
-                    width: `${((currentStepIndex + 1) / thinkingSteps.length) * 100}%`,
-                  }}
-                />
+              <div className="w-20 h-1 bg-navi-100 dark:bg-navi-900/50 rounded-full overflow-hidden">
+                <div className="h-full bg-navi-500 rounded-full w-full animate-[pulse_1s_ease-in-out_infinite]"></div>
               </div>
             </div>
           </div>

@@ -13,7 +13,8 @@ import {
   Redo2,
   Film,
 } from "../ui/icons";
-import { Window } from "@tauri-apps/api/window";
+// ✨ FIXED: Use getCurrentWindow for bulletproof window controls in Tauri
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { SaveAs } from "./SaveAs";
 import { UnsavedChanges } from "./UnsavedChanges";
 import { useFileActions } from "../../hooks/useFileActions";
@@ -96,7 +97,8 @@ export function TitleBar() {
   };
 
   const handleWindow = async (action: "minimize" | "maximize" | "close") => {
-    const appWindow = new Window("main");
+    // ✨ FIXED: Bulletproof window targeting
+    const appWindow = getCurrentWindow();
     if (action === "minimize") await appWindow.minimize();
     if (action === "maximize") await appWindow.toggleMaximize();
     if (action === "close") {
@@ -139,7 +141,7 @@ export function TitleBar() {
 
         if (pendingNavigation) {
           if (pendingNavigation === "close") {
-            const appWindow = new Window("main");
+            const appWindow = getCurrentWindow();
             await appWindow.close();
           } else if (
             pendingNavigation === "title_screen" ||
@@ -157,7 +159,7 @@ export function TitleBar() {
 
   const handleUndo = () => (editorMode === "map" ? undoMap() : undoTimeline());
   const canUndo = editorMode === "map" ? canUndoMap : canUndoTimeline;
-  const handleRedo = () => (editorMode == "map" ? redoMap() : redoTimeline());
+  const handleRedo = () => (editorMode === "map" ? redoMap() : redoTimeline());
   const canRedo = editorMode === "map" ? canRedoMap : canRedoTimeline;
 
   return (
@@ -166,7 +168,7 @@ export function TitleBar() {
         data-tauri-drag-region
         className="h-10 bg-white dark:bg-navidark-700 border-b border-zinc-200 dark:border-navidark-300 flex items-center justify-between select-none shrink-0 transition-colors"
       >
-        {/* --- LEFT: MENU BUTTON --- */}
+        {/* Left Menu button */}
         <div className="flex items-center h-full">
           <div className="relative h-full flex items-center" ref={menuRef}>
             <button
@@ -179,7 +181,6 @@ export function TitleBar() {
             {/* Dropdown Menu */}
             {isMenuOpen && (
               <div className="absolute top-10 w-56 bg-white dark:bg-navidark-600 border border-zinc-200 dark:border-white/10 rounded-br-2xl shadow-2xl py-1 z-800 text-sm text-zinc-700 dark:text-zinc-300">
-                {/* Save options */}
                 {currentView === "editor" && (
                   <>
                     <button
@@ -231,7 +232,6 @@ export function TitleBar() {
                 >
                   <span>New Project</span>
                 </button>
-                {/*<div className="h-px bg-zinc-200 dark:bg-white/5 my-1 mx-2" />*/}
                 <button
                   onClick={async () => {
                     setIsMenuOpen(false);
@@ -269,7 +269,7 @@ export function TitleBar() {
                       disabled={!canUndo}
                       onClick={() => {
                         setIsMenuOpen(false);
-                        handleUndo(); // Fixed to use wrapper
+                        handleUndo(); 
                       }}
                       className="w-full flex items-center justify-between px-4 py-1.5 hover:bg-zinc-100 dark:hover:bg-navidark-400 transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
                     >
@@ -283,7 +283,7 @@ export function TitleBar() {
                       disabled={!canRedo}
                       onClick={() => {
                         setIsMenuOpen(false);
-                        handleRedo(); // Fixed to use wrapper
+                        handleRedo(); 
                       }}
                       className="w-full flex items-center justify-between px-4 py-1.5 hover:bg-zinc-100 dark:hover:bg-navidark-400 transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
                     >
@@ -314,7 +314,7 @@ export function TitleBar() {
           data-tauri-drag-region
           className="flex-1 flex items-center justify-between h-full px-4"
         >
-          {/* Breadcrumbs (Click-through so it drags the window) */}
+          {/* Breadcrumbs */}
           <div
             data-tauri-drag-region
             className="flex items-center gap-2 text-xs font-medium text-zinc-500 dark:text-zinc-400"
@@ -334,7 +334,7 @@ export function TitleBar() {
             </span>
           </div>
 
-          {/* Map / Timeline Toggle (Only visible in editor mode) */}
+          {/* Map / Timeline Toggle */}
           {currentView === "editor" && (
             <div className="flex bg-zinc-200/50 dark:bg-navidark-900 rounded-lg p-0.5 border-zinc-300 dark:border-navidark-400 shadow-inner ">
               <button
@@ -364,11 +364,10 @@ export function TitleBar() {
 
         {/* --- RIGHT: WINDOW CONTROLS --- */}
         <div className="flex h-full text-zinc-600 dark:text-zinc-400 shrink-0">
-          {/* Undo/Redo Buttons */}
           {currentView === "editor" && (
             <div className="flex items-center my-auto h-5 border-r border-zinc-200 dark:border-white/5 pr-2 mr-1">
               <button
-                onClick={handleUndo} // Fixed to use wrapper
+                onClick={handleUndo}
                 disabled={!canUndo}
                 className="h-full px-3 flex items-center hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors disabled:opacity-30 disabled:hover:bg-transparent"
                 title="Undo (Ctrl+Z)"
@@ -376,7 +375,7 @@ export function TitleBar() {
                 <Undo2 className="w-3.5 h-3.5" />
               </button>
               <button
-                onClick={handleRedo} // Fixed to use wrapper
+                onClick={handleRedo}
                 disabled={!canRedo}
                 className="h-full px-3 flex items-center hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors disabled:opacity-30 disabled:hover:bg-transparent"
                 title="Redo (Ctrl+Y)"
@@ -396,7 +395,6 @@ export function TitleBar() {
 
           <div className="w-px h-5 my-auto bg-zinc-200 dark:bg-white/10 mx-1"></div>
 
-          {/* OS Window Controls */}
           <button
             onClick={() => handleWindow("minimize")}
             className="h-full px-4 hover:bg-zinc-100 dark:hover:bg-navidark-500 transition-colors"
@@ -433,7 +431,7 @@ export function TitleBar() {
         onDiscard={async () => {
           setIsDirty(false);
           if (pendingNavigation === "close") {
-            const appWindow = new Window("main");
+            const appWindow = getCurrentWindow();
             await appWindow.close();
           } else if (
             pendingNavigation === "title_screen" ||
@@ -456,7 +454,7 @@ export function TitleBar() {
           const saved = await handleSave();
           if (saved && pendingNavigation) {
             if (pendingNavigation === "close") {
-              const appWindow = new Window("main");
+              const appWindow = getCurrentWindow();
               await appWindow.close();
             } else if (
               pendingNavigation === "title_screen" ||

@@ -4,7 +4,8 @@ export function useWaypointActions() {
   const { updateWaypoint, waypoints, setWaypoints, setIsDirty } = useWorkspace();
 
   const addWaypoint = async (lat: number, lng: number) => {
-    const newId = Math.random().toString(36).substring(7);
+    // ✨ FIXED: Upgraded to crypto.randomUUID
+    const newId = crypto.randomUUID();
 
     setWaypoints((prev) => [
       ...prev,
@@ -16,7 +17,11 @@ export function useWaypointActions() {
         images: [],
         imagePans: [],
         narration: "",
+        arrivingNarration: "",
+        attractionNarration: "",
         routeMode: "driving",
+        isStopBy: false,
+        connectToRoute: undefined,
       },
     ]);
 
@@ -56,13 +61,12 @@ export function useWaypointActions() {
       );
       const data = await res.json();
       const placeName =
-        data.name || data.address?.road || data.address?.city || "Unknown Location"
+        data.name || data.address?.road || data.address?.city || "Unknown Location";
 
       updateWaypoint(id, { name: placeName });
     } catch (error) {
       updateWaypoint(id, { name: "Unknown Location" });
     }
-
   };
 
   const addReturnStop = (targetId: string) => {
@@ -74,7 +78,12 @@ export function useWaypointActions() {
       id: crypto.randomUUID(),
       name: `${wpToClone.name} (Return)`,
       narration: "",
+      arrivingNarration: "",
+      attractionNarration: "",
       images: [],
+      imagePans: [],
+      isStopBy: false,
+      connectToRoute: undefined
     };
 
     setWaypoints((prev) => [...prev, returnWaypoint]);

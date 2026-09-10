@@ -136,22 +136,28 @@ export const saveProjectData = async (
         lng: wp.lng,
         label: wp.name,
         name: wp.name,
+        
         popup_image: absoluteImagePaths,
-        // Safely check imagePans (plural) and fallback to "panright" for each image
         camera_pans: absoluteImagePaths.length > 0
           ? absoluteImagePaths.map((_, i) => (wp.imagePans && wp.imagePans[i] ? wp.imagePans[i] : "panright"))
           : [],
         image_display: wp.imageDisplay || "pip",
-        narration: wp.narration || "", // Prevent undefined
+        
+        images: absoluteImagePaths,
+        imagePans: wp.imagePans || [],
+        imageTransitions: wp.imageTransitions || [],
+        imageDisplay: wp.imageDisplay || "pip",
+        
+        narration: wp.narration || "",
+        arrivingNarration: wp.arrivingNarration || "",
+        attractionNarration: wp.attractionNarration || "",
+        
         routeMode: wp.routeMode || "driving",
-        ...(wp.customRoute && wp.customRoute.length > 0 && {
-          customRoute: wp.customRoute,
-          drawStyle: wp.drawStyle || "linear",
-        }),
-        ...(wp.isStopBy && {
-          isStopBy: true,
-          connectToRoute: wp.connectToRoute || false,
-        })
+        customRoute: wp.customRoute || [],
+        drawStyle: wp.drawStyle || "linear",
+        
+        isStopBy: wp.isStopBy || false,
+        connectToRoute: wp.connectToRoute || false,
       };
     })
   );
@@ -189,6 +195,7 @@ export const saveProjectData = async (
     const customHash = mode === "draw" ? JSON.stringify(wp1.customRoute || []) : "";
     activeKeys.add(`${wp1.lat.toFixed(5)},${wp1.lng.toFixed(5)}|${wp2.lat.toFixed(5)},${wp2.lng.toFixed(5)}|${mode}|${customHash}`);
   }
+  
   const cleanCache: Record<string, [number, number][]> = {};
   let deletedCount = 0;
   for (const [key, routeData] of Object.entries(routingCache)) {

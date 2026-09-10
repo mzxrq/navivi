@@ -48,7 +48,7 @@ export function WaypointEditor({
   wpId: string;
   onClose: () => void;
 }) {
-  const { waypoints, setWaypoints, updateWaypoint, setActiveWaypointId, setIsDirty } =
+  const { waypoints, setWaypoints, updateWaypoint, setActiveWaypointId, metadata, setIsDirty } =
     useWorkspace();
   const { showToast } = useUI();
 
@@ -131,13 +131,13 @@ export function WaypointEditor({
     showToast(`Writing ${type} script for ${wp.name}...`, "info");
 
     try {
-      await generateWaypointScriptStream(wp.name, prompt, engine, (chunk) => {
+      await generateWaypointScriptStream(wp.name, prompt, engine, metadata.theme || "", (chunk) => {
         if (type === "arriving") {
           updateWaypoint(wp.id, { arrivingNarration: chunk });
         } else {
           updateWaypoint(wp.id, { attractionNarration: chunk });
         }
-      });
+      }, wp.lat, wp.lng);
       showToast(`Script finished for ${wp.name}!`, "success");
     } catch (error) {
       console.error(error);
@@ -147,7 +147,6 @@ export function WaypointEditor({
     }
   };
 
-  // ✨ NEW: Handles swapping the waypoint type directly from the sidebar
   const handleSetWaypointType = (type: "start" | "end" | "stopby" | "normal") => {
     const newWaypoints = [...waypoints];
     const currentIndex = newWaypoints.findIndex(w => w.id === wp.id);

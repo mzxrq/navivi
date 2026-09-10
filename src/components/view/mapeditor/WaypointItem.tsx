@@ -49,7 +49,6 @@ export function WaypointItem({
     onEdit();
   };
 
-  // ✨ PERFECTLY SYNCED COUNTING LOGIC
   let displayLabel = "";
   const isStart = index === 0;
   const isEnd = index === waypoints.length - 1 && waypoints.length > 1;
@@ -73,6 +72,10 @@ export function WaypointItem({
     displayLabel = normalIndex.toString();
   }
 
+  // ✨ FIXED: Check all three possible script locations
+  const hasScript = !!(wp.narration || wp.arrivingNarration || wp.attractionNarration);
+  const scriptPreview = wp.arrivingNarration || wp.attractionNarration || wp.narration || "";
+
   return (
     <div
       ref={itemRef}
@@ -82,7 +85,7 @@ export function WaypointItem({
           : "border-transparent hover:bg-zinc-50/80 dark:hover:bg-zinc-900/30"
       }`}
     >
-      {/* 1. Delete Action (Edit Mode) */}
+      {/* 1. Delete Action */}
       {isListEditMode && (
         <button
           onClick={(e) => {
@@ -100,17 +103,14 @@ export function WaypointItem({
       {/* 2. Timeline Graphics */}
       {!isListEditMode && (
         <div className="relative flex flex-col items-center w-10 shrink-0">
-          {/* Top connecting line */}
           {!isFirst && (
             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-0.5 h-4.5 bg-navi dark:bg-zinc-800 transition-colors" />
           )}
 
-          {/* Bottom connecting line */}
           {!isLast && (
             <div className="absolute top-4.5 bottom-0 left-1/2 -translate-x-1/2 w-0.5 bg-navi dark:bg-zinc-800 transition-colors" />
           )}
 
-          {/* ✨ The Node: Dynamic Styling for Stop Bys */}
           <div
             className={`relative z-10 w-5 h-5 mt-1.75 rounded-full border-[2.5px] flex items-center justify-center shadow-sm transition-colors ${
               wp.isStopBy
@@ -134,7 +134,6 @@ export function WaypointItem({
       {/* 3. Content Card */}
       <div className="flex-1 flex items-start justify-between min-w-0 py-1.5 pr-2">
         <div className="flex flex-col min-w-0 flex-1">
-          {/* Location Name */}
           <span
             className={`text-sm font-semibold truncate pr-4 transition-colors ${
               wp.isStopBy
@@ -147,14 +146,14 @@ export function WaypointItem({
           </span>
 
           {/* Micro Data Badges */}
-          {(wp.images?.length || wp.narration) && (
+          {(wp.images?.length || hasScript) && (
             <div className="flex flex-wrap gap-1.5 mt-1.5">
               {wp.images && wp.images.length > 0 && (
                 <span className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800/80 text-[9px] font-medium text-zinc-800 dark:text-zinc-400 transition-colors">
                   <ImageIcon className="w-2.5 h-2.5" /> {wp.images.length} / 3
                 </span>
               )}
-              {wp.narration && (
+              {hasScript && (
                 <span className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800/80 text-[9px] font-medium text-zinc-800 dark:text-zinc-400 transition-colors">
                   <Mic className="w-2.5 h-2.5" />
                 </span>
@@ -162,10 +161,10 @@ export function WaypointItem({
             </div>
           )}
 
-          {/* Narration Preview (Subtext) */}
-          {wp.narration && (
+          {/* Narration Preview */}
+          {hasScript && (
             <span className="text-[10px] text-zinc-400 dark:text-zinc-500 italic truncate mt-0.5 transition-colors">
-              {wp.narration.substring(0, 40) + " ..."}
+              {scriptPreview.substring(0, 40) + " ..."}
             </span>
           )}
 
@@ -246,7 +245,7 @@ export function WaypointItem({
           )}
         </div>
 
-        {/* 5. Hover Actions & Drag Grip */}
+        {/* Hover Actions */}
         {!isListEditMode && (
           <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 transition-opacity shrink-0 mt-0.5">
             <button

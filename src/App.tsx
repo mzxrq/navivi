@@ -9,7 +9,7 @@ import { AppSettings } from "./components/ui/AppSettings";
 import { Toast } from "./components/ui/Toast";
 import { useUI } from "./hooks/useUI";
 import "./App.css";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { StatusBar } from "./components/ui/StatusBar";
 import { ContextMenu } from "./components/ui/ContextMenu";
@@ -18,7 +18,14 @@ import { useAutoSave } from "./hooks/useAutoSave";
 export default function App() {
   const { currentView, editorMode, showToast } = useUI();
   useAutoSave();
+  
+  // ✨ FIXED: Use a ref to guarantee the Ollama check only ever runs once
+  const hasCheckedOllama = useRef(false);
+
   useEffect(() => {
+    if (hasCheckedOllama.current) return;
+    hasCheckedOllama.current = true;
+
     const initializeOllama = async () => {
       try {
         const res = await invoke<string>("wake_up_ollama");
@@ -32,7 +39,7 @@ export default function App() {
       }
     };
     initializeOllama();
-  }, [showToast]);
+  }, []); // ✨ FIXED: Removed showToast from dependency array
 
   return (
     <div

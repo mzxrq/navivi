@@ -204,8 +204,12 @@ export function MapArea() {
     e.originalEvent.stopPropagation();
 
     if (rightClickStartRef.current) {
-      const dx = Math.abs(e.originalEvent.clientX - rightClickStartRef.current.x);
-      const dy = Math.abs(e.originalEvent.clientY - rightClickStartRef.current.y);
+      const dx = Math.abs(
+        e.originalEvent.clientX - rightClickStartRef.current.x,
+      );
+      const dy = Math.abs(
+        e.originalEvent.clientY - rightClickStartRef.current.y,
+      );
       if (dx > 5 || dy > 5) return;
     }
 
@@ -366,6 +370,27 @@ export function MapArea() {
           wp.id === newId ? { ...wp, name: `Unknown Location` } : wp,
         ),
       );
+    }
+  };
+
+  const getStyleThumbnail = (id: string) => {
+    switch (id) {
+      case "outdoors":
+        return "bg-gradient-to-br from-[#dceacc] to-[#8ebc83]";
+      case "satellite":
+        return "bg-gradient-to-br from-[#1d2c3b] to-[#2c4021]";
+      case "dark":
+        return "bg-gradient-to-br from-[#2a2a2b] to-[#121212]";
+      case "standard":
+        return "bg-gradient-to-br from-[#e8e6e1] to-[#c5c8cc]";
+      case "light":
+        return "bg-gradient-to-br from-[#f4f4f4] to-[#e0e0e0]";
+      case "osm":
+        return "bg-gradient-to-br from-[#f2efe9] to-[#aad3df]";
+      case "gsi-japan":
+        return "bg-gradient-to-br from-[#e4ead2] to-[#d4dac0]";
+      default:
+        return "bg-zinc-200";
     }
   };
 
@@ -534,27 +559,75 @@ export function MapArea() {
             <Layers className="w-4 h-4" />
           </button>
 
+          {/* ✨ REDESIGNED: Vertical List with Cached Actual Map Previews */}
           {showStyleMenu && (
-            <div className="absolute top-12 right-0 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl shadow-2xl p-2 flex flex-col gap-1 w-48 z-1000 animate-in slide-in-from-top-2">
-              <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider px-2 pt-1 pb-2">
-                Map Style
-              </span>
-              {mapStyles.map((style) => (
-                <button
-                  key={style.id}
-                  onClick={() => {
-                    setSelectedStyle(style.id);
-                    setShowStyleMenu(false);
-                  }}
-                  className={`text-left px-3 py-2 text-xs font-bold rounded-lg transition-colors ${
-                    selectedStyle === style.id
-                      ? "bg-navi-500 text-white"
-                      : "text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700"
-                  }`}
-                >
-                  {style.label}
-                </button>
-              ))}
+            <div className="absolute top-12 right-0 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl shadow-2xl p-2 flex flex-col gap-2 w-48 z-1000 animate-in slide-in-from-top-2">
+              <div className="px-2 pt-1 pb-1">
+                <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">
+                  Map Style
+                </span>
+              </div>
+
+              {mapStyles.map((style) => {
+                const isSelected = selectedStyle === style.id;
+
+                let previewUrl = "";
+
+                // ✨ FIXED: Hardcoded coordinates (Kada area) so the browser caches the image instantly.
+                // This costs virtually 0 API calls after the first load!
+                const previewLon = "135.0667";
+                const previewLat = "34.2744";
+                const previewZ = "11";
+
+                if (style.id === "osm") {
+                  previewUrl = `https://a.tile.openstreetmap.org/11/1792/815.png`; // Fixed OSM tile
+                } else if (style.id === "gsi-japan") {
+                  previewUrl = `https://cyberjapandata.gsi.go.jp/xyz/std/11/1792/815.png`; // Fixed GSI tile
+                } else {
+                  // Mapbox Static API - Browser will cache this perfectly now
+                  let mbStyle = "outdoors-v12";
+                  if (style.id === "satellite")
+                    mbStyle = "satellite-streets-v12";
+                  if (style.id === "dark") mbStyle = "dark-v11";
+                  if (style.id === "light") mbStyle = "light-v11";
+                  if (style.id === "standard") mbStyle = "streets-v12";
+
+                  previewUrl = `https://api.mapbox.com/styles/v1/mapbox/${mbStyle}/static/${previewLon},${previewLat},${previewZ}/200x60?access_token=${mapboxToken}`;
+                }
+
+                return (
+                  <button
+                    key={style.id}
+                    onClick={() => {
+                      setSelectedStyle(style.id);
+                      setShowStyleMenu(false);
+                    }}
+                    className={`relative w-full h-[46px] rounded-lg overflow-hidden transition-all duration-200 group text-left bg-zinc-200 dark:bg-zinc-700 ${
+                      isSelected
+                        ? "ring-2 ring-navi-500 shadow-md"
+                        : "ring-1 ring-black/10 dark:ring-white/10 hover:ring-navi-400"
+                    }`}
+                  >
+                    {/* Actual Map Image Background */}
+                    <div
+                      className="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-110"
+                      style={{ backgroundImage: `url('${previewUrl}')` }}
+                    />
+
+                    {/* Dark Overlay for Text Readability */}
+                    <div
+                      className={`absolute inset-0 transition-colors ${isSelected ? "bg-navi-900/40" : "bg-black/50 group-hover:bg-black/30"}`}
+                    />
+
+                    {/* Text Over Styled Map */}
+                    <div className="absolute inset-0 px-3 flex items-center">
+                      <span className="text-xs font-bold text-white drop-shadow-md">
+                        {style.label.split(" (")[0]}
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
@@ -619,9 +692,9 @@ export function MapArea() {
           onContextMenu={handleMapContextMenu}
           onMouseDown={(e) => {
             if (e.originalEvent.button === 2) {
-              rightClickStartRef.current = { 
-                x: e.originalEvent.clientX, 
-                y: e.originalEvent.clientY 
+              rightClickStartRef.current = {
+                x: e.originalEvent.clientX,
+                y: e.originalEvent.clientY,
               };
             }
           }}
