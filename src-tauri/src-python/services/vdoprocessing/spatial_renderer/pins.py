@@ -89,8 +89,12 @@ class _PinMixin:
             cx = sum(active_popups[i]["x"] for i in members) / len(members)
             cy = sum(active_popups[i]["y"] for i in members) / len(members)
             fan_radius = min_gap * 0.8
+            # [NOTE] [Animation] Stop-by waypoints never get an "order" (they
+            # render as a "・" dot, not a number — see overview.py), so fall
+            # back to 0 for them: any stable position in the fan-out works
+            # since their draw order doesn't need to match a visit number.
             for k, idx in enumerate(
-                sorted(members, key=lambda i: active_popups[i]["order"])
+                sorted(members, key=lambda i: active_popups[i].get("order", 0))
             ):
                 angle = 2 * math.pi * k / len(members)
                 active_popups[idx]["pin_x"] = cx + fan_radius * math.cos(angle)

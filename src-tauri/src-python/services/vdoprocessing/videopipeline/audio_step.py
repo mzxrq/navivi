@@ -66,8 +66,15 @@ def generate_audio(
         # [NOTE] [TTS] Awaits each waypoint in order inside this loop, so despite being async the TTS calls run fully sequentially, not concurrently.
         async def _generate_all_speech():
             for idx, wp in enumerate(waypoints):
-                # Look for narration text in standard keys
-                script = wp.get("script") or wp.get("narration") or wp.get("voiceover")
+                # The waypoint editor writes narration as separate
+                # arriving/attraction legs (see WaypointEditor.tsx); "script"/
+                # "narration"/"voiceover" are only for older job_config.json
+                # files that predate that split.
+                arriving = (wp.get("arrivingNarration") or "").strip()
+                attraction = (wp.get("attractionNarration") or wp.get("narration") or "").strip()
+                script = " ".join(part for part in (arriving, attraction) if part) or (
+                    wp.get("script") or wp.get("voiceover")
+                )
                 label = wp.get("label", f"Waypoint {idx + 1}")
 
                 if not script:

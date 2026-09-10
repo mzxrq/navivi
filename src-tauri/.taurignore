@@ -5,6 +5,10 @@ src-python/**/*.mp4
 src-python/**/*.wav
 src-python/**/*.jpg
 src-python/**/*.png
+src-python/services/**
+
+# Bundled ComfyUI (runtime state files churn constantly, don't watch)
+src-python/bin/**
 
 # Python Caches
 src-python/**/__pycache__/**

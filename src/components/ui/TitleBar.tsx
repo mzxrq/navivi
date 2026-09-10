@@ -97,7 +97,6 @@ export function TitleBar() {
   };
 
   const handleWindow = async (action: "minimize" | "maximize" | "close") => {
-    // ✨ FIXED: Bulletproof window targeting
     const appWindow = getCurrentWindow();
     if (action === "minimize") await appWindow.minimize();
     if (action === "maximize") await appWindow.toggleMaximize();

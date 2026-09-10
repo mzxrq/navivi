@@ -45,13 +45,29 @@ def run_full_pipeline(
     tracker.stage("Generating TTS narration...")
     audio_data = generate_audio(cleaned_route, str(config_file_path))
 
-    # --- STEP 3 ---
-    tracker.stage("Generating attraction videos...")
-    attraction_videos = render_attraction_videos(
-        str(config_file_path),
-        audio_durations=audio_data.get("audio_durations"),
-        audio_paths=audio_data.get("audio_paths"),
-    )
+    # [NOTE] [TTS] Force-stop the TTS server now instead of leaving it to its
+    # idle timeout — otherwise it stays loaded in VRAM while the renderer
+    # below (and the attraction step's SDXL/ComfyUI pipeline, when enabled)
+    # starts competing for the same VRAM right after, which can overcommit a
+    # tight GPU budget. Mirrors combine_commands.py's test_all, which added
+    # this after observing the same contention.
+    tracker.stage("Stopping TTS server...")
+    from services.tts.ttsengine import IrodoriTTSClient
+    IrodoriTTSClient.stop_server()
+
+    # # --- STEP 3 ---
+    # tracker.stage("Generating attraction videos...")
+    # attraction_videos = render_attraction_videos(
+    #     str(config_file_path),
+    #     audio_durations=audio_data.get("audio_durations"),
+    #     audio_paths=audio_data.get("audio_paths"),
+    # )
+    #
+    # # Same VRAM-contention reasoning as the TTS server above — the
+    # # attraction step's ComfyUI/Wan pipeline would otherwise stay loaded
+    # # into the renderer below via its own idle timeout.
+    # from services.vdoprocessing.comfyui_i2v_client import ComfyUII2VClient
+    # ComfyUII2VClient.stop_server()
 
     # --- STEP 4 ---
     tracker.stage("Rendering overview & residential video...")
@@ -64,7 +80,7 @@ def run_full_pipeline(
         audio_paths=audio_data.get("audio_paths"),
     )
 
-    all_videos = video_paths + attraction_videos
+    all_videos = video_paths #+ attraction_videos
 
     # --- STEP 5 ---
     tracker.stage("Burning subtitles...")
@@ -76,7 +92,7 @@ def run_full_pipeline(
 
     timeline_path = build_timeline(
         video_paths=video_paths,
-        attraction_videos=attraction_videos,
+        #attraction_videos=attraction_videos,
         final_videos=final_videos,
         audio_paths=audio_data.get("audio_paths"),
         subtitle_paths=audio_data.get("subtitle_paths"),
