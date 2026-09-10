@@ -392,6 +392,8 @@ class _CardMixin:
         mode_breakdown: Optional[Dict[str, float]] = None,
         mode_duration: Optional[Dict[str, float]] = None,
         min_card_width: int = 260,
+        title: Optional[str] = None,
+        max_title_width: int = 420,
     ) -> np.ndarray:
         """Second summary-card template: a narrow vertical list styled like
         a Windows taskbar/notification flyout (icon-badge header row, then
@@ -407,7 +409,13 @@ class _CardMixin:
         Width is measured from the actual longest row (label + value text)
         rather than a fixed card_width — a fixed width let a long value
         string ("10.7 km · 3 hr 35 min") run past the card edge or
-        collide with its own row's label/icon on the left."""
+        collide with its own row's label/icon on the left.
+
+        `title` overrides the default "taskbar_card_title" header text
+        (e.g. a per-leg "{from} → {to}" route line instead of the trip-
+        wide "旅の概要") — truncated with an ellipsis past
+        `max_title_width` px so an unusually long pair of place names
+        can't blow the whole card out to an awkward width."""
         mode_duration = mode_duration or {}
         rows: List[Tuple[str, str, float, float]] = []
         if mode_breakdown:
@@ -483,7 +491,14 @@ class _CardMixin:
             )
             content_w_px = max(content_w_px, row_w)
 
-        title_w = probe_draw.textlength(self.summary_card_labels["taskbar_card_title"], font=font_header)
+        title_text = title if title is not None else self.summary_card_labels["taskbar_card_title"]
+        title_w = probe_draw.textlength(title_text, font=font_header)
+        max_title_w_px = max_title_width * scale
+        if title_w > max_title_w_px:
+            while title_text and probe_draw.textlength(title_text + "…", font=font_header) > max_title_w_px:
+                title_text = title_text[:-1]
+            title_text += "…"
+            title_w = probe_draw.textlength(title_text, font=font_header)
         header_w_px = pad_x + badge_r * 2 + text_gap + title_w + pad_x
         card_w_px = max(min_card_width * scale, content_w_px, header_w_px)
 
@@ -506,12 +521,12 @@ class _CardMixin:
             [badge_cx - badge_r, badge_cy - badge_r, badge_cx + badge_r, badge_cy + badge_r],
             fill=accent,
         )
-        self._draw_ruler_icon(draw, badge_cx, badge_cy, badge_r * 1.1, (255, 255, 255, 255))
+        self._draw_ruler_icon(draw, badge_cx, badge_cy, int(badge_r * 1.1), (255, 255, 255, 255))
         title_x = badge_cx + badge_r + text_gap
         header_ascent, _ = font_header.getmetrics()
         draw.text(
             (title_x, header_h / 2 - header_ascent / 2),
-            self.summary_card_labels["taskbar_card_title"], font=font_header, fill=header_color,
+            title_text, font=font_header, fill=header_color,
         )
         draw.line(
             [(pad_x, header_h), (card_w_px - pad_x, header_h)],
@@ -559,6 +574,118 @@ class _CardMixin:
         canvas = canvas.resize((w_px, h_px), Image.Resampling.LANCZOS)
         return np.array(canvas)[:, :, [2, 1, 0, 3]]
 
+    def create_leg_summary_bar(
+        self,
+        frame_width: int,
+        distance_km: float,
+        duration_seconds: float,
+        mode: str,
+        from_label: str = "",
+        to_label: str = "",
+        bar_height: int = 140,
+    ) -> np.ndarray:
+        """A per-residential-leg summary bar spanning the FULL video
+        width — a lower-third strip, not a floating corner card like
+        create_summary_card/create_summary_card_taskbar. Route
+        ("{from} → {to}") on the left (a colored mode-icon badge, not a
+        bare icon, matching the taskbar card's own badge language) and
+        this leg's distance/time on the right — no border, no divider
+        line, just whitespace and a soft shadow lifting it off the video
+        below, for a minimal look rather than a boxed-in table row.
+
+        Returned taller than `bar_height` alone — a soft shadow band sits
+        above the actual bar within the same image — so callers should
+        keep using the array's own .shape[0] (not `bar_height`) for
+        placement/slide-distance math; composite_card_on_frame (margin=0)
+        already does. The bar itself is exactly `frame_width` px wide,
+        flush against both side edges once composited."""
+        scale = 2
+        pad_x = 40 * scale
+        badge_r = 30 * scale
+        text_gap = 22 * scale
+        bar_h_px = bar_height * scale
+        bar_w_px = frame_width * scale
+        # A soft gradient shadow ABOVE the bar reads as "floating just
+        # above the video" rather than a hard-edged box sitting on it —
+        # replaces the old flat top border line entirely.
+        shadow_h_px = 34 * scale
+
+        bg_color = (255, 255, 255, 242)
+        route_color = (28, 28, 30, 255)
+        label_color = (120, 120, 126, 255)
+        col_accent = tuple(reversed(self.MODE_COLORS.get(mode, self.line_color))) + (255,)
+
+        font_route = self._load_font(self.FONT_CANDIDATES_BOLD, 36 * scale)
+        font_value = self._load_font(
+            self.FONT_CANDIDATES_BOLD, int(tuning.SUMMARY_CARD_LABEL_FONT_SIZE * 1.55) * scale
+        )
+        font_label = self._load_font(
+            self.FONT_CANDIDATES_REGULAR, int(tuning.SUMMARY_CARD_LABEL_FONT_SIZE * 1.15) * scale
+        )
+
+        canvas = Image.new("RGBA", (bar_w_px, shadow_h_px + bar_h_px), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(canvas)
+        for i in range(shadow_h_px):
+            # Quadratic ease so the shadow is nearly invisible for most of
+            # its span and only darkens right near the bar's own top edge
+            # — a soft lift, not a visible gray stripe.
+            t = (i + 1) / shadow_h_px
+            shadow_alpha = int(26 * (t ** 2))
+            draw.line([(0, i), (bar_w_px, i)], fill=(0, 0, 0, shadow_alpha))
+        draw.rectangle([0, shadow_h_px, bar_w_px - 1, shadow_h_px + bar_h_px - 1], fill=bg_color)
+
+        bar_cy = shadow_h_px + bar_h_px / 2
+
+        # Left: colored circular badge (mode icon in white, like the
+        # taskbar card's own header badge) + route text.
+        badge_cx = pad_x + badge_r
+        draw.ellipse(
+            [badge_cx - badge_r, bar_cy - badge_r, badge_cx + badge_r, bar_cy + badge_r],
+            fill=col_accent,
+        )
+        self._draw_mode_icon(draw, mode, badge_cx, bar_cy, int(badge_r * 1.15), (255, 255, 255, 255))
+
+        route_text = f"{from_label}  →  {to_label}" if from_label and to_label else (from_label or to_label)
+        if route_text:
+            route_ascent, _ = font_route.getmetrics()
+            draw.text(
+                (badge_cx + badge_r + text_gap, bar_cy - route_ascent / 2),
+                route_text, font=font_route, fill=route_color,
+            )
+
+        # Right: distance/time (bold, accent-colored) over this leg's
+        # mode name (small, muted) — right-aligned, tight line spacing,
+        # no divider needed since the two blocks already read as
+        # distinct groups (icon+text vs. stacked numbers).
+        distance_str = f"{distance_km * 1000:.0f} m" if distance_km < 1 else f"{distance_km:.1f} km"
+        dur_str = self._format_duration_ja(duration_seconds) if duration_seconds > 0 else "--"
+        value_str = f"{distance_str}  ·  {dur_str}"
+        label_str = self._mode_name_ja(mode)
+
+        value_w = draw.textlength(value_str, font=font_value)
+        label_w = draw.textlength(label_str, font=font_label)
+        right_x = bar_w_px - pad_x
+        value_ascent, value_descent = font_value.getmetrics()
+        label_ascent, _ = font_label.getmetrics()
+        # Full ascent+descent (not just ascent) for the value's own line
+        # height, plus real breathing room between the two rows — using
+        # ascent alone for spacing ignored descenders (the "分"/"秒"
+        # glyphs, the value row's own comma-like punctuation), which
+        # left the label row crowding right up against them with almost
+        # no visible gap.
+        row_gap = 10 * scale
+        block_h = value_ascent + value_descent + row_gap + label_ascent
+        block_top = bar_cy - block_h / 2
+        draw.text((right_x - value_w, block_top), value_str, font=font_value, fill=col_accent)
+        draw.text(
+            (right_x - label_w, block_top + value_ascent + value_descent + row_gap),
+            label_str, font=font_label, fill=label_color,
+        )
+
+        out_h = bar_height + int(shadow_h_px / scale)
+        canvas = canvas.resize((frame_width, out_h), Image.Resampling.LANCZOS)
+        return np.array(canvas)[:, :, [2, 1, 0, 3]]
+
     def render_summary_card(self, card_size: Optional[Tuple[int, int]] = None, **kwargs) -> np.ndarray:
         """Shared dispatch point for every summary-card call site: picks
         create_summary_card (the original wide pill/column card — kept
@@ -575,6 +702,13 @@ class _CardMixin:
             if card_size is not None:
                 kwargs.setdefault("min_card_width", card_size[0])
             return self.create_summary_card_taskbar(**kwargs)
+        # create_summary_card (the pill/column style) has no concept of a
+        # custom header title — a caller passing `title` (e.g. a per-leg
+        # "{from} → {to}" route line) only meant it for the taskbar
+        # template; silently drop it here rather than raising a
+        # TypeError for an unexpected keyword.
+        kwargs.pop("title", None)
+        kwargs.pop("max_title_width", None)
         if card_size is not None:
             kwargs["card_size"] = card_size
         return self.create_summary_card(**kwargs)
@@ -586,6 +720,7 @@ class _CardMixin:
         alpha: float,
         margin: int = 20,
         corner: str = "bottom_right",
+        slide_offset_y: float = 0.0,
     ) -> np.ndarray:
         out = frame.copy()
         h, w = out.shape[:2]
@@ -601,7 +736,27 @@ class _CardMixin:
             ch, cw = card_bgra.shape[:2]
         x = margin if "left" in corner else w - cw - margin
         y = margin if "top" in corner else h - ch - margin
+        # Positive slide_offset_y pushes the card DOWN below its resting
+        # spot — animating this from a large value down to 0 (and back up
+        # on exit) is the "pop up from the bottom" entrance/exit, without
+        # needing a separate drawing path: it's the exact same composite,
+        # just offset, so the fade above still applies identically.
+        y += int(slide_offset_y)
         x0, y0 = x, y
+        # A slid-down card can partially (or fully) fall below the frame
+        # — clip the blend region to what's actually still on-screen
+        # rather than letting a negative-height/out-of-bounds slice
+        # silently no-op or raise.
+        src_y0 = max(0, -y0)
+        src_x0 = max(0, -x0)
+        dst_y0 = max(0, y0)
+        dst_x0 = max(0, x0)
+        blend_h = min(ch, h - dst_y0) - src_y0
+        blend_w = min(cw, w - dst_x0) - src_x0
+        if blend_h <= 0 or blend_w <= 0:
+            return out
+        card_bgra = card_bgra[src_y0 : src_y0 + blend_h, src_x0 : src_x0 + blend_w]
+        x0, y0, cw, ch = dst_x0, dst_y0, blend_w, blend_h
         # Alpha-blends the card's own per-pixel alpha channel together with
         # the caller-supplied fade-in/out `alpha`, so the card can both have
         # soft edges and fade as a whole.

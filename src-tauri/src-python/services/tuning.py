@@ -178,6 +178,40 @@ DEFAULT_SUMMARY_CARD_STYLE = "glass"
 # tile download that never finished in reasonable time.
 RESIDENTIAL_MIN_ZOOM = 17
 RESIDENTIAL_MIN_ZOOM_MAX_PIN_DISTANCE_M = 2000
+# Ceiling on the other end — independent of the tile provider's own
+# MAX_ZOOM_LEVEL (19), which is a capability limit, not a "looks good"
+# limit. A very short/tight leg's span-based zoom lookup could otherwise
+# reach right up to that provider ceiling, framing so close the map reads
+# as an abstract block-level crop rather than a recognizable street view.
+RESIDENTIAL_MAX_ZOOM = 18
+# How far a leg's own path (a loop, an on/off-ramp, a switchback) is
+# allowed to inflate the map's framing beyond the straight-line distance
+# between its two pins — see _compute_residential_bbox's own cap. 1.5x
+# lets a moderate bulge still frame naturally; a bigger loop gets scaled
+# back down to this multiple instead of zooming the whole leg out to fit
+# it, which used to leave most of the frame as empty unused map.
+RESIDENTIAL_LOOP_ZOOM_CAP = 1.5
+# Absolute floor (in degrees, ~55m) on that cap's own diagonal — without
+# this, a leg whose pins sit almost on top of each other (a loop that
+# returns nearly to its own start) would get capped down to a near-zero,
+# degenerate box.
+RESIDENTIAL_LOOP_ZOOM_CAP_MIN_DEGREES = 0.0005
+# Minimum fraction of the box's own span a pin must stay away from any
+# edge — see _compute_residential_bbox's safety clamp. A zigzagging path
+# (several switchbacks leaning the same direction, none of them one
+# single dominant loop RESIDENTIAL_LOOP_ZOOM_CAP would catch) can still
+# drag the path-bbox center far enough that a pin ends up almost cut off;
+# this translates the box back just enough to guarantee at least this
+# much breathing room, without touching its zoom/span.
+RESIDENTIAL_PIN_EDGE_MARGIN = 0.10
+# Fraction of the frame's own height that the bottom summary bar roughly
+# occupies (create_leg_summary_bar's default bar_height + its shadow band
+# is ~174px of a 1080px-tall frame) — the residential chunk tile's own
+# vertical framing is biased upward by this much so the route/pins still
+# read as centered in the AREA ABOVE the bar once it's composited on,
+# rather than the bar visually cutting into what would otherwise be a
+# frame-centered route.
+RESIDENTIAL_MAP_BOTTOM_BAR_FRACTION = 0.16
 # How many residential-leg map tiles MapFetcher.process_residential_sequence
 # fetches concurrently (thread pool — these are network-bound calls to the
 # tile provider via contextily, so they genuinely overlap instead of
