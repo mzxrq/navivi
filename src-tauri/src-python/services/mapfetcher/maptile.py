@@ -24,10 +24,21 @@ from services import tuning
 # [Utility] Log setup for debugging and monitoring
 logger = setup_logger("MapTile")
 
-# Load src-python/.env (MAPBOX_API_KEY, etc.) into the process environment.
-# Explicit path rather than dotenv's auto-search, since the CWD this runs
-# from (launched by the Tauri sidecar) isn't guaranteed to be src-python.
-load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env")
+# Load src-python/.env AND the frontend's repo-root .env (VITE_MAPBOX_TOKEN)
+# into the process environment. Explicit paths rather than dotenv's
+# auto-search, since the CWD this runs from (launched by the Tauri sidecar)
+# isn't guaranteed to be src-python. Walk up by directory NAME (not a fixed
+# `.parent` depth) so this survives future re-nesting — see
+# pydeckrecorder/common.py's identical reasoning.
+_src_python_dir = Path(__file__).resolve().parent
+while _src_python_dir.name != "src-python" and _src_python_dir.parent != _src_python_dir:
+    _src_python_dir = _src_python_dir.parent
+load_dotenv(_src_python_dir / ".env")
+# src-python/../.. == the repo root, where the frontend's own .env
+# (VITE_MAPBOX_TOKEN) lives — loaded second so it doesn't override an
+# explicit src-python/.env value already set (load_dotenv default:
+# override=False), only fills in what's still missing.
+load_dotenv(_src_python_dir.parent.parent / ".env")
 
 # Tiles are cached to disk forever with no eviction otherwise — across every
 # project/run this grows unbounded. Best-effort age-based sweep, run once
@@ -111,13 +122,18 @@ class TileDownloader:
 
     # [Map/Util] Picks Mapbox (higher-resolution, retina-capable tiles) when
     # an access token is configured, falling back to the free Esri tiles
-    # otherwise. Mapbox token can come from job_config settings, or from
-    # src-python/.env (MAPBOX_API_KEY / MAPBOX_ACCESS_TOKEN).
+    # otherwise. Mapbox token can come from job_config settings, from
+    # src-python/.env (MAPBOX_API_KEY / MAPBOX_ACCESS_TOKEN), or from the
+    # frontend's own repo-root .env (VITE_MAPBOX_TOKEN) — checked last so an
+    # explicit backend-only override still wins, but a project with no
+    # separate src-python/.env setup still picks up the same token the
+    # frontend map already uses.
     def _build_provider(self, settings: Dict):
         token = (
             settings.get("mapbox_access_token")
             or os.environ.get("MAPBOX_API_KEY")
             or os.environ.get("MAPBOX_ACCESS_TOKEN")
+            or os.environ.get("VITE_MAPBOX_TOKEN")
         )
         if not token:
             return self.PROVIDER

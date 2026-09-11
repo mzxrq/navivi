@@ -14,6 +14,7 @@ services/vdoprocessing/videopipeline/.
 import sys
 import json
 import traceback
+from pathlib import Path
 
 from services.logger.progress import tracker as _tracker
 from services.cli import (
@@ -82,6 +83,12 @@ if __name__ == "__main__":
             # [NOTE] [Core] output_dir_arg is always derived from job_config.json's directory_path here — every mode below shares the same "<project>/video" output dir, none of them take it as a separate CLI argument.
             job_config_arg = command_arg
             output_dir_arg = _output_dir_from_config(job_config_arg)
+            # Route (overview/residential) and attraction outputs get their
+            # own subfolders under output_dir_arg instead of sharing one
+            # flat folder — see helpers.project_route_video_dir/
+            # project_attraction_video_dir.
+            route_dir_arg = str(Path(output_dir_arg) / "route")
+            attraction_dir_arg = str(Path(output_dir_arg) / "attraction")
             mode_arg = sys.argv[2] if len(sys.argv) > 2 else "overview"
 
             # [NOTE] [Core] Each branch below is one isolated pipeline step
@@ -94,7 +101,7 @@ if __name__ == "__main__":
                 result = test_gps(job_config_arg)
             elif mode_arg == "residential":
                 # [NOTE] [Animation] Renders only the per-waypoint leg-by-leg clips (2D or 3D per settings.use_3d_res) — no overview map.
-                result = test_residential_video(job_config_arg, output_dir_arg, force=force_arg)
+                result = test_residential_video(job_config_arg, route_dir_arg, force=force_arg)
             elif mode_arg == "tts":
                 # [NOTE] [TTS] Generates narration audio for ONE waypoint (index from argv[3], default 0).
                 waypoint_index_arg = int(sys.argv[3]) if len(sys.argv) > 3 else 0
@@ -106,16 +113,16 @@ if __name__ == "__main__":
                 # [NOTE] [Animation] Generates ONE waypoint's attraction (pan/outpaint) video from its popup image (index from argv[3], default 0).
                 waypoint_index_arg = int(sys.argv[3]) if len(sys.argv) > 3 else 0
                 result = test_attraction_video(
-                    job_config_arg, output_dir_arg, waypoint_index_arg, force=force_arg
+                    job_config_arg, attraction_dir_arg, waypoint_index_arg, force=force_arg
                 )
             elif mode_arg == "attraction-all":
                 # [NOTE] [Animation] Generates attraction videos for every waypoint that has a popup image.
-                result = test_attraction_videos(job_config_arg, output_dir_arg, force=force_arg)
+                result = test_attraction_videos(job_config_arg, attraction_dir_arg, force=force_arg)
             elif mode_arg == "attraction-finalize":
                 # [NOTE] [Editor] Combines a multi-image waypoint's already-generated pending clips into the final deliverable (index from argv[3], default 0) — see test_attraction_finalize's docstring.
                 waypoint_index_arg = int(sys.argv[3]) if len(sys.argv) > 3 else 0
                 result = test_attraction_finalize(
-                    job_config_arg, output_dir_arg, waypoint_index_arg
+                    job_config_arg, attraction_dir_arg, waypoint_index_arg
                 )
             # [NOTE] [Core] intro/outro are on-demand CLI test hooks mirroring the
             # pipeline's own render_intro_clip/render_outro_clip steps.
@@ -140,13 +147,13 @@ if __name__ == "__main__":
                 )
             elif mode_arg == "transition":
                 # [NOTE] [Transition] Renders the overview/storyboard map animation, including configured popup transitions — thin wrapper over test_overview_video.
-                result = test_transition_editor(job_config_arg, output_dir_arg, force=force_arg)
+                result = test_transition_editor(job_config_arg, route_dir_arg, force=force_arg)
             elif mode_arg == "all":
-                # [NOTE] [Core] Runs every isolated stage above (TTS, attractions, subtitles, overview+residential, concat) as one combined project test — NOT the same as full_pipeline (no subtitle burn-in / timeline.json, see above).
+                # [NOTE] [Core] Runs every isolated stage above (TTS, attractions, subtitles, overview+residential, concat) as one combined project test — NOT the same as full_pipeline (no subtitle burn-in / timeline.json, see above). test_all splits route/attraction outputs into their own subfolders internally.
                 result = test_all(job_config_arg, output_dir_arg, force=force_arg)
             else:
                 # [NOTE] [Core] Default when no mode (or an unrecognized one) is given — just the overview map animation.
-                result = test_overview_video(job_config_arg, output_dir_arg, force=force_arg)
+                result = test_overview_video(job_config_arg, route_dir_arg, force=force_arg)
 
         _tracker.clear()
         if sys.stderr.isatty():

@@ -31,9 +31,9 @@ def test_video_concat(
     output_dir = Path(output_video_dir) if output_video_dir else project_video_dir(config_path.parent)
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / "03_concat.mp4"
-    # [NOTE] [Editor] Explicit clip_paths (from the CLI/frontend) take priority; with none given, fall back to every *.mp4 already in the output dir, alphabetically — relying on the "0N_..." filename prefixes each stage writes to land clips in pipeline order.
+    # [NOTE] [Editor] Explicit clip_paths (from the CLI/frontend) take priority; with none given, fall back to every *.mp4 already in the output dir (including its route/attraction subfolders), alphabetically — relying on the "0N_..." filename prefixes each stage writes to land clips in pipeline order.
     inputs = [Path(path) for path in clip_paths] if clip_paths else sorted(
-        path for path in output_dir.glob("*.mp4") if path.name != output_path.name
+        path for path in output_dir.rglob("*.mp4") if path.name != output_path.name
     )
     if not inputs:
         raise ValueError(f"No video clips found in {output_dir}")
@@ -99,6 +99,11 @@ def test_all(
     audio_dir = project_audio_dir(project_dir)
     video_dir = Path(output_dir) if output_dir else project_video_dir(project_dir)
     subtitle_dir = project_subtitle_dir(project_dir)
+    # Route (overview/residential) and attraction outputs get their own
+    # subfolders under video_dir instead of sharing one flat folder — see
+    # helpers.project_route_video_dir/project_attraction_video_dir.
+    route_dir = video_dir / "route"
+    attraction_dir = video_dir / "attraction"
 
     # [NOTE] [Core] Read use_3d_res up front so the total stage count for _tracker.stage(total=...) is known before the first stage starts.
     with config_path.open("r", encoding="utf-8") as config_file:
@@ -131,19 +136,19 @@ def test_all(
     _tracker.clear()
 
     _tracker.stage("Generating attraction videos")
-    attraction_result = test_attraction_videos(str(config_path), str(video_dir), force=force)
+    attraction_result = test_attraction_videos(str(config_path), str(attraction_dir), force=force)
 
     _tracker.stage("Generating subtitles")
     subtitle_result = test_subtitles(str(config_path), str(subtitle_dir), force=force)
 
     _tracker.stage("Rendering overview & residential video...")
-    transition_result = test_transition_editor(str(config_path), str(video_dir), force=force)
+    transition_result = test_transition_editor(str(config_path), str(route_dir), force=force)
 
     # [NOTE] [Animation] 2D mode already renders residential clips inside render_route_video; only 3D mode needs this separate pydeck/Playwright call, to avoid rendering residential twice.
     if use_3d_res:
         _tracker.stage("Rendering residential video (3D)...")
     residential_result = (
-        test_residential_video(str(config_path), str(video_dir), force=force)
+        test_residential_video(str(config_path), str(route_dir), force=force)
         if use_3d_res
         else None
     )

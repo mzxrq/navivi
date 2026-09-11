@@ -88,6 +88,27 @@ class _OverviewAnimationMixin:
         last_trigger_frame = -min_trigger_gap_frames
         pending_popups: List[Dict] = []
 
+        # Real (non-stop-by) waypoints must pop up STRICTLY in route order —
+        # expected_frame/proximity alone (see the loop below) can still let
+        # a later waypoint's pin satisfy both checks while the traveler is
+        # only really passing near it on an earlier, unrelated stretch of a
+        # route that loops or clusters several stops close together (e.g.
+        # arriving at #2 while #3/#4 sit just a few pixels away) — popping
+        # #3/#4 before the traveler has actually walked the legs to reach
+        # them. `sequential_popups` (in the same route-position order
+        # active_popups already is) plus `seq_ptr` gate a real waypoint's
+        # eligibility on every waypoint ahead of it in sequence having
+        # already arrived first. Stop-bys are deliberately exempt — a
+        # pass-through marker should always pop as soon as the traveler is
+        # physically near it, regardless of sequence.
+        sequential_popups = [
+            ap for ap in active_popups
+            if ap["index"] != 0
+            and (not stop_popup or ap["index"] != stop_popup["index"])
+            and not ap["data"].get("is_stopby")
+        ]
+        seq_ptr = 0
+
         for current_frame, p in enumerate(smooth_path):
             if is_video:
                 ret, vid_frame = cap.read()
@@ -152,6 +173,16 @@ class _OverviewAnimationMixin:
                     stop_popup and popup["index"] == stop_popup["index"]
                 ):
                     continue
+                is_stopby = bool(popup["data"].get("is_stopby"))
+                # A real waypoint only becomes eligible once every waypoint
+                # ahead of it in route sequence has already arrived — see
+                # sequential_popups/seq_ptr's own comment above. Stop-bys
+                # skip this gate entirely; they always pop on proximity.
+                if not is_stopby and (
+                    seq_ptr >= len(sequential_popups)
+                    or popup is not sequential_popups[seq_ptr]
+                ):
+                    continue
                 # Identity check, not `in` (which is value-equality on
                 # dicts) — these dicts keep mutating in place as the loop
                 # runs (e.g. "triggered" itself), so an equality-based
@@ -189,6 +220,12 @@ class _OverviewAnimationMixin:
                         + self.trigger_radius_padding["overview"]
                     ):
                         pending_popups.append(popup)
+                        if not is_stopby:
+                            # This was sequential_popups[seq_ptr] (the gate
+                            # above only let it through if so) — advance so
+                            # the NEXT real waypoint in sequence becomes
+                            # eligible for its own proximity check.
+                            seq_ptr += 1
                         # Mark the pin itself as reached right away, on the
                         # same frame the traveler actually gets there —
                         # "triggered" below (which the pin-drawing loops

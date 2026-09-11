@@ -45,13 +45,13 @@ class MapFetcher:
     ):
         """Instance method mapping for overview maps."""
         # ---------------------------------------------------------------------
-        # DYNAMIC PATH FIX: Route the overview map to the central png directory
+        # DYNAMIC PATH FIX: Route the overview map to the central map-image directory
         # ---------------------------------------------------------------------
         base_path = Path(self.config.get("directory_path", "assets"))
-        png_dir = (base_path / "png").resolve()
+        png_dir = (base_path / "assets" / "image" / "map").resolve()
         png_dir.mkdir(parents=True, exist_ok=True)
 
-        # Override the filename path to sit correctly in the png folder
+        # Override the filename path to sit correctly in the map-image folder
         final_filename = str(png_dir / Path(output_filename).name)
 
         settings = (self.config.get("settings", {}) if self.config else {}) or {}
@@ -101,10 +101,10 @@ class MapFetcher:
         sequence_data = []
 
         # ---------------------------------------------------------------------
-        # DYNAMIC PATH FIX: Route all residential chunks to the central png directory
+        # DYNAMIC PATH FIX: Route all residential chunks to the central map-image directory
         # ---------------------------------------------------------------------
         base_path = Path(self.config.get("directory_path", "assets"))
-        png_dir = (base_path / "png").resolve()
+        png_dir = (base_path / "assets" / "image" / "map").resolve()
         png_dir.mkdir(parents=True, exist_ok=True)
 
         if route_df.empty or not waypoints:

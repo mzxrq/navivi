@@ -29,6 +29,7 @@ from .helpers import (
     _resolve_leg_geometry_from_cache,
     logger,
     output_is_valid,
+    project_route_video_dir,
 )
 
 _RENDER_MANIFEST_NAME = ".render_manifest.json"
@@ -154,7 +155,7 @@ def render_route_video(
     # explicitly (every real caller currently does).
     if output_video_dir is None:
         output_video_dir = str(
-            Path(project_config.get("directory_path", BASE_DIR)) / "video"
+            project_route_video_dir(project_config.get("directory_path", BASE_DIR))
         )
 
     tracker.show(f"Rendering overview & residential video: {project_name}")

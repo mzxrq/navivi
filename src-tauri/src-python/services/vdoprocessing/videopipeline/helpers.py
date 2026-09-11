@@ -95,6 +95,20 @@ def project_video_dir(project_dir) -> Path:
     return Path(project_dir) / "assets" / "video"
 
 
+# Route outputs (overview map, residential leg clips, the render manifest)
+# and attraction outputs (ComfyUI/Wan2.2 image-to-video clips) used to share
+# one flat assets/video/ folder, which made it hard to tell the two domains'
+# files apart at a glance. Split into their own subfolders; intro/outro and
+# the final subtitled/concatenated videos still live directly under
+# project_video_dir since they aren't specific to either domain.
+def project_route_video_dir(project_dir) -> Path:
+    return project_video_dir(project_dir) / "route"
+
+
+def project_attraction_video_dir(project_dir) -> Path:
+    return project_video_dir(project_dir) / "attraction"
+
+
 def project_subtitle_dir(project_dir) -> Path:
     return Path(project_dir) / "assets" / "subtitles"
 

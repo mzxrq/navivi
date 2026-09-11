@@ -103,10 +103,17 @@ def build_subtitles(
 def burn_subtitles(
     video_paths: list[str],
     subtitle_paths: list[str],
-    output_dir: str,
     force: bool = False,
 ) -> list[str]:
-    """Step 5: Permanently burns SRT subtitles onto the finished video files."""
+    """Step 5: Permanently burns SRT subtitles onto the finished video files.
+
+    Each subtitled output is written next to its own source video (same
+    directory) rather than into one shared folder — route and attraction
+    clips now live in their own subfolders (see
+    helpers.project_route_video_dir/project_attraction_video_dir), so this
+    keeps a leg's/attraction's subtitled output grouped with its source
+    instead of flattening everything back into one place.
+    """
     logger.info("Step 5: Burning subtitles into %d video(s).", len(video_paths))
 
     final_videos = []
@@ -118,7 +125,7 @@ def burn_subtitles(
         if idx < len(subtitle_paths) and subtitle_paths[idx]:
             sub_path = subtitle_paths[idx]
             subtitled_output = str(
-                Path(output_dir)
+                original_file.parent
                 / f"{original_file.stem}_subtitled{original_file.suffix}"
             )
 

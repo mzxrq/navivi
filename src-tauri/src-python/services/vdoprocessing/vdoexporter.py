@@ -584,7 +584,6 @@ class VideoExporter:
         output_video_path: str,
         *,
         trim_to: Optional[float] = None,
-        stretch_to: Optional[float] = None,
         hold_to: Optional[float] = None,
         scale_to: Optional[Tuple[int, int]] = None,
         sharpen: bool = False,
@@ -592,31 +591,30 @@ class VideoExporter:
         label_style: Optional[SubtitleStyle] = None,
     ) -> str:
         """Combines what used to be up to three sequential ffmpeg re-encodes
-        — trim_video_duration/adjust_video_duration, upscale_video, and
-        burn_static_label, each a full decode+encode pass over the same
-        clip — into a single filter graph and a single encode. Pass only
-        the stages actually needed; omitting all of them is just a
-        (still single-pass) re-encode/copy.
+        — trim_video_duration, upscale_video, and burn_static_label, each a
+        full decode+encode pass over the same clip — into a single filter
+        graph and a single encode. Pass only the stages actually needed;
+        omitting all of them is just a (still single-pass) re-encode/copy.
 
-        trim_to, stretch_to, and hold_to are mutually exclusive: trim_to
-        hard-cuts the tail (same as trim_video_duration), stretch_to
-        time-scales via setpts (same as adjust_video_duration — this plays
-        the WHOLE clip in slow motion, which visibly exaggerates any
-        motion instability in a generated clip; prefer hold_to whenever
-        the source is AI-generated video), hold_to instead plays the clip
-        at its natural speed and then freezes/clones the final frame
-        (ffmpeg's tpad) to pad out the remaining gap — motion stays at
-        normal speed, only the padding is static. scale_to applies a
+        trim_to and hold_to are mutually exclusive: trim_to hard-cuts the
+        tail (same as trim_video_duration); hold_to plays the clip at its
+        natural speed and then freezes/clones the final frame (ffmpeg's
+        tpad) to pad out the remaining gap — motion stays at normal speed,
+        only the padding is static. There's deliberately no time-scaling
+        (setpts) option here — stretching the WHOLE clip in slow motion
+        would visibly exaggerate any motion instability in a generated
+        clip, so an overlong/underlong clip is always trimmed or
+        freeze-held, never sped up or slowed down. scale_to applies a
         lanczos resize; sharpen adds a mild unsharp pass right after it to
         claw back some of the perceived softness a lanczos upscale
         introduces. label_text burns a full-duration top-left caption (see
         burn_static_label) using the SAME output duration as trim_to/
-        stretch_to/hold_to, so the label's .srt cue doesn't have to be
-        probed against a not-yet-written file.
+        hold_to, so the label's .srt cue doesn't have to be probed against
+        a not-yet-written file.
         """
-        if sum(x is not None for x in (trim_to, stretch_to, hold_to)) > 1:
+        if trim_to is not None and hold_to is not None:
             raise ValueError(
-                "finalize_clip: pass at most one of trim_to/stretch_to/hold_to."
+                "finalize_clip: pass at most one of trim_to/hold_to."
             )
 
         video_path = Path(input_video_path)
@@ -633,15 +631,6 @@ class VideoExporter:
         from services.tts.ttsengine import FFmpegManager
 
         vf_parts: List[str] = []
-
-        if stretch_to is not None:
-            current_duration = FFmpegManager.get_media_duration(str(video_path))
-            if current_duration <= 0:
-                raise RuntimeError(
-                    f"ffprobe reported non-positive duration for '{video_path}'"
-                )
-            pts_factor = stretch_to / current_duration
-            vf_parts.append(f"setpts={pts_factor:.6f}*PTS")
 
         if hold_to is not None:
             current_duration = FFmpegManager.get_media_duration(str(video_path))
@@ -663,7 +652,7 @@ class VideoExporter:
 
         srt_path: Optional[Path] = None
         if label_text:
-            output_duration = trim_to or stretch_to or hold_to
+            output_duration = trim_to or hold_to
             if output_duration is None:
                 output_duration = FFmpegManager.get_media_duration(str(video_path))
 

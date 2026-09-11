@@ -288,112 +288,17 @@ class VideoEditor:
         logger.info("Successfully muxed audio into video: %s", output_path)
         return str(output_path)
 
-    # [Core/Util] Adjusts the playback duration of a video clip to match a target duration, using PTS scaling without frame interpolation.
-    def adjust_video_duration(
-        self, video_path: str, target_duration: float, output_filename: str
-    ) -> str:
-        """
-        Adjusts the playback duration of a video clip to match a target duration.
-        Uses PTS scaling without frame interpolation, which may result in
-        """
-        vid_p = Path(video_path)
-        if not vid_p.exists():
-            raise FileNotFoundError(
-                f"Video file not found for duration adjust: {vid_p}"
-            )
-
-        if target_duration <= 0:
-            raise ValueError(
-                f"target_duration must be positive, got {target_duration!r}."
-            )
-
-        # --- Probe current duration -----------------------------------------
-        # Reused as its own ffprobe call (not FFmpegEngine, which only wraps
-        # ffmpeg itself) so this method has no dependency on any other
-        # module's probing utility — keeps VideoEditor self-contained.
-        probe_cmd = [
-            "ffprobe",
-            "-v",
-            "error",
-            "-show_entries",
-            "format=duration",
-            "-of",
-            "default=noprint_wrappers=1:nokey=1",
-            str(vid_p),
-        ]
-        try:
-            probe_res = subprocess.run(
-                probe_cmd,
-                capture_output=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=10,
-            )
-            current_duration = float(probe_res.stdout.strip())
-        except (subprocess.TimeoutExpired, ValueError) as exc:
-            raise RuntimeError(
-                f"Could not determine source duration for '{vid_p}' via ffprobe: {exc}"
-            ) from exc
-
-        if current_duration <= 0:
-            raise RuntimeError(
-                f"ffprobe reported non-positive duration for '{vid_p}': {current_duration}"
-            )
-
-        # --- Derive the PTS scale factor --------------------------------------
-        # setpts=N*PTS yields output_duration = input_duration * N.
-        # To go FROM current_duration TO target_duration:
-        #   N = target_duration / current_duration
-        # (N > 1 -> stretched/slower; N < 1 -> compressed/faster.)
-        pts_factor = target_duration / current_duration
-
-        output_path = self._resolve_output_path(output_filename, "video")
-        if output_path.exists():
-            output_path.unlink()
-
-        ffmpeg_cmd = self.engine.resolve_binary()
-        cmd = [
-            ffmpeg_cmd,
-            "-y",
-            "-i",
-            str(vid_p),
-            "-vf",
-            f"setpts={pts_factor:.6f}*PTS",
-            "-c:v",
-            "libx264",
-            *tuning.ffmpeg_thread_args(),
-            "-preset",
-            "fast",
-            "-crf",
-            "18",
-            "-pix_fmt",
-            "yuv420p",
-            "-an",  # audio deliberately dropped — muxed in later from narration
-            str(output_path),
-        ]
-
-        self.engine.run_command(cmd)
-        logger.info(
-            "Adjusted duration of '%s' from %.3fs to %.3fs (pts_factor=%.4f): %s",
-            vid_p,
-            current_duration,
-            target_duration,
-            pts_factor,
-            output_path,
-        )
-        return str(output_path)
-
     # [Core/Util] Cuts a video down to a target duration (hard trim, no speed change).
     def trim_video_duration(
         self, video_path: str, target_duration: float, output_filename: str
     ) -> str:
         """
         Cuts a video's tail off so it lasts exactly target_duration, at
-        normal playback speed (unlike adjust_video_duration, which changes
-        speed via PTS scaling). Used when a clip runs longer than its
-        narration audio by more than the allowed tolerance — trimming here
-        keeps duration mismatches from reaching later pipeline/timeline
-        steps, which would otherwise pad the gap with a frozen last frame.
+        normal playback speed (no PTS/speed scaling). Used when a clip runs
+        longer than its narration audio by more than the allowed tolerance —
+        trimming here keeps duration mismatches from reaching later
+        pipeline/timeline steps, which would otherwise pad the gap with a
+        frozen last frame.
         """
         vid_p = Path(video_path)
         if not vid_p.exists():

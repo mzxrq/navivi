@@ -39,6 +39,11 @@ def run_full_pipeline(
         base_path = Path(job_config.get("directory_path", project_dir))
         output_video_dir = str(project_video_dir(base_path).resolve())
 
+    # Route (overview/residential) and attraction outputs get their own
+    # subfolders under output_video_dir instead of sharing one flat folder —
+    # see helpers.project_route_video_dir/project_attraction_video_dir.
+    route_video_dir = str(Path(output_video_dir) / "route")
+
     waypoints = job_config.get("waypoints", [])
 
     # [NOTE] [Core] total=8 (the "[n/N]" denominator) is only set on this first stage() call — later stage() calls rely on the tracker remembering it rather than re-declaring it each time.
@@ -85,7 +90,7 @@ def run_full_pipeline(
     video_paths = render_route_video(
         cleaned_route=cleaned_route,
         project_config_path=str(config_file_path),
-        output_video_dir=output_video_dir,
+        output_video_dir=route_video_dir,
         audio_durations=audio_data.get("audio_durations"),
         audio_pauses=audio_data.get("audio_pauses"),
         audio_paths=audio_data.get("audio_paths"),
@@ -99,7 +104,6 @@ def run_full_pipeline(
     final_videos = burn_subtitles(
         video_paths=all_videos,
         subtitle_paths=subtitle_paths,
-        output_dir=output_video_dir,
         force=force_regenerate,
     )
 

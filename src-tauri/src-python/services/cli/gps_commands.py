@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from services.logger.progress import tracker as _tracker
-from services.vdoprocessing.videopipeline.helpers import project_video_dir
+from services.vdoprocessing.videopipeline.helpers import project_route_video_dir
 
 
 def test_gps(job_config_path: str) -> Dict[str, Any]:
@@ -46,7 +46,7 @@ def test_overview_video(
     if not config_path.exists():
         raise FileNotFoundError(f"job_config.json not found: {config_path}")
 
-    output_video_dir = output_video_dir or str(project_video_dir(config_path.parent))
+    output_video_dir = output_video_dir or str(project_route_video_dir(config_path.parent))
 
     _tracker.show("Parsing GPS track...")
     cleaned_route = process_gps(str(config_path))
@@ -93,7 +93,7 @@ def test_residential_video(
         project_config = json.load(config_file)
     use_3d_res = bool(project_config.get("settings", {}).get("use_3d_res", False))
 
-    output_video_dir = Path(output_video_dir) if output_video_dir else project_video_dir(config_path.parent)
+    output_video_dir = Path(output_video_dir) if output_video_dir else project_route_video_dir(config_path.parent)
     output_video_dir.mkdir(parents=True, exist_ok=True)
 
     if use_3d_res:

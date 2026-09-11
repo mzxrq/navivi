@@ -21,10 +21,20 @@ from pathlib import Path
 # [Utility] Setup a logger with both file and console handlers
 def setup_logger(name: str):
     logger = logging.getLogger(name)
-    logger.setLevel(logging.INFO)  
+    logger.setLevel(logging.INFO)
 
     if not logger.handlers:
-        log_dir = Path("services/logger")
+        # Resolved against THIS file's own location, not the process's CWD —
+        # a relative "services/logger" path here used to write app.log
+        # wherever the process happened to be launched from (the Tauri
+        # sidecar never sets a working directory, and every entry point
+        # relies on relative "src-python/main.py" args, so CWD is whatever
+        # directory Tauri itself started in). That scattered app.log copies
+        # across src-tauri/, the repo root, and even nested cwd's like
+        # services/model/ — none of them the one actually being checked at
+        # src-python/services/logger/app.log, which sat empty/stale while
+        # logging silently landed elsewhere.
+        log_dir = Path(__file__).resolve().parent
         log_dir.mkdir(parents=True, exist_ok=True)
         file_handler = logging.FileHandler(log_dir / "app.log", encoding="utf-8")
         file_handler.setLevel(logging.INFO)

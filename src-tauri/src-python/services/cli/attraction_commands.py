@@ -14,8 +14,8 @@ from services.vdoprocessing.videopipeline.attraction_step import (
 from services.vdoprocessing.videopipeline.helpers import (
     attraction_output_filename,
     output_is_valid,
+    project_attraction_video_dir,
     project_audio_dir,
-    project_video_dir,
     waypoint_audio_filename,
 )
 from .helpers import _load_tts_waypoints
@@ -62,7 +62,7 @@ def test_attraction_video(
     from services.vdoprocessing.comfyui_i2v_client import ComfyUII2VClient
     from services.vdoprocessing.img2vdo import AttractionVideoGenerator
 
-    output_dir = Path(output_video_dir) if output_video_dir else project_video_dir(config_path.parent)
+    output_dir = Path(output_video_dir) if output_video_dir else project_attraction_video_dir(config_path.parent)
     output_dir.mkdir(parents=True, exist_ok=True)
     label = waypoint.get("label", f"Waypoint {waypoint_index + 1}")
     audio_info = _resolve_attraction_audio(config_path, waypoint_index, label)
@@ -160,7 +160,7 @@ def test_attraction_finalize(
     from services.config.job_config import JobConfigManager
     from services.vdoprocessing.img2vdo import AttractionVideoGenerator
 
-    output_dir = Path(output_video_dir) if output_video_dir else project_video_dir(config_path.parent)
+    output_dir = Path(output_video_dir) if output_video_dir else project_attraction_video_dir(config_path.parent)
     output_dir.mkdir(parents=True, exist_ok=True)
     output_filename = attraction_output_filename(waypoint_index, label)
 

@@ -19,7 +19,7 @@ from services.vdoprocessing.vdoeditor import VideoEditor
 from services.vdoprocessing.vdoexporter import VideoExporter
 from services.config.job_config import JobConfigManager
 from services.logger.logger import setup_logger
-from services.vdoprocessing.videopipeline.helpers import output_is_valid, project_video_dir
+from services.vdoprocessing.videopipeline.helpers import output_is_valid, project_attraction_video_dir
 
 # Logging configuration
 logger = setup_logger("AttractionVideoGenerator")
@@ -34,9 +34,9 @@ class AttractionVideoGenerator:
         self.config = job_config or JobConfigManager()
         self.editor = VideoEditor(job_config=self.config)
 
-        # Route outputs to project video directory
+        # Route outputs to the project's attraction video subfolder
         base_dir = Path(self.config.get("directory_path", "assets"))
-        self.output_dir = project_video_dir(base_dir).resolve()
+        self.output_dir = project_attraction_video_dir(base_dir).resolve()
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
     # [NOTE] [Config] Matches mapfetcher.py's MapFetcher.fetch_image/process_residential_sequence
@@ -57,6 +57,18 @@ class AttractionVideoGenerator:
     # ones get a tighter overshoot cap since concatenation compounds error.
     _AUDIO_DURATION_TOLERANCE_SECONDS: Final[float] = 3.0
     _MULTI_IMAGE_OVERSHOOT_TOLERANCE_SECONDS: Final[float] = 2.0
+
+    # Caps how long a single generated clip is actually asked to run for
+    # (the `duration_sec` passed to _generate_single_clip), regardless of
+    # narration length. ComfyUI/Wan2.2 already self-limits to roughly this
+    # range via tuning.COMFYUI_MAX_FRAMES, but the local pan/zoom fallback
+    # (local_pan_generator.py) has no such cap of its own — it renders
+    # exactly `duration_sec` worth of frames, so an 18s narration on one
+    # image used to generate an 18s clip outright (slow, and no longer
+    # trimmed back down now that duration-fitting is disabled — see
+    # _DURATION_FIT_ENABLED). Applied uniformly to both generators so
+    # neither one is a surprise outlier.
+    _MAX_GENERATED_CLIP_SECONDS: Final[float] = 5.0
 
     # Caps how long _resolve_duration_fit will freeze-hold a clip's last
     # frame to cover an undershoot. A short narration only a little longer
@@ -212,12 +224,20 @@ class AttractionVideoGenerator:
     # per-frame drift into obvious, ugly wobble. Holding the last frame
     # keeps the actual generated motion at its native, correct speed and
     # only pads with a static frame, which is unnoticeable by comparison.
+    # [TEMP] Duration-fitting (trim/hold) disabled for now so attraction
+    # clips come out as the raw generated/upscaled video, unmodified — to
+    # check what the plain output actually looks like before deciding how
+    # fitting should behave. Re-enable by removing this early return.
+    _DURATION_FIT_ENABLED: Final[bool] = False
+
     def _resolve_duration_fit(
         self,
         video_path: str,
         target_audio_duration: float,
         overshoot_tolerance: float,
     ) -> Tuple[Optional[float], Optional[float]]:
+        if not self._DURATION_FIT_ENABLED:
+            return None, None
         if target_audio_duration <= 0:
             return None, None
 
@@ -569,6 +589,7 @@ class AttractionVideoGenerator:
             if target_audio_duration > 0
             else _DEFAULT_CLIP_SECONDS
         )
+        per_clip_duration = min(per_clip_duration, self._MAX_GENERATED_CLIP_SECONDS)
 
         stem = Path(output_filename).stem
         generated_clips = []

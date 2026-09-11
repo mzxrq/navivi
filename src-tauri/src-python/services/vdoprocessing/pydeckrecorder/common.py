@@ -28,11 +28,17 @@ from services.logger.logger import setup_logger
 
 logger = setup_logger("3D Video Recorder")
 
-# Load src-python/.env (MAPBOX_API_KEY, etc.) into the process environment.
-# Explicit path rather than dotenv's auto-search, since the CWD this runs
-# from (launched by the Tauri sidecar) isn't guaranteed to be src-python --
-# same reasoning as mapfetcher/maptile.py's load_dotenv call.
+# Load src-python/.env AND the frontend's repo-root .env (VITE_MAPBOX_TOKEN)
+# into the process environment. Explicit paths rather than dotenv's
+# auto-search, since the CWD this runs from (launched by the Tauri sidecar)
+# isn't guaranteed to be src-python -- same reasoning as
+# mapfetcher/maptile.py's load_dotenv call. Root .env loaded second so it
+# doesn't override an explicit src-python/.env value already set
+# (load_dotenv default: override=False), only fills in what's still missing.
 load_dotenv(project_root / ".env")
+load_dotenv(project_root.parent.parent / ".env")
 
-# Set your Mapbox Access Token here or load it from environment/config
-MAPBOX_API_KEY = os.getenv("MAPBOX_API_KEY", "YOUR_MAPBOX_ACCESS_TOKEN_HERE")
+# Set your Mapbox Access Token here, or load it from src-python/.env
+# (MAPBOX_API_KEY) or the frontend's own repo-root .env (VITE_MAPBOX_TOKEN)
+# — checked last so an explicit backend-only override still wins.
+MAPBOX_API_KEY = os.getenv("MAPBOX_API_KEY") or os.getenv("VITE_MAPBOX_TOKEN") or "YOUR_MAPBOX_ACCESS_TOKEN_HERE"
