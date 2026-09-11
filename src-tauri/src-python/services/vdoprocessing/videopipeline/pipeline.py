@@ -71,19 +71,32 @@ def run_full_pipeline(
     )
 
     # --- STEP 3 ---
-    tracker.stage("Generating attraction videos...")
-    attraction_videos = render_attraction_videos(
-        str(config_file_path),
-        audio_durations=audio_data.get("audio_durations"),
-        audio_paths=audio_data.get("audio_paths"),
-        force=force_regenerate,
-    )
+    # Opt-out per project via job_config.json's settings.enable_attraction_videos
+    # (default True — unset/existing projects keep generating them as before).
+    # Off skips the whole ComfyUI/Wan2.2 (or local pan/zoom fallback) step
+    # entirely — the slowest, most GPU-heavy stage in the pipeline — for a
+    # project that only wants the route/overview video.
+    if job_config.get("settings", {}).get("enable_attraction_videos", True):
+        tracker.stage("Generating attraction videos...")
+        attraction_videos = render_attraction_videos(
+            str(config_file_path),
+            audio_durations=audio_data.get("audio_durations"),
+            audio_paths=audio_data.get("audio_paths"),
+            force=force_regenerate,
+        )
 
-    # Same VRAM-contention reasoning as the TTS server above — the
-    # attraction step's ComfyUI/Wan pipeline would otherwise stay loaded
-    # into the renderer below via its own idle timeout.
-    from services.vdoprocessing.comfyui_i2v_client import ComfyUII2VClient
-    ComfyUII2VClient.stop_server()
+        # Same VRAM-contention reasoning as the TTS server above — the
+        # attraction step's ComfyUI/Wan pipeline would otherwise stay loaded
+        # into the renderer below via its own idle timeout.
+        from services.vdoprocessing.comfyui_i2v_client import ComfyUII2VClient
+        ComfyUII2VClient.stop_server()
+    else:
+        tracker.stage("Skipping attraction videos (disabled for this project)...")
+        logger.info(
+            "Step 3: settings.enable_attraction_videos is off — skipping "
+            "attraction video generation."
+        )
+        attraction_videos = []
 
     # --- STEP 4 ---
     tracker.stage("Rendering overview & residential video...")

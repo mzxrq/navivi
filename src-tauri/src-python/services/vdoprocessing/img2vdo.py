@@ -224,10 +224,13 @@ class AttractionVideoGenerator:
     # per-frame drift into obvious, ugly wobble. Holding the last frame
     # keeps the actual generated motion at its native, correct speed and
     # only pads with a static frame, which is unnoticeable by comparison.
-    # [TEMP] Duration-fitting (trim/hold) disabled for now so attraction
-    # clips come out as the raw generated/upscaled video, unmodified — to
-    # check what the plain output actually looks like before deciding how
-    # fitting should behave. Re-enable by removing this early return.
+    # Narration-based fitting (trim to match narration if too long, freeze-
+    # hold if too short) is disabled — clips are no longer sized against
+    # target_audio_duration at all. Instead, _resolve_duration_fit only ever
+    # hard-trims a clip down to _MAX_GENERATED_CLIP_SECONDS if it somehow
+    # runs longer than that (generation should already cap it there via
+    # per_clip_duration, but this is the backstop) — never holds/stretches,
+    # and never extends a short clip to "catch up" to the narration.
     _DURATION_FIT_ENABLED: Final[bool] = False
 
     def _resolve_duration_fit(
@@ -236,15 +239,20 @@ class AttractionVideoGenerator:
         target_audio_duration: float,
         overshoot_tolerance: float,
     ) -> Tuple[Optional[float], Optional[float]]:
-        if not self._DURATION_FIT_ENABLED:
-            return None, None
-        if target_audio_duration <= 0:
-            return None, None
-
         from services.tts.ttsengine import FFmpegManager
 
         current_duration = FFmpegManager.get_media_duration(video_path)
         if current_duration <= 0:
+            return None, None
+
+        # Flat hard cap, independent of narration length — trim only, no
+        # hold/stretch, regardless of _DURATION_FIT_ENABLED below.
+        if current_duration > self._MAX_GENERATED_CLIP_SECONDS:
+            return self._MAX_GENERATED_CLIP_SECONDS, None
+
+        if not self._DURATION_FIT_ENABLED:
+            return None, None
+        if target_audio_duration <= 0:
             return None, None
 
         overshoot = current_duration - target_audio_duration

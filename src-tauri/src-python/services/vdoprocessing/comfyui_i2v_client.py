@@ -422,8 +422,32 @@ class ComfyUII2VClient:
     def _wait_for_result(self, client: httpx.Client, prompt_id: str) -> Dict[str, Any]:
         deadline = time.monotonic() + tuning.COMFYUI_GENERATION_TIMEOUT_SECONDS
         while time.monotonic() < deadline:
-            response = client.get(f"{self.base_url}/history/{prompt_id}", timeout=30.0)
-            response.raise_for_status()
+            try:
+                response = client.get(f"{self.base_url}/history/{prompt_id}", timeout=30.0)
+                response.raise_for_status()
+            except httpx.TransportError as exc:
+                # A generation can take several minutes of real GPU work
+                # (hundreds of 2s polls on the same pooled keep-alive
+                # connection) — observed in the wild as a `ReadError:
+                # [WinError 10054] An existing connection was forcibly
+                # closed by the remote host` roughly 10 minutes in, well
+                # before the job itself was actually done. httpx's own
+                # connection pool doesn't retry a read failure on a stale
+                # reused connection (only connect-phase failures), so
+                # without this the whole ~10 minutes of already-completed
+                # GPU work gets thrown away and the clip falls back to the
+                # much slower local generator over what's really just one
+                # transient dropped connection. Retrying opens a fresh
+                # connection and keeps waiting on the SAME prompt_id — the
+                # generation itself is unaffected, ComfyUI keeps running
+                # server-side regardless of whether anyone's polling it.
+                logger.warning(
+                    "Transient connection error polling ComfyUI for prompt %s "
+                    "(%s: %s) — retrying.",
+                    prompt_id, type(exc).__name__, exc,
+                )
+                time.sleep(self._POLL_INTERVAL_SECONDS)
+                continue
             history = response.json()
             entry = history.get(prompt_id)
             if entry:

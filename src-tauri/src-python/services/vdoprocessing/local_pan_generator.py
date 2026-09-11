@@ -62,7 +62,24 @@ def _get_pipe():
             "diffusers/stable-diffusion-xl-1.0-inpainting-0.1",
             torch_dtype=torch.bfloat16,
         )
-        _pipe.enable_model_cpu_offload()
+        # enable_model_cpu_offload() shuttles modules between CPU and GPU
+        # VRAM as each is needed — meaningless (and raises "requires
+        # accelerator, but not found") with no CUDA device to offload TO.
+        # Observed in the wild: ComfyUI's own subprocess had a rough run
+        # (a stalled/reset connection — see comfyui_i2v_client.py's
+        # _wait_for_result) right before this fallback kicked in, and by
+        # the time it did, torch.cuda.is_available() came back False here —
+        # this used to hard-fail the outpaint step outright (silently
+        # degrading to a plain, non-outpainted pan) instead of just running
+        # the pipeline directly on whatever device is actually available.
+        if torch.cuda.is_available():
+            _pipe.enable_model_cpu_offload()
+        else:
+            logger.warning(
+                "No CUDA device available — running the SDXL inpainting "
+                "pipeline on CPU directly (slow) instead of GPU-offloaded."
+            )
+            _pipe.to("cpu")
         _pipe.vae.enable_slicing()
     return _pipe
 
