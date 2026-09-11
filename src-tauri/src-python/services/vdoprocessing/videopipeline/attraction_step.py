@@ -117,6 +117,17 @@ def render_attraction_videos(
 
     for idx, wp in enumerate(waypoints):
         place_label = wp.get("label", f"waypoint_{idx}")
+
+        # Check upfront, before ever showing "Generating..." or touching
+        # ComfyUI/the local fallback — a waypoint with no popup image has
+        # nothing to generate a clip from, so skip it outright.
+        if not isinstance(wp, dict) or not wp.get("popup_image"):
+            logger.info(
+                "Step 3: [%d/%d] Skipping '%s' — no popup image configured.",
+                idx + 1, len(waypoints), place_label,
+            )
+            continue
+
         tracker.show(f"Generating attraction video {idx + 1}/{len(waypoints)}: {place_label}")
         logger.info(
             "Step 3: [%d/%d] Generating attraction video for: '%s'",
@@ -131,6 +142,9 @@ def render_attraction_videos(
         )
 
         if result["status"] == "skipped_no_image":
+            # Shouldn't normally hit this now that we pre-check above —
+            # kept as a safety net for any other validation inside
+            # generate_waypoint_attraction_video.
             logger.info(
                 "Step 3: [%d/%d] Skipping '%s' — no popup image configured.",
                 idx + 1, len(waypoints), place_label,

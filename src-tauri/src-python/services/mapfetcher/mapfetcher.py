@@ -89,10 +89,67 @@ class MapFetcher:
         wp_indices = [x[0] for x in sorted_wps]
         waypoints = [x[1] for x in sorted_wps]
 
-        segments = [
-            (wp_indices[i], wp_indices[i + 1], waypoints[i + 1])
-            for i in range(len(wp_indices) - 1)
-        ]
+        # Which sorted-waypoint POSITIONS act as leg boundaries. With
+        # merge_stopbys on, a stop-by strictly between two boundaries is
+        # skipped here — it merges into the leg spanning those two
+        # boundaries instead of starting its own — but the trip's true
+        # first/last waypoint is always kept as a boundary even if
+        # (unusually) flagged stop-by, since "pass through" isn't a
+        # meaningful concept for the trip's own endpoints.
+        if merge_stopbys:
+            boundary_positions = [
+                i
+                for i, wp in enumerate(waypoints)
+                if i == 0 or i == len(waypoints) - 1 or not wp.get("isStopBy", False)
+            ]
+        else:
+            boundary_positions = list(range(len(waypoints)))
+
+        # Each segment carries its own departure/arrival waypoint dicts
+        # directly (rather than relying on positional indexing into the
+        # full `waypoints` list, which merging boundaries would otherwise
+        # break), plus any stop-bys that merged into it as mid-leg markers.
+        segments = []
+        for bi in range(len(boundary_positions) - 1):
+            start_pos, end_pos = boundary_positions[bi], boundary_positions[bi + 1]
+            stopby_markers = [
+                {
+                    "row_idx": wp_indices[p],
+                    "label": waypoints[p].get("label"),
+                    # Carried through so a merged-in stop-by (drawn as a
+                    # plain pass-through pin — see waypoints.py's
+                    # mid_marker_pins) can still show its own popup photo
+                    # briefly when the traveler passes it, instead of
+                    # being purely a silent marker. job_config stores this
+                    # as a LIST (the UI's own multi-image field) — unwrapped
+                    # to a plain path string here, same convention
+                    # render_step.py's own popup_image handling uses;
+                    # left as a list, the image loader downstream never
+                    # matched it as a valid path and the card silently
+                    # never rendered.
+                    "popup_image": (
+                        str(_pi[0])
+                        if isinstance(_pi := waypoints[p].get("popup_image"), list) and _pi
+                        else (str(_pi) if _pi else None)
+                    ),
+                    "freeze_seconds": waypoints[p].get("freeze_seconds"),
+                    # "cover" (full-bleed photo, label overlaid) is now
+                    # the default look — "pip" (photo + caption strip
+                    # below) only applies when a waypoint explicitly asks
+                    # for it.
+                    "image_display": waypoints[p].get("image_display", "cover"),
+                }
+                for p in range(start_pos + 1, end_pos)
+            ]
+            segments.append(
+                (
+                    wp_indices[start_pos],
+                    wp_indices[end_pos],
+                    waypoints[end_pos],
+                    waypoints[start_pos],
+                    stopby_markers,
+                )
+            )
 
         # [NEW] Total leg count known up front — lets every per-leg log line
         # show "[i/total]" progress instead of an unbounded counter.
@@ -219,32 +276,59 @@ class MapFetcher:
                         chunk_labels.append(None)
                         chunk_popups.append(None)
 
-                sequence_data.append(
-                    {
-                        "start_idx": chunk_start,
-                        "end_idx": chunk_end,
-                        "img_path": res_map_path,
-                        "extent": res_extent,
-                        "lats": chunk["latitude"].to_numpy(),
-                        "lons": chunk["longitude"].to_numpy(),
-                        "points": chunk_points,
-                        "labels": chunk_labels,
-                        "popups": chunk_popups,
-                        # This leg's real departure/arrival waypoint ids
-                        # (job_config's own "id" field) — several
-                        # waypoints in the same project can share a label
-                        # (e.g. a route that passes through "大阪市"
-                        # multiple times), so matching a leg's endpoint
-                        # back to its true position in the whole route
-                        # by id is unambiguous where label text alone
-                        # isn't. `waypoints` here is this leg's own
-                        # departure/arrival pair — index leg_idx is the
-                        # one being LEFT, leg_idx + 1 (== wp) is the one
-                        # being ARRIVED at.
-                        "start_waypoint_id": waypoints[leg_idx].get("id"),
-                        "end_waypoint_id": wp.get("id"),
-                    }
-                )
+            # Merged-in stop-bys whose route-row falls in THIS chunk — a
+            # pin drawn as the traveler passes it (see waypoints.py's
+            # mid_marker_pins), separate from the real leg-arrival popup
+            # mechanism that chunk_labels/chunk_popups above feeds. Still
+            # carries its own popup_image/freeze_seconds/image_display
+            # (added upstream in _pos+1's stopby_markers) through to that
+            # pin, though — dropped here before, which silently kept a
+            # passed stop-by's own photo from ever showing.
+            mid_markers = [
+                {
+                    "row_idx": m["row_idx"],
+                    "label": m["label"],
+                    "px": chunk_points[m["row_idx"] - chunk_start],
+                    "popup_image": m.get("popup_image"),
+                    "freeze_seconds": m.get("freeze_seconds"),
+                    "image_display": m.get("image_display", "cover"),
+                }
+                for m in job["chunk_markers"]
+            ]
+
+            sequence_data.append(
+                {
+                    "start_idx": chunk_start,
+                    "end_idx": chunk_end,
+                    "img_path": job["res_map_path"],
+                    "extent": res_extent,
+                    # Wide establishing-shot tile + its own geo extent —
+                    # only set on a leg's FIRST chunk (see is_first_chunk_of_leg
+                    # in Pass 1); None on every other chunk.
+                    "wide_img_path": job["res_map_path_wide"],
+                    "wide_extent": wide_extents[job_index],
+                    "mid_markers": mid_markers,
+                    "lats": chunk["latitude"].to_numpy(),
+                    "lons": chunk["longitude"].to_numpy(),
+                    "points": chunk_points,
+                    "labels": chunk_labels,
+                    "popups": chunk_popups,
+                    # This leg's real departure/arrival waypoint ids
+                    # (job_config's own "id" field) — several
+                    # waypoints in the same project can share a label
+                    # (e.g. a route that passes through "大阪市"
+                    # multiple times), so matching a leg's endpoint
+                    # back to its true position in the whole route
+                    # by id is unambiguous where label text alone
+                    # isn't. Read directly off this job's own departure/
+                    # arrival waypoint dicts (not positional indexing into
+                    # `waypoints`, which merged-away stop-bys would throw
+                    # off) — see `start_wp`/`wp` set in Pass 1.
+                    "start_waypoint_id": job["start_wp"].get("id"),
+                    "end_waypoint_id": wp.get("id"),
+                    "leg_idx": leg_idx,
+                }
+            )
 
         logger.info(
             "process_residential_sequence complete: %d chunk(s) generated across %d leg(s).",

@@ -236,9 +236,6 @@ class _OverviewAnimationMixin:
                         smoothed_angle = self._smoothed_heading(
                             smoothed_angle, cx, cy, prev_cx, prev_cy
                         )
-                        self.graphics.draw_transport_icon(
-                            frame, cx, cy, current_frame, smoothed_angle, mode=current_mode
-                        )
                         # Render its card immediately too — otherwise the
                         # pin (already on this frame above) would show a
                         # full frame before its popup catches up on the
@@ -252,7 +249,20 @@ class _OverviewAnimationMixin:
                         hud_new["hud_corner"] = None
                         hud_new["draw_leader_line"] = True
                         frame = self.graphics.render_popup_box(
-                            frame, hud_new, alpha=self._popup_fade_alpha(new_bp)
+                            frame, hud_new, alpha=self._popup_fade_alpha(new_bp),
+                            line_only=True,
+                        )
+                        self._draw_pin(frame, triggered_popup, len(points))
+                        frame = self.graphics.render_popup_box(
+                            frame, hud_new, alpha=self._popup_fade_alpha(new_bp),
+                            skip_line=True,
+                        )
+                        # Drawn LAST (on top of the pin/line/card) — the
+                        # traveler is right at this pin's position the
+                        # instant it triggers, so drawing the icon earlier
+                        # left it hidden behind the pin redraw above.
+                        self.graphics.draw_transport_icon(
+                            frame, cx, cy, current_frame, smoothed_angle, mode=current_mode
                         )
                     self.last_frame = frame
                     video.write(frame)
@@ -270,10 +280,22 @@ class _OverviewAnimationMixin:
                     smoothed_angle = self._smoothed_heading(
                         smoothed_angle, cx, cy, prev_cx, prev_cy
                     )
+                    # Line, then pin, then card — pause_frame's own pin(s)
+                    # are already baked in (see popup_base_frame above), so
+                    # without redrawing triggered_popup's pin on top of the
+                    # line here, the line would land right over it.
+                    pause_frame = self.graphics.render_popup_box(
+                        pause_frame, triggered_popup, line_only=True
+                    )
+                    self._draw_pin(pause_frame, triggered_popup, len(points))
+                    pause_frame = self.graphics.render_popup_box(
+                        pause_frame, triggered_popup, skip_line=True
+                    )
+                    # Drawn LAST (on top of the pin/line/card) — same
+                    # reasoning as the trigger-moment frame above.
                     self.graphics.draw_transport_icon(
                         pause_frame, cx, cy, current_frame, smoothed_angle, mode=current_mode
                     )
-                    pause_frame = self.graphics.render_popup_box(pause_frame, triggered_popup)
                     for _ in range(int(self.post_arrival_hold_seconds * fps)):
                         video.write(pause_frame)
 

@@ -58,6 +58,19 @@ class AttractionVideoGenerator:
     _AUDIO_DURATION_TOLERANCE_SECONDS: Final[float] = 3.0
     _MULTI_IMAGE_OVERSHOOT_TOLERANCE_SECONDS: Final[float] = 2.0
 
+    # Caps how long _resolve_duration_fit will freeze-hold a clip's last
+    # frame to cover an undershoot. A short narration only a little longer
+    # than the clip is fine to pad; a clip that's, say, 20s short of its
+    # narration (routine here, since ComfyUI tops out around ~5s) would
+    # otherwise freeze on a static frame for 20 straight seconds — just as
+    # broken-looking as the slow-motion stretch this replaced, just in a
+    # different way. Past this cap, the clip is deliberately left short
+    # rather than forced to fit; see the warning _resolve_duration_fit logs
+    # when it happens — the fix is for the waypoint to gain another popup
+    # image (covering the rest of the narration with its own clip), not a
+    # bigger freeze.
+    _MAX_HOLD_SECONDS: Final[float] = 3.0
+
     # Multi-image waypoints (2+ popup images -> 2+ generated clips) are no
     # longer auto-combined here — combining is deferred until the frontend
     # explicitly approves it (via finalize_pending_video), so a user gets a
@@ -183,6 +196,55 @@ class AttractionVideoGenerator:
             logger.error("Local clip generation failed for %s: %s", local_image_path, exc)
             return None
 
+    # [NOTE] [Editor] Decides whether a generated clip needs trimming (runs
+    # too long past the narration) or holding (runs too short) to land
+    # within `overshoot_tolerance` of target_audio_duration. Returns
+    # (trim_to, hold_to) — at most one is non-None; both None means the
+    # clip is already close enough to use as-is.
+    #
+    # Undershoot is handled by freezing the last frame for the gap (hold_to)
+    # rather than slow-motion PTS-stretching the whole clip — ComfyUI/Wan is
+    # hard-capped at tuning.COMFYUI_MAX_FRAMES (~5s at COMFYUI_FPS), while
+    # real narration routinely runs 15-30s, so a naive stretch here would
+    # play the clip at roughly a fifth speed. That doesn't just look slow —
+    # a generated clip's motion is already only approximately stable (fast/
+    # turbo low-step diffusion), and stretching it 3-6x turns any small
+    # per-frame drift into obvious, ugly wobble. Holding the last frame
+    # keeps the actual generated motion at its native, correct speed and
+    # only pads with a static frame, which is unnoticeable by comparison.
+    def _resolve_duration_fit(
+        self,
+        video_path: str,
+        target_audio_duration: float,
+        overshoot_tolerance: float,
+    ) -> Tuple[Optional[float], Optional[float]]:
+        if target_audio_duration <= 0:
+            return None, None
+
+        from services.tts.ttsengine import FFmpegManager
+
+        current_duration = FFmpegManager.get_media_duration(video_path)
+        if current_duration <= 0:
+            return None, None
+
+        overshoot = current_duration - target_audio_duration
+        if overshoot > overshoot_tolerance:
+            return target_audio_duration, None
+        if overshoot < -overshoot_tolerance:
+            capped_hold_to = min(target_audio_duration, current_duration + self._MAX_HOLD_SECONDS)
+            if capped_hold_to < target_audio_duration - 0.05:
+                logger.warning(
+                    "Clip is %.1fs short of its %.1fs narration — holding only "
+                    "%.1fs (capped at +%.1fs) instead of freezing for the full "
+                    "gap. %.1fs of narration will play with no matching visual; "
+                    "add another popup image to this waypoint to cover it.",
+                    target_audio_duration - current_duration, target_audio_duration,
+                    capped_hold_to, self._MAX_HOLD_SECONDS,
+                    target_audio_duration - capped_hold_to,
+                )
+            return None, capped_hold_to
+        return None, None
+
     # [NOTE] [Editor] Shared tail end of clip processing: fit duration, place at the
     # project's output path, and upscale. Used by both the single-image path
     # in process_attraction_video and finalize_pending_video's multi-image
@@ -204,7 +266,7 @@ class AttractionVideoGenerator:
         without losing the whole clip). Narration audio is intentionally
         NOT muxed in here — see process_attraction_video's docstring for
         why."""
-        trim_to, stretch_to = self._resolve_duration_fit(
+        trim_to, hold_to = self._resolve_duration_fit(
             video_path, target_audio_duration, overshoot_tolerance
         )
 
@@ -222,7 +284,7 @@ class AttractionVideoGenerator:
                 input_video_path=video_path,
                 output_video_path=str(final_path),
                 trim_to=trim_to,
-                stretch_to=stretch_to,
+                hold_to=hold_to,
                 scale_to=(self._TARGET_WIDTH, self._TARGET_HEIGHT),
                 sharpen=tuning.ATTRACTION_UPSCALE_SHARPEN,
                 label_text=place_label,
@@ -236,7 +298,7 @@ class AttractionVideoGenerator:
             )
 
         return self._fit_and_finalize_stagewise(
-            video_path, trim_to, stretch_to, final_path, place_label
+            video_path, trim_to, hold_to, final_path, place_label
         )
 
     # [Core] Slow-path fallback for _fit_and_finalize: the original
@@ -248,7 +310,7 @@ class AttractionVideoGenerator:
         self,
         video_path: str,
         trim_to: Optional[float],
-        stretch_to: Optional[float],
+        hold_to: Optional[float],
         final_path: Path,
         place_label: Optional[str] = None,
     ) -> str:
@@ -261,12 +323,12 @@ class AttractionVideoGenerator:
                 output_filename=trimmed_name,
             )
             temp_fitted_video = fitted_video
-        elif stretch_to is not None:
-            scaled_name = f"temp_scaled_{uuid.uuid4().hex[:8]}.mp4"
-            fitted_video = self.editor.adjust_video_duration(
+        elif hold_to is not None:
+            held_name = f"temp_held_{uuid.uuid4().hex[:8]}.mp4"
+            fitted_video = self.editor.hold_last_frame(
                 video_path=video_path,
-                target_duration=stretch_to,
-                output_filename=scaled_name,
+                target_duration=hold_to,
+                output_filename=held_name,
             )
             temp_fitted_video = fitted_video
         else:

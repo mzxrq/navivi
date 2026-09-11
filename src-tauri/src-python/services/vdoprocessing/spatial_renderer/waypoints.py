@@ -238,9 +238,42 @@ class _WaypointRenderMixin:
                 res_data.get("start_waypoint_id"), start_label
             )
             end_match = _resolve_global_waypoint(
-                res_data.get("end_waypoint_id"), end_label
+                res_data.get("end_waypoint_id"), end_label,
+                lat=_res_lats[-1] if _res_lats is not None and len(_res_lats) else None,
+                lng=_res_lons[-1] if _res_lons is not None and len(_res_lons) else None,
             )
-            total_wp = len(job_waypoints)
+            # +2 for the true start/end points, which live outside
+            # job_waypoints entirely (see _resolve_global_waypoint's own
+            # comment) — matches the +1 offset applied to every resolved
+            # index above, so _pin_label_and_color's index==total-1 ("E")
+            # check lines up with the real last position in the FULL
+            # route instead of the last position within job_waypoints
+            # alone.
+            total_wp = len(job_waypoints) + 2
+
+            # Merged-in stop-bys along this leg (see mapfetcher.py's
+            # merge_stopbys) — drawn as plain pins for the whole leg's
+            # clip, same as res_named's landmark sprites just below (always
+            # visible from frame 1, not gated on the traveler having
+            # actually reached them yet). Carries its own popup_image (if
+            # it has one) so passing/arriving near it can still show a
+            # brief photo card — see the pass-by trigger check in the
+            # per-frame loop below — rather than staying a silent dot for
+            # the whole clip.
+            mid_marker_pins = [
+                {
+                    "x": m["px"][0], "y": m["px"][1], "index": -1, "order": None,
+                    "label": m.get("label"),
+                    "data": {
+                        "is_stopby": True,
+                        "popup_image": m.get("popup_image"),
+                        "freeze_seconds": m.get("freeze_seconds") or 2.0,
+                        "image_display": m.get("image_display", "cover"),
+                        "triggered": False,
+                    },
+                }
+                for m in res_data.get("mid_markers", [])
+            ]
 
             def _leg_pin(x, y, label, data, match):
                 # A resolved match carries this waypoint's real position
@@ -359,9 +392,6 @@ class _WaypointRenderMixin:
                         smoothed_angle, cx, cy, prev_cx, prev_cy
                     )
 
-                    self.graphics.draw_transport_icon(
-                        frame, cx, cy, current_frame, smoothed_angle, mode=res_mode
-                    )
                     if res_points:
                         # Same resolved label/color as the intro beat
                         # above (start_pin_label/end_pin_label) — this
@@ -381,6 +411,64 @@ class _WaypointRenderMixin:
                             number=end_pin_label,
                             color=end_pin_color,
                         )
+
+                    # Drawn LAST (on top of the S/E pins and mid-route
+                    # markers) — while the traveler is at or near either
+                    # pin, the mode icon used to end up hidden behind it
+                    # instead of visibly leading the animation.
+                    self.graphics.draw_transport_icon(
+                        frame, cx, cy, current_frame, smoothed_angle, mode=res_mode
+                    )
+
+                # Merged-in stop-bys (mid_marker_pins) with their own photo
+                # get a brief pip card as the traveler passes near them —
+                # not the full arrival treatment below (no hold-then-
+                # fullscreen, doesn't end the clip): this is a "passing
+                # by", not a real stop, so the card fades in over the
+                # still-live frame, holds briefly, then fades back out
+                # while the leg keeps animating.
+                for marker_pin in mid_marker_pins:
+                    if marker_pin["data"]["triggered"] or not marker_pin["data"].get("popup_image"):
+                        continue
+                    near_marker = (
+                        prev_cx is not None
+                        and prev_cy is not None
+                        and RouteGeometryProcessor.point_to_segment_distance(
+                            marker_pin["x"], marker_pin["y"], prev_cx, prev_cy, cx, cy
+                        )
+                        < (
+                            self.graphics.marker_radius
+                            + self.trigger_radius_padding["waypoint"]
+                        )
+                    )
+                    if near_marker:
+                        marker_pin["data"]["triggered"] = True
+                        pass_card = dict(marker_pin)
+                        pass_card["hud_corner"] = None
+                        pass_card["draw_leader_line"] = True
+                        pass_card["border_color"] = self._STOPBY_PIN_COLOR
+                        fade_frames = max(1, int(fade_sec * fps))
+                        hold_frames = max(1, int(
+                            float(marker_pin["data"].get("freeze_seconds", 2.0)) * fps
+                        ))
+                        for f in range(fade_frames):
+                            video.write(
+                                self.graphics.render_popup_box(
+                                    frame, pass_card, alpha=(f + 1) / fade_frames
+                                )
+                            )
+                        held_pass_frame = self.graphics.render_popup_box(
+                            frame, pass_card, alpha=1.0
+                        )
+                        for _ in range(max(0, hold_frames - fade_frames)):
+                            video.write(held_pass_frame)
+                        for f in range(fade_frames):
+                            video.write(
+                                self.graphics.render_popup_box(
+                                    frame, pass_card, alpha=1.0 - (f + 1) / fade_frames
+                                )
+                            )
+                        self.last_frame = frame
 
                 for popup in active_res_popups:
                     if popup["data"]["triggered"]:
@@ -407,6 +495,33 @@ class _WaypointRenderMixin:
                     )
                     if near_segment or just_arrived:
                         popup["data"]["triggered"] = True
+                        # This waypoint's own pin color — border_color was
+                        # never set on active_res_popups entries at all
+                        # before, so the popup card fell back to the
+                        # GLOBAL default card_border_color regardless of
+                        # which waypoint it belonged to, instead of
+                        # visually tying back to its own pin like every
+                        # other card in this codebase does. index==0 (the
+                        # departure) is already skipped above, so the only
+                        # two real cases left are "this popup IS the leg's
+                        # own arrival pin" (end_pin_color) or a genuine
+                        # intermediate point along the path with its own
+                        # photo, which reads as any other already-visited
+                        # numbered pin.
+                        # end_pin_color itself can legitimately be None
+                        # (_pin_color returns None for a not-yet-"arrived"
+                        # pin — see pins.py) — popup_box.py's own
+                        # border_color lookup is a plain dict .get(key,
+                        # default), which only falls back to the default
+                        # when the KEY is missing, not when it's present
+                        # with value None, so an unguarded None here
+                        # crashed render_popup_box instead of quietly
+                        # falling back.
+                        popup["border_color"] = (
+                            end_pin_color
+                            if popup["index"] == len(res_points) - 1
+                            else self.graphics.arrived_marker_color
+                        ) or self.graphics.marker_color
                         # Hold plain on the arrival frame for a beat before
                         # any fade/scale transition starts — without this,
                         # the fullscreen scale-up (or the cinematic-pause

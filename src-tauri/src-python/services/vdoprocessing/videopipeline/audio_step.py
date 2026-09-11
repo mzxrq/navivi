@@ -133,14 +133,31 @@ def generate_audio(
         async def _generate_all_speech():
             for idx, wp in enumerate(waypoints):
                 label = wp.get("label", f"Waypoint {idx + 1}") if isinstance(wp, dict) else f"Waypoint {idx + 1}"
+
+                # Check upfront, before ever showing "Generating..." or
+                # touching the TTS server — a waypoint with no narration
+                # text has nothing to generate, so skip it outright instead
+                # of attempting (and silently failing) the call.
+                if not isinstance(wp, dict) or not _resolve_narration_script(wp):
+                    logger.info(
+                        "Step 2: [%d] Skipping '%s' — no narration script configured.",
+                        idx + 1, label,
+                    )
+                    audio_durations.append(0.0)
+                    audio_pauses.append([])
+                    audio_paths.append(None)
+                    subtitle_paths.append(None)
+                    continue
+
                 tracker.show(f"Generating TTS {idx + 1}/{len(waypoints)}: {label}")
                 try:
                     clip = await generate_waypoint_audio(
                         wp, idx, client, processor, output_dir, force=force
                     )
                 except ValueError:
-                    # No narration text for this waypoint — keep list
-                    # alignment with waypoints rather than aborting the run.
+                    # Safety net for any other validation inside
+                    # generate_waypoint_audio — the script check above
+                    # should already catch the common case.
                     audio_durations.append(0.0)
                     audio_pauses.append([])
                     audio_paths.append(None)

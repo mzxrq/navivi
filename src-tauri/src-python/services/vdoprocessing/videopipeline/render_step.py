@@ -306,7 +306,7 @@ def render_route_video(
                     else (str(popup_img) if popup_img else None)
                 ),
                 "image_display": str(
-                    wp.get("image_display", "pip")
+                    wp.get("image_display", "cover")
                 ).lower(),
                 "triggered": False,
                 # Matches the map editor's own MapArea.tsx: a stop-by
@@ -370,14 +370,77 @@ def render_route_video(
             res_sequence.append({"segment_duration": total_time})
     else:
         logger.info("Step 4: Generating 2D residential map sequence...")
-        img_out_dir = BASE_DIR / "data" / "inputs" / "res_images"
+        # Stop-by leg-merging is toggleable per project (default: merge —
+        # see tuning.DEFAULT_MERGE_STOPBY_WAYPOINTS); multi-tile chunk
+        # splitting is deliberately kept off here (math.inf) even though
+        # process_residential_sequence now supports it — enabling it would
+        # also require reworking the audio-mux/timeline position lookups
+        # below to handle several clips sharing one leg's narration, which
+        # is real follow-up work, not something to fold in silently here.
+        # job_config's own "waypoints" array excludes the trip's TRUE
+        # start/end (those live in separate "start_point"/"end_point"
+        # keys) — passing it to process_residential_sequence unmodified
+        # meant the residential leg sequence's very first/last leg began/
+        # ended at the first/last WAYPOINT instead of the true start/end,
+        # so that point never got its own leg, intro pin, or "S"/"E"
+        # popup treatment in the residential video (only the separate
+        # overview pipeline ever showed it). Prepending/appending them
+        # here — as a LOCAL list used only for this call, not reassigning
+        # the shared `waypoints`/`wp_indices` — closes that gap without
+        # touching audio_durations/seg_durations/route_labels indexing
+        # elsewhere in this function, all of which are sized and indexed
+        # against the ORIGINAL waypoints list and would desync by one
+        # position if it shifted. Skipped when the true start/end already
+        # coincides with row 0 / the last row (nothing to add). Neither
+        # start_point nor end_point carries its own "popup_image" field
+        # in job_config's schema — only "waypoints" entries do — so this
+        # gives the true start/end a real leg + pin + "S"/"E" label, but
+        # not a photo unless a future schema change adds one.
+        _start_pt = project_config.get("start_point") or {}
+        _end_pt = project_config.get("end_point") or {}
+        res_waypoints = list(waypoints)
+        res_wp_indices = list(wp_indices)
+        if _start_pt.get("lat") is not None and (not res_wp_indices or res_wp_indices[0] != 0):
+            res_waypoints = [{
+                "lat": _start_pt["lat"],
+                "lng": _start_pt.get("lng", _start_pt.get("lon")),
+                "label": _start_pt.get("label"),
+                "isStopBy": False,
+            }] + res_waypoints
+            res_wp_indices = [0] + res_wp_indices
+        if _end_pt.get("lat") is not None and (
+            not res_wp_indices or res_wp_indices[-1] != len(route_df) - 1
+        ):
+            res_waypoints = res_waypoints + [{
+                "lat": _end_pt["lat"],
+                "lng": _end_pt.get("lng", _end_pt.get("lon")),
+                "label": _end_pt.get("label"),
+                "isStopBy": False,
+            }]
+            res_wp_indices = res_wp_indices + [len(route_df) - 1]
+
         sequence_data = fetcher.process_residential_sequence(
             route_df,
-            waypoints,
+            res_waypoints,
             output_size=(img_w, img_h),
             max_chunk_distance_meters=math.inf,
-            precomputed_indices=wp_indices,
+            precomputed_indices=res_wp_indices,
+            merge_stopbys=bool(
+                settings.get("merge_stopby_waypoints", tuning.DEFAULT_MERGE_STOPBY_WAYPOINTS)
+            ),
         )
+
+        # Maps a waypoint's job_config "id" back to its RAW position in the
+        # (unfiltered, includes stop-bys) `waypoints` list — audio_durations/
+        # audio_pauses/seg_durations are all indexed by that raw position
+        # (see audio_step.py's `for idx, wp in enumerate(waypoints)`), but
+        # once stop-by merging can skip a waypoint as a leg boundary, a
+        # leg's position in `sequence_data` no longer equals its departure
+        # waypoint's raw position — every lookup below must resolve through
+        # this map instead of indexing by `seq_idx` directly.
+        id_to_position = {
+            wp.get("id"): pos for pos, wp in enumerate(waypoints) if wp.get("id")
+        }
 
         for seq_idx, item in enumerate(sequence_data):
             start_idx, end_idx = item["start_idx"], item["end_idx"]

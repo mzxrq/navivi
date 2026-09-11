@@ -156,8 +156,18 @@ COMFYUI_MODEL_SHIFT = 8.0
 # Wan wants frame counts of the form 4k+1; clamp generated length into a
 # sane range so a very long/short narration duration can't request a
 # pathological (near-zero or excessively slow) clip.
-COMFYUI_MIN_FRAMES = 25   # ~1s @ 24fps
-COMFYUI_MAX_FRAMES = 121  # ~5s @ 24fps — the template's own default length
+#
+# Lowered from the template's own default (121, ~5s) — on an 8GB card, Wan
+# already runs "loaded partially" (VRAM offloading mid-model) even at this
+# resolution, and generation was crashing mid-sampling (a native runtime
+# abort, not a clean Python exception) roughly 10-14 minutes in, consistent
+# with VRAM exhaustion under sustained pressure across a longer sequence of
+# frames. A shorter clip needs less peak VRAM for the video latent across
+# the whole sampling run. If crashes persist even at this length, the next
+# lever is COMFYUI_WIDTH/HEIGHT (lower resolution), not step count (the
+# Turbo checkpoint is distilled specifically for 4 steps).
+COMFYUI_MIN_FRAMES = 25  # ~1s @ 24fps
+COMFYUI_MAX_FRAMES = 89  # ~3.7s @ 24fps (was 121 ~5s, then 65 ~2.7s — middle ground)
 COMFYUI_NEGATIVE_PROMPT = (
     "色调艳丽，过曝，静态，细节模糊不清，字幕，风格，作品，画作，画面，静止，"
     "整体发灰，最差质量，低质量，JPEG压缩残留，丑陋的，残缺的，多余的手指，"

@@ -439,6 +439,66 @@ class VideoEditor:
         )
         return str(output_path)
 
+    # [Core/Util] Pads a video out to a target duration by freezing/cloning its final frame.
+    def hold_last_frame(
+        self, video_path: str, target_duration: float, output_filename: str
+    ) -> str:
+        """
+        Extends a video to target_duration by holding its last frame,
+        rather than slow-motion PTS-stretching the whole clip (see
+        adjust_video_duration) — for a clip whose actual motion is only
+        approximately stable (e.g. fast/turbo-step AI generation), stretch
+        exaggerates any per-frame drift into obvious wobble, while holding
+        a still frame is unnoticeable padding. No-ops (a straight copy) if
+        the clip is already at or past target_duration.
+        """
+        vid_p = Path(video_path)
+        if not vid_p.exists():
+            raise FileNotFoundError(f"Video file not found for hold: {vid_p}")
+
+        if target_duration <= 0:
+            raise ValueError(
+                f"target_duration must be positive, got {target_duration!r}."
+            )
+
+        output_path = self._resolve_output_path(output_filename, "video")
+        if output_path.exists():
+            output_path.unlink()
+
+        current_duration = self.get_video_duration(str(vid_p))
+        pad_seconds = target_duration - current_duration
+        if pad_seconds <= 0:
+            shutil.copy2(vid_p, output_path)
+            return str(output_path)
+
+        ffmpeg_cmd = self.engine.resolve_binary()
+        cmd = [
+            ffmpeg_cmd,
+            "-y",
+            "-i",
+            str(vid_p),
+            "-vf",
+            f"tpad=stop_mode=clone:stop_duration={pad_seconds:.3f}",
+            "-c:v",
+            "libx264",
+            *tuning.ffmpeg_thread_args(),
+            "-preset",
+            "fast",
+            "-crf",
+            "18",
+            "-pix_fmt",
+            "yuv420p",
+            "-an",  # audio deliberately dropped — muxed in later from narration
+            str(output_path),
+        ]
+
+        self.engine.run_command(cmd)
+        logger.info(
+            "Held last frame of '%s' for %.3fs to reach %.3fs: %s",
+            vid_p, pad_seconds, target_duration, output_path,
+        )
+        return str(output_path)
+
     # [Core/Util] Stitches an image sequence into an MP4 video using libx264.
     def stitch_images_to_video(
         self,
