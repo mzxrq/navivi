@@ -17,6 +17,11 @@ export interface Waypoint {
   narration?: string;
   arrivingNarration?: string;
   attractionNarration?: string;
+  isGeneratingAudio?: boolean;
+  audioUrl?: string;
+  isGeneratingVideo?: boolean;
+  videoPrompt?: string;
+  videoUrl?: string;
   routeMode: RouteMode;
   customRoute?: [number, number][];
   isGeneratingScript?: boolean;
@@ -24,6 +29,9 @@ export interface Waypoint {
   connectToRoute?: boolean;
   drawStyle?: "linear" | "spline";
   curveOffset?: number;
+  timelineOffset?: number;
+  videoOffset?: number;
+  audioOffset?: number;
 }
 
 export interface RouteSegment {
@@ -37,6 +45,8 @@ export interface ProjectSettings {
   duration_seconds: number;
   line_color: [number, number, number];
   line_thickness: number;
+  line_border_color?: [number, number, number];
+  line_border_width?: number;
   marker_color: [number, number, number];
   marker_radius: number;
   res_duration: number;

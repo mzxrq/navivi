@@ -178,67 +178,15 @@ export function TimelineTrack({
       }
     }
 
-    if (isRippleMode) {
-      newClips = newClips.flatMap((c) => {
-        if (c.trackId !== track.id) return [c];
-        if (c.startTime >= finalStart)
-          return [{ ...c, startTime: c.startTime + durationSeconds }];
+    const targetNeighbors = newClips.filter(c => c.trackId === track.id);
+    const overlapping = targetNeighbors.some(c => {
+      const cEnd = c.startTime + c.duration;
+      return (finalStart < cEnd && finalEnd > c.startTime);
+    });
 
-        const cEnd = c.startTime + c.duration;
-        if (c.startTime < finalStart && cEnd > finalEnd) {
-          return [
-            { ...c, id: crypto.randomUUID(), duration: finalStart - c.startTime, groupId: undefined }, 
-            {
-              ...c,
-              id: crypto.randomUUID(),
-              startTime: finalEnd,
-              duration: cEnd - finalEnd,
-              sourceOffset: (c.sourceOffset || 0) + (finalEnd - c.startTime),
-              groupId: undefined
-            },
-          ];
-        }
-        return [c];
-      });
-    } else {
-      newClips = newClips.flatMap((c) => {
-        if (c.trackId !== track.id) return [c];
-
-        const cEnd = c.startTime + c.duration;
-        if (c.startTime >= finalStart && cEnd <= finalEnd) return [];
-        if (c.startTime < finalStart && cEnd > finalEnd) {
-          return [
-            { ...c, duration: finalStart - c.startTime },
-            {
-              ...c,
-              id: crypto.randomUUID(),
-              startTime: finalEnd,
-              duration: cEnd - finalEnd,
-              sourceOffset: (c.sourceOffset || 0) + (finalEnd - c.startTime),
-              groupId: undefined,
-            },
-          ];
-        }
-        if (c.startTime < finalStart && cEnd > finalStart && cEnd <= finalEnd) {
-          return [{ ...c, duration: finalStart - c.startTime }];
-        }
-        if (
-          c.startTime >= finalStart &&
-          c.startTime < finalEnd &&
-          cEnd > finalEnd
-        ) {
-          return [
-            {
-              ...c,
-              startTime: finalEnd,
-              duration: cEnd - finalEnd,
-              sourceOffset: (c.sourceOffset || 0) + (finalEnd - c.startTime),
-              groupId: undefined,
-            },
-          ];
-        }
-        return [c];
-      });
+    if (overlapping) {
+      showToast("Cannot drop here: overlaps with another clip.", "error");
+      return;
     }
 
     newClips.push(newClip);

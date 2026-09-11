@@ -373,26 +373,7 @@ export function MapArea() {
     }
   };
 
-  const getStyleThumbnail = (id: string) => {
-    switch (id) {
-      case "outdoors":
-        return "bg-gradient-to-br from-[#dceacc] to-[#8ebc83]";
-      case "satellite":
-        return "bg-gradient-to-br from-[#1d2c3b] to-[#2c4021]";
-      case "dark":
-        return "bg-gradient-to-br from-[#2a2a2b] to-[#121212]";
-      case "standard":
-        return "bg-gradient-to-br from-[#e8e6e1] to-[#c5c8cc]";
-      case "light":
-        return "bg-gradient-to-br from-[#f4f4f4] to-[#e0e0e0]";
-      case "osm":
-        return "bg-gradient-to-br from-[#f2efe9] to-[#aad3df]";
-      case "gsi-japan":
-        return "bg-gradient-to-br from-[#e4ead2] to-[#d4dac0]";
-      default:
-        return "bg-zinc-200";
-    }
-  };
+
 
   // Drag and Drop Listeners
   useEffect(() => {
@@ -573,8 +554,6 @@ export function MapArea() {
 
                 let previewUrl = "";
 
-                // ✨ FIXED: Hardcoded coordinates (Kada area) so the browser caches the image instantly.
-                // This costs virtually 0 API calls after the first load!
                 const previewLon = "135.0667";
                 const previewLat = "34.2744";
                 const previewZ = "11";

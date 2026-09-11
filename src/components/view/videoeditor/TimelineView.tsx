@@ -443,10 +443,24 @@ export function TimelineView() {
   }, [isPlaying, timeline.clips]);
 
   const handleScrub = (clientX: number) => {
-    if (!timelineRef.current) return;
+    if (!timelineRef.current || !rulerRef.current) return;
     const rect = timelineRef.current.getBoundingClientRect();
-    const scrollLeft = timelineRef.current.scrollLeft;
-    const pixelsFromZero = clientX - rect.left + scrollLeft;
+    
+    let currentScroll = timelineRef.current.scrollLeft;
+    const scrollZone = 50;
+    const maxScroll = timelineRef.current.scrollWidth - rect.width;
+    
+    if (clientX > rect.right - scrollZone && currentScroll < maxScroll) {
+      currentScroll = Math.min(maxScroll, currentScroll + 30);
+      timelineRef.current.scrollLeft = currentScroll;
+      rulerRef.current.scrollLeft = currentScroll;
+    } else if (clientX < rect.left + scrollZone && currentScroll > 0) {
+      currentScroll = Math.max(0, currentScroll - 30);
+      timelineRef.current.scrollLeft = currentScroll;
+      rulerRef.current.scrollLeft = currentScroll;
+    }
+    
+    const pixelsFromZero = clientX - rect.left + currentScroll;
     setCurrentTime(Math.max(0, pixelsFromZero / pixelsPerSecond));
   };
 
@@ -816,6 +830,11 @@ export function TimelineView() {
           <div className="flex-1 flex flex-col min-w-0 relative bg-zinc-50 dark:bg-navidark-800/50">
             <div
               ref={rulerRef}
+              onScroll={(e) => {
+                if (timelineRef.current) {
+                  timelineRef.current.scrollLeft = e.currentTarget.scrollLeft;
+                }
+              }}
               className="h-8 w-full border-b border-zinc-300 dark:border-navidark-400 bg-zinc-200/90 dark:bg-navidark-800/90 overflow-hidden shrink-0"
             >
               <div

@@ -72,17 +72,17 @@ export function TimelineClip({
       ? clip.sourceDuration * pixelsPerSecond
       : undefined;
 
-  let colorClass = "bg-zinc-800 border-zinc-600 text-white";
+  let colorClass = "bg-[#2D2D2D] border-[#404040] text-zinc-300"; // Video
   if (clip.type === "audio")
-    colorClass = "bg-purple-900/80 border-purple-700 text-purple-100";
+    colorClass = "bg-[#233F32] border-[#36604C] text-[#93C9B2]"; // Audio
   if (clip.type === "image")
-    colorClass = "bg-amber-900/80 border-amber-700 text-amber-100";
+    colorClass = "bg-[#3F2F23] border-[#604636] text-[#C9AD93]"; // Image
   if (clip.type === "text")
-    colorClass = "bg-blue-900/80 border-blue-700 text-blue-100";
+    colorClass = "bg-[#23323F] border-[#364C60] text-[#93B2C9]"; // Text
 
   const selectedClass = isSelected
-    ? "ring-2 ring-white shadow-lg z-30 brightness-110"
-    : "opacity-90 hover:opacity-100 z-10";
+    ? "border-white shadow-md z-30 brightness-125"
+    : "opacity-100 hover:brightness-110 z-10";
 
   const safeUrl = clip.source ? convertFileSrc(clip.source) : "";
   const showThumbnail =
@@ -215,114 +215,27 @@ export function TimelineClip({
         }),
       });
     } else {
-      let newClips = [...timeline.clips].filter((c) => c.id !== clip.id);
+      const targetNeighbors = timeline.clips.filter((c) => c.trackId === targetTrackId && c.id !== clip.id);
+      
+      const overlapping = targetNeighbors.some(c => {
+         return finalStart < c.startTime + c.duration && finalStart + finalDuration > c.startTime;
+      });
 
-      if (isRippleMode) {
-        newClips = newClips.map((c) => {
-          if (c.trackId === clip.trackId && c.startTime > clip.startTime) {
-            return {
-              ...c,
-              startTime: Math.max(0, c.startTime - clip.duration),
-            };
-          }
-          return c;
-        });
-
-        let effectiveStart = finalStart;
-        if (clip.trackId === targetTrackId && finalStart > clip.startTime) {
-          effectiveStart = Math.max(0, finalStart - clip.duration);
-        }
-
-        newClips = newClips.flatMap((c) => {
-          if (c.trackId !== targetTrackId) return [c];
-
-          if (c.startTime >= effectiveStart)
-            return [{ ...c, startTime: c.startTime + finalDuration }];
-
-          const cEnd = c.startTime + c.duration;
-          if (c.startTime < effectiveStart && cEnd > effectiveStart) {
-            return [
-              { ...c, duration: effectiveStart - c.startTime },
-              {
-                ...c,
-                id: crypto.randomUUID(),
-                startTime: effectiveStart + finalDuration,
-                duration: cEnd - effectiveStart,
-                sourceOffset:
-                  (c.sourceOffset || 0) + (effectiveStart - c.startTime),
-              },
-            ];
-          }
-
-          return [c];
-        });
-
-        newClips.push({
-          ...clip,
-          startTime: effectiveStart,
-          duration: finalDuration,
-          trackId: targetTrackId,
-        });
-      } else {
-        newClips = newClips.flatMap((c) => {
-          if (c.trackId !== targetTrackId) return [c];
-
-          const cEnd = c.startTime + c.duration;
-          if (c.startTime >= finalStart && cEnd <= finalEnd) return [];
-          
-          if (c.startTime < finalStart && cEnd > finalEnd) {
-            return [
-              { 
-                ...c, 
-                id: crypto.randomUUID(),
-                duration: finalStart - c.startTime, 
-                groupId: undefined 
-              }, 
-              {
-                ...c,
-                id: crypto.randomUUID(),
-                startTime: finalEnd,
-                duration: cEnd - finalEnd,
-                sourceOffset: (c.sourceOffset || 0) + (finalEnd - c.startTime),
-                groupId: undefined
-              },
-            ];
-          }
-          if (
-            c.startTime < finalStart &&
-            cEnd > finalStart &&
-            cEnd <= finalEnd
-          ) {
-            return [{ ...c, duration: finalStart - c.startTime, groupId: undefined }]; 
-          }
-          if (
-            c.startTime >= finalStart &&
-            c.startTime < finalEnd &&
-            cEnd > finalEnd
-          ) {
-            return [
-              {
-                ...c,
-                startTime: finalEnd,
-                duration: cEnd - finalEnd,
-                sourceOffset: (c.sourceOffset || 0) + (finalEnd - c.startTime),
-                groupId: undefined 
-              },
-            ];
-          }
-          return [c];
-        });
-
-        newClips.push({
-          ...clip,
-          startTime: finalStart,
-          duration: finalDuration,
-          trackId: targetTrackId,
-        });
+      if (overlapping) {
+         showToast("Cannot move clip here: overlaps with existing clips.", "error");
+         return; // Revert
       }
 
-      newClips = newClips.map((c) => {
-        if (clip.groupId && c.groupId === clip.groupId && c.id !== clip.id) {
+      const newClips = timeline.clips.map((c) => {
+        if (c.id === clip.id) {
+          return {
+            ...c,
+            startTime: finalStart,
+            duration: finalDuration,
+            trackId: targetTrackId,
+          };
+        }
+        if (clip.groupId && c.groupId === clip.groupId) {
           return {
             ...c,
             startTime: Math.max(0, c.startTime + deltaStart),
@@ -435,7 +348,7 @@ export function TimelineClip({
         const isLeftResize = dir === "left" || dir === "topLeft" || dir === "bottomLeft";
         updateClipDimensions(newStartTime, newDuration, clip.trackId, true, isLeftResize);
       }}
-      className={`absolute top-0 bottom-0 rounded-md border-2 overflow-hidden flex flex-col justify-center px-2 transition-[filter,box-shadow,opacity] group ${isLocked ? "" : "hover:z-20 cursor-pointer"} ${colorClass} ${selectedClass} ${isLocked ? "opacity-50 grayscale" : ""}`}
+      className={`absolute top-0 bottom-0 rounded border overflow-hidden flex flex-col justify-center px-2 transition-[filter,box-shadow,opacity] group ${isLocked ? "" : "hover:z-20 cursor-pointer"} ${colorClass} ${selectedClass} ${isLocked ? "opacity-50 grayscale" : ""}`}
     >
       {showThumbnail && (
         <div

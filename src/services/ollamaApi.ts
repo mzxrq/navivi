@@ -100,7 +100,7 @@ export async function generateOverviewScriptStream(
 ): Promise<void> {
     const routeNames = waypoints.join("、");
     const themeContext = theme ? `このコースの全体テーマは「${theme}」です。` : "";
-    
+
     const prompt = `あなたは旅行番組のプロのナレーターです。
 ${themeContext}
 以下の立ち寄り場所を巡る旅のオープニングナレーションを、視聴者を惹きつけるように3〜4文で作成してください。
@@ -110,7 +110,7 @@ ${themeContext}
 1. 日本語の「です・ます調」で、自然な話し言葉にすること。
 2. 音声合成で読み上げるため、効果音や映像の指示（例：[波の音]、[カメラがズーム]など）は絶対に書かないこと。
 3. 歓迎の挨拶から始めること。`;
-    
+
     await streamLLM(prompt, engine, onChunk);
 }
 
@@ -125,7 +125,7 @@ export async function generateWaypointScriptStream(
     lng: number = 0,
 ): Promise<void> {
     let contextStr = "";
-    
+
     if (lat !== 0 && lng !== 0) {
         const { geo, searchTerms } = await fetchLocationContext(lat, lng);
         const webContext = await fetchKeylessWebContext(searchTerms);
@@ -145,6 +145,25 @@ ${contextStr}
 1. 日本語の「です・ます調」で、親しみやすい言葉遣いにすること。
 2. 音声合成で読み上げるため、括弧書きの指示（例：[笑顔で]など）は絶対に書かないこと。
 3. 簡潔に、その場所の魅力や歴史が伝わるようにすること。`;
+
+    await streamLLM(prompt, engine, onChunk);
+}
+
+// ✨ Stream Video Prompt for Wan 2.1
+export async function generateVideoPromptStream(
+    locationName: string,
+    narrationText: string,
+    engine: string = "gemma2",
+    onChunk: (text: string) => void
+): Promise<void> {
+    const prompt = `You are an expert video prompt engineer for Wan 2.1 (a high-quality video generation AI).
+Translate and expand the following Japanese narration and location into a highly descriptive, cinematic English visual prompt.
+Focus on visuals, lighting, camera angles, and atmosphere. Do NOT include any text, dialogue, or audio descriptions.
+
+Location: ${locationName}
+Narration: ${narrationText}
+
+English Visual Prompt:`;
 
     await streamLLM(prompt, engine, onChunk);
 }
