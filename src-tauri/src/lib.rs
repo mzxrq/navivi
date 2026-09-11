@@ -4,12 +4,31 @@ use std::io::{BufRead, BufReader, Read};
 use std::sync::Mutex;
 use std::{thread};
 use std::time::Duration;
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use std::path::Path;
 use std::fs;
 
 struct BlueprintState {
     process: Mutex<Option<Child>>,
+    // start_render's spawned child wasn't tracked anywhere before — only
+    // run_python_blueprint's was — so a force-killed app left it (and
+    // whatever Python server it had itself started, e.g. the bundled TTS/
+    // ComfyUI servers) running with no supervising process at all.
+    render_process: Mutex<Option<Child>>,
+}
+
+/// Kills whatever child process is currently tracked in `state`, best-effort.
+fn kill_tracked_children(state: &BlueprintState) {
+    if let Ok(mut lock) = state.process.lock() {
+        if let Some(mut child) = lock.take() {
+            let _ = child.kill();
+        }
+    }
+    if let Ok(mut lock) = state.render_process.lock() {
+        if let Some(mut child) = lock.take() {
+            let _ = child.kill();
+        }
+    }
 }
 
 
@@ -92,12 +111,24 @@ fn cancel_python_blueprint(state: State<'_, BlueprintState>) -> Result<String, S
 }
 
 #[tauri::command]
-fn start_render(app: AppHandle, config_path: String) -> Result<String, String> {
-    let mut child = Command::new("python")
+fn start_render(
+    app: AppHandle,
+    config_path: String,
+    force: Option<bool>,
+    state: State<'_, BlueprintState>,
+) -> Result<String, String> {
+    let mut command = Command::new("python");
+    command
         .env("PYTHONIOENCODING", "utf-8")
         .arg("src-python/main.py")
         .arg("full_pipeline")
-        .arg(&config_path)
+        .arg(&config_path);
+    if force.unwrap_or(false) {
+        // Bypasses the checkpoint/resume logic so every stage regenerates
+        // from scratch, instead of skipping steps whose output already exists.
+        command.arg("--force");
+    }
+    let mut child = command
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
@@ -105,6 +136,18 @@ fn start_render(app: AppHandle, config_path: String) -> Result<String, String> {
 
     let stdout = child.stdout.take().ok_or("Failed to capture stdout")?;
     let stderr = child.stderr.take().ok_or("Failed to capture stderr")?;
+
+    // Track this child the same way run_python_blueprint's is tracked, so
+    // an app exit (or a future cancel-render command) can find and kill it.
+    // Kill off any previous render that's still stuck first.
+    {
+        let mut lock = state.render_process.lock().unwrap();
+        if let Some(mut old_child) = lock.take() {
+            let _ = old_child.kill();
+            let _ = old_child.wait();
+        }
+        *lock = Some(child);
+    }
 
     let app_stdout = app.clone();
     thread::spawn(move || {
@@ -127,6 +170,14 @@ fn start_render(app: AppHandle, config_path: String) -> Result<String, String> {
     });
 
     thread::spawn(move || {
+        // Take the child back out of shared state to wait on it — it was
+        // stashed there (rather than kept as a local owned value) so an app
+        // exit in the meantime can find and kill it instead of orphaning it.
+        let child_state = app.state::<BlueprintState>();
+        let mut child = match child_state.render_process.lock().unwrap().take() {
+            Some(child) => child,
+            None => return, // already taken/killed elsewhere (e.g. app exit)
+        };
         let status = child.wait().expect("Failed to wait on child");
         if status.success() {
             let _ = app.emit("render-finish", "Success");
@@ -218,6 +269,7 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .manage(BlueprintState {
             process: Mutex::new(None),
+            render_process: Mutex::new(None),
         })
         .invoke_handler(tauri::generate_handler![
             run_python_blueprint,
@@ -227,6 +279,17 @@ pub fn run() {
             export_video,
             copy_asset_file,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app_handle, event| {
+            // A force-closed window (or OS shutdown) previously left any
+            // running Python worker — and whatever bundled server it had
+            // itself spawned (TTS/ComfyUI) — running with nothing left to
+            // supervise it. Kill whatever this app is still tracking on exit.
+            if let tauri::RunEvent::ExitRequested { .. } = event {
+                if let Some(state) = app_handle.try_state::<BlueprintState>() {
+                    kill_tracked_children(&state);
+                }
+            }
+        });
 }

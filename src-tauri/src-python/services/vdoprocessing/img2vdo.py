@@ -19,6 +19,7 @@ from services.vdoprocessing.vdoeditor import VideoEditor
 from services.vdoprocessing.vdoexporter import VideoExporter
 from services.config.job_config import JobConfigManager
 from services.logger.logger import setup_logger
+from services.vdoprocessing.videopipeline.helpers import output_is_valid, project_video_dir
 
 # Logging configuration
 logger = setup_logger("AttractionVideoGenerator")
@@ -35,7 +36,7 @@ class AttractionVideoGenerator:
 
         # Route outputs to project video directory
         base_dir = Path(self.config.get("directory_path", "assets"))
-        self.output_dir = (base_dir / "video").resolve()
+        self.output_dir = project_video_dir(base_dir).resolve()
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
     # [NOTE] [Config] Matches mapfetcher.py's MapFetcher.fetch_image/process_residential_sequence
@@ -56,6 +57,19 @@ class AttractionVideoGenerator:
     # ones get a tighter overshoot cap since concatenation compounds error.
     _AUDIO_DURATION_TOLERANCE_SECONDS: Final[float] = 3.0
     _MULTI_IMAGE_OVERSHOOT_TOLERANCE_SECONDS: Final[float] = 2.0
+
+    # Caps how long _resolve_duration_fit will freeze-hold a clip's last
+    # frame to cover an undershoot. A short narration only a little longer
+    # than the clip is fine to pad; a clip that's, say, 20s short of its
+    # narration (routine here, since ComfyUI tops out around ~5s) would
+    # otherwise freeze on a static frame for 20 straight seconds — just as
+    # broken-looking as the slow-motion stretch this replaced, just in a
+    # different way. Past this cap, the clip is deliberately left short
+    # rather than forced to fit; see the warning _resolve_duration_fit logs
+    # when it happens — the fix is for the waypoint to gain another popup
+    # image (covering the rest of the narration with its own clip), not a
+    # bigger freeze.
+    _MAX_HOLD_SECONDS: Final[float] = 3.0
 
     # Multi-image waypoints (2+ popup images -> 2+ generated clips) are no
     # longer auto-combined here — combining is deferred until the frontend
@@ -124,11 +138,20 @@ class AttractionVideoGenerator:
     # hard-fails just because the local GPU service had a bad run. See
     # services/model/ for the exploration that led to the local fallback.
     def _generate_single_clip(
-        self, local_image_path: str, prompt_text: str, duration_sec: float = 6.0
+        self,
+        local_image_path: str,
+        prompt_text: str,
+        duration_sec: float = 6.0,
+        save_path: Optional[str] = None,
     ) -> Optional[str]:
         """Generates a clip via ComfyUI (Wan2.2 I2V), falling back to the
-        local pan/zoom generator on failure. Returns the raw clip path."""
-        save_path = self.output_dir / f"raw_{uuid.uuid4().hex[:6]}.mp4"
+        local pan/zoom generator on failure. Returns the raw clip path.
+
+        `save_path` lets the caller give this clip a deterministic name
+        (rather than the old random-uuid one) so a checkpointed rerun can
+        recognize and reuse it later — see the per-image loop in
+        process_attraction_video."""
+        save_path = Path(save_path) if save_path else self.output_dir / f"raw_{uuid.uuid4().hex[:6]}.mp4"
 
         from services.vdoprocessing.comfyui_i2v_client import ComfyUII2VClient
 
@@ -173,6 +196,55 @@ class AttractionVideoGenerator:
             logger.error("Local clip generation failed for %s: %s", local_image_path, exc)
             return None
 
+    # [NOTE] [Editor] Decides whether a generated clip needs trimming (runs
+    # too long past the narration) or holding (runs too short) to land
+    # within `overshoot_tolerance` of target_audio_duration. Returns
+    # (trim_to, hold_to) — at most one is non-None; both None means the
+    # clip is already close enough to use as-is.
+    #
+    # Undershoot is handled by freezing the last frame for the gap (hold_to)
+    # rather than slow-motion PTS-stretching the whole clip — ComfyUI/Wan is
+    # hard-capped at tuning.COMFYUI_MAX_FRAMES (~5s at COMFYUI_FPS), while
+    # real narration routinely runs 15-30s, so a naive stretch here would
+    # play the clip at roughly a fifth speed. That doesn't just look slow —
+    # a generated clip's motion is already only approximately stable (fast/
+    # turbo low-step diffusion), and stretching it 3-6x turns any small
+    # per-frame drift into obvious, ugly wobble. Holding the last frame
+    # keeps the actual generated motion at its native, correct speed and
+    # only pads with a static frame, which is unnoticeable by comparison.
+    def _resolve_duration_fit(
+        self,
+        video_path: str,
+        target_audio_duration: float,
+        overshoot_tolerance: float,
+    ) -> Tuple[Optional[float], Optional[float]]:
+        if target_audio_duration <= 0:
+            return None, None
+
+        from services.tts.ttsengine import FFmpegManager
+
+        current_duration = FFmpegManager.get_media_duration(video_path)
+        if current_duration <= 0:
+            return None, None
+
+        overshoot = current_duration - target_audio_duration
+        if overshoot > overshoot_tolerance:
+            return target_audio_duration, None
+        if overshoot < -overshoot_tolerance:
+            capped_hold_to = min(target_audio_duration, current_duration + self._MAX_HOLD_SECONDS)
+            if capped_hold_to < target_audio_duration - 0.05:
+                logger.warning(
+                    "Clip is %.1fs short of its %.1fs narration — holding only "
+                    "%.1fs (capped at +%.1fs) instead of freezing for the full "
+                    "gap. %.1fs of narration will play with no matching visual; "
+                    "add another popup image to this waypoint to cover it.",
+                    target_audio_duration - current_duration, target_audio_duration,
+                    capped_hold_to, self._MAX_HOLD_SECONDS,
+                    target_audio_duration - capped_hold_to,
+                )
+            return None, capped_hold_to
+        return None, None
+
     # [NOTE] [Editor] Shared tail end of clip processing: fit duration, place at the
     # project's output path, and upscale. Used by both the single-image path
     # in process_attraction_video and finalize_pending_video's multi-image
@@ -194,7 +266,7 @@ class AttractionVideoGenerator:
         without losing the whole clip). Narration audio is intentionally
         NOT muxed in here — see process_attraction_video's docstring for
         why."""
-        trim_to, stretch_to = self._resolve_duration_fit(
+        trim_to, hold_to = self._resolve_duration_fit(
             video_path, target_audio_duration, overshoot_tolerance
         )
 
@@ -212,7 +284,7 @@ class AttractionVideoGenerator:
                 input_video_path=video_path,
                 output_video_path=str(final_path),
                 trim_to=trim_to,
-                stretch_to=stretch_to,
+                hold_to=hold_to,
                 scale_to=(self._TARGET_WIDTH, self._TARGET_HEIGHT),
                 sharpen=tuning.ATTRACTION_UPSCALE_SHARPEN,
                 label_text=place_label,
@@ -226,7 +298,7 @@ class AttractionVideoGenerator:
             )
 
         return self._fit_and_finalize_stagewise(
-            video_path, trim_to, stretch_to, final_path, place_label
+            video_path, trim_to, hold_to, final_path, place_label
         )
 
     # [Core] Slow-path fallback for _fit_and_finalize: the original
@@ -238,10 +310,11 @@ class AttractionVideoGenerator:
         self,
         video_path: str,
         trim_to: Optional[float],
-        stretch_to: Optional[float],
+        hold_to: Optional[float],
         final_path: Path,
         place_label: Optional[str] = None,
     ) -> str:
+        temp_fitted_video: Optional[str] = None
         if trim_to is not None:
             trimmed_name = f"temp_trimmed_{uuid.uuid4().hex[:8]}.mp4"
             fitted_video = self.editor.trim_video_duration(
@@ -249,20 +322,32 @@ class AttractionVideoGenerator:
                 target_duration=trim_to,
                 output_filename=trimmed_name,
             )
-        elif stretch_to is not None:
-            scaled_name = f"temp_scaled_{uuid.uuid4().hex[:8]}.mp4"
-            fitted_video = self.editor.adjust_video_duration(
+            temp_fitted_video = fitted_video
+        elif hold_to is not None:
+            held_name = f"temp_held_{uuid.uuid4().hex[:8]}.mp4"
+            fitted_video = self.editor.hold_last_frame(
                 video_path=video_path,
-                target_duration=stretch_to,
-                output_filename=scaled_name,
+                target_duration=hold_to,
+                output_filename=held_name,
             )
+            temp_fitted_video = fitted_video
         else:
             fitted_video = video_path
 
-        if Path(fitted_video).resolve() != final_path.resolve():
-            if final_path.exists():
-                final_path.unlink()
-            shutil.copy2(fitted_video, final_path)
+        try:
+            if Path(fitted_video).resolve() != final_path.resolve():
+                if final_path.exists():
+                    final_path.unlink()
+                shutil.copy2(fitted_video, final_path)
+        finally:
+            # temp_trimmed_*/temp_scaled_* was copied from, not moved —
+            # without this it's left behind on disk permanently every time
+            # this fallback path runs.
+            if temp_fitted_video and os.path.exists(temp_fitted_video):
+                try:
+                    os.remove(temp_fitted_video)
+                except OSError:
+                    pass
         final_output = str(final_path)
 
         try:
@@ -325,6 +410,7 @@ class AttractionVideoGenerator:
             logger.error("finalize_pending_video: no valid clip paths given.")
             return None
 
+        temp_combined_video: Optional[str] = None
         if len(valid_clips) > 1:
             logger.info(
                 f"Combining {len(valid_clips)} approved clips into a sequence..."
@@ -333,15 +419,26 @@ class AttractionVideoGenerator:
             combined_video = self.editor.concatenate_videos(
                 input_paths=valid_clips, output_filename=temp_combined_name
             )
+            temp_combined_video = combined_video
             overshoot_tolerance = self._MULTI_IMAGE_OVERSHOOT_TOLERANCE_SECONDS
         else:
             combined_video = valid_clips[0]
             overshoot_tolerance = self._AUDIO_DURATION_TOLERANCE_SECONDS
 
-        final_output = self._fit_and_finalize(
-            combined_video, target_audio_duration, output_filename, overshoot_tolerance,
-            place_label=place_label,
-        )
+        try:
+            final_output = self._fit_and_finalize(
+                combined_video, target_audio_duration, output_filename, overshoot_tolerance,
+                place_label=place_label,
+            )
+        finally:
+            # temp_concat_* was only ever an intermediate input to
+            # _fit_and_finalize, never cleaned up afterward — leaked to disk
+            # on every multi-clip finalize otherwise.
+            if temp_combined_video and os.path.exists(temp_combined_video):
+                try:
+                    os.remove(temp_combined_video)
+                except OSError:
+                    pass
 
         for clip in valid_clips:
             if os.path.exists(clip) and clip != final_output:
@@ -369,6 +466,7 @@ class AttractionVideoGenerator:
         audio_path: Optional[str] = None,
         output_filename: str = "waypoint_final.mp4",
         place_label: Optional[str] = None,
+        force: bool = False,
     ) -> Optional[str]:
         """
         Main processor:
@@ -382,6 +480,16 @@ class AttractionVideoGenerator:
            get burned onto whatever's returned via the normal pipeline
            subtitle step, but audio muxing is a separate, later step so a
            human gets a chance to review the clip(s) first.
+
+        Checkpointing (skipped entirely when `force` is True):
+        - If the final deliverable already exists, returns it immediately.
+        - If a pending manifest already exists and every clip it lists is
+          still present, leaves it alone (still awaiting finalize) instead
+          of regenerating.
+        - Otherwise, each per-image raw clip is generated to a deterministic
+          filename (raw_<output stem>_<index>.mp4) and reused if it already
+          exists — so a run interrupted partway through a multi-image
+          waypoint only regenerates the images it hadn't finished yet.
         """
         if not popup_image_entry:
             logger.warning("No popup image provided for waypoint.")
@@ -401,10 +509,44 @@ class AttractionVideoGenerator:
         if not image_list:
             return None
 
+        final_path = self.editor._resolve_output_path(output_filename, "video")
+        if not force and output_is_valid(final_path):
+            logger.info(
+                "Waypoint deliverable already exists — skipping generation: %s",
+                final_path,
+            )
+            return str(final_path)
+
+        manifest_path = self._pending_manifest_path(output_filename)
+        if not force and manifest_path.exists():
+            try:
+                with open(manifest_path, "r", encoding="utf-8") as f:
+                    existing_manifest = json.load(f)
+            except (OSError, json.JSONDecodeError):
+                existing_manifest = {}
+            existing_clips = existing_manifest.get("clip_paths", [])
+            if existing_clips and all(output_is_valid(c) for c in existing_clips):
+                logger.info(
+                    "Waypoint already has %d clip(s) pending approval — "
+                    "leaving as-is (call attraction-finalize once ready).",
+                    len(existing_clips),
+                )
+                return None
+
         # Regenerating this waypoint — clear out whatever a previous run
         # left behind (old deliverable, old pending manifest + its clips)
-        # before doing any fresh work.
+        # before doing any fresh work. Deterministic per-image raw clips
+        # (raw_<stem>_<idx>.mp4) are deliberately left alone here so the
+        # per-image loop below can still reuse ones from an interrupted
+        # run — force=True sweeps them up separately.
         self._clear_stale_outputs(output_filename)
+        if force:
+            stem = Path(output_filename).stem
+            for stale_raw in self.output_dir.glob(f"raw_{stem}_*.mp4"):
+                try:
+                    stale_raw.unlink()
+                except OSError:
+                    pass
 
         # --- Check list vs string for prompts ---
         if isinstance(prompt_text, str):
@@ -428,6 +570,7 @@ class AttractionVideoGenerator:
             else _DEFAULT_CLIP_SECONDS
         )
 
+        stem = Path(output_filename).stem
         generated_clips = []
         for idx, img_path in enumerate(image_list):
             # Match image index to prompt index (fallback to the last prompt if we run out)
@@ -437,10 +580,21 @@ class AttractionVideoGenerator:
                 else (prompt_list[-1] if prompt_list else "")
             )
 
+            raw_clip_path = self.output_dir / f"raw_{stem}_{idx:02d}.mp4"
+            if not force and output_is_valid(raw_clip_path):
+                logger.info(
+                    "   -> Image %d/%d already rendered — reusing %s",
+                    idx + 1, len(image_list), raw_clip_path,
+                )
+                generated_clips.append(str(raw_clip_path))
+                continue
+
             logger.info(
                 f"   -> Rendering image {idx + 1}/{len(image_list)}: {img_path} with prompt: '{current_prompt}'"
             )
-            clip = self._generate_single_clip(img_path, current_prompt, per_clip_duration)
+            clip = self._generate_single_clip(
+                img_path, current_prompt, per_clip_duration, save_path=str(raw_clip_path)
+            )
             if clip:
                 generated_clips.append(clip)
 

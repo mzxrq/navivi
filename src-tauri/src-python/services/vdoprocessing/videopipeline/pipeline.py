@@ -9,18 +9,20 @@ from services.logger.progress import tracker
 from services.vdoprocessing.vdoexporter import VideoExporter
 
 from .attraction_step import render_attraction_videos
-from .audio_step import generate_audio
+from .audio_step import generate_audio, stop_tts_server
 from .gps_step import process_gps
-from .helpers import logger
+from .helpers import logger, project_subtitle_dir, project_video_dir
 from .intro_step import render_intro_clip
 from .outro_step import render_outro_clip
 from .render_step import render_route_video
-from .subtitle_step import burn_subtitles
+from .subtitle_step import build_subtitles, burn_subtitles
 from .timeline_step import build_timeline
 
 
 def run_full_pipeline(
-    raw_source_path: str, output_video_dir: Optional[str] = None
+    raw_source_path: str,
+    output_video_dir: Optional[str] = None,
+    force_regenerate: bool = False,
 ) -> dict:
     """Executes all steps sequentially, reporting progress on the same
     "[mm:ss] [n/N] ..." live status line main.py's CLI test commands use
@@ -35,39 +37,48 @@ def run_full_pipeline(
 
     if not output_video_dir:
         base_path = Path(job_config.get("directory_path", project_dir))
-        output_video_dir = str((base_path / "video").resolve())
+        output_video_dir = str(project_video_dir(base_path).resolve())
 
-    # [NOTE] [Core] total=5 (the "[n/N]" denominator) is only set on this first stage() call — later stage() calls rely on the tracker remembering it rather than re-declaring it each time.
-    tracker.stage("Parsing GPS track...", total=5)
+    waypoints = job_config.get("waypoints", [])
+
+    # [NOTE] [Core] total=8 (the "[n/N]" denominator) is only set on this first stage() call — later stage() calls rely on the tracker remembering it rather than re-declaring it each time.
+    tracker.stage("Parsing GPS track...", total=8)
     cleaned_route = process_gps(raw_source_path)
 
     # --- STEP 2 ---
     tracker.stage("Generating TTS narration...")
-    audio_data = generate_audio(cleaned_route, str(config_file_path))
+    audio_data = generate_audio(
+        cleaned_route, str(config_file_path), force=force_regenerate
+    )
 
     # [NOTE] [TTS] Force-stop the TTS server now instead of leaving it to its
-    # idle timeout — otherwise it stays loaded in VRAM while the renderer
-    # below (and the attraction step's SDXL/ComfyUI pipeline, when enabled)
-    # starts competing for the same VRAM right after, which can overcommit a
-    # tight GPU budget. Mirrors combine_commands.py's test_all, which added
-    # this after observing the same contention.
+    # idle timeout — otherwise it stays loaded in VRAM while the attraction
+    # step's ComfyUI/Wan pipeline and the renderer below start competing for
+    # the same VRAM right after, which can overcommit a tight GPU budget.
     tracker.stage("Stopping TTS server...")
-    from services.tts.ttsengine import IrodoriTTSClient
-    IrodoriTTSClient.stop_server()
+    stop_tts_server()
 
-    # # --- STEP 3 ---
-    # tracker.stage("Generating attraction videos...")
-    # attraction_videos = render_attraction_videos(
-    #     str(config_file_path),
-    #     audio_durations=audio_data.get("audio_durations"),
-    #     audio_paths=audio_data.get("audio_paths"),
-    # )
-    #
-    # # Same VRAM-contention reasoning as the TTS server above — the
-    # # attraction step's ComfyUI/Wan pipeline would otherwise stay loaded
-    # # into the renderer below via its own idle timeout.
-    # from services.vdoprocessing.comfyui_i2v_client import ComfyUII2VClient
-    # ComfyUII2VClient.stop_server()
+    # --- STEP 2b ---
+    tracker.stage("Generating subtitles...")
+    subtitle_dir = project_subtitle_dir(project_dir)
+    subtitle_paths = build_subtitles(
+        waypoints, audio_data.get("audio_paths", []), str(subtitle_dir), force=force_regenerate
+    )
+
+    # --- STEP 3 ---
+    tracker.stage("Generating attraction videos...")
+    attraction_videos = render_attraction_videos(
+        str(config_file_path),
+        audio_durations=audio_data.get("audio_durations"),
+        audio_paths=audio_data.get("audio_paths"),
+        force=force_regenerate,
+    )
+
+    # Same VRAM-contention reasoning as the TTS server above — the
+    # attraction step's ComfyUI/Wan pipeline would otherwise stay loaded
+    # into the renderer below via its own idle timeout.
+    from services.vdoprocessing.comfyui_i2v_client import ComfyUII2VClient
+    ComfyUII2VClient.stop_server()
 
     # --- STEP 4 ---
     tracker.stage("Rendering overview & residential video...")
@@ -78,24 +89,45 @@ def run_full_pipeline(
         audio_durations=audio_data.get("audio_durations"),
         audio_pauses=audio_data.get("audio_pauses"),
         audio_paths=audio_data.get("audio_paths"),
+        force=force_regenerate,
     )
 
-    all_videos = video_paths #+ attraction_videos
+    all_videos = video_paths + attraction_videos
 
     # --- STEP 5 ---
     tracker.stage("Burning subtitles...")
     final_videos = burn_subtitles(
         video_paths=all_videos,
-        subtitle_paths=audio_data.get("subtitle_paths", []),
+        subtitle_paths=subtitle_paths,
         output_dir=output_video_dir,
+        force=force_regenerate,
     )
+
+    # --- STEP 5b ---
+    # Intro/outro carry no narration, so they deliberately bypass subtitle
+    # burning above — attached here instead, directly to the final clip
+    # order. Prepending intro to BOTH video_paths and final_videos (rather
+    # than just final_videos) keeps build_timeline's own indexing correct,
+    # since it uses len(video_paths) as the boundary between "route" and
+    # "attraction" clips; outro is only ever appended to the very end of
+    # final_videos, where build_timeline's attraction-index lookup already
+    # falls back to the clip's own filename once the index runs past
+    # attraction_videos, so it needs no such adjustment.
+    tracker.stage("Building intro/outro clips...")
+    intro_path = render_intro_clip(str(config_file_path))
+    outro_path = render_outro_clip(str(config_file_path))
+    if intro_path:
+        video_paths = [intro_path] + video_paths
+        final_videos = [intro_path] + final_videos
+    if outro_path:
+        final_videos = final_videos + [outro_path]
 
     timeline_path = build_timeline(
         video_paths=video_paths,
-        #attraction_videos=attraction_videos,
+        attraction_videos=attraction_videos,
         final_videos=final_videos,
         audio_paths=audio_data.get("audio_paths"),
-        subtitle_paths=audio_data.get("subtitle_paths"),
+        subtitle_paths=subtitle_paths,
         project_dir=str(project_dir),
     )
     tracker.clear()
@@ -120,7 +152,7 @@ def render_from_timeline(
 
     if not output_video_path:
         project_dir = timeline_path.parent
-        output_video_path = str(project_dir / "video" / "01_overview_rerendered.mp4")
+        output_video_path = str(project_video_dir(project_dir) / "01_overview_rerendered.mp4")
 
     print(f"NLE Engine: Re-rendering video from {timeline_path.name}...")
     logger.info("NLE Engine: Re-rendering video from %s...", timeline_path.name)

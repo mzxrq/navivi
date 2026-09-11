@@ -131,8 +131,8 @@ class _DrawingMixin:
             # shrinking both a notch keeps them from crowding the white
             # center's edge the way a single character never does.
             if len(label) > 1:
-                font_scale *= 0.82
-                thickness = max(2, round(thickness * 0.85))
+                font_scale *= 0.7
+                thickness = max(2, round(thickness * 0.75))
             (tw, th), baseline = cv2.getTextSize(label, self.font_cv, font_scale, thickness)
             # Center on the glyph's own visual bounding box (th tall, plus
             # baseline for any descenders) rather than assuming no
@@ -156,6 +156,73 @@ class _DrawingMixin:
                 thickness,
                 cv2.LINE_AA,
             )
+
+    def draw_compass(
+        self,
+        frame: np.ndarray,
+        margin: int = 24,
+        radius: int = 34,
+    ) -> None:
+        """Draws a static north-up compass badge in the top-right corner
+        — a white circular disc, a red/gray "N"-up needle, and the four
+        cardinal tick marks. Static (never rotates) because every map
+        this renders is itself always north-up (pitch=0/bearing=0
+        throughout this codebase — see pydeck_overview.py's own comment
+        on why), so there's nothing for it to actually track; it's purely
+        an orientation cue for the viewer, the same static role a
+        Google-Maps-style compass plays when north-up lock is on. Drawn
+        in-place, directly on the background, so it's automatically
+        present on every frame copied from it afterward — same
+        convention draw_frame_border uses."""
+        h, w = frame.shape[:2]
+        cx, cy = w - margin - radius, margin + radius
+
+        overlay = frame.copy()
+        cv2.circle(overlay, (cx, cy), radius, (255, 255, 255), -1, cv2.LINE_AA)
+        cv2.addWeighted(overlay, 0.88, frame, 0.12, 0, frame)
+        cv2.circle(frame, (cx, cy), radius, (210, 210, 210), 2, cv2.LINE_AA)
+
+        # Cardinal ticks — short lines just inside the disc's own edge at
+        # N/E/S/W, N drawn slightly bolder/longer than the other three so
+        # it still reads as "the important one" even though the needle
+        # itself already points there.
+        for angle_deg, is_north in ((270, True), (0, False), (90, False), (180, False)):
+            rad = math.radians(angle_deg)
+            outer = (cx + radius * 0.92 * math.cos(rad), cy + radius * 0.92 * math.sin(rad))
+            inner_r = radius * (0.68 if is_north else 0.76)
+            inner = (cx + inner_r * math.cos(rad), cy + inner_r * math.sin(rad))
+            cv2.line(
+                frame, (int(inner[0]), int(inner[1])), (int(outer[0]), int(outer[1])),
+                (150, 150, 150), 2 if is_north else 1, cv2.LINE_AA,
+            )
+
+        # The needle itself: a two-tone diamond (red tip pointing north,
+        # gray tail pointing south) — the classic compass-rose needle
+        # silhouette, rather than a plain arrow.
+        needle_len = radius * 0.62
+        needle_w = radius * 0.16
+        north_tip = (cx, int(cy - needle_len))
+        south_tip = (cx, int(cy + needle_len))
+        left_pt = (int(cx - needle_w), cy)
+        right_pt = (int(cx + needle_w), cy)
+        cv2.fillConvexPoly(
+            frame, np.array([north_tip, right_pt, south_tip, left_pt], dtype=np.int32),
+            (60, 60, 60), cv2.LINE_AA,
+        )
+        cv2.fillConvexPoly(
+            frame, np.array([north_tip, right_pt, left_pt], dtype=np.int32),
+            (60, 55, 210), cv2.LINE_AA,
+        )
+        cv2.circle(frame, (cx, cy), max(2, int(radius * 0.08)), (255, 255, 255), -1, cv2.LINE_AA)
+
+        # "N" label above the disc.
+        label = "N"
+        font_scale = radius / 34.0 * 0.55
+        (label_w, label_h), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_DUPLEX, font_scale, 2)
+        cv2.putText(
+            frame, label, (cx - label_w // 2, cy - radius - 8),
+            cv2.FONT_HERSHEY_DUPLEX, font_scale, (60, 60, 60), 2, cv2.LINE_AA,
+        )
 
     def draw_frame_border(
         self,

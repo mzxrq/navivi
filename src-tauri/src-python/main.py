@@ -27,6 +27,8 @@ from services.cli import (
     test_attraction_finalize,
     test_subtitle,
     test_subtitles,
+    test_intro_video,
+    test_outro_video,
     test_video_concat,
     test_transition_editor,
     test_all,
@@ -40,13 +42,21 @@ if __name__ == "__main__":
             "Usage: python main.py <path/to/job_config.json> "
             "[gps|overview|residential|tts|tts-all|attraction|attraction-all|"
             "attraction-finalize|intro|outro|subtitle|subtitle-all|concat|transition|all] "
-            "[waypoint_index]\n"
+            "[waypoint_index] [--force]\n"
             "       (output dir is always <job_config's directory_path>/video)\n"
-            "       python main.py full_pipeline <source_path> [output_dir]\n"
+            "       (--force bypasses checkpointing and regenerates everything)\n"
+            "       python main.py full_pipeline <source_path> [output_dir] [--force]\n"
             "       python main.py render_timeline <timeline.json> [output_video]",
             file=sys.stderr,
         )
         sys.exit(1)
+
+    # [NOTE] [Core] --force can appear anywhere on the command line (it's a
+    # flag, not a positional arg) — strip it out before any positional
+    # parsing below so waypoint_index/output_dir parsing is unaffected.
+    force_arg = "--force" in sys.argv
+    if force_arg:
+        sys.argv = [arg for arg in sys.argv if arg != "--force"]
 
     try:
         command_arg = sys.argv[1]
@@ -56,7 +66,9 @@ if __name__ == "__main__":
             from services.vdoprocessing.videopipeline import run_full_pipeline
 
             result = run_full_pipeline(
-                sys.argv[2], sys.argv[3] if len(sys.argv) > 3 else None
+                sys.argv[2],
+                sys.argv[3] if len(sys.argv) > 3 else None,
+                force_regenerate=force_arg,
             )
         elif command_arg == "render_timeline":
             if len(sys.argv) < 3:
@@ -82,23 +94,23 @@ if __name__ == "__main__":
                 result = test_gps(job_config_arg)
             elif mode_arg == "residential":
                 # [NOTE] [Animation] Renders only the per-waypoint leg-by-leg clips (2D or 3D per settings.use_3d_res) — no overview map.
-                result = test_residential_video(job_config_arg, output_dir_arg)
+                result = test_residential_video(job_config_arg, output_dir_arg, force=force_arg)
             elif mode_arg == "tts":
                 # [NOTE] [TTS] Generates narration audio for ONE waypoint (index from argv[3], default 0).
                 waypoint_index_arg = int(sys.argv[3]) if len(sys.argv) > 3 else 0
-                result = test_tts(job_config_arg, output_dir_arg, waypoint_index_arg)
+                result = test_tts(job_config_arg, output_dir_arg, waypoint_index_arg, force=force_arg)
             elif mode_arg == "tts-all":
                 # [NOTE] [TTS] Generates narration audio for every narrated waypoint.
-                result = test_tts_all(job_config_arg, output_dir_arg)
+                result = test_tts_all(job_config_arg, output_dir_arg, force=force_arg)
             elif mode_arg == "attraction":
                 # [NOTE] [Animation] Generates ONE waypoint's attraction (pan/outpaint) video from its popup image (index from argv[3], default 0).
                 waypoint_index_arg = int(sys.argv[3]) if len(sys.argv) > 3 else 0
                 result = test_attraction_video(
-                    job_config_arg, output_dir_arg, waypoint_index_arg
+                    job_config_arg, output_dir_arg, waypoint_index_arg, force=force_arg
                 )
             elif mode_arg == "attraction-all":
                 # [NOTE] [Animation] Generates attraction videos for every waypoint that has a popup image.
-                result = test_attraction_videos(job_config_arg, output_dir_arg)
+                result = test_attraction_videos(job_config_arg, output_dir_arg, force=force_arg)
             elif mode_arg == "attraction-finalize":
                 # [NOTE] [Editor] Combines a multi-image waypoint's already-generated pending clips into the final deliverable (index from argv[3], default 0) — see test_attraction_finalize's docstring.
                 waypoint_index_arg = int(sys.argv[3]) if len(sys.argv) > 3 else 0
@@ -115,11 +127,11 @@ if __name__ == "__main__":
                 # [NOTE] [Subtitle] Generates the .srt for ONE waypoint from its matching TTS audio (index from argv[3], default 0).
                 waypoint_index_arg = int(sys.argv[3]) if len(sys.argv) > 3 else 0
                 result = test_subtitle(
-                    job_config_arg, output_dir_arg, waypoint_index_arg
+                    job_config_arg, output_dir_arg, waypoint_index_arg, force=force_arg
                 )
             elif mode_arg == "subtitle-all":
                 # [NOTE] [Subtitle] Generates .srt files for every waypoint from matching TTS audio.
-                result = test_subtitles(job_config_arg, output_dir_arg)
+                result = test_subtitles(job_config_arg, output_dir_arg, force=force_arg)
             elif mode_arg == "concat":
                 # [NOTE] [Editor] Joins explicit clip paths (argv[3:]) — or, with none given, every *.mp4 already in the output dir in filename order — into 03_concat.mp4.
                 clip_paths_arg = sys.argv[3:] if len(sys.argv) > 3 else None
@@ -128,13 +140,13 @@ if __name__ == "__main__":
                 )
             elif mode_arg == "transition":
                 # [NOTE] [Transition] Renders the overview/storyboard map animation, including configured popup transitions — thin wrapper over test_overview_video.
-                result = test_transition_editor(job_config_arg, output_dir_arg)
+                result = test_transition_editor(job_config_arg, output_dir_arg, force=force_arg)
             elif mode_arg == "all":
                 # [NOTE] [Core] Runs every isolated stage above (TTS, attractions, subtitles, overview+residential, concat) as one combined project test — NOT the same as full_pipeline (no subtitle burn-in / timeline.json, see above).
-                result = test_all(job_config_arg, output_dir_arg)
+                result = test_all(job_config_arg, output_dir_arg, force=force_arg)
             else:
                 # [NOTE] [Core] Default when no mode (or an unrecognized one) is given — just the overview map animation.
-                result = test_overview_video(job_config_arg, output_dir_arg)
+                result = test_overview_video(job_config_arg, output_dir_arg, force=force_arg)
 
         _tracker.clear()
         if sys.stderr.isatty():

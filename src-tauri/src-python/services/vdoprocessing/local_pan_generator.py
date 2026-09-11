@@ -21,6 +21,7 @@ from PIL import Image, ImageFilter
 from diffusers import AutoPipelineForInpainting
 from transformers import BlipForConditionalGeneration, BlipProcessor
 
+from services import tuning
 from services.logger.logger import setup_logger
 
 logger = setup_logger("LocalPanGenerator")
@@ -257,7 +258,7 @@ def _render_pan(image: Image.Image, output_path: str, duration_sec: float, camer
 
     import subprocess
     subprocess.run(
-        ["ffmpeg", "-y", "-i", raw_path, "-c:v", "libx264", "-crf", "20",
+        ["ffmpeg", "-y", "-i", raw_path, "-c:v", "libx264", *tuning.ffmpeg_thread_args(), "-crf", "20",
          "-preset", "medium", "-pix_fmt", "yuv420p", output_path],
         check=True, capture_output=True,
     )

@@ -113,6 +113,7 @@ class VideoExporter:
             "-an",
             "-vcodec",
             "libx264",
+            *tuning.ffmpeg_thread_args(),
             "-crf",
             "18",
             "-preset",
@@ -235,6 +236,7 @@ class VideoExporter:
                     src,
                     "-vcodec",
                     "libx264",
+                    *tuning.ffmpeg_thread_args(),
                     "-crf",
                     "18",
                     "-preset",
@@ -427,6 +429,7 @@ class VideoExporter:
                 str(video_path),
                 "-vf",
                 f"subtitles='{safe_sub_path}'",
+                *tuning.ffmpeg_thread_args(),
                 "-c:a",
                 "copy",  # Copy the audio without re-encoding it
                 str(out_path),
@@ -478,6 +481,7 @@ class VideoExporter:
                 str(video_path),
                 "-vf",
                 f"scale={target_width}:{target_height}:flags=lanczos",
+                *tuning.ffmpeg_thread_args(),
                 "-c:a",
                 "copy",
                 str(out_path),
@@ -547,6 +551,7 @@ class VideoExporter:
                     "-i", str(video_path),
                     "-vf",
                     f"subtitles=filename='{escaped_srt}':force_style='{style.to_force_style()}'",
+                    *tuning.ffmpeg_thread_args(),
                     "-c:a", "copy",
                     str(out_path),
                 ],
@@ -580,6 +585,7 @@ class VideoExporter:
         *,
         trim_to: Optional[float] = None,
         stretch_to: Optional[float] = None,
+        hold_to: Optional[float] = None,
         scale_to: Optional[Tuple[int, int]] = None,
         sharpen: bool = False,
         label_text: Optional[str] = None,
@@ -592,19 +598,25 @@ class VideoExporter:
         the stages actually needed; omitting all of them is just a
         (still single-pass) re-encode/copy.
 
-        trim_to and stretch_to are mutually exclusive: trim_to hard-cuts
-        the tail (same as trim_video_duration), stretch_to time-scales via
-        setpts (same as adjust_video_duration). scale_to applies a lanczos
-        resize; sharpen adds a mild unsharp pass right after it to claw
-        back some of the perceived softness a lanczos upscale introduces.
-        label_text burns a full-duration top-left caption (see
+        trim_to, stretch_to, and hold_to are mutually exclusive: trim_to
+        hard-cuts the tail (same as trim_video_duration), stretch_to
+        time-scales via setpts (same as adjust_video_duration — this plays
+        the WHOLE clip in slow motion, which visibly exaggerates any
+        motion instability in a generated clip; prefer hold_to whenever
+        the source is AI-generated video), hold_to instead plays the clip
+        at its natural speed and then freezes/clones the final frame
+        (ffmpeg's tpad) to pad out the remaining gap — motion stays at
+        normal speed, only the padding is static. scale_to applies a
+        lanczos resize; sharpen adds a mild unsharp pass right after it to
+        claw back some of the perceived softness a lanczos upscale
+        introduces. label_text burns a full-duration top-left caption (see
         burn_static_label) using the SAME output duration as trim_to/
-        stretch_to, so the label's .srt cue doesn't have to be probed
-        against a not-yet-written file.
+        stretch_to/hold_to, so the label's .srt cue doesn't have to be
+        probed against a not-yet-written file.
         """
-        if trim_to is not None and stretch_to is not None:
+        if sum(x is not None for x in (trim_to, stretch_to, hold_to)) > 1:
             raise ValueError(
-                "finalize_clip: pass at most one of trim_to/stretch_to, not both."
+                "finalize_clip: pass at most one of trim_to/stretch_to/hold_to."
             )
 
         video_path = Path(input_video_path)
@@ -631,6 +643,16 @@ class VideoExporter:
             pts_factor = stretch_to / current_duration
             vf_parts.append(f"setpts={pts_factor:.6f}*PTS")
 
+        if hold_to is not None:
+            current_duration = FFmpegManager.get_media_duration(str(video_path))
+            if current_duration <= 0:
+                raise RuntimeError(
+                    f"ffprobe reported non-positive duration for '{video_path}'"
+                )
+            pad_seconds = hold_to - current_duration
+            if pad_seconds > 0:
+                vf_parts.append(f"tpad=stop_mode=clone:stop_duration={pad_seconds:.3f}")
+
         if scale_to is not None:
             target_width, target_height = scale_to
             vf_parts.append(f"scale={target_width}:{target_height}:flags=lanczos")
@@ -641,7 +663,7 @@ class VideoExporter:
 
         srt_path: Optional[Path] = None
         if label_text:
-            output_duration = trim_to or stretch_to
+            output_duration = trim_to or stretch_to or hold_to
             if output_duration is None:
                 output_duration = FFmpegManager.get_media_duration(str(video_path))
 
@@ -669,7 +691,8 @@ class VideoExporter:
         if trim_to is not None:
             cmd += ["-t", f"{trim_to:.3f}"]
         cmd += [
-            "-c:v", "libx264", "-preset", "fast", "-crf", "18", "-pix_fmt", "yuv420p",
+            "-c:v", "libx264", *tuning.ffmpeg_thread_args(),
+            "-preset", "fast", "-crf", "18", "-pix_fmt", "yuv420p",
             "-c:a", "copy",
             str(out_path),
         ]

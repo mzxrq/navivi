@@ -19,6 +19,7 @@ import numpy as np
 
 # [I/O] Import service dependencies for Integration
 from services.logger.logger import setup_logger
+from services import tuning
 
 # [Utility] Log setup for debugging and monitoring
 logger = setup_logger("MapTile")
@@ -27,6 +28,37 @@ logger = setup_logger("MapTile")
 # Explicit path rather than dotenv's auto-search, since the CWD this runs
 # from (launched by the Tauri sidecar) isn't guaranteed to be src-python.
 load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env")
+
+# Tiles are cached to disk forever with no eviction otherwise — across every
+# project/run this grows unbounded. Best-effort age-based sweep, run once
+# per TileDownloader init (see _evict_stale_tiles below).
+_TILE_CACHE_MAX_AGE_DAYS = 30
+
+
+def _evict_stale_tiles(cache_dir: Path, max_age_days: float = _TILE_CACHE_MAX_AGE_DAYS) -> None:
+    """Deletes cached tile files under `cache_dir` whose mtime is older than
+    `max_age_days`. Best-effort and silent — a cache-cleanup failure should
+    never break a render, it just means the cache grows a bit more."""
+    try:
+        cutoff = time.time() - (max_age_days * 86400)
+        removed = 0
+        for path in cache_dir.rglob("*"):
+            if not path.is_file():
+                continue
+            try:
+                if path.stat().st_mtime < cutoff:
+                    path.unlink()
+                    removed += 1
+            except OSError:
+                continue
+        if removed:
+            logger.info(
+                "Evicted %d stale tile cache file(s) older than %d day(s) from %s.",
+                removed, max_age_days, cache_dir,
+            )
+    except OSError as exc:
+        logger.warning("Tile cache eviction skipped for %s: %s", cache_dir, exc)
+
 
 class TileDownloader:
     """Handles downloading map tiles and fetching map images for route visualization."""
@@ -75,6 +107,7 @@ class TileDownloader:
         # subsequent fetch of an already-seen tile (any provider, Mapbox
         # included) is served from disk instead of hitting the network again.
         cx.set_cache_dir(str(self.cache_dir))
+        _evict_stale_tiles(self.cache_dir)
 
     # [Map/Util] Picks Mapbox (higher-resolution, retina-capable tiles) when
     # an access token is configured, falling back to the free Esri tiles
@@ -215,48 +248,76 @@ class TileDownloader:
 
         return final_path, new_extent, output_size
 
-    # [Map] Fetch a residential chunk image based on a DataFrame of lat/lon points
-    def fetch_residential_chunk(
+    # [Map] Shared bbox/zoom computation for a residential chunk — split out
+    # of fetch_residential_chunk so fetch_residential_wide (the leg's wide
+    # establishing shot) can reuse the exact same logic with a looser
+    # bbox and no zoom floor, instead of duplicating it.
+    def _compute_residential_bbox(
         self,
         chunk_df: pd.DataFrame,
-        output_filename: str,
-        output_size: Tuple[int, int] = (1920, 1080),
-    ) -> Tuple[float, float, float, float]:
-        """Fetches and crops map tiles for a specific route segment, ensuring proper aspect ratio."""
-        
+        output_size: Tuple[int, int],
+        bbox_multiplier: float = 1.0,
+        apply_min_zoom: bool = True,
+    ) -> Tuple[float, float, float, float, int, float]:
         if chunk_df.empty:
             raise ValueError("Chunk DataFrame is empty.")
 
-        # 1. Calculate a Bounding Box Centered on the Leg's Start/End
+        # 1. Calculate a Bounding Box Centered on the Leg's FULL PATH
         #
-        # Centering on the whole path's own min/max (the old approach)
-        # put the start/end pins whereever the path's OWN shape happened
-        # to place them — a detour or switchback loop off to one side (a
-        # scenic side-trail, a zigzag) skews that bbox's center away from
-        # the pins themselves, so even generous padding on "whichever edge
-        # is closest" wasn't reliably enough once the fetch-then-crop
-        # steps below shave a further, not-precisely-predictable slice off
-        # an edge. Centering on the *midpoint of start and end* instead
-        # guarantees both pins sit at an equal, symmetric distance from
-        # the frame's center — a loop or detour can still make the map
-        # less tightly zoomed (more empty space on the side it bulges
-        # toward), but it can no longer push either pin toward one edge.
-        min_lat = min(chunk_df["latitude"].min(), chunk_df["latitude"].iloc[0], chunk_df["latitude"].iloc[-1])
-        max_lat = max(chunk_df["latitude"].max(), chunk_df["latitude"].iloc[0], chunk_df["latitude"].iloc[-1])
-        min_lon = min(chunk_df["longitude"].min(), chunk_df["longitude"].iloc[0], chunk_df["longitude"].iloc[-1])
-        max_lon = max(chunk_df["longitude"].max(), chunk_df["longitude"].iloc[0], chunk_df["longitude"].iloc[-1])
-
+        # Centered on the path's own min/max extent (every point of the
+        # actual route, not just its two endpoints) — the whole route
+        # line stays centered and fully in-frame. The tradeoff (and it IS
+        # one — see git history if this needs revisiting): a leg whose
+        # path loops or bulges well to one side of the straight line
+        # between its start/end pins can leave one of those pins sitting
+        # closer to an edge than the other, since the box is sized and
+        # centered around the path's own shape rather than symmetric
+        # around the two pins.
         start_lat, end_lat = chunk_df["latitude"].iloc[0], chunk_df["latitude"].iloc[-1]
         start_lon, end_lon = chunk_df["longitude"].iloc[0], chunk_df["longitude"].iloc[-1]
-        center_lat = (start_lat + end_lat) / 2.0
-        center_lon = (start_lon + end_lon) / 2.0
+        lat_min, lat_max = chunk_df["latitude"].min(), chunk_df["latitude"].max()
+        lon_min, lon_max = chunk_df["longitude"].min(), chunk_df["longitude"].max()
+        center_lat = (lat_min + lat_max) / 2.0
+        center_lon = (lon_min + lon_max) / 2.0
 
-        # Half-extent needed, from that center, to still cover the whole
-        # path (every point stays within [min_lat, max_lat] x
-        # [min_lon, max_lon], so measuring the center's distance to those
-        # is enough — no need to scan every point individually).
-        half_lat = max(max_lat - center_lat, center_lat - min_lat, 1e-9)
-        half_lon = max(max_lon - center_lon, center_lon - min_lon, 1e-9)
+        # Half-extent from the path's own full bounding box — not the
+        # straight-line distance between just the two pins — so a loop or
+        # detour is guaranteed to stay in frame instead of running off an
+        # edge. `bbox_multiplier` widens this for the wide establishing
+        # shot (fetch_residential_wide) without duplicating any of this
+        # logic.
+        half_lat = max((lat_max - lat_min) / 2.0, 1e-9) * bbox_multiplier
+        half_lon = max((lon_max - lon_min) / 2.0, 1e-9) * bbox_multiplier
+
+        # Capped against the straight-line pin distance — an on/off-ramp
+        # loop or a wide switchback can inflate the path's own bounding
+        # box far beyond what the two pins actually need, zooming the
+        # whole leg out to fit a loop that only briefly swings wide
+        # (leaving most of the frame empty the rest of the time). Scaling
+        # BOTH axes down together (not clamping each independently, which
+        # would distort the box's own aspect ratio) once the path's
+        # diagonal extent exceeds RESIDENTIAL_LOOP_ZOOM_CAP times the
+        # pins' own diagonal distance keeps the center on the path's
+        # shape (per the framing above) while still stopping a loop from
+        # dominating the frame the way it did before this cap existed.
+        lon_scale_for_cap = math.cos(math.radians(center_lat))
+        pin_diag = math.hypot(
+            abs(end_lat - start_lat), abs(end_lon - start_lon) * lon_scale_for_cap
+        )
+        path_diag = math.hypot(half_lat, half_lon * lon_scale_for_cap)
+        # Floored in absolute degrees (not just scaled off pin_diag) so a
+        # leg whose two pins sit almost on top of each other (a loop that
+        # returns nearly to its own start) doesn't get capped down to a
+        # near-zero box — RESIDENTIAL_LOOP_ZOOM_CAP_MIN_DEGREES is roughly
+        # 55m, a sane lower bound on how tight the cap itself can squeeze.
+        max_diag = max(
+            pin_diag * tuning.RESIDENTIAL_LOOP_ZOOM_CAP,
+            tuning.RESIDENTIAL_LOOP_ZOOM_CAP_MIN_DEGREES,
+        )
+        if path_diag > max_diag:
+            shrink = max_diag / path_diag
+            half_lat *= shrink
+            half_lon *= shrink
 
         # 20% breathing room on top of that half-extent — covers both the
         # pin+label graphic (which extends past its anchor point) and the
@@ -288,7 +349,30 @@ class TileDownloader:
             12 if span_meters <= 50000 else
             11
         )
-        optimal_zoom = min(optimal_zoom, self.MAX_ZOOM_LEVEL)
+        # Ceiling independent of the provider's own MAX_ZOOM_LEVEL (a
+        # capability limit, not a "looks good" limit) — a very short/tight
+        # leg's span could otherwise reach right up to that provider
+        # ceiling, framing so close the map reads as an abstract
+        # block-level crop instead of a recognizable street view.
+        optimal_zoom = min(optimal_zoom, self.MAX_ZOOM_LEVEL, tuning.RESIDENTIAL_MAX_ZOOM)
+
+        # Zoom floor only for genuinely short/local legs — gated on the
+        # straight-line distance between the two pins (immune to a
+        # detour/loop inflating the padded span above) so a long car/ferry
+        # leg never gets dragged up to a street-level zoom, which would
+        # multiply its tile count ~4x per zoom level jumped. Skipped
+        # entirely for the wide establishing shot (apply_min_zoom=False) —
+        # that tile is meant to look zoomed OUT, so a min-zoom floor would
+        # defeat its whole purpose.
+        if apply_min_zoom:
+            pin_distance_meters = math.hypot(
+                (end_lat - start_lat) * meters_per_deg_lat,
+                (end_lon - start_lon) * meters_per_deg_lon,
+            )
+            if pin_distance_meters <= tuning.RESIDENTIAL_MIN_ZOOM_MAX_PIN_DISTANCE_M:
+                optimal_zoom = max(
+                    optimal_zoom, min(tuning.RESIDENTIAL_MIN_ZOOM, self.MAX_ZOOM_LEVEL)
+                )
 
         # 3. Adjust Bounding Box to Target Aspect Ratio
         out_w, out_h = output_size
@@ -303,27 +387,105 @@ class TileDownloader:
             expansion = (((e - w) * lon_scale) / target_ratio - (n - s)) / 2.0
             s, n = s - expansion, n + expansion
 
-        # 4. Fetch Map Tiles with Fallback
+        # Bias the box upward (toward higher latitude) so the route's own
+        # center lands in the upper portion of the frame instead of dead
+        # center — leaves genuine breathing room at the bottom for the
+        # summary bar to sit over without visually cutting into what
+        # would otherwise read as a centered route. Only for the actual
+        # per-frame chunk tile (apply_min_zoom=True) — the wide
+        # establishing shot never has the bar composited on top of it.
+        if apply_min_zoom:
+            lat_span = n - s
+            target_fraction_from_top = 0.5 - tuning.RESIDENTIAL_MAP_BOTTOM_BAR_FRACTION / 2.0
+            new_n = center_lat + target_fraction_from_top * lat_span
+            s, n = new_n - lat_span, new_n
+
+        # Safety clamp: neither pin is allowed to end up within
+        # RESIDENTIAL_PIN_EDGE_MARGIN of any edge, however the box above
+        # got centered/capped — a zigzagging path (several switchbacks
+        # all leaning the same direction, none of them a single dominant
+        # loop the cap above would catch) can still drag the path-bbox
+        # center far enough that a pin ends up almost cut off. Translates
+        # the box (same span, so zoom is untouched) just enough to bring
+        # an offending pin back to that margin — path-centered framing is
+        # still the default the rest of this function computes, this
+        # only intervenes in the specific case a pin would otherwise be
+        # nearly or fully out of frame.
+        lat_span, lon_span = n - s, e - w
+        margin = tuning.RESIDENTIAL_PIN_EDGE_MARGIN
+        for pin_lat, pin_lon in ((start_lat, start_lon), (end_lat, end_lon)):
+            lo, hi = s + lat_span * margin, n - lat_span * margin
+            if pin_lat < lo:
+                s, n = s - (lo - pin_lat), n - (lo - pin_lat)
+            elif pin_lat > hi:
+                s, n = s + (pin_lat - hi), n + (pin_lat - hi)
+            lo, hi = w + lon_span * margin, e - lon_span * margin
+            if pin_lon < lo:
+                w, e = w - (lo - pin_lon), e - (lo - pin_lon)
+            elif pin_lon > hi:
+                w, e = w + (pin_lon - hi), e + (pin_lon - hi)
+
+        return w, s, e, n, optimal_zoom, target_ratio
+
+    # [Map/Util] Fetch (with zoom-decrement fallback), crop, resize, and
+    # save — the actual network + image-IO half of a residential fetch,
+    # shared by fetch_residential_chunk and fetch_residential_wide.
+    def _fetch_and_save(
+        self,
+        w: float, s: float, e: float, n: float,
+        zoom: int,
+        target_ratio: float,
+        output_filename: str,
+        output_size: Tuple[int, int],
+    ) -> Tuple[float, float, float, float]:
         img, extent = None, None
-        while optimal_zoom > 0:
+        while zoom > 0:
             try:
-                img, extent = self._bounds2img_safe(w, s, e, n, optimal_zoom)
+                img, extent = self._bounds2img_safe(w, s, e, n, zoom)
                 break
             except Exception:
-                optimal_zoom -= 1
+                zoom -= 1
 
         if img is None or extent is None:
             raise RuntimeError("Failed to download map tiles for chunk.")
 
-        # 5. Crop, Resize, and Save Image
         final_path = self._force_png_path(output_filename)
         cropped_img, new_extent = self._crop_to_aspect_ratio(img, extent, target_ratio)
-        
+
         Image.fromarray(cropped_img).resize(
             output_size, Image.Resampling.LANCZOS
         ).convert("RGB").save(final_path)
 
         return new_extent
+
+    # [Map] Fetch a residential chunk image based on a DataFrame of lat/lon points
+    def fetch_residential_chunk(
+        self,
+        chunk_df: pd.DataFrame,
+        output_filename: str,
+        output_size: Tuple[int, int] = (1920, 1080),
+    ) -> Tuple[float, float, float, float]:
+        """Fetches and crops map tiles for a specific route segment, ensuring proper aspect ratio."""
+        w, s, e, n, zoom, target_ratio = self._compute_residential_bbox(chunk_df, output_size)
+        return self._fetch_and_save(w, s, e, n, zoom, target_ratio, output_filename, output_size)
+
+    # [Map] Wide establishing-shot variant of fetch_residential_chunk — same
+    # chunk, a looser bbox (tuning.RESIDENTIAL_WIDE_BBOX_MULTIPLIER) and no
+    # min-zoom floor, so it reads as "zoomed out" next to the tight tile
+    # it's cross-faded into (see waypoints.py's leg intro sequence).
+    def fetch_residential_wide(
+        self,
+        chunk_df: pd.DataFrame,
+        output_filename: str,
+        output_size: Tuple[int, int] = (1920, 1080),
+    ) -> Tuple[float, float, float, float]:
+        w, s, e, n, zoom, target_ratio = self._compute_residential_bbox(
+            chunk_df,
+            output_size,
+            bbox_multiplier=tuning.RESIDENTIAL_WIDE_BBOX_MULTIPLIER,
+            apply_min_zoom=False,
+        )
+        return self._fetch_and_save(w, s, e, n, zoom, target_ratio, output_filename, output_size)
 
     # [Map/Util] Crop an image to a specific aspect ratio and adjust the extent accordingly
     def _crop_to_aspect_ratio(

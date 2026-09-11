@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from services.vdoprocessing.videopipeline.helpers import project_video_dir, safe_label as _video_safe_label
+
 
 def _output_dir_from_config(job_config_path: str) -> str:
     """Every job_config.json carries its own project folder as
@@ -21,15 +23,7 @@ def _output_dir_from_config(job_config_path: str) -> str:
     except (OSError, json.JSONDecodeError):
         pass
     base_dir = Path(directory_path) if directory_path else config_path.parent
-    return str(base_dir / "video")
-
-
-def _video_safe_label(label: Any, fallback: str) -> str:
-    """Match the residential renderer's label sanitization for shared basenames."""
-    safe_label = "".join(
-        char for char in str(label) if char.isalnum() or char in (" ", "_", "-")
-    ).strip().replace(" ", "_")
-    return safe_label or fallback
+    return str(project_video_dir(base_dir))
 
 
 def _load_tts_waypoints(job_config_path: str) -> tuple[Path, list]:

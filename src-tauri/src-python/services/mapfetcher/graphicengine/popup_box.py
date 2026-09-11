@@ -1,7 +1,7 @@
 """Cinematic pause overlay and popup/HUD card rendering."""
 
 import os
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 import cv2
 import numpy as np
@@ -29,7 +29,11 @@ class _PopupBoxMixin:
         actually draw for a "beside the pin" card at this card_scale —
         assumes a label is present (has_label=True), a safe upper-bound
         estimate for collision-avoidance sizing even on the rare card with
-        no real label."""
+        no real label. Sized for a WORST-CASE two-line label (see
+        _fit_label_caption) since this is called without knowing the
+        actual label text — a one-line label just leaves a little extra
+        clearance below its card instead of the two cards ever visually
+        overlapping because this estimate came in short."""
         target_ratio = 16.0 / 9.0
         target_img_w = int(self.BESIDE_CARD_BASE_W * card_scale)
         target_img_h = int(target_img_w / target_ratio)
@@ -37,8 +41,45 @@ class _PopupBoxMixin:
         font_size = max(
             11, int(self.font_size * tuning.POPUP_LABEL_FONT_SCALE_BESIDE * card_scale)
         )
-        text_block_h = font_size + 14
+        line_gap = 4
+        text_block_h = font_size * 2 + line_gap + 14
         return target_img_w + border * 2, target_img_h + border * 2 + text_block_h
+
+    # Minimum caption font size _fit_label_caption will shrink to before
+    # giving up and letting a still-too-wide second line clip — matches
+    # the floor every other font-size calc in this file already uses.
+    _LABEL_MIN_FONT_SIZE = 11
+
+    def _fit_label_caption(
+        self, draw: ImageDraw.ImageDraw, text: str, font: Any, font_candidates: List[str], max_width: float
+    ) -> Tuple[List[str], Any]:
+        """Fits a popup's label caption within max_width — one line if it
+        already fits, otherwise two, split at whichever character position
+        best balances the two resulting line widths (most labels here are
+        Japanese place names/addresses with no spaces to break on, so a
+        word-boundary wrap isn't an option). Shrinks the font (down to
+        _LABEL_MIN_FONT_SIZE) only if the longer of the two lines still
+        doesn't fit even after splitting. Returns (lines, font) — `font`
+        may be a smaller instance than the one passed in."""
+        if draw.textlength(text, font=font) <= max_width:
+            return [text], font
+
+        best_split, best_diff = 1, None
+        for i in range(1, len(text)):
+            diff = abs(
+                draw.textlength(text[:i], font=font) - draw.textlength(text[i:], font=font)
+            )
+            if best_diff is None or diff < best_diff:
+                best_diff, best_split = diff, i
+        lines = [text[:best_split], text[best_split:]]
+
+        size = font.size
+        longest = max(draw.textlength(line, font=font) for line in lines)
+        while longest > max_width and size > self._LABEL_MIN_FONT_SIZE:
+            size = max(self._LABEL_MIN_FONT_SIZE, int(size * 0.9))
+            font = self._load_font(font_candidates, size)
+            longest = max(draw.textlength(line, font=font) for line in lines)
+        return lines, font
 
     def popup_card_geometry(
         self, popup_info: Dict, w: int, h: int
@@ -63,11 +104,32 @@ class _PopupBoxMixin:
             if is_beside
             else tuning.POPUP_LABEL_FONT_SCALE_CORNER
         )
+        # Caller override (e.g. the overview intro's preview cards, which
+        # want a larger photo via card_scale but NOT a proportionally
+        # larger caption) — defaults to 1.0, a no-op, for every ordinary
+        # popup.
+        font_scale *= float(popup_info.get("label_font_scale", 1.0))
         font_size = max(11, int(self.font_size * font_scale * card_scale))
-        has_label = RouteGeometryProcessor.is_real_label(popup_info.get("label"))
-        text_block_h = (font_size + 14) if has_label else 0
-        total_h = target_img_h + (border * 2) + text_block_h
         total_w = target_img_w + (border * 2)
+        has_label = RouteGeometryProcessor.is_real_label(popup_info.get("label"))
+        # "cover" (settings/job_config image_display: "cover") — the photo
+        # fills the entire card with no separate caption strip below it;
+        # the label overlays the photo itself instead (see
+        # render_popup_box), so it adds no extra height here.
+        is_cover = str((popup_info.get("data") or {}).get("image_display", "")).lower() == "cover"
+        text_block_h = 0
+        if has_label and not is_cover:
+            probe_draw = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+            font = self._load_font(self.FONT_CANDIDATES_REGULAR, font_size)
+            label_lines, font = self._fit_label_caption(
+                probe_draw, popup_info["label"], font,
+                self.FONT_CANDIDATES_REGULAR, max(1, total_w - 16),
+            )
+            line_gap = 4
+            text_block_h = (
+                font.size * len(label_lines) + line_gap * (len(label_lines) - 1) + 14
+            )
+        total_h = target_img_h + (border * 2) + text_block_h
         margin = 24
 
         if not is_beside:
@@ -226,23 +288,35 @@ class _PopupBoxMixin:
                     if is_beside
                     else tuning.POPUP_LABEL_FONT_SCALE_CORNER
                 )
+                # Must match popup_card_geometry's own font_scale exactly
+                # (that's what text_block_h/total_h were sized against) —
+                # see its own comment on label_font_scale.
+                font_scale *= float(popup_info.get("label_font_scale", 1.0))
                 font_size = max(11, int(self.font_size * font_scale * card_scale))
-                # Bold, not regular — Noto Sans's regular weight reads too
-                # thin for a short caption at this size.
-                font = self._load_font(self.FONT_CANDIDATES_BOLD, font_size)
+                is_cover = str(popup_info["data"].get("image_display", "")).lower() == "cover"
+                if is_cover:
+                    # Sized off the FIXED 1:4 scrim zone (ph // 5 — same
+                    # formula the scrim itself uses below), not off
+                    # font_size*multiplier — a flat multiplier ignored how
+                    # big the photo/card actually was, so a short label on
+                    # a small card could render far larger than its
+                    # reserved text zone could actually hold (clipping
+                    # into/past the photo instead of the intended bold-
+                    # but-contained title-card look).
+                    cover_scrim_h = max(1, ph // 5)
+                    font = self._load_font(
+                        self.FONT_CANDIDATES_BOLD,
+                        max(self._LABEL_MIN_FONT_SIZE, int(cover_scrim_h * 0.55)),
+                    )
+                else:
+                    # Regular, not bold — LINE Seed JP's regular weight reads
+                    # clearly enough at this size (unlike the old Kosugi Maru
+                    # default this used to be bumped to bold for), and matches
+                    # the smaller, lighter caption look under the photo.
+                    font = self._load_font(self.FONT_CANDIDATES_REGULAR, font_size)
                 has_label = RouteGeometryProcessor.is_real_label(label_text)
 
                 pil_canvas = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-                draw = ImageDraw.Draw(pil_canvas)
-
-                shadow_box = [
-                    box_x - 4,
-                    box_y - 2,
-                    box_x + total_w + 4,
-                    box_y + total_h + 4,
-                ]
-                draw.rounded_rectangle(shadow_box, radius=18, fill=(0, 0, 0, 25))
-                pil_canvas = pil_canvas.filter(ImageFilter.GaussianBlur(radius=6))
                 draw = ImageDraw.Draw(pil_canvas)
 
                 # Border color is stored BGR (like every other color in
@@ -254,14 +328,54 @@ class _PopupBoxMixin:
                 # color) so the card visually ties back to its pin — used
                 # by the recap and flow-through cards, where several
                 # differently-colored pins can be on screen at once.
-                border_color = popup_info.get("border_color", self.card_border_color)
+                # Computed BEFORE the shadow below so the shadow can tint
+                # to this same color instead of a flat neutral black.
+                # `or` (not just a .get default) — a caller can legitimately
+                # pass "border_color": None (e.g. a not-yet-"arrived" pin's
+                # own color resolves to None — see pins.py's _pin_color),
+                # and a plain dict .get(key, default) only falls back to
+                # the default when the KEY is absent, not when it's present
+                # with value None.
+                border_color = popup_info.get("border_color") or self.card_border_color
                 border_rgba = tuple(reversed(border_color)) + (255,)
+
+                # A softer, more pronounced "elevated card" shadow — wider
+                # blur radius and padding, and offset further down than up
+                # (light-from-above cue) so the card reads as genuinely
+                # floating above the map rather than merely outlined
+                # against it. Tinted to the card's own border color
+                # (low alpha) rather than plain black, so the shadow
+                # visually ties back to the same color as the border/pin
+                # instead of reading as a generic drop-shadow.
+                shadow_box = [
+                    box_x - 6,
+                    box_y - 4,
+                    box_x + total_w + 6,
+                    box_y + total_h + 14,
+                ]
+                # Neutral black for the cover style specifically — no
+                # border to tie a colored shadow back to, and a colored
+                # glow around an otherwise borderless full-bleed photo
+                # read as a border that was never actually removed.
+                shadow_rgba = (0, 0, 0, 60) if is_cover else border_rgba[:3] + (60,)
+                draw.rounded_rectangle(shadow_box, radius=18, fill=shadow_rgba)
+                pil_canvas = pil_canvas.filter(ImageFilter.GaussianBlur(radius=11))
+                draw = ImageDraw.Draw(pil_canvas)
+
                 card_box = [box_x, box_y, box_x + total_w, box_y + total_h]
                 draw.rounded_rectangle(
                     card_box,
                     radius=14,
                     fill=(255, 255, 255, 250),
-                    outline=border_rgba if self.card_border_thickness else None,
+                    # No outline for the cover style — the photo fills
+                    # the whole card, so a colored border would frame it
+                    # like the old pip card instead of reading as a
+                    # borderless full-bleed poster.
+                    outline=(
+                        border_rgba
+                        if self.card_border_thickness and not is_cover
+                        else None
+                    ),
                     width=self.card_border_thickness,
                 )
 
@@ -279,13 +393,62 @@ class _PopupBoxMixin:
 
                 if has_label:
                     draw_text_layer = ImageDraw.Draw(base_pil)
-                    text_bbox = draw_text_layer.textbbox((0, 0), label_text, font=font)
-                    text_w = text_bbox[2] - text_bbox[0]
-                    text_x = box_x + (total_w - text_w) // 2
-                    text_y = photo_y + ph + 10
-                    draw_text_layer.text(
-                        (text_x, text_y), label_text, font=font, fill=(40, 40, 40, 255)
+                    # Wraps to a second line (or shrinks the font, as a last
+                    # resort) rather than letting a long place name/address
+                    # run past the card's own edges — see _fit_label_caption.
+                    label_lines, label_font = self._fit_label_caption(
+                        draw_text_layer, label_text, font,
+                        self.FONT_CANDIDATES_BOLD if is_cover else self.FONT_CANDIDATES_REGULAR,
+                        max(1, (pw - 20) if is_cover else (total_w - 16)),
                     )
+                    line_gap = 4
+                    if is_cover:
+                        # Overlaid in the top-left corner, directly on
+                        # the photo — a dark gradient scrim (fading out
+                        # top-to-bottom, not a solid box) sits behind the
+                        # text just to keep it legible over any part of
+                        # the image, rather than covering the photo with
+                        # an opaque caption strip the way the default
+                        # style does below it.
+                        #
+                        # The scrim zone is a FIXED 1:4 ratio of the
+                        # photo's own height (not sized off the text
+                        # content) — text : picture — so the split stays
+                        # consistent across cards regardless of how much
+                        # label text there is, and the text itself sits
+                        # vertically CENTERED within that zone (equal
+                        # top/bottom margin) rather than pinned to its
+                        # own top edge, for a symmetric, balanced look.
+                        pad = 10
+                        text_h = (
+                            label_font.size * len(label_lines)
+                            + line_gap * (len(label_lines) - 1)
+                        )
+                        scrim_h = max(1, ph // 5)
+                        scrim = Image.new("RGBA", (pw, scrim_h), (0, 0, 0, 0))
+                        scrim_draw = ImageDraw.Draw(scrim)
+                        for gy in range(scrim_h):
+                            t = gy / max(1, scrim_h - 1)
+                            scrim_draw.line(
+                                [(0, gy), (pw, gy)], fill=(0, 0, 0, int(150 * (1 - t)))
+                            )
+                        base_pil.paste(scrim, (photo_x, photo_y), scrim)
+                        line_y = photo_y + max(pad, (scrim_h - text_h) // 2)
+                        for line in label_lines:
+                            draw_text_layer.text(
+                                (photo_x + pad, line_y),
+                                line, font=label_font, fill=(255, 255, 255, 255),
+                            )
+                            line_y += label_font.size + line_gap
+                    else:
+                        line_y = photo_y + ph + 10
+                        for line in label_lines:
+                            line_w = draw_text_layer.textlength(line, font=label_font)
+                            draw_text_layer.text(
+                                (box_x + (total_w - line_w) // 2, line_y),
+                                line, font=label_font, fill=(40, 40, 40, 255),
+                            )
+                            line_y += label_font.size + line_gap
 
                 f_frame = cv2.cvtColor(np.array(base_pil), cv2.COLOR_RGBA2BGR)
 

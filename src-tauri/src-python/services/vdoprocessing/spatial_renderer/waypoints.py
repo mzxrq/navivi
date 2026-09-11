@@ -10,9 +10,112 @@ from services.logger.progress import tracker
 from services.mapfetcher.mapfetcher import MapFetcher
 from services.mapfetcher.mapgeometry import RouteGeometryProcessor
 from services.vdoprocessing.vdoexporter import VideoExporter
+from services import tuning
 
 
 class _WaypointRenderMixin:
+    @staticmethod
+    def _ease_in_out(t: float) -> float:
+        """Same easing curve local_pan_generator.py uses for its Ken-Burns
+        pans — kept as its own copy rather than imported since that module
+        is coupled to its own photo pipeline/VideoWriter."""
+        return 0.5 - 0.5 * math.cos(math.pi * t)
+
+    def _play_leg_summary_card(
+        self,
+        video: VideoExporter,
+        base_frame: np.ndarray,
+        seg_card: np.ndarray,
+        fps: int,
+        fade_sec: float,
+        clip_hold_sec: float,
+        play_exit: bool = True,
+        play_hold: bool = True,
+        margin: int = 20,
+        corner: str = "bottom_right",
+    ) -> None:
+        """Slides this leg's summary card/bar up from off-screen at the
+        bottom (rather than just fading it in in place), holds it, then
+        (when `play_exit`) slides it back down and out — same ease-out-
+        cubic shape _popup_slide_offset_y uses elsewhere for the
+        overview's own popup cards, just with a distance sized to the
+        card's own height so it starts genuinely below the frame instead
+        of a few px below its resting spot. `play_exit=False` for a leg
+        whose clip ends right here (no next frame for a slide-out to play
+        into) — it just holds until the clip cuts. `play_hold=False`
+        skips the static hold entirely (entrance only) — used when the
+        caller wants to composite the hold/exit itself on top of OTHER,
+        already-moving frames instead of a static one (see
+        render_waypoints' own intro_card_hold_frames/
+        intro_card_exit_frames) so the card stays visible while the route
+        animation is already playing, not just before it starts.
+        `margin`/`corner` forward to composite_card_on_frame — pass
+        margin=0 for a create_leg_summary_bar full-width bar so it sits
+        flush against both side edges instead of floating with the usual
+        card margin."""
+        card_h = seg_card.shape[0]
+        slide_distance = card_h + 40
+        fade_frames = max(1, int(fade_sec * fps))
+
+        for f in range(fade_frames):
+            t = (f + 1) / fade_frames
+            eased = 1 - (1 - t) ** 3
+            video.write(
+                self.graphics.composite_card_on_frame(
+                    base_frame, seg_card, alpha=t, margin=margin, corner=corner,
+                    slide_offset_y=slide_distance * (1 - eased),
+                )
+            )
+
+        if play_hold:
+            held_frame = self.graphics.composite_card_on_frame(
+                base_frame, seg_card, alpha=1.0, margin=margin, corner=corner,
+            )
+            for _ in range(max(0, int(clip_hold_sec * fps) - fade_frames)):
+                video.write(held_frame)
+
+        if play_exit:
+            for f in range(fade_frames):
+                t = (f + 1) / fade_frames
+                eased = 1 - (1 - t) ** 3
+                video.write(
+                    self.graphics.composite_card_on_frame(
+                        base_frame, seg_card, alpha=1.0 - t, margin=margin, corner=corner,
+                        slide_offset_y=slide_distance * eased,
+                    )
+                )
+
+    def _play_leg_wide_intro(
+        self, video: VideoExporter, res_data: Dict, current_bg: np.ndarray, fps: int
+    ) -> None:
+        """Holds this leg's wide establishing shot, then crossfades (scale-
+        free — both tiles already share the same canvas size) into the
+        close/tight tile the rest of this leg's clip will animate on top
+        of. A no-op when this res_data has no wide tile (only a leg's
+        first chunk ever does — see mapfetcher.py's is_first_chunk_of_leg)
+        or the wide tile can't be read/doesn't match current_bg's size."""
+        wide_path = res_data.get("wide_img_path")
+        if not wide_path:
+            return
+        wide_bg = self.graphics.read_image_safe(str(wide_path))
+        if wide_bg is None:
+            return
+        if wide_bg.shape[:2] != current_bg.shape[:2]:
+            # Both tiles are fetched at the same output_size, but
+            # current_bg may have been snapped to even dimensions after
+            # the wide tile was already saved — resize rather than skip
+            # the whole intro over a 1px mismatch.
+            wide_bg = cv2.resize(wide_bg, (current_bg.shape[1], current_bg.shape[0]))
+
+        hold_frames = max(1, int(tuning.RESIDENTIAL_WIDE_HOLD_SECONDS * fps))
+        zoom_frames = max(1, int(tuning.RESIDENTIAL_WIDE_ZOOM_SECONDS * fps))
+        for _ in range(hold_frames):
+            video.write(wide_bg)
+        for frame_i in range(zoom_frames):
+            t = self._ease_in_out(frame_i / max(1, zoom_frames - 1))
+            blended = cv2.addWeighted(wide_bg, 1.0 - t, current_bg, t, 0.0)
+            video.write(blended)
+        self.last_frame = current_bg
     def render_waypoints(self, res_sequence: List[Dict], fps: int) -> List[str]:
         output_paths = []
         show_segment_summary = self.config.get("show_segment_summary", True)
@@ -29,7 +132,34 @@ class _WaypointRenderMixin:
         # route that passes through "大阪市" multiple times), so matching
         # by label would collapse them all onto whichever one happens to
         # come first in job_waypoints.
+        # job_config.json's own "waypoints" array holds only the
+        # INTERMEDIATE stops — the trip's true start/end live in separate
+        # "start_point"/"end_point" keys (see render_step.py) — so a raw
+        # 0-indexed position here is one less than that waypoint's real
+        # index in the FULL route (points[0] is always the true start).
+        # Stored/returned as `_pos + 1` throughout so it lines up with
+        # _pin_label_and_color's own index==0 ("S") / index==total-1
+        # ("E") checks, which are written assuming the full route's index
+        # space — without the +1, whichever waypoint happened to sit at
+        # job_waypoints position 0 got mislabeled "S" (and the one at the
+        # last position "E"), overwriting its real visit-order number.
         _wp_by_id: Dict[str, Tuple[int, int, bool]] = {}
+        # Geographic fallback candidates — every job_waypoint PLUS the
+        # true start/end points (which live outside job_waypoints
+        # entirely, in their own job_config keys) — each as
+        # (lat, lng, index, order, is_stopby). Used instead of matching
+        # by label text: this route revisits the same generic place name
+        # ("大阪市") at several genuinely different physical locations, so
+        # comparing real coordinates is the only way to actually tell
+        # those apart — a label match would (and did) conflate them.
+        _location_candidates: List[Tuple[float, float, int, Optional[int], bool]] = []
+        _job_config_for_resolve = self._get_job_config() or {}
+        _start_pt = _job_config_for_resolve.get("start_point") or {}
+        _end_pt = _job_config_for_resolve.get("end_point") or {}
+        if _start_pt.get("lat") is not None:
+            _location_candidates.append(
+                (_start_pt["lat"], _start_pt.get("lng", _start_pt.get("lon")), 0, None, False)
+            )
         _order = 0
         for _pos, _jw in enumerate(job_waypoints):
             # job_config.json's own key is "isStopBy" (camelCase, as saved
@@ -41,22 +171,47 @@ class _WaypointRenderMixin:
                 _order += 1
             _wp_id = _jw.get("id")
             if _wp_id:
-                _wp_by_id[_wp_id] = (_pos, _order, _is_stopby)
+                _wp_by_id[_wp_id] = (_pos + 1, _order, _is_stopby)
+            _lat, _lng = _jw.get("lat"), _jw.get("lng", _jw.get("lon"))
+            if _lat is not None and _lng is not None:
+                _location_candidates.append((_lat, _lng, _pos + 1, _order, _is_stopby))
+        _total_route_points = len(job_waypoints) + 2
+        if _end_pt.get("lat") is not None:
+            _location_candidates.append((
+                _end_pt["lat"], _end_pt.get("lng", _end_pt.get("lon")),
+                _total_route_points - 1, None, False,
+            ))
+        # ~30m in degrees at this latitude — a real GPS/routing match
+        # should land far closer than this; anything farther means "no
+        # real match found" rather than a wrong one.
+        _LOCATION_MATCH_MAX_DEGREES = 0.0003
 
-        def _resolve_global_waypoint(waypoint_id: Optional[str], label: str):
+        def _resolve_global_waypoint(
+            waypoint_id: Optional[str], label: str,
+            lat: Optional[float] = None, lng: Optional[float] = None,
+        ):
             """Finds this leg endpoint's real position in the whole
             route's waypoint list and its 1-based visit order — by exact
-            "id" match when available (see _wp_by_id above), falling back
-            to a fuzzy label match (ambiguous when a label repeats, but
-            better than nothing) for older data saved before waypoints
-            carried an id. Needed because a leg's OWN first/last point
-            (index 0 / len-1 within just that leg) is not the trip's
-            actual start/end — using those local indices directly would
-            mislabel every leg's arrival pin "E" (and every leg's
-            departure pin "S"), not just the true first and last legs of
-            the whole route."""
+            "id" match when available (see _wp_by_id above), else by
+            nearest real coordinate among _location_candidates (this
+            route's own generic repeated place names make label-text
+            matching unreliable — see _location_candidates' own comment),
+            falling back to a fuzzy label match only as a last resort for
+            older data with neither an id nor usable lat/lng. Needed
+            because a leg's OWN first/last point (index 0 / len-1 within
+            just that leg) is not the trip's actual start/end — using
+            those local indices directly would mislabel every leg's
+            arrival pin "E" (and every leg's departure pin "S"), not just
+            the true first and last legs of the whole route."""
             if waypoint_id and waypoint_id in _wp_by_id:
                 return _wp_by_id[waypoint_id]
+            if lat is not None and lng is not None and _location_candidates:
+                best = min(
+                    _location_candidates,
+                    key=lambda c: (c[0] - lat) ** 2 + (c[1] - lng) ** 2,
+                )
+                if math.hypot(best[0] - lat, best[1] - lng) <= _LOCATION_MATCH_MAX_DEGREES:
+                    return best[2], best[3], best[4]
             if not label:
                 return None
             order = 0
@@ -66,7 +221,7 @@ class _WaypointRenderMixin:
                     order += 1
                 jw_lbl = str(jw.get("label", ""))
                 if jw_lbl and (jw_lbl in label or label in jw_lbl):
-                    return pos, order, is_stopby
+                    return pos + 1, order, is_stopby
             return None
 
         for i, res_data in enumerate(res_sequence):
@@ -96,11 +251,31 @@ class _WaypointRenderMixin:
             show_map_border = self.config.get("waypoint_map_border", True)
             if show_map_border:
                 self.graphics.draw_frame_border(current_bg)
+            if self.config.get("show_compass", True):
+                self.graphics.draw_compass(current_bg)
 
             res_points = res_data["points"]
             res_labels = res_data["labels"]
             res_popups = res_data.get("popups", [None] * len(res_points))
             res_mode = str(res_data.get("mode", "walking")).lower()
+
+            # This leg's own departure/arrival place names, cleaned of the
+            # "出発: "/"到着: " prefixes route_labels carries (see
+            # render_step.py) — used by the per-leg summary card's route
+            # line ("{from} → {to}") further down.
+            def _clean_leg_label(raw: Optional[str]) -> str:
+                if not raw:
+                    return ""
+                return (
+                    raw.replace(tuning.PIPELINE_LABELS["start_prefix"], "")
+                    .replace(tuning.PIPELINE_LABELS["stop_prefix"], "")
+                    .replace(tuning.PIPELINE_LABELS["start_prefix"].strip(": "), "")
+                    .replace(tuning.PIPELINE_LABELS["stop_prefix"].strip(": "), "")
+                    .strip()
+                )
+
+            leg_from_label = _clean_leg_label(res_labels[0] if res_labels else None)
+            leg_to_label = _clean_leg_label(res_labels[-1] if res_labels else None)
 
             total_duration = res_data.get(
                 "segment_duration", self.config.get("res_duration", 12.0)
@@ -218,9 +393,29 @@ class _WaypointRenderMixin:
                 .replace(" ", "_")
                 or f"leg{i+1}"
             )
-            chunk_filename = f"02_waypoint_{i + 1:02d}_{safe_suffix}.mp4"
+            # 1-based departure-waypoint RAW position when render_step.py
+            # supplies one (see its "start_pos" field) — falls back to the
+            # old purely-sequential `i` for any other caller that doesn't.
+            # render_step.py's audio-mux loop and timeline_step.py both
+            # parse this number back out of the filename (RESIDENTIAL_LEG_RE)
+            # to find this leg's correct narration by position rather than
+            # a blind per-clip counter, which stop-by leg-merging can throw
+            # out of sync with a purely sequential `i`.
+            leg_file_num = res_data.get("start_pos")
+            leg_file_num = (leg_file_num + 1) if leg_file_num is not None else (i + 1)
+            chunk_filename = f"02_waypoint_{leg_file_num:02d}_{safe_suffix}.mp4"
 
             video = VideoExporter(str(self.out_dir / chunk_filename), w, h, fps)
+
+            # Wide establishing shot -> zoom crossfade into this leg's
+            # close/tight tile — plays once per leg (only res_data entries
+            # for a leg's first chunk carry a wide_img_path at all), before
+            # anything else (pins, popups, animation) is drawn. Off by
+            # default (settings.show_leg_wide_intro) — the clip now opens
+            # straight on the waypoint-level map instead of a "big map"
+            # beat first.
+            if self.config.get("show_leg_wide_intro", False):
+                self._play_leg_wide_intro(video, res_data, current_bg, fps)
 
             # This leg's departure/arrival waypoints, resolved to their
             # REAL position in the whole route (see _resolve_global_waypoint
@@ -234,13 +429,49 @@ class _WaypointRenderMixin:
             # this leg is actually the trip's true first/last one.
             start_label = res_labels[0] if res_labels else ""
             end_label = res_labels[-1] if res_labels else ""
+            _res_lats, _res_lons = res_data.get("lats"), res_data.get("lons")
             start_match = _resolve_global_waypoint(
-                res_data.get("start_waypoint_id"), start_label
+                res_data.get("start_waypoint_id"), start_label,
+                lat=_res_lats[0] if _res_lats is not None and len(_res_lats) else None,
+                lng=_res_lons[0] if _res_lons is not None and len(_res_lons) else None,
             )
             end_match = _resolve_global_waypoint(
-                res_data.get("end_waypoint_id"), end_label
+                res_data.get("end_waypoint_id"), end_label,
+                lat=_res_lats[-1] if _res_lats is not None and len(_res_lats) else None,
+                lng=_res_lons[-1] if _res_lons is not None and len(_res_lons) else None,
             )
-            total_wp = len(job_waypoints)
+            # +2 for the true start/end points, which live outside
+            # job_waypoints entirely (see _resolve_global_waypoint's own
+            # comment) — matches the +1 offset applied to every resolved
+            # index above, so _pin_label_and_color's index==total-1 ("E")
+            # check lines up with the real last position in the FULL
+            # route instead of the last position within job_waypoints
+            # alone.
+            total_wp = len(job_waypoints) + 2
+
+            # Merged-in stop-bys along this leg (see mapfetcher.py's
+            # merge_stopbys) — drawn as plain pins for the whole leg's
+            # clip, same as res_named's landmark sprites just below (always
+            # visible from frame 1, not gated on the traveler having
+            # actually reached them yet). Carries its own popup_image (if
+            # it has one) so passing/arriving near it can still show a
+            # brief photo card — see the pass-by trigger check in the
+            # per-frame loop below — rather than staying a silent dot for
+            # the whole clip.
+            mid_marker_pins = [
+                {
+                    "x": m["px"][0], "y": m["px"][1], "index": -1, "order": None,
+                    "label": m.get("label"),
+                    "data": {
+                        "is_stopby": True,
+                        "popup_image": m.get("popup_image"),
+                        "freeze_seconds": m.get("freeze_seconds") or 2.0,
+                        "image_display": m.get("image_display", "cover"),
+                        "triggered": False,
+                    },
+                }
+                for m in res_data.get("mid_markers", [])
+            ]
 
             def _leg_pin(x, y, label, data, match):
                 # A resolved match carries this waypoint's real position
@@ -266,6 +497,31 @@ class _WaypointRenderMixin:
             start_pin_label, start_pin_color = self._pin_label_and_color(start_wp, total_wp)
             end_pin_label, end_pin_color = self._pin_label_and_color(end_wp, total_wp)
 
+            # Built ONCE, always (not just when the popup-card intro below
+            # plays) — the full route line for this whole leg (a preview
+            # of where it's headed, at reduced opacity so it doesn't read
+            # as an already-traveled path — that's still drawn fresh,
+            # frame by frame, once the animation itself starts) plus
+            # every pin along it (mid-route stop-bys, and the departure/
+            # arrival points). Both the popup-card intro hold below AND
+            # the summary bar intro use THIS frame as their base — a
+            # previous version had the summary bar slide up on a bare
+            # current_bg with none of this drawn on it at all.
+            route_preview_frame = current_bg.copy()
+            if len(res_smooth_path) > 1:
+                overlay = route_preview_frame.copy()
+                cv2.polylines(
+                    overlay,
+                    [np.asarray(res_smooth_path, dtype=np.int32)],
+                    False, self.graphics.line_color, self.graphics.line_thickness,
+                    cv2.LINE_AA,
+                )
+                cv2.addWeighted(overlay, 0.45, route_preview_frame, 0.55, 0, route_preview_frame)
+            for marker_pin in mid_marker_pins:
+                self._draw_pin(route_preview_frame, marker_pin, total_wp)
+            self._draw_pin(route_preview_frame, start_wp, total_wp)
+            self._draw_pin(route_preview_frame, end_wp, total_wp)
+
             # Intro beat: show the departure and arrival pins (each with a
             # leader-lined popup card, when they have a photo) together on
             # the still, zoomed-in leg map before the route animates —
@@ -273,7 +529,7 @@ class _WaypointRenderMixin:
             # intro, scoped to this leg's own start/end.
             waypoint_intro_freeze = float(self.config.get("waypoint_intro_freeze", 2.0))
             if waypoint_intro_freeze > 0 and len(res_points) >= 2:
-                intro_frame = current_bg.copy()
+                intro_frame = route_preview_frame.copy()
                 popup_cards = []
                 for wp, wp_color in ((start_wp, start_pin_color), (end_wp, end_pin_color)):
                     if wp["data"].get("popup_image"):
@@ -303,6 +559,42 @@ class _WaypointRenderMixin:
                 for _ in range(int(waypoint_intro_freeze * fps)):
                     video.write(intro_frame)
                 self.last_frame = intro_frame
+                route_preview_frame = intro_frame
+
+            # Show this leg's own summary bar UP FRONT too, right before
+            # the traveler starts moving — not just at arrival (see
+            # show_segment_summary further down) — so the viewer knows
+            # where this leg is headed, by what mode, and how long it'll
+            # take before watching it play out. Only the ENTRANCE (slide
+            # up) plays here, as a brief static beat on route_preview_frame
+            # — the HOLD and EXIT are deliberately NOT played yet. They're
+            # composited instead on top of the real travel animation's own
+            # first frames below (see intro_card_hold_frames/
+            # intro_card_exit_frames), so the card is still genuinely
+            # visible while the route is already moving, not fully gone
+            # before any motion starts.
+            intro_seg_card = None
+            intro_card_hold_frames = 0
+            intro_card_exit_frames = 0
+            intro_card_slide_distance = 0.0
+            if show_segment_summary:
+                intro_seg_card = self.graphics.create_leg_summary_bar(
+                    frame_width=w,
+                    distance_km=res_data.get("distance_km", 0.0),
+                    duration_seconds=seg_real_duration,
+                    mode=res_mode,
+                    from_label=leg_from_label,
+                    to_label=leg_to_label,
+                )
+                self._play_leg_summary_card(
+                    video, route_preview_frame, intro_seg_card, fps, fade_sec, clip_hold_sec,
+                    margin=0, play_exit=False, play_hold=False,
+                )
+                fade_frames_n = max(1, int(fade_sec * fps))
+                intro_card_hold_frames = max(0, int(clip_hold_sec * fps) - fade_frames_n)
+                intro_card_exit_frames = fade_frames_n
+                intro_card_slide_distance = intro_seg_card.shape[0] + 40
+                self.last_frame = route_preview_frame
 
             path_idx = 0
             prev_cx, prev_cy = None, None
@@ -330,6 +622,8 @@ class _WaypointRenderMixin:
                         current_bg = vid_frame
                         if show_map_border:
                             self.graphics.draw_frame_border(current_bg)
+                        if self.config.get("show_compass", True):
+                            self.graphics.draw_compass(current_bg)
 
                 p = res_smooth_path[path_idx]
                 frame = current_bg.copy()
@@ -355,13 +649,13 @@ class _WaypointRenderMixin:
                         sprite, anchor = res_landmark_sprites[lbl]
                         self.graphics.blit_sprite(frame, sprite, anchor, x, y)
 
+                    for marker_pin in mid_marker_pins:
+                        self._draw_pin(frame, marker_pin, total_wp)
+
                     smoothed_angle = self._smoothed_heading(
                         smoothed_angle, cx, cy, prev_cx, prev_cy
                     )
 
-                    self.graphics.draw_transport_icon(
-                        frame, cx, cy, current_frame, smoothed_angle, mode=res_mode
-                    )
                     if res_points:
                         # Same resolved label/color as the intro beat
                         # above (start_pin_label/end_pin_label) — this
@@ -381,6 +675,64 @@ class _WaypointRenderMixin:
                             number=end_pin_label,
                             color=end_pin_color,
                         )
+
+                    # Drawn LAST (on top of the S/E pins and mid-route
+                    # markers) — while the traveler is at or near either
+                    # pin, the mode icon used to end up hidden behind it
+                    # instead of visibly leading the animation.
+                    self.graphics.draw_transport_icon(
+                        frame, cx, cy, current_frame, smoothed_angle, mode=res_mode
+                    )
+
+                # Merged-in stop-bys (mid_marker_pins) with their own photo
+                # get a brief pip card as the traveler passes near them —
+                # not the full arrival treatment below (no hold-then-
+                # fullscreen, doesn't end the clip): this is a "passing
+                # by", not a real stop, so the card fades in over the
+                # still-live frame, holds briefly, then fades back out
+                # while the leg keeps animating.
+                for marker_pin in mid_marker_pins:
+                    if marker_pin["data"]["triggered"] or not marker_pin["data"].get("popup_image"):
+                        continue
+                    near_marker = (
+                        prev_cx is not None
+                        and prev_cy is not None
+                        and RouteGeometryProcessor.point_to_segment_distance(
+                            marker_pin["x"], marker_pin["y"], prev_cx, prev_cy, cx, cy
+                        )
+                        < (
+                            self.graphics.marker_radius
+                            + self.trigger_radius_padding["waypoint"]
+                        )
+                    )
+                    if near_marker:
+                        marker_pin["data"]["triggered"] = True
+                        pass_card = dict(marker_pin)
+                        pass_card["hud_corner"] = None
+                        pass_card["draw_leader_line"] = True
+                        pass_card["border_color"] = self._STOPBY_PIN_COLOR
+                        fade_frames = max(1, int(fade_sec * fps))
+                        hold_frames = max(1, int(
+                            float(marker_pin["data"].get("freeze_seconds", 2.0)) * fps
+                        ))
+                        for f in range(fade_frames):
+                            video.write(
+                                self.graphics.render_popup_box(
+                                    frame, pass_card, alpha=(f + 1) / fade_frames
+                                )
+                            )
+                        held_pass_frame = self.graphics.render_popup_box(
+                            frame, pass_card, alpha=1.0
+                        )
+                        for _ in range(max(0, hold_frames - fade_frames)):
+                            video.write(held_pass_frame)
+                        for f in range(fade_frames):
+                            video.write(
+                                self.graphics.render_popup_box(
+                                    frame, pass_card, alpha=1.0 - (f + 1) / fade_frames
+                                )
+                            )
+                        self.last_frame = frame
 
                 for popup in active_res_popups:
                     if popup["data"]["triggered"]:
@@ -407,6 +759,33 @@ class _WaypointRenderMixin:
                     )
                     if near_segment or just_arrived:
                         popup["data"]["triggered"] = True
+                        # This waypoint's own pin color — border_color was
+                        # never set on active_res_popups entries at all
+                        # before, so the popup card fell back to the
+                        # GLOBAL default card_border_color regardless of
+                        # which waypoint it belonged to, instead of
+                        # visually tying back to its own pin like every
+                        # other card in this codebase does. index==0 (the
+                        # departure) is already skipped above, so the only
+                        # two real cases left are "this popup IS the leg's
+                        # own arrival pin" (end_pin_color) or a genuine
+                        # intermediate point along the path with its own
+                        # photo, which reads as any other already-visited
+                        # numbered pin.
+                        # end_pin_color itself can legitimately be None
+                        # (_pin_color returns None for a not-yet-"arrived"
+                        # pin — see pins.py) — popup_box.py's own
+                        # border_color lookup is a plain dict .get(key,
+                        # default), which only falls back to the default
+                        # when the KEY is missing, not when it's present
+                        # with value None, so an unguarded None here
+                        # crashed render_popup_box instead of quietly
+                        # falling back.
+                        popup["border_color"] = (
+                            end_pin_color
+                            if popup["index"] == len(res_points) - 1
+                            else self.graphics.arrived_marker_color
+                        ) or self.graphics.marker_color
                         # Hold plain on the arrival frame for a beat before
                         # any fade/scale transition starts — without this,
                         # the fullscreen scale-up (or the cinematic-pause
@@ -423,37 +802,18 @@ class _WaypointRenderMixin:
                         # composited onto the destination photo afterward.
                         if show_segment_summary:
                             summary_shown_inline = True
-                            seg_card = self.graphics.create_summary_card(
+                            seg_card = self.graphics.create_leg_summary_bar(
+                                frame_width=w,
                                 distance_km=res_data.get("distance_km", 0.0),
                                 duration_seconds=seg_real_duration,
-                                mode_breakdown={
-                                    res_mode: res_data.get("distance_km", 0.0)
-                                },
-                                mode_duration={res_mode: seg_real_duration},
-                                card_size=(480, 170),
+                                mode=res_mode,
+                                from_label=leg_from_label,
+                                to_label=leg_to_label,
                             )
-                            card_fade_frames = max(1, int(fade_sec * fps))
-                            for f in range(card_fade_frames):
-                                video.write(
-                                    self.graphics.composite_card_on_frame(
-                                        frame, seg_card, alpha=(f + 1) / card_fade_frames
-                                    )
-                                )
-                            card_frame = self.graphics.composite_card_on_frame(
-                                frame, seg_card, alpha=1.0
+                            self._play_leg_summary_card(
+                                video, frame, seg_card, fps, fade_sec, clip_hold_sec,
+                                margin=0,
                             )
-                            for _ in range(
-                                max(0, int(clip_hold_sec * fps) - card_fade_frames)
-                            ):
-                                video.write(card_frame)
-                            for f in range(card_fade_frames):
-                                video.write(
-                                    self.graphics.composite_card_on_frame(
-                                        frame,
-                                        seg_card,
-                                        alpha=1.0 - (f + 1) / card_fade_frames,
-                                    )
-                                )
 
                         # Every arrival now transitions the same way —
                         # scale-up-with-blur straight to fullscreen, then
@@ -480,6 +840,24 @@ class _WaypointRenderMixin:
                         ended_at_destination = True
 
                 if not ended_at_destination:
+                    # Intro card's hold, then exit — see
+                    # intro_card_hold_frames/intro_card_exit_frames above
+                    # — composited on top of these real, already-moving
+                    # animation frames instead of a static pre-roll, so
+                    # the card is still visibly up while the route
+                    # animation plays, not fully gone before any motion.
+                    intro_window = intro_card_hold_frames + intro_card_exit_frames
+                    if intro_seg_card is not None and current_frame < intro_window:
+                        if current_frame < intro_card_hold_frames:
+                            alpha, slide = 1.0, 0.0
+                        else:
+                            t = (current_frame - intro_card_hold_frames + 1) / intro_card_exit_frames
+                            eased = 1 - (1 - t) ** 3
+                            alpha, slide = 1.0 - t, intro_card_slide_distance * eased
+                        frame = self.graphics.composite_card_on_frame(
+                            frame, intro_seg_card, alpha=alpha, margin=0,
+                            slide_offset_y=slide,
+                        )
                     video.write(frame)
                     self.last_frame = frame
                 prev_cx, prev_cy = cx, cy
@@ -495,25 +873,18 @@ class _WaypointRenderMixin:
             # at the very end instead of before a transition that doesn't
             # happen here.
             if show_segment_summary and not summary_shown_inline:
-                seg_card = self.graphics.create_summary_card(
+                seg_card = self.graphics.create_leg_summary_bar(
+                    frame_width=w,
                     distance_km=res_data.get("distance_km", 0.0),
                     duration_seconds=seg_real_duration,
-                    mode_breakdown={res_mode: res_data.get("distance_km", 0.0)},
-                    mode_duration={res_mode: seg_real_duration},
-                    card_size=(480, 170),
+                    mode=res_mode,
+                    from_label=leg_from_label,
+                    to_label=leg_to_label,
                 )
-                fade_frames = max(1, int(fade_sec * fps))
-                for f in range(fade_frames):
-                    video.write(
-                        self.graphics.composite_card_on_frame(
-                            self.last_frame, seg_card, alpha=(f + 1) / fade_frames
-                        )
-                    )
-                held_frame = self.graphics.composite_card_on_frame(
-                    self.last_frame, seg_card, alpha=1.0
+                self._play_leg_summary_card(
+                    video, self.last_frame, seg_card, fps, fade_sec, clip_hold_sec,
+                    play_exit=False, margin=0,
                 )
-                for _ in range(max(0, int(clip_hold_sec * fps) - fade_frames)):
-                    video.write(held_frame)
 
             output_paths.append(video.release(str(self.out_dir / chunk_filename)))
             if cap:

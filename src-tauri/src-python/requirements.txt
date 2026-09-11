@@ -16,3 +16,12 @@ tqdm
 pydeck
 playwright
 python-dotenv
+
+# Local pan/zoom fallback (services/vdoprocessing/local_pan_generator.py) —
+# only used when the bundled ComfyUI attraction-video generator can't be
+# reached or a generation fails. Install torch/torchvision matching your
+# CUDA version separately first, e.g.:
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
+diffusers
+transformers
+accelerate

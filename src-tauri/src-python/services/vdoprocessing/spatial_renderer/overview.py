@@ -11,6 +11,7 @@ from typing import Dict, List, Optional
 import cv2
 import numpy as np
 
+from services import tuning
 from services.vdoprocessing.vdoexporter import VideoExporter
 
 from .base import logger
@@ -26,6 +27,7 @@ class _OverviewRenderMixin:
         fps: int,
         summary: Optional[Dict] = None,
         point_modes: Optional[List[str]] = None,
+        bounding_box: Optional[Dict[str, float]] = None,
     ) -> str:
         is_video = False
 
@@ -73,10 +75,10 @@ class _OverviewRenderMixin:
                 cleaned_labels.append(end_label)
             else:
                 cleaned_labels.append(
-                    lbl.replace("Start: ", "")
-                    .replace("Stop: ", "")
-                    .replace("Start", "")
-                    .replace("Stop", "")
+                    lbl.replace(tuning.PIPELINE_LABELS["start_prefix"], "")
+                    .replace(tuning.PIPELINE_LABELS["stop_prefix"], "")
+                    .replace(tuning.PIPELINE_LABELS["start_prefix"].strip(": "), "")
+                    .replace(tuning.PIPELINE_LABELS["stop_prefix"].strip(": "), "")
                     .strip()
                     if lbl
                     else None
@@ -194,24 +196,84 @@ class _OverviewRenderMixin:
         # expected frame — "2 to 3" shows popup 2, and the moment 3 is
         # reached popup 2 hides and popup 3 takes over.
         smooth_arr_lookup = np.asarray(smooth_path, dtype=float)
+        num_frames_lookup = len(smooth_arr_lookup)
 
-        def _expected_frame(px: float, py: float) -> int:
-            dists = np.hypot(smooth_arr_lookup[:, 0] - px, smooth_arr_lookup[:, 1] - py)
-            return int(np.argmin(dists))
+        # Each original waypoint's own fraction of the route's real
+        # physical distance (start-to-waypoint / start-to-end), over the
+        # raw waypoint polyline — independent of any curve shape, so a
+        # route that loops or self-crosses doesn't affect it at all.
+        raw_seg = np.hypot(
+            np.diff([p[0] for p in points]), np.diff([p[1] for p in points])
+        )
+        raw_cum = np.concatenate([[0.0], np.cumsum(raw_seg)])
+        raw_total = raw_cum[-1] if raw_cum[-1] > 0 else 1.0
+
+        def _estimate_frame(point_index: int) -> int:
+            # cum_smooth_dist is the ANIMATED path's own cumulative real
+            # pixel distance per frame (already speed-weighted per mode —
+            # see _build_overview_path) — searching it for this
+            # waypoint's target distance is a pure 1D lookup along "how
+            # far traveled", with no notion of XY position at all, so it
+            # can't be fooled by the curve merely passing physically
+            # close to some OTHER point earlier on. Falls back to a
+            # straight frame-count fraction when there's no mode data to
+            # have produced cum_smooth_dist in the first place.
+            frac = raw_cum[point_index] / raw_total
+            if cum_smooth_dist is not None:
+                target_dist = frac * total_smooth_dist
+                return int(np.searchsorted(cum_smooth_dist, target_dist))
+            return int(frac * (num_frames_lookup - 1))
+
+        def _expected_frame(px: float, py: float, search_from: int, search_to: int) -> int:
+            window = smooth_arr_lookup[search_from:search_to + 1]
+            if len(window) == 0:
+                return search_from
+            dists = np.hypot(window[:, 0] - px, window[:, 1] - py)
+            return search_from + int(np.argmin(dists))
+
+        # Each waypoint's own true position in the path's time-sequence —
+        # not just "is the traveler's dot pixel-close to this pin right
+        # now", which a route that loops or doubles back near a pin
+        # before actually reaching it (see the proximity-trigger gate in
+        # _animate_overview_frames) could satisfy far too early, popping
+        # the card up for a waypoint the traveler hasn't really arrived
+        # at yet — just passed near on an earlier, unrelated stretch of
+        # road.
+        #
+        # _estimate_frame (distance-based, immune to self-crossing) picks
+        # the anchor; the nearest-XY search below only fine-tunes within a
+        # small window around that anchor, rather than searching the
+        # whole remaining path — an open-ended forward search still let a
+        # route that loops back close to a LATER waypoint's pin before
+        # actually reaching it grab that closer-but-wrong crossing
+        # (reported: waypoint 7's card appearing while the traveler was
+        # still passing near the END pin's location first). Clamped to
+        # never go before the previous waypoint's own match, same
+        # guarantee as before.
+        last_matched_frame = 0
+        search_margin = max(20, int(num_frames_lookup * 0.05))
+        for ap in active_popups:
+            if ap["index"] == 0:
+                ap["expected_frame"] = 0
+                continue
+            est = max(last_matched_frame, min(num_frames_lookup - 1, _estimate_frame(ap["index"])))
+            window_from = max(last_matched_frame, est - search_margin)
+            window_to = min(num_frames_lookup - 1, est + search_margin)
+            ef = _expected_frame(ap["x"], ap["y"], window_from, window_to)
+            ap["expected_frame"] = ef
+            last_matched_frame = ef
 
         triggerable = [
             ap for ap in active_popups
             if ap["index"] != 0 and (not stop_popup or ap["index"] != stop_popup["index"])
         ]
-        triggerable.sort(key=lambda ap: _expected_frame(ap["x"], ap["y"]))
-        stop_expected_frame = (
-            _expected_frame(stop_popup["x"], stop_popup["y"]) if stop_popup else None
-        )
+        triggerable.sort(key=lambda ap: ap["expected_frame"])
+        stop_expected_frame = stop_popup["expected_frame"] if stop_popup else None
         min_leg_frames = int(fps * 1.5)
         for i, ap in enumerate(triggerable):
-            this_frame = _expected_frame(ap["x"], ap["y"])
+            this_frame = ap["expected_frame"]
             next_frame = (
-                _expected_frame(triggerable[i + 1]["x"], triggerable[i + 1]["y"])
+                triggerable[i + 1]["expected_frame"]
                 if i + 1 < len(triggerable)
                 else stop_expected_frame
             )
@@ -225,19 +287,73 @@ class _OverviewRenderMixin:
             intro_freeze_sec = float(start_popup["data"]["freeze_seconds"])
 
         if start_popup:
-            temp_sp = start_popup.copy()
-            temp_sp["data"] = start_popup["data"].copy()
-            temp_sp["data"]["triggered"] = True
-            temp_sp["hud_corner"], temp_sp["x"], temp_sp["y"] = (
-                self.graphics.pick_hud_corner(w, h, route_avoid_points),
-                start_popup["x"],
-                start_popup["y"],
+            intro_card_scale = self.config.get("overview_intro_card_scale", 1.3)
+            footprint_w, footprint_h = self.graphics.beside_card_footprint(intro_card_scale)
+
+            def _make_intro_card(popup: Dict) -> Dict:
+                card = popup.copy()
+                card["data"] = popup["data"].copy()
+                card["card_scale"] = intro_card_scale
+                # card_scale alone made the caption grow right along with
+                # the photo — fine for the photo (that's the point of
+                # intro_card_scale), but the label text read as oversized
+                # (and wrapped to two lines more readily) well past what
+                # a normal flow-through card's caption looks like. Scaled
+                # back down independently of the photo/card size.
+                card["label_font_scale"] = self.config.get(
+                    "overview_intro_label_font_scale", 0.7
+                )
+                return card
+
+            temp_sp = _make_intro_card(start_popup)
+            # Both the start AND stop waypoint's own photo (when it has
+            # one — most routes set popup_image on every waypoint incl.
+            # the destination) are previewed together on the intro, rather
+            # than only ever revealing the destination at the very end.
+            temp_ep = (
+                _make_intro_card(stop_popup)
+                if stop_popup and stop_popup["data"].get("popup_image")
+                else None
             )
-            # Smaller than the HUD-corner card's 440px default — full-size
-            # felt dominant sitting over the whole-route intro map, next to
-            # every waypoint pin already drawn on it.
-            temp_sp["card_scale"] = self.config.get("overview_intro_card_scale", 0.6)
+            intro_cards = [temp_sp] + ([temp_ep] if temp_ep else [])
+
+            # Anchored beside their own pin with a leader line back to it
+            # (see render_popup_box's non-HUD-corner branch), matching
+            # every other waypoint's popup style, rather than a fixed
+            # screen corner picked independently of where each pin
+            # actually sits. Laid out together (one _layout_beside_popups
+            # call) so the start/stop cards can't land on top of each
+            # other. A wide search radius, not the ~260px default — these
+            # cards sit over the intro's full-route overview, which
+            # usually has every waypoint's pin clustered somewhere on
+            # screen (as dense a cluster as the S/2/3/E group here); this
+            # one-off intro card has no "stay near the traveler" need, so
+            # it should keep spiraling outward — using any open area the
+            # frame actually has — rather than settling for a nearby spot
+            # that overlaps another waypoint's pin.
+            self._layout_beside_popups(
+                [{"popup": c, "frames_left": 1} for c in intro_cards], w, h,
+                card_w=footprint_w, card_h=footprint_h,
+                route_obstacles=route_obstacle_arr,
+                max_radius=float(max(w, h)),
+            )
+            for c in intro_cards:
+                c["hud_corner"] = None
+                c["draw_leader_line"] = True
+
             start_popup["data"]["triggered"] = True
+            # Pin-drawing checks in overview_animation.py/pins.py now key
+            # off "arrived" (set the instant a waypoint is actually
+            # reached) rather than "triggered" (which for every OTHER
+            # waypoint only flips once its popup card clears the overview's
+            # min-trigger-gap cooldown) — the start pin is "reached" from
+            # frame one, so set both here same as "triggered" always was.
+            # stop_popup itself is deliberately left untouched — unlike
+            # the start pin it hasn't actually been reached yet, its real
+            # "arrived" state still only flips at the true end of the
+            # route (see overview_animation.py); temp_ep is only ever a
+            # preview COPY, not stop_popup itself.
+            start_popup["data"]["arrived"] = True
 
             if not is_video:
                 # Show every waypoint marker up front on the intro frame,
@@ -245,15 +361,94 @@ class _OverviewRenderMixin:
                 # visible before the animation begins.
                 for wp in active_popups:
                     self._draw_pin(intro_frame, wp, len(points))
+            clean_frame = intro_frame
 
-            # The intro always opens as a plain pip card, regardless of
-            # this waypoint's own image_display setting — "fullscreen"
-            # is only ever honored by the end-of-video zoom-tile highlight
-            # (_render_ending_highlight), not here.
-            intro_frame = self.graphics.render_popup_box(intro_frame, temp_sp)
-            for _ in range(int(intro_freeze_sec * fps)):
+            # Clean beat first — just the map and every pin, no popup card
+            # yet — so the video opens on the route itself rather than
+            # cutting straight to a photo. Held briefly before the start/
+            # stop popups slide in below.
+            clean_hold_sec = min(
+                intro_freeze_sec * 0.5,
+                float(self.config.get("overview_intro_clean_hold_seconds", 1.5)),
+            )
+            for _ in range(int(clean_hold_sec * fps)):
+                video.write(clean_frame)
+
+            def _draw_intro_cards(base: np.ndarray, alpha: float) -> np.ndarray:
+                # Line, then pin, then card — in that order (mirrors
+                # waypoints.py's own leg intro) — so each leader line sits
+                # BEHIND every pin instead of drawing the pins first and
+                # letting the line (drawn afterward, as part of the card)
+                # land on top of them.
+                out = base
+                for c in intro_cards:
+                    out = self.graphics.render_popup_box(out, c, alpha=alpha, line_only=True)
+                if not is_video:
+                    for wp in active_popups:
+                        self._draw_pin(out, wp, len(points))
+                for c in intro_cards:
+                    out = self.graphics.render_popup_box(out, c, alpha=alpha, skip_line=True)
+                return out
+
+            # Slide-up entrance: the start/stop popups ease up into their
+            # real spot (from _POPUP_SLIDE_DISTANCE_PX below it) while
+            # fading in over POPUP_FADE_SECONDS — same easing every other
+            # waypoint's card uses (see _popup_slide_offset_y) — rather
+            # than the cards' photos just being present from the very
+            # first frame. The intro always opens as plain pip cards,
+            # regardless of either waypoint's own image_display setting —
+            # "fullscreen" is only ever honored by the end-of-video
+            # zoom-tile highlight (_render_ending_highlight), not here.
+            base_boxes = [c.get("beside_box") for c in intro_cards]
+            bounce_frames = max(1, int(tuning.POPUP_FADE_SECONDS * fps))
+            for i in range(bounce_frames):
+                # Straight 0->1 ramp for opacity (no fade back OUT — unlike
+                # _popup_fade_alpha's own bp shape, this entrance never
+                # disappears again) alongside the slide-up offset — the
+                # two finish together at i == bounce_frames-1.
+                alpha = min(1.0, (i + 1) / bounce_frames)
+                slide = self._popup_slide_offset_y(
+                    {"total_frames": bounce_frames, "frames_left": bounce_frames - i,
+                     "fade_frames": bounce_frames}
+                )
+                for c, box in zip(intro_cards, base_boxes):
+                    if box:
+                        c["beside_box"] = (box[0], int(box[1] + slide))
+                video.write(_draw_intro_cards(intro_frame, alpha))
+
+            for c, box in zip(intro_cards, base_boxes):
+                if box:
+                    c["beside_box"] = box
+            intro_frame = _draw_intro_cards(intro_frame, 1.0)
+            remaining_frames = int(intro_freeze_sec * fps) - int(clean_hold_sec * fps) - bounce_frames
+            for _ in range(max(0, remaining_frames)):
                 video.write(intro_frame)
-            self.last_frame = intro_frame
+
+            # Slide-down exit: once the animation is about to actually
+            # start moving, the preview cards ease back down and fade
+            # out — mirrors the entrance above — rather than abruptly
+            # cutting straight from "cards on screen" to "traveler moving"
+            # with no transition. Ends back on the clean pins-only frame
+            # so _animate_overview_frames picks up from the same plain
+            # base the intro opened on.
+            for i in range(bounce_frames):
+                alpha = max(0.0, 1.0 - (i + 1) / bounce_frames)
+                slide = self._popup_slide_offset_y(
+                    {"total_frames": bounce_frames, "frames_left": i + 1,
+                     "fade_frames": bounce_frames}
+                )
+                for c, box in zip(intro_cards, base_boxes):
+                    if box:
+                        c["beside_box"] = (box[0], int(box[1] + slide))
+                video.write(_draw_intro_cards(clean_frame, alpha))
+
+            # No zoom effect at the very start — the intro closes plainly
+            # on the clean pins-only frame, unzoomed, right before the
+            # traveler starts moving. The only zoom-toward-the-start-point
+            # beat in this video is the dynamic pydeck (or Ken Burns
+            # fallback) one at the very END, after the recap/summary card
+            # — see _render_ending_highlight.
+            self.last_frame = clean_frame
 
         pre_popup_frame = self._animate_overview_frames(
             video, current_bg, cap, is_video, w, h, fps,
@@ -267,7 +462,7 @@ class _OverviewRenderMixin:
         # composited over the video in the bottom-right corner, later.
         summary_card = None
         if summary:
-            summary_card = self.graphics.create_summary_card(
+            summary_card = self.graphics.render_summary_card(
                 distance_km=summary.get("total_distance_km", 0.0),
                 duration_seconds=summary.get("total_duration_seconds", 0.0),
                 mode_breakdown=summary.get("mode_breakdown"),
@@ -299,11 +494,13 @@ class _OverviewRenderMixin:
             hard_ended = self._render_ending_highlight(
                 video, w, h, fps, stop_popup, start_popup,
                 clean_map_frame=pre_popup_frame,
+                bounding_box=bounding_box,
             )
 
         for p in popups:
             if p:
                 p["triggered"] = False
+                p["arrived"] = False
 
         # The fullscreen ending highlight, when it plays, IS the video's
         # last frame — no trailing pause on the map afterward.

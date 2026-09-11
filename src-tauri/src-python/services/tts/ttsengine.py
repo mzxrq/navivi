@@ -21,6 +21,7 @@ import numpy as np
 import subprocess
 import os
 import shutil
+
 import logging
 from typing import Final, Optional, Tuple, List, Dict, Any
 
@@ -234,6 +235,13 @@ class IrodoriTTSClient:
     _IDLE_TIMEOUT_SECONDS: Final[float] = 600.0
     _ACTIVITY_FILE: Final[Path] = _SERVER_DIR / ".last_active"
 
+    # Written with the spawning process's PID right after Popen, so a
+    # second, separate `main.py` invocation racing to start the server at
+    # nearly the same moment (before either can see the other's server as
+    # healthy) can detect "someone else is already starting it" and just
+    # wait, instead of spawning its own second copy.
+    _PIDFILE: Final[Path] = _SERVER_DIR / ".server.pid"
+
     # Class-level: one server subprocess (and one watchdog) is enough for
     # every client instance/every caller in this process (main.py's
     # tts/tts-all/attraction commands, and the real audio_step.py pipeline,
@@ -267,12 +275,50 @@ class IrodoriTTSClient:
         except httpx.HTTPError:
             return False
 
+    @staticmethod
+    def _pid_is_alive(pid: int) -> bool:
+        if os.name == "nt":
+            try:
+                result = subprocess.run(
+                    ["tasklist", "/FI", f"PID eq {pid}"],
+                    capture_output=True, text=True, timeout=5,
+                )
+                return str(pid) in result.stdout
+            except Exception:
+                return False
+        try:
+            os.kill(pid, 0)
+            return True
+        except OSError:
+            return False
+
+    @classmethod
+    def _other_process_is_starting_server(cls) -> bool:
+        """Reads the pidfile a spawning process writes right after Popen —
+        True if some other still-alive process claims to already be
+        starting the server, so this one should just wait instead of
+        racing to spawn a second copy."""
+        try:
+            pid = int(cls._PIDFILE.read_text().strip())
+        except (OSError, ValueError):
+            return False
+        return cls._pid_is_alive(pid)
+
     async def _ensure_server_running(self) -> None:
         """Starts the local Irodori TTS server as a subprocess if it isn't
         already reachable, then waits for its /health endpoint to come up.
         Raises RuntimeError if it can't be found/started or never becomes
         healthy in time — callers should let that propagate rather than
         silently continuing to a request that would just fail the same way."""
+        # Check health FIRST — a fresh IrodoriTTSClient in a brand new
+        # `main.py` process always starts with _server_process == None, so
+        # without this check every single invocation would fall straight
+        # into the spawn branch below even when a server from an earlier
+        # invocation is already up and healthy.
+        if await self._is_server_up():
+            logger.info("Irodori TTS server already up at %s.", self.base_url)
+            return
+
         if not self._SERVER_VENV_PYTHON.exists():
             raise RuntimeError(
                 f"Irodori TTS server isn't reachable at {self.base_url} and its "
@@ -285,47 +331,64 @@ class IrodoriTTSClient:
             IrodoriTTSClient._server_process is None
             or IrodoriTTSClient._server_process.poll() is not None
         ):
-            logger.info(
-                "Irodori TTS server not reachable at %s — starting it as a "
-                "subprocess (this can take a while on first run while it "
-                "downloads/loads the model)...",
-                self.base_url,
-            )
-            port = urlsplit(self.base_url).port or 8088
-            popen_kwargs: Dict[str, Any] = {}
-            if os.name == "nt":
-                # Detached from this console/process group so it outlives a
-                # short-lived `python main.py ...` CLI invocation instead of
-                # being torn down (or fighting over Ctrl+C) with it.
-                popen_kwargs["creationflags"] = (
-                    subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
+            if self._other_process_is_starting_server():
+                logger.info(
+                    "Another process is already starting the Irodori TTS "
+                    "server — waiting for it instead of starting a second copy."
                 )
             else:
-                popen_kwargs["start_new_session"] = True
-            log_path = self._SERVER_DIR / "server.log"
-            log_file = open(log_path, "ab")
-            IrodoriTTSClient._server_process = subprocess.Popen(
-                [
-                    str(self._SERVER_VENV_PYTHON), "-m", "irodori_openai_tts",
-                    "--host", "127.0.0.1", "--port", str(port),
-                ],
-                cwd=str(self._SERVER_DIR),
-                stdout=log_file,
-                stderr=subprocess.STDOUT,
-                **popen_kwargs,
-            )
-            # Baseline activity timestamp so the watchdog's idle clock
-            # starts from "just launched", not from whatever this file's
-            # mtime happened to be left at by a previous run.
-            self._touch_activity()
-            self._start_idle_watchdog(IrodoriTTSClient._server_process.pid)
+                logger.info(
+                    "Irodori TTS server not reachable at %s — starting it as a "
+                    "subprocess (this can take a while on first run while it "
+                    "downloads/loads the model)...",
+                    self.base_url,
+                )
+                port = urlsplit(self.base_url).port or 8088
+                popen_kwargs: Dict[str, Any] = {}
+                if os.name == "nt":
+                    # CREATE_NEW_PROCESS_GROUP: outlives a short-lived
+                    # `python main.py ...` CLI invocation instead of being
+                    # torn down (or fighting over Ctrl+C) with it.
+                    # CREATE_NO_WINDOW (not DETACHED_PROCESS): a fully
+                    # detached process has NO console at all, which some
+                    # Fortran/MKL-linked scientific-Python dependencies
+                    # crash under on Windows ("forrtl: error (200): program
+                    # aborting due to window-CLOSE event") — CREATE_NO_WINDOW
+                    # still shows no visible window but keeps a (hidden)
+                    # console allocated.
+                    popen_kwargs["creationflags"] = (
+                        subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
+                    )
+                else:
+                    popen_kwargs["start_new_session"] = True
+                log_path = self._SERVER_DIR / "server.log"
+                log_file = open(log_path, "ab")
+                IrodoriTTSClient._server_process = subprocess.Popen(
+                    [
+                        str(self._SERVER_VENV_PYTHON), "-m", "irodori_openai_tts",
+                        "--host", "127.0.0.1", "--port", str(port),
+                    ],
+                    cwd=str(self._SERVER_DIR),
+                    stdout=log_file,
+                    stderr=subprocess.STDOUT,
+                    **popen_kwargs,
+                )
+                self._PIDFILE.write_text(str(IrodoriTTSClient._server_process.pid))
+                # Baseline activity timestamp so the watchdog's idle clock
+                # starts from "just launched", not from whatever this file's
+                # mtime happened to be left at by a previous run.
+                self._touch_activity()
+                self._start_idle_watchdog(IrodoriTTSClient._server_process.pid)
 
         deadline = time.monotonic() + self._SERVER_START_TIMEOUT_SECONDS
         while time.monotonic() < deadline:
             if await self._is_server_up():
                 logger.info("Irodori TTS server is up at %s.", self.base_url)
                 return
-            if IrodoriTTSClient._server_process.poll() is not None:
+            if (
+                IrodoriTTSClient._server_process is not None
+                and IrodoriTTSClient._server_process.poll() is not None
+            ):
                 raise RuntimeError(
                     "Irodori TTS server subprocess exited while starting up — "
                     f"see {self._SERVER_DIR / 'server.log'} for details."
@@ -375,8 +438,10 @@ class IrodoriTTSClient:
         started the server to actually catch that."""
         popen_kwargs: Dict[str, Any] = {}
         if os.name == "nt":
+            # See _ensure_server_running's comment on CREATE_NO_WINDOW vs
+            # DETACHED_PROCESS above.
             popen_kwargs["creationflags"] = (
-                subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
+                subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
             )
         else:
             popen_kwargs["start_new_session"] = True
@@ -802,6 +867,7 @@ class VideoProcessor:
                     vf_filter,
                     "-c:v",
                     "libx264",
+                    *tuning.ffmpeg_thread_args(),
                     "-crf",
                     "18",
                     "-preset",

@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from services.logger.progress import tracker as _tracker
+from services.vdoprocessing.videopipeline.helpers import project_video_dir
 
 
 def test_gps(job_config_path: str) -> Dict[str, Any]:
@@ -31,16 +32,21 @@ def test_gps(job_config_path: str) -> Dict[str, Any]:
     }
 
 
-def test_overview_video(job_config_path: str, output_video_dir: str = None) -> Dict[str, Any]:
+def test_overview_video(
+    job_config_path: str, output_video_dir: str = None, force: bool = False
+) -> Dict[str, Any]:
     """Runs GPS parsing + route video rendering only, to sanity-check the
-    overview map animation without paying for TTS/attraction/subtitle stages."""
+    overview map animation without paying for TTS/attraction/subtitle
+    stages. render_mode="overview" also skips residential entirely (no
+    per-leg residential map tile fetches, no residential clips rendered) —
+    this really is overview-only now, not both bundled together."""
     from services.vdoprocessing.videopipeline import process_gps, render_route_video
 
     config_path = Path(job_config_path)
     if not config_path.exists():
         raise FileNotFoundError(f"job_config.json not found: {config_path}")
 
-    output_video_dir = output_video_dir or str(config_path.parent / "video")
+    output_video_dir = output_video_dir or str(project_video_dir(config_path.parent))
 
     _tracker.show("Parsing GPS track...")
     cleaned_route = process_gps(str(config_path))
@@ -51,6 +57,8 @@ def test_overview_video(job_config_path: str, output_video_dir: str = None) -> D
         cleaned_route=cleaned_route,
         project_config_path=str(config_path),
         output_video_dir=output_video_dir,
+        force=force,
+        render_mode="overview",
     )
     _tracker.clear()
 
@@ -66,13 +74,16 @@ def test_residential_video(
     output_video_dir: str = None,
     fps: Optional[int] = None,
     speed_kmh: Optional[float] = None,
+    force: bool = False,
 ) -> Dict[str, Any]:
     """Runs the per-waypoint leg-by-leg render only, to sanity-check the
     residential animation without paying for the overview, TTS, or subtitle
     stages. Honors job_config.json's settings.use_3d_res (default False):
     2D (SpatialRenderer.render_waypoints, via the same render_route_video
-    path test_overview_video uses) unless the project has explicitly opted
-    into the 3D pydeck/Playwright renderer.
+    path test_overview_video uses, but with render_mode="residential" so
+    the overview animation itself is never rendered) unless the project
+    has explicitly opted into the 3D pydeck/Playwright renderer (which
+    never touches render_route_video/the overview path at all).
     """
     config_path = Path(job_config_path)
     if not config_path.exists():
@@ -82,7 +93,7 @@ def test_residential_video(
         project_config = json.load(config_file)
     use_3d_res = bool(project_config.get("settings", {}).get("use_3d_res", False))
 
-    output_video_dir = Path(output_video_dir or (config_path.parent / "video"))
+    output_video_dir = Path(output_video_dir) if output_video_dir else project_video_dir(config_path.parent)
     output_video_dir.mkdir(parents=True, exist_ok=True)
 
     if use_3d_res:
@@ -106,17 +117,13 @@ def test_residential_video(
         _tracker.clear()
 
         _tracker.show("Rendering residential video (2D)...")
-        all_paths = render_route_video(
+        video_paths = render_route_video(
             cleaned_route=cleaned_route,
             project_config_path=str(config_path),
             output_video_dir=str(output_video_dir),
+            force=force,
+            render_mode="residential",
         )
-        # render_route_video also produces "01_overview.mp4" — this entry
-        # point is scoped to the residential/per-leg clips only, matching
-        # what the 3D branch above returns.
-        video_paths = [
-            p for p in all_paths if Path(p).name != "01_overview.mp4"
-        ]
         _tracker.clear()
 
     return {

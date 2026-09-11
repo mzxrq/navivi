@@ -16,6 +16,7 @@ import tempfile
 from pathlib import Path
 from typing import Final, List, Optional
 
+from services import tuning
 from services.config.job_config import JobConfigManager
 from services.logger.logger import setup_logger
 
@@ -131,9 +132,12 @@ class VideoEditor:
 
     # [Validate] Resolves output paths dynamically based on the job configuration and subfolder
     def _resolve_output_path(self, filename: str, subfolder: str) -> Path:
-        """Dynamically routes outputs to the centralized assets directory."""
+        """Dynamically routes outputs to the project's assets directory,
+        e.g. <directory_path>/assets/video — every generated output
+        (audio/video/subtitles) lives grouped under assets/, alongside the
+        project's raw input assets (popup images)."""
         base_path = Path(self.config.get("directory_path", "assets"))
-        target_dir = (base_path / subfolder).resolve()
+        target_dir = (base_path / "assets" / subfolder).resolve()
         target_dir.mkdir(parents=True, exist_ok=True)
         return target_dir / filename
 
@@ -357,6 +361,7 @@ class VideoEditor:
             f"setpts={pts_factor:.6f}*PTS",
             "-c:v",
             "libx264",
+            *tuning.ffmpeg_thread_args(),
             "-preset",
             "fast",
             "-crf",
@@ -417,6 +422,7 @@ class VideoEditor:
             # would then not actually shorten the file at all.
             "-c:v",
             "libx264",
+            *tuning.ffmpeg_thread_args(),
             "-preset",
             "fast",
             "-crf",
@@ -430,6 +436,66 @@ class VideoEditor:
         self.engine.run_command(cmd)
         logger.info(
             "Trimmed '%s' to %.3fs: %s", vid_p, target_duration, output_path
+        )
+        return str(output_path)
+
+    # [Core/Util] Pads a video out to a target duration by freezing/cloning its final frame.
+    def hold_last_frame(
+        self, video_path: str, target_duration: float, output_filename: str
+    ) -> str:
+        """
+        Extends a video to target_duration by holding its last frame,
+        rather than slow-motion PTS-stretching the whole clip (see
+        adjust_video_duration) — for a clip whose actual motion is only
+        approximately stable (e.g. fast/turbo-step AI generation), stretch
+        exaggerates any per-frame drift into obvious wobble, while holding
+        a still frame is unnoticeable padding. No-ops (a straight copy) if
+        the clip is already at or past target_duration.
+        """
+        vid_p = Path(video_path)
+        if not vid_p.exists():
+            raise FileNotFoundError(f"Video file not found for hold: {vid_p}")
+
+        if target_duration <= 0:
+            raise ValueError(
+                f"target_duration must be positive, got {target_duration!r}."
+            )
+
+        output_path = self._resolve_output_path(output_filename, "video")
+        if output_path.exists():
+            output_path.unlink()
+
+        current_duration = self.get_video_duration(str(vid_p))
+        pad_seconds = target_duration - current_duration
+        if pad_seconds <= 0:
+            shutil.copy2(vid_p, output_path)
+            return str(output_path)
+
+        ffmpeg_cmd = self.engine.resolve_binary()
+        cmd = [
+            ffmpeg_cmd,
+            "-y",
+            "-i",
+            str(vid_p),
+            "-vf",
+            f"tpad=stop_mode=clone:stop_duration={pad_seconds:.3f}",
+            "-c:v",
+            "libx264",
+            *tuning.ffmpeg_thread_args(),
+            "-preset",
+            "fast",
+            "-crf",
+            "18",
+            "-pix_fmt",
+            "yuv420p",
+            "-an",  # audio deliberately dropped — muxed in later from narration
+            str(output_path),
+        ]
+
+        self.engine.run_command(cmd)
+        logger.info(
+            "Held last frame of '%s' for %.3fs to reach %.3fs: %s",
+            vid_p, pad_seconds, target_duration, output_path,
         )
         return str(output_path)
 
@@ -467,6 +533,7 @@ class VideoEditor:
             input_pattern,
             "-c:v",
             "libx264",  # Standard H.264 encoding
+            *tuning.ffmpeg_thread_args(),
             "-pix_fmt",
             "yuv420p",  # Ensures playback compatibility across standard video players
             str(output_path),

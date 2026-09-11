@@ -8,10 +8,19 @@ import numpy as np
 import pyproj
 
 from services.logger.logger import setup_logger
+from services import tuning
 
 # Standardized logger — writes to logs/app.log AND stderr, matching
 # every other service module in this codebase.
 logger = setup_logger("VideoPipeline")
+
+# Re-exported so existing `from .helpers import PIPELINE_LABELS` call sites
+# don't need to know it actually lives in tuning.py — it's defined there
+# (not here) because spatial_renderer/overview.py also needs it and can't
+# import this videopipeline package without a circular import
+# (videopipeline/__init__.py eagerly imports render_step.py, which imports
+# spatial_renderer).
+PIPELINE_LABELS = tuning.PIPELINE_LABELS
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 DEFAULT_FRONTEND_CONFIG = (
@@ -34,6 +43,60 @@ _WGS84_TO_WEBMERCATOR = pyproj.Transformer.from_crs(
 
 def clear_console():
     os.system("cls" if os.name == "nt" else "clear")
+
+
+def output_is_valid(path, min_bytes: int = 1024) -> bool:
+    """Checkpoint helper: True only if `path` exists and is above
+    `min_bytes` — guards against treating a zero-byte/truncated file left
+    behind by a killed process as a finished, skippable output."""
+    try:
+        p = Path(path)
+        return p.is_file() and p.stat().st_size >= min_bytes
+    except OSError:
+        return False
+
+
+def safe_label(label, fallback: str) -> str:
+    """The one canonical filename-safe label sanitizer, shared by every
+    domain (TTS, attraction, subtitles) — strips to alnum/space/underscore/
+    hyphen, then replaces spaces with underscores. Previously reimplemented
+    independently as services/cli/helpers.py's _video_safe_label,
+    audio_step.py's _safe_audio_label, and (looser, punctuation-preserving)
+    inline in attraction_step.py — those three could disagree on the same
+    label, silently desyncing filenames across domains."""
+    cleaned = "".join(
+        char for char in str(label) if char.isalnum() or char in (" ", "_", "-")
+    ).strip().replace(" ", "_")
+    return cleaned or fallback
+
+
+def waypoint_audio_filename(idx: int, label) -> str:
+    """Canonical TTS audio filename for waypoint `idx` (0-based)."""
+    return f"02_waypoint_{idx + 1:02d}_{safe_label(label, f'leg{idx + 1}')}.wav"
+
+
+def attraction_output_filename(idx: int, label) -> str:
+    """Canonical attraction-video filename for waypoint `idx` (0-based).
+    timeline_step.py's _ATTRACTION_RE depends on this exact format."""
+    return f"04_attraction_{idx:02d}_{safe_label(label, f'waypoint_{idx}')}.mp4"
+
+
+# Every generated output (audio, video, subtitles) lives grouped under the
+# project's assets/ folder, alongside the raw input assets (popup images)
+# that already live there — e.g. <project>/assets/audio, not
+# <project>/audio. Centralized here so every step/CLI command agrees on the
+# same layout instead of each independently joining "audio"/"video"/
+# "subtitles" onto a project directory.
+def project_audio_dir(project_dir) -> Path:
+    return Path(project_dir) / "assets" / "audio"
+
+
+def project_video_dir(project_dir) -> Path:
+    return Path(project_dir) / "assets" / "video"
+
+
+def project_subtitle_dir(project_dir) -> Path:
+    return Path(project_dir) / "assets" / "subtitles"
 
 
 def _project_route_to_pixels(
@@ -139,8 +202,10 @@ def _build_point_modes(
     if num_points == 0:
         return modes
 
-    # [NOTE] [Animation] "direct" is a straight-line routing choice, not a distinct travel mode — render/report it as walking rather than falling through to the generic colored-marker fallback icon.
-    mode_aliases = {"direct": "walking"}
+    # "direct" (a straight-line routing choice) and "draw" (a hand-drawn
+    # custom-route leg) both render/report as walking rather than getting
+    # their own distinct identity — see tuning.MODE_ALIASES.
+    mode_aliases = tuning.MODE_ALIASES
 
     boundaries = list(wp_indices) + [num_points - 1]
     prev_end = 0

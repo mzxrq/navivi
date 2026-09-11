@@ -189,6 +189,9 @@ class ComfyUII2VClient:
     )
     _ACTIVITY_FILE: Final[Path] = _SERVER_DIR / ".last_active_i2v"
     _POLL_INTERVAL_SECONDS: Final[float] = 2.0
+    # Written with the spawning process's PID right after Popen — see
+    # IrodoriTTSClient's identical mechanism in services/tts/ttsengine.py.
+    _PIDFILE: Final[Path] = _SERVER_DIR / ".server.pid"
 
     # One server subprocess is enough for every client instance/caller in
     # this process, same reasoning as IrodoriTTSClient.
@@ -207,6 +210,31 @@ class ComfyUII2VClient:
                 return response.status_code == 200
         except httpx.HTTPError:
             return False
+
+    @staticmethod
+    def _pid_is_alive(pid: int) -> bool:
+        if os.name == "nt":
+            try:
+                result = subprocess.run(
+                    ["tasklist", "/FI", f"PID eq {pid}"],
+                    capture_output=True, text=True, timeout=5,
+                )
+                return str(pid) in result.stdout
+            except Exception:
+                return False
+        try:
+            os.kill(pid, 0)
+            return True
+        except OSError:
+            return False
+
+    @classmethod
+    def _other_process_is_starting_server(cls) -> bool:
+        try:
+            pid = int(cls._PIDFILE.read_text().strip())
+        except (OSError, ValueError):
+            return False
+        return cls._pid_is_alive(pid)
 
     def _ensure_server_running(self) -> None:
         """Starts the bundled ComfyUI server as a subprocess if it isn't
@@ -227,41 +255,58 @@ class ComfyUII2VClient:
             ComfyUII2VClient._server_process is None
             or ComfyUII2VClient._server_process.poll() is not None
         ):
-            logger.info(
-                "Bundled ComfyUI not reachable at %s — starting it as a "
-                "subprocess...",
-                self.base_url,
-            )
-            port = urlsplit(self.base_url).port or 8189
-            popen_kwargs: Dict[str, Any] = {}
-            if os.name == "nt":
-                popen_kwargs["creationflags"] = (
-                    subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
+            if self._other_process_is_starting_server():
+                logger.info(
+                    "Another process is already starting the bundled ComfyUI "
+                    "server — waiting for it instead of starting a second copy."
                 )
             else:
-                popen_kwargs["start_new_session"] = True
-            log_path = self._SERVER_DIR / "comfyui_server.log"
-            log_file = open(log_path, "ab")
-            ComfyUII2VClient._server_process = subprocess.Popen(
-                [
-                    str(self._SERVER_VENV_PYTHON), "main.py",
-                    "--listen", "127.0.0.1", "--port", str(port),
-                    "--disable-auto-launch",
-                ],
-                cwd=str(self._SERVER_DIR),
-                stdout=log_file,
-                stderr=subprocess.STDOUT,
-                **popen_kwargs,
-            )
-            self._touch_activity()
-            self._start_idle_watchdog(ComfyUII2VClient._server_process.pid)
+                logger.info(
+                    "Bundled ComfyUI not reachable at %s — starting it as a "
+                    "subprocess...",
+                    self.base_url,
+                )
+                port = urlsplit(self.base_url).port or 8189
+                popen_kwargs: Dict[str, Any] = {}
+                if os.name == "nt":
+                    # CREATE_NO_WINDOW (not DETACHED_PROCESS) — a fully
+                    # detached process has NO console at all, which some of
+                    # ComfyUI's Fortran/MKL-linked dependencies (numpy/scipy)
+                    # crash under on Windows ("forrtl: error (200): program
+                    # aborting due to window-CLOSE event"). CREATE_NO_WINDOW
+                    # still shows no visible window but keeps a (hidden)
+                    # console allocated.
+                    popen_kwargs["creationflags"] = (
+                        subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
+                    )
+                else:
+                    popen_kwargs["start_new_session"] = True
+                log_path = self._SERVER_DIR / "comfyui_server.log"
+                log_file = open(log_path, "ab")
+                ComfyUII2VClient._server_process = subprocess.Popen(
+                    [
+                        str(self._SERVER_VENV_PYTHON), "main.py",
+                        "--listen", "127.0.0.1", "--port", str(port),
+                        "--disable-auto-launch",
+                    ],
+                    cwd=str(self._SERVER_DIR),
+                    stdout=log_file,
+                    stderr=subprocess.STDOUT,
+                    **popen_kwargs,
+                )
+                self._PIDFILE.write_text(str(ComfyUII2VClient._server_process.pid))
+                self._touch_activity()
+                self._start_idle_watchdog(ComfyUII2VClient._server_process.pid)
 
         deadline = time.monotonic() + tuning.COMFYUI_SERVER_START_TIMEOUT_SECONDS
         while time.monotonic() < deadline:
             if self._is_server_up():
                 logger.info("Bundled ComfyUI is up at %s.", self.base_url)
                 return
-            if ComfyUII2VClient._server_process.poll() is not None:
+            if (
+                ComfyUII2VClient._server_process is not None
+                and ComfyUII2VClient._server_process.poll() is not None
+            ):
                 raise RuntimeError(
                     "Bundled ComfyUI subprocess exited while starting up — "
                     f"see {self._SERVER_DIR / 'comfyui_server.log'} for details."
@@ -285,6 +330,24 @@ class ComfyUII2VClient:
             _kill_process_tree(cls._server_process.pid)
             cls._server_process = None
 
+    def clear_queue(self) -> None:
+        """Interrupts whatever ComfyUI is currently running and clears its
+        pending queue. Without this, a killed/restarted pipeline run leaves
+        its in-flight job running server-side — the next run's job just
+        gets queued behind it (and every restart after that queues another
+        one), so a slow/stuck generation only ever gets slower across
+        restarts instead of actually starting fresh. Best-effort: a
+        freshly-started server with nothing queued yet is a no-op here."""
+        if not self._is_server_up():
+            return
+        try:
+            with httpx.Client() as client:
+                client.post(f"{self.base_url}/interrupt", timeout=5.0)
+                client.post(f"{self.base_url}/queue", json={"clear": True}, timeout=5.0)
+            logger.info("Cleared any stale ComfyUI queue/in-flight job before starting.")
+        except httpx.HTTPError as exc:
+            logger.warning("Could not clear ComfyUI queue (%s) — continuing anyway.", exc)
+
     def _touch_activity(self) -> None:
         try:
             self._ACTIVITY_FILE.touch()
@@ -294,8 +357,10 @@ class ComfyUII2VClient:
     def _start_idle_watchdog(self, server_pid: int) -> None:
         popen_kwargs: Dict[str, Any] = {}
         if os.name == "nt":
+            # See _ensure_server_running's comment on CREATE_NO_WINDOW vs
+            # DETACHED_PROCESS above.
             popen_kwargs["creationflags"] = (
-                subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
+                subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
             )
         else:
             popen_kwargs["start_new_session"] = True
