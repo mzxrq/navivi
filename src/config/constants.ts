@@ -32,6 +32,8 @@ export const defaultProjectSettings = {
     duration_seconds: 8.0,
     line_color: [0, 200, 255] as [number, number, number],
     line_thickness: 6,
+    line_border_color: [255, 255, 255] as [number, number, number],
+    line_border_width: 0,
     marker_color: [0, 0, 255] as [number, number, number],
     marker_radius: 10,
     res_duration: 12.0,

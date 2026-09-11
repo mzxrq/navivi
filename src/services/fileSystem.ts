@@ -5,6 +5,17 @@ import { appConfig, fileSystem } from "../config/constants";
 import { TimelineData, TimelineManifest, ManifestClip } from "../types";
 
 
+function calculateDistance(pos1: [number, number], pos2: [number, number]) {
+  const R = 6371e3;
+  const dLat = (pos2[0] - pos1[0]) * (Math.PI / 180);
+  const dLon = (pos2[1] - pos1[1]) * (Math.PI / 180);
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(pos1[0] * (Math.PI / 180)) * Math.cos(pos2[0] * (Math.PI / 180)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
 export const saveProjectData = async (
   waypoints: any[],
   routeSegments: any[],
@@ -39,11 +50,12 @@ export const saveProjectData = async (
 
     if (!safeFolderName) {
       let counter = 1;
+      const baseProjName = overrideName || metadata.project_name || appConfig.defaultProjectName;
+      const baseSafeName = baseProjName.toLowerCase().replace(/[^a-z0-9]+/g, "_");
       while (await exists(projectDir)) {
         counter++;
-        projName = `${overrideName || metadata.project_name || appConfig.defaultProjectName} (${counter})`;
-        safeName = projName.toLowerCase().replace(/[^a-z0-9]+/g, "_");
-        projId = `${safeName}_${counter}`;
+        projName = `${baseProjName} (${counter})`;
+        projId = `${baseSafeName}_${counter}`;
         projectDir = await join(projectRoot, projId);
       }
     }
@@ -58,19 +70,21 @@ export const saveProjectData = async (
   if (!(await exists(assetsDir))) await mkdir(assetsDir, { recursive: true });
 
   // Initialize GPX String with GPSBabel expected headers
-  let gpxStr = `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="${appConfig.name}" xmlns="http://www.topografix.com/GPX/1/1">\n`;
-  gpxStr += `  <time>${new Date().toISOString()}</time>\n`;
+  const gpxLines: string[] = [];
+  gpxLines.push(`<?xml version="1.0" encoding="UTF-8"?>`);
+  gpxLines.push(`<gpx version="1.1" creator="${appConfig.name}" xmlns="http://www.topografix.com/GPX/1/1">`);
+  gpxLines.push(`  <time>${new Date().toISOString()}</time>`);
 
   // export waypoints
   waypoints.forEach((wp) => {
-    gpxStr += ` <wpt lat="${wp.lat}" lon="${wp.lng}">\n`;
+    gpxLines.push(` <wpt lat="${wp.lat}" lon="${wp.lng}">`);
     const safeName = (wp.name || "Navivi Stop").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    gpxStr += `   <name>${safeName}</name>\n`;
-    gpxStr += ` </wpt>\n`;
+    gpxLines.push(`   <name>${safeName}</name>`);
+    gpxLines.push(` </wpt>`);
   });
 
   // track segments
-  gpxStr += `  <trk>\n    <name>${projName}</name>\n    <trkseg>\n`;
+  gpxLines.push(`  <trk>\n    <name>${projName}</name>\n    <trkseg>`);
 
   let currentTime = new Date();
   let lastPos: [number, number] | null = null;
@@ -84,35 +98,28 @@ export const saveProjectData = async (
       let dist = 0;
 
       if (lastPos) {
-        // Haversine formula to get distance between coords in meters
-        const R = 6371e3;
-        const dLat = (pos[0] - lastPos[0]) * (Math.PI / 180);
-        const dLon = (pos[1] - lastPos[1]) * (Math.PI / 180);
-        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-          Math.cos(lastPos[0] * (Math.PI / 180)) * Math.cos(pos[0] * (Math.PI / 180)) *
-          Math.sin(dLon / 2) * Math.sin(dLon / 2);
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        dist = R * c;
+        dist = calculateDistance(lastPos, pos);
       }
 
       // Calculate time delta based on distance and assumed speed
       const timeDeltaSeconds = lastPos ? dist / speedMs : 0;
       currentTime = new Date(currentTime.getTime() + timeDeltaSeconds * 1000);
 
-      gpxStr += `      <trkpt lat="${pos[0]}" lon="${pos[1]}">\n`;
-      gpxStr += `        <ele>35.0</ele>\n`; // Static fake elevation
-      gpxStr += `        <time>${currentTime.toISOString()}</time>\n`;
-      gpxStr += `        <speed>${speedMs.toFixed(6)}</speed>\n`;
-      gpxStr += `        <fix>3d</fix>\n`;
-      gpxStr += `        <sat>8</sat>\n`;
-      gpxStr += `        <hdop>1.0</hdop>\n`;
-      gpxStr += `      </trkpt>\n`;
+      gpxLines.push(`      <trkpt lat="${pos[0]}" lon="${pos[1]}">`);
+      gpxLines.push(`        <ele>35.0</ele>`); // Static fake elevation
+      gpxLines.push(`        <time>${currentTime.toISOString()}</time>`);
+      gpxLines.push(`        <speed>${speedMs.toFixed(6)}</speed>`);
+      gpxLines.push(`        <fix>3d</fix>`);
+      gpxLines.push(`        <sat>8</sat>`);
+      gpxLines.push(`        <hdop>1.0</hdop>`);
+      gpxLines.push(`      </trkpt>`);
 
       lastPos = pos;
     });
   });
 
-  gpxStr += `    </trkseg>\n  </trk>\n</gpx>`;
+  gpxLines.push(`    </trkseg>\n  </trk>\n</gpx>`);
+  const gpxStr = gpxLines.join('\n');
   await writeTextFile(gpxPath, gpxStr);
 
   const processedWaypoints = await Promise.all(
@@ -170,6 +177,7 @@ export const saveProjectData = async (
     user_id: metadata.user_id,
     project_name: projName,
     created_at: metadata.created_at,
+    theme: metadata.theme,
     status: "saved",
     directory_path: projectDir,
     source_files: { gps_route: gpxPath },

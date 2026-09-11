@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { useUI } from "../../hooks/useUI";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { 
-  Plus, FolderOpen, Map, Clock, ChevronRight, 
+  Plus, FolderOpen, Map, Clock, 
   LayoutGrid, List, MoreVertical, Trash2, Copy, Edit3, Settings2, AlertTriangle
 } from "../ui/icons"; 
 

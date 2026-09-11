@@ -42,8 +42,11 @@ export function SaveAs({
     const baseName = saveAsName.trim();
     if (!baseName) {
       setFolderPreview("untitled");
+      setIsChecking(false);
       return;
     }
+
+    let isActive = true;
 
     const checkAvailablePath = async () => {
       setIsChecking(true);
@@ -52,31 +55,25 @@ export function SaveAs({
           baseName.toLowerCase().replace(/[^a-z0-9]+/g, "_") || "untitled";
 
         const docsPath = await documentDir();
+        const projectsRootPath = await join(docsPath, fileSystem.rootFolder, fileSystem.projectsFolder);
         let currentTestName = sanitizedBase;
         let counter = 1;
 
-        while (
-          await exists(
-            await join(
-              docsPath,
-              fileSystem.rootFolder,
-              fileSystem.projectsFolder,
-              currentTestName,
-            ),
-          )
-        ) {
+        while (await exists(await join(projectsRootPath, currentTestName))) {
           currentTestName = `${sanitizedBase}_${counter}`;
           counter++;
         }
 
-        setFolderPreview(currentTestName);
+        if (isActive) setFolderPreview(currentTestName);
       } catch (error) {
         console.error("Failed to check folder existence:", error);
-        setFolderPreview(
-          baseName.toLowerCase().replace(/[^a-z0-9]+/g, "_") || "untitled",
-        );
+        if (isActive) {
+          setFolderPreview(
+            baseName.toLowerCase().replace(/[^a-z0-9]+/g, "_") || "untitled"
+          );
+        }
       } finally {
-        setIsChecking(false);
+        if (isActive) setIsChecking(false);
       }
     };
 
@@ -84,7 +81,10 @@ export function SaveAs({
       checkAvailablePath();
     }, 300);
 
-    return () => clearTimeout(timer);
+    return () => {
+      isActive = false;
+      clearTimeout(timer);
+    };
   }, [saveAsName, isOpen]);
 
   if (!isOpen) return null;

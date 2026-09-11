@@ -2,6 +2,7 @@ import { useState } from "react";
 import { MapArea } from "./mapeditor/MapArea";
 import { Sidebar } from "./mapeditor/Sidebar";
 import { TimelineView } from "./videoeditor/TimelineView";
+import { TimelineEditor } from "./mapeditor/TimelineEditor";
 import { MapIcon, Film } from "../ui/icons";
 
 export function EditorLayout() {
@@ -43,8 +44,13 @@ export function EditorLayout() {
         {editorMode === "map" ? (
           <>
             <Sidebar />
-            <div className="flex-1 relative">
-              <MapArea />
+            <div className="flex-1 flex flex-col relative min-w-0">
+              <div className="flex-1 relative min-h-0">
+                <MapArea />
+              </div>
+              <div className="h-48 shrink-0 bg-white dark:bg-navidark-900 z-50">
+                <TimelineEditor />
+              </div>
             </div>
           </>
         ) : (

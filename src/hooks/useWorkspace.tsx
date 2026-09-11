@@ -369,10 +369,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       return 5.0; 
     };
 
-    let runningTime = 0;
+    const trackRunningTime: Record<string, number> = {
+      "track-video-1": 0,
+      "track-video-2": 0,
+    };
     const newClips: ClipData[] = [];
 
-    manifest.video_tracks.forEach((item) => {
+    const videoTracks = manifest.video_tracks || [];
+    videoTracks.forEach((item) => {
       const targetTrackId = item.type === "static_popup" ? "track-video-2" : "track-video-1";
       const safeDuration = parseDuration(item.duration);
 
@@ -380,23 +384,25 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         id: item.clip_id || crypto.randomUUID(),
         trackId: targetTrackId,
         label: item.file_path.split(/[/\\]/).pop() || "Video Clip", 
-        startTime: runningTime,
+        startTime: trackRunningTime[targetTrackId],
         duration: safeDuration,
         sourceDuration: safeDuration,
         source: item.file_path,
         type: "video",
       });
       
-      runningTime += item.duration;
+      trackRunningTime[targetTrackId] += safeDuration;
     });
 
     if (manifest.audio_track) {
+      const audioDuration = parseDuration(manifest.total_duration_seconds);
+      
       newClips.push({
         id: crypto.randomUUID(),
         trackId: "track-audio-1",
         label: manifest.audio_track.split(/[/\\]/).pop() || "Master Audio",
         startTime: 0,
-        duration: manifest.total_duration_seconds,
+        duration: audioDuration,
         source: manifest.audio_track,
         type: "audio",
       });

@@ -11,8 +11,12 @@ export function RouteLayer({ uploadedRouteLine, routePoints }: RouteLayerProps) 
   const { routeSegments, settings } = useWorkspace();
 
   const hexLineColor =
-    "#" + settings.line_color.map((x) => x.toString(16).padStart(2, "0")).join("");
-  const lineWidth = settings.line_thickness || 4;
+    "#" + (settings?.line_color || [59, 130, 246]).map((x: number) => x.toString(16).padStart(2, "0")).join("");
+  const lineWidth = settings?.line_thickness || 4;
+
+  const hexBorderColor =
+    "#" + (settings?.line_border_color || [255, 255, 255]).map((x: number) => x.toString(16).padStart(2, "0")).join("");
+  const borderWidth = settings?.line_border_width || 0;
 
   const dynamicRouteGeoJSON = useMemo(() => {
     const features = routeSegments.map((segment) => ({
@@ -88,6 +92,26 @@ export function RouteLayer({ uploadedRouteLine, routePoints }: RouteLayerProps) 
             "line-width": 9,
           }}
         />
+
+        {/* 🛠️ NORMAL ROUTE BORDERS */}
+        {borderWidth > 0 && (
+          <Layer
+            id="route-border-all"
+            type="line"
+            filter={["!=", "mode", "draw"]}
+            layout={{ "line-join": "round", "line-cap": "round" }}
+            paint={{
+              "line-color": hexBorderColor,
+              "line-width": [
+                "match",
+                ["get", "mode"],
+                "direct", 4 + borderWidth * 2,
+                "curve", 4 + borderWidth * 2,
+                lineWidth + borderWidth * 2
+              ]
+            }}
+          />
+        )}
 
         {/* 🛠️ NORMAL ROUTES */}
         <Layer

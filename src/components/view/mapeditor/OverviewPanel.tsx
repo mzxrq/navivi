@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Sparkles, PencilSparkles, Square, X, MapPin } from "../../ui/icons";
+import { Sparkles, PencilSparkles, Square, X } from "../../ui/icons";
 import { useWorkspace } from "../../../hooks/useWorkspace";
 import { useUI } from "../../../hooks/useUI";
 import { generateOverviewScriptStream, checkModelExists } from "../../../services/ollamaApi";
