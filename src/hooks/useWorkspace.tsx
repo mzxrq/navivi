@@ -68,7 +68,6 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const { editorMode } = useUI();
   const [isDirty, setIsDirty] = useState(false);
 
-  // ✨ FIX: Wrap Waypoint History to trigger isDirty
   const {
     state: waypoints,
     set: _setWaypoints,
@@ -87,7 +86,6 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const undoMap = useCallback(() => { _undoMap(); setIsDirty(true); }, [_undoMap]);
   const redoMap = useCallback(() => { _redoMap(); setIsDirty(true); }, [_redoMap]);
 
-  // ✨ FIX: Wrap Timeline History to trigger isDirty! (Fixes Status Bar)
   const {
     state: timeline,
     set: _setTimeline,

@@ -78,20 +78,23 @@ export function RenderOverlay() {
       time: new Date().toLocaleTimeString([], { hour12: false })
     }]);
 
+    const applyProgressFromText = (text: string) => {
+      const ratioMatch = text.match(/\[(\d+)\/(\d+)\]/);
+      if (ratioMatch) {
+        const current = parseInt(ratioMatch[1]);
+        const total = parseInt(ratioMatch[2]);
+        setProgress(20 + Math.floor((current / total) * 70));
+      } else if (text.includes("Step 1 complete")) { setProgress(10); }
+      else if (text.includes("Step 4:")) { setProgress(90); }
+      else if (text.includes("Step 6 complete") || text.includes("timeline written")) { setProgress(100); }
+    };
+
+    const isTrackerLine = (text: string) => /^\[\d{2}:\d{2}\]/.test(text);
+
     const setupListeners = async () => {
       const unlistenLog = await listen<string>("render-log", (event) => {
         const text = event.payload;
-        
-        // ✨ FIX: Smart aggressive regex for [X/Y] patterns
-        const ratioMatch = text.match(/\[(\d+)\/(\d+)\]/);
-        if (ratioMatch) {
-          const current = parseInt(ratioMatch[1]);
-          const total = parseInt(ratioMatch[2]);
-          // Scale from 20% to 90% based on chunks processing
-          setProgress(20 + Math.floor((current / total) * 70)); 
-        } else if (text.includes("Step 1 complete")) { setProgress(10); }
-        else if (text.includes("Step 4:")) { setProgress(90); }
-        else if (text.includes("Step 6 complete") || text.includes("timeline written")) { setProgress(100); }
+        applyProgressFromText(text);
 
         setLogs(prev => [...prev, {
           id: crypto.randomUUID(),
@@ -102,10 +105,14 @@ export function RenderOverlay() {
       });
 
       const unlistenError = await listen<string>("render-error", (event) => {
+        const text = event.payload;
+        const isProgress = isTrackerLine(text);
+        if (isProgress) applyProgressFromText(text);
+
         setLogs(prev => [...prev, {
           id: crypto.randomUUID(),
-          message: event.payload,
-          type: "error",
+          message: text,
+          type: isProgress ? "info" : "error",
           time: new Date().toLocaleTimeString([], { hour12: false })
         }]);
       });
@@ -191,7 +198,6 @@ export function RenderOverlay() {
     }
     setReviewItems(items);
 
-    // ✨ 2. Build Video Previews from Manifest
     try {
       const manifest = await loadTimelineManifest(metadata.directory_path);
       if (manifest && manifest.video_tracks) {
@@ -312,7 +318,6 @@ export function RenderOverlay() {
               const isActive = step === s.id;
               const isPast = ["generating", "verifying", "finished"].indexOf(step) > i;
               return (
-                // ✨ FIX: Solid background so the line doesn't pierce through the middle
                 <div key={s.id} className="relative z-10 flex flex-col items-center gap-2 bg-zinc-50 dark:bg-[#0c0c0e] px-4 py-1 rounded-lg">
                   <div className={`w-7 h-7 rounded-full flex items-center justify-center border-2 font-bold text-xs transition-colors ${
                     isActive ? "border-navi-500 bg-navi-500 text-white shadow-md" : 
@@ -370,7 +375,6 @@ export function RenderOverlay() {
           {step === "verifying" && (
             <div className="flex-1 flex flex-col gap-6 animate-in slide-in-from-right-4 duration-300">
               
-              {/* ✨ NEW: Video Verification Grid */}
               {videoItems.length > 0 && (
                 <div className="space-y-3">
                   <h3 className="text-xs font-bold text-zinc-800 dark:text-zinc-100 uppercase tracking-wider flex items-center gap-2">

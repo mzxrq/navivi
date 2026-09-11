@@ -13,7 +13,6 @@ import {
   Redo2,
   Film,
 } from "../ui/icons";
-// ✨ FIXED: Use getCurrentWindow for bulletproof window controls in Tauri
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { SaveAs } from "./SaveAs";
 import { UnsavedChanges } from "./UnsavedChanges";
@@ -97,16 +96,24 @@ export function TitleBar() {
   };
 
   const handleWindow = async (action: "minimize" | "maximize" | "close") => {
-    const appWindow = getCurrentWindow();
-    if (action === "minimize") await appWindow.minimize();
-    if (action === "maximize") await appWindow.toggleMaximize();
     if (action === "close") {
       setIsMenuOpen(false);
       if (currentView === "editor" && isDirty) {
         setPendingNavigation("close");
         return;
       }
-      await appWindow.close();
+    }
+
+    try {
+      const appWindow = getCurrentWindow();
+      if (action === "minimize") await appWindow.minimize();
+      if (action === "maximize") await appWindow.toggleMaximize();
+      if (action === "close") await appWindow.close();
+    } catch (err) {
+      console.error("Tauri Window API error:", err);
+      if (action === "close") {
+        showToast("Cannot close window. Check Tauri capabilities.", "error");
+      }
     }
   };
 
@@ -140,8 +147,7 @@ export function TitleBar() {
 
         if (pendingNavigation) {
           if (pendingNavigation === "close") {
-            const appWindow = getCurrentWindow();
-            await appWindow.close();
+            try { await getCurrentWindow().close(); } catch (e) { console.error(e); }
           } else if (
             pendingNavigation === "title_screen" ||
             pendingNavigation === "new_project"
@@ -430,8 +436,7 @@ export function TitleBar() {
         onDiscard={async () => {
           setIsDirty(false);
           if (pendingNavigation === "close") {
-            const appWindow = getCurrentWindow();
-            await appWindow.close();
+            try { await getCurrentWindow().close(); } catch (e) { console.error(e); }
           } else if (
             pendingNavigation === "title_screen" ||
             pendingNavigation === "new_project"
@@ -453,8 +458,7 @@ export function TitleBar() {
           const saved = await handleSave();
           if (saved && pendingNavigation) {
             if (pendingNavigation === "close") {
-              const appWindow = getCurrentWindow();
-              await appWindow.close();
+              try { await getCurrentWindow().close(); } catch (e) { console.error(e); }
             } else if (
               pendingNavigation === "title_screen" ||
               pendingNavigation === "new_project"
