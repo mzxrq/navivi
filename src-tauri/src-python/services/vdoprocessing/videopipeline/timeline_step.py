@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 from typing import Optional
 
-from .helpers import logger
+from .helpers import logger, project_subtitle_dir
 
 # [NOTE] [Core] Waypoint index embedded in attraction clip filenames, e.g. "04_attraction_03_Kabutoyama.mp4" -> waypoint index 3 (matches attraction_step.py's `f"04_attraction_{idx:02d}_{safe_label}.mp4"`).
 _ATTRACTION_RE = re.compile(r"04_attraction_(\d+)_")
@@ -46,7 +46,7 @@ def build_timeline(
     """
     audio_paths = audio_paths or []
     subtitle_paths = subtitle_paths or []
-    subtitles_dir = Path(project_dir) / "subtitles"
+    subtitles_dir = project_subtitle_dir(project_dir)
 
     num_route_videos = len(video_paths)
     # [NOTE] [Core] Sequential counter mirroring render_route_video's own audio-mux loop (Step 4), which walks video_paths in order and advances one audio index per residential-leg clip encountered — not the same as its position in the array.

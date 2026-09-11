@@ -151,7 +151,7 @@ def _crossfade_chain(
         *inputs,
         "-filter_complex", ";".join(filter_parts),
         "-map", f"[{prev_label}]",
-        "-c:v", "libx264", "-crf", "18", "-preset", "fast", "-pix_fmt", "yuv420p",
+        "-c:v", "libx264", *tuning.ffmpeg_thread_args(), "-crf", "18", "-preset", "fast", "-pix_fmt", "yuv420p",
         output_path,
     ]
     result = subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace")
@@ -310,7 +310,7 @@ def generate_intro_clip(
             "-i", str(combined_path),
             "-vf", vf_filter,
             "-an",
-            "-c:v", "libx264", "-crf", "18", "-preset", "fast", "-pix_fmt", "yuv420p",
+            "-c:v", "libx264", *tuning.ffmpeg_thread_args(), "-crf", "18", "-preset", "fast", "-pix_fmt", "yuv420p",
             str(output_path),
         ]
         result = subprocess.run(

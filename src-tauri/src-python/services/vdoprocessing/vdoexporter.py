@@ -113,6 +113,7 @@ class VideoExporter:
             "-an",
             "-vcodec",
             "libx264",
+            *tuning.ffmpeg_thread_args(),
             "-crf",
             "18",
             "-preset",
@@ -235,6 +236,7 @@ class VideoExporter:
                     src,
                     "-vcodec",
                     "libx264",
+                    *tuning.ffmpeg_thread_args(),
                     "-crf",
                     "18",
                     "-preset",
@@ -427,6 +429,7 @@ class VideoExporter:
                 str(video_path),
                 "-vf",
                 f"subtitles='{safe_sub_path}'",
+                *tuning.ffmpeg_thread_args(),
                 "-c:a",
                 "copy",  # Copy the audio without re-encoding it
                 str(out_path),
@@ -478,6 +481,7 @@ class VideoExporter:
                 str(video_path),
                 "-vf",
                 f"scale={target_width}:{target_height}:flags=lanczos",
+                *tuning.ffmpeg_thread_args(),
                 "-c:a",
                 "copy",
                 str(out_path),
@@ -547,6 +551,7 @@ class VideoExporter:
                     "-i", str(video_path),
                     "-vf",
                     f"subtitles=filename='{escaped_srt}':force_style='{style.to_force_style()}'",
+                    *tuning.ffmpeg_thread_args(),
                     "-c:a", "copy",
                     str(out_path),
                 ],
@@ -669,7 +674,8 @@ class VideoExporter:
         if trim_to is not None:
             cmd += ["-t", f"{trim_to:.3f}"]
         cmd += [
-            "-c:v", "libx264", "-preset", "fast", "-crf", "18", "-pix_fmt", "yuv420p",
+            "-c:v", "libx264", *tuning.ffmpeg_thread_args(),
+            "-preset", "fast", "-crf", "18", "-pix_fmt", "yuv420p",
             "-c:a", "copy",
             str(out_path),
         ]

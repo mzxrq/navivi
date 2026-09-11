@@ -224,7 +224,7 @@ def generate_outro_clip(
             ffmpeg_cmd, "-y",
             "-loop", "1", "-i", str(frame_path),
             "-t", f"{duration_sec:.3f}",
-            "-c:v", "libx264", "-crf", "18", "-preset", "fast", "-pix_fmt", "yuv420p",
+            "-c:v", "libx264", *tuning.ffmpeg_thread_args(), "-crf", "18", "-preset", "fast", "-pix_fmt", "yuv420p",
             str(output_path),
         ]
         result = subprocess.run(

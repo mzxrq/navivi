@@ -10,7 +10,23 @@ settings (e.g. settings.mode_speeds_kmh) — these are only the fallback
 defaults.
 """
 
-from typing import Dict, Tuple
+import os
+from typing import Dict, List, Tuple
+
+# --- FFmpeg resource cap -----------------------------------------------------
+# No ffmpeg call anywhere in this codebase passed -threads before, so every
+# encode/mux/upscale was free to claim every CPU core at once — on a render-
+# heavy run (subtitle burn, upscale, concat, TTS audio processing) that can
+# leave the whole machine unresponsive. Leave a couple of cores free by
+# default so the OS/UI stays usable while a render is in progress.
+FFMPEG_THREADS: int = max(1, (os.cpu_count() or 4) - 2)
+
+
+def ffmpeg_thread_args() -> List[str]:
+    """The -threads args every ffmpeg subprocess call site should splice
+    into its argument list, right after the ffmpeg binary path."""
+    return ["-threads", str(FFMPEG_THREADS)]
+
 
 # --- Mode speeds (km/h) -----------------------------------------------------
 # REPORTED is the real-world speed a leg's distance/time is estimated from

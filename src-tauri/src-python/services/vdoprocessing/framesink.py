@@ -15,6 +15,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+from services import tuning
 from services.logger.logger import setup_logger
 
 # Logging configuration
@@ -138,6 +139,7 @@ class FrameSink:
             "-an",
             "-vcodec",
             "libx264",
+            *tuning.ffmpeg_thread_args(),
             "-pix_fmt",
             "yuv420p",
             str(output_path),
@@ -165,6 +167,7 @@ class FrameSink:
                     src,
                     "-vcodec",
                     "libx264",
+                    *tuning.ffmpeg_thread_args(),
                     "-crf",
                     "18",
                     "-preset",

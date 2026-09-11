@@ -16,6 +16,7 @@ import tempfile
 from pathlib import Path
 from typing import Final, List, Optional
 
+from services import tuning
 from services.config.job_config import JobConfigManager
 from services.logger.logger import setup_logger
 
@@ -131,9 +132,12 @@ class VideoEditor:
 
     # [Validate] Resolves output paths dynamically based on the job configuration and subfolder
     def _resolve_output_path(self, filename: str, subfolder: str) -> Path:
-        """Dynamically routes outputs to the centralized assets directory."""
+        """Dynamically routes outputs to the project's assets directory,
+        e.g. <directory_path>/assets/video — every generated output
+        (audio/video/subtitles) lives grouped under assets/, alongside the
+        project's raw input assets (popup images)."""
         base_path = Path(self.config.get("directory_path", "assets"))
-        target_dir = (base_path / subfolder).resolve()
+        target_dir = (base_path / "assets" / subfolder).resolve()
         target_dir.mkdir(parents=True, exist_ok=True)
         return target_dir / filename
 
@@ -357,6 +361,7 @@ class VideoEditor:
             f"setpts={pts_factor:.6f}*PTS",
             "-c:v",
             "libx264",
+            *tuning.ffmpeg_thread_args(),
             "-preset",
             "fast",
             "-crf",
@@ -417,6 +422,7 @@ class VideoEditor:
             # would then not actually shorten the file at all.
             "-c:v",
             "libx264",
+            *tuning.ffmpeg_thread_args(),
             "-preset",
             "fast",
             "-crf",
@@ -467,6 +473,7 @@ class VideoEditor:
             input_pattern,
             "-c:v",
             "libx264",  # Standard H.264 encoding
+            *tuning.ffmpeg_thread_args(),
             "-pix_fmt",
             "yuv420p",  # Ensures playback compatibility across standard video players
             str(output_path),

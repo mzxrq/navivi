@@ -140,6 +140,7 @@ class RouteAnimator:
             f"tpad=stop_mode=clone:stop_duration={hold_seconds}",
             "-c:v",
             "libx264",
+            *tuning.ffmpeg_thread_args(),
             "-pix_fmt",
             "yuv420p",
             temp_out,

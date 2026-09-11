@@ -26,7 +26,10 @@ from .helpers import (
     _project_route_to_pixels,
     _resolve_leg_geometry_from_cache,
     logger,
+    output_is_valid,
 )
+
+_RENDER_MANIFEST_NAME = ".render_manifest.json"
 
 
 # Overview map padding, scaled to how physically big the route actually
@@ -77,9 +80,34 @@ def render_route_video(
     audio_paths: Optional[list[str]] = None,
     audio_durations: Optional[list[float]] = None,
     audio_pauses: Optional[list[Any]] = None,
+    force: bool = False,
 ) -> list[str]:
-    """Generates the visual map animation using synced audio timing."""
+    """Generates the visual map animation using synced audio timing.
+
+    Checkpointing: this step's internals branch too heavily (2D/3D
+    residential, ferry legs, overview map) to check each sub-output
+    individually, so instead a manifest of the exact output paths from the
+    last successful render is written to `.render_manifest.json` in
+    output_video_dir. If that manifest exists and every path it lists is
+    still a valid file, the whole (expensive) render is skipped and those
+    paths are returned directly, unless `force` is set.
+    """
     logger.info("Step 4: Rendering Video Engine — starting.")
+
+    manifest_path = Path(output_video_dir) / _RENDER_MANIFEST_NAME
+    if not force and manifest_path.exists():
+        try:
+            with open(manifest_path, "r", encoding="utf-8") as f:
+                cached_paths = json.load(f).get("output_paths", [])
+        except (OSError, json.JSONDecodeError):
+            cached_paths = []
+        if cached_paths and all(output_is_valid(p) for p in cached_paths):
+            logger.info(
+                "Step 4: All %d route/residential video output(s) already "
+                "exist — skipping render.",
+                len(cached_paths),
+            )
+            return cached_paths
 
     route_df = cleaned_route.get("route")
     if route_df is None or route_df.empty:
@@ -611,5 +639,12 @@ def render_route_video(
         output_paths = muxed_paths
     tracker.clear()
     logger.info("Step 4 complete: %d video file(s) produced.", len(output_paths))
+
+    try:
+        Path(output_video_dir).mkdir(parents=True, exist_ok=True)
+        with open(manifest_path, "w", encoding="utf-8") as f:
+            json.dump({"output_paths": output_paths}, f, ensure_ascii=False, indent=2)
+    except OSError as e:
+        logger.warning("Step 4: Failed to write render manifest: %s", e)
 
     return output_paths

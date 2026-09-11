@@ -5,7 +5,7 @@ from typing import Optional
 
 from services.config.job_config import JobConfigManager
 
-from .helpers import logger
+from .helpers import logger, project_video_dir
 
 
 def render_outro_clip(project_config_path: str) -> Optional[str]:
@@ -24,7 +24,7 @@ def render_outro_clip(project_config_path: str) -> Optional[str]:
     job_config = JobConfigManager(config_path)
     project_name = job_config.get("project_name", "")
     waypoints = job_config.get("waypoints", [])
-    video_dir = Path(job_config.get("directory_path", config_path.parent)) / "video"
+    video_dir = project_video_dir(job_config.get("directory_path", config_path.parent))
 
     logger.info("Outro step: building outro clip for project '%s'.", project_name)
     outro_path = generate_outro_clip(

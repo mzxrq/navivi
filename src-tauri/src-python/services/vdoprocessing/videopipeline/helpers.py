@@ -36,6 +36,60 @@ def clear_console():
     os.system("cls" if os.name == "nt" else "clear")
 
 
+def output_is_valid(path, min_bytes: int = 1024) -> bool:
+    """Checkpoint helper: True only if `path` exists and is above
+    `min_bytes` — guards against treating a zero-byte/truncated file left
+    behind by a killed process as a finished, skippable output."""
+    try:
+        p = Path(path)
+        return p.is_file() and p.stat().st_size >= min_bytes
+    except OSError:
+        return False
+
+
+def safe_label(label, fallback: str) -> str:
+    """The one canonical filename-safe label sanitizer, shared by every
+    domain (TTS, attraction, subtitles) — strips to alnum/space/underscore/
+    hyphen, then replaces spaces with underscores. Previously reimplemented
+    independently as services/cli/helpers.py's _video_safe_label,
+    audio_step.py's _safe_audio_label, and (looser, punctuation-preserving)
+    inline in attraction_step.py — those three could disagree on the same
+    label, silently desyncing filenames across domains."""
+    cleaned = "".join(
+        char for char in str(label) if char.isalnum() or char in (" ", "_", "-")
+    ).strip().replace(" ", "_")
+    return cleaned or fallback
+
+
+def waypoint_audio_filename(idx: int, label) -> str:
+    """Canonical TTS audio filename for waypoint `idx` (0-based)."""
+    return f"02_waypoint_{idx + 1:02d}_{safe_label(label, f'leg{idx + 1}')}.wav"
+
+
+def attraction_output_filename(idx: int, label) -> str:
+    """Canonical attraction-video filename for waypoint `idx` (0-based).
+    timeline_step.py's _ATTRACTION_RE depends on this exact format."""
+    return f"04_attraction_{idx:02d}_{safe_label(label, f'waypoint_{idx}')}.mp4"
+
+
+# Every generated output (audio, video, subtitles) lives grouped under the
+# project's assets/ folder, alongside the raw input assets (popup images)
+# that already live there — e.g. <project>/assets/audio, not
+# <project>/audio. Centralized here so every step/CLI command agrees on the
+# same layout instead of each independently joining "audio"/"video"/
+# "subtitles" onto a project directory.
+def project_audio_dir(project_dir) -> Path:
+    return Path(project_dir) / "assets" / "audio"
+
+
+def project_video_dir(project_dir) -> Path:
+    return Path(project_dir) / "assets" / "video"
+
+
+def project_subtitle_dir(project_dir) -> Path:
+    return Path(project_dir) / "assets" / "subtitles"
+
+
 def _project_route_to_pixels(
     lats,
     lons,

@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from services.logger.progress import tracker as _tracker
+from services.vdoprocessing.videopipeline.helpers import project_video_dir
 
 
 def test_gps(job_config_path: str) -> Dict[str, Any]:
@@ -31,7 +32,9 @@ def test_gps(job_config_path: str) -> Dict[str, Any]:
     }
 
 
-def test_overview_video(job_config_path: str, output_video_dir: str = None) -> Dict[str, Any]:
+def test_overview_video(
+    job_config_path: str, output_video_dir: str = None, force: bool = False
+) -> Dict[str, Any]:
     """Runs GPS parsing + route video rendering only, to sanity-check the
     overview map animation without paying for TTS/attraction/subtitle stages."""
     from services.vdoprocessing.videopipeline import process_gps, render_route_video
@@ -40,7 +43,7 @@ def test_overview_video(job_config_path: str, output_video_dir: str = None) -> D
     if not config_path.exists():
         raise FileNotFoundError(f"job_config.json not found: {config_path}")
 
-    output_video_dir = output_video_dir or str(config_path.parent / "video")
+    output_video_dir = output_video_dir or str(project_video_dir(config_path.parent))
 
     _tracker.show("Parsing GPS track...")
     cleaned_route = process_gps(str(config_path))
@@ -51,6 +54,7 @@ def test_overview_video(job_config_path: str, output_video_dir: str = None) -> D
         cleaned_route=cleaned_route,
         project_config_path=str(config_path),
         output_video_dir=output_video_dir,
+        force=force,
     )
     _tracker.clear()
 
@@ -66,6 +70,7 @@ def test_residential_video(
     output_video_dir: str = None,
     fps: Optional[int] = None,
     speed_kmh: Optional[float] = None,
+    force: bool = False,
 ) -> Dict[str, Any]:
     """Runs the per-waypoint leg-by-leg render only, to sanity-check the
     residential animation without paying for the overview, TTS, or subtitle
@@ -82,7 +87,7 @@ def test_residential_video(
         project_config = json.load(config_file)
     use_3d_res = bool(project_config.get("settings", {}).get("use_3d_res", False))
 
-    output_video_dir = Path(output_video_dir or (config_path.parent / "video"))
+    output_video_dir = Path(output_video_dir) if output_video_dir else project_video_dir(config_path.parent)
     output_video_dir.mkdir(parents=True, exist_ok=True)
 
     if use_3d_res:
@@ -110,6 +115,7 @@ def test_residential_video(
             cleaned_route=cleaned_route,
             project_config_path=str(config_path),
             output_video_dir=str(output_video_dir),
+            force=force,
         )
         # render_route_video also produces "01_overview.mp4" — this entry
         # point is scoped to the residential/per-leg clips only, matching

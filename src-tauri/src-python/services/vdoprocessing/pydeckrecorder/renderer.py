@@ -7,6 +7,8 @@ import math
 import os
 from typing import Any, Dict, Optional
 
+from services import tuning
+
 from .common import logger
 from .coinprop import coin_layer_expr, play_coin_collect, play_intro_coin_hold, setup_coin_mesh
 from .popupsequence import _run_popup_freeze_sequence, _wait_for_paint
@@ -62,6 +64,7 @@ async def render_leg_animation(
         "-",
         "-c:v",
         "libx264",
+        *tuning.ffmpeg_thread_args(),
         "-r",
         str(fps),
         "-pix_fmt",
@@ -262,8 +265,15 @@ async def render_leg_animation(
         coin_deg_per_frame = 360.0 / max(1, fps * 1.4)
         last_coin_spin = 0.0
 
+        # Precomputed once, in row order, so each frame below only needs a
+        # plain list slice — this used to re-derive the same prefix from
+        # the DataFrame (df.iloc[...][...].values.tolist()) on every single
+        # frame, which is O(frames) of pandas overhead per frame (O(frames^2)
+        # total) instead of a cheap list slice.
+        all_trail_points = df[["lon", "lat"]].values.tolist()
+
         for index, row in df.iterrows():
-            active_trail = df.iloc[: index + 1][["lon", "lat"]].values.tolist()
+            active_trail = all_trail_points[: index + 1]
 
             if accumulated_trail:
                 active_trail.insert(0, accumulated_trail[-1])

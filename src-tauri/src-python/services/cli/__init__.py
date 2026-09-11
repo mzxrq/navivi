@@ -7,6 +7,7 @@ each pipeline step's test_* command lives next to its own concerns:
 - tts_commands: TTS narration generation
 - attraction_commands: attraction/pan-zoom video generation
 - subtitle_commands: subtitle generation from TTS audio
+- intro_outro_commands: intro/outro clip generation
 - combine_commands: video concat, the transition editor, and test_all
   (which runs every isolated stage above as one combined project test)
 """
@@ -20,6 +21,7 @@ from .attraction_commands import (
     test_attraction_finalize,
 )
 from .subtitle_commands import test_subtitle, test_subtitles
+from .intro_outro_commands import test_intro_video, test_outro_video
 from .combine_commands import test_video_concat, test_transition_editor, test_all
 
 __all__ = [
@@ -36,6 +38,8 @@ __all__ = [
     "test_attraction_finalize",
     "test_subtitle",
     "test_subtitles",
+    "test_intro_video",
+    "test_outro_video",
     "test_video_concat",
     "test_transition_editor",
     "test_all",

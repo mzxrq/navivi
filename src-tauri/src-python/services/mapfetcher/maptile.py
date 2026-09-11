@@ -28,6 +28,37 @@ logger = setup_logger("MapTile")
 # from (launched by the Tauri sidecar) isn't guaranteed to be src-python.
 load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env")
 
+# Tiles are cached to disk forever with no eviction otherwise — across every
+# project/run this grows unbounded. Best-effort age-based sweep, run once
+# per TileDownloader init (see _evict_stale_tiles below).
+_TILE_CACHE_MAX_AGE_DAYS = 30
+
+
+def _evict_stale_tiles(cache_dir: Path, max_age_days: float = _TILE_CACHE_MAX_AGE_DAYS) -> None:
+    """Deletes cached tile files under `cache_dir` whose mtime is older than
+    `max_age_days`. Best-effort and silent — a cache-cleanup failure should
+    never break a render, it just means the cache grows a bit more."""
+    try:
+        cutoff = time.time() - (max_age_days * 86400)
+        removed = 0
+        for path in cache_dir.rglob("*"):
+            if not path.is_file():
+                continue
+            try:
+                if path.stat().st_mtime < cutoff:
+                    path.unlink()
+                    removed += 1
+            except OSError:
+                continue
+        if removed:
+            logger.info(
+                "Evicted %d stale tile cache file(s) older than %d day(s) from %s.",
+                removed, max_age_days, cache_dir,
+            )
+    except OSError as exc:
+        logger.warning("Tile cache eviction skipped for %s: %s", cache_dir, exc)
+
+
 class TileDownloader:
     """Handles downloading map tiles and fetching map images for route visualization."""
 
@@ -75,6 +106,7 @@ class TileDownloader:
         # subsequent fetch of an already-seen tile (any provider, Mapbox
         # included) is served from disk instead of hitting the network again.
         cx.set_cache_dir(str(self.cache_dir))
+        _evict_stale_tiles(self.cache_dir)
 
     # [Map/Util] Picks Mapbox (higher-resolution, retina-capable tiles) when
     # an access token is configured, falling back to the free Esri tiles
