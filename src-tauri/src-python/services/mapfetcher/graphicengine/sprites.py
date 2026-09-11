@@ -7,6 +7,8 @@ import cv2
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
 
+from services import tuning
+
 
 class _SpriteMixin:
     def prebake_landmark_sprite(self, label: str) -> Tuple[np.ndarray, Tuple[int, int]]:
@@ -15,7 +17,7 @@ class _SpriteMixin:
         this no longer duplicates it with its own circle. Drawn as a small
         rounded, soft-shadowed card (matching the popup cards' look)
         instead of a plain hard-edged rectangle."""
-        font_size = max(13, int(self.font_size * 0.6))
+        font_size = max(13, int(self.font_size * tuning.WAYPOINT_LABEL_FONT_SCALE))
         # Bold, not regular — at this small a size on a busy map tile,
         # Noto Sans's regular weight reads as too thin/hard to make out.
         font = self._load_font(self.FONT_CANDIDATES_BOLD, font_size)

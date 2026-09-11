@@ -35,6 +35,8 @@ class StepTracker:
         self._start = time.monotonic()
         self._stage_num = 0
         self._stage_total = 0
+        self._substep_total = 0
+        self._substep_start = 0.0
 
     def elapsed(self) -> str:
         secs = int(time.monotonic() - self._start)
@@ -52,6 +54,32 @@ class StepTracker:
             self._stage_total = total
         self._stage_num += 1
         self.show(name)
+
+    def begin_substeps(self, total: int) -> None:
+        """Marks the start of a loop of roughly-uniform-cost items (e.g. one
+        map tile fetch per waypoint leg, one TTS call per line) so
+        `show_item()` can append a live ETA — average time-per-item so far
+        in THIS loop, times the items still remaining. Call once right
+        before the loop starts; `total` doesn't need to match the stage's
+        own [n/N] counter (a stage can run several substep loops back to
+        back, e.g. TTS generation then subtitle burning)."""
+        self._substep_total = total
+        self._substep_start = time.monotonic()
+
+    def show_item(self, index: int, text: str) -> None:
+        """Like show(), but for the Nth (1-based) item of the loop started
+        by begin_substeps() — appends an "ETA ~mm:ss" estimate once at
+        least one prior item's duration is known to average from. Silent
+        (no ETA suffix) on the very first item, since there's nothing yet
+        to average."""
+        eta_suffix = ""
+        if self._substep_total and index > 1:
+            elapsed = time.monotonic() - self._substep_start
+            avg_per_item = elapsed / (index - 1)
+            remaining_items = max(0, self._substep_total - (index - 1))
+            eta_secs = int(avg_per_item * remaining_items)
+            eta_suffix = f" — ETA ~{eta_secs // 60:02d}:{eta_secs % 60:02d}"
+        self.show(f"{text}{eta_suffix}")
 
     def show(self, text: str) -> None:
         prefix = f"[{self.elapsed()}]"

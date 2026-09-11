@@ -112,7 +112,8 @@ class _OverviewPacingMixin:
             speeds = np.array(
                 [
                     self._mode_speed_factor.get(
-                        self._mode_at_fraction(mode_breakpoints, f), 1.0
+                        self._mode_at_fraction(mode_breakpoints, f),
+                        self._default_mode_speed_factor,
                     )
                     for f in fracs
                 ]

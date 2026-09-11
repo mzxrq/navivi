@@ -113,10 +113,10 @@ def _build_frame(project_name: str, waypoints: List[Dict[str, Any]]) -> Image.Im
 
     title_font = _load_font(_GraphicsEngineBase.FONT_CANDIDATES_BOLD, tuning.OUTRO_TITLE_FONT_SIZE)
     subtitle_font = _load_font(
-        _GraphicsEngineBase.FONT_CANDIDATES_REGULAR, tuning.OUTRO_SUBTITLE_FONT_SIZE
+        _GraphicsEngineBase.FONT_CANDIDATES_THIN, tuning.OUTRO_SUBTITLE_FONT_SIZE
     )
     label_font = _load_font(
-        _GraphicsEngineBase.FONT_CANDIDATES_REGULAR, tuning.OUTRO_LABEL_FONT_SIZE
+        _GraphicsEngineBase.FONT_CANDIDATES_THIN, tuning.OUTRO_LABEL_FONT_SIZE
     )
     badge_font = _load_font(
         _GraphicsEngineBase.FONT_CANDIDATES_BOLD, tuning.OUTRO_BADGE_FONT_SIZE
@@ -180,7 +180,9 @@ def _build_frame(project_name: str, waypoints: List[Dict[str, Any]]) -> Image.Im
         _draw_badge(canvas, (int(thumb_x) + 4, int(thumb_y) + 4), idx + 1, badge_font)
 
         label = _truncate_to_width(
-            draw, str(wp.get("label", f"Waypoint {idx + 1}")), label_font, thumb_w
+            draw,
+            str(wp.get("label", f"{tuning.PIPELINE_LABELS['waypoint_fallback']} {idx + 1}")),
+            label_font, thumb_w,
         )
         _center_text(
             draw,

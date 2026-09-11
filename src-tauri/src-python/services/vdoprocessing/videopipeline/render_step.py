@@ -3,6 +3,7 @@
 import json
 import math
 import os
+import re
 from pathlib import Path
 from typing import Any, Optional
 
@@ -22,6 +23,7 @@ from .helpers import (
     BASE_DIR,
     DEFAULT_FRONTEND_CONFIG,
     DEFAULT_MAP_BACKGROUND,
+    PIPELINE_LABELS,
     _build_point_modes,
     _project_route_to_pixels,
     _resolve_leg_geometry_from_cache,
@@ -30,6 +32,16 @@ from .helpers import (
 )
 
 _RENDER_MANIFEST_NAME = ".render_manifest.json"
+
+
+# Residential-leg clip filename's embedded 1-based departure-waypoint
+# position (see waypoints.py's chunk_filename: "02_waypoint_{N:02d}_...") —
+# used below (and by timeline_step.py's own mirrored match) to look up that
+# leg's narration by the waypoint's actual RAW position instead of a blind
+# per-clip counter, which stop-by leg-merging can throw out of sync (a
+# merged-away stop-by means consecutive leg clips no longer correspond to
+# consecutive audio_paths entries).
+RESIDENTIAL_LEG_RE = re.compile(r"02_waypoint_(\d+)_")
 
 
 # Overview map padding, scaled to how physically big the route actually
@@ -75,12 +87,13 @@ def _adaptive_overview_padding(route_df: pd.DataFrame) -> float:
 def render_route_video(
     cleaned_route: dict,
     project_config_path: str = str(DEFAULT_FRONTEND_CONFIG),
-    output_video_dir: str = str(BASE_DIR / "data" / "outputs" / "video"),
+    output_video_dir: Optional[str] = None,
     map_output_path: str = str(DEFAULT_MAP_BACKGROUND),
     audio_paths: Optional[list[str]] = None,
     audio_durations: Optional[list[float]] = None,
     audio_pauses: Optional[list[Any]] = None,
     force: bool = False,
+    render_mode: str = "both",
 ) -> list[str]:
     """Generates the visual map animation using synced audio timing.
 
@@ -91,6 +104,18 @@ def render_route_video(
     output_video_dir. If that manifest exists and every path it lists is
     still a valid file, the whole (expensive) render is skipped and those
     paths are returned directly, unless `force` is set.
+
+    render_mode gates which OUTPUT video(s) actually get produced/written:
+    "overview" skips building the residential leg-by-leg sequence entirely
+    (no per-leg residential map tile fetches, no residential clips
+    rendered/returned); "residential" still fetches the overview background
+    tile (needed for route_points/img_w/img_h, shared by both outputs) but
+    skips rendering the overview animation itself; "both" (the default,
+    used by run_full_pipeline) renders everything, unchanged from before.
+    Lets services/cli/gps_commands.py's test_overview_video and
+    test_residential_video each produce ONLY the video their name promises,
+    instead of both always being bundled into one call regardless of which
+    was asked for.
     """
     logger.info("Step 4: Rendering Video Engine — starting.")
 
@@ -122,6 +147,16 @@ def render_route_video(
 
     project_name = project_config.get("project_name", "Navigation Project")
 
+    # Defaults to the project's OWN folder (job_config.json's directory_path
+    # — the same "video" subfolder every other stage already writes to:
+    # audio_step.py, subtitle_step.py, intro_step.py/outro_step.py) rather
+    # than a fixed install-relative path — a caller can still override this
+    # explicitly (every real caller currently does).
+    if output_video_dir is None:
+        output_video_dir = str(
+            Path(project_config.get("directory_path", BASE_DIR)) / "video"
+        )
+
     tracker.show(f"Rendering overview & residential video: {project_name}")
 
     settings = project_config.get("settings", {})
@@ -136,6 +171,7 @@ def render_route_video(
 
     # 2. Fetch Base Map & Project Pixels
     logger.info("Step 4: Computing bounding box and fetching overview map tile...")
+    tracker.show("Fetching overview map tile...")
 
     # Pass the job_config explicitly (rather than relying on whatever state
     # the JobConfigManager singleton happens to already be in) so the tile
@@ -185,10 +221,9 @@ def render_route_video(
 
     # Real-world REPORTED speed per travel mode — what the summary card's
     # per-mode duration breakdown is estimated from. Kept separate from
-    # animation_speed_kmh below (used to weight on-screen time) so a
-    # realistic, honest walking speed here doesn't also drag the walking
-    # leg's on-screen animation out longer — see SpatialRenderer's
-    # _DEFAULT_ANIMATION_SPEED_KMH for why those need to differ.
+    # animation_speed_kmh below (used to weight on-screen time) — that one
+    # is a single uniform pace for every mode instead (see SpatialRenderer's
+    # _DEFAULT_ANIMATION_SPEED_KMH).
     mode_speed_kmh = {
         **SpatialRenderer._DEFAULT_MODE_SPEED_KMH,
         **{
@@ -197,13 +232,13 @@ def render_route_video(
         },
     }
     # Speed used only to weight each residential leg's ON-SCREEN duration
-    # (see seg_durations further down) — not shown anywhere as a stat, so
-    # it's free to run faster than the reported speed above for modes
-    # (walking) that would otherwise visibly crawl relative to a fast
-    # ferry/car leg.
+    # (see seg_durations further down) — not shown anywhere as a stat.
+    # Every mode defaults to the SAME pace (SpatialRenderer's own uniform
+    # _DEFAULT_ANIMATION_SPEED_KMH, not a per-mode dict) so a real-world-fast
+    # car/ferry leg doesn't get allocated dramatically more/less on-screen
+    # time than a walking one purely from its real-world speed.
     animation_speed_kmh = {
-        **mode_speed_kmh,
-        **SpatialRenderer._DEFAULT_ANIMATION_SPEED_KMH,
+        **{mode: SpatialRenderer._DEFAULT_ANIMATION_SPEED_KMH for mode in mode_speed_kmh},
         **{
             str(k).lower(): float(v)
             for k, v in (settings.get("animation_speeds_kmh") or {}).items()
@@ -282,7 +317,7 @@ def render_route_video(
 
         for idx, wp in enumerate(waypoints):
             c_idx = wp_indices[idx]
-            raw_label = wp.get("label", "Waypoint")
+            raw_label = wp.get("label", PIPELINE_LABELS["waypoint_fallback"])
 
             if idx == 0 and start_label:
                 raw_label = start_label
@@ -291,7 +326,9 @@ def render_route_video(
 
             formatted = format_waypoint_label(raw_label, subtitle_lang)
             prefix = (
-                "Start: " if idx == 0 else "Stop: " if idx == len(waypoints) - 1 else ""
+                PIPELINE_LABELS["start_prefix"] if idx == 0
+                else PIPELINE_LABELS["stop_prefix"] if idx == len(waypoints) - 1
+                else ""
             )
             route_labels[c_idx] = (
                 f"{prefix}{formatted}" if formatted else prefix.strip(": ")
@@ -335,7 +372,8 @@ def render_route_video(
         )
         if not leg_mode and wp_indices[seg_i] + 1 < len(point_modes):
             leg_mode = point_modes[wp_indices[seg_i] + 1]
-        seg_modes.append(leg_mode or "walking")
+        leg_mode = leg_mode or "walking"
+        seg_modes.append(tuning.MODE_ALIASES.get(leg_mode, leg_mode))
 
     seg_durations = (
         MapFetcher.compute_segment_durations(
@@ -356,7 +394,14 @@ def render_route_video(
         else []
     )
 
-    if use_3d_res:
+    if render_mode == "overview":
+        # Overview-only: skip building the residential sequence entirely —
+        # no per-leg residential map tile fetches, no residential clips
+        # produced. res_sequence stays [] (set above), which
+        # RouteAnimator.render already treats as "nothing to render" for
+        # the residential side.
+        logger.info("Step 4: render_mode=overview — skipping residential sequence.")
+    elif use_3d_res:
         logger.info(
             "Step 4: 3D residential rendering is enabled. Bypassing 2D map fetch."
         )
@@ -445,16 +490,30 @@ def render_route_video(
         for seq_idx, item in enumerate(sequence_data):
             start_idx, end_idx = item["start_idx"], item["end_idx"]
             chunk = route_df.iloc[start_idx : end_idx + 1]
+
+            # This leg's departure/arrival RAW positions in `waypoints` —
+            # resolved by id (see id_to_position above), not by `seq_idx`,
+            # since a merged-away stop-by can make them diverge. Falls back
+            # to the old positional guess only if a waypoint is missing its
+            # "id" field (older data saved before ids were assigned).
+            start_pos = id_to_position.get(item.get("start_waypoint_id"))
+            if start_pos is None:
+                start_pos = seq_idx
+            end_pos = id_to_position.get(item.get("end_waypoint_id"))
+            if end_pos is None:
+                end_pos = seq_idx + 1
+
             leg_mode = (
-                str(waypoints[seq_idx].get("routeMode", "")).lower()
-                if seq_idx < len(waypoints)
+                str(waypoints[start_pos].get("routeMode", "")).lower()
+                if start_pos < len(waypoints)
                 else ""
             )
             if not leg_mode and start_idx + 1 < len(point_modes):
                 leg_mode = point_modes[start_idx + 1]
             leg_mode = leg_mode or "walking"
-            if str(leg_mode).lower() == "ferry" and seq_idx + 1 < len(waypoints):
-                start_wp, end_wp = waypoints[seq_idx], waypoints[seq_idx + 1]
+            leg_mode = tuning.MODE_ALIASES.get(leg_mode, leg_mode)
+            if str(leg_mode).lower() == "ferry" and end_pos < len(waypoints):
+                start_wp, end_wp = waypoints[start_pos], waypoints[end_pos]
                 cached_geometry = _resolve_leg_geometry_from_cache(
                     start_wp, end_wp, routing_cache
                 )
@@ -491,12 +550,22 @@ def render_route_video(
                     chunk, ferry_map_path, (img_w, img_h)
                 )
 
-            # Extract safe variables
-            has_audio = seq_idx < len(audio_durations) and audio_durations[seq_idx] > 0
-            distance_fallback = (
-                seg_durations[seq_idx] if seq_idx < len(seg_durations) else 10.0
-            )
-            total_time = audio_durations[seq_idx] if has_audio else distance_fallback
+            # Extract safe variables — indexed by start_pos (this leg's
+            # departure waypoint's RAW position), not seq_idx: with stop-by
+            # merging, a leg can span MULTIPLE raw waypoint-to-waypoint
+            # gaps (e.g. real -> merged stop-by -> real), so its distance-
+            # fallback duration sums every raw gap's own seg_durations
+            # entry across [start_pos, end_pos) rather than reading a
+            # single seg_durations[seq_idx]. audio_durations/audio_pauses
+            # only ever come from the true departure waypoint itself
+            # (start_pos) — a merged-in stop-by's own narration, if any,
+            # is intentionally not played (no dedicated arrival moment for
+            # it anymore, matching "just show its pin as we pass").
+            has_audio = start_pos < len(audio_durations) and audio_durations[start_pos] > 0
+            distance_fallback = sum(
+                seg_durations[p] for p in range(start_pos, end_pos) if p < len(seg_durations)
+            ) or 10.0
+            total_time = audio_durations[start_pos] if has_audio else distance_fallback
 
             lats_arr, lons_arr = item["lats"], item["lons"]
             seg_dist = (
@@ -551,8 +620,25 @@ def render_route_video(
                     ),
                     "distance_km": seg_dist,
                     "pauses": (
-                        audio_pauses[seq_idx] if seq_idx < len(audio_pauses) else []
+                        audio_pauses[start_pos] if start_pos < len(audio_pauses) else []
                     ),
+                    # This leg's departure waypoint's RAW position — embedded
+                    # into the output clip's filename (see waypoints.py) so
+                    # the audio-mux loop below and timeline_step.py's own
+                    # mirrored lookup can resolve the correct narration by
+                    # position instead of a blind per-clip counter, which
+                    # stop-by merging would otherwise throw out of sync.
+                    "start_pos": start_pos,
+                    "wide_img_path": item.get("wide_img_path"),
+                    "wide_extent": item.get("wide_extent"),
+                    # "pos_in_chunk" (0-based index into this leg's own
+                    # `points`/res_points list, not the route_df row index)
+                    # is what waypoints.py actually needs to know when the
+                    # traveler has passed a merged-in stop-by along the way.
+                    "mid_markers": [
+                        {**m, "pos_in_chunk": m["row_idx"] - start_idx}
+                        for m in item.get("mid_markers", [])
+                    ],
                 }
             )
 
@@ -626,6 +712,23 @@ def render_route_video(
         # settings to override per project.
         "mode_speeds_kmh": settings.get("mode_speeds_kmh", {}),
         "animation_speeds_kmh": settings.get("animation_speeds_kmh", {}),
+        # Which summary-card template the overview/per-leg cards render as
+        # ("glass" default, or "taskbar" for the notification-flyout-style
+        # template — see cards.py's render_summary_card). Was missing from
+        # this dict entirely, so job_config.json's settings.summary_card_style
+        # never reached RouteAnimator/GraphicsEngine no matter what a
+        # project set it to — self.config here IS this whole dict, not the
+        # raw settings (see RouteAnimator.__init__'s own note on that).
+        "summary_card_style": settings.get(
+            "summary_card_style", tuning.DEFAULT_SUMMARY_CARD_STYLE
+        ),
+        # Per-project override of any subset of assets/config/labels_ja.json's
+        # summary-card keys (mode_name, mode_duration_label, total_label,
+        # distance_label, taskbar_card_title) — see cards.py's
+        # merge_summary_card_labels. Same "must be forwarded through THIS
+        # dict, not just read off raw settings" requirement as
+        # summary_card_style above.
+        "summary_card_labels": settings.get("summary_card_labels"),
     }
 
     animator = RouteAnimator(animator_config)
@@ -651,6 +754,13 @@ def render_route_video(
         summary=summary,
         wp_indices=wp_indices,
         point_modes=point_modes,
+        render_mode=render_mode,
+        # Same bbox the overview background (map_output_path) was just
+        # fetched with — needed by the dynamic pydeck zoom-in intro (see
+        # overview.py) to re-render fresh, correctly-zoomed frames toward
+        # the start pin from the SAME base view the static background
+        # already shows, rather than an unrelated one.
+        overview_bounding_box=bbox,
     )
 
     # --- 2. ADD THIS AUDIO MUXING BLOCK ---
@@ -662,20 +772,16 @@ def render_route_video(
 
         logger.info("Muxing TTS narration audio into video segments...")
 
-        # We need a separate counter just for the residential audio
-        audio_idx = 0
-
         for v_path in output_paths:
             filename = Path(v_path).name
+            match = RESIDENTIAL_LEG_RE.search(filename)
 
-            # [HACK] [Editor] Distinguishes residential-leg clips from the overview map purely by filename substring — renaming output files elsewhere in the pipeline would silently break this audio-muxing match.
-            if (
-                "02_" in filename
-                or "leg" in filename.lower()
-                or "waypoint" in filename.lower()
-            ):
+            if match:
+                # 1-based in the filename (matches the "Waypoint N" numbering
+                # everywhere else); audio_durations/audio_paths are 0-based.
+                audio_idx = int(match.group(1)) - 1
                 if (
-                    audio_idx < len(audio_paths)
+                    0 <= audio_idx < len(audio_paths)
                     and audio_paths[audio_idx]
                     and os.path.exists(audio_paths[audio_idx])
                 ):
@@ -692,9 +798,6 @@ def render_route_video(
                         muxed_paths.append(v_path)
                 else:
                     muxed_paths.append(v_path)
-
-                # Move to the next audio file for the next residential leg
-                audio_idx += 1
             else:
                 # This is the 01_overview map, pass it through silently!
                 muxed_paths.append(v_path)

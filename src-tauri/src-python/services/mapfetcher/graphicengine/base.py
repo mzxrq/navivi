@@ -39,6 +39,8 @@ from PIL.ImageFont import FreeTypeFont, load_default, truetype
 from services.logger.logger import setup_logger
 from services import tuning
 
+from .cards import merge_summary_card_labels
+
 logger = setup_logger("GraphicsEngine")
 
 # Bundled in the repo (services/mapfetcher/graphicengine/ -> up to src-python/
@@ -52,15 +54,16 @@ _BUNDLED_FONTS_DIR = os.path.join(
 
 
 class _GraphicsEngineBase:
-    # Kosugi Maru first — it's bundled (see _BUNDLED_FONTS_DIR above), so
+    # LINE Seed JP first — it's bundled (see _BUNDLED_FONTS_DIR above), so
     # it's the one candidate guaranteed to actually be found on disk,
     # rather than depending on whatever CJK font (if any) happens to be
-    # installed on the machine this renders on. Kosugi Maru only ships a
-    # single regular weight, so the bold list reuses it too — _load_font
-    # falls through the rest of each list only if the bundled file is
-    # somehow missing.
+    # installed on the machine this renders on. Unlike the previous
+    # Kosugi Maru default, LINE Seed JP ships real separate weights, so
+    # regular/bold each point at their own bundled file instead of both
+    # falling back to the same one. _load_font falls through the rest of
+    # each list only if the bundled file is somehow missing.
     FONT_CANDIDATES_REGULAR: Final[List[str]] = [
-        os.path.join(_BUNDLED_FONTS_DIR, "KosugiMaru-Regular.ttf"),
+        os.path.join(_BUNDLED_FONTS_DIR, "LINESeedJP-Regular.ttf"),
         "NotoSansJP-VF.ttf",
         "NotoSansJP-Regular.ttf",
         "NotoSansJP-Regular.otf",
@@ -72,7 +75,7 @@ class _GraphicsEngineBase:
         "DejaVuSans.ttf",
     ]
     FONT_CANDIDATES_BOLD: Final[List[str]] = [
-        os.path.join(_BUNDLED_FONTS_DIR, "KosugiMaru-Regular.ttf"),
+        os.path.join(_BUNDLED_FONTS_DIR, "LINESeedJP-Bold.ttf"),
         "NotoSansJP-VF.ttf",
         "NotoSansJP-Bold.ttf",
         "NotoSansJP-Bold.otf",
@@ -82,6 +85,21 @@ class _GraphicsEngineBase:
         "YuGothic-Bold.ttc",
         "seguisb.ttf",
         "DejaVuSans-Bold.ttf",
+    ]
+    # Heaviest bundled weight — for spots that want extra emphasis (e.g. a
+    # title/badge) beyond plain bold. Falls back to the regular bold list's
+    # candidates since only LINE Seed JP itself ships this weight.
+    FONT_CANDIDATES_EXTRABOLD: Final[List[str]] = [
+        os.path.join(_BUNDLED_FONTS_DIR, "LINESeedJP-ExtraBold.ttf"),
+        *FONT_CANDIDATES_BOLD,
+    ]
+    # Lightest bundled weight — for secondary/caption text that should read
+    # as lower emphasis than the regular weight (e.g. the outro card's
+    # subtitle line). Falls back to the regular list's candidates since
+    # only LINE Seed JP itself ships this weight.
+    FONT_CANDIDATES_THIN: Final[List[str]] = [
+        os.path.join(_BUNDLED_FONTS_DIR, "LINESeedJP-Thin.ttf"),
+        *FONT_CANDIDATES_REGULAR,
     ]
 
     def __init__(
@@ -96,6 +114,8 @@ class _GraphicsEngineBase:
         card_border_thickness=tuning.DEFAULT_CARD_BORDER_THICKNESS,
         line_border_color=tuning.DEFAULT_LINE_BORDER_COLOR,
         line_border_thickness=tuning.DEFAULT_LINE_BORDER_THICKNESS,
+        summary_card_style=tuning.DEFAULT_SUMMARY_CARD_STYLE,
+        summary_card_labels: Optional[Dict] = None,
     ):
         self.line_color = line_color
         self.line_border_color = line_border_color
@@ -118,6 +138,16 @@ class _GraphicsEngineBase:
         # settings.card_border_color (BGR) / settings.card_border_thickness.
         self.card_border_color = card_border_color
         self.card_border_thickness = max(0, int(round(card_border_thickness)))
+        # Which summary-card template render_summary_card renders (see
+        # cards.py) — configurable via job_config.json's
+        # settings.summary_card_style ("glass" default, or "taskbar" for
+        # the new notification-flyout-style template).
+        self.summary_card_style = summary_card_style
+        # Every summary-card display string — bundled defaults from
+        # assets/config/labels_ja.json, layered with this project's own
+        # job_config.json settings.summary_card_labels override (any
+        # subset of keys) — see .cards.merge_summary_card_labels.
+        self.summary_card_labels = merge_summary_card_labels(summary_card_labels)
         # See _load_font below — every popup card, summary card, and
         # landmark label chip loads a font on every frame it's drawn, so
         # without this a multi-second held card re-opens and re-parses

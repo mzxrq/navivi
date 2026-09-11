@@ -1,0 +1,22 @@
+{
+  "mode_name": {
+    "walking": "歩く",
+    "driving": "運転",
+    "car": "運転",
+    "ferry": "乗船",
+    "airplane": "飛行機"
+  },
+  "mode_duration_label": {
+    "walking": "歩く時間",
+    "driving": "運転時間",
+    "car": "運転時間",
+    "ferry": "乗船時間",
+    "airplane": "飛行時間"
+  },
+  "total_label": "合計",
+  "distance_label": "距離",
+  "taskbar_card_title": "旅の概要",
+  "waypoint_fallback": "ウェイポイント",
+  "start_prefix": "出発: ",
+  "stop_prefix": "到着: "
+}

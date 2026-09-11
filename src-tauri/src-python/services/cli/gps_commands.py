@@ -36,7 +36,10 @@ def test_overview_video(
     job_config_path: str, output_video_dir: str = None, force: bool = False
 ) -> Dict[str, Any]:
     """Runs GPS parsing + route video rendering only, to sanity-check the
-    overview map animation without paying for TTS/attraction/subtitle stages."""
+    overview map animation without paying for TTS/attraction/subtitle
+    stages. render_mode="overview" also skips residential entirely (no
+    per-leg residential map tile fetches, no residential clips rendered) —
+    this really is overview-only now, not both bundled together."""
     from services.vdoprocessing.videopipeline import process_gps, render_route_video
 
     config_path = Path(job_config_path)
@@ -55,6 +58,7 @@ def test_overview_video(
         project_config_path=str(config_path),
         output_video_dir=output_video_dir,
         force=force,
+        render_mode="overview",
     )
     _tracker.clear()
 
@@ -76,8 +80,10 @@ def test_residential_video(
     residential animation without paying for the overview, TTS, or subtitle
     stages. Honors job_config.json's settings.use_3d_res (default False):
     2D (SpatialRenderer.render_waypoints, via the same render_route_video
-    path test_overview_video uses) unless the project has explicitly opted
-    into the 3D pydeck/Playwright renderer.
+    path test_overview_video uses, but with render_mode="residential" so
+    the overview animation itself is never rendered) unless the project
+    has explicitly opted into the 3D pydeck/Playwright renderer (which
+    never touches render_route_video/the overview path at all).
     """
     config_path = Path(job_config_path)
     if not config_path.exists():
@@ -111,18 +117,13 @@ def test_residential_video(
         _tracker.clear()
 
         _tracker.show("Rendering residential video (2D)...")
-        all_paths = render_route_video(
+        video_paths = render_route_video(
             cleaned_route=cleaned_route,
             project_config_path=str(config_path),
             output_video_dir=str(output_video_dir),
             force=force,
+            render_mode="residential",
         )
-        # render_route_video also produces "01_overview.mp4" — this entry
-        # point is scoped to the residential/per-leg clips only, matching
-        # what the 3D branch above returns.
-        video_paths = [
-            p for p in all_paths if Path(p).name != "01_overview.mp4"
-        ]
         _tracker.clear()
 
     return {

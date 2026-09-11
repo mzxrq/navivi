@@ -1,7 +1,7 @@
 """Cinematic pause overlay and popup/HUD card rendering."""
 
 import os
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 import cv2
 import numpy as np
@@ -29,7 +29,11 @@ class _PopupBoxMixin:
         actually draw for a "beside the pin" card at this card_scale —
         assumes a label is present (has_label=True), a safe upper-bound
         estimate for collision-avoidance sizing even on the rare card with
-        no real label."""
+        no real label. Sized for a WORST-CASE two-line label (see
+        _fit_label_caption) since this is called without knowing the
+        actual label text — a one-line label just leaves a little extra
+        clearance below its card instead of the two cards ever visually
+        overlapping because this estimate came in short."""
         target_ratio = 16.0 / 9.0
         target_img_w = int(self.BESIDE_CARD_BASE_W * card_scale)
         target_img_h = int(target_img_w / target_ratio)
@@ -37,8 +41,45 @@ class _PopupBoxMixin:
         font_size = max(
             11, int(self.font_size * tuning.POPUP_LABEL_FONT_SCALE_BESIDE * card_scale)
         )
-        text_block_h = font_size + 14
+        line_gap = 4
+        text_block_h = font_size * 2 + line_gap + 14
         return target_img_w + border * 2, target_img_h + border * 2 + text_block_h
+
+    # Minimum caption font size _fit_label_caption will shrink to before
+    # giving up and letting a still-too-wide second line clip — matches
+    # the floor every other font-size calc in this file already uses.
+    _LABEL_MIN_FONT_SIZE = 11
+
+    def _fit_label_caption(
+        self, draw: ImageDraw.ImageDraw, text: str, font: Any, font_candidates: List[str], max_width: float
+    ) -> Tuple[List[str], Any]:
+        """Fits a popup's label caption within max_width — one line if it
+        already fits, otherwise two, split at whichever character position
+        best balances the two resulting line widths (most labels here are
+        Japanese place names/addresses with no spaces to break on, so a
+        word-boundary wrap isn't an option). Shrinks the font (down to
+        _LABEL_MIN_FONT_SIZE) only if the longer of the two lines still
+        doesn't fit even after splitting. Returns (lines, font) — `font`
+        may be a smaller instance than the one passed in."""
+        if draw.textlength(text, font=font) <= max_width:
+            return [text], font
+
+        best_split, best_diff = 1, None
+        for i in range(1, len(text)):
+            diff = abs(
+                draw.textlength(text[:i], font=font) - draw.textlength(text[i:], font=font)
+            )
+            if best_diff is None or diff < best_diff:
+                best_diff, best_split = diff, i
+        lines = [text[:best_split], text[best_split:]]
+
+        size = font.size
+        longest = max(draw.textlength(line, font=font) for line in lines)
+        while longest > max_width and size > self._LABEL_MIN_FONT_SIZE:
+            size = max(self._LABEL_MIN_FONT_SIZE, int(size * 0.9))
+            font = self._load_font(font_candidates, size)
+            longest = max(draw.textlength(line, font=font) for line in lines)
+        return lines, font
 
     def popup_card_geometry(
         self, popup_info: Dict, w: int, h: int
@@ -63,7 +104,13 @@ class _PopupBoxMixin:
             if is_beside
             else tuning.POPUP_LABEL_FONT_SCALE_CORNER
         )
+        # Caller override (e.g. the overview intro's preview cards, which
+        # want a larger photo via card_scale but NOT a proportionally
+        # larger caption) — defaults to 1.0, a no-op, for every ordinary
+        # popup.
+        font_scale *= float(popup_info.get("label_font_scale", 1.0))
         font_size = max(11, int(self.font_size * font_scale * card_scale))
+        total_w = target_img_w + (border * 2)
         has_label = RouteGeometryProcessor.is_real_label(popup_info.get("label"))
         # "cover" (settings/job_config image_display: "cover") — the photo
         # fills the entire card with no separate caption strip below it;
@@ -83,7 +130,6 @@ class _PopupBoxMixin:
                 font.size * len(label_lines) + line_gap * (len(label_lines) - 1) + 14
             )
         total_h = target_img_h + (border * 2) + text_block_h
-        total_w = target_img_w + (border * 2)
         margin = 24
 
         if not is_beside:
@@ -242,6 +288,10 @@ class _PopupBoxMixin:
                     if is_beside
                     else tuning.POPUP_LABEL_FONT_SCALE_CORNER
                 )
+                # Must match popup_card_geometry's own font_scale exactly
+                # (that's what text_block_h/total_h were sized against) —
+                # see its own comment on label_font_scale.
+                font_scale *= float(popup_info.get("label_font_scale", 1.0))
                 font_size = max(11, int(self.font_size * font_scale * card_scale))
                 is_cover = str(popup_info["data"].get("image_display", "")).lower() == "cover"
                 if is_cover:

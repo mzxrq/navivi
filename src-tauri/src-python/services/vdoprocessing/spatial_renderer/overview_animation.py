@@ -13,6 +13,8 @@ import numpy as np
 
 from services.mapfetcher.mapgeometry import RouteGeometryProcessor
 from services.vdoprocessing.vdoexporter import VideoExporter
+from services.logger.progress import tracker
+from services import tuning
 
 
 class _OverviewAnimationMixin:
@@ -65,6 +67,27 @@ class _OverviewAnimationMixin:
         # double-image for whichever popup happened to still be fading.
         pre_popup_frame = None
 
+        # Live CLI substep + ETA for this (often long, frame-by-frame)
+        # render — total_stops excludes the start pin (index 0), which
+        # never triggers an arrival of its own. See mapfetcher.py's
+        # identical begin_substeps/show_item use for the per-leg tile
+        # fetch stage.
+        total_stops = max(1, len(active_popups) - 1)
+        tracker.begin_substeps(total_stops)
+        arrival_count = 0
+
+        # Waypoints placed close together on the map (a common case —
+        # several stops within the same block) can otherwise trigger their
+        # popups back-to-back within a frame or two of real animation time,
+        # popping the current card back out again almost as soon as it
+        # appeared. This floor guarantees at least this many seconds of
+        # real time between one trigger and the next, regardless of how
+        # close the pins themselves are — set far enough in the past that
+        # it never blocks the very first trigger.
+        min_trigger_gap_frames = int(fps * tuning.OVERVIEW_POPUP_MIN_TRIGGER_GAP_SECONDS)
+        last_trigger_frame = -min_trigger_gap_frames
+        pending_popups: List[Dict] = []
+
         for current_frame, p in enumerate(smooth_path):
             if is_video:
                 ret, vid_frame = cap.read()
@@ -110,23 +133,97 @@ class _OverviewAnimationMixin:
                 and current_frame == len(smooth_path) - 1
             ):
                 stop_popup["data"]["triggered"] = True
+                # The per-frame pin-drawing loops below key off "arrived"
+                # now (see the proximity loop's own comment further down),
+                # not "triggered" — set both here so the "E" pin still
+                # shows up on this same final frame instead of only ever
+                # appearing via the separate ending-highlight's marker.
+                stop_popup["data"]["arrived"] = True
 
-            triggered_popup = None
+            # Queue any not-yet-triggered, not-yet-queued popup the
+            # traveler is passing right now — queued (not triggered)
+            # immediately, so a popup is never missed just because the
+            # cooldown below hasn't elapsed yet: without this, gating the
+            # proximity check itself on the cooldown could let the
+            # traveler move past a clustered pin entirely during the wait,
+            # with no later frame ever close enough to catch it.
             for popup in active_popups:
                 if popup["index"] == 0 or (
                     stop_popup and popup["index"] == stop_popup["index"]
                 ):
                     continue
-                if not popup["data"]["triggered"]:
+                # Identity check, not `in` (which is value-equality on
+                # dicts) — these dicts keep mutating in place as the loop
+                # runs (e.g. "triggered" itself), so an equality-based
+                # membership test isn't reliable for "is this the same
+                # popup already queued".
+                if not popup["data"]["triggered"] and not any(
+                    p is popup for p in pending_popups
+                ):
+                    # Raw pixel distance alone isn't enough to mean "the
+                    # traveler has arrived" — a route that loops or
+                    # doubles back (a real street layout near a cluster
+                    # of stops) can swing physically close to a pin long
+                    # before actually reaching it in the path's own
+                    # sequence, popping that waypoint's card up while the
+                    # traveler is really just passing through on an
+                    # earlier, unrelated leg. `expected_frame` (set in
+                    # overview.py) is this popup's own nearest-point
+                    # position along the animated path — requiring the
+                    # traveler to have actually reached near that point
+                    # in time (not just in space) before it can trigger
+                    # rules out that false-early case. A small tolerance
+                    # keeps it from being stricter than the spatial check
+                    # itself needs.
+                    expected_frame = popup.get("expected_frame")
+                    trigger_tolerance_frames = int(fps * 1.0)
+                    if (
+                        expected_frame is not None
+                        and current_frame < expected_frame - trigger_tolerance_frames
+                    ):
+                        continue
                     if RouteGeometryProcessor.point_to_segment_distance(
                         popup["x"], popup["y"], px, py, cx, cy
                     ) < (
                         self.graphics.marker_radius
                         + self.trigger_radius_padding["overview"]
                     ):
-                        popup["data"]["triggered"] = True
-                        triggered_popup = popup
-                        break
+                        pending_popups.append(popup)
+                        # Mark the pin itself as reached right away, on the
+                        # same frame the traveler actually gets there —
+                        # "triggered" below (which the pin-drawing loops
+                        # used to gate on instead) only flips once this
+                        # popup's card actually clears the min-trigger-gap
+                        # cooldown, which for a cluster of nearby waypoints
+                        # can be a couple of seconds after the real arrival.
+                        # Gating the pin on "triggered" made it (and the
+                        # popup card fading in beside it) visibly pop in
+                        # late, seconds after the traveler had already
+                        # passed the spot on screen.
+                        popup["data"]["arrived"] = True
+
+            # A fixed cooldown between triggers is what a single popup
+            # needs to be readable before the next one bumps it — but
+            # applied unconditionally to a real backlog (several
+            # waypoints queued at once, see the proximity loop above), it
+            # became the bottleneck itself: dequeuing one every fixed
+            # min_trigger_gap_frames could take longer than the
+            # remaining animation had frames left for, so some queued
+            # waypoints never got their turn to even be triggered before
+            # the video ended. Shrinks (down to a floor) the more that's
+            # backed up, so a dense cluster drains fast enough that every
+            # waypoint the traveler actually reached gets shown.
+            effective_gap_frames = min_trigger_gap_frames
+            if len(pending_popups) > 1:
+                effective_gap_frames = max(
+                    int(fps * 0.4), min_trigger_gap_frames // len(pending_popups)
+                )
+
+            triggered_popup = None
+            if pending_popups and current_frame - last_trigger_frame >= effective_gap_frames:
+                triggered_popup = pending_popups.pop(0)
+                triggered_popup["data"]["triggered"] = True
+                last_trigger_frame = current_frame
 
             # [NOTE] [Animation] "Point to point" snapshot for hide_route_on_popup — every
             # earlier, already-completed leg stays drawn; only the CURRENT
@@ -144,7 +241,7 @@ class _OverviewAnimationMixin:
                     mode_history[: last_leg_boundary + 1],
                 )
                 for wp in active_popups:
-                    if wp["data"].get("triggered") or wp["index"] == 0:
+                    if wp["data"].get("arrived") or wp["index"] == 0:
                         self._draw_pin(frame_no_route, wp, len(points))
 
             if not is_video:
@@ -154,7 +251,7 @@ class _OverviewAnimationMixin:
                 # not-yet-visited stops stay hidden instead of cluttering
                 # the map with numbers for places not reached yet.
                 for wp in active_popups:
-                    if wp["data"].get("triggered") or wp["index"] == 0:
+                    if wp["data"].get("arrived") or wp["index"] == 0:
                         self._draw_pin(frame, wp, len(points))
 
             # [NOTE] [Animation] Only the very last iteration's pre-popup frame is ever read
@@ -178,12 +275,30 @@ class _OverviewAnimationMixin:
                 # of an "earlier leg" for the NEXT popup's hide effect.
                 last_leg_boundary = len(path_history) - 1
 
-                # Pick a corner clear of the route/pins once, and keep it on
-                # the popup itself so the lingering baked-popup HUD (below)
-                # doesn't jump to a different corner mid-display.
-                triggered_popup["hud_corner"] = self.graphics.pick_hud_corner(
-                    w, h, route_avoid_points
+                arrival_count += 1
+                place_label = triggered_popup.get("label") or f"waypoint_{triggered_popup['index']}"
+                tracker.show_item(
+                    arrival_count,
+                    f"Rendering overview video {arrival_count}/{total_stops}: arriving at '{place_label}'",
                 )
+
+                # Anchored beside this waypoint's own pin with a leader line
+                # back to it (see render_popup_box's non-HUD-corner branch),
+                # computed once and kept on the popup itself so the arrival
+                # pause, the frozen hold, and the lingering baked-popup HUD
+                # (below) all reuse the identical spot instead of jumping
+                # around mid-display. A fixed screen corner (the old
+                # pick_hud_corner behavior) looked fine whenever it happened
+                # to land near the pin, but read as disconnected/"floating
+                # over there" for a stop on the opposite side of the frame —
+                # this ties every triggered popup, flow-through or frozen,
+                # back to its own pin the same way.
+                self._layout_beside_popups(
+                    [{"popup": triggered_popup, "frames_left": 1}], w, h,
+                    route_obstacles=route_obstacle_arr,
+                )
+                triggered_popup["hud_corner"] = None
+                triggered_popup["draw_leader_line"] = True
 
                 # Shared base for BOTH the arrival-hold pause and the popup
                 # itself — decluttered to only already-arrived pins when
@@ -229,7 +344,15 @@ class _OverviewAnimationMixin:
                         triggered_popup.get("leg_display_seconds")
                         or triggered_popup["data"].get("freeze_seconds", 4.0)
                     )
-                    new_bp = self._make_baked_popup(triggered_popup, display_seconds, fps)
+                    # pending_popups here is whatever's LEFT after this one
+                    # was just popped off the front — i.e. how many other
+                    # already-triggered popups are still queued behind it,
+                    # each needing its own turn at the trigger cooldown
+                    # before it can even start waiting for a display slot.
+                    new_bp = self._make_baked_popup(
+                        triggered_popup, display_seconds, fps,
+                        queue_depth=len(pending_popups),
+                    )
                     baked_popups.append(new_bp)
                     frame = popup_base_frame
                     if not is_video:
@@ -248,6 +371,19 @@ class _OverviewAnimationMixin:
                         hud_new = triggered_popup.copy()
                         hud_new["hud_corner"] = None
                         hud_new["draw_leader_line"] = True
+                        # Slide-up entrance, same as every later frame
+                        # _composite_baked_popups draws this popup for —
+                        # see _popup_slide_offset_y.
+                        if hud_new.get("beside_box"):
+                            bx, by = hud_new["beside_box"]
+                            hud_new["beside_box"] = (
+                                bx, int(by + self._popup_slide_offset_y(new_bp))
+                            )
+                        # Line, then pin, then card — the pin's already
+                        # baked into `frame` (see the comment above), so
+                        # without redrawing it here on top of the line,
+                        # the line (drawn as part of a combined call) would
+                        # land right over it.
                         frame = self.graphics.render_popup_box(
                             frame, hud_new, alpha=self._popup_fade_alpha(new_bp),
                             line_only=True,
@@ -330,10 +466,35 @@ class _OverviewAnimationMixin:
                     total_hold_frames = lingering_bp["total_frames"]
                     fade_in_frames = lingering_bp["fade_frames"]
                     temp_frame = popup_base_frame
+                    base_beside_box = hud_triggered.get("beside_box")
                     for i in range(total_hold_frames):
                         alpha = min(1.0, (i + 1) / fade_in_frames)
+                        # Same slide-up entrance as every other popup
+                        # appearance (see _popup_slide_offset_y) — reuses
+                        # that same helper via a throwaway bp-shaped dict
+                        # matching this loop's own (i, fade_in_frames)
+                        # progress, rather than re-deriving the easing
+                        # curve inline.
+                        if base_beside_box:
+                            bx, by = base_beside_box
+                            slide = self._popup_slide_offset_y(
+                                {
+                                    "total_frames": total_hold_frames,
+                                    "frames_left": total_hold_frames - i,
+                                    "fade_frames": fade_in_frames,
+                                }
+                            )
+                            hud_triggered["beside_box"] = (bx, int(by + slide))
+                        # Line, then pin, then card — same reasoning as the
+                        # post-arrival pause above: popup_base_frame's own
+                        # pin(s) are already baked in, so the line must be
+                        # drawn first and the pin redrawn on top of it.
                         temp_frame = self.graphics.render_popup_box(
-                            popup_base_frame, hud_triggered, alpha=alpha
+                            popup_base_frame, hud_triggered, alpha=alpha, line_only=True
+                        )
+                        self._draw_pin(temp_frame, triggered_popup, len(points))
+                        temp_frame = self.graphics.render_popup_box(
+                            temp_frame, hud_triggered, alpha=alpha, skip_line=True
                         )
                         video.write(temp_frame)
 

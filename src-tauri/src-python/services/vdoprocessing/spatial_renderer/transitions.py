@@ -11,6 +11,8 @@ from services.mapfetcher.mapgeometry import RouteGeometryProcessor
 from services.vdoprocessing.vdoexporter import VideoExporter
 from services import tuning
 
+from .base import logger
+
 
 class _TransitionMixin:
     @staticmethod
@@ -172,7 +174,17 @@ class _TransitionMixin:
         _pin_label_and_color), computed from each waypoint's real
         position in job_config's own waypoints list."""
         job_waypoints = (self._get_job_config() or {}).get("waypoints", [])
+        # job_config's own "waypoints" array holds only the INTERMEDIATE
+        # stops — the true start/end live in separate "start_point"/
+        # "end_point" keys (see _render_ending_highlight's own zoom_point
+        # lookup) — so index 0 / len-1 here are just the first/last
+        # intermediate stop, NOT the route's real S/E. Without the +1/+2
+        # offset, _pin_label_and_color's own index==0 / index==total-1
+        # checks (written assuming the FULL route's points array, where
+        # those positions genuinely ARE S/E) mislabeled those two
+        # intermediate waypoints as "S"/green and "E"/red.
         total_wp = len(job_waypoints)
+        total_points = total_wp + 2
         order = 0
         for pos, jw in enumerate(job_waypoints):
             is_stopby = bool(jw.get("isStopBy", False))
@@ -187,8 +199,15 @@ class _TransitionMixin:
                 continue
             if math.hypot(px - exclude_px, py - exclude_py) < self.graphics.marker_radius * 2:
                 continue  # the featured waypoint itself
-            wp = {"index": pos, "order": order, "data": {"is_stopby": is_stopby}}
-            label, color = self._pin_label_and_color(wp, total_wp)
+            # "arrived": True — this only ever runs at the very end of
+            # the video, once the whole route (every waypoint) has
+            # genuinely been visited, so every pin here should show its
+            # own arrived_marker_color, same as it does for the rest of
+            # the video, rather than falling back to the DEFAULT
+            # (not-yet-visited) marker_color — visibly wrong whenever a
+            # project has customized the two to different colors.
+            wp = {"index": pos + 1, "order": order, "data": {"is_stopby": is_stopby, "arrived": True}}
+            label, color = self._pin_label_and_color(wp, total_points)
             self.graphics.draw_marker(frame, px, py, number=label, color=color)
 
     def _render_ending_highlight(
@@ -200,6 +219,7 @@ class _TransitionMixin:
         stop_popup: Dict,
         start_popup: Optional[Dict] = None,
         clean_map_frame: Optional[np.ndarray] = None,
+        bounding_box: Optional[Dict[str, float]] = None,
     ) -> bool:
         """End-of-video highlight: a hard cut (no transition) from the
         recap straight to a freshly fetched, genuinely higher-zoom map
@@ -224,6 +244,15 @@ class _TransitionMixin:
         AND the summary card composited on top) keeps that lead-in a plain
         map push instead of dragging a screenful of cards along with it.
 
+        When `bounding_box` is given AND settings.overview_background is
+        "pydeck", the lead-in push and the cut-to-a-second-static-tile
+        above are BOTH replaced by one continuous sequence of genuinely
+        re-rendered deck.gl frames (mapfetcher.pydeck_overview.
+        capture_pydeck_zoom_sequence) — the map itself gets visibly
+        sharper terrain/street/building detail as it zooms in, rather
+        than a digital crop of one already-fetched image. Falls back to
+        the static-tile path automatically on any capture failure.
+
         Returns True if the fullscreen photo transition played and the
         caller should treat this as the video's hard ending (write nothing
         further) — the fullscreen photo, once reached, is meant to be the
@@ -239,98 +268,239 @@ class _TransitionMixin:
         if lat is None or lng is None:
             return False
 
-        fetched = self._fetch_highlight_image(lat, lng, (w, h))
-        if not fetched:
-            return False
-        highlight_path, highlight_extent = fetched
-        highlight_bg = self.graphics.read_image_safe(highlight_path)
-        if highlight_bg is None:
-            return False
-        if highlight_bg.shape[:2] != (h, w):
-            highlight_bg = cv2.resize(highlight_bg, (w, h))
-
-        px, py = RouteGeometryProcessor.project_latlon_to_pixel(
-            lat, lng, highlight_extent, w, h
-        )
-        px, py = int(px), int(py)
-
-        # The close-up tile is genuinely zoomed in, but at this scale a
-        # nearby waypoint can easily fall inside the same small area —
-        # without this they'd be invisible even though they're physically
-        # on screen. Drawn with the same S/E/stop-by/number labeling as
-        # everywhere else, so a stop that happens to land in frame reads
-        # exactly like it does on the main overview map.
-        self._draw_nearby_waypoints(highlight_bg, w, h, highlight_extent, px, py)
-
         featured_popup = start_popup or stop_popup
-
-        # Lead-in: push in on the clean map plate (no cards on it — see the
-        # docstring above), toward the same point, BEFORE cutting to the
-        # close-up tile — this is the "zoom from the big map" half of the
-        # beat; the cut below and the _ken_burns_hold after it are the
-        # "into the waypoint start" half.
-        lead_in_source = clean_map_frame if clean_map_frame is not None else self.last_frame
-        self.last_frame = self._ken_burns_hold(
-            video, lead_in_source, fps, self._BIG_MAP_ZOOM_LEAD_SECONDS,
-            featured_popup["x"], featured_popup["y"],
-            zoom_from=1.0, zoom_to=self._BIG_MAP_ZOOM_TARGET,
+        settings = (job_config.get("settings", {}) or {})
+        # "enable_gl_ending_zoom" — the actual job_config.json setting
+        # this feature is toggled by (also honors overview_background:
+        # "pydeck" as an alternate opt-in, since a project already using
+        # pydeck for its overview background naturally wants this too).
+        use_dynamic_pydeck = bounding_box is not None and (
+            bool(settings.get("enable_gl_ending_zoom", False))
+            or str(settings.get("overview_background", "")).lower() == "pydeck"
         )
-
-        highlight_popup = featured_popup.copy()
-        highlight_popup["data"] = featured_popup["data"].copy()
-        highlight_popup["x"], highlight_popup["y"] = px, py
-        # render_popup_box's leader line prefers "pin_x"/"pin_y" over
-        # "x"/"y" when present (see pins.py's declutter fan-out) — a
-        # leftover fanned-out position from the main overview render, in
-        # that image's own coordinate space, means nothing on this
-        # freshly fetched close-up tile. Without clearing it here the
-        # leader line anchors on that stale spot instead of the marker
-        # actually drawn at (px, py) above.
-        highlight_popup.pop("pin_x", None)
-        highlight_popup.pop("pin_y", None)
-        highlight_popup["hud_corner"] = None  # forces the leader-lined "beside" card style
-        highlight_popup["draw_leader_line"] = True
-        # Same short-leader-line placement flow-through popups use
-        # elsewhere (starts ~55px from the pin, spiraling out only if that
-        # spot's taken) — without this, render_popup_box's own fallback
-        # placement (meant for corner-avoidance, not a tight leader line)
-        # can land the card far across the frame.
-        self._layout_beside_popups([{"popup": highlight_popup, "frames_left": 1}], w, h)
-
-        # Line, then marker, then card — in that order — so the leader
-        # line sits BEHIND both the marker pin and the card it connects,
-        # instead of potentially drawing on top of the pin (drawing the
-        # marker first, as before, put the line above it whenever
-        # render_popup_box ran afterward).
-        highlight_bg = self.graphics.render_popup_box(
-            highlight_bg, highlight_popup, line_only=True
-        )
-        self.graphics.draw_marker(
-            highlight_bg, px, py,
-            number="S" if is_start else "E",
-            color=self._START_PIN_COLOR if is_start else self._END_PIN_COLOR,
-        )
-        highlight_frame = self.graphics.render_popup_box(
-            highlight_bg, highlight_popup, skip_line=True
-        )
-
-        # Hard cut straight to the highlight — no transition connecting
-        # the two shots — then a slow Ken Burns zoom-in while it's held,
-        # toward the same point (featured_popup's own x/y, untouched by
-        # highlight_popup's copy above, which overwrites its OWN x/y with
-        # px/py in the new highlight image's space) rather than a static
-        # freeze.
-        zoomed_end = self._ken_burns_hold(
-            video, highlight_frame, fps, self._ENDING_HIGHLIGHT_WAIT_SECONDS,
-            featured_popup["x"], featured_popup["y"],
-            zoom_from=1.0, zoom_to=1.18,
-        )
-        self.last_frame = zoomed_end
-
-        if (
+        is_fullscreen = (
             self.enable_fullscreen_popups
-            and highlight_popup["data"].get("image_display") == "fullscreen"
-        ):
+            and featured_popup["data"].get("image_display") == "fullscreen"
+        )
+        highlight_hold_sec = float(featured_popup["data"].get("freeze_seconds", 3.0))
+
+        highlight_bg = None
+        highlight_extent = None
+        px = py = 0
+        # Only set when the dynamic pydeck path actually ran — lets the
+        # tail code below skip every _ken_burns_hold call entirely
+        # instead of digitally zooming a frame that's already a genuine
+        # real re-render.
+        dynamic_zoomed_end = None
+        dynamic_final_hold = None
+
+        if use_dynamic_pydeck:
+            # The camera actually MOVES only through the lead-in + wait
+            # phases — capturing real re-rendered frames just for those
+            # (zoom_n), reaching the target zoom by the end of the wait
+            # phase. The further pip-hold phase (hold_n) then reuses that
+            # SAME final real frame rather than continuing to re-render
+            # more of the same already-reached view — a genuine hold
+            # (matching what "hold" should mean) rather than an
+            # imperceptibly slow continued zoom, and faster to both watch
+            # (the same total zoom_boost now happens over fewer frames,
+            # so it visibly moves quicker) and render (no extra browser
+            # round-trips for frames that would've looked identical
+            # anyway).
+            try:
+                from services.mapfetcher.pydeck_overview import capture_pydeck_zoom_sequence
+
+                lead_in_n = max(1, int(self._BIG_MAP_ZOOM_LEAD_SECONDS * fps))
+                wait_n = max(1, int(self._ENDING_HIGHLIGHT_WAIT_SECONDS * fps))
+                hold_n = 0 if is_fullscreen else max(1, int(highlight_hold_sec * fps))
+                zoom_n = lead_in_n + wait_n
+
+                dynamic_frames = capture_pydeck_zoom_sequence(
+                    bounding_box, (w, h), lat, lng, zoom_n,
+                    zoom_boost=tuning.ENDING_HIGHLIGHT_PYDECK_ZOOM_BOOST,
+                    mapbox_key=settings.get("mapbox_token"),
+                )
+            except Exception:
+                logger.warning(
+                    "Dynamic pydeck ending-highlight zoom failed; falling back to "
+                    "the static-tile Ken Burns version.", exc_info=True,
+                )
+                dynamic_frames = None
+
+            if dynamic_frames:
+                # The target point is panned to stay at the SAME pixel
+                # across every frame (see capture_pydeck_zoom_sequence's
+                # own docstring) — computed once from the last frame's
+                # extent rather than per-frame, since by construction
+                # every frame's extent projects it to the same spot.
+                highlight_bg, highlight_extent = dynamic_frames[-1]
+                px, py = RouteGeometryProcessor.project_latlon_to_pixel(
+                    lat, lng, highlight_extent, w, h
+                )
+                px, py = int(px), int(py)
+
+                highlight_popup = featured_popup.copy()
+                highlight_popup["data"] = featured_popup["data"].copy()
+                highlight_popup["x"], highlight_popup["y"] = px, py
+                highlight_popup.pop("pin_x", None)
+                highlight_popup.pop("pin_y", None)
+                highlight_popup["hud_corner"] = None
+                highlight_popup["draw_leader_line"] = True
+                self._layout_beside_popups([{"popup": highlight_popup, "frames_left": 1}], w, h)
+
+                for i, (frame_bgr, extent) in enumerate(dynamic_frames):
+                    frame_out = frame_bgr.copy()
+                    # Nearby waypoints re-projected fresh against THIS
+                    # frame's own extent (it changes every frame as the
+                    # camera zooms), unlike the featured marker/card
+                    # above, which stays pixel-fixed by construction.
+                    # _draw_nearby_waypoints deliberately EXCLUDES the
+                    # featured point itself (px, py) — it's meant to be
+                    # drawn separately below — so without drawing its own
+                    # marker unconditionally here too, the start/end pin
+                    # was simply missing from every lead-in frame.
+                    self._draw_nearby_waypoints(frame_out, w, h, extent, px, py)
+                    if i < lead_in_n:
+                        self.graphics.draw_marker(
+                            frame_out, px, py,
+                            number="S" if is_start else "E",
+                            color=self._START_PIN_COLOR if is_start else self._END_PIN_COLOR,
+                        )
+                    if i >= lead_in_n:
+                        # The "hard cut to arrived" moment — before this
+                        # frame the featured point is just a plain pin on
+                        # the map, same as every other waypoint (matches
+                        # the static-tile fallback's own lead-in, which
+                        # shows no card either); from here on its
+                        # leader-lined card joins it too.
+                        frame_out = self.graphics.render_popup_box(
+                            frame_out, highlight_popup, line_only=True
+                        )
+                        self.graphics.draw_marker(
+                            frame_out, px, py,
+                            number="S" if is_start else "E",
+                            color=self._START_PIN_COLOR if is_start else self._END_PIN_COLOR,
+                        )
+                        frame_out = self.graphics.render_popup_box(
+                            frame_out, highlight_popup, skip_line=True
+                        )
+                    video.write(frame_out)
+                    if i == lead_in_n + wait_n - 1:
+                        dynamic_zoomed_end = frame_out
+                # hold_n: a genuine hold on the last real frame reached —
+                # see the comment above on why this doesn't re-capture
+                # more (identical-looking) pydeck frames.
+                for _ in range(hold_n):
+                    video.write(frame_out)
+                dynamic_final_hold = frame_out
+                self.last_frame = frame_out
+                # highlight_bg only needs to stay non-None here so the
+                # `if highlight_bg is None` gate below skips the
+                # static-tile fallback path — its actual pixel content is
+                # never read again once dynamic_final_hold is set.
+
+        if highlight_bg is None:
+            # Either dynamic pydeck wasn't requested, or it failed —
+            # original path: a genuinely higher-zoom SEPARATE image,
+            # fetched fresh, cut to after a lead-in push on the wide map.
+            fetched = self._fetch_highlight_image(lat, lng, (w, h))
+            if not fetched:
+                return False
+            highlight_path, highlight_extent = fetched
+            highlight_bg = self.graphics.read_image_safe(highlight_path)
+            if highlight_bg is None:
+                return False
+            if highlight_bg.shape[:2] != (h, w):
+                highlight_bg = cv2.resize(highlight_bg, (w, h))
+
+            px, py = RouteGeometryProcessor.project_latlon_to_pixel(
+                lat, lng, highlight_extent, w, h
+            )
+            px, py = int(px), int(py)
+
+            # The close-up tile is genuinely zoomed in, but at this scale a
+            # nearby waypoint can easily fall inside the same small area —
+            # without this they'd be invisible even though they're physically
+            # on screen. Drawn with the same S/E/stop-by/number labeling as
+            # everywhere else, so a stop that happens to land in frame reads
+            # exactly like it does on the main overview map.
+            self._draw_nearby_waypoints(highlight_bg, w, h, highlight_extent, px, py)
+
+            # Lead-in: push in on the clean map plate (no cards on it — see
+            # the docstring above), toward the same point, BEFORE cutting to
+            # the close-up tile — this is the "zoom from the big map" half
+            # of the beat; the cut below and the _ken_burns_hold after it
+            # are the "into the waypoint start" half.
+            lead_in_source = clean_map_frame if clean_map_frame is not None else self.last_frame
+            self.last_frame = self._ken_burns_hold(
+                video, lead_in_source, fps, self._BIG_MAP_ZOOM_LEAD_SECONDS,
+                featured_popup["x"], featured_popup["y"],
+                zoom_from=1.0, zoom_to=self._BIG_MAP_ZOOM_TARGET,
+            )
+
+        if dynamic_final_hold is not None:
+            # The dynamic pydeck path already built highlight_popup,
+            # composited it onto every frame, and wrote the whole beat
+            # (lead-in + wait + hold, as applicable) to `video` — nothing
+            # left to draw or digitally zoom here, just hand the right
+            # endpoint frames to whichever branch below needs them.
+            zoomed_end = dynamic_zoomed_end if dynamic_zoomed_end is not None else dynamic_final_hold
+            highlight_frame = dynamic_final_hold
+        else:
+            highlight_popup = featured_popup.copy()
+            highlight_popup["data"] = featured_popup["data"].copy()
+            highlight_popup["x"], highlight_popup["y"] = px, py
+            # render_popup_box's leader line prefers "pin_x"/"pin_y" over
+            # "x"/"y" when present (see pins.py's declutter fan-out) — a
+            # leftover fanned-out position from the main overview render,
+            # in that image's own coordinate space, means nothing on this
+            # freshly fetched close-up tile. Without clearing it here the
+            # leader line anchors on that stale spot instead of the
+            # marker actually drawn at (px, py) above.
+            highlight_popup.pop("pin_x", None)
+            highlight_popup.pop("pin_y", None)
+            highlight_popup["hud_corner"] = None  # forces the leader-lined "beside" card style
+            highlight_popup["draw_leader_line"] = True
+            # Same short-leader-line placement flow-through popups use
+            # elsewhere (starts ~55px from the pin, spiraling out only if
+            # that spot's taken) — without this, render_popup_box's own
+            # fallback placement (meant for corner-avoidance, not a tight
+            # leader line) can land the card far across the frame.
+            self._layout_beside_popups([{"popup": highlight_popup, "frames_left": 1}], w, h)
+
+            # Line, then marker, then card — in that order — so the
+            # leader line sits BEHIND both the marker pin and the card it
+            # connects, instead of potentially drawing on top of the pin
+            # (drawing the marker first, as before, put the line above it
+            # whenever render_popup_box ran afterward).
+            highlight_bg = self.graphics.render_popup_box(
+                highlight_bg, highlight_popup, line_only=True
+            )
+            self.graphics.draw_marker(
+                highlight_bg, px, py,
+                number="S" if is_start else "E",
+                color=self._START_PIN_COLOR if is_start else self._END_PIN_COLOR,
+            )
+            highlight_frame = self.graphics.render_popup_box(
+                highlight_bg, highlight_popup, skip_line=True
+            )
+
+            # Hard cut straight to the highlight — no transition
+            # connecting the two shots — then a slow Ken Burns zoom-in
+            # while it's held, toward the same point (featured_popup's
+            # own x/y, untouched by highlight_popup's copy above, which
+            # overwrites its OWN x/y with px/py in the new highlight
+            # image's space) rather than a static freeze. Only reached
+            # when the dynamic pydeck path wasn't used/failed — see the
+            # branch above.
+            zoomed_end = self._ken_burns_hold(
+                video, highlight_frame, fps, self._ENDING_HIGHLIGHT_WAIT_SECONDS,
+                featured_popup["x"], featured_popup["y"],
+                zoom_from=1.0, zoom_to=1.18,
+            )
+            self.last_frame = zoomed_end
+
+        if is_fullscreen:
             scale_sec = self.transition_cfg["scale_seconds"]
             hold_sec = self.transition_cfg["min_hold_seconds"]
             t_frames = self.graphics.generate_fullscreen_popup_transition(
@@ -356,11 +526,14 @@ class _TransitionMixin:
                 # the next clip opens on this exact same picture.
                 self.last_frame = self._blur_out(video, t_frames[-1], fps)
                 return True
-        else:
-            highlight_hold_sec = float(highlight_popup["data"].get("freeze_seconds", 3.0))
+        elif dynamic_final_hold is None:
             # Continue the same zoom further rather than resetting to a
             # static hold — one continuous push for the whole highlight
-            # beat instead of a moving bit followed by a frozen bit.
+            # beat instead of a moving bit followed by a frozen bit. Only
+            # reached on the static-tile fallback path — the dynamic
+            # pydeck path already wrote this hold's frames as real
+            # re-renders (see the capture loop above) and already set
+            # self.last_frame to the last one.
             self.last_frame = self._ken_burns_hold(
                 video, highlight_frame, fps, highlight_hold_sec,
                 featured_popup["x"], featured_popup["y"],

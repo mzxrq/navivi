@@ -10,6 +10,7 @@ settings (e.g. settings.mode_speeds_kmh) — these are only the fallback
 defaults.
 """
 
+import json
 import os
 from typing import Dict, List, Tuple
 
@@ -27,15 +28,83 @@ def ffmpeg_thread_args() -> List[str]:
     into its argument list, right after the ffmpeg binary path."""
     return ["-threads", str(FFMPEG_THREADS)]
 
+# --- On-video text labels (Japanese) -----------------------------------------
+# services/ -> up to src-python/ -> assets/config/ — same bundled-relative-
+# to-module convention graphicengine/base.py's _BUNDLED_FONTS_DIR uses. Every
+# piece of Japanese text drawn onto the rendered video lives in this one file
+# (assets/config/labels_ja.json) instead of scattered across modules:
+# - waypoint_fallback/start_prefix/stop_prefix: render_step.py's on-screen
+#   waypoint label chip (also outrocard.py's end-card grid fallback).
+# - mode_name/mode_duration_label/total_label/distance_label/
+#   taskbar_card_title: cards.py's summary cards (create_summary_card /
+#   create_summary_card_taskbar) — see cards.py's merge_summary_card_labels
+#   for how a project's job_config.json settings.summary_card_labels can
+#   still override a subset of just those keys.
+# A project can override any of these via job_config.json's
+# settings.pipeline_labels / settings.summary_card_labels without touching
+# this bundled file at all.
+_LABELS_JA_PATH = os.path.join(
+    os.path.dirname(__file__), "..", "assets", "config", "labels_ja.json",
+)
+_DEFAULT_LABELS_JA: Dict = {
+    "waypoint_fallback": "ウェイポイント",
+    "start_prefix": "出発: ",
+    "stop_prefix": "到着: ",
+    "mode_name": {
+        "walking": "歩く", "driving": "運転", "car": "運転",
+        "ferry": "乗船", "airplane": "飛行機",
+    },
+    "mode_duration_label": {
+        "walking": "歩く時間", "driving": "運転時間", "car": "運転時間",
+        "ferry": "乗船時間", "airplane": "飛行時間",
+    },
+    "total_label": "合計",
+    "distance_label": "距離",
+    "taskbar_card_title": "旅の概要",
+}
+
+
+def _load_labels_ja() -> Dict:
+    try:
+        with open(_LABELS_JA_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return _DEFAULT_LABELS_JA
+
+
+# Loaded once at import time — these are static display strings, not
+# something a render needs to re-read per frame/per card.
+LABELS_JA: Dict = _load_labels_ja()
+# Alias kept for the pipeline-label (waypoint_fallback/start_prefix/
+# stop_prefix) call sites that only ever needed those three keys —
+# render_step.py, overview.py, outrocard.py, and helpers.py's re-export.
+PIPELINE_LABELS: Dict = LABELS_JA
+
+# --- Mode aliases ------------------------------------------------------------
+# Route-mode strings that should be TREATED AS another mode everywhere a mode
+# drives behavior (speed lookup, animation icon, line/card color, duration
+# label) — rather than being a distinct identity that then falls through to
+# some generic fallback. "direct" (a straight-line routing choice, not a real
+# travel mode) already aliased to "walking"; "draw" (a hand-drawn custom-route
+# leg) is walking in every practical sense here too — same pace, same on-foot
+# icon — so it's folded into the same alias rather than getting its own
+# separate (and generic-fallback-flavored) identity. Apply via
+# `MODE_ALIASES.get(mode, mode)` at the point a mode string is first read off
+# job_config.json (routeMode / routing_cache), so every downstream lookup
+# just sees "walking" and never has to special-case "draw" itself.
+MODE_ALIASES: Dict[str, str] = {"direct": "walking", "draw": "walking"}
 
 # --- Mode speeds (km/h) -----------------------------------------------------
 # REPORTED is the real-world speed a leg's distance/time is estimated from
-# when no real GPS timestamp is available (drives the summary/per-leg
-# stat cards). ANIMATION is a separate, usually faster set of speeds that
-# drives the on-screen travel pace instead — kept apart so a realistic
-# (and often much slower) reported walking speed doesn't also drag the
-# walking leg's on-screen animation out longer. Modes not listed in
-# ANIMATION_MODE_SPEED_KMH reuse their REPORTED speed for animation too.
+# when no real GPS timestamp is available (drives the summary/per-leg stat
+# cards and every other real-world calculation) — unaffected by anything
+# below. ANIMATION_SPEED_KMH is the single on-screen travel pace EVERY mode
+# animates at by default (walking, driving, ferry, airplane — all the same),
+# so a fast car/ferry/flight leg doesn't visually zip by relative to a
+# walking one just because its real-world speed is so much higher; only the
+# real numbers above still vary per mode. A project can still opt a specific
+# mode into its own on-screen pace via job_config.json's
+# settings.animation_speeds_kmh (see SpatialRenderer.__init__).
 REPORTED_MODE_SPEED_KMH: Dict[str, float] = {
     "walking": 3.0,
     "ferry": 35.0,  # regular passenger ferry, not a high-speed jet ferry
@@ -43,13 +112,11 @@ REPORTED_MODE_SPEED_KMH: Dict[str, float] = {
     "driving": 70.0,
     "airplane": 500.0,
 }
-ANIMATION_MODE_SPEED_KMH: Dict[str, float] = {
-    "walking": 8.0,
-}
+ANIMATION_SPEED_KMH = 8.0
 # Fixed anchor "1x" pace every mode's on-screen speed-up factor is computed
-# against — not whatever "walking" happens to be configured as (see
-# SpatialRenderer._mode_speed_factor).
-# [NOTE] [Config] Kept independent of REPORTED/ANIMATION_MODE_SPEED_KMH["walking"] so changing walking speed doesn't silently rescale every other mode's speed-up factor.
+# against — not whatever ANIMATION_SPEED_KMH happens to be configured as
+# (see SpatialRenderer._mode_speed_factor).
+# [NOTE] [Config] Kept independent of REPORTED/ANIMATION_SPEED_KMH so changing either doesn't silently rescale every mode's speed-up factor.
 REFERENCE_SPEED_KMH = 3.0
 
 # --- Pin / line colors (BGR) ------------------------------------------------
@@ -87,14 +154,116 @@ DEFAULT_CARD_BORDER_THICKNESS = 1
 # scaled-down card, e.g. the intro overview's card_scale). Bumped up from
 # the original 0.6x/1.0x, which read as too small next to the photo/pin
 # they're labeling.
-POPUP_LABEL_FONT_SCALE_BESIDE = 0.85  # "beside the pin" card (was 0.6x)
-POPUP_LABEL_FONT_SCALE_CORNER = 1.3  # fixed HUD-corner card (was 1.0x)
+POPUP_LABEL_FONT_SCALE_BESIDE = 1.15  # "beside the pin" card (was 0.6x, then 0.85x)
+POPUP_LABEL_FONT_SCALE_CORNER = 1.1  # fixed HUD-corner card (was 1.0x, then 1.3x)
+# Waypoint name chip drawn next to each numbered/lettered pin as the route
+# animates leg-to-leg (e.g. "S  大阪市") — see _SpriteMixin.prebake_landmark_sprite.
+# Bumped up from 0.6x, which read as too small to make out against a busy
+# map tile at video resolution.
+WAYPOINT_LABEL_FONT_SCALE = 0.85
 # Summary-card stat text — flat pixel sizes (at the card's internal 2x
 # render scale), independent of card_size since the card is always
 # resampled down to its target box afterward. Bumped up from the
 # original 14/24-26px, which read as too small for an end-of-video stat.
 SUMMARY_CARD_LABEL_FONT_SIZE = 20
 SUMMARY_CARD_VALUE_FONT_SIZE = 34
+# Which summary-card template render_summary_card picks: "glass" (the
+# original wide stat pill/column card, cards.py's create_summary_card) or
+# "taskbar" (a narrow Windows-notification-flyout-style list,
+# create_summary_card_taskbar). Overridable per project via
+# job_config.json's settings.summary_card_style.
+DEFAULT_SUMMARY_CARD_STYLE = "glass"
+# Floor on the residential-chunk zoom level computed from a leg's physical
+# span (see TileDownloader.fetch_residential_chunk) — a leg whose path
+# bulges or loops (e.g. a detour around a highway on-ramp) can inflate
+# that span well past what the leg's start/end distance suggests, picking
+# a lower zoom than the leg actually needs, which reads as street/place
+# labels becoming too small to make out. This floor keeps every SHORT
+# (local/residential-scale) leg at least this legible regardless of path
+# shape.
+#
+# Only applied when the leg's two pins are within
+# RESIDENTIAL_MIN_ZOOM_MAX_PIN_DISTANCE_M of each other — gated on the
+# straight-line pin distance rather than the (bulge-inflated) padded span,
+# since that's the one measure a detour/loop can't skew. Long car/ferry/
+# driving legs must NOT get this floor: forcing e.g. a 30km leg from its
+# natural zoom (~12) up to 17 multiplies the tile count roughly 4x per
+# zoom level jumped, which turned one real render into a multi-thousand-
+# tile download that never finished in reasonable time.
+RESIDENTIAL_MIN_ZOOM = 17
+RESIDENTIAL_MIN_ZOOM_MAX_PIN_DISTANCE_M = 2000
+# Ceiling on the other end — independent of the tile provider's own
+# MAX_ZOOM_LEVEL (19), which is a capability limit, not a "looks good"
+# limit. A very short/tight leg's span-based zoom lookup could otherwise
+# reach right up to that provider ceiling, framing so close the map reads
+# as an abstract block-level crop rather than a recognizable street view.
+RESIDENTIAL_MAX_ZOOM = 18
+# How far a leg's own path (a loop, an on/off-ramp, a switchback) is
+# allowed to inflate the map's framing beyond the straight-line distance
+# between its two pins — see _compute_residential_bbox's own cap. 1.5x
+# lets a moderate bulge still frame naturally; a bigger loop gets scaled
+# back down to this multiple instead of zooming the whole leg out to fit
+# it, which used to leave most of the frame as empty unused map.
+RESIDENTIAL_LOOP_ZOOM_CAP = 1.5
+# Absolute floor (in degrees, ~55m) on that cap's own diagonal — without
+# this, a leg whose pins sit almost on top of each other (a loop that
+# returns nearly to its own start) would get capped down to a near-zero,
+# degenerate box.
+RESIDENTIAL_LOOP_ZOOM_CAP_MIN_DEGREES = 0.0005
+# Minimum fraction of the box's own span a pin must stay away from any
+# edge — see _compute_residential_bbox's safety clamp. A zigzagging path
+# (several switchbacks leaning the same direction, none of them one
+# single dominant loop RESIDENTIAL_LOOP_ZOOM_CAP would catch) can still
+# drag the path-bbox center far enough that a pin ends up almost cut off;
+# this translates the box back just enough to guarantee at least this
+# much breathing room, without touching its zoom/span.
+RESIDENTIAL_PIN_EDGE_MARGIN = 0.10
+# Fraction of the frame's own height that the bottom summary bar roughly
+# occupies (create_leg_summary_bar's default bar_height + its shadow band
+# is ~174px of a 1080px-tall frame) — the residential chunk tile's own
+# vertical framing is biased upward by this much so the route/pins still
+# read as centered in the AREA ABOVE the bar once it's composited on,
+# rather than the bar visually cutting into what would otherwise be a
+# frame-centered route.
+RESIDENTIAL_MAP_BOTTOM_BAR_FRACTION = 0.16
+# How many residential-leg map tiles MapFetcher.process_residential_sequence
+# fetches concurrently (thread pool — these are network-bound calls to the
+# tile provider via contextily, so they genuinely overlap instead of
+# competing for CPU). Kept modest rather than "as many legs as there are"
+# to stay well clear of the tile provider's own rate limiting; raise with
+# caution, and only alongside TileDownloader's wait/retry backoff settings.
+RESIDENTIAL_TILE_FETCH_WORKERS = 4
+# Whether a stop-by waypoint (job_config.json's "isStopBy": true) merges
+# into the surrounding real-to-real leg (True — just shows its pin as the
+# traveler passes, no popup, no new map tile) instead of forcing its own
+# full leg/tile boundary and arrival-popup sequence like a real waypoint
+# (False — the old behavior). Overridable per project via job_config.json's
+# settings.merge_stopby_waypoints.
+DEFAULT_MERGE_STOPBY_WAYPOINTS = True
+# Every residential leg opens on a brief WIDE shot of the whole leg, then
+# zooms — a scale+crossfade between two separately-fetched static tiles,
+# not a continuous crop within one image — into the existing tight/close
+# framing before the traveler animation begins.
+RESIDENTIAL_WIDE_HOLD_SECONDS = 1.2
+RESIDENTIAL_WIDE_ZOOM_SECONDS = 1.0
+# Wide tile's bbox half-extent is the tight tile's own half-extent
+# (straight-line pin distance + its 20% pad) multiplied by this — loose
+# enough to read as "establishing". No RESIDENTIAL_MIN_ZOOM floor is
+# applied to the wide tile.
+RESIDENTIAL_WIDE_BBOX_MULTIPLIER = 2.5
+# A leg's wide establishing shot is only worth showing when its two pins
+# are far enough apart that the zoom-in actually reads as "zooming in" —
+# below this straight-line pin distance, the wide and tight tiles end up
+# at nearly the same zoom level anyway, so the extra shot is just a stall
+# before the traveler animation. Short legs skip straight to the tight
+# framing (no wide tile fetched, no crossfade played).
+RESIDENTIAL_WIDE_MIN_DISTANCE_M = 400.0
+# Default leg-splitting distance (replaces the old math.inf, which disabled
+# splitting entirely) — a leg longer than this becomes N sequential tight-
+# tile chunks, hard-cut between them (free — see VideoExporter's existing
+# per-chunk clip concatenation); the wide shot only plays before chunk 1 of
+# each leg, not before every chunk.
+RESIDENTIAL_DEFAULT_MAX_CHUNK_DISTANCE_M = 8000.0
 # Per-travel-mode ROUTE LINE colors. Modes without an entry (e.g. walking)
 # fall back to the renderer's own line_color.
 # [NOTE] [Config] Modes missing here (e.g. walking) fall back to the renderer's own line_color rather than a hardcoded default.
@@ -108,15 +277,51 @@ MODE_LINE_COLORS: Dict[str, Tuple[int, int, int]] = {
 # --- End-of-video "zoom to start point" highlight ---------------------------
 # How long the freshly-fetched close-up tile is held/zoomed after the hard
 # cut, before handing off to the fullscreen photo transition (or just
-# holding).
-ENDING_HIGHLIGHT_WAIT_SECONDS = 2.2
+# holding). Also drives the dynamic-pydeck path's own zoom pacing (see
+# ENDING_HIGHLIGHT_PYDECK_ZOOM_BOOST) — shortened together with
+# BIG_MAP_ZOOM_LEAD_SECONDS below so the SAME total zoom amount plays out
+# over less time, i.e. visibly faster, not just a shorter hold.
+ENDING_HIGHLIGHT_WAIT_SECONDS = 1.4
 # Lead-in: how long to push in on the CURRENT wide map (clean, no cards)
 # toward the same point BEFORE that hard cut, and how far.
-BIG_MAP_ZOOM_LEAD_SECONDS = 2.0
+BIG_MAP_ZOOM_LEAD_SECONDS = 1.3
 BIG_MAP_ZOOM_TARGET = 2.6
+# When settings.enable_gl_ending_zoom (or overview_background: "pydeck")
+# is on (see mapfetcher/pydeck_overview.py), the ending highlight's
+# lead-in push AND its cut to a separate fetched close-up tile are both
+# replaced by ONE continuous sequence of genuinely re-rendered deck.gl
+# frames zooming from the wide map all the way in — real map detail
+# revealed as it zooms, rather than a modest digital Ken Burns crop
+# followed by a hard cut to a second static image. In log2 zoom units
+# (each +1 doubles the visual scale) — 3.2 stops around street-label
+# level (road names legible) regardless of the base overview's own zoom,
+# rather than zooming in past that to individual-building/terrain detail.
+ENDING_HIGHLIGHT_PYDECK_ZOOM_BOOST = 3.2
 
 # --- Popup / transition timing ----------------------------------------------
 POPUP_FADE_SECONDS = 1.5
+# Minimum wall-clock gap between one waypoint popup triggering and the next
+# one being allowed to — a cluster of waypoints placed close together on
+# the map (a common case: several stops within the same block) could
+# otherwise trigger back-to-back within a frame or two of each other,
+# popping the current card out again almost as soon as it appeared, well
+# before it was actually readable. Applies regardless of how close the
+# pins are, on top of (not instead of) each popup's own display duration.
+OVERVIEW_POPUP_MIN_TRIGGER_GAP_SECONDS = 2.0
+# Floor on how long a flow-through popup is willing to sit queued for one
+# of MAX_CONCURRENT_FLOW_POPUPS's display slots (see
+# _composite_baked_popups) before giving up and never appearing at all.
+# This used to be exactly the popup's OWN display duration
+# (leg_display_seconds — itself floored short for a tightly-clustered
+# waypoint, since it's based on how soon the NEXT trigger follows) — for a
+# real cluster of 4+ nearby waypoints, a popup could easily need to wait
+# longer than its own short display time for one of only 3 concurrent
+# slots to free up, and be dropped having never been shown even though
+# the traveler had genuinely reached it. The wait budget is now the
+# LARGER of that and this floor, so a short-duration popup still gets a
+# real chance at a slot; still bounded (not infinite) so a popup doesn't
+# finally appear absurdly long after the traveler has moved on.
+POPUP_MIN_WAIT_SECONDS = 6.0
 # [NOTE] [Transition] Fullscreen photo transition plays as an ordered sequence: confirm (pin selected) -> scale (zoom into photo) -> blur -> fade_out; hold_ratio_of_freeze/min_hold_seconds/min_small_hold_seconds bound how long the fullscreen photo is held relative to its freeze duration before the next stage starts.
 FULLSCREEN_TRANSITION_DEFAULTS: Dict[str, float] = {
     "confirm_seconds": 0.4,

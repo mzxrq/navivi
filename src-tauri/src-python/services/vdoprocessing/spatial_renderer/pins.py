@@ -32,15 +32,19 @@ class _PinMixin:
         else:
             self.graphics.draw_path(base, path_history, mode_history)
         for wp in active_popups:
-            if wp["data"].get("triggered"):
+            if wp["data"].get("arrived"):
                 self._draw_pin(base, wp, total_points)
         return base
 
     def _pin_color(self, wp: Dict):
         """Arrived waypoints get GraphicsEngine.arrived_marker_color; ones
         still ahead keep the default marker_color (return None so
-        draw_marker falls back to it)."""
-        return self.graphics.arrived_marker_color if wp["data"].get("triggered") else None
+        draw_marker falls back to it). "arrived" (set the instant the
+        traveler reaches the pin) rather than "triggered" (which only
+        flips once this popup's card clears the overview's min-trigger-gap
+        cooldown — see overview_animation.py) so the pin's own color
+        change never lags behind the real arrival."""
+        return self.graphics.arrived_marker_color if wp["data"].get("arrived") else None
 
     def _declutter_pins(self, active_popups: List[Dict]) -> None:
         """When two or more waypoints sit within a marker's width of each
