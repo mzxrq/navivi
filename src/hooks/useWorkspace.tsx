@@ -144,7 +144,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   }, [_redoTimeline]);
 
   const [routeSegments, setRouteSegments] = useState<RouteSegment[]>([]);
-  const [routePoints, setRoutePoints] = useState<[number, number][]>([]);
+  const [routePoints, setRoutePoints] = useState<number[][]>([]);
   const [drawnRoute, setDrawnRoute] = useState<[number, number][]>([]);
   const [activeWaypointId, setActiveWaypointId] = useState<string | null>(null);
 

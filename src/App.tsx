@@ -1,6 +1,6 @@
-import { Sidebar } from "./components/view/mapeditor/Sidebar";
-import { MapArea } from "./components/view/mapeditor/MapArea";
-import { TimelineView } from "./components/view/videoeditor/TimelineView";
+import { Sidebar } from "./features/map/components/Sidebar";
+import { MapArea } from "./features/map/components/MapArea";
+import { TimelineView } from "./features/timeline/components/TimelineView";
 import { TitleBar } from "./components/ui/TitleBar";
 import { RenderOverlay } from "./components/ui/RenderOverlay";
 import { TitleScreen } from "./components/view/TitleScreen";

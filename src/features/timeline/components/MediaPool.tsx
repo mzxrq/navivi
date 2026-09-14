@@ -11,7 +11,7 @@ import {
   Mic,
   FileAudio,
   FolderSync,
-} from "../../ui/icons";
+} from "../../../components/ui/icons";
 
 type MediaType = "all" | "video" | "audio" | "image" | "text";
 

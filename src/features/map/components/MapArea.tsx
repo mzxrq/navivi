@@ -4,6 +4,7 @@ import Map, {
   Marker,
   MapRef,
   Source,
+  Layer
 } from "react-map-gl/mapbox";
 import { listen } from "@tauri-apps/api/event";
 import { convertFileSrc } from "@tauri-apps/api/core";
@@ -17,22 +18,23 @@ import {
   MapPinned,
   Square,
   Navigation,
-} from "../../ui/icons";
+} from "../../../components/ui/icons";
 import { mapStyles, mapDefaults } from "../../../config/constants";
 import { RouteStyling } from "./MapLayers/RouteStyling";
 import { useWorkspace } from "../../../hooks/useWorkspace";
 import { useTheme } from "../../../hooks/useTheme";
-import { useMapRouting } from "../../../hooks/useMapRouting";
+import { useMapRouting } from "../hooks/useMapRouting";
 import { useFileActions } from "../../../hooks/useFileActions";
 import { useUI } from "../../../hooks/useUI";
 import { loadProjectData } from "../../../services/fileSystem";
-import { MapStyleMenu } from "./MapLayers/MapStyleMenu";
+import { LayerManager } from "./MapLayers/LayerManager";
 import { RouteLayer } from "./MapLayers/RouteLayer";
 import { NaviPin } from "./MapLayers/NaviPin";
+import { ElevationProfile } from "./ElevationProfile";
 
 export function MapArea() {
   const { theme, mapTheme } = useTheme();
-  const { showToast } = useUI();
+  const { showToast, isRendering } = useUI();
   const {
     waypoints,
     setWaypoints,
@@ -43,7 +45,7 @@ export function MapArea() {
     updateWaypoint,
     setActiveWaypointId,
   } = useWorkspace();
-  const { importRouteFile } = useFileActions();
+  const { handleDroppedFiles } = useFileActions();
 
   // Overlays & Modes
   const [isHovering, setIsHovering] = useState(false);
@@ -59,6 +61,9 @@ export function MapArea() {
   const [uploadedRouteLine] = useState<[number, number][]>([]);
   const mapRef = useRef<MapRef>(null);
   const rightClickStartRef = useRef<{ x: number; y: number } | null>(null);
+
+  const [eleHoverPoint, setEleHoverPoint] = useState<number[] | null>(null);
+  const [vehicleGeoJson, setVehicleGeoJson] = useState<any>(null);
 
   // Mapbox View State
   const [viewState, setViewState] = useState({
@@ -302,6 +307,68 @@ export function MapArea() {
     }
   };
 
+  useEffect(() => {
+    const handleHover = ((e: CustomEvent) => setEleHoverPoint(e.detail)) as EventListener;
+    window.addEventListener('elevation-hover', handleHover);
+    return () => window.removeEventListener('elevation-hover', handleHover);
+  }, []);
+
+  useEffect(() => {
+    const map = mapRef.current?.getMap();
+    if (!map) return;
+    const loadModels = () => {
+      try {
+        if (!map.hasModel('car')) map.addModel('car', '/car.glb');
+        if (!map.hasModel('airplane')) map.addModel('airplane', '/airplane.glb');
+      } catch (e) { console.warn("Failed to load models", e); }
+    };
+    map.on('style.load', loadModels);
+    if (map.isStyleLoaded()) loadModels();
+    
+    return () => {
+      map.off('style.load', loadModels);
+    };
+  }, [selectedStyle]);
+
+  useEffect(() => {
+    if (!isRendering || routePoints.length < 2) {
+      setVehicleGeoJson(null);
+      return;
+    }
+    let frameId: number;
+    let startTime = performance.now();
+    const duration = 10000;
+    
+    const animate = (time: number) => {
+      let progress = ((time - startTime) % duration) / duration;
+      
+      const totalPoints = routePoints.length;
+      const exactIndex = progress * (totalPoints - 1);
+      const index1 = Math.floor(exactIndex);
+      const index2 = Math.min(index1 + 1, totalPoints - 1);
+      const frac = exactIndex - index1;
+      
+      const p1 = routePoints[index1];
+      const p2 = routePoints[index2];
+      const lat = p1[0] + (p2[0] - p1[0]) * frac;
+      const lng = p1[1] + (p2[1] - p1[1]) * frac;
+      
+      const dy = p2[0] - p1[0];
+      const dx = p2[1] - p1[1];
+      const bearing = (Math.atan2(dx, dy) * 180 / Math.PI) || 0;
+
+      setVehicleGeoJson({
+        type: 'Feature',
+        properties: { rotation: [0, 0, bearing], model: 'car' },
+        geometry: { type: 'Point', coordinates: [lng, lat] }
+      });
+      
+      frameId = requestAnimationFrame(animate);
+    };
+    frameId = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(frameId);
+  }, [isRendering, routePoints]);
+
   // Drag and Drop Listeners
   useEffect(() => {
     const unlistenHover = listen("tauri://drag-enter", () =>
@@ -322,7 +389,7 @@ export function MapArea() {
           ) {
             await loadProjectData(path);
           } else {
-            await importRouteFile(path);
+            await handleDroppedFiles(event.payload.paths);
           }
         }
       },
@@ -333,7 +400,7 @@ export function MapArea() {
       unlistenLeave.then((f) => f());
       unlistenDrop.then((f) => f());
     };
-  }, []);
+  }, [handleDroppedFiles]);
 
   const mapboxToken =
     settings?.mapbox_api_key || import.meta.env.VITE_MAPBOX_TOKEN;
@@ -455,13 +522,7 @@ export function MapArea() {
           </button>
         </div>
 
-        <button
-          onClick={() => setIs3D(!is3D)}
-          title="Toggle 2D/3D"
-          className={`flex items-center justify-center w-10 h-10 rounded-full transition-all font-bold text-xs ${is3D ? "bg-navi hover:bg-navi-600 text-white shadow-md shadow-navi/25" : "bg-white dark:bg-zinc-800 text-zinc-700 hover:bg-zinc-200 dark:text-zinc-200 dark:hover:bg-zinc-500"}`}
-        >
-          {is3D ? "3D" : "2D"}
-        </button>
+
 
         <button
           onClick={() => {
@@ -482,10 +543,12 @@ export function MapArea() {
 
         <RouteStyling />
 
-        <MapStyleMenu
+        <LayerManager
           selectedStyle={selectedStyle}
           setSelectedStyle={setSelectedStyle}
           mapboxToken={mapboxToken}
+          is3D={is3D}
+          setIs3D={setIs3D}
         />
       </div>
 
@@ -767,8 +830,35 @@ export function MapArea() {
                   </div>
                 </Marker>
               ))}
+
+          {/* Elevation Hover Marker */}
+          {eleHoverPoint && (
+            <Marker longitude={eleHoverPoint[1]} latitude={eleHoverPoint[0]}>
+              <div className="w-4 h-4 bg-navi-500 rounded-full border-2 border-white shadow-lg pointer-events-none" />
+            </Marker>
+          )}
+
+          {/* 3D Vehicle Layer */}
+          {vehicleGeoJson && (
+            <Source id="vehicle-source" type="geojson" data={vehicleGeoJson}>
+              <Layer
+                id="vehicle-layer"
+                type="model"
+                layout={{
+                  "model-id": ["get", "model"]
+                }}
+                paint={{
+                  "model-rotation": ["get", "rotation"],
+                  "model-scale": [50, 50, 50],
+                  "model-translation": [0, 0, 0]
+                }}
+              />
+            </Source>
+          )}
         </Map>
       </div>
+
+      <ElevationProfile />
 
       {/* OVERLAYS */}
       {isHovering && (

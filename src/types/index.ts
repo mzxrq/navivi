@@ -284,8 +284,8 @@ export interface WorkspaceState {
   setRouteSegments: Dispatch<SetStateAction<RouteSegment[]>>;
   activeWaypointId: string | null;
   setActiveWaypointId: (id: string | null) => void;
-  routePoints: [number, number][];
-  setRoutePoints: Dispatch<SetStateAction<[number, number][]>>;
+  routePoints: number[][];
+  setRoutePoints: Dispatch<SetStateAction<number[][]>>;
   drawnRoute: [number, number][];
   setDrawnRoute: Dispatch<SetStateAction<[number, number][]>>;
   // Project Config

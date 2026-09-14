@@ -11,11 +11,11 @@ import {
   LinkIcon,
   UnlinkIcon,
   CornerDownLeft,
-} from "../../ui/icons";
+} from "../../../components/ui/icons";
 import { useWorkspace } from "../../../hooks/useWorkspace";
 import { useUI } from "../../../hooks/useUI";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
-import { ScriptInput } from "../../ui/ScriptInput";
+import { ScriptInput } from "../../../components/ui/ScriptInput";
 import { open } from "@tauri-apps/plugin-dialog";
 import {
   checkModelExists,
@@ -206,7 +206,7 @@ export function WaypointEditor({
   };
 
   return (
-    <aside className="w-85 shrink-0 bg-white dark:bg-navidark-600 border-r border-zinc-200 dark:border-white/5 flex flex-col h-full select-none z-10 relative shadow-xl transition-colors">
+    <aside className="w-90 shrink-0 bg-white dark:bg-navidark-600 border-r border-zinc-200 dark:border-white/5 flex flex-col h-full select-none z-10 relative shadow-xl transition-colors">
       {/* --- HEADER --- */}
       <div className="flex items-center gap-3 p-4 border-b border-zinc-200 dark:border-white/5 shrink-0 bg-zinc-50/50 dark:bg-navidark-700/50">
         <button

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Stage, Layer, Rect, Text, Group } from "react-konva";
 import { useWorkspace } from "../../../hooks/useWorkspace";
 import { useTheme } from "../../../hooks/useTheme";
-import { Film } from "../../ui/icons";
+import { Film } from "../../../components/ui/icons";
 import { exportVideo } from "../../../services/exportApi";
 
 export function TimelineEditor() {

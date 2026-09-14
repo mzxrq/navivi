@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useMemo } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { TimelineData, TimelineTrack, ClipData } from "../types";
+import { TimelineData, TimelineTrack, ClipData } from "../../../types/index";
 
 export interface UseTimelineAudioOptions {
   timeline: TimelineData;

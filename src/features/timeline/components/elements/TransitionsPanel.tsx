@@ -8,7 +8,7 @@ import {
   Film,
   Check,
   Clock,
-} from "../../../ui/icons";
+} from "../../../../components/ui/icons";
 
 export interface TransitionItem {
   shader: string;

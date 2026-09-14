@@ -11,7 +11,7 @@ import {
   Edit,
   RefreshCw,
   Play
-} from "../../ui/icons";
+} from "../../../components/ui/icons";
 import {
   DragDropContext,
   Droppable,
@@ -22,7 +22,7 @@ import { useWorkspace } from "../../../hooks/useWorkspace";
 import { useUI } from "../../../hooks/useUI";
 import { WaypointItem } from "./WaypointItem";
 import { WaypointEditor } from "./WaypointEditor";
-import { LocationSearch } from "../../ui/LocationSearch";
+import { LocationSearch } from "../../../components/ui/LocationSearch";
 import { OverviewPanel } from "./OverviewPanel";
 
 export function Sidebar() {
@@ -126,13 +126,15 @@ export function Sidebar() {
     showToast("Route reversed successfully.", "info");
   };
 
-  if (editingId) {
-    return <WaypointEditor wpId={editingId} onClose={handleCloseEditor} />;
-  }
-
   return (
-    <aside
-      ref={sidebarRef}
+    <>
+      {editingId && (
+        <div className="absolute top-12 left-90 bottom-0 z-[100] shadow-2xl flex">
+          <WaypointEditor wpId={editingId} onClose={handleCloseEditor} />
+        </div>
+      )}
+      <aside
+        ref={sidebarRef}
       className="w-90 shrink-0 bg-white dark:bg-navidark-800 border-r border-zinc-200 dark:border-white/5 flex flex-col h-full select-none z-100 relative shadow-2xl transition-colors"
     >
       <div className="sticky top-0 z-30 bg-white/80 dark:bg-navidark-800/80 backdrop-blur-xl border-b border-zinc-100 dark:border-white/5 p-6 shrink-0 flex flex-col gap-5">
@@ -382,5 +384,6 @@ export function Sidebar() {
         document.body
       )}
     </aside>
+    </>
   );
 }

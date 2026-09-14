@@ -3,8 +3,8 @@ import { Source, Layer } from "react-map-gl/mapbox";
 import { useWorkspace } from "../../../../hooks/useWorkspace";
 
 interface RouteLayerProps {
-  uploadedRouteLine: [number, number][];
-  routePoints: [number, number][];
+  uploadedRouteLine: number[][];
+  routePoints: number[][];
 }
 
 export function RouteLayer({

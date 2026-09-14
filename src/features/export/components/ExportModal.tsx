@@ -23,7 +23,7 @@ import {
   ProjectSettings,
   Waypoint,
   RenderSettings,
-} from "../../../types";
+} from "../../../types/index";
 import {
   saveTimelineManifest,
   compileTimelineManifest,

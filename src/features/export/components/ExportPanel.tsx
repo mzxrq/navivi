@@ -1,5 +1,5 @@
 
-import { Film, MonitorPlay } from "../../ui/icons";
+import { Film, MonitorPlay } from "../../../components/ui/icons";
 import { useWorkspace } from "../../../hooks/useWorkspace";
 
 interface ExportPanelProps {

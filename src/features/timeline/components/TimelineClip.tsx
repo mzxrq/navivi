@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Rnd } from "react-rnd";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { ClipData } from "../../../types";
+import { ClipData } from "../../../types/index";
 import { AudioWaveform } from "./elements/AudioWaveform";
 import { useWorkspace } from "../../../hooks/useWorkspace";
 import { useUI } from "../../../hooks/useUI"; // ✨ NEW: For throwing track-error toasts

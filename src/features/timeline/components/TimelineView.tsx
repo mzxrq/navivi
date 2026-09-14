@@ -4,10 +4,10 @@ import { useWorkspace } from "../../../hooks/useWorkspace";
 import { useUI } from "../../../hooks/useUI";
 import { MediaPool } from "./MediaPool";
 import { TimelineTrack } from "./TimelineTrack";
-import { ClipData, WaypointTimelineMarker } from "../../../types";
+import { ClipData, WaypointTimelineMarker } from "../../../types/index";
 import { Inspector } from "./Inspector";
-import { ExportPanel } from "./ExportPanel";
-import { ExportModal } from "./ExportModal";
+import { ExportPanel } from "../../export/components/ExportPanel";
+import { ExportModal } from "../../export/components/ExportModal";
 import {
   ZoomIn,
   ZoomOut,
@@ -30,10 +30,10 @@ import {
   Settings2,
   MapPin,
   Download,
-} from "../../ui/icons";
+} from "../../../components/ui/icons";
 import { PreviewMonitor } from "./PreviewMonitor";
 import { TransitionsPanel } from "./elements/TransitionsPanel";
-import { useTimelineAudio } from "../../../hooks/useTimelineAudio";
+import { useTimelineAudio } from "../hooks/useTimelineAudio";
 import {
   WaypointMarker,
   WaypointGuideLine,

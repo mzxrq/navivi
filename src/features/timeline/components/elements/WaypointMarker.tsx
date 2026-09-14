@@ -1,6 +1,6 @@
 import React, { memo } from "react";
 import { MapPin } from "lucide-react";
-import { WaypointTimelineMarker } from "../../../../types";
+import { WaypointTimelineMarker } from "../../../../types/index";
 
 export interface WaypointMarkerProps {
   marker: WaypointTimelineMarker;

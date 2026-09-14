@@ -1,7 +1,7 @@
 import React, { useState, useRef } from "react";
 import { useWorkspace } from "../../../hooks/useWorkspace";
 import { useUI } from "../../../hooks/useUI";
-import { TimelineTrack as TrackType } from "../../../types";
+import { TimelineTrack as TrackType } from "../../../types/index";
 import { TimelineClip } from "./TimelineClip";
 import { TransitionBlock } from "./elements/TransitionBlock";
 

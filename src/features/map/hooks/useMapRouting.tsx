@@ -1,6 +1,6 @@
 import { useRef, useEffect } from "react";
-import { useWorkspace } from "./useWorkspace";
-import { getCurve, OsmNode, getDistanceKm, fillRouteCoordinates } from "../utils/mapUtils";
+import { useWorkspace } from "../../../hooks/useWorkspace";
+import { getCurve, OsmNode, getDistanceKm, fillRouteCoordinates } from "../../../utils/mapUtils";
 import bezierSpline from "@turf/bezier-spline";
 import { lineString } from "@turf/helpers";
 

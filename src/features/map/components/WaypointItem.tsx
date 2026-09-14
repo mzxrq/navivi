@@ -9,8 +9,8 @@ import {
   Ruler,
   Plane,
   Pencil,
-} from "../../ui/icons";
-import { Waypoint, RouteMode } from "../../../types";
+} from "../../../components/ui/icons";
+import { Waypoint, RouteMode } from "../../../types/index";
 import { useEffect, useRef } from "react";
 import { useWorkspace } from "../../../hooks/useWorkspace";
 

@@ -1,11 +1,94 @@
 import { useWorkspace } from "./useWorkspace";
 import { useUI } from "./useUI";
 import { open } from "@tauri-apps/plugin-dialog";
-import { readTextFile } from "@tauri-apps/plugin-fs";
+import { readTextFile, readFile, readDir } from "@tauri-apps/plugin-fs";
+import * as exifr from "exifr";
 
 export function useFileActions() {
-  const { setRoutePoints } = useWorkspace();
+  const { setRoutePoints, waypoints, setWaypoints, setIsDirty } = useWorkspace();
   const { showToast } = useUI();
+
+  const handleDroppedFiles = async (paths: string[]) => {
+    try {
+      const allFiles = [];
+      for (const path of paths) {
+        if (path.toLowerCase().endsWith(".json") || path.toLowerCase().endsWith(".navivi")) {
+          // This should be handled by caller
+          continue;
+        }
+        
+        try {
+          const stats = await readDir(path);
+          for (const file of stats) {
+            if (file.name && (file.name.toLowerCase().endsWith(".jpg") || file.name.toLowerCase().endsWith(".jpeg") || file.name.toLowerCase().endsWith(".png"))) {
+              allFiles.push(path + "/" + file.name); // Assuming unix style or we can let tauri path API handle it, but for simplicity
+            }
+          }
+        } catch {
+          // Not a directory
+          allFiles.push(path);
+        }
+      }
+
+      const photoPoints = [];
+      for (const path of allFiles) {
+        if (path.toLowerCase().endsWith(".jpg") || path.toLowerCase().endsWith(".jpeg") || path.toLowerCase().endsWith(".png")) {
+          try {
+            const buffer = await readFile(path);
+            const exifData = await exifr.parse(buffer);
+            if (exifData?.latitude && exifData?.longitude) {
+              photoPoints.push({
+                lat: exifData.latitude,
+                lng: exifData.longitude,
+                date: exifData.DateTimeOriginal || new Date(),
+                path,
+              });
+            }
+          } catch (e) {
+            console.warn("Failed to parse EXIF for", path, e);
+          }
+        } else if (path.toLowerCase().endsWith(".gpx")) {
+          await importRouteFile(path);
+          return;
+        }
+      }
+
+      if (photoPoints.length > 0) {
+        // Sort chronologically
+        photoPoints.sort((a, b) => a.date.getTime() - b.date.getTime());
+        
+        const newWaypoints = [...waypoints];
+        for (const pt of photoPoints) {
+          const newId = Math.random().toString(36).substring(7);
+          let placeName = `Photo ${pt.date.toLocaleTimeString()}`;
+          try {
+            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${pt.lat}&lon=${pt.lng}`);
+            const data = await res.json();
+            placeName = data.name || data.address?.road || data.address?.city || placeName;
+          } catch {}
+
+          newWaypoints.push({
+            id: newId,
+            lat: pt.lat,
+            lng: pt.lng,
+            name: placeName,
+            images: [pt.path],
+            imagePans: ["none"],
+            imageTransitions: [],
+            narration: "",
+            routeMode: "driving"
+          });
+        }
+        setWaypoints(newWaypoints);
+        setIsDirty(true);
+        showToast(`Imported ${photoPoints.length} photos and generated route.`, "success");
+      }
+
+    } catch (e) {
+      console.error(e);
+      showToast("Failed to process dropped files.", "error");
+    }
+  };
 
   const importRouteFile = async (filePath?: string) => {
     try {
@@ -21,7 +104,7 @@ export function useFileActions() {
         const parser = new DOMParser();
         const xmlDoc = parser.parseFromString(fileContent, "text/xml");
         const trackPoints = xmlDoc.getElementsByTagName("trkpt");
-        const points: [number, number][] = [];
+        const points: [number, number, number][] = [];
 
         for (let i = 0; i < trackPoints.length; i++) {
           const latAttr = trackPoints[i].getAttribute("lat");
@@ -29,8 +112,15 @@ export function useFileActions() {
           if (latAttr === null || lonAttr === null) continue;
           const lat = Number.parseFloat(latAttr);
           const lon = Number.parseFloat(lonAttr);
+          
+          let ele = 0;
+          const eleNode = trackPoints[i].getElementsByTagName("ele")[0];
+          if (eleNode && eleNode.textContent) {
+            ele = Number.parseFloat(eleNode.textContent);
+          }
+
           if (Number.isFinite(lat) && Number.isFinite(lon))
-            points.push([lat, lon]);
+            points.push([lat, lon, ele]);
         }
 
         // Distance calculation
@@ -53,7 +143,7 @@ export function useFileActions() {
         } else {
           showToast("Route imported successfully", "success");
         }
-        setRoutePoints(points);
+        setRoutePoints(points); // Will need to update type if routePoints is just [number, number][]
       } else {
         // todo: call gpsbabel conversion logic for non-gpx files
         // setRoutePoints([]);
@@ -63,7 +153,7 @@ export function useFileActions() {
       showToast("Failed to parse file", "error");
     }
   };
-  return { importRouteFile };
+  return { importRouteFile, handleDroppedFiles };
 }
 
 export const parseAndEnrichGPX = async (rawGpxPoints: { lat: number, lon: number }[]) => {

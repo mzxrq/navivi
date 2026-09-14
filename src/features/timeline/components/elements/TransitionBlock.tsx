@@ -1,6 +1,6 @@
-import { TimelineTransition } from "../../../../types";
+import { TimelineTransition } from "../../../../types/index";
 import { useWorkspace } from "../../../../hooks/useWorkspace";
-import { Trash2 } from "../../../ui/icons";
+import { Trash2 } from "../../../../components/ui/icons";
 
 interface TransitionBlockProps {
   transition: TimelineTransition;

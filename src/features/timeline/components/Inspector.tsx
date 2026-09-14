@@ -11,7 +11,7 @@ import {
   Mic,
   Palette,
   Subtitles,
-} from "../../ui/icons";
+} from "../../../components/ui/icons";
 
 const FONT_FAMILIES = [
   { label: "Inter (Modern Sans)", value: "Inter, sans-serif" },
