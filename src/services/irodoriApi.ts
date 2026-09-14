@@ -1,6 +1,6 @@
 import { fetch } from '@tauri-apps/plugin-http';
 
-const IRODORI_URL = "http://127.0.0.1:5000";
+const IRODORI_URL = "http://127.0.0.1:8088";
 
 /**
  * Calls a local Irodori TTS endpoint to synthesize audio from text.

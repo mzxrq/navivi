@@ -16,14 +16,27 @@ import {
   UnlinkIcon,
   FolderOpen,
   Edit3,
-  Copy, 
-  Settings2
+  Copy,
+  Settings2,
+  Eye,
+  EyeOff,
+  Volume2,
+  VolumeX,
+  Lock,
+  Unlock,
 } from "../ui/icons";
 
 export interface ContextMenuState {
   x: number;
   y: number;
-  type: "track-header" | "timeline-clip" | "map-canvas" | "waypoint-marker" | "empty-track" | "project-card";
+  type:
+    | "track-header"
+    | "timeline-clip"
+    | "map-canvas"
+    | "waypoint-marker"
+    | "empty-track"
+    | "project-card"
+    | "mediapool-item";
   targetId?: string;
   data?: any;
 }
@@ -36,7 +49,7 @@ export function ContextMenu() {
     waypoints,
     setWaypoints,
     setActiveWaypointId,
-    setIsDirty // ✨ Added to safely trigger route re-calculations
+    setIsDirty, // ✨ Added to safely trigger route re-calculations
   } = useWorkspace();
   const { addReturnStop } = useWaypointActions();
 
@@ -82,16 +95,20 @@ export function ContextMenu() {
 
   if (!menu) return null;
 
-  const handleAddTrack = (type: "video" | "audio") => {
+  const handleAddTrack = (type: "video" | "audio" | "subtitle") => {
     const existingTracksOfType = timeline.tracks.filter((t) => t.type === type);
     const trackCount = existingTracksOfType.length + 1;
-    
+
     let newOrderIndex = 0;
     if (existingTracksOfType.length > 0) {
-      newOrderIndex = Math.max(...existingTracksOfType.map(t => t.orderIndex)) + 0.1;
+      newOrderIndex =
+        Math.max(...existingTracksOfType.map((t) => t.orderIndex)) + 1;
     } else {
-      newOrderIndex = type === "video" ? 1.5 : 5;
+      newOrderIndex = type === "subtitle" ? 0 : type === "video" ? 100 : 200;
     }
+
+    let trackPrefix = type.toUpperCase();
+    if (type === "video") trackPrefix = "VISUAL";
 
     setTimeline({
       ...timeline,
@@ -99,12 +116,12 @@ export function ContextMenu() {
         ...timeline.tracks,
         {
           id: crypto.randomUUID(),
-          name: `${type.toUpperCase()} ${trackCount}`,
+          name: `${trackPrefix} ${trackCount}`,
           type,
           orderIndex: newOrderIndex,
           isHidden: false,
           isMuted: false,
-          isLocked: false
+          isLocked: false,
         },
       ],
     });
@@ -113,6 +130,19 @@ export function ContextMenu() {
 
   const handleDeleteTrack = (trackId?: string) => {
     if (!trackId) return;
+
+    const trackToDelete = timeline.tracks.find((t) => t.id === trackId);
+    if (trackToDelete?.type === "video") {
+      const visualTracks = timeline.tracks.filter((t) => t.type === "video");
+      if (visualTracks.length <= 1) {
+        // Cannot delete the last visual track
+        setMenu(null);
+        // Dispatch toast manually since showToast isn't directly available here
+        // Wait, actually I can just do it silently or leave it since it's a UI constraint.
+        return;
+      }
+    }
+
     setTimeline({
       ...timeline,
       tracks: timeline.tracks.filter((t) => t.id !== trackId),
@@ -159,27 +189,42 @@ export function ContextMenu() {
     setMenu(null);
   };
 
-  const handleSetWaypointType = (wpId: string | undefined, type: "start" | "end" | "stopby" | "normal") => {
+  const handleSetWaypointType = (
+    wpId: string | undefined,
+    type: "start" | "end" | "stopby" | "normal",
+  ) => {
     if (!wpId) return;
-    
+
     const newWaypoints = [...waypoints];
-    const currentIndex = newWaypoints.findIndex(w => w.id === wpId);
+    const currentIndex = newWaypoints.findIndex((w) => w.id === wpId);
     if (currentIndex === -1) return;
-    
+
     const wp = newWaypoints[currentIndex];
-    
+
     if (type === "start") {
       newWaypoints.splice(currentIndex, 1);
-      newWaypoints.unshift({ ...wp, isStopBy: false, connectToRoute: undefined });
+      newWaypoints.unshift({
+        ...wp,
+        isStopBy: false,
+        connectToRoute: undefined,
+      });
     } else if (type === "end") {
       newWaypoints.splice(currentIndex, 1);
       newWaypoints.push({ ...wp, isStopBy: false, connectToRoute: undefined });
     } else if (type === "stopby") {
-      newWaypoints[currentIndex] = { ...wp, isStopBy: true, connectToRoute: false };
+      newWaypoints[currentIndex] = {
+        ...wp,
+        isStopBy: true,
+        connectToRoute: false,
+      };
     } else if (type === "normal") {
-      newWaypoints[currentIndex] = { ...wp, isStopBy: false, connectToRoute: undefined };
+      newWaypoints[currentIndex] = {
+        ...wp,
+        isStopBy: false,
+        connectToRoute: undefined,
+      };
     }
-    
+
     setWaypoints(newWaypoints);
     if (setIsDirty) setIsDirty(true);
     setMenu(null);
@@ -187,7 +232,7 @@ export function ContextMenu() {
 
   const handleDuplicateClip = (clipId?: string) => {
     if (!clipId) return;
-    const targetClip = timeline.clips.find(c => c.id === clipId);
+    const targetClip = timeline.clips.find((c) => c.id === clipId);
     if (!targetClip) return;
 
     const newClip = {
@@ -198,7 +243,7 @@ export function ContextMenu() {
 
     setTimeline({
       ...timeline,
-      clips: [...timeline.clips, newClip]
+      clips: [...timeline.clips, newClip],
     });
     setMenu(null);
   };
@@ -206,8 +251,9 @@ export function ContextMenu() {
   const menuWidth = 192;
   let estimatedHeight = 200;
 
-  if (menu.type === "timeline-clip" || menu.type === "map-canvas") estimatedHeight = 50;
-  if (menu.type === "track-header") estimatedHeight = 120;
+  if (menu.type === "timeline-clip" || menu.type === "map-canvas")
+    estimatedHeight = 50;
+  if (menu.type === "track-header") estimatedHeight = 320;
   if (menu.type === "waypoint-marker") estimatedHeight = 220; // ✨ Slightly increased for new option
 
   let top = menu.y;
@@ -222,17 +268,20 @@ export function ContextMenu() {
     left = window.innerWidth - menuWidth - 8;
   }
 
-  const popSubmenuLeft = left + (menuWidth * 2) > window.innerWidth;
-  
+  const popSubmenuLeft = left + menuWidth * 2 > window.innerWidth;
+
   // Find the specific waypoint if we clicked on one
-  const targetWp = menu.type === "waypoint-marker" ? waypoints.find(w => w.id === menu.targetId) : null;
+  const targetWp =
+    menu.type === "waypoint-marker"
+      ? waypoints.find((w) => w.id === menu.targetId)
+      : null;
 
   return (
     <div
       id="global-context-menu"
       key={`${menu.x}-${menu.y}`}
-      className="fixed z-1000 w-48 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl border border-zinc-200 dark:border-white/10 rounded-xl shadow-2xl p-1 animate-in fade-in zoom-in-95 duration-100"
-      style={{ top, left }}
+      className="fixed z-1000 w-48 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl border border-zinc-200 dark:border-white/10 rounded-xl shadow-2xl p-1 animate-in fade-in zoom-in-95 duration-100 overflow-visible"
+      style={{ top, left, maxHeight: `calc(100vh - ${Math.max(12, top)}px)` }}
       onContextMenu={(e) => e.preventDefault()}
     >
       <div className="flex flex-col text-xs font-medium text-zinc-700 dark:text-zinc-300">
@@ -252,8 +301,63 @@ export function ContextMenu() {
               <Edit className="w-3.5 h-3.5" /> Rename Track
             </button>
             <div className="my-1 border-t border-zinc-200 dark:border-white/10" />
+
+            {!menu.data?.isAudioTrack && (
+              <button
+                onClick={() => {
+                  if (menu.data?.onToggleHide) menu.data.onToggleHide();
+                  setMenu(null);
+                }}
+                className="ctx-btn"
+              >
+                {menu.data?.isHidden ? (
+                  <Eye className="w-3.5 h-3.5" />
+                ) : (
+                  <EyeOff className="w-3.5 h-3.5" />
+                )}
+                {menu.data?.isHidden ? "Show Track" : "Hide Track"}
+              </button>
+            )}
+            {menu.data?.isAudioTrack && (
+              <button
+                onClick={() => {
+                  if (menu.data?.onToggleMute) menu.data.onToggleMute();
+                  setMenu(null);
+                }}
+                className="ctx-btn"
+              >
+                {menu.data?.isMuted ? (
+                  <Volume2 className="w-3.5 h-3.5" />
+                ) : (
+                  <VolumeX className="w-3.5 h-3.5" />
+                )}
+                {menu.data?.isMuted ? "Unmute Track" : "Mute Track"}
+              </button>
+            )}
+            <button
+              onClick={() => {
+                if (menu.data?.onToggleLock) menu.data.onToggleLock();
+                setMenu(null);
+              }}
+              className="ctx-btn"
+            >
+              {menu.data?.isLocked ? (
+                <Unlock className="w-3.5 h-3.5" />
+              ) : (
+                <Lock className="w-3.5 h-3.5" />
+              )}
+              {menu.data?.isLocked ? "Unlock Track" : "Lock Track"}
+            </button>
+
+            <div className="my-1 border-t border-zinc-200 dark:border-white/10" />
+            <button
+              onClick={() => handleAddTrack("subtitle")}
+              className="ctx-btn"
+            >
+              <Plus className="w-3.5 h-3.5" /> Add Subtitle Track
+            </button>
             <button onClick={() => handleAddTrack("video")} className="ctx-btn">
-              <Plus className="w-3.5 h-3.5" /> Add Video Track
+              <Plus className="w-3.5 h-3.5" /> Add Visual Track
             </button>
             <button onClick={() => handleAddTrack("audio")} className="ctx-btn">
               <Plus className="w-3.5 h-3.5" /> Add Audio Track
@@ -270,28 +374,40 @@ export function ContextMenu() {
 
         {menu.type === "timeline-clip" && (
           <>
-          <button
-            onClick={() => handleDuplicateClip(menu.targetId)}
-            className="ctx-btn"
-          >
-            <CopyPlus className="w-3.5 h-3.5"/> Duplicate Clip
-          </button>
-          <div className="my-1 border-t border-zinc-200 dark:border-white/10" />
-          <button
-            onClick={() => handleDeleteClip(menu.targetId)}
-            className="ctx-btn text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10"
-          >
-            <Trash2 className="w-3.5 h-3.5" /> Delete Clip
-          </button>
-          <div className="my-1 border-t border-zinc-200 dark:border-white/10" />          
-          <button onClick={() => { window.dispatchEvent(new CustomEvent('trigger-link-clips')); setMenu(null); }} className="ctx-btn">
-            <LinkIcon className="w-3.5 h-3.5" /> Link Clips
-          </button>
+            <button
+              onClick={() => handleDuplicateClip(menu.targetId)}
+              className="ctx-btn"
+            >
+              <CopyPlus className="w-3.5 h-3.5" /> Duplicate Clip
+            </button>
+            <div className="my-1 border-t border-zinc-200 dark:border-white/10" />
+            <button
+              onClick={() => handleDeleteClip(menu.targetId)}
+              className="ctx-btn text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10"
+            >
+              <Trash2 className="w-3.5 h-3.5" /> Delete Clip
+            </button>
+            <div className="my-1 border-t border-zinc-200 dark:border-white/10" />
+            <button
+              onClick={() => {
+                window.dispatchEvent(new CustomEvent("trigger-link-clips"));
+                setMenu(null);
+              }}
+              className="ctx-btn"
+            >
+              <LinkIcon className="w-3.5 h-3.5" /> Link Clips
+            </button>
 
-          <button onClick={() => { window.dispatchEvent(new CustomEvent('trigger-unlink-clips')); setMenu(null); }} className="ctx-btn">
-            <UnlinkIcon className="w-3.5 h-3.5" /> Unlink Clips
-          </button>
-        </>
+            <button
+              onClick={() => {
+                window.dispatchEvent(new CustomEvent("trigger-unlink-clips"));
+                setMenu(null);
+              }}
+              className="ctx-btn"
+            >
+              <UnlinkIcon className="w-3.5 h-3.5" /> Unlink Clips
+            </button>
+          </>
         )}
 
         {menu.type === "map-canvas" && (
@@ -303,7 +419,8 @@ export function ContextMenu() {
               }}
               className="ctx-btn"
             >
-              <MapPinned className="w-3.5 h-3.5" />Set as Start
+              <MapPinned className="w-3.5 h-3.5" />
+              Set as Start
             </button>
             <button
               onClick={() => {
@@ -312,7 +429,8 @@ export function ContextMenu() {
               }}
               className="ctx-btn"
             >
-              <div className="w-3.5 h-3.5" />Set as Destination
+              <div className="w-3.5 h-3.5" />
+              Set as Destination
             </button>
             <button
               onClick={() => {
@@ -321,7 +439,8 @@ export function ContextMenu() {
               }}
               className="ctx-btn text-amber-600 dark:text-amber-500"
             >
-              <div className="w-3.5 h-3.5" />Add Stop By
+              <div className="w-3.5 h-3.5" />
+              Add Stop By
             </button>
             <div className="my-1 border-t border-zinc-200 dark:border-white/10" />
             <button
@@ -338,10 +457,16 @@ export function ContextMenu() {
 
         {menu.type === "waypoint-marker" && (
           <>
-            <button onClick={() => { if (menu.targetId) addReturnStop(menu.targetId); setMenu(null); }} className="ctx-btn">
-              <CornerDownLeft className="w-3.5 h-3.5"/> Add Return Stop
+            <button
+              onClick={() => {
+                if (menu.targetId) addReturnStop(menu.targetId);
+                setMenu(null);
+              }}
+              className="ctx-btn"
+            >
+              <CornerDownLeft className="w-3.5 h-3.5" /> Add Return Stop
             </button>
-            
+
             <div className="relative group">
               <button className="ctx-btn w-full flex items-center justify-between">
                 <span className="flex items-center gap-2">
@@ -349,18 +474,42 @@ export function ContextMenu() {
                 </span>
                 <ChevronRight className="w-3.5 h-3.5 opacity-50" />
               </button>
-              
+
               {/* Flyout Menu */}
-              <div 
+              <div
                 className={`absolute top-0 hidden group-hover:flex flex-col w-40 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl border border-zinc-200 dark:border-white/10 rounded-xl shadow-2xl p-1 animate-in fade-in zoom-in-95 duration-100 ${
                   popSubmenuLeft ? "right-full mr-1" : "left-full ml-1"
                 }`}
               >
-                <button onClick={() => handleSetWaypointType(menu.targetId, "start")} className="ctx-btn"><MapPinned className="w-3.5 h-3.5" />Set as Start</button>
-                <button onClick={() => handleSetWaypointType(menu.targetId, "end")} className="ctx-btn"><div className="w-3.5 h-3.5" />Set as Destination</button>
+                <button
+                  onClick={() => handleSetWaypointType(menu.targetId, "start")}
+                  className="ctx-btn"
+                >
+                  <MapPinned className="w-3.5 h-3.5" />
+                  Set as Start
+                </button>
+                <button
+                  onClick={() => handleSetWaypointType(menu.targetId, "end")}
+                  className="ctx-btn"
+                >
+                  <div className="w-3.5 h-3.5" />
+                  Set as Destination
+                </button>
                 <div className="my-1 border-t border-zinc-200 dark:border-white/10" />
-                <button onClick={() => handleSetWaypointType(menu.targetId, "normal")} className="ctx-btn text-blue-600 dark:text-blue-400"><MapPinPlus className="w-3.5 h-3.5" />Normal Node</button>
-                <button onClick={() => handleSetWaypointType(menu.targetId, "stopby")} className="ctx-btn text-amber-600 dark:text-amber-500"><div className="w-3.5 h-3.5" />Stop By</button>
+                <button
+                  onClick={() => handleSetWaypointType(menu.targetId, "normal")}
+                  className="ctx-btn text-blue-600 dark:text-blue-400"
+                >
+                  <MapPinPlus className="w-3.5 h-3.5" />
+                  Normal Node
+                </button>
+                <button
+                  onClick={() => handleSetWaypointType(menu.targetId, "stopby")}
+                  className="ctx-btn text-amber-600 dark:text-amber-500"
+                >
+                  <div className="w-3.5 h-3.5" />
+                  Stop By
+                </button>
               </div>
             </div>
 
@@ -372,16 +521,26 @@ export function ContextMenu() {
                 <button
                   onClick={() => {
                     const newValue = !targetWp.connectToRoute;
-                    setWaypoints(waypoints.map(w => 
-                      w.id === menu.targetId ? { ...w, connectToRoute: newValue } : w
-                    ));
+                    setWaypoints(
+                      waypoints.map((w) =>
+                        w.id === menu.targetId
+                          ? { ...w, connectToRoute: newValue }
+                          : w,
+                      ),
+                    );
                     if (setIsDirty) setIsDirty(true);
                     setMenu(null);
                   }}
                   className={`ctx-btn ${targetWp.connectToRoute ? "text-amber-600 dark:text-amber-500" : "text-blue-600 dark:text-blue-400"}`}
                 >
-                  {targetWp.connectToRoute ? <UnlinkIcon className="w-3.5 h-3.5" /> : <LinkIcon className="w-3.5 h-3.5" />}
-                  {targetWp.connectToRoute ? "Disconnect Route" : "Connect to Route"}
+                  {targetWp.connectToRoute ? (
+                    <UnlinkIcon className="w-3.5 h-3.5" />
+                  ) : (
+                    <LinkIcon className="w-3.5 h-3.5" />
+                  )}
+                  {targetWp.connectToRoute
+                    ? "Disconnect Route"
+                    : "Connect to Route"}
                 </button>
                 <div className="my-1 border-t border-zinc-200 dark:border-white/10" />
               </>
@@ -411,59 +570,113 @@ export function ContextMenu() {
 
         {menu.type === "empty-track" && (
           <>
+            <button
+              onClick={() => handleAddTrack("subtitle")}
+              className="ctx-btn"
+            >
+              <Plus className="w-3.5 h-3.5" /> Add Subtitle Track
+            </button>
             <button onClick={() => handleAddTrack("video")} className="ctx-btn">
-              <Plus className="w-3.5 h-3.5" /> Add Video Track
+              <Plus className="w-3.5 h-3.5" /> Add Visual Track
             </button>
             <button onClick={() => handleAddTrack("audio")} className="ctx-btn">
               <Plus className="w-3.5 h-3.5" /> Add Audio Track
             </button>
-            <div className="my-1 border-t border-zinc-200 dark:border-white/10"/>
+            <div className="my-1 border-t border-zinc-200 dark:border-white/10" />
             {menu.targetId && (
-            <>
-              <button
-                onClick={() => handleDeleteTrack(menu.targetId)}
-                className="ctx-btn text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10"
-              >
-                <Trash2 className="w-3.5 h-3.5" /> Delete Empty Track
-              </button>
-            </>
-          )}
+              <>
+                <button
+                  onClick={() => handleDeleteTrack(menu.targetId)}
+                  className="ctx-btn text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Delete Empty Track
+                </button>
+              </>
+            )}
           </>
         )}
 
         {menu.type === "project-card" && (
           <>
-            <button 
-              onClick={() => { if (menu.data?.onOpen) menu.data.onOpen(); setMenu(null); }} 
+            <button
+              onClick={() => {
+                if (menu.data?.onOpen) menu.data.onOpen();
+                setMenu(null);
+              }}
               className="ctx-btn"
             >
               <FolderOpen className="w-3.5 h-3.5" /> Open Project
             </button>
             <div className="my-1 border-t border-zinc-200 dark:border-white/10" />
-            <button 
-              onClick={() => { if (menu.data?.onRename) menu.data.onRename(); setMenu(null); }} 
+            <button
+              onClick={() => {
+                if (menu.data?.onRename) menu.data.onRename();
+                setMenu(null);
+              }}
               className="ctx-btn"
             >
               <Edit3 className="w-3.5 h-3.5" /> Rename
             </button>
-            <button 
-              onClick={() => { if (menu.data?.onDuplicate) menu.data.onDuplicate(); setMenu(null); }} 
+            <button
+              onClick={() => {
+                if (menu.data?.onDuplicate) menu.data.onDuplicate();
+                setMenu(null);
+              }}
               className="ctx-btn"
             >
               <Copy className="w-3.5 h-3.5" /> Duplicate
             </button>
-            <button 
-              onClick={() => { if (menu.data?.onSettings) menu.data.onSettings(); setMenu(null); }} 
+            <button
+              onClick={() => {
+                if (menu.data?.onSettings) menu.data.onSettings();
+                setMenu(null);
+              }}
               className="ctx-btn"
             >
               <Settings2 className="w-3.5 h-3.5" /> Advanced Settings
             </button>
             <div className="my-1 border-t border-zinc-200 dark:border-white/10" />
-            <button 
-              onClick={() => { if (menu.data?.onRemove) menu.data.onRemove(); setMenu(null); }} 
+            <button
+              onClick={() => {
+                if (menu.data?.onRemove) menu.data.onRemove();
+                setMenu(null);
+              }}
               className="ctx-btn text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10"
             >
               <Trash2 className="w-3.5 h-3.5" /> Remove from list
+            </button>
+          </>
+        )}
+
+        {menu.type === "mediapool-item" && (
+          <>
+            <button
+              onClick={() => {
+                if (menu.data?.onDuplicate) menu.data.onDuplicate();
+                setMenu(null);
+              }}
+              className="ctx-btn"
+            >
+              <Copy className="w-3.5 h-3.5" /> Duplicate
+            </button>
+            <button
+              onClick={() => {
+                if (menu.data?.onProperties) menu.data.onProperties();
+                setMenu(null);
+              }}
+              className="ctx-btn"
+            >
+              <Settings2 className="w-3.5 h-3.5" /> Properties
+            </button>
+            <div className="my-1 border-t border-zinc-200 dark:border-white/10" />
+            <button
+              onClick={() => {
+                if (menu.data?.onRemove) menu.data.onRemove();
+                setMenu(null);
+              }}
+              className="ctx-btn text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10"
+            >
+              <Trash2 className="w-3.5 h-3.5" /> Remove from Mediapool
             </button>
           </>
         )}

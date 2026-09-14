@@ -2,7 +2,7 @@ import { documentDir, join, basename } from "@tauri-apps/api/path";
 import { writeTextFile, mkdir, exists, copyFile, readTextFile, BaseDirectory, open as fsOpen } from "@tauri-apps/plugin-fs";
 import { open as dialogOpen } from "@tauri-apps/plugin-dialog";
 import { appConfig, fileSystem } from "../config/constants";
-import { TimelineData, TimelineManifest, ManifestClip } from "../types";
+import { TimelineData, TimelineManifest, ManifestClip, RenderSettings, ExportManifestPayload } from "../types";
 
 
 function calculateDistance(pos1: [number, number], pos2: [number, number]) {
@@ -267,49 +267,110 @@ export async function appendToRenderLog(message: string) {
   }
 };
 
-export async function saveTimelineManifest(projectDir: string, projectName: string, timeline: TimelineData): Promise<boolean> {
+export function compileTimelineManifest(
+  projectName: string,
+  timeline: TimelineData,
+  renderSettings?: RenderSettings,
+  markers?: Array<{ id: string; name: string; time: number }>,
+): TimelineManifest & ExportManifestPayload {
+  // find master audio track
+  const audioTrack = timeline.tracks.find((t) => t.type === "audio");
+  const audioClip = audioTrack
+    ? timeline.clips.find((c) => c.trackId === audioTrack.id)
+    : null;
+  // map visual clips
+  const videoTracks: ManifestClip[] = [];
+  // Sort clips by start time so python receives them in order
+  const visualClips = timeline.clips
+    .filter((c) => c.trackId !== audioTrack?.id)
+    .sort((a, b) => a.startTime - b.startTime);
+
+  for (const clip of visualClips) {
+    const track = timeline.tracks.find((t) => t.id === clip.trackId);
+    videoTracks.push({
+      clip_id: clip.id,
+      file_path: clip.source || "",
+      duration: clip.duration,
+      type: track?.name.toLowerCase().includes("popup")
+        ? "static_popup"
+        : "video",
+    });
+  }
+  // calculate total duration (end of last clip)
+  const totalDuration = timeline.clips.reduce(
+    (max, clip) => Math.max(max, clip.startTime + clip.duration),
+    0,
+  );
+
+  const aspectRatio = renderSettings?.aspectRatio || "16:9";
+  const resolution = renderSettings?.resolution || {
+    width: 1920,
+    height: 1080,
+  };
+  const fps = renderSettings?.fps || 30;
+  const bitrateKbps = renderSettings?.bitrateKbps || 10000;
+  const nowIso = new Date().toISOString();
+
+  // build final json manifest payload
+  const manifest: TimelineManifest & ExportManifestPayload = {
+    project_name: projectName,
+    total_duration_seconds: totalDuration,
+    video_tracks: videoTracks,
+    audio_track: audioClip?.source || undefined,
+    ui_state: timeline,
+    render_settings: renderSettings,
+    aspect_ratio: aspectRatio,
+    resolution: resolution,
+    fps: fps,
+    bitrate_kbps: bitrateKbps,
+    tracks: timeline.tracks,
+    clips: timeline.clips,
+    transitions: timeline.transitions || [],
+    markers: markers || [],
+    exported_at: nowIso,
+
+    // ExportManifestPayload compliance
+    projectName: projectName,
+    aspectRatio: aspectRatio,
+    bitrateKbps: bitrateKbps,
+    totalDuration: totalDuration,
+    exportedAt: nowIso,
+    renderSettings: renderSettings,
+  };
+
+  return manifest;
+}
+
+export async function saveTimelineManifest(
+  projectDir: string,
+  projectName: string,
+  timeline: TimelineData,
+  renderSettings?: RenderSettings,
+  markers?: Array<{ id: string; name: string; time: number }>,
+): Promise<boolean> {
   /**
    * convert react timeline state into timeline.json manifest
    * and saves it for python backend to process
    */
   try {
     const manifestPath = await join(projectDir, "timeline.json");
-    // find master audio track
-    const audioTrack = timeline.tracks.find(t => t.type === "audio");
-    const audioClip = audioTrack ? timeline.clips.find(c => c.trackId === audioTrack.id) : null;
-    // map visual clips
-    const videoTracks: ManifestClip[] = [];
-    // Sort clips by start time so python receives them in order
-    const visualClips = timeline.clips.filter(c => c.trackId !== audioTrack?.id).sort((a, b) => a.startTime - b.startTime);
+    const manifest = compileTimelineManifest(
+      projectName,
+      timeline,
+      renderSettings,
+      markers,
+    );
 
-    for (const clip of visualClips) {
-      const track = timeline.tracks.find(t => t.id === clip.trackId);
-      videoTracks.push({
-        clip_id: clip.id,
-        file_path: clip.source || "",
-        duration: clip.duration,
-        type: track?.name.toLowerCase().includes("popup") ? "static_popup" : "video"
-      });
-    }
-    // calculate total duration (end of last clip)
-    const totalDuration = timeline.clips.reduce((max, clip) => Math.max(max, clip.startTime + clip.duration), 0);
-    // build final json body
-    const manifest: TimelineManifest = {
-      project_name: projectName,
-      total_duration_seconds: totalDuration,
-      video_tracks: videoTracks,
-      audio_track: audioClip?.source || undefined,
-      ui_state: timeline,
-    };
-    // write to disk
+    // write to disk formatted cleanly
     await writeTextFile(manifestPath, JSON.stringify(manifest, null, 2));
-    console.log("✓ timeline.json successfully saved.")
+    console.log("✓ timeline.json successfully saved.");
     return true;
   } catch (error) {
     console.error("Failed to save timeline.json:", error);
     return false;
   }
-};
+}
+
 
 export async function loadTimelineManifest(projectDir: string): Promise<TimelineManifest | null> {
   try {

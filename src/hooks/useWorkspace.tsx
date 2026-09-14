@@ -1,5 +1,6 @@
 import { readTextFile, exists } from "@tauri-apps/plugin-fs";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import { parseSRT } from "../utils/srtParser";
 import {
   createContext,
@@ -53,11 +54,26 @@ const DefaultMetadata: ProjectMetadata = {
 
 const DefaultTimeline: TimelineData = {
   tracks: [
-    { id: "track-video-2", name: "V2: Pop-ups", type: "video", orderIndex: 0 },
-    { id: "track-video-1", name: "V1: Main Video", type: "video", orderIndex: 1 },
-    { id: "track-subtitles", name: "T1: Subtitles", type: "subtitle", orderIndex: 2 },
-    { id: "track-audio-1", name: "A1: Voiceovers", type: "audio", orderIndex: 3 },
-    { id: "track-audio-2", name: "A2: Music", type: "audio", orderIndex: 4 },
+    {
+      id: "track-subtitles",
+      name: "T1: Subtitles",
+      type: "subtitle",
+      orderIndex: 0,
+    },
+    { id: "track-video-2", name: "V2: Pop-ups", type: "video", orderIndex: 100 },
+    {
+      id: "track-video-1",
+      name: "V1: Main Video",
+      type: "video",
+      orderIndex: 101,
+    },
+    {
+      id: "track-audio-1",
+      name: "A1: Voiceovers",
+      type: "audio",
+      orderIndex: 200,
+    },
+    { id: "track-audio-2", name: "A2: Music", type: "audio", orderIndex: 201 },
   ],
   clips: [],
   transitions: [],
@@ -78,13 +94,22 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     reset: resetWaypointHistory,
   } = useHistory<Waypoint[]>([], 50);
 
-  const setWaypoints = useCallback((action: React.SetStateAction<Waypoint[]>) => {
-    _setWaypoints(action);
-    setIsDirty(true);
-  }, [_setWaypoints]);
+  const setWaypoints = useCallback(
+    (action: React.SetStateAction<Waypoint[]>) => {
+      _setWaypoints(action);
+      setIsDirty(true);
+    },
+    [_setWaypoints],
+  );
 
-  const undoMap = useCallback(() => { _undoMap(); setIsDirty(true); }, [_undoMap]);
-  const redoMap = useCallback(() => { _redoMap(); setIsDirty(true); }, [_redoMap]);
+  const undoMap = useCallback(() => {
+    _undoMap();
+    setIsDirty(true);
+  }, [_undoMap]);
+  const redoMap = useCallback(() => {
+    _redoMap();
+    setIsDirty(true);
+  }, [_redoMap]);
 
   const {
     state: timeline,
@@ -96,27 +121,38 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     reset: resetTimelineHistory,
   } = useHistory<TimelineData>(DefaultTimeline, 50);
 
-  const setTimeline = useCallback((action: React.SetStateAction<TimelineData>) => {
-    _setTimeline(action);
-    setIsDirty(true);
-  }, [_setTimeline]);
+  const setTimeline = useCallback(
+    (action: React.SetStateAction<TimelineData>) => {
+      _setTimeline(action);
+      setIsDirty(true);
+    },
+    [_setTimeline],
+  );
 
-  const undoTimeline = useCallback(() => { _undoTimeline(); setIsDirty(true); }, [_undoTimeline]);
-  const redoTimeline = useCallback(() => { _redoTimeline(); setIsDirty(true); }, [_redoTimeline]);
+  const undoTimeline = useCallback(() => {
+    _undoTimeline();
+    setIsDirty(true);
+  }, [_undoTimeline]);
+  const redoTimeline = useCallback(() => {
+    _redoTimeline();
+    setIsDirty(true);
+  }, [_redoTimeline]);
 
   const [routeSegments, setRouteSegments] = useState<RouteSegment[]>([]);
   const [routePoints, setRoutePoints] = useState<[number, number][]>([]);
   const [drawnRoute, setDrawnRoute] = useState<[number, number][]>([]);
   const [activeWaypointId, setActiveWaypointId] = useState<string | null>(null);
-  
+
   const [metadata, setMetadata] = useState<ProjectMetadata>(() => ({
     ...DefaultMetadata,
     created_at: new Date().toISOString(),
   }));
-  
+
   const [settings, setSettings] = useState<ProjectSettings>(DefaultSettings);
-  const [routingCache, setRoutingCache] = useState<Record<string, [number, number][]>>({});
-  
+  const [routingCache, setRoutingCache] = useState<
+    Record<string, [number, number][]>
+  >({});
+
   const [recentProjects, setRecentProjects] = useState<RecentProjects[]>(() => {
     const saved = localStorage.getItem("navivi-recents");
     return saved ? JSON.parse(saved) : [];
@@ -136,7 +172,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         }
       });
       return () => {
-        unlisten.then(f => f());
+        unlisten.then((f) => f());
       };
     } catch (e) {
       console.log("Tauri window API not available in browser mode");
@@ -155,11 +191,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const updateWaypoint = useCallback((id: string, data: Partial<Waypoint>) => {
-    setWaypoints((prev) =>
-      prev.map((wp) => (wp.id === id ? { ...wp, ...data } : wp)),
-    );
-  }, [setWaypoints]);
+  const updateWaypoint = useCallback(
+    (id: string, data: Partial<Waypoint>) => {
+      setWaypoints((prev) =>
+        prev.map((wp) => (wp.id === id ? { ...wp, ...data } : wp)),
+      );
+    },
+    [setWaypoints],
+  );
 
   const updateClip = useCallback(
     (id: string, startTime: number, duration: number) => {
@@ -266,7 +305,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           routeMode: wp.routeMode || "walking",
           customRoute: wp.customRoute || [],
           drawStyle: wp.drawStyle || "linear",
-          
+
           isStopBy: wp.isStopBy || false,
           connectToRoute: wp.connectToRoute || false,
           images: wp.popup_image || [],
@@ -275,7 +314,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           imageDisplay: wp.image_display || "pip",
           narration: wp.narration || "",
           arrivingNarration: wp.arrivingNarration || "",
-          attractionNarration: wp.attractionNarration || "",          
+          attractionNarration: wp.attractionNarration || "",
         })),
       );
       resetTimelineHistory(DefaultTimeline);
@@ -343,18 +382,38 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       resetTimelineHistory(DefaultTimeline);
       return;
     }
-    
+
     if (manifest.ui_state) {
       resetTimelineHistory(manifest.ui_state);
       return;
     }
 
     const defaultTracks: TimelineTrack[] = [
-      { id: "track-video-2", name: "V2: Pop-ups", type: "video", orderIndex: 0 },
-      { id: "track-video-1", name: "V1: Main Video", type: "video", orderIndex: 1 },
-      { id: "track-subtitles", name: "T1: Subtitles", type: "subtitle", orderIndex: 2 },
-      { id: "track-audio-1", name: "A1: Voiceovers", type: "audio", orderIndex: 3 },
-      { id: "track-audio-2", name: "A2: Music", type: "audio", orderIndex: 4 },
+      {
+        id: "track-subtitles",
+        name: "T1: Subtitles",
+        type: "subtitle",
+        orderIndex: 0,
+      },
+      {
+        id: "track-video-2",
+        name: "V2: Pop-ups",
+        type: "video",
+        orderIndex: 100,
+      },
+      {
+        id: "track-video-1",
+        name: "V1: Main Video",
+        type: "video",
+        orderIndex: 101,
+      },
+      {
+        id: "track-audio-1",
+        name: "A1: Voiceovers",
+        type: "audio",
+        orderIndex: 200,
+      },
+      { id: "track-audio-2", name: "A2: Music", type: "audio", orderIndex: 201 },
     ];
 
     const parseDuration = (val: any): number => {
@@ -366,7 +425,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         }
         return parseFloat(val) || 5.0;
       }
-      return 5.0; 
+      return 5.0;
     };
 
     const trackRunningTime: Record<string, number> = {
@@ -376,27 +435,40 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     const newClips: ClipData[] = [];
 
     const videoTracks = manifest.video_tracks || [];
-    videoTracks.forEach((item) => {
-      const targetTrackId = item.type === "static_popup" ? "track-video-2" : "track-video-1";
-      const safeDuration = parseDuration(item.duration);
+    for (const item of videoTracks) {
+      const targetTrackId =
+        item.type === "static_popup" ? "track-video-2" : "track-video-1";
+      let safeDuration = parseDuration(item.duration);
+
+      if (!item.duration || safeDuration <= 5.0) {
+        const realDuration = await new Promise<number>((resolve) => {
+          const media = document.createElement("video");
+          media.onloadedmetadata = () => resolve(media.duration);
+          media.onerror = () => resolve(safeDuration);
+          media.src = convertFileSrc(item.file_path);
+        });
+        if (realDuration && realDuration > 0 && isFinite(realDuration)) {
+          safeDuration = realDuration;
+        }
+      }
 
       newClips.push({
         id: item.clip_id || crypto.randomUUID(),
         trackId: targetTrackId,
-        label: item.file_path.split(/[/\\]/).pop() || "Video Clip", 
+        label: item.file_path.split(/[/\\]/).pop() || "Video Clip",
         startTime: trackRunningTime[targetTrackId],
         duration: safeDuration,
         sourceDuration: safeDuration,
         source: item.file_path,
         type: "video",
       });
-      
+
       trackRunningTime[targetTrackId] += safeDuration;
-    });
+    }
 
     if (manifest.audio_track) {
       const audioDuration = parseDuration(manifest.total_duration_seconds);
-      
+
       newClips.push({
         id: crypto.randomUUID(),
         trackId: "track-audio-1",
@@ -408,12 +480,12 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       });
 
       try {
-        const srtPath = manifest.audio_track.replace(/\.[^/.]+$/, ".srt"); 
-        
+        const srtPath = manifest.audio_track.replace(/\.[^/.]+$/, ".srt");
+
         if (await exists(srtPath)) {
           const srtContent = await readTextFile(srtPath);
           const parsedSubtitles = parseSRT(srtContent);
-          
+
           parsedSubtitles.forEach((sub) => {
             newClips.push({
               id: crypto.randomUUID(),
@@ -425,10 +497,17 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
               duration: sub.endTime - sub.startTime,
               x: 960,
               y: 900,
+              fontFamily: "Inter, sans-serif",
               fontSize: 48,
               color: "#ffffff",
               stroke: "#000000",
-              strokeWidth: 2,
+              strokeWidth: 3,
+              shadowColor: "rgba(0, 0, 0, 0.75)",
+              shadowBlur: 4,
+              shadowOffsetX: 2,
+              shadowOffsetY: 2,
+              karaoke: false,
+              karaokeHighlightColor: "#f59e0b",
             });
           });
         }
@@ -494,7 +573,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       }}
     >
       {children}
-      
+
       <UnsavedChanges
         isOpen={isUnsavedModalOpen}
         projectName={metadata.project_name || "Untitled Project"}

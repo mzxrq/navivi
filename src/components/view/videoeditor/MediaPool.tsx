@@ -1,10 +1,17 @@
 import { useState, useEffect } from "react";
 import { join } from "@tauri-apps/api/path";
-import { open } from '@tauri-apps/plugin-dialog';
+import { open } from "@tauri-apps/plugin-dialog";
 import { readDir, exists } from "@tauri-apps/plugin-fs"; // ✨ NEW: Native filesystem scanner
-import { convertFileSrc } from '@tauri-apps/api/core';
+import { convertFileSrc } from "@tauri-apps/api/core";
 import { useWorkspace } from "../../../hooks/useWorkspace";
-import { Search, Film, ImageIcon, Mic, FileAudio, FolderSync } from "../../ui/icons";
+import {
+  Search,
+  Film,
+  ImageIcon,
+  Mic,
+  FileAudio,
+  FolderSync,
+} from "../../ui/icons";
 
 type MediaType = "all" | "video" | "audio" | "image" | "text";
 
@@ -20,14 +27,14 @@ export function MediaPool() {
   const { metadata } = useWorkspace();
   const [filter, setFilter] = useState<MediaType>("all");
   const [searchQuery, setSearchQuery] = useState("");
-  
+
   const [assets, setAssets] = useState<MediaAsset[]>([]);
   const [importedAssets, setImportedAssets] = useState<MediaAsset[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
 
   // Auto-Load System for user-imported assets
   useEffect(() => {
-    const savedAssets = localStorage.getItem('nle_media_pool');
+    const savedAssets = localStorage.getItem("nle_media_pool");
     if (savedAssets) {
       try {
         setImportedAssets(JSON.parse(savedAssets));
@@ -41,7 +48,7 @@ export function MediaPool() {
   // Auto-Save System for user-imported assets
   useEffect(() => {
     if (isLoaded) {
-      localStorage.setItem('nle_media_pool', JSON.stringify(importedAssets));
+      localStorage.setItem("nle_media_pool", JSON.stringify(importedAssets));
     }
   }, [importedAssets, isLoaded]);
 
@@ -59,23 +66,53 @@ export function MediaPool() {
         { name: "video", type: "video" as const },
         { name: "audio", type: "audio" as const },
         { name: "image", type: "image" as const },
-        { name: "subtitle", type: "text" as const }
+        { name: "subtitle", type: "text" as const },
       ];
 
       for (const folder of folders) {
         const folderPath = await join(baseAssetsDir, folder.name);
-        
+
         if (await exists(folderPath)) {
           try {
             const entries = await readDir(folderPath);
             for (const entry of entries) {
-              if (entry.isFile && !entry.name.startsWith('.')) { // Ignore hidden files like .DS_Store
+              if (entry.isFile && !entry.name.startsWith(".")) {
+                // Ignore hidden files like .DS_Store
+                const filePath = await join(folderPath, entry.name);
+                let durationStr =
+                  folder.type === "image" || folder.type === "text"
+                    ? "00:05"
+                    : undefined;
+
+                if (folder.type === "video" || folder.type === "audio") {
+                  const safeUrl = convertFileSrc(filePath);
+                  const durationSeconds = await new Promise<number>(
+                    (resolve) => {
+                      const media = document.createElement(
+                        folder.type === "audio" ? "audio" : "video",
+                      );
+                      media.onloadedmetadata = () => resolve(media.duration);
+                      media.onerror = () => resolve(0);
+                      media.src = safeUrl;
+                    },
+                  );
+                  if (durationSeconds > 0 && isFinite(durationSeconds)) {
+                    const mins = Math.floor(durationSeconds / 60)
+                      .toString()
+                      .padStart(2, "0");
+                    const secs = Math.floor(durationSeconds % 60)
+                      .toString()
+                      .padStart(2, "0");
+                    durationStr = `${mins}:${secs}`;
+                  }
+                }
+
                 generated.push({
                   id: crypto.randomUUID(),
                   name: entry.name,
                   type: folder.type,
-                  source: await join(folderPath, entry.name),
-                  duration: folder.type === "image" || folder.type === "text" ? "00:05" : undefined 
+                  source: filePath,
+                  duration: durationStr,
                 });
               }
             }
@@ -94,10 +131,22 @@ export function MediaPool() {
     try {
       const selected = await open({
         multiple: true,
-        filters: [{
-          name: 'Media',
-          extensions: ['mp4', 'mov', 'webm', 'mp3', 'wav', 'png', 'jpg', 'jpeg', 'srt']
-        }]
+        filters: [
+          {
+            name: "Media",
+            extensions: [
+              "mp4",
+              "mov",
+              "webm",
+              "mp3",
+              "wav",
+              "png",
+              "jpg",
+              "jpeg",
+              "srt",
+            ],
+          },
+        ],
       });
 
       if (!selected) return;
@@ -106,39 +155,45 @@ export function MediaPool() {
       const newAssets: MediaAsset[] = [];
 
       for (const path of filePaths) {
-        const ext = path.split('.').pop()?.toLowerCase() || '';
-        let type: "video" | "audio" | "image" | "text" = 'image';
-        if (['mp4', 'mov', 'webm'].includes(ext)) type = 'video';
-        if (['mp3', 'wav'].includes(ext)) type = 'audio';
-        if (['srt'].includes(ext)) type = 'text';
+        const ext = path.split(".").pop()?.toLowerCase() || "";
+        let type: "video" | "audio" | "image" | "text" = "image";
+        if (["mp4", "mov", "webm"].includes(ext)) type = "video";
+        if (["mp3", "wav"].includes(ext)) type = "audio";
+        if (["srt"].includes(ext)) type = "text";
 
-        const name = path.split(/[\\/]/).pop() || 'Unknown File';
-        let durationStr = "00:05"; 
+        const name = path.split(/[\\/]/).pop() || "Unknown File";
+        let durationStr = "00:05";
 
-        if (type === 'audio' || type === 'video') {
+        if (type === "audio" || type === "video") {
           const safeUrl = convertFileSrc(path);
           const durationSeconds = await new Promise<number>((resolve) => {
-            const media = document.createElement(type === 'audio' ? 'audio' : 'video');
+            const media = document.createElement(
+              type === "audio" ? "audio" : "video",
+            );
             media.onloadedmetadata = () => resolve(media.duration);
-            media.onerror = () => resolve(5); 
+            media.onerror = () => resolve(5);
             media.src = safeUrl;
           });
 
-          const mins = Math.floor(durationSeconds / 60).toString().padStart(2, '0');
-          const secs = Math.floor(durationSeconds % 60).toString().padStart(2, '0');
+          const mins = Math.floor(durationSeconds / 60)
+            .toString()
+            .padStart(2, "0");
+          const secs = Math.floor(durationSeconds % 60)
+            .toString()
+            .padStart(2, "0");
           durationStr = `${mins}:${secs}`;
         }
 
         newAssets.push({
           id: crypto.randomUUID(),
           name: name,
-          source: path, 
+          source: path,
           type: type,
-          duration: durationStr
+          duration: durationStr,
         });
       }
 
-      setImportedAssets(prev => [...prev, ...newAssets]);
+      setImportedAssets((prev) => [...prev, ...newAssets]);
     } catch (error) {
       console.error("Failed to import media:", error);
     }
@@ -146,45 +201,51 @@ export function MediaPool() {
 
   const allAssets = [...assets, ...importedAssets];
 
-  const filteredAssets = allAssets.filter(asset => {
+  const filteredAssets = allAssets.filter((asset) => {
     const matchesType = filter === "all" || asset.type === filter;
-    const matchesSearch = asset.name.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = asset.name
+      .toLowerCase()
+      .includes(searchQuery.toLowerCase());
     return matchesType && matchesSearch;
   });
 
   const getIcon = (type: string) => {
     switch (type) {
-      case "video": return <Film className="w-4 h-4 text-navi-500" />
-      case "audio": return <Mic className="w-4 h-4 text-purple-500" />
-      case "image": return <ImageIcon className="w-4 h-4 text-amber-500" />
-      default: return <FileAudio className="w-4 h-4 text-zinc-500" />
+      case "video":
+        return <Film className="w-4 h-4 text-navi-500" />;
+      case "audio":
+        return <Mic className="w-4 h-4 text-purple-500" />;
+      case "image":
+        return <ImageIcon className="w-4 h-4 text-amber-500" />;
+      default:
+        return <FileAudio className="w-4 h-4 text-zinc-500" />;
     }
   };
 
   return (
-    <div className="w-64 h-full bg-white dark:bg-navidark-800 border-r border-zinc-200 dark:border-navidark-300 flex flex-col shrink-0">
+    <div className="w-full h-full flex-1 bg-white dark:bg-navidark-800 flex flex-col shrink-0">
       {/* Header & Search */}
       <div className="p-3 border-b border-zinc-200 dark:border-navidark-300 space-y-3">
         <div className="flex items-center justify-between text-xs font-bold text-zinc-700 dark:text-zinc-200 uppercase tracking-wider">
           <span>Media Pool</span>
           <div className="flex items-center gap-2">
-            <button 
-              onClick={handleImportMedia} 
+            <button
+              onClick={handleImportMedia}
               className="bg-navi hover:bg-navi-600 text-white text-[10px] px-2 py-1 rounded transition-colors flex items-center gap-1 shadow-sm"
               title="Import External Media"
             >
               <span className="text-sm leading-none">+</span> Import
             </button>
-            <button 
-              onClick={() => setImportedAssets([])} 
-              className="text-zinc-400 hover:text-red-500 transition-colors" 
+            <button
+              onClick={() => setImportedAssets([])}
+              className="text-zinc-400 hover:text-red-500 transition-colors"
               title="Clear Imported Media"
             >
               <FolderSync className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
-        
+
         <div className="relative">
           <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400" />
           <input
@@ -227,8 +288,42 @@ export function MediaPool() {
               draggable="true"
               onDragStart={(e) => {
                 e.stopPropagation();
-                e.dataTransfer.setData("text", JSON.stringify(asset)); 
+                e.dataTransfer.setData("text", JSON.stringify(asset));
                 e.dataTransfer.effectAllowed = "copy";
+              }}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                window.dispatchEvent(
+                  new CustomEvent("open-context-menu", {
+                    detail: {
+                      x: e.clientX,
+                      y: e.clientY,
+                      type: "mediapool-item",
+                      targetId: asset.id,
+                      data: {
+                        onDuplicate: () => {
+                          const newAsset = {
+                            ...asset,
+                            id: crypto.randomUUID(),
+                            name: asset.name + " (Copy)",
+                          };
+                          setImportedAssets((prev) => [...prev, newAsset]);
+                        },
+                        onRemove: () => {
+                          setImportedAssets((prev) =>
+                            prev.filter((a) => a.id !== asset.id),
+                          );
+                        },
+                        onProperties: () => {
+                          alert(
+                            `Name: ${asset.name}\nType: ${asset.type}\nDuration: ${asset.duration || "N/A"}\nPath: ${asset.source}`,
+                          );
+                        },
+                      },
+                    },
+                  }),
+                );
               }}
               className="flex items-center gap-3 p-2 rounded-md hover:bg-zinc-100 dark:hover:bg-navidark-600 cursor-grab active:cursor-grabbing border border-transparent hover:border-zinc-200 dark:hover:border-navidark-400 transition-colors group"
             >

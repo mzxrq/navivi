@@ -3,7 +3,7 @@ import type { Dispatch, SetStateAction, } from "react";
 export type RouteMode = "driving" | "walking" | "direct" | "curve" | "ferry" | "calculating" | "draw";
 // export type TrackType = "video" | "audio" | "image" | "text";
 export type TrackKind = "video" | "overlay" | "subtitle" | "audio";
-export type ClipKind = "video" | "audio" | "image" | "text";
+export type ClipKind = "video" | "audio" | "image" | "text" | "subtitle";
 
 export interface Waypoint {
   id: string;
@@ -88,6 +88,10 @@ export interface TimelineTrack {
   isHidden?: boolean;
   isMuted?: boolean;
   isLocked?: boolean;
+  volume?: number;              // 0.0 - 1.5 (default 1.0)
+  audioRole?: "voice" | "music" | "sfx";
+  duckingEnabled?: boolean;     // Enable auto-ducking on this track (e.g. music)
+  duckingAmount?: number;       // Ducking attenuation ratio (default 0.25)
 }
 
 export interface ClipData {
@@ -112,13 +116,56 @@ export interface ClipData {
   text?: string;
   fontSize?: number;
   color?: string;
+  fontFamily?: string;
   stroke?: string;
   strokeWidth?: number;
+  shadowColor?: string;
+  shadowBlur?: number;
+  shadowOffsetX?: number;
+  shadowOffsetY?: number;
+  karaoke?: boolean;
+  karaokeHighlightColor?: string;
+
+  volume?: number;              // 0.0 - 1.5 (default 1.0)
+  isMuted?: boolean;
+  audioRole?: "voice" | "music" | "sfx";
+  ducking?: boolean;
+  duckingAmount?: number;
 
   fadeIn?: number;
   fadeOut?: number;
-  transitionIn?: string;
-  transitionOut?: string;
+  transitionIn?: any;
+  transitionOut?: any;
+  prevClip?: ClipData;
+  effects?: {
+    brightness?: number;
+    contrast?: number;
+    saturation?: number;
+  };
+  style?: {
+    fontFamily?: string;
+    fontSize?: number;
+    color?: string;
+    stroke?: string;
+    strokeWidth?: number;
+    shadowColor?: string;
+    shadowBlur?: number;
+    shadowOffsetX?: number;
+    shadowOffsetY?: number;
+    karaoke?: boolean;
+    karaokeHighlightColor?: string;
+    [key: string]: any;
+  };
+}
+
+export interface AudioWaveformProps {
+  src: string;
+  width: number;
+  height: number;
+  duration?: number;
+  sourceOffset?: number;
+  volume?: number;
+  color?: string;
 }
 
 export interface TimelineTransition {
@@ -138,11 +185,53 @@ export interface TimelineData {
   zoomMultiplier: number;
 }
 
+export interface WaypointTimelineMarker {
+  id: string;
+  name: string;
+  time: number;
+  index: number;
+  color?: string;
+}
+
 export interface ManifestClip {
   clip_id: string;
   file_path: string;
   duration: number;
   type: string;
+}
+
+export type AspectRatioType = "16:9" | "9:16";
+
+export interface QualityProfile {
+  id: string;
+  label: string;
+  width: number;
+  height: number;
+  bitrateKbps: number;
+  fps: number;
+}
+
+export interface RenderSettings {
+  aspectRatio: AspectRatioType;
+  resolution: { width: number; height: number };
+  fps: number;
+  bitrateKbps: number;
+  qualityId: string;
+}
+
+export interface ExportManifestPayload {
+  projectName: string;
+  aspectRatio: AspectRatioType;
+  resolution: { width: number; height: number };
+  fps: number;
+  bitrateKbps: number;
+  totalDuration: number;
+  tracks: TimelineTrack[];
+  clips: ClipData[];
+  transitions: any[];
+  markers: Array<{ id: string; name: string; time: number }>;
+  exportedAt: string;
+  renderSettings?: RenderSettings;
 }
 
 export interface TimelineManifest {
@@ -151,6 +240,16 @@ export interface TimelineManifest {
   video_tracks: ManifestClip[];
   audio_track?: string;
   ui_state?: TimelineData;
+  render_settings?: RenderSettings;
+  aspect_ratio?: AspectRatioType;
+  resolution?: { width: number; height: number };
+  fps?: number;
+  bitrate_kbps?: number;
+  tracks?: TimelineTrack[];
+  clips?: ClipData[];
+  transitions?: any[];
+  markers?: Array<{ id: string; name: string; time: number }>;
+  exported_at?: string;
 }
 
 // Global State Interface

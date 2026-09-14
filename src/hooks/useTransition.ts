@@ -33,6 +33,35 @@ void main() {
 
 // Curated dictionary of raw gl-transitions 
 export const SHADERS: Record<string, string> = {
+  "glsl-crossfade": `
+    vec4 transition(vec2 uv) {
+      return mix(getFromColor(uv), getToColor(uv), progress);
+    }
+  `,
+  "glsl-wipe": `
+    vec4 transition(vec2 uv) {
+      return mix(getFromColor(uv), getToColor(uv), step(uv.x, progress));
+    }
+  `,
+  "glsl-slide": `
+    vec4 transition(vec2 uv) {
+      vec2 p = uv - vec2(progress, 0.0);
+      if (p.x >= 0.0) {
+        return getFromColor(p);
+      } else {
+        return getToColor(p + vec2(1.0, 0.0));
+      }
+    }
+  `,
+  "glsl-dissolve": `
+    float rand(vec2 co) {
+      return fract(sin(dot(co.xy, vec2(12.9898, 78.233))) * 43758.5453);
+    }
+    vec4 transition(vec2 uv) {
+      float r = rand(uv);
+      return mix(getFromColor(uv), getToColor(uv), step(r, progress));
+    }
+  `,
   "glsl-directionalwarp": `
     vec4 transition (vec2 uv) {
       vec2 p = uv + progress * sign(vec2(-1.0, 1.0));

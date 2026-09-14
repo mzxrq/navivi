@@ -70,40 +70,26 @@ export function TimelineTrack({
     const assetData = e.dataTransfer.getData("text");
     if (!assetData) return;
 
-    const asset = JSON.parse(assetData);
+    let asset: any;
+    try {
+      asset = JSON.parse(assetData);
+    } catch {
+      return;
+    }
+    if (!asset || typeof asset !== "object") return;
 
     const trackRect = e.currentTarget.getBoundingClientRect();
     const dropX = e.clientX - trackRect.left;
     const zoomRatio = pxPs * timeline.zoomMultiplier;
     const dropTime = Math.max(0, dropX / zoomRatio);
 
-    // ✨ STRICT TRACK TYPE VALIDATION
-    if (track.type === "video" && asset.type === "audio") {
-      showToast("Cannot place Audio on a Video track.", "error");
-      return;
-    }
-    if (track.type === "audio" && asset.type !== "audio") {
-      showToast("Audio tracks only accept Audio files.", "error");
-      return;
-    }
-    if (track.type === "subtitle") {
-      showToast("Subtitles are managed automatically or via text clips.", "warning");
-      if (asset.type !== "text") return;
-    }
-
-    const durationParts = asset.duration
-      ? asset.duration.split(":")
-      : ["00", "05"];
-    const durationSeconds =
-      parseInt(durationParts[0]) * 60 + parseInt(durationParts[1]);
-
-    const finalStart = Math.max(0, dropX / zoomRatio);
-    const finalEnd = finalStart + durationSeconds;
-
-    const isVideoFile = asset.type === "video";
-    const newGroupId = isVideoFile ? crypto.randomUUID() : undefined;
-
+    // ✨ TRANSITION DROP HANDLING (Checked FIRST!)
     if (asset.type === "transition") {
+      if (track.type !== "video") {
+        showToast("Transitions can only be placed on video tracks.", "warning");
+        return;
+      }
+
       const sortedClips = [...trackClips].sort((a, b) => a.startTime - b.startTime);
       let bestCut = null;
       let minDiff = Infinity;
@@ -129,7 +115,13 @@ export function TimelineTrack({
         return;
       }
 
-      const transDuration = 1.0; // 1 second default transition
+      const transDuration =
+        typeof asset.duration === "number"
+          ? asset.duration
+          : typeof asset.duration === "string"
+            ? parseFloat(asset.duration) || 1.0
+            : 1.0;
+
       const newTransition = {
         id: crypto.randomUUID(),
         trackId: track.id,
@@ -137,15 +129,80 @@ export function TimelineTrack({
         toClipId: bestCut.right.id,
         type: asset.shader, // e.g., "glsl-dreamy"
         duration: transDuration,
-        startTime: bestCut.cutTime - (transDuration / 2), // Center it exactly on the cut!
+        startTime: bestCut.cutTime - transDuration / 2, // Center it exactly on the cut!
       };
+
+      const updatedClips = timeline.clips.map((c) => {
+        if (c.id === bestCut.right.id) {
+          return {
+            ...c,
+            transitionIn: asset.shader,
+            fadeIn: transDuration,
+            prevClip: bestCut.left,
+          };
+        }
+        if (c.id === bestCut.left.id) {
+          return {
+            ...c,
+            transitionOut: asset.shader,
+            fadeOut: transDuration,
+          };
+        }
+        return c;
+      });
+
+      const filteredTransitions = (timeline.transitions || []).filter(
+        (t) =>
+          !(
+            t.fromClipId === bestCut.left.id &&
+            t.toClipId === bestCut.right.id
+          ),
+      );
 
       setTimeline({
         ...timeline,
-        transitions: [...(timeline.transitions || []), newTransition]
+        clips: updatedClips,
+        transitions: [...filteredTransitions, newTransition],
       });
+      showToast(
+        `Applied ${asset.name || "transition"} between clips`,
+        "success",
+      );
       return;
     }
+
+    // ✨ STRICT TRACK TYPE VALIDATION
+    if (track.type === "video" && asset.type === "audio") {
+      showToast("Cannot place Audio on a Video track.", "error");
+      return;
+    }
+    if (track.type === "audio" && asset.type !== "audio") {
+      showToast("Audio tracks only accept Audio files.", "error");
+      return;
+    }
+    if (track.type === "subtitle") {
+      showToast("Subtitles are managed automatically or via text clips.", "warning");
+      if (asset.type !== "text") return;
+    }
+
+    const durationSeconds =
+      typeof asset.duration === "number"
+        ? asset.duration
+        : typeof asset.duration === "string" && asset.duration.includes(":")
+          ? (() => {
+              const parts = asset.duration.split(":");
+              return (
+                parseInt(parts[0] || "0", 10) * 60 +
+                parseInt(parts[1] || "0", 10)
+              );
+            })()
+          : parseFloat(asset.duration) || 5;
+
+    const finalStart = Math.max(0, dropX / zoomRatio);
+    const finalEnd = finalStart + durationSeconds;
+
+    const isVideoFile = asset.type === "video";
+    const newGroupId = isVideoFile ? crypto.randomUUID() : undefined;
 
     const newClip = {
       id: crypto.randomUUID(),

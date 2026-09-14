@@ -3,10 +3,36 @@ import Konva from "konva";
 import {
   Image as KonvaImage,
   Text as KonvaText,
+  Group as KonvaGroup,
   Transformer,
 } from "react-konva";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { useGLTransition } from "../../../../hooks/useTransition";
+
+let measureCanvasCtx: CanvasRenderingContext2D | null = null;
+function getMeasuredTextDimensions(text: string, fontSize: number, fontFamily: string) {
+  if (typeof document !== "undefined" && !measureCanvasCtx) {
+    const c = document.createElement("canvas");
+    measureCanvasCtx = c.getContext("2d");
+  }
+  const lines = (text || "New Text").split("\n");
+  if (measureCanvasCtx) {
+    measureCanvasCtx.font = `${fontSize}px ${fontFamily}`;
+    let maxW = 0;
+    for (const l of lines) {
+      const metrics = measureCanvasCtx.measureText(l);
+      if (metrics.width > maxW) maxW = metrics.width;
+    }
+    return {
+      width: Math.max(10, maxW),
+      height: Math.max(10, lines.length * fontSize * 1.25),
+    };
+  }
+  return {
+    width: Math.max(10, (text || "New Text").length * fontSize * 0.6),
+    height: Math.max(10, lines.length * fontSize * 1.25),
+  };
+}
 
 interface TransformableClipProps {
   clip: any;
@@ -44,44 +70,68 @@ export function TransformableClip({
     return null;
   });
 
-  // previous media for transitions
-  const [prevVideoElement] = useState(() => {
-    if (clip.prevClip?.source && clip.prevClip?.type === "video") {
-      const vid = document.createElement("video");
-      vid.playsInline = true;
-      vid.crossOrigin = "anonymous";
-      vid.src = convertFileSrc(clip.prevClip.source);
-      vid.load();
-      return vid;
-    }
-    return null;
-  });
-
   const [imageElement] = useState(() => {
     if (clip.type === "image") return new window.Image();
     return null;
   });
 
+  // Dynamic previous media for transitions (supports both video and image)
+  const [prevMediaElement, setPrevMediaElement] = useState<HTMLVideoElement | HTMLImageElement | null>(null);
+
+  useEffect(() => {
+    if (!clip.prevClip?.source) {
+      setPrevMediaElement(null);
+      return;
+    }
+
+    const safeUrl = convertFileSrc(clip.prevClip.source);
+
+    if (clip.prevClip.type === "video") {
+      const vid = document.createElement("video");
+      vid.playsInline = true;
+      vid.crossOrigin = "anonymous";
+      vid.muted = true;
+      vid.src = safeUrl;
+      vid.load();
+      setPrevMediaElement(vid);
+
+      return () => {
+        vid.pause();
+        vid.removeAttribute("src");
+        vid.load();
+      };
+    } else if (clip.prevClip.type === "image") {
+      const img = new window.Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        shapeRef.current?.getLayer()?.batchDraw();
+      };
+      img.src = safeUrl;
+      setPrevMediaElement(img);
+
+      return () => {
+        img.onload = null;
+      };
+    } else {
+      setPrevMediaElement(null);
+    }
+  }, [clip.prevClip?.id, clip.prevClip?.source, clip.prevClip?.type]);
+
   // ミュートstate
   useEffect(() => {
-    if (videoElement) videoElement.muted = clip.isMuted || false;
-    if (prevVideoElement) prevVideoElement.muted = true;
-  }, [clip.isMuted, videoElement, prevVideoElement]);
+    if (videoElement instanceof HTMLVideoElement) videoElement.muted = clip.isMuted || false;
+    if (prevMediaElement instanceof HTMLVideoElement) prevMediaElement.muted = true;
+  }, [clip.isMuted, videoElement, prevMediaElement]);
 
   useEffect(() => {
     return () => {
-      if (videoElement) {
+      if (videoElement instanceof HTMLVideoElement) {
         videoElement.pause();
         videoElement.removeAttribute("src");
         videoElement.load();
       }
-      if (prevVideoElement) {
-        prevVideoElement.pause();
-        prevVideoElement.removeAttribute("src");
-        prevVideoElement.load();
-      }
     };
-  }, [videoElement, prevVideoElement]);
+  }, [videoElement]);
 
   // Load sources
   useEffect(() => {
@@ -89,7 +139,15 @@ export function TransformableClip({
     const safeUrl = convertFileSrc(clip.source);
 
     if (clip.type === "image" && imageElement) {
-      imageElement.onload = () => shapeRef.current?.getLayer()?.batchDraw();
+      imageElement.onload = () => {
+        if (imageElement.naturalWidth && imageElement.naturalHeight) {
+          setVideoSize({
+            width: imageElement.naturalWidth,
+            height: imageElement.naturalHeight,
+          });
+        }
+        shapeRef.current?.getLayer()?.batchDraw();
+      };
       imageElement.src = safeUrl;
     } else if (
       clip.type === "video" &&
@@ -110,9 +168,15 @@ export function TransformableClip({
     }
   }, [clip.source, clip.type, videoElement, imageElement]);
 
+  // Trigger layer redraw when color adjustment effects change
+  useEffect(() => {
+    shapeRef.current?.getLayer()?.batchDraw();
+  }, [clip.effects?.brightness, clip.effects?.contrast, clip.effects?.saturation]);
+
   // Animation Loop
   useEffect(() => {
-    if (clip.type !== "video" || !shapeRef.current) return;
+    const isPrevVideo = prevMediaElement instanceof HTMLVideoElement;
+    if ((clip.type !== "video" && !isPrevVideo) || !shapeRef.current) return;
     const layer = shapeRef.current.getLayer();
     if (!layer) return;
 
@@ -122,46 +186,46 @@ export function TransformableClip({
     return () => {
       anim.stop();
     };
-  }, [clip.type]);
+  }, [clip.type, prevMediaElement]);
 
   const { glCanvas, drawGL } = useGLTransition(
     videoSize.width,
     videoSize.height,
-    clip.trasitionIn,
+    clip.transitionIn,
   );
 
   // Playhead
   useEffect(() => {
-    if (clip.type !== "video" || !videoElement) return;
+    if (clip.type === "video" && videoElement instanceof HTMLVideoElement) {
+      const localTime = currentTime - clip.startTime + (clip.sourceOffset || 0);
 
-    const localTime = currentTime - clip.startTime + (clip.sourceOffset || 0);
-
-    if (isPlaying) {
-      if (videoElement.paused) videoElement.play().catch(() => {});
-      if (Math.abs(videoElement.currentTime - localTime) > 0.25) {
-        videoElement.currentTime = Math.max(0, localTime);
-      }
-    } else {
-      if (!videoElement.paused) videoElement.pause();
-      if (Math.abs(videoElement.currentTime - localTime) > 0.05) {
-        videoElement.currentTime = Math.max(0, localTime);
-        shapeRef.current?.getLayer()?.batchDraw();
+      if (isPlaying) {
+        if (videoElement.paused) videoElement.play().catch(() => {});
+        if (Math.abs(videoElement.currentTime - localTime) > 0.25) {
+          videoElement.currentTime = Math.max(0, localTime);
+        }
+      } else {
+        if (!videoElement.paused) videoElement.pause();
+        if (Math.abs(videoElement.currentTime - localTime) > 0.05) {
+          videoElement.currentTime = Math.max(0, localTime);
+          shapeRef.current?.getLayer()?.batchDraw();
+        }
       }
     }
 
-    if (clip.prevClip && prevVideoElement) {
+    if (clip.prevClip && prevMediaElement instanceof HTMLVideoElement) {
       const prevLocalTime =
         currentTime -
         clip.prevClip.startTime +
         (clip.prevClip.sourceOffset || 0);
       if (isPlaying) {
-        if (prevVideoElement.paused) prevVideoElement.play().catch(() => {});
-        if (Math.abs(prevVideoElement.currentTime - prevLocalTime) > 0.25)
-          prevVideoElement.currentTime = Math.max(0, prevLocalTime);
+        if (prevMediaElement.paused) prevMediaElement.play().catch(() => {});
+        if (Math.abs(prevMediaElement.currentTime - prevLocalTime) > 0.25)
+          prevMediaElement.currentTime = Math.max(0, prevLocalTime);
       } else {
-        if (!prevVideoElement.paused) prevVideoElement.pause();
-        if (Math.abs(prevVideoElement.currentTime - prevLocalTime) > 0.05)
-          prevVideoElement.currentTime = Math.max(0, prevLocalTime);
+        if (!prevMediaElement.paused) prevMediaElement.pause();
+        if (Math.abs(prevMediaElement.currentTime - prevLocalTime) > 0.05)
+          prevMediaElement.currentTime = Math.max(0, prevLocalTime);
       }
     }
   }, [
@@ -170,7 +234,9 @@ export function TransformableClip({
     clip.startTime,
     clip.sourceOffset,
     clip.type,
+    clip.prevClip,
     videoElement,
+    prevMediaElement,
   ]);
 
   // ✨ RENDER LOOP: Calculate Progress & Draw WebGL
@@ -187,27 +253,79 @@ export function TransformableClip({
   transitionProgress = Math.max(0, Math.min(1, transitionProgress));
   const isTransitioning = transitionProgress > 0 && transitionProgress < 1;
 
+  const currentMedia =
+    clip.type === "video" && videoElement instanceof HTMLVideoElement
+      ? videoElement
+      : clip.type === "image" && imageElement
+        ? imageElement
+        : null;
+
   useEffect(() => {
-    if (isTransitioning && prevVideoElement && videoElement && glCanvas) {
-      drawGL(prevVideoElement, videoElement, transitionProgress);
+    if (isTransitioning && prevMediaElement && currentMedia && glCanvas) {
+      drawGL(prevMediaElement, currentMedia, transitionProgress);
       shapeRef.current?.getLayer()?.batchDraw(); // Force Konva to update its image node
     }
   }, [
     currentTime,
     isTransitioning,
     transitionProgress,
-    prevVideoElement,
-    videoElement,
+    prevMediaElement,
+    currentMedia,
     glCanvas,
     drawGL,
   ]);
+
+  const textRef = useRef<any>(null);
+
+  const isTextOrSubtitle = clip.type === "text" || clip.type === "subtitle";
+  const textContent = clip.text !== undefined ? clip.text : "New Text";
+  const fontFamily = clip.fontFamily || clip.style?.fontFamily || "Inter, sans-serif";
+  const fontSize = clip.fontSize || clip.style?.fontSize || 48;
+  const fillColor = clip.color || clip.style?.color || "#ffffff";
+  const strokeColor = clip.stroke || clip.style?.stroke || undefined;
+  const strokeWidth = clip.strokeWidth ?? clip.style?.strokeWidth ?? 0;
+  const shadowColor = clip.shadowColor || clip.style?.shadowColor || undefined;
+  const shadowBlur = clip.shadowBlur ?? clip.style?.shadowBlur ?? 0;
+  const shadowOffsetX = clip.shadowOffsetX ?? clip.style?.shadowOffsetX ?? 0;
+  const shadowOffsetY = clip.shadowOffsetY ?? clip.style?.shadowOffsetY ?? 0;
+  const shadowOpacity = shadowColor ? 0.8 : 0;
+  const isKaraoke = Boolean(
+    clip.karaoke ??
+    clip.style?.karaoke ??
+    (clip.trackId === "track-subtitles" && clip.karaoke)
+  );
+  const karaokeHighlightColor =
+    clip.karaokeHighlightColor || clip.style?.karaokeHighlightColor || "#f59e0b";
+
+  const measured = isTextOrSubtitle
+    ? getMeasuredTextDimensions(textContent, fontSize, fontFamily)
+    : { width: 100, height: 50 };
+
+  const computedTextWidth =
+    textRef.current && typeof textRef.current.width === "function" && textRef.current.width() > 0
+      ? textRef.current.width()
+      : measured.width;
+  const computedTextHeight =
+    textRef.current && typeof textRef.current.height === "function" && textRef.current.height() > 0
+      ? textRef.current.height()
+      : measured.height;
+
+  const clipProgress = clip.duration > 0
+    ? Math.max(0, Math.min(1, (currentTime - clip.startTime) / clip.duration))
+    : 0;
+
+  useEffect(() => {
+    if (isKaraoke && isTextOrSubtitle && shapeRef.current) {
+      shapeRef.current.getLayer()?.batchDraw();
+    }
+  }, [isKaraoke, isTextOrSubtitle, currentTime]);
 
   useEffect(() => {
     if (isSelected && trRef.current && shapeRef.current) {
       trRef.current.nodes([shapeRef.current]);
       trRef.current.getLayer()?.batchDraw();
     }
-  }, [isSelected]);
+  }, [isSelected, isKaraoke, clip.type]);
 
   const x = clip.x || 0;
   const y = clip.y || 0;
@@ -239,15 +357,87 @@ export function TransformableClip({
 
   return (
     <>
-      {clip.type === "text" || clip.type === "subtitle" ? (
-        <KonvaText
+      {isTextOrSubtitle ? (
+        <KonvaGroup
           ref={shapeRef}
-          text={clip.text || "New Text"}
           x={x}
           y={y}
           opacity={currentOpacity}
-          fontSize={clip.fontSize || 48}
-          fill={clip.color || "#ffffff"}
+          scaleX={scaleX}
+          scaleY={scaleY}
+          rotation={rotation}
+          draggable={isSelected}
+          onClick={onSelect}
+          onTap={onSelect}
+          onDragEnd={(e) => onChange({ x: e.target.x(), y: e.target.y() })}
+          onTransformEnd={() => {
+            const node = shapeRef.current;
+            if (!node) return;
+            onChange({
+              x: node.x(),
+              y: node.y(),
+              scaleX: node.scaleX(),
+              scaleY: node.scaleY(),
+              rotation: node.rotation(),
+            });
+          }}
+        >
+          {/* Layer 1 (Base): Normal KonvaText with default fill color, stroke, and drop shadow */}
+          <KonvaText
+            ref={textRef}
+            text={textContent}
+            x={0}
+            y={0}
+            fontFamily={fontFamily}
+            fontSize={fontSize}
+            fill={fillColor}
+            stroke={strokeColor}
+            strokeWidth={strokeWidth}
+            fillAfterStrokeEnabled={true}
+            shadowColor={shadowColor}
+            shadowBlur={shadowBlur}
+            shadowOffsetX={shadowOffsetX}
+            shadowOffsetY={shadowOffsetY}
+            shadowOpacity={shadowOpacity}
+          />
+
+          {/* Layer 2 (Highlight): Wrapped inside a Konva Group with horizontal clipping */}
+          {isKaraoke && clipProgress > 0 && (
+            <KonvaGroup
+              clip={{
+                x: 0,
+                y: 0,
+                width: computedTextWidth * clipProgress,
+                height: computedTextHeight + 20,
+              }}
+              clipX={0}
+              clipY={0}
+              clipWidth={computedTextWidth * clipProgress}
+              clipHeight={computedTextHeight + 20}
+            >
+              <KonvaText
+                text={textContent}
+                x={0}
+                y={0}
+                fontFamily={fontFamily}
+                fontSize={fontSize}
+                fill={karaokeHighlightColor}
+                stroke={strokeColor}
+                strokeWidth={strokeWidth}
+                fillAfterStrokeEnabled={true}
+              />
+            </KonvaGroup>
+          )}
+        </KonvaGroup>
+      ) : (
+        <KonvaImage
+          ref={shapeRef}
+          image={activeMedia}
+          x={x}
+          y={y}
+          opacity={currentOpacity}
+          width={videoSize.width}
+          height={videoSize.height}
           scaleX={scaleX}
           scaleY={scaleY}
           rotation={rotation}
@@ -265,32 +455,40 @@ export function TransformableClip({
               rotation: node.rotation(),
             });
           }}
-        />
-      ) : (
-        <KonvaImage
-          ref={shapeRef}
-          image={activeMedia}
-          x={x}
-          y={y}
-          opacity={currentOpacity}
-          width={clip.type === "video" ? videoSize.width : undefined}
-          height={clip.type === "video" ? videoSize.height : undefined}
-          scaleX={scaleX}
-          scaleY={scaleY}
-          rotation={rotation}
-          draggable={isSelected}
-          onClick={onSelect}
-          onTap={onSelect}
-          onDragEnd={(e) => onChange({ x: e.target.x(), y: e.target.y() })}
-          onTransformEnd={() => {
-            const node = shapeRef.current;
-            onChange({
-              x: node.x(),
-              y: node.y(),
-              scaleX: node.scaleX(),
-              scaleY: node.scaleY(),
-              rotation: node.rotation(),
-            });
+          sceneFunc={(context, shape) => {
+            if (!activeMedia) return;
+            const ctx = context._context;
+            const b = clip.effects?.brightness ?? 0;
+            const c = clip.effects?.contrast ?? 0;
+            const s = clip.effects?.saturation ?? 0;
+            const hasColorFilter = b !== 0 || c !== 0 || s !== 0;
+
+            const prevFilter = ctx.filter;
+            if (hasColorFilter) {
+              const bVal = Math.max(0, 1 + b / 100);
+              const cVal = Math.max(0, 1 + c / 100);
+              const sVal = Math.max(0, 1 + s / 100);
+              ctx.filter = `brightness(${bVal}) contrast(${cVal}) saturate(${sVal})`;
+            }
+
+            const w = shape.width() || videoSize.width;
+            const h = shape.height() || videoSize.height;
+            context.drawImage(activeMedia, 0, 0, w, h);
+
+            if (hasColorFilter) {
+              ctx.filter = prevFilter || "none";
+            }
+          }}
+          hitFunc={(context, shape) => {
+            context.beginPath();
+            context.rect(
+              0,
+              0,
+              shape.width() || videoSize.width,
+              shape.height() || videoSize.height,
+            );
+            context.closePath();
+            context.fillStrokeShape(shape);
           }}
         />
       )}

@@ -1,14 +1,13 @@
 import { listen } from "@tauri-apps/api/event";
-import { invoke } from "@tauri-apps/api/core";
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useWorkspace } from "../../../hooks/useWorkspace";
 import { useUI } from "../../../hooks/useUI";
 import { MediaPool } from "./MediaPool";
 import { TimelineTrack } from "./TimelineTrack";
-import { ClipData } from "../../../types";
+import { ClipData, WaypointTimelineMarker } from "../../../types";
 import { Inspector } from "./Inspector";
 import { ExportPanel } from "./ExportPanel";
-import { saveTimelineManifest } from "../../../services/fileSystem";
+import { ExportModal } from "./ExportModal";
 import {
   ZoomIn,
   ZoomOut,
@@ -27,23 +26,54 @@ import {
   Lock,
   Unlock,
   Type,
+  Film,
+  Settings2,
+  MapPin,
+  Download,
 } from "../../ui/icons";
 import { PreviewMonitor } from "./PreviewMonitor";
+import { TransitionsPanel } from "./elements/TransitionsPanel";
+import { useTimelineAudio } from "../../../hooks/useTimelineAudio";
+import {
+  WaypointMarker,
+  WaypointGuideLine,
+  formatMarkerTime,
+} from "./elements/WaypointMarker";
 
 export function TimelineView() {
-  const { timeline, setTimeline, autoLoadTimeline, metadata } = useWorkspace();
+  const {
+    timeline,
+    setTimeline,
+    autoLoadTimeline,
+    metadata,
+    waypoints,
+    settings,
+  } = useWorkspace();
   const { showToast } = useUI();
 
   const [selectedClipIds, setSelectedClipIds] = useState<string[]>([]);
   const [copiedClips, setCopiedClips] = useState<ClipData[]>([]);
 
-  const [activeTool, setActiveTool] = useState<"pointer" | "razor" | "magic">("pointer");
-  const [rightPanelTab, setRightPanelTab] = useState<"inspector" | "export">("inspector");
+  const [activeTool, setActiveTool] = useState<"pointer" | "razor" | "magic">(
+    "pointer",
+  );
+  const [rightPanelTab, setRightPanelTab] = useState<
+    "media" | "objects" | "transitions" | "inspector" | "export" | null
+  >("media");
   const [isRippleMode, setIsRippleMode] = useState(true);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [isScrubbing, setIsScrubbing] = useState(false);
+
+  // Audio Playback & Auto-Ducking synchronization hook
+  const { isDuckingActive } = useTimelineAudio({
+    timeline,
+    currentTime,
+    isPlaying,
+    isScrubbing,
+  });
 
   const timelineRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLDivElement>(null);
@@ -58,18 +88,52 @@ export function TimelineView() {
     y2: number;
   } | null>(null);
 
+  const [timelineHeight, setTimelineHeight] = useState(320);
+  const isResizingTimeline = useRef(false);
+
+  useEffect(() => {
+    const handleGlobalMouseUp = () => {
+      isResizingTimeline.current = false;
+    };
+    const handleGlobalMouseMove = (e: MouseEvent) => {
+      if (!isResizingTimeline.current) return;
+      const newHeight = window.innerHeight - e.clientY;
+      setTimelineHeight(
+        Math.max(150, Math.min(newHeight, window.innerHeight - 200)),
+      );
+    };
+    window.addEventListener("mouseup", handleGlobalMouseUp);
+    window.addEventListener("mousemove", handleGlobalMouseMove);
+    return () => {
+      window.removeEventListener("mouseup", handleGlobalMouseUp);
+      window.removeEventListener("mousemove", handleGlobalMouseMove);
+    };
+  }, []);
+
   const pixelsPerSecond = 20 * timeline.zoomMultiplier;
 
   // ✨ SORT TRACKS BY ORDER INDEX
   const sortedTracks = useMemo(() => {
-    return [...timeline.tracks].sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
+    return [...timeline.tracks].sort((a, b) => {
+      const getBase = (type: string) =>
+        type === "subtitle" ? 0 : type === "video" ? 100 : 200;
+      const aOrder = a.orderIndex ?? getBase(a.type);
+      const bOrder = b.orderIndex ?? getBase(b.type);
+      return aOrder - bOrder;
+    });
   }, [timeline.tracks]);
 
   // ✨ Calculate track bounds using the SORTED tracks
   const trackBounds = useMemo(() => {
     let y = 0;
+    let currentType: string | null = null;
     return sortedTracks.map((t) => {
-      const h = t.type === "video" || t.name.toLowerCase().includes("video") ? 80 : 56;
+      if (currentType !== t.type) {
+        y += 24; // 24px (h-6) spacing div for new track group (including the first one)
+      }
+      currentType = t.type;
+      const h =
+        t.type === "video" || t.name.toLowerCase().includes("video") ? 80 : 56;
       const bounds = { id: t.id, top: y, bottom: y + h };
       y += h;
       return bounds;
@@ -161,6 +225,7 @@ export function TimelineView() {
       );
     } else {
       setSelectedClipIds([id]);
+      setRightPanelTab("inspector");
     }
   };
 
@@ -445,11 +510,11 @@ export function TimelineView() {
   const handleScrub = (clientX: number) => {
     if (!timelineRef.current || !rulerRef.current) return;
     const rect = timelineRef.current.getBoundingClientRect();
-    
+
     let currentScroll = timelineRef.current.scrollLeft;
     const scrollZone = 50;
     const maxScroll = timelineRef.current.scrollWidth - rect.width;
-    
+
     if (clientX > rect.right - scrollZone && currentScroll < maxScroll) {
       currentScroll = Math.min(maxScroll, currentScroll + 30);
       timelineRef.current.scrollLeft = currentScroll;
@@ -459,7 +524,7 @@ export function TimelineView() {
       timelineRef.current.scrollLeft = currentScroll;
       rulerRef.current.scrollLeft = currentScroll;
     }
-    
+
     const pixelsFromZero = clientX - rect.left + currentScroll;
     setCurrentTime(Math.max(0, pixelsFromZero / pixelsPerSecond));
   };
@@ -543,17 +608,8 @@ export function TimelineView() {
     };
   }, [metadata]);
 
-  const handleExportVideo = async () => {
-    if (!metadata?.directory_path) return;
-    const success = await saveTimelineManifest(
-      metadata.directory_path,
-      metadata.project_name || "Project",
-      timeline,
-    );
-    if (success)
-      invoke("export_video", { projectDir: metadata.directory_path }).catch(
-        console.error,
-      );
+  const handleExportVideo = () => {
+    setIsExportModalOpen(true);
   };
 
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
@@ -598,11 +654,118 @@ export function TimelineView() {
     };
   }, [timeline, selectedClipIds]);
 
+  // Waypoint Timeline Calculation (F4.1)
+  const waypointMarkers = useMemo<WaypointTimelineMarker[]>(() => {
+    if (!waypoints || waypoints.length === 0) return [];
+
+    const stepDuration =
+      typeof settings?.duration_seconds === "number" && settings.duration_seconds > 0
+        ? settings.duration_seconds
+        : 5.0;
+
+    const videoTrackIds = new Set(
+      timeline.tracks
+        .filter((t) => t.type === "video")
+        .map((t) => t.id),
+    );
+    const videoClips = timeline.clips.filter((c) => {
+      if (c.type && c.type !== "video") return false;
+      return videoTrackIds.size === 0 || (c.trackId && videoTrackIds.has(c.trackId));
+    });
+
+    let runningTime = 0;
+
+    return waypoints.map((wp, idx) => {
+      let calculatedTime: number;
+
+      if (typeof wp.timelineOffset === "number" && !isNaN(wp.timelineOffset)) {
+        calculatedTime = wp.timelineOffset;
+      } else {
+        const rawWpName = (wp.name || "").trim().toLowerCase();
+        const strippedWpName = rawWpName.replace(/[^a-z0-9]/g, "");
+        const underscoreWpName = rawWpName.replace(/[\s\-]+/g, "_");
+
+        const pad2 = String(idx + 1).padStart(2, "0");
+        const pad1 = String(idx + 1);
+
+        const matchedClip = videoClips.find((clip) => {
+          const rawLabel = (clip.label || "").toLowerCase();
+          const strippedLabel = rawLabel.replace(/[^a-z0-9]/g, "");
+          const underscoreLabel = rawLabel.replace(/[\s\-]+/g, "_");
+
+          if (
+            strippedWpName &&
+            strippedWpName !== "waypoint" &&
+            (strippedLabel.includes(strippedWpName) ||
+              underscoreLabel.includes(underscoreWpName))
+          ) {
+            return true;
+          }
+
+          return (
+            rawLabel.includes(`waypoint_${pad2}`) ||
+            rawLabel.includes(`waypoint_${pad1}`) ||
+            rawLabel.includes(`waypoint-${pad2}`) ||
+            rawLabel.includes(`waypoint-${pad1}`) ||
+            rawLabel.includes(`waypoint ${pad1}`) ||
+            rawLabel.includes(`wp_${pad2}`) ||
+            rawLabel.includes(`wp_${pad1}`) ||
+            rawLabel.includes(`wp-${pad2}`) ||
+            rawLabel.includes(`wp-${pad1}`) ||
+            strippedLabel.includes(`waypoint${pad2}`) ||
+            strippedLabel.includes(`waypoint${pad1}`) ||
+            strippedLabel.includes(`wp${pad2}`) ||
+            strippedLabel.includes(`wp${pad1}`)
+          );
+        });
+
+        if (matchedClip && typeof matchedClip.startTime === "number") {
+          calculatedTime = matchedClip.startTime;
+        } else {
+          calculatedTime = runningTime;
+        }
+      }
+
+      runningTime = Math.max(runningTime, calculatedTime) + stepDuration;
+
+      return {
+        id: wp.id || `waypoint-${idx + 1}`,
+        name: wp.name || `Waypoint ${idx + 1}`,
+        time: Math.max(0, calculatedTime),
+        index: idx + 1,
+        color: "#f59e0b",
+      };
+    });
+  }, [waypoints, settings?.duration_seconds, timeline.clips, timeline.tracks]);
+
+  const [hoveredMarker, setHoveredMarker] = useState<WaypointTimelineMarker | null>(null);
+  const [markerTooltipPos, setMarkerTooltipPos] = useState<{ x: number; y: number } | null>(null);
+
+  const handleMarkerHover = (
+    marker: WaypointTimelineMarker | null,
+    rect?: DOMRect,
+  ) => {
+    if (marker && rect) {
+      setHoveredMarker(marker);
+      setMarkerTooltipPos({
+        x: rect.left + rect.width / 2,
+        y: rect.bottom,
+      });
+    } else {
+      setHoveredMarker(null);
+      setMarkerTooltipPos(null);
+    }
+  };
+
   const maxClipEnd = timeline.clips.reduce(
     (max, clip) => Math.max(max, clip.startTime + clip.duration),
     0,
   );
-  const rulerDuration = Math.max(600, maxClipEnd + 120);
+  const maxMarkerTime = waypointMarkers.reduce(
+    (max, m) => Math.max(max, m.time),
+    0,
+  );
+  const rulerDuration = Math.max(600, maxClipEnd + 120, maxMarkerTime + 120);
   const timelinePixelWidth = rulerDuration * pixelsPerSecond;
 
   let majorStep = 10,
@@ -621,39 +784,127 @@ export function TimelineView() {
   return (
     <div className="flex flex-col flex-1 h-full bg-white dark:bg-[#09090b] overflow-hidden select-none">
       <div className="flex-1 flex min-h-0 border-b border-zinc-200 dark:border-white/5">
-        <div className="w-64 shrink-0 flex flex-col border-r border-zinc-200 dark:border-navidark-400">
-          <MediaPool />
+        {/* SIDEBAR TABS BAR */}
+        <div className="w-14 shrink-0 flex flex-col items-center py-4 bg-zinc-50 dark:bg-navidark-900 border-r border-zinc-200 dark:border-navidark-400 gap-4">
+          <button
+            onClick={() =>
+              setRightPanelTab(
+                rightPanelTab === "media" ? null : ("media" as any),
+              )
+            }
+            className={`p-2 rounded-xl transition-colors ${rightPanelTab === "media" ? "bg-navi/10 text-navi" : "text-zinc-500 hover:bg-zinc-200 dark:hover:bg-white/5 dark:text-zinc-400"}`}
+            title="Media Pool"
+          >
+            <Film className="w-5 h-5" />
+          </button>
+          <button
+            onClick={() =>
+              setRightPanelTab(
+                rightPanelTab === "objects" ? null : ("objects" as any),
+              )
+            }
+            className={`p-2 rounded-xl transition-colors ${rightPanelTab === "objects" ? "bg-navi/10 text-navi" : "text-zinc-500 hover:bg-zinc-200 dark:hover:bg-white/5 dark:text-zinc-400"}`}
+            title="Add Object"
+          >
+            <Type className="w-5 h-5" />
+          </button>
+          <button
+            onClick={() =>
+              setRightPanelTab(
+                rightPanelTab === "transitions" ? null : ("transitions" as any),
+              )
+            }
+            className={`p-2 rounded-xl transition-colors ${rightPanelTab === "transitions" ? "bg-navi/10 text-navi" : "text-zinc-500 hover:bg-zinc-200 dark:hover:bg-white/5 dark:text-zinc-400"}`}
+            title="Transitions"
+          >
+            <Sparkles className="w-5 h-5" />
+          </button>
+          <div className="w-8 h-px bg-zinc-300 dark:bg-navidark-700 my-2" />
+          <button
+            onClick={() =>
+              setRightPanelTab(
+                rightPanelTab === "inspector" ? null : "inspector",
+              )
+            }
+            className={`p-2 rounded-xl transition-colors ${rightPanelTab === "inspector" ? "bg-navi/10 text-navi" : "text-zinc-500 hover:bg-zinc-200 dark:hover:bg-white/5 dark:text-zinc-400"}`}
+            title="Inspector"
+          >
+            <Settings2 className="w-5 h-5" />
+          </button>
+          <button
+            onClick={() =>
+              setRightPanelTab(rightPanelTab === "export" ? null : "export")
+            }
+            className={`p-2 rounded-xl transition-colors ${rightPanelTab === "export" ? "bg-navi/10 text-navi" : "text-zinc-500 hover:bg-zinc-200 dark:hover:bg-white/5 dark:text-zinc-400"}`}
+            title="Export"
+          >
+            <Play className="w-5 h-5" />
+          </button>
         </div>
 
-        <div className="w-72 bg-white dark:bg-navidark-800 border-r border-zinc-200 dark:border-navidark-400 flex flex-col shrink-0">
-          <div className="flex border-b border-zinc-200 dark:border-navidark-700 bg-zinc-50 dark:bg-navidark-900/50">
-            <button
-              onClick={() => setRightPanelTab("inspector")}
-              className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider transition-colors ${rightPanelTab === "inspector" ? "border-b-2 border-navi text-navi" : "text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200"}`}
-            >
-              Inspector
-            </button>
-            <button
-              onClick={() => setRightPanelTab("export")}
-              className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider transition-colors ${rightPanelTab === "export" ? "border-b-2 border-navi text-navi" : "text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200"}`}
-            >
-              Export
-            </button>
+        {/* SIDEBAR PANEL CONTENT */}
+        {rightPanelTab !== null && (
+          <div className="w-80 bg-white dark:bg-navidark-800 border-r border-zinc-200 dark:border-navidark-400 flex flex-col shrink-0 animate-in slide-in-from-left-2 duration-200">
+            <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col">
+              {rightPanelTab === "media" && <MediaPool />}
+              {rightPanelTab === "objects" && (
+                <div className="p-4 text-center text-sm text-zinc-500">
+                  <Type className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                  <p>Drag and drop texts or shapes.</p>
+                  <button
+                    onClick={() => {
+                      const popupTrack = sortedTracks.find(
+                        (t) => t.type === "video" || t.type === "overlay",
+                      );
+                      if (!popupTrack) return;
+                      const newTextClip = {
+                        id: crypto.randomUUID(),
+                        trackId: popupTrack.id,
+                        type: "text" as any,
+                        label: "Custom Text",
+                        text: "Enter text here...",
+                        startTime: currentTime,
+                        duration: 5,
+                        x: 960,
+                        y: 540,
+                        fontSize: 64,
+                        color: "#ffffff",
+                      };
+                      setTimeline({
+                        ...timeline,
+                        clips: [...timeline.clips, newTextClip],
+                      });
+                      showToast("Text added to timeline", "success");
+                    }}
+                    className="mt-4 px-4 py-2 bg-navi text-white rounded-md w-full"
+                  >
+                    Add Text Layer
+                  </button>
+                </div>
+              )}
+              {rightPanelTab === "transitions" && (
+                <TransitionsPanel selectedClipIds={selectedClipIds} />
+              )}
+              {rightPanelTab === "inspector" && (
+                <div className="p-4 flex-1">
+                  <Inspector
+                    selectedClipIds={selectedClipIds}
+                    onClearSelection={() => setSelectedClipIds([])}
+                  />
+                </div>
+              )}
+              {rightPanelTab === "export" && (
+                <div className="p-4 flex-1">
+                  <ExportPanel onExport={handleExportVideo} />
+                </div>
+              )}
+            </div>
           </div>
-          <div className="flex-1 overflow-y-auto custom-scrollbar p-4">
-            {rightPanelTab === "inspector" ? (
-              <Inspector
-                selectedClipIds={selectedClipIds}
-                onClearSelection={() => setSelectedClipIds([])}
-              />
-            ) : (
-              <ExportPanel onExport={handleExportVideo} />
-            )}
-          </div>
-        </div>
+        )}
 
-        <div className="flex-1 p-4 md:p-6 flex flex-col items-center justify-center bg-zinc-50/50 dark:bg-navidark-800 min-w-0 min-h-0 relative overflow-hidden">
-          <div className="w-full max-w-5xl aspect-video bg-black border border-zinc-800 relative overflow-hidden group shadow-xl">
+        {/* PREVIEW MONITOR */}
+        <div className="flex-1 p-4 md:p-6 flex flex-col items-center justify-center bg-zinc-50/50 dark:bg-navidark-800/50 min-w-0 min-h-0 relative overflow-hidden">
+          <div className="w-full max-w-5xl aspect-video bg-zinc-100 dark:bg-black border border-zinc-300 dark:border-zinc-800 ring-1 ring-black/5 dark:ring-0 relative overflow-hidden group shadow-xl">
             {activeClipsToRender.length > 0 ? (
               <PreviewMonitor
                 activeClips={activeClipsToRender}
@@ -672,18 +923,43 @@ export function TimelineView() {
         </div>
       </div>
 
-      <div className="h-80 shrink-0 flex flex-col bg-zinc-100 dark:bg-navidark-900 relative border-t border-zinc-300 dark:border-black shadow-[0_-4px_20px_rgba(0,0,0,0.1)] min-h-0">
+      {/* ✨ RESIZER BAR */}
+      <div
+        className="h-1.5 cursor-row-resize bg-zinc-200 dark:bg-zinc-800 hover:bg-navi dark:hover:bg-navi transition-colors shrink-0 z-40 relative"
+        onMouseDown={() => {
+          isResizingTimeline.current = true;
+        }}
+      />
+
+      <div
+        className="shrink-0 flex flex-col bg-zinc-100 dark:bg-navidark-900 relative border-t border-zinc-300 dark:border-black shadow-[0_-4px_20px_rgba(0,0,0,0.1)] min-h-0"
+        style={{ height: timelineHeight }}
+      >
         <div className="h-11 bg-white dark:bg-navidark-800 border-b border-zinc-200 dark:border-navidark-400 flex items-center justify-between px-4 shrink-0 z-30">
           {/* LEFT: Tools */}
           <div className="flex items-center gap-1 bg-zinc-100 dark:bg-navidark-900 p-1 rounded-md border border-zinc-200 dark:border-navidark-700">
-            <button onClick={() => setActiveTool("pointer")} className={`p-1.5 rounded transition-colors ${activeTool === "pointer" ? "bg-white dark:bg-navidark-700 text-navi shadow-sm" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"}`} title="Selection Tool (V)"><MousePointer2 className="w-4 h-4" /></button>
-            <button onClick={() => setActiveTool("razor")} className={`p-1.5 rounded transition-colors ${activeTool === "razor" ? "bg-white dark:bg-navidark-700 text-navi shadow-sm" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"}`} title="Razor Tool (C)"><Scissors className="w-4 h-4" /></button>
-            
-            <button 
+            <button
+              onClick={() => setActiveTool("pointer")}
+              className={`p-1.5 rounded transition-colors ${activeTool === "pointer" ? "bg-white dark:bg-navidark-700 text-navi shadow-sm" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"}`}
+              title="Selection Tool (V)"
+            >
+              <MousePointer2 className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setActiveTool("razor")}
+              className={`p-1.5 rounded transition-colors ${activeTool === "razor" ? "bg-white dark:bg-navidark-700 text-navi shadow-sm" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"}`}
+              title="Razor Tool (C)"
+            >
+              <Scissors className="w-4 h-4" />
+            </button>
+
+            <button
               onClick={() => {
-                const popupTrack = sortedTracks.find(t => t.type === "video" || t.type === "overlay");
+                const popupTrack = sortedTracks.find(
+                  (t) => t.type === "video" || t.type === "overlay",
+                );
                 if (!popupTrack) return;
-                
+
                 const newTextClip: ClipData = {
                   id: crypto.randomUUID(),
                   trackId: popupTrack.id,
@@ -695,45 +971,111 @@ export function TimelineView() {
                   x: 960,
                   y: 540,
                   fontSize: 64,
-                  color: "#ffffff"
+                  color: "#ffffff",
                 };
-                setTimeline({ ...timeline, clips: [...timeline.clips, newTextClip] });
+                setTimeline({
+                  ...timeline,
+                  clips: [...timeline.clips, newTextClip],
+                });
                 showToast("Text added to timeline", "success");
-              }} 
-              className="p-1.5 rounded transition-colors text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200" 
+              }}
+              className="p-1.5 rounded transition-colors text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
               title="Add Custom Text"
             >
               <Type className="w-4 h-4" />
             </button>
 
             <div className="w-px h-4 bg-zinc-300 dark:bg-navidark-400 mx-1" />
-            <button onClick={() => setIsRippleMode(!isRippleMode)} className={`p-1.5 rounded transition-colors ${isRippleMode ? "bg-navi text-white shadow-sm" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"}`} title="Ripple Insert Mode"><Magnet className="w-4 h-4" /></button>
-            <button onClick={() => setActiveTool("magic")} className={`p-1.5 rounded transition-colors ${activeTool === "magic" ? "bg-white dark:bg-navidark-700 text-navi shadow-sm" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"}`} title="Auto-Transitions"><Sparkles className="w-4 h-4" /></button>
+            <button
+              onClick={() => setIsRippleMode(!isRippleMode)}
+              className={`p-1.5 rounded transition-colors ${isRippleMode ? "bg-navi text-white shadow-sm" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"}`}
+              title="Ripple Insert Mode"
+            >
+              <Magnet className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setActiveTool("magic")}
+              className={`p-1.5 rounded transition-colors ${activeTool === "magic" ? "bg-white dark:bg-navidark-700 text-navi shadow-sm" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"}`}
+              title="Auto-Transitions"
+            >
+              <Sparkles className="w-4 h-4" />
+            </button>
           </div>
 
           {/* CENTER: Playback Controls */}
           <div className="flex items-center gap-1 bg-zinc-100 dark:bg-navidark-900 p-1 rounded-md border border-zinc-200 dark:border-navidark-700">
-            <button onClick={() => setCurrentTime(0)} className="p-1.5 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors rounded hover:bg-zinc-200 dark:hover:bg-navidark-700" title="Home"><SkipBack className="w-4 h-4" /></button>
-            <button onClick={() => setIsPlaying(!isPlaying)} className="p-1.5 text-zinc-500 hover:text-navi transition-colors rounded hover:bg-zinc-200 dark:hover:bg-navidark-700" title="Play/Pause (Space)">
-              {isPlaying ? <Pause className="w-4 h-4" fill="currentColor" /> : <Play className="w-4 h-4" fill="currentColor" />}
+            <button
+              onClick={() => setCurrentTime(0)}
+              className="p-1.5 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors rounded hover:bg-zinc-200 dark:hover:bg-navidark-700"
+              title="Home"
+            >
+              <SkipBack className="w-4 h-4" />
             </button>
-            <button onClick={() => setCurrentTime(timeline.clips.reduce((max, c) => Math.max(max, c.startTime + c.duration), 0))} className="p-1.5 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors rounded hover:bg-zinc-200 dark:hover:bg-navidark-700" title="End"><SkipForward className="w-4 h-4" /></button>
+            <button
+              onClick={() => setIsPlaying(!isPlaying)}
+              className="p-1.5 text-zinc-500 hover:text-navi transition-colors rounded hover:bg-zinc-200 dark:hover:bg-navidark-700"
+              title="Play/Pause (Space)"
+            >
+              {isPlaying ? (
+                <Pause className="w-4 h-4" fill="currentColor" />
+              ) : (
+                <Play className="w-4 h-4" fill="currentColor" />
+              )}
+            </button>
+            <button
+              onClick={() =>
+                setCurrentTime(
+                  timeline.clips.reduce(
+                    (max, c) => Math.max(max, c.startTime + c.duration),
+                    0,
+                  ),
+                )
+              }
+              className="p-1.5 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors rounded hover:bg-zinc-200 dark:hover:bg-navidark-700"
+              title="End"
+            >
+              <SkipForward className="w-4 h-4" />
+            </button>
             <div className="w-px h-4 bg-zinc-300 dark:bg-navidark-400 mx-2" />
-            <div className="text-xs font-mono font-medium text-zinc-600 dark:text-zinc-300 px-2 py-0.5 pointer-events-none">
-              {new Date(currentTime * 1000).toISOString().substring(11, 23).replace(".", ":")}
+            <div className="text-xs font-medium tracking-wide text-zinc-600 dark:text-zinc-300 px-2 py-0.5 pointer-events-none">
+              {new Date(currentTime * 1000)
+                .toISOString()
+                .substring(11, 23)
+                .replace(".", ":")}
             </div>
           </div>
 
-          {/* RIGHT: Zoom Controls */}
-          <div className="flex items-center gap-2">
-            <ZoomOut className="w-3.5 h-3.5 text-zinc-400" />
-            <input type="range" min="0.2" max="5" step="0.1" value={timeline.zoomMultiplier} onChange={(e) => handleZoom(parseFloat(e.target.value))} className="w-24 accent-navi cursor-ew-resize" />
-            <ZoomIn className="w-3.5 h-3.5 text-zinc-400" />
+          {/* RIGHT: Zoom & Export Controls */}
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <ZoomOut className="w-3.5 h-3.5 text-zinc-400" />
+              <input
+                type="range"
+                min="0.2"
+                max="5"
+                step="0.1"
+                value={timeline.zoomMultiplier}
+                onChange={(e) => handleZoom(parseFloat(e.target.value))}
+                className="w-24 accent-navi cursor-ew-resize"
+              />
+              <ZoomIn className="w-3.5 h-3.5 text-zinc-400" />
+            </div>
+
+            <div className="w-px h-4 bg-zinc-300 dark:bg-navidark-400" />
+
+            <button
+              onClick={() => setIsExportModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1 bg-navi hover:bg-navi-600 text-white rounded-md text-xs font-bold shadow-sm hover:shadow transition-all cursor-pointer"
+              title="Export & Render Video"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Export</span>
+            </button>
           </div>
         </div>
 
         <div className="flex-1 flex flex-row min-h-0 overflow-hidden">
-          <div className="w-40 flex flex-col shrink-0 border-r border-zinc-300 dark:border-navidark-400 bg-zinc-50 dark:bg-navidark-800 z-40">
+          <div className="w-48 flex flex-col shrink-0 border-r border-zinc-300 dark:border-navidark-400 bg-zinc-50 dark:bg-navidark-800 z-40">
             <div className="h-8 w-full border-b border-zinc-300 dark:border-navidark-400 shrink-0 flex items-center px-3 bg-zinc-200/90 dark:bg-navidark-800/90">
               <span className="text-[9px] font-bold text-zinc-400 dark:text-zinc-500 tracking-widest">
                 TRACKS
@@ -742,6 +1084,11 @@ export function TimelineView() {
             <div
               ref={headerRef}
               className="flex-1 overflow-hidden"
+              onWheel={(e) => {
+                if (timelineRef.current) {
+                  timelineRef.current.scrollTop += e.deltaY;
+                }
+              }}
               onContextMenu={(e) => {
                 e.preventDefault();
                 window.dispatchEvent(
@@ -753,74 +1100,232 @@ export function TimelineView() {
             >
               <div className="pb-32">
                 {/* ✨ MAPPING OVER SORTED TRACKS */}
-                {sortedTracks.map((track) => {
-                  const isMainTrack = track.type === "video" || track.name.toLowerCase().includes("video");
+                {sortedTracks.map((track, idx) => {
+                  const prevTrack = sortedTracks[idx - 1];
+                  const isNewGroup =
+                    !prevTrack || prevTrack.type !== track.type;
+
+                  const isMainTrack =
+                    track.type === "video" ||
+                    track.name.toLowerCase().includes("video");
                   const isAudioTrack = track.type === "audio";
                   const trackHeight = isMainTrack ? "h-20" : "h-14";
                   return (
-                    <div
-                      key={track.id}
-                      onContextMenu={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        window.dispatchEvent(
-                          new CustomEvent("open-context-menu", {
-                            detail: {
-                              x: e.clientX,
-                              y: e.clientY,
-                              type: "track-header",
-                              targetId: track.id,
-                            },
-                          }),
-                        );
-                      }}
-                      onDoubleClick={() => setEditingTrackId(track.id)}
-                      className={`w-full border-b border-zinc-200 dark:border-navidark-400 flex flex-col justify-center px-3 ${editingTrackId === track.id ? "" : "cursor-context-menu"} ${trackHeight}`}
-                    >
-                      {editingTrackId === track.id ? (
-                        <input
-                          type="text"
-                          autoFocus
-                          defaultValue={track.name}
-                          onBlur={(e) =>
-                            handleUpdateTrackName(track.id, e.target.value)
-                          }
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter")
-                              handleUpdateTrackName(track.id, e.currentTarget.value);
-                            if (e.key === "Escape") setEditingTrackId(null);
-                          }}
-                          className="w-full bg-white dark:bg-navidark-900 text-[10px] font-bold text-zinc-900 dark:text-zinc-100 px-1.5 py-1 rounded outline-none border-2 border-navi"
-                        />
-                      ) : (
-                        <span className="text-[10px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-wider truncate mb-1">
-                          {track.name}
-                        </span>
+                    <React.Fragment key={track.id}>
+                      {isNewGroup && (
+                        <div className="h-6 w-full bg-zinc-200 dark:bg-navidark-900 border-b border-zinc-300 dark:border-navidark-700 flex items-center px-3 sticky top-0 z-10 shadow-sm">
+                          <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest">
+                            {track.type} TRACKS
+                          </span>
+                        </div>
                       )}
-                      <div className="flex items-center gap-2">
-                        {!isAudioTrack ? (
-                          <button
-                            onClick={() => handleToggleTrackProp(track.id, "isHidden")}
-                            className={`p-1 rounded transition-colors ${track.isHidden ? "text-red-500 bg-red-50 dark:bg-red-500/10" : "text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200"}`}
-                          >
-                            {track.isHidden ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => handleToggleTrackProp(track.id, "isMuted")}
-                            className={`p-1 rounded transition-colors ${track.isMuted ? "text-red-500 bg-red-50 dark:bg-red-500/10" : "text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200"}`}
-                          >
-                            {track.isMuted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
-                          </button>
-                        )}
-                        <button
-                          onClick={() => handleToggleTrackProp(track.id, "isLocked")}
-                          className={`p-1 rounded transition-colors ${track.isLocked ? "text-red-500 bg-red-50 dark:bg-red-500/10" : "text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200"}`}
-                        >
-                          {track.isLocked ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
-                        </button>
+                      <div
+                        draggable
+                        onDragStart={(e) => {
+                          e.dataTransfer.setData(
+                            "application/navivi-track",
+                            track.id,
+                          );
+                        }}
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          const sourceTrackId = e.dataTransfer.getData(
+                            "application/navivi-track",
+                          );
+                          if (!sourceTrackId || sourceTrackId === track.id)
+                            return;
+
+                          const sourceTrack = timeline.tracks.find(
+                            (t) => t.id === sourceTrackId,
+                          );
+                          if (!sourceTrack || sourceTrack.type !== track.type)
+                            return;
+
+                          setTimeline({
+                            ...timeline,
+                            tracks: timeline.tracks.map((t) => {
+                              if (t.id === sourceTrackId)
+                                return { ...t, orderIndex: track.orderIndex };
+                              if (t.id === track.id)
+                                return {
+                                  ...t,
+                                  orderIndex: sourceTrack.orderIndex,
+                                };
+                              return t;
+                            }),
+                          });
+                        }}
+                        onContextMenu={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          window.dispatchEvent(
+                            new CustomEvent("open-context-menu", {
+                              detail: {
+                                x: e.clientX,
+                                y: e.clientY,
+                                type: "track-header",
+                                targetId: track.id,
+                                data: {
+                                  isLocked: track.isLocked,
+                                  isHidden: track.isHidden,
+                                  isMuted: track.isMuted,
+                                  isAudioTrack,
+                                  onToggleHide: () =>
+                                    handleToggleTrackProp(track.id, "isHidden"),
+                                  onToggleMute: () =>
+                                    handleToggleTrackProp(track.id, "isMuted"),
+                                  onToggleLock: () =>
+                                    handleToggleTrackProp(track.id, "isLocked"),
+                                },
+                              },
+                            }),
+                          );
+                        }}
+                        onDoubleClick={() => setEditingTrackId(track.id)}
+                        className={`w-full border-b border-zinc-200 dark:border-navidark-400 flex flex-col justify-center px-2.5 ${editingTrackId === track.id ? "" : "cursor-context-menu"} ${trackHeight}`}
+                      >
+                        <div className="flex items-center justify-between mb-1 gap-1">
+                          {editingTrackId === track.id ? (
+                            <input
+                              type="text"
+                              autoFocus
+                              defaultValue={track.name}
+                              onBlur={(e) =>
+                                handleUpdateTrackName(track.id, e.target.value)
+                              }
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter")
+                                  handleUpdateTrackName(
+                                    track.id,
+                                    e.currentTarget.value,
+                                  );
+                                if (e.key === "Escape") setEditingTrackId(null);
+                              }}
+                              className="w-full bg-white dark:bg-navidark-900 text-[10px] font-bold text-zinc-900 dark:text-zinc-100 px-1.5 py-1 rounded outline-none border-2 border-navi"
+                            />
+                          ) : (
+                            <span className="text-[10px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-wider truncate flex-1">
+                              {track.name}
+                            </span>
+                          )}
+
+                          {/* Ducking toggle & active indicator for Audio tracks */}
+                          {isAudioTrack && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setTimeline({
+                                  ...timeline,
+                                  tracks: timeline.tracks.map((t) =>
+                                    t.id === track.id
+                                      ? {
+                                          ...t,
+                                          duckingEnabled: !t.duckingEnabled,
+                                        }
+                                      : t,
+                                  ),
+                                });
+                              }}
+                              className={`px-1 py-0.5 text-[8px] font-bold rounded tracking-tighter uppercase transition-colors shrink-0 ${
+                                track.duckingEnabled
+                                  ? isDuckingActive
+                                    ? "bg-amber-500 text-white animate-pulse"
+                                    : "bg-amber-500/20 text-amber-500 border border-amber-500/40"
+                                  : "text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 opacity-60"
+                              }`}
+                              title={
+                                track.duckingEnabled
+                                  ? isDuckingActive
+                                    ? "Auto-Ducking Actively Attenuating (Click to disable)"
+                                    : "Auto-Ducking Armed (Click to disable)"
+                                  : "Enable Auto-Ducking on this track"
+                              }
+                            >
+                              DUCK
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="flex items-center justify-between gap-1.5">
+                          <div className="flex items-center gap-1 shrink-0">
+                            {!isAudioTrack ? (
+                              <button
+                                onClick={() =>
+                                  handleToggleTrackProp(track.id, "isHidden")
+                                }
+                                className={`p-1 rounded transition-colors ${track.isHidden ? "text-red-500 bg-red-50 dark:bg-red-500/10" : "text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200"}`}
+                              >
+                                {track.isHidden ? (
+                                  <EyeOff className="w-3.5 h-3.5" />
+                                ) : (
+                                  <Eye className="w-3.5 h-3.5" />
+                                )}
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() =>
+                                  handleToggleTrackProp(track.id, "isMuted")
+                                }
+                                className={`p-1 rounded transition-colors ${track.isMuted ? "text-red-500 bg-red-50 dark:bg-red-500/10" : "text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200"}`}
+                                title={track.isMuted ? "Unmute Track" : "Mute Track"}
+                              >
+                                {track.isMuted ? (
+                                  <VolumeX className="w-3.5 h-3.5" />
+                                ) : (
+                                  <Volume2 className="w-3.5 h-3.5" />
+                                )}
+                              </button>
+                            )}
+                            <button
+                              onClick={() =>
+                                handleToggleTrackProp(track.id, "isLocked")
+                              }
+                              className={`p-1 rounded transition-colors ${track.isLocked ? "text-red-500 bg-red-50 dark:bg-red-500/10" : "text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200"}`}
+                              title={track.isLocked ? "Unlock Track" : "Lock Track"}
+                            >
+                              {track.isLocked ? (
+                                <Lock className="w-3 h-3" />
+                              ) : (
+                                <Unlock className="w-3 h-3" />
+                              )}
+                            </button>
+                          </div>
+
+                          {/* Track volume slider for Audio tracks */}
+                          {isAudioTrack && (
+                            <div
+                              className="flex items-center gap-1 flex-1 min-w-0"
+                              title={`Track Volume: ${Math.round((track.volume ?? 1.0) * 100)}%`}
+                            >
+                              <input
+                                type="range"
+                                min="0"
+                                max="150"
+                                step="5"
+                                value={Math.round((track.volume ?? 1.0) * 100)}
+                                onChange={(e) => {
+                                  const newVol = parseFloat(e.target.value) / 100;
+                                  setTimeline({
+                                    ...timeline,
+                                    tracks: timeline.tracks.map((t) =>
+                                      t.id === track.id
+                                        ? { ...t, volume: newVol }
+                                        : t,
+                                    ),
+                                  });
+                                }}
+                                className="w-full h-1 accent-[#36604C] dark:accent-[#93C9B2] bg-zinc-200 dark:bg-zinc-700 rounded cursor-pointer"
+                              />
+                              <span className="text-[8px] font-mono text-zinc-400 w-5 text-right shrink-0">
+                                {Math.round((track.volume ?? 1.0) * 100)}%
+                              </span>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
+                    </React.Fragment>
                   );
                 })}
               </div>
@@ -857,17 +1362,40 @@ export function TimelineView() {
                       className="absolute bottom-0"
                       style={{ left: `${time * pixelsPerSecond}px` }}
                     >
-                      <div className={`w-px bg-zinc-400 dark:bg-zinc-600 ${isMajor ? "h-2.5" : "h-1.5"}`} />
+                      <div
+                        className={`w-px bg-zinc-400 dark:bg-zinc-600 ${isMajor ? "h-2.5" : "h-1.5"}`}
+                      />
                       {isMajor && (
-                        <span className="absolute bottom-3 -translate-x-1/2 text-[9px] text-zinc-500 dark:text-zinc-400 font-mono select-none pointer-events-none">
-                          {Math.floor(time / 60).toString().padStart(2, "0")}:{Math.floor(time % 60).toString().padStart(2, "0")}
+                        <span className="absolute bottom-3 -translate-x-1/2 text-[9px] text-zinc-500 dark:text-zinc-400 font-semibold tracking-wider select-none pointer-events-none">
+                          {Math.floor(time / 60)
+                            .toString()
+                            .padStart(2, "0")}
+                          :
+                          {Math.floor(time % 60)
+                            .toString()
+                            .padStart(2, "0")}
                         </span>
                       )}
                     </div>
                   );
                 })}
+                {/* Waypoint Timeline Ruler Markers (F4.2 & F4.3) */}
+                {waypointMarkers.map((marker) => (
+                  <WaypointMarker
+                    key={marker.id}
+                    marker={marker}
+                    pixelsPerSecond={pixelsPerSecond}
+                    isActive={Math.abs(currentTime - marker.time) < 0.15}
+                    onSeek={(time) => {
+                      if (isPlaying) setIsPlaying(false);
+                      setCurrentTime(time);
+                    }}
+                    onHover={handleMarkerHover}
+                  />
+                ))}
+
                 <div
-                  className="absolute bottom-0 -translate-x-1/2 w-3 h-3 bg-red-500 [clip-path:polygon(50%_100%,0_0,100%_0)] z-50 pointer-events-none"
+                  className="absolute bottom-0 -translate-x-1/2 w-3 h-3 bg-navi [clip-path:polygon(50%_100%,0_0,100%_0)] z-50 pointer-events-none"
                   style={{ left: `${currentTime * pixelsPerSecond}px` }}
                 />
               </div>
@@ -879,7 +1407,8 @@ export function TimelineView() {
               className="flex-1 overflow-auto custom-scrollbar relative"
               onMouseDown={(e) => {
                 if (e.button === 2) return;
-                if ((e.target as HTMLElement).closest(".react-draggable")) return;
+                if ((e.target as HTMLElement).closest(".react-draggable"))
+                  return;
                 const rect = e.currentTarget.getBoundingClientRect();
                 const x = e.clientX - rect.left + e.currentTarget.scrollLeft;
                 const y = e.clientY - rect.top + e.currentTarget.scrollTop;
@@ -895,9 +1424,18 @@ export function TimelineView() {
                 style={{ width: `${timelinePixelWidth}px` }}
               >
                 <div
-                  className="absolute top-0 bottom-0 w-[1.5px] bg-red-500 z-35 pointer-events-none shadow-[0_0_10px_rgba(239,68,68,0.5)]"
+                  className="absolute top-0 bottom-0 w-[1.5px] bg-navi z-35 pointer-events-none shadow-[0_0_10px_var(--color-navi)]"
                   style={{ left: `${currentTime * pixelsPerSecond}px` }}
                 />
+
+                {/* Waypoint Sync Guide Lines (F4.3) */}
+                {waypointMarkers.map((marker) => (
+                  <WaypointGuideLine
+                    key={`guide-${marker.id}`}
+                    marker={marker}
+                    pixelsPerSecond={pixelsPerSecond}
+                  />
+                ))}
 
                 {marquee && (
                   <div
@@ -912,25 +1450,73 @@ export function TimelineView() {
                 )}
 
                 {/* ✨ MAPPING OVER SORTED TRACKS */}
-                {sortedTracks.map((track) => (
-                  <TimelineTrack
-                    key={track.id}
-                    track={track}
-                    selectedClipIds={selectedClipIds}
-                    onSelectClip={handleSelectClip}
-                    activeTool={activeTool}
-                    onSplit={handleSplitClip}
-                    isRippleMode={isRippleMode}
-                    trackWidth={timelinePixelWidth}
-                    currentTime={currentTime}
-                    isLocked={track.isLocked || false}
-                  />
-                ))}
+                {sortedTracks.map((track, idx) => {
+                  const prevTrack = sortedTracks[idx - 1];
+                  const isNewGroup =
+                    !prevTrack || prevTrack.type !== track.type;
+
+                  return (
+                    <React.Fragment key={track.id}>
+                      {isNewGroup && (
+                        <div className="h-6 w-full bg-zinc-100 dark:bg-navidark-900/40 border-b border-zinc-200 dark:border-navidark-700 pointer-events-none sticky left-0 z-10" />
+                      )}
+                      <TimelineTrack
+                        track={track}
+                        selectedClipIds={selectedClipIds}
+                        onSelectClip={handleSelectClip}
+                        activeTool={activeTool}
+                        onSplit={handleSplitClip}
+                        isRippleMode={isRippleMode}
+                        trackWidth={timelinePixelWidth}
+                        currentTime={currentTime}
+                        isLocked={track.isLocked || false}
+                      />
+                    </React.Fragment>
+                  );
+                })}
               </div>
             </div>
+
+            {/* Waypoint Marker Floating Tooltip Overlay */}
+            {hoveredMarker && markerTooltipPos && (
+              <div
+                className="fixed z-50 pointer-events-none -translate-x-1/2 flex flex-col items-center transition-all duration-150"
+                style={{
+                  left: `${markerTooltipPos.x}px`,
+                  top: `${markerTooltipPos.y + 4}px`,
+                }}
+              >
+                <div className="w-0 h-0 border-l-[4px] border-l-transparent border-r-[4px] border-r-transparent border-b-[5px] border-b-zinc-900/95 dark:border-b-zinc-800/95" />
+                <div className="bg-zinc-900/95 dark:bg-zinc-800/95 backdrop-blur-sm text-white text-xs rounded-md shadow-2xl border border-zinc-700/80 px-2.5 py-1.5 flex flex-col items-center gap-0.5">
+                  <div className="flex items-center gap-1.5 font-bold text-amber-400">
+                    <MapPin className="w-3 h-3 shrink-0" />
+                    <span>#{hoveredMarker.index} {hoveredMarker.name}</span>
+                  </div>
+                  <span className="font-mono text-[10px] text-zinc-300">
+                    {formatMarkerTime(hoveredMarker.time)}
+                  </span>
+                  <span className="text-[9px] text-zinc-400">
+                    Click marker to jump playhead
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
+
+      <ExportModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        timeline={timeline}
+        metadata={metadata}
+        waypoints={waypoints}
+        settings={settings}
+        duration={maxClipEnd}
+        onExportSuccess={() => {
+          showToast("Export process started", "success");
+        }}
+      />
     </div>
   );
 }

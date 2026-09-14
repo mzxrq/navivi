@@ -262,6 +262,22 @@ async fn copy_asset_file(source_path: String, target_dir: String) -> Result<Stri
     }
 }
 
+#[tauri::command]
+fn open_in_explorer(path: String) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    let cmd = "explorer";
+    #[cfg(target_os = "macos")]
+    let cmd = "open";
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    let cmd = "xdg-open";
+
+    std::process::Command::new(cmd)
+        .arg(&path)
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -278,6 +294,7 @@ pub fn run() {
             wake_up_ollama,
             export_video,
             copy_asset_file,
+            open_in_explorer,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

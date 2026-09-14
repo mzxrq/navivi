@@ -1,87 +1,193 @@
 import { useEffect, useRef, useState } from "react";
+import { AudioWaveformProps } from "../../../../types";
 
-interface AudioWaveformProps {
-  src: string;
-  width: number;
-  height: number;
+interface DecodedAudio {
+  channelData: Float32Array;
+  sampleRate: number;
+  duration: number;
 }
 
-export function AudioWaveform({ src, width, height }: AudioWaveformProps) {
+// Singleton in-memory decoded audio cache to avoid redundant network fetches and decodes
+const audioBufferCache = new Map<string, Promise<DecodedAudio>>();
+
+function getDecodedAudio(src: string): Promise<DecodedAudio> {
+  if (audioBufferCache.has(src)) {
+    return audioBufferCache.get(src)!;
+  }
+
+  const decodePromise = (async () => {
+    const response = await fetch(src);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch audio source: ${response.statusText}`);
+    }
+    const arrayBuffer = await response.arrayBuffer();
+
+    // Use OfflineAudioContext or fallback AudioContext with guaranteed closure
+    const OfflineCtx =
+      window.OfflineAudioContext || (window as any).webkitOfflineAudioContext;
+    const audioCtx = OfflineCtx
+      ? new OfflineCtx(1, 2, 44100)
+      : new (window.AudioContext || (window as any).webkitAudioContext)();
+
+    try {
+      const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+      return {
+        channelData: audioBuffer.getChannelData(0),
+        sampleRate: audioBuffer.sampleRate,
+        duration: audioBuffer.duration,
+      };
+    } finally {
+      if (audioCtx && typeof (audioCtx as any).close === "function") {
+        await (audioCtx as any).close().catch(() => {});
+      }
+    }
+  })();
+
+  // If decoding fails, remove from cache so future attempts can retry
+  decodePromise.catch(() => {
+    audioBufferCache.delete(src);
+  });
+
+  audioBufferCache.set(src, decodePromise);
+  return decodePromise;
+}
+
+export function AudioWaveform({
+  src,
+  width,
+  height,
+  duration,
+  sourceOffset = 0,
+  volume = 1.0,
+  color = "rgba(255, 255, 255, 0.45)",
+}: AudioWaveformProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [audioData, setAudioData] = useState<Float32Array | null>(null);
+  const [decodedAudio, setDecodedAudio] = useState<DecodedAudio | null>(null);
 
-  // ✨ 1. Fetch and decode the audio ONLY when the source changes
+  // 1. Fetch & decode with singleton cache
   useEffect(() => {
-    if (!src) return;
+    if (!src) {
+      setIsLoading(false);
+      setDecodedAudio(null);
+      return;
+    }
+
     let isMounted = true;
+    setIsLoading(true);
 
-    const fetchAudio = async () => {
-      try {
-        setIsLoading(true);
-        const response = await fetch(src);
-        const arrayBuffer = await response.arrayBuffer();
-
-        const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-        const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-
+    getDecodedAudio(src)
+      .then((data) => {
         if (isMounted) {
-          setAudioData(audioBuffer.getChannelData(0));
+          setDecodedAudio(data);
+          setIsLoading(false);
         }
-      } catch (error) {
-        console.error("Failed to render waveform:", error);
-      }
-    };
-
-    fetchAudio();
+      })
+      .catch((err) => {
+        console.error("Failed to render audio waveform for:", src, err);
+        if (isMounted) {
+          setIsLoading(false);
+          setDecodedAudio(null);
+        }
+      });
 
     return () => {
       isMounted = false;
     };
   }, [src]);
 
-  // ✨ 2. Instantly redraw the canvas whenever the width (Zoom) changes
+  // 2. High-DPI canvas render with temporal windowing & performance downsampling stride
   useEffect(() => {
-    if (!audioData || !width || !height) return;
-    
+    if (!decodedAudio || !width || !height || width <= 0 || height <= 0) return;
+
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const samplesPerPixel = Math.floor(audioData.length / width);
-    const peaks = [];
+    const dpr = window.devicePixelRatio || 1;
+    const pixelWidth = Math.max(1, Math.floor(width));
+    const pixelHeight = Math.max(1, Math.floor(height));
 
-    for (let i = 0; i < width; i++) {
+    // Configure high-DPI canvas internal buffer
+    canvas.width = Math.floor(pixelWidth * dpr);
+    canvas.height = Math.floor(pixelHeight * dpr);
+
+    ctx.save();
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, pixelWidth, pixelHeight);
+
+    const { channelData, sampleRate, duration: totalDuration } = decodedAudio;
+    const totalSamples = channelData.length;
+
+    // Temporal Windowing: slice accurately from sourceOffset for duration
+    const validOffset = Math.max(0, sourceOffset);
+    const startSample = Math.min(
+      totalSamples,
+      Math.floor(validOffset * sampleRate),
+    );
+
+    const effectiveDuration =
+      duration !== undefined && duration > 0 ? duration : totalDuration;
+    const endSample = Math.min(
+      totalSamples,
+      Math.max(
+        startSample + 1,
+        Math.floor((validOffset + effectiveDuration) * sampleRate),
+      ),
+    );
+
+    const windowSamples = endSample - startSample;
+    const samplesPerPixel = windowSamples / pixelWidth;
+
+    // Performance Downsampling: stride through samplesPerPixel with a max sub-sampling count
+    const stride = Math.max(1, Math.floor(samplesPerPixel / 32));
+    const effectiveVol = Math.max(0, volume);
+    const midHeight = pixelHeight / 2;
+
+    ctx.fillStyle = color;
+
+    for (let i = 0; i < pixelWidth; i++) {
+      const segStart = startSample + Math.floor(i * samplesPerPixel);
+      const segEnd = Math.min(
+        endSample,
+        startSample + Math.floor((i + 1) * samplesPerPixel),
+      );
+
       let min = 1.0;
       let max = -1.0;
-      for (let j = 0; j < samplesPerPixel; j++) {
-        const datum = audioData[i * samplesPerPixel + j];
-        if (datum < min) min = datum;
-        if (datum > max) max = datum;
+
+      if (segStart < totalSamples) {
+        for (let j = segStart; j < segEnd; j += stride) {
+          const val = channelData[j];
+          if (val < min) min = val;
+          if (val > max) max = val;
+        }
       }
-      peaks.push(Math.max(Math.abs(min), Math.abs(max)));
+
+      if (min > max) {
+        min = 0;
+        max = 0;
+      }
+
+      const peak = Math.max(Math.abs(min), Math.abs(max)) * effectiveVol;
+      const peakHeight = Math.max(1, peak * (pixelHeight * 0.82));
+
+      ctx.fillRect(i, midHeight - peakHeight / 2, 1, peakHeight);
     }
 
-    ctx.clearRect(0, 0, width, height);
-    ctx.fillStyle = "rgba(255,255,255,0.4)";
-    const midHeight = height / 2;
-    
-    peaks.forEach((peak, index) => {
-      const peakHeight = Math.max(1, peak * (height * 0.8));
-      ctx.fillRect(index, midHeight - peakHeight / 2, 1, peakHeight);
-    });
-
+    ctx.restore();
     setIsLoading(false);
-  }, [audioData, width, height]);
+  }, [decodedAudio, width, height, duration, sourceOffset, volume, color]);
 
   return (
     <div className="absolute inset-0 pointer-events-none overflow-hidden z-10">
       <canvas
         ref={canvasRef}
-        width={width}
-        height={height}
-        className={`w-full h-full transition-opacity duration-500 ${isLoading ? "opacity-0" : "opacity-100"}`}
+        style={{ width: "100%", height: "100%" }}
+        className={`transition-opacity duration-300 ${
+          isLoading ? "opacity-0" : "opacity-100"
+        }`}
       />
     </div>
   );

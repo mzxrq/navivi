@@ -25,7 +25,6 @@ export function TimelineClip({
   pixelsPerSecond,
   isSelected,
   activeTool = "pointer",
-  isRippleMode,
   currentTime,
   isLocked,
   onSplit,
@@ -40,24 +39,24 @@ export function TimelineClip({
   // Listen for sibling clips being dragged
   useEffect(() => {
     if (!clip.groupId) return;
-    
+
     const handleGroupDrag = (e: any) => {
       if (e.detail.groupId === clip.groupId && e.detail.sourceId !== clip.id) {
         setDragDeltaX(e.detail.deltaX);
       }
     };
-    
+
     const handleGroupStop = (e: any) => {
       if (e.detail.groupId === clip.groupId && e.detail.sourceId !== clip.id) {
         setDragDeltaX(0);
       }
     };
 
-    window.addEventListener('group-drag', handleGroupDrag);
-    window.addEventListener('group-drag-stop', handleGroupStop);
+    window.addEventListener("group-drag", handleGroupDrag);
+    window.addEventListener("group-drag-stop", handleGroupStop);
     return () => {
-      window.removeEventListener('group-drag', handleGroupDrag);
-      window.removeEventListener('group-drag-stop', handleGroupStop);
+      window.removeEventListener("group-drag", handleGroupDrag);
+      window.removeEventListener("group-drag-stop", handleGroupStop);
     };
   }, [clip.groupId, clip.id]);
 
@@ -81,8 +80,8 @@ export function TimelineClip({
     colorClass = "bg-[#23323F] border-[#364C60] text-[#93B2C9]"; // Text
 
   const selectedClass = isSelected
-    ? "border-white shadow-md z-30 brightness-125"
-    : "opacity-100 hover:brightness-110 z-10";
+    ? "border-navi border-2 shadow-[0_0_8px_var(--color-navi)] z-30 brightness-110"
+    : "border-transparent border-2 opacity-100 hover:brightness-110 z-10";
 
   const safeUrl = clip.source ? convertFileSrc(clip.source) : "";
   const showThumbnail =
@@ -201,7 +200,12 @@ export function TimelineClip({
         ...timeline,
         clips: timeline.clips.map((c) => {
           if (c.id === clip.id) {
-            return { ...c, startTime: finalStart, duration: finalDuration, sourceOffset: newSourceOffset };
+            return {
+              ...c,
+              startTime: finalStart,
+              duration: finalDuration,
+              sourceOffset: newSourceOffset,
+            };
           }
           if (clip.groupId && c.groupId === clip.groupId) {
             return {
@@ -215,15 +219,23 @@ export function TimelineClip({
         }),
       });
     } else {
-      const targetNeighbors = timeline.clips.filter((c) => c.trackId === targetTrackId && c.id !== clip.id);
-      
-      const overlapping = targetNeighbors.some(c => {
-         return finalStart < c.startTime + c.duration && finalStart + finalDuration > c.startTime;
+      const targetNeighbors = timeline.clips.filter(
+        (c) => c.trackId === targetTrackId && c.id !== clip.id,
+      );
+
+      const overlapping = targetNeighbors.some((c) => {
+        return (
+          finalStart < c.startTime + c.duration &&
+          finalStart + finalDuration > c.startTime
+        );
       });
 
       if (overlapping) {
-         showToast("Cannot move clip here: overlaps with existing clips.", "error");
-         return; // Revert
+        showToast(
+          "Cannot move clip here: overlaps with existing clips.",
+          "error",
+        );
+        return; // Revert
       }
 
       const newClips = timeline.clips.map((c) => {
@@ -252,7 +264,7 @@ export function TimelineClip({
     if (type.includes("crossfade")) return "FADE";
     if (type.includes("black")) return "BLACK";
     if (type.includes("white")) return "WHITE";
-    
+
     if (type.startsWith("glsl-")) {
       return type.replace("glsl-", "").substring(0, 5).toUpperCase();
     }
@@ -271,67 +283,105 @@ export function TimelineClip({
         right: "hover:bg-white/30 transition-colors z-50",
       }}
       enableResizing={{
-        left: !isLocked, right: !isLocked,
-        top: false, bottom: false, topLeft: false, topRight: false, bottomLeft: false, bottomRight: false,
+        left: !isLocked,
+        right: !isLocked,
+        top: false,
+        bottom: false,
+        topLeft: false,
+        topRight: false,
+        bottomLeft: false,
+        bottomRight: false,
       }}
       minWidth={10}
       dragAxis="both"
       onMouseDownCapture={(e: React.MouseEvent) => {
         if (e.button === 2) return;
         if (activeTool === "razor" && onSplit) {
-          e.stopPropagation(); e.preventDefault();
+          e.stopPropagation();
+          e.preventDefault();
           const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-          onSplit(clip.id, clip.startTime + (e.clientX - rect.left) / pixelsPerSecond);
+          onSplit(
+            clip.id,
+            clip.startTime + (e.clientX - rect.left) / pixelsPerSecond,
+          );
           return;
         }
         if (onSelect) onSelect(e.shiftKey || e.ctrlKey || e.metaKey);
       }}
       onContextMenu={(e: React.MouseEvent) => {
-        e.preventDefault(); e.stopPropagation();
+        e.preventDefault();
+        e.stopPropagation();
         if (!isSelected && onSelect) onSelect(false);
         window.dispatchEvent(
           new CustomEvent("open-context-menu", {
-            detail: { x: e.clientX, y: e.clientY, type: "timeline-clip", targetId: clip.id },
+            detail: {
+              x: e.clientX,
+              y: e.clientY,
+              type: "timeline-clip",
+              targetId: clip.id,
+            },
           }),
         );
       }}
       onDrag={(_e, data) => {
         const newDeltaX = data.x - globalXPos;
         setDragDeltaX(newDeltaX);
-        
+
         // Broadcast movement to linked siblings instantly
         if (clip.groupId) {
-          window.dispatchEvent(new CustomEvent('group-drag', {
-             detail: { groupId: clip.groupId, deltaX: newDeltaX, sourceId: clip.id }
-          }));
+          window.dispatchEvent(
+            new CustomEvent("group-drag", {
+              detail: {
+                groupId: clip.groupId,
+                deltaX: newDeltaX,
+                sourceId: clip.id,
+              },
+            }),
+          );
         }
       }}
       onDragStop={(e, data) => {
         setDragDeltaX(0);
-        
+
         // Stop sibling broadcast
         if (clip.groupId) {
-          window.dispatchEvent(new CustomEvent('group-drag-stop', { detail: { groupId: clip.groupId, sourceId: clip.id } }));
+          window.dispatchEvent(
+            new CustomEvent("group-drag-stop", {
+              detail: { groupId: clip.groupId, sourceId: clip.id },
+            }),
+          );
         }
 
         let targetTrackId = clip.trackId;
 
         // ✨ CROSS-TRACK DETECTION
-        const clientX = 'clientX' in e ? (e as MouseEvent).clientX : ('touches' in e ? (e as TouchEvent).touches[0].clientX : 0);
-        const clientY = 'clientY' in e ? (e as MouseEvent).clientY : ('touches' in e ? (e as TouchEvent).touches[0].clientY : 0);
+        const clientX =
+          "clientX" in e
+            ? (e as MouseEvent).clientX
+            : "touches" in e
+              ? (e as TouchEvent).touches[0].clientX
+              : 0;
+        const clientY =
+          "clientY" in e
+            ? (e as MouseEvent).clientY
+            : "touches" in e
+              ? (e as TouchEvent).touches[0].clientY
+              : 0;
 
         if (clientX && clientY) {
           // Find whatever HTML element the mouse was dropped on top of
           const elements = document.elementsFromPoint(clientX, clientY);
-          const trackEl = elements.find(el => el.getAttribute('data-track-id'));
+          const trackEl = elements.find((el) =>
+            el.getAttribute("data-track-id"),
+          );
 
           if (trackEl) {
-            const hoverTrackId = trackEl.getAttribute('data-track-id');
-            const hoverTrackType = trackEl.getAttribute('data-track-type');
+            const hoverTrackId = trackEl.getAttribute("data-track-id");
+            const hoverTrackType = trackEl.getAttribute("data-track-type");
 
-            if (clip.type === 'audio' && hoverTrackType !== 'audio') {
+            if (clip.type === "audio" && hoverTrackType !== "audio") {
               showToast("Audio clips must stay in audio tracks.", "error");
-            } else if (clip.type !== 'audio' && hoverTrackType === 'audio') {
+            } else if (clip.type !== "audio" && hoverTrackType === "audio") {
               showToast("Cannot place video/text in audio tracks.", "error");
             } else {
               targetTrackId = hoverTrackId!;
@@ -345,8 +395,15 @@ export function TimelineClip({
       onResizeStop={(_e, dir, ref, _delta, position) => {
         const newDuration = parseFloat(ref.style.width) / pixelsPerSecond;
         const newStartTime = Math.max(0, position.x / pixelsPerSecond);
-        const isLeftResize = dir === "left" || dir === "topLeft" || dir === "bottomLeft";
-        updateClipDimensions(newStartTime, newDuration, clip.trackId, true, isLeftResize);
+        const isLeftResize =
+          dir === "left" || dir === "topLeft" || dir === "bottomLeft";
+        updateClipDimensions(
+          newStartTime,
+          newDuration,
+          clip.trackId,
+          true,
+          isLeftResize,
+        );
       }}
       className={`absolute top-0 bottom-0 rounded border overflow-hidden flex flex-col justify-center px-2 transition-[filter,box-shadow,opacity] group ${isLocked ? "" : "hover:z-20 cursor-pointer"} ${colorClass} ${selectedClass} ${isLocked ? "opacity-50 grayscale" : ""}`}
     >
@@ -363,11 +420,25 @@ export function TimelineClip({
       )}
 
       {(clip.type === "audio" || clip.type === "video") && safeUrl && (
-        <AudioWaveform src={safeUrl} width={clipWidth} height={height} />
+        <AudioWaveform
+          src={safeUrl}
+          width={clipWidth}
+          height={height}
+          duration={clip.duration}
+          sourceOffset={clip.sourceOffset || 0}
+          volume={clip.volume ?? 1.0}
+          color={clip.type === "audio" ? "#93C9B2" : "rgba(255,255,255,0.4)"}
+        />
       )}
 
-      <span className="text-[10px] font-bold tracking-wide truncate pointer-events-none select-none relative z-20 drop-shadow-md">
-        {clip.label}
+      <span className="text-[10px] font-bold tracking-wide truncate pointer-events-none select-none relative z-20 drop-shadow-md flex items-center gap-1">
+        <span>{clip.label}</span>
+        {clip.isMuted && (
+          <span className="text-[8px] bg-red-500/80 text-white px-1 py-0.5 rounded font-mono">MUTED</span>
+        )}
+        {clip.ducking && (
+          <span className="text-[8px] bg-amber-500/80 text-white px-1 py-0.5 rounded font-mono">DUCK</span>
+        )}
       </span>
 
       {clip.fadeIn && clip.fadeIn > 0 && (
@@ -429,7 +500,9 @@ export function TimelineClip({
         <>
           <div
             className="absolute left-0 top-0 w-3 h-3 bg-white/80 border border-black/50 cursor-crosshair z-40 rounded-br shadow-sm hover:bg-white transition-colors opacity-0 group-hover:opacity-100"
-            style={{ transform: `translateX(${(clip.fadeIn || 0) * pixelsPerSecond}px)` }}
+            style={{
+              transform: `translateX(${(clip.fadeIn || 0) * pixelsPerSecond}px)`,
+            }}
             onMouseDown={(e) => {
               e.stopPropagation();
               const startX = e.clientX;
@@ -443,8 +516,10 @@ export function TimelineClip({
                 setTimeline({
                   ...timeline,
                   clips: timeline.clips.map((c) =>
-                    c.id === clip.id || (clip.groupId && c.groupId === clip.groupId)
-                      ? { ...c, fadeIn: newFadeIn } : c,
+                    c.id === clip.id ||
+                    (clip.groupId && c.groupId === clip.groupId)
+                      ? { ...c, fadeIn: newFadeIn }
+                      : c,
                   ),
                 });
               };
@@ -458,7 +533,9 @@ export function TimelineClip({
           />
           <div
             className="absolute right-0 top-0 w-3 h-3 bg-white/80 border border-black/50 cursor-crosshair z-40 rounded-bl shadow-sm hover:bg-white transition-colors opacity-0 group-hover:opacity-100"
-            style={{ transform: `translateX(-${(clip.fadeOut || 0) * pixelsPerSecond}px)` }}
+            style={{
+              transform: `translateX(-${(clip.fadeOut || 0) * pixelsPerSecond}px)`,
+            }}
             onMouseDown={(e) => {
               e.stopPropagation();
               const startX = e.clientX;
@@ -472,8 +549,10 @@ export function TimelineClip({
                 setTimeline({
                   ...timeline,
                   clips: timeline.clips.map((c) =>
-                    c.id === clip.id || (clip.groupId && c.groupId === clip.groupId)
-                      ? { ...c, fadeOut: newFadeOut } : c,
+                    c.id === clip.id ||
+                    (clip.groupId && c.groupId === clip.groupId)
+                      ? { ...c, fadeOut: newFadeOut }
+                      : c,
                   ),
                 });
               };

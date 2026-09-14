@@ -473,7 +473,7 @@ OUTRO_CARD_ASPECT = 4 / 3  # thumbnail width:height
 # can still override per-project via settings.tts, same pattern as
 # settings.mode_speeds_kmh above.
 TTS_MODEL = "irodori-tts"
-TTS_VOICE = "string"  # Irodori's only bundled voice preset as of writing
+TTS_VOICE = "test1"  # Irodori's only bundled voice preset as of writing
 # [Config] Playback speed multiplier sent to the Irodori TTS server; 1.0 = the
 # model's natural pace. The server itself clamps to [0.25, 4.0], but TTSConfig
 # validates this too so a bad value fails fast with a readable message

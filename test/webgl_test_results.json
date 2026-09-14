@@ -1,0 +1,1115 @@
+{
+  "webglSupported": true,
+  "shaders": {
+    "glsl-crossfade": {
+      "name": "glsl-crossfade",
+      "compiled": true,
+      "linked": true,
+      "compileLog": "",
+      "linkLog": "",
+      "boundaryTest": {
+        "0.00": {
+          "bottomLeft": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "center": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "bottomRight": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "topLeft": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "topRight": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "avgRed": 255,
+          "avgBlue": 0
+        },
+        "0.50": {
+          "bottomLeft": [
+            128,
+            0,
+            128,
+            255
+          ],
+          "center": [
+            128,
+            0,
+            128,
+            255
+          ],
+          "bottomRight": [
+            128,
+            0,
+            128,
+            255
+          ],
+          "topLeft": [
+            128,
+            0,
+            128,
+            255
+          ],
+          "topRight": [
+            128,
+            0,
+            128,
+            255
+          ],
+          "avgRed": 128,
+          "avgBlue": 128
+        },
+        "1.00": {
+          "bottomLeft": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "center": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "bottomRight": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "topLeft": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "topRight": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "avgRed": 0,
+          "avgBlue": 255
+        }
+      }
+    },
+    "glsl-wipe": {
+      "name": "glsl-wipe",
+      "compiled": true,
+      "linked": true,
+      "compileLog": "",
+      "linkLog": "",
+      "boundaryTest": {
+        "0.00": {
+          "bottomLeft": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "center": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "bottomRight": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "topLeft": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "topRight": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "avgRed": 255,
+          "avgBlue": 0
+        },
+        "0.50": {
+          "bottomLeft": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "center": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "bottomRight": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "topLeft": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "topRight": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "avgRed": 128,
+          "avgBlue": 128
+        },
+        "1.00": {
+          "bottomLeft": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "center": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "bottomRight": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "topLeft": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "topRight": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "avgRed": 0,
+          "avgBlue": 255
+        }
+      }
+    },
+    "glsl-slide": {
+      "name": "glsl-slide",
+      "compiled": true,
+      "linked": true,
+      "compileLog": "",
+      "linkLog": "",
+      "boundaryTest": {
+        "0.00": {
+          "bottomLeft": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "center": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "bottomRight": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "topLeft": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "topRight": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "avgRed": 255,
+          "avgBlue": 0
+        },
+        "0.50": {
+          "bottomLeft": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "center": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "bottomRight": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "topLeft": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "topRight": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "avgRed": 128,
+          "avgBlue": 128
+        },
+        "1.00": {
+          "bottomLeft": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "center": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "bottomRight": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "topLeft": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "topRight": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "avgRed": 0,
+          "avgBlue": 255
+        }
+      }
+    },
+    "glsl-dissolve": {
+      "name": "glsl-dissolve",
+      "compiled": true,
+      "linked": true,
+      "compileLog": "",
+      "linkLog": "",
+      "boundaryTest": {
+        "0.00": {
+          "bottomLeft": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "center": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "bottomRight": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "topLeft": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "topRight": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "avgRed": 254,
+          "avgBlue": 1
+        },
+        "0.50": {
+          "bottomLeft": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "center": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "bottomRight": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "topLeft": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "topRight": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "avgRed": 131,
+          "avgBlue": 124
+        },
+        "1.00": {
+          "bottomLeft": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "center": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "bottomRight": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "topLeft": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "topRight": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "avgRed": 0,
+          "avgBlue": 255
+        }
+      }
+    },
+    "glsl-directionalwarp": {
+      "name": "glsl-directionalwarp",
+      "compiled": true,
+      "linked": true,
+      "compileLog": "",
+      "linkLog": "",
+      "boundaryTest": {
+        "0.00": {
+          "bottomLeft": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "center": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "bottomRight": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "topLeft": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "topRight": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "avgRed": 255,
+          "avgBlue": 0
+        },
+        "0.50": {
+          "bottomLeft": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "center": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "bottomRight": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "topLeft": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "topRight": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "avgRed": 64,
+          "avgBlue": 191
+        },
+        "1.00": {
+          "bottomLeft": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "center": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "bottomRight": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "topLeft": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "topRight": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "avgRed": 0,
+          "avgBlue": 255
+        }
+      }
+    },
+    "glsl-dreamy": {
+      "name": "glsl-dreamy",
+      "compiled": true,
+      "linked": true,
+      "compileLog": "",
+      "linkLog": "",
+      "boundaryTest": {
+        "0.00": {
+          "bottomLeft": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "center": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "bottomRight": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "topLeft": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "topRight": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "avgRed": 255,
+          "avgBlue": 0
+        },
+        "0.50": {
+          "bottomLeft": [
+            128,
+            0,
+            128,
+            255
+          ],
+          "center": [
+            128,
+            0,
+            128,
+            255
+          ],
+          "bottomRight": [
+            128,
+            0,
+            128,
+            255
+          ],
+          "topLeft": [
+            128,
+            0,
+            128,
+            255
+          ],
+          "topRight": [
+            128,
+            0,
+            128,
+            255
+          ],
+          "avgRed": 128,
+          "avgBlue": 128
+        },
+        "1.00": {
+          "bottomLeft": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "center": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "bottomRight": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "topLeft": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "topRight": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "avgRed": 0,
+          "avgBlue": 255
+        }
+      }
+    },
+    "glsl-pixelize": {
+      "name": "glsl-pixelize",
+      "compiled": true,
+      "linked": true,
+      "compileLog": "",
+      "linkLog": "",
+      "boundaryTest": {
+        "0.00": {
+          "bottomLeft": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "center": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "bottomRight": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "topLeft": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "topRight": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "avgRed": 255,
+          "avgBlue": 0
+        },
+        "0.50": {
+          "bottomLeft": [
+            128,
+            0,
+            128,
+            255
+          ],
+          "center": [
+            128,
+            0,
+            128,
+            255
+          ],
+          "bottomRight": [
+            128,
+            0,
+            128,
+            255
+          ],
+          "topLeft": [
+            128,
+            0,
+            128,
+            255
+          ],
+          "topRight": [
+            128,
+            0,
+            128,
+            255
+          ],
+          "avgRed": 128,
+          "avgBlue": 128
+        },
+        "1.00": {
+          "bottomLeft": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "center": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "bottomRight": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "topLeft": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "topRight": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "avgRed": 0,
+          "avgBlue": 255
+        }
+      }
+    },
+    "glsl-multiply_blend": {
+      "name": "glsl-multiply_blend",
+      "compiled": true,
+      "linked": true,
+      "compileLog": "",
+      "linkLog": "",
+      "boundaryTest": {
+        "0.00": {
+          "bottomLeft": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "center": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "bottomRight": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "topLeft": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "topRight": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "avgRed": 255,
+          "avgBlue": 0
+        },
+        "0.50": {
+          "bottomLeft": [
+            0,
+            0,
+            0,
+            255
+          ],
+          "center": [
+            0,
+            0,
+            0,
+            255
+          ],
+          "bottomRight": [
+            0,
+            0,
+            0,
+            255
+          ],
+          "topLeft": [
+            0,
+            0,
+            0,
+            255
+          ],
+          "topRight": [
+            0,
+            0,
+            0,
+            255
+          ],
+          "avgRed": 0,
+          "avgBlue": 0
+        },
+        "1.00": {
+          "bottomLeft": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "center": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "bottomRight": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "topLeft": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "topRight": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "avgRed": 0,
+          "avgBlue": 255
+        }
+      }
+    },
+    "glsl-crosswarp": {
+      "name": "glsl-crosswarp",
+      "compiled": true,
+      "linked": true,
+      "compileLog": "",
+      "linkLog": "",
+      "boundaryTest": {
+        "0.00": {
+          "bottomLeft": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "center": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "bottomRight": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "topLeft": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "topRight": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "avgRed": 255,
+          "avgBlue": 0
+        },
+        "0.50": {
+          "bottomLeft": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "center": [
+            125,
+            0,
+            130,
+            255
+          ],
+          "bottomRight": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "topLeft": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "topRight": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "avgRed": 128,
+          "avgBlue": 128
+        },
+        "1.00": {
+          "bottomLeft": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "center": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "bottomRight": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "topLeft": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "topRight": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "avgRed": 0,
+          "avgBlue": 255
+        }
+      }
+    },
+    "glsl-burn": {
+      "name": "glsl-burn",
+      "compiled": true,
+      "linked": true,
+      "compileLog": "",
+      "linkLog": "",
+      "boundaryTest": {
+        "0.00": {
+          "bottomLeft": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "center": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "bottomRight": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "topLeft": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "topRight": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "avgRed": 255,
+          "avgBlue": 0
+        },
+        "0.50": {
+          "bottomLeft": [
+            191,
+            0,
+            191,
+            255
+          ],
+          "center": [
+            191,
+            0,
+            191,
+            255
+          ],
+          "bottomRight": [
+            191,
+            0,
+            191,
+            255
+          ],
+          "topLeft": [
+            191,
+            0,
+            191,
+            255
+          ],
+          "topRight": [
+            191,
+            0,
+            191,
+            255
+          ],
+          "avgRed": 191,
+          "avgBlue": 191
+        },
+        "1.00": {
+          "bottomLeft": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "center": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "bottomRight": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "topLeft": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "topRight": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "avgRed": 0,
+          "avgBlue": 255
+        }
+      }
+    }
+  }
+}

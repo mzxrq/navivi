@@ -318,7 +318,7 @@ export function Sidebar() {
         <button
           onClick={handleGenerateClick}
           disabled={waypoints.length === 0 || isListEditMode || isRendering || isPreviewing}
-          className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-navi-500 hover:bg-navi-600 text-white font-bold text-[11px] transition-all disabled:opacity-40 disabled:pointer-events-none shadow-sm hover:shadow focus:ring-2 focus:ring-navi-500/50 focus:outline-none"
+          className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-navi hover:bg-navi-600 text-white font-bold text-[11px] transition-all disabled:opacity-40 disabled:pointer-events-none shadow-sm hover:shadow focus:ring-2 focus:ring-navi-500/50 focus:outline-none"
         >
           {isRendering ? (
             <>
@@ -351,7 +351,7 @@ export function Sidebar() {
               </button>
               <button
                 onClick={executeGenerate}
-                className="px-4 py-2 bg-navi-500 hover:bg-navi-600 text-white text-xs font-bold rounded-lg shadow-md transition-colors"
+                className="px-4 py-2 bg-navi hover:bg-navi-600 text-white text-xs font-bold rounded-lg shadow-md transition-colors"
               >
                 Generate Assets
               </button>
