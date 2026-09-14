@@ -148,7 +148,7 @@ export function TimelineEditor() {
   return (
     <div ref={containerRef} className="w-full h-full bg-zinc-50 dark:bg-navidark-900 overflow-hidden relative border-t border-zinc-200 dark:border-navidark-400 select-none">
       <div className="absolute top-0 left-0 w-32 h-full bg-zinc-100 dark:bg-navidark-800 z-10 border-r border-zinc-200 dark:border-navidark-400 flex flex-col">
-        <div className="h-[30px] border-b border-zinc-200 dark:border-navidark-400 flex items-center px-2 shrink-0 bg-white dark:bg-navidark-900">
+        <div className="h-7.5 border-b border-zinc-200 dark:border-navidark-400 flex items-center px-2 shrink-0 bg-white dark:bg-navidark-900">
           <span className="text-[10px] font-bold text-zinc-500 uppercase">Tracks</span>
         </div>
         {tracks.map((t) => (
@@ -159,7 +159,7 @@ export function TimelineEditor() {
       </div>
       
       <div className="ml-32 h-full overflow-x-auto overflow-y-hidden relative custom-scrollbar bg-white dark:bg-navidark-950">
-        <div className="absolute top-0 right-0 h-[30px] z-20 flex items-center px-4 bg-white/80 dark:bg-navidark-900/80 backdrop-blur-sm border-b border-l border-zinc-200 dark:border-navidark-400 rounded-bl-lg">
+        <div className="absolute top-0 right-0 h-7.5 z-20 flex items-center px-4 bg-white/80 dark:bg-navidark-900/80 backdrop-blur-sm border-b border-l border-zinc-200 dark:border-navidark-400 rounded-bl-lg">
           <button
             onClick={handleExport}
             disabled={isExporting}

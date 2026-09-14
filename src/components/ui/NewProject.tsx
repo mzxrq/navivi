@@ -2,9 +2,18 @@ import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { useUI } from "../../hooks/useUI";
-import { 
-  FolderPlus, ChevronRight, Navigation, 
-  Car, Footprints, Plane, Search, Loader2, MapPin, X, Info
+import {
+  FolderPlus,
+  ChevronRight,
+  Navigation,
+  Car,
+  Footprints,
+  Plane,
+  Search,
+  Loader2,
+  MapPin,
+  X,
+  Info,
 } from "../ui/icons";
 
 interface SearchResult {
@@ -19,14 +28,20 @@ export function NewProject() {
   const { updateMetadata, updateSettings, resetWorkspace } = useWorkspace();
 
   const [projectName, setProjectName] = useState("Untitled Project");
-  const [travelMode, setTravelMode] = useState<"driving" | "walking" | "flying">("driving");
-  
+  const [travelMode, setTravelMode] = useState<"driving" | "walking" | "curve">(
+    "driving",
+  );
+
   // Origin Search State (Defaults to Osaka)
   const [originQuery, setOriginQuery] = useState("Osaka, Japan");
-  const [selectedCoords, setSelectedCoords] = useState<[number, number]>([34.6937, 135.5023]);
+  const [selectedCoords, setSelectedCoords] = useState<[number, number]>([
+    34.6937, 135.5023,
+  ]);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
+
+  const [skipRichMedia, setSkipRichMedia] = useState(false);
 
   const searchRef = useRef<HTMLDivElement>(null);
 
@@ -65,13 +80,13 @@ export function NewProject() {
       try {
         const res = await fetch(
           `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
-            originQuery
-          )}&limit=5&accept-language=en`
+            originQuery,
+          )}&limit=5&accept-language=en`,
         );
         if (!res.ok) throw new Error("No Internet Connection.");
         const data = await res.json();
         setSearchResults(data);
-        setShowDropdown(true);           
+        setShowDropdown(true);
       } catch (error) {
         console.error("Search failed:", error);
       } finally {
@@ -90,7 +105,7 @@ export function NewProject() {
 
   const handleCreate = () => {
     resetWorkspace();
-    
+
     updateMetadata({
       project_name: projectName || "Untitled Project",
       project_id: "",
@@ -99,17 +114,17 @@ export function NewProject() {
 
     updateSettings({
       start_coords: selectedCoords,
-      resolution: "1080p", // Hidden defaults
-      fps: 30,             // Hidden defaults
+      fps: 30,
+      skip_rich_media: skipRichMedia,
+      default_route_mode: travelMode,
     });
-    
+
     setCurrentView("editor");
   };
 
   return createPortal(
     <div className="fixed inset-0 z-99999 flex items-center justify-center bg-zinc-950/40 backdrop-blur-[2px] animate-in fade-in duration-200 select-none">
       <div className="w-full max-w-130 bg-white dark:bg-navidark-900 border border-zinc-200 dark:border-navidark-400 rounded-2xl shadow-2xl p-8 animate-in zoom-in-95 duration-200">
-        
         {/* Header */}
         <div className="flex items-center gap-4 mb-8">
           <div className="w-12 h-12 rounded-xl bg-navi-50 dark:bg-navi/10 flex items-center justify-center border border-navi-200 dark:border-navi/20 shrink-0">
@@ -155,7 +170,9 @@ export function NewProject() {
                 type="text"
                 value={originQuery}
                 onChange={(e) => setOriginQuery(e.target.value)}
-                onFocus={() => { if (searchResults.length > 0) setShowDropdown(true); }}
+                onFocus={() => {
+                  if (searchResults.length > 0) setShowDropdown(true);
+                }}
                 placeholder="Search for a city, landmark, or address..."
                 className="w-full bg-zinc-100 dark:bg-navidark-800 border-none rounded-lg pl-10 pr-10 py-3 text-sm font-semibold text-zinc-900 dark:text-white outline-none focus:ring-2 focus:ring-navi/50 transition-all shadow-inner placeholder-zinc-400 dark:placeholder-navidark-200"
               />
@@ -166,7 +183,10 @@ export function NewProject() {
                 ) : (
                   originQuery && (
                     <button
-                      onClick={() => { setOriginQuery(""); setSearchResults([]); }}
+                      onClick={() => {
+                        setOriginQuery("");
+                        setSearchResults([]);
+                      }}
                       className="p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
                     >
                       <X className="h-4 w-4" />
@@ -207,15 +227,16 @@ export function NewProject() {
                 <Navigation className="w-3.5 h-3.5" /> Default Routing Mode
               </label>
               <p className="text-[10px] text-zinc-500 dark:text-navidark-150 flex items-center gap-1">
-                <Info className="w-3 h-3" /> Sets the default pathfinding engine when placing waypoints.
+                <Info className="w-3 h-3" /> Sets the default pathfinding engine
+                when placing waypoints.
               </p>
             </div>
-            
+
             <div className="grid grid-cols-3 gap-2">
               {[
                 { id: "driving", icon: Car, label: "Driving" },
                 { id: "walking", icon: Footprints, label: "Walking" },
-                { id: "flying", icon: Plane, label: "Direct/Fly" },
+                { id: "curve", icon: Plane, label: "Direct/Fly" },
               ].map((mode) => (
                 <button
                   key={mode.id}
@@ -233,6 +254,45 @@ export function NewProject() {
             </div>
           </div>
 
+          <div className="pt-2">
+            <div
+              onClick={() => setSkipRichMedia(!skipRichMedia)}
+              className={`flex items-center justify-between p-4 rounded-xl border-2 transition-all cursor-pointer select-none group ${
+                skipRichMedia
+                  ? "border-navi bg-navi-50/50 dark:border-navi/50 dark:bg-navi/10 shadow-sm"
+                  : "border-zinc-200 dark:border-navidark-400 bg-zinc-50 dark:bg-navidark-800 hover:border-zinc-300 dark:hover:border-navidark-300"
+              }`}
+            >
+              <div className="flex flex-col gap-1 pr-6">
+                <span
+                  className={`text-xs font-bold transition-colors ${
+                    skipRichMedia
+                      ? "text-navi-700 dark:text-navi-400"
+                      : "text-zinc-700 dark:text-zinc-200 group-hover:text-zinc-900 dark:group-hover:text-white"
+                  }`}
+                >
+                  Fast Render Mode
+                </span>
+                <span className="text-[10px] text-zinc-500 dark:text-navidark-150 leading-relaxed">
+                  Skip AI voiceover synthesis and pop-up images during
+                  generation. Perfect for quickly previewing route paths.
+                </span>
+              </div>
+
+              {/* Custom Animated Switch */}
+              <div
+                className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-200 ease-in-out ${
+                  skipRichMedia ? "bg-navi" : "bg-zinc-300 dark:bg-zinc-700"
+                }`}
+              >
+                <span
+                  className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform duration-200 ease-in-out ${
+                    skipRichMedia ? "translate-x-4.5" : "translate-x-0.5"
+                  }`}
+                />
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Footer Actions */}
@@ -252,6 +312,6 @@ export function NewProject() {
         </div>
       </div>
     </div>,
-    document.body
+    document.body,
   );
 }

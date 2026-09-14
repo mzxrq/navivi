@@ -145,15 +145,9 @@ export function ExportModal({
   const { showToast } = useUI();
 
   // Initial aspect ratio based on existing settings
-  const initialAspectRatio: AspectRatioType =
-    settings?.resolution === "vertical" ? "9:16" : "16:9";
+  const initialAspectRatio: AspectRatioType = "16:9";
 
-  const initialResolution: ResolutionTier =
-    settings?.resolution === "4k"
-      ? "4k"
-      : settings?.resolution === "720p"
-      ? "720p"
-      : "1080p";
+  const initialResolution: ResolutionTier = "1080p";
 
   const initialFps = settings?.fps === 60 ? 60 : settings?.fps === 24 ? 24 : 30;
 
@@ -167,14 +161,8 @@ export function ExportModal({
   // Sync settings if modal opens afresh
   useEffect(() => {
     if (isOpen) {
-      if (settings?.resolution === "vertical") {
-        setAspectRatio("9:16");
-      } else {
-        setAspectRatio("16:9");
-      }
-      if (settings?.resolution === "4k") setResolutionTier("4k");
-      else if (settings?.resolution === "720p") setResolutionTier("720p");
-      else setResolutionTier("1080p");
+      setAspectRatio("16:9");
+      setResolutionTier("1080p");
 
       if (settings?.fps && [24, 30, 60].includes(settings.fps)) {
         setFps(settings.fps);
@@ -376,7 +364,7 @@ export function ExportModal({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/75 backdrop-blur-md p-4 animate-in fade-in duration-200"
+      className="fixed inset-0 z-99999 flex items-center justify-center bg-black/75 backdrop-blur-md p-4 animate-in fade-in duration-200"
       onClick={(e) => {
         if (e.target === e.currentTarget && !isExporting) {
           onClose();
@@ -586,7 +574,7 @@ export function ExportModal({
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
               <div className="bg-zinc-900/80 p-2.5 rounded-lg border border-zinc-800/60">
-                <span className="text-[10px] text-zinc-400 block mb-0.5 flex items-center gap-1">
+                <span className="text-[10px] text-zinc-400 mb-0.5 flex items-center gap-1">
                   <Clock className="w-3 h-3 text-zinc-400" />
                   Timeline Duration
                 </span>
@@ -596,7 +584,7 @@ export function ExportModal({
               </div>
 
               <div className="bg-zinc-900/80 p-2.5 rounded-lg border border-zinc-800/60">
-                <span className="text-[10px] text-zinc-400 block mb-0.5 flex items-center gap-1">
+                <span className="text-[10px] text-zinc-400 mb-0.5 flex items-center gap-1">
                   <Layers className="w-3 h-3 text-zinc-400" />
                   Target Canvas
                 </span>
@@ -606,7 +594,7 @@ export function ExportModal({
               </div>
 
               <div className="bg-zinc-900/80 p-2.5 rounded-lg border border-zinc-800/60">
-                <span className="text-[10px] text-zinc-400 block mb-0.5 flex items-center gap-1">
+                <span className="text-[10px] text-zinc-400 mb-0.5 flex items-center gap-1">
                   <Volume2 className="w-3 h-3 text-zinc-400" />
                   Audio Mix
                 </span>
@@ -616,7 +604,7 @@ export function ExportModal({
               </div>
 
               <div className="bg-zinc-900/80 p-2.5 rounded-lg border border-zinc-800/60">
-                <span className="text-[10px] text-zinc-400 block mb-0.5 flex items-center gap-1">
+                <span className="text-[10px] text-zinc-400 mb-0.5 flex items-center gap-1">
                   <HardDrive className="w-3 h-3 text-zinc-400" />
                   Est. File Size
                 </span>

@@ -136,6 +136,15 @@ export const saveProjectData = async (
           absoluteImagePaths.push(absoluteDest);
         }
       }
+      let finalCustomMarker = "";
+      if (wp.customMarker) {
+        const markerName = await basename(wp.customMarker);
+        const markerDest = await join(assetsDir, markerName);
+        if (wp.customMarker !== markerDest) {
+          await copyFile(wp.customMarker, markerDest);
+        }
+        finalCustomMarker = markerDest;
+      }
 
       return {
         id: wp.id,
@@ -143,26 +152,25 @@ export const saveProjectData = async (
         lng: wp.lng,
         label: wp.name,
         name: wp.name,
-        
-        popup_image: absoluteImagePaths,
+        customMarker: finalCustomMarker || undefined,
+
+        popup_image: absoluteImagePaths.length > 0 ? [absoluteImagePaths[0]] : [],
         camera_pans: absoluteImagePaths.length > 0
           ? absoluteImagePaths.map((_, i) => (wp.imagePans && wp.imagePans[i] ? wp.imagePans[i] : "panright"))
           : [],
         image_display: wp.imageDisplay || "pip",
-        
+
         images: absoluteImagePaths,
         imagePans: wp.imagePans || [],
         imageTransitions: wp.imageTransitions || [],
-        imageDisplay: wp.imageDisplay || "pip",
-        
         narration: wp.narration || "",
         arrivingNarration: wp.arrivingNarration || "",
         attractionNarration: wp.attractionNarration || "",
-        
+
         routeMode: wp.routeMode || "driving",
         customRoute: wp.customRoute || [],
         drawStyle: wp.drawStyle || "linear",
-        
+
         isStopBy: wp.isStopBy || false,
         connectToRoute: wp.connectToRoute || false,
       };
@@ -203,7 +211,7 @@ export const saveProjectData = async (
     const customHash = mode === "draw" ? JSON.stringify(wp1.customRoute || []) : "";
     activeKeys.add(`${wp1.lat.toFixed(5)},${wp1.lng.toFixed(5)}|${wp2.lat.toFixed(5)},${wp2.lng.toFixed(5)}|${mode}|${customHash}`);
   }
-  
+
   const cleanCache: Record<string, [number, number][]> = {};
   let deletedCount = 0;
   for (const [key, routeData] of Object.entries(routingCache)) {

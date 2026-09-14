@@ -1,0 +1,82 @@
+{
+  "project_id": "kyoto_demo",
+  "project_name": "Kyoto Demo",
+  "user_id": "local",
+  "created_at": "2026-09-14T00:00:00.000Z",
+  "theme": "light",
+  "status": "saved",
+  "directory_path": "",
+  "source_files": { "gps_route": "" },
+  "overview_narration": "A beautiful journey through Kyoto's most iconic sites.",
+  "start_point": {
+    "lat": 34.9671,
+    "lng": 135.7727,
+    "label": "Fushimi Inari Taisha"
+  },
+  "end_point": {
+    "lat": 35.0094,
+    "lng": 135.6722,
+    "label": "Arashiyama Bamboo Grove"
+  },
+  "settings": {
+    "fps": 30,
+    "duration_seconds": 8,
+    "line_color": [0, 200, 255],
+    "line_thickness": 6,
+    "line_border_color": [255, 255, 255],
+    "line_border_width": 0,
+    "marker_color": [0, 0, 255],
+    "marker_radius": 10,
+    "routeMarker": "/defaults/markers/map_pin.svg",
+    "res_duration": 12,
+    "pause": 2,
+    "summary_hold": 4,
+    "summary_fade": 0.5,
+    "resolution": "1080p",
+    "start_coords": [34.985, 135.75]
+  },
+  "waypoints": [
+    {
+      "id": "kyoto-1",
+      "lat": 34.9671,
+      "lng": 135.7727,
+      "label": "Fushimi Inari Taisha",
+      "name": "Fushimi Inari Taisha",
+      "routeMode": "driving",
+      "images": [],
+      "imagePans": [],
+      "narration": "Welcome to Kyoto! Our first stop is the breathtaking Fushimi Inari Taisha, famous for its thousands of vermilion torii gates.",
+      "arrivingNarration": "We are arriving at Fushimi Inari.",
+      "attractionNarration": "Let's explore the beautiful torii gates.",
+      "customMarker": "/defaults/markers/walking.svg"
+    },
+    {
+      "id": "kyoto-2",
+      "lat": 34.9949,
+      "lng": 135.7850,
+      "label": "Kiyomizu-dera",
+      "name": "Kiyomizu-dera",
+      "routeMode": "driving",
+      "images": [],
+      "imagePans": [],
+      "narration": "Next, we visit Kiyomizu-dera, an independent Buddhist temple offering stunning views over the city.",
+      "arrivingNarration": "Approaching Kiyomizu-dera.",
+      "attractionNarration": "Take in the panoramic view of Kyoto.",
+      "customMarker": "/defaults/markers/walking.svg"
+    },
+    {
+      "id": "kyoto-3",
+      "lat": 35.0094,
+      "lng": 135.6722,
+      "label": "Arashiyama Bamboo Grove",
+      "name": "Arashiyama Bamboo Grove",
+      "routeMode": "driving",
+      "images": [],
+      "imagePans": [],
+      "narration": "Finally, we end our journey walking through the towering stalks of the Arashiyama Bamboo Grove. Truly a magical experience.",
+      "arrivingNarration": "Arriving at Arashiyama.",
+      "attractionNarration": "Enjoy the peaceful atmosphere of the bamboo forest."
+    }
+  ],
+  "routingCache": {}
+}

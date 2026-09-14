@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useUI } from "../../hooks/useUI";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import {
@@ -173,19 +173,19 @@ export function TitleBar() {
         data-tauri-drag-region
         className="h-10 bg-white dark:bg-navidark-700 border-b border-zinc-200 dark:border-navidark-300 flex items-center justify-between select-none shrink-0 transition-colors"
       >
-        {/* Left Menu button */}
-        <div className="flex items-center h-full">
+        {/* --- LEFT: MENU & DOCUMENT ACTIONS --- */}
+        <div className="flex items-center h-full shrink-0">
           <div className="relative h-full flex items-center" ref={menuRef}>
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className={`h-full px-3 flex items-center transition-colors ${isMenuOpen ? "bg-zinc-100 dark:bg-navidark-500 text-zinc-900 dark:text-white" : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-50 dark:hover:bg-white/5"}`}
+              className={`h-full px-4 flex items-center transition-colors ${isMenuOpen ? "bg-zinc-100 dark:bg-navidark-500 text-zinc-900 dark:text-white" : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-50 dark:hover:bg-white/5"}`}
             >
-              <Menu className="w-3.75 h-3.75" />
+              <Menu className="w-4 h-4" />
             </button>
 
             {/* Dropdown Menu */}
             {isMenuOpen && (
-              <div className="absolute top-10 w-56 bg-white dark:bg-navidark-600 border border-zinc-200 dark:border-white/10 rounded-br-2xl shadow-2xl py-1 z-800 text-sm text-zinc-700 dark:text-zinc-300">
+               <div className="absolute top-10 w-56 bg-white dark:bg-navidark-600 border border-zinc-200 dark:border-white/10 rounded-br-2xl shadow-2xl py-1 z-800 text-sm text-zinc-700 dark:text-zinc-300">
                 {currentView === "editor" && (
                   <>
                     <button
@@ -266,40 +266,6 @@ export function TitleBar() {
                   <span>Import GPX...</span>
                 </button>
 
-                {/* Undo/Redo Menu Options */}
-                {currentView === "editor" && (
-                  <>
-                    <div className="h-px bg-zinc-200 dark:bg-white/5 my-1 mx-2" />
-                    <button
-                      disabled={!canUndo}
-                      onClick={() => {
-                        setIsMenuOpen(false);
-                        handleUndo(); 
-                      }}
-                      className="w-full flex items-center justify-between px-4 py-1.5 hover:bg-zinc-100 dark:hover:bg-navidark-400 transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
-                    >
-                      <span className="flex items-center gap-2">
-                        <Undo2 className="w-3.5 h-3.5" /> Undo
-                      </span>
-                      <span className="text-xs text-zinc-400">Ctrl+Z</span>
-                    </button>
-
-                    <button
-                      disabled={!canRedo}
-                      onClick={() => {
-                        setIsMenuOpen(false);
-                        handleRedo(); 
-                      }}
-                      className="w-full flex items-center justify-between px-4 py-1.5 hover:bg-zinc-100 dark:hover:bg-navidark-400 transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
-                    >
-                      <span className="flex items-center gap-2">
-                        <Redo2 className="w-3.5 h-3.5" /> Redo
-                      </span>
-                      <span className="text-xs text-zinc-400">Ctrl+Y</span>
-                    </button>
-                  </>
-                )}
-
                 <div className="h-px bg-zinc-200 dark:bg-white/5 my-1 mx-2" />
                 <button
                   onClick={() => handleWindow("close")}
@@ -310,67 +276,12 @@ export function TitleBar() {
               </div>
             )}
           </div>
-        </div>
 
-        <div className="w-px h-5 my-auto bg-zinc-200 dark:bg-white/10 mx-1"></div>
+          <div className="w-px h-5 my-auto bg-zinc-200 dark:bg-white/10 mx-1"></div>
 
-        {/* --- MIDDLE: DRAG REGION & VIEW TOGGLE --- */}
-        <div
-          data-tauri-drag-region
-          className="flex-1 flex items-center justify-between h-full px-4"
-        >
-          {/* Breadcrumbs */}
-          <div
-            data-tauri-drag-region
-            className="flex items-center gap-2 text-xs font-medium text-zinc-500 dark:text-zinc-400"
-          >
-            <Map className="w-4.5 h-4.5 text-navi dark:text-navi pointer-events-none" />
-            <span className="text-zinc-800 dark:text-zinc-300 pointer-events-none">
-              Navivi
-            </span>
-            <ChevronRight className="w-3 h-3 opacity-50 pointer-events-none" />
-            <span className="text-zinc-600 dark:text-zinc-200 pointer-events-none">
-              {currentView === "title_screen"
-                ? "Project Manager"
-                : currentView === "new_project"
-                  ? "Setup"
-                  : metadata.project_name}
-              {currentView === "editor" && isDirty && "*"}
-            </span>
-          </div>
-
-          {/* Map / Timeline Toggle */}
+          {/* ✨ MOVED: Undo/Redo safely tucked away from the close button */}
           {currentView === "editor" && (
-            <div className="flex bg-zinc-200/50 dark:bg-navidark-900 rounded-lg p-0.5 border-zinc-300 dark:border-navidark-400 shadow-inner ">
-              <button
-                onClick={() => setEditorMode("map")}
-                className={`flex items-center gap-2 px-2 py-1 text-xs font-bold rounded-md transition-all ${
-                  editorMode === "map"
-                    ? "bg-white dark:bg-navidark-500 text-navi dark:text-navi shadow-sm"
-                    : "text-zinc-500 hover:text-zinc-700 dark:text-navidark-125 dark:hover:text-white"
-                }`}
-              >
-                <Map className="w-3.5 h-3.5" /> Map
-              </button>
-
-              <button
-                onClick={() => setEditorMode("timeline")}
-                className={`flex items-center gap-2 px-2 py-1 text-xs font-bold rounded-md transition-all ${
-                  editorMode === "timeline"
-                    ? "bg-white dark:bg-navidark-500 text-navi dark:text-navi shadow-sm"
-                    : "text-zinc-500 hover:text-zinc-700 dark:text-navidark-125 dark:hover:text-white"
-                }`}
-              >
-                <Film className="w-3.5 h-3.5" /> Timeline
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* --- RIGHT: WINDOW CONTROLS --- */}
-        <div className="flex h-full text-zinc-600 dark:text-zinc-400 shrink-0">
-          {currentView === "editor" && (
-            <div className="flex items-center my-auto h-5 border-r border-zinc-200 dark:border-white/5 pr-2 mr-1">
+            <div className="flex items-center h-full text-zinc-600 dark:text-zinc-400 px-1">
               <button
                 onClick={handleUndo}
                 disabled={!canUndo}
@@ -389,10 +300,77 @@ export function TitleBar() {
               </button>
             </div>
           )}
+        </div>
+
+        {/* --- CENTER: CONTEXT & STATUS --- */}
+        <div
+          data-tauri-drag-region
+          className="flex-1 flex items-center justify-center h-full px-4"
+        >
+          <div
+            data-tauri-drag-region
+            className="flex items-center justify-center gap-2 text-xs font-medium text-zinc-500 dark:text-zinc-400"
+          >
+            <Map className="w-4 h-4 text-navi dark:text-navi pointer-events-none" />
+            <span className="text-zinc-800 dark:text-zinc-300 pointer-events-none">
+              Navivi
+            </span>
+            <ChevronRight className="w-3 h-3 opacity-50 pointer-events-none" />
+            <span className="text-zinc-800 dark:text-zinc-200 pointer-events-none font-semibold">
+              {currentView === "title_screen"
+                ? "Project Manager"
+                : currentView === "new_project"
+                  ? "Setup"
+                  : metadata.project_name}
+            </span>
+            
+            {/* ✨ NEW: Informative Status Pill */}
+            {currentView === "editor" && (
+              <span
+                className={`text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded-sm font-bold ml-2 transition-colors pointer-events-none ${
+                  isDirty
+                    ? "bg-amber-100 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400"
+                    : "bg-emerald-100 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400"
+                }`}
+              >
+                {isDirty ? "Unsaved" : "Saved"}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* --- RIGHT: VIEW & WINDOW CONTROLS --- */}
+        <div className="flex items-center h-full shrink-0">
+          {/* Map / Timeline Toggle */}
+          {currentView === "editor" && (
+            <div className="flex bg-zinc-200/50 dark:bg-navidark-900 rounded-lg p-0.5 border border-zinc-300/50 dark:border-navidark-400 shadow-inner mr-4">
+              <button
+                onClick={() => setEditorMode("map")}
+                className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold rounded-md transition-all ${
+                  editorMode === "map"
+                    ? "bg-white dark:bg-navidark-500 text-navi dark:text-navi shadow-sm"
+                    : "text-zinc-500 hover:text-zinc-700 dark:text-navidark-125 dark:hover:text-white"
+                }`}
+              >
+                <Map className="w-3.5 h-3.5" /> Map
+              </button>
+
+              <button
+                onClick={() => setEditorMode("timeline")}
+                className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold rounded-md transition-all ${
+                  editorMode === "timeline"
+                    ? "bg-white dark:bg-navidark-500 text-navi dark:text-navi shadow-sm"
+                    : "text-zinc-500 hover:text-zinc-700 dark:text-navidark-125 dark:hover:text-white"
+                }`}
+              >
+                <Film className="w-3.5 h-3.5" /> Timeline
+              </button>
+            </div>
+          )}
 
           <button
             onClick={() => setShowAppSettings(true)}
-            className="h-full px-4 hover:bg-zinc-100 dark:hover:bg-navidark-500 hover:text-zinc-900 dark:hover:text-white transition-colors"
+            className="h-full px-4 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-navidark-500 hover:text-zinc-900 dark:hover:text-white transition-colors"
             title="App Settings"
           >
             <Settings2 className="w-4 h-4" />
@@ -400,24 +378,26 @@ export function TitleBar() {
 
           <div className="w-px h-5 my-auto bg-zinc-200 dark:bg-white/10 mx-1"></div>
 
-          <button
-            onClick={() => handleWindow("minimize")}
-            className="h-full px-4 hover:bg-zinc-100 dark:hover:bg-navidark-500 transition-colors"
-          >
-            <Minus className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => handleWindow("maximize")}
-            className="h-full px-4 hover:bg-zinc-100 dark:hover:bg-navidark-500 transition-colors"
-          >
-            <Square className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={() => handleWindow("close")}
-            className="h-full px-4 hover:bg-red-500 hover:text-white transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex h-full text-zinc-600 dark:text-zinc-400">
+            <button
+              onClick={() => handleWindow("minimize")}
+              className="h-full px-4 hover:bg-zinc-100 dark:hover:bg-navidark-500 transition-colors"
+            >
+              <Minus className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => handleWindow("maximize")}
+              className="h-full px-4 hover:bg-zinc-100 dark:hover:bg-navidark-500 transition-colors"
+            >
+              <Square className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => handleWindow("close")}
+              className="h-full px-4 hover:bg-red-500 hover:text-white transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
 

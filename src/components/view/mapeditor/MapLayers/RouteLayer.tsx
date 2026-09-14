@@ -7,16 +7,25 @@ interface RouteLayerProps {
   routePoints: [number, number][];
 }
 
-export function RouteLayer({ uploadedRouteLine, routePoints }: RouteLayerProps) {
+export function RouteLayer({
+  uploadedRouteLine,
+  routePoints,
+}: RouteLayerProps) {
   const { routeSegments, settings } = useWorkspace();
 
   const hexLineColor =
-    "#" + (settings?.line_color || [59, 130, 246]).map((x: number) => x.toString(16).padStart(2, "0")).join("");
+    "#" +
+    (settings?.line_color || [59, 130, 246])
+      .map((x: number) => x.toString(16).padStart(2, "0"))
+      .join("");
   const lineWidth = settings?.line_thickness || 4;
 
   const hexBorderColor =
-    "#" + (settings?.line_border_color || [255, 255, 255]).map((x: number) => x.toString(16).padStart(2, "0")).join("");
-  const borderWidth = settings?.line_border_width || 0;
+    "#" +
+    (settings?.route_line_border_color || [255, 255, 255])
+      .map((x: number) => x.toString(16).padStart(2, "0"))
+      .join("");
+  const borderWidth = settings?.route_line_border_thickness || 0;
 
   const dynamicRouteGeoJSON = useMemo(() => {
     const features = routeSegments.map((segment) => ({
@@ -79,8 +88,11 @@ export function RouteLayer({ uploadedRouteLine, routePoints }: RouteLayerProps) 
       {/* ======================================= */}
       {/* DYNAMIC NAVIVI ROUTES                   */}
       {/* ======================================= */}
-      <Source id="dynamic-routes" type="geojson" data={dynamicRouteGeoJSON as any}>
-        
+      <Source
+        id="dynamic-routes"
+        type="geojson"
+        data={dynamicRouteGeoJSON as any}
+      >
         {/* 🛠️ DRAW BORDER (White, thick, renders underneath) */}
         <Layer
           id="route-draw-border"
@@ -94,24 +106,17 @@ export function RouteLayer({ uploadedRouteLine, routePoints }: RouteLayerProps) 
         />
 
         {/* 🛠️ NORMAL ROUTE BORDERS */}
-        {borderWidth > 0 && (
-          <Layer
-            id="route-border-all"
-            type="line"
-            filter={["!=", "mode", "draw"]}
-            layout={{ "line-join": "round", "line-cap": "round" }}
-            paint={{
-              "line-color": hexBorderColor,
-              "line-width": [
-                "match",
-                ["get", "mode"],
-                "direct", 4 + borderWidth * 2,
-                "curve", 4 + borderWidth * 2,
-                lineWidth + borderWidth * 2
-              ]
-            }}
-          />
-        )}
+        <Layer
+          id="route-all-border"
+          type="line"
+          filter={["!=", "mode", "draw"]}
+          layout={{ "line-join": "round", "line-cap": "round" }}
+          paint={{
+            "line-color": hexBorderColor,
+            "line-width": borderWidth === 0 ? 0 : lineWidth + borderWidth * 2,
+            "line-opacity": borderWidth === 0 ? 0 : 1,
+          }}
+        />
 
         {/* 🛠️ NORMAL ROUTES */}
         <Layer
@@ -126,28 +131,44 @@ export function RouteLayer({ uploadedRouteLine, routePoints }: RouteLayerProps) 
           type="line"
           filter={["==", "mode", "walking"]}
           layout={{ "line-join": "round", "line-cap": "round" }}
-          paint={{ "line-color": hexLineColor, "line-width": lineWidth, "line-dasharray": [1, 2] }}
+          paint={{
+            "line-color": hexLineColor,
+            "line-width": lineWidth,
+            "line-dasharray": [1, 2],
+          }}
         />
         <Layer
           id="route-ferry"
           type="line"
           filter={["==", "mode", "ferry"]}
           layout={{ "line-join": "round", "line-cap": "round" }}
-          paint={{ "line-color": "#2563eb", "line-width": lineWidth, "line-dasharray": [2, 2] }}
+          paint={{
+            "line-color": "#2563eb",
+            "line-width": lineWidth,
+            "line-dasharray": [2, 2],
+          }}
         />
         <Layer
           id="route-direct"
           type="line"
           filter={["==", "mode", "direct"]}
           layout={{ "line-join": "round", "line-cap": "round" }}
-          paint={{ "line-color": "#a1a1aa", "line-width": 4, "line-dasharray": [2, 2] }}
+          paint={{
+            "line-color": "#a1a1aa",
+            "line-width": 4,
+            "line-dasharray": [2, 2],
+          }}
         />
         <Layer
           id="route-curve"
           type="line"
           filter={["==", "mode", "curve"]}
           layout={{ "line-join": "round", "line-cap": "round" }}
-          paint={{ "line-color": "#a855f7", "line-width": 4, "line-dasharray": [2, 3] }}
+          paint={{
+            "line-color": "#a855f7",
+            "line-width": 4,
+            "line-dasharray": [2, 3],
+          }}
         />
 
         {/* 🛠️ DRAW FILL (Orange, dashed, renders on top) */}

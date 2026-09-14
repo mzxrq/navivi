@@ -10,6 +10,7 @@ export interface Waypoint {
   lat: number;
   lng: number;
   name: string;
+  customMarker?: string;
   images?: string[];
   imageDisplay?: "pip" | "fullscreen";
   imagePans?: string[];
@@ -45,21 +46,28 @@ export interface ProjectSettings {
   duration_seconds: number;
   line_color: [number, number, number];
   line_thickness: number;
-  line_border_color?: [number, number, number];
-  line_border_width?: number;
+  route_line_border_color?: [number, number, number];
+  route_line_border_thickness?: number;
   marker_color: [number, number, number];
   marker_radius: number;
+  routeMarker?: string;
   res_duration: number;
   pause: number;
   summary_hold: number;
   summary_fade: number;
   start_coords?: [number, number];
-  resolution: string;
   mapbox_api_key: string;
-  ors_api_key: string;
-  is_round_trip?: boolean;
-  return_route_mode?: "driving" | "walking" | "direct" | "curve";
+  ors_api_key?: string;
   auto_save_interval: number;
+  skip_rich_media?: boolean;
+  default_route_mode?: RouteMode;
+  subtitle_font?: string; // either uses Calibri or some nice looking font as default
+  subtitle_font_size?: number; // could be at least size 30
+  subtitle_color?: string; // This uses ASS color format, &HAABBGGRR -- alpha,  blue-green-red
+  subtitle_outline_color?: string; // same as above, ASS color format
+  subtitle_bold?: boolean; // false unless necessary
+  subtitle_alignment?: number;
+  subtitle_margin_v?: number;
 }
 
 export interface ProjectMetadata {
@@ -88,10 +96,10 @@ export interface TimelineTrack {
   isHidden?: boolean;
   isMuted?: boolean;
   isLocked?: boolean;
-  volume?: number;              // 0.0 - 1.5 (default 1.0)
+  volume?: number;
   audioRole?: "voice" | "music" | "sfx";
-  duckingEnabled?: boolean;     // Enable auto-ducking on this track (e.g. music)
-  duckingAmount?: number;       // Ducking attenuation ratio (default 0.25)
+  duckingEnabled?: boolean;
+  duckingAmount?: number;
 }
 
 export interface ClipData {
@@ -126,7 +134,7 @@ export interface ClipData {
   karaoke?: boolean;
   karaokeHighlightColor?: string;
 
-  volume?: number;              // 0.0 - 1.5 (default 1.0)
+  volume?: number;
   isMuted?: boolean;
   audioRole?: "voice" | "music" | "sfx";
   ducking?: boolean;

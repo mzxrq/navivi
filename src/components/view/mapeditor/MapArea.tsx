@@ -1,5 +1,4 @@
 import { useEffect, useState, useRef } from "react";
-// ✨ NEW: Imported Source for the 3D Terrain Data
 import Map, {
   ViewStateChangeEvent,
   Marker,
@@ -7,89 +6,33 @@ import Map, {
   Source,
 } from "react-map-gl/mapbox";
 import { listen } from "@tauri-apps/api/event";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import {
   UploadCloud,
   MapPin,
   Pencil,
   SplinePointer,
-  Undo,
   Eraser,
-  Layers, // ✨ NEW: Icon for the Style Switcher
+  Play,
+  MapPinned,
+  Square,
+  Navigation,
 } from "../../ui/icons";
+import { mapStyles, mapDefaults } from "../../../config/constants";
 import { RouteStyling } from "./MapLayers/RouteStyling";
 import { useWorkspace } from "../../../hooks/useWorkspace";
 import { useTheme } from "../../../hooks/useTheme";
 import { useMapRouting } from "../../../hooks/useMapRouting";
 import { useFileActions } from "../../../hooks/useFileActions";
+import { useUI } from "../../../hooks/useUI";
 import { loadProjectData } from "../../../services/fileSystem";
+import { MapStyleMenu } from "./MapLayers/MapStyleMenu";
 import { RouteLayer } from "./MapLayers/RouteLayer";
 import { NaviPin } from "./MapLayers/NaviPin";
 
-// ✨ NEW: Mapbox Style Definitions
-const mapStyles = [
-  {
-    id: "outdoors",
-    label: "Outdoors (3D Terrain)",
-    url: "mapbox://styles/mapbox/outdoors-v12",
-  },
-  {
-    id: "satellite",
-    label: "Satellite Streets",
-    url: "mapbox://styles/mapbox/satellite-streets-v12",
-  },
-  {
-    id: "dark",
-    label: "Cinematic Dark",
-    url: "mapbox://styles/mapbox/dark-v11",
-  },
-  {
-    id: "standard",
-    label: "Standard (Dynamic)",
-    url: "mapbox://styles/mapbox/standard",
-  },
-  {
-    id: "light",
-    label: "Light Streets",
-    url: "mapbox://styles/mapbox/streets-v12",
-  },
-  {
-    id: "osm",
-    label: "Classic OpenStreetMap",
-    url: {
-      version: 8,
-      sources: {
-        osm: {
-          type: "raster",
-          tiles: ["https://a.tile.openstreetmap.org/{z}/{x}/{y}.png"],
-          tileSize: 256,
-        },
-      },
-      layers: [
-        { id: "osm", type: "raster", source: "osm", minzoom: 0, maxzoom: 22 },
-      ],
-    } as any,
-  },
-  {
-    id: "gsi-japan",
-    label: "Japan GSI Topo (Hiking)",
-    url: {
-      version: 8,
-      sources: {
-        gsi: {
-          type: "raster",
-          tiles: ["https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png"],
-          tileSize: 256,
-        },
-      },
-      layers: [
-        { id: "gsi", type: "raster", source: "gsi", minzoom: 0, maxzoom: 18 },
-      ],
-    } as any,
-  },
-];
-
 export function MapArea() {
   const { theme, mapTheme } = useTheme();
+  const { showToast } = useUI();
   const {
     waypoints,
     setWaypoints,
@@ -106,10 +49,12 @@ export function MapArea() {
   const [isHovering, setIsHovering] = useState(false);
   const [isAddMode, setIsAddMode] = useState(false);
   const [isDrawMode, setIsDrawMode] = useState(false);
+  const [isEraserMode, setIsEraserMode] = useState(false);
   const [addType, setAddType] = useState<"normal" | "start" | "end" | "stopby">(
     "normal",
   );
 
+  const [is3D, setIs3D] = useState(false);
   const [isProcessing] = useState(false);
   const [uploadedRouteLine] = useState<[number, number][]>([]);
   const mapRef = useRef<MapRef>(null);
@@ -120,7 +65,7 @@ export function MapArea() {
     longitude: settings.start_coords?.[1] || 135.5023,
     latitude: settings.start_coords?.[0] || 34.6937,
     zoom: 13,
-    pitch: 0, // ✨ Ensure pitch is tracked for 3D viewing
+    pitch: 0,
     bearing: 0,
   });
 
@@ -133,11 +78,10 @@ export function MapArea() {
         (theme === "system" &&
           window.matchMedia("(prefers-color-scheme: dark)").matches)));
 
-  // ✨ NEW: States for Style Switcher
+  // Style Switcher
   const [selectedStyle, setSelectedStyle] = useState<string>(() =>
     isDarkMap ? "dark" : "outdoors",
   );
-  const [showStyleMenu, setShowStyleMenu] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -178,30 +122,7 @@ export function MapArea() {
     }
   };
 
-  const handleUndoDraw = () => {
-    if (!activeWaypointId) return;
-    setWaypoints((prev) =>
-      prev.map((wp) => {
-        if (wp.id === activeWaypointId && wp.customRoute?.length) {
-          return { ...wp, customRoute: wp.customRoute.slice(0, -1) };
-        }
-        return wp;
-      }),
-    );
-  };
-
-  const handleClearDraw = () => {
-    if (!activeWaypointId) return;
-    setWaypoints((prev) =>
-      prev.map((wp) =>
-        wp.id === activeWaypointId ? { ...wp, customRoute: [] } : wp,
-      ),
-    );
-  };
-
   const handleMapContextMenu = (e: any) => {
-    e.originalEvent.preventDefault();
-    e.originalEvent.stopPropagation();
 
     if (rightClickStartRef.current) {
       const dx = Math.abs(
@@ -253,6 +174,14 @@ export function MapArea() {
   };
 
   const handleAddWaypoint = async (lat: number, lng: number) => {
+    if (waypoints.length >= mapDefaults.maxWaypoints) {
+      showToast(
+        `Routes are limited to ${mapDefaults.maxWaypoints} waypoints in this preview build.`,
+        "warning",
+      );
+      return;
+    }
+
     const newId = Math.random().toString(36).substring(7);
 
     setWaypoints((prev) => [
@@ -265,7 +194,7 @@ export function MapArea() {
         images: [],
         imagePans: [],
         narration: "",
-        routeMode: "walking",
+        routeMode: settings.default_route_mode || "driving",
       },
     ]);
     setIsDirty(true);
@@ -307,7 +236,7 @@ export function MapArea() {
       images: [],
       imagePans: [],
       narration: "",
-      routeMode: "driving",
+      routeMode: settings.default_route_mode || "driving",
     };
 
     setWaypoints((prev) => {
@@ -348,7 +277,7 @@ export function MapArea() {
         images: [],
         imagePans: [],
         narration: "",
-        routeMode: "walking",
+        routeMode: settings.default_route_mode || "driving",
         isStopBy: true,
       },
     ]);
@@ -372,8 +301,6 @@ export function MapArea() {
       );
     }
   };
-
-
 
   // Drag and Drop Listeners
   useEffect(() => {
@@ -429,16 +356,9 @@ export function MapArea() {
             className={`flex items-center overflow-hidden transition-all duration-300 ease-out ${isDrawMode ? "max-w-50 opacity-100 px-2" : "max-w-0 opacity-0 px-0"}`}
           >
             <button
-              onClick={handleUndoDraw}
-              title="Undo Last Point"
-              className="p-1.5 text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors"
-            >
-              <Undo className="w-4 h-4" />
-            </button>
-            <button
-              onClick={handleClearDraw}
-              title="Clear Route"
-              className="p-1.5 text-zinc-500 hover:text-red-500 transition-colors"
+              onClick={() => setIsEraserMode(!isEraserMode)}
+              title="Erase Anchor"
+              className={`p-1.5 transition-colors ${isEraserMode ? "text-red-500 bg-red-50 dark:bg-red-500/20 rounded-md" : "text-zinc-500 hover:text-red-500"}`}
             >
               <Eraser className="w-4 h-4" />
             </button>
@@ -481,33 +401,39 @@ export function MapArea() {
           className={`flex items-center rounded-full drop-shadow-xl transition-all duration-300 ease-out ${isAddMode ? "bg-white dark:bg-zinc-800" : ""}`}
         >
           <div
-            className={`flex items-center overflow-hidden transition-all duration-300 ease-out ${isAddMode ? "max-w-62.5 opacity-100 px-2 gap-1" : "max-w-0 opacity-0 px-0 gap-0"}`}
+            className={`flex items-center overflow-hidden transition-all duration-300 ease-out ${isAddMode ? "max-w-50 opacity-100 px-2" : "max-w-0 opacity-0 px-0"}`}
           >
-            <button
-              onClick={() => setAddType("start")}
-              className={`px-2 py-1 text-[10px] font-bold uppercase tracking-wider rounded transition-colors ${addType === "start" ? "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-white"}`}
-            >
-              Start
-            </button>
-            <button
-              onClick={() => setAddType("normal")}
-              className={`px-2 py-1 text-[10px] font-bold uppercase tracking-wider rounded transition-colors ${addType === "normal" ? "bg-blue-500/20 text-blue-600 dark:text-blue-400" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-white"}`}
-            >
-              Node
-            </button>
-            <button
-              onClick={() => setAddType("stopby")}
-              className={`px-2 py-1 text-[10px] font-bold uppercase tracking-wider rounded transition-colors ${addType === "stopby" ? "bg-amber-500/20 text-amber-600 dark:text-amber-400" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-white"}`}
-            >
-              Stop By
-            </button>
-            <button
-              onClick={() => setAddType("end")}
-              className={`px-2 py-1 text-[10px] font-bold uppercase tracking-wider rounded transition-colors ${addType === "end" ? "bg-red-500/20 text-red-600 dark:text-red-400" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-white"}`}
-            >
-              End
-            </button>
-            <div className="w-px h-4 bg-zinc-200 dark:bg-zinc-700 ml-1 mr-1" />
+            <div className="flex items-center gap-1 w-max">
+              <button
+                onClick={() => setAddType("start")}
+                title="Start"
+                className={`p-1.5 rounded transition-colors ${addType === "start" ? "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-white"}`}
+              >
+                <Play className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setAddType("normal")}
+                title="Node"
+                className={`p-1.5 rounded transition-colors ${addType === "normal" ? "bg-blue-500/20 text-blue-600 dark:text-blue-400" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-white"}`}
+              >
+                <MapPin className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setAddType("stopby")}
+                title="Stop By"
+                className={`p-1.5 rounded transition-colors ${addType === "stopby" ? "bg-amber-500/20 text-amber-600 dark:text-amber-400" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-white"}`}
+              >
+                <MapPinned className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setAddType("end")}
+                title="End"
+                className={`p-1.5 rounded transition-colors ${addType === "end" ? "bg-red-500/20 text-red-600 dark:text-red-400" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-white"}`}
+              >
+                <Square className="w-4 h-4" />
+              </button>
+              <div className="w-px h-4 bg-zinc-200 dark:bg-zinc-700 mx-1" />
+            </div>
           </div>
 
           <button
@@ -529,91 +455,42 @@ export function MapArea() {
           </button>
         </div>
 
+        <button
+          onClick={() => setIs3D(!is3D)}
+          title="Toggle 2D/3D"
+          className={`flex items-center justify-center w-10 h-10 rounded-full transition-all font-bold text-xs ${is3D ? "bg-navi hover:bg-navi-600 text-white shadow-md shadow-navi/25" : "bg-white dark:bg-zinc-800 text-zinc-700 hover:bg-zinc-200 dark:text-zinc-200 dark:hover:bg-zinc-500"}`}
+        >
+          {is3D ? "3D" : "2D"}
+        </button>
+
+        <button
+          onClick={() => {
+            setViewState((prev) => ({
+              ...prev,
+              pitch: 0,
+              bearing: 0,
+            }));
+          }}
+          title="Reset View (North)"
+          className="flex items-center justify-center w-10 h-10 rounded-full bg-white dark:bg-zinc-800 text-zinc-700 hover:bg-zinc-200 dark:text-zinc-200 dark:hover:bg-zinc-500 transition-all font-bold"
+        >
+          <Navigation
+            className="w-4 h-4 transition-transform duration-200"
+            style={{ transform: `rotate(${-viewState.bearing}deg)` }}
+          />
+        </button>
+
         <RouteStyling />
 
-        <div className="relative">
-          <button
-            onClick={() => setShowStyleMenu(!showStyleMenu)}
-            className="flex items-center justify-center w-10 h-10 rounded-full transition-all font-bold bg-white dark:bg-zinc-800 text-zinc-700 hover:bg-zinc-200 dark:text-zinc-200 dark:hover:bg-zinc-500 drop-shadow-xl"
-            title="Map Style & Terrain"
-          >
-            <Layers className="w-4 h-4" />
-          </button>
-
-          {/* ✨ REDESIGNED: Vertical List with Cached Actual Map Previews */}
-          {showStyleMenu && (
-            <div className="absolute top-12 right-0 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl shadow-2xl p-2 flex flex-col gap-2 w-48 z-1000 animate-in slide-in-from-top-2">
-              <div className="px-2 pt-1 pb-1">
-                <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">
-                  Map Style
-                </span>
-              </div>
-
-              {mapStyles.map((style) => {
-                const isSelected = selectedStyle === style.id;
-
-                let previewUrl = "";
-
-                const previewLon = "135.0667";
-                const previewLat = "34.2744";
-                const previewZ = "11";
-
-                if (style.id === "osm") {
-                  previewUrl = `https://a.tile.openstreetmap.org/11/1792/815.png`; // Fixed OSM tile
-                } else if (style.id === "gsi-japan") {
-                  previewUrl = `https://cyberjapandata.gsi.go.jp/xyz/std/11/1792/815.png`; // Fixed GSI tile
-                } else {
-                  // Mapbox Static API - Browser will cache this perfectly now
-                  let mbStyle = "outdoors-v12";
-                  if (style.id === "satellite")
-                    mbStyle = "satellite-streets-v12";
-                  if (style.id === "dark") mbStyle = "dark-v11";
-                  if (style.id === "light") mbStyle = "light-v11";
-                  if (style.id === "standard") mbStyle = "streets-v12";
-
-                  previewUrl = `https://api.mapbox.com/styles/v1/mapbox/${mbStyle}/static/${previewLon},${previewLat},${previewZ}/200x60?access_token=${mapboxToken}`;
-                }
-
-                return (
-                  <button
-                    key={style.id}
-                    onClick={() => {
-                      setSelectedStyle(style.id);
-                      setShowStyleMenu(false);
-                    }}
-                    className={`relative w-full h-[46px] rounded-lg overflow-hidden transition-all duration-200 group text-left bg-zinc-200 dark:bg-zinc-700 ${
-                      isSelected
-                        ? "ring-2 ring-navi-500 shadow-md"
-                        : "ring-1 ring-black/10 dark:ring-white/10 hover:ring-navi-400"
-                    }`}
-                  >
-                    {/* Actual Map Image Background */}
-                    <div
-                      className="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-110"
-                      style={{ backgroundImage: `url('${previewUrl}')` }}
-                    />
-
-                    {/* Dark Overlay for Text Readability */}
-                    <div
-                      className={`absolute inset-0 transition-colors ${isSelected ? "bg-navi-900/40" : "bg-black/50 group-hover:bg-black/30"}`}
-                    />
-
-                    {/* Text Over Styled Map */}
-                    <div className="absolute inset-0 px-3 flex items-center">
-                      <span className="text-xs font-bold text-white drop-shadow-md">
-                        {style.label.split(" (")[0]}
-                      </span>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
+        <MapStyleMenu
+          selectedStyle={selectedStyle}
+          setSelectedStyle={setSelectedStyle}
+          mapboxToken={mapboxToken}
+        />
       </div>
 
       {isDrawMode && activeWp && nextWp && (
-        <div className="absolute top-4 left-5 -translate-x-1 z-250 dark:bg-zinc-900/95 bg-zinc-100/95 dark:text-white text-zinc-900 px-4 py-2 rounded-full shadow-2xl flex items-center gap-3 backdrop-blur-md animate-in slide-in-from-top-4 border border-white/10 dark:border-black/10">
+        <div className="absolute top-4 left-5 -translate-x-1 z-250 dark:bg-zinc-900/95 bg-zinc-100/95 dark:text-white text-zinc-900 px-4 py-2 rounded-2xl md:rounded-full shadow-2xl flex items-center gap-3 backdrop-blur-md animate-in slide-in-from-top-4 border border-white/10 dark:border-black/10 flex-wrap max-w-[60vw]">
           <span className="flex items-center gap-2 text-[10px] font-black tracking-widest text-amber-400 dark:text-amber-600 uppercase">
             <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
             Active
@@ -633,31 +510,45 @@ export function MapArea() {
             {nextWp.name}
           </span>
 
-          {/* RETRACE PREVIOUS TRAIL BUTTON */}
-          {activeIndex > 0 &&
-          waypoints[activeIndex - 1]?.customRoute?.length ? (
-            <>
-              <div className="w-px h-4 bg-white/20 dark:bg-black/20 ml-2" />
-              <button
-                onClick={() => {
-                  const prevRoute = waypoints[activeIndex - 1].customRoute;
-                  if (prevRoute) {
-                    // Clone and reverse the exact coordinates!
-                    const reversed = [...prevRoute].reverse();
-                    updateWaypoint(activeWp.id, {
-                      customRoute: reversed,
-                      routeMode: "draw",
-                    });
-                    setIsDirty(true);
-                  }
-                }}
-                className="ml-1 px-3 py-1 bg-white/10 hover:bg-white/20 dark:bg-black/10 dark:hover:bg-black/20 rounded text-[10px] font-bold uppercase tracking-wider transition-colors flex items-center gap-1"
-                title="Copy and reverse the previous trail"
-              >
-                Retrace Back
-              </button>
-            </>
-          ) : null}
+          {/* RETRACE TRAIL SELECTOR */}
+          <div className="w-px h-4 bg-white/20 dark:bg-black/20 ml-2" />
+          <div className="relative group">
+            <button
+              className="ml-1 px-3 py-1 bg-white/10 hover:bg-white/20 dark:bg-black/10 dark:hover:bg-black/20 rounded text-[10px] font-bold uppercase tracking-wider transition-colors flex items-center gap-1"
+              title="Copy a trail from another waypoint"
+            >
+              Copy Trail ▾
+            </button>
+            <div className="absolute right-0 top-full mt-2 w-48 bg-white dark:bg-navidark-800 border border-zinc-200 dark:border-navidark-400 rounded-xl shadow-xl py-1.5 z-50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
+              <div className="px-3 py-1.5 text-[10px] font-bold text-zinc-500 uppercase tracking-wider border-b border-zinc-100 dark:border-white/5 mb-1">
+                Select Layer to Copy
+              </div>
+              <div className="max-h-40 overflow-y-auto custom-scrollbar">
+                {waypoints.filter(w => w.id !== activeWp.id && w.customRoute && w.customRoute.length > 0).length === 0 ? (
+                  <div className="px-4 py-2 text-xs text-zinc-500 italic">No drawn trails found</div>
+                ) : (
+                  waypoints.filter(w => w.id !== activeWp.id && w.customRoute && w.customRoute.length > 0).map(w => (
+                    <button
+                      key={w.id}
+                      onClick={() => {
+                        if (w.customRoute) {
+                          const routeCopy = [...w.customRoute];
+                          updateWaypoint(activeWp.id, {
+                            customRoute: routeCopy,
+                            routeMode: "draw",
+                          });
+                          setIsDirty(true);
+                        }
+                      }}
+                      className="w-full text-left px-4 py-2 text-xs font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-navidark-600 truncate"
+                    >
+                      {w.name || "Waypoint"}
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -665,6 +556,7 @@ export function MapArea() {
       <div className="absolute inset-0 z-0">
         <Map
           ref={mapRef}
+          cursor={isEraserMode ? 'crosshair' : ''}
           {...viewState}
           onMove={(evt: ViewStateChangeEvent) => setViewState(evt.viewState)}
           onClick={handleMapClick}
@@ -685,9 +577,8 @@ export function MapArea() {
           attributionControl={false}
           dragRotate={true}
           doubleClickZoom={!isDrawMode}
-          terrain={{ source: "mapbox-dem", exaggeration: 1.5 }} // ✨ INJECT 3D TERRAIN MULTIPLIER
+          terrain={is3D ? { source: "mapbox-dem", exaggeration: 1.5 } : undefined}
         >
-          {/* ✨ NEW: SOURCE DATA FOR 3D TERRAIN */}
           <Source
             id="mapbox-dem"
             type="raster-dem"
@@ -701,7 +592,6 @@ export function MapArea() {
             routePoints={routePoints}
           />
 
-          {/* PERFECTLY SYNCED MAP PINS */}
           {waypoints.map((wp, index) => {
             const isStart = index === 0;
             const isEnd =
@@ -747,11 +637,30 @@ export function MapArea() {
                     <div className="bg-zinc-900 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-lg border border-white/20 mb-1 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
                       {wp.name || `Waypoint`}
                     </div>
-                    <NaviPin
-                      className="w-8 h-8"
-                      label={label}
-                      pinType="stopby"
-                    />
+                    {wp.customMarker || settings.routeMarker ? (
+                      <img
+                        src={
+                          (wp.customMarker || settings.routeMarker)?.startsWith(
+                            "/",
+                          ) ||
+                          (wp.customMarker || settings.routeMarker)?.match(
+                            /^[a-zA-Z]:\\/,
+                          )
+                            ? convertFileSrc(
+                                wp.customMarker || settings.routeMarker || "",
+                              )
+                            : wp.customMarker || settings.routeMarker
+                        }
+                        alt="Custom Marker"
+                        className="w-10 h-10 object-contain drop-shadow-xl"
+                      />
+                    ) : (
+                      <NaviPin
+                        className="w-8 h-8"
+                        label={label}
+                        pinType="stopby"
+                      />
+                    )}
                   </div>
                 </Marker>
               );
@@ -779,7 +688,26 @@ export function MapArea() {
                     {wp.name || `Waypoint`}
                   </div>
 
-                  <NaviPin label={label} pinType={pinType} />
+                  {wp.customMarker || settings.routeMarker ? (
+                    <img
+                      src={
+                        (wp.customMarker || settings.routeMarker)?.startsWith(
+                          "/",
+                        ) ||
+                        (wp.customMarker || settings.routeMarker)?.match(
+                          /^[a-zA-Z]:\\/,
+                        )
+                          ? convertFileSrc(
+                              wp.customMarker || settings.routeMarker || "",
+                            )
+                          : wp.customMarker || settings.routeMarker
+                      }
+                      alt="Custom Marker"
+                      className="w-10 h-10 object-contain drop-shadow-xl"
+                    />
+                  ) : (
+                    <NaviPin label={label} pinType={pinType} color={settings.marker_color ? "#" + settings.marker_color.map((x: number) => x.toString(16).padStart(2, "0")).join("") : undefined} />
+                  )}
                 </div>
               </Marker>
             );
@@ -795,7 +723,7 @@ export function MapArea() {
                   key={`drawn-node-${idx}`}
                   latitude={pos[0]}
                   longitude={pos[1]}
-                  draggable
+                  draggable={!isEraserMode}
                   onDragEnd={(e) => {
                     setWaypoints((prev) =>
                       prev.map((wp) => {
@@ -810,7 +738,24 @@ export function MapArea() {
                     setIsDirty(true);
                   }}
                 >
-                  <div className="relative group cursor-grab active:cursor-grabbing">
+                  <div 
+                    className={`relative group ${isEraserMode ? 'cursor-crosshair' : 'cursor-grab active:cursor-grabbing'}`}
+                    onClick={(e) => {
+                      if (isEraserMode) {
+                        e.stopPropagation();
+                        setWaypoints((prev) =>
+                          prev.map((wp) => {
+                            if (wp.id === activeWaypointId && wp.customRoute) {
+                              const newRoute = wp.customRoute.filter((_, i) => i !== idx);
+                              return { ...wp, customRoute: newRoute };
+                            }
+                            return wp;
+                          }),
+                        );
+                        setIsDirty(true);
+                      }
+                    }}
+                  >
                     <div className="w-5 h-5 bg-amber-500 border-2 border-white dark:border-zinc-900 rounded-full shadow-md group-hover:scale-110 group-hover:bg-amber-400 transition-all flex items-center justify-center">
                       <span className="text-[9px] font-black text-white dark:text-zinc-900">
                         {idx + 1}

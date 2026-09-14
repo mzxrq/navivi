@@ -206,9 +206,9 @@ export function useMapRouting() {
   const {
     waypoints,
     setRouteSegments,
-    settings,
     routingCache,
     setRoutingCache,
+    settings,
   } = useWorkspace();
   const latestSegmentsRef = useRef<
     { positions: [number, number][]; mode: string }[]
@@ -222,7 +222,7 @@ export function useMapRouting() {
       return;
     }
 
-    const apiKey = settings?.ors_api_key || import.meta.env.VITE_ORS_API_KEY;
+    const apiKey = settings.ors_api_key || import.meta.env.VITE_ORS_API_KEY;
     const newSegments: { positions: [number, number][]; mode: string }[] = [];
     const fetchQueue: {
       index: number;
@@ -342,6 +342,5 @@ export function useMapRouting() {
     setRouteSegments,
     routingCache,
     setRoutingCache,
-    settings?.ors_api_key,
   ]);
 }

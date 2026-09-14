@@ -4,25 +4,26 @@ import { useUI } from "../../hooks/useUI";
 import { useTheme } from "../../hooks/useTheme";
 import {
   X,
-  Key,
-  ExternalLink,
   Moon,
   Sun,
   Monitor,
-  Map,
   Settings,
   Palette,
   Save,
+  MapPin,
+  Key,
 } from "./icons";
+import { open } from "@tauri-apps/plugin-dialog";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { useAnimatedUnmount } from "../../hooks/useAnimatedUnmount";
 
 type SettingsTab = "general" | "appearance" | "api";
 
 export function AppSettings() {
-  const { settings, updateSettings } = useWorkspace();
-  const { showAppSettings, setShowAppSettings } = useUI();
-  const { theme, setTheme, mapTheme, setMapTheme } = useTheme();
+  const { settings, updateSettings, setIsDirty } = useWorkspace();
+  const { showAppSettings, setShowAppSettings, currentView } = useUI();
+  const { theme, setTheme } = useTheme();
 
   const [activeTab, setActiveTab] = useState<SettingsTab>("general");
   const { shouldRender, isAnimatingOut } = useAnimatedUnmount(
@@ -30,7 +31,6 @@ export function AppSettings() {
     150,
   );
 
-  // ✨ NEW: Press ESC to close App Settings
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
       if (e.key === "Escape" && showAppSettings) {
@@ -116,13 +116,67 @@ export function AppSettings() {
                     <option value={600}>10 minutes</option>
                   </select>
                 </div>
+
+                {/* FAST RENDER MODE */}
+                {currentView === "editor" && (
+                  <div className="space-y-3 pt-4 border-t border-zinc-100 dark:border-navidark-700">
+                    <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-widest flex items-center gap-1.5">
+                      Project Overrides
+                    </label>
+                    <div
+                      onClick={() => {
+                        updateSettings({
+                          skip_rich_media: !settings.skip_rich_media,
+                        });
+                        setIsDirty(true);
+                      }}
+                      className={`flex items-center justify-between p-4 rounded-xl border-2 transition-all cursor-pointer select-none group ${
+                        settings.skip_rich_media
+                          ? "border-navi bg-navi-50/50 dark:border-navi/50 dark:bg-navi/10 shadow-sm"
+                          : "border-zinc-200 dark:border-navidark-400 bg-zinc-50 dark:bg-navidark-800 hover:border-zinc-300 dark:hover:border-navidark-300"
+                      }`}
+                    >
+                      <div className="flex flex-col gap-1 pr-6">
+                        <span
+                          className={`text-xs font-bold transition-colors ${
+                            settings.skip_rich_media
+                              ? "text-navi-700 dark:text-navi-400"
+                              : "text-zinc-700 dark:text-zinc-200 group-hover:text-zinc-900 dark:group-hover:text-white"
+                          }`}
+                        >
+                          Fast Render Mode
+                        </span>
+                        <span className="text-[10px] text-zinc-500 dark:text-navidark-150 leading-relaxed">
+                          Skip AI voiceover synthesis and pop-up images during
+                          generation. Perfect for quickly previewing route
+                          paths.
+                        </span>
+                      </div>
+
+                      <div
+                        className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-200 ease-in-out ${
+                          settings.skip_rich_media
+                            ? "bg-navi"
+                            : "bg-zinc-300 dark:bg-zinc-700"
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform duration-200 ease-in-out ${
+                            settings.skip_rich_media
+                              ? "translate-x-4.5"
+                              : "translate-x-0.5"
+                          }`}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
             {/* APPEARANCE TAB */}
             {activeTab === "appearance" && (
               <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-                {/* App Theme */}
                 <div className="space-y-3">
                   <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-widest flex items-center gap-1.5">
                     <Monitor className="w-3.5 h-3.5" /> UI Theme
@@ -148,67 +202,130 @@ export function AppSettings() {
                   </div>
                 </div>
 
-                {/* Map Theme */}
                 <div className="space-y-3 pt-4 border-t border-zinc-100 dark:border-navidark-700">
                   <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-widest flex items-center gap-1.5">
-                    <Map className="w-3.5 h-3.5" /> Map Style
+                    <MapPin className="w-3.5 h-3.5" /> Global Route Marker
                   </label>
-                  <div className="flex p-1 bg-zinc-100 dark:bg-navidark-800 rounded-lg border border-zinc-200 dark:border-navidark-400">
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                    Default marker for all waypoints. Can be overridden
+                    per-stop.
+                  </p>
+                  <div className="flex items-center gap-3">
+                    {settings.routeMarker ? (
+                      <div className="relative w-12 h-12 rounded-lg border border-zinc-200 dark:border-white/10 flex items-center justify-center bg-zinc-50 dark:bg-navidark-700/50 group">
+                        <img
+                          src={
+                            settings.routeMarker.startsWith("/") ||
+                            settings.routeMarker.match(/^[a-zA-Z]:\\/)
+                              ? convertFileSrc(settings.routeMarker)
+                              : settings.routeMarker
+                          }
+                          alt="Route Marker"
+                          className="w-8 h-8 object-contain"
+                        />
+                        <button
+                          onClick={() => {
+                            updateSettings({ routeMarker: "" });
+                            setIsDirty(true);
+                          }}
+                          className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md"
+                          title="Remove Marker"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="w-12 h-12 rounded-lg border border-dashed border-zinc-300 dark:border-white/20 flex items-center justify-center bg-zinc-50 dark:bg-navidark-700/30">
+                        <MapPin className="w-5 h-5 text-zinc-300 dark:text-zinc-600" />
+                      </div>
+                    )}
+                    <button
+                      onClick={async () => {
+                        const selected = await open({
+                          multiple: false,
+                          filters: [
+                            {
+                              name: "Images",
+                              extensions: ["svg", "png", "jpg", "jpeg"],
+                            },
+                          ],
+                        });
+                        if (selected && typeof selected === "string") {
+                          updateSettings({ routeMarker: selected });
+                          setIsDirty(true);
+                        }
+                      }}
+                      className="flex-1 py-2 text-xs font-semibold rounded-xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-navidark-600 hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors text-zinc-700 dark:text-zinc-300 shadow-sm"
+                    >
+                      {settings.routeMarker
+                        ? "Change Marker"
+                        : "Select Custom Marker"}
+                    </button>
+                  </div>
+                  <div className="flex gap-2 mt-2">
                     {[
-                      { id: "light", label: "Light Map" },
-                      { id: "dark", label: "Dark Map" },
-                      { id: "sync", label: "Sync with UI" },
-                    ].map((t) => (
+                      "/defaults/markers/map_pin.svg",
+                      "/defaults/markers/walking.svg",
+                      "/defaults/markers/car.svg",
+                    ].map((preset) => (
                       <button
-                        key={t.id}
-                        onClick={() => setMapTheme(t.id as any)}
-                        className={`flex-1 py-2 text-xs font-bold rounded-md transition-all duration-200 ${
-                          mapTheme === t.id
-                            ? "bg-white dark:bg-navidark-600 text-navi shadow-sm"
-                            : "text-zinc-500 dark:text-navidark-150 hover:text-zinc-700 dark:hover:text-zinc-200"
+                        key={preset}
+                        onClick={() => {
+                          updateSettings({ routeMarker: preset });
+                          setIsDirty(true);
+                        }}
+                        className={`w-10 h-10 rounded-lg border flex items-center justify-center transition-colors ${
+                          settings.routeMarker === preset
+                            ? "border-navi bg-navi-50 dark:bg-navi-900/20"
+                            : "border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-navidark-700/50 hover:bg-zinc-100 dark:hover:bg-navidark-600"
                         }`}
                       >
-                        {t.label}
+                        <img src={preset} className="w-6 h-6 object-contain" />
                       </button>
                     ))}
                   </div>
-                  <p className="text-[10px] text-zinc-400 px-1">
-                    "Sync with UI" will automatically switch the map to match
-                    your App Theme.
-                  </p>
                 </div>
               </div>
             )}
 
-            {/* API KEYS TAB */}
+            {/* API TAB */}
             {activeTab === "api" && (
               <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
                 <div className="space-y-3">
                   <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-widest flex items-center gap-1.5">
-                    <Key className="w-3.5 h-3.5" /> Routing API Key
+                    <Key className="w-3.5 h-3.5" /> Mapbox API Key
                   </label>
                   <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                    Navivi uses OpenRouteService for driving and walking
-                    directions. Provide your own free API key to enable routing.
+                    Required for map rendering and 3D terrain.
                   </p>
                   <input
-                    type="password"
-                    value={settings.ors_api_key || ""}
-                    onChange={(e) =>
-                      updateSettings({ ors_api_key: e.target.value })
-                    }
-                    placeholder="Enter your ORS API Key..."
-                    className="w-full bg-zinc-50 dark:bg-navidark-800 border border-zinc-200 dark:border-navidark-400 rounded-lg px-3 py-2.5 text-sm text-zinc-900 dark:text-white outline-none focus:border-navi focus:ring-1 focus:ring-navi transition-all"
-                    spellCheck={false}
+                    type="text"
+                    value={settings.mapbox_api_key || ""}
+                    onChange={(e) => {
+                      updateSettings({ mapbox_api_key: e.target.value });
+                      setIsDirty(true);
+                    }}
+                    placeholder="pk.eyJ1..."
+                    className="w-full bg-zinc-50 dark:bg-navidark-800 border border-zinc-200 dark:border-navidark-400 rounded-lg px-3 py-2.5 text-sm text-zinc-900 dark:text-zinc-100 outline-none focus:border-navi focus:ring-1 focus:ring-navi transition-all"
                   />
-                  <a
-                    href="https://openrouteservice.org/dev/#/signup"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1 text-[11px] underline font-semibold text-navi-600 hover:text-navi-800 dark:text-navi-400 dark:hover:text-navi-300 transition-colors"
-                  >
-                    Get a free key here <ExternalLink className="w-3 h-3" />
-                  </a>
+                </div>
+                <div className="space-y-3 pt-4 border-t border-zinc-100 dark:border-navidark-700">
+                  <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-widest flex items-center gap-1.5">
+                    <Key className="w-3.5 h-3.5" /> OpenRouteService API Key
+                  </label>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                    Required for walking and some driving routes (fallback).
+                  </p>
+                  <input
+                    type="text"
+                    value={settings.ors_api_key || ""}
+                    onChange={(e) => {
+                      updateSettings({ ors_api_key: e.target.value });
+                      setIsDirty(true);
+                    }}
+                    placeholder="5b3ce3597851110001cf6248..."
+                    className="w-full bg-zinc-50 dark:bg-navidark-800 border border-zinc-200 dark:border-navidark-400 rounded-lg px-3 py-2.5 text-sm text-zinc-900 dark:text-zinc-100 outline-none focus:border-navi focus:ring-1 focus:ring-navi transition-all"
+                  />
                 </div>
               </div>
             )}
@@ -226,11 +343,10 @@ export function AppSettings() {
         </div>
       </div>
     </div>,
-    document.body
+    document.body,
   );
 }
 
-// Small helper component for the sidebar tabs
 function TabButton({
   active,
   onClick,

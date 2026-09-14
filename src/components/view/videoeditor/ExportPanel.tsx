@@ -17,18 +17,6 @@ export function ExportPanel({ onExport }: ExportPanelProps) {
         </div>
 
         <div className="space-y-4">
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Resolution</label>
-            <select 
-              value={settings.resolution || "1080p"}
-              onChange={(e) => updateSettings({ resolution: e.target.value })}
-              className="w-full bg-zinc-50 dark:bg-navidark-900 border border-zinc-200 dark:border-navidark-400 rounded p-2 text-xs text-zinc-800 dark:text-zinc-200 focus:outline-none focus:border-navi"
-            >
-              <option value="1080p">1080p HD (1920x1080)</option>
-              <option value="4k">4K UHD (3840x2160)</option>
-              <option value="vertical">Vertical (1080x1920)</option>
-            </select>
-          </div>
 
           <div className="space-y-1.5">
             <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Framerate</label>

@@ -60,7 +60,12 @@ const DefaultTimeline: TimelineData = {
       type: "subtitle",
       orderIndex: 0,
     },
-    { id: "track-video-2", name: "V2: Pop-ups", type: "video", orderIndex: 100 },
+    {
+      id: "track-video-2",
+      name: "V2: Pop-ups",
+      type: "video",
+      orderIndex: 100,
+    },
     {
       id: "track-video-1",
       name: "V1: Main Video",
@@ -301,14 +306,15 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           id: wp.id || crypto.randomUUID(),
           lat: wp.lat,
           lng: wp.lng,
-          name: wp.label,
+          name: wp.label || wp.name,
           routeMode: wp.routeMode || "walking",
           customRoute: wp.customRoute || [],
           drawStyle: wp.drawStyle || "linear",
+          customMarker: wp.customMarker,
 
           isStopBy: wp.isStopBy || false,
           connectToRoute: wp.connectToRoute || false,
-          images: wp.popup_image || [],
+          images: wp.popup_image || wp.images || [],
           imagePans: wp.imagePans || [],
           imageTransitions: wp.imageTransitions || [],
           imageDisplay: wp.image_display || "pip",
@@ -413,7 +419,12 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         type: "audio",
         orderIndex: 200,
       },
-      { id: "track-audio-2", name: "A2: Music", type: "audio", orderIndex: 201 },
+      {
+        id: "track-audio-2",
+        name: "A2: Music",
+        type: "audio",
+        orderIndex: 201,
+      },
     ];
 
     const parseDuration = (val: any): number => {

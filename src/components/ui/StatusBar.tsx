@@ -12,6 +12,9 @@ import {
   X,
   Copy,
   Trash2,
+  Menu,
+  Film,
+  Volume2
 } from "../ui/icons";
 
 function NotificationItem({ notif }: { notif: any }) {
@@ -69,11 +72,13 @@ export function StatusBar() {
   // Popup States
   const [showNotifications, setShowNotifications] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  
   // Unmount
   const { shouldRender: renderNotifs, isAnimatingOut: exitingNotifs } =
     useAnimatedUnmount(showNotifications, 150);
   const { shouldRender: renderHistory, isAnimatingOut: exitingHistory } =
     useAnimatedUnmount(showHistory, 150);
+    
   // Notification Unread State
   const [hasUnread, setHasUnread] = useState(false);
   const prevNotifCount = useRef(notifications?.length || 0);
@@ -86,15 +91,24 @@ export function StatusBar() {
     prevNotifCount.current = currentCount;
   }, [notifications, showNotifications]);
 
+  // ✨ TIMELINE STATS
   const totalDuration = timeline.clips.reduce((max, clip) => {
     const end = clip.startTime + clip.duration;
     return end > max ? end : max;
   }, 0);
+  const totalClips = timeline.clips.length;
+
+  // ✨ MAP STATS & REALISTIC ESTIMATION
+  // Count how many waypoints actually have user-added images or scripts
+  const populatedStops = waypoints.filter(
+    (wp) => (wp.images && wp.images.length > 0) || wp.narration || wp.arrivingNarration || wp.attractionNarration
+  ).length;
+
+  // Estimate: Base 2 mins for setup/routing + ~1.5 mins per waypoint for AI voice/GLSL/FFmpeg
+  const estRenderMinutes = Math.max(1, Math.ceil((waypoints.length * 1.5) + 2));
 
   const toggleNotifications = () => {
-    if (showNotifications) {
-      setHasUnread(false);
-    }
+    if (showNotifications) setHasUnread(false);
     setShowNotifications(!showNotifications);
     setShowHistory(false);
   };
@@ -106,44 +120,59 @@ export function StatusBar() {
 
   return (
     <div className="h-7 bg-white dark:bg-navidark-900 border-t border-zinc-200 dark:border-navidark-400 flex items-center justify-between px-3 text-[10px] font-medium text-zinc-500 z-900 select-none relative">
-      {/* Left side: Mode-specific info */}
-      <div className="flex items-center gap-4">
+      
+      {/* --- LEFT: MODE-SPECIFIC METRICS --- */}
+      <div className="flex items-center gap-3">
         {editorMode === "map" ? (
           <>
-            <span className="flex items-center gap-1.5">
-              <Map className="w-3 h-3 text-navi" /> {waypoints.length} Waypoints
+            <span className="flex items-center gap-1.5 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors" title="Total stops on the map">
+              <Map className="w-3 h-3 text-navi" /> {waypoints.length} Stops
             </span>
-            <span className="flex items-center gap-1.5">
-              <Clock className="w-3 h-3" /> Est. Gen: {waypoints.length * 5}s
+            <div className="w-px h-3 bg-zinc-300 dark:bg-navidark-400" />
+            <span className="flex items-center gap-1.5 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors" title="Stops containing custom images or AI scripts">
+              <Volume2 className="w-3 h-3" /> {populatedStops} Rich Media
+            </span>
+            <div className="w-px h-3 bg-zinc-300 dark:bg-navidark-400" />
+            <span className="flex items-center gap-1.5 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors" title="Estimated time for the Python backend to synthesize AI voiceovers and encode the video">
+              <Clock className="w-3 h-3" /> Est. Render: ~{estRenderMinutes}m
             </span>
           </>
         ) : (
           <>
-            <span className="flex items-center gap-1.5">
-              <Clock className="w-3 h-3 text-navi" /> Timeline Duration:{" "}
-              {totalDuration.toFixed(1)}s
+            <span className="flex items-center gap-1.5 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors" title="Total video duration">
+              <Clock className="w-3 h-3 text-navi" /> Duration: {totalDuration.toFixed(1)}s
             </span>
-            <span>Tracks: {timeline.tracks.length}</span>
+            <div className="w-px h-3 bg-zinc-300 dark:bg-navidark-400" />
+            <span className="flex items-center gap-1.5 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors" title="Total tracks in the timeline">
+              <Menu className="w-3 h-3" /> {timeline.tracks.length} Tracks
+            </span>
+            <div className="w-px h-3 bg-zinc-300 dark:bg-navidark-400" />
+            <span className="flex items-center gap-1.5 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors" title="Total individual clips">
+              <Film className="w-3 h-3" /> {totalClips} Clips
+            </span>
           </>
         )}
       </div>
 
-      {/* Right side: Global actions & status */}
+      {/* --- RIGHT: GLOBAL ACTIONS & STATUS --- */}
       <div className="flex items-center gap-4 relative">
+        
         {/* Compact Save Status */}
         {isDirty ? (
           <span
-            className="flex items-center gap-1 text-amber-600 dark:text-amber-500"
-            title="Unsaved Changes"
+            className="flex items-center gap-1.5 text-amber-600 dark:text-amber-500 cursor-help"
+            title="Unsaved Changes - Press Ctrl+S to save"
           >
             <CircleDashed className="w-3.5 h-3.5 animate-[spin_3s_linear_infinite]" />
+            Unsaved
           </span>
         ) : (
           <span
-            className="flex items-center gap-1 text-emerald-600 dark:text-emerald-500 opacity-70"
-            title="All changes saved"
+            className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-500 opacity-70 cursor-help"
+            title="All changes safely stored to disk"
           >
             <CheckCircle2 className="w-3.5 h-3.5" />
+            Saved
           </span>
         )}
 
@@ -196,13 +225,14 @@ export function StatusBar() {
         <button
           onClick={toggleNotifications}
           className={`transition-colors relative ${showNotifications ? "text-navi" : "hover:text-zinc-800 dark:hover:text-zinc-200"}`}
-          title="Notifications"
+          title="System Logs & Notifications"
         >
           <Bell className="w-3.5 h-3.5" />
           {hasUnread && (
             <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-navi rounded-full animate-pulse border border-white dark:border-navidark-900" />
           )}
         </button>
+
         {/* NOTIFICATION POPUP */}
         {renderNotifs && (
           <div

@@ -21,8 +21,6 @@ import {
   checkModelExists,
   generateWaypointScriptStream,
 } from "../../../services/ollamaApi";
-import { synthesizeAudio } from "../../../services/irodoriApi";
-import { generateComfyUiVideo } from "../../../services/comfyUiApi";
 
 const cameraPans = [
   { value: "none", label: "None" },
@@ -172,60 +170,6 @@ export function WaypointEditor({
     }
   };
 
-  const handleGenerateAudio = async () => {
-    const textToSynthesize =
-      wp.arrivingNarration || wp.attractionNarration || wp.narration;
-    if (!textToSynthesize) {
-      showToast("No narration text available to synthesize.", "error");
-      return;
-    }
-
-    updateWaypoint(wp.id, { isGeneratingAudio: true });
-    showToast("Generating Audio via Irodori...", "info");
-
-    try {
-      const { buffer, contentType } = await synthesizeAudio(textToSynthesize);
-      const blob = new Blob([buffer], { type: contentType });
-      const url = URL.createObjectURL(blob);
-      if (wp.audioUrl) {
-        URL.revokeObjectURL(wp.audioUrl);
-      }
-      updateWaypoint(wp.id, { audioUrl: url });
-      showToast("Audio generated successfully!", "success");
-    } catch (error) {
-      console.error(error);
-      showToast(`Audio generation failed: ${error}`, "error");
-    } finally {
-      updateWaypoint(wp.id, { isGeneratingAudio: false });
-    }
-  };
-
-  const handleGenerateVideo = async () => {
-    if (!wpImages || wpImages.length === 0) {
-      showToast("ComfyUI Wan 2.2 requires at least one image.", "error");
-      return;
-    }
-
-    updateWaypoint(wp.id, { isGeneratingVideo: true });
-    showToast("Triggering ComfyUI Wan 2.2 Video Generation...", "info");
-
-    try {
-      const panValue = wpImagePans[0] || "none";
-      const finalPrompt = panValue.replace("-", "");
-      updateWaypoint(wp.id, { videoPrompt: finalPrompt });
-
-      const videoPath = await generateComfyUiVideo(wpImages[0], finalPrompt);
-
-      updateWaypoint(wp.id, { videoUrl: convertFileSrc(videoPath) });
-      showToast("Video generated successfully!", "success");
-    } catch (error) {
-      console.error(error);
-      showToast(`Video generation failed: ${error}`, "error");
-    } finally {
-      updateWaypoint(wp.id, { isGeneratingVideo: false });
-    }
-  };
-
   const handleSetWaypointType = (
     type: "start" | "end" | "stopby" | "normal",
   ) => {
@@ -303,6 +247,62 @@ export function WaypointEditor({
               Draw Mode Active for Next Route
             </div>
           )}
+        </div>
+
+        {/* 1.5 Custom Marker */}
+        <div className="space-y-3">
+          <div className="flex flex-col gap-1">
+            <h3 className="text-xs font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-wider flex items-center gap-1.5">
+              <MapPin className="w-3.5 h-3.5 text-zinc-400" /> Custom Marker
+            </h3>
+            <p className="text-[10px] text-zinc-500 dark:text-zinc-400 leading-tight">
+              Overrides the global route marker. Leave empty to use the global
+              marker.
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            {wp.customMarker ? (
+              <div className="relative w-12 h-12 rounded-lg border border-zinc-200 dark:border-white/10 flex items-center justify-center bg-zinc-50 dark:bg-navidark-700/50 group">
+                <img
+                  src={convertFileSrc(wp.customMarker)}
+                  alt="Custom Marker"
+                  className="w-8 h-8 object-contain"
+                />
+                <button
+                  onClick={() =>
+                    updateWaypoint(wp.id, { customMarker: undefined })
+                  }
+                  className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md"
+                  title="Remove Marker"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            ) : (
+              <div className="w-12 h-12 rounded-lg border border-dashed border-zinc-300 dark:border-white/20 flex items-center justify-center bg-zinc-50 dark:bg-navidark-700/30">
+                <MapPin className="w-5 h-5 text-zinc-300 dark:text-zinc-600" />
+              </div>
+            )}
+            <button
+              onClick={async () => {
+                const selected = await open({
+                  multiple: false,
+                  filters: [
+                    {
+                      name: "Images",
+                      extensions: ["svg", "png", "jpg", "jpeg"],
+                    },
+                  ],
+                });
+                if (selected && typeof selected === "string") {
+                  updateWaypoint(wp.id, { customMarker: selected });
+                }
+              }}
+              className="flex-1 py-2 text-xs font-semibold rounded-xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-navidark-600 hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors text-zinc-700 dark:text-zinc-300 shadow-sm"
+            >
+              {wp.customMarker ? "Change Marker" : "Select Marker"}
+            </button>
+          </div>
         </div>
 
         {/* 2. Split Narration Scripts */}
@@ -495,157 +495,49 @@ export function WaypointEditor({
                 + Add Image
               </button>
             )}
-
-            {wpImages.length > 0 && (
-              <div className="flex flex-col gap-1.5 mt-3">
-                <label className="text-[10px] font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-wider">
-                  Visual Layout
-                </label>
-                <div className="flex p-1 bg-zinc-100 dark:bg-navidark-900 rounded-lg border border-zinc-200/50 dark:border-white/5 shadow-inner">
-                  <button
-                    onClick={() =>
-                      updateWaypoint(wp.id, { imageDisplay: "pip" })
-                    }
-                    className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all duration-200 ${
-                      wp.imageDisplay !== "fullscreen"
-                        ? "bg-white dark:bg-navidark-500 shadow-sm text-navi-600 dark:text-navi-400"
-                        : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-200/50 dark:hover:bg-white/5"
-                    }`}
-                  >
-                    Map Pop-up
-                  </button>
-                  <button
-                    onClick={() =>
-                      updateWaypoint(wp.id, { imageDisplay: "fullscreen" })
-                    }
-                    className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all duration-200 ${
-                      wp.imageDisplay === "fullscreen"
-                        ? "bg-white dark:bg-navidark-500 shadow-sm text-navi-600 dark:text-navi-400"
-                        : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-200/50 dark:hover:bg-white/5"
-                    }`}
-                  >
-                    Fullscreen
-                  </button>
-                </div>
-                <p className="text-[9px] text-zinc-500 dark:text-zinc-400 leading-tight px-1 mt-1">
-                  {wp.imageDisplay !== "fullscreen"
-                    ? "Displays as a pop-up above the map marker. Transitions to the generated AI video will be applied in the Timeline."
-                    : "Displays the image fullscreen over the map. Transitions to the generated AI video will be applied in the Timeline."}
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* 4. Media Generation (Audio & Video) */}
-        <div className="space-y-3 pb-4">
-          <div className="flex items-center justify-between">
-            <label className="text-xs font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-wider">
-              AI Generation
-            </label>
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <button
-              onClick={handleGenerateAudio}
-              disabled={
-                wp.isGeneratingAudio ||
-                (!wp.arrivingNarration &&
-                  !wp.attractionNarration &&
-                  !wp.narration)
-              }
-              className="w-full bg-indigo-50 dark:bg-indigo-500/10 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 border border-indigo-200 dark:border-indigo-500/30 text-indigo-700 dark:text-indigo-400 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {wp.isGeneratingAudio
-                ? "Generating Audio..."
-                : "Generate Audio (Irodori)"}
-            </button>
-
-            {wp.audioUrl && (
-              <audio controls src={wp.audioUrl} className="w-full h-8 mt-1" />
-            )}
-
-            <button
-              onClick={handleGenerateVideo}
-              disabled={
-                wp.isGeneratingVideo || !wpImages || wpImages.length === 0
-              }
-              className="w-full bg-fuchsia-50 dark:bg-fuchsia-500/10 hover:bg-fuchsia-100 dark:hover:bg-fuchsia-500/20 border border-fuchsia-200 dark:border-fuchsia-500/30 text-fuchsia-700 dark:text-fuchsia-400 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {wp.isGeneratingVideo
-                ? "Generating Video..."
-                : "Generate Video (ComfyUI Wan)"}
-            </button>
-
-            {wp.videoPrompt && (
-              <div className="mt-2 p-2 bg-zinc-50 dark:bg-navidark-700/50 border border-zinc-200 dark:border-white/10 rounded-lg">
-                <label className="text-[10px] font-bold text-zinc-500 uppercase">
-                  Generated Video Prompt
-                </label>
-                <p className="text-xs text-zinc-700 dark:text-zinc-300 mt-1 whitespace-pre-wrap">
-                  {wp.videoPrompt}
-                </p>
-              </div>
-            )}
-
-            {wp.videoUrl && (
-              <div className="mt-2">
-                {wp.videoUrl.startsWith("http") ? (
-                  <video
-                    src={wp.videoUrl}
-                    controls
-                    className="w-full rounded-lg shadow-sm border border-zinc-200 dark:border-white/10"
-                  />
-                ) : (
-                  <div className="p-2 bg-green-50 dark:bg-green-500/10 border border-green-200 dark:border-green-500/30 rounded-lg">
-                    <p className="text-xs text-green-700 dark:text-green-400 font-medium">
-                      Video Task ID: {wp.videoUrl} (Processing)
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
           </div>
         </div>
       </div>
 
-      {/* --- ✨ REDESIGNED SETTINGS & DANGER ZONE --- */}
-      <div className="flex flex-col p-4 border-t border-zinc-200 dark:border-white/5 shrink-0 bg-zinc-50/80 dark:bg-navidark-700/80 gap-3">
+      {/* --- WAYPOINT ACTIONS --- */}
+      <div className="flex flex-col p-3 border-t border-zinc-200 dark:border-white/5 shrink-0 bg-white dark:bg-navidark-600 gap-2">
         {/* Type Configuration Buttons */}
-        <div className="flex flex-col gap-1.5">
-          <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider px-1">
-            Waypoint Properties
+        <div className="flex flex-col gap-2">
+          <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+            Waypoint Actions
           </label>
-          <div className="grid grid-cols-2 gap-2">
-            {!isStart && (
-              <button
-                onClick={() => handleSetWaypointType("start")}
-                className="flex items-center justify-center gap-1.5 py-1.5 rounded-lg border border-emerald-200 dark:border-emerald-500/20 bg-emerald-50 dark:bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold hover:bg-emerald-100 dark:hover:bg-emerald-500/10 transition-colors"
-              >
-                <MapPinned className="w-3.5 h-3.5" /> Set Start
-              </button>
-            )}
-            {!isEnd && (
-              <button
-                onClick={() => handleSetWaypointType("end")}
-                className="flex items-center justify-center gap-1.5 py-1.5 rounded-lg border border-red-200 dark:border-red-500/20 bg-red-50 dark:bg-red-500/5 text-red-600 dark:text-red-400 text-[10px] font-bold hover:bg-red-100 dark:hover:bg-red-500/10 transition-colors"
-              >
-                <CornerDownLeft className="w-3.5 h-3.5" /> Set End
-              </button>
-            )}
+          <div className="flex flex-col gap-2">
+            <div className="flex gap-2">
+              {!isStart && (
+                <button
+                  onClick={() => handleSetWaypointType("start")}
+                  className="flex items-center justify-center gap-2 py-1.5 rounded-lg border border-zinc-200 dark:border-white/10 bg-white dark:bg-navidark-700 text-zinc-700 dark:text-zinc-300 text-xs font-semibold hover:bg-zinc-50 dark:hover:bg-navidark-500 transition-colors flex-1 shadow-sm"
+                >
+                  <MapPinned className="w-4 h-4 text-zinc-400" /> Set Start
+                </button>
+              )}
+              {!isEnd && (
+                <button
+                  onClick={() => handleSetWaypointType("end")}
+                  className="flex items-center justify-center gap-2 py-1.5 rounded-lg border border-zinc-200 dark:border-white/10 bg-white dark:bg-navidark-700 text-zinc-700 dark:text-zinc-300 text-xs font-semibold hover:bg-zinc-50 dark:hover:bg-navidark-500 transition-colors flex-1 shadow-sm"
+                >
+                  <CornerDownLeft className="w-4 h-4 text-zinc-400" /> Set End
+                </button>
+              )}
+            </div>
             {wp.isStopBy ? (
               <button
                 onClick={() => handleSetWaypointType("normal")}
-                className="col-span-2 flex items-center justify-center gap-1.5 py-1.5 rounded-lg border border-blue-200 dark:border-blue-500/20 bg-blue-50 dark:bg-blue-500/5 text-blue-600 dark:text-blue-400 text-[10px] font-bold hover:bg-blue-100 dark:hover:bg-blue-500/10 transition-colors"
+                className="w-full flex items-center justify-center gap-2 py-1.5 rounded-lg border border-zinc-200 dark:border-white/10 bg-white dark:bg-navidark-700 text-zinc-700 dark:text-zinc-300 text-xs font-semibold hover:bg-zinc-50 dark:hover:bg-navidark-500 transition-colors shadow-sm"
               >
-                <MapPinPlus className="w-3.5 h-3.5" /> Revert to Normal Stop
+                <MapPinPlus className="w-4 h-4 text-zinc-400" /> Revert to Normal Stop
               </button>
             ) : (
               <button
                 onClick={() => handleSetWaypointType("stopby")}
-                className="flex items-center justify-center gap-1.5 py-1.5 rounded-lg border border-amber-200 dark:border-amber-500/20 bg-amber-50 dark:bg-amber-500/5 text-amber-600 dark:text-amber-500 text-[10px] font-bold hover:bg-amber-100 dark:hover:bg-amber-500/10 transition-colors"
+                className="w-full flex items-center justify-center gap-2 py-1.5 rounded-lg border border-zinc-200 dark:border-white/10 bg-white dark:bg-navidark-700 text-zinc-700 dark:text-zinc-300 text-xs font-semibold hover:bg-zinc-50 dark:hover:bg-navidark-500 transition-colors shadow-sm"
               >
-                <MapPin className="w-3.5 h-3.5" /> Set Stop-By
+                <MapPin className="w-4 h-4 text-zinc-400" /> Set Stop-By
               </button>
             )}
           </div>
@@ -658,22 +550,16 @@ export function WaypointEditor({
               updateWaypoint(wp.id, { connectToRoute: !wp.connectToRoute });
               if (setIsDirty) setIsDirty(true);
             }}
-            className={`flex justify-center items-center gap-2 w-full py-2 rounded-lg border text-xs font-bold transition-all shadow-sm ${
-              wp.connectToRoute
-                ? "border-amber-200 dark:border-amber-500/30 bg-amber-100/50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-500/20"
-                : "border-blue-200 dark:border-blue-500/30 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-500/20"
-            }`}
+            className="flex justify-center items-center gap-2 w-full py-1.5 rounded-lg border border-zinc-200 dark:border-white/10 bg-white dark:bg-navidark-700 text-zinc-700 dark:text-zinc-300 text-xs font-semibold hover:bg-zinc-50 dark:hover:bg-navidark-500 transition-colors shadow-sm"
           >
             {wp.connectToRoute ? (
-              <UnlinkIcon className="w-4 h-4" />
+              <UnlinkIcon className="w-4 h-4 text-zinc-400" />
             ) : (
-              <LinkIcon className="w-4 h-4" />
+              <LinkIcon className="w-4 h-4 text-zinc-400" />
             )}
             {wp.connectToRoute ? "Disconnect from Route" : "Connect to Route"}
           </button>
         )}
-
-        <div className="w-full h-px bg-zinc-200 dark:bg-white/10 my-1" />
 
         <button
           onClick={() => {
@@ -683,9 +569,9 @@ export function WaypointEditor({
               onClose();
             }
           }}
-          className="w-full py-2 rounded-xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-navidark-600 text-red-600 dark:text-red-400 text-xs font-bold hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors flex justify-center items-center gap-2 shadow-sm"
+          className="w-full py-1.5 rounded-lg border border-transparent text-zinc-500 dark:text-zinc-400 text-xs font-semibold hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors flex justify-center items-center gap-2"
         >
-          <Trash2 className="w-4 h-4" /> Remove Waypoint
+          <Trash2 className="w-4 h-4" /> Remove Stop
         </button>
       </div>
     </aside>

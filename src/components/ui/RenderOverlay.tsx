@@ -304,6 +304,30 @@ export function RenderOverlay() {
     setStatus("success");
     if (audioRef.current) audioRef.current.pause();
 
+    // Play success chime
+    try {
+      const AudioCtx =
+        window.AudioContext || (window as any).webkitAudioContext;
+      const ctx = new AudioCtx();
+      const playNote = (freq: number, startTime: number, duration: number) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(freq, ctx.currentTime);
+        gain.gain.setValueAtTime(0, startTime);
+        gain.gain.linearRampToValueAtTime(0.3, startTime + 0.05);
+        gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(startTime);
+        osc.stop(startTime + duration);
+      };
+      playNote(523.25, ctx.currentTime, 0.4); // C5
+      playNote(659.25, ctx.currentTime + 0.15, 0.6); // E5
+    } catch (e) {
+      console.warn("Audio chime failed", e);
+    }
+
     if (metadata.directory_path) {
       await autoLoadTimeline(metadata.directory_path);
     }
@@ -533,7 +557,7 @@ export function RenderOverlay() {
                           preload="metadata"
                           className="w-full aspect-video object-cover bg-black"
                         />
-                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3 pt-8 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="absolute bottom-0 left-0 right-0 bg-linear-to-t from-black/80 to-transparent p-3 pt-8 opacity-0 group-hover:opacity-100 transition-opacity">
                           <p
                             className="text-[10px] font-mono text-zinc-200 truncate"
                             title={vid.name}
@@ -593,7 +617,7 @@ export function RenderOverlay() {
                           onChange={(e) =>
                             handleUpdateItemText(item.id, e.target.value)
                           }
-                          className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg p-3 text-sm text-zinc-700 dark:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-navi-500/50 resize-y min-h-[80px] custom-scrollbar"
+                          className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg p-3 text-sm text-zinc-700 dark:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-navi-500/50 resize-y min-h-20 custom-scrollbar"
                           placeholder="Script is empty..."
                         />
                       </div>
@@ -640,7 +664,7 @@ export function RenderOverlay() {
 
         {/* Terminal Log Output */}
         <div className="h-48 bg-zinc-950 p-6 overflow-hidden flex flex-col font-mono text-[11px] leading-relaxed border-t border-zinc-800 shrink-0 shadow-inner relative">
-          <div className="absolute top-0 left-0 right-0 h-4 bg-gradient-to-b from-zinc-950 to-transparent z-10 pointer-events-none"></div>
+          <div className="absolute top-0 left-0 right-0 h-4 bg-linear-to-b from-zinc-950 to-transparent z-10 pointer-events-none"></div>
           <div
             ref={scrollRef}
             className="space-y-1.5 overflow-y-auto custom-scrollbar h-full pb-2"

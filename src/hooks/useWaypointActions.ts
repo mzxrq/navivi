@@ -1,9 +1,16 @@
 import { useWorkspace } from "./useWorkspace";
+import { useUI } from "./useUI";
+import { mapDefaults } from "../config/constants";
 
 export function useWaypointActions() {
   const { updateWaypoint, waypoints, setWaypoints, setIsDirty } = useWorkspace();
+  const { showToast } = useUI();
 
   const addWaypoint = async (lat: number, lng: number) => {
+    if (waypoints.length >= mapDefaults.maxWaypoints) {
+      showToast(`Routes are limited to ${mapDefaults.maxWaypoints} waypoints in this preview build.`, "warning");
+      return;
+    }
     // ✨ FIXED: Upgraded to crypto.randomUUID
     const newId = crypto.randomUUID();
 

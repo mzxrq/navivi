@@ -1,15 +1,18 @@
 interface NaviviPinProps {
   label?: string;
   pinType: "start" | "end" | "stopby" | "normal" | "drawn";
+  color?: string;
   className?: string;
 }
 
-export function NaviPin({ label, pinType, className = "" }: NaviviPinProps) {
-  let fill = "#4287f5";
-  if (pinType === "start") fill = "#038813";
-  if (pinType === "end") fill = "#d90f51";
-  if (pinType === "drawn") fill = "#ff790c";
-  if (pinType === "stopby") fill = "#59412e";
+export function NaviPin({ label, pinType, color, className = "" }: NaviviPinProps) {
+  let fill = color || "#4287f5";
+  if (!color) {
+    if (pinType === "start") fill = "#038813";
+    if (pinType === "end") fill = "#d90f51";
+    if (pinType === "drawn") fill = "#ff790c";
+    if (pinType === "stopby") fill = "#59412e";
+  }
 
   return (
     <svg
