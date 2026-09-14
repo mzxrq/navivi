@@ -67,7 +67,7 @@ class MapFetcher:
             logger.info("Fetching overview map background via pydeck...")
             result = fetch_overview_image_pydeck(
                 bounding_box, final_filename, output_size,
-                mapbox_key=settings.get("mapbox_token"),
+                mapbox_key=settings.get("mapbox_api_key"),
             )
             logger.info("Overview map background saved -> %s", result[0])
             return result
@@ -162,7 +162,11 @@ class MapFetcher:
                         if isinstance(_pi := waypoints[p].get("popup_image"), list) and _pi
                         else (str(_pi) if _pi else None)
                     ),
-                    "freeze_seconds": waypoints[p].get("freeze_seconds"),
+                    "freeze_seconds": (
+                        min(float(waypoints[p]["freeze_seconds"]), tuning.POPUP_FREEZE_SECONDS_MAX)
+                        if waypoints[p].get("freeze_seconds") is not None
+                        else None
+                    ),
                     # "cover" (full-bleed photo, label overlaid) is now
                     # the default look — "pip" (photo + caption strip
                     # below) only applies when a waypoint explicitly asks
@@ -394,7 +398,10 @@ class MapFetcher:
                     chunk_labels.append(wp.get("label"))
                     chunk_popups.append(
                         {
-                            "freeze_seconds": float(wp.get("freeze_seconds", 3.0)),
+                            "freeze_seconds": min(
+                                float(wp.get("freeze_seconds", 3.0)),
+                                tuning.POPUP_FREEZE_SECONDS_MAX,
+                            ),
                             "popup_image": wp.get("popup_image"),
                             "triggered": False,
                         }
@@ -417,7 +424,11 @@ class MapFetcher:
                     "label": m["label"],
                     "px": chunk_points[m["row_idx"] - chunk_start],
                     "popup_image": m.get("popup_image"),
-                    "freeze_seconds": m.get("freeze_seconds"),
+                    "freeze_seconds": (
+                        min(float(m["freeze_seconds"]), tuning.POPUP_FREEZE_SECONDS_MAX)
+                        if m.get("freeze_seconds") is not None
+                        else None
+                    ),
                     "image_display": m.get("image_display", "cover"),
                 }
                 for m in job["chunk_markers"]

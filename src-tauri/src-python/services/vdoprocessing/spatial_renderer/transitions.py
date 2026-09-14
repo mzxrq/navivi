@@ -207,8 +207,10 @@ class _TransitionMixin:
             # (not-yet-visited) marker_color — visibly wrong whenever a
             # project has customized the two to different colors.
             wp = {"index": pos + 1, "order": order, "data": {"is_stopby": is_stopby, "arrived": True}}
-            label, color = self._pin_label_and_color(wp, total_points)
-            self.graphics.draw_marker(frame, px, py, number=label, color=color)
+            label, color, split_color = self._pin_label_and_color(wp, total_points)
+            self.graphics.draw_marker(
+                frame, px, py, number=label, color=color, split_color=split_color
+            )
 
     def _render_ending_highlight(
         self,
@@ -318,7 +320,7 @@ class _TransitionMixin:
                 dynamic_frames = capture_pydeck_zoom_sequence(
                     bounding_box, (w, h), lat, lng, zoom_n,
                     zoom_boost=tuning.ENDING_HIGHLIGHT_PYDECK_ZOOM_BOOST,
-                    mapbox_key=settings.get("mapbox_token"),
+                    mapbox_key=settings.get("mapbox_api_key"),
                 )
             except Exception:
                 logger.warning(

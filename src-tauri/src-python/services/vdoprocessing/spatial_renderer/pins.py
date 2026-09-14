@@ -1,9 +1,8 @@
-"""Waypoint pin coloring, declutter fan-out, and drawing."""
+"""Waypoint pin coloring and drawing."""
 
 import math
 from typing import Dict, List
 
-import cv2
 import numpy as np
 
 
@@ -92,7 +91,21 @@ class _PinMixin:
 
             cx = sum(active_popups[i]["x"] for i in members) / len(members)
             cy = sum(active_popups[i]["y"] for i in members) / len(members)
+            # Evenly spacing `len(members)` pins on a circle of radius R
+            # puts adjacent ones 2*R*sin(pi/k) apart — a FIXED radius
+            # (the old min_gap*0.8, sized for a pair or trio) shrinks that
+            # spacing as the cluster grows, so a real cluster of 5+ nearby
+            # waypoints (a small island with several stops, say) still
+            # overlapped after "fanning out" instead of actually
+            # separating. Solving for R keeps every cluster — regardless
+            # of how many pins share it — at least min_gap apart; the old
+            # constant is kept as a floor so a small cluster (2-4) isn't
+            # fanned out any tighter than before.
             fan_radius = min_gap * 0.8
+            if len(members) >= 3:
+                fan_radius = max(
+                    fan_radius, min_gap / (2 * math.sin(math.pi / len(members)))
+                )
             # [NOTE] [Animation] Stop-by waypoints never get an "order" (they
             # render as a "・" dot, not a number — see overview.py), so fall
             # back to 0 for them: any stable position in the fan-out works
@@ -107,11 +120,8 @@ class _PinMixin:
     def _draw_pin(
         self, frame: np.ndarray, wp: Dict, total_points: int
     ) -> None:
-        """Draws one waypoint's pin at its (possibly decluttered) position
-        — see _declutter_pins. No connector line back to the true spot is
-        drawn when the two differ; that reads as visual clutter/confusion
-        on a route with several nearby stops, and the fanned-out position
-        alone is still close enough to the cluster to be legible.
+        """Draws one waypoint's pin at its real position (wp["x"]/wp["y"]
+        — "pin_x"/"pin_y" is the same point now, see _declutter_pins).
 
         Label/color precedence matches the map editor's own MapArea.tsx
         exactly: a stop-by waypoint (wp["data"]["is_stopby"]) ALWAYS renders
@@ -123,19 +133,22 @@ class _PinMixin:
         shows its precomputed visit order (wp["order"] — assigned once in
         overview.py's active_popups setup, skipping stop-by waypoints in the
         count the same way MapArea.tsx's normalIndex does)."""
-        label, pin_color = self._pin_label_and_color(wp, total_points)
+        label, pin_color, split_color = self._pin_label_and_color(wp, total_points)
         px, py = int(wp.get("pin_x", wp["x"])), int(wp.get("pin_y", wp["y"]))
-        self.graphics.draw_marker(frame, px, py, number=label, color=pin_color)
+        self.graphics.draw_marker(
+            frame, px, py, number=label, color=pin_color, split_color=split_color
+        )
 
     def _pin_label_and_color(self, wp: Dict, total_points: int):
         """Factored out of _draw_pin so other frame elements (e.g. the
         end-of-video recap's leader lines, see _render_recap_frame) can be
         colored to match a waypoint's own pin without duplicating its
-        S/E/stop-by precedence rules."""
+        S/E/stop-by precedence rules. Returns (label, color, split_color)
+        — split_color is None for every pin except a loop route's "E"."""
         if wp["data"].get("is_stopby"):
-            return "・", self._STOPBY_PIN_COLOR
+            return "・", self._STOPBY_PIN_COLOR, None
         if wp["index"] == 0:
-            return "S", self._START_PIN_COLOR
+            return "S", self._START_PIN_COLOR, None
         if wp["index"] == total_points - 1:
             # A short route where the route's literal last point is ALSO
             # its first real numbered stop (order 1 — e.g. start -> one
@@ -143,6 +156,13 @@ class _PinMixin:
             # of being overwritten to "E"; the number is more useful here
             # than a redundant end marker.
             if wp.get("order") == 1:
-                return 1, self._END_PIN_COLOR
-            return "E", self._END_PIN_COLOR
-        return wp.get("order"), self._pin_color(wp)
+                return 1, self._END_PIN_COLOR, None
+            # A loop route's "E" sits on the exact same real-world spot as
+            # "S" — a plain solid red pin there loses that it's also the
+            # departure point. Half green (start)/half red (end) says
+            # "you're back where you started" at a glance, on the one pin
+            # that actually represents both.
+            if self._is_loop_route:
+                return "E", self._START_PIN_COLOR, self._END_PIN_COLOR
+            return "E", self._END_PIN_COLOR, None
+        return wp.get("order"), self._pin_color(wp), None

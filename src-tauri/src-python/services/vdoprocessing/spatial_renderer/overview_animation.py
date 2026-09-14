@@ -86,6 +86,12 @@ class _OverviewAnimationMixin:
         # it never blocks the very first trigger.
         min_trigger_gap_frames = int(fps * tuning.OVERVIEW_POPUP_MIN_TRIGGER_GAP_SECONDS)
         last_trigger_frame = -min_trigger_gap_frames
+        # (x, y) of the most recently triggered popup's own pin — lets the
+        # gap check below tell "these two waypoints are genuinely close
+        # together on the map" apart from "these two just happen to be
+        # queued back to back" (see the cluster-gap override further
+        # down).
+        last_triggered_pin: Optional[Tuple[float, float]] = None
         pending_popups: List[Dict] = []
 
         # Real (non-stop-by) waypoints must pop up STRICTLY in route order —
@@ -204,21 +210,41 @@ class _OverviewAnimationMixin:
                     # traveler to have actually reached near that point
                     # in time (not just in space) before it can trigger
                     # rules out that false-early case. A small tolerance
+                    # (see tuning.OVERVIEW_POPUP_TRIGGER_TOLERANCE_SECONDS)
                     # keeps it from being stricter than the spatial check
-                    # itself needs.
+                    # itself needs — just enough to absorb expected_frame's
+                    # own estimation jitter, not enough to visibly show a
+                    # popup before the traveler has actually gotten there.
                     expected_frame = popup.get("expected_frame")
-                    trigger_tolerance_frames = int(fps * 1.0)
+                    trigger_tolerance_frames = int(
+                        fps * tuning.OVERVIEW_POPUP_TRIGGER_TOLERANCE_SECONDS
+                    )
                     if (
                         expected_frame is not None
                         and current_frame < expected_frame - trigger_tolerance_frames
                     ):
                         continue
-                    if RouteGeometryProcessor.point_to_segment_distance(
-                        popup["x"], popup["y"], px, py, cx, cy
-                    ) < (
-                        self.graphics.marker_radius
-                        + self.trigger_radius_padding["overview"]
-                    ):
+                    # A stop-by can legitimately sit off the drawn route
+                    # entirely (a viewpoint a short walk from the road, a
+                    # landmark the route just passes near rather than
+                    # through) — requiring the traveler's on-screen dot to
+                    # actually come within the marker's trigger radius, the
+                    # same test real waypoints need, meant one placed just
+                    # outside that radius would never trigger at all, no
+                    # matter how long the animation ran. Time (expected_frame,
+                    # already checked above) is enough on its own for a
+                    # stop-by; only a real waypoint still needs the
+                    # traveler to actually be near it on screen.
+                    near_enough = is_stopby or (
+                        RouteGeometryProcessor.point_to_segment_distance(
+                            popup["x"], popup["y"], px, py, cx, cy
+                        )
+                        < (
+                            self.graphics.marker_radius
+                            + self.trigger_radius_padding["overview"]
+                        )
+                    )
+                    if near_enough:
                         pending_popups.append(popup)
                         if not is_stopby:
                             # This was sequential_popups[seq_ptr] (the gate
@@ -301,7 +327,7 @@ class _OverviewAnimationMixin:
                 pre_popup_frame = frame.copy()
             frame, baked_popups = self._composite_baked_popups(
                 frame, baked_popups, w, h, route_obstacle_arr,
-                active_popups=active_popups, total_points=len(points),
+                active_popups=active_popups, total_points=len(points), fps=fps,
             )
 
             if frame_no_route is None:
@@ -386,6 +412,32 @@ class _OverviewAnimationMixin:
                     # already-triggered popups are still queued behind it,
                     # each needing its own turn at the trigger cooldown
                     # before it can even start waiting for a display slot.
+                    # An EARLIER waypoint's own flow-through card can still
+                    # be mid-display right when this new one triggers —
+                    # frames_left only counts down while a card is
+                    # actually drawn (see _make_baked_popup's own
+                    # docstring on why: so one stuck waiting for a
+                    # concurrency slot isn't unfairly cut short), so a
+                    # card that got a late start (behind others) could
+                    # otherwise run its full nominal duration long after
+                    # the traveler has clearly moved on to this next
+                    # stop — reported as an earlier waypoint's card still
+                    # showing well past when it should already be gone.
+                    # Force every OTHER still-active, not-yet-fading
+                    # flow-through card straight into its own fade-out the
+                    # moment a later one arrives, instead of letting it
+                    # run out its original clock.
+                    new_order = triggered_popup.get("order", 0)
+                    for bp in baked_popups:
+                        if bp["popup"]["data"].get("freeze_frame", False):
+                            continue
+                        if bp["popup"].get("order", 0) >= new_order:
+                            continue
+                        wrap_up_frames = bp.get("fade_frames") or max(
+                            1, int(self._POPUP_FADE_SECONDS * fps)
+                        )
+                        bp["frames_left"] = min(bp["frames_left"], wrap_up_frames)
+
                     new_bp = self._make_baked_popup(
                         triggered_popup, display_seconds, fps,
                         queue_depth=len(pending_popups),

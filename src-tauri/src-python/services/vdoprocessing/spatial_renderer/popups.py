@@ -23,6 +23,7 @@ class _PopupMixin:
         route_obstacles: Optional[np.ndarray] = None,
         max_radius: float = 260.0,
         reserved_boxes: Optional[List[Tuple[float, float, float, float]]] = None,
+        fps: Optional[float] = None,
     ) -> None:
         """For waypoints flowing through without a freeze, their popup cards
         ride along the frame instead of holding it — small thumbnail cards
@@ -133,8 +134,30 @@ class _PopupMixin:
 
         # Trigger order, not screen position — so a cluster's cards fill in
         # the order the traveler actually reaches them.
+        lock_frames = (
+            fps * tuning.POPUP_POSITION_LOCK_SECONDS if fps else 0
+        )
         for bp in sorted(group, key=lambda b: b["popup"].get("order", 0)):
             popup = bp["popup"]
+
+            # Already-positioned and still within its lock window — keep
+            # the existing spot instead of recomputing (see
+            # tuning.POPUP_POSITION_LOCK_SECONDS). Still reserved into
+            # `placed` below so a card processed after this one (lower
+            # priority order) can't be given the same spot.
+            existing_box = popup.get("beside_box")
+            total_frames = bp.get("total_frames")
+            frames_left = bp.get("frames_left")
+            if (
+                existing_box is not None
+                and total_frames is not None
+                and frames_left is not None
+                and (total_frames - frames_left) < lock_frames
+            ):
+                box_x, box_y = existing_box
+                placed.append((box_x, box_y, box_x + card_w, box_y + card_h))
+                continue
+
             # The card's leader line actually anchors on pin_x/pin_y when
             # set (render_popup_box's own preference — see its docstring)
             # — searching for a spot relative to the true x/y instead
@@ -189,6 +212,16 @@ class _PopupMixin:
             card_h = card_h if card_h is not None else footprint_h
 
         placed: List[Tuple[float, float, float, float]] = list(reserved_boxes or [])
+        # Every already-placed popup's OWN leader line (pin -> its card's
+        # nearest edge, same anchor formula render_popup_box actually
+        # draws with — see _anchor_point) — checked alongside `placed`
+        # (the card boxes themselves) so a new candidate can't cut across
+        # another line that isn't touching any box directly. Two lines
+        # crossing in open space was the main source of the tangled,
+        # crisscrossing look: leader_crosses_placed used to only compare
+        # against card RECTANGLES, so nothing stopped one pin's line from
+        # slicing straight through another pin's line out in the open.
+        placed_lines: List[Tuple[float, float, float, float]] = []
         route_x = route_obstacles[:, 0] if route_obstacles is not None else None
         route_y = route_obstacles[:, 1] if route_obstacles is not None else None
         # Wider than the flow-through popups' own gap (14px) — the recap
@@ -197,6 +230,16 @@ class _PopupMixin:
         # breathing room between neighbors makes the layout read as
         # deliberately separated instead of jammed together.
         card_gap = 34
+
+        def _anchor_point(pin_x: float, pin_y: float, bx: float, by: float) -> Tuple[float, float]:
+            # Matches render_popup_box's own anchor exactly (clamps the
+            # pin onto the card box's nearest edge) — approximating with
+            # the box CENTER here (as this used to) checked crossings
+            # against a line the frame never actually draws.
+            return (
+                min(max(pin_x, bx), bx + card_w),
+                min(max(pin_y, by), by + card_h),
+            )
 
         def overlaps(bx: float, by: float) -> bool:
             rx0, ry0, rx1, ry1 = (
@@ -236,21 +279,26 @@ class _PopupMixin:
             return (d1 * d2 < 0) and (d3 * d4 < 0)
 
         def leader_crosses_placed(pin_x: float, pin_y: float, bx: float, by: float) -> bool:
-            # Approximates this card's own leader line as pin -> card
-            # center, then checks it against every OTHER already-placed
-            # card's box — a candidate spot whose line would visually cut
-            # across a different card is deprioritized (see free_spot),
-            # even when the spot itself doesn't overlap anything.
-            cx, cy = bx + card_w / 2, by + card_h / 2
+            # Checks this candidate's own leader line (pin -> its card's
+            # real anchor point) against every OTHER already-placed
+            # card's box AND every other already-placed popup's own
+            # leader line — a candidate spot whose line would visually
+            # cut across a different card, or simply cross another line
+            # out in the open, is deprioritized (see free_spot), even
+            # when the spot itself doesn't overlap anything.
+            ax, ay = _anchor_point(pin_x, pin_y, bx, by)
             for (rx0, ry0, rx1, ry1) in placed:
                 edges = (
                     (rx0, ry0, rx1, ry0), (rx1, ry0, rx1, ry1),
                     (rx1, ry1, rx0, ry1), (rx0, ry1, rx0, ry0),
                 )
                 if any(
-                    _segments_intersect(pin_x, pin_y, cx, cy, ex0, ey0, ex1, ey1)
+                    _segments_intersect(pin_x, pin_y, ax, ay, ex0, ey0, ex1, ey1)
                     for ex0, ey0, ex1, ey1 in edges
                 ):
+                    return True
+            for (lpx, lpy, lax, lay) in placed_lines:
+                if _segments_intersect(pin_x, pin_y, ax, ay, lpx, lpy, lax, lay):
                     return True
             return False
 
@@ -422,13 +470,16 @@ class _PopupMixin:
 
         for bp in ordered:
             popup = bp["popup"]
-            spot = free_spot(popup.get("pin_x", popup["x"]), popup.get("pin_y", popup["y"]))
+            pin_x, pin_y = popup.get("pin_x", popup["x"]), popup.get("pin_y", popup["y"])
+            spot = free_spot(pin_x, pin_y)
             if spot is None:
                 popup.pop("beside_box", None)
                 continue
             box_x, box_y = spot
             popup["beside_box"] = (int(box_x), int(box_y))
             placed.append((box_x, box_y, box_x + card_w, box_y + card_h))
+            anchor_x, anchor_y = _anchor_point(pin_x, pin_y, box_x, box_y)
+            placed_lines.append((pin_x, pin_y, anchor_x, anchor_y))
 
     def _render_recap_frame(
         self,
@@ -478,7 +529,7 @@ class _PopupMixin:
             # own pin (rather than one flat gray for all of them) makes it
             # possible to actually trace a given card back to its pin
             # despite the crossings.
-            _, pin_color = self._pin_label_and_color(ap, total_points)
+            _, pin_color, _ = self._pin_label_and_color(ap, total_points)
             pin_color = pin_color or self.graphics.marker_color
             hud_popup["leader_line_color"] = pin_color
             # Override the card's own border_color (set once, early in
@@ -634,6 +685,7 @@ class _PopupMixin:
         route_obstacles: Optional[np.ndarray],
         active_popups: Optional[List[Dict]] = None,
         total_points: int = 0,
+        fps: Optional[float] = None,
     ) -> Tuple[np.ndarray, List[Dict]]:
         """Draws every currently-active popup (flow-through or lingering
         frozen) onto `frame` for this one frame, fading each in/out per
@@ -672,7 +724,7 @@ class _PopupMixin:
             bp["popup"].pop("beside_box", None)
         if flowing_visible:
             self._layout_beside_popups(
-                flowing_visible, w, h, route_obstacles=route_obstacles
+                flowing_visible, w, h, route_obstacles=route_obstacles, fps=fps
             )
 
         hud_popups: List[Optional[Dict]] = [None] * len(baked_popups)

@@ -281,7 +281,7 @@ def record_headless_video(
                 bearing=30,
             )
 
-            mapbox_key = settings.get("mapbox_token", MAPBOX_API_KEY)
+            mapbox_key = settings.get("mapbox_api_key") or MAPBOX_API_KEY
 
             # [HACK] [Animation] Reverted the deck.gl TerrainLayer 3D-elevation experiment --
             # across several fix attempts (zoom/strategy mismatch, texture

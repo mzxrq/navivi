@@ -139,11 +139,41 @@ class _SpatialRendererBase:
     # standard map-app iconography) regardless of arrival state — every
     # other pin still uses _pin_color's default/arrived coloring. Shared by
     # both _PinMixin and _TransitionMixin, so it lives here rather than in
-    # either leaf mixin.
+    # either leaf mixin. Always plain green — a loop route (start==end)
+    # signals itself instead via the "E" pin's half green/red split (see
+    # pins.py's _pin_label_and_color) and the route line's own two-color
+    # shared-corridor split (see _is_loop_route below and
+    # _OverviewRenderMixin._compute_loop_shared_mask), not by recoloring
+    # S itself.
     _START_PIN_COLOR = tuning.START_PIN_COLOR
     _END_PIN_COLOR = tuning.END_PIN_COLOR
     _DRAWN_PIN_COLOR = tuning.DRAWN_PIN_COLOR
     _STOPBY_PIN_COLOR = tuning.STOPBY_PIN_COLOR
+
+    @property
+    def _is_loop_route(self) -> bool:
+        """True when this project's start_point and end_point are (near-)
+        identical real-world coordinates — an out-and-back or round trip
+        that returns to exactly where it began, rather than two distinct
+        places that just happen to be close. Cached on the instance since
+        _get_job_config re-reads job_config.json from disk every call and
+        this is checked on every pin draw."""
+        cached = getattr(self, "_is_loop_route_cache", None)
+        if cached is not None:
+            return cached
+        job_config = self._get_job_config() or {}
+        start = job_config.get("start_point") or {}
+        end = job_config.get("end_point") or {}
+        s_lat, s_lng = start.get("lat"), start.get("lng", start.get("lon"))
+        e_lat, e_lng = end.get("lat"), end.get("lng", end.get("lon"))
+        result = False
+        if None not in (s_lat, s_lng, e_lat, e_lng):
+            result = (
+                abs(s_lat - e_lat) <= tuning.LOOP_ROUTE_MATCH_DEGREES
+                and abs(s_lng - e_lng) <= tuning.LOOP_ROUTE_MATCH_DEGREES
+            )
+        self._is_loop_route_cache = result
+        return result
 
     @staticmethod
     def _initial_heading(path: List) -> float:

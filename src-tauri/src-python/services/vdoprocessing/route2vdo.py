@@ -103,7 +103,10 @@ class RouteAnimator:
                 ):
                     popups.append(
                         {
-                            "freeze_seconds": float(item.get("freeze_seconds", 2.0)),
+                            "freeze_seconds": min(
+                                float(item.get("freeze_seconds", 2.0)),
+                                tuning.POPUP_FREEZE_SECONDS_MAX,
+                            ),
                             "popup_image": item.get("popup_image"),
                             "popup_video": item.get("popup_video"),
                             "image_display": item.get(
@@ -201,6 +204,7 @@ class RouteAnimator:
             overview_path = self.spatial_renderer.render_overview(
                 img_path, points, labels, popups, fps, summary=summary, point_modes=point_modes,
                 bounding_box=kwargs.get("overview_bounding_box"),
+                extent=kwargs.get("overview_extent"),
             )
             tracker.clear()
             if overview_path:

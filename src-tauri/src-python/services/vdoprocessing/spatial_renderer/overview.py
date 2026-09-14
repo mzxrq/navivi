@@ -6,18 +6,159 @@ overview_pacing.py and the animation loop itself in overview_animation.py —
 both split out of this file to keep it to the setup/wrap-up orchestration."""
 
 import json
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import cv2
 import numpy as np
+from scipy.spatial import cKDTree
 
 from services import tuning
+from services.mapfetcher.mapgeometry import RouteGeometryProcessor
 from services.vdoprocessing.vdoexporter import VideoExporter
 
 from .base import logger
 
 
 class _OverviewRenderMixin:
+    @staticmethod
+    def _compute_loop_shared_mask(
+        smooth_path: np.ndarray,
+        points: Optional[List] = None,
+        point_frames: Optional[List[int]] = None,
+    ) -> np.ndarray:
+        """For a loop route, flags every point on the animated path that's
+        the SECOND (later) visit to a physical spot already passed
+        through earlier — i.e. the actual retrace of a stretch that's
+        genuinely walked twice (a ferry crossing, a there-and-back spur).
+        The FIRST pass over that same stretch stays a normal single line;
+        only once the route comes back over it does it switch to the
+        dual-stripe look — "double line only happens when we return back
+        over the same route", not on the initial way out. See
+        tuning.LOOP_SHARED_CORRIDOR_PX (the pixel-distance threshold) and
+        LOOP_SHARED_MIN_TIME_FRACTION (how far apart in time two points
+        must be before their closeness counts at all — without it, any
+        tight bend in a normal one-way path would trivially satisfy the
+        distance check against its own immediate neighbors).
+
+        A pair is excluded only when BOTH its points sit within
+        LOOP_SHARED_ENDPOINT_EXCLUSION_PX of the route's own start — S
+        and E sit on (near-)the same spot BY DEFINITION for a loop route,
+        so the very first steps leaving S will always be pixel-close to
+        the very last steps arriving at E, even though that's not an
+        actually-shared corridor, just S and E happening to coincide.
+        This is deliberately narrower than excluding every point near
+        either end outright: a point near E can still legitimately pair
+        with a genuinely different, far-from-start point earlier in the
+        route (e.g. a real street walked past a waypoint on the way out
+        AND again on the way back, close to the station but not
+        literally at S) — only when the pair's OTHER point is ALSO right
+        at the S/E coincidence does it stop counting.
+
+        Returns a boolean array the same length as smooth_path."""
+        n = len(smooth_path)
+        mask = np.zeros(n, dtype=bool)
+        if n >= 3:
+            min_gap = max(1, int(n * tuning.LOOP_SHARED_MIN_TIME_FRACTION))
+            tree = cKDTree(smooth_path)
+            pairs = tree.query_pairs(r=tuning.LOOP_SHARED_CORRIDOR_PX, output_type="ndarray")
+            if len(pairs) > 0:
+                far_enough = np.abs(pairs[:, 0] - pairs[:, 1]) > min_gap
+                idx = pairs[far_enough]
+                if len(idx) > 0:
+                    start_dists = np.hypot(
+                        smooth_path[:, 0] - smooth_path[0, 0],
+                        smooth_path[:, 1] - smooth_path[0, 1],
+                    )
+                    near_start = start_dists < tuning.LOOP_SHARED_ENDPOINT_EXCLUSION_PX
+                    both_near_start = near_start[idx[:, 0]] & near_start[idx[:, 1]]
+                    idx = idx[~both_near_start]
+                    # query_pairs always returns (i, j) with i < j — flagging
+                    # only the LATER index of each match is what keeps the
+                    # first pass over a shared stretch a plain single line.
+                    mask[idx[:, 1]] = True
+
+            # GPS/track noise between an outbound and return pass means their
+            # distance apart isn't constant — it can drift briefly just past
+            # LOOP_SHARED_CORRIDOR_PX even in the middle of a genuinely
+            # shared stretch, breaking one continuous corridor into several
+            # short flagged runs with tiny single-line gaps between them
+            # (reported: the red stripe flickering on/off instead of running
+            # solid). Closing those small gaps — filling any False run no
+            # longer than LOOP_SHARED_GAP_FILL_FRAMES that sits BETWEEN two
+            # True runs — keeps a genuinely shared corridor reading as one
+            # unbroken stretch without also bridging two unrelated shared
+            # stretches that are legitimately far apart.
+            max_gap = max(1, int(n * tuning.LOOP_SHARED_GAP_FILL_FRACTION))
+            i = 0
+            while i < n:
+                if not mask[i]:
+                    j = i
+                    while j < n and not mask[j]:
+                        j += 1
+                    if i > 0 and j < n and mask[i - 1] and mask[j] and (j - i) <= max_gap:
+                        mask[i:j] = True
+                    i = j
+                else:
+                    i += 1
+
+            # A genuinely shared corridor stays close for a SUSTAINED
+            # stretch; two different streets that merely cross paths (common
+            # in a town's street grid — an intersection, not a shared
+            # corridor) only satisfy the raw distance/time checks for a
+            # short, isolated run around that one crossing point before
+            # diverging again. Clearing any True run shorter than
+            # LOOP_SHARED_MIN_RUN_FRACTION removes those incidental-crossing
+            # false positives (reported: a return-leg street that only
+            # crosses the outbound one, not actually the same road, still
+            # showing the dual-stripe look) while leaving a real sustained
+            # retrace untouched.
+            min_run = max(1, int(n * tuning.LOOP_SHARED_MIN_RUN_FRACTION))
+            i = 0
+            while i < n:
+                if mask[i]:
+                    j = i
+                    while j < n and mask[j]:
+                        j += 1
+                    if (j - i) < min_run:
+                        mask[i:j] = False
+                    i = j
+                else:
+                    i += 1
+
+        # Some pairs of LEGS (the straight-line stretch of route between
+        # two consecutive waypoints) are known to be the exact same
+        # physical corridor, not merely geometrically close — job_config
+        # can give an explicit "(Return)" duplicate waypoint at the same
+        # lat/lng as an earlier waypoint (a ferry dock walked to, then
+        # back through on the way home). When two legs' endpoints match
+        # each other reversed, that whole leg is shared BY CONSTRUCTION.
+        # This matters because a short leg (a straight ferry crossing
+        # with no intermediate points) can be nothing but its own two
+        # endpoints, leaving the distance/time-based query_pairs check
+        # above nothing in the middle to find a match on at all — the
+        # general detector can simply never see it. Applied AFTER every
+        # heuristic above (not before) so it can't be pruned back out by
+        # the min-run/gap-fill passes meant for the fuzzier general case.
+        # Only the LATER leg (higher waypoint index) is forced, mirroring
+        # the same "first pass stays single line" rule used everywhere
+        # else here.
+        if points is not None and point_frames is not None and len(points) >= 4:
+            match_px = tuning.LOOP_LEG_ENDPOINT_MATCH_PX
+            n_points = len(points)
+            for i in range(n_points - 1):
+                for j in range(i + 2, n_points - 1):
+                    if (
+                        np.hypot(points[i][0] - points[j + 1][0], points[i][1] - points[j + 1][1])
+                        < match_px
+                        and np.hypot(points[i + 1][0] - points[j][0], points[i + 1][1] - points[j][1])
+                        < match_px
+                    ):
+                        lo = max(0, min(point_frames[j], point_frames[j + 1]))
+                        hi = min(n - 1, max(point_frames[j], point_frames[j + 1]))
+                        if hi > lo:
+                            mask[lo:hi + 1] = True
+        return mask
+
     def render_overview(
         self,
         bg_path: str,
@@ -28,6 +169,7 @@ class _OverviewRenderMixin:
         summary: Optional[Dict] = None,
         point_modes: Optional[List[str]] = None,
         bounding_box: Optional[Dict[str, float]] = None,
+        extent: Optional[Tuple[float, float, float, float]] = None,
     ) -> str:
         is_video = False
 
@@ -89,6 +231,47 @@ class _OverviewRenderMixin:
             self._build_overview_path(points, point_modes, num_frames)
         )
 
+        # Loop route (start_point == end_point, e.g. a ferry crossing
+        # walked both out and back) — see GraphicsEngine.draw_path's
+        # dual-stripe look for whichever stretch of the line is genuinely
+        # walked twice. Reset unconditionally (not just set when true)
+        # since self.graphics is one shared instance that renders every
+        # project in this process, not a fresh one per render.
+        #
+        # Rewound to plain single-line for every route (loop or not) —
+        # the shared-corridor detection kept surfacing new mismatches
+        # against real routed street geometry that no heuristic threshold
+        # fully covered. Hard-disabled by never computing/setting the
+        # mask (rather than deleting the detection code) so this is a
+        # one-line flip to bring back if wanted later.
+        _LOOP_LINE_COLORING_ENABLED = False
+        point_frames_for_mask = None
+        if _LOOP_LINE_COLORING_ENABLED and self._is_loop_route:
+            # Each ORIGINAL waypoint's own frame in the animated path —
+            # same distance-fraction technique as _estimate_frame further
+            # below (duplicated here since that closure isn't built yet
+            # at this point), used only to bound which frame RANGE a
+            # known-identical leg (see _compute_loop_shared_mask's
+            # leg-endpoint pass) covers.
+            raw_seg_early = np.hypot(
+                np.diff([p[0] for p in points]), np.diff([p[1] for p in points])
+            )
+            raw_cum_early = np.concatenate([[0.0], np.cumsum(raw_seg_early)])
+            raw_total_early = raw_cum_early[-1] if raw_cum_early[-1] > 0 else 1.0
+            num_frames_early = len(smooth_path)
+            point_frames_for_mask = []
+            for pi in range(len(points)):
+                frac = raw_cum_early[pi] / raw_total_early
+                if cum_smooth_dist is not None:
+                    target_dist = frac * total_smooth_dist
+                    point_frames_for_mask.append(int(np.searchsorted(cum_smooth_dist, target_dist)))
+                else:
+                    point_frames_for_mask.append(int(frac * (num_frames_early - 1)))
+        self.graphics.loop_shared_mask = (
+            self._compute_loop_shared_mask(smooth_path, points, point_frames_for_mask)
+            if _LOOP_LINE_COLORING_ENABLED and self._is_loop_route else None
+        )
+
         active_popups = [
             {
                 "x": points[i][0],
@@ -100,6 +283,31 @@ class _OverviewRenderMixin:
             for i in range(len(points))
             if popups and popups[i] is not None
         ]
+
+        # A stop-by's "x"/"y" above came from points[i] — the nearest
+        # point on the RECORDED TRACK, which is fine for a real stop the
+        # traveler actually walks to, but wrong for one only observed
+        # from a distance (a small offshore island seen from the trail, a
+        # viewpoint across the water) — that kind can sit well away from
+        # the track, and snapping it onto the nearest track pixel drew
+        # its pin right on top of the route line instead of at the real
+        # place. Re-projecting from the waypoint's own stored lat/lng (see
+        # render_step.py's route_popups) onto this same background image
+        # draws it where it actually is. Real (non-stop-by) waypoints keep
+        # their track-matched position — they're genuinely visited stops
+        # ON the route, so that position is already correct.
+        if extent is not None:
+            for ap in active_popups:
+                if not ap["data"].get("is_stopby"):
+                    continue
+                lat, lng = ap["data"].get("lat"), ap["data"].get("lng")
+                if lat is None or lng is None:
+                    continue
+                px, py = RouteGeometryProcessor.project_latlon_to_pixel(
+                    lat, lng, extent, w, h
+                )
+                ap["x"], ap["y"] = px, py
+
         # 1-based visit order, used to number each waypoint's pin and to
         # sort concurrently-visible popups in _layout_beside_popups. Stop-by
         # waypoints are skipped from the count (they show a "・" dot instead
@@ -108,11 +316,30 @@ class _OverviewRenderMixin:
         # that aren't isStopBy.
         order = 0
         for ap in active_popups:
-            if ap["data"].get("is_stopby"):
+            # The route's literal start ("S", index 0) isn't part of the
+            # visible 1..N numbering either — same treatment as a stop-by,
+            # just for a different reason (it's labeled "S" outright, see
+            # pins.py's _pin_label_and_color). Without this, S consumed
+            # order 1 for itself, pushing every real numbered waypoint one
+            # higher than its actual visit order (the first real stop
+            # showing "2" instead of "1").
+            if ap["data"].get("is_stopby") or ap["index"] == 0:
+                # Still gets an "order" key (just not incremented) so it's
+                # never missing when something reads ap["order"] generically
+                # — excluded only from the visible count/numbering itself.
+                ap["order"] = order
                 continue
             order += 1
             ap["order"] = order
-        self._declutter_pins(active_popups)
+        # Decluttering (fanning overlapping/close pins out into a small
+        # circle around their shared center) is deliberately disabled —
+        # it moved a waypoint's drawn pin off the actual route line it
+        # sits on, reading as "this stop isn't really on the path" even
+        # though its real x/y is. Every pin now draws at its true
+        # position (_draw_pin already falls back to wp["x"]/wp["y"] when
+        # "pin_x"/"pin_y" aren't set — see pins.py), so a tight cluster of
+        # stops can visually overlap, but none of them drift off-route.
+        # self._declutter_pins(active_popups)
 
         # Popup card border matches this waypoint's own pin color (S=green,
         # E=red, stop-by=brown, everything else=the default marker color)
@@ -123,7 +350,7 @@ class _OverviewRenderMixin:
         # separately.
         total_points_for_color = len(points)
         for ap in active_popups:
-            _, pin_color_for_border = self._pin_label_and_color(ap, total_points_for_color)
+            _, pin_color_for_border, _ = self._pin_label_and_color(ap, total_points_for_color)
             # _pin_label_and_color can return None for a plain numbered pin
             # not yet "arrived" (see _pin_color) — fall back to the base
             # marker color rather than letting popup_box's border draw
@@ -155,13 +382,9 @@ class _OverviewRenderMixin:
         # from the whole route rather than the animated path-so-far, so a
         # given waypoint's card always lands in the same corner regardless
         # of when in the animation it triggers.
-        # Uses each popup's DRAWN pin position (pin_x/pin_y, from
-        # _declutter_pins' fan-out above) rather than its true x/y — for a
-        # cluster of nearby waypoints, several entries can share nearly
-        # the same true x/y while their actual pins are fanned out around
-        # it; avoiding only the un-fanned point left the real, fanned-out
-        # pin positions unprotected, letting a card land right on top of
-        # one.
+        # pin_x/pin_y (set to each popup's real x/y by _declutter_pins) —
+        # kept as the lookup key rather than x/y directly so this stays
+        # correct if a future declutter pass ever nudges pins apart again.
         route_avoid_points = list(points) + [
             (p.get("pin_x", p["x"]), p.get("pin_y", p["y"])) for p in active_popups
         ]
@@ -281,6 +504,7 @@ class _OverviewRenderMixin:
                 ap["leg_display_seconds"] = (
                     max(min_leg_frames, next_frame - this_frame) / fps
                 )
+
 
         intro_freeze_sec = 3.0
         if start_popup and "freeze_seconds" in start_popup["data"]:
@@ -512,4 +736,10 @@ class _OverviewRenderMixin:
 
         if cap:
             cap.release()
+        # self.graphics is shared with the per-leg residential renderer
+        # that runs right after this (see route2vdo.py) — reset so its
+        # own, unrelated path_history/draw_path calls never pick up THIS
+        # render's loop_shared_mask (indexed against smooth_path, which
+        # the per-leg renderer has no equivalent of).
+        self.graphics.loop_shared_mask = None
         return video.release(overview_path)

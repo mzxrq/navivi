@@ -337,7 +337,9 @@ def render_route_video(
 
             popup_img = wp.get("popup_image")
             route_popups[c_idx] = {
-                "freeze_seconds": float(wp.get("freeze_seconds", 3.0)),
+                "freeze_seconds": min(
+                    float(wp.get("freeze_seconds", 3.0)), tuning.POPUP_FREEZE_SECONDS_MAX
+                ),
                 "popup_image": (
                     str(popup_img[0])
                     if isinstance(popup_img, list) and popup_img
@@ -353,6 +355,18 @@ def render_route_video(
                 # the OTHER waypoints' sequential numbering — see
                 # spatial_renderer/pins.py's _draw_pin/_pin_color.
                 "is_stopby": bool(wp.get("isStopBy", False)),
+                # This waypoint's own true GPS coordinates — separate from
+                # route_points[c_idx] (the nearest point on the RECORDED
+                # TRACK, used for x/y). A stop-by that's only observed from
+                # a distance rather than actually walked to (a small
+                # offshore island seen from the trail, say) can sit well
+                # off the track; overview.py re-projects that kind of pin
+                # to its own lat/lng instead of snapping it onto the
+                # nearest track pixel, which used to draw it right on top
+                # of the route line despite the real place being nowhere
+                # near it.
+                "lat": wp.get("lat"),
+                "lng": wp.get("lng", wp.get("lon")),
             }
 
     # 4. Process Residential Sequence (3D Bypass vs 2D Generation)
@@ -762,6 +776,12 @@ def render_route_video(
         # the start pin from the SAME base view the static background
         # already shows, rather than an unrelated one.
         overview_bounding_box=bbox,
+        # Pixel-projection extent for the SAME overview background image
+        # (map_output_path/route_points above) — lets a stop-by waypoint's
+        # pin be re-projected from its own true lat/lng (see route_popups
+        # above) onto this exact image instead of only ever using the
+        # nearest matched point on the recorded track.
+        overview_extent=extent,
     )
 
     # --- 2. ADD THIS AUDIO MUXING BLOCK ---

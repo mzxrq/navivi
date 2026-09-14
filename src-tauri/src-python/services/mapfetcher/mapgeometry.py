@@ -64,14 +64,62 @@ class RouteGeometryProcessor:
     def build_waypoint_index(
         route_df: pd.DataFrame, waypoints: List[Dict]
     ) -> List[int]:
-        """For each waypoint, finds the index of the closest point in `route_df`."""
+        """For each waypoint, in order, finds the index of the closest point
+        in `route_df` — searched only from the PREVIOUS waypoint's own match
+        onward, never earlier. A plain global nearest-neighbor query (the
+        old behavior) breaks on any route that revisits the same spot —
+        most commonly an out-and-back/loop trip whose first and last
+        waypoint share (near-)identical coordinates — since the true last
+        point and the true first point are then equally "nearest" to the
+        last waypoint, and cKDTree has no notion of which one is actually
+        meant. That let the LAST waypoint's match collide with the FIRST
+        waypoint's (both landing on index 0), silently overwriting the
+        start waypoint's popup and leaving nothing matched at the route's
+        real final index — which is what the overview's end-of-video
+        highlight (stop_popup) needs to ever trigger. Restricting each
+        search to start where the previous waypoint left off guarantees a
+        monotonically non-decreasing match by construction, resolving the
+        ambiguity the same way a human reading the track chronologically
+        would: each waypoint is visited in sequence, never before the one
+        before it."""
         if route_df.empty or not waypoints:
             return []
-        tree = cKDTree(route_df[["latitude", "longitude"]].to_numpy())
-        _, indices = tree.query(
-            [[wp["lat"], wp.get("lng", wp.get("lon"))] for wp in waypoints]
-        )
-        return np.atleast_1d(indices).tolist()
+        coords = route_df[["latitude", "longitude"]].to_numpy()
+        n = len(coords)
+        indices: List[int] = []
+        search_start = 0
+        for wp in waypoints:
+            lat, lng = wp["lat"], wp.get("lng", wp.get("lon"))
+            window = coords[search_start:]
+            if len(window) == 0:
+                indices.append(n - 1)
+                continue
+            d2 = (window[:, 0] - lat) ** 2 + (window[:, 1] - lng) ** 2
+            local_idx = int(np.argmin(d2))
+            global_idx = search_start + local_idx
+            indices.append(global_idx)
+            search_start = global_idx
+
+        # Two real, distinct waypoints placed close together on the map
+        # (several stops on the same block, or a lookout point revisited
+        # later in the trip) can still both land on the SAME nearest GPS
+        # index above — forward-only search prevents them going backward,
+        # but says nothing about ties. A caller downstream (route_popups in
+        # render_step.py) keys its per-waypoint data by this exact index,
+        # so a collision isn't cosmetic: the second waypoint's popup
+        # silently OVERWRITES the first's at that shared index, and when
+        # the animation later reaches that single point, whichever
+        # waypoint won the overwrite is the only one that ever pops up —
+        # which can visibly be the wrong one (e.g. a stop from later in the
+        # trip appearing at a spot the traveler is only passing for the
+        # first time). Bumping every duplicate forward by the smallest
+        # possible step keeps each waypoint's own popup at its own index,
+        # in the same visit order already established above, instead of
+        # letting two genuinely different stops fight over one slot.
+        for i in range(1, len(indices)):
+            if indices[i] <= indices[i - 1]:
+                indices[i] = min(n - 1, indices[i - 1] + 1)
+        return indices
 
     # [Map] Douglas-Peucker algorithm for path simplification
     @staticmethod
@@ -139,7 +187,7 @@ class RouteGeometryProcessor:
         3. Edge Case Handling: Returns a static array or zero-matrix if the resulting
            points fall below the minimum threshold required for interpolation.
         4. Cumulative Distance Parameterization: Computes point-to-point Euclidean distances
-           via `np.hypot` and builds a cumulative distance array ($cum\_dists$) to map
+           via `np.hypot` and builds a cumulative distance array (cum_dists) to map
            out the true spatial length of the route.
         5. Temporal Pacing & Easing: Normalizes path progress into a progress domain ($t$),
            generates linear frame markers across the requested `num_frames`, and optionally

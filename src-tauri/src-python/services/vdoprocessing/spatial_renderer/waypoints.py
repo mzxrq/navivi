@@ -494,8 +494,13 @@ class _WaypointRenderMixin:
             end_wp = _leg_pin(
                 res_points[-1][0], res_points[-1][1], end_label, res_popups[-1], end_match
             )
-            start_pin_label, start_pin_color = self._pin_label_and_color(start_wp, total_wp)
-            end_pin_label, end_pin_color = self._pin_label_and_color(end_wp, total_wp)
+            start_pin_label, start_pin_color, _ = self._pin_label_and_color(start_wp, total_wp)
+            # Per-leg turn-by-turn clips don't currently draw the loop
+            # route's half green/red split (see pins.py's
+            # _pin_label_and_color) — only the overview/recap does — so
+            # the split_color here is intentionally discarded rather than
+            # threaded through draw_marker.
+            end_pin_label, end_pin_color, _ = self._pin_label_and_color(end_wp, total_wp)
 
             # Built ONCE, always (not just when the popup-card intro below
             # plays) — the full route line for this whole leg (a preview
