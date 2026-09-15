@@ -163,21 +163,6 @@ class _GraphicsEngineBase:
         # — background map frames, unlike popup thumbnails, commonly do —
         # can't corrupt the cached array for the next read.
         self._image_cache: Dict[str, np.ndarray] = {}
-        # Set by overview.py's render_overview setup (never by __init__'s
-        # caller) when the route is a loop (start_point == end_point) — a
-        # boolean array, one entry per point in the animated path
-        # (smooth_path/path_history), True wherever that point's stretch
-        # of the route is walked TWICE (a ferry crossing or spur used out
-        # AND back, say — see _OverviewRenderMixin._compute_loop_shared_mask).
-        # draw_path draws a normal single line wherever this is False (or
-        # the whole thing, if this attribute is None/not set at all — a
-        # non-loop route never touches it) and switches to two parallel
-        # stripes (see _draw_dual_stripe) wherever it's True — including
-        # the FIRST time the route passes through a shared stretch, not
-        # only once it's later retraced, since a stretch that's shared at
-        # all is shared both times it's walked.
-        self.loop_shared_mask: Optional[np.ndarray] = None
-        self.loop_return_color: Tuple[int, int, int] = tuning.LOOP_RETURN_LINE_COLOR
 
     def read_image_safe(self, path: str) -> Optional[np.ndarray]:
         if not path or not os.path.exists(path):
@@ -212,12 +197,17 @@ class _GraphicsEngineBase:
         "bottom_left", "bottom_right", "top_left", "top_right",
     )
 
+    # Fixed screen-edge inset for a corner-anchored HUD card (popup or
+    # summary card) — keeps it off the very edge of the frame.
+    _HUD_CORNER_MARGIN: Final[int] = 40
+
     @staticmethod
     def _hud_corner_box(
         corner: str, w: int, h: int, total_w: int, total_h: int
     ) -> Tuple[int, int]:
-        x = 40 if "left" in corner else w - total_w - 40
-        y = h - total_h - 40 if "bottom" in corner else 40
+        margin = _GraphicsEngineBase._HUD_CORNER_MARGIN
+        x = margin if "left" in corner else w - total_w - margin
+        y = h - total_h - margin if "bottom" in corner else margin
         return x, y
 
     def _load_font(self, candidates: List[str], size: int) -> FreeTypeFont | Any:
@@ -230,9 +220,9 @@ class _GraphicsEngineBase:
         if cached is not None:
             return cached
 
-        for name in candidates:
+        for candidate in candidates:
             try:
-                font = truetype(name, size)
+                font = truetype(candidate, size)
                 break
             except OSError:
                 continue

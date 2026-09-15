@@ -25,6 +25,14 @@ from services.vdoprocessing.pydeckrecorder import record_headless_video
 # Logging configuration
 logger = setup_logger("RouteAnimator")
 
+# Shared fallback defaults — reused both as the initial GraphicsEngine
+# config value and later as the CLI --thickness/--radius/--summary-hold
+# fallback when neither the CLI flag nor the route JSON's settings supply
+# one. Named here so both use sites can't silently drift apart.
+DEFAULT_LINE_THICKNESS = 10
+DEFAULT_MARKER_RADIUS = 24
+DEFAULT_SUMMARY_HOLD_SECONDS = 4.0
+
 
 class RouteAnimator:
     """Orchestrates the animation pipeline by bridging configurations with Renderers."""
@@ -43,10 +51,23 @@ class RouteAnimator:
         # 1. Initialize the Core Graphics Engine
         self.graphics = GraphicsEngine(
             line_color=self.config.get("line_color", (243, 150, 33)),  # BGR blue
-            line_thickness=self.config.get("line_thickness", 10),
-            marker_color=self.config.get("marker_color", (0, 0, 255)),
-            arrived_marker_color=self.config.get("arrived_marker_color", (0, 0, 220)),
-            marker_radius=self.config.get("marker_radius", 24),
+            line_thickness=self.config.get("line_thickness", DEFAULT_LINE_THICKNESS),
+            # Was hardcoded to (0, 0, 255)/(0, 0, 220) here — both pure red
+            # in BGR — completely independent of (and inconsistent with)
+            # tuning.DEFAULT_MARKER_COLOR's own blue default. Since a
+            # project's job_config.json rarely sets "marker_color"
+            # explicitly, every not-yet-arrived numbered pin (and every
+            # popup card border, which falls back to this same color —
+            # see pins.py's _pin_color/_pin_label_and_color) rendered red
+            # instead of the intended blue in every real render. Falling
+            # back to the SAME tuning.py defaults GraphicsEngineBase
+            # itself already uses keeps this consistent regardless of
+            # which one actually ends up supplying the color.
+            marker_color=self.config.get("marker_color", tuning.DEFAULT_MARKER_COLOR),
+            arrived_marker_color=self.config.get(
+                "arrived_marker_color", tuning.DEFAULT_ARRIVED_MARKER_COLOR
+            ),
+            marker_radius=self.config.get("marker_radius", DEFAULT_MARKER_RADIUS),
             font_size=map_font_size,
             card_border_color=tuple(
                 self.config.get("card_border_color", tuning.DEFAULT_CARD_BORDER_COLOR)
@@ -77,13 +98,13 @@ class RouteAnimator:
     def load_route_data(self, json_path: str) -> Tuple[List, List, List, Dict]:
         """Loads and parses the waypoints into memory."""
         with open(json_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
+            raw_data = json.load(f)
 
-        if isinstance(data, list):
-            route_data, settings = data, {}
+        if isinstance(raw_data, list):
+            route_data, settings = raw_data, {}
         else:
-            route_data = data.get("route", data.get("points", []))
-            settings = data.get("settings", {})
+            route_data = raw_data.get("route", raw_data.get("points", []))
+            settings = raw_data.get("settings", {})
 
         points, labels, popups = [], [], []
         for item in route_data:
@@ -215,7 +236,10 @@ class RouteAnimator:
                 # of ending right when the blur finishes.
                 if not self.spatial_renderer.last_ending_hard_ended:
                     self._freeze_video_end(
-                        overview_path, hold_seconds=self.config.get("summary_hold", 4.0)
+                        overview_path,
+                        hold_seconds=self.config.get(
+                            "summary_hold", DEFAULT_SUMMARY_HOLD_SECONDS
+                        ),
                     )
                 output_paths.append(overview_path)
 
@@ -286,9 +310,11 @@ def main():
     animator.config["fps"] = args.fps or settings.get("fps", 30)
     animator.config["duration"] = args.duration or settings.get("duration_seconds", 8)
     animator.graphics.line_thickness = args.thickness or settings.get(
-        "line_thickness", 10
+        "line_thickness", DEFAULT_LINE_THICKNESS
     )
-    animator.graphics.marker_radius = args.radius or settings.get("marker_radius", 24)
+    animator.graphics.marker_radius = args.radius or settings.get(
+        "marker_radius", DEFAULT_MARKER_RADIUS
+    )
 
     res_sequence = None
     if args.res_route and args.res_map:
@@ -304,9 +330,9 @@ def main():
                 out_path.parent / "job_config.json",
             ]
 
-            for jp in job_paths:
-                if jp.exists():
-                    with open(jp, "r", encoding="utf-8") as f:
+            for job_config_path in job_paths:
+                if job_config_path.exists():
+                    with open(job_config_path, "r", encoding="utf-8") as f:
                         job_data = json.load(f)
                         start_lbl = job_data.get("start_point", {}).get("label")
                         end_lbl = job_data.get("end_point", {}).get("label")

@@ -1,13 +1,17 @@
 """Sprite blitting and cached procedural walker/vehicle icon sprites."""
 
 import math
-from typing import Dict, Tuple
+from typing import Dict, Final, Tuple
 
 import cv2
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
 
 from services import tuning
+
+# Horizontal gap between a marker's own radius and its landmark label
+# chip — how far the chip's near edge sits from the pin's anchor point.
+_LABEL_CHIP_GAP: Final[int] = 4
 
 
 class _SpriteMixin:
@@ -26,15 +30,18 @@ class _SpriteMixin:
         tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
         pad_x, pad_y = 10, 6
 
-        sprite_w = int(self.marker_radius + 4 + tw + pad_x * 2 + self.marker_radius + 4)
+        sprite_w = int(
+            self.marker_radius + _LABEL_CHIP_GAP + tw + pad_x * 2
+            + self.marker_radius + _LABEL_CHIP_GAP
+        )
         sprite_h = int(max(2 * (self.marker_radius + 3), th + pad_y * 2) + 8)
 
         # cx/cy is the pin's own anchor point (kept for spacing math below,
         # and as the sprite's blit anchor so it still lines up with the pin).
-        cx = int(self.marker_radius + 4)
+        cx = int(self.marker_radius + _LABEL_CHIP_GAP)
         cy = sprite_h // 2
 
-        bx1 = cx + int(self.marker_radius + 4)
+        bx1 = cx + int(self.marker_radius + _LABEL_CHIP_GAP)
         by1 = cy - (th // 2) - pad_y
         bx2 = bx1 + tw + pad_x * 2
         by2 = cy + (th // 2) + pad_y
@@ -287,8 +294,9 @@ class _SpriteMixin:
         color = self.MODE_COLORS.get(mode, self.marker_color)
         radius = int(self.marker_radius)
 
-        cv2.circle(frame, (cx, cy), radius + 6, (255, 255, 255), -1, cv2.LINE_AA)
-        cv2.circle(frame, (cx, cy), radius + 6, (200, 200, 200), 1, cv2.LINE_AA)
+        if self.line_border_thickness:
+            cv2.circle(frame, (cx, cy), radius + 6, (255, 255, 255), -1, cv2.LINE_AA)
+            cv2.circle(frame, (cx, cy), radius + 6, (200, 200, 200), 1, cv2.LINE_AA)
         cv2.circle(frame, (cx, cy), radius, color, -1, cv2.LINE_AA)
 
         # Heading arrow so unrecognized modes still show travel direction.

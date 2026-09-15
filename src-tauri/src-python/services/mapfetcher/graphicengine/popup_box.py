@@ -24,6 +24,10 @@ class _PopupBoxMixin:
     # [NOTE] [Animation] Single source of truth for beside-card sizing so render and collision-layout geometry can't drift apart again.
     BESIDE_CARD_BASE_W = 210
 
+    # Screen-edge inset a "beside the pin" popup card is clamped to, so it
+    # can't be placed flush against (or past) the very edge of the frame.
+    _BESIDE_POPUP_EDGE_MARGIN = 24
+
     def beside_card_footprint(self, card_scale: float = 1.0) -> Tuple[int, int]:
         """Returns the (total_w, total_h) footprint render_popup_box will
         actually draw for a "beside the pin" card at this card_scale —
@@ -130,7 +134,7 @@ class _PopupBoxMixin:
                 font.size * len(label_lines) + line_gap * (len(label_lines) - 1) + 14
             )
         total_h = target_img_h + (border * 2) + text_block_h
-        margin = 24
+        margin = self._BESIDE_POPUP_EDGE_MARGIN
 
         if not is_beside:
             box_x, box_y = self._hud_corner_box(hud_corner, w, h, total_w, total_h)
@@ -148,6 +152,15 @@ class _PopupBoxMixin:
             box_y = max(margin, min(box_y, h - total_h - margin))
 
         return box_x, box_y, total_w, total_h, border
+
+    @staticmethod
+    def _fade_to_base(frame: np.ndarray, alpha: float, base_frame: np.ndarray) -> np.ndarray:
+        """Blends `frame` back toward `base_frame` by `alpha` (0-1) — the
+        shared "fade the whole composited card result as one unit"
+        behavior render_popup_box uses both for its line_only early-return
+        and its own final return. Only called when alpha < 1.0."""
+        blend_alpha = max(0.0, alpha)
+        return cv2.addWeighted(frame, blend_alpha, base_frame, 1 - blend_alpha, 0)
 
     def pick_hud_corner(
         self,
@@ -199,13 +212,13 @@ class _PopupBoxMixin:
         then `skip_line=True` for every popup afterward (drawing just the
         cards on top), guarantees every line sits behind every card
         regardless of draw order."""
-        f_frame = target_frame.copy()
-        img_url = popup_info["data"].get("popup_image")
-        h, w = f_frame.shape[:2]
+        working_frame = target_frame.copy()
+        image_path = popup_info["data"].get("popup_image")
+        h, w = working_frame.shape[:2]
 
         # [NOTE] [Animation] Missing/unreadable popup_image silently skips the entire card draw, returning the frame unchanged rather than raising or drawing a placeholder.
-        if img_url and (line_only or os.path.exists(img_url)):
-            pop_img = None if line_only else self.read_image_safe(img_url)
+        if image_path and (line_only or os.path.exists(image_path)):
+            pop_img = None if line_only else self.read_image_safe(image_path)
             if line_only or pop_img is not None:
                 hud_corner = popup_info.get("hud_corner")
                 is_beside = hud_corner not in self.HUD_CORNERS
@@ -224,15 +237,6 @@ class _PopupBoxMixin:
                     # the pin it's meant to connect to.
                     point_x = int(popup_info.get("pin_x", popup_info["x"]))
                     point_y = int(popup_info.get("pin_y", popup_info["y"]))
-                    # Connects the card back to the waypoint's own pin —
-                    # used when the card is riding beside a waypoint the
-                    # traveler is flowing through rather than sitting in
-                    # a fixed HUD corner, so it's still clear which stop
-                    # it belongs to. The grid layout can place the card
-                    # anywhere, so pick whichever edge (or corner) of
-                    # the box is actually nearest the pin.
-                    anchor_x = min(max(point_x, box_x), box_x + total_w)
-                    anchor_y = min(max(point_y, box_y), box_y + total_h)
                     # Defaults to a neutral gray; callers with several
                     # leader lines on screen at once (e.g. the
                     # end-of-video recap) pass "leader_line_color" —
@@ -240,23 +244,50 @@ class _PopupBoxMixin:
                     # still be traced back to its pin despite crossing
                     # others.
                     line_color = popup_info.get("leader_line_color", (130, 130, 130))
-                    cv2.line(
-                        f_frame,
-                        (point_x, point_y),
-                        (anchor_x, anchor_y),
-                        line_color,
-                        2,
-                        cv2.LINE_AA,
-                    )
+                    # "leader_via" (set by _layout_recap_popups for a pin
+                    # that's part of a tight cluster — see its own
+                    # _padded_boundary docstring) routes the line through
+                    # an extra point on the cluster's shared outer
+                    # boundary first: pin -> via -> card, instead of a
+                    # single straight pin -> card line that would cut
+                    # through the cluster's interior. The FINAL segment's
+                    # anchor is computed from the via point (whichever
+                    # edge of the box is nearest to where the line is
+                    # actually arriving FROM), not the pin, so that last
+                    # stretch still reads as "coming from the cluster's
+                    # edge", not from the pin itself.
+                    via = popup_info.get("leader_via")
+                    if via is not None:
+                        via_x, via_y = int(via[0]), int(via[1])
+                        anchor_x = min(max(via_x, box_x), box_x + total_w)
+                        anchor_y = min(max(via_y, box_y), box_y + total_h)
+                        cv2.line(
+                            working_frame, (point_x, point_y), (via_x, via_y),
+                            line_color, 2, cv2.LINE_AA,
+                        )
+                        cv2.line(
+                            working_frame, (via_x, via_y), (anchor_x, anchor_y),
+                            line_color, 2, cv2.LINE_AA,
+                        )
+                    else:
+                        # Connects the card back to the waypoint's own pin
+                        # directly — the grid layout can place the card
+                        # anywhere, so pick whichever edge (or corner) of
+                        # the box is actually nearest the pin.
+                        anchor_x = min(max(point_x, box_x), box_x + total_w)
+                        anchor_y = min(max(point_y, box_y), box_y + total_h)
+                        cv2.line(
+                            working_frame, (point_x, point_y), (anchor_x, anchor_y),
+                            line_color, 2, cv2.LINE_AA,
+                        )
                     cv2.circle(
-                        f_frame, (point_x, point_y), 4, line_color, -1, cv2.LINE_AA
+                        working_frame, (point_x, point_y), 4, line_color, -1, cv2.LINE_AA
                     )
 
                 if line_only:
                     if alpha < 1.0:
-                        a = max(0.0, alpha)
-                        f_frame = cv2.addWeighted(f_frame, a, target_frame, 1 - a, 0)
-                    return f_frame
+                        working_frame = self._fade_to_base(working_frame, alpha, target_frame)
+                    return working_frame
 
                 target_ratio = 16.0 / 9.0
                 target_img_w = total_w - border * 2
@@ -379,7 +410,7 @@ class _PopupBoxMixin:
                     width=self.card_border_thickness,
                 )
 
-                base_pil = Image.fromarray(cv2.cvtColor(f_frame, cv2.COLOR_BGR2RGBA))
+                base_pil = Image.fromarray(cv2.cvtColor(working_frame, cv2.COLOR_BGR2RGBA))
                 base_pil.paste(pil_canvas, (0, 0), pil_canvas)
 
                 pil_img = Image.fromarray(cv2.cvtColor(pop_img, cv2.COLOR_BGR2RGB))
@@ -450,9 +481,8 @@ class _PopupBoxMixin:
                             )
                             line_y += label_font.size + line_gap
 
-                f_frame = cv2.cvtColor(np.array(base_pil), cv2.COLOR_RGBA2BGR)
+                working_frame = cv2.cvtColor(np.array(base_pil), cv2.COLOR_RGBA2BGR)
 
         if alpha < 1.0:
-            a = max(0.0, alpha)
-            f_frame = cv2.addWeighted(f_frame, a, target_frame, 1 - a, 0)
-        return f_frame
+            working_frame = self._fade_to_base(working_frame, alpha, target_frame)
+        return working_frame

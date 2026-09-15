@@ -14,6 +14,33 @@ from services import tuning
 
 
 class _WaypointRenderMixin:
+    # Extra pixels below the frame a sliding summary card starts from, on
+    # top of its own height, so it genuinely starts off-screen rather than
+    # just below its resting spot. Shared by _play_leg_summary_card's own
+    # entrance and the intro card's hold/exit compositing further down.
+    _CARD_SLIDE_MARGIN_PX = 40
+
+    # Default hold time (seconds) for a merged-in mid-route stop-by's
+    # pass-by popup card when it doesn't specify its own freeze_seconds.
+    _DEFAULT_PASSBY_FREEZE_SECONDS = 2.0
+
+    # Minimum spacing (px) enforced between consecutive residential-map
+    # points before smoothing/animating the path (see "FIX 2" below).
+    _MIN_RESIDENTIAL_POINT_SPACING_PX = 3.0
+
+    # Simplification tolerance (px) used when smoothing this leg's path —
+    # see the comment at its call site for why this is looser than the
+    # library's own 3px default.
+    _ROUTE_SIMPLIFY_TOLERANCE_PX = 6.0
+
+    # Floor on total_frames so a very short/near-zero-duration leg still
+    # produces a playable clip instead of 0-1 frames.
+    _MIN_LEG_TOTAL_FRAMES = 10
+
+    # Clamp bounds (seconds) applied to the configured post-arrival hold.
+    _ARRIVAL_HOLD_MIN_SECONDS = 1.0
+    _ARRIVAL_HOLD_MAX_SECONDS = 2.0
+
     @staticmethod
     def _ease_in_out(t: float) -> float:
         """Same easing curve local_pan_generator.py uses for its Ken-Burns
@@ -54,11 +81,11 @@ class _WaypointRenderMixin:
         flush against both side edges instead of floating with the usual
         card margin."""
         card_h = seg_card.shape[0]
-        slide_distance = card_h + 40
+        slide_distance = card_h + self._CARD_SLIDE_MARGIN_PX
         fade_frames = max(1, int(fade_sec * fps))
 
-        for f in range(fade_frames):
-            t = (f + 1) / fade_frames
+        for frame_idx in range(fade_frames):
+            t = (frame_idx + 1) / fade_frames
             eased = 1 - (1 - t) ** 3
             video.write(
                 self.graphics.composite_card_on_frame(
@@ -75,8 +102,8 @@ class _WaypointRenderMixin:
                 video.write(held_frame)
 
         if play_exit:
-            for f in range(fade_frames):
-                t = (f + 1) / fade_frames
+            for frame_idx in range(fade_frames):
+                t = (frame_idx + 1) / fade_frames
                 eased = 1 - (1 - t) ** 3
                 video.write(
                     self.graphics.composite_card_on_frame(
@@ -303,8 +330,8 @@ class _WaypointRenderMixin:
                     seg_real_duration = total_duration
             pauses = res_data.get("pauses", [])
 
-            # [NOTE] [Animation] Floors total_frames at 10 so a very short/near-zero-duration leg still produces a playable clip instead of 0-1 frames.
-            total_frames = max(10, int(total_duration * fps))
+            # [NOTE] [Animation] Floors total_frames at _MIN_LEG_TOTAL_FRAMES so a very short/near-zero-duration leg still produces a playable clip instead of 0-1 frames.
+            total_frames = max(self._MIN_LEG_TOTAL_FRAMES, int(total_duration * fps))
             is_paused_per_frame = [
                 (
                     any(p["start"] <= (f / fps) <= p["end"] for p in pauses)
@@ -321,7 +348,7 @@ class _WaypointRenderMixin:
             for pt in res_points[1:]:
                 if (
                     math.hypot(pt[0] - filtered_res[-1][0], pt[1] - filtered_res[-1][1])
-                    > 3.0
+                    > self._MIN_RESIDENTIAL_POINT_SPACING_PX
                 ):
                     filtered_res.append(pt)
             if filtered_res[-1] != res_points[-1]:
@@ -337,13 +364,13 @@ class _WaypointRenderMixin:
                 # small GPS/routing jitter that the default 3px tolerance
                 # barely touches — a noticeably looser tolerance smooths
                 # that out into a cleaner line without cutting real turns.
-                simplify_tolerance_px=6.0,
+                simplify_tolerance_px=self._ROUTE_SIMPLIFY_TOLERANCE_PX,
             )
 
             res_named = [
-                (int(res_points[j][0]), int(res_points[j][1]), res_labels[j])
-                for j in range(len(res_points))
-                if RouteGeometryProcessor.is_real_label(res_labels[j])
+                (int(res_points[point_idx][0]), int(res_points[point_idx][1]), res_labels[point_idx])
+                for point_idx in range(len(res_points))
+                if RouteGeometryProcessor.is_real_label(res_labels[point_idx])
             ]
             leg_label = (
                 res_named[-1][2]
@@ -355,14 +382,14 @@ class _WaypointRenderMixin:
             )
             active_res_popups = [
                 {
-                    "x": res_points[j][0],
-                    "y": res_points[j][1],
-                    "data": res_popups[j],
-                    "label": res_labels[j],
-                    "index": j,
+                    "x": res_points[point_idx][0],
+                    "y": res_points[point_idx][1],
+                    "data": res_popups[point_idx],
+                    "label": res_labels[point_idx],
+                    "index": point_idx,
                 }
-                for j in range(len(res_points))
-                if res_popups[j] is not None
+                for point_idx in range(len(res_points))
+                if res_popups[point_idx] is not None
             ]
 
             for popup in active_res_popups:
@@ -460,17 +487,17 @@ class _WaypointRenderMixin:
             # the whole clip.
             mid_marker_pins = [
                 {
-                    "x": m["px"][0], "y": m["px"][1], "index": -1, "order": None,
-                    "label": m.get("label"),
+                    "x": marker_data["px"][0], "y": marker_data["px"][1], "index": -1, "order": None,
+                    "label": marker_data.get("label"),
                     "data": {
                         "is_stopby": True,
-                        "popup_image": m.get("popup_image"),
-                        "freeze_seconds": m.get("freeze_seconds") or 2.0,
-                        "image_display": m.get("image_display", "cover"),
+                        "popup_image": marker_data.get("popup_image"),
+                        "freeze_seconds": marker_data.get("freeze_seconds") or self._DEFAULT_PASSBY_FREEZE_SECONDS,
+                        "image_display": marker_data.get("image_display", "cover"),
                         "triggered": False,
                     },
                 }
-                for m in res_data.get("mid_markers", [])
+                for marker_data in res_data.get("mid_markers", [])
             ]
 
             def _leg_pin(x, y, label, data, match):
@@ -546,6 +573,28 @@ class _WaypointRenderMixin:
                         popup_card["border_color"] = wp_color or self.graphics.marker_color
                         popup_cards.append(popup_card)
 
+                # Position each card via the same collision-avoiding
+                # search render_overview's own intro cards use (see its
+                # _layout_beside_popups call) instead of a fixed offset
+                # to one side of the pin — without this, a card had no
+                # idea where this leg's OWN route line actually ran and
+                # could land directly on top of it, hiding a whole
+                # stretch of the route underneath its opaque background.
+                if popup_cards:
+                    route_obstacle_arr = None
+                    if len(res_smooth_path) > 1:
+                        route_obstacle_arr = np.asarray(res_smooth_path, dtype=float)
+                        if len(route_obstacle_arr) > 400:
+                            step = max(1, len(route_obstacle_arr) // 400)
+                            route_obstacle_arr = route_obstacle_arr[::step]
+                    footprint_w, footprint_h = self.graphics.beside_card_footprint()
+                    self._layout_beside_popups(
+                        [{"popup": c, "frames_left": 1} for c in popup_cards], w, h,
+                        card_w=footprint_w, card_h=footprint_h,
+                        route_obstacles=route_obstacle_arr,
+                        max_radius=float(max(w, h)),
+                    )
+
                 # Line, then pin, then card — in that order — so each
                 # leader line sits BEHIND both its own pin and its card,
                 # instead of drawing the pins first and letting the lines
@@ -598,7 +647,7 @@ class _WaypointRenderMixin:
                 fade_frames_n = max(1, int(fade_sec * fps))
                 intro_card_hold_frames = max(0, int(clip_hold_sec * fps) - fade_frames_n)
                 intro_card_exit_frames = fade_frames_n
-                intro_card_slide_distance = intro_seg_card.shape[0] + 40
+                intro_card_slide_distance = intro_seg_card.shape[0] + self._CARD_SLIDE_MARGIN_PX
                 self.last_frame = route_preview_frame
 
             path_idx = 0
@@ -607,7 +656,8 @@ class _WaypointRenderMixin:
             ended_at_destination = False
             summary_shown_inline = False
             arrival_hold_seconds = max(
-                1.0, min(2.0, float(self.post_arrival_hold_seconds))
+                self._ARRIVAL_HOLD_MIN_SECONDS,
+                min(self._ARRIVAL_HOLD_MAX_SECONDS, float(self.post_arrival_hold_seconds)),
             )
 
             for current_frame in range(total_frames):
@@ -630,14 +680,34 @@ class _WaypointRenderMixin:
                         if self.config.get("show_compass", True):
                             self.graphics.draw_compass(current_bg)
 
-                p = res_smooth_path[path_idx]
+                current_point = res_smooth_path[path_idx]
                 frame = current_bg.copy()
                 current_chunk_px = res_smooth_path[: path_idx + 1]
 
                 if len(current_chunk_px) > 1:
                     cx, cy = int(current_chunk_px[-1][0]), int(current_chunk_px[-1][1])
                 else:
-                    cx, cy = int(p[0]), int(p[1])
+                    cx, cy = int(current_point[0]), int(current_point[1])
+
+                def _within_trigger_radius(px, py):
+                    # Same "has the traveler's path segment come within
+                    # the pin's own trigger radius" check used for both a
+                    # mid-route stop-by pass-by (near_marker) and a
+                    # popup's own arrival trigger (near_segment) — kept as
+                    # one shared closure over this frame's prev_cx/prev_cy/
+                    # cx/cy instead of the same few lines duplicated for
+                    # each.
+                    return (
+                        prev_cx is not None
+                        and prev_cy is not None
+                        and RouteGeometryProcessor.point_to_segment_distance(
+                            px, py, prev_cx, prev_cy, cx, cy
+                        )
+                        < (
+                            self.graphics.marker_radius
+                            + self.trigger_radius_padding["waypoint"]
+                        )
+                    )
 
                 if not is_video:
                     if len(current_chunk_px) > 1:
@@ -699,17 +769,7 @@ class _WaypointRenderMixin:
                 for marker_pin in mid_marker_pins:
                     if marker_pin["data"]["triggered"] or not marker_pin["data"].get("popup_image"):
                         continue
-                    near_marker = (
-                        prev_cx is not None
-                        and prev_cy is not None
-                        and RouteGeometryProcessor.point_to_segment_distance(
-                            marker_pin["x"], marker_pin["y"], prev_cx, prev_cy, cx, cy
-                        )
-                        < (
-                            self.graphics.marker_radius
-                            + self.trigger_radius_padding["waypoint"]
-                        )
-                    )
+                    near_marker = _within_trigger_radius(marker_pin["x"], marker_pin["y"])
                     if near_marker:
                         marker_pin["data"]["triggered"] = True
                         pass_card = dict(marker_pin)
@@ -718,12 +778,14 @@ class _WaypointRenderMixin:
                         pass_card["border_color"] = self._STOPBY_PIN_COLOR
                         fade_frames = max(1, int(fade_sec * fps))
                         hold_frames = max(1, int(
-                            float(marker_pin["data"].get("freeze_seconds", 2.0)) * fps
+                            float(marker_pin["data"].get(
+                                "freeze_seconds", self._DEFAULT_PASSBY_FREEZE_SECONDS
+                            )) * fps
                         ))
-                        for f in range(fade_frames):
+                        for frame_idx in range(fade_frames):
                             video.write(
                                 self.graphics.render_popup_box(
-                                    frame, pass_card, alpha=(f + 1) / fade_frames
+                                    frame, pass_card, alpha=(frame_idx + 1) / fade_frames
                                 )
                             )
                         held_pass_frame = self.graphics.render_popup_box(
@@ -731,10 +793,10 @@ class _WaypointRenderMixin:
                         )
                         for _ in range(max(0, hold_frames - fade_frames)):
                             video.write(held_pass_frame)
-                        for f in range(fade_frames):
+                        for frame_idx in range(fade_frames):
                             video.write(
                                 self.graphics.render_popup_box(
-                                    frame, pass_card, alpha=1.0 - (f + 1) / fade_frames
+                                    frame, pass_card, alpha=1.0 - (frame_idx + 1) / fade_frames
                                 )
                             )
                         self.last_frame = frame
@@ -751,17 +813,7 @@ class _WaypointRenderMixin:
                     # the actual destination.
                     if popup["index"] == 0:
                         continue
-                    near_segment = (
-                        prev_cx is not None
-                        and prev_cy is not None
-                        and RouteGeometryProcessor.point_to_segment_distance(
-                            popup["x"], popup["y"], prev_cx, prev_cy, cx, cy
-                        )
-                        < (
-                            self.graphics.marker_radius
-                            + self.trigger_radius_padding["waypoint"]
-                        )
-                    )
+                    near_segment = _within_trigger_radius(popup["x"], popup["y"])
                     if near_segment or just_arrived:
                         popup["data"]["triggered"] = True
                         # This waypoint's own pin color — border_color was

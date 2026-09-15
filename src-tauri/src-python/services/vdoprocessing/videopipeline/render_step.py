@@ -54,12 +54,34 @@ RESIDENTIAL_LEG_RE = re.compile(r"02_waypoint_(\d+)_")
 # tighter (more zoomed-in) crop; bigger ones get a bit more room so nearby
 # pins/labels don't crowd the frame edge.
 _OVERVIEW_PADDING_BY_SPAN_KM = (
-    (1.5, 0.06),
-    (5.0, 0.08),
-    (15.0, 0.10),
-    (40.0, 0.13),
+    (1.5, 0.045),
+    (5.0, 0.06),
+    (15.0, 0.07),
+    (40.0, 0.09),
 )
-_OVERVIEW_PADDING_MAX_SPAN = 0.16
+_OVERVIEW_PADDING_MAX_SPAN = 0.11
+
+# Fallback real-world speed (km/h) used when a leg's own mode has no
+# configured speed AND there's no configured "car" speed to fall back to
+# either (see mode_speed_kmh.get(mode) or mode_speed_kmh.get("car", ...)
+# below).
+_FALLBACK_CAR_SPEED_KMH = 70.0
+
+_SECONDS_PER_HOUR = 3600.0
+
+# Bounds on how many points a synthetic straight-line ferry crossing is
+# sampled into when there's no cached routed polyline for that leg (see the
+# "No cached route for this leg" fallback below).
+_MIN_FERRY_SAMPLE_POINTS = 2
+_MAX_FERRY_SAMPLE_POINTS = 120
+
+# Overview animation pacing bounds/rates — see the "Pace the overview off
+# the route itself" comment further down for the full rationale.
+_OVERVIEW_MIN_DURATION_SECONDS = 24.0
+_OVERVIEW_MAX_DURATION_SECONDS = 180.0
+_OVERVIEW_SECONDS_PER_LEG = 8.0
+_OVERVIEW_SECONDS_PER_KM = 1.5
+_OVERVIEW_MIN_FINAL_DURATION_SECONDS = 10.0
 
 
 def _adaptive_overview_padding(route_df: pd.DataFrame) -> float:
@@ -269,9 +291,11 @@ def render_route_video(
         # allowed to run faster than this for modes like walking, so the
         # two intentionally diverge rather than staying "consistent".
         for mode, dist_km in mode_breakdown.items():
-            speed = mode_speed_kmh.get(mode) or mode_speed_kmh.get("car", 70.0)
+            speed = mode_speed_kmh.get(mode) or mode_speed_kmh.get(
+                "car", _FALLBACK_CAR_SPEED_KMH
+            )
             if speed > 0:
-                mode_duration[mode] = (dist_km / speed) * 3600.0
+                mode_duration[mode] = (dist_km / speed) * _SECONDS_PER_HOUR
 
     # Per-leg (waypoint-to-waypoint) distance/duration, so the overview can
     # show "this segment: X km, Y min" at each arrival instead of only a
@@ -317,7 +341,7 @@ def render_route_video(
         end_label = project_config.get("end_point", {}).get("label")
 
         for idx, wp in enumerate(waypoints):
-            c_idx = wp_indices[idx]
+            route_point_idx = wp_indices[idx]
             raw_label = wp.get("label", PIPELINE_LABELS["waypoint_fallback"])
 
             if idx == 0 and start_label:
@@ -331,12 +355,12 @@ def render_route_video(
                 else PIPELINE_LABELS["stop_prefix"] if idx == len(waypoints) - 1
                 else ""
             )
-            route_labels[c_idx] = (
+            route_labels[route_point_idx] = (
                 f"{prefix}{formatted}" if formatted else prefix.strip(": ")
             )
 
             popup_img = wp.get("popup_image")
-            route_popups[c_idx] = {
+            route_popups[route_point_idx] = {
                 "freeze_seconds": min(
                     float(wp.get("freeze_seconds", 3.0)), tuning.POPUP_FREEZE_SECONDS_MAX
                 ),
@@ -502,8 +526,8 @@ def render_route_video(
             wp.get("id"): pos for pos, wp in enumerate(waypoints) if wp.get("id")
         }
 
-        for seq_idx, item in enumerate(sequence_data):
-            start_idx, end_idx = item["start_idx"], item["end_idx"]
+        for seq_idx, leg_item in enumerate(sequence_data):
+            start_idx, end_idx = leg_item["start_idx"], leg_item["end_idx"]
             chunk = route_df.iloc[start_idx : end_idx + 1]
 
             # This leg's departure/arrival RAW positions in `waypoints` —
@@ -511,10 +535,10 @@ def render_route_video(
             # since a merged-away stop-by can make them diverge. Falls back
             # to the old positional guess only if a waypoint is missing its
             # "id" field (older data saved before ids were assigned).
-            start_pos = id_to_position.get(item.get("start_waypoint_id"))
+            start_pos = id_to_position.get(leg_item.get("start_waypoint_id"))
             if start_pos is None:
                 start_pos = seq_idx
-            end_pos = id_to_position.get(item.get("end_waypoint_id"))
+            end_pos = id_to_position.get(leg_item.get("end_waypoint_id"))
             if end_pos is None:
                 end_pos = seq_idx + 1
 
@@ -547,7 +571,10 @@ def render_route_video(
                     # No cached route for this leg — fall back to the direct
                     # water crossing between stops rather than whatever
                     # (possibly road-snapped) path route_df happens to have.
-                    ferry_count = max(2, min(120, end_idx - start_idx + 1))
+                    ferry_count = max(
+                        _MIN_FERRY_SAMPLE_POINTS,
+                        min(_MAX_FERRY_SAMPLE_POINTS, end_idx - start_idx + 1),
+                    )
                     ferry_lats = np.linspace(
                         float(start_wp["lat"]), float(end_wp["lat"]), ferry_count
                     )
@@ -558,10 +585,10 @@ def render_route_video(
                     {"latitude": ferry_lats, "longitude": ferry_lons}
                 )
                 ferry_map_path = str(
-                    Path(item["img_path"]).with_name(f"res_map_ferry_{seq_idx + 1}.png")
+                    Path(leg_item["img_path"]).with_name(f"res_map_ferry_{seq_idx + 1}.png")
                 )
-                item["img_path"] = ferry_map_path
-                item["extent"] = fetcher.downloader.fetch_residential_chunk(
+                leg_item["img_path"] = ferry_map_path
+                leg_item["extent"] = fetcher.downloader.fetch_residential_chunk(
                     chunk, ferry_map_path, (img_w, img_h)
                 )
 
@@ -582,7 +609,7 @@ def render_route_video(
             ) or 10.0
             total_time = audio_durations[start_pos] if has_audio else distance_fallback
 
-            lats_arr, lons_arr = item["lats"], item["lons"]
+            lats_arr, lons_arr = leg_item["lats"], leg_item["lons"]
             seg_dist = (
                 float(
                     np.nansum(
@@ -595,7 +622,7 @@ def render_route_video(
                 else 0.0
             )
 
-            raw_img = item.get("img_path")
+            raw_img = leg_item.get("img_path")
             leg_popups = [None] * len(chunk)
             if len(leg_popups) > 0:
                 leg_popups[-1] = route_popups[end_idx]
@@ -607,13 +634,13 @@ def render_route_video(
                         if isinstance(raw_img, list) and raw_img
                         else (str(raw_img) if raw_img else None)
                     ),
-                    "extent": item["extent"],
+                    "extent": leg_item["extent"],
                     "lats": lats_arr,
                     "lons": lons_arr,
                     "points": _project_route_to_pixels(
                         chunk["latitude"].to_numpy(),
                         chunk["longitude"].to_numpy(),
-                        item["extent"],
+                        leg_item["extent"],
                         img_w,
                         img_h,
                     ),
@@ -644,15 +671,15 @@ def render_route_video(
                     # position instead of a blind per-clip counter, which
                     # stop-by merging would otherwise throw out of sync.
                     "start_pos": start_pos,
-                    "wide_img_path": item.get("wide_img_path"),
-                    "wide_extent": item.get("wide_extent"),
+                    "wide_img_path": leg_item.get("wide_img_path"),
+                    "wide_extent": leg_item.get("wide_extent"),
                     # "pos_in_chunk" (0-based index into this leg's own
                     # `points`/res_points list, not the route_df row index)
                     # is what waypoints.py actually needs to know when the
                     # traveler has passed a merged-in stop-by along the way.
                     "mid_markers": [
                         {**m, "pos_in_chunk": m["row_idx"] - start_idx}
-                        for m in item.get("mid_markers", [])
+                        for m in leg_item.get("mid_markers", [])
                     ],
                 }
             )
@@ -669,7 +696,11 @@ def render_route_video(
     # covered, clamped to a sane range either way.
     num_legs = max(1, len(wp_indices) - 1) if wp_indices else 1
     base_overview_duration = max(
-        24.0, min(180.0, num_legs * 8.0 + total_distance_km * 1.5)
+        _OVERVIEW_MIN_DURATION_SECONDS,
+        min(
+            _OVERVIEW_MAX_DURATION_SECONDS,
+            num_legs * _OVERVIEW_SECONDS_PER_LEG + total_distance_km * _OVERVIEW_SECONDS_PER_KM,
+        ),
     )
     # Overall playback speed for the overview — 2x by default (i.e. half
     # the paced-out duration above), tunable via job_config.json's
@@ -677,7 +708,9 @@ def render_route_video(
     # (mode-to-mode ratios from mode_speeds_kmh are unaffected), unlike
     # that setting which only controls relative pacing between modes.
     overview_speed_multiplier = float(settings.get("overview_speed_multiplier", 2.0))
-    overview_duration = max(10.0, base_overview_duration / overview_speed_multiplier)
+    overview_duration = max(
+        _OVERVIEW_MIN_FINAL_DURATION_SECONDS, base_overview_duration / overview_speed_multiplier
+    )
 
     animator_config = {
         "output_dir": output_video_dir,

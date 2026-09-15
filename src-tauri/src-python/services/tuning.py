@@ -129,97 +129,13 @@ END_PIN_COLOR: Tuple[int, int, int] = (81, 15, 217)  # #d90f51 red/pink
 DRAWN_PIN_COLOR: Tuple[int, int, int] = (12, 121, 255)  # #ff790c orange — drawn-route waypoints
 STOPBY_PIN_COLOR: Tuple[int, int, int] = (28, 38, 51)  # #33261c dark brown — stop-by waypoints
 # How close start_point and end_point need to be (in degrees lat/lng) to
-# count as "the same place" — a loop/out-and-back route — for both the
-# "E" pin's half green/red split (see pins.py's _pin_label_and_color) and
-# the route line's own two-color shared-corridor split (see
-# SpatialRendererBase._is_loop_route and _OverviewRenderMixin's
-# _compute_loop_shared_mask). Matches the proximity threshold
+# count as "the same place" — a loop/out-and-back route — for the "E"
+# pin's half green/red split (see pins.py's _pin_label_and_color and
+# SpatialRendererBase._is_loop_route). Matches the proximity threshold
 # render_step.py's own waypoint-id resolution already uses for "this is
 # really the same real-world spot" (~30m at these latitudes); a genuinely
 # different end point a block or two away should never trigger this.
 LOOP_ROUTE_MATCH_DEGREES = 0.0003
-# One of the two parallel stripes GraphicsEngine.draw_path draws over any
-# stretch of a loop route's line that's genuinely walked TWICE (see
-# loop_shared_mask) — the other stripe uses the normal per-mode line
-# color. A stretch walked only once (a real one-way leg — an island loop
-# with no exact retrace, say) stays a plain single-color line; only an
-# actually-shared corridor (most commonly a ferry crossing or a
-# there-and-back spur used both directions) gets this divided-road look.
-# Distinct from END_PIN_COLOR too, so the return stripe doesn't get
-# visually confused with the "arrived" pin color.
-LOOP_RETURN_LINE_COLOR: Tuple[int, int, int] = (60, 60, 235)  # #eb3c3c red
-# How close (in PIXELS, on the rendered overview frame) two points from
-# DIFFERENT stretches of the same route have to be to count as "the same
-# physical corridor, walked twice" — see
-# _OverviewRenderMixin._compute_loop_shared_mask. Wide enough to tolerate
-# normal GPS/track noise between an outbound and return pass over
-# nominally the same path (they're rarely pixel-identical), tight enough
-# that two genuinely different, merely nearby legs (two separate trail
-# segments a short walk apart) don't get flagged as the same corridor.
-LOOP_SHARED_CORRIDOR_PX = 14.0
-# How far apart (as a FRACTION of the whole animated path's frame count)
-# two points must be in TIME before their spatial closeness even counts
-# as a candidate "shared corridor" pair — without this, two adjacent
-# points a few frames apart on the same continuous curve (any tight bend
-# in the path, not an out-and-back at all) would trivially satisfy the
-# pixel-distance check against each other and get flagged as "shared".
-# Only two stretches visited at meaningfully different TIMES (e.g. an
-# early outbound crossing and a late return crossing) should ever count.
-LOOP_SHARED_MIN_TIME_FRACTION = 0.08
-# Radius (in PIXELS) around the route's own start point within which a
-# CANDIDATE "shared" pair is dropped, but only when BOTH its points fall
-# inside it — a loop route's S and E sit on (near-) the same real-world
-# spot by definition (see LOOP_ROUTE_MATCH_DEGREES), so the first few
-# steps leaving S will always be pixel-close to the last few steps
-# arriving at E even though that's not an actually-shared corridor, just
-# S and E happening to coincide. A point near E is still free to pair
-# with a genuinely different, far-from-start point earlier in the route
-# (a real street walked past on both the way out and the way back, close
-# to the station but not literally at S) — only a pair where BOTH ends
-# sit right at the S/E coincidence itself is excluded. Kept small (close
-# to a pin's own drawn radius) rather than a generous buffer — sized to
-# only cover the point genuinely indistinguishable from "departing" vs.
-# "arriving" (right under the S/E pin markers themselves, which are drawn
-# on top of the line anyway), not the visible street leading up to it —
-# a larger radius left a noticeably long single-color gap right before
-# reaching S/E even on a leg that's genuinely walked both ways.
-LOOP_SHARED_ENDPOINT_EXCLUSION_PX = 20.0
-# How large (as a FRACTION of the whole animated path's frame count) a
-# gap of NOT-shared points sandwiched between two shared runs can be
-# before it's filled in as shared too — see
-# _OverviewRenderMixin._compute_loop_shared_mask. Normal GPS/track noise
-# means an outbound and return pass are rarely a constant distance apart,
-# so a genuinely shared corridor can drift briefly past
-# LOOP_SHARED_CORRIDOR_PX in the middle of it, splitting one continuous
-# stretch into several short flagged runs with flickering gaps between
-# them. Only a gap fully enclosed by shared runs on both sides gets
-# filled — this never bridges two separate, legitimately distant shared
-# stretches (e.g. a ferry crossing AND a completely different spur).
-LOOP_SHARED_GAP_FILL_FRACTION = 0.02
-# How large (as a FRACTION of the whole animated path's frame count) a
-# flagged "shared" run must be to actually count, once gaps are filled —
-# see _OverviewRenderMixin._compute_loop_shared_mask. A genuinely shared
-# corridor stays close for a sustained stretch; two different streets
-# that merely cross paths at one intersection (common in a town's street
-# grid) only satisfy the distance/time checks for a short, isolated run
-# right around that crossing before diverging again. Any run shorter than
-# this is treated as that kind of incidental crossing and cleared back to
-# a normal single line, rather than a real retrace.
-LOOP_SHARED_MIN_RUN_FRACTION = 0.02
-# Pixel distance within which two waypoint-to-waypoint LEGS' endpoints
-# count as "the same physical spot" for forced shared-corridor matching —
-# see _OverviewRenderMixin._compute_loop_shared_mask's leg-endpoint pass.
-# job_config.json can give an explicit "(Return)" duplicate waypoint at
-# the exact same lat/lng as an earlier waypoint (a ferry dock walked to,
-# then back through on the way home) — when two legs' endpoints match
-# each other reversed, that whole leg is shared BY CONSTRUCTION, not by
-# chance geometric closeness, so it doesn't need (and isn't vulnerable
-# to) the distance/time/min-run heuristics the general detector uses. A
-# short leg (a straight ferry crossing) can be nothing but its own two
-# endpoints, leaving query_pairs nothing in the middle to find a match
-# on. Kept small — this only matches genuinely near-identical waypoint
-# coordinates, not merely nearby ones.
-LOOP_LEG_ENDPOINT_MATCH_PX = 25.0
 DEFAULT_MARKER_COLOR: Tuple[int, int, int] = (245, 135, 66)  # #4287f5 blue — every other numbered pin
 DEFAULT_ARRIVED_MARKER_COLOR: Tuple[int, int, int] = (200, 110, 30)  # deeper blue once visited
 PIN_NUMBER_TEXT_COLOR: Tuple[int, int, int] = (17, 17, 17)  # #111 — NaviPin's number/letter fill
@@ -244,10 +160,11 @@ DEFAULT_CARD_BORDER_THICKNESS = 1
 # Popup-picture caption size, as a multiple of settings.map_font_size (kept
 # relative rather than a flat pixel size so it still shrinks/grows with a
 # scaled-down card, e.g. the intro overview's card_scale). Bumped up from
-# the original 0.6x/1.0x, which read as too small next to the photo/pin
-# they're labeling.
-POPUP_LABEL_FONT_SCALE_BESIDE = 1.15  # "beside the pin" card (was 0.6x, then 0.85x)
-POPUP_LABEL_FONT_SCALE_CORNER = 1.1  # fixed HUD-corner card (was 1.0x, then 1.3x)
+# the original 0.6x/1.0x (too small), then brought back down from 1.15/1.1
+# (too large — competed with the photo/pin for attention, especially on
+# the small "beside" card).
+POPUP_LABEL_FONT_SCALE_BESIDE = 0.9  # "beside the pin" card (was 0.6x, 0.85x, then 1.15x)
+POPUP_LABEL_FONT_SCALE_CORNER = 0.95  # fixed HUD-corner card (was 1.0x, 1.3x, then 1.1x)
 # Waypoint name chip drawn next to each numbered/lettered pin as the route
 # animates leg-to-leg (e.g. "S  大阪市") — see _SpriteMixin.prebake_landmark_sprite.
 # Bumped up from 0.6x, which read as too small to make out against a busy

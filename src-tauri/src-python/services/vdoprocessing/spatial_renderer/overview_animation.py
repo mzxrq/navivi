@@ -16,6 +16,11 @@ from services.vdoprocessing.vdoexporter import VideoExporter
 from services.logger.progress import tracker
 from services import tuning
 
+# Animation-loop tuning constants (magic numbers pulled out of the loop body
+# below so their purpose has a name; not read from self.config/tuning).
+_MIN_TRIGGER_GAP_FLOOR_SECONDS = 0.4  # floor effective_gap_frames shrinks to for a deep backlog
+_DEFAULT_FREEZE_SECONDS = 4.0  # fallback display duration when a popup sets no freeze_seconds
+
 
 class _OverviewAnimationMixin:
     def _animate_overview_frames(
@@ -115,7 +120,7 @@ class _OverviewAnimationMixin:
         ]
         seq_ptr = 0
 
-        for current_frame, p in enumerate(smooth_path):
+        for current_frame, path_point in enumerate(smooth_path):
             if is_video:
                 ret, vid_frame = cap.read()
                 if ret:
@@ -125,7 +130,7 @@ class _OverviewAnimationMixin:
 
             frame = current_bg.copy()
 
-            path_history.append((int(p[0]), int(p[1])))
+            path_history.append((int(path_point[0]), int(path_point[1])))
 
             if cum_smooth_dist is not None:
                 frac = cum_smooth_dist[current_frame] / total_smooth_dist
@@ -279,7 +284,8 @@ class _OverviewAnimationMixin:
             effective_gap_frames = min_trigger_gap_frames
             if len(pending_popups) > 1:
                 effective_gap_frames = max(
-                    int(fps * 0.4), min_trigger_gap_frames // len(pending_popups)
+                    int(fps * _MIN_TRIGGER_GAP_FLOOR_SECONDS),
+                    min_trigger_gap_frames // len(pending_popups),
                 )
 
             triggered_popup = None
@@ -287,6 +293,21 @@ class _OverviewAnimationMixin:
                 triggered_popup = pending_popups.pop(0)
                 triggered_popup["data"]["triggered"] = True
                 last_trigger_frame = current_frame
+                # border_color was set once in render_overview's setup,
+                # before any waypoint had "arrived" — for a plain numbered
+                # pin that made it permanently the pre-arrival default
+                # marker color (_pin_color returns None until "arrived" is
+                # set), even once this pin's own dot has since turned
+                # arrived_marker_color above. Recompute fresh now that
+                # "arrived" is true (set on the proximity loop above) so
+                # the card's border actually matches its own pin's current
+                # color, same as waypoints.py's per-leg video already does.
+                _, fresh_border_color, _ = self._pin_label_and_color(
+                    triggered_popup, len(points)
+                )
+                triggered_popup["border_color"] = (
+                    fresh_border_color or self.graphics.marker_color
+                )
 
             # [NOTE] [Animation] "Point to point" snapshot for hide_route_on_popup — every
             # earlier, already-completed leg stays drawn; only the CURRENT
@@ -405,7 +426,7 @@ class _OverviewAnimationMixin:
                     # instead of lingering past it or vanishing early.
                     display_seconds = float(
                         triggered_popup.get("leg_display_seconds")
-                        or triggered_popup["data"].get("freeze_seconds", 4.0)
+                        or triggered_popup["data"].get("freeze_seconds", _DEFAULT_FREEZE_SECONDS)
                     )
                     # pending_popups here is whatever's LEFT after this one
                     # was just popped off the front — i.e. how many other
@@ -535,7 +556,7 @@ class _OverviewAnimationMixin:
                     )
                 else:
                     display_seconds = float(
-                        triggered_popup["data"].get("freeze_seconds", 4.0)
+                        triggered_popup["data"].get("freeze_seconds", _DEFAULT_FREEZE_SECONDS)
                     )
                     # Kept as its own baked_popups entry so it lingers as a
                     # HUD overlay (with its own fade in/out) once the
