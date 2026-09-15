@@ -265,8 +265,20 @@ def record_headless_video(
             coin_image_url = popup_url
             screen_popup_url = popup_url if is_final_leg else None
 
-            center_lon = (df_raw["lon"].min() + df_raw["lon"].max()) / 2.0
-            center_lat = (df_raw["lat"].min() + df_raw["lat"].max()) / 2.0
+            # Center on the midpoint between this leg's own two waypoints
+            # (its route polyline's first and last point) rather than the
+            # bounding-box center of every point along the way — a leg
+            # that curves/hooks partway through (a common shape once real
+            # routing is involved, not a straight line) pulls the bbox
+            # center off toward whichever side the curve bulges out on,
+            # so the route reads as off-center in frame even though both
+            # waypoints themselves are framed symmetrically around this
+            # point. Zoom-to-fit below still uses the full bbox span, so
+            # a wide bulge still isn't clipped out of frame.
+            start_lon, start_lat = df_raw["lon"].iloc[0], df_raw["lat"].iloc[0]
+            end_lon, end_lat = df_raw["lon"].iloc[-1], df_raw["lat"].iloc[-1]
+            center_lon = (start_lon + end_lon) / 2.0
+            center_lat = (start_lat + end_lat) / 2.0
             max_diff = max(
                 df_raw["lon"].max() - df_raw["lon"].min(),
                 df_raw["lat"].max() - df_raw["lat"].min(),

@@ -128,6 +128,21 @@ def render_route_video(
     still a valid file, the whole (expensive) render is skipped and those
     paths are returned directly, unless `force` is set.
 
+    The manifest is only READ (to skip) and WRITTEN when render_mode ==
+    "both" — i.e. only run_full_pipeline's own call, gated by its
+    --force flag, ever resumes from or updates this checkpoint. A
+    standalone render_mode="overview"/"residential" call (from
+    services/cli/gps_commands.py's test_overview_video /
+    test_residential_video — the map editor's own "recreate this video"
+    actions) always regenerates from scratch: those calls exist
+    specifically so a user can force one piece to redo, and honoring a
+    stale checkpoint there would silently no-op the very action they
+    asked for. It also fixes a latent correctness bug this used to have:
+    a standalone overview-only run's manifest listed ONLY the overview
+    path, so a later full_pipeline run could read that incomplete
+    manifest and wrongly skip rendering the residential clips it never
+    actually produced.
+
     render_mode gates which OUTPUT video(s) actually get produced/written:
     "overview" skips building the residential leg-by-leg sequence entirely
     (no per-leg residential map tile fetches, no residential clips
@@ -143,7 +158,8 @@ def render_route_video(
     logger.info("Step 4: Rendering Video Engine — starting.")
 
     manifest_path = Path(output_video_dir) / _RENDER_MANIFEST_NAME
-    if not force and manifest_path.exists():
+    is_full_pipeline_render = render_mode == "both"
+    if is_full_pipeline_render and not force and manifest_path.exists():
         try:
             with open(manifest_path, "r", encoding="utf-8") as f:
                 cached_paths = json.load(f).get("output_paths", [])
@@ -702,12 +718,13 @@ def render_route_video(
             num_legs * _OVERVIEW_SECONDS_PER_LEG + total_distance_km * _OVERVIEW_SECONDS_PER_KM,
         ),
     )
-    # Overall playback speed for the overview — 2x by default (i.e. half
-    # the paced-out duration above), tunable via job_config.json's
-    # settings.overview_speed_multiplier. This scales everything uniformly
-    # (mode-to-mode ratios from mode_speeds_kmh are unaffected), unlike
-    # that setting which only controls relative pacing between modes.
-    overview_speed_multiplier = float(settings.get("overview_speed_multiplier", 2.0))
+    # Overall playback speed for the overview — 4x by default (i.e. a
+    # quarter of the paced-out duration above), tunable via
+    # job_config.json's settings.overview_speed_multiplier. This scales
+    # everything uniformly (mode-to-mode ratios from mode_speeds_kmh are
+    # unaffected), unlike that setting which only controls relative pacing
+    # between modes.
+    overview_speed_multiplier = float(settings.get("overview_speed_multiplier", 4.0))
     overview_duration = max(
         _OVERVIEW_MIN_FINAL_DURATION_SECONDS, base_overview_duration / overview_speed_multiplier
     )
@@ -860,11 +877,17 @@ def render_route_video(
     tracker.clear()
     logger.info("Step 4 complete: %d video file(s) produced.", len(output_paths))
 
-    try:
-        Path(output_video_dir).mkdir(parents=True, exist_ok=True)
-        with open(manifest_path, "w", encoding="utf-8") as f:
-            json.dump({"output_paths": output_paths}, f, ensure_ascii=False, indent=2)
-    except OSError as e:
-        logger.warning("Step 4: Failed to write render manifest: %s", e)
+    # Only a "both" (full-pipeline) render's output set is a complete,
+    # resumable checkpoint — see this function's own docstring. Writing
+    # a manifest for a standalone overview/residential-only render would
+    # let a LATER full_pipeline run read it back and wrongly skip
+    # rendering whichever half this run never produced.
+    if is_full_pipeline_render:
+        try:
+            Path(output_video_dir).mkdir(parents=True, exist_ok=True)
+            with open(manifest_path, "w", encoding="utf-8") as f:
+                json.dump({"output_paths": output_paths}, f, ensure_ascii=False, indent=2)
+        except OSError as e:
+            logger.warning("Step 4: Failed to write render manifest: %s", e)
 
     return output_paths

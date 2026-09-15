@@ -293,17 +293,30 @@ class TileDownloader:
         start_lon, end_lon = chunk_df["longitude"].iloc[0], chunk_df["longitude"].iloc[-1]
         lat_min, lat_max = chunk_df["latitude"].min(), chunk_df["latitude"].max()
         lon_min, lon_max = chunk_df["longitude"].min(), chunk_df["longitude"].max()
-        center_lat = (lat_min + lat_max) / 2.0
-        center_lon = (lon_min + lon_max) / 2.0
+        # Centered on the path's own POINT-DENSITY MEAN, not the midpoint
+        # of its bounding box's corners — those coincide for a path that's
+        # roughly a straight line or symmetric loop, but a curved/
+        # "boomerang" leg (most of its points bunched along one arc, with
+        # the bbox's opposite corner reached only briefly) used to center
+        # on that corner-midpoint anyway, leaving the frame's corner away
+        # from the bend looking mostly empty even though the box was
+        # technically "centered". Centering on the mean instead pulls the
+        # frame toward where the route actually spends its length.
+        center_lat = chunk_df["latitude"].mean()
+        center_lon = chunk_df["longitude"].mean()
 
         # Half-extent from the path's own full bounding box — not the
         # straight-line distance between just the two pins — so a loop or
         # detour is guaranteed to stay in frame instead of running off an
         # edge. `bbox_multiplier` widens this for the wide establishing
         # shot (fetch_residential_wide) without duplicating any of this
-        # logic.
-        half_lat = max((lat_max - lat_min) / 2.0, 1e-9) * bbox_multiplier
-        half_lon = max((lon_max - lon_min) / 2.0, 1e-9) * bbox_multiplier
+        # logic. Measured as the LARGER of the two one-sided distances
+        # from the new mean-based center (not half the corner-to-corner
+        # span) — since the mean center isn't necessarily equidistant
+        # from both extremes, halving the raw span could leave the
+        # farther extreme outside the box.
+        half_lat = max(center_lat - lat_min, lat_max - center_lat, 1e-9) * bbox_multiplier
+        half_lon = max(center_lon - lon_min, lon_max - center_lon, 1e-9) * bbox_multiplier
 
         # Capped against the straight-line pin distance — an on/off-ramp
         # loop or a wide switchback can inflate the path's own bounding
