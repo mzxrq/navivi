@@ -1,6 +1,7 @@
 use std::net::TcpStream;
 use std::process::{Child, Command, Stdio};
 use std::io::{BufRead, BufReader, Read};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::{thread};
 use std::time::Duration;
@@ -15,6 +16,7 @@ struct BlueprintState {
     // whatever Python server it had itself started, e.g. the bundled TTS/
     // ComfyUI servers) running with no supervising process at all.
     render_process: Mutex<Option<Child>>,
+    render_cancelled: AtomicBool,
 }
 
 /// Kills whatever child process is currently tracked in `state`, best-effort.
@@ -111,6 +113,20 @@ fn cancel_python_blueprint(state: State<'_, BlueprintState>) -> Result<String, S
 }
 
 #[tauri::command]
+fn cancel_render(app: AppHandle, state: State<'_, BlueprintState>) -> Result<String, String> {
+    state.render_cancelled.store(true, Ordering::SeqCst);
+    let mut lock = state.render_process.lock().map_err(|e| e.to_string())?;
+    if let Some(mut child) = lock.take() {
+        let _ = child.kill();
+        let _ = child.wait();
+        let _ = app.emit("render-finish", "Cancelled");
+        Ok("Cancelled".to_string())
+    } else {
+        Ok("No active process to cancel".to_string())
+    }
+}
+
+#[tauri::command]
 fn start_render(
     app: AppHandle,
     config_path: String,
@@ -136,6 +152,8 @@ fn start_render(
 
     let stdout = child.stdout.take().ok_or("Failed to capture stdout")?;
     let stderr = child.stderr.take().ok_or("Failed to capture stderr")?;
+
+    state.render_cancelled.store(false, Ordering::SeqCst);
 
     // Track this child the same way run_python_blueprint's is tracked, so
     // an app exit (or a future cancel-render command) can find and kill it.
@@ -169,21 +187,41 @@ fn start_render(
         }
     });
 
-    thread::spawn(move || {
-        // Take the child back out of shared state to wait on it — it was
-        // stashed there (rather than kept as a local owned value) so an app
-        // exit in the meantime can find and kill it instead of orphaning it.
+    thread::spawn(move || loop {
         let child_state = app.state::<BlueprintState>();
-        let mut child = match child_state.render_process.lock().unwrap().take() {
-            Some(child) => child,
-            None => return, // already taken/killed elsewhere (e.g. app exit)
-        };
-        let status = child.wait().expect("Failed to wait on child");
-        if status.success() {
-            let _ = app.emit("render-finish", "Success");
-        } else {
-            let _ = app.emit("render-finish", "Failed");
+        let mut finished = None;
+
+        if let Ok(mut lock) = child_state.render_process.lock() {
+            if let Some(child) = lock.as_mut() {
+                match child.try_wait() {
+                    Ok(Some(status)) => {
+                        lock.take();
+                        finished = Some(status.success());
+                    }
+                    Ok(None) => {}
+                    Err(_) => {
+                        lock.take();
+                        finished = Some(false);
+                    }
+                }
+            } else {
+                return;
+            }
         }
+
+        if let Some(success) = finished {
+            let payload = if child_state.render_cancelled.load(Ordering::SeqCst) {
+                "Cancelled"
+            } else if success {
+                "Success"
+            } else {
+                "Failed"
+            };
+            let _ = app.emit("render-finish", payload);
+            return;
+        }
+
+        thread::sleep(Duration::from_millis(100));
     });
 
     Ok("Rendering".to_string())
@@ -286,10 +324,12 @@ pub fn run() {
         .manage(BlueprintState {
             process: Mutex::new(None),
             render_process: Mutex::new(None),
+            render_cancelled: AtomicBool::new(false),
         })
         .invoke_handler(tauri::generate_handler![
             run_python_blueprint,
             cancel_python_blueprint,
+            cancel_render,
             start_render,
             wake_up_ollama,
             export_video,

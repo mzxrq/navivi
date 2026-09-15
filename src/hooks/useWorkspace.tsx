@@ -8,6 +8,7 @@ import {
   useState,
   useCallback,
   useEffect,
+  useRef,
   ReactNode,
 } from "react";
 import {
@@ -94,7 +95,12 @@ const DefaultTimeline: TimelineData = {
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const { editorMode } = useUI();
-  const [isDirty, setIsDirty] = useState(false);
+  const [isDirty, setIsDirtyState] = useState(false);
+  const dirtyRevisionRef = useRef(0);
+  const setIsDirty = useCallback((dirty: boolean) => {
+    if (dirty) dirtyRevisionRef.current += 1;
+    setIsDirtyState(dirty);
+  }, []);
 
   const {
     state: waypoints,
@@ -226,11 +232,26 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         metadata,
         settings,
         timeline,
+        routePoints,
+        drawnRoute,
+        routingCache,
+        activeWaypointId,
       });
       await refreshVersions();
       return version;
     },
-    [metadata, refreshVersions, routeSegments, settings, timeline, waypoints],
+    [
+      activeWaypointId,
+      drawnRoute,
+      metadata,
+      refreshVersions,
+      routePoints,
+      routeSegments,
+      routingCache,
+      settings,
+      timeline,
+      waypoints,
+    ],
   );
 
   const restoreVersion = useCallback(
@@ -246,7 +267,16 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       resetWaypointHistory(snapshot.waypoints);
       resetTimelineHistory(snapshot.timeline);
       setRouteSegments(snapshot.routeSegments);
-      setMetadata({ ...snapshot.metadata, status: "restored" });
+      setRoutePoints(snapshot.routePoints);
+      setDrawnRoute(snapshot.drawnRoute);
+      setRoutingCache(snapshot.routingCache);
+      setActiveWaypointId(snapshot.activeWaypointId);
+      setMetadata({
+        ...snapshot.metadata,
+        project_id: metadata.project_id,
+        directory_path: metadata.directory_path,
+        status: "restored",
+      });
       setSettings(snapshot.settings);
       setIsDirty(true);
       return true;
@@ -256,6 +286,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       metadata.project_id,
       resetTimelineHistory,
       resetWaypointHistory,
+      metadata.project_id,
+      metadata.directory_path,
     ],
   );
 
@@ -308,12 +340,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     overrideName?: string,
     asDuplicate?: boolean,
     safeFolderName?: string,
+    recordVersion = true,
   ) => {
     if (waypoints.length === 0) {
       console.warn("No waypoints to save.");
       return;
     }
 
+    const saveRevision = dirtyRevisionRef.current;
     try {
       const result = await saveProjectData(
         waypoints,
@@ -328,13 +362,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
       await saveTimelineManifest(result.projectDir, result.projName, timeline);
 
-      updateMetadata({
+      setMetadata({
+        ...metadata,
         project_name: result.projName,
         status: "saved",
         directory_path: result.projectDir,
         project_id: result.projId,
       });
-      setIsDirty(false);
+      if (dirtyRevisionRef.current === saveRevision) setIsDirtyState(false);
 
       const savedMetadata = {
         ...metadata,
@@ -343,16 +378,21 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         directory_path: result.projectDir,
         project_id: result.projId,
       };
-      await saveProjectVersion({
-        projectId: result.projId,
-        projectName: result.projName,
-        label: "Saved version",
-        waypoints,
-        routeSegments,
-        metadata: savedMetadata,
-        settings,
-        timeline,
-      });
+      if (recordVersion)
+        await saveProjectVersion({
+          projectId: result.projId,
+          projectName: result.projName,
+          label: "Saved version",
+          waypoints,
+          routeSegments,
+          metadata: savedMetadata,
+          settings,
+          timeline,
+          routePoints,
+          drawnRoute,
+          routingCache,
+          activeWaypointId,
+        });
       setVersions(await listProjectVersions(result.projectDir, result.projId));
 
       console.log(`Saved successfully to: ${result.projectDir}`);

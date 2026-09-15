@@ -6,6 +6,12 @@ export function useAutoSave() {
     const { settings, metadata, isDirty, setIsDirty, saveProject } = useWorkspace();
     const { showToast } = useUI();
     const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const saveProjectRef = useRef(saveProject);
+    const showToastRef = useRef(showToast);
+    const savingRef = useRef(false);
+
+    saveProjectRef.current = saveProject;
+    showToastRef.current = showToast;
 
     useEffect(() => {
         // no unsaved changes, happy life
@@ -18,16 +24,19 @@ export function useAutoSave() {
         }
         // set a new timeout to save after 3 seconds
         timeoutRef.current = setTimeout(async () => {
+            if (savingRef.current) return;
+            savingRef.current = true;
             try {
-                await saveProject();
-                setIsDirty(false);
+                await saveProjectRef.current(undefined, undefined, undefined, false);
             } catch (error) {
                 console.error("Auto-save failed:", error);
-                showToast("Auto-save failed. Please check your disk.", "error");
+                showToastRef.current("Auto-save failed. Please check your disk.", "error");
+            } finally {
+                savingRef.current = false;
             }
         }, intervalSeconds * 1000);
         return () => {
             if (timeoutRef.current) clearTimeout(timeoutRef.current);
         };
-    }, [isDirty, setIsDirty, saveProject, settings.auto_save_interval, showToast]);
+    }, [isDirty, metadata?.directory_path, setIsDirty, settings.auto_save_interval]);
 }

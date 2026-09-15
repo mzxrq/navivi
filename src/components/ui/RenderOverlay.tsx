@@ -57,6 +57,7 @@ export function RenderOverlay() {
   const [status, setStatus] = useState<
     "processing" | "success" | "error" | "cancelling"
   >("processing");
+  const [renderAttempt, setRenderAttempt] = useState(0);
 
   // Verification State
   const [reviewItems, setReviewItems] = useState<ScriptReviewItem[]>([]);
@@ -174,6 +175,17 @@ export function RenderOverlay() {
               await buildReviewItems();
               setStep("verifying");
             }
+          } else if (event.payload === "Cancelled") {
+            setLogs((prev) => [
+              ...prev,
+              {
+                id: crypto.randomUUID(),
+                message: "Rendering cancelled.",
+                type: "system",
+                time: new Date().toLocaleTimeString([], { hour12: false }),
+              },
+            ]);
+            setIsRendering(false);
           } else {
             setStatus("error");
             setLogs((prev) => [
@@ -218,7 +230,7 @@ export function RenderOverlay() {
     return () => {
       if (cleanupFn) cleanupFn();
     };
-  }, [isRendering]);
+  }, [isRendering, renderAttempt]);
 
   const buildReviewItems = async () => {
     if (!metadata?.directory_path) return;
@@ -351,17 +363,14 @@ export function RenderOverlay() {
     ]);
 
     try {
-      await invoke("cancel_render");
+      const result = await invoke<string>("cancel_render");
+      if (result === "No active process to cancel") setIsRendering(false);
     } catch (err) {
       console.warn(
         "Cancellation invoke failed or not implemented in Rust:",
         err,
       );
     }
-
-    setTimeout(() => {
-      setIsRendering(false);
-    }, 1000);
   };
 
   if (!isRendering) return null;
@@ -704,13 +713,13 @@ export function RenderOverlay() {
               onClick={() => {
                 setStatus("processing");
                 setStep("generating");
-                // The actual retry is complicated, so just fallback to close for now or allow UI to show retry visually.
-                // A correct retry would re-invoke start_render. We can let the user close and re-render.
-                setIsRendering(false);
+                setProgress(0);
+                setLogs([]);
+                setRenderAttempt((attempt) => attempt + 1);
               }}
               className="px-5 py-2.5 bg-zinc-800 text-zinc-200 text-sm font-semibold rounded-lg hover:bg-zinc-700 transition-colors"
             >
-              Dismiss
+              Retry
             </button>
           </div>
         )}

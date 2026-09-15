@@ -81,9 +81,9 @@ interface BitratePreset {
   label: string;
   description: string;
   rates: {
-    "4k": number;    // Kbps
+    "4k": number; // Kbps
     "1080p": number; // Kbps
-    "720p": number;  // Kbps
+    "720p": number; // Kbps
   };
 }
 
@@ -91,7 +91,8 @@ const BITRATE_PRESETS: BitratePreset[] = [
   {
     id: "high",
     label: "High Quality",
-    description: "Maximum quality for archival and master presentation (50 Mbps 4K / 20 Mbps 1080p)",
+    description:
+      "Maximum quality for archival and master presentation (50 Mbps 4K / 20 Mbps 1080p)",
     rates: {
       "4k": 50000,
       "1080p": 20000,
@@ -101,7 +102,8 @@ const BITRATE_PRESETS: BitratePreset[] = [
   {
     id: "standard",
     label: "Balanced / Standard",
-    description: "Optimal balance between quality and file size for web & YouTube (25 Mbps 4K / 10 Mbps 1080p)",
+    description:
+      "Optimal balance between quality and file size for web & YouTube (25 Mbps 4K / 10 Mbps 1080p)",
     rates: {
       "4k": 25000,
       "1080p": 10000,
@@ -111,7 +113,8 @@ const BITRATE_PRESETS: BitratePreset[] = [
   {
     id: "draft",
     label: "Fast / Draft",
-    description: "Fastest export with compact file size for quick previews (12 Mbps 4K / 5 Mbps 1080p)",
+    description:
+      "Fastest export with compact file size for quick previews (12 Mbps 4K / 5 Mbps 1080p)",
     rates: {
       "4k": 12000,
       "1080p": 5000,
@@ -151,8 +154,10 @@ export function ExportModal({
 
   const initialFps = settings?.fps === 60 ? 60 : settings?.fps === 24 ? 24 : 30;
 
-  const [aspectRatio, setAspectRatio] = useState<AspectRatioType>(initialAspectRatio);
-  const [resolutionTier, setResolutionTier] = useState<ResolutionTier>(initialResolution);
+  const [aspectRatio, setAspectRatio] =
+    useState<AspectRatioType>(initialAspectRatio);
+  const [resolutionTier, setResolutionTier] =
+    useState<ResolutionTier>(initialResolution);
   const [fps, setFps] = useState<number>(initialFps);
   const [bitrateTier, setBitrateTier] = useState<BitratePresetTier>("standard");
   const [isExporting, setIsExporting] = useState<boolean>(false);
@@ -183,8 +188,10 @@ export function ExportModal({
 
   // Resolved dimensions
   const activeResolutionOption = useMemo(
-    () => RESOLUTION_OPTIONS.find((r) => r.id === resolutionTier) || RESOLUTION_OPTIONS[1],
-    [resolutionTier]
+    () =>
+      RESOLUTION_OPTIONS.find((r) => r.id === resolutionTier) ||
+      RESOLUTION_OPTIONS[1],
+    [resolutionTier],
   );
 
   const activeDimensions = useMemo(() => {
@@ -194,8 +201,9 @@ export function ExportModal({
   }, [aspectRatio, activeResolutionOption]);
 
   const activeBitratePreset = useMemo(
-    () => BITRATE_PRESETS.find((b) => b.id === bitrateTier) || BITRATE_PRESETS[1],
-    [bitrateTier]
+    () =>
+      BITRATE_PRESETS.find((b) => b.id === bitrateTier) || BITRATE_PRESETS[1],
+    [bitrateTier],
   );
 
   const activeBitrateKbps = activeBitratePreset.rates[resolutionTier];
@@ -205,7 +213,7 @@ export function ExportModal({
     if (typeof duration === "number" && duration > 0) return duration;
     return timeline.clips.reduce(
       (max, clip) => Math.max(max, clip.startTime + clip.duration),
-      0
+      0,
     );
   }, [duration, timeline.clips]);
 
@@ -228,7 +236,8 @@ export function ExportModal({
     let runningTime = 0;
     return waypoints.map((wp, idx) => {
       const legDuration = 5;
-      const time = wp.timelineOffset !== undefined ? wp.timelineOffset : runningTime;
+      const time =
+        wp.timelineOffset !== undefined ? wp.timelineOffset : runningTime;
       runningTime = Math.max(runningTime, time + legDuration);
       return {
         id: wp.id,
@@ -251,7 +260,9 @@ export function ExportModal({
       trackCount: audioTracks.length,
       clipCount: audioClips.length,
       hasDucking,
-      statusText: hasDucking ? "Auto-Ducking Active" : "Standard Multi-Track Mix",
+      statusText: hasDucking
+        ? "Auto-Ducking Active"
+        : "Standard Multi-Track Mix",
     };
   }, [timeline.tracks, timeline.clips]);
 
@@ -268,8 +279,16 @@ export function ExportModal({
       fps,
       bitrateKbps: activeBitrateKbps,
       qualityId: resolutionTier,
+      skipRichMedia: settings?.skip_rich_media ?? false,
     }),
-    [aspectRatio, activeDimensions, fps, activeBitrateKbps, resolutionTier]
+    [
+      aspectRatio,
+      activeDimensions,
+      fps,
+      activeBitrateKbps,
+      resolutionTier,
+      settings?.skip_rich_media,
+    ],
   );
 
   // Format time (MM:SS)
@@ -283,7 +302,10 @@ export function ExportModal({
   const handleExportVideo = async () => {
     const projectDir = metadata?.directory_path;
     if (!projectDir) {
-      showToast("No project directory found. Save your project first.", "error");
+      showToast(
+        "No project directory found. Save your project first.",
+        "error",
+      );
       return;
     }
 
@@ -296,7 +318,7 @@ export function ExportModal({
         metadata?.project_name || "Project",
         timeline,
         renderSettings,
-        markers
+        markers,
       );
 
       if (!saved) {
@@ -326,7 +348,7 @@ export function ExportModal({
         metadata?.project_name || "Project",
         timeline,
         renderSettings,
-        markers
+        markers,
       );
 
       const jsonString = JSON.stringify(payload, null, 2);
@@ -338,7 +360,7 @@ export function ExportModal({
           metadata.project_name || "Project",
           timeline,
           renderSettings,
-          markers
+          markers,
         );
       }
 
@@ -383,7 +405,8 @@ export function ExportModal({
                 Export & Render Video
               </h2>
               <p className="text-xs text-zinc-400">
-                Configure aspect ratio, quality profiles, and compile timeline manifest
+                Configure aspect ratio, quality profiles, and compile timeline
+                manifest
               </p>
             </div>
           </div>
@@ -408,7 +431,9 @@ export function ExportModal({
               </label>
               {/* Live aspect ratio badge */}
               <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-navi/20 text-navi border border-navi/30 animate-pulse">
-                {aspectRatio === "16:9" ? "16:9 Landscape" : "9:16 Shorts / Vertical"}
+                {aspectRatio === "16:9"
+                  ? "16:9 Landscape"
+                  : "9:16 Shorts / Vertical"}
               </span>
             </div>
 
@@ -431,7 +456,9 @@ export function ExportModal({
                     16:9
                   </span>
                 </div>
-                <div className="font-bold text-sm text-white">Desktop & YouTube</div>
+                <div className="font-bold text-sm text-white">
+                  Desktop & YouTube
+                </div>
                 <div className="text-xs text-zinc-400 mt-0.5">
                   Standard widescreen (1920×1080) for monitors and TVs
                 </div>
@@ -455,9 +482,12 @@ export function ExportModal({
                     9:16
                   </span>
                 </div>
-                <div className="font-bold text-sm text-white">Shorts, Reels & TikTok</div>
+                <div className="font-bold text-sm text-white">
+                  Shorts, Reels & TikTok
+                </div>
                 <div className="text-xs text-zinc-400 mt-0.5">
-                  Vertical portrait format (1080×1920) optimized for mobile feeds
+                  Vertical portrait format (1080×1920) optimized for mobile
+                  feeds
                 </div>
               </button>
             </div>
@@ -470,7 +500,8 @@ export function ExportModal({
             </label>
             <div className="grid grid-cols-3 gap-2.5">
               {RESOLUTION_OPTIONS.map((opt) => {
-                const dims = aspectRatio === "16:9" ? opt.landscape : opt.portrait;
+                const dims =
+                  aspectRatio === "16:9" ? opt.landscape : opt.portrait;
                 const isSelected = resolutionTier === opt.id;
                 return (
                   <button
@@ -486,7 +517,9 @@ export function ExportModal({
                     <span className="text-xs font-mono font-bold text-navi mb-1">
                       {opt.tag}
                     </span>
-                    <span className="text-sm font-bold text-white">{opt.label}</span>
+                    <span className="text-sm font-bold text-white">
+                      {opt.label}
+                    </span>
                     <span className="text-[11px] font-mono text-zinc-400 mt-1">
                       {dims.width} × {dims.height}
                     </span>
@@ -518,7 +551,9 @@ export function ExportModal({
                       }`}
                     >
                       <span>{f.label}</span>
-                      <span className="text-[10px] text-zinc-400">{f.description}</span>
+                      <span className="text-[10px] text-zinc-400">
+                        {f.description}
+                      </span>
                     </button>
                   );
                 })}
@@ -598,7 +633,10 @@ export function ExportModal({
                   <Volume2 className="w-3 h-3 text-zinc-400" />
                   Audio Mix
                 </span>
-                <span className="font-semibold text-zinc-200 text-xs truncate block" title={audioMixSummary.statusText}>
+                <span
+                  className="font-semibold text-zinc-200 text-xs truncate block"
+                  title={audioMixSummary.statusText}
+                >
                   {audioMixSummary.statusText}
                 </span>
               </div>
@@ -616,7 +654,9 @@ export function ExportModal({
 
             {/* Output filename preview */}
             <div className="text-[11px] text-zinc-400 flex items-center gap-2 pt-1 font-mono break-all bg-zinc-900/50 px-3 py-1.5 rounded-md border border-zinc-800/50">
-              <span className="text-zinc-400 shrink-0 font-sans font-semibold">Output File:</span>
+              <span className="text-zinc-400 shrink-0 font-sans font-semibold">
+                Output File:
+              </span>
               <span className="text-zinc-200 truncate">{outputFilename}</span>
             </div>
           </div>
@@ -668,6 +708,6 @@ export function ExportModal({
         </div>
       </div>
     </div>,
-    document.body
+    document.body,
   );
 }

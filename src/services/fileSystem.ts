@@ -331,6 +331,7 @@ export function compileTimelineManifest(
     resolution: resolution,
     fps: fps,
     bitrate_kbps: bitrateKbps,
+    skip_rich_media: renderSettings?.skipRichMedia ?? false,
     tracks: timeline.tracks,
     clips: timeline.clips,
     transitions: timeline.transitions || [],

@@ -228,6 +228,7 @@ export interface RenderSettings {
   fps: number;
   bitrateKbps: number;
   qualityId: string;
+  skipRichMedia?: boolean;
 }
 
 export interface ExportManifestPayload {
@@ -256,6 +257,7 @@ export interface TimelineManifest {
   resolution?: { width: number; height: number };
   fps?: number;
   bitrate_kbps?: number;
+  skip_rich_media?: boolean;
   tracks?: TimelineTrack[];
   clips?: ClipData[];
   transitions?: any[];
@@ -279,6 +281,10 @@ export interface ProjectVersionSnapshot extends ProjectVersion {
   metadata: ProjectMetadata;
   settings: ProjectSettings;
   timeline: TimelineData;
+  routePoints: number[][];
+  drawnRoute: [number, number][];
+  routingCache: Record<string, [number, number][]>;
+  activeWaypointId: string | null;
 }
 
 // Global State Interface
@@ -317,7 +323,7 @@ export interface WorkspaceState {
   setSettings: Dispatch<SetStateAction<ProjectSettings>>;
   updateSettings: (data: Partial<ProjectSettings>) => void;
   // FileSystem thingy
-  saveProject: (overrideName?: string, asDuplicate?: boolean, safeFolderName?: string) => Promise<string | undefined>;
+  saveProject: (overrideName?: string, asDuplicate?: boolean, safeFolderName?: string, recordVersion?: boolean) => Promise<string | undefined>;
   loadProject: (forcePath?: string) => Promise<boolean>;
   recentProjects: RecentProjects[];
   setRecentProjects: Dispatch<SetStateAction<RecentProjects[]>>;

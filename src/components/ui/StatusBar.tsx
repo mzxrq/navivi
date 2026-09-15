@@ -70,6 +70,7 @@ export function StatusBar() {
   const {
     waypoints,
     timeline,
+    metadata,
     isDirty,
     versions,
     refreshVersions,
@@ -139,6 +140,10 @@ export function StatusBar() {
   };
 
   const handleCreateVersion = async () => {
+    if (!metadata.directory_path || !metadata.project_id) {
+      setHistoryError("Save the project before creating a version.");
+      return;
+    }
     setHistoryBusy(true);
     setHistoryError(null);
     try {
@@ -300,7 +305,11 @@ export function StatusBar() {
                   />
                   <button
                     onClick={() => void handleCreateVersion()}
-                    disabled={historyBusy}
+                    disabled={
+                      historyBusy ||
+                      !metadata.directory_path ||
+                      !metadata.project_id
+                    }
                     className="rounded bg-navi px-2 text-white transition-opacity hover:opacity-85 disabled:opacity-50"
                     title="Save current version"
                   >
@@ -316,7 +325,11 @@ export function StatusBar() {
                 {versions.length === 0 ? (
                   <div className="p-4 text-center text-zinc-400 text-xs flex flex-col items-center gap-2">
                     <History className="w-6 h-6 opacity-20 mb-1" />
-                    <p>No saved versions yet.</p>
+                    <p>
+                      {metadata.directory_path
+                        ? "No saved versions yet."
+                        : "Save the project to enable version history."}
+                    </p>
                     <p className="text-[10px]">
                       Save a version to create a restore point.
                     </p>

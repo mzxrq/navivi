@@ -7,9 +7,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri",
-    "test:empirical": "node test/test_m2_empirical.mjs",
-    "test:karaoke": "node test/test_m3_karaoke_empirical.mjs"
+    "tauri": "tauri"
   },
   "dependencies": {
     "@hello-pangea/dnd": "^18.0.1",

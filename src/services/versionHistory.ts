@@ -29,6 +29,10 @@ interface VersionInput {
     metadata: ProjectMetadata;
     settings: ProjectSettings;
     timeline: TimelineData;
+    routePoints: number[][];
+    drawnRoute: [number, number][];
+    routingCache: Record<string, [number, number][]>;
+    activeWaypointId: string | null;
 }
 
 interface HistoryManifest {
@@ -75,6 +79,30 @@ async function readManifest(projectDir: string): Promise<HistoryManifest> {
     }
 }
 
+function isTimeline(value: unknown): value is TimelineData {
+    if (!value || typeof value !== "object") return false;
+    const timeline = value as TimelineData;
+    return Array.isArray(timeline.tracks) && Array.isArray(timeline.clips) &&
+        Array.isArray(timeline.transitions) && typeof timeline.zoomMultiplier === "number";
+}
+
+function normalizeSnapshot(value: unknown, projectId: string, versionId: string): ProjectVersionSnapshot | null {
+    if (!value || typeof value !== "object") return null;
+    const snapshot = value as ProjectVersionSnapshot;
+    if (snapshot.id !== versionId || snapshot.projectId !== projectId ||
+        !Array.isArray(snapshot.waypoints) || !Array.isArray(snapshot.routeSegments) ||
+        !snapshot.metadata || typeof snapshot.metadata !== "object" ||
+        !snapshot.settings || typeof snapshot.settings !== "object" ||
+        !isTimeline(snapshot.timeline)) return null;
+    return {
+        ...snapshot,
+        routePoints: Array.isArray(snapshot.routePoints) ? snapshot.routePoints : [],
+        drawnRoute: Array.isArray(snapshot.drawnRoute) ? snapshot.drawnRoute : [],
+        routingCache: snapshot.routingCache && typeof snapshot.routingCache === "object" ? snapshot.routingCache : {},
+        activeWaypointId: typeof snapshot.activeWaypointId === "string" ? snapshot.activeWaypointId : null,
+    };
+}
+
 export async function listProjectVersions(projectDir: string, projectId: string): Promise<ProjectVersion[]> {
     if (!projectDir || !projectId) return [];
     const manifest = await readManifest(projectDir);
@@ -106,6 +134,10 @@ export async function saveProjectVersion(input: VersionInput): Promise<ProjectVe
         metadata: structuredClone(input.metadata),
         settings: structuredClone(input.settings),
         timeline: structuredClone(input.timeline),
+        routePoints: structuredClone(input.routePoints),
+        drawnRoute: structuredClone(input.drawnRoute),
+        routingCache: structuredClone(input.routingCache),
+        activeWaypointId: input.activeWaypointId,
     };
 
     await writeTextFile(
@@ -145,8 +177,7 @@ export async function loadProjectVersion(
         const snapshot = JSON.parse(
             await readTextFile(await join(historyDir, `${versionId}.json`)),
         ) as ProjectVersionSnapshot;
-        if (snapshot.projectId !== projectId || snapshot.id !== versionId) return null;
-        return snapshot;
+        return normalizeSnapshot(snapshot, projectId, versionId);
     } catch (error) {
         console.error("Failed to load project version:", error);
         return null;

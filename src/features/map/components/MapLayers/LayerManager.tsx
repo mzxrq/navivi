@@ -36,7 +36,11 @@ export function LayerManager({
     <div className="relative z-50">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center justify-center gap-2 px-3 h-10 rounded-full transition-all font-bold bg-white dark:bg-zinc-800 text-zinc-700 hover:bg-zinc-200 dark:text-zinc-200 dark:hover:bg-zinc-500 drop-shadow-xl"
+        className={`flex items-center justify-center gap-2 px-3 h-10 rounded-full transition-all font-bold drop-shadow-xl ${
+          isOpen
+            ? "bg-zinc-400 hover:bg-zinc-600 text-white shadow-zinc-200/25"
+            : "bg-white dark:bg-zinc-800 text-zinc-700 hover:bg-zinc-200 dark:text-zinc-200 dark:hover:bg-zinc-500"
+        }`}
         title="Layer Manager"
       >
         <Layers className="w-4 h-4" />
@@ -46,97 +50,116 @@ export function LayerManager({
       {isOpen && (
         <div
           ref={panelRef}
-          className="absolute top-12 right-0 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border border-zinc-200 dark:border-white/10 rounded-2xl shadow-2xl w-80 p-4 flex flex-col gap-4 animate-in slide-in-from-top-4"
+          className="absolute top-12 right-0 w-64 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-xl rounded-2xl shadow-2xl p-5 z-40 animate-in fade-in zoom-in-95"
         >
-          <div className="flex items-center justify-between border-b border-zinc-100 dark:border-white/5 pb-2">
-            <h3 className="text-sm font-bold text-zinc-800 dark:text-white flex items-center gap-2">
-              <Layers className="w-4 h-4 text-navi-500" /> Layer Manager
+          <div className="flex justify-between pb-4">
+            <h3 className="text-sm font-bold text-zinc-800 dark:text-zinc-200 flex items-center gap-2">
+              <Layers className="w-4 h-4 text-zinc-500" /> Layer Manager
             </h3>
             <button
               onClick={() => setIsOpen(false)}
-              className="text-zinc-400 hover:text-red-500 transition-colors"
+              className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors p-1"
             >
-              <X className="w-4 h-4" />
+              <X className="w-3.5 h-3.5" />
             </button>
           </div>
 
-          {/* Terrain Toggle */}
-          <div className="flex flex-col gap-2">
-            <h4 className="text-xs font-black text-zinc-400 uppercase tracking-widest">
-              Terrain & 3D
-            </h4>
-            <label className="flex items-center justify-between p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-white/5 cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
-              <div className="flex flex-col gap-1">
-                <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200">
+          <div className="flex flex-col">
+            {/* Terrain Toggle (Pill Style) */}
+            <label className="flex items-center justify-between pb-4 border-b border-zinc-200/80 dark:border-zinc-800 cursor-pointer select-none group">
+              <div className="flex flex-col pr-4">
+                <span className="text-xs font-semibold text-zinc-600 dark:text-zinc-400 group-hover:text-zinc-900 dark:group-hover:text-white transition-colors">
                   Enable 3D Terrain
                 </span>
                 <span className="text-[10px] text-zinc-500">
                   Show elevation and 3D buildings.
                 </span>
               </div>
-              <input
-                type="checkbox"
-                checked={is3D}
-                onChange={(e) => setIs3D(e.target.checked)}
-                className="w-4 h-4 rounded text-navi-500 focus:ring-navi-500 border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 cursor-pointer"
-              />
-            </label>
-          </div>
 
-          {/* Base Map Styles */}
-          <div className="flex flex-col gap-2">
-            <h4 className="text-xs font-black text-zinc-400 uppercase tracking-widest">
-              Base Map Style
-            </h4>
-            <div className="grid grid-cols-2 gap-2 max-h-60 overflow-y-auto custom-scrollbar pr-1">
-              {mapStyles.map((style: any) => {
-                const isSelected = selectedStyle === style.id;
-                let previewUrl = "";
-                const previewLon = "135.0667";
-                const previewLat = "34.2744";
-                const previewZ = "11";
-
-                if (style.id === "osm") {
-                  previewUrl = `https://a.tile.openstreetmap.org/11/1792/815.png`;
-                } else if (style.id === "gsi-japan") {
-                  previewUrl = `https://cyberjapandata.gsi.go.jp/xyz/std/11/1792/815.png`;
-                } else {
-                  let mbStyle = "outdoors-v12";
-                  if (style.id === "satellite") mbStyle = "satellite-streets-v12";
-                  if (style.id === "dark") mbStyle = "dark-v11";
-                  if (style.id === "light") mbStyle = "light-v11";
-                  if (style.id === "standard") mbStyle = "streets-v12";
-
-                  previewUrl = `https://api.mapbox.com/styles/v1/mapbox/${mbStyle}/static/${previewLon},${previewLat},${previewZ}/200x100?access_token=${mapboxToken}`;
-                }
-
-                return (
-                  <button
-                    key={style.id}
-                    onClick={() => setSelectedStyle(style.id)}
-                    className={`relative w-full h-16 rounded-xl overflow-hidden transition-all duration-200 group text-left bg-zinc-200 dark:bg-zinc-700 ${
-                      isSelected
-                        ? "ring-2 ring-navi-500 shadow-md scale-95"
-                        : "ring-1 ring-black/10 dark:ring-white/10 hover:ring-navi-400"
+              {/* Custom Animated Switch */}
+              <div className="relative flex items-center">
+                <input
+                  type="checkbox"
+                  checked={is3D}
+                  onChange={(e) => setIs3D(e.target.checked)}
+                  className="sr-only"
+                />
+                <div
+                  className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-200 ease-in-out ${
+                    is3D ? "bg-navi" : "bg-zinc-300 dark:bg-zinc-700"
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform duration-200 ease-in-out ${
+                      is3D ? "translate-x-4.5" : "translate-x-0.5"
                     }`}
-                  >
-                    <div
-                      className="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-110"
-                      style={{ backgroundImage: `url('${previewUrl}')` }}
-                    />
-                    <div
-                      className={`absolute inset-0 transition-colors ${
-                        isSelected ? "bg-navi-900/40" : "bg-black/50 group-hover:bg-black/30"
+                  />
+                </div>
+              </div>
+            </label>
+
+            {/* Base Map Styles (Vertical List) */}
+            <div className="flex flex-col gap-3 pt-4">
+              <h4 className="text-xs font-semibold text-zinc-600 dark:text-zinc-400">
+                Base Map Style
+              </h4>
+              {/* ✨ Increased max height to accommodate taller boxes */}
+              <div className="grid grid-cols-1 gap-2 max-h-36 overflow-y-auto custom-scrollbar p-1">
+                {mapStyles.map((style: any) => {
+                  const isSelected = selectedStyle === style.id;
+                  let previewUrl = "";
+                  const previewLon = "135.0667";
+                  const previewLat = "34.2744";
+                  const previewZ = "11";
+
+                  if (style.id === "osm") {
+                    previewUrl = `https://a.tile.openstreetmap.org/11/1792/815.png`;
+                  } else if (style.id === "gsi-japan") {
+                    previewUrl = `https://cyberjapandata.gsi.go.jp/xyz/std/11/1792/815.png`;
+                  } else {
+                    let mbStyle = "outdoors-v12";
+                    if (style.id === "satellite")
+                      mbStyle = "satellite-streets-v12";
+                    if (style.id === "dark") mbStyle = "dark-v11";
+                    if (style.id === "light") mbStyle = "light-v11";
+                    if (style.id === "standard") mbStyle = "streets-v12";
+
+                    // ✨ Increased requested image resolution to stay crisp
+                    previewUrl = `https://api.mapbox.com/styles/v1/mapbox/${mbStyle}/static/${previewLon},${previewLat},${previewZ}/300x100?access_token=${mapboxToken}`;
+                  }
+
+                  return (
+                    <button
+                      key={style.id}
+                      onClick={() => setSelectedStyle(style.id)}
+                      className={`relative w-full h-16 rounded-xl overflow-hidden transition-all duration-200 group text-left bg-zinc-200 dark:bg-zinc-700 ${
+                        isSelected
+                          ? "ring-2 ring-navi-500 shadow-md scale-[0.98]"
+                          : "ring-1 ring-black/10 dark:ring-white/10 hover:ring-navi-400"
                       }`}
-                    />
-                    <div className="absolute inset-0 p-2 flex items-end">
-                      <span className="text-[10px] font-bold text-white drop-shadow-md truncate">
-                        {style.label.split(" (")[0]}
-                      </span>
-                    </div>
-                  </button>
-                );
-              })}
+                    >
+                      <div
+                        className="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-110"
+                        style={{ backgroundImage: `url('${previewUrl}')` }}
+                      />
+                      {/* Subtler gradient overlay so the map is highly visible */}
+                      <div
+                        className={`absolute inset-0 transition-colors ${
+                          isSelected
+                            ? "bg-navi-900/30"
+                            : "bg-linear-to-t from-black/60 via-black/10 to-transparent group-hover:from-black/50"
+                        }`}
+                      />
+                      {/* ✨ Shifted text to the bottom left corner */}
+                      <div className="absolute inset-0 p-3 flex items-end">
+                        <span className="text-xs font-bold text-white drop-shadow-md truncate">
+                          {style.label.split(" (")[0]}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>
