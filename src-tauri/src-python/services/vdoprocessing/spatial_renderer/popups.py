@@ -5,6 +5,7 @@ import math
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
+from scipy.spatial import ConvexHull, QhullError
 
 from services import tuning
 
@@ -77,6 +78,112 @@ def _leader_crosses_placed(
                 if _segments_intersect(ax0, ay0, ax1, ay1, bx0, by0, bx1, by1):
                     return True
     return False
+
+
+def _cluster_points_by_distance(
+    points: List[Tuple[float, float]], link_dist: float
+) -> List[List[int]]:
+    """Groups point INDICES into clusters via union-find: two points join
+    the same cluster if within `link_dist` of each other, directly or
+    transitively through a chain of other points — so a tight run of
+    waypoints (e.g. several attractions on the same small island) forms
+    one cluster even though the two farthest-apart members of it might
+    exceed link_dist on their own. Used to detect the "many pins packed
+    into a small area" case where individual straight leader lines
+    tangle no matter how carefully each one is placed (see
+    _padded_boundary's own docstring for the fix)."""
+    n = len(points)
+    parent = list(range(n))
+
+    def find(a: int) -> int:
+        while parent[a] != a:
+            parent[a] = parent[parent[a]]
+            a = parent[a]
+        return a
+
+    def union(a: int, b: int) -> None:
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[ra] = rb
+
+    for i in range(n):
+        for j in range(i + 1, n):
+            if math.hypot(points[i][0] - points[j][0], points[i][1] - points[j][1]) <= link_dist:
+                union(i, j)
+
+    groups: Dict[int, List[int]] = {}
+    for i in range(n):
+        groups.setdefault(find(i), []).append(i)
+    return list(groups.values())
+
+
+def _padded_boundary(points: List[Tuple[float, float]], padding: float) -> List[Tuple[float, float]]:
+    """A closed polygon comfortably wrapping every point in `points` plus
+    `padding` px of clearance on every side — the convex hull of the
+    cluster, pushed outward from its own centroid. Falls back to a
+    padded circle around the centroid when the points are collinear (a
+    degenerate hull ConvexHull can't wrap) or when there are fewer than
+    3 points to hull at all.
+
+    Every line in a tight cluster first travels to the NEAREST point on
+    this shared outer boundary (see _nearest_point_on_polygon), then out
+    to its card from there, instead of anchoring straight at the pin —
+    measured (on a real dense cluster) to reduce total leader-line
+    crossings across the whole map from 6 to 4 versus anchoring every
+    line straight at its own pin."""
+    pts = np.asarray(points, dtype=float)
+    centroid = pts.mean(axis=0)
+    if len(pts) >= 3:
+        try:
+            hull = ConvexHull(pts)
+            hull_pts = pts[hull.vertices]
+            if len(hull_pts) >= 3:
+                polygon = []
+                for p in hull_pts:
+                    direction = p - centroid
+                    norm = float(np.hypot(direction[0], direction[1]))
+                    pushed = p if norm < 1e-6 else p + (direction / norm) * padding
+                    polygon.append((float(pushed[0]), float(pushed[1])))
+                return polygon
+        except QhullError:
+            pass
+    max_r = max(float(np.hypot(p[0] - centroid[0], p[1] - centroid[1])) for p in pts) + padding
+    max_r = max(max_r, padding)
+    n_samples = 16
+    return [
+        (
+            float(centroid[0] + max_r * math.cos(2 * math.pi * i / n_samples)),
+            float(centroid[1] + max_r * math.sin(2 * math.pi * i / n_samples)),
+        )
+        for i in range(n_samples)
+    ]
+
+
+def _closest_point_on_segment(
+    ax: float, ay: float, bx: float, by: float, px: float, py: float
+) -> Tuple[float, float]:
+    dx, dy = bx - ax, by - ay
+    len_sq = dx * dx + dy * dy
+    if len_sq < 1e-9:
+        return (ax, ay)
+    t = max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / len_sq))
+    return (ax + t * dx, ay + t * dy)
+
+
+def _nearest_point_on_polygon(
+    polygon: List[Tuple[float, float]], target: Tuple[float, float]
+) -> Tuple[float, float]:
+    tx, ty = target
+    best_pt, best_dist = polygon[0], float("inf")
+    n = len(polygon)
+    for i in range(n):
+        ax, ay = polygon[i]
+        bx, by = polygon[(i + 1) % n]
+        pt = _closest_point_on_segment(ax, ay, bx, by, tx, ty)
+        d = math.hypot(pt[0] - tx, pt[1] - ty)
+        if d < best_dist:
+            best_dist, best_pt = d, pt
+    return best_pt
 
 
 class _PopupMixin:
@@ -298,6 +405,364 @@ class _PopupMixin:
             anchor_x, anchor_y = _anchor_point(pin_x, pin_y, box_x, box_y, card_w, card_h)
             placed_lines.append([(pin_x, pin_y), (anchor_x, anchor_y)])
 
+    def _layout_recap_popups(
+        self,
+        group: List[Dict],
+        w: int,
+        h: int,
+        card_w: Optional[int] = None,
+        card_h: Optional[int] = None,
+        margin: int = 20,
+        reserved_boxes: Optional[List[Tuple[float, float, float, float]]] = None,
+        route_obstacles: Optional[np.ndarray] = None,
+        fps: Optional[float] = None,
+    ) -> None:
+        """End-of-video recap layout: a pin in the frame's left third
+        always gets its card placed on the left, a pin in the right third
+        always on the right — a card never crosses the frame to the
+        opposite side from its own pin, which is disorienting regardless
+        of how clean the packing looks otherwise. A pin in the middle
+        third isn't tied to either side and picks whichever currently has
+        more free room. Within its required side, a card still starts as
+        close as possible to its own pin (mirrors _layout_beside_popups's
+        own near-pin start) and packs like masonry tiles against already-
+        placed neighbors' edges — tight, with no big empty holes — but
+        the leader line is free to stretch as long or short as necessary
+        to stay in bounds; it never wins by crossing sides.
+
+        Pins packed within `marker_radius * 3.0` px of 2 or more other
+        pins (e.g. several attractions on one small island) route their
+        leader line via the nearest point on a shared padded convex-hull
+        boundary around the whole cluster (see _padded_boundary) instead
+        of anchoring straight at the pin — measured to cut total leader-
+        line crossings on a real dense cluster from 6 to 4, since
+        straight-line anchoring guarantees a crossing whenever two of the
+        cluster's cards land on opposite sides of it.
+
+        Processed in ANGULAR order around the whole recap cluster's
+        centroid — not trigger order — so pins that are geographically
+        next to each other get their cards placed one after another too;
+        processing them in an unrelated order is what let two nearby
+        pins' lines end up crossing even though nothing forced them to."""
+        if card_w is None or card_h is None:
+            footprint_w, footprint_h = self.graphics.beside_card_footprint()
+            card_w = card_w if card_w is not None else footprint_w
+            card_h = card_h if card_h is not None else footprint_h
+
+        placed: List[Tuple[float, float, float, float]] = list(reserved_boxes or [])
+        # Every already-placed popup's OWN leader line (pin -> its card's
+        # nearest edge, same anchor formula render_popup_box actually
+        # draws with — see _anchor_point) — checked alongside `placed`
+        # (the card boxes themselves) so a new candidate can't cut across
+        # another line that isn't touching any box directly.
+        placed_lines: List[List[Tuple[float, float]]] = []
+        route_x = route_obstacles[:, 0] if route_obstacles is not None else None
+        route_y = route_obstacles[:, 1] if route_obstacles is not None else None
+        # Wider than the flow-through popups' own gap (14px) — the recap
+        # shows every card at once, so a tight 14px pack read as one
+        # solid, cramped block rather than a set of distinct cards. Was
+        # 34px, brought down to 26 (still real breathing room, just not
+        # as generous): measured against a real project's dense cluster,
+        # 34px let cards run out of nearby packed spots sooner, forcing
+        # the spiral search to travel much further out — longest line
+        # 929px, only 8 of the cluster's cards fitting within max_radius
+        # at all. 26px measurably shortens lines (longest 646px) and
+        # lets more cards fit nearby (11 shown instead of 8), at the cost
+        # of more total crossings (7 vs 4) — a real tradeoff, chosen
+        # because shorter/more-cards was the priority here.
+        card_gap = 26
+
+        # --- Tight-cluster detection: route lines around the cluster's
+        # own outer edge instead of straight through its middle ---------
+        pin_positions: List[Tuple[float, float]] = [
+            (bp["popup"].get("pin_x", bp["popup"]["x"]), bp["popup"].get("pin_y", bp["popup"]["y"]))
+            for bp in group
+        ]
+        link_dist = self.graphics.marker_radius * 3.0
+        hull_padding = self.graphics.marker_radius + 24.0
+        hull_anchor_by_id: Dict[int, Tuple[float, float]] = {}
+        cluster_centroid_by_id: Dict[int, Tuple[float, float]] = {}
+        for idxs in _cluster_points_by_distance(pin_positions, link_dist):
+            if len(idxs) < 3:
+                continue
+            cluster_pts = [pin_positions[i] for i in idxs]
+            boundary = _padded_boundary(cluster_pts, hull_padding)
+            cx = sum(p[0] for p in cluster_pts) / len(cluster_pts)
+            cy = sum(p[1] for p in cluster_pts) / len(cluster_pts)
+            for i in idxs:
+                popup_id = id(group[i]["popup"])
+                hull_anchor_by_id[popup_id] = _nearest_point_on_polygon(boundary, pin_positions[i])
+                cluster_centroid_by_id[popup_id] = (cx, cy)
+
+        def overlaps(bx: float, by: float) -> bool:
+            rx0, ry0, rx1, ry1 = (
+                bx - card_gap, by - card_gap,
+                bx + card_w + card_gap, by + card_h + card_gap,
+            )
+            if any(
+                rx0 < px1 and rx1 > px0 and ry0 < py1 and ry1 > py0
+                for (px0, py0, px1, py1) in placed
+            ):
+                return True
+            if route_x is not None and len(route_x) > 0:
+                return bool(
+                    np.any(
+                        (route_x >= rx0) & (route_x <= rx1)
+                        & (route_y >= ry0) & (route_y <= ry1)
+                    )
+                )
+            return False
+
+        def clamp(bx: float, by: float) -> Tuple[float, float]:
+            return (
+                max(margin, min(bx, w - card_w - margin)),
+                max(margin, min(by, h - card_h - margin)),
+            )
+
+        def leader_crosses_placed(
+            pin_x: float, pin_y: float, bx: float, by: float,
+            via: Optional[Tuple[float, float]] = None,
+        ) -> bool:
+            if via is not None:
+                ax, ay = _anchor_point(via[0], via[1], bx, by, card_w, card_h)
+                polyline = [(pin_x, pin_y), via, (ax, ay)]
+            else:
+                ax, ay = _anchor_point(pin_x, pin_y, bx, by, card_w, card_h)
+                polyline = [(pin_x, pin_y), (ax, ay)]
+            return _leader_crosses_placed(polyline, placed, placed_lines)
+
+        left_zone = w / 3.0
+        right_zone = w * 2.0 / 3.0
+        top_zone = h / 3.0
+        bottom_zone = h * 2.0 / 3.0
+
+        def side_for(x: float) -> str:
+            if x < left_zone:
+                return "left"
+            if x > right_zone:
+                return "right"
+            # A middle-third pin isn't tied to either side of its own map
+            # position — pick whichever side of the FRAME currently has
+            # more untouched room, so a center cluster spreads into
+            # whichever direction actually has space instead of always
+            # defaulting to one.
+            return "left" if (x - margin) >= (w - margin - x) else "right"
+
+        def vside_for(y: float) -> str:
+            # Same thirds rule as side_for, on the vertical axis — a pin
+            # near the top or bottom of the frame gets the same
+            # above/below lock a left/right-zone pin gets horizontally.
+            if y < top_zone:
+                return "top"
+            if y > bottom_zone:
+                return "bottom"
+            return "top" if (y - margin) >= (h - margin - y) else "bottom"
+
+        def quadrant_ok(
+            hside: str, vside: str, cbx: float, cby: float, pin_x: float, pin_y: float
+        ) -> bool:
+            # Hard rule: a card must sit entirely on its required side of
+            # ITS OWN pin on BOTH axes — never past it horizontally OR
+            # vertically. The leader line's length is unconstrained (see
+            # free_spot below), only its direction.
+            horiz_ok = (cbx + card_w <= pin_x + 1) if hside == "left" else (cbx >= pin_x - 1)
+            vert_ok = (cby + card_h <= pin_y + 1) if vside == "top" else (cby >= pin_y - 1)
+            return horiz_ok and vert_ok
+
+        def free_spot(
+            x: float, y: float,
+            origin: Optional[Tuple[float, float]] = None,
+            via: Optional[Tuple[float, float]] = None,
+        ) -> Optional[Tuple[float, float]]:
+            # `origin` overrides WHERE THE SEARCH STARTS (a cluster's
+            # pin uses its outward-pushed hull anchor here, so cards ring
+            # the cluster's outside instead of starting from a point
+            # potentially deep in its interior) — `x, y` (the true pin)
+            # still governs side_for/vside_for/quadrant_ok below, so the
+            # "never cross to the wrong side of your OWN pin" guarantee
+            # is unaffected by which point the search happens to start
+            # from.
+            ox, oy = origin if origin is not None else (x, y)
+            hside = side_for(x)
+            vside = vside_for(y)
+            # Anchor gap scales with how much genuinely open room this
+            # pin's required side actually has, rather than a flat 50px —
+            # a pin sitting well into a spacious empty region (say, the
+            # far side of the frame from a dense cluster of other pins)
+            # used to still anchor its card right up against itself,
+            # leaving that open space unused and cards crowded in toward
+            # the middle. Capped so it doesn't stretch absurdly far on a
+            # huge frame.
+            avail_x = (ox - margin) if hside == "left" else (w - margin - ox)
+            gap_x = max(50.0, min(avail_x * 0.35, 200.0))
+            start_x = ox - card_w - gap_x if hside == "left" else ox + gap_x
+            avail_y = (oy - margin) if vside == "top" else (h - margin - oy)
+            gap_y = max(50.0, min(avail_y * 0.35, 200.0))
+            start_y = oy - card_h - gap_y if vside == "top" else oy + gap_y
+
+            # A uniform grid (an earlier version of this) guaranteed no
+            # gaps but made every card across the whole frame snap onto
+            # the same fixed rows/columns — unrelated clusters on
+            # opposite sides of the frame ended up suspiciously
+            # ruler-straight with each other. Instead, pack like tiles in
+            # a masonry layout: try the pin's own near spot plus snapping
+            # directly against the edges of cards already placed nearby
+            # (right/left/top/bottom of each) — a new card then butts up
+            # against a real neighbor's actual (organic, pin-derived)
+            # position rather than an abstract lattice line, which is
+            # what keeps the pack tight with no big empty holes without
+            # looking like a table. Every candidate is still filtered by
+            # quadrant_ok — packing against a neighbor on the WRONG side
+            # of this pin (horizontally OR vertically) is exactly the
+            # "left pin's card popped up on the right" bug, so that's
+            # rejected same as an overlap would be.
+            candidates: List[Tuple[float, float]] = [(start_x, start_y)]
+            for (px0, py0, px1, py1) in placed:
+                candidates.append((px1 + card_gap, py0))
+                candidates.append((px0 - card_w - card_gap, py0))
+                candidates.append((px0, py1 + card_gap))
+                candidates.append((px0, py0 - card_h - card_gap))
+            seen = set()
+            deduped: List[Tuple[float, float]] = []
+            for cx, cy in candidates:
+                cbx, cby = clamp(cx, cy)
+                if not quadrant_ok(hside, vside, cbx, cby, x, y):
+                    continue
+                key = (round(cbx), round(cby))
+                if key in seen:
+                    continue
+                seen.add(key)
+                deduped.append((cbx, cby))
+            deduped.sort(key=lambda p: (p[0] - start_x) ** 2 + (p[1] - start_y) ** 2)
+
+            # Two passes: first only accept a spot whose own leader line
+            # doesn't cut across another card. `fallback` (the closest
+            # merely-non-overlapping spot) is tracked here but NOT
+            # returned yet — the masonry candidate set is a small,
+            # tightly-packed sample, and giving up on crossing-avoidance
+            # the moment IT runs dry skips the far larger spiral search
+            # below entirely, even though the spiral routinely finds a
+            # genuinely crossing-free spot the masonry set never
+            # considered. Both passes share one fallback, only ever used
+            # once NEITHER pass finds a crossing-free spot.
+            fallback: Optional[Tuple[float, float]] = None
+            for cbx, cby in deduped:
+                if overlaps(cbx, cby):
+                    continue
+                if fallback is None:
+                    fallback = (cbx, cby)
+                if not leader_crosses_placed(x, y, cbx, cby, via):
+                    return cbx, cby
+
+            # Nothing in the masonry candidate set was crossing-free —
+            # widen the search with a continuous spiral, still confined
+            # to the required quadrant (candidates violating quadrant_ok
+            # are skipped, not just deprioritized — the leader line grows
+            # as long as it needs to rather than ever crossing to the
+            # wrong side on either axis), still preferring a non-crossing
+            # spot over the masonry pass's own fallback.
+            angle, radius = 0.0, 0.0
+            max_radius = float(max(w, h)) * 1.5
+            while radius < max_radius:
+                radius += _SPIRAL_RADIUS_STEP_PX
+                angle += _SPIRAL_ANGLE_STEP_RAD
+                bx, by = clamp(
+                    start_x + radius * math.cos(angle), start_y + radius * math.sin(angle)
+                )
+                if not quadrant_ok(hside, vside, bx, by, x, y):
+                    continue
+                if overlaps(bx, by):
+                    continue
+                if fallback is None:
+                    fallback = (bx, by)
+                if not leader_crosses_placed(x, y, bx, by, via):
+                    return bx, by
+            if fallback is not None:
+                return fallback
+
+            # A pin sitting close enough to the frame's own edge that
+            # there's no room at all for a full card in its required
+            # quadrant (e.g. a left-zone pin within one card-width of the
+            # left margin) — showing the card off-quadrant beats not
+            # showing it at all, so this absolute last resort drops the
+            # quadrant_ok requirement (everything else — no overlap,
+            # prefer no line-crossing — still applies).
+            angle, radius = 0.0, 0.0
+            while radius < max_radius:
+                radius += _SPIRAL_RADIUS_STEP_PX
+                angle += _SPIRAL_ANGLE_STEP_RAD
+                bx, by = clamp(
+                    start_x + radius * math.cos(angle), start_y + radius * math.sin(angle)
+                )
+                if not overlaps(bx, by):
+                    return bx, by
+            return None
+
+        xs = [bp["popup"].get("pin_x", bp["popup"]["x"]) for bp in group]
+        ys = [bp["popup"].get("pin_y", bp["popup"]["y"]) for bp in group]
+        centroid_x = sum(xs) / len(xs) if xs else w / 2
+        centroid_y = sum(ys) / len(ys) if ys else h / 2
+        ordered = sorted(
+            group,
+            key=lambda bp: math.atan2(
+                bp["popup"].get("pin_y", bp["popup"]["y"]) - centroid_y,
+                bp["popup"].get("pin_x", bp["popup"]["x"]) - centroid_x,
+            ),
+        )
+
+        lock_frames = (
+            fps * tuning.POPUP_POSITION_LOCK_SECONDS if fps else 0
+        )
+        for bp in ordered:
+            popup = bp["popup"]
+            pin_x, pin_y = popup.get("pin_x", popup["x"]), popup.get("pin_y", popup["y"])
+            via = hull_anchor_by_id.get(id(popup))
+            
+            existing_box = popup.get("beside_box")
+            total_frames = bp.get("total_frames")
+            frames_left = bp.get("frames_left")
+            if (
+                existing_box is not None
+                and total_frames is not None
+                and frames_left is not None
+                and (total_frames - frames_left) < lock_frames
+            ):
+                box_x, box_y = existing_box
+                placed.append((box_x, box_y, box_x + card_w, box_y + card_h))
+                if via is not None:
+                    anchor_x, anchor_y = _anchor_point(via[0], via[1], box_x, box_y, card_w, card_h)
+                    placed_lines.append([(pin_x, pin_y), via, (anchor_x, anchor_y)])
+                else:
+                    anchor_x, anchor_y = _anchor_point(pin_x, pin_y, box_x, box_y, card_w, card_h)
+                    placed_lines.append([(pin_x, pin_y), (anchor_x, anchor_y)])
+                continue
+
+            search_origin = None
+            if via is not None:
+                # Push the search's own starting point further outward
+                # from the cluster centroid, past the padded hull, so
+                # cards seed OUTSIDE the boundary (a halo around the
+                # cluster) rather than right on its edge.
+                cx, cy = cluster_centroid_by_id[id(popup)]
+                dx, dy = via[0] - cx, via[1] - cy
+                norm = math.hypot(dx, dy) or 1.0
+                push = self.graphics.marker_radius + 20.0
+                search_origin = (via[0] + dx / norm * push, via[1] + dy / norm * push)
+            spot = free_spot(pin_x, pin_y, origin=search_origin, via=via)
+            popup["leader_via"] = via
+            if spot is None:
+                popup.pop("beside_box", None)
+                continue
+            box_x, box_y = spot
+            popup["beside_box"] = (int(box_x), int(box_y))
+            placed.append((box_x, box_y, box_x + card_w, box_y + card_h))
+            if via is not None:
+                anchor_x, anchor_y = _anchor_point(via[0], via[1], box_x, box_y, card_w, card_h)
+                placed_lines.append([(pin_x, pin_y), via, (anchor_x, anchor_y)])
+            else:
+                anchor_x, anchor_y = _anchor_point(pin_x, pin_y, box_x, box_y, card_w, card_h)
+                placed_lines.append([(pin_x, pin_y), (anchor_x, anchor_y)])
+
     def _render_recap_frame(
         self,
         base_frame: np.ndarray,
@@ -311,29 +776,23 @@ class _PopupMixin:
         card shown at once, each with a leader line back to its own pin —
         start and end (see _draw_pin's "S"/"E" pins) laid out the same way
         as every other waypoint, no special fixed corner or enlarged card.
-        Cards scatter into open space near their own pin the same way the
-        main animation's flow-through cards do (see _layout_beside_popups)
-        rather than stacking into a rigid margin column — reads as loosely
-        clustered around the map instead of lined up along an edge, while
-        still steering clear of the map/route artwork, other cards, and
-        `reserved_boxes` (e.g. the summary stat card, composited over this
-        same frame afterward) exactly like a flow-through card would.
         Replaces just showing the LAST waypoint's card alone in a fixed
-        HUD corner through the whole summary. Passes a much larger
-        max_radius than the animation uses — this is a single one-shot
-        layout (no next frame to retry on), and every card here needs to
-        actually show, not just the ones that happen to fit close to their
-        pin."""
+        HUD corner through the whole summary. Uses _layout_recap_popups
+        (not the plain flow-through _layout_beside_popups) — every card
+        here needs an actual spot (no "sit this frame out" fallback), a
+        pin can never cross to the opposite side of the frame from its
+        own pin, and a tight cluster of pins routes its leader lines
+        around a shared hull boundary rather than straight through the
+        cluster's middle (see _layout_recap_popups's own docstring)."""
         recap_frame = base_frame.copy()
         recap_popups = [ap for ap in active_popups if ap["data"].get("popup_image")]
         if not recap_popups:
             return recap_frame
 
         group = [{"popup": ap, "frames_left": 1} for ap in recap_popups]
-        self._layout_beside_popups(
+        self._layout_recap_popups(
             group, w, h, reserved_boxes=list(reserved_boxes or []),
             route_obstacles=route_obstacles,
-            max_radius=math.hypot(w, h),
         )
 
         total_points = 1 + max((ap["index"] for ap in active_popups), default=0)
@@ -553,7 +1012,7 @@ class _PopupMixin:
         for bp in flowing[MAX_CONCURRENT_FLOW_POPUPS:]:
             bp["popup"].pop("beside_box", None)
         if flowing_visible:
-            self._layout_beside_popups(
+            self._layout_recap_popups(
                 flowing_visible, w, h, route_obstacles=route_obstacles, fps=fps
             )
 

@@ -418,7 +418,7 @@ class _TransitionMixin:
                 highlight_popup.pop("pin_y", None)
                 highlight_popup["hud_corner"] = None
                 highlight_popup["draw_leader_line"] = True
-                self._layout_beside_popups([{"popup": highlight_popup, "frames_left": 1}], w, h)
+                self._layout_recap_popups([{"popup": highlight_popup, "frames_left": 1}], w, h)
 
                 for frame_idx, (frame_bgr, extent) in enumerate(dynamic_frames):
                     frame_out = frame_bgr.copy()
@@ -540,7 +540,7 @@ class _TransitionMixin:
             # that spot's taken) — without this, render_popup_box's own
             # fallback placement (meant for corner-avoidance, not a tight
             # leader line) can land the card far across the frame.
-            self._layout_beside_popups([{"popup": highlight_popup, "frames_left": 1}], w, h)
+            self._layout_recap_popups([{"popup": highlight_popup, "frames_left": 1}], w, h)
 
             # Line, then marker, then card — in that order — so the
             # leader line sits BEHIND both the marker pin and the card it

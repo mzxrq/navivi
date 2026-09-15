@@ -146,6 +146,17 @@ class MapFetcher:
                 {
                     "row_idx": wp_indices[p],
                     "label": waypoints[p].get("label"),
+                    # This waypoint's own true coordinate — carried through
+                    # so a stop-by that's only OBSERVED from the trail (a
+                    # small offshore island, a viewpoint across the water)
+                    # can be drawn at where it actually is, not wherever
+                    # the nearest RECORDED TRACK row happens to fall (see
+                    # waypoints.py's mid_marker_pins, which reprojects onto
+                    # this using its own chunk's extent when both lat/lng
+                    # are present — the nearest-track-row "px" below stays
+                    # the fallback for a stop-by with no coordinate).
+                    "lat": waypoints[p].get("lat"),
+                    "lng": waypoints[p].get("lng", waypoints[p].get("lon")),
                     # Carried through so a merged-in stop-by (drawn as a
                     # plain pass-through pin — see waypoints.py's
                     # mid_marker_pins) can still show its own popup photo
@@ -423,6 +434,13 @@ class MapFetcher:
                     "row_idx": m["row_idx"],
                     "label": m["label"],
                     "px": chunk_points[m["row_idx"] - chunk_start],
+                    # Passed through so waypoints.py can reproject this
+                    # marker onto its own true position (via this chunk's
+                    # own "extent" below) instead of the nearest-track-row
+                    # "px" above, for a stop-by only observed from a
+                    # distance rather than actually walked to.
+                    "lat": m.get("lat"),
+                    "lng": m.get("lng"),
                     "popup_image": m.get("popup_image"),
                     "freeze_seconds": (
                         min(float(m["freeze_seconds"]), tuning.POPUP_FREEZE_SECONDS_MAX)

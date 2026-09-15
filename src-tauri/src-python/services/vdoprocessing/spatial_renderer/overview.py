@@ -405,12 +405,10 @@ class _OverviewRenderMixin:
             # it should keep spiraling outward — using any open area the
             # frame actually has — rather than settling for a nearby spot
             # that overlaps another waypoint's pin.
-            self._layout_beside_popups(
+            self._layout_recap_popups(
                 [{"popup": c, "frames_left": 1} for c in intro_cards], w, h,
                 card_w=footprint_w, card_h=footprint_h,
-                route_obstacles=route_obstacle_arr,
-                max_radius=float(max(w, h)),
-            )
+                route_obstacles=route_obstacle_arr)
             for c in intro_cards:
                 c["hud_corner"] = None
                 c["draw_leader_line"] = True

@@ -28,7 +28,7 @@ class _PopupBoxMixin:
     # can't be placed flush against (or past) the very edge of the frame.
     _BESIDE_POPUP_EDGE_MARGIN = 24
 
-    def beside_card_footprint(self, card_scale: float = 1.0) -> Tuple[int, int]:
+    def beside_card_footprint(self, card_scale: float = 1.0, has_label: bool = True) -> Tuple[int, int]:
         """Returns the (total_w, total_h) footprint render_popup_box will
         actually draw for a "beside the pin" card at this card_scale —
         assumes a label is present (has_label=True), a safe upper-bound
@@ -38,6 +38,9 @@ class _PopupBoxMixin:
         actual label text — a one-line label just leaves a little extra
         clearance below its card instead of the two cards ever visually
         overlapping because this estimate came in short."""
+        # When has_label=True, assumes a worst-case two-line label for
+        # collision avoidance sizing. When has_label=False, sizes only the
+        # photo and borders without any extra text block height.
         target_ratio = 16.0 / 9.0
         target_img_w = int(self.BESIDE_CARD_BASE_W * card_scale)
         target_img_h = int(target_img_w / target_ratio)
@@ -47,6 +50,13 @@ class _PopupBoxMixin:
         )
         line_gap = 4
         text_block_h = font_size * 2 + line_gap + 14
+        text_block_h = 0
+        if has_label:
+            font_size = max(
+                11, int(self.font_size * tuning.POPUP_LABEL_FONT_SCALE_BESIDE * card_scale)
+            )
+            line_gap = 4
+            text_block_h = font_size * 2 + line_gap + 14
         return target_img_w + border * 2, target_img_h + border * 2 + text_block_h
 
     # Minimum caption font size _fit_label_caption will shrink to before
@@ -65,6 +75,7 @@ class _PopupBoxMixin:
         _LABEL_MIN_FONT_SIZE) only if the longer of the two lines still
         doesn't fit even after splitting. Returns (lines, font) — `font`
         may be a smaller instance than the one passed in."""
+
         if draw.textlength(text, font=font) <= max_width:
             return [text], font
 
@@ -117,6 +128,10 @@ class _PopupBoxMixin:
         total_w = target_img_w + (border * 2)
         has_label = RouteGeometryProcessor.is_real_label(popup_info.get("label"))
         # "cover" (settings/job_config image_display: "cover") — the photo
+        has_label = (
+            RouteGeometryProcessor.is_real_label(popup_info.get("label"))
+            and bool(popup_info.get("show_label", True))
+        )
         # fills the entire card with no separate caption strip below it;
         # the label overlays the photo itself instead (see
         # render_popup_box), so it adds no extra height here.
@@ -346,6 +361,10 @@ class _PopupBoxMixin:
                     # the smaller, lighter caption look under the photo.
                     font = self._load_font(self.FONT_CANDIDATES_REGULAR, font_size)
                 has_label = RouteGeometryProcessor.is_real_label(label_text)
+                has_label = (
+                    RouteGeometryProcessor.is_real_label(label_text)
+                    and bool(popup_info.get("show_label", True))
+                )
 
                 pil_canvas = Image.new("RGBA", (w, h), (0, 0, 0, 0))
                 draw = ImageDraw.Draw(pil_canvas)

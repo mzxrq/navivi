@@ -261,7 +261,17 @@ class VideoExporter:
             # has confirmed the encode actually finished. A process
             # killed at any point before this line leaves whatever was
             # already at output_path completely untouched.
-            _replace_with_retry(self._temp_path, output_path)
+            try:
+                _replace_with_retry(self._temp_path, output_path)
+            except OSError:
+                # Every retry was denied (a persistent file lock outliving
+                # the whole retry window) — clean up the fully-encoded
+                # temp file before re-raising, same as the two error paths
+                # above (broken pipe, nonzero exit) already do, so a
+                # failure here doesn't leave an orphaned hidden
+                # ".name.<uuid>.tmp.mp4" behind in the output directory.
+                Path(self._temp_path).unlink(missing_ok=True)
+                raise
             return output_path
 
         if self._fallback_writer:

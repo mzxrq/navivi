@@ -377,7 +377,7 @@ class _OverviewAnimationMixin:
                 # over there" for a stop on the opposite side of the frame —
                 # this ties every triggered popup, flow-through or frozen,
                 # back to its own pin the same way.
-                self._layout_beside_popups(
+                self._layout_recap_popups(
                     [{"popup": triggered_popup, "frames_left": 1}], w, h,
                     route_obstacles=route_obstacle_arr,
                 )
@@ -475,7 +475,7 @@ class _OverviewAnimationMixin:
                         # next one. Faded in from the start (see
                         # _popup_fade_alpha), same as every later frame
                         # _composite_baked_popups draws it for.
-                        self._layout_beside_popups(
+                        self._layout_recap_popups(
                             [new_bp], w, h, route_obstacles=route_obstacle_arr
                         )
                         hud_new = triggered_popup.copy()
