@@ -14,7 +14,8 @@ import {
   Trash2,
   Menu,
   Film,
-  Volume2
+  Volume2,
+  Save,
 } from "../ui/icons";
 
 function NotificationItem({ notif }: { notif: any }) {
@@ -66,19 +67,31 @@ function NotificationItem({ notif }: { notif: any }) {
 }
 
 export function StatusBar() {
-  const { waypoints, timeline, isDirty } = useWorkspace();
+  const {
+    waypoints,
+    timeline,
+    isDirty,
+    versions,
+    refreshVersions,
+    createVersion,
+    restoreVersion,
+    deleteVersion,
+  } = useWorkspace();
   const { editorMode, notifications, clearNotifications } = useUI();
 
   // Popup States
   const [showNotifications, setShowNotifications] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
-  
+  const [versionLabel, setVersionLabel] = useState("");
+  const [historyBusy, setHistoryBusy] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+
   // Unmount
   const { shouldRender: renderNotifs, isAnimatingOut: exitingNotifs } =
     useAnimatedUnmount(showNotifications, 150);
   const { shouldRender: renderHistory, isAnimatingOut: exitingHistory } =
     useAnimatedUnmount(showHistory, 150);
-    
+
   // Notification Unread State
   const [hasUnread, setHasUnread] = useState(false);
   const prevNotifCount = useRef(notifications?.length || 0);
@@ -101,11 +114,15 @@ export function StatusBar() {
   // ✨ MAP STATS & REALISTIC ESTIMATION
   // Count how many waypoints actually have user-added images or scripts
   const populatedStops = waypoints.filter(
-    (wp) => (wp.images && wp.images.length > 0) || wp.narration || wp.arrivingNarration || wp.attractionNarration
+    (wp) =>
+      (wp.images && wp.images.length > 0) ||
+      wp.narration ||
+      wp.arrivingNarration ||
+      wp.attractionNarration,
   ).length;
 
   // Estimate: Base 2 mins for setup/routing + ~1.5 mins per waypoint for AI voice/GLSL/FFmpeg
-  const estRenderMinutes = Math.max(1, Math.ceil((waypoints.length * 1.5) + 2));
+  const estRenderMinutes = Math.max(1, Math.ceil(waypoints.length * 1.5 + 2));
 
   const toggleNotifications = () => {
     if (showNotifications) setHasUnread(false);
@@ -114,40 +131,104 @@ export function StatusBar() {
   };
 
   const toggleHistory = () => {
-    setShowHistory(!showHistory);
+    const nextValue = !showHistory;
+    setShowHistory(nextValue);
     setShowNotifications(false);
+    setHistoryError(null);
+    if (nextValue) void refreshVersions();
+  };
+
+  const handleCreateVersion = async () => {
+    setHistoryBusy(true);
+    setHistoryError(null);
+    try {
+      await createVersion(versionLabel);
+      setVersionLabel("");
+    } catch (error) {
+      console.error("Failed to create project version:", error);
+      setHistoryError("Could not save this version.");
+    } finally {
+      setHistoryBusy(false);
+    }
+  };
+
+  const handleRestoreVersion = async (versionId: string) => {
+    setHistoryBusy(true);
+    setHistoryError(null);
+    try {
+      const restored = await restoreVersion(versionId);
+      if (!restored) setHistoryError("This version is no longer available.");
+    } catch (error) {
+      console.error("Failed to restore project version:", error);
+      setHistoryError("Could not restore this version.");
+    } finally {
+      setHistoryBusy(false);
+    }
+  };
+
+  const handleDeleteVersion = async (versionId: string) => {
+    if (!window.confirm("Delete this saved version?")) return;
+    setHistoryBusy(true);
+    setHistoryError(null);
+    try {
+      const deleted = await deleteVersion(versionId);
+      if (!deleted) setHistoryError("This version could not be deleted.");
+    } catch (error) {
+      console.error("Failed to delete project version:", error);
+      setHistoryError("Could not delete this version.");
+    } finally {
+      setHistoryBusy(false);
+    }
   };
 
   return (
     <div className="h-7 bg-white dark:bg-navidark-900 border-t border-zinc-200 dark:border-navidark-400 flex items-center justify-between px-3 text-[10px] font-medium text-zinc-500 z-900 select-none relative">
-      
       {/* --- LEFT: MODE-SPECIFIC METRICS --- */}
       <div className="flex items-center gap-3">
         {editorMode === "map" ? (
           <>
-            <span className="flex items-center gap-1.5 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors" title="Total stops on the map">
+            <span
+              className="flex items-center gap-1.5 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors"
+              title="Total stops on the map"
+            >
               <Map className="w-3 h-3 text-navi" /> {waypoints.length} Stops
             </span>
             <div className="w-px h-3 bg-zinc-300 dark:bg-navidark-400" />
-            <span className="flex items-center gap-1.5 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors" title="Stops containing custom images or AI scripts">
+            <span
+              className="flex items-center gap-1.5 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors"
+              title="Stops containing custom images or AI scripts"
+            >
               <Volume2 className="w-3 h-3" /> {populatedStops} Rich Media
             </span>
             <div className="w-px h-3 bg-zinc-300 dark:bg-navidark-400" />
-            <span className="flex items-center gap-1.5 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors" title="Estimated time for the Python backend to synthesize AI voiceovers and encode the video">
+            <span
+              className="flex items-center gap-1.5 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors"
+              title="Estimated time for the Python backend to synthesize AI voiceovers and encode the video"
+            >
               <Clock className="w-3 h-3" /> Est. Render: ~{estRenderMinutes}m
             </span>
           </>
         ) : (
           <>
-            <span className="flex items-center gap-1.5 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors" title="Total video duration">
-              <Clock className="w-3 h-3 text-navi" /> Duration: {totalDuration.toFixed(1)}s
+            <span
+              className="flex items-center gap-1.5 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors"
+              title="Total video duration"
+            >
+              <Clock className="w-3 h-3 text-navi" /> Duration:{" "}
+              {totalDuration.toFixed(1)}s
             </span>
             <div className="w-px h-3 bg-zinc-300 dark:bg-navidark-400" />
-            <span className="flex items-center gap-1.5 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors" title="Total tracks in the timeline">
+            <span
+              className="flex items-center gap-1.5 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors"
+              title="Total tracks in the timeline"
+            >
               <Menu className="w-3 h-3" /> {timeline.tracks.length} Tracks
             </span>
             <div className="w-px h-3 bg-zinc-300 dark:bg-navidark-400" />
-            <span className="flex items-center gap-1.5 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors" title="Total individual clips">
+            <span
+              className="flex items-center gap-1.5 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors"
+              title="Total individual clips"
+            >
               <Film className="w-3 h-3" /> {totalClips} Clips
             </span>
           </>
@@ -156,7 +237,6 @@ export function StatusBar() {
 
       {/* --- RIGHT: GLOBAL ACTIONS & STATUS --- */}
       <div className="flex items-center gap-4 relative">
-        
         {/* Compact Save Status */}
         {isDirty ? (
           <span
@@ -206,16 +286,82 @@ export function StatusBar() {
               </button>
             </div>
             <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1">
-              <div className="p-3 text-center text-zinc-400 text-xs flex flex-col items-center gap-2">
-                <History className="w-6 h-6 opacity-20 mb-1" />
-                <p>Detailed version history will be available in Sprint 5.</p>
-                <p className="text-[10px]">
-                  For now, use{" "}
-                  <kbd className="bg-zinc-100 dark:bg-navidark-700 px-1 py-0.5 rounded border border-zinc-200 dark:border-navidark-400">
-                    Ctrl+Z
-                  </kbd>{" "}
-                  to undo recent changes.
-                </p>
+              <div className="p-2 border-b border-zinc-100 dark:border-navidark-400 space-y-2">
+                <div className="flex gap-1.5">
+                  <input
+                    value={versionLabel}
+                    onChange={(event) => setVersionLabel(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") void handleCreateVersion();
+                    }}
+                    placeholder="Version label"
+                    className="min-w-0 flex-1 rounded border border-zinc-200 dark:border-navidark-500 bg-white dark:bg-navidark-900 px-2 py-1.5 text-[11px] outline-none focus:border-navi"
+                    disabled={historyBusy}
+                  />
+                  <button
+                    onClick={() => void handleCreateVersion()}
+                    disabled={historyBusy}
+                    className="rounded bg-navi px-2 text-white transition-opacity hover:opacity-85 disabled:opacity-50"
+                    title="Save current version"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                {historyError && (
+                  <p className="text-[10px] text-red-500">{historyError}</p>
+                )}
+              </div>
+
+              <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1">
+                {versions.length === 0 ? (
+                  <div className="p-4 text-center text-zinc-400 text-xs flex flex-col items-center gap-2">
+                    <History className="w-6 h-6 opacity-20 mb-1" />
+                    <p>No saved versions yet.</p>
+                    <p className="text-[10px]">
+                      Save a version to create a restore point.
+                    </p>
+                  </div>
+                ) : (
+                  versions.map((version) => (
+                    <div
+                      key={version.id}
+                      className="p-2 rounded-md border border-transparent hover:border-zinc-200 dark:hover:border-navidark-500 hover:bg-zinc-50 dark:hover:bg-navidark-700/50 transition-colors"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="truncate text-xs font-semibold text-zinc-700 dark:text-zinc-200">
+                            {version.label}
+                          </p>
+                          <p className="text-[9px] text-zinc-400 font-mono">
+                            {new Date(version.createdAt).toLocaleString()} ·{" "}
+                            {version.waypointCount} stops · {version.clipCount}{" "}
+                            clips
+                          </p>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-1">
+                          <button
+                            onClick={() =>
+                              void handleRestoreVersion(version.id)
+                            }
+                            disabled={historyBusy}
+                            className="rounded p-1 text-zinc-400 hover:bg-zinc-200 hover:text-navi dark:hover:bg-navidark-600 disabled:opacity-50"
+                            title="Restore version"
+                          >
+                            <History className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => void handleDeleteVersion(version.id)}
+                            disabled={historyBusy}
+                            className="rounded p-1 text-zinc-400 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-950/30 disabled:opacity-50"
+                            title="Delete version"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           </div>

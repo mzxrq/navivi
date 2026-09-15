@@ -18,6 +18,7 @@ import {
   RecentProjects,
   WorkspaceState,
   TimelineData,
+  ProjectVersion,
 } from "../types";
 import {
   appConfig,
@@ -31,6 +32,12 @@ import {
   loadRouteCache,
   saveTimelineManifest,
 } from "../services/fileSystem";
+import {
+  deleteProjectVersion,
+  listProjectVersions,
+  loadProjectVersion,
+  saveProjectVersion,
+} from "../services/versionHistory";
 import { ClipData, TimelineTrack } from "../types";
 import { useHistory } from "./useHistory";
 import { useUI } from "./useUI";
@@ -157,6 +164,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [routingCache, setRoutingCache] = useState<
     Record<string, [number, number][]>
   >({});
+  const [versions, setVersions] = useState<ProjectVersion[]>([]);
 
   const [recentProjects, setRecentProjects] = useState<RecentProjects[]>(() => {
     const saved = localStorage.getItem("navivi-recents");
@@ -195,6 +203,75 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       return updated;
     });
   }, []);
+
+  const refreshVersions = useCallback(async () => {
+    if (!metadata.directory_path || !metadata.project_id) {
+      setVersions([]);
+      return;
+    }
+    setVersions(
+      await listProjectVersions(metadata.directory_path, metadata.project_id),
+    );
+  }, [metadata.directory_path, metadata.project_id]);
+
+  const createVersion = useCallback(
+    async (label = "") => {
+      if (!metadata.directory_path || !metadata.project_id) return null;
+      const version = await saveProjectVersion({
+        projectId: metadata.project_id,
+        projectName: metadata.project_name,
+        label,
+        waypoints,
+        routeSegments,
+        metadata,
+        settings,
+        timeline,
+      });
+      await refreshVersions();
+      return version;
+    },
+    [metadata, refreshVersions, routeSegments, settings, timeline, waypoints],
+  );
+
+  const restoreVersion = useCallback(
+    async (versionId: string) => {
+      if (!metadata.directory_path || !metadata.project_id) return false;
+      const snapshot = await loadProjectVersion(
+        metadata.directory_path,
+        metadata.project_id,
+        versionId,
+      );
+      if (!snapshot) return false;
+
+      resetWaypointHistory(snapshot.waypoints);
+      resetTimelineHistory(snapshot.timeline);
+      setRouteSegments(snapshot.routeSegments);
+      setMetadata({ ...snapshot.metadata, status: "restored" });
+      setSettings(snapshot.settings);
+      setIsDirty(true);
+      return true;
+    },
+    [
+      metadata.directory_path,
+      metadata.project_id,
+      resetTimelineHistory,
+      resetWaypointHistory,
+    ],
+  );
+
+  const removeVersion = useCallback(
+    async (versionId: string) => {
+      if (!metadata.directory_path || !metadata.project_id) return false;
+      const deleted = await deleteProjectVersion(
+        metadata.directory_path,
+        metadata.project_id,
+        versionId,
+      );
+      if (deleted) await refreshVersions();
+      return deleted;
+    },
+    [metadata.directory_path, metadata.project_id, refreshVersions],
+  );
 
   const updateWaypoint = useCallback(
     (id: string, data: Partial<Waypoint>) => {
@@ -258,6 +335,25 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         project_id: result.projId,
       });
       setIsDirty(false);
+
+      const savedMetadata = {
+        ...metadata,
+        project_name: result.projName,
+        status: "saved",
+        directory_path: result.projectDir,
+        project_id: result.projId,
+      };
+      await saveProjectVersion({
+        projectId: result.projId,
+        projectName: result.projName,
+        label: "Saved version",
+        waypoints,
+        routeSegments,
+        metadata: savedMetadata,
+        settings,
+        timeline,
+      });
+      setVersions(await listProjectVersions(result.projectDir, result.projId));
 
       console.log(`Saved successfully to: ${result.projectDir}`);
       addToRecents(result.projName, result.nvvPath);
@@ -326,6 +422,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       resetTimelineHistory(DefaultTimeline);
       await autoLoadTimeline(data.directory_path);
 
+      setVersions(
+        await listProjectVersions(data.directory_path || "", data.project_id),
+      );
+
       setIsDirty(false);
       addToRecents(
         data.project_name || appConfig.defaultProjectName,
@@ -350,6 +450,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     });
     setSettings(DefaultSettings);
     setRoutingCache({});
+    setVersions([]);
     setIsDirty(false);
   };
 
@@ -581,6 +682,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         forceReroute,
         drawnRoute,
         setDrawnRoute,
+        versions,
+        refreshVersions,
+        createVersion,
+        restoreVersion,
+        deleteVersion: removeVersion,
       }}
     >
       {children}

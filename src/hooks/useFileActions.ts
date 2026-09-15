@@ -30,9 +30,11 @@ export function useFileActions() {
         }
       }
 
+      let imageCount = 0;
       const photoPoints = [];
       for (const path of allFiles) {
         if (path.toLowerCase().endsWith(".jpg") || path.toLowerCase().endsWith(".jpeg") || path.toLowerCase().endsWith(".png")) {
+          imageCount++;
           try {
             const buffer = await readFile(path);
             const exifData = await exifr.parse(buffer);
@@ -51,6 +53,11 @@ export function useFileActions() {
           await importRouteFile(path);
           return;
         }
+      }
+
+      if (imageCount > 0 && photoPoints.length === 0) {
+        showToast("No GPS location data found in selected photos.", "warning");
+        return;
       }
 
       if (photoPoints.length > 0) {
@@ -76,7 +83,8 @@ export function useFileActions() {
             imagePans: ["none"],
             imageTransitions: [],
             narration: "",
-            routeMode: "driving"
+            routeMode: "driving",
+            timestamp: pt.date.toISOString(),
           });
         }
         setWaypoints(newWaypoints);
@@ -104,7 +112,7 @@ export function useFileActions() {
         const parser = new DOMParser();
         const xmlDoc = parser.parseFromString(fileContent, "text/xml");
         const trackPoints = xmlDoc.getElementsByTagName("trkpt");
-        const points: [number, number, number][] = [];
+        const points: number[][] = [];
 
         for (let i = 0; i < trackPoints.length; i++) {
           const latAttr = trackPoints[i].getAttribute("lat");
@@ -113,14 +121,22 @@ export function useFileActions() {
           const lat = Number.parseFloat(latAttr);
           const lon = Number.parseFloat(lonAttr);
           
-          let ele = 0;
+          let ele: number | undefined = undefined;
           const eleNode = trackPoints[i].getElementsByTagName("ele")[0];
           if (eleNode && eleNode.textContent) {
-            ele = Number.parseFloat(eleNode.textContent);
+            const parsedEle = Number.parseFloat(eleNode.textContent);
+            if (Number.isFinite(parsedEle)) {
+              ele = parsedEle;
+            }
           }
 
-          if (Number.isFinite(lat) && Number.isFinite(lon))
-            points.push([lat, lon, ele]);
+          if (Number.isFinite(lat) && Number.isFinite(lon)) {
+            if (ele !== undefined) {
+              points.push([lat, lon, ele]);
+            } else {
+              points.push([lat, lon]);
+            }
+          }
         }
 
         // Distance calculation
@@ -153,7 +169,27 @@ export function useFileActions() {
       showToast("Failed to parse file", "error");
     }
   };
-  return { importRouteFile, handleDroppedFiles };
+
+  const importPhotos = async () => {
+    try {
+      const selected = await open({
+        multiple: true,
+        filters: [{ name: "Photos & Images", extensions: ["jpg", "jpeg", "png"] }],
+      });
+
+      if (selected) {
+        const paths = Array.isArray(selected) ? selected : [selected];
+        if (paths.length > 0) {
+          await handleDroppedFiles(paths);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to select photos:", error);
+      showToast("Failed to open file dialog.", "error");
+    }
+  };
+
+  return { importRouteFile, handleDroppedFiles, importPhotos };
 }
 
 export const parseAndEnrichGPX = async (rawGpxPoints: { lat: number, lon: number }[]) => {

@@ -161,6 +161,46 @@ export function RouteStyling() {
                 className="w-full h-1.5 bg-zinc-200 dark:bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-zinc-700 dark:accent-zinc-300"
               />
             </div>
+
+            {/* Gradient Heatmap Toggle */}
+            <label className="flex items-center justify-between pt-3 border-t border-zinc-200/80 dark:border-zinc-800 cursor-pointer select-none group">
+              <div className="flex flex-col">
+                <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200 group-hover:text-zinc-900 dark:group-hover:text-white transition-colors">
+                  Gradient Heatmap
+                </span>
+                <span className="text-[10px] text-zinc-500">
+                  Color route lines by slope gradient
+                </span>
+              </div>
+              <div className="relative flex items-center">
+                <input
+                  type="checkbox"
+                  checked={!!settings.show_route_heatmap}
+                  onChange={(e) =>
+                    updateSettings({
+                      show_route_heatmap: e.target.checked,
+                    })
+                  }
+                  className="sr-only"
+                  aria-label="Gradient Heatmap"
+                />
+                <div
+                  className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-200 ease-in-out ${
+                    settings.show_route_heatmap
+                      ? "bg-navi"
+                      : "bg-zinc-300 dark:bg-zinc-700"
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform duration-200 ease-in-out ${
+                      settings.show_route_heatmap
+                        ? "translate-x-4.5"
+                        : "translate-x-0.5"
+                    }`}
+                  />
+                </div>
+              </div>
+            </label>
           </div>
         </div>
       )}

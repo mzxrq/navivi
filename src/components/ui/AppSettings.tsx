@@ -169,6 +169,57 @@ export function AppSettings() {
                         />
                       </div>
                     </div>
+
+                    {/* HISTORICAL WEATHER SYNC */}
+                    <div
+                      onClick={() => {
+                        updateSettings({
+                          weather_sync_enabled: !settings.weather_sync_enabled,
+                        });
+                        setIsDirty(true);
+                      }}
+                      className={`flex items-center justify-between p-4 rounded-xl border-2 transition-all cursor-pointer select-none group ${
+                        settings.weather_sync_enabled
+                          ? "border-navi bg-navi-50/50 dark:border-navi/50 dark:bg-navi/10 shadow-sm"
+                          : "border-zinc-200 dark:border-navidark-400 bg-zinc-50 dark:bg-navidark-800 hover:border-zinc-300 dark:hover:border-navidark-300"
+                      }`}
+                    >
+                      <div className="flex flex-col gap-1 pr-6">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`text-xs font-bold transition-colors ${
+                              settings.weather_sync_enabled
+                                ? "text-navi-700 dark:text-navi-400"
+                                : "text-zinc-700 dark:text-zinc-200 group-hover:text-zinc-900 dark:group-hover:text-white"
+                            }`}
+                          >
+                            Historical Weather Sync
+                          </span>
+                          <span className="text-[9px] font-semibold tracking-wider uppercase px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:bg-amber-400/10 dark:text-amber-400 border border-amber-500/20">
+                            Experimental
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-zinc-500 dark:text-navidark-150 leading-relaxed">
+                          Synchronize historical weather conditions from photo EXIF dates using Open-Meteo to dynamically apply atmospheric fog and rain effects.
+                        </span>
+                      </div>
+
+                      <div
+                        className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-200 ease-in-out ${
+                          settings.weather_sync_enabled
+                            ? "bg-navi"
+                            : "bg-zinc-300 dark:bg-zinc-700"
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform duration-200 ease-in-out ${
+                            settings.weather_sync_enabled
+                              ? "translate-x-4.5"
+                              : "translate-x-0.5"
+                          }`}
+                        />
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>

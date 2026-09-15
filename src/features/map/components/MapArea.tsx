@@ -18,6 +18,7 @@ import {
   MapPinned,
   Square,
   Navigation,
+  ImageIcon,
 } from "../../../components/ui/icons";
 import { mapStyles, mapDefaults } from "../../../config/constants";
 import { RouteStyling } from "./MapLayers/RouteStyling";
@@ -31,6 +32,94 @@ import { LayerManager } from "./MapLayers/LayerManager";
 import { RouteLayer } from "./MapLayers/RouteLayer";
 import { NaviPin } from "./MapLayers/NaviPin";
 import { ElevationProfile } from "./ElevationProfile";
+import {
+  getHistoricalWeather,
+  generateMapboxAtmosphereParams,
+  WeatherCondition,
+} from "../../../services/weatherService";
+
+function RainOverlay() {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    let animId: number;
+    let width = (canvas.width = canvas.parentElement?.clientWidth || window.innerWidth);
+    let height = (canvas.height = canvas.parentElement?.clientHeight || window.innerHeight);
+
+    const handleResize = () => {
+      if (!canvas) return;
+      width = canvas.width = canvas.parentElement?.clientWidth || window.innerWidth;
+      height = canvas.height = canvas.parentElement?.clientHeight || window.innerHeight;
+    };
+    window.addEventListener("resize", handleResize);
+
+    const dropCount = 120;
+    const drops: Array<{
+      x: number;
+      y: number;
+      speed: number;
+      length: number;
+      opacity: number;
+    }> = [];
+
+    for (let i = 0; i < dropCount; i++) {
+      drops.push({
+        x: Math.random() * width,
+        y: Math.random() * height,
+        speed: 14 + Math.random() * 10,
+        length: 12 + Math.random() * 16,
+        opacity: 0.2 + Math.random() * 0.35,
+      });
+    }
+
+    const render = () => {
+      ctx.clearRect(0, 0, width, height);
+
+      for (let i = 0; i < drops.length; i++) {
+        const d = drops[i];
+        ctx.beginPath();
+        ctx.strokeStyle = `rgba(185, 205, 230, ${d.opacity})`;
+        ctx.lineWidth = 1.2;
+        ctx.lineCap = "round";
+        ctx.moveTo(d.x, d.y);
+        ctx.lineTo(d.x - 2, d.y + d.length);
+        ctx.stroke();
+
+        d.y += d.speed;
+        d.x -= 2;
+
+        if (d.y > height) {
+          d.y = -d.length;
+          d.x = Math.random() * (width + 50);
+        }
+        if (d.x < -10) {
+          d.x = width + 10;
+        }
+      }
+
+      animId = requestAnimationFrame(render);
+    };
+
+    animId = requestAnimationFrame(render);
+
+    return () => {
+      cancelAnimationFrame(animId);
+      window.removeEventListener("resize", handleResize);
+    };
+  }, []);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      className="absolute inset-0 pointer-events-none z-10 w-full h-full"
+    />
+  );
+}
 
 export function MapArea() {
   const { theme, mapTheme } = useTheme();
@@ -45,7 +134,7 @@ export function MapArea() {
     updateWaypoint,
     setActiveWaypointId,
   } = useWorkspace();
-  const { handleDroppedFiles } = useFileActions();
+  const { handleDroppedFiles, importPhotos } = useFileActions();
 
   // Overlays & Modes
   const [isHovering, setIsHovering] = useState(false);
@@ -64,6 +153,7 @@ export function MapArea() {
 
   const [eleHoverPoint, setEleHoverPoint] = useState<number[] | null>(null);
   const [vehicleGeoJson, setVehicleGeoJson] = useState<any>(null);
+  const [weatherCondition, setWeatherCondition] = useState<WeatherCondition>("clear");
 
   // Mapbox View State
   const [viewState, setViewState] = useState({
@@ -329,6 +419,75 @@ export function MapArea() {
       map.off('style.load', loadModels);
     };
   }, [selectedStyle]);
+
+  // Historical Weather Sync
+  useEffect(() => {
+    if (!settings.weather_sync_enabled) {
+      setWeatherCondition("clear");
+      return;
+    }
+
+    let isSubscribed = true;
+    const targetWp =
+      (activeWaypointId ? waypoints.find((w) => w.id === activeWaypointId && w.timestamp) : null) ||
+      waypoints.find((w) => !!w.timestamp);
+
+    if (!targetWp || !targetWp.timestamp) {
+      setWeatherCondition("clear");
+      return;
+    }
+
+    getHistoricalWeather(targetWp.lat, targetWp.lng, targetWp.timestamp)
+      .then((condition) => {
+        if (isSubscribed) {
+          setWeatherCondition(condition);
+        }
+      })
+      .catch(() => {
+        if (isSubscribed) {
+          setWeatherCondition("clear");
+        }
+      });
+
+    return () => {
+      isSubscribed = false;
+    };
+  }, [settings.weather_sync_enabled, waypoints, activeWaypointId]);
+
+  // Mapbox Atmosphere & Fog Effect
+  useEffect(() => {
+    const map = mapRef.current?.getMap();
+    if (!map) return;
+
+    const applyAtmosphere = () => {
+      try {
+        if (settings.weather_sync_enabled) {
+          const atmosphere = generateMapboxAtmosphereParams(weatherCondition);
+          if (atmosphere.fog) {
+            map.setFog(atmosphere.fog as any);
+          } else {
+            map.setFog(null as any);
+          }
+        } else {
+          map.setFog(null as any);
+        }
+      } catch (err) {
+        console.warn("Failed to apply Mapbox atmosphere:", err);
+      }
+    };
+
+    map.on("style.load", applyAtmosphere);
+    if (map.isStyleLoaded()) {
+      applyAtmosphere();
+    }
+
+    return () => {
+      map.off("style.load", applyAtmosphere);
+      try {
+        map.setFog(null as any);
+      } catch {}
+    };
+  }, [settings.weather_sync_enabled, weatherCondition, selectedStyle]);
 
   useEffect(() => {
     if (!isRendering || routePoints.length < 2) {
@@ -856,18 +1015,46 @@ export function MapArea() {
             </Source>
           )}
         </Map>
+
+        {/* HISTORICAL WEATHER RAIN OVERLAY */}
+        {settings.weather_sync_enabled && weatherCondition === "rain" && (
+          <RainOverlay />
+        )}
       </div>
 
       <ElevationProfile />
 
       {/* OVERLAYS */}
+      {waypoints.length === 0 && !isHovering && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none p-6">
+          <div className="pointer-events-auto bg-white/90 dark:bg-navidark-800/90 backdrop-blur-md border-2 border-dashed border-zinc-300 dark:border-white/15 rounded-2xl p-8 max-w-md w-full text-center shadow-xl flex flex-col items-center gap-3 transition-all animate-in fade-in zoom-in-95">
+            <div className="w-12 h-12 rounded-xl bg-navi/10 text-navi flex items-center justify-center">
+              <ImageIcon className="w-6 h-6" />
+            </div>
+            <h3 className="text-sm font-bold text-zinc-900 dark:text-white">
+              Drop photos here to auto-plot your route
+            </h3>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 max-w-xs leading-relaxed">
+              EXIF GPS tags from your travel photos will automatically generate sequenced stops on the map.
+            </p>
+            <button
+              onClick={importPhotos}
+              className="mt-1 px-3.5 py-1.5 bg-navi hover:bg-navi-600 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors flex items-center gap-1.5"
+            >
+              <ImageIcon className="w-3.5 h-3.5" />
+              Select Photos...
+            </button>
+          </div>
+        </div>
+      )}
+
       {isHovering && (
         <div className="absolute inset-0 z-600 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-sm border-2 border-dashed border-zinc-400 dark:border-zinc-500 m-4 rounded-2xl flex flex-col items-center justify-center transition-all animate-in fade-in">
           <div className="w-16 h-16 rounded-2xl bg-zinc-900 dark:bg-zinc-200 text-zinc-100 dark:text-zinc-900 flex items-center justify-center mb-4 shadow-lg scale-110">
             <UploadCloud className="w-8 h-8" />
           </div>
           <p className="text-zinc-900 dark:text-zinc-200 font-medium text-lg">
-            Drop any GPS file to Load
+            Drop photos or GPS files to plot route
           </p>
         </div>
       )}

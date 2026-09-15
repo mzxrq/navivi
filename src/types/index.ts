@@ -33,6 +33,7 @@ export interface Waypoint {
   timelineOffset?: number;
   videoOffset?: number;
   audioOffset?: number;
+  timestamp?: string;
 }
 
 export interface RouteSegment {
@@ -68,6 +69,8 @@ export interface ProjectSettings {
   subtitle_bold?: boolean; // false unless necessary
   subtitle_alignment?: number;
   subtitle_margin_v?: number;
+  show_route_heatmap?: boolean;
+  weather_sync_enabled?: boolean;
 }
 
 export interface ProjectMetadata {
@@ -260,6 +263,24 @@ export interface TimelineManifest {
   exported_at?: string;
 }
 
+export interface ProjectVersion {
+  id: string;
+  projectId: string;
+  projectName: string;
+  label: string;
+  createdAt: string;
+  waypointCount: number;
+  clipCount: number;
+}
+
+export interface ProjectVersionSnapshot extends ProjectVersion {
+  waypoints: Waypoint[];
+  routeSegments: RouteSegment[];
+  metadata: ProjectMetadata;
+  settings: ProjectSettings;
+  timeline: TimelineData;
+}
+
 // Global State Interface
 export interface WorkspaceState {
   // Waypoints
@@ -306,4 +327,9 @@ export interface WorkspaceState {
   routingCache: Record<string, [number, number][]>;
   setRoutingCache: Dispatch<SetStateAction<Record<string, [number, number][]>>>;
   forceReroute: () => void;
+  versions: ProjectVersion[];
+  refreshVersions: () => Promise<void>;
+  createVersion: (label?: string) => Promise<ProjectVersion | null>;
+  restoreVersion: (versionId: string) => Promise<boolean>;
+  deleteVersion: (versionId: string) => Promise<boolean>;
 }

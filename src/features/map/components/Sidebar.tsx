@@ -85,14 +85,24 @@ export function Sidebar() {
   }, []);
 
   useEffect(() => {
+    if (editingId && !waypoints.some((w) => w.id === editingId)) {
+      handleCloseEditor();
+    }
+  }, [editingId, waypoints]);
+
+  useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && showGenerateConfirm) {
-        setShowGenerateConfirm(false);
+      if (e.key === "Escape") {
+        if (showGenerateConfirm) {
+          setShowGenerateConfirm(false);
+        } else if (editingId) {
+          handleCloseEditor();
+        }
       }
     };
     window.addEventListener("keydown", handleEsc);
     return () => window.removeEventListener("keydown", handleEsc);
-  }, [showGenerateConfirm]);
+  }, [showGenerateConfirm, editingId]);
 
   const handleGenerateClick = async () => {
     if (waypoints.length === 0) {
@@ -127,16 +137,14 @@ export function Sidebar() {
   };
 
   return (
-    <>
-      {editingId && (
-        <div className="absolute top-12 left-90 bottom-0 z-[100] shadow-2xl flex">
-          <WaypointEditor wpId={editingId} onClose={handleCloseEditor} />
-        </div>
-      )}
-      <aside
-        ref={sidebarRef}
+    <aside
+      ref={sidebarRef}
       className="w-90 shrink-0 bg-white dark:bg-navidark-800 border-r border-zinc-200 dark:border-white/5 flex flex-col h-full select-none z-100 relative shadow-2xl transition-colors"
     >
+      {editingId ? (
+        <WaypointEditor wpId={editingId} onClose={handleCloseEditor} />
+      ) : (
+        <>
       <div className="sticky top-0 z-30 bg-white/80 dark:bg-navidark-800/80 backdrop-blur-xl border-b border-zinc-100 dark:border-white/5 p-6 shrink-0 flex flex-col gap-5">
         <LocationSearch />
         <OverviewPanel />
@@ -383,7 +391,8 @@ export function Sidebar() {
         </div>,
         document.body
       )}
+        </>
+      )}
     </aside>
-    </>
   );
 }

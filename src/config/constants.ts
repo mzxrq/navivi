@@ -45,6 +45,8 @@ export const defaultProjectSettings = {
     summary_fade: 0.5,
     mapbox_api_key: "",
     auto_save_interval: 3,
+    show_route_heatmap: false,
+    weather_sync_enabled: false,
 };
 
 export const mapStyles = [

@@ -206,11 +206,13 @@ export function WaypointEditor({
   };
 
   return (
-    <aside className="w-90 shrink-0 bg-white dark:bg-navidark-600 border-r border-zinc-200 dark:border-white/5 flex flex-col h-full select-none z-10 relative shadow-xl transition-colors">
+    <div className="flex flex-col h-full bg-white dark:bg-navidark-800 select-none transition-colors animate-in fade-in duration-200">
       {/* --- HEADER --- */}
       <div className="flex items-center gap-3 p-4 border-b border-zinc-200 dark:border-white/5 shrink-0 bg-zinc-50/50 dark:bg-navidark-700/50">
         <button
           onClick={onClose}
+          title="Back to stops list"
+          aria-label="Back to stops list"
           className="p-1.5 -ml-1.5 rounded-lg hover:bg-zinc-200 dark:hover:bg-navidark-400 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
         >
           <ChevronLeft className="w-5 h-5" />
@@ -298,7 +300,7 @@ export function WaypointEditor({
                   updateWaypoint(wp.id, { customMarker: selected });
                 }
               }}
-              className="flex-1 py-2 text-xs font-semibold rounded-xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-navidark-600 hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors text-zinc-700 dark:text-zinc-300 shadow-sm"
+              className="flex-1 py-2 text-xs font-semibold rounded-xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-navidark-700 hover:bg-zinc-50 dark:hover:bg-navidark-600 transition-colors text-zinc-700 dark:text-zinc-300 shadow-sm"
             >
               {wp.customMarker ? "Change Marker" : "Select Marker"}
             </button>
@@ -458,7 +460,7 @@ export function WaypointEditor({
                     <div className="flex justify-center py-2 relative z-10">
                       <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-zinc-200 dark:bg-white/10 -z-10" />
 
-                      <div className="bg-white dark:bg-navidark-600 border border-zinc-200 dark:border-white/10 rounded-full shadow-sm flex items-center pr-1 hover:border-navi-300 transition-colors">
+                      <div className="bg-white dark:bg-navidark-700 border border-zinc-200 dark:border-white/10 rounded-full shadow-sm flex items-center pr-1 hover:border-navi-300 transition-colors">
                         <div className="pl-3 pr-2 py-1 text-[9px] text-zinc-400 font-bold uppercase tracking-wider border-r border-zinc-100 dark:border-white/5">
                           Transition
                         </div>
@@ -500,7 +502,7 @@ export function WaypointEditor({
       </div>
 
       {/* --- WAYPOINT ACTIONS --- */}
-      <div className="flex flex-col p-3 border-t border-zinc-200 dark:border-white/5 shrink-0 bg-white dark:bg-navidark-600 gap-2">
+      <div className="flex flex-col p-3 border-t border-zinc-200 dark:border-white/5 shrink-0 bg-white dark:bg-navidark-800 gap-2">
         {/* Type Configuration Buttons */}
         <div className="flex flex-col gap-2">
           <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
@@ -574,6 +576,6 @@ export function WaypointEditor({
           <Trash2 className="w-4 h-4" /> Remove Stop
         </button>
       </div>
-    </aside>
+    </div>
   );
 }

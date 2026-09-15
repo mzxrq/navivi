@@ -79,7 +79,14 @@ export function WaypointItem({
   return (
     <div
       ref={itemRef}
-      className={`relative flex items-stretch group transition-all px-2 py-1.5 rounded-xl border cursor-pointer ${
+      onClick={() => {
+        if (!isListEditMode) {
+          handleSelect();
+        }
+      }}
+      className={`relative flex items-stretch group transition-all px-2 py-1.5 rounded-xl border ${
+        isListEditMode ? "cursor-default" : "cursor-pointer"
+      } ${
         isActive
           ? "bg-navi/60 dark:bg-navi/20 border-navi/50 dark:border-navi/40 ring-1 ring-navi/30"
           : "border-transparent hover:bg-zinc-50/80 dark:hover:bg-zinc-900/30"

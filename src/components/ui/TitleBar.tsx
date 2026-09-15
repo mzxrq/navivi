@@ -47,7 +47,7 @@ export function TitleBar() {
     setMetadata,
   } = useWorkspace();
 
-  const { importRouteFile } = useFileActions();
+  const { importRouteFile, importPhotos } = useFileActions();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [showSaveAs, setShowSaveAs] = useState(false);
   const [saveMode, setSaveMode] = useState<"initial" | "duplicate">("initial");
@@ -256,6 +256,15 @@ export function TitleBar() {
                 </button>
 
                 <div className="h-px bg-zinc-200 dark:bg-white/5 my-1 mx-2" />
+                <button
+                  onClick={async () => {
+                    setIsMenuOpen(false);
+                    await importPhotos();
+                  }}
+                  className="w-full flex items-center justify-between px-4 py-1.5 hover:bg-zinc-100 dark:hover:bg-navidark-400 transition-colors"
+                >
+                  <span>Import Photos...</span>
+                </button>
                 <button
                   onClick={async () => {
                     setIsMenuOpen(false);
