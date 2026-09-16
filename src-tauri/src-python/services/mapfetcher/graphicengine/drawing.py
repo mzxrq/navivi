@@ -99,6 +99,7 @@ class _DrawingMixin:
         number: Optional[Any] = None,
         color: Optional[Tuple[int, int, int]] = None,
         split_color: Optional[Tuple[int, int, int]] = None,
+        is_circle: bool = False,
     ):
         """Draws a classic Google-Maps-style teardrop map-pin marker with
         its TIP anchored at (cx, cy) — the actual waypoint coordinate —
@@ -122,33 +123,44 @@ class _DrawingMixin:
         radius = int(self.marker_radius)
         head_cy = cy - int(radius * _PIN_HEAD_OFFSET_RATIO)
 
-        # White halo (slightly larger all round, including a bit past the
-        # tip) so the pin reads against busy map tiles.
-        cv2.fillPoly(
-            frame, [_pin_silhouette(cx, head_cy, radius + 4, cy + 4)],
-            (255, 255, 255), cv2.LINE_AA,
-        )
-
-        if split_color is not None:
-            # Fill the WHOLE silhouette with the left color first, then
-            # overwrite only the right half (x >= cx) with the split
-            # color — via a mask rather than two separately-clipped
-            # fillPoly calls, so the teardrop's own curved/tapered outline
-            # (not a plain rectangle) is respected on both halves without
-            # having to intersect it with a half-plane by hand.
-            silhouette = [_pin_silhouette(cx, head_cy, radius, cy)]
-            mask = np.zeros(frame.shape[:2], dtype=np.uint8)
-            cv2.fillPoly(mask, silhouette, 255, cv2.LINE_AA)
-            cv2.fillPoly(frame, silhouette, pin_color, cv2.LINE_AA)
-            right_mask = mask.copy()
-            right_mask[:, :cx] = 0
-            frame[right_mask > 0] = split_color
+        if is_circle:
+            radius = int(radius * 0.65)
+            head_cy = cy
+            cv2.circle(frame, (cx, head_cy), radius + 3, (255, 255, 255), -1, cv2.LINE_AA)
+            if split_color is not None:
+                # Split colored circle
+                cv2.circle(frame, (cx, head_cy), radius, pin_color, -1, cv2.LINE_AA)
+                cv2.ellipse(frame, (cx, head_cy), (radius, radius), 0, -90, 90, split_color, -1, cv2.LINE_AA)
+            else:
+                cv2.circle(frame, (cx, head_cy), radius, pin_color, -1, cv2.LINE_AA)
         else:
-            # Colored pin body.
+            # White halo (slightly larger all round, including a bit past the
+            # tip) so the pin reads against busy map tiles.
             cv2.fillPoly(
-                frame, [_pin_silhouette(cx, head_cy, radius, cy)],
-                pin_color, cv2.LINE_AA,
+                frame, [_pin_silhouette(cx, head_cy, radius + 4, cy + 4)],
+                (255, 255, 255), cv2.LINE_AA,
             )
+
+            if split_color is not None:
+                # Fill the WHOLE silhouette with the left color first, then
+                # overwrite only the right half (x >= cx) with the split
+                # color — via a mask rather than two separately-clipped
+                # fillPoly calls, so the teardrop's own curved/tapered outline
+                # (not a plain rectangle) is respected on both halves without
+                # having to intersect it with a half-plane by hand.
+                silhouette = [_pin_silhouette(cx, head_cy, radius, cy)]
+                mask = np.zeros(frame.shape[:2], dtype=np.uint8)
+                cv2.fillPoly(mask, silhouette, 255, cv2.LINE_AA)
+                cv2.fillPoly(frame, silhouette, pin_color, cv2.LINE_AA)
+                right_mask = mask.copy()
+                right_mask[:, :cx] = 0
+                frame[right_mask > 0] = split_color
+            else:
+                # Colored pin body.
+                cv2.fillPoly(
+                    frame, [_pin_silhouette(cx, head_cy, radius, cy)],
+                    pin_color, cv2.LINE_AA,
+                )
 
         # White center — always drawn (not just when there's no number) so
         # every numbered pin gets the same dark-on-white number. Smaller

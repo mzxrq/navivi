@@ -37,6 +37,25 @@ _VEHICLE_PROFILES = {
 }
 
 
+def _route_linestring_feature(coords_lonlat: list, line_color: list) -> dict:
+    """A single-feature GeoJSON FeatureCollection wrapping `coords_lonlat`
+    (already [lon, lat] pairs, matching GeoJSON's own axis order) as a
+    LineString -- the shape pdk.Layer("GeoJsonLayer", ...) expects for its
+    `data`. `line_color` rides along in "properties" rather than as a
+    layer-level constant so get_line_color can read it per-feature the way
+    GeoJsonLayer is designed to be driven."""
+    return {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "geometry": {"type": "LineString", "coordinates": coords_lonlat},
+                "properties": {"line_color": line_color},
+            }
+        ],
+    }
+
+
 def record_headless_video(
     config_path: str,
     output_video_path: str = "final_reliable_map_animation.mp4",
@@ -308,16 +327,31 @@ def record_headless_video(
             # the static base map so the route is visible before the
             # vehicle animates over it, instead of only appearing as the
             # driving loop draws it frame by frame.
-            route_preview_path = df_raw[["lon", "lat"]].values.tolist()
+            #
+            # [PROTOTYPE] [Map] Rendered as a real GeoJSON LineString Feature
+            # through GeoJsonLayer rather than PathLayer's own
+            # {"path": [[lon, lat], ...]} record shape -- this is the piece
+            # of the pipeline actually being trialed for a GeoJsonLayer-based
+            # route rendering approach (the rest of the pipeline, including
+            # the live per-frame trail in renderer.py, is untouched pending
+            # that trial's outcome). stroked/filled=False mirrors PathLayer's
+            # line-only rendering; get_line_color/get_line_width read from
+            # each feature's own "properties" instead of being passed as
+            # layer-level constants, since that's how GeoJsonLayer expects
+            # per-feature styling to be supplied.
             base_layers = [
                 pdk.Layer(
-                    "PathLayer",
+                    "GeoJsonLayer",
                     id="route-preview",
-                    data=[{"path": route_preview_path}],
-                    get_path="path",
-                    get_color=[255, 255, 255, 130],
-                    width_scale=1,
-                    width_min_pixels=max(2, line_thickness // 3),
+                    data=_route_linestring_feature(
+                        route_preview_path,
+                        line_color=[255, 255, 255, 130],
+                    ),
+                    stroked=True,
+                    filled=False,
+                    get_line_color="properties.line_color",
+                    line_width_scale=1,
+                    line_width_min_pixels=max(2, line_thickness // 3),
                 ),
             ]
 
@@ -325,22 +359,30 @@ def record_headless_video(
                 base_layers.extend(
                     [
                         pdk.Layer(
-                            "PathLayer",
+                            "GeoJsonLayer",
                             id="static-glow",
-                            data=[{"path": accumulated_trail}],
-                            get_path="path",
-                            get_color=history_color + [90],
-                            width_scale=1,
-                            width_min_pixels=line_thickness + 8,
+                            data=_route_linestring_feature(
+                                accumulated_trail,
+                                line_color=history_color + [90],
+                            ),
+                            stroked=True,
+                            filled=False,
+                            get_line_color="properties.line_color",
+                            line_width_scale=1,
+                            line_width_min_pixels=line_thickness + 8,
                         ),
                         pdk.Layer(
-                            "PathLayer",
+                            "GeoJsonLayer",
                             id="static-trail",
-                            data=[{"path": accumulated_trail}],
-                            get_path="path",
-                            get_color=history_color,
-                            width_scale=1,
-                            width_min_pixels=line_thickness,
+                            data=_route_linestring_feature(
+                                accumulated_trail,
+                                line_color=history_color,
+                            ),
+                            stroked=True,
+                            filled=False,
+                            get_line_color="properties.line_color",
+                            line_width_scale=1,
+                            line_width_min_pixels=line_thickness,
                         ),
                     ]
                 )

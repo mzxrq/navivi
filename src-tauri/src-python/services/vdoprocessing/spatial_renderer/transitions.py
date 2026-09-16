@@ -106,17 +106,29 @@ class _TransitionMixin:
         reserved_boxes: List[Tuple[float, float, float, float]],
         pre_popup_frame: Optional[np.ndarray],
     ) -> float:
-        """Builds the end-of-video recap (every waypoint's card at once,
-        each with a leader line back to its own pin) if there's a
-        stop_popup, fades the summary stat card in on top of it, and
-        returns how long (seconds) the caller should hold on the result
-        before moving on — the longer of the recap's own freeze_seconds
-        and the summary card's configured hold, so the two read as one
-        continuous ending beat rather than the recap being shown alone
-        first and the card only appearing afterward in its own pause.
-        Updates self.last_frame; does not write the hold itself, since
-        the highlight (_render_ending_highlight) may still need to run
-        first."""
+        """Builds the end-of-video recap and fades the summary stat card in
+        on top of it, returning how long (seconds) the caller should hold
+        on the result before moving on. Updates self.last_frame; does not
+        write that final hold itself, since the highlight
+        (_render_ending_highlight) may still need to run first.
+
+        The recap ends up showing EVERY waypoint's card together, but
+        reveals them a few at a time rather than cutting straight to a
+        full screen of them. The whole set is laid out up front into the
+        frame's free space (see _layout_recap_cards), which is what makes
+        showing them all at once viable at all — disjoint slots, so no two
+        cards can overlap, matched to pins by minimum total leader length,
+        which leaves the lines both short and uncrossed. They're then
+        revealed
+        cumulatively in that same ring order, tuning.RECAP_GROUP_SIZE
+        cards per step, crossfading between steps: because the layout was
+        computed once over the full set, no card ever moves, resizes or
+        recolors as later ones join it. Every pin stays visible from the
+        first step regardless of whether its own card has appeared yet
+        (see _render_recap_frame's group_popups param). All of this is
+        written directly here (not left to the caller's own trailing hold
+        loop), so the returned outro_hold_sec covers only the summary
+        card's own hold on top of the final, complete ring."""
         outro_hold_sec = 0.0
 
         if stop_popup:
@@ -132,14 +144,59 @@ class _TransitionMixin:
                 pre_popup_frame.copy() if pre_popup_frame is not None
                 else self.last_frame.copy()
             )
-            self.last_frame = self._render_recap_frame(
-                outro_frame, active_popups, w, h,
-                route_obstacles=route_obstacle_arr,
-                reserved_boxes=reserved_boxes,
-            )
-            outro_hold_sec = float(
+            all_recap_popups = [ap for ap in active_popups if ap["data"].get("popup_image")]
+            # A loop route's "E" is the exact same real-world place as "S"
+            # (see SpatialRendererBase._is_loop_route) — usually labeled
+            # "... (Return)" in job_config.json, its own popup card would
+            # otherwise show the same photo/place right next to the start
+            # card it's a duplicate of. Drop it here (by identity, not by
+            # label text) so the recap shows that place once, via its
+            # start-popup card, rather than twice.
+            if self._is_loop_route and stop_popup is not None:
+                all_recap_popups = [ap for ap in all_recap_popups if ap is not stop_popup]
+            total_freeze = float(
                 stop_popup["data"].get("freeze_seconds", self._DEFAULT_FREEZE_SECONDS)
             )
+
+            if all_recap_popups:
+                laid_out = self._layout_recap_cards(
+                    all_recap_popups, w, h,
+                    reserved_boxes=reserved_boxes,
+                    route_obstacles=route_obstacle_arr,
+                )
+                step = max(1, tuning.RECAP_GROUP_SIZE)
+                # Cumulative prefixes: each step adds `step` more cards to
+                # the ones already up, so the last one holds every card.
+                reveals = [
+                    laid_out[: i + step] for i in range(0, len(laid_out), step)
+                ]
+                per_step_hold = max(
+                    tuning.RECAP_GROUP_MIN_HOLD_SECONDS, total_freeze / len(reveals)
+                )
+                fade_frames = max(1, int(tuning.RECAP_GROUP_FADE_SECONDS * fps))
+
+                prev_step_frame = None
+                for shown in reveals:
+                    step_frame = self._render_recap_frame(
+                        outro_frame, active_popups, group_popups=shown
+                    )
+                    hold_frames = max(0, int(per_step_hold * fps))
+                    if prev_step_frame is None:
+                        for _ in range(hold_frames):
+                            video.write(step_frame)
+                    else:
+                        for i in range(fade_frames):
+                            alpha = (i + 1) / fade_frames
+                            video.write(
+                                cv2.addWeighted(step_frame, alpha, prev_step_frame, 1 - alpha, 0)
+                            )
+                        for _ in range(max(0, hold_frames - fade_frames)):
+                            video.write(step_frame)
+                    prev_step_frame = step_frame
+
+                self.last_frame = prev_step_frame
+            else:
+                self.last_frame = outro_frame
 
         if summary_card is not None:
             fade_frames = max(1, int(self.config.get("summary_fade", 0.5) * fps))
@@ -277,7 +334,8 @@ class _TransitionMixin:
             wp = {"index": pos + 1, "order": order, "data": {"is_stopby": is_stopby, "arrived": True}}
             label, color, split_color = self._pin_label_and_color(wp, total_points)
             self.graphics.draw_marker(
-                frame, px, py, number=label, color=color, split_color=split_color
+                frame, px, py, number=label, color=color, split_color=split_color,
+                is_circle=bool(is_stopby)
             )
 
     def _render_ending_highlight(

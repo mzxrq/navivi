@@ -755,6 +755,20 @@ class _WaypointRenderMixin:
                         if len(route_obstacle_arr) > 400:
                             step = max(1, len(route_obstacle_arr) // 400)
                             route_obstacle_arr = route_obstacle_arr[::step]
+                    # Every pin already drawn on this frame counts as an
+                    # obstacle too, not just the route line — otherwise a
+                    # card placed just above a waypoint sits right on top of
+                    # a pin (which is drawn upward from its own anchor),
+                    # hiding the stop it's captioning.
+                    pin_obstacles = self._pin_obstacle_points(
+                        [*mid_marker_pins, start_wp, end_wp]
+                    )
+                    if len(pin_obstacles):
+                        route_obstacle_arr = (
+                            pin_obstacles
+                            if route_obstacle_arr is None
+                            else np.vstack([route_obstacle_arr, pin_obstacles])
+                        )
                     footprint_w, footprint_h = self.graphics.beside_card_footprint()
                     self._layout_beside_popups(
                         [{"popup": c, "frames_left": 1} for c in popup_cards], w, h,
@@ -952,6 +966,7 @@ class _WaypointRenderMixin:
                             int(res_points[0][1]),
                             number=start_pin_label,
                             color=start_pin_color,
+                            is_circle=bool(start_wp.get("data", {}).get("is_stopby")),
                         )
                         self.graphics.draw_marker(
                             frame,
@@ -959,6 +974,7 @@ class _WaypointRenderMixin:
                             int(res_points[-1][1]),
                             number=end_pin_label,
                             color=end_pin_color,
+                            is_circle=bool(end_wp.get("data", {}).get("is_stopby")),
                         )
 
                     # Drawn LAST (on top of the S/E pins and mid-route

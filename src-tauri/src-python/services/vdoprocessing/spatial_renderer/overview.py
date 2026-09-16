@@ -342,7 +342,7 @@ class _OverviewRenderMixin:
         ]
         triggerable.sort(key=lambda ap: ap["expected_frame"])
         stop_expected_frame = stop_popup["expected_frame"] if stop_popup else None
-        min_leg_frames = int(fps * _MIN_LEG_DISPLAY_SECONDS)
+        min_leg_frames = int(fps * max(_MIN_LEG_DISPLAY_SECONDS, tuning.POPUP_MIN_DISPLAY_SECONDS))
         for i, ap in enumerate(triggerable):
             this_frame = ap["expected_frame"]
             next_frame = (
@@ -384,9 +384,17 @@ class _OverviewRenderMixin:
             # one — most routes set popup_image on every waypoint incl.
             # the destination) are previewed together on the intro, rather
             # than only ever revealing the destination at the very end.
+            # A loop route's "E" is the exact same real-world place as "S"
+            # (see SpatialRendererBase._is_loop_route) though — showing
+            # both there would just duplicate the start card's own photo
+            # right next to itself, so it's skipped (same reasoning as
+            # transitions.py's end-of-video recap, which drops the same
+            # duplicate popup for the same reason).
             temp_ep = (
                 _make_intro_card(stop_popup)
-                if stop_popup and stop_popup["data"].get("popup_image")
+                if stop_popup
+                and stop_popup["data"].get("popup_image")
+                and not self._is_loop_route
                 else None
             )
             intro_cards = [temp_sp] + ([temp_ep] if temp_ep else [])

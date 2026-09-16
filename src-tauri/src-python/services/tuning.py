@@ -94,6 +94,17 @@ PIPELINE_LABELS: Dict = LABELS_JA
 # just sees "walking" and never has to special-case "draw" itself.
 MODE_ALIASES: Dict[str, str] = {"direct": "walking", "draw": "walking"}
 
+# Travel modes that fall back to the flat 2D renderer for their own leg even
+# when the project is otherwise on the pydeck pedestrian pipeline (see
+# route2vdo._render_residential_pydeck). The chase camera is built for
+# ground-level travel: it follows the route at pedestrian zoom with a tilted
+# horizon, which suits walking and driving but not a ferry crossing or a
+# flight, where the "route" is a long featureless line over water or sky and
+# a tilted close-up of it shows nothing. Those legs read far better as a
+# flat, zoomed-out 2D map showing the whole hop. Legs either side of one
+# still render in 3D — the fallback is per leg, not per project.
+RESIDENTIAL_2D_FALLBACK_MODES: Tuple[str, ...] = ("ferry", "airplane")
+
 # --- Mode speeds (km/h) -----------------------------------------------------
 # REPORTED is the real-world speed a leg's distance/time is estimated from
 # when no real GPS timestamp is available (drives the summary/per-leg stat
@@ -136,6 +147,14 @@ STOPBY_PIN_COLOR: Tuple[int, int, int] = (28, 38, 51)  # #33261c dark brown — 
 # really the same real-world spot" (~30m at these latitudes); a genuinely
 # different end point a block or two away should never trigger this.
 LOOP_ROUTE_MATCH_DEGREES = 0.0003
+# Base route-line color: the fallback for any travel mode without its own
+# entry in MODE_LINE_COLORS, and what the end-of-video zoom-to-start
+# highlight draws the whole route with. Neutral grey rather than the gold
+# it used to be — now that each real mode carries its own color (walking
+# blue, ferry orange, ...), the base line reads as "route" rather than
+# competing with them, and grey stays legible over both the light land and
+# the blue water without claiming to be a mode of its own.
+DEFAULT_LINE_COLOR: Tuple[int, int, int] = (110, 110, 110)  # #6e6e6e grey
 DEFAULT_MARKER_COLOR: Tuple[int, int, int] = (245, 135, 66)  # #4287f5 blue — every other numbered pin
 DEFAULT_ARRIVED_MARKER_COLOR: Tuple[int, int, int] = (200, 110, 30)  # deeper blue once visited
 PIN_NUMBER_TEXT_COLOR: Tuple[int, int, int] = (17, 17, 17)  # #111 — NaviPin's number/letter fill
@@ -273,10 +292,16 @@ RESIDENTIAL_WIDE_MIN_DISTANCE_M = 400.0
 # per-chunk clip concatenation); the wide shot only plays before chunk 1 of
 # each leg, not before every chunk.
 RESIDENTIAL_DEFAULT_MAX_CHUNK_DISTANCE_M = 8000.0
-# Per-travel-mode ROUTE LINE colors. Modes without an entry (e.g. walking)
-# fall back to the renderer's own line_color.
-# [NOTE] [Config] Modes missing here (e.g. walking) fall back to the renderer's own line_color rather than a hardcoded default.
+# Per-travel-mode ROUTE LINE colors. Modes without an entry fall back to
+# the renderer's own line_color.
+# [NOTE] [Config] A mode missing here falls back to the renderer's own line_color rather than a hardcoded default.
 MODE_LINE_COLORS: Dict[str, Tuple[int, int, int]] = {
+    # Was unset (falling back to line_color's yellow/gold) — the same
+    # color doubled as the walking-mode accent on cards.py's summary card
+    # labels (see _mode_accent), where yellow text read poorly against the
+    # card's light background. Explicit "Google Maps blue" instead: good
+    # contrast on a light card AND distinct from every other mode below.
+    "walking": (232, 115, 26),  # #1A73E8 blue
     "ferry": (0, 140, 255),  # orange — reads clearly against blue water
     "airplane": (180, 60, 220),  # magenta/purple
     "car": (60, 180, 60),  # green
@@ -311,12 +336,21 @@ ENDING_HIGHLIGHT_PYDECK_ZOOM_BOOST = 3.2
 POPUP_FADE_SECONDS = 1.5
 # Minimum wall-clock gap between one waypoint popup triggering and the next
 # one being allowed to — a cluster of waypoints placed close together on
-# the map (a common case: several stops within the same block) could
-# otherwise trigger back-to-back within a frame or two of each other,
-# popping the current card out again almost as soon as it appeared, well
-# before it was actually readable. Applies regardless of how close the
-# pins are, on top of (not instead of) each popup's own display duration.
-OVERVIEW_POPUP_MIN_TRIGGER_GAP_SECONDS = 2.0
+# the map (a common case: several stops within the same block) would
+# otherwise all snap in on the same frame. Kept to a brief stagger, NOT a
+# readability pause: at the 2.0s it used to be, a cluster's cards queued up
+# and appeared seconds after the traveler had visibly gone past their pins,
+# which reads as the card belonging to somewhere the dot already left.
+# Cards are meant to arrive with the traveler and then coexist (see
+# MAX_CONCURRENT_FLOW_POPUPS) rather than take turns.
+OVERVIEW_POPUP_MIN_TRIGGER_GAP_SECONDS = 0.4
+# How many flow-through popup cards may share the screen at once. Raised
+# alongside the shorter trigger gap above: with cards no longer waiting
+# their turn to appear, a dense cluster needs the room to actually show
+# them together, or the ones behind sit queued for a display slot and can
+# still time out having never been drawn (see _make_baked_popup's
+# max_wait_frames).
+MAX_CONCURRENT_FLOW_POPUPS = 4
 # How much earlier than a popup's own computed `expected_frame` (its
 # nearest-point position along the animated path — see overview.py) the
 # proximity trigger is still allowed to fire. Exists only to absorb the
@@ -327,6 +361,51 @@ OVERVIEW_POPUP_MIN_TRIGGER_GAP_SECONDS = 2.0
 # card appear while the dot is still approaching the pin, not on it) —
 # kept just wide enough to cover realistic estimation jitter instead.
 OVERVIEW_POPUP_TRIGGER_TOLERANCE_SECONDS = 0.2
+# How close (in seconds of animated travel time) the traveler must be to a
+# waypoint's own expected_frame before the overview's dynamic top-banner
+# caption (see overview_animation.py/GraphicsEngine.render_top_banner)
+# switches from "{label} へ" (still en route) to "まもなく {label}"
+# (arriving) — matches pydeckrecorder.pedestrian's own arrive_threshold_m,
+# just expressed in time (animated-path seconds) rather than real-world
+# meters, since the 2D overview has no consistent meters-per-pixel scale
+# to compare against.
+OVERVIEW_BANNER_NEAR_SECONDS = 3.0
+# End-of-video recap: every waypoint's photo card ends up on screen at
+# once (laid out around the frame's border by popups.py's
+# _layout_recap_cards), but they arrive this many at a time rather than in
+# one cut, each step crossfading onto the ones already up. Every pin stays
+# visible from the first step regardless of whether its own card has shown
+# yet (see _render_recap_frame's group_popups param).
+RECAP_GROUP_SIZE = 6
+# Floor on how long each reveal step is held on screen, regardless of how
+# the stop waypoint's own freeze_seconds divides across however many steps
+# this route ended up needing — a step flashed by for under this long
+# isn't actually readable.
+RECAP_GROUP_MIN_HOLD_SECONDS = 2.5
+# Crossfade duration between two consecutive recap reveal steps.
+RECAP_GROUP_FADE_SECONDS = 0.4
+# Leader-line/card-border colors cycled by a popup's position around the
+# recap reveal order (see popups.py's _layout_recap_cards) — NOT tied to the
+# waypoint's own pin category. By recap time every waypoint has "arrived",
+# collapsing _pin_label_and_color to just two flat colors (one shared by
+# every numbered stop, one shared by every stop-by landmark), so
+# same-category cards would be indistinguishable from each other; cycling a
+# small distinct palette in ring order instead gives each card a color
+# different from its neighbours', and puts any repeat a long way around the
+# ring from the card it repeats. BGR tuples (a
+# Tableau10-derived qualitative palette), picked to stay visually distinct
+# from each other and from the fixed route/pin colors above (route line
+# yellow, START/END green/red, DRAWN_PIN_COLOR orange — omitted here to
+# avoid a near-identical duplicate).
+RECAP_LINE_COLOR_PALETTE: List[Tuple[int, int, int]] = [
+    (180, 119, 31),   # blue
+    (189, 103, 148),  # purple
+    (75, 86, 140),    # brown
+    (194, 119, 227),  # pink
+    (127, 127, 127),  # gray
+    (34, 189, 188),   # olive
+    (207, 190, 23),   # cyan
+]
 # How long a flow-through popup's beside-pin position (its "beside_box",
 # found by _layout_beside_popups' spiral search) is locked in place once
 # set, before it's allowed to be recomputed. Without this, a newly
@@ -352,6 +431,15 @@ POPUP_POSITION_LOCK_SECONDS = 2.0
 # real chance at a slot; still bounded (not infinite) so a popup doesn't
 # finally appear absurdly long after the traveler has moved on.
 POPUP_MIN_WAIT_SECONDS = 6.0
+# Hard floor on how long any popup card stays on screen once it appears,
+# whatever its own leg's pacing worked out to. A leg between two stops a
+# few metres apart can compute a display time of well under a second, which
+# is long enough to draw the eye but not to actually read the place name —
+# the card registers only as a flicker. Enforced centrally in
+# _make_baked_popup (the one place a display duration becomes frames), so
+# it holds for every caller rather than each having to remember its own
+# floor. Covers the whole on-screen life including the fade in/out.
+POPUP_MIN_DISPLAY_SECONDS = 2.0
 # Hard ceiling on a waypoint's own "freeze_seconds" (job_config's per-stop
 # override for how long its popup photo is held/displayed) — applied
 # wherever that raw job_config value is first read, so every downstream

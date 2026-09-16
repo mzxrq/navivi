@@ -45,6 +45,38 @@ class _PinMixin:
         change never lags behind the real arrival."""
         return self.graphics.arrived_marker_color if wp["data"].get("arrived") else None
 
+    def _pin_obstacle_points(
+        self, pins: List[Dict], cols: int = 3, rows: int = 4
+    ) -> np.ndarray:
+        """A grid of points covering each pin's DRAWN silhouette, for use as
+        popup-layout obstacles (see popups.py's _layout_beside_popups, which
+        rejects any candidate card box containing an obstacle point).
+
+        Passing the route line alone isn't enough to keep a card off the
+        map's content. A pin is drawn from its anchor UPWARD — the teardrop's
+        tip sits on the coordinate and its head is ~2.5 radii above it (see
+        drawing.py's _PIN_HEAD_OFFSET_RATIO) — so a card placed just above a
+        waypoint lands squarely on the pin it belongs to, or on a
+        neighbour's. Sampled as a grid rather than one point for that same
+        reason: a single point at the anchor would only ever protect the tip.
+        """
+        if not pins:
+            return np.empty((0, 2), dtype=float)
+        radius = float(self.graphics.marker_radius)
+        half_w = radius + 4.0
+        points = []
+        for wp in pins:
+            cx = float(wp.get("pin_x", wp["x"]))
+            cy = float(wp.get("pin_y", wp["y"]))
+            x0, x1 = cx - half_w, cx + half_w
+            y0, y1 = cy - (2.5 * radius + 4.0), cy + 4.0
+            for i in range(cols):
+                fx = i / (cols - 1) if cols > 1 else 0.5
+                for j in range(rows):
+                    fy = j / (rows - 1) if rows > 1 else 0.5
+                    points.append((x0 + (x1 - x0) * fx, y0 + (y1 - y0) * fy))
+        return np.asarray(points, dtype=float)
+
     def _declutter_pins(self, active_popups: List[Dict]) -> None:
         """When two or more waypoints sit within a marker's width of each
         other (a cluster of stops on the same small island, say), their
@@ -135,8 +167,9 @@ class _PinMixin:
         count the same way MapArea.tsx's normalIndex does)."""
         label, pin_color, split_color = self._pin_label_and_color(wp, total_points)
         px, py = int(wp.get("pin_x", wp["x"])), int(wp.get("pin_y", wp["y"]))
+        is_circle = bool(wp.get("data", {}).get("is_stopby"))
         self.graphics.draw_marker(
-            frame, px, py, number=label, color=pin_color, split_color=split_color
+            frame, px, py, number=label, color=pin_color, split_color=split_color, is_circle=is_circle
         )
 
     def _pin_label_and_color(self, wp: Dict, total_points: int):

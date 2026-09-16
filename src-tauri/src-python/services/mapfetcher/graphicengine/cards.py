@@ -489,8 +489,13 @@ class _CardMixin:
 
         scale = 2
         font_header = self._load_font(self.FONT_CANDIDATES_BOLD, 22 * scale)
+        # Bold, not regular — same reasoning as create_summary_card's own
+        # font_label (see its comment): a mode label drawn in its own
+        # accent color (rather than plain text-color gray) needs the extra
+        # weight to stay legible against the card's light background,
+        # especially for a pale accent like the walking mode's yellow.
         font_label = self._load_font(
-            self.FONT_CANDIDATES_REGULAR, tuning.SUMMARY_CARD_LABEL_FONT_SIZE * scale
+            self.FONT_CANDIDATES_BOLD, tuning.SUMMARY_CARD_LABEL_FONT_SIZE * scale
         )
         font_value = self._load_font(
             self.FONT_CANDIDATES_BOLD, int(tuning.SUMMARY_CARD_LABEL_FONT_SIZE * 1.15) * scale
@@ -800,6 +805,55 @@ class _CardMixin:
             card_bgra[:, :, :3].astype(np.float32),
             (card_bgra[:, :, 3].astype(np.float32) / 255.0) * alpha,
         )
+        roi = out[y0 : y0 + ch, x0 : x0 + cw].astype(np.float32)
+        out[y0 : y0 + ch, x0 : x0 + cw] = (
+            card_bgr * card_alpha[..., None] + roi * (1 - card_alpha[..., None])
+        ).astype(np.uint8)
+        return out
+
+    def render_top_banner(
+        self, frame: np.ndarray, text: str, alpha: float = 1.0, top_margin: int = 30,
+    ) -> np.ndarray:
+        """A dark rounded-pill caption centered near the top of the frame —
+        the OpenCV/PIL equivalent of pydeckrecorder.pedestrian's own CSS HUD
+        banner (same dark pill + bold white text), for the 2D
+        spatial_renderer overview's dynamic "next stop" caption. Sized to
+        fit `text` exactly (plus padding) rather than a fixed card_size,
+        since the destination label's length varies waypoint to waypoint.
+        `alpha` fades the whole pill (not just its own soft edges) the same
+        way composite_card_on_frame's own `alpha` does for popup/summary
+        cards, for a consistent fade in/out."""
+        if not text:
+            return frame
+
+        scale = 2  # supersampled for antialiased text/corners, then downscaled
+        font = self._load_font(self.FONT_CANDIDATES_BOLD, 22 * scale)
+        measure = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+        bbox = measure.textbbox((0, 0), text, font=font)
+        text_w, text_h = bbox[2] - bbox[0], bbox[3] - bbox[1]
+        pad_x, pad_y = 28 * scale, 14 * scale
+        card_w, card_h = text_w + pad_x * 2, text_h + pad_y * 2
+
+        canvas = Image.new("RGBA", (card_w, card_h), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(canvas)
+        draw.rounded_rectangle([0, 0, card_w, card_h], radius=card_h // 2, fill=(30, 34, 40, 225))
+        draw.text((pad_x - bbox[0], pad_y - bbox[1]), text, font=font, fill=(255, 255, 255, 255))
+        canvas = canvas.resize((max(1, card_w // scale), max(1, card_h // scale)), Image.LANCZOS)
+
+        card_bgra = np.array(canvas)
+        ch, cw = card_bgra.shape[:2]
+        h, w = frame.shape[:2]
+        x0 = max(0, (w - cw) // 2)
+        y0 = max(0, top_margin)
+        cw = min(cw, w - x0)
+        ch = min(ch, h - y0)
+        if cw <= 0 or ch <= 0:
+            return frame
+        card_bgra = card_bgra[:ch, :cw]
+
+        out = frame.copy()
+        card_bgr = card_bgra[:, :, :3].astype(np.float32)
+        card_alpha = (card_bgra[:, :, 3].astype(np.float32) / 255.0) * alpha
         roi = out[y0 : y0 + ch, x0 : x0 + cw].astype(np.float32)
         out[y0 : y0 + ch, x0 : x0 + cw] = (
             card_bgr * card_alpha[..., None] + roi * (1 - card_alpha[..., None])

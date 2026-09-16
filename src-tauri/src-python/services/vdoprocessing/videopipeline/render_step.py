@@ -732,6 +732,8 @@ def render_route_video(
     animator_config = {
         "output_dir": output_video_dir,
         "use_3d_res": use_3d_res,
+        "use_pydeck_pedestrian": bool(settings.get("use_pydeck_pedestrian", False)),
+        "use_pydeck_overview": bool(settings.get("use_pydeck_overview", False)),
         "res_route_path": project_config_path,
         "leg_durations": seg_durations or None,
         "duration": settings.get("duration", overview_duration),

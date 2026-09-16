@@ -38,18 +38,12 @@ class _PopupBoxMixin:
         actual label text — a one-line label just leaves a little extra
         clearance below its card instead of the two cards ever visually
         overlapping because this estimate came in short."""
-        # When has_label=True, assumes a worst-case two-line label for
-        # collision avoidance sizing. When has_label=False, sizes only the
-        # photo and borders without any extra text block height.
+        # The photo itself is full-bleed (flush to the card's left/right/
+        # top edges, no white margin) — only a label caption, when present,
+        # adds a strip of height below it.
         target_ratio = 16.0 / 9.0
         target_img_w = int(self.BESIDE_CARD_BASE_W * card_scale)
         target_img_h = int(target_img_w / target_ratio)
-        border = int(10 * card_scale)
-        font_size = max(
-            11, int(self.font_size * tuning.POPUP_LABEL_FONT_SCALE_BESIDE * card_scale)
-        )
-        line_gap = 4
-        text_block_h = font_size * 2 + line_gap + 14
         text_block_h = 0
         if has_label:
             font_size = max(
@@ -57,7 +51,8 @@ class _PopupBoxMixin:
             )
             line_gap = 4
             text_block_h = font_size * 2 + line_gap + 14
-        return target_img_w + border * 2, target_img_h + border * 2 + text_block_h
+        caption_gap = 10 if has_label else 0
+        return target_img_w, target_img_h + caption_gap + text_block_h
 
     # Minimum caption font size _fit_label_caption will shrink to before
     # giving up and letting a still-too-wide second line clip — matches
@@ -98,14 +93,19 @@ class _PopupBoxMixin:
 
     def popup_card_geometry(
         self, popup_info: Dict, w: int, h: int
-    ) -> Tuple[int, int, int, int, int]:
-        """Returns (box_x, box_y, total_w, total_h, border) for the exact
-        card render_popup_box would draw for this popup_info — the single
+    ) -> Tuple[int, int, int, int]:
+        """Returns (box_x, box_y, total_w, total_h) for the exact card
+        render_popup_box would draw for this popup_info — the single
         source of truth for where/how big that card is, so anything else
         that needs to start from (or match) it — e.g. the fullscreen
         scale-up transition — can't drift out of sync with what's actually
         on screen. Pure geometry, no image I/O, so it's cheap to call
-        ahead of the real draw."""
+        ahead of the real draw.
+
+        The photo is always full-bleed within the card — flush to its
+        left/right/top edges with no white margin around it. A label
+        caption, when shown (and not the overlaid "cover" style), adds a
+        white strip of height below the photo instead."""
         target_ratio = 16.0 / 9.0
         hud_corner = popup_info.get("hud_corner")
         is_beside = hud_corner not in self.HUD_CORNERS
@@ -113,7 +113,6 @@ class _PopupBoxMixin:
         base_img_w = self.BESIDE_CARD_BASE_W if is_beside else 440
         target_img_w = int(base_img_w * card_scale)
         target_img_h = int(target_img_w / target_ratio)
-        border = int((10 if is_beside else 14) * card_scale)
         font_scale = (
             tuning.POPUP_LABEL_FONT_SCALE_BESIDE
             if is_beside
@@ -125,8 +124,7 @@ class _PopupBoxMixin:
         # popup.
         font_scale *= float(popup_info.get("label_font_scale", 1.0))
         font_size = max(11, int(self.font_size * font_scale * card_scale))
-        total_w = target_img_w + (border * 2)
-        has_label = RouteGeometryProcessor.is_real_label(popup_info.get("label"))
+        total_w = target_img_w
         # "cover" (settings/job_config image_display: "cover") — the photo
         has_label = (
             RouteGeometryProcessor.is_real_label(popup_info.get("label"))
@@ -148,7 +146,8 @@ class _PopupBoxMixin:
             text_block_h = (
                 font.size * len(label_lines) + line_gap * (len(label_lines) - 1) + 14
             )
-        total_h = target_img_h + (border * 2) + text_block_h
+        caption_gap = 10 if (has_label and not is_cover) else 0
+        total_h = target_img_h + caption_gap + text_block_h
         margin = self._BESIDE_POPUP_EDGE_MARGIN
 
         if not is_beside:
@@ -166,7 +165,7 @@ class _PopupBoxMixin:
             box_x = max(margin, min(box_x, w - total_w - margin))
             box_y = max(margin, min(box_y, h - total_h - margin))
 
-        return box_x, box_y, total_w, total_h, border
+        return box_x, box_y, total_w, total_h
 
     @staticmethod
     def _fade_to_base(frame: np.ndarray, alpha: float, base_frame: np.ndarray) -> np.ndarray:
@@ -239,7 +238,7 @@ class _PopupBoxMixin:
                 is_beside = hud_corner not in self.HUD_CORNERS
                 card_scale = float(popup_info.get("card_scale", 1.0))
 
-                box_x, box_y, total_w, total_h, border = self.popup_card_geometry(
+                box_x, box_y, total_w, total_h = self.popup_card_geometry(
                     popup_info, w, h
                 )
 
@@ -259,6 +258,10 @@ class _PopupBoxMixin:
                     # still be traced back to its pin despite crossing
                     # others.
                     line_color = popup_info.get("leader_line_color", (130, 130, 130))
+                    # Callers showing many lines at once (the end-of-video
+                    # recap) thicken theirs — a 2px hairline gets lost
+                    # against a busy map once there are a dozen-plus cards.
+                    line_width = int(popup_info.get("leader_line_width", 2))
                     # "leader_via" (set by _layout_recap_popups for a pin
                     # that's part of a tight cluster — see its own
                     # _padded_boundary docstring) routes the line through
@@ -278,11 +281,11 @@ class _PopupBoxMixin:
                         anchor_y = min(max(via_y, box_y), box_y + total_h)
                         cv2.line(
                             working_frame, (point_x, point_y), (via_x, via_y),
-                            line_color, 2, cv2.LINE_AA,
+                            line_color, line_width, cv2.LINE_AA,
                         )
                         cv2.line(
                             working_frame, (via_x, via_y), (anchor_x, anchor_y),
-                            line_color, 2, cv2.LINE_AA,
+                            line_color, line_width, cv2.LINE_AA,
                         )
                     else:
                         # Connects the card back to the waypoint's own pin
@@ -293,7 +296,7 @@ class _PopupBoxMixin:
                         anchor_y = min(max(point_y, box_y), box_y + total_h)
                         cv2.line(
                             working_frame, (point_x, point_y), (anchor_x, anchor_y),
-                            line_color, 2, cv2.LINE_AA,
+                            line_color, line_width, cv2.LINE_AA,
                         )
                     cv2.circle(
                         working_frame, (point_x, point_y), 4, line_color, -1, cv2.LINE_AA
@@ -305,7 +308,7 @@ class _PopupBoxMixin:
                     return working_frame
 
                 target_ratio = 16.0 / 9.0
-                target_img_w = total_w - border * 2
+                target_img_w = total_w
                 target_img_h = int(target_img_w / target_ratio)
 
                 # Cover-fit (scale to fill the 16:9 box, then crop the
@@ -413,20 +416,14 @@ class _PopupBoxMixin:
                 draw = ImageDraw.Draw(pil_canvas)
 
                 card_box = [box_x, box_y, box_x + total_w, box_y + total_h]
+                # No colored outline on any popup card — the photo is
+                # full-bleed against the card's rounded edges, so a drawn
+                # border would frame it like the old pip card instead of
+                # reading as a clean, borderless photo card.
                 draw.rounded_rectangle(
                     card_box,
                     radius=14,
                     fill=(255, 255, 255, 250),
-                    # No outline for the cover style — the photo fills
-                    # the whole card, so a colored border would frame it
-                    # like the old pip card instead of reading as a
-                    # borderless full-bleed poster.
-                    outline=(
-                        border_rgba
-                        if self.card_border_thickness and not is_cover
-                        else None
-                    ),
-                    width=self.card_border_thickness,
                 )
 
                 base_pil = Image.fromarray(cv2.cvtColor(working_frame, cv2.COLOR_BGR2RGBA))
@@ -435,10 +432,15 @@ class _PopupBoxMixin:
                 pil_img = Image.fromarray(cv2.cvtColor(pop_img, cv2.COLOR_BGR2RGB))
                 mask = Image.new("L", (pw, ph), 255)
                 mask_draw = ImageDraw.Draw(mask)
-                mask_draw.rounded_rectangle([0, 0, pw, ph], radius=8, fill=255)
+                # Photo is full-bleed (flush to the card's left/right/top
+                # edges, no white margin) — its mask uses the SAME corner
+                # radius as the outer card (14) so the photo's own rounded
+                # corners line up with the card's, instead of a smaller
+                # radius leaving a sliver of white card visible behind it.
+                mask_draw.rounded_rectangle([0, 0, pw, ph], radius=14, fill=255)
 
-                photo_x = box_x + border
-                photo_y = box_y + border
+                photo_x = box_x
+                photo_y = box_y
                 base_pil.paste(pil_img, (photo_x, photo_y), mask=mask)
 
                 if has_label:

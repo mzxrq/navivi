@@ -18,7 +18,7 @@ from services import tuning
 
 # Animation-loop tuning constants (magic numbers pulled out of the loop body
 # below so their purpose has a name; not read from self.config/tuning).
-_MIN_TRIGGER_GAP_FLOOR_SECONDS = 0.4  # floor effective_gap_frames shrinks to for a deep backlog
+_MIN_TRIGGER_GAP_FLOOR_SECONDS = 0.15  # floor effective_gap_frames shrinks to for a deep backlog
 _DEFAULT_FREEZE_SECONDS = 4.0  # fallback display duration when a popup sets no freeze_seconds
 
 
@@ -510,6 +510,13 @@ class _OverviewAnimationMixin:
                         self.graphics.draw_transport_icon(
                             frame, cx, cy, current_frame, smoothed_angle, mode=current_mode
                         )
+                    # This IS the arrival frame — always "まもなく" (never
+                    # the "へ"/en-route phrasing), naming the waypoint that
+                    # just triggered rather than sequential_popups[seq_ptr]
+                    # (already advanced past it by this point in the loop).
+                    frame = self.graphics.render_top_banner(
+                        frame, f"まもなく {triggered_popup.get('label') or ''}"
+                    )
                     self.last_frame = frame
                     video.write(frame)
                     prev_cx, prev_cy = cx, cy
@@ -618,6 +625,26 @@ class _OverviewAnimationMixin:
                     self.graphics.draw_transport_icon(
                         frame, cx, cy, current_frame, smoothed_angle, mode=current_mode
                     )
+
+                # Dynamic "next stop" caption — the next real waypoint still
+                # ahead in route order (sequential_popups[seq_ptr]), or the
+                # final destination once every other real waypoint has
+                # already arrived. "まもなく" once within
+                # OVERVIEW_BANNER_NEAR_SECONDS of its own expected_frame
+                # (the same estimated-arrival frame the trigger logic
+                # above uses), "へ" (still en route) otherwise.
+                banner_target = (
+                    sequential_popups[seq_ptr] if seq_ptr < len(sequential_popups) else stop_popup
+                )
+                if banner_target:
+                    label = banner_target.get("label") or ""
+                    expected_frame = banner_target.get("expected_frame")
+                    near = (
+                        expected_frame is not None
+                        and (expected_frame - current_frame) <= int(fps * tuning.OVERVIEW_BANNER_NEAR_SECONDS)
+                    )
+                    banner_text = f"まもなく {label}" if near else f"{label} へ"
+                    frame = self.graphics.render_top_banner(frame, banner_text)
 
                 self.last_frame = frame
                 video.write(frame)

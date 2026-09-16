@@ -5,6 +5,7 @@ import math
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
+from scipy.optimize import linear_sum_assignment
 from scipy.spatial import ConvexHull, QhullError
 
 from services import tuning
@@ -187,6 +188,67 @@ def _nearest_point_on_polygon(
 
 
 class _PopupMixin:
+    def _nearest_lattice_slot(
+        self,
+        pin_x: float,
+        pin_y: float,
+        w: int,
+        h: int,
+        card_w: int,
+        card_h: int,
+        placed: List[Tuple[float, float, float, float]],
+        reserved_boxes: Optional[List[Tuple[float, float, float, float]]] = None,
+        route_obstacles: Optional[np.ndarray] = None,
+    ) -> Optional[Tuple[float, float]]:
+        """The free lattice slot closest to (pin_x, pin_y), or None if the
+        lattice is full. Last-resort placement for a card whose own
+        near-pin search came up empty (see _layout_beside_popups) — the
+        same disjoint grid the recap lays every card out on, so whatever
+        it returns cannot overlap another card, only sit further from its
+        own pin than the near-pin search would have liked.
+
+        `route_obstacles` is honoured here as well as by the near-pin
+        search: without it the fallback would happily plant a card on the
+        route line or on a pin, which is exactly what the near-pin search
+        had just refused to do — the card would end up further from its pin
+        AND covering the map.
+
+        The lattice for a given frame/card size is the same every frame, so
+        it's built once and cached: this is called per un-placed card per
+        frame, and rebuilding it each time would be pure waste."""
+        # reserved_boxes is part of the key, not just the frame/card size:
+        # the slots it excludes differ per caller (the summary card's own
+        # corner is reserved for the recap but not during the animation), so
+        # keying without it would hand back a lattice that still contains
+        # slots this caller had asked to keep clear.
+        obstacle_key = (
+            None if route_obstacles is None or not len(route_obstacles)
+            else (route_obstacles.shape, hash(route_obstacles.tobytes()))
+        )
+        key = (
+            w, h, card_w, card_h,
+            tuple(map(tuple, reserved_boxes or ())),
+            obstacle_key,
+        )
+        cache = getattr(self, "_lattice_slot_cache", None)
+        if cache is None:
+            cache = self._lattice_slot_cache = {}
+        if key not in cache:
+            cache[key] = self._recap_card_slots(
+                w, h, card_w, card_h, reserved_boxes, route_obstacles
+            )
+        best, best_d2 = None, None
+        for sx, sy in cache[key]:
+            if any(
+                sx < px2 and sx + card_w > px1 and sy < py2 and sy + card_h > py1
+                for px1, py1, px2, py2 in placed
+            ):
+                continue
+            d2 = (sx + card_w / 2 - pin_x) ** 2 + (sy + card_h / 2 - pin_y) ** 2
+            if best_d2 is None or d2 < best_d2:
+                best, best_d2 = (float(sx), float(sy)), d2
+        return best
+
     def _layout_beside_popups(
         self,
         group: List[Dict],
@@ -393,6 +455,20 @@ class _PopupMixin:
             # the line will actually connect, for any waypoint whose pin
             # got fanned out by _declutter_pins.
             spot = free_spot(pin_x, pin_y)
+            if spot is None:
+                # The near-pin spiral found nothing within max_radius —
+                # a real dense cluster, where the room beside every pin is
+                # already taken. Rather than let the card sit this frame
+                # out (it would keep sitting out for as long as the cluster
+                # is on screen, so a waypoint the traveler genuinely
+                # reached could go unshown for seconds or never), fall back
+                # to the nearest slot on the frame-wide lattice: disjoint
+                # by construction, so the card is placed with a guaranteed
+                # non-overlapping spot at the cost of a longer leader line.
+                spot = self._nearest_lattice_slot(
+                    pin_x, pin_y, w, h, card_w, card_h, placed, reserved_boxes,
+                    route_obstacles,
+                )
             if spot is None:
                 # Clear any position from a previous frame — don't let it
                 # keep rendering at a now-stale spot that may itself have
@@ -763,37 +839,244 @@ class _PopupMixin:
                 anchor_x, anchor_y = _anchor_point(pin_x, pin_y, box_x, box_y, card_w, card_h)
                 placed_lines.append([(pin_x, pin_y), (anchor_x, anchor_y)])
 
+    # --- End-of-video recap: card layout --------------------------------
+    # Card scales tried largest-first until the frame has enough free slots
+    # to give every card one at once. Floored at the last entry — below
+    # that a card's photo and label stop being legible, so a route with
+    # more stops than that many slots shows as many as fit rather than
+    # shrinking into illegibility.
+    _RECAP_CARD_SCALES: Tuple[float, ...] = (0.85, 0.75, 0.65, 0.55, 0.46, 0.38)
+    _RECAP_CARD_MARGIN = 16
+    # Breathing room between neighbouring cards. Generous on purpose: at a
+    # tight 10px, cards placed near each other read as one solid slab and
+    # the leader lines threading between them had no visible channel to run
+    # through, so an individual line was hard to follow back to its pin.
+    _RECAP_CARD_GAP = 24
+    # Leader lines in the recap are drawn thicker than the default 2px — a
+    # hairline is easy to lose against a busy map with this many cards up.
+    _RECAP_LEADER_WIDTH = 3
+    # Clearance kept between a card and the route line/pins it must not
+    # cover — the map underneath is the whole point of the recap frame.
+    _RECAP_CARD_OBSTACLE_PAD = 10
+
+    def _recap_card_slots(
+        self,
+        w: int,
+        h: int,
+        card_w: int,
+        card_h: int,
+        reserved_boxes: Optional[List[Tuple[float, float, float, float]]] = None,
+        route_obstacles: Optional[np.ndarray] = None,
+    ) -> List[Tuple[int, int]]:
+        """Candidate card positions on a disjoint lattice covering the WHOLE
+        frame — not just its border — minus any that would cover the route
+        line, a pin, or `reserved_boxes` (the summary card's own corner,
+        composited over the recap afterwards).
+
+        Spanning the interior is what lets a card sit in open space near
+        its own pin instead of being pushed out to the frame edge: a route
+        with a big empty region in the middle (open water, say) has plenty
+        of room there, and leaving it unused both wastes the frame and
+        makes every leader line longer than it needs to be. The lattice
+        pitch is the card's own size plus a gap, so two slots can never
+        overlap however many cards end up placed, and it is centred in the
+        leftover space so the arrangement doesn't bias to one side."""
+        margin, gap = self._RECAP_CARD_MARGIN, self._RECAP_CARD_GAP
+
+        def axis(available: int, size: int) -> List[int]:
+            pitch = size + gap
+            count = int((available + gap) // pitch)
+            if count <= 0:
+                return []
+            slack = available - (count * size + (count - 1) * gap)
+            first = margin + slack // 2
+            return [first + i * pitch for i in range(count)]
+
+        xs = axis(w - 2 * margin, card_w)
+        ys = axis(h - 2 * margin, card_h)
+        if not xs or not ys:
+            return []
+
+        pad = self._RECAP_CARD_OBSTACLE_PAD
+        ox = oy = None
+        if route_obstacles is not None and len(route_obstacles):
+            ox, oy = route_obstacles[:, 0], route_obstacles[:, 1]
+
+        slots: List[Tuple[int, int]] = []
+        for y in ys:
+            for x in xs:
+                if any(
+                    x < rx2 and x + card_w > rx1 and y < ry2 and y + card_h > ry1
+                    for rx1, ry1, rx2, ry2 in (reserved_boxes or ())
+                ):
+                    continue
+                if ox is not None and bool(
+                    np.any(
+                        (ox >= x - pad) & (ox <= x + card_w + pad)
+                        & (oy >= y - pad) & (oy <= y + card_h + pad)
+                    )
+                ):
+                    continue
+                slots.append((int(x), int(y)))
+        return slots
+
+    def _layout_recap_cards(
+        self,
+        popups: List[Dict],
+        w: int,
+        h: int,
+        reserved_boxes: Optional[List[Tuple[float, float, float, float]]] = None,
+        route_obstacles: Optional[np.ndarray] = None,
+    ) -> List[Dict]:
+        """Places EVERY recap card at once and returns them in the order
+        they should be revealed.
+
+        Used for the recap instead of _layout_recap_popups' spiral/masonry
+        search, which packs each card in beside its own pin. That reads
+        well for a handful of cards but cannot show a real route's full set
+        together: with nothing like enough free space beside a dense
+        cluster, its cards spiral far away and their leader lines tangle.
+        Here the candidate positions are a disjoint lattice of free space
+        (see _recap_card_slots), so no two cards can overlap however many
+        there are, and cards are matched to them by MINIMUM TOTAL leader
+        length via linear_sum_assignment. Minimising the total is what
+        keeps the lines untangled as well as short: if two leaders crossed,
+        trading the two cards' slots would shorten both (triangle
+        inequality), so a minimum-total matching cannot hold a crossing in
+        the first place.
+
+        Each card's "card_scale" and "recap_line_color" are stamped onto
+        the popup here too, so the per-frame draw never re-derives either —
+        a card must not move, resize or change color as later cards join it
+        on screen (see _render_recap_frame)."""
+        if not popups:
+            return []
+
+        def pin_of(popup: Dict) -> Tuple[float, float]:
+            return popup.get("pin_x", popup["x"]), popup.get("pin_y", popup["y"])
+
+        card_scale = self._RECAP_CARD_SCALES[-1]
+        card_w, card_h = self.graphics.beside_card_footprint(card_scale)
+        slots: List[Tuple[int, int]] = []
+        # Second pass drops the keep-off-the-route rule: a map whose route
+        # sprawls across most of the frame would otherwise leave too few
+        # free slots to show every stop, and drawing them over the line
+        # beats silently dropping some.
+        for obstacles in (route_obstacles, None):
+            for scale in self._RECAP_CARD_SCALES:
+                cw, ch = self.graphics.beside_card_footprint(scale)
+                candidate = self._recap_card_slots(
+                    w, h, cw, ch, reserved_boxes, obstacles
+                )
+                if len(candidate) > len(slots):
+                    card_scale, card_w, card_h, slots = scale, cw, ch, candidate
+                if len(candidate) >= len(popups):
+                    break
+            if len(slots) >= len(popups):
+                break
+
+        # Revealed in angular order around the cluster, so consecutive
+        # reveals land next to each other on screen rather than jumping
+        # about the frame.
+        xs, ys = zip(*(pin_of(p) for p in popups))
+        cx, cy = sum(xs) / len(xs), sum(ys) / len(ys)
+        ordered = sorted(
+            popups, key=lambda p: math.atan2(pin_of(p)[1] - cy, pin_of(p)[0] - cx)
+        )
+
+        if len(slots) < len(ordered):
+            logger.warning(
+                "Recap layout: only %d free card slots for %d popup cards at "
+                "the smallest card scale — showing %d of them.",
+                len(slots), len(ordered), len(slots),
+            )
+            ordered = ordered[: len(slots)]
+
+        pins_xy = [pin_of(p) for p in ordered]
+        pin_arr = np.asarray(pins_xy, dtype=float)
+        slot_arr = np.asarray(slots, dtype=float) + np.array(
+            [card_w / 2.0, card_h / 2.0]
+        )
+        cost = np.hypot(
+            slot_arr[None, :, 0] - pin_arr[:, None, 0],
+            slot_arr[None, :, 1] - pin_arr[:, None, 1],
+        )
+        slot_for = list(linear_sum_assignment(cost)[1])
+
+        # Safety net. The matching above minimises pin-to-card-CENTRE
+        # distance, while a leader actually stops at the card's near edge
+        # (see _anchor_point), so the no-crossing property it guarantees is
+        # very slightly approximate. Any pair that does still cross gets
+        # its slots traded, which shortens both — so this strictly reduces
+        # total leader length and always terminates.
+        n = len(ordered)
+
+        def leader(j: int) -> Tuple[Tuple[float, float], Tuple[float, float]]:
+            sx, sy = slots[slot_for[j]]
+            px, py = pins_xy[j]
+            return (px, py), _anchor_point(px, py, sx, sy, card_w, card_h)
+
+        def crosses(a1, a2, b1, b2) -> bool:
+            def turn(p, q, r):
+                return (r[1] - p[1]) * (q[0] - p[0]) - (q[1] - p[1]) * (r[0] - p[0])
+
+            return (
+                (turn(b1, b2, a1) > 0) != (turn(b1, b2, a2) > 0)
+                and (turn(a1, a2, b1) > 0) != (turn(a1, a2, b2) > 0)
+            )
+
+        for _ in range(n * n):
+            swapped = False
+            for a in range(n):
+                for b in range(a + 1, n):
+                    if crosses(*leader(a), *leader(b)):
+                        slot_for[a], slot_for[b] = slot_for[b], slot_for[a]
+                        swapped = True
+            if not swapped:
+                break
+
+        palette = tuning.RECAP_LINE_COLOR_PALETTE
+        for j, popup in enumerate(ordered):
+            sx, sy = slots[slot_for[j]]
+            popup["beside_box"] = (int(sx), int(sy))
+            popup["card_scale"] = card_scale
+            # Straight pin -> card lines only; the dense-cluster hull detour
+            # _layout_recap_popups adds would bend a leader away from the
+            # shortest path this layout is built around.
+            popup.pop("leader_via", None)
+            popup["recap_line_color"] = palette[j % len(palette)]
+
+        return ordered
+
     def _render_recap_frame(
         self,
         base_frame: np.ndarray,
         active_popups: List[Dict],
-        w: int,
-        h: int,
-        route_obstacles: Optional[np.ndarray] = None,
-        reserved_boxes: Optional[List[Tuple[float, float, float, float]]] = None,
+        group_popups: Optional[List[Dict]] = None,
     ) -> np.ndarray:
         """End-of-video recap: every waypoint with a photo gets its popup
-        card shown at once, each with a leader line back to its own pin —
-        start and end (see _draw_pin's "S"/"E" pins) laid out the same way
-        as every other waypoint, no special fixed corner or enlarged card.
-        Replaces just showing the LAST waypoint's card alone in a fixed
-        HUD corner through the whole summary. Uses _layout_recap_popups
-        (not the plain flow-through _layout_beside_popups) — every card
-        here needs an actual spot (no "sit this frame out" fallback), a
-        pin can never cross to the opposite side of the frame from its
-        own pin, and a tight cluster of pins routes its leader lines
-        around a shared hull boundary rather than straight through the
-        cluster's middle (see _layout_recap_popups's own docstring)."""
+        card, each with a leader line back to its own pin — start and end
+        (see _draw_pin's "S"/"E" pins) treated the same as every other
+        waypoint, no special fixed corner or enlarged card. Replaces just
+        showing the LAST waypoint's card alone in a fixed HUD corner
+        through the whole summary.
+
+        Purely a draw pass: where each card sits, how big it is and what
+        color its line is were all decided once by _layout_recap_cards,
+        which the caller runs over the WHOLE set before the first frame.
+
+        `group_popups` (a caller-chosen subset — see
+        _render_recap_and_summary's progressive reveal) restricts which
+        popups get a CARD drawn this frame; `active_popups` below still
+        draws EVERY pin regardless, so the whole route's stops stay
+        visible even before their own card has appeared."""
         recap_frame = base_frame.copy()
-        recap_popups = [ap for ap in active_popups if ap["data"].get("popup_image")]
+        recap_popups = (
+            group_popups if group_popups is not None
+            else [ap for ap in active_popups if ap["data"].get("popup_image")]
+        )
         if not recap_popups:
             return recap_frame
-
-        group = [{"popup": ap, "frames_left": 1} for ap in recap_popups]
-        self._layout_recap_popups(
-            group, w, h, reserved_boxes=list(reserved_boxes or []),
-            route_obstacles=route_obstacles,
-        )
 
         total_points = 1 + max((ap["index"] for ap in active_popups), default=0)
         hud_popups = []
@@ -803,23 +1086,21 @@ class _PopupMixin:
             hud_popup = ap.copy()
             hud_popup["hud_corner"] = None
             hud_popup["draw_leader_line"] = True
-            # With every waypoint's card shown at once, their leader lines
-            # cross each other constantly — coloring each line to match its
-            # own pin (rather than one flat gray for all of them) makes it
-            # possible to actually trace a given card back to its pin
-            # despite the crossings.
-            _, pin_color, _ = self._pin_label_and_color(ap, total_points)
-            pin_color = pin_color or self.graphics.marker_color
-            hud_popup["leader_line_color"] = pin_color
+            # By recap time every waypoint has "arrived", which collapses
+            # _pin_label_and_color down to two flat colors (one shared by
+            # every numbered stop, one by every stop-by landmark), so
+            # matching each line to its own pin's color would leave most
+            # of them identical. _layout_recap_cards hands out a distinct
+            # palette color per card instead, which is
+            # what makes an individual line followable back to its card.
+            line_color = ap.get("recap_line_color") or self.graphics.marker_color
+            hud_popup["leader_line_color"] = line_color
+            hud_popup["leader_line_width"] = self._RECAP_LEADER_WIDTH
             # Override the card's own border_color (set once, early in
             # render_overview's setup, back when no waypoint had "arrived"
-            # yet — see _pin_color) with this SAME color the line just
-            # used, computed fresh right now instead — by the time the
-            # recap plays, every waypoint genuinely has arrived, so a
-            # border still showing the pre-arrival default color no
-            # longer matched its own leader line's (freshly-computed,
-            # arrived) color.
-            hud_popup["border_color"] = pin_color
+            # yet — see _pin_color) with this SAME color the line uses, so
+            # each card visually matches the line leading to it.
+            hud_popup["border_color"] = line_color
             hud_popups.append(hud_popup)
 
         # Three passes — every line, then every pin, then every card —
@@ -892,6 +1173,10 @@ class _PopupMixin:
         slot — a wait budget sized without accounting for that backlog let
         several of them time out and vanish, having genuinely been reached
         by the traveler but never shown at all."""
+        # Floored at POPUP_MIN_DISPLAY_SECONDS: this is the single point
+        # every popup's display duration passes through on its way to
+        # frames, so enforcing the minimum here covers every caller.
+        display_seconds = max(float(display_seconds), tuning.POPUP_MIN_DISPLAY_SECONDS)
         total_frames = max(1, int(display_seconds * fps))
         fade_frames = max(1, min(int(cls._POPUP_FADE_SECONDS * fps), total_frames // 4))
         backlog_wait_seconds = queue_depth * tuning.OVERVIEW_POPUP_MIN_TRIGGER_GAP_SECONDS
@@ -996,7 +1281,7 @@ class _PopupMixin:
         top of any pin. `active_popups` is optional only so callers that
         never have leader-lined cards (none currently) don't need to pass
         it; every real caller does."""
-        MAX_CONCURRENT_FLOW_POPUPS = 3
+        MAX_CONCURRENT_FLOW_POPUPS = tuning.MAX_CONCURRENT_FLOW_POPUPS
 
         flowing = [
             bp for bp in baked_popups if not bp["popup"]["data"].get("freeze_frame", False)
