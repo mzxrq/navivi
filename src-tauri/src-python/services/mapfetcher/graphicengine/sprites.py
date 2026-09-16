@@ -1,7 +1,7 @@
 """Sprite blitting and cached procedural walker/vehicle icon sprites."""
 
 import math
-from typing import Dict, Tuple
+from typing import Dict, Final, Tuple
 
 import cv2
 import numpy as np
@@ -9,14 +9,21 @@ from PIL import Image, ImageDraw, ImageFilter
 
 from services import tuning
 
+# Horizontal gap between a marker's own radius and its landmark label
+# chip — how far the chip's near edge sits from the pin's anchor point.
+_LABEL_CHIP_GAP: Final[int] = 4
+
 
 class _SpriteMixin:
-    def prebake_landmark_sprite(self, label: str) -> Tuple[np.ndarray, Tuple[int, int]]:
+    def prebake_landmark_sprite(
+        self, label: str, side: str = "right"
+    ) -> Tuple[np.ndarray, Tuple[int, int]]:
         """Builds just the label chip for a waypoint — draw_marker()
         already draws the actual numbered pin at this same anchor point, so
         this no longer duplicates it with its own circle. Drawn as a small
         rounded, soft-shadowed card (matching the popup cards' look)
-        instead of a plain hard-edged rectangle."""
+        instead of a plain hard-edged rectangle. Supports side="right" (chip
+        to the right of the pin anchor) or side="left" (chip to the left)."""
         font_size = max(13, int(self.font_size * tuning.WAYPOINT_LABEL_FONT_SCALE))
         # Bold, not regular — at this small a size on a busy map tile,
         # Noto Sans's regular weight reads as too thin/hard to make out.
@@ -26,18 +33,29 @@ class _SpriteMixin:
         tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
         pad_x, pad_y = 10, 6
 
-        sprite_w = int(self.marker_radius + 4 + tw + pad_x * 2 + self.marker_radius + 4)
+        sprite_w = int(
+            self.marker_radius + _LABEL_CHIP_GAP + tw + pad_x * 2
+            + self.marker_radius + _LABEL_CHIP_GAP
+        )
         sprite_h = int(max(2 * (self.marker_radius + 3), th + pad_y * 2) + 8)
+        chip_w = tw + pad_x * 2
+        chip_h = th + pad_y * 2
+        pin_gap = int(self.marker_radius + _LABEL_CHIP_GAP)
+        sprite_w = int(pin_gap + chip_w + pin_gap)
+        sprite_h = int(max(2 * (self.marker_radius + 3), chip_h) + 8)
 
-        # cx/cy is the pin's own anchor point (kept for spacing math below,
-        # and as the sprite's blit anchor so it still lines up with the pin).
-        cx = int(self.marker_radius + 4)
         cy = sprite_h // 2
-
-        bx1 = cx + int(self.marker_radius + 4)
         by1 = cy - (th // 2) - pad_y
-        bx2 = bx1 + tw + pad_x * 2
         by2 = cy + (th // 2) + pad_y
+
+        if side == "left":
+            cx = sprite_w - pin_gap
+            bx2 = cx - pin_gap
+            bx1 = bx2 - chip_w
+        else:
+            cx = pin_gap
+            bx1 = cx + pin_gap
+            bx2 = bx1 + chip_w
 
         canvas = Image.new("RGBA", (sprite_w, sprite_h), (0, 0, 0, 0))
         draw = ImageDraw.Draw(canvas)
@@ -287,8 +305,9 @@ class _SpriteMixin:
         color = self.MODE_COLORS.get(mode, self.marker_color)
         radius = int(self.marker_radius)
 
-        cv2.circle(frame, (cx, cy), radius + 6, (255, 255, 255), -1, cv2.LINE_AA)
-        cv2.circle(frame, (cx, cy), radius + 6, (200, 200, 200), 1, cv2.LINE_AA)
+        if self.line_border_thickness:
+            cv2.circle(frame, (cx, cy), radius + 6, (255, 255, 255), -1, cv2.LINE_AA)
+            cv2.circle(frame, (cx, cy), radius + 6, (200, 200, 200), 1, cv2.LINE_AA)
         cv2.circle(frame, (cx, cy), radius, color, -1, cv2.LINE_AA)
 
         # Heading arrow so unrecognized modes still show travel direction.

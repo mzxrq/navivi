@@ -54,13 +54,13 @@ class _FullscreenMixin:
         # (as this used to, with its own hardcoded size/position guesses)
         # let the growing image start from a visibly different spot than
         # the small card actually sat at.
-        box_x, box_y, total_w, total_h, border = self.popup_card_geometry(
+        box_x, box_y, total_w, total_h = self.popup_card_geometry(
             popup_info, w, h
         )
-        target_img_w = total_w - border * 2
+        target_img_w = total_w
         target_img_h = int(target_img_w / target_ratio)
 
-        start_x, start_y = box_x + border, box_y + border
+        start_x, start_y = box_x, box_y
 
         scale_frames = max(1, int(duration_sec * fps))
         # [NOTE] [Animation] Cubic ease-out (1 - (1-progress)^3): fast at the start, settling gently into the fullscreen size instead of a linear, mechanical-feeling scale.

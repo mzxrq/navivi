@@ -34,6 +34,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 from typing import List, Optional, Tuple
 import uuid
@@ -60,6 +61,34 @@ logger = setup_logger("VideoExporter")
 # the fatal error line lives) for diagnostics, not the entire stream.
 _STDERR_TAIL_BYTES = 4000
 
+# Retry budget for the final os.replace() onto output_path — on Windows a
+# just-finished output file can be transiently held open by something with
+# no real stake in it (Explorer's thumbnail/preview handle, an antivirus
+# scan, a media player the user has the previous render open in) for a
+# few hundred ms right as this process tries to replace it, which raises
+# PermissionError (WinError 5) even though nothing is actually wrong with
+# the render itself. A short retry-with-backoff clears the transient case
+# instead of failing the whole render over someone else's file handle.
+_REPLACE_RETRY_ATTEMPTS = 5
+_REPLACE_RETRY_DELAY_SECONDS = 0.5
+
+
+def _replace_with_retry(src: str, dst: str) -> None:
+    for attempt in range(_REPLACE_RETRY_ATTEMPTS):
+        try:
+            os.replace(src, dst)
+            return
+        except PermissionError:
+            if attempt == _REPLACE_RETRY_ATTEMPTS - 1:
+                raise
+            logger.warning(
+                "Replacing '%s' was denied (attempt %d/%d) — likely still "
+                "open in another program (a preview/player/antivirus scan). "
+                "Retrying shortly.",
+                dst, attempt + 1, _REPLACE_RETRY_ATTEMPTS,
+            )
+            time.sleep(_REPLACE_RETRY_DELAY_SECONDS)
+
 
 class VideoExporter:
     def __init__(self, output_path: str, width: int, height: int, fps: int):
@@ -67,7 +96,18 @@ class VideoExporter:
         self.height = height
         self.fps = fps
         self.output_path = output_path
-        self.proc = self._open_ffmpeg_writer(output_path)
+        # Every frame is written to a private temp file in the SAME
+        # directory as output_path (same filesystem — required for the
+        # os.replace() in release() to be an atomic rename rather than a
+        # copy) instead of straight to output_path itself. output_path
+        # is only ever touched once, at the very end of a SUCCESSFUL
+        # release() — so a render that's killed mid-stream (e.g. the
+        # app's cancel button, which SIGKILLs this whole process) leaves
+        # only this throwaway temp file corrupted; whatever valid video
+        # already existed at output_path before this render started is
+        # never overwritten.
+        self._temp_path = self._make_temp_path(output_path)
+        self.proc = self._open_ffmpeg_writer(self._temp_path)
         self._fallback_path = None
         self._fallback_writer = None
 
@@ -83,6 +123,20 @@ class VideoExporter:
                 raise RuntimeError(
                     "Neither ffmpeg nor OpenCV VideoWriter is available."
                 )
+
+    @staticmethod
+    def _make_temp_path(output_path: str) -> str:
+        """A private, collision-safe path in output_path's OWN directory
+        (not the OS temp dir — os.replace() in release() needs same-
+        filesystem to be atomic) to write into instead of output_path
+        directly. Leading "." hides it from a casual directory listing;
+        the uuid suffix means two concurrent renders into the same
+        directory (or a leftover temp file from a killed previous run)
+        can never collide on the same path."""
+        out_path = Path(output_path)
+        return str(
+            out_path.with_name(f".{out_path.stem}.{uuid.uuid4().hex[:8]}.tmp{out_path.suffix}")
+        )
 
     @staticmethod
     def resolve_ffmpeg() -> Optional[str]:
@@ -158,6 +212,10 @@ class VideoExporter:
                     stderr_text,
                 )
                 self.proc = None  # stop trying to write to a dead process
+                # Only the throwaway temp file was ever touched (see
+                # __init__) — output_path itself is untouched, so there's
+                # nothing to protect there; just clean up our own mess.
+                Path(self._temp_path).unlink(missing_ok=True)
                 raise RuntimeError(
                     f"FFmpeg process died mid-render while writing '{self.output_path}': "
                     f"{exc}\n--- ffmpeg stderr (tail) ---\n{stderr_text}"
@@ -192,27 +250,45 @@ class VideoExporter:
                     output_path,
                     stderr_text,
                 )
+                Path(self._temp_path).unlink(missing_ok=True)
                 raise RuntimeError(
                     f"FFmpeg failed (exit {self.proc.returncode}) while producing "
                     f"'{output_path}'.\n--- ffmpeg stderr (tail) ---\n{stderr_text}"
                 )
+            # The only moment output_path itself is ever touched — an
+            # atomic rename (same directory/filesystem, see
+            # _make_temp_path) onto the real destination, now that ffmpeg
+            # has confirmed the encode actually finished. A process
+            # killed at any point before this line leaves whatever was
+            # already at output_path completely untouched.
+            try:
+                _replace_with_retry(self._temp_path, output_path)
+            except OSError:
+                # Every retry was denied (a persistent file lock outliving
+                # the whole retry window) — clean up the fully-encoded
+                # temp file before re-raising, same as the two error paths
+                # above (broken pipe, nonzero exit) already do, so a
+                # failure here doesn't leave an orphaned hidden
+                # ".name.<uuid>.tmp.mp4" behind in the output directory.
+                Path(self._temp_path).unlink(missing_ok=True)
+                raise
             return output_path
 
         if self._fallback_writer:
             self._fallback_writer.release()
 
-        if (
-            output_path.lower().endswith(".mp4")
-            and self._fallback_path
-            and self._reencode_to_h264(self._fallback_path, output_path)
-        ):
-            if os.path.exists(self._fallback_path):
-                os.remove(self._fallback_path)
-            return output_path
+        if output_path.lower().endswith(".mp4") and self._fallback_path:
+            temp_mp4 = self._temp_path
+            if self._reencode_to_h264(self._fallback_path, temp_mp4):
+                _replace_with_retry(temp_mp4, output_path)
+                if os.path.exists(self._fallback_path):
+                    os.remove(self._fallback_path)
+                return output_path
+            Path(temp_mp4).unlink(missing_ok=True)
 
         avi_path = str(Path(output_path).with_suffix(".avi"))
         if self._fallback_path:
-            os.rename(self._fallback_path, avi_path)
+            _replace_with_retry(self._fallback_path, avi_path)
         return avi_path
 
     @staticmethod

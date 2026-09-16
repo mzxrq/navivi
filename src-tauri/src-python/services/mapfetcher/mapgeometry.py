@@ -23,6 +23,13 @@ logger = setup_logger("MapEngine")
 # [Final] Constants for map tile downloading and geometry processing
 TARGET_ASPECT_RATIO: Final[float] = 16 / 9
 MIN_MAP_WIDTH_PX: Final[int] = 800
+# Standard Web Mercator (EPSG:3857) spherical Earth radius in meters, used by
+# both project_latlon_to_pixel and its inverse, pixel_to_latlon.
+EARTH_RADIUS_METERS: Final[float] = 6378137.0
+# Consecutive raw points closer together than this (in the same units as the
+# input points) are treated as redundant jitter and dropped before smoothing
+# — see get_smooth_path's own docstring, step 1.
+NOISE_FILTER_DISTANCE: Final[float] = 0.1
 
 # [Map] Map routing geometry smoothing and time pacing parameters
 class RouteGeometryProcessor:
@@ -30,11 +37,11 @@ class RouteGeometryProcessor:
 
     # [Utility] Get bounding box for a set of lat/lon points
     @staticmethod
-    def get_bounding_box(df : pd.DataFrame, padding_factor : float = 0.15, **kwargs) -> Dict[str, float]:
+    def get_bounding_box(route_df : pd.DataFrame, padding_factor : float = 0.15, **kwargs) -> Dict[str, float]:
         """Calculate the bounding box with optional padding."""
 
-        min_lat, max_lat = df["latitude"].min(), df["latitude"].max()
-        min_lon, max_lon = df["longitude"].min(), df["longitude"].max()
+        min_lat, max_lat = route_df["latitude"].min(), route_df["latitude"].max()
+        min_lon, max_lon = route_df["longitude"].min(), route_df["longitude"].max()
 
         lat_padding = (max_lat - min_lat) * padding_factor
         lon_padding = (max_lon - min_lon) * padding_factor
@@ -64,14 +71,62 @@ class RouteGeometryProcessor:
     def build_waypoint_index(
         route_df: pd.DataFrame, waypoints: List[Dict]
     ) -> List[int]:
-        """For each waypoint, finds the index of the closest point in `route_df`."""
+        """For each waypoint, in order, finds the index of the closest point
+        in `route_df` — searched only from the PREVIOUS waypoint's own match
+        onward, never earlier. A plain global nearest-neighbor query (the
+        old behavior) breaks on any route that revisits the same spot —
+        most commonly an out-and-back/loop trip whose first and last
+        waypoint share (near-)identical coordinates — since the true last
+        point and the true first point are then equally "nearest" to the
+        last waypoint, and cKDTree has no notion of which one is actually
+        meant. That let the LAST waypoint's match collide with the FIRST
+        waypoint's (both landing on index 0), silently overwriting the
+        start waypoint's popup and leaving nothing matched at the route's
+        real final index — which is what the overview's end-of-video
+        highlight (stop_popup) needs to ever trigger. Restricting each
+        search to start where the previous waypoint left off guarantees a
+        monotonically non-decreasing match by construction, resolving the
+        ambiguity the same way a human reading the track chronologically
+        would: each waypoint is visited in sequence, never before the one
+        before it."""
         if route_df.empty or not waypoints:
             return []
-        tree = cKDTree(route_df[["latitude", "longitude"]].to_numpy())
-        _, indices = tree.query(
-            [[wp["lat"], wp.get("lng", wp.get("lon"))] for wp in waypoints]
-        )
-        return np.atleast_1d(indices).tolist()
+        coords = route_df[["latitude", "longitude"]].to_numpy()
+        num_points = len(coords)
+        indices: List[int] = []
+        search_start = 0
+        for wp in waypoints:
+            lat, lng = wp["lat"], wp.get("lng", wp.get("lon"))
+            window = coords[search_start:]
+            if len(window) == 0:
+                indices.append(num_points - 1)
+                continue
+            dist_sq = (window[:, 0] - lat) ** 2 + (window[:, 1] - lng) ** 2
+            local_idx = int(np.argmin(dist_sq))
+            global_idx = search_start + local_idx
+            indices.append(global_idx)
+            search_start = global_idx
+
+        # Two real, distinct waypoints placed close together on the map
+        # (several stops on the same block, or a lookout point revisited
+        # later in the trip) can still both land on the SAME nearest GPS
+        # index above — forward-only search prevents them going backward,
+        # but says nothing about ties. A caller downstream (route_popups in
+        # render_step.py) keys its per-waypoint data by this exact index,
+        # so a collision isn't cosmetic: the second waypoint's popup
+        # silently OVERWRITES the first's at that shared index, and when
+        # the animation later reaches that single point, whichever
+        # waypoint won the overwrite is the only one that ever pops up —
+        # which can visibly be the wrong one (e.g. a stop from later in the
+        # trip appearing at a spot the traveler is only passing for the
+        # first time). Bumping every duplicate forward by the smallest
+        # possible step keeps each waypoint's own popup at its own index,
+        # in the same visit order already established above, instead of
+        # letting two genuinely different stops fight over one slot.
+        for i in range(1, len(indices)):
+            if indices[i] <= indices[i - 1]:
+                indices[i] = min(num_points - 1, indices[i - 1] + 1)
+        return indices
 
     # [Map] Douglas-Peucker algorithm for path simplification
     @staticmethod
@@ -139,7 +194,7 @@ class RouteGeometryProcessor:
         3. Edge Case Handling: Returns a static array or zero-matrix if the resulting
            points fall below the minimum threshold required for interpolation.
         4. Cumulative Distance Parameterization: Computes point-to-point Euclidean distances
-           via `np.hypot` and builds a cumulative distance array ($cum\_dists$) to map
+           via `np.hypot` and builds a cumulative distance array (cum_dists) to map
            out the true spatial length of the route.
         5. Temporal Pacing & Easing: Normalizes path progress into a progress domain ($t$),
            generates linear frame markers across the requested `num_frames`, and optionally
@@ -155,7 +210,7 @@ class RouteGeometryProcessor:
 
         filtered_pts = [points[0]]
         for p in points[1:]:
-            if np.hypot(p[0] - filtered_pts[-1][0], p[1] - filtered_pts[-1][1]) > 0.1:
+            if np.hypot(p[0] - filtered_pts[-1][0], p[1] - filtered_pts[-1][1]) > NOISE_FILTER_DISTANCE:
                 filtered_pts.append(p)
 
         if len(filtered_pts) > 2:
@@ -210,13 +265,25 @@ class RouteGeometryProcessor:
         """
 
         min_x, max_x, min_y, max_y = extent
-        r = 6378137.0
+        r = EARTH_RADIUS_METERS
         mx = lon * (r * np.pi / 180.0)
         my = np.log(np.tan((90.0 + lat) * np.pi / 360.0)) * r
         px = (mx - min_x) / (max_x - min_x) * img_w
         py = (max_y - my) / (max_y - min_y) * img_h
 
         return [float(px), float(py)]
+
+    # [Map] Inverse of project_latlon_to_pixel — recovers the real-world
+    # coordinate a pixel on a map image of the given extent corresponds to.
+    @staticmethod
+    def pixel_to_latlon(px: float, py: float, extent: Tuple[float, float, float, float], img_w: int, img_h: int) -> List[float]:
+        min_x, max_x, min_y, max_y = extent
+        r = EARTH_RADIUS_METERS
+        mx = min_x + (px / img_w) * (max_x - min_x)
+        my = max_y - (py / img_h) * (max_y - min_y)
+        lon = mx / (r * np.pi / 180.0)
+        lat = (2 * np.arctan(np.exp(my / r)) - np.pi / 2) * (180.0 / np.pi)
+        return [float(lat), float(lon)]
 
     # [NOTE] [Map] Projects point P onto segment AB, clamping t to [0, 1] so the closest point stays within the segment's endpoints rather than the infinite line through them.
     @staticmethod
@@ -232,9 +299,9 @@ class RouteGeometryProcessor:
         return float(np.hypot(px - closest_x, py - closest_y))
 
     @staticmethod
-    def is_real_label(lbl: Any) -> bool:
-        if lbl is None:
+    def is_real_label(label: Any) -> bool:
+        if label is None:
             return False
-        if isinstance(lbl, float) and math.isnan(lbl):
+        if isinstance(label, float) and math.isnan(label):
             return False
-        return str(lbl).strip() != ""
+        return str(label).strip() != ""

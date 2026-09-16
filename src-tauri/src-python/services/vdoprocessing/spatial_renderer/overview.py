@@ -6,15 +6,28 @@ overview_pacing.py and the animation loop itself in overview_animation.py —
 both split out of this file to keep it to the setup/wrap-up orchestration."""
 
 import json
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import cv2
 import numpy as np
 
 from services import tuning
+from services.mapfetcher.mapgeometry import RouteGeometryProcessor
 from services.vdoprocessing.vdoexporter import VideoExporter
 
 from .base import logger
+
+# Overview render tuning constants (magic numbers pulled out of the setup
+# logic below so their purpose has a name; none of these are read from
+# self.config/tuning, they're just fixed constants of this render).
+_MIN_OVERVIEW_FRAMES = 10  # floor on num_frames even for a very short duration
+_ROUTE_LATLON_SAMPLE_STRIDE = 500  # decimation stride for self._route_latlon_path
+_ROUTE_OBSTACLE_MAX_POINTS = 400  # cap on the decimated obstacle array's size
+_MIN_LEG_DISPLAY_SECONDS = 1.5  # floor on a flow-through popup's own leg_display_seconds
+_EXPECTED_FRAME_SEARCH_MARGIN_MIN_FRAMES = 20  # floor on the expected-frame search window
+_EXPECTED_FRAME_SEARCH_FRACTION = 0.05  # window size as a fraction of the path's frame count
+_DEFAULT_INTRO_FREEZE_SECONDS = 3.0  # used when the start popup sets no freeze_seconds
+_INTRO_CLEAN_HOLD_FRACTION_OF_FREEZE = 0.5  # clean-beat hold, as a fraction of intro_freeze_sec
 
 
 class _OverviewRenderMixin:
@@ -28,6 +41,7 @@ class _OverviewRenderMixin:
         summary: Optional[Dict] = None,
         point_modes: Optional[List[str]] = None,
         bounding_box: Optional[Dict[str, float]] = None,
+        extent: Optional[Tuple[float, float, float, float]] = None,
     ) -> str:
         is_video = False
 
@@ -48,11 +62,11 @@ class _OverviewRenderMixin:
             current_bg = cv2.resize(current_bg, (w, h))
 
         duration = self.config.get("duration", 30.0)
-        num_frames = max(10, int(duration * fps))
+        num_frames = max(_MIN_OVERVIEW_FRAMES, int(duration * fps))
 
         start_label, end_label = "開始", "終点"
-        for p in [self.out_dir] + list(self.out_dir.parents):
-            potential_path = p / "job_config.json"
+        for ancestor_dir in [self.out_dir] + list(self.out_dir.parents):
+            potential_path = ancestor_dir / "job_config.json"
             if potential_path.exists():
                 try:
                     with open(potential_path, "r", encoding="utf-8") as f:
@@ -89,6 +103,22 @@ class _OverviewRenderMixin:
             self._build_overview_path(points, point_modes, num_frames)
         )
 
+        # Stashed so _render_ending_highlight can redraw the route line on
+        # its own, freshly fetched close-up tile (a different extent than
+        # this wide overview map) — reprojected from this animated path's
+        # own pixel coordinates back to lat/lon via THIS render's extent,
+        # since that's the only extent this pixel data is meaningful
+        # against. None when extent wasn't given (falls back to no line
+        # drawn on the highlight, same as before this existed).
+        self._route_latlon_path = (
+            [
+                RouteGeometryProcessor.pixel_to_latlon(p[0], p[1], extent, w, h)
+                for p in smooth_path[:: max(1, len(smooth_path) // _ROUTE_LATLON_SAMPLE_STRIDE)]
+            ]
+            if extent is not None
+            else None
+        )
+
         active_popups = [
             {
                 "x": points[i][0],
@@ -100,6 +130,31 @@ class _OverviewRenderMixin:
             for i in range(len(points))
             if popups and popups[i] is not None
         ]
+
+        # A stop-by's "x"/"y" above came from points[i] — the nearest
+        # point on the RECORDED TRACK, which is fine for a real stop the
+        # traveler actually walks to, but wrong for one only observed
+        # from a distance (a small offshore island seen from the trail, a
+        # viewpoint across the water) — that kind can sit well away from
+        # the track, and snapping it onto the nearest track pixel drew
+        # its pin right on top of the route line instead of at the real
+        # place. Re-projecting from the waypoint's own stored lat/lng (see
+        # render_step.py's route_popups) onto this same background image
+        # draws it where it actually is. Real (non-stop-by) waypoints keep
+        # their track-matched position — they're genuinely visited stops
+        # ON the route, so that position is already correct.
+        if extent is not None:
+            for ap in active_popups:
+                if not ap["data"].get("is_stopby"):
+                    continue
+                lat, lng = ap["data"].get("lat"), ap["data"].get("lng")
+                if lat is None or lng is None:
+                    continue
+                px, py = RouteGeometryProcessor.project_latlon_to_pixel(
+                    lat, lng, extent, w, h
+                )
+                ap["x"], ap["y"] = px, py
+
         # 1-based visit order, used to number each waypoint's pin and to
         # sort concurrently-visible popups in _layout_beside_popups. Stop-by
         # waypoints are skipped from the count (they show a "・" dot instead
@@ -108,10 +163,35 @@ class _OverviewRenderMixin:
         # that aren't isStopBy.
         order = 0
         for ap in active_popups:
-            if ap["data"].get("is_stopby"):
+            # The route's literal start ("S", index 0) isn't part of the
+            # visible 1..N numbering either — same treatment as a stop-by,
+            # just for a different reason (it's labeled "S" outright, see
+            # pins.py's _pin_label_and_color). Without this, S consumed
+            # order 1 for itself, pushing every real numbered waypoint one
+            # higher than its actual visit order (the first real stop
+            # showing "2" instead of "1").
+            if ap["data"].get("is_stopby") or ap["index"] == 0:
+                # Still gets an "order" key (just not incremented) so it's
+                # never missing when something reads ap["order"] generically
+                # — excluded only from the visible count/numbering itself.
+                ap["order"] = order
                 continue
             order += 1
             ap["order"] = order
+        # Pins that would be drawn completely on top of each other are
+        # nudged just far enough apart to both stay visible — a tight
+        # cluster of stops (four stop-by landmarks around one small town,
+        # say) otherwise shows as three dots for four waypoints, the last
+        # one painted hiding the rest.
+        #
+        # This pass used to fan a whole cluster out onto a circle around
+        # its shared centre, which moved pins clear off the route line
+        # they sit on ("this stop isn't really on the path") and was
+        # disabled outright for that reason. It now only separates pins
+        # whose drawn silhouettes actually collide, by the minimum amount
+        # needed and within a hard cap on how far any one pin may travel
+        # from its true position, so nothing drifts off-route — see
+        # pins.py's _declutter_pins.
         self._declutter_pins(active_popups)
 
         # Popup card border matches this waypoint's own pin color (S=green,
@@ -123,7 +203,7 @@ class _OverviewRenderMixin:
         # separately.
         total_points_for_color = len(points)
         for ap in active_popups:
-            _, pin_color_for_border = self._pin_label_and_color(ap, total_points_for_color)
+            _, pin_color_for_border, _ = self._pin_label_and_color(ap, total_points_for_color)
             # _pin_label_and_color can return None for a plain numbered pin
             # not yet "arrived" (see _pin_color) — fall back to the base
             # marker color rather than letting popup_box's border draw
@@ -155,13 +235,9 @@ class _OverviewRenderMixin:
         # from the whole route rather than the animated path-so-far, so a
         # given waypoint's card always lands in the same corner regardless
         # of when in the animation it triggers.
-        # Uses each popup's DRAWN pin position (pin_x/pin_y, from
-        # _declutter_pins' fan-out above) rather than its true x/y — for a
-        # cluster of nearby waypoints, several entries can share nearly
-        # the same true x/y while their actual pins are fanned out around
-        # it; avoiding only the un-fanned point left the real, fanned-out
-        # pin positions unprotected, letting a card land right on top of
-        # one.
+        # pin_x/pin_y (set to each popup's real x/y by _declutter_pins) —
+        # kept as the lookup key rather than x/y directly so this stays
+        # correct if a future declutter pass ever nudges pins apart again.
         route_avoid_points = list(points) + [
             (p.get("pin_x", p["x"]), p.get("pin_y", p["y"])) for p in active_popups
         ]
@@ -171,8 +247,8 @@ class _OverviewRenderMixin:
         # route line itself (cheaply, vectorized) so a flow-through card
         # doesn't get planted right on top of the path it's next to.
         route_obstacle_arr = np.asarray(route_avoid_points, dtype=float)
-        if len(route_obstacle_arr) > 400:
-            step = max(1, len(route_obstacle_arr) // 400)
+        if len(route_obstacle_arr) > _ROUTE_OBSTACLE_MAX_POINTS:
+            step = max(1, len(route_obstacle_arr) // _ROUTE_OBSTACLE_MAX_POINTS)
             route_obstacle_arr = route_obstacle_arr[::step]
 
         logger.info(f"Rendering Overview Map ({duration}s)")
@@ -251,7 +327,10 @@ class _OverviewRenderMixin:
         # never go before the previous waypoint's own match, same
         # guarantee as before.
         last_matched_frame = 0
-        search_margin = max(20, int(num_frames_lookup * 0.05))
+        search_margin = max(
+            _EXPECTED_FRAME_SEARCH_MARGIN_MIN_FRAMES,
+            int(num_frames_lookup * _EXPECTED_FRAME_SEARCH_FRACTION),
+        )
         for ap in active_popups:
             if ap["index"] == 0:
                 ap["expected_frame"] = 0
@@ -269,7 +348,7 @@ class _OverviewRenderMixin:
         ]
         triggerable.sort(key=lambda ap: ap["expected_frame"])
         stop_expected_frame = stop_popup["expected_frame"] if stop_popup else None
-        min_leg_frames = int(fps * 1.5)
+        min_leg_frames = int(fps * max(_MIN_LEG_DISPLAY_SECONDS, tuning.POPUP_MIN_DISPLAY_SECONDS))
         for i, ap in enumerate(triggerable):
             this_frame = ap["expected_frame"]
             next_frame = (
@@ -282,7 +361,8 @@ class _OverviewRenderMixin:
                     max(min_leg_frames, next_frame - this_frame) / fps
                 )
 
-        intro_freeze_sec = 3.0
+
+        intro_freeze_sec = _DEFAULT_INTRO_FREEZE_SECONDS
         if start_popup and "freeze_seconds" in start_popup["data"]:
             intro_freeze_sec = float(start_popup["data"]["freeze_seconds"])
 
@@ -310,9 +390,17 @@ class _OverviewRenderMixin:
             # one — most routes set popup_image on every waypoint incl.
             # the destination) are previewed together on the intro, rather
             # than only ever revealing the destination at the very end.
+            # A loop route's "E" is the exact same real-world place as "S"
+            # (see SpatialRendererBase._is_loop_route) though — showing
+            # both there would just duplicate the start card's own photo
+            # right next to itself, so it's skipped (same reasoning as
+            # transitions.py's end-of-video recap, which drops the same
+            # duplicate popup for the same reason).
             temp_ep = (
                 _make_intro_card(stop_popup)
-                if stop_popup and stop_popup["data"].get("popup_image")
+                if stop_popup
+                and stop_popup["data"].get("popup_image")
+                and not self._is_loop_route
                 else None
             )
             intro_cards = [temp_sp] + ([temp_ep] if temp_ep else [])
@@ -331,12 +419,10 @@ class _OverviewRenderMixin:
             # it should keep spiraling outward — using any open area the
             # frame actually has — rather than settling for a nearby spot
             # that overlaps another waypoint's pin.
-            self._layout_beside_popups(
+            self._layout_recap_popups(
                 [{"popup": c, "frames_left": 1} for c in intro_cards], w, h,
                 card_w=footprint_w, card_h=footprint_h,
-                route_obstacles=route_obstacle_arr,
-                max_radius=float(max(w, h)),
-            )
+                route_obstacles=route_obstacle_arr)
             for c in intro_cards:
                 c["hud_corner"] = None
                 c["draw_leader_line"] = True
@@ -368,7 +454,7 @@ class _OverviewRenderMixin:
             # cutting straight to a photo. Held briefly before the start/
             # stop popups slide in below.
             clean_hold_sec = min(
-                intro_freeze_sec * 0.5,
+                intro_freeze_sec * _INTRO_CLEAN_HOLD_FRACTION_OF_FREEZE,
                 float(self.config.get("overview_intro_clean_hold_seconds", 1.5)),
             )
             for _ in range(int(clean_hold_sec * fps)):

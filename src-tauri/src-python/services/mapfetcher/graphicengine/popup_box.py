@@ -24,7 +24,11 @@ class _PopupBoxMixin:
     # [NOTE] [Animation] Single source of truth for beside-card sizing so render and collision-layout geometry can't drift apart again.
     BESIDE_CARD_BASE_W = 210
 
-    def beside_card_footprint(self, card_scale: float = 1.0) -> Tuple[int, int]:
+    # Screen-edge inset a "beside the pin" popup card is clamped to, so it
+    # can't be placed flush against (or past) the very edge of the frame.
+    _BESIDE_POPUP_EDGE_MARGIN = 24
+
+    def beside_card_footprint(self, card_scale: float = 1.0, has_label: bool = True) -> Tuple[int, int]:
         """Returns the (total_w, total_h) footprint render_popup_box will
         actually draw for a "beside the pin" card at this card_scale —
         assumes a label is present (has_label=True), a safe upper-bound
@@ -34,16 +38,21 @@ class _PopupBoxMixin:
         actual label text — a one-line label just leaves a little extra
         clearance below its card instead of the two cards ever visually
         overlapping because this estimate came in short."""
+        # The photo itself is full-bleed (flush to the card's left/right/
+        # top edges, no white margin) — only a label caption, when present,
+        # adds a strip of height below it.
         target_ratio = 16.0 / 9.0
         target_img_w = int(self.BESIDE_CARD_BASE_W * card_scale)
         target_img_h = int(target_img_w / target_ratio)
-        border = int(10 * card_scale)
-        font_size = max(
-            11, int(self.font_size * tuning.POPUP_LABEL_FONT_SCALE_BESIDE * card_scale)
-        )
-        line_gap = 4
-        text_block_h = font_size * 2 + line_gap + 14
-        return target_img_w + border * 2, target_img_h + border * 2 + text_block_h
+        text_block_h = 0
+        if has_label:
+            font_size = max(
+                11, int(self.font_size * tuning.POPUP_LABEL_FONT_SCALE_BESIDE * card_scale)
+            )
+            line_gap = 4
+            text_block_h = font_size * 2 + line_gap + 14
+        caption_gap = 10 if has_label else 0
+        return target_img_w, target_img_h + caption_gap + text_block_h
 
     # Minimum caption font size _fit_label_caption will shrink to before
     # giving up and letting a still-too-wide second line clip — matches
@@ -61,6 +70,7 @@ class _PopupBoxMixin:
         _LABEL_MIN_FONT_SIZE) only if the longer of the two lines still
         doesn't fit even after splitting. Returns (lines, font) — `font`
         may be a smaller instance than the one passed in."""
+
         if draw.textlength(text, font=font) <= max_width:
             return [text], font
 
@@ -83,14 +93,19 @@ class _PopupBoxMixin:
 
     def popup_card_geometry(
         self, popup_info: Dict, w: int, h: int
-    ) -> Tuple[int, int, int, int, int]:
-        """Returns (box_x, box_y, total_w, total_h, border) for the exact
-        card render_popup_box would draw for this popup_info — the single
+    ) -> Tuple[int, int, int, int]:
+        """Returns (box_x, box_y, total_w, total_h) for the exact card
+        render_popup_box would draw for this popup_info — the single
         source of truth for where/how big that card is, so anything else
         that needs to start from (or match) it — e.g. the fullscreen
         scale-up transition — can't drift out of sync with what's actually
         on screen. Pure geometry, no image I/O, so it's cheap to call
-        ahead of the real draw."""
+        ahead of the real draw.
+
+        The photo is always full-bleed within the card — flush to its
+        left/right/top edges with no white margin around it. A label
+        caption, when shown (and not the overlaid "cover" style), adds a
+        white strip of height below the photo instead."""
         target_ratio = 16.0 / 9.0
         hud_corner = popup_info.get("hud_corner")
         is_beside = hud_corner not in self.HUD_CORNERS
@@ -98,7 +113,6 @@ class _PopupBoxMixin:
         base_img_w = self.BESIDE_CARD_BASE_W if is_beside else 440
         target_img_w = int(base_img_w * card_scale)
         target_img_h = int(target_img_w / target_ratio)
-        border = int((10 if is_beside else 14) * card_scale)
         font_scale = (
             tuning.POPUP_LABEL_FONT_SCALE_BESIDE
             if is_beside
@@ -110,9 +124,12 @@ class _PopupBoxMixin:
         # popup.
         font_scale *= float(popup_info.get("label_font_scale", 1.0))
         font_size = max(11, int(self.font_size * font_scale * card_scale))
-        total_w = target_img_w + (border * 2)
-        has_label = RouteGeometryProcessor.is_real_label(popup_info.get("label"))
+        total_w = target_img_w
         # "cover" (settings/job_config image_display: "cover") — the photo
+        has_label = (
+            RouteGeometryProcessor.is_real_label(popup_info.get("label"))
+            and bool(popup_info.get("show_label", True))
+        )
         # fills the entire card with no separate caption strip below it;
         # the label overlays the photo itself instead (see
         # render_popup_box), so it adds no extra height here.
@@ -129,8 +146,9 @@ class _PopupBoxMixin:
             text_block_h = (
                 font.size * len(label_lines) + line_gap * (len(label_lines) - 1) + 14
             )
-        total_h = target_img_h + (border * 2) + text_block_h
-        margin = 24
+        caption_gap = 10 if (has_label and not is_cover) else 0
+        total_h = target_img_h + caption_gap + text_block_h
+        margin = self._BESIDE_POPUP_EDGE_MARGIN
 
         if not is_beside:
             box_x, box_y = self._hud_corner_box(hud_corner, w, h, total_w, total_h)
@@ -147,7 +165,16 @@ class _PopupBoxMixin:
             box_x = max(margin, min(box_x, w - total_w - margin))
             box_y = max(margin, min(box_y, h - total_h - margin))
 
-        return box_x, box_y, total_w, total_h, border
+        return box_x, box_y, total_w, total_h
+
+    @staticmethod
+    def _fade_to_base(frame: np.ndarray, alpha: float, base_frame: np.ndarray) -> np.ndarray:
+        """Blends `frame` back toward `base_frame` by `alpha` (0-1) — the
+        shared "fade the whole composited card result as one unit"
+        behavior render_popup_box uses both for its line_only early-return
+        and its own final return. Only called when alpha < 1.0."""
+        blend_alpha = max(0.0, alpha)
+        return cv2.addWeighted(frame, blend_alpha, base_frame, 1 - blend_alpha, 0)
 
     def pick_hud_corner(
         self,
@@ -199,19 +226,19 @@ class _PopupBoxMixin:
         then `skip_line=True` for every popup afterward (drawing just the
         cards on top), guarantees every line sits behind every card
         regardless of draw order."""
-        f_frame = target_frame.copy()
-        img_url = popup_info["data"].get("popup_image")
-        h, w = f_frame.shape[:2]
+        working_frame = target_frame.copy()
+        image_path = popup_info["data"].get("popup_image")
+        h, w = working_frame.shape[:2]
 
         # [NOTE] [Animation] Missing/unreadable popup_image silently skips the entire card draw, returning the frame unchanged rather than raising or drawing a placeholder.
-        if img_url and (line_only or os.path.exists(img_url)):
-            pop_img = None if line_only else self.read_image_safe(img_url)
+        if image_path and (line_only or os.path.exists(image_path)):
+            pop_img = None if line_only else self.read_image_safe(image_path)
             if line_only or pop_img is not None:
                 hud_corner = popup_info.get("hud_corner")
                 is_beside = hud_corner not in self.HUD_CORNERS
                 card_scale = float(popup_info.get("card_scale", 1.0))
 
-                box_x, box_y, total_w, total_h, border = self.popup_card_geometry(
+                box_x, box_y, total_w, total_h = self.popup_card_geometry(
                     popup_info, w, h
                 )
 
@@ -224,15 +251,6 @@ class _PopupBoxMixin:
                     # the pin it's meant to connect to.
                     point_x = int(popup_info.get("pin_x", popup_info["x"]))
                     point_y = int(popup_info.get("pin_y", popup_info["y"]))
-                    # Connects the card back to the waypoint's own pin —
-                    # used when the card is riding beside a waypoint the
-                    # traveler is flowing through rather than sitting in
-                    # a fixed HUD corner, so it's still clear which stop
-                    # it belongs to. The grid layout can place the card
-                    # anywhere, so pick whichever edge (or corner) of
-                    # the box is actually nearest the pin.
-                    anchor_x = min(max(point_x, box_x), box_x + total_w)
-                    anchor_y = min(max(point_y, box_y), box_y + total_h)
                     # Defaults to a neutral gray; callers with several
                     # leader lines on screen at once (e.g. the
                     # end-of-video recap) pass "leader_line_color" —
@@ -240,26 +258,57 @@ class _PopupBoxMixin:
                     # still be traced back to its pin despite crossing
                     # others.
                     line_color = popup_info.get("leader_line_color", (130, 130, 130))
-                    cv2.line(
-                        f_frame,
-                        (point_x, point_y),
-                        (anchor_x, anchor_y),
-                        line_color,
-                        2,
-                        cv2.LINE_AA,
-                    )
+                    # Callers showing many lines at once (the end-of-video
+                    # recap) thicken theirs — a 2px hairline gets lost
+                    # against a busy map once there are a dozen-plus cards.
+                    line_width = int(popup_info.get("leader_line_width", 2))
+                    # "leader_via" (set by _layout_recap_popups for a pin
+                    # that's part of a tight cluster — see its own
+                    # _padded_boundary docstring) routes the line through
+                    # an extra point on the cluster's shared outer
+                    # boundary first: pin -> via -> card, instead of a
+                    # single straight pin -> card line that would cut
+                    # through the cluster's interior. The FINAL segment's
+                    # anchor is computed from the via point (whichever
+                    # edge of the box is nearest to where the line is
+                    # actually arriving FROM), not the pin, so that last
+                    # stretch still reads as "coming from the cluster's
+                    # edge", not from the pin itself.
+                    via = popup_info.get("leader_via")
+                    if via is not None:
+                        via_x, via_y = int(via[0]), int(via[1])
+                        anchor_x = min(max(via_x, box_x), box_x + total_w)
+                        anchor_y = min(max(via_y, box_y), box_y + total_h)
+                        cv2.line(
+                            working_frame, (point_x, point_y), (via_x, via_y),
+                            line_color, line_width, cv2.LINE_AA,
+                        )
+                        cv2.line(
+                            working_frame, (via_x, via_y), (anchor_x, anchor_y),
+                            line_color, line_width, cv2.LINE_AA,
+                        )
+                    else:
+                        # Connects the card back to the waypoint's own pin
+                        # directly — the grid layout can place the card
+                        # anywhere, so pick whichever edge (or corner) of
+                        # the box is actually nearest the pin.
+                        anchor_x = min(max(point_x, box_x), box_x + total_w)
+                        anchor_y = min(max(point_y, box_y), box_y + total_h)
+                        cv2.line(
+                            working_frame, (point_x, point_y), (anchor_x, anchor_y),
+                            line_color, line_width, cv2.LINE_AA,
+                        )
                     cv2.circle(
-                        f_frame, (point_x, point_y), 4, line_color, -1, cv2.LINE_AA
+                        working_frame, (point_x, point_y), 4, line_color, -1, cv2.LINE_AA
                     )
 
                 if line_only:
                     if alpha < 1.0:
-                        a = max(0.0, alpha)
-                        f_frame = cv2.addWeighted(f_frame, a, target_frame, 1 - a, 0)
-                    return f_frame
+                        working_frame = self._fade_to_base(working_frame, alpha, target_frame)
+                    return working_frame
 
                 target_ratio = 16.0 / 9.0
-                target_img_w = total_w - border * 2
+                target_img_w = total_w
                 target_img_h = int(target_img_w / target_ratio)
 
                 # Cover-fit (scale to fill the 16:9 box, then crop the
@@ -315,6 +364,10 @@ class _PopupBoxMixin:
                     # the smaller, lighter caption look under the photo.
                     font = self._load_font(self.FONT_CANDIDATES_REGULAR, font_size)
                 has_label = RouteGeometryProcessor.is_real_label(label_text)
+                has_label = (
+                    RouteGeometryProcessor.is_real_label(label_text)
+                    and bool(popup_info.get("show_label", True))
+                )
 
                 pil_canvas = Image.new("RGBA", (w, h), (0, 0, 0, 0))
                 draw = ImageDraw.Draw(pil_canvas)
@@ -363,32 +416,31 @@ class _PopupBoxMixin:
                 draw = ImageDraw.Draw(pil_canvas)
 
                 card_box = [box_x, box_y, box_x + total_w, box_y + total_h]
+                # No colored outline on any popup card — the photo is
+                # full-bleed against the card's rounded edges, so a drawn
+                # border would frame it like the old pip card instead of
+                # reading as a clean, borderless photo card.
                 draw.rounded_rectangle(
                     card_box,
                     radius=14,
                     fill=(255, 255, 255, 250),
-                    # No outline for the cover style — the photo fills
-                    # the whole card, so a colored border would frame it
-                    # like the old pip card instead of reading as a
-                    # borderless full-bleed poster.
-                    outline=(
-                        border_rgba
-                        if self.card_border_thickness and not is_cover
-                        else None
-                    ),
-                    width=self.card_border_thickness,
                 )
 
-                base_pil = Image.fromarray(cv2.cvtColor(f_frame, cv2.COLOR_BGR2RGBA))
+                base_pil = Image.fromarray(cv2.cvtColor(working_frame, cv2.COLOR_BGR2RGBA))
                 base_pil.paste(pil_canvas, (0, 0), pil_canvas)
 
                 pil_img = Image.fromarray(cv2.cvtColor(pop_img, cv2.COLOR_BGR2RGB))
                 mask = Image.new("L", (pw, ph), 255)
                 mask_draw = ImageDraw.Draw(mask)
-                mask_draw.rounded_rectangle([0, 0, pw, ph], radius=8, fill=255)
+                # Photo is full-bleed (flush to the card's left/right/top
+                # edges, no white margin) — its mask uses the SAME corner
+                # radius as the outer card (14) so the photo's own rounded
+                # corners line up with the card's, instead of a smaller
+                # radius leaving a sliver of white card visible behind it.
+                mask_draw.rounded_rectangle([0, 0, pw, ph], radius=14, fill=255)
 
-                photo_x = box_x + border
-                photo_y = box_y + border
+                photo_x = box_x
+                photo_y = box_y
                 base_pil.paste(pil_img, (photo_x, photo_y), mask=mask)
 
                 if has_label:
@@ -450,9 +502,8 @@ class _PopupBoxMixin:
                             )
                             line_y += label_font.size + line_gap
 
-                f_frame = cv2.cvtColor(np.array(base_pil), cv2.COLOR_RGBA2BGR)
+                working_frame = cv2.cvtColor(np.array(base_pil), cv2.COLOR_RGBA2BGR)
 
         if alpha < 1.0:
-            a = max(0.0, alpha)
-            f_frame = cv2.addWeighted(f_frame, a, target_frame, 1 - a, 0)
-        return f_frame
+            working_frame = self._fade_to_base(working_frame, alpha, target_frame)
+        return working_frame

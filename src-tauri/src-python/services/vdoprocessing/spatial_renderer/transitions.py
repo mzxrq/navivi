@@ -15,6 +15,24 @@ from .base import logger
 
 
 class _TransitionMixin:
+    # Divisor/floor used to size _blur_out's max Gaussian kernel radius
+    # relative to the frame's short edge (see the comment at its call site).
+    _BLUR_KSIZE_DIVISOR = 20
+    _BLUR_MIN_KSIZE = 3
+
+    # Default hold time (seconds) used when a popup's own "freeze_seconds"
+    # is absent from its data.
+    _DEFAULT_FREEZE_SECONDS = 3.0
+
+    # Multiplier on marker_radius used to decide whether a nearby waypoint
+    # pin would land close enough to the featured pin to be treated as
+    # "the same point" and skipped in _draw_nearby_waypoints.
+    _SAME_POINT_RADIUS_MULTIPLIER = 2
+
+    # Multiplier on max(w, h) used to bound the off-screen margin route
+    # points get clamped to in _draw_route_line_on_extent.
+    _ROUTE_LINE_MARGIN_MULTIPLIER = 5
+
     @staticmethod
     def _ken_burns_hold(
         video: VideoExporter,
@@ -37,10 +55,10 @@ class _TransitionMixin:
         visibly, but this range doesn't. Returns the final (most-zoomed)
         frame written, so a later hold can continue the zoom from there."""
         h, w = frame.shape[:2]
-        n = max(1, int(duration_sec * fps))
+        total_frames = max(1, int(duration_sec * fps))
         last = frame
-        for i in range(n):
-            progress = i / max(1, n - 1)
+        for frame_idx in range(total_frames):
+            progress = frame_idx / max(1, total_frames - 1)
             zoom = zoom_from + (zoom_to - zoom_from) * progress
             crop_w, crop_h = w / zoom, h / zoom
             cx = min(max(zoom_cx, crop_w / 2), w - crop_w / 2)
@@ -64,11 +82,13 @@ class _TransitionMixin:
         last frames instead of a hard cut or fade-to-black — a bare cut
         would jump straight into whatever plays next, and this reads
         smoothly even when the next clip opens on this exact picture."""
-        n = max(1, int(duration_sec * fps))
-        max_ksize = max(3, (min(frame.shape[:2]) // 20) | 1)  # odd, ~5% of the short edge
+        total_frames = max(1, int(duration_sec * fps))
+        max_ksize = max(
+            self._BLUR_MIN_KSIZE, (min(frame.shape[:2]) // self._BLUR_KSIZE_DIVISOR) | 1
+        )  # odd, ~5% of the short edge
         blurred = frame
-        for i in range(n):
-            ksize = max(1, round((i + 1) / n * max_ksize)) | 1
+        for frame_idx in range(total_frames):
+            ksize = max(1, round((frame_idx + 1) / total_frames * max_ksize)) | 1
             blurred = cv2.GaussianBlur(frame, (ksize, ksize), 0)
             video.write(blurred)
         return blurred
@@ -86,17 +106,29 @@ class _TransitionMixin:
         reserved_boxes: List[Tuple[float, float, float, float]],
         pre_popup_frame: Optional[np.ndarray],
     ) -> float:
-        """Builds the end-of-video recap (every waypoint's card at once,
-        each with a leader line back to its own pin) if there's a
-        stop_popup, fades the summary stat card in on top of it, and
-        returns how long (seconds) the caller should hold on the result
-        before moving on — the longer of the recap's own freeze_seconds
-        and the summary card's configured hold, so the two read as one
-        continuous ending beat rather than the recap being shown alone
-        first and the card only appearing afterward in its own pause.
-        Updates self.last_frame; does not write the hold itself, since
-        the highlight (_render_ending_highlight) may still need to run
-        first."""
+        """Builds the end-of-video recap and fades the summary stat card in
+        on top of it, returning how long (seconds) the caller should hold
+        on the result before moving on. Updates self.last_frame; does not
+        write that final hold itself, since the highlight
+        (_render_ending_highlight) may still need to run first.
+
+        The recap ends up showing EVERY waypoint's card together, but
+        reveals them a few at a time rather than cutting straight to a
+        full screen of them. The whole set is laid out up front into the
+        frame's free space (see _layout_recap_cards), which is what makes
+        showing them all at once viable at all — disjoint slots, so no two
+        cards can overlap, matched to pins by minimum total leader length,
+        which leaves the lines both short and uncrossed. They're then
+        revealed
+        cumulatively in that same ring order, tuning.RECAP_GROUP_SIZE
+        cards per step, crossfading between steps: because the layout was
+        computed once over the full set, no card ever moves, resizes or
+        recolors as later ones join it. Every pin stays visible from the
+        first step regardless of whether its own card has appeared yet
+        (see _render_recap_frame's group_popups param). All of this is
+        written directly here (not left to the caller's own trailing hold
+        loop), so the returned outro_hold_sec covers only the summary
+        card's own hold on top of the final, complete ring."""
         outro_hold_sec = 0.0
 
         if stop_popup:
@@ -112,19 +144,66 @@ class _TransitionMixin:
                 pre_popup_frame.copy() if pre_popup_frame is not None
                 else self.last_frame.copy()
             )
-            self.last_frame = self._render_recap_frame(
-                outro_frame, active_popups, w, h,
-                route_obstacles=route_obstacle_arr,
-                reserved_boxes=reserved_boxes,
+            all_recap_popups = [ap for ap in active_popups if ap["data"].get("popup_image")]
+            # A loop route's "E" is the exact same real-world place as "S"
+            # (see SpatialRendererBase._is_loop_route) — usually labeled
+            # "... (Return)" in job_config.json, its own popup card would
+            # otherwise show the same photo/place right next to the start
+            # card it's a duplicate of. Drop it here (by identity, not by
+            # label text) so the recap shows that place once, via its
+            # start-popup card, rather than twice.
+            if self._is_loop_route and stop_popup is not None:
+                all_recap_popups = [ap for ap in all_recap_popups if ap is not stop_popup]
+            total_freeze = float(
+                stop_popup["data"].get("freeze_seconds", self._DEFAULT_FREEZE_SECONDS)
             )
-            outro_hold_sec = float(stop_popup["data"].get("freeze_seconds", 3.0))
+
+            if all_recap_popups:
+                laid_out = self._layout_recap_cards(
+                    all_recap_popups, w, h,
+                    reserved_boxes=reserved_boxes,
+                    route_obstacles=route_obstacle_arr,
+                )
+                step = max(1, tuning.RECAP_GROUP_SIZE)
+                # Cumulative prefixes: each step adds `step` more cards to
+                # the ones already up, so the last one holds every card.
+                reveals = [
+                    laid_out[: i + step] for i in range(0, len(laid_out), step)
+                ]
+                per_step_hold = max(
+                    tuning.RECAP_GROUP_MIN_HOLD_SECONDS, total_freeze / len(reveals)
+                )
+                fade_frames = max(1, int(tuning.RECAP_GROUP_FADE_SECONDS * fps))
+
+                prev_step_frame = None
+                for shown in reveals:
+                    step_frame = self._render_recap_frame(
+                        outro_frame, active_popups, group_popups=shown
+                    )
+                    hold_frames = max(0, int(per_step_hold * fps))
+                    if prev_step_frame is None:
+                        for _ in range(hold_frames):
+                            video.write(step_frame)
+                    else:
+                        for i in range(fade_frames):
+                            alpha = (i + 1) / fade_frames
+                            video.write(
+                                cv2.addWeighted(step_frame, alpha, prev_step_frame, 1 - alpha, 0)
+                            )
+                        for _ in range(max(0, hold_frames - fade_frames)):
+                            video.write(step_frame)
+                    prev_step_frame = step_frame
+
+                self.last_frame = prev_step_frame
+            else:
+                self.last_frame = outro_frame
 
         if summary_card is not None:
             fade_frames = max(1, int(self.config.get("summary_fade", 0.5) * fps))
-            for i in range(fade_frames):
+            for frame_idx in range(fade_frames):
                 video.write(
                     self.graphics.composite_card_on_frame(
-                        self.last_frame, summary_card, alpha=(i + 1) / fade_frames
+                        self.last_frame, summary_card, alpha=(frame_idx + 1) / fade_frames
                     )
                 )
             self.last_frame = self.graphics.composite_card_on_frame(
@@ -156,6 +235,49 @@ class _TransitionMixin:
     # at a middling zoom and leaving a second, more noticeable jump for the
     # residential clip that follows this video.
     _BIG_MAP_ZOOM_TARGET = tuning.BIG_MAP_ZOOM_TARGET
+
+    def _draw_route_line_on_extent(
+        self,
+        frame: np.ndarray,
+        w: int,
+        h: int,
+        extent: Tuple[float, float, float, float],
+    ) -> None:
+        """Redraws the route line on a freshly fetched close-up tile — the
+        ending highlight's own extent is a genuinely different (much more
+        zoomed-in) map than the main overview render, so the pixel-space
+        path drawn there doesn't carry over; this reprojects the lat/lon
+        route (stashed by render_overview as self._route_latlon_path) onto
+        THIS frame's extent instead. Drawn before pins/markers so it sits
+        underneath them, matching the main overview's own draw order. A
+        no-op when there's no stashed route (e.g. render_overview wasn't
+        given an extent to reproject from in the first place)."""
+        route_latlon = getattr(self, "_route_latlon_path", None)
+        if not route_latlon:
+            return
+        pts = [
+            RouteGeometryProcessor.project_latlon_to_pixel(lat, lon, extent, w, h)
+            for lat, lon in route_latlon
+        ]
+        # Generous but bounded margin — keeps genuinely nearby off-screen
+        # stretches connecting properly across the frame edge without
+        # letting a wildly out-of-view point blow up into huge coordinates.
+        margin = max(w, h) * self._ROUTE_LINE_MARGIN_MULTIPLIER
+        pts = [
+            (int(min(max(px, -margin), w + margin)), int(min(max(py, -margin), h + margin)))
+            for px, py in pts
+        ]
+        arr = np.array(pts, dtype=np.int32)
+        if self.graphics.line_border_thickness:
+            cv2.polylines(
+                frame, [arr], False, self.graphics.line_border_color,
+                self.graphics.line_thickness + self.graphics.line_border_thickness * 2,
+                cv2.LINE_AA,
+            )
+        cv2.polylines(
+            frame, [arr], False, self.graphics.line_color,
+            self.graphics.line_thickness, cv2.LINE_AA,
+        )
 
     def _draw_nearby_waypoints(
         self,
@@ -197,7 +319,10 @@ class _TransitionMixin:
             px, py = int(px), int(py)
             if not (0 <= px <= w and 0 <= py <= h):
                 continue
-            if math.hypot(px - exclude_px, py - exclude_py) < self.graphics.marker_radius * 2:
+            if (
+                math.hypot(px - exclude_px, py - exclude_py)
+                < self.graphics.marker_radius * self._SAME_POINT_RADIUS_MULTIPLIER
+            ):
                 continue  # the featured waypoint itself
             # "arrived": True — this only ever runs at the very end of
             # the video, once the whole route (every waypoint) has
@@ -207,8 +332,11 @@ class _TransitionMixin:
             # (not-yet-visited) marker_color — visibly wrong whenever a
             # project has customized the two to different colors.
             wp = {"index": pos + 1, "order": order, "data": {"is_stopby": is_stopby, "arrived": True}}
-            label, color = self._pin_label_and_color(wp, total_points)
-            self.graphics.draw_marker(frame, px, py, number=label, color=color)
+            label, color, split_color = self._pin_label_and_color(wp, total_points)
+            self.graphics.draw_marker(
+                frame, px, py, number=label, color=color, split_color=split_color,
+                is_circle=bool(is_stopby)
+            )
 
     def _render_ending_highlight(
         self,
@@ -282,7 +410,9 @@ class _TransitionMixin:
             self.enable_fullscreen_popups
             and featured_popup["data"].get("image_display") == "fullscreen"
         )
-        highlight_hold_sec = float(featured_popup["data"].get("freeze_seconds", 3.0))
+        highlight_hold_sec = float(
+            featured_popup["data"].get("freeze_seconds", self._DEFAULT_FREEZE_SECONDS)
+        )
 
         highlight_bg = None
         highlight_extent = None
@@ -318,7 +448,7 @@ class _TransitionMixin:
                 dynamic_frames = capture_pydeck_zoom_sequence(
                     bounding_box, (w, h), lat, lng, zoom_n,
                     zoom_boost=tuning.ENDING_HIGHLIGHT_PYDECK_ZOOM_BOOST,
-                    mapbox_key=settings.get("mapbox_token"),
+                    mapbox_key=settings.get("mapbox_api_key"),
                 )
             except Exception:
                 logger.warning(
@@ -346,9 +476,9 @@ class _TransitionMixin:
                 highlight_popup.pop("pin_y", None)
                 highlight_popup["hud_corner"] = None
                 highlight_popup["draw_leader_line"] = True
-                self._layout_beside_popups([{"popup": highlight_popup, "frames_left": 1}], w, h)
+                self._layout_recap_popups([{"popup": highlight_popup, "frames_left": 1}], w, h)
 
-                for i, (frame_bgr, extent) in enumerate(dynamic_frames):
+                for frame_idx, (frame_bgr, extent) in enumerate(dynamic_frames):
                     frame_out = frame_bgr.copy()
                     # Nearby waypoints re-projected fresh against THIS
                     # frame's own extent (it changes every frame as the
@@ -359,14 +489,15 @@ class _TransitionMixin:
                     # drawn separately below — so without drawing its own
                     # marker unconditionally here too, the start/end pin
                     # was simply missing from every lead-in frame.
+                    self._draw_route_line_on_extent(frame_out, w, h, extent)
                     self._draw_nearby_waypoints(frame_out, w, h, extent, px, py)
-                    if i < lead_in_n:
+                    if frame_idx < lead_in_n:
                         self.graphics.draw_marker(
                             frame_out, px, py,
                             number="S" if is_start else "E",
                             color=self._START_PIN_COLOR if is_start else self._END_PIN_COLOR,
                         )
-                    if i >= lead_in_n:
+                    if frame_idx >= lead_in_n:
                         # The "hard cut to arrived" moment — before this
                         # frame the featured point is just a plain pin on
                         # the map, same as every other waypoint (matches
@@ -385,7 +516,7 @@ class _TransitionMixin:
                             frame_out, highlight_popup, skip_line=True
                         )
                     video.write(frame_out)
-                    if i == lead_in_n + wait_n - 1:
+                    if frame_idx == lead_in_n + wait_n - 1:
                         dynamic_zoomed_end = frame_out
                 # hold_n: a genuine hold on the last real frame reached —
                 # see the comment above on why this doesn't re-capture
@@ -424,6 +555,7 @@ class _TransitionMixin:
             # on screen. Drawn with the same S/E/stop-by/number labeling as
             # everywhere else, so a stop that happens to land in frame reads
             # exactly like it does on the main overview map.
+            self._draw_route_line_on_extent(highlight_bg, w, h, highlight_extent)
             self._draw_nearby_waypoints(highlight_bg, w, h, highlight_extent, px, py)
 
             # Lead-in: push in on the clean map plate (no cards on it — see
@@ -466,7 +598,7 @@ class _TransitionMixin:
             # that spot's taken) — without this, render_popup_box's own
             # fallback placement (meant for corner-avoidance, not a tight
             # leader line) can land the card far across the frame.
-            self._layout_beside_popups([{"popup": highlight_popup, "frames_left": 1}], w, h)
+            self._layout_recap_popups([{"popup": highlight_popup, "frames_left": 1}], w, h)
 
             # Line, then marker, then card — in that order — so the
             # leader line sits BEHIND both the marker pin and the card it
@@ -517,8 +649,8 @@ class _TransitionMixin:
                 # frame, not a cutaway that returns to the map afterward.
                 keep = max(1, int(scale_sec * fps)) + max(1, int(hold_sec * fps))
                 t_frames = t_frames[:keep]
-                for tf in t_frames:
-                    video.write(tf)
+                for transition_frame in t_frames:
+                    video.write(transition_frame)
 
                 # Blur out rather than hard-cutting on the photo — a bare
                 # cut here would jump straight into whatever plays next;

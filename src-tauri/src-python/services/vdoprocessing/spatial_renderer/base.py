@@ -41,6 +41,16 @@ class _SpatialRendererBase:
     # 1.0), which defeats the point of it being a tunable setting.
     _REFERENCE_KMH = tuning.REFERENCE_SPEED_KMH
 
+    # Clamp bounds for every derived on-screen speed factor below — see the
+    # "Clamped so no leg is compressed..." comment in __init__ for why.
+    _MIN_SPEED_FACTOR = 0.3
+    _MAX_SPEED_FACTOR = 60.0
+
+    # Minimum on-screen pixel movement between two heading samples for the
+    # direction to be trusted rather than treated as rounding noise — shared
+    # by _initial_heading and _smoothed_heading below.
+    _MIN_HEADING_SAMPLE_DIST_PX = 1.5
+
     def __init__(self, config: Dict[str, Any], graphics: GraphicsEngine, out_dir: Path):
         self.config = config
         self.graphics = graphics
@@ -76,7 +86,7 @@ class _SpatialRendererBase:
             **animation_overrides,
         }
         self._mode_speed_factor = {
-            mode: max(0.3, min(60.0, kmh / self._REFERENCE_KMH))
+            mode: max(self._MIN_SPEED_FACTOR, min(self._MAX_SPEED_FACTOR, kmh / self._REFERENCE_KMH))
             for mode, kmh in animation_speed_kmh.items()
         }
         # Fallback factor for a mode key with no entry above at all (e.g. a
@@ -84,7 +94,8 @@ class _SpatialRendererBase:
         # pace as every listed mode, not a hardcoded "1.0" that would give
         # it yet another, different speed of its own.
         self._default_mode_speed_factor = max(
-            0.3, min(60.0, self._DEFAULT_ANIMATION_SPEED_KMH / self._REFERENCE_KMH)
+            self._MIN_SPEED_FACTOR,
+            min(self._MAX_SPEED_FACTOR, self._DEFAULT_ANIMATION_SPEED_KMH / self._REFERENCE_KMH),
         )
 
         self.trigger_radius_padding = {
@@ -139,11 +150,39 @@ class _SpatialRendererBase:
     # standard map-app iconography) regardless of arrival state — every
     # other pin still uses _pin_color's default/arrived coloring. Shared by
     # both _PinMixin and _TransitionMixin, so it lives here rather than in
-    # either leaf mixin.
+    # either leaf mixin. Always plain green — a loop route (start==end)
+    # signals itself instead via the "E" pin's half green/red split (see
+    # pins.py's _pin_label_and_color and _is_loop_route below), not by
+    # recoloring S itself.
     _START_PIN_COLOR = tuning.START_PIN_COLOR
     _END_PIN_COLOR = tuning.END_PIN_COLOR
     _DRAWN_PIN_COLOR = tuning.DRAWN_PIN_COLOR
     _STOPBY_PIN_COLOR = tuning.STOPBY_PIN_COLOR
+
+    @property
+    def _is_loop_route(self) -> bool:
+        """True when this project's start_point and end_point are (near-)
+        identical real-world coordinates — an out-and-back or round trip
+        that returns to exactly where it began, rather than two distinct
+        places that just happen to be close. Cached on the instance since
+        _get_job_config re-reads job_config.json from disk every call and
+        this is checked on every pin draw."""
+        cached = getattr(self, "_is_loop_route_cache", None)
+        if cached is not None:
+            return cached
+        job_config = self._get_job_config() or {}
+        start = job_config.get("start_point") or {}
+        end = job_config.get("end_point") or {}
+        s_lat, s_lng = start.get("lat"), start.get("lng", start.get("lon"))
+        e_lat, e_lng = end.get("lat"), end.get("lng", end.get("lon"))
+        result = False
+        if None not in (s_lat, s_lng, e_lat, e_lng):
+            result = (
+                abs(s_lat - e_lat) <= tuning.LOOP_ROUTE_MATCH_DEGREES
+                and abs(s_lng - e_lng) <= tuning.LOOP_ROUTE_MATCH_DEGREES
+            )
+        self._is_loop_route_cache = result
+        return result
 
     @staticmethod
     def _initial_heading(path: List) -> float:
@@ -161,7 +200,7 @@ class _SpatialRendererBase:
             return 0.0
         x0, y0 = path[0][0], path[0][1]
         for pt in path[1:]:
-            if math.hypot(pt[0] - x0, pt[1] - y0) >= 1.5:
+            if math.hypot(pt[0] - x0, pt[1] - y0) >= _SpatialRendererBase._MIN_HEADING_SAMPLE_DIST_PX:
                 return math.degrees(math.atan2(pt[1] - y0, pt[0] - x0))
         x1, y1 = path[-1][0], path[-1][1]
         return math.degrees(math.atan2(y1 - y0, x1 - x0))
@@ -173,7 +212,7 @@ class _SpatialRendererBase:
         cy: int,
         prev_cx: Optional[int],
         prev_cy: Optional[int],
-        min_dist: float = 1.5,
+        min_dist: float = _MIN_HEADING_SAMPLE_DIST_PX,
         alpha: float = 0.35,
     ) -> float:
         """Blends the new frame-to-frame heading into the previous smoothed
@@ -231,8 +270,8 @@ class _SpatialRendererBase:
         return math.degrees(math.atan2(y, x))
 
     def _get_job_config(self) -> Optional[Dict]:
-        for p in [self.out_dir] + list(self.out_dir.parents):
-            potential_path = p / "job_config.json"
+        for search_dir in [self.out_dir] + list(self.out_dir.parents):
+            potential_path = search_dir / "job_config.json"
             if potential_path.exists():
                 try:
                     with open(potential_path, "r", encoding="utf-8") as f:

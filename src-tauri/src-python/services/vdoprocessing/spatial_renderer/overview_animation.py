@@ -16,6 +16,11 @@ from services.vdoprocessing.vdoexporter import VideoExporter
 from services.logger.progress import tracker
 from services import tuning
 
+# Animation-loop tuning constants (magic numbers pulled out of the loop body
+# below so their purpose has a name; not read from self.config/tuning).
+_MIN_TRIGGER_GAP_FLOOR_SECONDS = 0.15  # floor effective_gap_frames shrinks to for a deep backlog
+_DEFAULT_FREEZE_SECONDS = 4.0  # fallback display duration when a popup sets no freeze_seconds
+
 
 class _OverviewAnimationMixin:
     def _animate_overview_frames(
@@ -86,6 +91,12 @@ class _OverviewAnimationMixin:
         # it never blocks the very first trigger.
         min_trigger_gap_frames = int(fps * tuning.OVERVIEW_POPUP_MIN_TRIGGER_GAP_SECONDS)
         last_trigger_frame = -min_trigger_gap_frames
+        # (x, y) of the most recently triggered popup's own pin — lets the
+        # gap check below tell "these two waypoints are genuinely close
+        # together on the map" apart from "these two just happen to be
+        # queued back to back" (see the cluster-gap override further
+        # down).
+        last_triggered_pin: Optional[Tuple[float, float]] = None
         pending_popups: List[Dict] = []
 
         # Real (non-stop-by) waypoints must pop up STRICTLY in route order —
@@ -109,7 +120,7 @@ class _OverviewAnimationMixin:
         ]
         seq_ptr = 0
 
-        for current_frame, p in enumerate(smooth_path):
+        for current_frame, path_point in enumerate(smooth_path):
             if is_video:
                 ret, vid_frame = cap.read()
                 if ret:
@@ -119,7 +130,7 @@ class _OverviewAnimationMixin:
 
             frame = current_bg.copy()
 
-            path_history.append((int(p[0]), int(p[1])))
+            path_history.append((int(path_point[0]), int(path_point[1])))
 
             if cum_smooth_dist is not None:
                 frac = cum_smooth_dist[current_frame] / total_smooth_dist
@@ -204,21 +215,41 @@ class _OverviewAnimationMixin:
                     # traveler to have actually reached near that point
                     # in time (not just in space) before it can trigger
                     # rules out that false-early case. A small tolerance
+                    # (see tuning.OVERVIEW_POPUP_TRIGGER_TOLERANCE_SECONDS)
                     # keeps it from being stricter than the spatial check
-                    # itself needs.
+                    # itself needs — just enough to absorb expected_frame's
+                    # own estimation jitter, not enough to visibly show a
+                    # popup before the traveler has actually gotten there.
                     expected_frame = popup.get("expected_frame")
-                    trigger_tolerance_frames = int(fps * 1.0)
+                    trigger_tolerance_frames = int(
+                        fps * tuning.OVERVIEW_POPUP_TRIGGER_TOLERANCE_SECONDS
+                    )
                     if (
                         expected_frame is not None
                         and current_frame < expected_frame - trigger_tolerance_frames
                     ):
                         continue
-                    if RouteGeometryProcessor.point_to_segment_distance(
-                        popup["x"], popup["y"], px, py, cx, cy
-                    ) < (
-                        self.graphics.marker_radius
-                        + self.trigger_radius_padding["overview"]
-                    ):
+                    # A stop-by can legitimately sit off the drawn route
+                    # entirely (a viewpoint a short walk from the road, a
+                    # landmark the route just passes near rather than
+                    # through) — requiring the traveler's on-screen dot to
+                    # actually come within the marker's trigger radius, the
+                    # same test real waypoints need, meant one placed just
+                    # outside that radius would never trigger at all, no
+                    # matter how long the animation ran. Time (expected_frame,
+                    # already checked above) is enough on its own for a
+                    # stop-by; only a real waypoint still needs the
+                    # traveler to actually be near it on screen.
+                    near_enough = is_stopby or (
+                        RouteGeometryProcessor.point_to_segment_distance(
+                            popup["x"], popup["y"], px, py, cx, cy
+                        )
+                        < (
+                            self.graphics.marker_radius
+                            + self.trigger_radius_padding["overview"]
+                        )
+                    )
+                    if near_enough:
                         pending_popups.append(popup)
                         if not is_stopby:
                             # This was sequential_popups[seq_ptr] (the gate
@@ -253,7 +284,8 @@ class _OverviewAnimationMixin:
             effective_gap_frames = min_trigger_gap_frames
             if len(pending_popups) > 1:
                 effective_gap_frames = max(
-                    int(fps * 0.4), min_trigger_gap_frames // len(pending_popups)
+                    int(fps * _MIN_TRIGGER_GAP_FLOOR_SECONDS),
+                    min_trigger_gap_frames // len(pending_popups),
                 )
 
             triggered_popup = None
@@ -261,6 +293,21 @@ class _OverviewAnimationMixin:
                 triggered_popup = pending_popups.pop(0)
                 triggered_popup["data"]["triggered"] = True
                 last_trigger_frame = current_frame
+                # border_color was set once in render_overview's setup,
+                # before any waypoint had "arrived" — for a plain numbered
+                # pin that made it permanently the pre-arrival default
+                # marker color (_pin_color returns None until "arrived" is
+                # set), even once this pin's own dot has since turned
+                # arrived_marker_color above. Recompute fresh now that
+                # "arrived" is true (set on the proximity loop above) so
+                # the card's border actually matches its own pin's current
+                # color, same as waypoints.py's per-leg video already does.
+                _, fresh_border_color, _ = self._pin_label_and_color(
+                    triggered_popup, len(points)
+                )
+                triggered_popup["border_color"] = (
+                    fresh_border_color or self.graphics.marker_color
+                )
 
             # [NOTE] [Animation] "Point to point" snapshot for hide_route_on_popup — every
             # earlier, already-completed leg stays drawn; only the CURRENT
@@ -301,7 +348,7 @@ class _OverviewAnimationMixin:
                 pre_popup_frame = frame.copy()
             frame, baked_popups = self._composite_baked_popups(
                 frame, baked_popups, w, h, route_obstacle_arr,
-                active_popups=active_popups, total_points=len(points),
+                active_popups=active_popups, total_points=len(points), fps=fps,
             )
 
             if frame_no_route is None:
@@ -330,9 +377,17 @@ class _OverviewAnimationMixin:
                 # over there" for a stop on the opposite side of the frame —
                 # this ties every triggered popup, flow-through or frozen,
                 # back to its own pin the same way.
-                self._layout_beside_popups(
+                # Every card already on screen is reserved here: this
+                # lays out ONE popup, so without them its `placed` list
+                # would be empty and it could be dropped straight on top
+                # of a still-visible neighbour (see _active_card_boxes)
+                # — and the lock window would then hold both there.
+                self._layout_recap_popups(
                     [{"popup": triggered_popup, "frames_left": 1}], w, h,
                     route_obstacles=route_obstacle_arr,
+                    reserved_boxes=self._active_card_boxes(
+                        baked_popups, exclude=triggered_popup
+                    ),
                 )
                 triggered_popup["hud_corner"] = None
                 triggered_popup["draw_leader_line"] = True
@@ -379,13 +434,39 @@ class _OverviewAnimationMixin:
                     # instead of lingering past it or vanishing early.
                     display_seconds = float(
                         triggered_popup.get("leg_display_seconds")
-                        or triggered_popup["data"].get("freeze_seconds", 4.0)
+                        or triggered_popup["data"].get("freeze_seconds", _DEFAULT_FREEZE_SECONDS)
                     )
                     # pending_popups here is whatever's LEFT after this one
                     # was just popped off the front — i.e. how many other
                     # already-triggered popups are still queued behind it,
                     # each needing its own turn at the trigger cooldown
                     # before it can even start waiting for a display slot.
+                    # An EARLIER waypoint's own flow-through card can still
+                    # be mid-display right when this new one triggers —
+                    # frames_left only counts down while a card is
+                    # actually drawn (see _make_baked_popup's own
+                    # docstring on why: so one stuck waiting for a
+                    # concurrency slot isn't unfairly cut short), so a
+                    # card that got a late start (behind others) could
+                    # otherwise run its full nominal duration long after
+                    # the traveler has clearly moved on to this next
+                    # stop — reported as an earlier waypoint's card still
+                    # showing well past when it should already be gone.
+                    # Force every OTHER still-active, not-yet-fading
+                    # flow-through card straight into its own fade-out the
+                    # moment a later one arrives, instead of letting it
+                    # run out its original clock.
+                    new_order = triggered_popup.get("order", 0)
+                    for bp in baked_popups:
+                        if bp["popup"]["data"].get("freeze_frame", False):
+                            continue
+                        if bp["popup"].get("order", 0) >= new_order:
+                            continue
+                        wrap_up_frames = bp.get("fade_frames") or max(
+                            1, int(self._POPUP_FADE_SECONDS * fps)
+                        )
+                        bp["frames_left"] = min(bp["frames_left"], wrap_up_frames)
+
                     new_bp = self._make_baked_popup(
                         triggered_popup, display_seconds, fps,
                         queue_depth=len(pending_popups),
@@ -402,8 +483,11 @@ class _OverviewAnimationMixin:
                         # next one. Faded in from the start (see
                         # _popup_fade_alpha), same as every later frame
                         # _composite_baked_popups draws it for.
-                        self._layout_beside_popups(
-                            [new_bp], w, h, route_obstacles=route_obstacle_arr
+                        self._layout_recap_popups(
+                            [new_bp], w, h, route_obstacles=route_obstacle_arr,
+                            reserved_boxes=self._active_card_boxes(
+                                baked_popups, exclude=triggered_popup
+                            ),
                         )
                         hud_new = triggered_popup.copy()
                         hud_new["hud_corner"] = None
@@ -437,6 +521,13 @@ class _OverviewAnimationMixin:
                         self.graphics.draw_transport_icon(
                             frame, cx, cy, current_frame, smoothed_angle, mode=current_mode
                         )
+                    # This IS the arrival frame — always "まもなく" (never
+                    # the "へ"/en-route phrasing), naming the waypoint that
+                    # just triggered rather than sequential_popups[seq_ptr]
+                    # (already advanced past it by this point in the loop).
+                    frame = self.graphics.render_top_banner(
+                        frame, f"まもなく {triggered_popup.get('label') or ''}"
+                    )
                     self.last_frame = frame
                     video.write(frame)
                     prev_cx, prev_cy = cx, cy
@@ -483,7 +574,7 @@ class _OverviewAnimationMixin:
                     )
                 else:
                     display_seconds = float(
-                        triggered_popup["data"].get("freeze_seconds", 4.0)
+                        triggered_popup["data"].get("freeze_seconds", _DEFAULT_FREEZE_SECONDS)
                     )
                     # Kept as its own baked_popups entry so it lingers as a
                     # HUD overlay (with its own fade in/out) once the
@@ -545,6 +636,26 @@ class _OverviewAnimationMixin:
                     self.graphics.draw_transport_icon(
                         frame, cx, cy, current_frame, smoothed_angle, mode=current_mode
                     )
+
+                # Dynamic "next stop" caption — the next real waypoint still
+                # ahead in route order (sequential_popups[seq_ptr]), or the
+                # final destination once every other real waypoint has
+                # already arrived. "まもなく" once within
+                # OVERVIEW_BANNER_NEAR_SECONDS of its own expected_frame
+                # (the same estimated-arrival frame the trigger logic
+                # above uses), "へ" (still en route) otherwise.
+                banner_target = (
+                    sequential_popups[seq_ptr] if seq_ptr < len(sequential_popups) else stop_popup
+                )
+                if banner_target:
+                    label = banner_target.get("label") or ""
+                    expected_frame = banner_target.get("expected_frame")
+                    near = (
+                        expected_frame is not None
+                        and (expected_frame - current_frame) <= int(fps * tuning.OVERVIEW_BANNER_NEAR_SECONDS)
+                    )
+                    banner_text = f"まもなく {label}" if near else f"{label} へ"
+                    frame = self.graphics.render_top_banner(frame, banner_text)
 
                 self.last_frame = frame
                 video.write(frame)

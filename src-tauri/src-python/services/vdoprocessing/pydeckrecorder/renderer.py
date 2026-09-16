@@ -278,7 +278,32 @@ async def render_leg_animation(
             if accumulated_trail:
                 active_trail.insert(0, accumulated_trail[-1])
 
-            trail_json = json.dumps([{"path": active_trail}])
+            # [PROTOTYPE] [Map] Same GeoJsonLayer trial as recorder.py's
+            # static route/trail layers -- a real GeoJSON LineString Feature
+            # instead of PathLayer's {"path": [...]} shape. A LineString
+            # needs >=2 coordinates (unlike PathLayer, which silently drew
+            # nothing for a 1-point path), so the very first frame (no
+            # accumulated_trail, index 0) intentionally gets an empty
+            # FeatureCollection rather than an invalid 1-point LineString.
+            trail_json = json.dumps(
+                {
+                    "type": "FeatureCollection",
+                    "features": (
+                        [
+                            {
+                                "type": "Feature",
+                                "geometry": {
+                                    "type": "LineString",
+                                    "coordinates": active_trail,
+                                },
+                                "properties": {},
+                            }
+                        ]
+                        if len(active_trail) >= 2
+                        else []
+                    ),
+                }
+            )
 
             car_json = json.dumps(
                 [{"lon": row["lon"], "lat": row["lat"], "yaw": row["yaw"]}]
@@ -307,16 +332,18 @@ async def render_leg_animation(
 
                 const coinLayer = {coin_expr};
 
-                const newGlow = new deck.PathLayer({{
+                const newGlow = new deck.GeoJsonLayer({{
                     id: 'trail-glow', data: {trail_json},
-                    getPath: d => d.path, getColor: {c_glow},
-                    widthScale: 1, widthMinPixels: {line_thickness + 8}
+                    stroked: true, filled: false,
+                    getLineColor: {c_glow},
+                    lineWidthScale: 1, lineWidthMinPixels: {line_thickness + 8}
                 }});
 
-                const newTrail = new deck.PathLayer({{
+                const newTrail = new deck.GeoJsonLayer({{
                     id: 'trail-layer', data: {trail_json},
-                    getPath: d => d.path, getColor: {c_trail},
-                    widthScale: 1, widthMinPixels: {line_thickness}
+                    stroked: true, filled: false,
+                    getLineColor: {c_trail},
+                    lineWidthScale: 1, lineWidthMinPixels: {line_thickness}
                 }});
 
                 const newHalo = new deck.ScatterplotLayer({{

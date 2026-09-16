@@ -37,6 +37,25 @@ _VEHICLE_PROFILES = {
 }
 
 
+def _route_linestring_feature(coords_lonlat: list, line_color: list) -> dict:
+    """A single-feature GeoJSON FeatureCollection wrapping `coords_lonlat`
+    (already [lon, lat] pairs, matching GeoJSON's own axis order) as a
+    LineString -- the shape pdk.Layer("GeoJsonLayer", ...) expects for its
+    `data`. `line_color` rides along in "properties" rather than as a
+    layer-level constant so get_line_color can read it per-feature the way
+    GeoJsonLayer is designed to be driven."""
+    return {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "geometry": {"type": "LineString", "coordinates": coords_lonlat},
+                "properties": {"line_color": line_color},
+            }
+        ],
+    }
+
+
 def record_headless_video(
     config_path: str,
     output_video_path: str = "final_reliable_map_animation.mp4",
@@ -265,8 +284,20 @@ def record_headless_video(
             coin_image_url = popup_url
             screen_popup_url = popup_url if is_final_leg else None
 
-            center_lon = (df_raw["lon"].min() + df_raw["lon"].max()) / 2.0
-            center_lat = (df_raw["lat"].min() + df_raw["lat"].max()) / 2.0
+            # Center on the midpoint between this leg's own two waypoints
+            # (its route polyline's first and last point) rather than the
+            # bounding-box center of every point along the way — a leg
+            # that curves/hooks partway through (a common shape once real
+            # routing is involved, not a straight line) pulls the bbox
+            # center off toward whichever side the curve bulges out on,
+            # so the route reads as off-center in frame even though both
+            # waypoints themselves are framed symmetrically around this
+            # point. Zoom-to-fit below still uses the full bbox span, so
+            # a wide bulge still isn't clipped out of frame.
+            start_lon, start_lat = df_raw["lon"].iloc[0], df_raw["lat"].iloc[0]
+            end_lon, end_lat = df_raw["lon"].iloc[-1], df_raw["lat"].iloc[-1]
+            center_lon = (start_lon + end_lon) / 2.0
+            center_lat = (start_lat + end_lat) / 2.0
             max_diff = max(
                 df_raw["lon"].max() - df_raw["lon"].min(),
                 df_raw["lat"].max() - df_raw["lat"].min(),
@@ -281,7 +312,7 @@ def record_headless_video(
                 bearing=30,
             )
 
-            mapbox_key = settings.get("mapbox_token", MAPBOX_API_KEY)
+            mapbox_key = settings.get("mapbox_api_key") or MAPBOX_API_KEY
 
             # [HACK] [Animation] Reverted the deck.gl TerrainLayer 3D-elevation experiment --
             # across several fix attempts (zoom/strategy mismatch, texture
@@ -296,16 +327,31 @@ def record_headless_video(
             # the static base map so the route is visible before the
             # vehicle animates over it, instead of only appearing as the
             # driving loop draws it frame by frame.
-            route_preview_path = df_raw[["lon", "lat"]].values.tolist()
+            #
+            # [PROTOTYPE] [Map] Rendered as a real GeoJSON LineString Feature
+            # through GeoJsonLayer rather than PathLayer's own
+            # {"path": [[lon, lat], ...]} record shape -- this is the piece
+            # of the pipeline actually being trialed for a GeoJsonLayer-based
+            # route rendering approach (the rest of the pipeline, including
+            # the live per-frame trail in renderer.py, is untouched pending
+            # that trial's outcome). stroked/filled=False mirrors PathLayer's
+            # line-only rendering; get_line_color/get_line_width read from
+            # each feature's own "properties" instead of being passed as
+            # layer-level constants, since that's how GeoJsonLayer expects
+            # per-feature styling to be supplied.
             base_layers = [
                 pdk.Layer(
-                    "PathLayer",
+                    "GeoJsonLayer",
                     id="route-preview",
-                    data=[{"path": route_preview_path}],
-                    get_path="path",
-                    get_color=[255, 255, 255, 130],
-                    width_scale=1,
-                    width_min_pixels=max(2, line_thickness // 3),
+                    data=_route_linestring_feature(
+                        route_preview_path,
+                        line_color=[255, 255, 255, 130],
+                    ),
+                    stroked=True,
+                    filled=False,
+                    get_line_color="properties.line_color",
+                    line_width_scale=1,
+                    line_width_min_pixels=max(2, line_thickness // 3),
                 ),
             ]
 
@@ -313,22 +359,30 @@ def record_headless_video(
                 base_layers.extend(
                     [
                         pdk.Layer(
-                            "PathLayer",
+                            "GeoJsonLayer",
                             id="static-glow",
-                            data=[{"path": accumulated_trail}],
-                            get_path="path",
-                            get_color=history_color + [90],
-                            width_scale=1,
-                            width_min_pixels=line_thickness + 8,
+                            data=_route_linestring_feature(
+                                accumulated_trail,
+                                line_color=history_color + [90],
+                            ),
+                            stroked=True,
+                            filled=False,
+                            get_line_color="properties.line_color",
+                            line_width_scale=1,
+                            line_width_min_pixels=line_thickness + 8,
                         ),
                         pdk.Layer(
-                            "PathLayer",
+                            "GeoJsonLayer",
                             id="static-trail",
-                            data=[{"path": accumulated_trail}],
-                            get_path="path",
-                            get_color=history_color,
-                            width_scale=1,
-                            width_min_pixels=line_thickness,
+                            data=_route_linestring_feature(
+                                accumulated_trail,
+                                line_color=history_color,
+                            ),
+                            stroked=True,
+                            filled=False,
+                            get_line_color="properties.line_color",
+                            line_width_scale=1,
+                            line_width_min_pixels=line_thickness,
                         ),
                     ]
                 )

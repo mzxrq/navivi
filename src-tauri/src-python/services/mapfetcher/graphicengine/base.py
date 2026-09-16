@@ -104,7 +104,7 @@ class _GraphicsEngineBase:
 
     def __init__(
         self,
-        line_color=(0, 200, 255),
+        line_color=tuning.DEFAULT_LINE_COLOR,
         line_thickness=10,
         marker_color=tuning.DEFAULT_MARKER_COLOR,  # blue (BGR) — every pin except S/E
         arrived_marker_color=tuning.DEFAULT_ARRIVED_MARKER_COLOR,  # deeper blue once visited
@@ -197,12 +197,17 @@ class _GraphicsEngineBase:
         "bottom_left", "bottom_right", "top_left", "top_right",
     )
 
+    # Fixed screen-edge inset for a corner-anchored HUD card (popup or
+    # summary card) — keeps it off the very edge of the frame.
+    _HUD_CORNER_MARGIN: Final[int] = 40
+
     @staticmethod
     def _hud_corner_box(
         corner: str, w: int, h: int, total_w: int, total_h: int
     ) -> Tuple[int, int]:
-        x = 40 if "left" in corner else w - total_w - 40
-        y = h - total_h - 40 if "bottom" in corner else 40
+        margin = _GraphicsEngineBase._HUD_CORNER_MARGIN
+        x = margin if "left" in corner else w - total_w - margin
+        y = h - total_h - margin if "bottom" in corner else margin
         return x, y
 
     def _load_font(self, candidates: List[str], size: int) -> FreeTypeFont | Any:
@@ -215,9 +220,9 @@ class _GraphicsEngineBase:
         if cached is not None:
             return cached
 
-        for name in candidates:
+        for candidate in candidates:
             try:
-                font = truetype(name, size)
+                font = truetype(candidate, size)
                 break
             except OSError:
                 continue

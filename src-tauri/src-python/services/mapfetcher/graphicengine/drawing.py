@@ -1,12 +1,17 @@
 """Route line and waypoint pin drawing."""
 
 import math
-from typing import Any, List, Optional, Tuple
+from typing import Any, Final, List, Optional, Tuple
 
 import cv2
 import numpy as np
 
 from services import tuning
+
+# Vertical distance from the pin's round head to its tip (cx,cy),
+# expressed as a multiple of the marker radius so the tail lengthens or
+# shortens proportionally as marker_radius changes.
+_PIN_HEAD_OFFSET_RATIO: Final[float] = 1.5
 
 
 def _pin_silhouette(cx: int, head_cy: int, radius: float, tip_y: int) -> np.ndarray:
@@ -16,8 +21,8 @@ def _pin_silhouette(cx: int, head_cy: int, radius: float, tip_y: int) -> np.ndar
     circle smoothly (no visible seam/notch at the neck), reading as one
     continuous teardrop shape instead of a circle with a triangle stuck
     onto it."""
-    d = max(tip_y - head_cy, radius + 1)
-    angle_c = math.degrees(math.acos(radius / d))
+    tip_distance = max(tip_y - head_cy, radius + 1)
+    angle_c = math.degrees(math.acos(radius / tip_distance))
     arc_pts = cv2.ellipse2Poly(
         (cx, head_cy), (int(radius), int(radius)), 0,
         int(90 + angle_c), int(90 - angle_c + 360), 2,
@@ -26,37 +31,12 @@ def _pin_silhouette(cx: int, head_cy: int, radius: float, tip_y: int) -> np.ndar
 
 
 class _DrawingMixin:
-    def draw_path(
-        self,
-        frame: np.ndarray,
-        path_history: List[Tuple[int, int]],
-        mode_history: Optional[List[str]] = None,
-    ):
-        if len(path_history) < 2:
-            return
-
-        # Group consecutive points into same-mode runs so each leg (e.g. a
-        # ferry crossing) can be drawn in its own color, matching the
-        # transport icon shown for that leg.
-        # [NOTE] [Animation] Groups consecutive same-mode points into segments so each leg (e.g. a ferry crossing) draws in its own color.
-        if mode_history and len(mode_history) == len(path_history):
-            segments: List[Tuple[str, List[Tuple[int, int]]]] = []
-            for point, mode in zip(path_history, mode_history):
-                if segments and segments[-1][0] == mode:
-                    segments[-1][1].append(point)
-                else:
-                    # Include the last point of the previous segment so the
-                    # drawn line has no gap at the mode boundary.
-                    prev_point = segments[-1][1][-1] if segments else None
-                    seg_points = [prev_point, point] if prev_point else [point]
-                    segments.append((mode, seg_points))
-        else:
-            segments = [("walking", list(path_history))]
-
-        for mode, seg_points in segments:
+    def _draw_polyline_segments(
+        self, frame: np.ndarray, segments: List[Tuple[Tuple[int, int, int], List[Tuple[int, int]]]]
+    ) -> None:
+        for color, seg_points in segments:
             if len(seg_points) < 2:
                 continue
-            color = self.MODE_COLORS.get(mode, self.line_color)
             pts = np.array(seg_points, dtype=np.int32)
             if self.line_border_thickness:
                 cv2.polylines(
@@ -76,6 +56,41 @@ class _DrawingMixin:
                 cv2.LINE_AA,
             )
 
+    def _mode_segments(
+        self, path_history: List[Tuple[int, int]], mode_history: Optional[List[str]]
+    ) -> List[Tuple[Tuple[int, int, int], List[Tuple[int, int]]]]:
+        # Group consecutive points into same-mode runs so each leg (e.g. a
+        # ferry crossing) can be drawn in its own color, matching the
+        # transport icon shown for that leg.
+        # [NOTE] [Animation] Groups consecutive same-mode points into segments so each leg (e.g. a ferry crossing) draws in its own color.
+        if mode_history and len(mode_history) == len(path_history):
+            raw_segments: List[Tuple[str, List[Tuple[int, int]]]] = []
+            for point, mode in zip(path_history, mode_history):
+                if raw_segments and raw_segments[-1][0] == mode:
+                    raw_segments[-1][1].append(point)
+                else:
+                    # Include the last point of the previous segment so the
+                    # drawn line has no gap at the mode boundary.
+                    prev_point = raw_segments[-1][1][-1] if raw_segments else None
+                    seg_points = [prev_point, point] if prev_point else [point]
+                    raw_segments.append((mode, seg_points))
+        else:
+            raw_segments = [("walking", list(path_history))]
+        return [
+            (self.MODE_COLORS.get(mode, self.line_color), seg_points)
+            for mode, seg_points in raw_segments
+        ]
+
+    def draw_path(
+        self,
+        frame: np.ndarray,
+        path_history: List[Tuple[int, int]],
+        mode_history: Optional[List[str]] = None,
+    ):
+        if len(path_history) < 2:
+            return
+        self._draw_polyline_segments(frame, self._mode_segments(path_history, mode_history))
+
     def draw_marker(
         self,
         frame: np.ndarray,
@@ -83,6 +98,8 @@ class _DrawingMixin:
         cy: int,
         number: Optional[Any] = None,
         color: Optional[Tuple[int, int, int]] = None,
+        split_color: Optional[Tuple[int, int, int]] = None,
+        is_circle: bool = False,
     ):
         """Draws a classic Google-Maps-style teardrop map-pin marker with
         its TIP anchored at (cx, cy) — the actual waypoint coordinate —
@@ -94,23 +111,56 @@ class _DrawingMixin:
         start/end) drawn inside it in dark, readable text. Pass `color`
         to override self.marker_color for this pin only (e.g. arrived
         waypoints, or one of tuning.py's
-        START/END/DRAWN/STOPBY_PIN_COLOR)."""
+        START/END/DRAWN/STOPBY_PIN_COLOR).
+
+        `split_color`, if given, fills the RIGHT half of the pin body with
+        this color instead of `color` (the left half) — used for a loop
+        route's "E" pin, which sits on the exact same spot as "S": half
+        `color` (the start's green) and half `split_color` (the end's
+        red) reads as "this one point is both" instead of just showing
+        one color and losing that it's the same place as the departure."""
         pin_color = color if color is not None else self.marker_color
         radius = int(self.marker_radius)
-        head_cy = cy - int(radius * 1.5)
+        head_cy = cy - int(radius * _PIN_HEAD_OFFSET_RATIO)
 
-        # White halo (slightly larger all round, including a bit past the
-        # tip) so the pin reads against busy map tiles.
-        cv2.fillPoly(
-            frame, [_pin_silhouette(cx, head_cy, radius + 4, cy + 4)],
-            (255, 255, 255), cv2.LINE_AA,
-        )
+        if is_circle:
+            radius = int(radius * 0.65)
+            head_cy = cy
+            cv2.circle(frame, (cx, head_cy), radius + 3, (255, 255, 255), -1, cv2.LINE_AA)
+            if split_color is not None:
+                # Split colored circle
+                cv2.circle(frame, (cx, head_cy), radius, pin_color, -1, cv2.LINE_AA)
+                cv2.ellipse(frame, (cx, head_cy), (radius, radius), 0, -90, 90, split_color, -1, cv2.LINE_AA)
+            else:
+                cv2.circle(frame, (cx, head_cy), radius, pin_color, -1, cv2.LINE_AA)
+        else:
+            # White halo (slightly larger all round, including a bit past the
+            # tip) so the pin reads against busy map tiles.
+            cv2.fillPoly(
+                frame, [_pin_silhouette(cx, head_cy, radius + 4, cy + 4)],
+                (255, 255, 255), cv2.LINE_AA,
+            )
 
-        # Colored pin body.
-        cv2.fillPoly(
-            frame, [_pin_silhouette(cx, head_cy, radius, cy)],
-            pin_color, cv2.LINE_AA,
-        )
+            if split_color is not None:
+                # Fill the WHOLE silhouette with the left color first, then
+                # overwrite only the right half (x >= cx) with the split
+                # color — via a mask rather than two separately-clipped
+                # fillPoly calls, so the teardrop's own curved/tapered outline
+                # (not a plain rectangle) is respected on both halves without
+                # having to intersect it with a half-plane by hand.
+                silhouette = [_pin_silhouette(cx, head_cy, radius, cy)]
+                mask = np.zeros(frame.shape[:2], dtype=np.uint8)
+                cv2.fillPoly(mask, silhouette, 255, cv2.LINE_AA)
+                cv2.fillPoly(frame, silhouette, pin_color, cv2.LINE_AA)
+                right_mask = mask.copy()
+                right_mask[:, :cx] = 0
+                frame[right_mask > 0] = split_color
+            else:
+                # Colored pin body.
+                cv2.fillPoly(
+                    frame, [_pin_silhouette(cx, head_cy, radius, cy)],
+                    pin_color, cv2.LINE_AA,
+                )
 
         # White center — always drawn (not just when there's no number) so
         # every numbered pin gets the same dark-on-white number. Smaller

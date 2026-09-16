@@ -4,7 +4,7 @@ from typing import Dict, List, Optional, Tuple
 
 import cv2
 import numpy as np
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFilter
 
 from services import tuning
 
@@ -20,6 +20,17 @@ from services import tuning
 # mode's name/duration label but silently drop every other mode's, unless
 # those two are merged one level deeper instead.
 _NESTED_LABEL_KEYS = ("mode_name", "mode_duration_label")
+
+# Shared light "glass" card palette (white background, dark text, muted
+# gray labels) reused by every one of this file's summary/leg-bar card
+# templates.
+_CARD_BG_COLOR: Tuple[int, int, int, int] = (255, 255, 255, 240)
+_CARD_TEXT_COLOR: Tuple[int, int, int, int] = (35, 35, 35, 255)
+_CARD_LABEL_COLOR: Tuple[int, int, int, int] = (110, 110, 110, 255)
+# Total column/row always reads as blue rather than borrowing whichever
+# mode happens to be self.line_color — it summarizes across modes, not
+# one of them.
+_TOTAL_ACCENT_COLOR: Tuple[int, int, int, int] = (232, 115, 26, 255)  # BGR for RGB (26, 115, 232)
 
 
 def merge_summary_card_labels(overrides: Optional[Dict]) -> Dict:
@@ -105,6 +116,47 @@ class _CardMixin:
         hrs, mins = divmod(int(round(seconds / 60)), 60)
         return f"{hrs}時間{mins:02d}分" if hrs else f"{mins}分"
 
+    def _mode_accent(self, mode: str) -> Tuple:
+        """Same color the route line itself uses for this mode
+        (MODE_COLORS), pre-reversed so it comes out correct after the
+        canvas-wide BGR swap at the end — ties each mode's stat
+        column/row back to its own line color on the map instead of
+        every one sharing one generic accent. "total" isn't a real
+        travel mode with a line color of its own, so it always gets a
+        fixed blue (_TOTAL_ACCENT_COLOR)."""
+        if mode == "total":
+            return _TOTAL_ACCENT_COLOR
+        return tuple(reversed(self.MODE_COLORS.get(mode, self.line_color))) + (255,)
+
+    @staticmethod
+    def _add_card_shadow(
+        canvas: Image.Image, radius_px: float, tint_rgb: Tuple[int, int, int], scale: int,
+    ) -> Image.Image:
+        """Wraps a finished card canvas in the same soft, color-tinted
+        "elevated card" drop shadow every popup card already gets (see
+        popup_box.py's render_popup_box) — the summary card was the one
+        card in the whole video with no shadow of its own, so next to a
+        popup card on screen it read as pasted flat rather than floating
+        above the map the same way. Grows the canvas by the shadow's own
+        padding (matching popup_box's blur radius/offset, scaled to this
+        card's own 2x supersampling) rather than shadowing in place, so
+        the blur has room to fall off past the card's edge instead of
+        being clipped by the original canvas bounds."""
+        pad = 16 * scale
+        offset_y = 8 * scale
+        blur = 10 * scale
+        w, h = canvas.size
+        out = Image.new("RGBA", (w + pad * 2, h + pad * 2 + offset_y), (0, 0, 0, 0))
+        shadow = Image.new("RGBA", out.size, (0, 0, 0, 0))
+        ImageDraw.Draw(shadow).rounded_rectangle(
+            [pad, pad + offset_y, pad + w, pad + offset_y + h],
+            radius=radius_px, fill=tint_rgb + (70,),
+        )
+        shadow = shadow.filter(ImageFilter.GaussianBlur(radius=blur))
+        out.paste(shadow, (0, 0), shadow)
+        out.paste(canvas, (pad, pad), canvas)
+        return out
+
     def create_summary_card(
         self,
         distance_km: float,
@@ -134,7 +186,7 @@ class _CardMixin:
         if not mode_breakdown or len(mode_breakdown) > 1:
             columns.append((self.summary_card_labels["total_label"], "total", distance_km, duration_seconds))
 
-        n = len(columns)
+        num_columns = len(columns)
 
         # A single mode gets a light, fully-rounded "pill" card — icon on
         # the left of each stat, its label/value stacked to the right —
@@ -142,13 +194,13 @@ class _CardMixin:
         # trips keep the denser dark glass card with one column per mode,
         # since that layout (mode header + big number + small time row)
         # doesn't fit the pill style once there's more than one stat pair.
-        if n == 1:
-            bg_color = (255, 255, 255, 240)
-            text_color, label_color = (35, 35, 35, 255), (110, 110, 110, 255)
-            icon_color = (35, 35, 35, 255)
+        if num_columns == 1:
+            bg_color = _CARD_BG_COLOR
+            text_color, label_color = _CARD_TEXT_COLOR, _CARD_LABEL_COLOR
+            icon_color = _CARD_TEXT_COLOR
             # BGR, like every other color in job_config.json's settings —
             # reversed here since the canvas is RGBA->BGR swapped as a
-            # whole at the end (see mode_accent's own comment below).
+            # whole at the end (see _mode_accent's own comment).
             border_rgba = tuple(reversed(self.card_border_color)) + (255,)
 
             # Bold, not regular — Noto Sans's regular weight read as too
@@ -204,9 +256,10 @@ class _CardMixin:
             draw = ImageDraw.Draw(canvas)
             w, h = card_w_px // scale, card_h_px // scale
 
+            card_radius_px = 22 * scale
             draw.rounded_rectangle(
                 [0, 0, card_w_px - 1, card_h_px - 1],
-                radius=22 * scale,
+                radius=card_radius_px,
                 fill=bg_color,
                 outline=border_rgba if self.card_border_thickness else None,
                 width=self.card_border_thickness * scale,
@@ -226,30 +279,14 @@ class _CardMixin:
             # above (white glass, dark text, thin neutral border) rather
             # than a separate dark-glass/yellow-accent look — only the
             # layout (one column per mode) differs between the two.
-            bg_color = (255, 255, 255, 240)
-            text_color, label_color = (35, 35, 35, 255), (110, 110, 110, 255)
+            bg_color = _CARD_BG_COLOR
+            text_color, label_color = _CARD_TEXT_COLOR, _CARD_LABEL_COLOR
             divider_color = (0, 0, 0, 30)
             # BGR, like every other color in job_config.json's settings —
             # reversed here since the canvas is RGBA->BGR swapped as a
-            # whole at the end (see mode_accent's own comment below).
+            # whole at the end (see _mode_accent's own comment).
             border_rgba = tuple(reversed(self.card_border_color)) + (255,)
             accent = tuple(reversed(self.line_color)) + (255,)
-            # Total column always reads as blue rather than borrowing
-            # whichever mode happens to be self.line_color — it
-            # summarizes across modes, not one of them.
-            total_accent = (232, 115, 26, 255)  # BGR for RGB (26, 115, 232)
-
-            def mode_accent(mode: str) -> Tuple:
-                """Same color the route line itself uses for this mode
-                (MODE_COLORS), pre-reversed like `accent` above so it
-                comes out correct after the canvas-wide BGR swap at the
-                end — ties each mode's stat column back to its own line
-                color on the map instead of every column sharing one
-                generic accent. "total" isn't a real travel mode with a
-                line color of its own, so it always gets a fixed blue."""
-                if mode == "total":
-                    return total_accent
-                return tuple(reversed(self.MODE_COLORS.get(mode, self.line_color))) + (255,)
 
             # Mode header ("Draw"/"Walking"/"Driving"/"Total") is Regular —
             # LINE Seed JP's regular weight reads fine at this size, unlike
@@ -298,14 +335,15 @@ class _CardMixin:
                 col_content_w = max(col_content_w, *widths)
 
             col_padding = 20 * scale
-            col_w = max((w * scale) / n, col_content_w + col_padding * 2)
-            card_w_px, card_h_px = int(col_w * n), h * scale
+            col_w = max((w * scale) / num_columns, col_content_w + col_padding * 2)
+            card_w_px, card_h_px = int(col_w * num_columns), h * scale
 
+            card_radius_px = 18 * scale
             canvas = Image.new("RGBA", (card_w_px, card_h_px), (0, 0, 0, 0))
             draw = ImageDraw.Draw(canvas)
             draw.rounded_rectangle(
                 [0, 0, card_w_px - 1, card_h_px - 1],
-                radius=18 * scale,
+                radius=card_radius_px,
                 fill=bg_color,
                 outline=border_rgba if self.card_border_thickness else None,
                 width=self.card_border_thickness * scale,
@@ -337,7 +375,7 @@ class _CardMixin:
 
             for i, (label, mode, dist, dur) in enumerate(columns):
                 col_cx = col_w * i + col_w / 2
-                col_accent = mode_accent(mode)
+                col_accent = self._mode_accent(mode)
                 if i > 0:
                     x_div = col_w * i
                     draw.line(
@@ -380,6 +418,13 @@ class _CardMixin:
                         (line_x + stat_icon_d + icon_text_gap, row_y),
                         dur_str, font=font_label_time, fill=label_color,
                     )
+
+        # Same elevated-card shadow every popup card gets — see
+        # _add_card_shadow's own comment on why the summary card was
+        # missing one. Grows the canvas, so w/h are recomputed from its
+        # new size before the final downscale.
+        canvas = self._add_card_shadow(canvas, card_radius_px, border_rgba[:3], scale)
+        w, h = canvas.size[0] // scale, canvas.size[1] // scale
 
         # [NOTE] [Animation] Downscales the 2x supersampled canvas for anti-aliasing, then swaps RGBA -> BGRA to match OpenCV's channel order.
         canvas = canvas.resize((w, h), Image.Resampling.LANCZOS)
@@ -431,31 +476,26 @@ class _CardMixin:
         # Light "white glass" flyout — same family as create_summary_card's
         # own light palette (this project's actual card theme) rather than
         # the dark mica look this template first shipped with.
-        bg_color = (255, 255, 255, 240)
-        header_color = (35, 35, 35, 255)
-        label_color = (110, 110, 110, 255)
-        value_color = (35, 35, 35, 255)
+        bg_color = _CARD_BG_COLOR
+        header_color = _CARD_TEXT_COLOR
+        label_color = _CARD_LABEL_COLOR
+        value_color = _CARD_TEXT_COLOR
         divider_color = (0, 0, 0, 24)
         border_rgba = tuple(reversed(self.card_border_color)) + (255,)
         # BGR, like every other color in job_config.json's settings —
         # reversed here since the canvas is RGBA->BGR swapped as a whole
         # at the end (same convention create_summary_card uses).
         accent = tuple(reversed(self.line_color)) + (255,)
-        # Total row always reads as blue, distinct from any individual
-        # travel mode's own route-line color — it summarizes across
-        # modes rather than belonging to one, so it shouldn't visually
-        # borrow whichever mode happens to be self.line_color.
-        total_accent = (232, 115, 26, 255)  # BGR for RGB (26, 115, 232)
-
-        def mode_accent(mode: str) -> Tuple:
-            if mode == "total":
-                return total_accent
-            return tuple(reversed(self.MODE_COLORS.get(mode, self.line_color))) + (255,)
 
         scale = 2
         font_header = self._load_font(self.FONT_CANDIDATES_BOLD, 22 * scale)
+        # Bold, not regular — same reasoning as create_summary_card's own
+        # font_label (see its comment): a mode label drawn in its own
+        # accent color (rather than plain text-color gray) needs the extra
+        # weight to stay legible against the card's light background,
+        # especially for a pale accent like the walking mode's yellow.
         font_label = self._load_font(
-            self.FONT_CANDIDATES_REGULAR, tuning.SUMMARY_CARD_LABEL_FONT_SIZE * scale
+            self.FONT_CANDIDATES_BOLD, tuning.SUMMARY_CARD_LABEL_FONT_SIZE * scale
         )
         font_value = self._load_font(
             self.FONT_CANDIDATES_BOLD, int(tuning.SUMMARY_CARD_LABEL_FONT_SIZE * 1.15) * scale
@@ -481,7 +521,7 @@ class _CardMixin:
             distance_str = f"{dist * 1000:.0f} m" if dist < 1 else f"{dist:.1f} km"
             dur_str = self._format_duration_ja(dur) if dur > 0 else "--"
             value_str = f"{distance_str} · {dur_str}"
-            col_accent = mode_accent(mode)
+            col_accent = self._mode_accent(mode)
             row_texts.append((label, value_str, col_accent, mode))
             label_w = probe_draw.textlength(label, font=font_label)
             value_w = probe_draw.textlength(value_str, font=font_value)
@@ -569,8 +609,9 @@ class _CardMixin:
                 )
             y += row_h
 
-        w_px = int(card_w_px // scale)
-        h_px = card_h_px // scale
+        canvas = self._add_card_shadow(canvas, radius, border_rgba[:3], scale)
+        w_px = canvas.size[0] // scale
+        h_px = canvas.size[1] // scale
         canvas = canvas.resize((w_px, h_px), Image.Resampling.LANCZOS)
         return np.array(canvas)[:, :, [2, 1, 0, 3]]
 
@@ -764,6 +805,55 @@ class _CardMixin:
             card_bgra[:, :, :3].astype(np.float32),
             (card_bgra[:, :, 3].astype(np.float32) / 255.0) * alpha,
         )
+        roi = out[y0 : y0 + ch, x0 : x0 + cw].astype(np.float32)
+        out[y0 : y0 + ch, x0 : x0 + cw] = (
+            card_bgr * card_alpha[..., None] + roi * (1 - card_alpha[..., None])
+        ).astype(np.uint8)
+        return out
+
+    def render_top_banner(
+        self, frame: np.ndarray, text: str, alpha: float = 1.0, top_margin: int = 30,
+    ) -> np.ndarray:
+        """A dark rounded-pill caption centered near the top of the frame —
+        the OpenCV/PIL equivalent of pydeckrecorder.pedestrian's own CSS HUD
+        banner (same dark pill + bold white text), for the 2D
+        spatial_renderer overview's dynamic "next stop" caption. Sized to
+        fit `text` exactly (plus padding) rather than a fixed card_size,
+        since the destination label's length varies waypoint to waypoint.
+        `alpha` fades the whole pill (not just its own soft edges) the same
+        way composite_card_on_frame's own `alpha` does for popup/summary
+        cards, for a consistent fade in/out."""
+        if not text:
+            return frame
+
+        scale = 2  # supersampled for antialiased text/corners, then downscaled
+        font = self._load_font(self.FONT_CANDIDATES_BOLD, 22 * scale)
+        measure = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+        bbox = measure.textbbox((0, 0), text, font=font)
+        text_w, text_h = bbox[2] - bbox[0], bbox[3] - bbox[1]
+        pad_x, pad_y = 28 * scale, 14 * scale
+        card_w, card_h = text_w + pad_x * 2, text_h + pad_y * 2
+
+        canvas = Image.new("RGBA", (card_w, card_h), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(canvas)
+        draw.rounded_rectangle([0, 0, card_w, card_h], radius=card_h // 2, fill=(30, 34, 40, 225))
+        draw.text((pad_x - bbox[0], pad_y - bbox[1]), text, font=font, fill=(255, 255, 255, 255))
+        canvas = canvas.resize((max(1, card_w // scale), max(1, card_h // scale)), Image.LANCZOS)
+
+        card_bgra = np.array(canvas)
+        ch, cw = card_bgra.shape[:2]
+        h, w = frame.shape[:2]
+        x0 = max(0, (w - cw) // 2)
+        y0 = max(0, top_margin)
+        cw = min(cw, w - x0)
+        ch = min(ch, h - y0)
+        if cw <= 0 or ch <= 0:
+            return frame
+        card_bgra = card_bgra[:ch, :cw]
+
+        out = frame.copy()
+        card_bgr = card_bgra[:, :, :3].astype(np.float32)
+        card_alpha = (card_bgra[:, :, 3].astype(np.float32) / 255.0) * alpha
         roi = out[y0 : y0 + ch, x0 : x0 + cw].astype(np.float32)
         out[y0 : y0 + ch, x0 : x0 + cw] = (
             card_bgr * card_alpha[..., None] + roi * (1 - card_alpha[..., None])

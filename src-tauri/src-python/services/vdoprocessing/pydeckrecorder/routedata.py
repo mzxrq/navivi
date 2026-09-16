@@ -36,7 +36,7 @@ def build_pydeck_map(
 ):
     os.makedirs(os.path.dirname(output_html_path), exist_ok=True)
 
-    mapbox_key = project_data.get("settings", {}).get("mapbox_token", MAPBOX_API_KEY)
+    mapbox_key = project_data.get("settings", {}).get("mapbox_api_key") or MAPBOX_API_KEY
 
     raw_coords = []
     for route_key, coords in project_data.get("routing_cache", {}).items():
