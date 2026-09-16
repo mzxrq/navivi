@@ -77,77 +77,113 @@ class _PinMixin:
                     points.append((x0 + (x1 - x0) * fx, y0 + (y1 - y0) * fy))
         return np.asarray(points, dtype=float)
 
+    # How far a pin may be nudged from its true position to stop it
+    # hiding (or being hidden by) a neighbour, as a multiple of
+    # marker_radius. Deliberately small: the reason decluttering was
+    # switched off entirely once before is that fanning a cluster onto a
+    # circle around its shared centre moved pins clear off the route line
+    # they sit on, reading as "this stop isn't really on the path". Within
+    # ~1.5 marker radii a pin still visibly belongs to the line it was
+    # drawn on, which is enough to separate two dots that would otherwise
+    # be exactly on top of each other.
+    _PIN_DECLUTTER_MAX_SHIFT_RATIO = 1.5
+    # Extra clear space between two pins' drawn silhouettes, in pixels.
+    _PIN_DECLUTTER_PADDING = 2.0
+    _PIN_DECLUTTER_ITERATIONS = 24
+    # Below this separation (in pixels, measured on the pins' TRUE
+    # positions) two pins are treated as one and the same place — see the
+    # loop-route "S"/"E" case in the pair loop below.
+    _PIN_SAME_PLACE_PX = 2.0
+
+    def _pin_draw_half_width(self, wp: Dict) -> float:
+        """Half the width of this waypoint's DRAWN pin, matching
+        drawing.py's draw_marker: a stop-by renders as a small dot
+        (0.65 * marker_radius) inside a 3px white ring, everything else as
+        a teardrop whose head is marker_radius plus a 4px white halo."""
+        radius = float(self.graphics.marker_radius)
+        if wp.get("data", {}).get("is_stopby"):
+            return radius * 0.65 + 3.0
+        return radius + 4.0
+
     def _declutter_pins(self, active_popups: List[Dict]) -> None:
-        """When two or more waypoints sit within a marker's width of each
-        other (a cluster of stops on the same small island, say), their
-        pins fully overlap when drawn at their real pixel position — the
-        later one painted on top completely hides the earlier one, not
-        just crowds it. This fans clustered pins out in a small circle
-        around their shared center (storing the result as "pin_x"/"pin_y",
-        separate from the pin's real "x"/"y" — trigger detection, popup
-        placement, etc. all keep using the real position) so every pin
-        stays visible."""
-        # [NOTE] [Animation] Union-find groups pins transitively (A near B, B near C => one cluster of 3) rather than only pairwise-adjacent ones.
+        """Nudges pins apart by the MINIMUM amount needed so no pin is
+        drawn completely underneath another, storing the result as
+        "pin_x"/"pin_y" (separate from the real "x"/"y", which trigger
+        detection, popup placement and leader-line anchoring all keep
+        using).
+
+        Two waypoints only a few dozen metres apart — four stop-by
+        landmarks around one small town, say — land on the same pixel at
+        a whole-route zoom, and the one painted last hides the others
+        outright: four stops in the data, three dots on screen.
+
+        This is a pairwise relaxation, not the fan-out-onto-a-circle pass
+        this function used to do. That version moved every member of a
+        cluster a fixed radius away from their shared centre, which
+        pushed pins clear off the route line they sit on (the reason it
+        was disabled outright), and it moved pins that were merely close
+        as readily as ones that genuinely overlapped. Here a pair is only
+        touched when their drawn silhouettes actually collide, each is
+        pushed out by half the penetration, and every pin's total shift
+        from its true position is capped at
+        _PIN_DECLUTTER_MAX_SHIFT_RATIO * marker_radius — so pins stay on
+        their line, and a cluster too tight to fully separate within that
+        cap ends up slightly offset (all of them visible) rather than
+        perfectly spaced somewhere off-route."""
         n = len(active_popups)
-        parent = list(range(n))
+        for wp in active_popups:
+            wp["pin_x"], wp["pin_y"] = float(wp["x"]), float(wp["y"])
+        if n < 2:
+            return
 
-        def find(i: int) -> int:
-            while parent[i] != i:
-                parent[i] = parent[parent[i]]
-                i = parent[i]
-            return i
+        half_w = [self._pin_draw_half_width(wp) for wp in active_popups]
+        max_shift = float(self.graphics.marker_radius) * self._PIN_DECLUTTER_MAX_SHIFT_RATIO
+        pad = self._PIN_DECLUTTER_PADDING
 
-        def union(i: int, j: int) -> None:
-            ri, rj = find(i), find(j)
-            if ri != rj:
-                parent[ri] = rj
-
-        min_gap = self.graphics.marker_radius * 2.4
-        for i in range(n):
-            for j in range(i + 1, n):
-                dx = active_popups[i]["x"] - active_popups[j]["x"]
-                dy = active_popups[i]["y"] - active_popups[j]["y"]
-                if math.hypot(dx, dy) < min_gap:
-                    union(i, j)
-
-        clusters: Dict[int, List[int]] = {}
-        for i in range(n):
-            clusters.setdefault(find(i), []).append(i)
-
-        for members in clusters.values():
-            if len(members) == 1:
-                idx = members[0]
-                active_popups[idx]["pin_x"] = active_popups[idx]["x"]
-                active_popups[idx]["pin_y"] = active_popups[idx]["y"]
-                continue
-
-            cx = sum(active_popups[i]["x"] for i in members) / len(members)
-            cy = sum(active_popups[i]["y"] for i in members) / len(members)
-            # Evenly spacing `len(members)` pins on a circle of radius R
-            # puts adjacent ones 2*R*sin(pi/k) apart — a FIXED radius
-            # (the old min_gap*0.8, sized for a pair or trio) shrinks that
-            # spacing as the cluster grows, so a real cluster of 5+ nearby
-            # waypoints (a small island with several stops, say) still
-            # overlapped after "fanning out" instead of actually
-            # separating. Solving for R keeps every cluster — regardless
-            # of how many pins share it — at least min_gap apart; the old
-            # constant is kept as a floor so a small cluster (2-4) isn't
-            # fanned out any tighter than before.
-            fan_radius = min_gap * 0.8
-            if len(members) >= 3:
-                fan_radius = max(
-                    fan_radius, min_gap / (2 * math.sin(math.pi / len(members)))
-                )
-            # [NOTE] [Animation] Stop-by waypoints never get an "order" (they
-            # render as a "・" dot, not a number — see overview.py), so fall
-            # back to 0 for them: any stable position in the fan-out works
-            # since their draw order doesn't need to match a visit number.
-            for k, idx in enumerate(
-                sorted(members, key=lambda i: active_popups[i].get("order", 0))
-            ):
-                angle = 2 * math.pi * k / len(members)
-                active_popups[idx]["pin_x"] = cx + fan_radius * math.cos(angle)
-                active_popups[idx]["pin_y"] = cy + fan_radius * math.sin(angle)
+        for _ in range(self._PIN_DECLUTTER_ITERATIONS):
+            moved = False
+            for i in range(n):
+                for j in range(i + 1, n):
+                    a, b = active_popups[i], active_popups[j]
+                    need = half_w[i] + half_w[j] + pad
+                    dx = b["pin_x"] - a["pin_x"]
+                    dy = b["pin_y"] - a["pin_y"]
+                    dist = math.hypot(dx, dy)
+                    if dist >= need:
+                        continue
+                    if (
+                        math.hypot(a["x"] - b["x"], a["y"] - b["y"])
+                        <= self._PIN_SAME_PLACE_PX
+                    ):
+                        # Two pins on (essentially) the same pixel are the
+                        # same real-world place, not a cluster that needs
+                        # separating — a loop route's "E" sits exactly on
+                        # its "S" by definition, and _pin_label_and_color
+                        # already handles that deliberately with a single
+                        # half-green/half-red pin. Pushing them apart
+                        # would replace that one honest marker with two
+                        # markers for one place.
+                        continue
+                    push = (need - dist) / 2.0
+                    ux, uy = dx / dist, dy / dist
+                    a["pin_x"] -= ux * push
+                    a["pin_y"] -= uy * push
+                    b["pin_x"] += ux * push
+                    b["pin_y"] += uy * push
+                    moved = True
+            # Re-clamp every pin back inside its own shift budget after
+            # each sweep — applied here rather than inside the pair loop
+            # so one pair's push can't be undone mid-sweep by a clamp
+            # that a later pair would have relieved anyway.
+            for k, wp in enumerate(active_popups):
+                ox, oy = wp["pin_x"] - wp["x"], wp["pin_y"] - wp["y"]
+                shift = math.hypot(ox, oy)
+                if shift > max_shift:
+                    scale = max_shift / shift
+                    wp["pin_x"] = wp["x"] + ox * scale
+                    wp["pin_y"] = wp["y"] + oy * scale
+            if not moved:
+                break
 
     def _draw_pin(
         self, frame: np.ndarray, wp: Dict, total_points: int

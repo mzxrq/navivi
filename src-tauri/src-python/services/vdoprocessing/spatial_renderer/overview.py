@@ -178,15 +178,21 @@ class _OverviewRenderMixin:
                 continue
             order += 1
             ap["order"] = order
-        # Decluttering (fanning overlapping/close pins out into a small
-        # circle around their shared center) is deliberately disabled —
-        # it moved a waypoint's drawn pin off the actual route line it
-        # sits on, reading as "this stop isn't really on the path" even
-        # though its real x/y is. Every pin now draws at its true
-        # position (_draw_pin already falls back to wp["x"]/wp["y"] when
-        # "pin_x"/"pin_y" aren't set — see pins.py), so a tight cluster of
-        # stops can visually overlap, but none of them drift off-route.
-        # self._declutter_pins(active_popups)
+        # Pins that would be drawn completely on top of each other are
+        # nudged just far enough apart to both stay visible — a tight
+        # cluster of stops (four stop-by landmarks around one small town,
+        # say) otherwise shows as three dots for four waypoints, the last
+        # one painted hiding the rest.
+        #
+        # This pass used to fan a whole cluster out onto a circle around
+        # its shared centre, which moved pins clear off the route line
+        # they sit on ("this stop isn't really on the path") and was
+        # disabled outright for that reason. It now only separates pins
+        # whose drawn silhouettes actually collide, by the minimum amount
+        # needed and within a hard cap on how far any one pin may travel
+        # from its true position, so nothing drifts off-route — see
+        # pins.py's _declutter_pins.
+        self._declutter_pins(active_popups)
 
         # Popup card border matches this waypoint's own pin color (S=green,
         # E=red, stop-by=brown, everything else=the default marker color)

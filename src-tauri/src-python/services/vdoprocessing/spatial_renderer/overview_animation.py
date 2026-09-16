@@ -377,9 +377,17 @@ class _OverviewAnimationMixin:
                 # over there" for a stop on the opposite side of the frame —
                 # this ties every triggered popup, flow-through or frozen,
                 # back to its own pin the same way.
+                # Every card already on screen is reserved here: this
+                # lays out ONE popup, so without them its `placed` list
+                # would be empty and it could be dropped straight on top
+                # of a still-visible neighbour (see _active_card_boxes)
+                # — and the lock window would then hold both there.
                 self._layout_recap_popups(
                     [{"popup": triggered_popup, "frames_left": 1}], w, h,
                     route_obstacles=route_obstacle_arr,
+                    reserved_boxes=self._active_card_boxes(
+                        baked_popups, exclude=triggered_popup
+                    ),
                 )
                 triggered_popup["hud_corner"] = None
                 triggered_popup["draw_leader_line"] = True
@@ -476,7 +484,10 @@ class _OverviewAnimationMixin:
                         # _popup_fade_alpha), same as every later frame
                         # _composite_baked_popups draws it for.
                         self._layout_recap_popups(
-                            [new_bp], w, h, route_obstacles=route_obstacle_arr
+                            [new_bp], w, h, route_obstacles=route_obstacle_arr,
+                            reserved_boxes=self._active_card_boxes(
+                                baked_popups, exclude=triggered_popup
+                            ),
                         )
                         hud_new = triggered_popup.copy()
                         hud_new["hud_corner"] = None

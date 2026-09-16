@@ -789,29 +789,53 @@ class _PopupMixin:
         lock_frames = (
             fps * tuning.POPUP_POSITION_LOCK_SECONDS if fps else 0
         )
-        for bp in ordered:
-            popup = bp["popup"]
-            pin_x, pin_y = popup.get("pin_x", popup["x"]), popup.get("pin_y", popup["y"])
-            via = hull_anchor_by_id.get(id(popup))
-            
-            existing_box = popup.get("beside_box")
+
+        def is_locked(bp: Dict) -> bool:
+            """Positioned on an earlier frame and still inside its lock
+            window (see tuning.POPUP_POSITION_LOCK_SECONDS) — its box is
+            fixed for this frame, wherever it happens to be."""
             total_frames = bp.get("total_frames")
             frames_left = bp.get("frames_left")
-            if (
-                existing_box is not None
+            return (
+                bp["popup"].get("beside_box") is not None
                 and total_frames is not None
                 and frames_left is not None
                 and (total_frames - frames_left) < lock_frames
-            ):
-                box_x, box_y = existing_box
-                placed.append((box_x, box_y, box_x + card_w, box_y + card_h))
-                if via is not None:
-                    anchor_x, anchor_y = _anchor_point(via[0], via[1], box_x, box_y, card_w, card_h)
-                    placed_lines.append([(pin_x, pin_y), via, (anchor_x, anchor_y)])
-                else:
-                    anchor_x, anchor_y = _anchor_point(pin_x, pin_y, box_x, box_y, card_w, card_h)
-                    placed_lines.append([(pin_x, pin_y), (anchor_x, anchor_y)])
+            )
+
+        def reserve(bp: Dict) -> None:
+            popup = bp["popup"]
+            pin_x, pin_y = popup.get("pin_x", popup["x"]), popup.get("pin_y", popup["y"])
+            via = hull_anchor_by_id.get(id(popup))
+            box_x, box_y = popup["beside_box"]
+            placed.append((box_x, box_y, box_x + card_w, box_y + card_h))
+            if via is not None:
+                anchor_x, anchor_y = _anchor_point(via[0], via[1], box_x, box_y, card_w, card_h)
+                placed_lines.append([(pin_x, pin_y), via, (anchor_x, anchor_y)])
+            else:
+                anchor_x, anchor_y = _anchor_point(pin_x, pin_y, box_x, box_y, card_w, card_h)
+                placed_lines.append([(pin_x, pin_y), (anchor_x, anchor_y)])
+
+        # EVERY locked card is reserved up front, before a single free
+        # placement runs — not as its turn comes round in angular order.
+        # A locked card's box can't move this frame, so a card placed
+        # before it in the ring order has to treat it as an obstacle:
+        # reserving them in-order instead let an earlier free card be
+        # placed straight on top of a locked one that simply hadn't been
+        # reached yet, and the two then stayed stacked until the lock
+        # expired.
+        locked_ids = set()
+        for bp in ordered:
+            if is_locked(bp):
+                locked_ids.add(id(bp))
+                reserve(bp)
+
+        for bp in ordered:
+            if id(bp) in locked_ids:
                 continue
+            popup = bp["popup"]
+            pin_x, pin_y = popup.get("pin_x", popup["x"]), popup.get("pin_y", popup["y"])
+            via = hull_anchor_by_id.get(id(popup))
 
             search_origin = None
             if via is not None:
@@ -831,13 +855,7 @@ class _PopupMixin:
                 continue
             box_x, box_y = spot
             popup["beside_box"] = (int(box_x), int(box_y))
-            placed.append((box_x, box_y, box_x + card_w, box_y + card_h))
-            if via is not None:
-                anchor_x, anchor_y = _anchor_point(via[0], via[1], box_x, box_y, card_w, card_h)
-                placed_lines.append([(pin_x, pin_y), via, (anchor_x, anchor_y)])
-            else:
-                anchor_x, anchor_y = _anchor_point(pin_x, pin_y, box_x, box_y, card_w, card_h)
-                placed_lines.append([(pin_x, pin_y), (anchor_x, anchor_y)])
+            reserve(bp)
 
     # --- End-of-video recap: card layout --------------------------------
     # Card scales tried largest-first until the frame has enough free slots
@@ -1249,6 +1267,39 @@ class _PopupMixin:
             return cls._POPUP_SLIDE_DISTANCE_PX * eased
 
         return 0.0
+
+    def _active_card_boxes(
+        self,
+        baked_popups: List[Dict],
+        exclude: Optional[Dict] = None,
+    ) -> List[Tuple[float, float, float, float]]:
+        """The on-screen rectangles of every baked popup that currently has
+        a leader-lined card placed — for handing to a layout call that is
+        only positioning ONE new card (see overview_animation.py's
+        trigger-time placement).
+
+        Without this, a card laid out on its own has an empty `placed`
+        list and so happily lands exactly where an already-visible card
+        sits: two waypoints close together on the same side of the frame
+        seed their search from nearly the same point and both get clamped
+        into the same corner, and since a freshly placed card is then
+        pinned there for tuning.POPUP_POSITION_LOCK_SECONDS, the
+        per-frame full layout in _composite_baked_popups cannot pull
+        them apart either — they simply sit stacked on top of each other
+        for the whole lock window."""
+        boxes: List[Tuple[float, float, float, float]] = []
+        for bp in baked_popups:
+            popup = bp["popup"]
+            if exclude is not None and popup is exclude:
+                continue
+            box = popup.get("beside_box")
+            if not box:
+                continue
+            card_w, card_h = self.graphics.beside_card_footprint(
+                popup.get("card_scale", 1.0)
+            )
+            boxes.append((box[0], box[1], box[0] + card_w, box[1] + card_h))
+        return boxes
 
     def _composite_baked_popups(
         self,
