@@ -6,7 +6,6 @@ import { MediaPool } from "./MediaPool";
 import { TimelineTrack } from "./TimelineTrack";
 import { ClipData, WaypointTimelineMarker } from "../../../types/index";
 import { Inspector } from "./Inspector";
-import { ExportPanel } from "../../export/components/ExportPanel";
 import { ExportModal } from "../../export/components/ExportModal";
 import {
   ZoomIn,
@@ -30,6 +29,11 @@ import {
   Settings2,
   MapPin,
   Download,
+  RefreshCw,
+  Maximize,
+  MapPinPlus,
+  UnlinkIcon,
+  Check,
 } from "../../../components/ui/icons";
 import { PreviewMonitor } from "./PreviewMonitor";
 import { TransitionsPanel } from "./elements/TransitionsPanel";
@@ -39,6 +43,7 @@ import {
   WaypointGuideLine,
   formatMarkerTime,
 } from "./elements/WaypointMarker";
+import { MarkersPanel } from "./elements/MarkersPanel";
 
 export function TimelineView() {
   const {
@@ -58,7 +63,7 @@ export function TimelineView() {
     "pointer",
   );
   const [rightPanelTab, setRightPanelTab] = useState<
-    "media" | "objects" | "transitions" | "inspector" | "export" | null
+    "media" | "objects" | "transitions" | "inspector" | "markers" | null
   >("media");
   const [isRippleMode, setIsRippleMode] = useState(true);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
@@ -592,9 +597,28 @@ export function TimelineView() {
     const track = timeline.tracks.find((t) => t.id === clip.trackId);
     if (!track || track.isHidden) return false;
 
+    const isTransitionSource = timeline.clips.some((nextClip) => {
+      if (
+        nextClip.id === clip.id ||
+        nextClip.trackId !== clip.trackId ||
+        !nextClip.transitionIn?.startsWith("glsl-") ||
+        !nextClip.fadeIn
+      ) {
+        return false;
+      }
+      const nextEnd = nextClip.startTime + nextClip.duration;
+      return (
+        clip.startTime < nextClip.startTime &&
+        clip.startTime + clip.duration >= nextClip.startTime &&
+        currentTime >= nextClip.startTime &&
+        currentTime <= Math.min(nextEnd, nextClip.startTime + nextClip.fadeIn)
+      );
+    });
+
     return (
-      currentTime >= clip.startTime - PRELOAD_SECONDS &&
-      currentTime <= clip.startTime + clip.duration
+      (currentTime >= clip.startTime - PRELOAD_SECONDS &&
+        currentTime <= clip.startTime + clip.duration) ||
+      isTransitionSource
     );
   });
 
@@ -607,10 +631,6 @@ export function TimelineView() {
       unlisten.then((f) => f());
     };
   }, [metadata]);
-
-  const handleExportVideo = () => {
-    setIsExportModalOpen(true);
-  };
 
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
     if (headerRef.current)
@@ -655,22 +675,23 @@ export function TimelineView() {
   }, [timeline, selectedClipIds]);
 
   // Waypoint Timeline Calculation (F4.1)
-  const waypointMarkers = useMemo<WaypointTimelineMarker[]>(() => {
+  const derivedWaypointMarkers = useMemo<WaypointTimelineMarker[]>(() => {
     if (!waypoints || waypoints.length === 0) return [];
 
     const stepDuration =
-      typeof settings?.duration_seconds === "number" && settings.duration_seconds > 0
+      typeof settings?.duration_seconds === "number" &&
+      settings.duration_seconds > 0
         ? settings.duration_seconds
         : 5.0;
 
     const videoTrackIds = new Set(
-      timeline.tracks
-        .filter((t) => t.type === "video")
-        .map((t) => t.id),
+      timeline.tracks.filter((t) => t.type === "video").map((t) => t.id),
     );
     const videoClips = timeline.clips.filter((c) => {
       if (c.type && c.type !== "video") return false;
-      return videoTrackIds.size === 0 || (c.trackId && videoTrackIds.has(c.trackId));
+      return (
+        videoTrackIds.size === 0 || (c.trackId && videoTrackIds.has(c.trackId))
+      );
     });
 
     let runningTime = 0;
@@ -733,13 +754,87 @@ export function TimelineView() {
         name: wp.name || `Waypoint ${idx + 1}`,
         time: Math.max(0, calculatedTime),
         index: idx + 1,
+        waypointId: wp.id,
         color: "#f59e0b",
       };
     });
   }, [waypoints, settings?.duration_seconds, timeline.clips, timeline.tracks]);
 
-  const [hoveredMarker, setHoveredMarker] = useState<WaypointTimelineMarker | null>(null);
-  const [markerTooltipPos, setMarkerTooltipPos] = useState<{ x: number; y: number } | null>(null);
+  const waypointMarkers = useMemo(() => {
+    if (!timeline.markers) return derivedWaypointMarkers;
+    const waypointIds = new Set(waypoints.map((waypoint) => waypoint.id));
+    return timeline.markers
+      .filter(
+        (marker) => !marker.waypointId || waypointIds.has(marker.waypointId),
+      )
+      .sort((a, b) => a.time - b.time);
+  }, [derivedWaypointMarkers, timeline.markers, waypoints]);
+
+  const normalizeMarkers = (markers: WaypointTimelineMarker[]) =>
+    [...markers]
+      .sort(
+        (left, right) =>
+          left.time - right.time || left.id.localeCompare(right.id),
+      )
+      .map((marker, index) => ({ ...marker, index: index + 1 }));
+
+  const updateMarkers = (markers: WaypointTimelineMarker[]) => {
+    setTimeline({ ...timeline, markers: normalizeMarkers(markers) });
+  };
+
+  const handleAddMarker = () => {
+    const existingMarkers = normalizeMarkers(
+      timeline.markers || waypointMarkers,
+    );
+    const linkedWaypoint = waypointMarkers.find(
+      (marker) =>
+        marker.waypointId && Math.abs(marker.time - currentTime) < 0.15,
+    );
+    if (linkedWaypoint) {
+      showToast(
+        `${linkedWaypoint.name} already has a marker at this time.`,
+        "info",
+      );
+      setRightPanelTab("markers");
+      return;
+    }
+    updateMarkers([
+      ...existingMarkers,
+      {
+        id: crypto.randomUUID(),
+        name: `Marker ${existingMarkers.length + 1}`,
+        time: Math.max(0, currentTime),
+        index: existingMarkers.length + 1,
+      },
+    ]);
+    setRightPanelTab("markers");
+  };
+
+  const handleUpdateMarker = (
+    id: string,
+    updates: Partial<WaypointTimelineMarker>,
+  ) => {
+    updateMarkers(
+      (timeline.markers || waypointMarkers).map((marker) =>
+        marker.id === id ? { ...marker, ...updates } : marker,
+      ),
+    );
+  };
+
+  const handleDeleteMarker = (id: string) => {
+    updateMarkers(
+      (timeline.markers || waypointMarkers).filter(
+        (marker) => marker.id !== id,
+      ),
+    );
+  };
+
+  const [hoveredMarker, setHoveredMarker] =
+    useState<WaypointTimelineMarker | null>(null);
+  const [markerTooltipPos, setMarkerTooltipPos] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
 
   const handleMarkerHover = (
     marker: WaypointTimelineMarker | null,
@@ -765,6 +860,21 @@ export function TimelineView() {
     (max, m) => Math.max(max, m.time),
     0,
   );
+
+  const fitTimeline = () => {
+    const contentEnd = Math.max(
+      maxClipEnd,
+      ...waypointMarkers.map((marker) => marker.time),
+      1,
+    );
+    const availableWidth = timelineRef.current?.clientWidth || 800;
+    const fittedZoom = Math.max(
+      0.2,
+      Math.min(5, (availableWidth * 0.9) / (contentEnd * 20)),
+    );
+    handleZoom(Number(fittedZoom.toFixed(1)));
+  };
+
   const rulerDuration = Math.max(600, maxClipEnd + 120, maxMarkerTime + 120);
   const timelinePixelWidth = rulerDuration * pixelsPerSecond;
 
@@ -831,15 +941,6 @@ export function TimelineView() {
           >
             <Settings2 className="w-5 h-5" />
           </button>
-          <button
-            onClick={() =>
-              setRightPanelTab(rightPanelTab === "export" ? null : "export")
-            }
-            className={`p-2 rounded-xl transition-colors ${rightPanelTab === "export" ? "bg-navi/10 text-navi" : "text-zinc-500 hover:bg-zinc-200 dark:hover:bg-white/5 dark:text-zinc-400"}`}
-            title="Export"
-          >
-            <Play className="w-5 h-5" />
-          </button>
         </div>
 
         {/* SIDEBAR PANEL CONTENT */}
@@ -893,10 +994,18 @@ export function TimelineView() {
                   />
                 </div>
               )}
-              {rightPanelTab === "export" && (
-                <div className="p-4 flex-1">
-                  <ExportPanel onExport={handleExportVideo} />
-                </div>
+              {rightPanelTab === "markers" && (
+                <MarkersPanel
+                  markers={waypointMarkers}
+                  currentTime={currentTime}
+                  onAdd={handleAddMarker}
+                  onUpdate={handleUpdateMarker}
+                  onDelete={handleDeleteMarker}
+                  onSeek={(time) => {
+                    setCurrentTime(time);
+                    setIsPlaying(false);
+                  }}
+                />
               )}
             </div>
           </div>
@@ -994,11 +1103,35 @@ export function TimelineView() {
               <Magnet className="w-4 h-4" />
             </button>
             <button
-              onClick={() => setActiveTool("magic")}
-              className={`p-1.5 rounded transition-colors ${activeTool === "magic" ? "bg-white dark:bg-navidark-700 text-navi shadow-sm" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"}`}
-              title="Auto-Transitions"
+              onClick={handleAddMarker}
+              className="p-1.5 rounded text-zinc-500 hover:text-navi"
+              title="Add marker at playhead"
             >
-              <Sparkles className="w-4 h-4" />
+              <MapPinPlus className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setRightPanelTab("markers")}
+              className="p-1.5 rounded text-zinc-500 hover:text-navi"
+              title="Manage timeline markers"
+            >
+              <MapPin className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() =>
+                setSelectedClipIds(timeline.clips.map((clip) => clip.id))
+              }
+              className="p-1.5 rounded text-zinc-500 hover:text-navi"
+              title="Select all clips (Ctrl/Cmd+A)"
+            >
+              <Check className="w-4 h-4" />
+            </button>
+            <button
+              onClick={handleUnlink}
+              disabled={selectedClipIds.length === 0}
+              className="p-1.5 rounded text-zinc-500 hover:text-navi disabled:opacity-30"
+              title="Unlink selected clips"
+            >
+              <UnlinkIcon className="w-4 h-4" />
             </button>
           </div>
 
@@ -1062,6 +1195,25 @@ export function TimelineView() {
             </div>
 
             <div className="w-px h-4 bg-zinc-300 dark:bg-navidark-400" />
+
+            <button
+              onClick={fitTimeline}
+              className="p-1.5 text-zinc-500 hover:text-navi"
+              title="Fit timeline to content"
+            >
+              <Maximize className="w-4 h-4" />
+            </button>
+            <button
+              onClick={async () => {
+                if (!metadata.directory_path) return;
+                await autoLoadTimeline(metadata.directory_path);
+                showToast("Timeline reloaded", "success");
+              }}
+              className="p-1.5 text-zinc-500 hover:text-navi"
+              title="Reload saved timeline"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </button>
 
             <button
               onClick={() => setIsExportModalOpen(true)}
@@ -1269,7 +1421,9 @@ export function TimelineView() {
                                   handleToggleTrackProp(track.id, "isMuted")
                                 }
                                 className={`p-1 rounded transition-colors ${track.isMuted ? "text-red-500 bg-red-50 dark:bg-red-500/10" : "text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200"}`}
-                                title={track.isMuted ? "Unmute Track" : "Mute Track"}
+                                title={
+                                  track.isMuted ? "Unmute Track" : "Mute Track"
+                                }
                               >
                                 {track.isMuted ? (
                                   <VolumeX className="w-3.5 h-3.5" />
@@ -1283,7 +1437,9 @@ export function TimelineView() {
                                 handleToggleTrackProp(track.id, "isLocked")
                               }
                               className={`p-1 rounded transition-colors ${track.isLocked ? "text-red-500 bg-red-50 dark:bg-red-500/10" : "text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200"}`}
-                              title={track.isLocked ? "Unlock Track" : "Lock Track"}
+                              title={
+                                track.isLocked ? "Unlock Track" : "Lock Track"
+                              }
                             >
                               {track.isLocked ? (
                                 <Lock className="w-3 h-3" />
@@ -1306,7 +1462,8 @@ export function TimelineView() {
                                 step="5"
                                 value={Math.round((track.volume ?? 1.0) * 100)}
                                 onChange={(e) => {
-                                  const newVol = parseFloat(e.target.value) / 100;
+                                  const newVol =
+                                    parseFloat(e.target.value) / 100;
                                   setTimeline({
                                     ...timeline,
                                     tracks: timeline.tracks.map((t) =>
@@ -1486,11 +1643,13 @@ export function TimelineView() {
                   top: `${markerTooltipPos.y + 4}px`,
                 }}
               >
-                <div className="w-0 h-0 border-l-[4px] border-l-transparent border-r-[4px] border-r-transparent border-b-[5px] border-b-zinc-900/95 dark:border-b-zinc-800/95" />
+                <div className="w-0 h-0 border-l-4 border-l-transparent border-r-4 border-r-transparent border-b-[5px] border-b-zinc-900/95 dark:border-b-zinc-800/95" />
                 <div className="bg-zinc-900/95 dark:bg-zinc-800/95 backdrop-blur-sm text-white text-xs rounded-md shadow-2xl border border-zinc-700/80 px-2.5 py-1.5 flex flex-col items-center gap-0.5">
                   <div className="flex items-center gap-1.5 font-bold text-amber-400">
                     <MapPin className="w-3 h-3 shrink-0" />
-                    <span>#{hoveredMarker.index} {hoveredMarker.name}</span>
+                    <span>
+                      #{hoveredMarker.index} {hoveredMarker.name}
+                    </span>
                   </div>
                   <span className="font-mono text-[10px] text-zinc-300">
                     {formatMarkerTime(hoveredMarker.time)}

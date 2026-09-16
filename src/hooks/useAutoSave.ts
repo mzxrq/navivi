@@ -30,7 +30,7 @@ export function useAutoSave() {
                 await saveProjectRef.current(undefined, undefined, undefined, false);
             } catch (error) {
                 console.error("Auto-save failed:", error);
-                showToastRef.current("Auto-save failed. Please check your disk.", "error");
+                showToastRef.current("Auto-save failed", "error");
             } finally {
                 savingRef.current = false;
             }

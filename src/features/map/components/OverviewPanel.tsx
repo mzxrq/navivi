@@ -1,22 +1,34 @@
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Sparkles, PencilSparkles, Square, X } from "../../../components/ui/icons";
+import {
+  Sparkles,
+  PencilSparkles,
+  Square,
+  ChevronUp,
+  ChevronDown,
+  X,
+} from "../../../components/ui/icons";
 import { useWorkspace } from "../../../hooks/useWorkspace";
 import { useUI } from "../../../hooks/useUI";
-import { generateOverviewScriptStream, checkModelExists } from "../../../services/ollamaApi";
+import {
+  generateOverviewScriptStream,
+  checkModelExists,
+} from "../../../services/ollamaApi";
 
 export function OverviewPanel() {
   const { waypoints, metadata, updateMetadata, setIsDirty } = useWorkspace();
   const { showToast } = useUI();
 
-  const [showOverview, setShowOverview] = useState(!!metadata.overview_narration || !!metadata.theme);
+  const [showOverview, setShowOverview] = useState(
+    !!metadata.overview_narration || !!metadata.theme,
+  );
   const [isGeneratingOverview, setIsGeneratingOverview] = useState(false);
 
   const handleGenerateOverview = async () => {
     const waypointNames = waypoints
       .map((wp) => wp.name)
       .filter((name) => name && name !== "Locating...");
-      
+
     if (waypointNames.length === 0) {
       return showToast("Please add some waypoints!", "info");
     }
@@ -27,17 +39,26 @@ export function OverviewPanel() {
     if (hasQwen) engine = "qwen2.5";
     else {
       const hasGemma = await checkModelExists("gemma2");
-      if (!hasGemma) return showToast(`Model "gemma2" or "qwen2.5" not found. Please install one via Ollama!`, "error");
+      if (!hasGemma)
+        return showToast(
+          `Model "gemma2" or "qwen2.5" not found. Please install one via Ollama!`,
+          "error",
+        );
     }
-      
+
     setIsGeneratingOverview(true);
     showToast(`Synthesizing with ${engine}...`, "info");
 
     try {
       // ✨ Pass the theme to the API!
-      await generateOverviewScriptStream(waypointNames, engine, metadata.theme || "", (chunk) => {
-        updateMetadata({ overview_narration: chunk });
-      });
+      await generateOverviewScriptStream(
+        waypointNames,
+        engine,
+        metadata.theme || "",
+        (chunk) => {
+          updateMetadata({ overview_narration: chunk });
+        },
+      );
       setIsDirty(true);
       showToast("Overview script compiled!", "success");
     } catch (error) {
@@ -54,25 +75,32 @@ export function OverviewPanel() {
   };
 
   if (!showOverview) {
+    const hasData = !!metadata.overview_narration || !!metadata.theme;
     return (
       <button
         onClick={() => setShowOverview(true)}
-        className="w-full text-left px-3 py-2.5 rounded-xl border border-dashed border-zinc-300 dark:border-navidark-400 text-xs font-semibold text-zinc-500 hover:text-navi-600 dark:hover:text-navi-400 hover:bg-navi-50 dark:hover:bg-navi-900/20 transition-colors shrink-0"
+        className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl border border-dashed border-zinc-300 dark:border-navidark-400 text-xs font-semibold text-zinc-500 hover:text-navi-600 dark:hover:text-navi-400 hover:bg-navi-50 dark:hover:bg-navi-900/20 transition-colors shrink-0"
       >
-        + Add Course Theme & Intro
+        <span>
+          {hasData ? "Course Concept & Intro" : "+ Add Course Theme & Intro"}
+        </span>
+        {hasData && <ChevronDown className="w-3.5 h-3.5" />}
       </button>
     );
   }
 
   return (
     <div className="space-y-3 bg-zinc-50 dark:bg-navidark-700/30 p-3 rounded-xl border border-zinc-200 dark:border-navidark-400 shrink-0">
-      
       <div className="flex justify-between items-center">
         <label className="text-xs font-bold text-navi-700 dark:text-navi-400">
           Course Concept & Intro
         </label>
-        <button onClick={() => setShowOverview(false)} className="text-zinc-400 hover:text-red-500 transition-colors">
-          <X className="w-3.5 h-3.5" />
+        <button
+          onClick={() => setShowOverview(false)}
+          title="Collapse"
+          className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors"
+        >
+          <ChevronUp className="w-3.5 h-3.5" />
         </button>
       </div>
 
@@ -85,7 +113,7 @@ export function OverviewPanel() {
             updateMetadata({ theme: e.target.value });
             setIsDirty(true);
           }}
-          placeholder="Course Theme (e.g., 葛城修験と友ヶ島廃墟巡り)"
+          placeholder="Course Theme (e.g., 葛城修験と友ヶ島を巡る)"
           className="w-full bg-white dark:bg-navidark-800 border border-zinc-200 dark:border-navidark-300 rounded-lg px-2.5 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-navi-400 shadow-sm"
         />
       </div>

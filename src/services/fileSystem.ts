@@ -1,10 +1,12 @@
 import { documentDir, join, basename } from "@tauri-apps/api/path";
-import { writeTextFile, mkdir, exists, copyFile, readTextFile, BaseDirectory, open as fsOpen } from "@tauri-apps/plugin-fs";
+import { writeTextFile, writeFile, mkdir, exists, copyFile, readTextFile, BaseDirectory, open as fsOpen } from "@tauri-apps/plugin-fs";
 import { open as dialogOpen } from "@tauri-apps/plugin-dialog";
 import { appConfig, fileSystem } from "../config/constants";
+import { buildAssetManifest } from "../utils/manifestBuilder";
 import { TimelineData, TimelineManifest, ManifestClip, RenderSettings, ExportManifestPayload } from "../types";
 
 
+// Haversine distance calculator
 function calculateDistance(pos1: [number, number], pos2: [number, number]) {
   const R = 6371e3;
   const dLat = (pos2[0] - pos1[0]) * (Math.PI / 180);
@@ -25,6 +27,7 @@ export const saveProjectData = async (
   overrideName?: string,
   asDuplicate?: boolean,
   safeFolderName?: string,
+  thumbnailDataUrl?: string | null,
 ) => {
   const docsPath = await documentDir();
   const projectRoot = await join(docsPath, fileSystem.rootFolder, fileSystem.projectsFolder);
@@ -62,12 +65,14 @@ export const saveProjectData = async (
   }
 
   const assetsDir = await join(projectDir, "assets");
+  const imageAssetsDir = await join(assetsDir, "image");
   const gpxPath = await join(projectDir, "raw_track.gpx");
   const nvvPath = await join(projectDir, `${projName}.${fileSystem.extensions.project}`);
   const jsonPath = await join(projectDir, "job_config.json");
 
   if (!(await exists(projectDir))) await mkdir(projectDir, { recursive: true });
   if (!(await exists(assetsDir))) await mkdir(assetsDir, { recursive: true });
+  if (!(await exists(imageAssetsDir))) await mkdir(imageAssetsDir, { recursive: true });
 
   // Initialize GPX String with GPSBabel expected headers
   const gpxLines: string[] = [];
@@ -129,7 +134,7 @@ export const saveProjectData = async (
       if (wp.images && wp.images.length > 0) {
         for (const imgPath of wp.images) {
           const fileName = await basename(imgPath);
-          const absoluteDest = await join(assetsDir, fileName);
+          const absoluteDest = await join(imageAssetsDir, fileName);
           if (imgPath !== absoluteDest) {
             await copyFile(imgPath, absoluteDest);
           }
@@ -139,7 +144,7 @@ export const saveProjectData = async (
       let finalCustomMarker = "";
       if (wp.customMarker) {
         const markerName = await basename(wp.customMarker);
-        const markerDest = await join(assetsDir, markerName);
+        const markerDest = await join(imageAssetsDir, markerName);
         if (wp.customMarker !== markerDest) {
           await copyFile(wp.customMarker, markerDest);
         }
@@ -177,6 +182,21 @@ export const saveProjectData = async (
     })
   );
 
+  const firstUploadedImage = processedWaypoints.find(
+    (wp) => wp.images && wp.images.length > 0,
+  )?.images?.[0];
+  let thumbnailPath = firstUploadedImage;
+  if (thumbnailDataUrl?.startsWith("data:image/")) {
+    const base64 = thumbnailDataUrl.split(",", 2)[1];
+    if (base64) {
+      thumbnailPath = await join(projectDir, "thumbnail.png");
+      await writeFile(
+        thumbnailPath,
+        Uint8Array.from(atob(base64), (char) => char.charCodeAt(0)),
+      );
+    }
+  }
+
   const startWp = processedWaypoints[0];
   const endWp = processedWaypoints[processedWaypoints.length - 1];
 
@@ -188,6 +208,7 @@ export const saveProjectData = async (
     theme: metadata.theme,
     status: "saved",
     directory_path: projectDir,
+    thumbnail_path: thumbnailPath,
     source_files: { gps_route: gpxPath },
     settings: settings,
     overview_narration: metadata.overview_narration || "",
@@ -199,6 +220,10 @@ export const saveProjectData = async (
   const payload = JSON.stringify(jobConfig, null, 2);
   await writeTextFile(nvvPath, payload);
   await writeTextFile(jsonPath, payload);
+
+  const manifest = buildAssetManifest(projId, waypoints, settings);
+  const manifestPath = await join(projectDir, "asset_manifest.json");
+  await writeTextFile(manifestPath, JSON.stringify(manifest, null, 2));
 
   const activeKeys = new Set<string>();
 
@@ -228,7 +253,7 @@ export const saveProjectData = async (
   const routeCachePath = await join(projectDir, ".routecache.json");
   await writeTextFile(routeCachePath, JSON.stringify(cleanCache));
 
-  return { projectDir, projId, projName, nvvPath };
+  return { projectDir, projId, projName, nvvPath, thumbnailPath };
 };
 
 export const loadProjectData = async (forcePath?: string) => {
@@ -279,7 +304,7 @@ export function compileTimelineManifest(
   projectName: string,
   timeline: TimelineData,
   renderSettings?: RenderSettings,
-  markers?: Array<{ id: string; name: string; time: number }>,
+  markers?: TimelineManifest["markers"],
 ): TimelineManifest & ExportManifestPayload {
   // find master audio track
   const audioTrack = timeline.tracks.find((t) => t.type === "audio");
@@ -335,7 +360,7 @@ export function compileTimelineManifest(
     tracks: timeline.tracks,
     clips: timeline.clips,
     transitions: timeline.transitions || [],
-    markers: markers || [],
+    markers: markers || timeline.markers || [],
     exported_at: nowIso,
 
     // ExportManifestPayload compliance
@@ -355,7 +380,7 @@ export async function saveTimelineManifest(
   projectName: string,
   timeline: TimelineData,
   renderSettings?: RenderSettings,
-  markers?: Array<{ id: string; name: string; time: number }>,
+  markers?: TimelineManifest["markers"],
 ): Promise<boolean> {
   /**
    * convert react timeline state into timeline.json manifest

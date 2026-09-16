@@ -1,5 +1,6 @@
 import { useState, useEffect, MouseEvent } from "react";
 import { createPortal } from "react-dom";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import { useUI } from "../../hooks/useUI";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import {
@@ -214,7 +215,9 @@ export function TitleScreen() {
           onClick={() => setShowTemplates(!showTemplates)}
           className="flex items-center gap-2 text-sm font-bold text-zinc-700 dark:text-zinc-200 hover:text-navi dark:hover:text-navi transition-colors"
         >
-          <FolderOpen className={`w-4 h-4 transition-transform ${showTemplates ? "rotate-90" : ""}`} />
+          <FolderOpen
+            className={`w-4 h-4 transition-transform ${showTemplates ? "rotate-90" : ""}`}
+          />
           Templates
         </button>
         {showTemplates && (
@@ -255,8 +258,12 @@ export function TitleScreen() {
                 <Map className="w-8 h-8 text-emerald-500 dark:text-emerald-400" />
               </div>
               <div className="p-4 w-full flex flex-col justify-center flex-1 min-w-0 border-l border-emerald-100 dark:border-emerald-500/20">
-                <h3 className="font-bold text-sm text-emerald-900 dark:text-emerald-100">Kyoto Demo Route</h3>
-                <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1">Pre-configured sample project</p>
+                <h3 className="font-bold text-sm text-emerald-900 dark:text-emerald-100">
+                  Kyoto Demo Route
+                </h3>
+                <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1">
+                  Pre-configured sample project
+                </p>
               </div>
             </div>
           </div>
@@ -288,7 +295,15 @@ export function TitleScreen() {
               className="group flex cursor-pointer bg-white dark:bg-navidark-700 border border-zinc-200 dark:border-white/10 rounded-2xl overflow-visible hover:border-navi dark:hover:border-navi transition-all duration-200 hover:shadow-lg"
             >
               <div className="w-1/3 min-w-30 bg-linear-to-br from-zinc-100 to-zinc-200 dark:from-navidark-600 dark:to-navidark-800 flex items-center justify-center relative overflow-hidden rounded-l-2xl shrink-0">
-                <Map className="w-8 h-8 text-zinc-300 dark:text-white/5 group-hover:text-navi/30 transition-colors duration-300" />
+                {project.thumbnailPath ? (
+                  <img
+                    src={convertFileSrc(project.thumbnailPath)}
+                    alt=""
+                    className="absolute inset-0 w-full h-full object-cover"
+                  />
+                ) : (
+                  <Map className="w-8 h-8 text-zinc-300 dark:text-white/5 group-hover:text-navi/30 transition-colors duration-300" />
+                )}
                 <div className="absolute inset-0 bg-navi/0 group-hover:bg-navi/5 transition-colors duration-300" />
               </div>
 
@@ -396,7 +411,15 @@ export function TitleScreen() {
                 }`}
               >
                 <div className="col-span-9 sm:col-span-4 flex items-center gap-3 min-w-0 pointer-events-none text-left">
-                  <Map className="w-4 h-4 text-zinc-400 shrink-0 group-hover:text-navi transition-colors" />
+                  {project.thumbnailPath ? (
+                    <img
+                      src={convertFileSrc(project.thumbnailPath)}
+                      alt=""
+                      className="w-8 h-8 rounded-md object-cover shrink-0"
+                    />
+                  ) : (
+                    <Map className="w-4 h-4 text-zinc-400 shrink-0 group-hover:text-navi transition-colors" />
+                  )}
                   <span className="font-bold text-sm text-zinc-900 dark:text-zinc-100 truncate group-hover:text-navi transition-colors">
                     {project.name}
                   </span>

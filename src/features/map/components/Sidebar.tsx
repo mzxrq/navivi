@@ -10,7 +10,7 @@ import {
   Ship,
   Edit,
   RefreshCw,
-  Play
+  Play,
 } from "../../../components/ui/icons";
 import {
   DragDropContext,
@@ -26,12 +26,8 @@ import { LocationSearch } from "../../../components/ui/LocationSearch";
 import { OverviewPanel } from "./OverviewPanel";
 
 export function Sidebar() {
-  const {
-    showToast,
-    isRendering,
-    setIsRendering,
-  } = useUI();
-  
+  const { showToast, isRendering, setIsRendering } = useUI();
+
   const {
     waypoints,
     setWaypoints,
@@ -40,11 +36,10 @@ export function Sidebar() {
     setActiveWaypointId,
     forceReroute,
     setIsDirty,
-    settings,        
-    updateSettings,  
+    settings,
+    updateSettings,
   } = useWorkspace();
-  
-  const [editingId, setEditingId] = useState<string | null>(null);
+
   const [isListEditMode, setIsListEditMode] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
 
@@ -52,14 +47,7 @@ export function Sidebar() {
   const [isPreviewing, setIsPreviewing] = useState(false);
   const sidebarRef = useRef<HTMLElement>(null);
 
-  useEffect(() => {
-    if (activeWaypointId) {
-      setEditingId(activeWaypointId);
-    }
-  }, [activeWaypointId]);
-
   const handleCloseEditor = () => {
-    setEditingId(null);
     setActiveWaypointId(null);
   };
 
@@ -85,24 +73,18 @@ export function Sidebar() {
   }, []);
 
   useEffect(() => {
-    if (editingId && !waypoints.some((w) => w.id === editingId)) {
-      handleCloseEditor();
-    }
-  }, [editingId, waypoints]);
-
-  useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         if (showGenerateConfirm) {
           setShowGenerateConfirm(false);
-        } else if (editingId) {
+        } else if (activeWaypointId) {
           handleCloseEditor();
         }
       }
     };
     window.addEventListener("keydown", handleEsc);
     return () => window.removeEventListener("keydown", handleEsc);
-  }, [showGenerateConfirm, editingId]);
+  }, [showGenerateConfirm, activeWaypointId]);
 
   const handleGenerateClick = async () => {
     if (waypoints.length === 0) {
@@ -111,7 +93,7 @@ export function Sidebar() {
     }
     setShowGenerateConfirm(true);
   };
-  
+
   const executeGenerate = async () => {
     setShowGenerateConfirm(false);
     await saveProject(); // ✨ Settings are already updated by the checkbox below
@@ -141,10 +123,6 @@ export function Sidebar() {
       ref={sidebarRef}
       className="w-90 shrink-0 bg-white dark:bg-navidark-800 border-r border-zinc-200 dark:border-white/5 flex flex-col h-full select-none z-100 relative shadow-2xl transition-colors"
     >
-      {editingId ? (
-        <WaypointEditor wpId={editingId} onClose={handleCloseEditor} />
-      ) : (
-        <>
       <div className="sticky top-0 z-30 bg-white/80 dark:bg-navidark-800/80 backdrop-blur-xl border-b border-zinc-100 dark:border-white/5 p-6 shrink-0 flex flex-col gap-5">
         <LocationSearch />
         <OverviewPanel />
@@ -200,7 +178,6 @@ export function Sidebar() {
                               isLast={isLast}
                               onEdit={() => {
                                 setActiveWaypointId(wp.id);
-                                setEditingId(wp.id);
                               }}
                               onDelete={() =>
                                 setWaypoints(
@@ -244,7 +221,6 @@ export function Sidebar() {
 
       {/* --- FOOTER TOOLBAR --- */}
       <div className="shrink-0 p-3 flex flex-col gap-3 bg-white/80 dark:bg-navidark-800/80 backdrop-blur-xl border-t border-zinc-100 dark:border-white/5 z-30">
-        
         {waypoints.length > 0 && (
           <div className="flex items-center justify-between w-full">
             <div className="flex items-center bg-zinc-50 dark:bg-zinc-900/50 rounded-xl p-1 border border-zinc-200/80 dark:border-white/5 transition-all">
@@ -263,14 +239,18 @@ export function Sidebar() {
               >
                 <Edit className="w-4 h-4" />
               </button>
-              
+
               <div className="w-px h-5 bg-zinc-200 dark:bg-zinc-700 mx-1" />
-              
-              <div className={`flex items-center overflow-hidden transition-all duration-300 ease-out ${showClearConfirm ? "max-w-32 opacity-100" : "max-w-10"}`}>
+
+              <div
+                className={`flex items-center overflow-hidden transition-all duration-300 ease-out ${showClearConfirm ? "max-w-32 opacity-100" : "max-w-10"}`}
+              >
                 {!showClearConfirm ? (
                   <button
                     onClick={() => setShowClearConfirm(true)}
-                    disabled={waypoints.length === 0 || isRendering || isPreviewing}
+                    disabled={
+                      waypoints.length === 0 || isRendering || isPreviewing
+                    }
                     title="Clear Entire Route"
                     className="p-2 w-10 text-zinc-500 hover:text-red-500 dark:text-zinc-400 dark:hover:text-red-400 rounded-lg hover:bg-white dark:hover:bg-zinc-800 transition-colors flex justify-center shrink-0"
                   >
@@ -278,7 +258,9 @@ export function Sidebar() {
                   </button>
                 ) : (
                   <div className="flex items-center gap-1.5 px-1.5 h-10 animate-in fade-in slide-in-from-right-2">
-                    <span className="text-[10px] font-bold text-red-500 uppercase tracking-widest pl-1">Clear?</span>
+                    <span className="text-[10px] font-bold text-red-500 uppercase tracking-widest pl-1">
+                      Clear?
+                    </span>
                     <button
                       onClick={() => setShowClearConfirm(false)}
                       className="px-2 py-1.5 text-[10px] font-bold text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded-md transition-colors"
@@ -301,19 +283,34 @@ export function Sidebar() {
             </div>
 
             <div className="flex items-center bg-zinc-50 dark:bg-zinc-900/50 rounded-xl p-1 border border-zinc-200/80 dark:border-white/5">
-              <button 
-                onClick={handleReverseRoute} 
+              <button
+                onClick={handleReverseRoute}
                 disabled={waypoints.length < 2 || isRendering || isPreviewing}
                 title="Reverse Route Direction"
                 className="p-2 text-zinc-500 hover:text-navi-500 dark:text-zinc-400 dark:hover:text-navi-400 rounded-lg hover:bg-white dark:hover:bg-zinc-800 transition-colors disabled:opacity-50"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="m21 8-4-4-4 4"/><path d="M17 4v16"/></svg>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="m3 16 4 4 4-4" />
+                  <path d="M7 20V4" />
+                  <path d="m21 8-4-4-4 4" />
+                  <path d="M17 4v16" />
+                </svg>
               </button>
 
               <div className="w-px h-5 bg-zinc-200 dark:bg-zinc-700 mx-1" />
-              
-              <button 
-                onClick={forceReroute} 
+
+              <button
+                onClick={forceReroute}
                 title="Refresh Map Routing"
                 className="p-2 text-zinc-500 hover:text-navi-500 dark:text-zinc-400 dark:hover:text-navi-400 rounded-lg hover:bg-white dark:hover:bg-zinc-800 transition-colors"
               >
@@ -326,7 +323,12 @@ export function Sidebar() {
         {/* Generate Primary Action */}
         <button
           onClick={handleGenerateClick}
-          disabled={waypoints.length === 0 || isListEditMode || isRendering || isPreviewing}
+          disabled={
+            waypoints.length === 0 ||
+            isListEditMode ||
+            isRendering ||
+            isPreviewing
+          }
           className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-navi hover:bg-navi-600 text-white font-bold text-xs transition-all disabled:opacity-40 disabled:pointer-events-none shadow-md hover:shadow-lg focus:ring-4 focus:ring-navi-500/20 focus:outline-none"
         >
           {isRendering ? (
@@ -342,57 +344,60 @@ export function Sidebar() {
         </button>
       </div>
 
-      {showGenerateConfirm && createPortal(
-        <div className="fixed inset-0 z-99999 bg-zinc-950/40 backdrop-blur-[2px] flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="p-5">
-              <h3 className="text-base font-bold text-zinc-900 dark:text-white mb-2">Ready to Generate?</h3>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                This will save your project, synthesize AI voiceovers, and render map videos before opening the Timeline.
-              </p>
+      {showGenerateConfirm &&
+        createPortal(
+          <div className="fixed inset-0 z-99999 bg-zinc-950/40 backdrop-blur-[2px] flex items-center justify-center p-4 animate-in fade-in duration-200">
+            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200">
+              <div className="p-5">
+                <h3 className="text-base font-bold text-zinc-900 dark:text-white mb-2">
+                  Ready to Generate?
+                </h3>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
+                  This will save your project, synthesize AI voiceovers, and
+                  render map videos before opening the Timeline.
+                </p>
 
-              {/* ✨ NEW: Skip Rich Media Toggle */}
-              <label className="flex items-start gap-2.5 mt-5 cursor-pointer group">
-                <input
-                  type="checkbox"
-                  className="mt-0.5 w-4 h-4 rounded border-zinc-300 text-navi focus:ring-navi bg-white dark:bg-zinc-800 dark:border-zinc-700 transition-colors cursor-pointer"
-                  checked={settings.skip_rich_media || false}
-                  onChange={(e) => {
-                    updateSettings({ skip_rich_media: e.target.checked });
-                    if (setIsDirty) setIsDirty(true);
-                  }}
-                />
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-sm font-bold text-zinc-800 dark:text-zinc-200 group-hover:text-navi transition-colors">
-                    Skip Rich Media (Fast Render)
-                  </span>
-                  <span className="text-[10px] text-zinc-500 dark:text-zinc-400 leading-tight">
-                    Generates the map route only. Ignores all pop-up images and AI voice synthesis to save time.
-                  </span>
-                </div>
-              </label>
+                {/* ✨ NEW: Skip Rich Media Toggle */}
+                <label className="flex items-start gap-2.5 mt-5 cursor-pointer group">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 w-4 h-4 rounded border-zinc-300 text-navi focus:ring-navi bg-white dark:bg-zinc-800 dark:border-zinc-700 transition-colors cursor-pointer"
+                    checked={settings.skip_rich_media || false}
+                    onChange={(e) => {
+                      updateSettings({ skip_rich_media: e.target.checked });
+                      if (setIsDirty) setIsDirty(true);
+                    }}
+                  />
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-sm font-bold text-zinc-800 dark:text-zinc-200 group-hover:text-navi transition-colors">
+                      Skip Rich Media (Fast Render)
+                    </span>
+                    <span className="text-[10px] text-zinc-500 dark:text-zinc-400 leading-tight">
+                      Generates the map route only. Ignores all pop-up images
+                      and AI voice synthesis to save time.
+                    </span>
+                  </div>
+                </label>
+              </div>
+
+              <div className="p-4 bg-zinc-50 dark:bg-black/20 border-t border-zinc-100 dark:border-white/5 flex items-center justify-end gap-3">
+                <button
+                  onClick={() => setShowGenerateConfirm(false)}
+                  className="px-4 py-2 text-xs font-bold text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={executeGenerate}
+                  className="px-4 py-2 bg-navi hover:bg-navi-600 text-white text-xs font-bold rounded-lg shadow-md transition-colors"
+                >
+                  Generate Assets
+                </button>
+              </div>
             </div>
-            
-            <div className="p-4 bg-zinc-50 dark:bg-black/20 border-t border-zinc-100 dark:border-white/5 flex items-center justify-end gap-3">
-              <button
-                onClick={() => setShowGenerateConfirm(false)}
-                className="px-4 py-2 text-xs font-bold text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={executeGenerate}
-                className="px-4 py-2 bg-navi hover:bg-navi-600 text-white text-xs font-bold rounded-lg shadow-md transition-colors"
-              >
-                Generate Assets
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
-        </>
-      )}
+          </div>,
+          document.body,
+        )}
     </aside>
   );
 }

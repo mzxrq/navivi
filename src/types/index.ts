@@ -26,6 +26,7 @@ export interface Waypoint {
   routeMode: RouteMode;
   customRoute?: [number, number][];
   isGeneratingScript?: boolean;
+  markers?: WaypointTimelineMarker[];
   isStopBy?: boolean;
   connectToRoute?: boolean;
   drawStyle?: "linear" | "spline";
@@ -81,6 +82,7 @@ export interface ProjectMetadata {
   created_at: string;
   status: string;
   directory_path: string;
+  thumbnail_path?: string;
   overview_narration?: string;
 }
 // end dev 1 settings
@@ -89,6 +91,7 @@ export interface RecentProjects {
   name: string;
   path: string;
   lastOpened: number;
+  thumbnailPath?: string;
 }
 
 export interface TimelineTrack {
@@ -194,6 +197,7 @@ export interface TimelineData {
   clips: ClipData[];
   transitions: TimelineTransition[];
   zoomMultiplier: number;
+  markers?: WaypointTimelineMarker[];
 }
 
 export interface WaypointTimelineMarker {
@@ -201,6 +205,7 @@ export interface WaypointTimelineMarker {
   name: string;
   time: number;
   index: number;
+  waypointId?: string;
   color?: string;
 }
 
@@ -241,7 +246,7 @@ export interface ExportManifestPayload {
   tracks: TimelineTrack[];
   clips: ClipData[];
   transitions: any[];
-  markers: Array<{ id: string; name: string; time: number }>;
+  markers: WaypointTimelineMarker[];
   exportedAt: string;
   renderSettings?: RenderSettings;
 }
@@ -261,7 +266,7 @@ export interface TimelineManifest {
   tracks?: TimelineTrack[];
   clips?: ClipData[];
   transitions?: any[];
-  markers?: Array<{ id: string; name: string; time: number }>;
+  markers?: WaypointTimelineMarker[];
   exported_at?: string;
 }
 
@@ -315,6 +320,8 @@ export interface WorkspaceState {
   setRoutePoints: Dispatch<SetStateAction<number[][]>>;
   drawnRoute: [number, number][];
   setDrawnRoute: Dispatch<SetStateAction<[number, number][]>>;
+  projectThumbnail: string | null;
+  setProjectThumbnail: (thumbnail: string | null) => void;
   // Project Config
   metadata: ProjectMetadata;
   setMetadata: Dispatch<SetStateAction<ProjectMetadata>>;

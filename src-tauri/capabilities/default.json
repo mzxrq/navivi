@@ -2,9 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Capability for the main window",
-  "windows": [
-    "main"
-  ],
+  "windows": ["main"],
   "permissions": [
     "core:default",
     "opener:default",
@@ -17,15 +15,15 @@
     "fs:default",
     "dialog:default",
     "fs:allow-exists",
+    "fs:allow-write",
+    "fs:allow-write-file",
     "fs:allow-mkdir",
     "fs:allow-copy-file",
     "fs:allow-write-text-file",
     "fs:allow-read-text-file",
     {
       "identifier": "fs:scope",
-      "allow": [
-        { "path": "**/*"}
-      ]
+      "allow": [{ "path": "**/*" }]
     }
   ]
 }

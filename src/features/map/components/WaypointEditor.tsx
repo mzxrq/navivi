@@ -1,6 +1,7 @@
 import { useState } from "react";
 import {
   ChevronLeft,
+  ChevronDown,
   ImageIcon,
   X,
   Trash2,
@@ -11,6 +12,7 @@ import {
   LinkIcon,
   UnlinkIcon,
   CornerDownLeft,
+  Mic,
 } from "../../../components/ui/icons";
 import { useWorkspace } from "../../../hooks/useWorkspace";
 import { useUI } from "../../../hooks/useUI";
@@ -52,81 +54,85 @@ export function WaypointEditor({
     waypoints,
     setWaypoints,
     updateWaypoint,
+    setIsDirty,
     setActiveWaypointId,
     metadata,
-    setIsDirty,
   } = useWorkspace();
   const { showToast } = useUI();
 
-  const index = waypoints.findIndex((w) => w.id === wpId);
-  const wp = index !== -1 ? waypoints[index] : undefined;
-  const [showArriving, setShowArriving] = useState(!!wp?.arrivingNarration);
-  const [showAttraction, setShowAttraction] = useState(
-    !!(wp?.attractionNarration || wp?.narration),
+  const wpIndex = waypoints.findIndex((w) => w.id === wpId);
+  const wp = wpIndex !== -1 ? waypoints[wpIndex] : null;
+
+  const [showArriving, setShowArriving] = useState(
+    () => !!wp?.arrivingNarration,
   );
+  const [showAttraction, setShowAttraction] = useState(
+    () => !!wp?.attractionNarration,
+  );
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [activeTab, setActiveTab] = useState<"scripts" | "images">("scripts");
 
   if (!wp) return null;
 
-  const isStart = index === 0;
-  const isEnd = index === waypoints.length - 1 && waypoints.length > 1;
-
   const wpImages = wp.images || [];
-  const wpImagePans = wp.imagePans || [];
-  const wpImageTransitions = wp.imageTransitions || [];
+  const imagePans = wp.imagePans || [];
+  const imageTransitionsState = wp.imageTransitions || [];
+  const isStart = wpIndex === 0;
+  const isEnd = wpIndex === waypoints.length - 1 && waypoints.length > 1;
 
   const handleImageSelect = async () => {
-    if (wpImages.length >= 3) {
-      showToast("Maximum of 3 images allowed per waypoint.", "error");
-      return;
-    }
-    const selectedPaths = await open({
-      multiple: true,
-      filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg"] }],
-    });
-    if (selectedPaths) {
-      const pathsArray = Array.isArray(selectedPaths)
-        ? selectedPaths
-        : [selectedPaths];
-      const newImages = [...wpImages, ...pathsArray].slice(0, 3);
-      const newPans = [...wpImagePans, ...pathsArray.map(() => "none")].slice(
-        0,
-        3,
-      );
-      const newTransitions = [
-        ...wpImageTransitions,
-        ...pathsArray.map(() => "crossfade"),
-      ].slice(0, Math.max(0, newImages.length - 1));
-      updateWaypoint(wp.id, {
-        images: newImages,
-        imagePans: newPans,
-        imageTransitions: newTransitions,
+    try {
+      const selected = await open({
+        multiple: true,
+        filters: [
+          {
+            name: "Images",
+            extensions: ["png", "jpg", "jpeg", "webp"],
+          },
+        ],
       });
+      if (selected && Array.isArray(selected)) {
+        updateWaypoint(wp.id, {
+          images: [...wpImages, ...selected].slice(0, 3),
+        });
+        if (setIsDirty) setIsDirty(true);
+      }
+    } catch (err) {
+      console.error(err);
+      showToast("Failed to select images", "error");
     }
   };
 
-  const updateImagePan = (idx: number, pan: string) => {
-    const newPans = [...wpImagePans];
-    newPans[idx] = pan;
-    updateWaypoint(wp.id, { imagePans: newPans });
-  };
+  const removeImage = (idx: number) => {
+    const newImgs = [...wpImages];
+    newImgs.splice(idx, 1);
 
-  const updateImageTransition = (idx: number, transition: string) => {
-    const newTransitions = [...wpImageTransitions];
-    newTransitions[idx] = transition;
-    updateWaypoint(wp.id, { imageTransitions: newTransitions });
-  };
+    const newPans = [...imagePans];
+    newPans.splice(idx, 1);
 
-  const handleRemoveImage = (idx: number) => {
-    const newImages = wpImages.filter((_, i) => i !== idx);
-    const newTransitions = wpImageTransitions
-      .filter((_, i) => i !== idx)
-      .slice(0, Math.max(0, newImages.length - 1));
+    const newTrans = [...imageTransitionsState];
+    newTrans.splice(idx, 1);
 
     updateWaypoint(wp.id, {
-      images: newImages,
-      imagePans: wpImagePans.filter((_, i) => i !== idx),
-      imageTransitions: newTransitions,
+      images: newImgs,
+      imagePans: newPans,
+      imageTransitions: newTrans,
     });
+    if (setIsDirty) setIsDirty(true);
+  };
+
+  const updateImagePan = (idx: number, val: string) => {
+    const newPans = [...imagePans];
+    newPans[idx] = val;
+    updateWaypoint(wp.id, { imagePans: newPans });
+    if (setIsDirty) setIsDirty(true);
+  };
+
+  const updateImageTransition = (idx: number, val: string) => {
+    const newTrans = [...imageTransitionsState];
+    newTrans[idx] = val;
+    updateWaypoint(wp.id, { imageTransitions: newTrans });
+    if (setIsDirty) setIsDirty(true);
   };
 
   const handleGenerateScript = async (
@@ -134,18 +140,22 @@ export function WaypointEditor({
     prompt: string,
     engine: string,
   ) => {
-    const hasModel = await checkModelExists(engine);
-    if (!hasModel) {
-      showToast(
-        `Model "${engine}" not found. Please run: ollama run ${engine}`,
-        "error",
-      );
-      return;
-    }
-    updateWaypoint(wp.id, { isGeneratingScript: true });
-    showToast(`Writing ${type} script for ${wp.name}...`, "info");
+    if (type === "arriving" && !showArriving) setShowArriving(true);
+    if (type === "attraction" && !showAttraction) setShowAttraction(true);
 
     try {
+      updateWaypoint(wp.id, { isGeneratingScript: true });
+
+      const hasEngine = await checkModelExists(engine);
+      if (!hasEngine) {
+        showToast(
+          `Model "${engine}" not found. Please install it in Ollama.`,
+          "error",
+        );
+        updateWaypoint(wp.id, { isGeneratingScript: false });
+        return;
+      }
+
       await generateWaypointScriptStream(
         wp.name,
         prompt,
@@ -158,13 +168,10 @@ export function WaypointEditor({
             updateWaypoint(wp.id, { attractionNarration: chunk });
           }
         },
-        wp.lat,
-        wp.lng,
       );
-      showToast(`Script finished for ${wp.name}!`, "success");
+      showToast(`Generated ${type} script!`, "success");
     } catch (error) {
-      console.error(error);
-      showToast(`Generation failed: ${error}`, "error");
+      showToast(`Script generation failed: ${error}`, "error");
     } finally {
       updateWaypoint(wp.id, { isGeneratingScript: false });
     }
@@ -206,18 +213,10 @@ export function WaypointEditor({
   };
 
   return (
-    <div className="flex flex-col h-full bg-white dark:bg-navidark-800 select-none transition-colors animate-in fade-in duration-200">
+    <div className="flex flex-col h-full w-full bg-white dark:bg-navidark-800 rounded-2xl shadow-[0_-10px_50px_-15px_rgba(0,0,0,0.4)] border border-zinc-200 dark:border-white/10 select-none transition-colors animate-in slide-in-from-bottom-10 duration-200 overflow-hidden mb-2 ml-2">
       {/* --- HEADER --- */}
-      <div className="flex items-center gap-3 p-4 border-b border-zinc-200 dark:border-white/5 shrink-0 bg-zinc-50/50 dark:bg-navidark-700/50">
-        <button
-          onClick={onClose}
-          title="Back to stops list"
-          aria-label="Back to stops list"
-          className="p-1.5 -ml-1.5 rounded-lg hover:bg-zinc-200 dark:hover:bg-navidark-400 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
-        >
-          <ChevronLeft className="w-5 h-5" />
-        </button>
-        <div className="flex flex-col min-w-0">
+      <div className="editor-drag-handle cursor-move flex items-center justify-between gap-3 p-3 border-b border-zinc-200 dark:border-white/5 shrink-0 bg-zinc-50/50 dark:bg-navidark-700/50">
+        <div className="flex flex-col min-w-0 pointer-events-none">
           <span className="text-[10px] font-bold text-navi-600 dark:text-navi-500 uppercase tracking-wider">
             Editing Stop
           </span>
@@ -225,356 +224,412 @@ export function WaypointEditor({
             {wp.name}
           </h2>
         </div>
+
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onClose();
+          }}
+          title="Close Editor"
+          className="p-1.5 rounded-lg hover:bg-zinc-200 dark:hover:bg-navidark-400 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
+        >
+          <ChevronDown className="w-5 h-5" />
+        </button>
       </div>
 
-      {/* --- SCROLLABLE EDITOR CONTENT --- */}
-      <div className="flex-1 flex flex-col min-h-0 space-y-6 overflow-y-auto custom-scrollbar p-5">
-        {/* 1. Location Details */}
-        <div className="space-y-4">
+      <div className="flex-1 flex flex-row min-w-0 h-full overflow-hidden items-stretch">
+        {/* --- LEFT COLUMN: METADATA & ACTIONS --- */}
+        <div className="w-[300px] shrink-0 border-r border-zinc-200 dark:border-white/10 p-5 flex flex-col gap-6 overflow-y-auto custom-scrollbar bg-zinc-50/30 dark:bg-navidark-800/30">
+          {/* Waypoint Name */}
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
               <MapPin className="w-3.5 h-3.5 text-zinc-400" /> Location Name
             </label>
-            <input
-              type="text"
-              value={wp.name}
-              onChange={(e) => updateWaypoint(wp.id, { name: e.target.value })}
-              className="w-full bg-white dark:bg-navidark-700 border border-zinc-200 dark:border-white/10 rounded-xl px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-navi-500 dark:focus:border-navi-500/50 transition-colors shadow-sm"
-            />
-          </div>
-
-          {wp.routeMode === "draw" && !isEnd && (
-            <div className="flex items-center gap-2 px-3 py-2 bg-navi-50 dark:bg-navi-500/10 border border-navi-200 dark:border-navi-500/20 rounded-lg text-navi-700 dark:text-navi-400 text-[10px] font-bold uppercase tracking-wider shadow-sm">
-              <Pencil className="w-4 h-4 shrink-0" />
-              Draw Mode Active for Next Route
-            </div>
-          )}
-        </div>
-
-        {/* 1.5 Custom Marker */}
-        <div className="space-y-3">
-          <div className="flex flex-col gap-1">
-            <h3 className="text-xs font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-wider flex items-center gap-1.5">
-              <MapPin className="w-3.5 h-3.5 text-zinc-400" /> Custom Marker
-            </h3>
-            <p className="text-[10px] text-zinc-500 dark:text-zinc-400 leading-tight">
-              Overrides the global route marker. Leave empty to use the global
-              marker.
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            {wp.customMarker ? (
-              <div className="relative w-12 h-12 rounded-lg border border-zinc-200 dark:border-white/10 flex items-center justify-center bg-zinc-50 dark:bg-navidark-700/50 group">
-                <img
-                  src={convertFileSrc(wp.customMarker)}
-                  alt="Custom Marker"
-                  className="w-8 h-8 object-contain"
-                />
-                <button
-                  onClick={() =>
-                    updateWaypoint(wp.id, { customMarker: undefined })
-                  }
-                  className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md"
-                  title="Remove Marker"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
+            {isEditingName ? (
+              <input
+                type="text"
+                autoFocus
+                value={wp.name}
+                onBlur={() => setIsEditingName(false)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") setIsEditingName(false);
+                }}
+                onChange={(e) =>
+                  updateWaypoint(wp.id, { name: e.target.value })
+                }
+                className="w-full bg-white dark:bg-navidark-700 border border-zinc-200 dark:border-white/10 rounded-xl px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-navi-500 dark:focus:border-navi-500/50 transition-colors shadow-sm"
+              />
             ) : (
-              <div className="w-12 h-12 rounded-lg border border-dashed border-zinc-300 dark:border-white/20 flex items-center justify-center bg-zinc-50 dark:bg-navidark-700/30">
-                <MapPin className="w-5 h-5 text-zinc-300 dark:text-zinc-600" />
-              </div>
-            )}
-            <button
-              onClick={async () => {
-                const selected = await open({
-                  multiple: false,
-                  filters: [
-                    {
-                      name: "Images",
-                      extensions: ["svg", "png", "jpg", "jpeg"],
-                    },
-                  ],
-                });
-                if (selected && typeof selected === "string") {
-                  updateWaypoint(wp.id, { customMarker: selected });
-                }
-              }}
-              className="flex-1 py-2 text-xs font-semibold rounded-xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-navidark-700 hover:bg-zinc-50 dark:hover:bg-navidark-600 transition-colors text-zinc-700 dark:text-zinc-300 shadow-sm"
-            >
-              {wp.customMarker ? "Change Marker" : "Select Marker"}
-            </button>
-          </div>
-        </div>
-
-        {/* 2. Split Narration Scripts */}
-        <div className="space-y-3">
-          <div className="flex flex-col gap-1">
-            <h3 className="text-xs font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-wider">
-              Voiceover Scripts
-            </h3>
-            <p className="text-[10px] text-zinc-500 dark:text-zinc-400 leading-tight">
-              Scripts are optional. Add text manually or use AI to generate
-              narration for the route travel and the location itself.
-            </p>
-          </div>
-
-          {/* Arriving Script */}
-          {!showArriving ? (
-            <button
-              onClick={() => setShowArriving(true)}
-              className="w-full text-left px-3 py-2.5 rounded-xl border border-dashed border-zinc-300 dark:border-navidark-300 text-xs font-semibold text-zinc-500 hover:text-navi-600 dark:hover:text-navi-400 hover:bg-navi-50 dark:hover:bg-navi-900/20 transition-colors"
-            >
-              + Add Arriving Narration Script
-            </button>
-          ) : (
-            <div className="space-y-1.5 bg-zinc-50 dark:bg-navidark-700/30 p-3 rounded-xl border border-zinc-200 dark:border-white/5">
-              <div className="flex justify-between items-center mb-2">
-                <label className="text-xs font-bold text-navi-700 dark:text-navi-400">
-                  Arriving Script
-                </label>
-                <button
-                  onClick={() => setShowArriving(false)}
-                  className="text-zinc-400 hover:text-red-500"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
-              <ScriptInput
-                value={wp.arrivingNarration || ""}
-                onChange={(v) =>
-                  updateWaypoint(wp.id, { arrivingNarration: v })
-                }
-                isGenerating={wp.isGeneratingScript || false}
-                onCancel={() => {
-                  updateWaypoint(wp.id, { isGeneratingScript: false });
-                  invoke("cancel_python_blueprint").catch(console.error);
-                }}
-                onGenerate={(prompt, engine) =>
-                  handleGenerateScript("arriving", prompt, engine)
-                }
-              />
-            </div>
-          )}
-
-          {/* Attraction Script */}
-          {!showAttraction ? (
-            <button
-              onClick={() => setShowAttraction(true)}
-              className="w-full text-left px-3 py-2.5 rounded-xl border border-dashed border-zinc-300 dark:border-navidark-300 text-xs font-semibold text-zinc-500 hover:text-navi-600 dark:hover:text-navi-400 hover:bg-navi-50 dark:hover:bg-navi-900/20 transition-colors"
-            >
-              + Add Attraction Script
-            </button>
-          ) : (
-            <div className="space-y-1.5 bg-zinc-50 dark:bg-navidark-700/30 p-3 rounded-xl border border-zinc-200 dark:border-white/5">
-              <div className="flex justify-between items-center mb-2">
-                <label className="text-xs font-bold text-navi-700 dark:text-navi-400">
-                  Attraction Script
-                </label>
-                <button
-                  onClick={() => setShowAttraction(false)}
-                  className="text-zinc-400 hover:text-red-500"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
-              <ScriptInput
-                value={wp.attractionNarration || wp.narration || ""}
-                onChange={(v) =>
-                  updateWaypoint(wp.id, { attractionNarration: v })
-                }
-                isGenerating={wp.isGeneratingScript || false}
-                onCancel={() => {
-                  updateWaypoint(wp.id, { isGeneratingScript: false });
-                  invoke("cancel_python_blueprint").catch(console.error);
-                }}
-                onGenerate={(prompt, engine) =>
-                  handleGenerateScript("attraction", prompt, engine)
-                }
-              />
-            </div>
-          )}
-        </div>
-
-        {/* 3. Images, Camera Pans & Transitions */}
-        <div className="space-y-3 pb-8">
-          <div className="flex items-center justify-between">
-            <label className="text-xs font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-wider flex items-center gap-1.5">
-              <ImageIcon className="w-3.5 h-3.5 text-zinc-400" /> Pop-up
-              Pictures
-            </label>
-            <span className="text-[10px] font-medium text-zinc-500 bg-zinc-100 dark:bg-navidark-400 px-2 py-0.5 rounded-md">
-              {wpImages.length} / 3
-            </span>
-          </div>
-
-          <div className="flex flex-col gap-2 relative">
-            {wpImages.map((img, idx) => {
-              const currentPan = wpImagePans[idx] || "none";
-              const currentTransition = wpImageTransitions[idx] || "crossfade";
-
-              return (
-                <div key={idx} className="flex flex-col">
-                  <div className="flex flex-col bg-zinc-50 dark:bg-navidark-700/50 border border-zinc-200 dark:border-white/10 rounded-xl p-1.5 shadow-sm group">
-                    <div className="relative w-full h-28 rounded-lg overflow-hidden bg-zinc-200 dark:bg-navidark-900 mb-1.5">
-                      <img
-                        src={convertFileSrc(img)}
-                        alt="Preview"
-                        className="w-full h-full object-cover"
-                      />
-
-                      <div className="absolute bottom-2 left-2 right-8 pointer-events-none">
-                        <div className="bg-black/60 backdrop-blur-md text-white text-[9px] font-medium px-2 py-1 rounded-md truncate shadow-sm">
-                          {img.split(/[/\\]/).pop()}
-                        </div>
-                      </div>
-
-                      <button
-                        onClick={() => handleRemoveImage(idx)}
-                        className="absolute top-2 right-2 p-1.5 bg-black/50 hover:bg-red-500 text-white rounded-md backdrop-blur-md opacity-0 group-hover:opacity-100 transition-all shadow-md"
-                        title="Remove Image"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-
-                    <div className="flex items-center gap-2 px-1">
-                      <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-wider shrink-0">
-                        Cam Pan:
-                      </span>
-                      <select
-                        value={currentPan}
-                        onChange={(e) => updateImagePan(idx, e.target.value)}
-                        className="w-full bg-white dark:bg-navidark-900 border border-zinc-200 dark:border-white/5 text-zinc-700 dark:text-zinc-300 text-[10px] font-medium rounded-md px-2 py-1 focus:outline-none focus:border-navi-500 transition-colors cursor-pointer"
-                      >
-                        {cameraPans.map((pan) => (
-                          <option key={pan.value} value={pan.value}>
-                            {pan.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  {idx < wpImages.length - 1 && (
-                    <div className="flex justify-center py-2 relative z-10">
-                      <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-zinc-200 dark:bg-white/10 -z-10" />
-
-                      <div className="bg-white dark:bg-navidark-700 border border-zinc-200 dark:border-white/10 rounded-full shadow-sm flex items-center pr-1 hover:border-navi-300 transition-colors">
-                        <div className="pl-3 pr-2 py-1 text-[9px] text-zinc-400 font-bold uppercase tracking-wider border-r border-zinc-100 dark:border-white/5">
-                          Transition
-                        </div>
-                        <select
-                          value={currentTransition}
-                          onChange={(e) =>
-                            updateImageTransition(idx, e.target.value)
-                          }
-                          className="bg-transparent text-[10px] font-bold text-navi-600 dark:text-navi-400 py-1 pl-2 pr-6 focus:outline-none cursor-pointer appearance-none"
-                          style={{
-                            backgroundImage: `url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23296cf2%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E")`,
-                            backgroundRepeat: "no-repeat",
-                            backgroundPosition: "right 4px center",
-                          }}
-                        >
-                          {imageTransitions.map((t) => (
-                            <option key={t.value} value={t.value}>
-                              {t.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-
-            {wpImages.length < 3 && (
               <button
-                onClick={handleImageSelect}
-                className="w-full bg-zinc-50 dark:bg-navidark-700/50 hover:bg-navi-50 dark:hover:bg-navi-500/10 border border-zinc-300 dark:border-white/10 hover:border-navi-500/50 border-dashed rounded-xl py-3 text-xs font-medium text-zinc-500 hover:text-navi-600 dark:hover:text-navi-400 transition-all flex items-center justify-center gap-2 mt-2"
+                onClick={() => setIsEditingName(true)}
+                className="w-full text-left bg-white dark:bg-navidark-700 border border-zinc-200 dark:border-white/10 rounded-xl px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 hover:border-navi-300 transition-colors shadow-sm truncate"
               >
-                + Add Image
+                {wp.name}
               </button>
             )}
           </div>
-        </div>
-      </div>
 
-      {/* --- WAYPOINT ACTIONS --- */}
-      <div className="flex flex-col p-3 border-t border-zinc-200 dark:border-white/5 shrink-0 bg-white dark:bg-navidark-800 gap-2">
-        {/* Type Configuration Buttons */}
-        <div className="flex flex-col gap-2">
-          <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-            Waypoint Actions
-          </label>
-          <div className="flex flex-col gap-2">
-            <div className="flex gap-2">
+          {/* Custom Marker */}
+          <div className="space-y-3">
+            <div className="flex flex-col gap-1">
+              <h3 className="text-xs font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-wider flex items-center gap-1.5">
+                <MapPin className="w-3.5 h-3.5 text-zinc-400" /> Custom Marker
+              </h3>
+            </div>
+            <div className="flex items-center gap-3">
+              {wp.customMarker ? (
+                <div className="relative w-12 h-12 rounded-lg border border-zinc-200 dark:border-white/10 flex items-center justify-center bg-zinc-50 dark:bg-navidark-700/50 group">
+                  <img
+                    src={convertFileSrc(wp.customMarker)}
+                    alt="Custom Marker"
+                    className="w-8 h-8 object-contain"
+                  />
+                  <button
+                    onClick={() =>
+                      updateWaypoint(wp.id, { customMarker: undefined })
+                    }
+                    className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md"
+                    title="Remove Marker"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ) : (
+                <div className="w-12 h-12 rounded-lg border border-dashed border-zinc-300 dark:border-white/20 flex items-center justify-center bg-zinc-50 dark:bg-navidark-700/30">
+                  <MapPin className="w-5 h-5 text-zinc-300 dark:text-zinc-600" />
+                </div>
+              )}
+              <button
+                onClick={async () => {
+                  const selected = await open({
+                    multiple: false,
+                    filters: [
+                      {
+                        name: "Images",
+                        extensions: ["svg", "png", "jpg", "jpeg"],
+                      },
+                    ],
+                  });
+                  if (selected && typeof selected === "string") {
+                    updateWaypoint(wp.id, { customMarker: selected });
+                  }
+                }}
+                className="flex-1 py-2 text-xs font-semibold rounded-xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-navidark-700 hover:bg-zinc-50 dark:hover:bg-navidark-600 transition-colors text-zinc-700 dark:text-zinc-300 shadow-sm"
+              >
+                {wp.customMarker ? "Change" : "Select Marker"}
+              </button>
+            </div>
+          </div>
+
+          {/* Waypoint Actions */}
+          <div className="space-y-3 pt-4 border-t border-zinc-200 dark:border-white/10">
+            <h3 className="text-xs font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-wider flex items-center gap-1.5">
+              Actions
+            </h3>
+
+            <div className="grid grid-cols-2 gap-2">
               {!isStart && (
                 <button
                   onClick={() => handleSetWaypointType("start")}
-                  className="flex items-center justify-center gap-2 py-1.5 rounded-lg border border-zinc-200 dark:border-white/10 bg-white dark:bg-navidark-700 text-zinc-700 dark:text-zinc-300 text-xs font-semibold hover:bg-zinc-50 dark:hover:bg-navidark-500 transition-colors flex-1 shadow-sm"
+                  title="Set Start"
+                  className="flex flex-col items-center justify-center gap-1 py-2 rounded-lg border border-zinc-200 dark:border-white/10 bg-white dark:bg-navidark-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-navidark-500 transition-colors shadow-sm"
                 >
-                  <MapPinned className="w-4 h-4 text-zinc-400" /> Set Start
+                  <MapPinned className="w-4 h-4 text-zinc-400" />
+                  <span className="text-[10px] font-semibold">Start</span>
                 </button>
               )}
               {!isEnd && (
                 <button
                   onClick={() => handleSetWaypointType("end")}
-                  className="flex items-center justify-center gap-2 py-1.5 rounded-lg border border-zinc-200 dark:border-white/10 bg-white dark:bg-navidark-700 text-zinc-700 dark:text-zinc-300 text-xs font-semibold hover:bg-zinc-50 dark:hover:bg-navidark-500 transition-colors flex-1 shadow-sm"
+                  title="Set End"
+                  className="flex flex-col items-center justify-center gap-1 py-2 rounded-lg border border-zinc-200 dark:border-white/10 bg-white dark:bg-navidark-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-navidark-500 transition-colors shadow-sm"
                 >
-                  <CornerDownLeft className="w-4 h-4 text-zinc-400" /> Set End
+                  <CornerDownLeft className="w-4 h-4 text-zinc-400" />
+                  <span className="text-[10px] font-semibold">End</span>
                 </button>
               )}
+              {wp.isStopBy ? (
+                <button
+                  onClick={() => handleSetWaypointType("normal")}
+                  title="Revert to Normal Stop"
+                  className="flex flex-col items-center justify-center gap-1 py-2 rounded-lg border border-zinc-200 dark:border-white/10 bg-navi-50 dark:bg-navi-500/10 text-navi-700 dark:text-navi-400 hover:bg-navi-100 dark:hover:bg-navi-500/20 transition-colors shadow-sm"
+                >
+                  <MapPinPlus className="w-4 h-4" />
+                  <span className="text-[10px] font-semibold">Revert</span>
+                </button>
+              ) : (
+                <button
+                  onClick={() => handleSetWaypointType("stopby")}
+                  title="Set Stop-By"
+                  className="flex flex-col items-center justify-center gap-1 py-2 rounded-lg border border-zinc-200 dark:border-white/10 bg-white dark:bg-navidark-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-navidark-500 transition-colors shadow-sm"
+                >
+                  <MapPin className="w-4 h-4 text-zinc-400" />
+                  <span className="text-[10px] font-semibold">Stop-By</span>
+                </button>
+              )}
+
+              {wp.isStopBy && (
+                <button
+                  onClick={() => {
+                    updateWaypoint(wp.id, {
+                      connectToRoute: !wp.connectToRoute,
+                    });
+                    if (setIsDirty) setIsDirty(true);
+                  }}
+                  title={wp.connectToRoute ? "Disconnect" : "Connect"}
+                  className="flex flex-col items-center justify-center gap-1 py-2 rounded-lg border border-zinc-200 dark:border-white/10 bg-white dark:bg-navidark-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-navidark-500 transition-colors shadow-sm"
+                >
+                  {wp.connectToRoute ? (
+                    <UnlinkIcon className="w-4 h-4 text-zinc-400" />
+                  ) : (
+                    <LinkIcon className="w-4 h-4 text-zinc-400" />
+                  )}
+                  <span className="text-[10px] font-semibold">
+                    {wp.connectToRoute ? "Unlink" : "Link"}
+                  </span>
+                </button>
+              )}
+
+              <button
+                onClick={() => {
+                  if (confirm(`Remove ${wp.name}?`)) {
+                    setWaypoints(waypoints.filter((w) => w.id !== wp.id));
+                    setActiveWaypointId(null);
+                    onClose();
+                  }
+                }}
+                title="Remove Stop"
+                className="flex flex-col items-center justify-center gap-1 py-2 rounded-lg border border-transparent text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors col-span-full mt-2"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span className="text-[10px] font-semibold">Remove</span>
+              </button>
             </div>
-            {wp.isStopBy ? (
-              <button
-                onClick={() => handleSetWaypointType("normal")}
-                className="w-full flex items-center justify-center gap-2 py-1.5 rounded-lg border border-zinc-200 dark:border-white/10 bg-white dark:bg-navidark-700 text-zinc-700 dark:text-zinc-300 text-xs font-semibold hover:bg-zinc-50 dark:hover:bg-navidark-500 transition-colors shadow-sm"
-              >
-                <MapPinPlus className="w-4 h-4 text-zinc-400" /> Revert to Normal Stop
-              </button>
-            ) : (
-              <button
-                onClick={() => handleSetWaypointType("stopby")}
-                className="w-full flex items-center justify-center gap-2 py-1.5 rounded-lg border border-zinc-200 dark:border-white/10 bg-white dark:bg-navidark-700 text-zinc-700 dark:text-zinc-300 text-xs font-semibold hover:bg-zinc-50 dark:hover:bg-navidark-500 transition-colors shadow-sm"
-              >
-                <MapPin className="w-4 h-4 text-zinc-400" /> Set Stop-By
-              </button>
-            )}
           </div>
         </div>
 
-        {/* Connect to Route Toggle (Only visible if Stop-By) */}
-        {wp.isStopBy && (
-          <button
-            onClick={() => {
-              updateWaypoint(wp.id, { connectToRoute: !wp.connectToRoute });
-              if (setIsDirty) setIsDirty(true);
-            }}
-            className="flex justify-center items-center gap-2 w-full py-1.5 rounded-lg border border-zinc-200 dark:border-white/10 bg-white dark:bg-navidark-700 text-zinc-700 dark:text-zinc-300 text-xs font-semibold hover:bg-zinc-50 dark:hover:bg-navidark-500 transition-colors shadow-sm"
-          >
-            {wp.connectToRoute ? (
-              <UnlinkIcon className="w-4 h-4 text-zinc-400" />
-            ) : (
-              <LinkIcon className="w-4 h-4 text-zinc-400" />
-            )}
-            {wp.connectToRoute ? "Disconnect from Route" : "Connect to Route"}
-          </button>
-        )}
+        {/* --- RIGHT COLUMN: TABS --- */}
+        <div className="flex-1 flex flex-col min-w-0 h-full">
+          {/* Tabs Header */}
+          <div className="flex items-center px-4 pt-3 gap-2 border-b border-zinc-200 dark:border-white/10">
+            <button
+              onClick={() => setActiveTab("scripts")}
+              className={`px-4 py-2 text-xs font-bold transition-all border-b-2 ${
+                activeTab === "scripts"
+                  ? "border-navi text-navi dark:text-navi-400"
+                  : "border-transparent text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+              }`}
+            >
+              <div className="flex items-center gap-1.5">
+                <Mic className="w-3.5 h-3.5" />
+                Voiceover Scripts
+              </div>
+            </button>
+            <button
+              onClick={() => setActiveTab("images")}
+              className={`px-4 py-2 text-xs font-bold transition-all border-b-2 ${
+                activeTab === "images"
+                  ? "border-emerald-500 text-emerald-600 dark:text-emerald-400"
+                  : "border-transparent text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+              }`}
+            >
+              <div className="flex items-center gap-1.5">
+                <ImageIcon className="w-3.5 h-3.5" />
+                Pop-up Images
+              </div>
+            </button>
+          </div>
 
-        <button
-          onClick={() => {
-            if (confirm(`Remove ${wp.name}?`)) {
-              setWaypoints(waypoints.filter((w) => w.id !== wp.id));
-              setActiveWaypointId(null);
-              onClose();
-            }
-          }}
-          className="w-full py-1.5 rounded-lg border border-transparent text-zinc-500 dark:text-zinc-400 text-xs font-semibold hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors flex justify-center items-center gap-2"
-        >
-          <Trash2 className="w-4 h-4" /> Remove Stop
-        </button>
+          {/* Tab Content */}
+          <div className="flex-1 overflow-y-auto custom-scrollbar p-5">
+            {activeTab === "scripts" && (
+              <div className="space-y-6 max-w-2xl">
+                <div className="flex flex-col gap-1 mb-2">
+                  <h3 className="text-xs font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-wider">
+                    Voiceover Scripts
+                  </h3>
+                  <p className="text-[10px] text-zinc-500 dark:text-zinc-400 leading-tight">
+                    Scripts are optional. Add text manually or use AI to
+                    generate narration for the route travel and the location
+                    itself.
+                  </p>
+                </div>
+
+                {/* Arriving Script */}
+                {!showArriving ? (
+                  <button
+                    onClick={() => setShowArriving(true)}
+                    className="w-full text-left px-3 py-2.5 rounded-xl border border-dashed border-zinc-300 dark:border-navidark-300 text-xs font-semibold text-zinc-500 hover:text-navi-600 dark:hover:text-navi-400 hover:bg-navi-50 dark:hover:bg-navi-900/20 transition-colors"
+                  >
+                    + Add Arriving Narration Script
+                  </button>
+                ) : (
+                  <div className="space-y-1.5 bg-zinc-50 dark:bg-navidark-700/30 p-3 rounded-xl border border-zinc-200 dark:border-white/5">
+                    <div className="flex justify-between items-center mb-2">
+                      <label className="text-xs font-bold text-navi-700 dark:text-navi-400">
+                        Arriving Script
+                      </label>
+                      <button
+                        onClick={() => setShowArriving(false)}
+                        className="text-zinc-400 hover:text-red-500"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    <ScriptInput
+                      value={wp.arrivingNarration || ""}
+                      onChange={(v) =>
+                        updateWaypoint(wp.id, { arrivingNarration: v })
+                      }
+                      isGenerating={wp.isGeneratingScript || false}
+                      onCancel={() => {
+                        updateWaypoint(wp.id, { isGeneratingScript: false });
+                        invoke("cancel_python_blueprint").catch(console.error);
+                      }}
+                      onGenerate={(prompt, engine) =>
+                        handleGenerateScript("arriving", prompt, engine)
+                      }
+                    />
+                  </div>
+                )}
+
+                {/* Attraction Script */}
+                {!showAttraction ? (
+                  <button
+                    onClick={() => setShowAttraction(true)}
+                    className="w-full text-left px-3 py-2.5 rounded-xl border border-dashed border-zinc-300 dark:border-navidark-300 text-xs font-semibold text-zinc-500 hover:text-navi-600 dark:hover:text-navi-400 hover:bg-navi-50 dark:hover:bg-navi-900/20 transition-colors"
+                  >
+                    + Add Attraction Narration Script
+                  </button>
+                ) : (
+                  <div className="space-y-1.5 bg-zinc-50 dark:bg-navidark-700/30 p-3 rounded-xl border border-zinc-200 dark:border-white/5">
+                    <div className="flex justify-between items-center mb-2">
+                      <label className="text-xs font-bold text-emerald-700 dark:text-emerald-500">
+                        Attraction Script
+                      </label>
+                      <button
+                        onClick={() => setShowAttraction(false)}
+                        className="text-zinc-400 hover:text-red-500"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    <ScriptInput
+                      value={wp.attractionNarration || ""}
+                      onChange={(v) =>
+                        updateWaypoint(wp.id, { attractionNarration: v })
+                      }
+                      isGenerating={wp.isGeneratingScript || false}
+                      onCancel={() => {
+                        updateWaypoint(wp.id, { isGeneratingScript: false });
+                        invoke("cancel_python_blueprint").catch(console.error);
+                      }}
+                      onGenerate={(prompt, engine) =>
+                        handleGenerateScript("attraction", prompt, engine)
+                      }
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === "images" && (
+              <div className="space-y-4 max-w-3xl">
+                <div className="flex flex-col gap-1">
+                  <h3 className="text-xs font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-wider">
+                    Pop-up Images ({wpImages.length}/3)
+                  </h3>
+                  <p className="text-[10px] text-zinc-500 dark:text-zinc-400 leading-tight">
+                    Add up to 3 images that will pop up during the narration at
+                    this stop.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                  {wpImages.map((img, idx) => {
+                    const currentPan = imagePans[idx] || "none";
+                    const currentTransition =
+                      imageTransitionsState[idx] || "crossfade";
+
+                    return (
+                      <div
+                        key={`${img}-${idx}`}
+                        className="flex flex-col bg-zinc-50 dark:bg-navidark-700/30 rounded-xl p-3 border border-zinc-200 dark:border-white/5"
+                      >
+                        <div className="relative group w-full aspect-video rounded-lg overflow-hidden bg-black/5 dark:bg-white/5 shadow-inner mb-3">
+                          <img
+                            src={convertFileSrc(img)}
+                            alt={`Waypoint ${idx}`}
+                            className="w-full h-full object-cover"
+                          />
+                          <button
+                            onClick={() => removeImage(idx)}
+                            className="absolute top-2 right-2 p-1.5 bg-red-500/90 text-white rounded-md opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:bg-red-500 backdrop-blur-sm"
+                            title="Remove Image"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+
+                        <div className="space-y-3">
+                          <div className="flex flex-col gap-1.5">
+                            <label className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
+                              Camera Motion
+                            </label>
+                            <select
+                              value={currentPan}
+                              onChange={(e) =>
+                                updateImagePan(idx, e.target.value)
+                              }
+                              className="w-full bg-white dark:bg-navidark-800 border border-zinc-200 dark:border-white/10 text-zinc-700 dark:text-zinc-300 text-xs font-medium rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-navi-500 transition-colors cursor-pointer"
+                            >
+                              {cameraPans.map((pan) => (
+                                <option key={pan.value} value={pan.value}>
+                                  {pan.label}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          {idx < wpImages.length - 1 && (
+                            <div className="flex flex-col gap-1.5 border-t border-zinc-200 dark:border-white/10 pt-3 mt-1">
+                              <label className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
+                                Transition to Next
+                              </label>
+                              <select
+                                value={currentTransition}
+                                onChange={(e) =>
+                                  updateImageTransition(idx, e.target.value)
+                                }
+                                className="w-full bg-white dark:bg-navidark-800 border border-zinc-200 dark:border-white/10 text-zinc-700 dark:text-zinc-300 text-xs font-medium rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-navi-500 transition-colors cursor-pointer"
+                              >
+                                {imageTransitions.map((t) => (
+                                  <option key={t.value} value={t.value}>
+                                    {t.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {wpImages.length < 3 && (
+                    <button
+                      onClick={handleImageSelect}
+                      className="h-full min-h-[200px] bg-zinc-50 dark:bg-navidark-700/50 hover:bg-navi-50 dark:hover:bg-navi-500/10 border border-zinc-300 dark:border-white/10 hover:border-navi-500/50 border-dashed rounded-xl py-3 flex flex-col items-center justify-center gap-3 text-zinc-500 hover:text-navi-600 dark:hover:text-navi-400 transition-all"
+                    >
+                      <ImageIcon className="w-8 h-8 opacity-50" />
+                      <span className="text-xs font-medium">+ Add Image</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

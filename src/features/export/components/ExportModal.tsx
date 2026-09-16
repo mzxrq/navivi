@@ -230,8 +230,8 @@ export function ExportModal({
     return `${Math.max(0.1, estimatedMb).toFixed(1)} MB`;
   }, [estimatedMb]);
 
-  // Waypoint arrival markers
   const markers = useMemo(() => {
+    if (timeline.markers) return timeline.markers;
     if (!waypoints || waypoints.length === 0) return [];
     let runningTime = 0;
     return waypoints.map((wp, idx) => {
@@ -243,10 +243,11 @@ export function ExportModal({
         id: wp.id,
         name: wp.name || `Waypoint ${idx + 1}`,
         time,
-        index: idx,
+        index: idx + 1,
+        waypointId: wp.id,
       };
     });
-  }, [waypoints]);
+  }, [timeline.markers, waypoints]);
 
   // Audio mix status
   const audioMixSummary = useMemo(() => {

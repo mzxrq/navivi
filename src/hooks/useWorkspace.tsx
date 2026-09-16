@@ -58,6 +58,7 @@ const DefaultMetadata: ProjectMetadata = {
   created_at: "",
   status: "initialized",
   directory_path: "",
+  thumbnail_path: "",
 };
 
 const DefaultTimeline: TimelineData = {
@@ -171,6 +172,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     Record<string, [number, number][]>
   >({});
   const [versions, setVersions] = useState<ProjectVersion[]>([]);
+  const [projectThumbnail, setProjectThumbnail] = useState<string | null>(null);
 
   const [recentProjects, setRecentProjects] = useState<RecentProjects[]>(() => {
     const saved = localStorage.getItem("navivi-recents");
@@ -198,17 +200,20 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     }
   }, [isDirty]);
 
-  const addToRecents = useCallback((name: string, path: string) => {
-    setRecentProjects((prev) => {
-      const filtered = prev.filter((p) => p.path !== path);
-      const updated = [
-        { name, path, lastOpened: Date.now() },
-        ...filtered,
-      ].slice(0, 10);
-      localStorage.setItem("navivi-recents", JSON.stringify(updated));
-      return updated;
-    });
-  }, []);
+  const addToRecents = useCallback(
+    (name: string, path: string, thumbnailPath?: string) => {
+      setRecentProjects((prev) => {
+        const filtered = prev.filter((p) => p.path !== path);
+        const updated = [
+          { name, path, lastOpened: Date.now(), thumbnailPath },
+          ...filtered,
+        ].slice(0, 10);
+        localStorage.setItem("navivi-recents", JSON.stringify(updated));
+        return updated;
+      });
+    },
+    [],
+  );
 
   const refreshVersions = useCallback(async () => {
     if (!metadata.directory_path || !metadata.project_id) {
@@ -358,6 +363,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         overrideName,
         asDuplicate,
         safeFolderName,
+        projectThumbnail,
       );
 
       await saveTimelineManifest(result.projectDir, result.projName, timeline);
@@ -368,6 +374,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         status: "saved",
         directory_path: result.projectDir,
         project_id: result.projId,
+        thumbnail_path: result.thumbnailPath || "",
       });
       if (dirtyRevisionRef.current === saveRevision) setIsDirtyState(false);
 
@@ -377,6 +384,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         status: "saved",
         directory_path: result.projectDir,
         project_id: result.projId,
+        thumbnail_path: result.thumbnailPath || "",
       };
       if (recordVersion)
         await saveProjectVersion({
@@ -396,7 +404,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       setVersions(await listProjectVersions(result.projectDir, result.projId));
 
       console.log(`Saved successfully to: ${result.projectDir}`);
-      addToRecents(result.projName, result.nvvPath);
+      setProjectThumbnail(result.thumbnailPath || null);
+      addToRecents(result.projName, result.nvvPath, result.thumbnailPath);
 
       return result.projectDir;
     } catch (error) {
@@ -432,6 +441,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         created_at: data.created_at,
         status: "saved",
         directory_path: data.directory_path || "",
+        thumbnail_path: data.thumbnail_path || "",
         overview_narration: data.overview_narration || "",
       });
 
@@ -467,9 +477,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       );
 
       setIsDirty(false);
+      setProjectThumbnail(data.thumbnail_path || null);
       addToRecents(
         data.project_name || appConfig.defaultProjectName,
         selectedPath,
+        data.thumbnail_path,
       );
 
       return true;
@@ -490,6 +502,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     });
     setSettings(DefaultSettings);
     setRoutingCache({});
+    setProjectThumbnail(null);
     setVersions([]);
     setIsDirty(false);
   };
@@ -531,7 +544,12 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     }
 
     if (manifest.ui_state) {
-      resetTimelineHistory(manifest.ui_state);
+      resetTimelineHistory({
+        ...DefaultTimeline,
+        ...manifest.ui_state,
+        transitions: manifest.ui_state.transitions || [],
+        markers: manifest.ui_state.markers || manifest.markers || [],
+      });
       return;
     }
 
@@ -673,6 +691,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       clips: newClips,
       zoomMultiplier: 1,
       transitions: [],
+      markers: manifest.markers || [],
     });
   };
 
@@ -716,6 +735,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         setIsDirty,
         recentProjects,
         setRecentProjects,
+        projectThumbnail,
+        setProjectThumbnail,
         resetWorkspace,
         routingCache,
         setRoutingCache,

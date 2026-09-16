@@ -234,7 +234,7 @@ export function RenderOverlay() {
 
   const buildReviewItems = async () => {
     if (!metadata?.directory_path) return;
-    const videoDir = await join(metadata.directory_path, "video");
+    const audioDir = await join(metadata.directory_path, "assets", "audio");
     const items: ScriptReviewItem[] = [];
 
     // 1. Build Audio Items
@@ -243,7 +243,7 @@ export function RenderOverlay() {
         id: "overview",
         label: "Route Overview Narration",
         text: metadata.overview_narration,
-        audioPath: await join(videoDir, "overview_voice.wav"),
+        audioPath: await join(audioDir, "overview_voice.wav"),
       });
     }
 
@@ -258,7 +258,10 @@ export function RenderOverlay() {
           id: wp.id,
           label: `Stop ${i + 1}: ${wp.name}`,
           text: text,
-          audioPath: await join(videoDir, `${safeLabel}_script.wav`),
+          audioPath: await join(
+            audioDir,
+            `02_waypoint_${String(i + 1).padStart(2, "0")}_${safeLabel}.wav`,
+          ),
         });
       }
     }
@@ -710,7 +713,12 @@ export function RenderOverlay() {
         {status === "error" && (
           <div className="p-4 bg-zinc-900 border-t border-zinc-800 flex justify-end shrink-0 gap-3">
             <button
-              onClick={() => {
+              onClick={async () => {
+                try {
+                  await invoke("cancel_render");
+                } catch {
+                  // There may be no live child after a failed launch.
+                }
                 setStatus("processing");
                 setStep("generating");
                 setProgress(0);

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 
 // The vertex shader simply creates a fullscreen quad
 const VERTEX_SHADER = `
@@ -124,6 +124,7 @@ function compileShader(gl: WebGLRenderingContext, type: number, source: string) 
 
 export function useGLTransition(width: number, height: number, transitionName?: string) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [canvas, setCanvas] = useState<HTMLCanvasElement | null>(null);
   const glRef = useRef<WebGLRenderingContext | null>(null);
   const programRef = useRef<WebGLProgram | null>(null);
   const texturesRef = useRef<{ from: WebGLTexture | null; to: WebGLTexture | null }>({ from: null, to: null });
@@ -131,8 +132,11 @@ export function useGLTransition(width: number, height: number, transitionName?: 
 
   // Initialize WebGL context and compile the selected shader
   useEffect(() => {
-    if (!canvasRef.current) canvasRef.current = document.createElement("canvas");
+    if (!canvasRef.current) {
+      canvasRef.current = document.createElement("canvas");
+    }
     const canvas = canvasRef.current;
+    setCanvas(canvas);
     canvas.width = width;
     canvas.height = height;
 
@@ -140,7 +144,10 @@ export function useGLTransition(width: number, height: number, transitionName?: 
     if (!gl) return;
     glRef.current = gl;
 
-    if (!transitionName || !SHADERS[transitionName]) return;
+    if (!transitionName || !SHADERS[transitionName]) {
+      programRef.current = null;
+      return;
+    }
 
     const fsSource = FRAGMENT_BASE.replace("__TRANSITION_CODE__", SHADERS[transitionName]);
     const vertexShader = compileShader(gl, gl.VERTEX_SHADER, VERTEX_SHADER);
@@ -154,14 +161,17 @@ export function useGLTransition(width: number, height: number, transitionName?: 
     gl.attachShader(program, fragmentShader);
     gl.linkProgram(program);
 
-    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) return;
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+      gl.deleteProgram(program);
+      return;
+    }
     programRef.current = program;
     gl.useProgram(program);
 
     // Setup full-screen quad
     const positionBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1,  1, -1, -1,  1,  -1,  1,  1, -1,  1,  1]), gl.STATIC_DRAW);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]), gl.STATIC_DRAW);
 
     const positionLocation = gl.getAttribLocation(program, "a_position");
     gl.enableVertexAttribArray(positionLocation);
@@ -183,13 +193,36 @@ export function useGLTransition(width: number, height: number, transitionName?: 
     texturesRef.current = { from: setupTexture(0, "texFrom"), to: setupTexture(1, "texTo") };
     locRef.current.progress = gl.getUniformLocation(program, "progress");
 
+    return () => {
+      if (texturesRef.current.from) gl.deleteTexture(texturesRef.current.from);
+      if (texturesRef.current.to) gl.deleteTexture(texturesRef.current.to);
+      gl.deleteProgram(program);
+      if (vertexShader) gl.deleteShader(vertexShader);
+      if (fragmentShader) gl.deleteShader(fragmentShader);
+      texturesRef.current = { from: null, to: null };
+      programRef.current = null;
+      glRef.current = null;
+    };
+
   }, [width, height, transitionName]);
 
   // Render loop function exposed to components
   const drawGL = useCallback((fromMedia: any, toMedia: any, progress: number) => {
     const gl = glRef.current;
     const program = programRef.current;
-    if (!gl || !program) return;
+    if (!gl || !program) return false;
+
+    const fromReady = fromMedia instanceof HTMLVideoElement
+      ? fromMedia.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA
+      : fromMedia instanceof HTMLImageElement
+        ? fromMedia.complete && fromMedia.naturalWidth > 0
+        : false;
+    const toReady = toMedia instanceof HTMLVideoElement
+      ? toMedia.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA
+      : toMedia instanceof HTMLImageElement
+        ? toMedia.complete && toMedia.naturalWidth > 0
+        : false;
+    if (!fromReady || !toReady) return false;
 
     gl.useProgram(program);
 
@@ -204,10 +237,12 @@ export function useGLTransition(width: number, height: number, transitionName?: 
 
       gl.uniform1f(locRef.current.progress, progress);
       gl.drawArrays(gl.TRIANGLES, 0, 6);
+      return true;
     } catch (e) {
       // Catch errors if video elements aren't fully loaded yet
+      return false;
     }
   }, []);
 
-  return { glCanvas: canvasRef.current, drawGL };
+  return { glCanvas: canvas, drawGL };
 }

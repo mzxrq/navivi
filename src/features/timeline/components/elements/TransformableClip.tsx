@@ -10,7 +10,11 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { useGLTransition } from "../../../../hooks/useTransition";
 
 let measureCanvasCtx: CanvasRenderingContext2D | null = null;
-function getMeasuredTextDimensions(text: string, fontSize: number, fontFamily: string) {
+function getMeasuredTextDimensions(
+  text: string,
+  fontSize: number,
+  fontFamily: string,
+) {
   if (typeof document !== "undefined" && !measureCanvasCtx) {
     const c = document.createElement("canvas");
     measureCanvasCtx = c.getContext("2d");
@@ -55,6 +59,7 @@ export function TransformableClip({
   const trRef = useRef<any>(null);
 
   const [videoSize, setVideoSize] = useState({ width: 1920, height: 1080 });
+  const [hasTransitionFrame, setHasTransitionFrame] = useState(false);
 
   // <Main> Media Elements
   const [videoElement] = useState(() => {
@@ -76,7 +81,9 @@ export function TransformableClip({
   });
 
   // Dynamic previous media for transitions (supports both video and image)
-  const [prevMediaElement, setPrevMediaElement] = useState<HTMLVideoElement | HTMLImageElement | null>(null);
+  const [prevMediaElement, setPrevMediaElement] = useState<
+    HTMLVideoElement | HTMLImageElement | null
+  >(null);
 
   useEffect(() => {
     if (!clip.prevClip?.source) {
@@ -119,8 +126,10 @@ export function TransformableClip({
 
   // ミュートstate
   useEffect(() => {
-    if (videoElement instanceof HTMLVideoElement) videoElement.muted = clip.isMuted || false;
-    if (prevMediaElement instanceof HTMLVideoElement) prevMediaElement.muted = true;
+    if (videoElement instanceof HTMLVideoElement)
+      videoElement.muted = clip.isMuted || false;
+    if (prevMediaElement instanceof HTMLVideoElement)
+      prevMediaElement.muted = true;
   }, [clip.isMuted, videoElement, prevMediaElement]);
 
   useEffect(() => {
@@ -171,7 +180,11 @@ export function TransformableClip({
   // Trigger layer redraw when color adjustment effects change
   useEffect(() => {
     shapeRef.current?.getLayer()?.batchDraw();
-  }, [clip.effects?.brightness, clip.effects?.contrast, clip.effects?.saturation]);
+  }, [
+    clip.effects?.brightness,
+    clip.effects?.contrast,
+    clip.effects?.saturation,
+  ]);
 
   // Animation Loop
   useEffect(() => {
@@ -193,6 +206,10 @@ export function TransformableClip({
     videoSize.height,
     clip.transitionIn,
   );
+
+  useEffect(() => {
+    setHasTransitionFrame(false);
+  }, [clip.transitionIn, clip.prevClip?.id, clip.source]);
 
   // Playhead
   useEffect(() => {
@@ -261,10 +278,28 @@ export function TransformableClip({
         : null;
 
   useEffect(() => {
-    if (isTransitioning && prevMediaElement && currentMedia && glCanvas) {
-      drawGL(prevMediaElement, currentMedia, transitionProgress);
-      shapeRef.current?.getLayer()?.batchDraw(); // Force Konva to update its image node
-    }
+    if (!isTransitioning || !prevMediaElement || !currentMedia || !glCanvas)
+      return;
+
+    let animationFrame: number | null = null;
+    const renderTransition = () => {
+      const rendered = drawGL(
+        prevMediaElement,
+        currentMedia,
+        transitionProgress,
+      );
+      if (rendered) {
+        setHasTransitionFrame(true);
+        shapeRef.current?.getLayer()?.batchDraw();
+      } else {
+        animationFrame = requestAnimationFrame(renderTransition);
+      }
+    };
+    renderTransition();
+
+    return () => {
+      if (animationFrame !== null) cancelAnimationFrame(animationFrame);
+    };
   }, [
     currentTime,
     isTransitioning,
@@ -279,7 +314,8 @@ export function TransformableClip({
 
   const isTextOrSubtitle = clip.type === "text" || clip.type === "subtitle";
   const textContent = clip.text !== undefined ? clip.text : "New Text";
-  const fontFamily = clip.fontFamily || clip.style?.fontFamily || "Inter, sans-serif";
+  const fontFamily =
+    clip.fontFamily || clip.style?.fontFamily || "Inter, sans-serif";
   const fontSize = clip.fontSize || clip.style?.fontSize || 48;
   const fillColor = clip.color || clip.style?.color || "#ffffff";
   const strokeColor = clip.stroke || clip.style?.stroke || undefined;
@@ -292,27 +328,34 @@ export function TransformableClip({
   const isKaraoke = Boolean(
     clip.karaoke ??
     clip.style?.karaoke ??
-    (clip.trackId === "track-subtitles" && clip.karaoke)
+    (clip.trackId === "track-subtitles" && clip.karaoke),
   );
   const karaokeHighlightColor =
-    clip.karaokeHighlightColor || clip.style?.karaokeHighlightColor || "#f59e0b";
+    clip.karaokeHighlightColor ||
+    clip.style?.karaokeHighlightColor ||
+    "#f59e0b";
 
   const measured = isTextOrSubtitle
     ? getMeasuredTextDimensions(textContent, fontSize, fontFamily)
     : { width: 100, height: 50 };
 
   const computedTextWidth =
-    textRef.current && typeof textRef.current.width === "function" && textRef.current.width() > 0
+    textRef.current &&
+    typeof textRef.current.width === "function" &&
+    textRef.current.width() > 0
       ? textRef.current.width()
       : measured.width;
   const computedTextHeight =
-    textRef.current && typeof textRef.current.height === "function" && textRef.current.height() > 0
+    textRef.current &&
+    typeof textRef.current.height === "function" &&
+    textRef.current.height() > 0
       ? textRef.current.height()
       : measured.height;
 
-  const clipProgress = clip.duration > 0
-    ? Math.max(0, Math.min(1, (currentTime - clip.startTime) / clip.duration))
-    : 0;
+  const clipProgress =
+    clip.duration > 0
+      ? Math.max(0, Math.min(1, (currentTime - clip.startTime) / clip.duration))
+      : 0;
 
   useEffect(() => {
     if (isKaraoke && isTextOrSubtitle && shapeRef.current) {
@@ -349,7 +392,7 @@ export function TransformableClip({
     return null;
   }
   const activeMedia =
-    isTransitioning && glCanvas
+    isTransitioning && glCanvas && hasTransitionFrame
       ? glCanvas
       : clip.type === "video" && videoElement instanceof HTMLVideoElement
         ? videoElement

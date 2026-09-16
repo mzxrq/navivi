@@ -3,14 +3,17 @@ import { join } from "@tauri-apps/api/path";
 import { open } from "@tauri-apps/plugin-dialog";
 import { readDir, exists } from "@tauri-apps/plugin-fs"; // ✨ NEW: Native filesystem scanner
 import { convertFileSrc } from "@tauri-apps/api/core";
+import { invoke } from "@tauri-apps/api/core";
 import { useWorkspace } from "../../../hooks/useWorkspace";
+import { useUI } from "../../../hooks/useUI";
 import {
   Search,
   Film,
   ImageIcon,
   Mic,
   FileAudio,
-  FolderSync,
+  AlertTriangle,
+  RefreshCw,
 } from "../../../components/ui/icons";
 
 type MediaType = "all" | "video" | "audio" | "image" | "text";
@@ -21,20 +24,28 @@ interface MediaAsset {
   type: "video" | "audio" | "image" | "text";
   duration?: string;
   source: string;
+  missing?: boolean;
 }
 
 export function MediaPool() {
   const { metadata } = useWorkspace();
+  const { showToast } = useUI();
   const [filter, setFilter] = useState<MediaType>("all");
   const [searchQuery, setSearchQuery] = useState("");
 
   const [assets, setAssets] = useState<MediaAsset[]>([]);
   const [importedAssets, setImportedAssets] = useState<MediaAsset[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [refreshToken, setRefreshToken] = useState(0);
+  const projectAssetKey = metadata?.directory_path
+    ? `nle_media_pool:${metadata.directory_path}`
+    : "nle_media_pool:unsaved";
 
   // Auto-Load System for user-imported assets
   useEffect(() => {
-    const savedAssets = localStorage.getItem("nle_media_pool");
+    setIsLoaded(false);
+    setImportedAssets([]);
+    const savedAssets = localStorage.getItem(projectAssetKey);
     if (savedAssets) {
       try {
         setImportedAssets(JSON.parse(savedAssets));
@@ -43,15 +54,38 @@ export function MediaPool() {
       }
     }
     setIsLoaded(true);
-  }, []);
+  }, [projectAssetKey]);
 
   // Auto-Save System for user-imported assets
   useEffect(() => {
     if (isLoaded) {
-      localStorage.setItem("nle_media_pool", JSON.stringify(importedAssets));
+      localStorage.setItem(projectAssetKey, JSON.stringify(importedAssets));
     }
-  }, [importedAssets, isLoaded]);
+  }, [importedAssets, isLoaded, projectAssetKey]);
 
+  useEffect(() => {
+    let cancelled = false;
+    const validateImportedAssets = async () => {
+      const checked = await Promise.all(
+        importedAssets.map(async (asset) => ({
+          ...asset,
+          missing: !(await exists(asset.source)),
+        })),
+      );
+      if (
+        !cancelled &&
+        checked.some(
+          (asset, index) => asset.missing !== importedAssets[index]?.missing,
+        )
+      ) {
+        setImportedAssets(checked);
+      }
+    };
+    if (importedAssets.length > 0) void validateImportedAssets();
+    return () => {
+      cancelled = true;
+    };
+  }, [importedAssets.length]);
   // ✨ TRUE DISK SCANNER
   useEffect(() => {
     const buildAssets = async () => {
@@ -63,10 +97,10 @@ export function MediaPool() {
 
       // The new strict folder structure mapped to ClipKinds
       const folders = [
-        { name: "video", type: "video" as const },
-        { name: "audio", type: "audio" as const },
-        { name: "image", type: "image" as const },
-        { name: "subtitle", type: "text" as const },
+        { name: "video", type: "video" as const, recursive: true },
+        { name: "audio", type: "audio" as const, recursive: false },
+        { name: "image", type: "image" as const, recursive: false },
+        { name: "subtitles", type: "text" as const, recursive: false },
       ];
 
       for (const folder of folders) {
@@ -74,46 +108,54 @@ export function MediaPool() {
 
         if (await exists(folderPath)) {
           try {
-            const entries = await readDir(folderPath);
-            for (const entry of entries) {
-              if (entry.isFile && !entry.name.startsWith(".")) {
-                // Ignore hidden files like .DS_Store
-                const filePath = await join(folderPath, entry.name);
-                let durationStr =
-                  folder.type === "image" || folder.type === "text"
-                    ? "00:05"
-                    : undefined;
-
-                if (folder.type === "video" || folder.type === "audio") {
-                  const safeUrl = convertFileSrc(filePath);
-                  const durationSeconds = await new Promise<number>(
-                    (resolve) => {
-                      const media = document.createElement(
-                        folder.type === "audio" ? "audio" : "video",
-                      );
-                      media.onloadedmetadata = () => resolve(media.duration);
-                      media.onerror = () => resolve(0);
-                      media.src = safeUrl;
-                    },
-                  );
-                  if (durationSeconds > 0 && isFinite(durationSeconds)) {
-                    const mins = Math.floor(durationSeconds / 60)
-                      .toString()
-                      .padStart(2, "0");
-                    const secs = Math.floor(durationSeconds % 60)
-                      .toString()
-                      .padStart(2, "0");
-                    durationStr = `${mins}:${secs}`;
-                  }
+            const foldersToScan = [folderPath];
+            while (foldersToScan.length > 0) {
+              const currentFolderPath = foldersToScan.pop()!;
+              const entries = await readDir(currentFolderPath);
+              for (const entry of entries) {
+                if (entry.isDirectory && folder.recursive) {
+                  foldersToScan.push(await join(currentFolderPath, entry.name));
+                  continue;
                 }
+                if (entry.isFile && !entry.name.startsWith(".")) {
+                  // Ignore hidden files like .DS_Store
+                  const filePath = await join(currentFolderPath, entry.name);
+                  let durationStr =
+                    folder.type === "image" || folder.type === "text"
+                      ? "00:05"
+                      : undefined;
 
-                generated.push({
-                  id: crypto.randomUUID(),
-                  name: entry.name,
-                  type: folder.type,
-                  source: filePath,
-                  duration: durationStr,
-                });
+                  if (folder.type === "video" || folder.type === "audio") {
+                    const safeUrl = convertFileSrc(filePath);
+                    const durationSeconds = await new Promise<number>(
+                      (resolve) => {
+                        const media = document.createElement(
+                          folder.type === "audio" ? "audio" : "video",
+                        );
+                        media.onloadedmetadata = () => resolve(media.duration);
+                        media.onerror = () => resolve(0);
+                        media.src = safeUrl;
+                      },
+                    );
+                    if (durationSeconds > 0 && isFinite(durationSeconds)) {
+                      const mins = Math.floor(durationSeconds / 60)
+                        .toString()
+                        .padStart(2, "0");
+                      const secs = Math.floor(durationSeconds % 60)
+                        .toString()
+                        .padStart(2, "0");
+                      durationStr = `${mins}:${secs}`;
+                    }
+                  }
+
+                  generated.push({
+                    id: crypto.randomUUID(),
+                    name: entry.name,
+                    type: folder.type,
+                    source: filePath,
+                    duration: durationStr,
+                  });
+                }
               }
             }
           } catch (err) {
@@ -125,7 +167,7 @@ export function MediaPool() {
     };
 
     buildAssets();
-  }, [metadata]); // Re-runs whenever the project directory changes
+  }, [metadata?.directory_path, refreshToken]);
 
   const handleImportMedia = async () => {
     try {
@@ -154,6 +196,10 @@ export function MediaPool() {
       const filePaths = Array.isArray(selected) ? selected : [selected];
       const newAssets: MediaAsset[] = [];
 
+      if (!metadata?.directory_path) {
+        throw new Error("Save the project before importing media.");
+      }
+
       for (const path of filePaths) {
         const ext = path.split(".").pop()?.toLowerCase() || "";
         let type: "video" | "audio" | "image" | "text" = "image";
@@ -162,6 +208,24 @@ export function MediaPool() {
         if (["srt"].includes(ext)) type = "text";
 
         const name = path.split(/[\\/]/).pop() || "Unknown File";
+        const folderName = type === "text" ? "subtitles" : type;
+        const targetDir = await join(
+          metadata.directory_path,
+          "assets",
+          folderName,
+        );
+        const normalizedPath = path.replace(/\\/g, "/").toLowerCase();
+        const normalizedProjectDir = metadata.directory_path
+          .replace(/\\/g, "/")
+          .toLowerCase();
+        const projectAssetPath = normalizedPath.startsWith(
+          `${normalizedProjectDir}/assets/`,
+        )
+          ? path
+          : await invoke<string>("copy_asset_file", {
+              sourcePath: path,
+              targetDir,
+            });
         let durationStr = "00:05";
 
         if (type === "audio" || type === "video") {
@@ -187,19 +251,28 @@ export function MediaPool() {
         newAssets.push({
           id: crypto.randomUUID(),
           name: name,
-          source: path,
+          source: projectAssetPath,
           type: type,
           duration: durationStr,
         });
       }
 
       setImportedAssets((prev) => [...prev, ...newAssets]);
+      showToast(
+        `${newAssets.length} media asset(s) copied into the project.`,
+        "success",
+      );
     } catch (error) {
       console.error("Failed to import media:", error);
+      showToast("Failed to import media into the project.", "error");
     }
   };
 
-  const allAssets = [...assets, ...importedAssets];
+  const allAssets = Array.from(
+    new Map(
+      [...assets, ...importedAssets].map((asset) => [asset.source, asset]),
+    ).values(),
+  );
 
   const filteredAssets = allAssets.filter((asset) => {
     const matchesType = filter === "all" || asset.type === filter;
@@ -227,7 +300,12 @@ export function MediaPool() {
       {/* Header & Search */}
       <div className="p-3 border-b border-zinc-200 dark:border-navidark-300 space-y-3">
         <div className="flex items-center justify-between text-xs font-bold text-zinc-700 dark:text-zinc-200 uppercase tracking-wider">
-          <span>Media Pool</span>
+          <span>
+            Media Pool{" "}
+            <span className="text-[9px] font-normal text-zinc-400">
+              {allAssets.length}
+            </span>
+          </span>
           <div className="flex items-center gap-2">
             <button
               onClick={handleImportMedia}
@@ -237,11 +315,11 @@ export function MediaPool() {
               <span className="text-sm leading-none">+</span> Import
             </button>
             <button
-              onClick={() => setImportedAssets([])}
+              onClick={() => setRefreshToken((token) => token + 1)}
               className="text-zinc-400 hover:text-red-500 transition-colors"
-              title="Clear Imported Media"
+              title="Refresh asset library"
             >
-              <FolderSync className="w-3.5 h-3.5" />
+              <RefreshCw className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
@@ -260,7 +338,7 @@ export function MediaPool() {
 
       {/* Filter Tabs */}
       <div className="flex bg-zinc-50 dark:bg-navidark-700 border-b border-zinc-200 dark:border-navidark-300 p-1">
-        {["all", "video", "audio", "image"].map((type) => (
+        {["all", "video", "audio", "image", "text"].map((type) => (
           <button
             key={type}
             onClick={() => setFilter(type as MediaType)}
@@ -288,6 +366,14 @@ export function MediaPool() {
               draggable="true"
               onDragStart={(e) => {
                 e.stopPropagation();
+                if (asset.missing) {
+                  e.preventDefault();
+                  showToast(
+                    "This asset is missing from the project.",
+                    "warning",
+                  );
+                  return;
+                }
                 e.dataTransfer.setData("text", JSON.stringify(asset));
                 e.dataTransfer.effectAllowed = "copy";
               }}
@@ -325,15 +411,28 @@ export function MediaPool() {
                   }),
                 );
               }}
-              className="flex items-center gap-3 p-2 rounded-md hover:bg-zinc-100 dark:hover:bg-navidark-600 cursor-grab active:cursor-grabbing border border-transparent hover:border-zinc-200 dark:hover:border-navidark-400 transition-colors group"
+              className={`flex items-center gap-3 p-2 rounded-md border border-transparent transition-colors group ${asset.missing ? "opacity-60 bg-red-50/50 dark:bg-red-950/20" : "hover:bg-zinc-100 dark:hover:bg-navidark-600 cursor-grab active:cursor-grabbing hover:border-zinc-200 dark:hover:border-navidark-400"}`}
             >
               <div className="shrink-0 bg-zinc-100 dark:bg-navidark-900 p-1.5 rounded pointer-events-none">
-                {getIcon(asset.type)}
+                {asset.missing ? (
+                  <AlertTriangle className="w-4 h-4 text-red-500" />
+                ) : asset.type === "image" ? (
+                  <img
+                    src={convertFileSrc(asset.source)}
+                    alt=""
+                    className="w-8 h-8 rounded object-cover"
+                  />
+                ) : (
+                  getIcon(asset.type)
+                )}
               </div>
               <div className="flex-1 min-w-0 pointer-events-none">
                 <p className="text-xs font-medium text-zinc-700 dark:text-zinc-200 truncate select-none">
                   {asset.name}
                 </p>
+                {asset.missing && (
+                  <p className="text-[10px] text-red-500">Missing file</p>
+                )}
                 {asset.duration && (
                   <p className="text-[10px] text-zinc-400 font-mono">
                     {asset.duration}

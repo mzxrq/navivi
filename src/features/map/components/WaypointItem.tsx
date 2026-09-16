@@ -11,7 +11,7 @@ import {
   Pencil,
 } from "../../../components/ui/icons";
 import { Waypoint, RouteMode } from "../../../types/index";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useWorkspace } from "../../../hooks/useWorkspace";
 
 interface WaypointItemProps {
@@ -36,6 +36,7 @@ export function WaypointItem({
   const { activeWaypointId, setActiveWaypointId, updateWaypoint, waypoints } =
     useWorkspace();
   const itemRef = useRef<HTMLDivElement>(null);
+  const [isExpanded, setIsExpanded] = useState(false);
   const isActive = activeWaypointId === wp.id;
 
   useEffect(() => {
@@ -73,8 +74,13 @@ export function WaypointItem({
   }
 
   // ✨ FIXED: Check all three possible script locations
-  const hasScript = !!(wp.narration || wp.arrivingNarration || wp.attractionNarration);
-  const scriptPreview = wp.arrivingNarration || wp.attractionNarration || wp.narration || "";
+  const hasScript = !!(
+    wp.narration ||
+    wp.arrivingNarration ||
+    wp.attractionNarration
+  );
+  const scriptPreview =
+    wp.arrivingNarration || wp.attractionNarration || wp.narration || "";
 
   return (
     <div
@@ -123,8 +129,8 @@ export function WaypointItem({
               wp.isStopBy
                 ? "bg-[#33261c] border-[#33261c]"
                 : isActive
-                ? "border-navi bg-navi dark:bg-navi" 
-                : "border-navi bg-navi dark:bg-navi" 
+                  ? "border-navi bg-navi dark:bg-navi"
+                  : "border-navi bg-navi dark:bg-navi"
             }`}
           >
             <span
@@ -152,27 +158,46 @@ export function WaypointItem({
             {wp.name}
           </span>
 
-          {/* Micro Data Badges */}
+          {/* Collapsible Tree for Media/Script */}
           {(wp.images?.length || hasScript) && (
-            <div className="flex flex-wrap gap-1.5 mt-1.5">
-              {wp.images && wp.images.length > 0 && (
-                <span className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800/80 text-[9px] font-medium text-zinc-800 dark:text-zinc-400 transition-colors">
-                  <ImageIcon className="w-2.5 h-2.5" /> {wp.images.length} / 3
+            <div className="mt-1.5 flex flex-col">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsExpanded(!isExpanded);
+                }}
+                className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider text-zinc-500 hover:text-navi-500 transition-colors"
+              >
+                <span
+                  className={`transition-transform duration-200 inline-block ${isExpanded ? "rotate-90" : ""}`}
+                >
+                  ▶
                 </span>
-              )}
-              {hasScript && (
-                <span className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800/80 text-[9px] font-medium text-zinc-800 dark:text-zinc-400 transition-colors">
-                  <Mic className="w-2.5 h-2.5" />
-                </span>
+                Assets & Media
+              </button>
+
+              {isExpanded && (
+                <div className="pl-3 mt-1.5 ml-1 border-l border-zinc-200 dark:border-white/10 flex flex-col gap-1.5 text-[10px] text-zinc-600 dark:text-zinc-400">
+                  {wp.images && wp.images.length > 0 && (
+                    <div className="flex items-center gap-1.5">
+                      <ImageIcon className="w-3 h-3 text-emerald-500" />
+                      {wp.images.length} Image{wp.images.length > 1 ? "s" : ""}
+                    </div>
+                  )}
+                  {hasScript && (
+                    <div className="flex flex-col gap-0.5">
+                      <div className="flex items-center gap-1.5">
+                        <Mic className="w-3 h-3 text-navi-400" /> Voiceover
+                        Script
+                      </div>
+                      <span className="pl-4.5 italic text-zinc-400 dark:text-zinc-500 truncate max-w-[200px]">
+                        "{scriptPreview.substring(0, 30)}..."
+                      </span>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
-          )}
-
-          {/* Narration Preview */}
-          {hasScript && (
-            <span className="text-[10px] text-zinc-400 dark:text-zinc-500 italic truncate mt-0.5 transition-colors">
-              {scriptPreview.substring(0, 40) + " ..."}
-            </span>
           )}
 
           {/* Routing Mode Controls */}

@@ -79,12 +79,19 @@ export function PreviewMonitor({
             fill="#000000"
           />
           {activeClips.map((clip) => {
-            const prevClip = activeClips.find(
-              (c) =>
-                c.trackId === clip.trackId &&
-                c.startTime < clip.startTime &&
-                c.id !== clip.id,
-            );
+            const prevClip = activeClips
+              .filter(
+                (c) =>
+                  c.trackId === clip.trackId &&
+                  c.id !== clip.id &&
+                  c.startTime < clip.startTime,
+              )
+              .sort(
+                (left, right) =>
+                  right.startTime +
+                  right.duration -
+                  (left.startTime + left.duration),
+              )[0];
 
             return (
               <TransformableClip
