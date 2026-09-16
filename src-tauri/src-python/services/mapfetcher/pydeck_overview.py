@@ -28,6 +28,7 @@ import cv2
 import numpy as np
 import pydeck as pdk
 
+from services.mapfetcher.mapgeometry import choose_route_focus_view
 from services.vdoprocessing.pydeckrecorder.common import MAPBOX_API_KEY
 from services.vdoprocessing.pydeckrecorder.httpserver import start_local_server
 from services.vdoprocessing.pydeckrecorder.popupsequence import _wait_for_paint
@@ -299,6 +300,9 @@ def capture_pydeck_zoom_sequence(
     zoom_boost: float = 1.6,
     mapbox_key: str = None,
     map_style: str = "mapbox://styles/mapbox/streets-v12",
+    route_latlon=None,
+    next_lat: float = None,
+    next_lon: float = None,
 ) -> List[Tuple[np.ndarray, Tuple[float, float, float, float]]]:
     """A GENUINE dynamic zoom — `num_frames` real deck.gl re-renders as
     the camera pushes in from the base overview view toward
@@ -322,7 +326,17 @@ def capture_pydeck_zoom_sequence(
     image. The base (frame 0, most-zoomed-out) view exactly matches
     fetch_overview_image_pydeck's own output for the same bounding_box/
     output_size, so a sequence started here picks up seamlessly from an
-    already-displayed static pydeck overview background."""
+    already-displayed static pydeck overview background.
+
+    Pass `route_latlon` (the route as (lat, lon) pairs) to have the view
+    the push ENDS on chosen by choose_route_focus_view rather than assumed:
+    it settles on the tightest framing that still shows the route running
+    through the target point, instead of zooming a fixed `zoom_boost` with
+    the point pinned to whatever screen pixel it happened to occupy in the
+    wide shot. That pinning is what left the close-up looking like a map of
+    nothing in particular whenever the point sat near a frame edge — the
+    line simply ran out of the shot as the camera pushed in. Without the
+    argument the original fixed-boost, fixed-pixel behaviour is unchanged."""
     base_lon, base_lat, base_zoom, base_extent = compute_pydeck_view(bounding_box, output_size)
     out_w, out_h = output_size
 
@@ -333,14 +347,38 @@ def capture_pydeck_zoom_sequence(
     )
     target_zoom = base_zoom + zoom_boost
 
+    end_view = None
+    if route_latlon:
+        # Bounded by the zoom this would have used anyway: the chooser may
+        # pull BACK from it to keep the line in shot, never past the wide
+        # shot the push starts from.
+        end_view = choose_route_focus_view(
+            route_latlon, target_lat, target_lon, output_size,
+            min_zoom=base_zoom, max_zoom=target_zoom,
+            next_lat=next_lat, next_lon=next_lon,
+        )
+
     view_states: List[Tuple[float, float, float]] = []
     extents: List[Tuple[float, float, float, float]] = []
     for i in range(max(1, num_frames)):
         t = i / max(1, num_frames - 1)
-        zoom = base_zoom + (target_zoom - base_zoom) * t
-        c_lon, c_lat = _center_for_fixed_screen_point(
-            target_lon, target_lat, target_px, target_py, zoom, output_size
-        )
+        if end_view is not None:
+            # Straight interpolation from the base view to the chosen one.
+            # Frame 0 is still exactly the base view (t=0), so a sequence
+            # started from an already-displayed static overview picks up
+            # seamlessly either way.
+            end_lon, end_lat, end_zoom = end_view
+            zoom = base_zoom + (end_zoom - base_zoom) * t
+            c_lon = base_lon + (end_lon - base_lon) * t
+            c_lat = _inverse_mercator_y(
+                _mercator_y(base_lat)
+                + (_mercator_y(end_lat) - _mercator_y(base_lat)) * t
+            )
+        else:
+            zoom = base_zoom + (target_zoom - base_zoom) * t
+            c_lon, c_lat = _center_for_fixed_screen_point(
+                target_lon, target_lat, target_px, target_py, zoom, output_size
+            )
         view_states.append((c_lon, c_lat, zoom))
         extents.append(_extent_for_view(c_lon, c_lat, zoom, output_size))
 

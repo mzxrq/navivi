@@ -135,7 +135,17 @@ def _find_leg_cache_key(
     """Finds the .routecache.json entry for the leg from_wp -> to_wp, by
     nearest-coordinate match on the key's own start/end points (tolerant of
     the key's 5-decimal rounding). Shared by the mode and geometry lookups
-    below so both agree on exactly the same cache entry for a given leg."""
+    below so both agree on exactly the same cache entry for a given leg.
+
+    A key is "lat,lng|lat,lng|mode|customHash" — FOUR fields, the last one
+    a hand-drawn leg's own geometry hash (empty for every other mode). See
+    the frontend's own key builders (src/services/fileSystem.ts and
+    src/features/map/hooks/useMapRouting.tsx), which have always written
+    that trailing field. Unpacking exactly three fields here (as this did)
+    raised ValueError on EVERY key and skipped it, so the whole route
+    cache silently resolved to nothing: no leg ever got its cached mode,
+    and _resolve_leg_geometry_from_cache never returned a routed polyline
+    either, leaving hand-drawn legs to fall back to the raw GPS track."""
     if not routing_cache:
         return None
     from_lat, from_lng = from_wp.get("lat"), from_wp.get("lng", from_wp.get("lon"))
@@ -145,10 +155,12 @@ def _find_leg_cache_key(
 
     best_key, best_dist = None, float("inf")
     for route_key in routing_cache:
+        parts = route_key.split("|")
+        if len(parts) < 3:
+            continue
         try:
-            start_str, end_str, _mode = route_key.split("|")
-            s_lat, s_lng = (float(v) for v in start_str.split(","))
-            e_lat, e_lng = (float(v) for v in end_str.split(","))
+            s_lat, s_lng = (float(v) for v in parts[0].split(","))
+            e_lat, e_lng = (float(v) for v in parts[1].split(","))
         except ValueError:
             continue
         dist = (
@@ -167,18 +179,22 @@ def _find_leg_cache_key(
 def _resolve_leg_mode_from_cache(
     from_wp: dict, to_wp: dict, routing_cache: dict
 ) -> Optional[str]:
-    """Returns the leg's mode suffix ("walking"/"ferry"/...) from its
-    .routecache.json entry.
+    """Returns the leg's mode ("walking"/"ferry"/...) from its
+    .routecache.json entry — the mode a project that no longer records
+    `routeMode` on its waypoints falls back to (see _build_point_modes,
+    where an explicit routeMode wins).
 
-    job_config.json's waypoints no longer carry `routeMode` — the frontend
-    now leaves that field off entirely and the cache key (the only place
-    that still records "...|walking"/"...|ferry"/etc per leg) is the sole
-    source of truth for what mode a leg was actually computed with.
-    """
+    The mode is the key's THIRD field, not its last: a key ends with a
+    hand-drawn leg's geometry hash ("...|draw|[[34.27,135.06],...]"), so
+    reading the last field (as this did) returned that hash — or, for
+    every other mode, the empty string it ends with."""
     best_key = _find_leg_cache_key(from_wp, to_wp, routing_cache)
     if best_key is None:
         return None
-    return best_key.rsplit("|", 1)[-1].strip().lower()
+    parts = best_key.split("|")
+    if len(parts) < 3:
+        return None
+    return parts[2].strip().lower() or None
 
 
 def _resolve_leg_geometry_from_cache(
@@ -206,12 +222,18 @@ def _build_point_modes(
     routing_cache: Optional[dict] = None,
 ) -> list[str]:
     """Assigns a travel mode ("walking"/"ferry"/"airplane"/...) to every
-    route point. Each leg's mode is resolved primarily from
-    `routing_cache` (.routecache.json, keyed "lat,lon|lat,lon|mode" by the
-    DEPARTING waypoint — matches the frontend's own routing/cache-pruning
-    convention), falling back to that waypoint's own `routeMode` field only
-    for older projects that still have it set. The mode carries forward
-    past the last waypoint for the final leg to the destination."""
+    route point. Each leg's mode comes from the DEPARTING waypoint's own
+    `routeMode` field, falling back to that leg's `routing_cache` entry
+    (.routecache.json, keyed "lat,lon|lat,lon|mode|customHash" by the
+    departing waypoint — matches the frontend's own routing/cache-pruning
+    convention) for projects that don't record routeMode. The mode carries
+    forward past the last waypoint for the final leg to the destination.
+
+    routeMode wins because it is the field a project is actually edited
+    through: the cache records what a leg was last ROUTED with, so a leg
+    whose mode was changed without re-routing (a ferry crossing the
+    router has no water route for, say) would otherwise keep reporting
+    the stale mode its geometry happened to be computed with."""
     modes = ["walking"] * num_points
     if num_points == 0:
         return modes
@@ -228,9 +250,9 @@ def _build_point_modes(
         # [NOTE] [Animation] boundaries[leg_idx] is where waypoint `leg_idx` sits; the leg ending there departs from waypoint `leg_idx - 1`. leg_idx == 0 has no real leg before it, and leg_idx == len(waypoints) is the trailing stretch past the last waypoint — both just keep whatever current_mode already is.
         if 0 < leg_idx < len(waypoints):
             from_wp, to_wp = waypoints[leg_idx - 1], waypoints[leg_idx]
-            leg_mode = _resolve_leg_mode_from_cache(from_wp, to_wp, routing_cache)
+            leg_mode = from_wp.get("routeMode")
             if not leg_mode:
-                leg_mode = from_wp.get("routeMode")
+                leg_mode = _resolve_leg_mode_from_cache(from_wp, to_wp, routing_cache)
             if leg_mode:
                 leg_mode = str(leg_mode).lower()
                 current_mode = mode_aliases.get(leg_mode, leg_mode)

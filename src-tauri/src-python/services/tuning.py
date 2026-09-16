@@ -123,7 +123,7 @@ REPORTED_MODE_SPEED_KMH: Dict[str, float] = {
     "driving": 70.0,
     "airplane": 500.0,
 }
-ANIMATION_SPEED_KMH = 8.0
+ANIMATION_SPEED_KMH = 3.0
 # Fixed anchor "1x" pace every mode's on-screen speed-up factor is computed
 # against — not whatever ANIMATION_SPEED_KMH happens to be configured as
 # (see SpatialRenderer._mode_speed_factor).
@@ -440,6 +440,14 @@ POPUP_MIN_WAIT_SECONDS = 6.0
 # it holds for every caller rather than each having to remember its own
 # floor. Covers the whole on-screen life including the fade in/out.
 POPUP_MIN_DISPLAY_SECONDS = 2.0
+# How long each UNCONNECTED stop-by's card is held during the batch shown
+# at the previous normal waypoint's stop (see overview_animation.py's
+# _play_stopby_batch). Per-card, not split across the group: a run of four
+# landmarks holds that stop for four times this, rather than flashing each
+# one by in a quarter of the time. Deliberately equal to
+# POPUP_MIN_DISPLAY_SECONDS — these cards are read at a glance and the
+# stop they extend is already a full stop.
+STOPBY_BATCH_SECONDS = 2.0
 # Hard ceiling on a waypoint's own "freeze_seconds" (job_config's per-stop
 # override for how long its popup photo is held/displayed) — applied
 # wherever that raw job_config value is first read, so every downstream

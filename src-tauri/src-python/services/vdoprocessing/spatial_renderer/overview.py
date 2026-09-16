@@ -178,6 +178,14 @@ class _OverviewRenderMixin:
                 continue
             order += 1
             ap["order"] = order
+
+        # Which stop-bys ride along with which stop. An unconnected
+        # stop-by is a place the traveler never actually goes, so it's
+        # shown during the previous NORMAL waypoint's stop rather than
+        # popping where it sits; a "Connect to Route" one is a genuine
+        # stop and keeps its own arrival. See _attach_stopby_groups.
+        self._attach_stopby_groups(active_popups)
+
         # Pins that would be drawn completely on top of each other are
         # nudged just far enough apart to both stay visible — a tight
         # cluster of stops (four stop-by landmarks around one small town,

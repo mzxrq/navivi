@@ -85,6 +85,12 @@ class RouteAnimator:
                 "summary_card_style", tuning.DEFAULT_SUMMARY_CARD_STYLE
             ),
             summary_card_labels=self.config.get("summary_card_labels"),
+            # Per-mode line colors: the pipeline puts {"walking": <the
+            # project's own Route Line color>} here when the project
+            # picked one, so the ordinary leg follows the map-appearance
+            # panel instead of tuning.py's walking blue — see
+            # render_step.py's _mode_line_color_overrides.
+            mode_line_colors=self.config.get("mode_line_colors"),
         )
 
         self.out_dir = Path(config.get("output_dir", ""))

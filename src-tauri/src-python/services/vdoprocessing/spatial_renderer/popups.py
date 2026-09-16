@@ -188,6 +188,68 @@ def _nearest_point_on_polygon(
 
 
 class _PopupMixin:
+    @staticmethod
+    def _attach_stopby_groups(active_popups: List[Dict]) -> None:
+        """Works out which stop-by waypoints are shown as part of which
+        stop, stamping "stopby_group" on each host and "stopby_host" on
+        each stop-by it owns.
+
+        Stop-bys split in two, by the map editor's own "Connect to Route"
+        toggle (job_config's `connectToRoute`, reaching us as
+        data["connect_to_route"] — see render_step.py):
+
+        * CONNECTED — the route genuinely runs through it (the frontend's
+          routing includes it in the geometry for exactly that reason), so
+          it's an ordinary stop that merely looks different: its own
+          arrival, its own popup where it sits, still drawn as a "・" dot
+          and still skipped by the 1..N numbering. It neither joins a
+          group nor hosts one.
+        * UNCONNECTED — a landmark observed from a distance, never
+          actually reached. Popping its card where it sits meant a card
+          appearing for somewhere the traveler visibly never goes. It's
+          shown during the previous NORMAL waypoint's stop instead, with
+          every other unconnected stop-by behind that same waypoint, in
+          route order.
+
+        The host is the previous non-stop-by waypoint — NOT merely the
+        previous ROUTED one. A connected stop-by sitting between a normal
+        waypoint and an unconnected one does not take over as host; the
+        batch still belongs to the normal stop before it.
+
+        An unconnected stop-by with no preceding normal waypoint at all
+        (nothing to host it) is left ungrouped, and keeps the old
+        pop-on-proximity behaviour — never shown at all would be worse."""
+        host = None
+        for ap in active_popups:
+            data = ap.get("data") or {}
+            if not data.get("is_stopby"):
+                host = ap
+                ap["stopby_group"] = []
+                continue
+            if data.get("connect_to_route"):
+                continue
+            if host is not None:
+                host.setdefault("stopby_group", []).append(ap)
+                ap["stopby_host"] = host
+
+    @staticmethod
+    def _is_loose_stopby(popup: Dict) -> bool:
+        """True for a stop-by that still pops on its own, on proximity,
+        exempt from the sequential-arrival gate — i.e. an UNCONNECTED one
+        with no host waypoint to be batched at (see _attach_stopby_groups,
+        which only leaves a stop-by hostless when nothing precedes it).
+
+        A connected stop-by is deliberately NOT "loose": the route runs
+        through it, so it arrives in sequence like any ordinary stop. This
+        is the single place that distinction is made, so the trigger loop
+        can't apply one half of it and miss the other."""
+        data = popup.get("data") or {}
+        return (
+            bool(data.get("is_stopby"))
+            and not data.get("connect_to_route")
+            and popup.get("stopby_host") is None
+        )
+
     def _nearest_lattice_slot(
         self,
         pin_x: float,
@@ -1426,29 +1488,58 @@ class _PopupMixin:
 
         return frame, survivors
 
+    # Bounds for the highlight's close-up: a plain fixed ~300m-across crop
+    # (this used to be the ONLY option) is the tightest the search may go;
+    # roughly 4x that across is the widest it'll pull back to in order to
+    # keep the route through the point in shot. Anything wider than that
+    # stops reading as a "close-up" at all.
+    _HIGHLIGHT_TIGHT_WIDTH_M = 300.0
+    _HIGHLIGHT_WIDE_WIDTH_M = 1200.0
+
     def _fetch_highlight_image(
-        self, lat: float, lng: float, output_size: Tuple[int, int]
+        self, lat: float, lng: float, output_size: Tuple[int, int],
+        next_lat: Optional[float] = None, next_lon: Optional[float] = None,
     ) -> Optional[Tuple[str, Tuple[float, float, float, float]]]:
-        """Fetches a fresh, tightly-cropped (~300m across) map image
-        centered on one lat/lng — a genuinely higher zoom level than the
-        overview's own background, used for the end-of-video "zoom into
-        this place" highlight. Returns (path, extent) so the caller can
-        still project the same lat/lng onto this new image's pixels (for
-        the marker/popup), or None (rather than raising) on any failure —
-        a tile-download hiccup here shouldn't take down a render that's
-        otherwise already finished."""
+        """Fetches a fresh, higher-zoom map image centered on one lat/lng
+        for the end-of-video "zoom into this place" highlight — framed by
+        choose_route_focus_view so the shot shows as much of the route
+        running through this point as it can, rather than a fixed ~300m
+        crop that happens to catch the line or happens to cut it off
+        depending on where the point sits relative to it.
+
+        Returns (path, extent) so the caller can still project the same
+        lat/lng onto this new image's pixels (for the marker/popup), or
+        None (rather than raising) on any failure — a tile-download hiccup
+        here shouldn't take down a render that's otherwise already
+        finished."""
         try:
             from services.mapfetcher.mapfetcher import MapFetcher
+            from services.mapfetcher.mapgeometry import (
+                bbox_for_view, choose_route_focus_view, zoom_for_ground_width,
+            )
 
             job_config = self._get_job_config()
             if not job_config:
                 return None
             fetcher = MapFetcher(job_config=job_config)
-            delta = 0.0015  # ~150-160m in latitude degrees either side
-            bbox = {
-                "min_lat": lat - delta, "max_lat": lat + delta,
-                "min_lon": lng - delta, "max_lon": lng + delta,
-            }
+
+            route_latlon = getattr(self, "_route_latlon_path", None)
+            out_w, _out_h = output_size
+            tight_zoom = zoom_for_ground_width(self._HIGHLIGHT_TIGHT_WIDTH_M, out_w)
+            wide_zoom = zoom_for_ground_width(self._HIGHLIGHT_WIDE_WIDTH_M, out_w)
+            if route_latlon:
+                center_lon, center_lat, zoom = choose_route_focus_view(
+                    route_latlon, lat, lng, output_size,
+                    min_zoom=wide_zoom, max_zoom=tight_zoom,
+                    next_lat=next_lat, next_lon=next_lon,
+                )
+                bbox = bbox_for_view(center_lon, center_lat, zoom, output_size)
+            else:
+                delta = 0.0015  # ~150-160m in latitude degrees either side
+                bbox = {
+                    "min_lat": lat - delta, "max_lat": lat + delta,
+                    "min_lon": lng - delta, "max_lon": lng + delta,
+                }
             out_path = str(self.out_dir / "01_overview_highlight.png")
             path, extent, _size = fetcher.fetch_image(bbox, out_path, output_size)
             return path, extent

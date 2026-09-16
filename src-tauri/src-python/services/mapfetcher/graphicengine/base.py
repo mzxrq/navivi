@@ -116,8 +116,20 @@ class _GraphicsEngineBase:
         line_border_thickness=tuning.DEFAULT_LINE_BORDER_THICKNESS,
         summary_card_style=tuning.DEFAULT_SUMMARY_CARD_STYLE,
         summary_card_labels: Optional[Dict] = None,
+        mode_line_colors: Optional[Dict[str, Tuple[int, int, int]]] = None,
     ):
         self.line_color = line_color
+        # Per-mode route-line colors, merged OVER the class-level defaults
+        # (see MODE_COLORS below) rather than replacing them, so a caller
+        # naming one mode doesn't silently drop the rest. The pipeline
+        # passes {"walking": line_color} here whenever a project chose its
+        # own Route Line color in the map-appearance panel: the ordinary
+        # leg then draws in the color the project actually picked, while
+        # ferry/car/airplane keep their distinct accents, which is what
+        # makes a crossing still readable as a crossing. Left as None,
+        # every mode keeps its tuning.py default.
+        if mode_line_colors:
+            self.MODE_COLORS = {**self.MODE_COLORS, **mode_line_colors}
         self.line_border_color = line_border_color
         self.line_border_thickness = max(0, int(round(line_border_thickness)))
         # Clamp to a sane minimum: a sub-pixel radius/thickness (e.g. a

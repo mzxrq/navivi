@@ -139,6 +139,21 @@ class _SpatialRendererBase:
         self.hide_upcoming_pins_on_popup: bool = bool(
             config.get("hide_upcoming_pins_on_popup", False)
         )
+        # Per-project pin colors: shadow the class defaults above with
+        # whatever this project configured (already normalized to BGR by
+        # render_step.py). Set as INSTANCE attributes, so a key the
+        # project didn't set simply leaves the class default visible
+        # rather than needing a copy of it here.
+        for attr, key in (
+            ("_START_PIN_COLOR", "start_pin_color"),
+            ("_END_PIN_COLOR", "end_pin_color"),
+            ("_DRAWN_PIN_COLOR", "drawn_pin_color"),
+            ("_STOPBY_PIN_COLOR", "stopby_pin_color"),
+        ):
+            configured = config.get(key)
+            if configured:
+                setattr(self, attr, tuple(configured))
+
         self.last_frame = None
         # Set by render_overview() after each run — True when the video
         # already ended on its own blur-out (see _render_ending_highlight),
@@ -146,14 +161,22 @@ class _SpatialRendererBase:
         # onto a clip that was deliberately built to end right there.
         self.last_ending_hard_ended = False
 
-    # Start/end pins get a fixed, conventional color (green/red, matching
-    # standard map-app iconography) regardless of arrival state — every
-    # other pin still uses _pin_color's default/arrived coloring. Shared by
-    # both _PinMixin and _TransitionMixin, so it lives here rather than in
-    # either leaf mixin. Always plain green — a loop route (start==end)
-    # signals itself instead via the "E" pin's half green/red split (see
-    # pins.py's _pin_label_and_color and _is_loop_route below), not by
-    # recoloring S itself.
+    # Start/end pins get a conventional color (green/red, matching standard
+    # map-app iconography) regardless of arrival state — every other pin
+    # still uses _pin_color's default/arrived coloring. Shared by both
+    # _PinMixin and _TransitionMixin, so these live here rather than in
+    # either leaf mixin. "S" is always plain green — a loop route
+    # (start==end) signals itself instead via the "E" pin's half green/red
+    # split (see pins.py's _pin_label_and_color and _is_loop_route below),
+    # not by recoloring S itself.
+    #
+    # These are the DEFAULTS. Each is overridable per project through
+    # job_config.json's settings (start_pin_color / end_pin_color /
+    # drawn_pin_color / stopby_pin_color, alongside marker_color and
+    # arrived_marker_color, which reach the GraphicsEngine instead) — see
+    # the instance attributes set in __init__ below and render_step.py's
+    # _project_color, which is where a project's own RGB values are
+    # converted to the BGR the renderer draws in.
     _START_PIN_COLOR = tuning.START_PIN_COLOR
     _END_PIN_COLOR = tuning.END_PIN_COLOR
     _DRAWN_PIN_COLOR = tuning.DRAWN_PIN_COLOR

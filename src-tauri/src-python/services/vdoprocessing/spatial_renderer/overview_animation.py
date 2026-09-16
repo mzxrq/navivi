@@ -23,6 +23,135 @@ _DEFAULT_FREEZE_SECONDS = 4.0  # fallback display duration when a popup sets no 
 
 
 class _OverviewAnimationMixin:
+    def _play_stopby_batch(
+        self,
+        video: VideoExporter,
+        base_frame: np.ndarray,
+        host_popup: Dict,
+        host_hud: Dict,
+        stopby_group: List[Dict],
+        w: int,
+        h: int,
+        fps: int,
+        total_points: int,
+        route_obstacles: Optional[np.ndarray] = None,
+        draw_host_card: bool = True,
+    ) -> np.ndarray:
+        """Plays every unconnected stop-by attached to `host_popup` over
+        the frame held at that stop, one card at a time in route order,
+        each for tuning.STOPBY_BATCH_SECONDS. Returns the last frame
+        written.
+
+        These landmarks are places the route only passes NEAR — the
+        traveler visibly never goes to them, so a card popping where each
+        one sits read as the map claiming a visit that never happened.
+        Shown here instead: the traveler stops at the previous normal
+        waypoint, that stop's own card settles, and then the landmarks
+        behind it appear in turn beside their own pins, with a leader line
+        back to each. See _attach_stopby_groups for which stop-by belongs
+        to which host, and why a CONNECTED one is never in this group.
+
+        The host's own line, pin and card are composited into the plate
+        once, at full opacity (`draw_host_card=False` for a host that just
+        finished a FULLSCREEN photo transition instead — it never had a
+        small map card of its own to begin with, only the pin), rather
+        than re-rendered per frame: the frame is frozen for the whole
+        batch, so the only thing changing is whichever stop-by card is
+        currently fading in or out on top of it. When drawn, the host's
+        card is laid out fresh here (not reused from wherever it happened
+        to sit during the earlier flow-through/frozen hold — that box
+        lived in a different frame's own state and isn't guaranteed to
+        still be free), and reserved so a landmark's card can never land
+        on top of the stop it belongs to."""
+        if not stopby_group:
+            return base_frame
+
+        plate = base_frame
+        reserved = []
+        if draw_host_card:
+            self._layout_recap_popups(
+                [{"popup": host_hud, "frames_left": 1}], w, h,
+                route_obstacles=route_obstacles,
+            )
+            plate = self.graphics.render_popup_box(
+                plate, host_hud, alpha=1.0, line_only=True
+            )
+            self._draw_pin(plate, host_popup, total_points)
+            plate = self.graphics.render_popup_box(
+                plate, host_hud, alpha=1.0, skip_line=True
+            )
+            card_w, card_h = self.graphics.beside_card_footprint()
+            host_box = host_hud.get("beside_box")
+            if host_box:
+                reserved.append(
+                    (host_box[0], host_box[1], host_box[0] + card_w, host_box[1] + card_h)
+                )
+        else:
+            self._draw_pin(plate, host_popup, total_points)
+
+        last_frame = plate
+        # Pins of the stop-bys already shown in this batch. They stay on
+        # the map for the rest of it (they've been "arrived" now), and are
+        # redrawn ON TOP of each later card's leader line — same
+        # line-then-pins-then-card ordering every other multi-card frame
+        # in this renderer uses, so a line crossing an earlier landmark's
+        # pin never paints over it.
+        shown: List[Dict] = []
+        for stopby in stopby_group:
+            stopby["data"]["arrived"] = True
+            stopby["data"]["triggered"] = True
+
+            hud = stopby.copy()
+            hud["hud_corner"] = None
+            hud["draw_leader_line"] = True
+            self._layout_recap_popups(
+                [{"popup": hud, "frames_left": 1}], w, h,
+                reserved_boxes=reserved, route_obstacles=route_obstacles,
+            )
+            base_box = hud.get("beside_box")
+            if not base_box:
+                # Nowhere free to put this card on this frame. Its pin is
+                # still shown (it HAS been reached, as far as the map is
+                # concerned) — better a landmark with no card than a card
+                # dropped on top of the stop it belongs to.
+                self._draw_pin(plate, stopby, total_points)
+                shown.append(stopby)
+                continue
+
+            bp = self._make_baked_popup(stopby, tuning.STOPBY_BATCH_SECONDS, fps)
+            total_frames = bp["total_frames"]
+            for i in range(total_frames):
+                # Drives _popup_fade_alpha/_popup_slide_offset_y's shared
+                # envelope straight off this loop's own progress, so the
+                # card fades and slides in and back out exactly the way
+                # every other popup in the video does.
+                bp["frames_left"] = total_frames - i - 1
+                alpha = self._popup_fade_alpha(bp)
+                bx, by = base_box
+                hud["beside_box"] = (bx, int(by + self._popup_slide_offset_y(bp)))
+
+                frame = self.graphics.render_popup_box(
+                    plate, hud, alpha=alpha, line_only=True
+                )
+                for already in shown:
+                    self._draw_pin(frame, already, total_points)
+                self._draw_pin(frame, stopby, total_points)
+                frame = self.graphics.render_popup_box(
+                    frame, hud, alpha=alpha, skip_line=True
+                )
+                video.write(frame)
+                last_frame = frame
+
+            # Bake this landmark's pin into the plate so it stays put for
+            # the rest of the batch without being re-drawn from scratch.
+            self._draw_pin(plate, stopby, total_points)
+            shown.append(stopby)
+            reserved.append(
+                (base_box[0], base_box[1], base_box[0] + card_w, base_box[1] + card_h)
+            )
+
+        return last_frame
+
     def _animate_overview_frames(
         self,
         video: VideoExporter,
@@ -109,14 +238,21 @@ class _OverviewAnimationMixin:
         # them. `sequential_popups` (in the same route-position order
         # active_popups already is) plus `seq_ptr` gate a real waypoint's
         # eligibility on every waypoint ahead of it in sequence having
-        # already arrived first. Stop-bys are deliberately exempt — a
-        # pass-through marker should always pop as soon as the traveler is
-        # physically near it, regardless of sequence.
+        # already arrived first.
+        #
+        # A CONNECTED stop-by ("Connect to Route" in the map editor) is
+        # gated here too: the route genuinely runs through it, so it
+        # arrives in sequence like any other stop — it just draws as a
+        # "・" dot and takes no number. Only an UNCONNECTED stop-by is
+        # exempt, and those no longer reach this loop at all (their cards
+        # play during their host waypoint's stop — see
+        # _attach_stopby_groups), bar the hostless fallback case that
+        # keeps the old pop-on-proximity behaviour.
         sequential_popups = [
             ap for ap in active_popups
             if ap["index"] != 0
             and (not stop_popup or ap["index"] != stop_popup["index"])
-            and not ap["data"].get("is_stopby")
+            and not self._is_loose_stopby(ap)
         ]
         seq_ptr = 0
 
@@ -184,11 +320,22 @@ class _OverviewAnimationMixin:
                     stop_popup and popup["index"] == stop_popup["index"]
                 ):
                     continue
-                is_stopby = bool(popup["data"].get("is_stopby"))
-                # A real waypoint only becomes eligible once every waypoint
-                # ahead of it in route sequence has already arrived — see
-                # sequential_popups/seq_ptr's own comment above. Stop-bys
-                # skip this gate entirely; they always pop on proximity.
+                # An unconnected stop-by belonging to a host waypoint's
+                # batch never triggers on its own — its card plays during
+                # that host's stop instead (see _play_stopby_batch).
+                # Without this it would ALSO pop here on proximity,
+                # showing the same landmark twice.
+                if popup.get("stopby_host") is not None:
+                    continue
+                # Only a HOSTLESS unconnected stop-by still behaves the old
+                # way: exempt from the sequence gate below, and from having
+                # to be near the traveler at all.
+                is_stopby = self._is_loose_stopby(popup)
+                # A real waypoint — and a connected stop-by, which is one
+                # in all but appearance — only becomes eligible once every
+                # waypoint ahead of it in route sequence has already
+                # arrived; see sequential_popups/seq_ptr's own comment
+                # above.
                 if not is_stopby and (
                     seq_ptr >= len(sequential_popups)
                     or popup is not sequential_popups[seq_ptr]
@@ -418,8 +565,17 @@ class _OverviewAnimationMixin:
                     self.enable_fullscreen_popups
                     and triggered_popup["data"].get("image_display") == "fullscreen"
                 )
+                # A waypoint hosting unconnected stop-bys always freezes,
+                # whatever the project asked for: their cards are played
+                # over its held frame (see _play_stopby_batch), and
+                # "flow through" leaves nothing to play them over — the
+                # traveler is meant to stop here first, then the landmarks
+                # behind this stop appear in order.
+                stopby_group = triggered_popup.get("stopby_group") or []
                 freeze_frame_on = (
-                    triggered_popup["data"].get("freeze_frame", False) or is_fullscreen
+                    triggered_popup["data"].get("freeze_frame", False)
+                    or is_fullscreen
+                    or bool(stopby_group)
                 )
 
                 if not freeze_frame_on:
@@ -627,6 +783,25 @@ class _OverviewAnimationMixin:
                         video.write(temp_frame)
 
                     self.last_frame = temp_frame
+
+                # Then the landmarks behind this stop, in route order — see
+                # _play_stopby_batch. Outside the freeze/fullscreen split
+                # above so a host whose own photo takes over the screen
+                # still plays its batch afterwards, on the map it returns
+                # to. Built from popup_base_frame rather than the hold's
+                # last frame: that one already has the host's card
+                # mid-slide-out (its own fade envelope), which would sit
+                # frozen half-departed underneath the whole batch.
+                if stopby_group:
+                    hud_settled = triggered_popup.copy()
+                    hud_settled["hud_corner"] = None
+                    hud_settled["draw_leader_line"] = True
+                    self.last_frame = self._play_stopby_batch(
+                        video, popup_base_frame, triggered_popup, hud_settled,
+                        stopby_group, w, h, fps, len(points),
+                        route_obstacles=route_obstacle_arr,
+                        draw_host_card=not is_fullscreen,
+                    )
 
             else:
                 if not is_video:
