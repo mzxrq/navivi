@@ -37,6 +37,9 @@ import {
 } from "../../../components/ui/icons";
 import { PreviewMonitor } from "./PreviewMonitor";
 import { TransitionsPanel } from "./elements/TransitionsPanel";
+import { TimelineToolbar } from "./elements/TimelineToolbar";
+import { TimelineRuler } from "./elements/TimelineRuler";
+import { TimelineTrackHeaders } from "./elements/TimelineTrackHeaders";
 import { useTimelineAudio } from "../hooks/useTimelineAudio";
 import {
   WaypointMarker,
@@ -1044,520 +1047,60 @@ export function TimelineView() {
         className="shrink-0 flex flex-col bg-zinc-100 dark:bg-navidark-900 relative border-t border-zinc-300 dark:border-black shadow-[0_-4px_20px_rgba(0,0,0,0.1)] min-h-0"
         style={{ height: timelineHeight }}
       >
-        <div className="h-11 bg-white dark:bg-navidark-800 border-b border-zinc-200 dark:border-navidark-400 flex items-center justify-between px-4 shrink-0 z-30">
-          {/* LEFT: Tools */}
-          <div className="flex items-center gap-1 bg-zinc-100 dark:bg-navidark-900 p-1 rounded-md border border-zinc-200 dark:border-navidark-700">
-            <button
-              onClick={() => setActiveTool("pointer")}
-              className={`p-1.5 rounded transition-colors ${activeTool === "pointer" ? "bg-white dark:bg-navidark-700 text-navi shadow-sm" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"}`}
-              title="Selection Tool (V)"
-            >
-              <MousePointer2 className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => setActiveTool("razor")}
-              className={`p-1.5 rounded transition-colors ${activeTool === "razor" ? "bg-white dark:bg-navidark-700 text-navi shadow-sm" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"}`}
-              title="Razor Tool (C)"
-            >
-              <Scissors className="w-4 h-4" />
-            </button>
-
-            <button
-              onClick={() => {
-                const popupTrack = sortedTracks.find(
-                  (t) => t.type === "video" || t.type === "overlay",
-                );
-                if (!popupTrack) return;
-
-                const newTextClip: ClipData = {
-                  id: crypto.randomUUID(),
-                  trackId: popupTrack.id,
-                  type: "text",
-                  label: "Custom Text",
-                  text: "Enter text here...",
-                  startTime: currentTime,
-                  duration: 5,
-                  x: 960,
-                  y: 540,
-                  fontSize: 64,
-                  color: "#ffffff",
-                };
-                setTimeline({
-                  ...timeline,
-                  clips: [...timeline.clips, newTextClip],
-                });
-                showToast("Text added to timeline", "success");
-              }}
-              className="p-1.5 rounded transition-colors text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
-              title="Add Custom Text"
-            >
-              <Type className="w-4 h-4" />
-            </button>
-
-            <div className="w-px h-4 bg-zinc-300 dark:bg-navidark-400 mx-1" />
-            <button
-              onClick={() => setIsRippleMode(!isRippleMode)}
-              className={`p-1.5 rounded transition-colors ${isRippleMode ? "bg-navi text-white shadow-sm" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"}`}
-              title="Ripple Insert Mode"
-            >
-              <Magnet className="w-4 h-4" />
-            </button>
-            <button
-              onClick={handleAddMarker}
-              className="p-1.5 rounded text-zinc-500 hover:text-navi"
-              title="Add marker at playhead"
-            >
-              <MapPinPlus className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => setRightPanelTab("markers")}
-              className="p-1.5 rounded text-zinc-500 hover:text-navi"
-              title="Manage timeline markers"
-            >
-              <MapPin className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() =>
-                setSelectedClipIds(timeline.clips.map((clip) => clip.id))
-              }
-              className="p-1.5 rounded text-zinc-500 hover:text-navi"
-              title="Select all clips (Ctrl/Cmd+A)"
-            >
-              <Check className="w-4 h-4" />
-            </button>
-            <button
-              onClick={handleUnlink}
-              disabled={selectedClipIds.length === 0}
-              className="p-1.5 rounded text-zinc-500 hover:text-navi disabled:opacity-30"
-              title="Unlink selected clips"
-            >
-              <UnlinkIcon className="w-4 h-4" />
-            </button>
-          </div>
-
-          {/* CENTER: Playback Controls */}
-          <div className="flex items-center gap-1 bg-zinc-100 dark:bg-navidark-900 p-1 rounded-md border border-zinc-200 dark:border-navidark-700">
-            <button
-              onClick={() => setCurrentTime(0)}
-              className="p-1.5 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors rounded hover:bg-zinc-200 dark:hover:bg-navidark-700"
-              title="Home"
-            >
-              <SkipBack className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => setIsPlaying(!isPlaying)}
-              className="p-1.5 text-zinc-500 hover:text-navi transition-colors rounded hover:bg-zinc-200 dark:hover:bg-navidark-700"
-              title="Play/Pause (Space)"
-            >
-              {isPlaying ? (
-                <Pause className="w-4 h-4" fill="currentColor" />
-              ) : (
-                <Play className="w-4 h-4" fill="currentColor" />
-              )}
-            </button>
-            <button
-              onClick={() =>
-                setCurrentTime(
-                  timeline.clips.reduce(
-                    (max, c) => Math.max(max, c.startTime + c.duration),
-                    0,
-                  ),
-                )
-              }
-              className="p-1.5 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors rounded hover:bg-zinc-200 dark:hover:bg-navidark-700"
-              title="End"
-            >
-              <SkipForward className="w-4 h-4" />
-            </button>
-            <div className="w-px h-4 bg-zinc-300 dark:bg-navidark-400 mx-2" />
-            <div className="text-xs font-medium tracking-wide text-zinc-600 dark:text-zinc-300 px-2 py-0.5 pointer-events-none">
-              {new Date(currentTime * 1000)
-                .toISOString()
-                .substring(11, 23)
-                .replace(".", ":")}
-            </div>
-          </div>
-
-          {/* RIGHT: Zoom & Export Controls */}
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
-              <ZoomOut className="w-3.5 h-3.5 text-zinc-400" />
-              <input
-                type="range"
-                min="0.2"
-                max="5"
-                step="0.1"
-                value={timeline.zoomMultiplier}
-                onChange={(e) => handleZoom(parseFloat(e.target.value))}
-                className="w-24 accent-navi cursor-ew-resize"
-              />
-              <ZoomIn className="w-3.5 h-3.5 text-zinc-400" />
-            </div>
-
-            <div className="w-px h-4 bg-zinc-300 dark:bg-navidark-400" />
-
-            <button
-              onClick={fitTimeline}
-              className="p-1.5 text-zinc-500 hover:text-navi"
-              title="Fit timeline to content"
-            >
-              <Maximize className="w-4 h-4" />
-            </button>
-            <button
-              onClick={async () => {
-                if (!metadata.directory_path) return;
-                await autoLoadTimeline(metadata.directory_path);
-                showToast("Timeline reloaded", "success");
-              }}
-              className="p-1.5 text-zinc-500 hover:text-navi"
-              title="Reload saved timeline"
-            >
-              <RefreshCw className="w-4 h-4" />
-            </button>
-
-            <button
-              onClick={() => setIsExportModalOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1 bg-navi hover:bg-navi-600 text-white rounded-md text-xs font-bold shadow-sm hover:shadow transition-all cursor-pointer"
-              title="Export & Render Video"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Export</span>
-            </button>
-          </div>
-        </div>
+        <TimelineToolbar
+          activeTool={activeTool}
+          setActiveTool={setActiveTool}
+          isRippleMode={isRippleMode}
+          setIsRippleMode={setIsRippleMode}
+          isPlaying={isPlaying}
+          setIsPlaying={setIsPlaying}
+          currentTime={currentTime}
+          setCurrentTime={setCurrentTime}
+          timeline={timeline}
+          setTimeline={setTimeline}
+          handleZoom={handleZoom}
+          fitTimeline={fitTimeline}
+          setIsExportModalOpen={setIsExportModalOpen}
+          selectedClipIds={selectedClipIds}
+          setSelectedClipIds={setSelectedClipIds}
+          handleUnlink={handleUnlink}
+          handleAddMarker={handleAddMarker}
+          setRightPanelTab={setRightPanelTab}
+          metadata={metadata}
+          sortedTracks={sortedTracks}
+        />
 
         <div className="flex-1 flex flex-row min-h-0 overflow-hidden">
-          <div className="w-48 flex flex-col shrink-0 border-r border-zinc-300 dark:border-navidark-400 bg-zinc-50 dark:bg-navidark-800 z-40">
-            <div className="h-8 w-full border-b border-zinc-300 dark:border-navidark-400 shrink-0 flex items-center px-3 bg-zinc-200/90 dark:bg-navidark-800/90">
-              <span className="text-[9px] font-bold text-zinc-400 dark:text-zinc-500 tracking-widest">
-                TRACKS
-              </span>
-            </div>
-            <div
-              ref={headerRef}
-              className="flex-1 overflow-hidden"
-              onWheel={(e) => {
-                if (timelineRef.current) {
-                  timelineRef.current.scrollTop += e.deltaY;
-                }
-              }}
-              onContextMenu={(e) => {
-                e.preventDefault();
-                window.dispatchEvent(
-                  new CustomEvent("open-context-menu", {
-                    detail: { x: e.clientX, y: e.clientY, type: "empty-track" },
-                  }),
-                );
-              }}
-            >
-              <div className="pb-32">
-                {/* ✨ MAPPING OVER SORTED TRACKS */}
-                {sortedTracks.map((track, idx) => {
-                  const prevTrack = sortedTracks[idx - 1];
-                  const isNewGroup =
-                    !prevTrack || prevTrack.type !== track.type;
-
-                  const isMainTrack =
-                    track.type === "video" ||
-                    track.name.toLowerCase().includes("video");
-                  const isAudioTrack = track.type === "audio";
-                  const trackHeight = isMainTrack ? "h-20" : "h-14";
-                  return (
-                    <React.Fragment key={track.id}>
-                      {isNewGroup && (
-                        <div className="h-6 w-full bg-zinc-200 dark:bg-navidark-900 border-b border-zinc-300 dark:border-navidark-700 flex items-center px-3 sticky top-0 z-10 shadow-sm">
-                          <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest">
-                            {track.type} TRACKS
-                          </span>
-                        </div>
-                      )}
-                      <div
-                        draggable
-                        onDragStart={(e) => {
-                          e.dataTransfer.setData(
-                            "application/navivi-track",
-                            track.id,
-                          );
-                        }}
-                        onDragOver={(e) => e.preventDefault()}
-                        onDrop={(e) => {
-                          e.preventDefault();
-                          const sourceTrackId = e.dataTransfer.getData(
-                            "application/navivi-track",
-                          );
-                          if (!sourceTrackId || sourceTrackId === track.id)
-                            return;
-
-                          const sourceTrack = timeline.tracks.find(
-                            (t) => t.id === sourceTrackId,
-                          );
-                          if (!sourceTrack || sourceTrack.type !== track.type)
-                            return;
-
-                          setTimeline({
-                            ...timeline,
-                            tracks: timeline.tracks.map((t) => {
-                              if (t.id === sourceTrackId)
-                                return { ...t, orderIndex: track.orderIndex };
-                              if (t.id === track.id)
-                                return {
-                                  ...t,
-                                  orderIndex: sourceTrack.orderIndex,
-                                };
-                              return t;
-                            }),
-                          });
-                        }}
-                        onContextMenu={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          window.dispatchEvent(
-                            new CustomEvent("open-context-menu", {
-                              detail: {
-                                x: e.clientX,
-                                y: e.clientY,
-                                type: "track-header",
-                                targetId: track.id,
-                                data: {
-                                  isLocked: track.isLocked,
-                                  isHidden: track.isHidden,
-                                  isMuted: track.isMuted,
-                                  isAudioTrack,
-                                  onToggleHide: () =>
-                                    handleToggleTrackProp(track.id, "isHidden"),
-                                  onToggleMute: () =>
-                                    handleToggleTrackProp(track.id, "isMuted"),
-                                  onToggleLock: () =>
-                                    handleToggleTrackProp(track.id, "isLocked"),
-                                },
-                              },
-                            }),
-                          );
-                        }}
-                        onDoubleClick={() => setEditingTrackId(track.id)}
-                        className={`w-full border-b border-zinc-200 dark:border-navidark-400 flex flex-col justify-center px-2.5 ${editingTrackId === track.id ? "" : "cursor-context-menu"} ${trackHeight}`}
-                      >
-                        <div className="flex items-center justify-between mb-1 gap-1">
-                          {editingTrackId === track.id ? (
-                            <input
-                              type="text"
-                              autoFocus
-                              defaultValue={track.name}
-                              onBlur={(e) =>
-                                handleUpdateTrackName(track.id, e.target.value)
-                              }
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter")
-                                  handleUpdateTrackName(
-                                    track.id,
-                                    e.currentTarget.value,
-                                  );
-                                if (e.key === "Escape") setEditingTrackId(null);
-                              }}
-                              className="w-full bg-white dark:bg-navidark-900 text-[10px] font-bold text-zinc-900 dark:text-zinc-100 px-1.5 py-1 rounded outline-none border-2 border-navi"
-                            />
-                          ) : (
-                            <span className="text-[10px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-wider truncate flex-1">
-                              {track.name}
-                            </span>
-                          )}
-
-                          {/* Ducking toggle & active indicator for Audio tracks */}
-                          {isAudioTrack && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setTimeline({
-                                  ...timeline,
-                                  tracks: timeline.tracks.map((t) =>
-                                    t.id === track.id
-                                      ? {
-                                          ...t,
-                                          duckingEnabled: !t.duckingEnabled,
-                                        }
-                                      : t,
-                                  ),
-                                });
-                              }}
-                              className={`px-1 py-0.5 text-[8px] font-bold rounded tracking-tighter uppercase transition-colors shrink-0 ${
-                                track.duckingEnabled
-                                  ? isDuckingActive
-                                    ? "bg-amber-500 text-white animate-pulse"
-                                    : "bg-amber-500/20 text-amber-500 border border-amber-500/40"
-                                  : "text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 opacity-60"
-                              }`}
-                              title={
-                                track.duckingEnabled
-                                  ? isDuckingActive
-                                    ? "Auto-Ducking Actively Attenuating (Click to disable)"
-                                    : "Auto-Ducking Armed (Click to disable)"
-                                  : "Enable Auto-Ducking on this track"
-                              }
-                            >
-                              DUCK
-                            </button>
-                          )}
-                        </div>
-
-                        <div className="flex items-center justify-between gap-1.5">
-                          <div className="flex items-center gap-1 shrink-0">
-                            {!isAudioTrack ? (
-                              <button
-                                onClick={() =>
-                                  handleToggleTrackProp(track.id, "isHidden")
-                                }
-                                className={`p-1 rounded transition-colors ${track.isHidden ? "text-red-500 bg-red-50 dark:bg-red-500/10" : "text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200"}`}
-                              >
-                                {track.isHidden ? (
-                                  <EyeOff className="w-3.5 h-3.5" />
-                                ) : (
-                                  <Eye className="w-3.5 h-3.5" />
-                                )}
-                              </button>
-                            ) : (
-                              <button
-                                onClick={() =>
-                                  handleToggleTrackProp(track.id, "isMuted")
-                                }
-                                className={`p-1 rounded transition-colors ${track.isMuted ? "text-red-500 bg-red-50 dark:bg-red-500/10" : "text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200"}`}
-                                title={
-                                  track.isMuted ? "Unmute Track" : "Mute Track"
-                                }
-                              >
-                                {track.isMuted ? (
-                                  <VolumeX className="w-3.5 h-3.5" />
-                                ) : (
-                                  <Volume2 className="w-3.5 h-3.5" />
-                                )}
-                              </button>
-                            )}
-                            <button
-                              onClick={() =>
-                                handleToggleTrackProp(track.id, "isLocked")
-                              }
-                              className={`p-1 rounded transition-colors ${track.isLocked ? "text-red-500 bg-red-50 dark:bg-red-500/10" : "text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200"}`}
-                              title={
-                                track.isLocked ? "Unlock Track" : "Lock Track"
-                              }
-                            >
-                              {track.isLocked ? (
-                                <Lock className="w-3 h-3" />
-                              ) : (
-                                <Unlock className="w-3 h-3" />
-                              )}
-                            </button>
-                          </div>
-
-                          {/* Track volume slider for Audio tracks */}
-                          {isAudioTrack && (
-                            <div
-                              className="flex items-center gap-1 flex-1 min-w-0"
-                              title={`Track Volume: ${Math.round((track.volume ?? 1.0) * 100)}%`}
-                            >
-                              <input
-                                type="range"
-                                min="0"
-                                max="150"
-                                step="5"
-                                value={Math.round((track.volume ?? 1.0) * 100)}
-                                onChange={(e) => {
-                                  const newVol =
-                                    parseFloat(e.target.value) / 100;
-                                  setTimeline({
-                                    ...timeline,
-                                    tracks: timeline.tracks.map((t) =>
-                                      t.id === track.id
-                                        ? { ...t, volume: newVol }
-                                        : t,
-                                    ),
-                                  });
-                                }}
-                                className="w-full h-1 accent-[#36604C] dark:accent-[#93C9B2] bg-zinc-200 dark:bg-zinc-700 rounded cursor-pointer"
-                              />
-                              <span className="text-[8px] font-mono text-zinc-400 w-5 text-right shrink-0">
-                                {Math.round((track.volume ?? 1.0) * 100)}%
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </React.Fragment>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-
+          <TimelineTrackHeaders
+            headerRef={headerRef}
+            timelineRef={timelineRef}
+            sortedTracks={sortedTracks}
+            timeline={timeline}
+            setTimeline={setTimeline}
+            editingTrackId={editingTrackId}
+            setEditingTrackId={setEditingTrackId}
+            handleUpdateTrackName={handleUpdateTrackName}
+            handleToggleTrackProp={handleToggleTrackProp}
+            isDuckingActive={isDuckingActive}
+          />
           <div className="flex-1 flex flex-col min-w-0 relative bg-zinc-50 dark:bg-navidark-800/50">
-            <div
-              ref={rulerRef}
-              onScroll={(e) => {
-                if (timelineRef.current) {
-                  timelineRef.current.scrollLeft = e.currentTarget.scrollLeft;
-                }
-              }}
-              className="h-8 w-full border-b border-zinc-300 dark:border-navidark-400 bg-zinc-200/90 dark:bg-navidark-800/90 overflow-hidden shrink-0"
-            >
-              <div
-                className="h-full cursor-ew-resize relative shrink-0"
-                style={{ width: `${timelinePixelWidth}px` }}
-                onMouseDown={(e) => {
-                  if (isPlaying) setIsPlaying(false);
-                  setIsScrubbing(true);
-                  handleScrub(e.clientX);
-                }}
-              >
-                {Array.from({
-                  length: Math.ceil(rulerDuration / minorStep),
-                }).map((_, i) => {
-                  const time = i * minorStep;
-                  const isMajor = time % majorStep === 0;
-                  return (
-                    <div
-                      key={time}
-                      className="absolute bottom-0"
-                      style={{ left: `${time * pixelsPerSecond}px` }}
-                    >
-                      <div
-                        className={`w-px bg-zinc-400 dark:bg-zinc-600 ${isMajor ? "h-2.5" : "h-1.5"}`}
-                      />
-                      {isMajor && (
-                        <span className="absolute bottom-3 -translate-x-1/2 text-[9px] text-zinc-500 dark:text-zinc-400 font-semibold tracking-wider select-none pointer-events-none">
-                          {Math.floor(time / 60)
-                            .toString()
-                            .padStart(2, "0")}
-                          :
-                          {Math.floor(time % 60)
-                            .toString()
-                            .padStart(2, "0")}
-                        </span>
-                      )}
-                    </div>
-                  );
-                })}
-                {/* Waypoint Timeline Ruler Markers (F4.2 & F4.3) */}
-                {waypointMarkers.map((marker) => (
-                  <WaypointMarker
-                    key={marker.id}
-                    marker={marker}
-                    pixelsPerSecond={pixelsPerSecond}
-                    isActive={Math.abs(currentTime - marker.time) < 0.15}
-                    onSeek={(time) => {
-                      if (isPlaying) setIsPlaying(false);
-                      setCurrentTime(time);
-                    }}
-                    onHover={handleMarkerHover}
-                  />
-                ))}
-
-                <div
-                  className="absolute bottom-0 -translate-x-1/2 w-3 h-3 bg-navi [clip-path:polygon(50%_100%,0_0,100%_0)] z-50 pointer-events-none"
-                  style={{ left: `${currentTime * pixelsPerSecond}px` }}
-                />
-              </div>
-            </div>
-
+            <TimelineRuler
+              rulerRef={rulerRef}
+              timelineRef={timelineRef}
+              timelinePixelWidth={timelinePixelWidth}
+              isPlaying={isPlaying}
+              setIsPlaying={setIsPlaying}
+              setIsScrubbing={setIsScrubbing}
+              handleScrub={handleScrub}
+              rulerDuration={rulerDuration}
+              minorStep={minorStep}
+              majorStep={majorStep}
+              pixelsPerSecond={pixelsPerSecond}
+              waypointMarkers={waypointMarkers}
+              currentTime={currentTime}
+              setCurrentTime={setCurrentTime}
+              handleMarkerHover={handleMarkerHover}
+            />
             <div
               ref={timelineRef}
               onScroll={handleScroll}
