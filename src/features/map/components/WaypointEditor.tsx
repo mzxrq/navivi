@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Rnd } from "react-rnd";
 import {
   ChevronLeft,
   ChevronUp,
@@ -64,6 +65,7 @@ export function WaypointEditor({
   );
   const [isEditingName, setIsEditingName] = useState(false);
   const [activeTab, setActiveTab] = useState<"scripts" | "images">("scripts");
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
   if (!wp) return null;
 
@@ -199,7 +201,23 @@ export function WaypointEditor({
   };
 
   return (
-    <div className="flex flex-col h-full w-full bg-white dark:bg-navidark-800 rounded-2xl shadow-[0_-10px_50px_-15px_rgba(0,0,0,0.4)] border border-zinc-200 dark:border-white/10 select-none transition-colors animate-in slide-in-from-bottom-10 duration-200 overflow-hidden ml-2 mb-2">
+    <Rnd
+      default={{
+        x: window.innerWidth > 1000 ? (window.innerWidth - 600) / 2 : 20,
+        y: window.innerHeight - 420,
+        width: "auto",
+        height: "auto",
+      }}
+      bounds="parent"
+      enableResizing={false}
+      dragHandleClassName="editor-drag-handle"
+      className="z-50 pointer-events-none"
+    >
+      <div
+        className={`flex flex-col bg-white dark:bg-navidark-800 rounded-2xl shadow-[0_-10px_50px_-15px_rgba(0,0,0,0.4)] border border-zinc-200 dark:border-white/10 select-none transition-all duration-300 pointer-events-auto ml-2 mb-2 ${
+          isCollapsed ? "w-[300px] h-[55px]" : "w-[90vw] md:w-[600px] lg:w-[800px] h-[400px] max-h-[80vh]"
+        } overflow-hidden`}
+      >
       {/* --- HEADER --- */}
       <div className="editor-drag-handle cursor-move flex items-center justify-between gap-3 p-2.5 border-b border-zinc-200 dark:border-white/5 shrink-0 bg-zinc-50/50 dark:bg-navidark-700/50">
         <div className="flex flex-col min-w-0 pointer-events-none">
@@ -211,19 +229,32 @@ export function WaypointEditor({
           </h2>
         </div>
 
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onClose();
-          }}
-          title="Close Editor"
-          className="p-1.5 rounded-lg hover:bg-zinc-200 dark:hover:bg-navidark-400 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
-        >
-          <ChevronDown className="w-5 h-5" />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsCollapsed(!isCollapsed);
+            }}
+            title="Toggle Editor Size"
+            className="p-1.5 rounded-lg hover:bg-zinc-200 dark:hover:bg-navidark-400 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
+          >
+            {isCollapsed ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onClose();
+            }}
+            title="Close Editor"
+            className="p-1.5 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 text-zinc-500 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
       </div>
 
-      <div className="flex-1 flex flex-row min-w-0 h-full overflow-hidden items-stretch">
+      {!isCollapsed && (
+        <div className="flex-1 flex flex-row min-w-0 h-full overflow-hidden items-stretch">
         {/* --- LEFT COLUMN: METADATA & ACTIONS --- */}
         <div className="w-70 shrink-0 border-r border-zinc-200 dark:border-white/10 p-5 flex flex-col gap-6 overflow-y-auto scrollbar-none bg-zinc-50/30 dark:bg-navidark-800/30">
           {/* Waypoint Name */}
@@ -617,6 +648,8 @@ export function WaypointEditor({
           </div>
         </div>
       </div>
+      )}
     </div>
+    </Rnd>
   );
 }

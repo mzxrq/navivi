@@ -8,19 +8,27 @@ interface InspectorTransitionsPanelProps {
   setTimeline: (timeline: any) => void;
 }
 
-export function InspectorTransitionsPanel({ selectedClip, updateClip, timeline, setTimeline }: InspectorTransitionsPanelProps) {
+export function InspectorTransitionsPanel({
+  selectedClip,
+  updateClip,
+  timeline,
+  setTimeline,
+}: InspectorTransitionsPanelProps) {
   return (
-<div className="space-y-3 pt-3 border-t border-zinc-200 dark:border-navidark-400">
+    <div className="space-y-3 pt-3 border-t border-zinc-200 dark:border-navidark-400">
       <h5 className="flex items-center gap-2 text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
         <Sparkles className="w-3 h-3" /> Transitions
       </h5>
       <div className="space-y-2">
         <div>
-          <label className="text-[10px] text-zinc-400 block mb-1">In-Transition</label>
+          <label className="text-[10px] text-zinc-400 block mb-1">
+            In-Transition
+          </label>
           <select
             value={selectedClip.transitionIn || "none"}
             onChange={(e) => {
-              const val = e.target.value === "none" ? undefined : e.target.value;
+              const val =
+                e.target.value === "none" ? undefined : e.target.value;
               if (val) {
                 const duration = selectedClip.fadeIn || 1.0;
                 const precedingClip = timeline.clips
@@ -30,7 +38,10 @@ export function InspectorTransitionsPanel({ selectedClip, updateClip, timeline, 
                       c.id !== selectedClip.id &&
                       c.startTime < selectedClip.startTime,
                   )
-                  .sort((a: any, b: any) => (b.startTime + b.duration) - (a.startTime + a.duration))[0];
+                  .sort(
+                    (a: any, b: any) =>
+                      b.startTime + b.duration - (a.startTime + a.duration),
+                  )[0];
 
                 const updatedClips = timeline.clips.map((c: any) => {
                   if (c.id === selectedClip.id) {
@@ -54,7 +65,10 @@ export function InspectorTransitionsPanel({ selectedClip, updateClip, timeline, 
                 const filteredTransitions = (timeline.transitions || []).filter(
                   (t: any) =>
                     !precedingClip ||
-                    !(t.fromClipId === precedingClip.id && t.toClipId === selectedClip.id),
+                    !(
+                      t.fromClipId === precedingClip.id &&
+                      t.toClipId === selectedClip.id
+                    ),
                 );
 
                 const newTransitions = precedingClip
@@ -81,7 +95,11 @@ export function InspectorTransitionsPanel({ selectedClip, updateClip, timeline, 
                   transitions: newTransitions,
                 });
               } else {
-                updateClip({ transitionIn: undefined, fadeIn: undefined, prevClip: undefined });
+                updateClip({
+                  transitionIn: undefined,
+                  fadeIn: undefined,
+                  prevClip: undefined,
+                });
               }
             }}
             className="w-full bg-zinc-50 dark:bg-navidark-900 border border-zinc-200 dark:border-navidark-400 rounded p-2 text-xs text-zinc-800 dark:text-zinc-200 cursor-pointer"
@@ -92,7 +110,9 @@ export function InspectorTransitionsPanel({ selectedClip, updateClip, timeline, 
             <option value="glsl-slide">Slide (GLSL)</option>
             <option value="glsl-dissolve">Dissolve (GLSL)</option>
             <option value="glsl-dreamy">Dreamy (GLSL)</option>
-            <option value="glsl-directionalwarp">Directional Warp (GLSL)</option>
+            <option value="glsl-directionalwarp">
+              Directional Warp (GLSL)
+            </option>
             <option value="glsl-pixelize">Pixelize (GLSL)</option>
             <option value="glsl-multiply_blend">Multiply Blend (GLSL)</option>
             <option value="glsl-crosswarp">Cross Warp (GLSL)</option>
@@ -102,11 +122,14 @@ export function InspectorTransitionsPanel({ selectedClip, updateClip, timeline, 
           </select>
         </div>
         <div>
-          <label className="text-[10px] text-zinc-400 block mb-1">Out-Transition</label>
+          <label className="text-[10px] text-zinc-400 block mb-1">
+            Out-Transition
+          </label>
           <select
             value={selectedClip.transitionOut || "none"}
             onChange={(e) => {
-              const val = e.target.value === "none" ? undefined : e.target.value;
+              const val =
+                e.target.value === "none" ? undefined : e.target.value;
               if (val) {
                 const duration = selectedClip.fadeOut || 1.0;
                 const nextClip = timeline.clips
@@ -140,7 +163,10 @@ export function InspectorTransitionsPanel({ selectedClip, updateClip, timeline, 
                 const filteredTransitions = (timeline.transitions || []).filter(
                   (t: any) =>
                     !nextClip ||
-                    !(t.fromClipId === selectedClip.id && t.toClipId === nextClip.id),
+                    !(
+                      t.fromClipId === selectedClip.id &&
+                      t.toClipId === nextClip.id
+                    ),
                 );
 
                 const newTransitions = nextClip
@@ -178,7 +204,9 @@ export function InspectorTransitionsPanel({ selectedClip, updateClip, timeline, 
             <option value="glsl-slide">Slide (GLSL)</option>
             <option value="glsl-dissolve">Dissolve (GLSL)</option>
             <option value="glsl-dreamy">Dreamy (GLSL)</option>
-            <option value="glsl-directionalwarp">Directional Warp (GLSL)</option>
+            <option value="glsl-directionalwarp">
+              Directional Warp (GLSL)
+            </option>
             <option value="glsl-pixelize">Pixelize (GLSL)</option>
             <option value="glsl-multiply_blend">Multiply Blend (GLSL)</option>
             <option value="glsl-crosswarp">Cross Warp (GLSL)</option>
@@ -189,6 +217,5 @@ export function InspectorTransitionsPanel({ selectedClip, updateClip, timeline, 
         </div>
       </div>
     </div>
-        
   );
 }

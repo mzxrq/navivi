@@ -902,26 +902,11 @@ export function MapArea() {
       )}
       {/* --- FLOATING WAYPOINT EDITOR --- */}
       {activeWaypointId && !isDrawMode && !isAddMode && (
-        <Rnd
-          default={{
-            x: window.innerWidth > 1000 ? (window.innerWidth - 800) / 2 : 390,
-            y: window.innerHeight - 420,
-            width: "min(800px, calc(100vw - 420px))",
-            height: 400,
-          }}
-          bounds="parent"
-          enableResizing={false}
-          dragHandleClassName="editor-drag-handle"
-          className="z-50"
-        >
-          <div className="w-full h-full pointer-events-auto">
-            <WaypointEditor
-              wpId={activeWaypointId}
-              onClose={() => setActiveWaypointId(null)}
-            />
-          </div>
-        </Rnd>
-      )}
+          <WaypointEditor
+            wpId={activeWaypointId}
+            onClose={() => setActiveWaypointId(null)}
+          />
+        )}
     </main>
   );
 }

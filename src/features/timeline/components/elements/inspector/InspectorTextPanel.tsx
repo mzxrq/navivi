@@ -1,7 +1,6 @@
 import React from "react";
 import { Type, Subtitles, Check } from "lucide-react";
 
-
 const FONT_FAMILIES = [
   { label: "Inter (Modern Sans)", value: "Inter, sans-serif" },
   { label: "Roboto (Clean Sans)", value: "Roboto, sans-serif" },
@@ -11,7 +10,6 @@ const FONT_FAMILIES = [
   { label: "Georgia (Classic Serif)", value: "Georgia, serif" },
   { label: "Courier New (Monospace)", value: "'Courier New', monospace" },
 ];
-
 
 const STYLE_PRESETS = [
   {
@@ -88,12 +86,18 @@ const STYLE_PRESETS = [
   },
 ];
 interface InspectorTextPanelProps {
-  selectedClip: any; updateClip: (updates: any) => void; updateTextStyle: (updates: any) => void;
+  selectedClip: any;
+  updateClip: (updates: any) => void;
+  updateTextStyle: (updates: any) => void;
 }
 
-export function InspectorTextPanel({ selectedClip, updateClip, updateTextStyle }: InspectorTextPanelProps) {
+export function InspectorTextPanel({
+  selectedClip,
+  updateClip,
+  updateTextStyle,
+}: InspectorTextPanelProps) {
   return (
-<div className="space-y-4 pt-3 border-t border-zinc-200 dark:border-navidark-400">
+    <div className="space-y-4 pt-3 border-t border-zinc-200 dark:border-navidark-400">
       <div className="flex items-center justify-between">
         <h5 className="flex items-center gap-2 text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
           {selectedClip.type === "subtitle" ? (
@@ -216,8 +220,12 @@ export function InspectorTextPanel({ selectedClip, updateClip, updateTextStyle }
             <input
               type="color"
               value={
-                (selectedClip.color || selectedClip.style?.color || "#ffffff").startsWith("#")
-                  ? (selectedClip.color || selectedClip.style?.color || "#ffffff")
+                (
+                  selectedClip.color ||
+                  selectedClip.style?.color ||
+                  "#ffffff"
+                ).startsWith("#")
+                  ? selectedClip.color || selectedClip.style?.color || "#ffffff"
                   : "#ffffff"
               }
               onChange={(e) => updateTextStyle({ color: e.target.value })}
@@ -234,14 +242,25 @@ export function InspectorTextPanel({ selectedClip, updateClip, updateTextStyle }
             <input
               type="checkbox"
               checked={Boolean(
-                (selectedClip.strokeWidth ?? selectedClip.style?.strokeWidth ?? 0) > 0 &&
-                (selectedClip.stroke || selectedClip.style?.stroke)
+                (selectedClip.strokeWidth ??
+                  selectedClip.style?.strokeWidth ??
+                  0) > 0 &&
+                (selectedClip.stroke || selectedClip.style?.stroke),
               )}
               onChange={(e) => {
                 if (e.target.checked) {
-                  const defaultStroke = selectedClip.stroke || selectedClip.style?.stroke || "#000000";
-                  const defaultWidth = (selectedClip.strokeWidth || selectedClip.style?.strokeWidth) || 3;
-                  updateTextStyle({ stroke: defaultStroke, strokeWidth: defaultWidth });
+                  const defaultStroke =
+                    selectedClip.stroke ||
+                    selectedClip.style?.stroke ||
+                    "#000000";
+                  const defaultWidth =
+                    selectedClip.strokeWidth ||
+                    selectedClip.style?.strokeWidth ||
+                    3;
+                  updateTextStyle({
+                    stroke: defaultStroke,
+                    strokeWidth: defaultWidth,
+                  });
                 } else {
                   updateTextStyle({ stroke: undefined, strokeWidth: 0 });
                 }
@@ -251,11 +270,16 @@ export function InspectorTextPanel({ selectedClip, updateClip, updateTextStyle }
             <span>Text Outline / Stroke</span>
           </label>
           <span className="text-[10px] uppercase font-bold text-zinc-400">
-            {(selectedClip.strokeWidth ?? selectedClip.style?.strokeWidth ?? 0) > 0 ? "Active" : "Off"}
+            {(selectedClip.strokeWidth ??
+              selectedClip.style?.strokeWidth ??
+              0) > 0
+              ? "Active"
+              : "Off"}
           </span>
         </div>
 
-        {(selectedClip.strokeWidth ?? selectedClip.style?.strokeWidth ?? 0) > 0 && (
+        {(selectedClip.strokeWidth ?? selectedClip.style?.strokeWidth ?? 0) >
+          0 && (
           <div className="space-y-2 pt-2 border-t border-zinc-200 dark:border-navidark-700">
             <div className="flex items-center justify-between">
               <span className="text-[11px] text-zinc-500 dark:text-zinc-400">
@@ -263,13 +287,21 @@ export function InspectorTextPanel({ selectedClip, updateClip, updateTextStyle }
               </span>
               <div className="flex items-center gap-2">
                 <span className="text-[10px] font-mono text-zinc-400 uppercase">
-                  {selectedClip.stroke || selectedClip.style?.stroke || "#000000"}
+                  {selectedClip.stroke ||
+                    selectedClip.style?.stroke ||
+                    "#000000"}
                 </span>
                 <input
                   type="color"
                   value={
-                    (selectedClip.stroke || selectedClip.style?.stroke || "#000000").startsWith("#")
-                      ? (selectedClip.stroke || selectedClip.style?.stroke || "#000000")
+                    (
+                      selectedClip.stroke ||
+                      selectedClip.style?.stroke ||
+                      "#000000"
+                    ).startsWith("#")
+                      ? selectedClip.stroke ||
+                        selectedClip.style?.stroke ||
+                        "#000000"
                       : "#000000"
                   }
                   onChange={(e) => updateTextStyle({ stroke: e.target.value })}
@@ -282,7 +314,10 @@ export function InspectorTextPanel({ selectedClip, updateClip, updateTextStyle }
               <div className="flex justify-between items-center text-[11px] text-zinc-500 dark:text-zinc-400">
                 <span>Stroke Width</span>
                 <span className="font-mono text-navi font-bold">
-                  {selectedClip.strokeWidth ?? selectedClip.style?.strokeWidth ?? 3}px
+                  {selectedClip.strokeWidth ??
+                    selectedClip.style?.strokeWidth ??
+                    3}
+                  px
                 </span>
               </div>
               <input
@@ -290,7 +325,11 @@ export function InspectorTextPanel({ selectedClip, updateClip, updateTextStyle }
                 min="0.5"
                 max="12"
                 step="0.5"
-                value={selectedClip.strokeWidth ?? selectedClip.style?.strokeWidth ?? 3}
+                value={
+                  selectedClip.strokeWidth ??
+                  selectedClip.style?.strokeWidth ??
+                  3
+                }
                 onChange={(e) =>
                   updateTextStyle({ strokeWidth: parseFloat(e.target.value) })
                 }
@@ -309,15 +348,29 @@ export function InspectorTextPanel({ selectedClip, updateClip, updateTextStyle }
               type="checkbox"
               checked={Boolean(
                 (selectedClip.shadowColor || selectedClip.style?.shadowColor) &&
-                (selectedClip.shadowBlur ?? selectedClip.style?.shadowBlur ?? 0) > 0
+                (selectedClip.shadowBlur ??
+                  selectedClip.style?.shadowBlur ??
+                  0) > 0,
               )}
               onChange={(e) => {
                 if (e.target.checked) {
                   updateTextStyle({
-                    shadowColor: selectedClip.shadowColor || selectedClip.style?.shadowColor || "rgba(0, 0, 0, 0.75)",
-                    shadowBlur: (selectedClip.shadowBlur || selectedClip.style?.shadowBlur) || 6,
-                    shadowOffsetX: (selectedClip.shadowOffsetX ?? selectedClip.style?.shadowOffsetX) ?? 2,
-                    shadowOffsetY: (selectedClip.shadowOffsetY ?? selectedClip.style?.shadowOffsetY) ?? 2,
+                    shadowColor:
+                      selectedClip.shadowColor ||
+                      selectedClip.style?.shadowColor ||
+                      "rgba(0, 0, 0, 0.75)",
+                    shadowBlur:
+                      selectedClip.shadowBlur ||
+                      selectedClip.style?.shadowBlur ||
+                      6,
+                    shadowOffsetX:
+                      selectedClip.shadowOffsetX ??
+                      selectedClip.style?.shadowOffsetX ??
+                      2,
+                    shadowOffsetY:
+                      selectedClip.shadowOffsetY ??
+                      selectedClip.style?.shadowOffsetY ??
+                      2,
                   });
                 } else {
                   updateTextStyle({
@@ -333,13 +386,16 @@ export function InspectorTextPanel({ selectedClip, updateClip, updateTextStyle }
             <span>Drop Shadow</span>
           </label>
           <span className="text-[10px] uppercase font-bold text-zinc-400">
-            {(selectedClip.shadowBlur ?? selectedClip.style?.shadowBlur ?? 0) > 0 ? "Active" : "Off"}
+            {(selectedClip.shadowBlur ?? selectedClip.style?.shadowBlur ?? 0) >
+            0
+              ? "Active"
+              : "Off"}
           </span>
         </div>
 
         {Boolean(
           (selectedClip.shadowColor || selectedClip.style?.shadowColor) &&
-          (selectedClip.shadowBlur ?? selectedClip.style?.shadowBlur ?? 0) > 0
+          (selectedClip.shadowBlur ?? selectedClip.style?.shadowBlur ?? 0) > 0,
         ) && (
           <div className="space-y-2 pt-2 border-t border-zinc-200 dark:border-navidark-700">
             <div className="flex items-center justify-between">
@@ -350,11 +406,19 @@ export function InspectorTextPanel({ selectedClip, updateClip, updateTextStyle }
                 <input
                   type="color"
                   value={
-                    (selectedClip.shadowColor || selectedClip.style?.shadowColor || "#000000").startsWith("#")
-                      ? (selectedClip.shadowColor || selectedClip.style?.shadowColor || "#000000")
+                    (
+                      selectedClip.shadowColor ||
+                      selectedClip.style?.shadowColor ||
+                      "#000000"
+                    ).startsWith("#")
+                      ? selectedClip.shadowColor ||
+                        selectedClip.style?.shadowColor ||
+                        "#000000"
                       : "#000000"
                   }
-                  onChange={(e) => updateTextStyle({ shadowColor: e.target.value })}
+                  onChange={(e) =>
+                    updateTextStyle({ shadowColor: e.target.value })
+                  }
                   className="w-7 h-6 rounded cursor-pointer border border-zinc-300 dark:border-navidark-600 bg-transparent"
                 />
               </div>
@@ -364,7 +428,10 @@ export function InspectorTextPanel({ selectedClip, updateClip, updateTextStyle }
               <div className="flex justify-between items-center text-[11px] text-zinc-500 dark:text-zinc-400">
                 <span>Shadow Blur</span>
                 <span className="font-mono text-navi font-bold">
-                  {selectedClip.shadowBlur ?? selectedClip.style?.shadowBlur ?? 6}px
+                  {selectedClip.shadowBlur ??
+                    selectedClip.style?.shadowBlur ??
+                    6}
+                  px
                 </span>
               </div>
               <input
@@ -372,7 +439,9 @@ export function InspectorTextPanel({ selectedClip, updateClip, updateTextStyle }
                 min="0"
                 max="30"
                 step="1"
-                value={selectedClip.shadowBlur ?? selectedClip.style?.shadowBlur ?? 6}
+                value={
+                  selectedClip.shadowBlur ?? selectedClip.style?.shadowBlur ?? 6
+                }
                 onChange={(e) =>
                   updateTextStyle({ shadowBlur: parseInt(e.target.value) || 0 })
                 }
@@ -385,7 +454,10 @@ export function InspectorTextPanel({ selectedClip, updateClip, updateTextStyle }
                 <div className="flex justify-between items-center text-[10px] text-zinc-500 dark:text-zinc-400">
                   <span>Offset X</span>
                   <span className="font-mono text-zinc-700 dark:text-zinc-300">
-                    {selectedClip.shadowOffsetX ?? selectedClip.style?.shadowOffsetX ?? 2}px
+                    {selectedClip.shadowOffsetX ??
+                      selectedClip.style?.shadowOffsetX ??
+                      2}
+                    px
                   </span>
                 </div>
                 <input
@@ -393,9 +465,15 @@ export function InspectorTextPanel({ selectedClip, updateClip, updateTextStyle }
                   min="-20"
                   max="20"
                   step="1"
-                  value={selectedClip.shadowOffsetX ?? selectedClip.style?.shadowOffsetX ?? 2}
+                  value={
+                    selectedClip.shadowOffsetX ??
+                    selectedClip.style?.shadowOffsetX ??
+                    2
+                  }
                   onChange={(e) =>
-                    updateTextStyle({ shadowOffsetX: parseInt(e.target.value) || 0 })
+                    updateTextStyle({
+                      shadowOffsetX: parseInt(e.target.value) || 0,
+                    })
                   }
                   className="w-full accent-navi cursor-pointer h-1.5 bg-zinc-200 dark:bg-zinc-700 rounded-lg"
                 />
@@ -404,7 +482,10 @@ export function InspectorTextPanel({ selectedClip, updateClip, updateTextStyle }
                 <div className="flex justify-between items-center text-[10px] text-zinc-500 dark:text-zinc-400">
                   <span>Offset Y</span>
                   <span className="font-mono text-zinc-700 dark:text-zinc-300">
-                    {selectedClip.shadowOffsetY ?? selectedClip.style?.shadowOffsetY ?? 2}px
+                    {selectedClip.shadowOffsetY ??
+                      selectedClip.style?.shadowOffsetY ??
+                      2}
+                    px
                   </span>
                 </div>
                 <input
@@ -412,9 +493,15 @@ export function InspectorTextPanel({ selectedClip, updateClip, updateTextStyle }
                   min="-20"
                   max="20"
                   step="1"
-                  value={selectedClip.shadowOffsetY ?? selectedClip.style?.shadowOffsetY ?? 2}
+                  value={
+                    selectedClip.shadowOffsetY ??
+                    selectedClip.style?.shadowOffsetY ??
+                    2
+                  }
                   onChange={(e) =>
-                    updateTextStyle({ shadowOffsetY: parseInt(e.target.value) || 0 })
+                    updateTextStyle({
+                      shadowOffsetY: parseInt(e.target.value) || 0,
+                    })
                   }
                   className="w-full accent-navi cursor-pointer h-1.5 bg-zinc-200 dark:bg-zinc-700 rounded-lg"
                 />
@@ -430,7 +517,9 @@ export function InspectorTextPanel({ selectedClip, updateClip, updateTextStyle }
           <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-zinc-800 dark:text-zinc-200">
             <input
               type="checkbox"
-              checked={Boolean(selectedClip.karaoke ?? selectedClip.style?.karaoke)}
+              checked={Boolean(
+                selectedClip.karaoke ?? selectedClip.style?.karaoke,
+              )}
               onChange={(e) => {
                 updateTextStyle({
                   karaoke: e.target.checked,
@@ -445,11 +534,14 @@ export function InspectorTextPanel({ selectedClip, updateClip, updateTextStyle }
             <span>Karaoke Timing Mode</span>
           </label>
           <span className="text-[10px] uppercase font-bold text-amber-500">
-            {(selectedClip.karaoke ?? selectedClip.style?.karaoke) ? "Active" : "Off"}
+            {(selectedClip.karaoke ?? selectedClip.style?.karaoke)
+              ? "Active"
+              : "Off"}
           </span>
         </div>
         <p className="text-[10px] text-zinc-400 leading-normal">
-          Progressively illuminates text in sync with clip duration during playback.
+          Progressively illuminates text in sync with clip duration during
+          playback.
         </p>
 
         {(selectedClip.karaoke ?? selectedClip.style?.karaoke) && (
@@ -460,13 +552,21 @@ export function InspectorTextPanel({ selectedClip, updateClip, updateTextStyle }
               </span>
               <div className="flex items-center gap-2">
                 <span className="text-[10px] font-mono text-amber-500 font-bold uppercase">
-                  {selectedClip.karaokeHighlightColor || selectedClip.style?.karaokeHighlightColor || "#f59e0b"}
+                  {selectedClip.karaokeHighlightColor ||
+                    selectedClip.style?.karaokeHighlightColor ||
+                    "#f59e0b"}
                 </span>
                 <input
                   type="color"
                   value={
-                    (selectedClip.karaokeHighlightColor || selectedClip.style?.karaokeHighlightColor || "#f59e0b").startsWith("#")
-                      ? (selectedClip.karaokeHighlightColor || selectedClip.style?.karaokeHighlightColor || "#f59e0b")
+                    (
+                      selectedClip.karaokeHighlightColor ||
+                      selectedClip.style?.karaokeHighlightColor ||
+                      "#f59e0b"
+                    ).startsWith("#")
+                      ? selectedClip.karaokeHighlightColor ||
+                        selectedClip.style?.karaokeHighlightColor ||
+                        "#f59e0b"
                       : "#f59e0b"
                   }
                   onChange={(e) =>
@@ -503,6 +603,5 @@ export function InspectorTextPanel({ selectedClip, updateClip, updateTextStyle }
         )}
       </div>
     </div>
-
   );
 }
