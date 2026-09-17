@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   ChevronLeft,
   ChevronUp,
@@ -65,6 +65,11 @@ export function WaypointEditor({
   const [isEditingName, setIsEditingName] = useState(false);
   const [activeTab, setActiveTab] = useState<"scripts" | "images">("scripts");
   const [isCollapsed, setIsCollapsed] = useState(false);
+
+  // Auto-expand if the user clicks a new waypoint
+  useEffect(() => {
+    setIsCollapsed(false);
+  }, [wpId]);
 
   if (!wp) return null;
 
