@@ -1,5 +1,6 @@
 import { useState, useEffect, MouseEvent } from "react";
 import { createPortal } from "react-dom";
+import { open } from "@tauri-apps/plugin-dialog";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { useUI } from "../../hooks/useUI";
@@ -582,13 +583,53 @@ export function ProjectManager() {
                     from your recent list? The original files will remain on
                     your computer.
                   </p>
+                ) : modalState.type === "settings" ? (
+                  <div className="space-y-3 mt-4">
+                    <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                      Global Custom Marker
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={modalInput}
+                        readOnly
+                        placeholder="Default marker will be used..."
+                        className="flex-1 bg-zinc-50 dark:bg-navidark-800 border border-zinc-200 dark:border-navidark-400 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-white outline-none focus:border-navi focus:ring-1 focus:ring-navi transition-all opacity-80"
+                      />
+                      <button
+                        onClick={async () => {
+                          const selected = await open({
+                            multiple: false,
+                            filters: [
+                              {
+                                name: "Images",
+                                extensions: ["svg", "png", "jpg", "jpeg"],
+                              },
+                            ],
+                          });
+                          if (selected && typeof selected === "string") {
+                            setModalInput(selected);
+                          }
+                        }}
+                        className="bg-navi-500 hover:bg-navi-600 text-white px-3 py-2 rounded-lg text-xs font-bold shadow-sm transition-colors shrink-0"
+                      >
+                        Select
+                      </button>
+                      {modalInput && (
+                        <button
+                          onClick={() => setModalInput("")}
+                          className="bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-500/10 dark:hover:bg-red-500/20 px-3 py-2 rounded-lg text-xs font-bold transition-colors shrink-0"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 ) : (
                   <div className="space-y-3 mt-4">
                     <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
                       {modalState.type === "rename"
                         ? "New Project Name"
-                        : modalState.type === "settings"
-                        ? "Global Custom Marker"
                         : "Duplicate Project Name"}
                     </label>
                     <input
@@ -609,14 +650,18 @@ export function ProjectManager() {
                 >
                   Cancel
                 </button>
-                <button
-                  onClick={executeModalAction}
-                  disabled={modalState.type !== "remove" && !modalInput.trim()}
-                  className={`px-4 py-2 text-white text-xs font-bold rounded-lg shadow-md transition-colors disabled:opacity-50 ${
-                    modalState.type === "remove"
-                      ? "bg-red-500 hover:bg-red-600"
-                      : "bg-navi hover:bg-navi-600"
-                  }`}
+                  <button
+                    onClick={executeModalAction}
+                    disabled={
+                      modalState.type !== "remove" &&
+                      modalState.type !== "settings" &&
+                      !modalInput.trim()
+                    }
+                    className={`px-4 py-2 text-white text-xs font-bold rounded-lg shadow-md transition-colors disabled:opacity-50 ${
+                      modalState.type === "remove"
+                        ? "bg-red-500 hover:bg-red-600"
+                        : "bg-navi hover:bg-navi-600"
+                    }`}
                 >
                   {modalState.type === "remove" ? "Remove" : "Confirm"}
                 </button>
