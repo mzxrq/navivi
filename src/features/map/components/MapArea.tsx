@@ -902,11 +902,11 @@ export function MapArea() {
       )}
       {/* --- FLOATING WAYPOINT EDITOR --- */}
       {activeWaypointId && !isDrawMode && !isAddMode && (
-          <WaypointEditor
-            wpId={activeWaypointId}
-            onClose={() => setActiveWaypointId(null)}
-          />
-        )}
+        <WaypointEditor
+          wpId={activeWaypointId}
+          onClose={() => setActiveWaypointId(null)}
+        />
+      )}
     </main>
   );
 }
