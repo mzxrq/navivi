@@ -16,6 +16,7 @@ import {
 import { useWorkspace } from "../../../hooks/useWorkspace";
 import { useUI } from "../../../hooks/useUI";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
+import { Tooltip } from "../../../components/ui/Tooltip";
 import { ScriptInput } from "../../../components/ui/ScriptInput";
 import { open } from "@tauri-apps/plugin-dialog";
 import {
@@ -241,42 +242,42 @@ export function WaypointEditor({
 
                 <div className="mt-5 flex flex-col gap-4 pl-1">
                   {/* Skip Asset Generation Toggle */}
-                  <label className="flex items-start gap-3 cursor-pointer group">
-                    <div className="relative inline-flex items-center mt-0.5">
-                      <input 
-                        type="checkbox" 
-                        className="sr-only peer" 
-                        checked={wp.skipAssetGeneration || false}
-                        onChange={(e) => updateWaypoint(wp.id, { skipAssetGeneration: e.target.checked })}
-                      />
-                      <div className="w-9 h-5 bg-zinc-200 peer-focus:outline-none rounded-full peer dark:bg-navidark-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-navi-500 border border-zinc-300 dark:border-white/20"></div>
-                    </div>
-                    <div className="flex flex-col gap-0.5">
+                  <div className="flex items-center gap-3">
+                    <label className="flex items-center gap-3 cursor-pointer group">
+                      <div className="relative inline-flex items-center">
+                        <input 
+                          type="checkbox" 
+                          className="sr-only peer" 
+                          checked={wp.skipAssetGeneration || false}
+                          onChange={(e) => updateWaypoint(wp.id, { skipAssetGeneration: e.target.checked })}
+                        />
+                        <div className="w-9 h-5 bg-zinc-200 peer-focus:outline-none rounded-full peer dark:bg-navidark-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-navi-500 border border-zinc-300 dark:border-white/20"></div>
+                      </div>
                       <span className="text-[11px] font-bold text-zinc-700 dark:text-zinc-200">Skip in Video Export</span>
-                      <span className="text-[9px] font-medium text-red-500 dark:text-red-400 leading-tight">
-                        // Skips this location during video generation (useful for shaping the route without visiting).
-                      </span>
-                    </div>
-                  </label>
+                    </label>
+                    <Tooltip content="Skips this location during video generation (useful for shaping the route without visiting)." position="top">
+                      <Info className="w-3.5 h-3.5 text-zinc-400 hover:text-navi transition-colors cursor-help" />
+                    </Tooltip>
+                  </div>
 
                   {/* Pause At Waypoint Toggle */}
-                  <label className="flex items-start gap-3 cursor-pointer group">
-                    <div className="relative inline-flex items-center mt-0.5">
-                      <input 
-                        type="checkbox" 
-                        className="sr-only peer" 
-                        checked={wp.pauseAtWaypoint || false}
-                        onChange={(e) => updateWaypoint(wp.id, { pauseAtWaypoint: e.target.checked })}
-                      />
-                      <div className="w-9 h-5 bg-zinc-200 peer-focus:outline-none rounded-full peer dark:bg-navidark-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-navi-500 border border-zinc-300 dark:border-white/20"></div>
-                    </div>
-                    <div className="flex flex-col gap-0.5">
+                  <div className="flex items-center gap-3">
+                    <label className="flex items-center gap-3 cursor-pointer group">
+                      <div className="relative inline-flex items-center">
+                        <input 
+                          type="checkbox" 
+                          className="sr-only peer" 
+                          checked={wp.pauseAtWaypoint || false}
+                          onChange={(e) => updateWaypoint(wp.id, { pauseAtWaypoint: e.target.checked })}
+                        />
+                        <div className="w-9 h-5 bg-zinc-200 peer-focus:outline-none rounded-full peer dark:bg-navidark-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-navi-500 border border-zinc-300 dark:border-white/20"></div>
+                      </div>
                       <span className="text-[11px] font-bold text-zinc-700 dark:text-zinc-200">Pause at Location</span>
-                      <span className="text-[9px] font-medium text-zinc-500 dark:text-zinc-400 leading-tight">
-                        // Adds a brief pause in the generated video at this waypoint before continuing the journey.
-                      </span>
-                    </div>
-                  </label>
+                    </label>
+                    <Tooltip content="Adds a brief pause in the generated video at this waypoint before continuing the journey." position="top">
+                      <Info className="w-3.5 h-3.5 text-zinc-400 hover:text-navi transition-colors cursor-help" />
+                    </Tooltip>
+                  </div>
                 </div>
               </div>
 
@@ -340,7 +341,7 @@ export function WaypointEditor({
                       className={`flex flex-col items-center justify-center gap-1.5 p-2 rounded-xl border transition-all shadow-sm ${!isStopBy && !isStart && !isDest ? 'bg-navi-50 dark:bg-navi-900/30 border-navi text-navi-700 dark:text-navi-400' : 'bg-white dark:bg-navidark-700 border-zinc-200 dark:border-white/10 hover:border-navi-300 text-zinc-600 dark:text-zinc-300'}`}
                     >
                       <Navigation className="w-4 h-4" />
-                      <span className="text-[9px] font-bold">Node</span>
+                      <span className="text-[9px] font-bold max-[1414px]:hidden">Node</span>
                     </button>
                     
                     <button 
@@ -348,7 +349,7 @@ export function WaypointEditor({
                       className={`flex flex-col items-center justify-center gap-1.5 p-2 rounded-xl border transition-all shadow-sm ${isStopBy && !isStart && !isDest ? 'bg-navi-50 dark:bg-navi-900/30 border-navi text-navi-700 dark:text-navi-400' : 'bg-white dark:bg-navidark-700 border-zinc-200 dark:border-white/10 hover:border-navi-300 text-zinc-600 dark:text-zinc-300'}`}
                     >
                       <MapPinned className="w-4 h-4" />
-                      <span className="text-[9px] font-bold">Stop-by</span>
+                      <span className="text-[9px] font-bold max-[1414px]:hidden">Stop-by</span>
                     </button>
 
                     <button 
@@ -356,7 +357,7 @@ export function WaypointEditor({
                       className={`flex flex-col items-center justify-center gap-1.5 p-2 rounded-xl border transition-all shadow-sm ${isStart ? 'bg-emerald-50 dark:bg-emerald-900/30 border-emerald-500 text-emerald-700 dark:text-emerald-400' : 'bg-white dark:bg-navidark-700 border-zinc-200 dark:border-white/10 opacity-50'}`}
                     >
                       <PlayCircle className="w-4 h-4" />
-                      <span className="text-[9px] font-bold">Start</span>
+                      <span className="text-[9px] font-bold max-[1414px]:hidden">Start</span>
                     </button>
 
                     <button 
@@ -364,7 +365,7 @@ export function WaypointEditor({
                       className={`flex flex-col items-center justify-center gap-1.5 p-2 rounded-xl border transition-all shadow-sm ${isDest ? 'bg-indigo-50 dark:bg-indigo-900/30 border-indigo-500 text-indigo-700 dark:text-indigo-400' : 'bg-white dark:bg-navidark-700 border-zinc-200 dark:border-white/10 opacity-50'}`}
                     >
                       <CheckCircle2 className="w-4 h-4" />
-                      <span className="text-[9px] font-bold">Dest</span>
+                      <span className="text-[9px] font-bold max-[1414px]:hidden">Dest</span>
                     </button>
 
                     <button 
@@ -372,7 +373,7 @@ export function WaypointEditor({
                       className="flex flex-col items-center justify-center gap-1.5 p-2 rounded-xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-navidark-700 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 hover:border-red-200 transition-all shadow-sm"
                     >
                       <Trash2 className="w-4 h-4" />
-                      <span className="text-[9px] font-bold">Delete</span>
+                      <span className="text-[9px] font-bold max-[1414px]:hidden">Delete</span>
                     </button>
                   </div>
                 </div>
