@@ -214,6 +214,47 @@ export function WaypointItem({
               )}
             </div>
           )}
+
+          {/* Simple Inline Route Mode Selector */}
+          {!isLast && (
+            <div className="mt-2.5 flex items-center gap-2">
+              <span className="text-[9px] font-bold text-zinc-400 dark:text-zinc-600 uppercase tracking-widest">
+                To Next
+              </span>
+              <div className="flex items-center bg-zinc-100 dark:bg-black/20 rounded-md p-0.5 border border-zinc-200 dark:border-white/5">
+                {[
+                  { id: "walking", icon: Footprints, title: "Walk" },
+                  { id: "driving", icon: Car, title: "Drive" },
+                  { id: "curve", icon: Plane, title: "Fly" },
+                  { id: "direct", icon: Ruler, title: "Direct" },
+                  { id: "ferry", icon: Ship, title: "Ferry" },
+                  { id: "draw", icon: Pencil, title: "Draw" },
+                ].map((mode) => {
+                  const isModeActive = (wp.routeMode || "driving") === mode.id;
+                  const Icon = mode.icon;
+                  return (
+                    <button
+                      key={mode.id}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        updateWaypoint(wp.id, {
+                          routeMode: mode.id as RouteMode,
+                        });
+                      }}
+                      className={`p-1 rounded transition-colors ${
+                        isModeActive
+                          ? "bg-white dark:bg-white/10 text-navi-600 dark:text-white shadow-sm ring-1 ring-black/5 dark:ring-white/10"
+                          : "text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-black/5 dark:hover:bg-white/5"
+                      }`}
+                      title={mode.title}
+                    >
+                      <Icon className="w-3 h-3" />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Hover Actions */}

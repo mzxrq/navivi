@@ -178,7 +178,8 @@ export function ProjectManager() {
             onOpen: () => handleOpenProject(project.path),
             onRename: () => openModal("rename", project),
             onDuplicate: () => openModal("duplicate", project),
-            onSettings: () => openModal("settings", project),
+            onSettings: () =>
+              showToast("To change settings, open the project first.", "info"),
             onQuickRender: () => handleQuickRender(project),
             onRemove: () => openModal("remove", project),
           },
@@ -394,7 +395,14 @@ export function ProjectManager() {
                           <Film className="w-3.5 h-3.5" /> Quick Render
                         </button>
                         <button
-                          onClick={(e) => openModal("settings", project, e as any)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            showToast(
+                              "To change settings, open the project first.",
+                              "info",
+                            );
+                            setActiveMenu(null);
+                          }}
                           className="w-full text-left px-4 py-2 text-xs font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-navidark-600 flex items-center gap-2"
                         >
                           <Settings2 className="w-3.5 h-3.5" /> Advanced Settings
@@ -521,12 +529,7 @@ export function ProjectManager() {
                       >
                         <Film className="w-3.5 h-3.5" /> Quick Render
                       </button>
-                      <button
-                        onClick={(e) => openModal("settings", project, e as any)}
-                        className="w-full text-left px-4 py-2 text-xs font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-navidark-600 flex items-center gap-2"
-                      >
-                        <Settings2 className="w-3.5 h-3.5" /> Advanced Settings
-                      </button>
+
                       <div className="h-px bg-zinc-200 dark:bg-navidark-400 my-1 mx-2" />
                       <button
                         onClick={(e) => openModal("remove", project, e)}
