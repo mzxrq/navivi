@@ -96,8 +96,8 @@ export function WaypointItem({
         isListEditMode ? "cursor-default" : "cursor-pointer"
       } ${
         isActive
-          ? "bg-navi/60 dark:bg-navi/20 border-navi/50 dark:border-navi/40 ring-1 ring-navi/30"
-          : "border-transparent hover:bg-zinc-50/80 dark:hover:bg-zinc-900/30"
+          ? "bg-white dark:bg-white/5 border-zinc-200 dark:border-white/10 shadow-sm"
+          : "border-transparent hover:bg-white/50 dark:hover:bg-white/5"
       }`}
     >
       {/* 1. Delete Action */}
@@ -129,17 +129,13 @@ export function WaypointItem({
           <div
             className={`relative z-10 w-5 h-5 mt-1.75 rounded-full border-[2.5px] flex items-center justify-center shadow-sm transition-colors ${
               wp.isStopBy
-                ? "bg-[#33261c] border-[#33261c]"
+                ? "bg-zinc-800 border-zinc-800 text-white"
                 : isActive
-                  ? "border-navi bg-navi dark:bg-navi"
-                  : "border-navi bg-navi dark:bg-navi"
+                  ? "border-navi bg-navi text-white"
+                  : "border-zinc-300 dark:border-zinc-700 bg-white dark:bg-[#09090b] text-zinc-700 dark:text-zinc-300"
             }`}
           >
-            <span
-              className={`text-white ${
-                wp.isStopBy ? "text-[8px]" : "text-[9px]"
-              }`}
-            >
+            <span className={wp.isStopBy ? "text-[8px]" : "text-[9px] font-bold"}>
               {displayLabel}
             </span>
           </div>
@@ -152,8 +148,8 @@ export function WaypointItem({
           <span
             className={`text-sm font-semibold truncate pr-4 transition-colors ${
               wp.isStopBy
-                ? "text-zinc-600 dark:text-zinc-400"
-                : "text-zinc-900 dark:text-zinc-100"
+                ? "text-zinc-500 dark:text-zinc-500"
+                : "text-zinc-900 dark:text-white"
             }`}
             title={wp.name}
           >
@@ -205,10 +201,10 @@ export function WaypointItem({
           {/* Routing Mode Controls */}
           {!isListEditMode && !isLast && (
             <div className="flex-col items-center gap-1 mt-2 pt-2 border-t border-zinc-200/60 dark:border-white/10 w-full">
-              <div className="font-bold text-[9px] text-zinc-400">
+              <div className="font-bold text-[9px] text-zinc-400 dark:text-zinc-500 uppercase tracking-wide">
                 To the next stop:
               </div>
-              <div className="flex gap-2 bg-zinc-100/80 dark:bg-zinc-900 rounded-md p-0.5 border border-zinc-200/50 dark:border-white/5">
+              <div className="flex gap-2 bg-black/5 dark:bg-white/5 rounded-md p-0.5 mt-1 border border-black/5 dark:border-white/5">
                 {[
                   {
                     mode: "walking",
@@ -259,8 +255,8 @@ export function WaypointItem({
                       }}
                       className={`flex items-center justify-center p-1.25 rounded-md transition-all duration-300 ease-out overflow-hidden ${
                         isSelected
-                          ? `bg-white dark:bg-zinc-800 shadow-sm ring-1 ring-zinc-200 dark:ring-white/10 ${activeColor}`
-                          : "text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-200/50 dark:hover:bg-white/5"
+                          ? `bg-white dark:bg-white/10 shadow-sm ring-1 ring-zinc-200 dark:ring-white/5 ${activeColor}`
+                          : "text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-black/5 dark:hover:bg-white/5"
                       }`}
                       title={title}
                     >

@@ -611,7 +611,7 @@ export function MapArea() {
   return (
     <main className="flex-1 relative bg-zinc-100 dark:bg-[#09090b] overflow-hidden transition-colors">
       {/* --- GEOJSON.IO STYLE TOP TOOLBAR --- */}
-      <div className="absolute z-[200] transition-all duration-300 max-[1159px]:top-4 max-[1159px]:left-4 max-[1159px]:translate-x-0 min-[1160px]:top-4 min-[1160px]:left-1/2 min-[1160px]:-translate-x-1/2">
+      <div className="absolute z-[200] transition-all duration-300 max-[1159px]:top-14 max-[1159px]:left-4 max-[1159px]:translate-x-0 min-[1160px]:top-14 min-[1160px]:left-1/2 min-[1160px]:-translate-x-1/2">
         <MapToolbar
           isAddMode={isAddMode}
           setIsAddMode={setIsAddMode}
@@ -640,7 +640,7 @@ export function MapArea() {
         />
       </div>
 
-      <div className="absolute top-4 right-4 z-200 flex items-center gap-2">
+      <div className="absolute top-14 right-4 z-[200] flex items-center gap-2">
         <button
           onClick={() => {
             setViewState((prev) => ({

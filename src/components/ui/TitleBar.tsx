@@ -147,7 +147,11 @@ export function TitleBar() {
 
         if (pendingNavigation) {
           if (pendingNavigation === "close") {
-            try { await getCurrentWindow().close(); } catch (e) { console.error(e); }
+            try {
+              await getCurrentWindow().close();
+            } catch (e) {
+              console.error(e);
+            }
           } else if (
             pendingNavigation === "title_screen" ||
             pendingNavigation === "new_project"
@@ -185,7 +189,7 @@ export function TitleBar() {
 
             {/* Dropdown Menu */}
             {isMenuOpen && (
-               <div className="absolute top-10 w-56 bg-white dark:bg-navidark-600 border border-zinc-200 dark:border-white/10 rounded-br-2xl shadow-2xl py-1 z-800 text-sm text-zinc-700 dark:text-zinc-300">
+              <div className="absolute top-10 w-56 bg-white dark:bg-navidark-600 border border-zinc-200 dark:border-white/10 rounded-br-2xl shadow-2xl py-1 z-800 text-sm text-zinc-700 dark:text-zinc-300">
                 {currentView === "editor" && (
                   <>
                     <button
@@ -332,7 +336,7 @@ export function TitleBar() {
                   ? "Setup"
                   : metadata.project_name}
             </span>
-            
+
             {/* ✨ NEW: Informative Status Pill */}
             {currentView === "editor" && (
               <span
@@ -425,7 +429,11 @@ export function TitleBar() {
         onDiscard={async () => {
           setIsDirty(false);
           if (pendingNavigation === "close") {
-            try { await getCurrentWindow().close(); } catch (e) { console.error(e); }
+            try {
+              await getCurrentWindow().close();
+            } catch (e) {
+              console.error(e);
+            }
           } else if (
             pendingNavigation === "title_screen" ||
             pendingNavigation === "new_project"
@@ -447,7 +455,11 @@ export function TitleBar() {
           const saved = await handleSave();
           if (saved && pendingNavigation) {
             if (pendingNavigation === "close") {
-              try { await getCurrentWindow().close(); } catch (e) { console.error(e); }
+              try {
+                await getCurrentWindow().close();
+              } catch (e) {
+                console.error(e);
+              }
             } else if (
               pendingNavigation === "title_screen" ||
               pendingNavigation === "new_project"
