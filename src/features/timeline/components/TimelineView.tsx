@@ -895,7 +895,7 @@ export function TimelineView() {
   }
 
   return (
-    <div className="flex flex-col flex-1 h-full bg-white dark:bg-[#09090b] overflow-hidden select-none">
+    <div className="pt-10 flex flex-col flex-1 h-full bg-white dark:bg-[#09090b] overflow-hidden select-none">
       <div className="flex-1 flex min-h-0 border-b border-zinc-200 dark:border-white/5">
         {/* SIDEBAR TABS BAR */}
         <div className="w-14 shrink-0 flex flex-col items-center py-4 bg-zinc-50 dark:bg-navidark-900 border-r border-zinc-200 dark:border-navidark-400 gap-4">

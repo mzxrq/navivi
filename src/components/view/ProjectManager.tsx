@@ -154,7 +154,7 @@ export function ProjectManager() {
   const safeRecentProject = recentProjects || [];
 
   return (
-    <div className="flex-1 flex flex-col w-full h-full p-10 bg-zinc-50 dark:bg-navidark-800 relative z-10 animate-in fade-in duration-500 select-none">
+    <div className="flex-1 flex flex-col w-full h-full px-10 pb-10 pt-16 bg-zinc-50 dark:bg-navidark-800 relative z-10 animate-in fade-in duration-500 select-none">
       {/* Top Header Bar */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-10 gap-6">
         <div>

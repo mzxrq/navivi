@@ -171,14 +171,14 @@ export function TitleBar() {
     <>
       <div
         data-tauri-drag-region
-        className="h-10 bg-white dark:bg-navidark-700 border-b border-zinc-200 dark:border-navidark-300 flex items-center justify-between select-none shrink-0 transition-colors"
+        className="absolute top-0 inset-x-0 h-10 bg-white/60 dark:bg-zinc-950/60 backdrop-blur-xl border-b border-white/40 dark:border-white/10 flex items-center justify-between select-none shrink-0 transition-colors z-[9999] shadow-sm"
       >
         {/* --- LEFT: MENU & DOCUMENT ACTIONS --- */}
-        <div className="flex items-center h-full shrink-0">
+        <div className="flex items-center h-full shrink-0 px-2">
           <div className="relative h-full flex items-center" ref={menuRef}>
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className={`h-full px-4 flex items-center transition-colors ${isMenuOpen ? "bg-zinc-100 dark:bg-navidark-500 text-zinc-900 dark:text-white" : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-50 dark:hover:bg-white/5"}`}
+              className={`h-7 px-3 flex items-center justify-center rounded-lg font-medium transition-all ${isMenuOpen ? "bg-zinc-800 text-white dark:bg-white dark:text-zinc-900 shadow-md" : "text-zinc-600 dark:text-zinc-300 hover:bg-black/5 dark:hover:bg-white/10"}`}
             >
               <Menu className="w-4 h-4" />
             </button>
@@ -352,13 +352,13 @@ export function TitleBar() {
         <div className="flex items-center h-full shrink-0">
           {/* Map / Timeline Toggle */}
           {currentView === "editor" && (
-            <div className="flex bg-zinc-200/50 dark:bg-navidark-900 rounded-lg p-0.5 border border-zinc-300/50 dark:border-navidark-400 shadow-inner mr-4">
+            <div className="flex bg-black/5 dark:bg-white/5 rounded-full p-0.5 border border-black/5 dark:border-white/5 shadow-inner mr-4">
               <button
                 onClick={() => setEditorMode("map")}
-                className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold rounded-md transition-all ${
+                className={`flex items-center gap-1.5 px-3 py-1 text-[11px] font-bold rounded-full transition-all ${
                   editorMode === "map"
-                    ? "bg-white dark:bg-navidark-500 text-navi dark:text-navi shadow-sm"
-                    : "text-zinc-500 hover:text-zinc-700 dark:text-navidark-125 dark:hover:text-white"
+                    ? "bg-white dark:bg-zinc-800 text-navi-600 dark:text-navi-400 shadow-sm"
+                    : "text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
                 }`}
               >
                 <Map className="w-3.5 h-3.5" /> Map
@@ -366,10 +366,10 @@ export function TitleBar() {
 
               <button
                 onClick={() => setEditorMode("timeline")}
-                className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold rounded-md transition-all ${
+                className={`flex items-center gap-1.5 px-3 py-1 text-[11px] font-bold rounded-full transition-all ${
                   editorMode === "timeline"
-                    ? "bg-white dark:bg-navidark-500 text-navi dark:text-navi shadow-sm"
-                    : "text-zinc-500 hover:text-zinc-700 dark:text-navidark-125 dark:hover:text-white"
+                    ? "bg-white dark:bg-zinc-800 text-navi-600 dark:text-navi-400 shadow-sm"
+                    : "text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
                 }`}
               >
                 <Film className="w-3.5 h-3.5" /> Timeline
@@ -379,24 +379,24 @@ export function TitleBar() {
 
           <button
             onClick={() => setShowAppSettings(true)}
-            className="h-full px-4 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-navidark-500 hover:text-zinc-900 dark:hover:text-white transition-colors"
+            className="h-full px-4 text-zinc-600 dark:text-zinc-400 hover:bg-black/5 dark:hover:bg-white/10 hover:text-zinc-900 dark:hover:text-white transition-colors"
             title="App Settings"
           >
             <Settings2 className="w-4 h-4" />
           </button>
 
-          <div className="w-px h-5 my-auto bg-zinc-200 dark:bg-white/10 mx-1"></div>
+          <div className="w-px h-5 my-auto bg-black/10 dark:bg-white/10 mx-1"></div>
 
           <div className="flex h-full text-zinc-600 dark:text-zinc-400">
             <button
               onClick={() => handleWindow("minimize")}
-              className="h-full px-4 hover:bg-zinc-100 dark:hover:bg-navidark-500 transition-colors"
+              className="h-full px-4 hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
             >
               <Minus className="w-4 h-4" />
             </button>
             <button
               onClick={() => handleWindow("maximize")}
-              className="h-full px-4 hover:bg-zinc-100 dark:hover:bg-navidark-500 transition-colors"
+              className="h-full px-4 hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
             >
               <Square className="w-3.5 h-3.5" />
             </button>
