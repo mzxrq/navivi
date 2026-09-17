@@ -224,6 +224,9 @@ export function AppSettings() {
                     </div>
                   </div>
                 )}
+                <div>
+                  <img src="/public/navivi-type.svg" alt="" />
+                </div>
               </div>
             )}
 

@@ -324,6 +324,7 @@ export interface WorkspaceState {
   setDrawnRoute: Dispatch<SetStateAction<[number, number][]>>;
   projectThumbnail: string | null;
   setProjectThumbnail: (thumbnail: string | null) => void;
+  registerThumbnailGetter: (fn: () => string | null) => void;
   // Project Config
   metadata: ProjectMetadata;
   setMetadata: Dispatch<SetStateAction<ProjectMetadata>>;

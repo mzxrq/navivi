@@ -57,7 +57,8 @@ export function MapArea() {
     updateWaypoint,
     setActiveWaypointId,
     setProjectThumbnail,
-  } = useWorkspace();
+      registerThumbnailGetter,
+    } = useWorkspace();
   const { handleDroppedFiles, importPhotos } = useFileActions();
 
   // Overlays & Modes
@@ -93,6 +94,17 @@ export function MapArea() {
   });
 
   useMapRouting();
+
+  useEffect(() => {
+    registerThumbnailGetter(() => {
+      try {
+        const canvas = mapRef.current?.getMap().getCanvas();
+        return canvas ? canvas.toDataURL("image/png") : null;
+      } catch (e) {
+        return null;
+      }
+    });
+  }, [registerThumbnailGetter]);
 
   const captureMapThumbnail = () => {
     if (thumbnailCaptureTimeoutRef.current) {
