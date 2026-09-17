@@ -7,7 +7,12 @@ interface TooltipProps {
   className?: string;
 }
 
-export function Tooltip({ children, content, position = "top", className = "" }: TooltipProps) {
+export function Tooltip({
+  children,
+  content,
+  position = "top",
+  className = "",
+}: TooltipProps) {
   const positionClasses = {
     top: "bottom-full left-1/2 -translate-x-1/2 mb-2",
     bottom: "top-full left-1/2 -translate-x-1/2 mt-2",
@@ -17,9 +22,11 @@ export function Tooltip({ children, content, position = "top", className = "" }:
 
   const arrowClasses = {
     top: "top-full left-1/2 -translate-x-1/2 border-t-zinc-800 dark:border-t-white",
-    bottom: "bottom-full left-1/2 -translate-x-1/2 border-b-zinc-800 dark:border-b-white",
+    bottom:
+      "bottom-full left-1/2 -translate-x-1/2 border-b-zinc-800 dark:border-b-white",
     left: "left-full top-1/2 -translate-y-1/2 border-l-zinc-800 dark:border-l-white",
-    right: "right-full top-1/2 -translate-y-1/2 border-r-zinc-800 dark:border-r-white",
+    right:
+      "right-full top-1/2 -translate-y-1/2 border-r-zinc-800 dark:border-r-white",
   };
 
   return (
@@ -38,4 +45,3 @@ export function Tooltip({ children, content, position = "top", className = "" }:
     </div>
   );
 }
-

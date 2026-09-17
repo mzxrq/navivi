@@ -12,6 +12,8 @@ import {
   Navigation,
   PlayCircle,
   CheckCircle2,
+  LinkIcon,
+  UnlinkIcon,
 } from "../../../components/ui/icons";
 import { useWorkspace } from "../../../hooks/useWorkspace";
 import { useUI } from "../../../hooks/useUI";
@@ -243,15 +245,16 @@ export function WaypointEditor({
                 <div className="mt-5 flex flex-col gap-4 pl-1">
                   {/* Skip Asset Generation Toggle */}
                   <div className="flex items-center gap-3">
-                    <label className="flex items-center gap-3 cursor-pointer group">
+                    <label className={`flex items-center gap-3 group ${isStart || isDest ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}>
                       <div className="relative inline-flex items-center">
                         <input 
                           type="checkbox" 
                           className="sr-only peer" 
                           checked={wp.skipAssetGeneration || false}
+                          disabled={isStart || isDest}
                           onChange={(e) => updateWaypoint(wp.id, { skipAssetGeneration: e.target.checked })}
                         />
-                        <div className="w-9 h-5 bg-zinc-200 peer-focus:outline-none rounded-full peer dark:bg-navidark-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-navi-500 border border-zinc-300 dark:border-white/20"></div>
+                        <div className="w-9 h-5 bg-zinc-200 peer-focus:outline-none rounded-full peer dark:bg-navidark-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-navi-500 border border-zinc-300 dark:border-white/20 peer-disabled:cursor-not-allowed"></div>
                       </div>
                       <span className="text-[11px] font-bold text-zinc-700 dark:text-zinc-200">Skip in Video Export</span>
                     </label>
@@ -267,7 +270,7 @@ export function WaypointEditor({
                         <input 
                           type="checkbox" 
                           className="sr-only peer" 
-                          checked={wp.pauseAtWaypoint || false}
+                          checked={wp.pauseAtWaypoint !== undefined ? wp.pauseAtWaypoint : (waypoints[wpIndex + 1]?.isStopBy === true)}
                           onChange={(e) => updateWaypoint(wp.id, { pauseAtWaypoint: e.target.checked })}
                         />
                         <div className="w-9 h-5 bg-zinc-200 peer-focus:outline-none rounded-full peer dark:bg-navidark-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-navi-500 border border-zinc-300 dark:border-white/20"></div>
@@ -335,7 +338,7 @@ export function WaypointEditor({
                     Waypoint settings <Info className="w-3.5 h-3.5 text-zinc-400" />
                   </h3>
                   
-                  <div className="grid grid-cols-5 gap-2">
+                  <div className={`grid gap-2 ${isStopBy && !isStart && !isDest ? 'grid-cols-6' : 'grid-cols-5'}`}>
                     <button 
                       onClick={() => updateWaypoint(wp.id, { isStopBy: false })}
                       className={`flex flex-col items-center justify-center gap-1.5 p-2 rounded-xl border transition-all shadow-sm ${!isStopBy && !isStart && !isDest ? 'bg-navi-50 dark:bg-navi-900/30 border-navi text-navi-700 dark:text-navi-400' : 'bg-white dark:bg-navidark-700 border-zinc-200 dark:border-white/10 hover:border-navi-300 text-zinc-600 dark:text-zinc-300'}`}
@@ -351,6 +354,17 @@ export function WaypointEditor({
                       <MapPinned className="w-4 h-4" />
                       <span className="text-[9px] font-bold max-[1414px]:hidden">Stop-by</span>
                     </button>
+                    
+                    {isStopBy && !isStart && !isDest && (
+                      <button 
+                        onClick={() => updateWaypoint(wp.id, { connectToRoute: wp.connectToRoute === false ? true : false })}
+                        className={`flex flex-col items-center justify-center gap-1.5 p-2 rounded-xl border transition-all shadow-sm ${wp.connectToRoute !== false ? 'bg-emerald-50 dark:bg-emerald-900/30 border-emerald-500 text-emerald-700 dark:text-emerald-400' : 'bg-zinc-100 dark:bg-navidark-600 border-zinc-300 dark:border-white/20 text-zinc-600 dark:text-zinc-400'}`}
+                        title={wp.connectToRoute !== false ? "Connected to route" : "Disconnected from route"}
+                      >
+                        {wp.connectToRoute !== false ? <LinkIcon className="w-4 h-4" /> : <UnlinkIcon className="w-4 h-4" />}
+                        <span className="text-[9px] font-bold max-[1414px]:hidden">{wp.connectToRoute !== false ? "Linked" : "Unlinked"}</span>
+                      </button>
+                    )}
 
                     <button 
                       disabled
@@ -463,36 +477,40 @@ export function WaypointEditor({
 
                     <div className="border-t border-zinc-200/50 dark:border-white/5" />
 
-                    {/* Attraction Script */}
-                    <div className="flex flex-col gap-3">
-                      <button 
-                        onClick={() => setShowAttraction(!showAttraction)}
-                        className="flex items-center gap-2 group w-max"
-                      >
-                        <Mic className="w-4 h-4 text-zinc-500 dark:text-zinc-400 group-hover:text-emerald-500 transition-colors" />
-                        <h3 className="text-sm font-bold text-zinc-800 dark:text-zinc-200">Attraction Script</h3>
-                        {showAttraction ? (
-                          <ChevronUp className="w-4 h-4 ml-1 text-zinc-400 group-hover:text-zinc-700 transition-colors" />
-                        ) : (
-                          <ChevronDown className="w-4 h-4 ml-1 text-zinc-400 group-hover:text-zinc-700 transition-colors" />
-                        )}
-                      </button>
+                    {!(isStopBy && wp.connectToRoute === false) && (
+                      <>
+                        {/* Attraction Script */}
+                        <div className="flex flex-col gap-3">
+                          <button 
+                            onClick={() => setShowAttraction(!showAttraction)}
+                            className="flex items-center gap-2 group w-max"
+                          >
+                            <Mic className="w-4 h-4 text-zinc-500 dark:text-zinc-400 group-hover:text-emerald-500 transition-colors" />
+                            <h3 className="text-sm font-bold text-zinc-800 dark:text-zinc-200">Attraction Script</h3>
+                            {showAttraction ? (
+                              <ChevronUp className="w-4 h-4 ml-1 text-zinc-400 group-hover:text-zinc-700 transition-colors" />
+                            ) : (
+                              <ChevronDown className="w-4 h-4 ml-1 text-zinc-400 group-hover:text-zinc-700 transition-colors" />
+                            )}
+                          </button>
 
-                      {showAttraction && (
-                        <div className="pl-6">
-                          <ScriptInput
-                            value={wp.attractionNarration || ""}
-                            onChange={(v) => updateWaypoint(wp.id, { attractionNarration: v })}
-                            isGenerating={wp.isGeneratingScript || false}
-                            onCancel={() => {
-                              updateWaypoint(wp.id, { isGeneratingScript: false });
-                              invoke("cancel_python_blueprint").catch(console.error);
-                            }}
-                            onGenerate={(prompt, engine) => handleGenerateScript("attraction", prompt, engine)}
-                          />
+                          {showAttraction && (
+                            <div className="pl-6">
+                              <ScriptInput
+                                value={wp.attractionNarration || ""}
+                                onChange={(v) => updateWaypoint(wp.id, { attractionNarration: v })}
+                                isGenerating={wp.isGeneratingScript || false}
+                                onCancel={() => {
+                                  updateWaypoint(wp.id, { isGeneratingScript: false });
+                                  invoke("cancel_python_blueprint").catch(console.error);
+                                }}
+                                onGenerate={(prompt, engine) => handleGenerateScript("attraction", prompt, engine)}
+                              />
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
+                      </>
+                    )}
                   </div>
                 )}
 
