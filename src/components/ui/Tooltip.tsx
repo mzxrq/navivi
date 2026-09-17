@@ -28,7 +28,7 @@ export function Tooltip({ children, content, position = "top", className = "" }:
       <div
         className={`absolute z-50 invisible opacity-0 group-hover:visible group-hover:opacity-100 transition-all duration-200 pointer-events-none ${positionClasses[position]} ${className}`}
       >
-        <div className="bg-zinc-800 dark:bg-white text-white dark:text-zinc-900 text-[10px] font-bold px-3 py-2 rounded-lg shadow-xl max-w-[220px] whitespace-normal text-center leading-tight">
+        <div className="bg-zinc-800 dark:bg-white text-white dark:text-zinc-900 text-[10px] font-bold px-3 py-2 rounded-lg shadow-xl max-w-[220px] w-max whitespace-normal text-center leading-tight">
           {content}
         </div>
         <div
@@ -38,3 +38,4 @@ export function Tooltip({ children, content, position = "top", className = "" }:
     </div>
   );
 }
+
