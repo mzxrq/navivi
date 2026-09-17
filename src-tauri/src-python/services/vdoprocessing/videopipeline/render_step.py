@@ -146,12 +146,12 @@ RESIDENTIAL_LEG_RE = re.compile(r"02_waypoint_(\d+)_")
 # tighter (more zoomed-in) crop; bigger ones get a bit more room so nearby
 # pins/labels don't crowd the frame edge.
 _OVERVIEW_PADDING_BY_SPAN_KM = (
-    (1.5, 0.045),
-    (5.0, 0.06),
-    (15.0, 0.07),
-    (40.0, 0.09),
+    (1.5, 0.025),
+    (5.0, 0.035),
+    (15.0, 0.045),
+    (40.0, 0.06),
 )
-_OVERVIEW_PADDING_MAX_SPAN = 0.11
+_OVERVIEW_PADDING_MAX_SPAN = 0.075
 
 # Fallback real-world speed (km/h) used when a leg's own mode has no
 # configured speed AND there's no configured "car" speed to fall back to

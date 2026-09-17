@@ -505,10 +505,23 @@ class _TransitionMixin:
                 hold_n = 0 if is_fullscreen else max(1, int(highlight_hold_sec * fps))
                 zoom_n = lead_in_n + wait_n
 
+                # settings.mapbox_style_id lets a project swap in a custom
+                # Mapbox Studio style (e.g. one with larger place-name
+                # text) — same setting TileDownloader._build_provider
+                # already honors for the raster/contextily overview path,
+                # threaded through here too so a project that sets it gets
+                # bigger labels on this GL path as well, not just the
+                # static one. Falls back to pydeck's own default style.
+                style_id = settings.get("mapbox_style_id")
+                map_style = (
+                    f"mapbox://styles/{style_id}" if style_id
+                    else "mapbox://styles/mapbox/streets-v12"
+                )
                 dynamic_frames = capture_pydeck_zoom_sequence(
                     bounding_box, (w, h), lat, lng, zoom_n,
                     zoom_boost=tuning.ENDING_HIGHLIGHT_PYDECK_ZOOM_BOOST,
                     mapbox_key=settings.get("mapbox_api_key"),
+                    map_style=map_style,
                     # The route this video actually drew (stashed by
                     # render_overview — the same geometry
                     # _draw_route_line_on_extent redraws on the close-up),

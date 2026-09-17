@@ -65,9 +65,15 @@ class MapFetcher:
             from services.mapfetcher.pydeck_overview import fetch_overview_image_pydeck
 
             logger.info("Fetching overview map background via pydeck...")
+            style_id = settings.get("mapbox_style_id")
+            map_style = (
+                f"mapbox://styles/{style_id}" if style_id
+                else "mapbox://styles/mapbox/streets-v12"
+            )
             result = fetch_overview_image_pydeck(
                 bounding_box, final_filename, output_size,
                 mapbox_key=settings.get("mapbox_api_key"),
+                map_style=map_style,
             )
             logger.info("Overview map background saved -> %s", result[0])
             return result
