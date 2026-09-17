@@ -23,7 +23,11 @@ export function buildAssetManifest(
           start_coord: [prevWp.lng, prevWp.lat],
           end_coord: [wp.lng, wp.lat],
           zoom: 14,
-          pitch: 60
+          pitch: 60,
+          route_mode: prevWp.routeMode,
+          custom_marker: wp.customMarker,
+          draw_style: prevWp.drawStyle,
+          curve_offset: prevWp.curveOffset
         }
       });
     }
@@ -42,16 +46,19 @@ export function buildAssetManifest(
     }
 
     // Only create a location segment if there's media or narration to play
-    if (locationMedia.length > 0 || wp.audioUrl) {
+    if (locationMedia.length > 0 || wp.audioUrl || wp.narration || wp.arrivingNarration || wp.attractionNarration) {
       segments.push({
         id: `loc_${wp.id}`,
         name: `Location: ${wp.name}`,
         type: "location_media",
         duration_sec: (locationMedia.length * 5) || 5, // 5s per media item
         visuals: locationMedia,
-        narration: wp.audioUrl ? {
+        narration: wp.audioUrl || wp.narration || wp.arrivingNarration || wp.attractionNarration ? {
           audio_path: wp.audioUrl,
-          start_time_offset: 0.5
+          start_time_offset: 0.5,
+          base_text: wp.narration,
+          arriving_text: wp.arrivingNarration,
+          attraction_text: wp.attractionNarration
         } : undefined,
         subtitles: wp.audioUrl ? {
           srt_path: wp.audioUrl.replace(/\.[^/.]+$/, ".srt")
@@ -66,6 +73,7 @@ export function buildAssetManifest(
     global_settings: {
       resolution: { width: 1920, height: 1080 },
       fps: settings.fps || 30,
+      line_color: settings.line_color
     },
     segments
   };

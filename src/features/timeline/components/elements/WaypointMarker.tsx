@@ -73,11 +73,11 @@ export const WaypointMarker = memo(function WaypointMarker({
       </div>
 
       {/* Pin Needle Tip pointing to the ruler timestamp */}
-      <div className="w-0 h-0 border-l-[3px] border-l-transparent border-r-[3px] border-r-transparent border-t-[3.5px] border-t-amber-500 group-hover:border-t-amber-400 -mt-[0.5px]" />
+      <div className="w-0 h-0 border-l-[3px] border-l-transparent border-r-[3px] border-r-transparent border-t-[3.5px] border-t-amber-500 group-hover:border-t-amber-400 mt-[-0.5px]" />
 
       {/* Embedded Hover Tooltip */}
       <div className="pointer-events-none opacity-0 group-hover:opacity-100 transition-all duration-150 delay-75 absolute top-full mt-1 z-50 flex flex-col items-center whitespace-nowrap shadow-xl">
-        <div className="w-0 h-0 border-l-[4px] border-l-transparent border-r-[4px] border-r-transparent border-b-[4px] border-b-zinc-900/95 dark:border-b-zinc-800/95" />
+        <div className="w-0 h-0 border-l-4 border-l-transparent border-r-4 border-r-transparent border-b-4 border-b-zinc-900/95 dark:border-b-zinc-800/95" />
         <div className="bg-zinc-900/95 dark:bg-zinc-800/95 backdrop-blur-sm text-white text-xs rounded-md border border-zinc-700/80 px-2 py-1 flex flex-col items-center gap-0.5">
           <div className="flex items-center gap-1 font-semibold text-amber-400 text-[11px]">
             <MapPin className="w-2.5 h-2.5 shrink-0" />

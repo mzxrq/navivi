@@ -5,18 +5,89 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+:root {
+  /* Default Blue (navi) */
+  --accent-base: #4287f5;
+  --accent-1100: #000bcc;
+  --accent-1000: #002dd9;
+  --accent-900: #134ee6;
+  --accent-800: #296cf2;
+  --accent-600: #66abef;
+  --accent-500: #88c5eb;
+  --accent-400: #a7d8ea;
+  --accent-300: #c2e6ec;
+  --accent-200: #dcf0f1;
+  --accent-100: #f2f8f8;
+}
+
+:root[data-theme="emerald"] {
+  --accent-base: #10b981;
+  --accent-1100: #022c22;
+  --accent-1000: #064e3b;
+  --accent-900: #065f46;
+  --accent-800: #047857;
+  --accent-600: #34d399;
+  --accent-500: #6ee7b7;
+  --accent-400: #a7f3d0;
+  --accent-300: #d1fae5;
+  --accent-200: #ecfdf5;
+  --accent-100: #f0fdf4;
+}
+
+:root[data-theme="violet"] {
+  --accent-base: #8b5cf6;
+  --accent-1100: #2e1065;
+  --accent-1000: #4c1d95;
+  --accent-900: #5b21b6;
+  --accent-800: #6d28d9;
+  --accent-600: #a78bfa;
+  --accent-500: #c4b5fd;
+  --accent-400: #ddd6fe;
+  --accent-300: #ede9fe;
+  --accent-200: #f5f3ff;
+  --accent-100: #faf5ff;
+}
+
+:root[data-theme="amber"] {
+  --accent-base: #f59e0b;
+  --accent-1100: #451a03;
+  --accent-1000: #78350f;
+  --accent-900: #92400e;
+  --accent-800: #b45309;
+  --accent-600: #fbbf24;
+  --accent-500: #fcd34d;
+  --accent-400: #fde68a;
+  --accent-300: #fef3c7;
+  --accent-200: #fffbeb;
+  --accent-100: #fffbeb;
+}
+
+:root[data-theme="rose"] {
+  --accent-base: #f43f5e;
+  --accent-1100: #4c0519;
+  --accent-1000: #881337;
+  --accent-900: #9f1239;
+  --accent-800: #be123c;
+  --accent-600: #fb7185;
+  --accent-500: #fda4af;
+  --accent-400: #fecdd3;
+  --accent-300: #ffe4e6;
+  --accent-200: #fff1f2;
+  --accent-100: #fff1f2;
+}
+
 @theme {
-  --color-navi: #4287f5;
-  --color-navi-1100: #000bcc;
-  --color-navi-1000: #002dd9;
-  --color-navi-900: #134ee6;
-  --color-navi-800: #296cf2;
-  --color-navi-600: #66abef;
-  --color-navi-500: #88c5eb;
-  --color-navi-400: #a7d8ea;
-  --color-navi-300: #c2e6ec;
-  --color-navi-200: #dcf0f1;
-  --color-navi-100: #f2f8f8;
+  --color-navi: var(--accent-base);
+  --color-navi-1100: var(--accent-1100);
+  --color-navi-1000: var(--accent-1000);
+  --color-navi-900: var(--accent-900);
+  --color-navi-800: var(--accent-800);
+  --color-navi-600: var(--accent-600);
+  --color-navi-500: var(--accent-500);
+  --color-navi-400: var(--accent-400);
+  --color-navi-300: var(--accent-300);
+  --color-navi-200: var(--accent-200);
+  --color-navi-100: var(--accent-100);
   --color-navidark-900: #110f10;
   --color-navidark-800: #131012;
   --color-navidark-700: #141214;
@@ -56,8 +127,6 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(113, 113, 122, 0.8); /* zinc-500 on hover */
 }
-
-
 
 .no-spinners::-webkit-inner-spin-button,
 .no-spinners::-webkit-outer-spin-button {

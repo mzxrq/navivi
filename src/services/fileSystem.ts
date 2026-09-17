@@ -1,4 +1,4 @@
-import { documentDir, join, basename } from "@tauri-apps/api/path";
+import { documentDir, join, basename, dirname } from "@tauri-apps/api/path";
 import { writeTextFile, writeFile, mkdir, exists, copyFile, readTextFile, BaseDirectory, open as fsOpen } from "@tauri-apps/plugin-fs";
 import { open as dialogOpen } from "@tauri-apps/plugin-dialog";
 import { appConfig, fileSystem } from "../config/constants";
@@ -129,7 +129,7 @@ export const saveProjectData = async (
 
   const processedWaypoints = await Promise.all(
     waypoints.map(async (wp) => {
-      const absoluteImagePaths: string[] = [];
+      const relativeImagePaths: string[] = [];
 
       if (wp.images && wp.images.length > 0) {
         for (const imgPath of wp.images) {
@@ -138,7 +138,7 @@ export const saveProjectData = async (
           if (imgPath !== absoluteDest) {
             await copyFile(imgPath, absoluteDest);
           }
-          absoluteImagePaths.push(absoluteDest);
+          relativeImagePaths.push("assets/image/" + fileName);
         }
       }
       let finalCustomMarker = "";
@@ -148,7 +148,7 @@ export const saveProjectData = async (
         if (wp.customMarker !== markerDest) {
           await copyFile(wp.customMarker, markerDest);
         }
-        finalCustomMarker = markerDest;
+        finalCustomMarker = "assets/image/" + markerName;
       }
 
       return {
@@ -159,18 +159,21 @@ export const saveProjectData = async (
         name: wp.name,
         customMarker: finalCustomMarker || undefined,
 
-        popup_image: absoluteImagePaths.length > 0 ? [absoluteImagePaths[0]] : [],
-        camera_pans: absoluteImagePaths.length > 0
-          ? absoluteImagePaths.map((_, i) => (wp.imagePans && wp.imagePans[i] ? wp.imagePans[i] : "panright"))
+        popup_image: relativeImagePaths.length > 0 ? [relativeImagePaths[0]] : [],
+        camera_pans: relativeImagePaths.length > 0
+          ? relativeImagePaths.map((_, i) => (wp.imagePans && wp.imagePans[i] ? wp.imagePans[i] : "panright"))
           : [],
         image_display: wp.imageDisplay || "pip",
 
-        images: absoluteImagePaths,
+        images: relativeImagePaths,
         imagePans: wp.imagePans || [],
         imageTransitions: wp.imageTransitions || [],
         narration: wp.narration || "",
         arrivingNarration: wp.arrivingNarration || "",
         attractionNarration: wp.attractionNarration || "",
+
+        audioUrl: wp.audioUrl ? "assets/audio/" + await basename(wp.audioUrl) : undefined,
+        videoUrl: wp.videoUrl ? "assets/video/" + await basename(wp.videoUrl) : undefined,
 
         routeMode: wp.routeMode || "driving",
         customRoute: wp.customRoute || [],
@@ -189,9 +192,10 @@ export const saveProjectData = async (
   if (thumbnailDataUrl?.startsWith("data:image/")) {
     const base64 = thumbnailDataUrl.split(",", 2)[1];
     if (base64) {
-      thumbnailPath = await join(projectDir, "thumbnail.png");
+      thumbnailPath = "thumbnail.png";
+      const absThumbPath = await join(projectDir, "thumbnail.png");
       await writeFile(
-        thumbnailPath,
+        absThumbPath,
         Uint8Array.from(atob(base64), (char) => char.charCodeAt(0)),
       );
     }
@@ -207,9 +211,8 @@ export const saveProjectData = async (
     created_at: metadata.created_at,
     theme: metadata.theme,
     status: "saved",
-    directory_path: projectDir,
     thumbnail_path: thumbnailPath,
-    source_files: { gps_route: gpxPath },
+    source_files: { gps_route: "raw_track.gpx" },
     settings: settings,
     overview_narration: metadata.overview_narration || "",
     start_point: startWp ? { lat: startWp.lat, lng: startWp.lng, label: startWp.label } : null,
@@ -221,7 +224,7 @@ export const saveProjectData = async (
   await writeTextFile(nvvPath, payload);
   await writeTextFile(jsonPath, payload);
 
-  const manifest = buildAssetManifest(projId, waypoints, settings);
+  const manifest = buildAssetManifest(projId, processedWaypoints as any, settings);
   const manifestPath = await join(projectDir, "asset_manifest.json");
   await writeTextFile(manifestPath, JSON.stringify(manifest, null, 2));
 
@@ -270,6 +273,46 @@ export const loadProjectData = async (forcePath?: string) => {
 
   const fileContent = await readTextFile(selectedPath);
   const data = JSON.parse(fileContent);
+
+  // Resolve relative paths back to absolute based on the .nvv file location
+  const projectDir = await dirname(selectedPath);
+  data.directory_path = projectDir;
+
+  if (data.thumbnail_path && !data.thumbnail_path.match(/^[a-zA-Z]:\\/) && !data.thumbnail_path.startsWith('/')) {
+    data.thumbnail_path = await join(projectDir, data.thumbnail_path);
+  }
+
+  if (data.source_files?.gps_route && !data.source_files.gps_route.match(/^[a-zA-Z]:\\/) && !data.source_files.gps_route.startsWith('/')) {
+    data.source_files.gps_route = await join(projectDir, data.source_files.gps_route);
+  }
+
+  if (data.waypoints) {
+    for (const wp of data.waypoints) {
+      if (wp.customMarker && !wp.customMarker.match(/^[a-zA-Z]:\\/) && !wp.customMarker.startsWith('/')) {
+        wp.customMarker = await join(projectDir, wp.customMarker);
+      }
+      if (wp.audioUrl && !wp.audioUrl.match(/^[a-zA-Z]:\\/) && !wp.audioUrl.startsWith('/')) {
+        wp.audioUrl = await join(projectDir, wp.audioUrl);
+      }
+      if (wp.videoUrl && !wp.videoUrl.match(/^[a-zA-Z]:\\/) && !wp.videoUrl.startsWith('/')) {
+        wp.videoUrl = await join(projectDir, wp.videoUrl);
+      }
+      if (wp.images) {
+        for (let i = 0; i < wp.images.length; i++) {
+          if (wp.images[i] && !wp.images[i].match(/^[a-zA-Z]:\\/) && !wp.images[i].startsWith('/')) {
+            wp.images[i] = await join(projectDir, wp.images[i]);
+          }
+        }
+      }
+      if (wp.popup_image) {
+        for (let i = 0; i < wp.popup_image.length; i++) {
+          if (wp.popup_image[i] && !wp.popup_image[i].match(/^[a-zA-Z]:\\/) && !wp.popup_image[i].startsWith('/')) {
+            wp.popup_image[i] = await join(projectDir, wp.popup_image[i]);
+          }
+        }
+      }
+    }
+  }
 
   return { data, selectedPath };
 };

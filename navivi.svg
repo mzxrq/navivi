@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="26 12 160 160" width="512" height="512">
+  <defs>
+    <linearGradient id="a" x1="30" y1="125" x2="160" y2="40" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#3b82f6"/>
+      <stop offset="45%" stop-color="#8b5cf6"/>
+      <stop offset="100%" stop-color="#ff7e5f"/>
+    </linearGradient>
+  </defs>
+  
+  <!-- ✨ The Smooth, Taller 'N' Route Line -->
+  <path d="M 60 150 
+           L 72 65 Q 75 40 88 65 
+           L 122 127.5 Q 135 150 137.5 136.75 
+           L 144 97" 
+        fill="none" stroke="url(#a)" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
+        
+  <!-- Waypoint Dots -->
+  <circle cx="60" cy="150" r="18" fill="url(#a)"/>
+  <circle cx="60" cy="150" r="9" fill="#fff"/>
+  
+  <!-- The Map Pin -->
+  <path id="Shape-1-Teardrop" 
+        fill="url(#a)" 
+        stroke="url(#a)" 
+        stroke-width="19" 
+        stroke-linejoin="round"
+        transform="translate(140, 25) scale(0.42)"
+        d="m21.65 118.46c-10.06-2.7-20.47-45.45-21-53.76-0.54-8.58-0.03-21.19 2.59-30.99 5-18.64 26.18-29.12 47.4-23.43 21.21 5.68 34.32 25.35 29.33 43.99-2.44 9.1-9.3 20.05-14.44 27.82-7.16 10.83-33.02 39.28-43.88 36.37z" />
+        
+  <!-- Play button -->
+  <path fill="#fff" stroke="#fff" stroke-width="8" stroke-linejoin="round" d="m153 38 9 8-10 5z"/>
+</svg>

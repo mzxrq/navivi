@@ -10,6 +10,7 @@ export interface AssetManifest {
       ducking_level: number;
       fade_duration: number;
     };
+    line_color?: [number, number, number];
   };
   segments: ManifestSegment[];
 }
@@ -26,6 +27,10 @@ export interface ManifestSegment {
     end_coord: [number, number];
     zoom: number;
     pitch: number;
+    route_mode?: string;
+    custom_marker?: string;
+    draw_style?: string;
+    curve_offset?: number;
   };
 
   // Wan2.2 AI Video / Images
@@ -38,8 +43,11 @@ export interface ManifestSegment {
 
   // Narration TTS Audio (ElevenLabs / SpeechGen)
   narration?: {
-    audio_path: string;
+    audio_path?: string;
     start_time_offset: number;
+    base_text?: string;
+    arriving_text?: string;
+    attraction_text?: string;
   };
 
   // Subtitle Overlay

@@ -20,7 +20,7 @@ import {
 
 type ModalActionType = "rename" | "duplicate" | "remove" | null;
 
-export function TitleScreen() {
+export function ProjectManager() {
   const { setCurrentView, showToast } = useUI();
   const { loadProject, recentProjects, setRecentProjects, resetWorkspace } =
     useWorkspace();

@@ -23,7 +23,7 @@ type SettingsTab = "general" | "appearance" | "api";
 export function AppSettings() {
   const { settings, updateSettings, setIsDirty } = useWorkspace();
   const { showAppSettings, setShowAppSettings, currentView } = useUI();
-  const { theme, setTheme } = useTheme();
+  const { theme, setTheme, accentTheme, setAccentTheme } = useTheme();
 
   const [activeTab, setActiveTab] = useState<SettingsTab>("general");
   const { shouldRender, isAnimatingOut } = useAnimatedUnmount(
@@ -200,7 +200,9 @@ export function AppSettings() {
                           </span>
                         </div>
                         <span className="text-[10px] text-zinc-500 dark:text-navidark-150 leading-relaxed">
-                          Synchronize historical weather conditions from photo EXIF dates using Open-Meteo to dynamically apply atmospheric fog and rain effects.
+                          Synchronize historical weather conditions from photo
+                          EXIF dates using Open-Meteo to dynamically apply
+                          atmospheric fog and rain effects.
                         </span>
                       </div>
 
@@ -248,6 +250,40 @@ export function AppSettings() {
                         }`}
                       >
                         <t.icon className="w-3.5 h-3.5" /> {t.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-3 pt-4 border-t border-zinc-100 dark:border-navidark-700">
+                  <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-widest flex items-center gap-1.5">
+                    <Palette className="w-3.5 h-3.5" /> Accent Color
+                  </label>
+                  <div className="flex gap-2">
+                    {[
+                      { id: "navi", color: "bg-[#4287f5]", label: "Navi Blue" },
+                      {
+                        id: "emerald",
+                        color: "bg-[#10b981]",
+                        label: "Emerald",
+                      },
+                      { id: "violet", color: "bg-[#8b5cf6]", label: "Violet" },
+                      { id: "amber", color: "bg-[#f59e0b]", label: "Amber" },
+                      { id: "rose", color: "bg-[#f43f5e]", label: "Rose" },
+                    ].map((t) => (
+                      <button
+                        key={t.id}
+                        onClick={() => setAccentTheme(t.id as any)}
+                        title={t.label}
+                        className={`w-8 h-8 rounded-full ${t.color} flex items-center justify-center transition-transform hover:scale-110 ${
+                          accentTheme === t.id
+                            ? "ring-2 ring-offset-2 ring-offset-white dark:ring-offset-navidark-900 ring-zinc-400 dark:ring-zinc-500 scale-110 shadow-sm"
+                            : "opacity-80 hover:opacity-100"
+                        }`}
+                      >
+                        {accentTheme === t.id && (
+                          <div className="w-2 h-2 rounded-full bg-white opacity-80" />
+                        )}
                       </button>
                     ))}
                   </div>

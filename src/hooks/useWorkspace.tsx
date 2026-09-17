@@ -467,6 +467,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           narration: wp.narration || "",
           arrivingNarration: wp.arrivingNarration || "",
           attractionNarration: wp.attractionNarration || "",
+          audioUrl: wp.audioUrl,
+          videoUrl: wp.videoUrl,
         })),
       );
       resetTimelineHistory(DefaultTimeline);

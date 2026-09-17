@@ -9,6 +9,8 @@ import {
   Ruler,
   Plane,
   Pencil,
+  ChevronRight,
+  Ship,
 } from "../../../components/ui/icons";
 import { Waypoint, RouteMode } from "../../../types/index";
 import { useEffect, useRef, useState } from "react";
@@ -171,7 +173,7 @@ export function WaypointItem({
                 <span
                   className={`transition-transform duration-200 inline-block ${isExpanded ? "rotate-90" : ""}`}
                 >
-                  ▶
+                  <ChevronRight className="w-3.5 h-3.5"/>
                 </span>
                 Assets & Media
               </button>
@@ -190,7 +192,7 @@ export function WaypointItem({
                         <Mic className="w-3 h-3 text-navi-400" /> Voiceover
                         Script
                       </div>
-                      <span className="pl-4.5 italic text-zinc-400 dark:text-zinc-500 truncate max-w-[200px]">
+                      <span className="pl-4.5 italic text-zinc-400 dark:text-zinc-500 truncate max-w-50">
                         "{scriptPreview.substring(0, 30)}..."
                       </span>
                     </div>
@@ -230,6 +232,12 @@ export function WaypointItem({
                     mode: "direct",
                     icon: Ruler,
                     title: "Direct",
+                    activeColor: "text-navi-800 dark:text-white",
+                  },
+                  {
+                    mode: "ferry",
+                    icon: Ship,
+                    title: "Ferry",
                     activeColor: "text-navi-800 dark:text-white",
                   },
                   {

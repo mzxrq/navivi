@@ -552,6 +552,118 @@ export function ContextMenu() {
             >
               <Edit className="w-3.5 h-3.5" /> Edit Waypoint
             </button>
+
+            {/* Copy Trail / Retrace Back features for empty drawn routes */}
+            {targetWp &&
+              targetWp.routeMode === "draw" &&
+              (!targetWp.customRoute || targetWp.customRoute.length === 0) && (
+                <>
+                  <div className="my-1 border-t border-zinc-200 dark:border-white/10" />
+                  <div className="relative group/copy-trail">
+                    <button className="ctx-btn w-full flex items-center justify-between text-navi-600 dark:text-navi-400">
+                      <span className="flex items-center gap-2">
+                        <Copy className="w-3.5 h-3.5" /> Copy Trail
+                      </span>
+                      <ChevronRight className="w-3.5 h-3.5 opacity-50" />
+                    </button>
+                    <div
+                      className={`absolute top-0 hidden group-hover/copy-trail:flex flex-col w-48 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl border border-zinc-200 dark:border-white/10 rounded-xl shadow-2xl p-1 animate-in fade-in zoom-in-95 duration-100 ${
+                        popSubmenuLeft ? "right-full mr-1" : "left-full ml-1"
+                      }`}
+                    >
+                      <div className="px-3 py-1.5 text-[10px] font-bold text-zinc-500 uppercase tracking-wider border-b border-zinc-100 dark:border-white/5 mb-1">
+                        Select Layer to Copy
+                      </div>
+                      <div className="max-h-40 overflow-y-auto custom-scrollbar">
+                        {waypoints.filter(
+                          (w) =>
+                            w.id !== menu.targetId &&
+                            w.customRoute &&
+                            w.customRoute.length > 0,
+                        ).length === 0 ? (
+                          <div className="px-4 py-2 text-xs text-zinc-500 italic">
+                            No drawn trails found
+                          </div>
+                        ) : (
+                          waypoints
+                            .filter(
+                              (w) =>
+                                w.id !== menu.targetId &&
+                                w.customRoute &&
+                                w.customRoute.length > 0,
+                            )
+                            .map((w) => (
+                              <button
+                                key={w.id}
+                                onClick={() => {
+                                  if (w.customRoute && menu.targetId) {
+                                    const routeCopy = [...w.customRoute];
+                                    setWaypoints((prev) =>
+                                      prev.map((wp) =>
+                                        wp.id === menu.targetId
+                                          ? {
+                                              ...wp,
+                                              customRoute: routeCopy,
+                                              routeMode: "draw",
+                                            }
+                                          : wp,
+                                      ),
+                                    );
+                                    setIsDirty(true);
+                                    setMenu(null);
+                                  }
+                                }}
+                                className="ctx-btn truncate block w-full text-left"
+                              >
+                                {w.name || "Waypoint"}
+                              </button>
+                            ))
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Retrace Back */}
+                  {(() => {
+                    const idx = waypoints.findIndex(
+                      (w) => w.id === menu.targetId,
+                    );
+                    if (idx > 0 && waypoints[idx - 1]?.customRoute?.length) {
+                      return (
+                        <button
+                          onClick={() => {
+                            if (menu.targetId) {
+                              const prevRoute = waypoints[idx - 1].customRoute;
+                              if (prevRoute) {
+                                const reversed = [...prevRoute].reverse();
+                                setWaypoints((prev) =>
+                                  prev.map((wp) =>
+                                    wp.id === menu.targetId
+                                      ? {
+                                          ...wp,
+                                          customRoute: reversed,
+                                          routeMode: "draw",
+                                        }
+                                      : wp,
+                                  ),
+                                );
+                                setIsDirty(true);
+                                setMenu(null);
+                              }
+                            }
+                          }}
+                          className="ctx-btn text-amber-600 dark:text-amber-400"
+                        >
+                          <CornerDownLeft className="w-3.5 h-3.5" /> Retrace
+                          Previous Trail
+                        </button>
+                      );
+                    }
+                    return null;
+                  })()}
+                </>
+              )}
+
             <button
               onClick={() => handleDupeWaypoint(menu.targetId)}
               className="ctx-btn"

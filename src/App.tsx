@@ -3,7 +3,7 @@ import { MapArea } from "./features/map/components/MapArea";
 import { TimelineView } from "./features/timeline/components/TimelineView";
 import { TitleBar } from "./components/ui/TitleBar";
 import { RenderOverlay } from "./components/ui/RenderOverlay";
-import { TitleScreen } from "./components/view/TitleScreen";
+import { ProjectManager } from "./components/view/ProjectManager";
 import { NewProject } from "./components/ui/NewProject";
 import { AppSettings } from "./components/ui/AppSettings";
 import { Toast } from "./components/ui/Toast";
@@ -18,7 +18,7 @@ import { useAutoSave } from "./hooks/useAutoSave";
 export default function App() {
   const { currentView, editorMode, showToast } = useUI();
   useAutoSave();
-  
+
   // ✨ FIXED: Use a ref to guarantee the Ollama check only ever runs once
   const hasCheckedOllama = useRef(false);
 
@@ -54,7 +54,7 @@ export default function App() {
       <AppSettings />
 
       {(currentView === "title_screen" || currentView === "new_project") && (
-        <TitleScreen />
+        <ProjectManager />
       )}
 
       {currentView === "new_project" && <NewProject />}
@@ -76,7 +76,7 @@ export default function App() {
 
       <ContextMenu />
       <Toast />
-      <StatusBar />
+      {currentView === "editor" && <StatusBar />}
     </div>
   );
 }

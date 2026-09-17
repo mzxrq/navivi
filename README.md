@@ -1,68 +1,13 @@
-# Navivi
+[<img width="300" alt="Navivi logo" src="public/navivi.svg">](#)
 
-**The AI-Powered Travel Route Animation Studio**
+**Navivi** is an AI-powered desktop application for creating, editing, and rendering cinematic map route animations and travel vlog timelines. By combining 3D terrain mapping with local AI generation, it turns raw GPX data or manual waypoints into fully produced travel videos.
 
-Navivi is a modern desktop application designed to create, edit, and render cinematic map route animations and travel vlog timelines. By combining 3D terrain mapping with local AI generation, Navivi turns raw GPX data or manual waypoints into fully produced travel videos.
+Navivi is built with performance and local-first execution in mind, featuring a highly fluid React/Tauri frontend and a robust Python sidecar backend. It provides the building blocks to add rich storytelling features like generative location scripts, custom narrations, and dynamic weather effects into any travel experience you create.
 
-## Features
+In addition to interactive 3D map routing, this repository contains the non-linear timeline editor, a universal asset manifest pipeline, and AI generation logic powered by ComfyUI, Irodori TTS, and Ollama.
 
-*   **Interactive 3D Map Routing:** Build routes using driving, walking, flying, or ferry pathfinding. Powered by Mapbox and OpenRouteService.
-*   **Smart GPX Import:** Drop in a GPX file and Navivi will intelligently downsample the route, reverse-geocode the major stops, and plot your trail automatically.
-*   **AI Storytelling & Media Pipeline:** 
-    *   Generate location scripts locally using **Ollama**.
-    *   Synthesize realistic voiceovers using **Irodori TTS**.
-    *   Render stunning pop-up videos using **ComfyUI (Wan 2.2)**.
-*   **Non-Linear Timeline Editor:** Fine-tune your generated video. Adjust subtitles, video tracks, audio layers, and custom map markers seamlessly.
-*   **Fast Render Mode:** Toggle off heavy AI media generation for rapid 30-second map-only previews before committing to a full render.
+- [Getting started with Navivi](./docs/GETTING_STARTED.md)
+- [Project Features](./docs/FEATURES.md)
+- [Contributor documentation](./CONTRIBUTING.md)
 
-## 🛠️ Tech Stack
-
-Navivi is built with performance and local-first execution in mind:
-*   **Frontend:** React, Vite, Tailwind CSS, Mapbox GL JS.
-*   **Backend/App Core:** Tauri (Rust).
-*   **Sidecar Pipeline:** Python 3.12+ (Handles FFmpeg encoding, GLSL rendering, and API communication for AI models).
-
----
-
-## 🚀 Getting Started
-
-### Prerequisites
-
-To build and run Navivi locally, you will need the following installed on your system:
-*   [Node.js](https://nodejs.org/) (v18+)
-*   [Rust](https://www.rust-lang.org/tools/install)
-*   [Python 3.12+](https://www.python.org/)
-*   **FFmpeg** (Must be installed and added to your system PATH)
-*   *(Optional)* **Ollama** and **ComfyUI** running locally for AI script and video generation.
-
-### Setup Instructions
-
-**1. Install Python Dependencies**
-The Python sidecar handles video rendering and AI synthesis. Navigate to the Python source directory and install the required packages:
-```bash
-cd src-tauri/src-python
-pip install -r requirements.txt
-```
-
-**2. Install Frontend Dependencies**
-Return to the project root and install the Node modules:
-```bash
-# Return to the root directory if you are in the python folder
-cd ../../
-npm install
-```
-
-**3. Configure Environment Variables**
-Copy the example environment file and add your API keys (Mapbox, OpenRouteService, etc.):
-```bash
-cp .env.example .env
-```
-
-**4. Run in Development Mode**
-Start the application. This will automatically boot the Vite development server and compile the Rust backend:
-```bash
-npm run tauri dev
-```
-
-## 🤝 Contributing
-Pull requests are welcome! Please open an issue first to discuss what you would like to change.
+[<img width="600" alt="Navivi map interface preview" src="public/navivi.svg">](#)

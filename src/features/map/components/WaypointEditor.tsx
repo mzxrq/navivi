@@ -1,6 +1,7 @@
 import { useState } from "react";
 import {
   ChevronLeft,
+  ChevronUp,
   ChevronDown,
   ImageIcon,
   X,
@@ -13,6 +14,7 @@ import {
   UnlinkIcon,
   CornerDownLeft,
   Mic,
+  Info,
 } from "../../../components/ui/icons";
 import { useWorkspace } from "../../../hooks/useWorkspace";
 import { useUI } from "../../../hooks/useUI";
@@ -32,15 +34,6 @@ const cameraPans = [
   { value: "pan-down", label: "Pan Down" },
   { value: "zoom-in", label: "Zoom In" },
   { value: "zoom-out", label: "Zoom Out" },
-];
-
-const imageTransitions = [
-  { value: "crossfade", label: "Crossfade" },
-  { value: "dip-to-black", label: "Dip to Black" },
-  { value: "dip-to-white", label: "Dip to White" },
-  { value: "wipe-left", label: "Wipe Left" },
-  { value: "wipe-right", label: "Wipe Right" },
-  { value: "cut", label: "Hard Cut" },
 ];
 
 export function WaypointEditor({
@@ -128,13 +121,6 @@ export function WaypointEditor({
     if (setIsDirty) setIsDirty(true);
   };
 
-  const updateImageTransition = (idx: number, val: string) => {
-    const newTrans = [...imageTransitionsState];
-    newTrans[idx] = val;
-    updateWaypoint(wp.id, { imageTransitions: newTrans });
-    if (setIsDirty) setIsDirty(true);
-  };
-
   const handleGenerateScript = async (
     type: "arriving" | "attraction",
     prompt: string,
@@ -213,12 +199,12 @@ export function WaypointEditor({
   };
 
   return (
-    <div className="flex flex-col h-full w-full bg-white dark:bg-navidark-800 rounded-2xl shadow-[0_-10px_50px_-15px_rgba(0,0,0,0.4)] border border-zinc-200 dark:border-white/10 select-none transition-colors animate-in slide-in-from-bottom-10 duration-200 overflow-hidden mb-2 ml-2">
+    <div className="flex flex-col h-full w-full bg-white dark:bg-navidark-800 rounded-2xl shadow-[0_-10px_50px_-15px_rgba(0,0,0,0.4)] border border-zinc-200 dark:border-white/10 select-none transition-colors animate-in slide-in-from-bottom-10 duration-200 overflow-hidden ml-2 mb-2">
       {/* --- HEADER --- */}
-      <div className="editor-drag-handle cursor-move flex items-center justify-between gap-3 p-3 border-b border-zinc-200 dark:border-white/5 shrink-0 bg-zinc-50/50 dark:bg-navidark-700/50">
+      <div className="editor-drag-handle cursor-move flex items-center justify-between gap-3 p-2.5 border-b border-zinc-200 dark:border-white/5 shrink-0 bg-zinc-50/50 dark:bg-navidark-700/50">
         <div className="flex flex-col min-w-0 pointer-events-none">
-          <span className="text-[10px] font-bold text-navi-600 dark:text-navi-500 uppercase tracking-wider">
-            Editing Stop
+          <span className="text-[10px] font-bold text-navi dark:text-navi-500">
+            Editing
           </span>
           <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate">
             {wp.name}
@@ -239,7 +225,7 @@ export function WaypointEditor({
 
       <div className="flex-1 flex flex-row min-w-0 h-full overflow-hidden items-stretch">
         {/* --- LEFT COLUMN: METADATA & ACTIONS --- */}
-        <div className="w-[300px] shrink-0 border-r border-zinc-200 dark:border-white/10 p-5 flex flex-col gap-6 overflow-y-auto custom-scrollbar bg-zinc-50/30 dark:bg-navidark-800/30">
+        <div className="w-70 shrink-0 border-r border-zinc-200 dark:border-white/10 p-5 flex flex-col gap-6 overflow-y-auto scrollbar-none bg-zinc-50/30 dark:bg-navidark-800/30">
           {/* Waypoint Name */}
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
@@ -270,35 +256,34 @@ export function WaypointEditor({
           </div>
 
           {/* Custom Marker */}
-          <div className="space-y-3">
-            <div className="flex flex-col gap-1">
-              <h3 className="text-xs font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-wider flex items-center gap-1.5">
-                <MapPin className="w-3.5 h-3.5 text-zinc-400" /> Custom Marker
+          <div className="flex items-center gap-3">
+            {wp.customMarker ? (
+              <div className="relative w-12 h-12 rounded-lg border border-zinc-200 dark:border-white/10 flex items-center justify-center bg-zinc-50 dark:bg-navidark-700/50 group shrink-0">
+                <img
+                  src={convertFileSrc(wp.customMarker)}
+                  alt="Custom Marker"
+                  className="w-8 h-8 object-contain"
+                />
+                <button
+                  onClick={() =>
+                    updateWaypoint(wp.id, { customMarker: undefined })
+                  }
+                  className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md"
+                  title="Remove Marker"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            ) : (
+              <div className="w-12 h-12 rounded-lg border border-dashed border-zinc-300 dark:border-white/20 flex items-center justify-center bg-zinc-50 dark:bg-navidark-700/30 shrink-0">
+                <MapPin className="w-5 h-5 text-zinc-300 dark:text-zinc-600" />
+              </div>
+            )}
+
+            <div className="flex flex-col flex-1 gap-1.5">
+              <h3 className="text-xs font-bold text-zinc-800 dark:text-zinc-200">
+                Custom Marker
               </h3>
-            </div>
-            <div className="flex items-center gap-3">
-              {wp.customMarker ? (
-                <div className="relative w-12 h-12 rounded-lg border border-zinc-200 dark:border-white/10 flex items-center justify-center bg-zinc-50 dark:bg-navidark-700/50 group">
-                  <img
-                    src={convertFileSrc(wp.customMarker)}
-                    alt="Custom Marker"
-                    className="w-8 h-8 object-contain"
-                  />
-                  <button
-                    onClick={() =>
-                      updateWaypoint(wp.id, { customMarker: undefined })
-                    }
-                    className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md"
-                    title="Remove Marker"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </div>
-              ) : (
-                <div className="w-12 h-12 rounded-lg border border-dashed border-zinc-300 dark:border-white/20 flex items-center justify-center bg-zinc-50 dark:bg-navidark-700/30">
-                  <MapPin className="w-5 h-5 text-zinc-300 dark:text-zinc-600" />
-                </div>
-              )}
               <button
                 onClick={async () => {
                   const selected = await open({
@@ -314,25 +299,49 @@ export function WaypointEditor({
                     updateWaypoint(wp.id, { customMarker: selected });
                   }
                 }}
-                className="flex-1 py-2 text-xs font-semibold rounded-xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-navidark-700 hover:bg-zinc-50 dark:hover:bg-navidark-600 transition-colors text-zinc-700 dark:text-zinc-300 shadow-sm"
+                className="w-full flex items-center text-xs text-zinc-500 dark:text-zinc-400 bg-white dark:bg-navidark-700 border border-zinc-200 dark:border-white/10 rounded-lg overflow-hidden hover:bg-zinc-50 dark:hover:bg-navidark-600 transition-colors shadow-sm"
               >
-                {wp.customMarker ? "Change" : "Select Marker"}
+                <div className="bg-zinc-100 dark:bg-navidark-600 text-zinc-700 dark:text-zinc-300 font-semibold px-3 py-1.5 border-r border-zinc-200 dark:border-white/10 shrink-0">
+                  {wp.customMarker ? "Change file" : "Choose file"}
+                </div>
+                <div className="px-3 py-1.5 truncate">
+                  {wp.customMarker
+                    ? wp.customMarker.split(/[/\\]/).pop()
+                    : "No file chosen"}
+                </div>
               </button>
             </div>
           </div>
 
           {/* Waypoint Actions */}
           <div className="space-y-3 pt-4 border-t border-zinc-200 dark:border-white/10">
-            <h3 className="text-xs font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-wider flex items-center gap-1.5">
+            <h3 className="text-xs font-bold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
               Actions
+              <button
+                type="button"
+                className="btn text-zinc-600 dark:text-zinc-400"
+                data-toggle="tooltip"
+                title="Change Waypoint Type"
+              >
+                <Info className="w-3.5 h-3.5" />
+              </button>
             </h3>
 
-            <div className="grid grid-cols-2 gap-2">
-              {!isStart && (
+            <div className="grid grid-rows-1 gap-2">
+              {!isStart ? (
                 <button
                   onClick={() => handleSetWaypointType("start")}
                   title="Set Start"
                   className="flex flex-col items-center justify-center gap-1 py-2 rounded-lg border border-zinc-200 dark:border-white/10 bg-white dark:bg-navidark-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-navidark-500 transition-colors shadow-sm"
+                >
+                  <MapPinned className="w-4 h-4 text-zinc-400" />
+                  <span className="text-[10px] font-semibold">Start</span>
+                </button>
+              ) : (
+                <button
+                  onClick={() => handleSetWaypointType("start")}
+                  title="Set Start"
+                  className="flex flex-col disable items-center justify-center gap-1 py-2 rounded-lg border border-zinc-200 dark:border-white/10 bg-white dark:bg-navidark-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-navidark-500 transition-colors shadow-sm"
                 >
                   <MapPinned className="w-4 h-4 text-zinc-400" />
                   <span className="text-[10px] font-semibold">Start</span>
@@ -548,8 +557,6 @@ export function WaypointEditor({
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                   {wpImages.map((img, idx) => {
                     const currentPan = imagePans[idx] || "none";
-                    const currentTransition =
-                      imageTransitionsState[idx] || "crossfade";
 
                     return (
                       <div
@@ -590,27 +597,6 @@ export function WaypointEditor({
                               ))}
                             </select>
                           </div>
-
-                          {idx < wpImages.length - 1 && (
-                            <div className="flex flex-col gap-1.5 border-t border-zinc-200 dark:border-white/10 pt-3 mt-1">
-                              <label className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
-                                Transition to Next
-                              </label>
-                              <select
-                                value={currentTransition}
-                                onChange={(e) =>
-                                  updateImageTransition(idx, e.target.value)
-                                }
-                                className="w-full bg-white dark:bg-navidark-800 border border-zinc-200 dark:border-white/10 text-zinc-700 dark:text-zinc-300 text-xs font-medium rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-navi-500 transition-colors cursor-pointer"
-                              >
-                                {imageTransitions.map((t) => (
-                                  <option key={t.value} value={t.value}>
-                                    {t.label}
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
-                          )}
                         </div>
                       </div>
                     );
@@ -619,7 +605,7 @@ export function WaypointEditor({
                   {wpImages.length < 3 && (
                     <button
                       onClick={handleImageSelect}
-                      className="h-full min-h-[200px] bg-zinc-50 dark:bg-navidark-700/50 hover:bg-navi-50 dark:hover:bg-navi-500/10 border border-zinc-300 dark:border-white/10 hover:border-navi-500/50 border-dashed rounded-xl py-3 flex flex-col items-center justify-center gap-3 text-zinc-500 hover:text-navi-600 dark:hover:text-navi-400 transition-all"
+                      className="h-full min-h-50 bg-zinc-50 dark:bg-navidark-700/50 hover:bg-navi-50 dark:hover:bg-navi-500/10 border border-zinc-300 dark:border-white/10 hover:border-navi-500/50 border-dashed rounded-xl py-3 flex flex-col items-center justify-center gap-3 text-zinc-500 hover:text-navi-600 dark:hover:text-navi-400 transition-all"
                     >
                       <ImageIcon className="w-8 h-8 opacity-50" />
                       <span className="text-xs font-medium">+ Add Image</span>

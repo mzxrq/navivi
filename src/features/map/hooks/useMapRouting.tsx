@@ -1,6 +1,11 @@
 import { useRef, useEffect } from "react";
 import { useWorkspace } from "../../../hooks/useWorkspace";
-import { getCurve, OsmNode, getDistanceKm, fillRouteCoordinates } from "../../../utils/mapUtils";
+import {
+  getCurve,
+  OsmNode,
+  getDistanceKm,
+  fillRouteCoordinates,
+} from "../../../utils/mapUtils";
 import bezierSpline from "@turf/bezier-spline";
 import { lineString } from "@turf/helpers";
 
@@ -43,96 +48,7 @@ const fetchSingleSegment = async (
   } else if (mode === "curve") {
     // curve
     positions = getCurve([wp1.lat, wp1.lng], [wp2.lat, wp2.lng]);
-  } else if (mode === "ferry") {
-    // ferry (very fallback: deprecatedd)
-    try {
-      const minLat = Math.min(wp1.lat, wp2.lat) - 0.05;
-      const maxLat = Math.max(wp1.lat, wp2.lat) + 0.05;
-      const minLng = Math.min(wp1.lng, wp2.lng) - 0.05;
-      const maxLng = Math.max(wp1.lng, wp2.lng) + 0.05;
-
-      const overpassQuery = `[out:json];way["route"="ferry"](${minLat},${minLng},${maxLat},${maxLng});out geom;`;
-      const overpassUrl = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(overpassQuery)}`;
-
-      // 🛠️ 2. Upgraded to use our kill-switch!
-      const res = await fetchWithTimeout(overpassUrl, {
-        headers: { "User-Agent": "NaviviApp/1.0" },
-      });
-      if (!res.ok)
-        throw new Error(`Overpass API failed with HTTP ${res.status}`);
-
-      const rawText = await res.text();
-      if (rawText.trim().startsWith("<"))
-        throw new Error("Overpass returned XML.");
-
-      const data = JSON.parse(rawText);
-
-      if (data.elements && data.elements.length > 0) {
-        let bestWay: OsmNode[] | null = null;
-        let bestScore = Infinity;
-
-        data.elements.forEach((element: any) => {
-          if (element.type === "way" && element.geometry) {
-            const geom = element.geometry as OsmNode[];
-            const distToStart = Math.min(
-              ...geom.map((pt) =>
-                getDistanceKm(wp1.lat, wp1.lng, pt.lat, pt.lon),
-              ),
-            );
-            const distToEnd = Math.min(
-              ...geom.map((pt) =>
-                getDistanceKm(wp2.lat, wp2.lng, pt.lat, pt.lon),
-              ),
-            );
-            const score = distToStart + distToEnd;
-
-            if (score < bestScore) {
-              bestScore = score;
-              bestWay = geom;
-            }
-          }
-        });
-
-        if (bestWay !== null && bestScore < 15) {
-          const validWay: OsmNode[] = bestWay;
-          const startDist = getDistanceKm(
-            wp1.lat,
-            wp1.lng,
-            validWay[0].lat,
-            validWay[0].lon,
-          ); // Fixed typo here earlier!
-          const endDist = getDistanceKm(
-            wp1.lat,
-            wp1.lng,
-            validWay[validWay.length - 1].lat,
-            validWay[validWay.length - 1].lon,
-          );
-
-          let formattedFerry: [number, number][] = validWay.map((pt) => [
-            pt.lat,
-            pt.lon,
-          ]);
-          if (endDist < startDist) formattedFerry.reverse();
-
-          positions = [
-            [wp1.lat, wp1.lng],
-            ...formattedFerry,
-            [wp2.lat, wp2.lng],
-          ];
-        } else {
-          throw new Error("No suitable ferry connecting these points.");
-        }
-      } else {
-        throw new Error("No ferry routes found in this bounding box.");
-      }
-    } catch (err) {
-      console.warn("[Ferry] Failed, using direct mode:", err);
-      positions = [
-        [wp1.lat, wp1.lng],
-        [wp2.lat, wp2.lng],
-      ];
-    }
-  } else if (mode === "walking") {
+  } else if (mode === "walking" || mode === "ferry") {
     // walking + ferry
     try {
       if (!apiKey) throw new Error("missing_api_key");
@@ -215,7 +131,9 @@ export function useMapRouting() {
   >([]);
 
   useEffect(() => {
-    const routedWaypoints = waypoints.filter(wp => !wp.isStopBy || wp.connectToRoute);
+    const routedWaypoints = waypoints.filter(
+      (wp) => !wp.isStopBy || wp.connectToRoute,
+    );
 
     if (routedWaypoints.length < 2) {
       setRouteSegments([]);
@@ -337,10 +255,5 @@ export function useMapRouting() {
       isCancelled: true;
       clearTimeout(debounce);
     };
-  }, [
-    waypoints,
-    setRouteSegments,
-    routingCache,
-    setRoutingCache,
-  ]);
+  }, [waypoints, setRouteSegments, routingCache, setRoutingCache]);
 }

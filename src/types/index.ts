@@ -25,10 +25,10 @@ export interface Waypoint {
   videoUrl?: string;
   routeMode: RouteMode;
   customRoute?: [number, number][];
+  connectToRoute?: boolean;
   isGeneratingScript?: boolean;
   markers?: WaypointTimelineMarker[];
   isStopBy?: boolean;
-  connectToRoute?: boolean;
   drawStyle?: "linear" | "spline";
   curveOffset?: number;
   timelineOffset?: number;
