@@ -196,15 +196,12 @@ export function ContextMenu() {
     setMenu(null);
   };
 
-  const handleSetRouteMode = (
-    wpId: string | undefined,
-    mode: string
-  ) => {
+  const handleSetRouteMode = (wpId: string | undefined, mode: string) => {
     if (!wpId) return;
     setWaypoints(
       waypoints.map((w) =>
-        w.id === wpId ? { ...w, routeMode: mode as any } : w
-      )
+        w.id === wpId ? { ...w, routeMode: mode as any } : w,
+      ),
     );
     if (setIsDirty) setIsDirty(true);
     setMenu(null);

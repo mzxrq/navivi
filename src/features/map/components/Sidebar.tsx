@@ -223,60 +223,60 @@ export function Sidebar() {
       <div className="shrink-0 px-4 py-3 flex items-center justify-between gap-3 bg-white/90 dark:bg-[#09090b]/90 backdrop-blur-xl border-t border-zinc-100 dark:border-white/5 z-30">
         {waypoints.length > 0 && (
           <div className="flex items-center bg-black/5 dark:bg-white/5 rounded-full p-1 border border-black/5 dark:border-white/5 transition-all shrink-0">
-              <button
-                onClick={() => {
-                  setIsListEditMode(!isListEditMode);
-                  setShowClearConfirm(false);
-                }}
-                disabled={waypoints.length === 0 || isRendering || isPreviewing}
-                title={isListEditMode ? "Done Editing" : "Edit List"}
-                className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ${
-                  isListEditMode
-                    ? "bg-navi text-white shadow-md"
-                    : "text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200 hover:bg-white dark:hover:bg-zinc-800"
-                }`}
-              >
-                <Edit className="w-3.5 h-3.5" />
-              </button>
+            <button
+              onClick={() => {
+                setIsListEditMode(!isListEditMode);
+                setShowClearConfirm(false);
+              }}
+              disabled={waypoints.length === 0 || isRendering || isPreviewing}
+              title={isListEditMode ? "Done Editing" : "Edit List"}
+              className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ${
+                isListEditMode
+                  ? "bg-navi text-white shadow-md"
+                  : "text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200 hover:bg-white dark:hover:bg-zinc-800"
+              }`}
+            >
+              <Edit className="w-3.5 h-3.5" />
+            </button>
 
-              <div className="w-px h-4 bg-black/10 dark:bg-white/10 mx-1" />
+            <div className="w-px h-4 bg-black/10 dark:bg-white/10 mx-1" />
 
-              <div
-                className={`flex items-center overflow-hidden transition-all duration-300 ease-out ${showClearConfirm ? "max-w-32 opacity-100" : "max-w-10"}`}
-              >
-                {!showClearConfirm ? (
+            <div
+              className={`flex items-center overflow-hidden transition-all duration-300 ease-out ${showClearConfirm ? "max-w-32 opacity-100" : "max-w-10"}`}
+            >
+              {!showClearConfirm ? (
+                <button
+                  onClick={() => setShowClearConfirm(true)}
+                  disabled={
+                    waypoints.length === 0 || isRendering || isPreviewing
+                  }
+                  title="Clear Entire Route"
+                  className="w-7 h-7 text-zinc-500 hover:text-red-500 dark:text-zinc-400 dark:hover:text-red-400 rounded-full hover:bg-white dark:hover:bg-zinc-800 transition-colors flex items-center justify-center shrink-0"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              ) : (
+                <div className="flex items-center gap-1.5 px-1.5 h-7 animate-in fade-in slide-in-from-right-2">
                   <button
-                    onClick={() => setShowClearConfirm(true)}
-                    disabled={
-                      waypoints.length === 0 || isRendering || isPreviewing
-                    }
-                    title="Clear Entire Route"
-                    className="w-7 h-7 text-zinc-500 hover:text-red-500 dark:text-zinc-400 dark:hover:text-red-400 rounded-full hover:bg-white dark:hover:bg-zinc-800 transition-colors flex items-center justify-center shrink-0"
+                    onClick={() => setShowClearConfirm(false)}
+                    className="px-2 h-full text-[10px] font-bold text-zinc-500 hover:bg-black/5 dark:hover:bg-white/10 rounded-full transition-colors"
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
+                    Cancel
                   </button>
-                ) : (
-                  <div className="flex items-center gap-1.5 px-1.5 h-7 animate-in fade-in slide-in-from-right-2">
-                    <button
-                      onClick={() => setShowClearConfirm(false)}
-                      className="px-2 h-full text-[10px] font-bold text-zinc-500 hover:bg-black/5 dark:hover:bg-white/10 rounded-full transition-colors"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={() => {
-                        setWaypoints([]);
-                        setIsListEditMode(false);
-                        setShowClearConfirm(false);
-                      }}
-                      className="px-2 h-full text-[10px] font-bold text-white bg-red-500 hover:bg-red-600 rounded-full transition-colors shadow-sm"
-                    >
-                      Clear
-                    </button>
-                  </div>
-                )}
-              </div>
+                  <button
+                    onClick={() => {
+                      setWaypoints([]);
+                      setIsListEditMode(false);
+                      setShowClearConfirm(false);
+                    }}
+                    className="px-2 h-full text-[10px] font-bold text-white bg-red-500 hover:bg-red-600 rounded-full transition-colors shadow-sm"
+                  >
+                    Clear
+                  </button>
+                </div>
+              )}
             </div>
+          </div>
         )}
 
         {/* Generate Primary Action */}

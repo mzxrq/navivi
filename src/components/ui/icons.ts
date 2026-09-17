@@ -31,3 +31,4 @@ export {
     Navigation, Globe, ChevronUp, ChevronLeftCircle,
     
 } from "lucide-react";
+export { ArrowLeft, ArrowUp, ArrowDown, MoveUpRight, MoveUpLeft, MoveDownRight, MoveDownLeft } from "lucide-react";

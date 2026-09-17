@@ -31,15 +31,15 @@ export function LocationSearch() {
       try {
         const res = await fetch(
           `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
-            query
-          )}&limit=5&accept-language=${currentLang}`
+            query,
+          )}&limit=5&accept-language=${currentLang}`,
         );
 
         if (!res.ok) throw new Error("No Internet Connection.");
 
         const data = await res.json();
         setResults(data);
-        setIsOpen(true);           
+        setIsOpen(true);
       } catch (error) {
         console.error("Search failed:", error);
       } finally {

@@ -14,6 +14,12 @@ import {
   CheckCircle2,
   LinkIcon,
   UnlinkIcon,
+  ArrowLeft,
+  ArrowRight,
+  ArrowUp,
+  ArrowDown,
+  ZoomIn,
+  ZoomOut,
 } from "../../../components/ui/icons";
 import { useWorkspace } from "../../../hooks/useWorkspace";
 import { useUI } from "../../../hooks/useUI";
@@ -633,44 +639,77 @@ export function WaypointEditor({
                       {wpImages.map((img, idx) => {
                         const currentPan = imagePans[idx] || "none";
 
+                        const renderPanIcon = (val: string) => {
+                          switch (val) {
+                            case "pan-left": return <ArrowLeft className="w-4 h-4" />;
+                            case "pan-right": return <ArrowRight className="w-4 h-4" />;
+                            case "pan-up": return <ArrowUp className="w-4 h-4" />;
+                            case "pan-down": return <ArrowDown className="w-4 h-4" />;
+                            case "zoom-in": return <ZoomIn className="w-4 h-4" />;
+                            case "zoom-out": return <ZoomOut className="w-4 h-4" />;
+                            default: return null;
+                          }
+                        };
+
                         return (
                           <div
                             key={`${img}-${idx}`}
-                            className="flex flex-col bg-zinc-50 dark:bg-navidark-700/30 rounded-xl p-3 border border-zinc-200 dark:border-white/10 shadow-sm"
+                            className="flex flex-col rounded-[20px] overflow-hidden border border-zinc-200 dark:border-white/10 shadow-sm relative group"
                           >
-                            <div className="relative group w-full aspect-video rounded-lg overflow-hidden bg-black/5 dark:bg-white/5 shadow-inner mb-3">
+                            <button
+                              onClick={() => removeImage(idx)}
+                              className="absolute top-2 right-2 p-1.5 bg-black/60 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-20 hover:bg-red-500 backdrop-blur-sm"
+                              title="Remove Image"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                            
+                            {/* Image Top Half */}
+                            <div className="relative w-full aspect-[4/3] bg-zinc-100 dark:bg-zinc-800">
                               <img
                                 src={convertFileSrc(img)}
                                 alt={`Waypoint ${idx}`}
                                 className="w-full h-full object-cover"
                               />
-                              <button
-                                onClick={() => removeImage(idx)}
-                                className="absolute top-2 right-2 p-1.5 bg-red-500/90 text-white rounded-md opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:bg-red-500 backdrop-blur-sm"
-                                title="Remove Image"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
                             </div>
 
-                            <div className="space-y-3">
-                              <div className="flex flex-col gap-1.5">
-                                <label className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
-                                  Camera Motion
-                                </label>
-                                <select
-                                  value={currentPan}
-                                  onChange={(e) =>
-                                    updateImagePan(idx, e.target.value)
-                                  }
-                                  className="w-full bg-white dark:bg-navidark-800 border border-zinc-200 dark:border-white/10 text-zinc-700 dark:text-zinc-300 text-xs font-bold rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-navi-500 transition-colors cursor-pointer shadow-sm"
-                                >
-                                  {cameraPans.map((pan) => (
-                                    <option key={pan.value} value={pan.value}>
-                                      {pan.label}
-                                    </option>
-                                  ))}
-                                </select>
+                            {/* Black Bottom Half */}
+                            <div className="bg-black text-white p-3 flex flex-col">
+                              <h4 className="font-semibold text-[13px] truncate mb-0.5">
+                                {img.split(/\\|\//).pop()}
+                              </h4>
+                              <span className="text-[10px] text-zinc-400 mb-3 tracking-wide">
+                                camera angle
+                              </span>
+
+                              {/* Buttons Row */}
+                              <div className="flex gap-2 overflow-x-auto custom-scrollbar pb-1">
+                                {cameraPans
+                                  .filter((p) => p.value !== "none")
+                                  .map((pan) => {
+                                    const isSelected = currentPan === pan.value;
+                                    return (
+                                      <button
+                                        key={pan.value}
+                                        onClick={() =>
+                                          updateImagePan(
+                                            idx,
+                                            isSelected ? "none" : pan.value,
+                                          )
+                                        }
+                                        className={`shrink-0 flex flex-col items-center justify-center w-[46px] h-[46px] rounded-[14px] transition-all duration-200 ${
+                                          isSelected
+                                            ? "bg-zinc-400 text-black shadow-inner"
+                                            : "bg-[#717171] hover:bg-zinc-500 text-white shadow-sm"
+                                        }`}
+                                      >
+                                        {renderPanIcon(pan.value)}
+                                        <span className="text-[8px] font-medium leading-tight mt-0.5">
+                                          {pan.label}
+                                        </span>
+                                      </button>
+                                    );
+                                  })}
                               </div>
                             </div>
                           </div>

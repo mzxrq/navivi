@@ -104,7 +104,7 @@ export function WaypointItem({
               type: "waypoint-marker",
               targetId: wp.id,
             },
-          })
+          }),
         );
       }}
       className={`relative flex items-stretch group transition-all px-2 py-1.5 rounded-xl border ${
