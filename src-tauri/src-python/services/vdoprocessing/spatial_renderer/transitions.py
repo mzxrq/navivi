@@ -312,6 +312,20 @@ class _TransitionMixin:
             is_stopby = bool(jw.get("isStopBy", False))
             if not is_stopby:
                 order += 1
+            # A loop route's job_config waypoints list ends with a
+            # synthetic "(Return)" entry at the SAME coordinates as the
+            # route's own start/end — the real S/E pin already covers
+            # that point (see _is_loop_route's half-green/half-red pin
+            # elsewhere). The exclude_px/exclude_py check below is meant
+            # to filter this out too (same coords as the featured point),
+            # but at this highlight's high zoom, a tiny lat/lng rounding
+            # difference between this entry and the true end_point can
+            # put it just outside that pixel radius — showing up as an
+            # extra, oddly-numbered pin sitting right next to S/E (e.g.
+            # "12" for a 10-stop route). Skipped outright here instead of
+            # relying on the distance check to catch it.
+            if self._is_loop_route and pos == total_wp - 1:
+                continue
             lat, lng = jw.get("lat"), jw.get("lng", jw.get("lon"))
             if lat is None or lng is None:
                 continue
@@ -416,6 +430,20 @@ class _TransitionMixin:
             next_lat = adjacent.get("lat")
             next_lon = adjacent.get("lng", adjacent.get("lon"))
 
+        # Every other waypoint (numbered stops AND stop-bys — a stop-by is
+        # frequently the thing that ends up cropped, since it usually sits
+        # just off the route line rather than on it) worth keeping in shot
+        # alongside the route line itself — see choose_route_focus_view's
+        # own must_fit_latlon docstring for how this is used (a reward,
+        # never a hard requirement, so a genuinely unreachable point at
+        # the chosen zoom is simply left out rather than breaking the
+        # framing search).
+        must_fit_latlon = [
+            (jw["lat"], jw.get("lng", jw.get("lon")))
+            for jw in job_waypoints
+            if jw.get("lat") is not None and jw.get("lng", jw.get("lon")) is not None
+        ]
+
         featured_popup = start_popup or stop_popup
         settings = (job_config.get("settings", {}) or {})
         # "enable_gl_ending_zoom" — the actual job_config.json setting
@@ -425,6 +453,18 @@ class _TransitionMixin:
         use_dynamic_pydeck = bounding_box is not None and (
             bool(settings.get("enable_gl_ending_zoom", False))
             or str(settings.get("overview_background", "")).lower() == "pydeck"
+        )
+        # Diagnostic: pins down WHY this ever silently falls back to the
+        # static-tile Ken Burns path (the try/except below only logs on an
+        # outright exception — a False use_dynamic_pydeck, or a dynamic
+        # capture that returns an empty/falsy result without raising,
+        # leaves no trace otherwise).
+        logger.info(
+            "Ending highlight: use_dynamic_pydeck=%s (bounding_box_present=%s, "
+            "enable_gl_ending_zoom=%s, overview_background=%r)",
+            use_dynamic_pydeck, bounding_box is not None,
+            settings.get("enable_gl_ending_zoom", False),
+            settings.get("overview_background"),
         )
         is_fullscreen = (
             self.enable_fullscreen_popups
@@ -477,6 +517,12 @@ class _TransitionMixin:
                     # out of frame.
                     route_latlon=getattr(self, "_route_latlon_path", None),
                     next_lat=next_lat, next_lon=next_lon,
+                    must_fit_latlon=must_fit_latlon,
+                )
+                logger.info(
+                    "Ending highlight: dynamic pydeck capture returned %d frame(s) "
+                    "(requested zoom_n=%d).",
+                    len(dynamic_frames) if dynamic_frames else 0, zoom_n,
                 )
             except Exception:
                 logger.warning(
@@ -527,20 +573,36 @@ class _TransitionMixin:
 
                 for frame_idx, (frame_bgr, extent) in enumerate(dynamic_frames):
                     frame_out = frame_bgr.copy()
-                    # Nearby waypoints re-projected fresh against THIS
-                    # frame's own extent (it changes every frame as the
-                    # camera zooms), unlike the featured marker/card
-                    # above, which stays pixel-fixed by construction.
+                    # Re-projected fresh against THIS frame's own extent,
+                    # same as _draw_nearby_waypoints just below — NOT
+                    # pixel-fixed "by construction" as this used to assume:
+                    # that guarantee only holds for the fixed-zoom-boost
+                    # path in capture_pydeck_zoom_sequence: when
+                    # route_latlon is passed (as it is here), the push
+                    # instead straight-line-interpolates center+zoom
+                    # toward choose_route_focus_view's chosen end view,
+                    # which generally does NOT keep this point pinned to
+                    # one screen pixel along the way. Using the LAST
+                    # frame's projection for every earlier frame — the old
+                    # behavior — left the marker sitting wherever that
+                    # final pixel happened to be throughout the whole
+                    # lead-in, including over open water on a route whose
+                    # camera path crosses it, before "snapping" to the
+                    # correct spot only once the push actually finished.
+                    frame_px, frame_py = RouteGeometryProcessor.project_latlon_to_pixel(
+                        lat, lng, extent, w, h
+                    )
+                    frame_px, frame_py = int(frame_px), int(frame_py)
                     # _draw_nearby_waypoints deliberately EXCLUDES the
-                    # featured point itself (px, py) — it's meant to be
-                    # drawn separately below — so without drawing its own
+                    # featured point itself — it's meant to be drawn
+                    # separately below — so without drawing its own
                     # marker unconditionally here too, the start/end pin
                     # was simply missing from every lead-in frame.
                     self._draw_route_line_on_extent(frame_out, w, h, extent)
-                    self._draw_nearby_waypoints(frame_out, w, h, extent, px, py)
+                    self._draw_nearby_waypoints(frame_out, w, h, extent, frame_px, frame_py)
                     if frame_idx < lead_in_n:
                         self.graphics.draw_marker(
-                            frame_out, px, py,
+                            frame_out, frame_px, frame_py,
                             number="S" if is_start else "E",
                             color=self._START_PIN_COLOR if is_start else self._END_PIN_COLOR,
                         )
@@ -550,12 +612,17 @@ class _TransitionMixin:
                         # the map, same as every other waypoint (matches
                         # the static-tile fallback's own lead-in, which
                         # shows no card either); from here on its
-                        # leader-lined card joins it too.
+                        # leader-lined card joins it too. The card's own
+                        # box was already laid out once (above) against
+                        # the final settled position, so only the pin end
+                        # of its leader line needs to track this frame's
+                        # own (by now very close to final) position.
+                        highlight_popup["x"], highlight_popup["y"] = frame_px, frame_py
                         frame_out = self.graphics.render_popup_box(
                             frame_out, highlight_popup, line_only=True
                         )
                         self.graphics.draw_marker(
-                            frame_out, px, py,
+                            frame_out, frame_px, frame_py,
                             number="S" if is_start else "E",
                             color=self._START_PIN_COLOR if is_start else self._END_PIN_COLOR,
                         )

@@ -100,10 +100,15 @@ _FOCUS_ZOOM_STEP = 0.1
 _FOCUS_CENTER_GRID = 7
 # How much of the best-achievable visible route length a tighter framing
 # must still deliver to be preferred over a wider one. At 1.0 it would
-# always pick the widest view; at 0.0, always the tightest. 0.7 keeps the
-# close-up genuinely close while refusing framings that only catch a stub
-# of the line.
-_FOCUS_VISIBLE_RATIO = 0.7
+# always pick the widest view; at 0.0, always the tightest. Lowered from
+# 0.7: that value pulled the ending highlight back well short of its own
+# zoom_boost ceiling (ENDING_HIGHLIGHT_PYDECK_ZOOM_BOOST) whenever the
+# route swept away from the target point at all, which it usually does —
+# reported as the close-up never actually reaching street/building-level
+# detail even after raising the ceiling itself. 0.3 still refuses a
+# framing that loses the line almost entirely, but otherwise favors
+# getting genuinely close over keeping a long stretch of route in shot.
+_FOCUS_VISIBLE_RATIO = 0.3
 # Route samples used for the search. The route is resampled to this many
 # evenly-spaced points inside the neighbourhood being considered, so
 # "visible length" is just a count of consecutive samples times their
@@ -116,6 +121,19 @@ _FOCUS_SAMPLES = 400
 # route just to chase the bias direction — 0.92 means "give up at most 8%
 # of the route this zoom could show" in exchange for better framing.
 _FOCUS_BIAS_TOLERANCE = 0.92
+# Final vertical nudge applied to whichever centre wins, as a fraction of
+# the safe-inset half-height at the chosen zoom: positive pushes the
+# camera centre NORTH of the target, which reads as the target sitting
+# LOWER in frame (more headroom above); negative pushes it the other way
+# (target higher, more room below). Tried +0.35 (push target toward the
+# bottom) first, but that left too much empty space above the route on a
+# wide sweeping shot — reported back as "map should be upper to center".
+# A small negative value instead keeps the target (and the route swinging
+# away from it) sitting slightly above center rather than pushed to either
+# extreme. Clamped so the target never leaves the safe inset the rest of
+# the search already guarantees — this only redistributes where WITHIN
+# that inset it sits.
+_FOCUS_VERTICAL_BIAS_FRAC = -0.30
 
 
 def _resample_local_route(
@@ -213,6 +231,7 @@ def choose_route_focus_view(
     max_zoom: float,
     next_lat: Optional[float] = None,
     next_lon: Optional[float] = None,
+    must_fit_latlon: Optional[List[Tuple[float, float]]] = None,
 ) -> Tuple[float, float, float]:
     """Picks (center_lon, center_lat, zoom) for a close-up on
     (target_lat, target_lon) that shows as much of the route through it as
@@ -251,6 +270,21 @@ def choose_route_focus_view(
     (e.g. the target has no next stop — it's the very end of the route)
     to fall back to pure length-maximizing centring.
 
+    `must_fit_latlon` — other waypoints worth keeping in shot alongside
+    the route line (typically every OTHER stop, e.g. nearby stop-bys —
+    the scoring only ever REWARDS a candidate for including more of them,
+    never requires it, so a genuinely unreachable point at the chosen zoom
+    just contributes nothing rather than breaking the search). Without
+    this, the search only ever judges a candidate by how much of the
+    ROUTE LINE it shows — a stop-by sitting just off to one side of the
+    line (the common case: it's a landmark the route passes NEAR, not
+    through) had nothing keeping it in frame, and a tight enough zoom
+    would happily crop it out despite the line itself looking fine.
+    Candidates are compared by (how many of these points they fit, route
+    length) in that order, so this can still shift which of two
+    similar-length centres wins, but it never overrides the zoom level
+    itself or pulls the target out of its own safe inset.
+
     Falls back to centring on the target at max_zoom (the old behaviour)
     when there's no route geometry to frame against."""
     out_w, out_h = output_size
@@ -266,9 +300,19 @@ def choose_route_focus_view(
     widest_mpp = _EARTH_CIRCUMFERENCE_M / (_TILE_SIZE_PX * (2.0 ** min_zoom))
     radius_m = math.hypot(out_w, out_h) * widest_mpp
 
+    def with_vertical_bias(cx: float, cy: float, zoom: float):
+        mpp = _EARTH_CIRCUMFERENCE_M / (_TILE_SIZE_PX * (2.0 ** zoom))
+        half_h = (out_h / 2.0) * mpp * (1.0 - 2.0 * _FOCUS_MARGIN_FRAC)
+        cy = cy + _FOCUS_VERTICAL_BIAS_FRAC * half_h
+        # Keep the target itself within the same safe inset the search
+        # already respected — the bias only redistributes where in it the
+        # target sits, it never pushes the target out of frame.
+        cy = min(ty + half_h, max(ty - half_h, cy))
+        return view_at(cx, cy, zoom)
+
     local = _resample_local_route(route_latlon, tx, ty, radius_m)
     if local is None:
-        return view_at(tx, ty, max_zoom)
+        return with_vertical_bias(tx, ty, max_zoom)
     samples, spacing, target_index = local
 
     bias_mx = bias_my = None
@@ -279,6 +323,13 @@ def choose_route_focus_view(
         # inset" constraint for anything but a very close next stop, and
         # defeats the point of this being a close-up ON the target.
         bias_mx, bias_my = (tx + nx) / 2.0, (ty + ny) / 2.0
+
+    must_fit_m = None
+    if must_fit_latlon:
+        must_fit_m = np.asarray(
+            [(_mercator_x(lon), _mercator_y(lat)) for lat, lon in must_fit_latlon],
+            dtype=float,
+        )
 
     def best_at(zoom: float):
         mpp = _EARTH_CIRCUMFERENCE_M / (_TILE_SIZE_PX * (2.0 ** zoom))
@@ -293,25 +344,40 @@ def choose_route_focus_view(
                 length = _visible_run_length(
                     samples, spacing, target_index, cx, cy, half_w, half_h
                 )
-                candidates.append((length, cx, cy))
+                fit_count = 0
+                if must_fit_m is not None and len(must_fit_m):
+                    fit_count = int(np.count_nonzero(
+                        (np.abs(must_fit_m[:, 0] - cx) <= half_w)
+                        & (np.abs(must_fit_m[:, 1] - cy) <= half_h)
+                    ))
+                candidates.append((length, cx, cy, fit_count))
                 best_length = max(best_length, length)
         if best_length <= 0:
             return (0.0, tx, ty)
         if bias_mx is None:
-            best = max(candidates, key=lambda c: c[0])
-            return best
-        # Among everything within tolerance of this zoom's own best, pick
-        # whichever sits closest to the bias point — see the docstring.
+            # Fit count first — among centres tied on it, the one showing
+            # more route line wins (see the docstring on must_fit_latlon:
+            # a reward, never a requirement, so this still degrades to
+            # pure length-maximizing when nothing was passed in).
+            best = max(candidates, key=lambda c: (c[3], c[0]))
+            return best[0], best[1], best[2]
+        # Among everything within tolerance of this zoom's own best route
+        # length, prefer whichever fits the most extra points, then break
+        # any remaining tie by closeness to the bias point — see the
+        # docstring.
         threshold = best_length * _FOCUS_BIAS_TOLERANCE
         near_best = [c for c in candidates if c[0] >= threshold]
-        return min(near_best, key=lambda c: (c[1] - bias_mx) ** 2 + (c[2] - bias_my) ** 2)
+        max_fit = max(c[3] for c in near_best)
+        near_best = [c for c in near_best if c[3] == max_fit]
+        best = min(near_best, key=lambda c: (c[1] - bias_mx) ** 2 + (c[2] - bias_my) ** 2)
+        return best[0], best[1], best[2]
 
     # The widest allowed view is the yardstick: nothing tighter can show
     # more route than this, so it defines what "as much as possible" is
     # worth in metres before deciding how much of it to trade for zoom.
     reference = best_at(min_zoom)[0]
     if reference <= 0:
-        return view_at(tx, ty, max_zoom)
+        return with_vertical_bias(tx, ty, max_zoom)
     wanted = reference * _FOCUS_VISIBLE_RATIO
 
     zoom = max_zoom
@@ -321,11 +387,11 @@ def choose_route_focus_view(
         if fallback is None or length > fallback[0]:
             fallback = (length, cx, cy, zoom)
         if length >= wanted:
-            return view_at(cx, cy, zoom)
+            return with_vertical_bias(cx, cy, zoom)
         zoom -= _FOCUS_ZOOM_STEP
 
     _, cx, cy, zoom = fallback
-    return view_at(cx, cy, zoom)
+    return with_vertical_bias(cx, cy, zoom)
 
 
 def bbox_for_view(

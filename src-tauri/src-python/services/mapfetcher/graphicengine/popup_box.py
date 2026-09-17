@@ -416,10 +416,6 @@ class _PopupBoxMixin:
                 draw = ImageDraw.Draw(pil_canvas)
 
                 card_box = [box_x, box_y, box_x + total_w, box_y + total_h]
-                # No colored outline on any popup card — the photo is
-                # full-bleed against the card's rounded edges, so a drawn
-                # border would frame it like the old pip card instead of
-                # reading as a clean, borderless photo card.
                 draw.rounded_rectangle(
                     card_box,
                     radius=14,
@@ -443,6 +439,13 @@ class _PopupBoxMixin:
                 photo_y = box_y
                 base_pil.paste(pil_img, (photo_x, photo_y), mask=mask)
 
+                # No colored outline on any popup card — the photo is
+                # full-bleed against the card's rounded edges, so a drawn
+                # border would frame it like the old pip card instead of
+                # reading as a clean, borderless photo card. (A stroke
+                # outline was tried here — it didn't follow the photo's
+                # own rounded corners cleanly, leaving a square-cornered
+                # notch at the top instead of tracing the curve.)
                 if has_label:
                     draw_text_layer = ImageDraw.Draw(base_pil)
                     # Wraps to a second line (or shrinks the font, as a last

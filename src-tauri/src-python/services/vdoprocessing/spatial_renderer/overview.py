@@ -131,22 +131,25 @@ class _OverviewRenderMixin:
             if popups and popups[i] is not None
         ]
 
-        # A stop-by's "x"/"y" above came from points[i] — the nearest
-        # point on the RECORDED TRACK, which is fine for a real stop the
-        # traveler actually walks to, but wrong for one only observed
-        # from a distance (a small offshore island seen from the trail, a
-        # viewpoint across the water) — that kind can sit well away from
-        # the track, and snapping it onto the nearest track pixel drew
-        # its pin right on top of the route line instead of at the real
-        # place. Re-projecting from the waypoint's own stored lat/lng (see
-        # render_step.py's route_popups) onto this same background image
-        # draws it where it actually is. Real (non-stop-by) waypoints keep
-        # their track-matched position — they're genuinely visited stops
-        # ON the route, so that position is already correct.
+        # Every waypoint's "x"/"y" above came from points[i] — the nearest
+        # point on the RECORDED TRACK, not its own true coordinate. That's
+        # visibly wrong for a stop-by only ever observed from a distance
+        # (a small offshore island seen from the trail, a viewpoint across
+        # the water) — it can sit well away from the track entirely, and
+        # snapping it onto the nearest track pixel used to draw its pin
+        # right on top of the route line instead of at the real place. But
+        # it's ALSO measurably off for a genuinely-visited real waypoint:
+        # the recorded/routed track is a sparse polyline (points sampled
+        # every so often, or snapped to a road centerline by the routing
+        # API), so the nearest track pixel to a real POI's true coordinate
+        # can land a visible distance from where that place actually is —
+        # a station pin sitting on the road instead of the station
+        # building, say. Re-projecting every waypoint from its own stored
+        # lat/lng (see render_step.py's route_popups) onto this same
+        # background image draws each one exactly where it really is,
+        # rather than only wherever the track happened to pass closest.
         if extent is not None:
             for ap in active_popups:
-                if not ap["data"].get("is_stopby"):
-                    continue
                 lat, lng = ap["data"].get("lat"), ap["data"].get("lng")
                 if lat is None or lng is None:
                     continue
@@ -258,6 +261,15 @@ class _OverviewRenderMixin:
         if len(route_obstacle_arr) > _ROUTE_OBSTACLE_MAX_POINTS:
             step = max(1, len(route_obstacle_arr) // _ROUTE_OBSTACLE_MAX_POINTS)
             route_obstacle_arr = route_obstacle_arr[::step]
+
+        # Pin centers alone under-protect each waypoint's drawn silhouette
+        # (see _pin_obstacle_points) — without this, a flow-through card
+        # can be placed over a neighbouring pin's teardrop/halo during the
+        # animated phase and, since cards composite after pins every frame,
+        # visually erase that waypoint marker for as long as it's shown.
+        pin_obstacles = self._pin_obstacle_points(active_popups)
+        if len(pin_obstacles):
+            route_obstacle_arr = np.vstack([route_obstacle_arr, pin_obstacles])
 
         logger.info(f"Rendering Overview Map ({duration}s)")
         overview_path = str(self.out_dir / "01_overview.mp4")

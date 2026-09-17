@@ -28,6 +28,10 @@ import cv2
 import numpy as np
 import pydeck as pdk
 
+from services.logger.logger import setup_logger
+
+logger = setup_logger("PydeckOverview")
+
 from services.mapfetcher.mapgeometry import choose_route_focus_view
 from services.vdoprocessing.pydeckrecorder.common import MAPBOX_API_KEY
 from services.vdoprocessing.pydeckrecorder.httpserver import start_local_server
@@ -246,7 +250,19 @@ async def _capture_zoom_frames(
             browser = await p.chromium.launch(headless=True)
             try:
                 context = await browser.new_context(
-                    viewport={"width": output_size[0], "height": output_size[1]}
+                    viewport={"width": output_size[0], "height": output_size[1]},
+                    # Without this, Playwright defaults to 1x — a plain,
+                    # non-retina capture — noticeably softer than what an
+                    # actual interactive map shows on any real (typically
+                    # 2x+) display, and softer than the "retina=True"
+                    # tiles the rest of this app already fetches for the
+                    # static overview background (see MapTile's own log
+                    # line). Screenshots come back at 2x output_size;
+                    # capture_pydeck_zoom_sequence downsamples each one
+                    # back to output_size, which is what actually buys the
+                    # extra sharpness (supersampling), not just a bigger
+                    # image.
+                    device_scale_factor=2,
                 )
                 page = await context.new_page()
                 await page.goto(f"http://127.0.0.1:{port}/{rel_path}")
@@ -303,6 +319,7 @@ def capture_pydeck_zoom_sequence(
     route_latlon=None,
     next_lat: float = None,
     next_lon: float = None,
+    must_fit_latlon=None,
 ) -> List[Tuple[np.ndarray, Tuple[float, float, float, float]]]:
     """A GENUINE dynamic zoom — `num_frames` real deck.gl re-renders as
     the camera pushes in from the base overview view toward
@@ -348,6 +365,7 @@ def capture_pydeck_zoom_sequence(
     target_zoom = base_zoom + zoom_boost
 
     end_view = None
+    end_target_px, end_target_py = target_px, target_py
     if route_latlon:
         # Bounded by the zoom this would have used anyway: the chooser may
         # pull BACK from it to keep the line in shot, never past the wide
@@ -356,23 +374,48 @@ def capture_pydeck_zoom_sequence(
             route_latlon, target_lat, target_lon, output_size,
             min_zoom=base_zoom, max_zoom=target_zoom,
             next_lat=next_lat, next_lon=next_lon,
+            must_fit_latlon=must_fit_latlon,
         )
+        end_extent = _extent_for_view(end_view[0], end_view[1], end_view[2], output_size)
+        end_target_px, end_target_py = RouteGeometryProcessor.project_latlon_to_pixel(
+            target_lat, target_lon, end_extent, out_w, out_h
+        )
+    logger.info(
+        "Ending highlight zoom: base=%.2f ceiling=%.2f (boost=%.2f) achieved=%.2f "
+        "(pulled back=%.2f levels)",
+        base_zoom, target_zoom, zoom_boost,
+        end_view[2] if end_view is not None else target_zoom,
+        target_zoom - (end_view[2] if end_view is not None else target_zoom),
+    )
 
     view_states: List[Tuple[float, float, float]] = []
     extents: List[Tuple[float, float, float, float]] = []
     for i in range(max(1, num_frames)):
         t = i / max(1, num_frames - 1)
         if end_view is not None:
-            # Straight interpolation from the base view to the chosen one.
-            # Frame 0 is still exactly the base view (t=0), so a sequence
-            # started from an already-displayed static overview picks up
-            # seamlessly either way.
             end_lon, end_lat, end_zoom = end_view
             zoom = base_zoom + (end_zoom - base_zoom) * t
-            c_lon = base_lon + (end_lon - base_lon) * t
-            c_lat = _inverse_mercator_y(
-                _mercator_y(base_lat)
-                + (_mercator_y(end_lat) - _mercator_y(base_lat)) * t
+            # Interpolating the CENTER directly (straight line in lon/lat)
+            # does not keep the target on screen throughout: the frame's
+            # half-width shrinks roughly exponentially with zoom while a
+            # lon/lat-interpolated center only closes the gap to the
+            # target linearly, so early in the push (zoom already rising
+            # fast, pan barely started) the target's screen offset can
+            # exceed the frame and it visibly flies off-screen before
+            # coming back into frame near the end — reported as "the
+            # waypoint is out of frame" mid-zoom even though it's in frame
+            # at both the start (whole-route wide shot) and the chosen end
+            # framing. Interpolating the TARGET'S OWN SCREEN PIXEL instead
+            # (linearly, from its pixel in the base frame to its pixel in
+            # the end frame — both guaranteed on-screen) and solving for
+            # the center that puts it there at each zoom keeps it inside
+            # the frame at every step in between too, since a straight
+            # line between two in-bounds points never leaves the
+            # rectangle.
+            px = target_px + (end_target_px - target_px) * t
+            py = target_py + (end_target_py - target_py) * t
+            c_lon, c_lat = _center_for_fixed_screen_point(
+                target_lon, target_lat, px, py, zoom, output_size
             )
         else:
             zoom = base_zoom + (target_zoom - base_zoom) * t
@@ -401,8 +444,20 @@ def capture_pydeck_zoom_sequence(
         patch_pydeck_html(html_path)
         asyncio.run(_capture_zoom_frames(html_path, html_dir, output_size, view_states, raw_frames))
 
+    out_w, out_h = output_size
     frames: List[Tuple[np.ndarray, Tuple[float, float, float, float]]] = []
     for data, ext in zip(raw_frames, extents):
         arr = cv2.imdecode(np.frombuffer(data, dtype=np.uint8), cv2.IMREAD_COLOR)
+        # _capture_zoom_frames' browser context captures at 2x
+        # (device_scale_factor) for a genuinely sharper/retina-quality
+        # result — downsampling that back to the caller's actual
+        # output_size here (INTER_AREA: the right choice for shrinking,
+        # unlike the upscaling interpolations used elsewhere in this
+        # codebase) is what turns the extra captured resolution into
+        # crisper text/edges instead of just a bigger array; every
+        # downstream consumer (video frames, project_latlon_to_pixel
+        # against `ext`) already assumes exactly output_size pixels.
+        if arr.shape[1] != out_w or arr.shape[0] != out_h:
+            arr = cv2.resize(arr, (out_w, out_h), interpolation=cv2.INTER_AREA)
         frames.append((arr, ext))
     return frames
