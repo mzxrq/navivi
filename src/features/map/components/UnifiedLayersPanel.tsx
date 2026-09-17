@@ -24,8 +24,9 @@ export function UnifiedLayersPanel({
     <Rnd
       key="anchors-layer-panel"
       default={{
-        x: Math.max(10, window.innerWidth - 660),
-        y: 80,
+        x:
+          window.innerWidth < 1160 ? 80 : Math.max(10, window.innerWidth - 660),
+        y: window.innerWidth < 1160 ? 56 : 80,
         width: 320,
         height: "auto",
       }}
@@ -44,9 +45,7 @@ export function UnifiedLayersPanel({
             >
               {activeWp.name}
             </span>
-            <span className="text-xs opacity-50 font-black shrink-0">
-              ↁE
-            </span>
+            <span className="text-xs opacity-50 font-black shrink-0">ↁE</span>
             <span
               className="text-xs font-bold text-zinc-700 dark:text-zinc-300 truncate max-w-24"
               title={nextWp.name}

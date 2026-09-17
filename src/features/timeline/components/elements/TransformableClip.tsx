@@ -261,11 +261,12 @@ export function TransformableClip({
   const clipTime = currentTime - clip.startTime;
   if (
     clip.transitionIn?.startsWith("glsl-") &&
-    clip.fadeIn &&
-    clipTime >= 0 &&
-    clipTime <= clip.fadeIn
+    clip.fadeIn
   ) {
-    transitionProgress = clipTime / clip.fadeIn;
+    const halfFade = clip.fadeIn / 2;
+    if (clipTime >= -halfFade && clipTime <= halfFade) {
+      transitionProgress = (clipTime + halfFade) / clip.fadeIn;
+    }
   }
   transitionProgress = Math.max(0, Math.min(1, transitionProgress));
   const isTransitioning = transitionProgress > 0 && transitionProgress < 1;
@@ -377,13 +378,10 @@ export function TransformableClip({
   const rotation = clip.rotation || 0;
 
   let currentOpacity = 1;
-  if (
-    !clip.transitionIn?.startsWith("glsl-") &&
-    clip.fadeIn &&
-    clipTime < clip.fadeIn
-  ) {
+  // Don't apply fade opacity if we are using GL transitions
+  if (!clip.transitionIn?.startsWith("glsl-") && clip.fadeIn && clipTime < clip.fadeIn && clipTime >= 0) {
     currentOpacity = clipTime / clip.fadeIn;
-  } else if (clip.fadeOut && clipTime > clip.duration - clip.fadeOut) {
+  } else if (!clip.transitionOut?.startsWith("glsl-") && clip.fadeOut && clipTime > clip.duration - clip.fadeOut) {
     currentOpacity = (clip.duration - clipTime) / clip.fadeOut;
   }
   currentOpacity = Math.max(0, Math.min(1, currentOpacity));

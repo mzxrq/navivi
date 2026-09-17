@@ -4,7 +4,6 @@ import Map, {
   Marker,
   MapRef,
   Source,
-  Layer,
 } from "react-map-gl/mapbox";
 import { listen } from "@tauri-apps/api/event";
 import { convertFileSrc } from "@tauri-apps/api/core";
@@ -12,17 +11,11 @@ import {
   UploadCloud,
   Navigation,
   ImageIcon,
-  ChevronLeft,
-  Pencil,
-  Layers,
 } from "../../../components/ui/icons";
-import { ChevronDown, ChevronUp } from "lucide-react";
 import { MapToolbar } from "./MapToolbar";
-import DrawControl from "./DrawControl";
 import "@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css";
 import { mapStyles, mapDefaults } from "../../../config/constants";
 import { RouteStyling } from "./MapLayers/RouteStyling";
-import { Rnd } from "react-rnd";
 import { useWorkspace } from "../../../hooks/useWorkspace";
 import { useTheme } from "../../../hooks/useTheme";
 import { useMapRouting } from "../hooks/useMapRouting";
@@ -57,6 +50,7 @@ export function MapArea() {
     updateWaypoint,
     setActiveWaypointId,
     setProjectThumbnail,
+    registerThumbnailGetter,
   } = useWorkspace();
   const { handleDroppedFiles, importPhotos } = useFileActions();
 
@@ -93,6 +87,17 @@ export function MapArea() {
   });
 
   useMapRouting();
+
+  useEffect(() => {
+    registerThumbnailGetter(() => {
+      try {
+        const canvas = mapRef.current?.getMap().getCanvas();
+        return canvas ? canvas.toDataURL("image/png") : null;
+      } catch (e) {
+        return null;
+      }
+    });
+  }, [registerThumbnailGetter]);
 
   const captureMapThumbnail = () => {
     if (thumbnailCaptureTimeoutRef.current) {
@@ -599,7 +604,7 @@ export function MapArea() {
   return (
     <main className="flex-1 relative bg-zinc-100 dark:bg-[#09090b] overflow-hidden transition-colors">
       {/* --- GEOJSON.IO STYLE TOP TOOLBAR --- */}
-      <div className="absolute top-4 left-1/2 -translate-x-1/2 z-200">
+      <div className="absolute z-200 transition-all duration-300 max-[1159px]:top-14 max-[1159px]:left-4 max-[1159px]:translate-x-0 min-[1160px]:top-14 min-[1160px]:left-1/2 min-[1160px]:-translate-x-1/2">
         <MapToolbar
           isAddMode={isAddMode}
           setIsAddMode={setIsAddMode}
@@ -628,7 +633,7 @@ export function MapArea() {
         />
       </div>
 
-      <div className="absolute top-4 right-4 z-200 flex items-center gap-2">
+      <div className="absolute top-14 right-4 z-200 flex items-center gap-2">
         <button
           onClick={() => {
             setViewState((prev) => ({
@@ -846,6 +851,63 @@ export function MapArea() {
               </Marker>
             );
           })}
+
+          {/* drawn nodes */}
+          {isDrawMode &&
+            activeWaypointId &&
+            waypoints
+              .find((w) => w.id === activeWaypointId)
+              ?.customRoute?.map((pos, idx) => (
+                <Marker
+                  key={`drawn-node-${idx}`}
+                  latitude={pos[0]}
+                  longitude={pos[1]}
+                  draggable={!isEraserMode}
+                  onDragEnd={(e) => {
+                    setWaypoints((prev) =>
+                      prev.map((wp) => {
+                        if (wp.id === activeWaypointId && wp.customRoute) {
+                          const newRoute = [...wp.customRoute];
+                          newRoute[idx] = [e.lngLat.lat, e.lngLat.lng];
+                          return { ...wp, customRoute: newRoute };
+                        }
+                        return wp;
+                      }),
+                    );
+                    setIsDirty(true);
+                  }}
+                >
+                  <div
+                    className={`relative group ${isEraserMode ? "cursor-crosshair" : "cursor-grab active:cursor-grabbing"}`}
+                    onClick={(e) => {
+                      if (isEraserMode) {
+                        e.stopPropagation();
+                        setWaypoints((prev) =>
+                          prev.map((wp) => {
+                            if (wp.id === activeWaypointId && wp.customRoute) {
+                              const newRoute = wp.customRoute.filter(
+                                (_, i) => i !== idx,
+                              );
+                              return { ...wp, customRoute: newRoute };
+                            }
+                            return wp;
+                          }),
+                        );
+                        setIsDirty(true);
+                      }
+                    }}
+                  >
+                    <div className="w-5 h-5 bg-amber-500 border-2 border-white dark:border-zinc-900 rounded-full shadow-md group-hover:scale-110 group-hover:bg-amber-400 transition-all flex items-center justify-center">
+                      <span className="text-[9px] font-black text-white dark:text-zinc-900">
+                        {idx + 1}
+                      </span>
+                    </div>
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 opacity-0 group-hover:opacity-100 transition-opacity bg-zinc-900 text-white text-[9px] font-bold px-1.5 py-0.5 rounded pointer-events-none whitespace-nowrap">
+                      Anchor {idx + 1}
+                    </div>
+                  </div>
+                </Marker>
+              ))}
         </Map>
 
         {/* HISTORICAL WEATHER RAIN OVERLAY */}

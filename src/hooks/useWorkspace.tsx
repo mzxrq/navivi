@@ -173,6 +173,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   >({});
   const [versions, setVersions] = useState<ProjectVersion[]>([]);
   const [projectThumbnail, setProjectThumbnail] = useState<string | null>(null);
+  const thumbnailGetterRef = useRef<(() => string | null) | null>(null);
+  const registerThumbnailGetter = useCallback((fn: () => string | null) => {
+    thumbnailGetterRef.current = fn;
+  }, []);
 
   const [recentProjects, setRecentProjects] = useState<RecentProjects[]>(() => {
     const saved = localStorage.getItem("navivi-recents");
@@ -347,12 +351,19 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     safeFolderName?: string,
     recordVersion = true,
   ) => {
+    // Allowed to save empty project
     if (waypoints.length === 0) {
-      console.warn("No waypoints to save.");
-      return;
+      console.warn("No waypoints to save, but saving anyway to preserve metadata.");
     }
 
     const saveRevision = dirtyRevisionRef.current;
+      let freshThumbnail = projectThumbnail;
+      if (thumbnailGetterRef.current) {
+        try {
+          const t = thumbnailGetterRef.current();
+          if (t) freshThumbnail = t;
+        } catch(e) {}
+      }
     try {
       const result = await saveProjectData(
         waypoints,
@@ -739,7 +750,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         setRecentProjects,
         projectThumbnail,
         setProjectThumbnail,
-        resetWorkspace,
+          registerThumbnailGetter,
+          resetWorkspace,
         routingCache,
         setRoutingCache,
         forceReroute,

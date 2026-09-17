@@ -26,6 +26,8 @@ export interface Waypoint {
   routeMode: RouteMode;
   customRoute?: [number, number][];
   connectToRoute?: boolean;
+  skipAssetGeneration?: boolean;
+  pauseAtWaypoint?: boolean;
   isGeneratingScript?: boolean;
   markers?: WaypointTimelineMarker[];
   isStopBy?: boolean;
@@ -322,6 +324,7 @@ export interface WorkspaceState {
   setDrawnRoute: Dispatch<SetStateAction<[number, number][]>>;
   projectThumbnail: string | null;
   setProjectThumbnail: (thumbnail: string | null) => void;
+  registerThumbnailGetter: (fn: () => string | null) => void;
   // Project Config
   metadata: ProjectMetadata;
   setMetadata: Dispatch<SetStateAction<ProjectMetadata>>;

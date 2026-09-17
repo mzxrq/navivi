@@ -79,7 +79,7 @@ export function OverviewPanel() {
     return (
       <button
         onClick={() => setShowOverview(true)}
-        className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl border border-dashed border-zinc-300 dark:border-navidark-400 text-xs font-semibold text-zinc-500 hover:text-navi-600 dark:hover:text-navi-400 hover:bg-navi-50 dark:hover:bg-navi-900/20 transition-colors shrink-0"
+        className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl border border-dashed border-zinc-300 dark:border-white/10 text-xs font-semibold text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-black/5 dark:hover:bg-white/5 transition-colors shrink-0"
       >
         <span>
           {hasData ? "Course Concept & Intro" : "+ Add Course Theme & Intro"}
@@ -90,9 +90,9 @@ export function OverviewPanel() {
   }
 
   return (
-    <div className="space-y-3 bg-zinc-50 dark:bg-navidark-700/30 p-3 rounded-xl border border-zinc-200 dark:border-navidark-400 shrink-0">
+    <div className="space-y-3 bg-transparent p-3 rounded-xl border border-zinc-200 dark:border-white/10 shrink-0 shadow-sm">
       <div className="flex justify-between items-center">
-        <label className="text-xs font-bold text-navi-700 dark:text-navi-400">
+        <label className="text-[11px] font-bold text-zinc-800 dark:text-zinc-200 tracking-wide uppercase">
           Course Concept & Intro
         </label>
         <button
@@ -114,18 +114,18 @@ export function OverviewPanel() {
             setIsDirty(true);
           }}
           placeholder="Course Theme (e.g., 葛城修験と友ヶ島を巡る)"
-          className="w-full bg-white dark:bg-navidark-800 border border-zinc-200 dark:border-navidark-300 rounded-lg px-2.5 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-navi-400 shadow-sm"
+          className="w-full bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5 rounded-lg px-2.5 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-zinc-300 dark:focus:border-zinc-600 shadow-inner transition-colors"
         />
       </div>
 
       <div className="flex items-center justify-between mt-2">
-        <p className="text-[10px] text-zinc-500 dark:text-navidark-150 leading-tight pr-4">
+        <p className="text-[10px] text-zinc-500 dark:text-zinc-500 leading-tight pr-4">
           AI will use the theme above to write a perfect Japanese intro.
         </p>
         {isGeneratingOverview ? (
           <button
             onClick={handleCancel}
-            className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-bold transition-all bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-100 border border-red-200 shadow-sm"
+            className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-bold transition-all bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-500/20 shadow-sm"
           >
             <Square className="w-3 h-3 fill-current" /> Cancel
           </button>
@@ -133,14 +133,14 @@ export function OverviewPanel() {
           <button
             onClick={handleGenerateOverview}
             disabled={isGeneratingOverview || waypoints.length === 0}
-            className="shrink-0 flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed bg-navi-50 dark:bg-navi-500/10 text-navi-700 dark:text-navi-300 hover:bg-navi-100 border border-navi-200 shadow-sm"
+            className="shrink-0 flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 hover:bg-black dark:hover:bg-zinc-200 shadow-sm"
           >
             <PencilSparkles className="w-3 h-3" /> Auto-Write
           </button>
         )}
       </div>
 
-      <div className="relative w-full h-24 rounded-lg overflow-hidden shadow-inner border border-zinc-200 dark:border-navidark-300 group focus-within:border-navi-400 transition-colors">
+      <div className="relative w-full h-24 rounded-lg overflow-hidden shadow-inner border border-black/5 dark:border-white/5 focus-within:border-zinc-300 dark:focus-within:border-zinc-600 transition-colors">
         <textarea
           value={metadata.overview_narration || ""}
           onChange={(e) => {
@@ -149,14 +149,14 @@ export function OverviewPanel() {
           }}
           disabled={isGeneratingOverview}
           placeholder="オープニングナレーション..."
-          className="w-full h-full resize-none p-3 text-xs custom-scrollbar bg-white dark:bg-navidark-800 text-zinc-900 dark:text-zinc-100 focus:outline-none disabled:opacity-50"
+          className="w-full h-full resize-none p-3 text-xs custom-scrollbar bg-black/5 dark:bg-white/5 text-zinc-900 dark:text-zinc-100 focus:outline-none disabled:opacity-50"
         />
 
         {isGeneratingOverview && (
-          <div className="absolute inset-0 bg-white/70 dark:bg-navidark-900/70 backdrop-blur-[2px] flex flex-col items-center justify-center z-10">
+          <div className="absolute inset-0 bg-white/70 dark:bg-zinc-950/70 backdrop-blur-[2px] flex flex-col items-center justify-center z-10">
             <div className="flex flex-col items-center gap-2">
-              <Sparkles className="w-5 h-5 text-navi-400 animate-bounce" />
-              <div className="text-[10px] font-bold text-navi-600 dark:text-navi-300 tracking-wide uppercase">
+              <Sparkles className="w-5 h-5 text-zinc-900 dark:text-white animate-bounce" />
+              <div className="text-[10px] font-bold text-zinc-900 dark:text-white tracking-wide uppercase">
                 AI is writing...
               </div>
             </div>

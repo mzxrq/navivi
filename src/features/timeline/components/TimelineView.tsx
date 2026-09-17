@@ -600,6 +600,7 @@ export function TimelineView() {
     const track = timeline.tracks.find((t) => t.id === clip.trackId);
     if (!track || track.isHidden) return false;
 
+    // Check if this clip needs to be rendered because it's the SOURCE (preceding clip) of a transition
     const isTransitionSource = timeline.clips.some((nextClip) => {
       if (
         nextClip.id === clip.id ||
@@ -609,19 +610,34 @@ export function TimelineView() {
       ) {
         return false;
       }
-      const nextEnd = nextClip.startTime + nextClip.duration;
+      
+      // The transition for nextClip happens from [nextClip.startTime - fadeIn/2, nextClip.startTime + fadeIn/2]
+      const transitionStart = nextClip.startTime - nextClip.fadeIn / 2;
+      const transitionEnd = nextClip.startTime + nextClip.fadeIn / 2;
+      
       return (
         clip.startTime < nextClip.startTime &&
         clip.startTime + clip.duration >= nextClip.startTime &&
-        currentTime >= nextClip.startTime &&
-        currentTime <= Math.min(nextEnd, nextClip.startTime + nextClip.fadeIn)
+        currentTime >= transitionStart &&
+        currentTime <= transitionEnd
       );
     });
+
+    // Check if this clip needs to be rendered because it's the TARGET of a transition
+    let isTransitionTarget = false;
+    if (clip.transitionIn?.startsWith("glsl-") && clip.fadeIn) {
+      const transitionStart = clip.startTime - clip.fadeIn / 2;
+      const transitionEnd = clip.startTime + clip.fadeIn / 2;
+      if (currentTime >= transitionStart && currentTime <= transitionEnd) {
+        isTransitionTarget = true;
+      }
+    }
 
     return (
       (currentTime >= clip.startTime - PRELOAD_SECONDS &&
         currentTime <= clip.startTime + clip.duration) ||
-      isTransitionSource
+      isTransitionSource ||
+      isTransitionTarget
     );
   });
 
@@ -895,7 +911,7 @@ export function TimelineView() {
   }
 
   return (
-    <div className="flex flex-col flex-1 h-full bg-white dark:bg-[#09090b] overflow-hidden select-none">
+    <div className="pt-10 flex flex-col flex-1 h-full bg-white dark:bg-[#09090b] overflow-hidden select-none">
       <div className="flex-1 flex min-h-0 border-b border-zinc-200 dark:border-white/5">
         {/* SIDEBAR TABS BAR */}
         <div className="w-14 shrink-0 flex flex-col items-center py-4 bg-zinc-50 dark:bg-navidark-900 border-r border-zinc-200 dark:border-navidark-400 gap-4">

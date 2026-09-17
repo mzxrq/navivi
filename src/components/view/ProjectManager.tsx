@@ -1,6 +1,8 @@
 import { useState, useEffect, MouseEvent } from "react";
 import { createPortal } from "react-dom";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { open } from "@tauri-apps/plugin-dialog";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { useUI } from "../../hooks/useUI";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import {
@@ -16,9 +18,10 @@ import {
   Edit3,
   Settings2,
   AlertTriangle,
+  Film,
 } from "../ui/icons";
 
-type ModalActionType = "rename" | "duplicate" | "remove" | null;
+type ModalActionType = "rename" | "duplicate" | "remove" | "settings" | null;
 
 export function ProjectManager() {
   const { setCurrentView, showToast } = useUI();
@@ -54,6 +57,19 @@ export function ProjectManager() {
     return () => window.removeEventListener("keydown", handleEsc);
   }, [modalState.type]);
 
+  const handleQuickRender = async (project: any) => {
+    showToast("Quick Render started for " + project.name, "info");
+    try {
+      await invoke("run_python_blueprint", {
+        action: project.path,
+        payload: "concat",
+      });
+      showToast("Quick Render complete for " + project.name, "success");
+    } catch (err: any) {
+      showToast("Quick Render failed: " + String(err), "error");
+    }
+  };
+
   const handleOpenProject = async (path?: string) => {
     try {
       const success = await loadProject(path);
@@ -77,12 +93,28 @@ export function ProjectManager() {
   };
 
   // ✨ UPDATED: Made 'e' optional so it can be called from the global context menu
-  const openModal = (type: ModalActionType, project: any, e?: MouseEvent) => {
+  const openModal = async (
+    type: ModalActionType,
+    project: any,
+    e?: MouseEvent,
+  ) => {
     if (e) e.stopPropagation();
     setModalState({ type, project });
-    setModalInput(
-      type === "duplicate" ? `${project.name} (Copy)` : project.name,
-    );
+
+    if (type === "settings") {
+      try {
+        const fileContent = await readTextFile(project.path);
+        const data = JSON.parse(fileContent);
+        setModalInput(data.settings?.routeMarker || "");
+      } catch (err) {
+        showToast("Failed to load project settings", "error");
+        setModalInput("");
+      }
+    } else {
+      setModalInput(
+        type === "duplicate" ? `${project.name} (Copy)` : project.name,
+      );
+    }
     setActiveMenu(null);
   };
 
@@ -114,6 +146,13 @@ export function ProjectManager() {
           );
         }
         showToast("Project renamed successfully.", "success");
+      } else if (type === "settings") {
+        const fileContent = await readTextFile(project.path);
+        const data = JSON.parse(fileContent);
+        if (!data.settings) data.settings = {};
+        data.settings.routeMarker = modalInput;
+        await writeTextFile(project.path, JSON.stringify(data, null, 2));
+        showToast("Project settings updated.", "success");
       } else if (type === "duplicate") {
         if (!modalInput.trim()) return closeModal();
         showToast("Project duplicated! (Requires backend integration)", "info");
@@ -144,6 +183,7 @@ export function ProjectManager() {
             onDuplicate: () => openModal("duplicate", project),
             onSettings: () =>
               showToast("To change settings, open the project first.", "info"),
+            onQuickRender: () => handleQuickRender(project),
             onRemove: () => openModal("remove", project),
           },
         },
@@ -154,7 +194,7 @@ export function ProjectManager() {
   const safeRecentProject = recentProjects || [];
 
   return (
-    <div className="flex-1 flex flex-col w-full h-full p-10 bg-zinc-50 dark:bg-navidark-800 relative z-10 animate-in fade-in duration-500 select-none">
+    <div className="flex-1 flex flex-col w-full h-full px-10 pb-10 pt-16 bg-zinc-50 dark:bg-navidark-800 relative z-10 animate-in fade-in duration-500 select-none">
       {/* Top Header Bar */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-10 gap-6">
         <div>
@@ -350,6 +390,16 @@ export function ProjectManager() {
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
+                            handleQuickRender(project);
+                            setActiveMenu(null);
+                          }}
+                          className="w-full text-left px-4 py-2 text-xs font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-navidark-600 flex items-center gap-2"
+                        >
+                          <Film className="w-3.5 h-3.5" /> Quick Render
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
                             showToast(
                               "To change settings, open the project first.",
                               "info",
@@ -473,6 +523,17 @@ export function ProjectManager() {
                       >
                         <Copy className="w-3.5 h-3.5" /> Duplicate
                       </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleQuickRender(project);
+                          setActiveMenu(null);
+                        }}
+                        className="w-full text-left px-4 py-2 text-xs font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-navidark-600 flex items-center gap-2"
+                      >
+                        <Film className="w-3.5 h-3.5" /> Quick Render
+                      </button>
+
                       <div className="h-px bg-zinc-200 dark:bg-navidark-400 my-1 mx-2" />
                       <button
                         onClick={(e) => openModal("remove", project, e)}
@@ -513,6 +574,12 @@ export function ProjectManager() {
                       Project
                     </>
                   )}
+                  {modalState.type === "settings" && (
+                    <>
+                      <Settings2 className="w-4 h-4 text-navi-500" /> Advanced
+                      Settings
+                    </>
+                  )}
                 </h3>
 
                 {modalState.type === "remove" ? (
@@ -524,6 +591,48 @@ export function ProjectManager() {
                     from your recent list? The original files will remain on
                     your computer.
                   </p>
+                ) : modalState.type === "settings" ? (
+                  <div className="space-y-3 mt-4">
+                    <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                      Global Custom Marker
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={modalInput}
+                        readOnly
+                        placeholder="Default marker will be used..."
+                        className="flex-1 bg-zinc-50 dark:bg-navidark-800 border border-zinc-200 dark:border-navidark-400 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-white outline-none focus:border-navi focus:ring-1 focus:ring-navi transition-all opacity-80"
+                      />
+                      <button
+                        onClick={async () => {
+                          const selected = await open({
+                            multiple: false,
+                            filters: [
+                              {
+                                name: "Images",
+                                extensions: ["svg", "png", "jpg", "jpeg"],
+                              },
+                            ],
+                          });
+                          if (selected && typeof selected === "string") {
+                            setModalInput(selected);
+                          }
+                        }}
+                        className="bg-navi-500 hover:bg-navi-600 text-white px-3 py-2 rounded-lg text-xs font-bold shadow-sm transition-colors shrink-0"
+                      >
+                        Select
+                      </button>
+                      {modalInput && (
+                        <button
+                          onClick={() => setModalInput("")}
+                          className="bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-500/10 dark:hover:bg-red-500/20 px-3 py-2 rounded-lg text-xs font-bold transition-colors shrink-0"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 ) : (
                   <div className="space-y-3 mt-4">
                     <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
@@ -551,7 +660,11 @@ export function ProjectManager() {
                 </button>
                 <button
                   onClick={executeModalAction}
-                  disabled={modalState.type !== "remove" && !modalInput.trim()}
+                  disabled={
+                    modalState.type !== "remove" &&
+                    modalState.type !== "settings" &&
+                    !modalInput.trim()
+                  }
                   className={`px-4 py-2 text-white text-xs font-bold rounded-lg shadow-md transition-colors disabled:opacity-50 ${
                     modalState.type === "remove"
                       ? "bg-red-500 hover:bg-red-600"
