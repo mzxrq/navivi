@@ -208,7 +208,7 @@ export function WaypointEditor({
     <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-50 pointer-events-none w-full px-4 flex flex-col items-center">
       <div
         className={`flex flex-col bg-white/95 dark:bg-navidark-800/95 backdrop-blur-xl rounded-2xl shadow-[0_-10px_60px_-15px_rgba(0,0,0,0.5)] border border-zinc-200/50 dark:border-white/10 select-none transition-all duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] pointer-events-auto ${
-          isCollapsed ? "w-[300px] h-[56px]" : "w-[90vw] md:w-[700px] lg:w-[900px] h-[420px] max-h-[45vh]"
+          isCollapsed ? "w-[300px] h-[56px]" : "w-full max-w-5xl h-[420px] max-h-[45vh]"
         } overflow-hidden`}
       >
         {/* --- HEADER --- */}
@@ -256,7 +256,7 @@ export function WaypointEditor({
         {!isCollapsed && (
           <div className="flex-1 flex flex-row min-w-0 h-full overflow-hidden items-stretch">
             {/* --- LEFT COLUMN: METADATA & ACTIONS --- */}
-            <div className="w-70 shrink-0 border-r border-zinc-200 dark:border-white/10 p-5 flex flex-col gap-6 overflow-y-auto scrollbar-none bg-zinc-50/30 dark:bg-navidark-800/30">
+            <div className="w-1/3 min-w-[240px] max-w-[320px] shrink-0 border-r border-zinc-200 dark:border-white/10 p-5 flex flex-col gap-6 overflow-y-auto scrollbar-none bg-zinc-50/30 dark:bg-navidark-800/30">
               {/* Waypoint Name */}
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
