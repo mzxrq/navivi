@@ -57,13 +57,12 @@ export function ProjectManager() {
     return () => window.removeEventListener("keydown", handleEsc);
   }, [modalState.type]);
 
-
   const handleQuickRender = async (project: any) => {
     showToast("Quick Render started for " + project.name, "info");
     try {
       await invoke("run_python_blueprint", {
         action: project.path,
-        payload: "concat"
+        payload: "concat",
       });
       showToast("Quick Render complete for " + project.name, "success");
     } catch (err: any) {
@@ -94,10 +93,14 @@ export function ProjectManager() {
   };
 
   // ✨ UPDATED: Made 'e' optional so it can be called from the global context menu
-  const openModal = async (type: ModalActionType, project: any, e?: MouseEvent) => {
+  const openModal = async (
+    type: ModalActionType,
+    project: any,
+    e?: MouseEvent,
+  ) => {
     if (e) e.stopPropagation();
     setModalState({ type, project });
-    
+
     if (type === "settings") {
       try {
         const fileContent = await readTextFile(project.path);
@@ -143,7 +146,7 @@ export function ProjectManager() {
           );
         }
         showToast("Project renamed successfully.", "success");
-} else if (type === "settings") {
+      } else if (type === "settings") {
         const fileContent = await readTextFile(project.path);
         const data = JSON.parse(fileContent);
         if (!data.settings) data.settings = {};
@@ -405,7 +408,8 @@ export function ProjectManager() {
                           }}
                           className="w-full text-left px-4 py-2 text-xs font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-navidark-600 flex items-center gap-2"
                         >
-                          <Settings2 className="w-3.5 h-3.5" /> Advanced Settings
+                          <Settings2 className="w-3.5 h-3.5" /> Advanced
+                          Settings
                         </button>
                         <div className="h-px bg-zinc-200 dark:bg-navidark-400 my-1 mx-2" />
                         <button
@@ -572,7 +576,8 @@ export function ProjectManager() {
                   )}
                   {modalState.type === "settings" && (
                     <>
-                      <Settings2 className="w-4 h-4 text-navi-500" /> Advanced Settings
+                      <Settings2 className="w-4 h-4 text-navi-500" /> Advanced
+                      Settings
                     </>
                   )}
                 </h3>
@@ -653,18 +658,18 @@ export function ProjectManager() {
                 >
                   Cancel
                 </button>
-                  <button
-                    onClick={executeModalAction}
-                    disabled={
-                      modalState.type !== "remove" &&
-                      modalState.type !== "settings" &&
-                      !modalInput.trim()
-                    }
-                    className={`px-4 py-2 text-white text-xs font-bold rounded-lg shadow-md transition-colors disabled:opacity-50 ${
-                      modalState.type === "remove"
-                        ? "bg-red-500 hover:bg-red-600"
-                        : "bg-navi hover:bg-navi-600"
-                    }`}
+                <button
+                  onClick={executeModalAction}
+                  disabled={
+                    modalState.type !== "remove" &&
+                    modalState.type !== "settings" &&
+                    !modalInput.trim()
+                  }
+                  className={`px-4 py-2 text-white text-xs font-bold rounded-lg shadow-md transition-colors disabled:opacity-50 ${
+                    modalState.type === "remove"
+                      ? "bg-red-500 hover:bg-red-600"
+                      : "bg-navi hover:bg-navi-600"
+                  }`}
                 >
                   {modalState.type === "remove" ? "Remove" : "Confirm"}
                 </button>

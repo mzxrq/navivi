@@ -600,6 +600,7 @@ export function TimelineView() {
     const track = timeline.tracks.find((t) => t.id === clip.trackId);
     if (!track || track.isHidden) return false;
 
+    // Check if this clip needs to be rendered because it's the SOURCE (preceding clip) of a transition
     const isTransitionSource = timeline.clips.some((nextClip) => {
       if (
         nextClip.id === clip.id ||
@@ -609,19 +610,34 @@ export function TimelineView() {
       ) {
         return false;
       }
-      const nextEnd = nextClip.startTime + nextClip.duration;
+      
+      // The transition for nextClip happens from [nextClip.startTime - fadeIn/2, nextClip.startTime + fadeIn/2]
+      const transitionStart = nextClip.startTime - nextClip.fadeIn / 2;
+      const transitionEnd = nextClip.startTime + nextClip.fadeIn / 2;
+      
       return (
         clip.startTime < nextClip.startTime &&
         clip.startTime + clip.duration >= nextClip.startTime &&
-        currentTime >= nextClip.startTime &&
-        currentTime <= Math.min(nextEnd, nextClip.startTime + nextClip.fadeIn)
+        currentTime >= transitionStart &&
+        currentTime <= transitionEnd
       );
     });
+
+    // Check if this clip needs to be rendered because it's the TARGET of a transition
+    let isTransitionTarget = false;
+    if (clip.transitionIn?.startsWith("glsl-") && clip.fadeIn) {
+      const transitionStart = clip.startTime - clip.fadeIn / 2;
+      const transitionEnd = clip.startTime + clip.fadeIn / 2;
+      if (currentTime >= transitionStart && currentTime <= transitionEnd) {
+        isTransitionTarget = true;
+      }
+    }
 
     return (
       (currentTime >= clip.startTime - PRELOAD_SECONDS &&
         currentTime <= clip.startTime + clip.duration) ||
-      isTransitionSource
+      isTransitionSource ||
+      isTransitionTarget
     );
   });
 
