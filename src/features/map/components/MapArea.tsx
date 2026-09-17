@@ -701,14 +701,7 @@ export function MapArea() {
           }
         >
           
-          {isDrawMode && (
-            <DrawControl
-              displayControlsDefault={false}
-              onUpdate={handleDrawUpdate}
-              onCreate={handleDrawUpdate}
-              onDelete={handleDrawUpdate}
-            />
-          )}
+
           <Source
             id="mapbox-dem"
             type="raster-dem"
@@ -854,7 +847,62 @@ export function MapArea() {
                 </div>
               </Marker>
             );
-          })}
+            })}
+
+          {/* drawn nodes */}
+          {isDrawMode &&
+            activeWaypointId &&
+            waypoints
+              .find((w) => w.id === activeWaypointId)
+              ?.customRoute?.map((pos, idx) => (
+                <Marker
+                  key={`drawn-node-${idx}`}
+                  latitude={pos[0]}
+                  longitude={pos[1]}
+                  draggable={!isEraserMode}
+                  onDragEnd={(e) => {
+                    setWaypoints((prev) =>
+                      prev.map((wp) => {
+                        if (wp.id === activeWaypointId && wp.customRoute) {
+                          const newRoute = [...wp.customRoute];
+                          newRoute[idx] = [e.lngLat.lat, e.lngLat.lng];
+                          return { ...wp, customRoute: newRoute };
+                        }
+                        return wp;
+                      }),
+                    );
+                    setIsDirty(true);
+                  }}
+                >
+                  <div 
+                    className={`relative group ${isEraserMode ? 'cursor-crosshair' : 'cursor-grab active:cursor-grabbing'}`}
+                    onClick={(e) => {
+                      if (isEraserMode) {
+                        e.stopPropagation();
+                        setWaypoints((prev) =>
+                          prev.map((wp) => {
+                            if (wp.id === activeWaypointId && wp.customRoute) {
+                              const newRoute = wp.customRoute.filter((_, i) => i !== idx);
+                              return { ...wp, customRoute: newRoute };
+                            }
+                            return wp;
+                          }),
+                        );
+                        setIsDirty(true);
+                      }
+                    }}
+                  >
+                    <div className="w-5 h-5 bg-amber-500 border-2 border-white dark:border-zinc-900 rounded-full shadow-md group-hover:scale-110 group-hover:bg-amber-400 transition-all flex items-center justify-center">
+                      <span className="text-[9px] font-black text-white dark:text-zinc-900">
+                        {idx + 1}
+                      </span>
+                    </div>
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 opacity-0 group-hover:opacity-100 transition-opacity bg-zinc-900 text-white text-[9px] font-bold px-1.5 py-0.5 rounded pointer-events-none whitespace-nowrap">
+                      Anchor {idx + 1}
+                    </div>
+                  </div>
+                </Marker>
+              ))}
         </Map>
 
         {/* HISTORICAL WEATHER RAIN OVERLAY */}
