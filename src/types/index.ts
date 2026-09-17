@@ -26,6 +26,8 @@ export interface Waypoint {
   routeMode: RouteMode;
   customRoute?: [number, number][];
   connectToRoute?: boolean;
+  skipAssetGeneration?: boolean;
+  pauseAtWaypoint?: boolean;
   isGeneratingScript?: boolean;
   markers?: WaypointTimelineMarker[];
   isStopBy?: boolean;
