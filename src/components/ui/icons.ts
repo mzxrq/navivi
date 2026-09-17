@@ -11,7 +11,7 @@ export {
     Car, Footprints, Ruler, Plane, Trash2, Edit, CopyPlus, CornerDownLeft, Ship, //WaypointLayer
     UploadCloud, //MapPin //MapArea
     FileVideo, Map as MapIcon, Route, Play, PencilSparkles, MapPinIcon, Clapperboard, Hourglass, ToolCase, ChevronDown, // ChevronRight, Trash2, Car, Footprints, Ruler, Plane, Square, Mic, Sparkles, Settings2, Ship, Loader, //Sidebar
-    Film, SkipBack, SkipForward, Volume2, Maximize,PictureInPicture, // Play,  Settings2, //VideoArea
+    Film, SkipBack, SkipForward, Volume2, Maximize, PictureInPicture, // Play,  Settings2, //VideoArea
     ChevronLeft, Image as ImageIcon, // X, Trash2, MapPin, Settings2,Mic, //WaypointEditor
     GripVertical, Edit2, //X, Image as ImageIcon, Mic //WaypointItem
     FolderPlus, Clock, // MapPin, Monitor, ChevronRight, //NewProject
@@ -29,6 +29,6 @@ export {
     MapPinPlus, MapPinned, Waypoints as WP,
     Eye, EyeOff, VolumeX, Lock, Unlock, LinkIcon, UnlinkIcon, Edit3, FileText, ArrowRight, MoreVertical, //TimelineView
     Navigation, Globe, ChevronUp, ChevronLeftCircle,
-    
+
 } from "lucide-react";
 export { ArrowLeft, ArrowUp, ArrowDown, MoveUpRight, MoveUpLeft, MoveDownRight, MoveDownLeft } from "lucide-react";

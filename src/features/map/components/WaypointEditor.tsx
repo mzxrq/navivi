@@ -641,13 +641,20 @@ export function WaypointEditor({
 
                         const renderPanIcon = (val: string) => {
                           switch (val) {
-                            case "pan-left": return <ArrowLeft className="w-4 h-4" />;
-                            case "pan-right": return <ArrowRight className="w-4 h-4" />;
-                            case "pan-up": return <ArrowUp className="w-4 h-4" />;
-                            case "pan-down": return <ArrowDown className="w-4 h-4" />;
-                            case "zoom-in": return <ZoomIn className="w-4 h-4" />;
-                            case "zoom-out": return <ZoomOut className="w-4 h-4" />;
-                            default: return null;
+                            case "pan-left":
+                              return <ArrowLeft className="w-4 h-4" />;
+                            case "pan-right":
+                              return <ArrowRight className="w-4 h-4" />;
+                            case "pan-up":
+                              return <ArrowUp className="w-4 h-4" />;
+                            case "pan-down":
+                              return <ArrowDown className="w-4 h-4" />;
+                            case "zoom-in":
+                              return <ZoomIn className="w-4 h-4" />;
+                            case "zoom-out":
+                              return <ZoomOut className="w-4 h-4" />;
+                            default:
+                              return null;
                           }
                         };
 
@@ -663,7 +670,7 @@ export function WaypointEditor({
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
-                            
+
                             {/* Image Top Half */}
                             <div className="relative w-full aspect-[4/3] bg-zinc-100 dark:bg-zinc-800">
                               <img
@@ -673,13 +680,13 @@ export function WaypointEditor({
                               />
                             </div>
 
-                            {/* Black Bottom Half */}
-                            <div className="bg-black text-white p-3 flex flex-col">
+                            {/* Dark Bottom Half */}
+                            <div className="bg-zinc-950 text-white p-3 flex flex-col">
                               <h4 className="font-semibold text-[13px] truncate mb-0.5">
                                 {img.split(/\\|\//).pop()}
                               </h4>
-                              <span className="text-[10px] text-zinc-400 mb-3 tracking-wide">
-                                camera angle
+                              <span className="text-[10px] text-zinc-500 mb-3 tracking-wide">
+                                Camera angle
                               </span>
 
                               {/* Buttons Row */}
@@ -697,14 +704,14 @@ export function WaypointEditor({
                                             isSelected ? "none" : pan.value,
                                           )
                                         }
-                                        className={`shrink-0 flex flex-col items-center justify-center w-[46px] h-[46px] rounded-[14px] transition-all duration-200 ${
+                                        className={`shrink-0 flex flex-col items-center justify-center w-11 h-11 rounded-xl transition-all duration-200 ${
                                           isSelected
-                                            ? "bg-zinc-400 text-black shadow-inner"
-                                            : "bg-[#717171] hover:bg-zinc-500 text-white shadow-sm"
+                                            ? "bg-white/10 text-white shadow-sm ring-1 ring-white/10"
+                                            : "text-zinc-500 hover:text-zinc-200 hover:bg-white/5"
                                         }`}
                                       >
                                         {renderPanIcon(pan.value)}
-                                        <span className="text-[8px] font-medium leading-tight mt-0.5">
+                                        <span className="text-[8px] font-bold tracking-wider leading-tight mt-1 uppercase">
                                           {pan.label}
                                         </span>
                                       </button>
