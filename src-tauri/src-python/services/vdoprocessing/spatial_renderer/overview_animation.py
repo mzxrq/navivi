@@ -792,10 +792,24 @@ class _OverviewAnimationMixin:
                     # Kept as its own baked_popups entry so it lingers as a
                     # HUD overlay (with its own fade in/out) once the
                     # camera resumes moving — see _composite_baked_popups.
+                    # NOT appended when a stopby_group follows (below): that
+                    # batch already makes this host's card vanish the
+                    # instant it starts (draw_host_card=False — see its own
+                    # comment), and a run of landmark cards plays in its
+                    # place. Letting it linger and reappear AFTER all of
+                    # that, once the batch ends and the traveler is already
+                    # moving on, reads as the map re-showing a photo the
+                    # viewer just watched settle and disappear moments
+                    # earlier — reported directly as a stray "already shown
+                    # image" flash right after a stop-by pause. A host with
+                    # no stopby_group never has this problem (its card never
+                    # disappears early), so it still gets the graceful
+                    # lingering fade-out.
                     lingering_bp = self._make_baked_popup(
                         triggered_popup, display_seconds, fps
                     )
-                    baked_popups.append(lingering_bp)
+                    if not stopby_group:
+                        baked_popups.append(lingering_bp)
                     hud_triggered = triggered_popup.copy()
 
                     # The frame itself is frozen (unchanging) for this
