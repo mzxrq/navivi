@@ -28,7 +28,7 @@ export function UnsavedChanges({
   if (!isOpen) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-99999 flex items-center justify-center bg-zinc-950/40 backdrop-blur-[2px] animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-zinc-950/40 backdrop-blur-[2px] animate-in fade-in duration-200">
       <div className="w-96 bg-white dark:bg-navidark-900 border border-zinc-200 dark:border-navidark-400 rounded-xl shadow-2xl p-6 animate-in zoom-in-95 duration-200">
         <h3 className="text-base font-bold text-zinc-900 dark:text-white mb-2">
           Unsaved Changes

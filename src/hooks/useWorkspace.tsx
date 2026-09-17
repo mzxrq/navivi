@@ -347,9 +347,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     safeFolderName?: string,
     recordVersion = true,
   ) => {
+    // Allowed to save empty project
     if (waypoints.length === 0) {
-      console.warn("No waypoints to save.");
-      return;
+      console.warn("No waypoints to save, but saving anyway to preserve metadata.");
     }
 
     const saveRevision = dirtyRevisionRef.current;
