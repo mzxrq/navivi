@@ -1,6 +1,7 @@
 import { useState, useEffect, MouseEvent } from "react";
 import { createPortal } from "react-dom";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { useUI } from "../../hooks/useUI";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import {
@@ -16,9 +17,10 @@ import {
   Edit3,
   Settings2,
   AlertTriangle,
+  Film,
 } from "../ui/icons";
 
-type ModalActionType = "rename" | "duplicate" | "remove" | null;
+type ModalActionType = "rename" | "duplicate" | "remove" | "settings" | null;
 
 export function ProjectManager() {
   const { setCurrentView, showToast } = useUI();
@@ -54,6 +56,20 @@ export function ProjectManager() {
     return () => window.removeEventListener("keydown", handleEsc);
   }, [modalState.type]);
 
+
+  const handleQuickRender = async (project: any) => {
+    showToast("Quick Render started for " + project.name, "info");
+    try {
+      await invoke("run_python_blueprint", {
+        action: project.path,
+        payload: "concat"
+      });
+      showToast("Quick Render complete for " + project.name, "success");
+    } catch (err: any) {
+      showToast("Quick Render failed: " + String(err), "error");
+    }
+  };
+
   const handleOpenProject = async (path?: string) => {
     try {
       const success = await loadProject(path);
@@ -77,12 +93,24 @@ export function ProjectManager() {
   };
 
   // ✨ UPDATED: Made 'e' optional so it can be called from the global context menu
-  const openModal = (type: ModalActionType, project: any, e?: MouseEvent) => {
+  const openModal = async (type: ModalActionType, project: any, e?: MouseEvent) => {
     if (e) e.stopPropagation();
     setModalState({ type, project });
-    setModalInput(
-      type === "duplicate" ? `${project.name} (Copy)` : project.name,
-    );
+    
+    if (type === "settings") {
+      try {
+        const fileContent = await readTextFile(project.path);
+        const data = JSON.parse(fileContent);
+        setModalInput(data.settings?.routeMarker || "");
+      } catch (err) {
+        showToast("Failed to load project settings", "error");
+        setModalInput("");
+      }
+    } else {
+      setModalInput(
+        type === "duplicate" ? `${project.name} (Copy)` : project.name,
+      );
+    }
     setActiveMenu(null);
   };
 
@@ -114,6 +142,13 @@ export function ProjectManager() {
           );
         }
         showToast("Project renamed successfully.", "success");
+} else if (type === "settings") {
+        const fileContent = await readTextFile(project.path);
+        const data = JSON.parse(fileContent);
+        if (!data.settings) data.settings = {};
+        data.settings.routeMarker = modalInput;
+        await writeTextFile(project.path, JSON.stringify(data, null, 2));
+        showToast("Project settings updated.", "success");
       } else if (type === "duplicate") {
         if (!modalInput.trim()) return closeModal();
         showToast("Project duplicated! (Requires backend integration)", "info");
@@ -142,8 +177,8 @@ export function ProjectManager() {
             onOpen: () => handleOpenProject(project.path),
             onRename: () => openModal("rename", project),
             onDuplicate: () => openModal("duplicate", project),
-            onSettings: () =>
-              showToast("To change settings, open the project first.", "info"),
+            onSettings: () => openModal("settings", project),
+            onQuickRender: () => handleQuickRender(project),
             onRemove: () => openModal("remove", project),
           },
         },
@@ -350,16 +385,18 @@ export function ProjectManager() {
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            showToast(
-                              "To change settings, open the project first.",
-                              "info",
-                            );
+                            handleQuickRender(project);
                             setActiveMenu(null);
                           }}
                           className="w-full text-left px-4 py-2 text-xs font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-navidark-600 flex items-center gap-2"
                         >
-                          <Settings2 className="w-3.5 h-3.5" /> Advanced
-                          Settings
+                          <Film className="w-3.5 h-3.5" /> Quick Render
+                        </button>
+                        <button
+                          onClick={(e) => openModal("settings", project, e as any)}
+                          className="w-full text-left px-4 py-2 text-xs font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-navidark-600 flex items-center gap-2"
+                        >
+                          <Settings2 className="w-3.5 h-3.5" /> Advanced Settings
                         </button>
                         <div className="h-px bg-zinc-200 dark:bg-navidark-400 my-1 mx-2" />
                         <button
@@ -473,6 +510,22 @@ export function ProjectManager() {
                       >
                         <Copy className="w-3.5 h-3.5" /> Duplicate
                       </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleQuickRender(project);
+                          setActiveMenu(null);
+                        }}
+                        className="w-full text-left px-4 py-2 text-xs font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-navidark-600 flex items-center gap-2"
+                      >
+                        <Film className="w-3.5 h-3.5" /> Quick Render
+                      </button>
+                      <button
+                        onClick={(e) => openModal("settings", project, e as any)}
+                        className="w-full text-left px-4 py-2 text-xs font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-navidark-600 flex items-center gap-2"
+                      >
+                        <Settings2 className="w-3.5 h-3.5" /> Advanced Settings
+                      </button>
                       <div className="h-px bg-zinc-200 dark:bg-navidark-400 my-1 mx-2" />
                       <button
                         onClick={(e) => openModal("remove", project, e)}
@@ -513,6 +566,11 @@ export function ProjectManager() {
                       Project
                     </>
                   )}
+                  {modalState.type === "settings" && (
+                    <>
+                      <Settings2 className="w-4 h-4 text-navi-500" /> Advanced Settings
+                    </>
+                  )}
                 </h3>
 
                 {modalState.type === "remove" ? (
@@ -529,6 +587,8 @@ export function ProjectManager() {
                     <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
                       {modalState.type === "rename"
                         ? "New Project Name"
+                        : modalState.type === "settings"
+                        ? "Global Custom Marker"
                         : "Duplicate Project Name"}
                     </label>
                     <input

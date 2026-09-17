@@ -202,8 +202,8 @@ export function WaypointEditor({
       <div
         className={`flex flex-col bg-white/95 dark:bg-navidark-800/95 backdrop-blur-xl rounded-2xl shadow-[0_-10px_60px_-15px_rgba(0,0,0,0.4)] border border-zinc-200/50 dark:border-white/10 select-none transition-all duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] pointer-events-auto ${
           isCollapsed
-            ? "w-[300px] h-[52px]"
-            : "w-full max-w-5xl h-[460px] max-h-[50vh]"
+            ? "w-75 h-13"
+            : "w-full max-w-5xl h-115 max-h-[50vh]"
         } overflow-hidden`}
       >
         {isCollapsed ? (
@@ -212,7 +212,7 @@ export function WaypointEditor({
             onClick={() => setIsCollapsed(false)}
           >
             <div className="flex flex-col min-w-0 pointer-events-none">
-              <span className="text-[10px] font-bold text-navi dark:text-navi-400 uppercase tracking-widest opacity-80 mb-0.5">
+              <span className="text-[10px] font-bold text-navi dark:text-navi-400  widest opacity-80 mb-0.5">
                 Editing Waypoint
               </span>
               <h2 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 truncate flex items-center gap-2">
@@ -240,7 +240,7 @@ export function WaypointEditor({
         ) : (
           <div className="flex-1 flex flex-row min-w-0 h-full overflow-hidden items-stretch text-zinc-900 dark:text-zinc-100">
             {/* --- LEFT COLUMN --- */}
-            <div className="w-1/3 min-w-[280px] max-w-[360px] shrink-0 border-r border-zinc-200/50 dark:border-white/10 flex flex-col overflow-y-auto scrollbar-none bg-zinc-50/30 dark:bg-navidark-800/30">
+            <div className="w-1/3 min-w-70 max-w-90 shrink-0 border-r border-zinc-200/50 dark:border-white/10 flex flex-col overflow-y-auto scrollbar-none bg-zinc-50/30 dark:bg-navidark-800/30">
               {/* TOP: Location Name & Toggles */}
               <div className="p-5 pb-5 flex flex-col gap-1">
                 <input
@@ -274,7 +274,7 @@ export function WaypointEditor({
                             })
                           }
                         />
-                        <div className="w-9 h-5 bg-zinc-200 peer-focus:outline-none rounded-full peer dark:bg-navidark-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-navi-500 border border-zinc-300 dark:border-white/20 peer-disabled:cursor-not-allowed"></div>
+                        <div className="w-9 h-5 bg-zinc-200 peer-focus:outline-none rounded-full peer dark:bg-navidark-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-0.5after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-navi-500 border border-zinc-300 dark:border-white/20 peer-disabled:cursor-not-allowed"></div>
                       </div>
                       <span className="text-[11px] font-bold text-zinc-700 dark:text-zinc-200">
                         Skip in Video Export
@@ -306,7 +306,7 @@ export function WaypointEditor({
                             })
                           }
                         />
-                        <div className="w-9 h-5 bg-zinc-200 peer-focus:outline-none rounded-full peer dark:bg-navidark-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-navi-500 border border-zinc-300 dark:border-white/20"></div>
+                        <div className="w-9 h-5 bg-zinc-200 peer-focus:outline-none rounded-full peer dark:bg-navidark-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-0.5after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-navi-500 border border-zinc-300 dark:border-white/20"></div>
                       </div>
                       <span className="text-[11px] font-bold text-zinc-700 dark:text-zinc-200">
                         Pause at Location
@@ -327,7 +327,7 @@ export function WaypointEditor({
 
               {/* BOTTOM: Action */}
               <div className="p-5 pt-4 flex flex-col gap-4 flex-1">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-800 dark:text-zinc-200">
+                <h3 className="text-xs font-bold  wider text-zinc-800 dark:text-zinc-200">
                   Action
                 </h3>
 
@@ -379,7 +379,7 @@ export function WaypointEditor({
                         Select
                       </button>
                       <span
-                        className="text-[10px] font-medium text-zinc-500 truncate max-w-[100px]"
+                        className="text-[10px] font-medium text-zinc-500 truncate max-w-25"
                         title={wp.customMarker || ""}
                       >
                         {wp.customMarker
@@ -392,8 +392,8 @@ export function WaypointEditor({
 
                 {/* Waypoint Settings (Grid of buttons with icons) */}
                 <div className="flex flex-col gap-2.5 mt-2">
-                  <h3 className="text-[11px] font-bold flex items-center gap-1.5 text-zinc-700 dark:text-zinc-300">
-                    Waypoint settings{" "}
+                  <h3 className="text-[11px] font-bold flex items-center gap-1.5 text-zinc-700 dark:text-zinc-300" title="Change Waypoint Type">
+                    Waypoint Settings{" "}
                     <Info className="w-3.5 h-3.5 text-zinc-400" />
                   </h3>
 
@@ -483,7 +483,7 @@ export function WaypointEditor({
             {/* --- RIGHT COLUMN --- */}
             <div className="flex-1 flex flex-col min-w-0 bg-white dark:bg-navidark-800">
               {/* Tabs & Window Controls */}
-              <div className="flex border-b border-zinc-200/50 dark:border-white/10 h-[56px] shrink-0 bg-zinc-50/50 dark:bg-navidark-800">
+              <div className="flex border-b border-zinc-200/50 dark:border-white/10 h-14 shrink-0 bg-zinc-50/50 dark:bg-navidark-800">
                 <button
                   onClick={() => setActiveTab("scripts")}
                   className={`px-6 flex items-center justify-center font-bold text-xs transition-colors ${
@@ -626,7 +626,7 @@ export function WaypointEditor({
                 {activeTab === "images" && (
                   <div className="space-y-5 max-w-3xl">
                     <div className="flex flex-col gap-1">
-                      <h3 className="text-xs font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-wider">
+                      <h3 className="text-xs font-bold text-zinc-800 dark:text-zinc-200  wider">
                         Pop-up Images ({wpImages.length}/3)
                       </h3>
                       <p className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400 leading-tight">
@@ -661,7 +661,7 @@ export function WaypointEditor({
                         return (
                           <div
                             key={`${img}-${idx}`}
-                            className="shrink-0 w-[240px] snap-start flex flex-col rounded-[20px] overflow-hidden border border-zinc-200 dark:border-white/10 shadow-sm relative group"
+                            className="shrink-0 w-60 snap-start flex flex-col rounded-[20px] overflow-hidden border border-zinc-200 dark:border-white/10 shadow-sm relative group"
                           >
                             <button
                               onClick={() => removeImage(idx)}
@@ -672,7 +672,7 @@ export function WaypointEditor({
                             </button>
 
                             {/* Image Top Half */}
-                            <div className="relative w-full aspect-[4/3] bg-zinc-100 dark:bg-zinc-800">
+                            <div className="relative w-full aspect-4/3 bg-zinc-100 dark:bg-zinc-800">
                               <img
                                 src={convertFileSrc(img)}
                                 alt={`Waypoint ${idx}`}
@@ -685,7 +685,7 @@ export function WaypointEditor({
                               <h4 className="font-semibold text-[13px] truncate mb-0.5">
                                 {img.split(/\\|\//).pop()}
                               </h4>
-                              <span className="text-[10px] text-zinc-500 mb-3 tracking-wide">
+                              <span className="text-[10px] text-zinc-500 mb-3 wide">
                                 Camera angle
                               </span>
 
@@ -711,7 +711,7 @@ export function WaypointEditor({
                                         }`}
                                       >
                                         {renderPanIcon(pan.value)}
-                                        <span className="text-[8px] font-bold tracking-wider leading-tight mt-1 uppercase">
+                                        <span className="text-[8px] font-bold wider leading-tight mt-1 ">
                                           {pan.label}
                                         </span>
                                       </button>
@@ -726,7 +726,7 @@ export function WaypointEditor({
                       {wpImages.length < 3 && (
                         <button
                           onClick={handleImageSelect}
-                          className="shrink-0 w-[240px] snap-start h-auto min-h-[200px] bg-zinc-50 dark:bg-navidark-700/50 hover:bg-zinc-100 dark:hover:bg-navidark-600 border border-zinc-300 dark:border-white/20 hover:border-zinc-400 dark:hover:border-white/40 border-dashed rounded-[20px] p-6 flex flex-col items-center justify-center gap-3 text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300 transition-all group shadow-sm"
+                          className="shrink-0 w-60 snap-start h-auto min-h-50 bg-zinc-50 dark:bg-navidark-700/50 hover:bg-zinc-100 dark:hover:bg-navidark-600 border border-zinc-300 dark:border-white/20 hover:border-zinc-400 dark:hover:border-white/40 border-dashed rounded-[20px] p-6 flex flex-col items-center justify-center gap-3 text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300 transition-all group shadow-sm"
                         >
                           <ImageIcon className="w-8 h-8 opacity-60 group-hover:opacity-100 transition-opacity" />
                           <span className="text-xs font-bold">+ Add Image</span>

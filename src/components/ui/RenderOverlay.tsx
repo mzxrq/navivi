@@ -314,6 +314,27 @@ export function RenderOverlay() {
     }
   };
 
+  const handleQuickRender = async () => {
+    setStep("finished");
+    setStatus("success");
+    if (audioRef.current) audioRef.current.pause();
+
+    try {
+      showToast("Quick Render started...", "info");
+      await invoke("run_python_blueprint", {
+        action: metadata.directory_path + "/job_config.json",
+        payload: "concat"
+      });
+      showToast("Quick Render complete!", "success");
+    } catch (err: any) {
+      showToast("Quick Render failed: " + String(err), "error");
+    }
+
+    setTimeout(() => {
+      setIsRendering(false);
+    }, 1200);
+  };
+
   const handleFinalize = async () => {
     setStep("finished");
     setStatus("success");
@@ -664,13 +685,22 @@ export function RenderOverlay() {
               <Settings2 className="w-4 h-4" />
               Settings {">"} Generation {">"} Skip Verification
             </span>
-            <button
-              onClick={handleFinalize}
-              className="px-6 py-2.5 bg-navi-500 hover:bg-navi-600 text-white text-sm font-semibold rounded-xl shadow-lg shadow-navi-500/20 transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center gap-2"
-            >
-              <CheckCircle className="w-4 h-4" />
-              Approve & Open Timeline
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleQuickRender}
+                className="px-6 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-white text-sm font-semibold rounded-xl shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center gap-2"
+              >
+                <Film className="w-4 h-4" />
+                Quick Render & Close
+              </button>
+              <button
+                onClick={handleFinalize}
+                className="px-6 py-2.5 bg-navi-500 hover:bg-navi-600 text-white text-sm font-semibold rounded-xl shadow-lg shadow-navi-500/20 transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center gap-2"
+              >
+                <CheckCircle className="w-4 h-4" />
+                Approve & Open Timeline
+              </button>
+            </div>
           </div>
         )}
 

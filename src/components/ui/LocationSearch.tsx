@@ -107,7 +107,7 @@ export function LocationSearch() {
       </div>
 
       {isOpen && results.length > 0 && (
-        <div className="absolute top-full left-0 right-0 mt-1.5 bg-white/95 dark:bg-[#09090b]/95 backdrop-blur-xl border border-zinc-200 dark:border-white/10 rounded-xl shadow-xl z-[9999] max-h-56 overflow-y-auto custom-scrollbar animate-in fade-in zoom-in-95">
+        <div className="absolute top-full left-0 right-0 mt-1.5 bg-white/95 dark:bg-[#09090b]/95 backdrop-blur-xl border border-zinc-200 dark:border-white/10 rounded-xl shadow-xl z-9999 max-h-56 overflow-y-auto custom-scrollbar animate-in fade-in zoom-in-95">
           {results.map((place) => (
             <button
               key={place.place_id}

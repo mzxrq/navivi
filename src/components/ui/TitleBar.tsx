@@ -175,7 +175,7 @@ export function TitleBar() {
     <>
       <div
         data-tauri-drag-region
-        className="absolute top-0 inset-x-0 h-10 bg-white/60 dark:bg-zinc-950/60 backdrop-blur-xl border-b border-white/40 dark:border-white/10 flex items-center justify-between select-none shrink-0 transition-colors z-[9999] shadow-sm"
+        className="absolute top-0 inset-x-0 h-10 bg-white/60 dark:bg-zinc-950/60 backdrop-blur-xl border-b border-white/40 dark:border-white/10 flex items-center justify-between select-none shrink-0 transition-colors z-9999 shadow-sm"
       >
         {/* --- LEFT: MENU & DOCUMENT ACTIONS --- */}
         <div className="flex items-center h-full shrink-0 px-2">

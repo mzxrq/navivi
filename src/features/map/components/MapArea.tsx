@@ -4,7 +4,6 @@ import Map, {
   Marker,
   MapRef,
   Source,
-  Layer,
 } from "react-map-gl/mapbox";
 import { listen } from "@tauri-apps/api/event";
 import { convertFileSrc } from "@tauri-apps/api/core";
@@ -12,17 +11,11 @@ import {
   UploadCloud,
   Navigation,
   ImageIcon,
-  ChevronLeft,
-  Pencil,
-  Layers,
 } from "../../../components/ui/icons";
-import { ChevronDown, ChevronUp } from "lucide-react";
 import { MapToolbar } from "./MapToolbar";
-import DrawControl from "./DrawControl";
 import "@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css";
 import { mapStyles, mapDefaults } from "../../../config/constants";
 import { RouteStyling } from "./MapLayers/RouteStyling";
-import { Rnd } from "react-rnd";
 import { useWorkspace } from "../../../hooks/useWorkspace";
 import { useTheme } from "../../../hooks/useTheme";
 import { useMapRouting } from "../hooks/useMapRouting";
@@ -611,7 +604,7 @@ export function MapArea() {
   return (
     <main className="flex-1 relative bg-zinc-100 dark:bg-[#09090b] overflow-hidden transition-colors">
       {/* --- GEOJSON.IO STYLE TOP TOOLBAR --- */}
-      <div className="absolute z-[200] transition-all duration-300 max-[1159px]:top-14 max-[1159px]:left-4 max-[1159px]:translate-x-0 min-[1160px]:top-14 min-[1160px]:left-1/2 min-[1160px]:-translate-x-1/2">
+      <div className="absolute z-200 transition-all duration-300 max-[1159px]:top-14 max-[1159px]:left-4 max-[1159px]:translate-x-0 min-[1160px]:top-14 min-[1160px]:left-1/2 min-[1160px]:-translate-x-1/2">
         <MapToolbar
           isAddMode={isAddMode}
           setIsAddMode={setIsAddMode}
@@ -640,7 +633,7 @@ export function MapArea() {
         />
       </div>
 
-      <div className="absolute top-14 right-4 z-[200] flex items-center gap-2">
+      <div className="absolute top-14 right-4 z-200 flex items-center gap-2">
         <button
           onClick={() => {
             setViewState((prev) => ({
