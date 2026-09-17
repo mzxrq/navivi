@@ -92,6 +92,21 @@ export function WaypointItem({
           handleSelect();
         }
       }}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (isListEditMode) return;
+        window.dispatchEvent(
+          new CustomEvent("open-context-menu", {
+            detail: {
+              x: e.clientX,
+              y: e.clientY,
+              type: "waypoint-marker",
+              targetId: wp.id,
+            },
+          })
+        );
+      }}
       className={`relative flex items-stretch group transition-all px-2 py-1.5 rounded-xl border ${
         isListEditMode ? "cursor-default" : "cursor-pointer"
       } ${
@@ -135,7 +150,9 @@ export function WaypointItem({
                   : "border-zinc-300 dark:border-zinc-700 bg-white dark:bg-[#09090b] text-zinc-700 dark:text-zinc-300"
             }`}
           >
-            <span className={wp.isStopBy ? "text-[8px]" : "text-[9px] font-bold"}>
+            <span
+              className={wp.isStopBy ? "text-[8px]" : "text-[9px] font-bold"}
+            >
               {displayLabel}
             </span>
           </div>
@@ -169,7 +186,7 @@ export function WaypointItem({
                 <span
                   className={`transition-transform duration-200 inline-block ${isExpanded ? "rotate-90" : ""}`}
                 >
-                  <ChevronRight className="w-3.5 h-3.5"/>
+                  <ChevronRight className="w-3.5 h-3.5" />
                 </span>
                 Assets & Media
               </button>
@@ -195,88 +212,6 @@ export function WaypointItem({
                   )}
                 </div>
               )}
-            </div>
-          )}
-
-          {/* Routing Mode Controls */}
-          {!isListEditMode && !isLast && (
-            <div className="flex-col items-center gap-1 mt-2 pt-2 border-t border-zinc-200/60 dark:border-white/10 w-full">
-              <div className="font-bold text-[9px] text-zinc-400 dark:text-zinc-500 uppercase tracking-wide">
-                To the next stop:
-              </div>
-              <div className="flex gap-2 bg-black/5 dark:bg-white/5 rounded-md p-0.5 mt-1 border border-black/5 dark:border-white/5">
-                {[
-                  {
-                    mode: "walking",
-                    icon: Footprints,
-                    title: "Walk",
-                    activeColor: "text-navi-800 dark:text-white",
-                  },
-                  {
-                    mode: "driving",
-                    icon: Car,
-                    title: "Drive",
-                    activeColor: "text-navi-800 dark:text-white",
-                  },
-                  {
-                    mode: "curve",
-                    icon: Plane,
-                    title: "Fly",
-                    activeColor: "text-navi-800 dark:text-white",
-                  },
-                  {
-                    mode: "direct",
-                    icon: Ruler,
-                    title: "Direct",
-                    activeColor: "text-navi-800 dark:text-white",
-                  },
-                  {
-                    mode: "ferry",
-                    icon: Ship,
-                    title: "Ferry",
-                    activeColor: "text-navi-800 dark:text-white",
-                  },
-                  {
-                    mode: "draw",
-                    icon: Pencil,
-                    title: "Draw",
-                    activeColor: "text-navi-800 dark:text-white",
-                  },
-                ].map(({ mode, icon: Icon, title, activeColor }) => {
-                  const isSelected =
-                    wp.routeMode === mode ||
-                    (!wp.routeMode && mode === "driving");
-                  return (
-                    <button
-                      key={mode}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        updateWaypoint(wp.id, { routeMode: mode as RouteMode });
-                      }}
-                      className={`flex items-center justify-center p-1.25 rounded-md transition-all duration-300 ease-out overflow-hidden ${
-                        isSelected
-                          ? `bg-white dark:bg-white/10 shadow-sm ring-1 ring-zinc-200 dark:ring-white/5 ${activeColor}`
-                          : "text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-black/5 dark:hover:bg-white/5"
-                      }`}
-                      title={title}
-                    >
-                      <Icon
-                        size={`${isSelected ? 16 : 14}`}
-                        strokeWidth={`${isSelected ? "2.5" : "2"}`}
-                      />
-                      <span
-                        className={`font-bold text-[9px] tracking-wider whitespace-nowrap transition-all duration-300 ease-out ${
-                          isSelected
-                            ? "max-w-10 ml-1.5 opacity-100"
-                            : "max-w-0 ml-0 opacity-0"
-                        }`}
-                      >
-                        {title}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
             </div>
           )}
         </div>

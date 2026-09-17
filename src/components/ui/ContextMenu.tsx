@@ -24,6 +24,13 @@ import {
   VolumeX,
   Lock,
   Unlock,
+  Footprints,
+  Car,
+  Plane,
+  Ruler,
+  Ship,
+  Pencil,
+  Route,
 } from "../ui/icons";
 
 export interface ContextMenuState {
@@ -186,6 +193,20 @@ export function ContextMenu() {
   const handleDeleteWaypoint = (wpId?: string) => {
     if (!wpId) return;
     setWaypoints(waypoints.filter((w) => w.id !== wpId));
+    setMenu(null);
+  };
+
+  const handleSetRouteMode = (
+    wpId: string | undefined,
+    mode: string
+  ) => {
+    if (!wpId) return;
+    setWaypoints(
+      waypoints.map((w) =>
+        w.id === wpId ? { ...w, routeMode: mode as any } : w
+      )
+    );
+    if (setIsDirty) setIsDirty(true);
     setMenu(null);
   };
 
@@ -510,6 +531,39 @@ export function ContextMenu() {
                   <div className="w-3.5 h-3.5" />
                   Stop By
                 </button>
+              </div>
+            </div>
+
+            <div className="relative group mt-1">
+              <button className="ctx-btn w-full flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <Route className="w-3.5 h-3.5" /> Next Route Mode
+                </span>
+                <ChevronRight className="w-3.5 h-3.5 opacity-50" />
+              </button>
+              {/* Flyout Menu */}
+              <div
+                className={`absolute top-0 hidden group-hover:flex flex-col w-32 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl border border-zinc-200 dark:border-white/10 rounded-xl shadow-2xl p-1 animate-in fade-in zoom-in-95 duration-100 ${
+                  popSubmenuLeft ? "right-full mr-1" : "left-full ml-1"
+                }`}
+              >
+                {[
+                  { mode: "walking", icon: Footprints, title: "Walk" },
+                  { mode: "driving", icon: Car, title: "Drive" },
+                  { mode: "curve", icon: Plane, title: "Fly" },
+                  { mode: "direct", icon: Ruler, title: "Direct" },
+                  { mode: "ferry", icon: Ship, title: "Ferry" },
+                  { mode: "draw", icon: Pencil, title: "Draw" },
+                ].map(({ mode, icon: Icon, title }) => (
+                  <button
+                    key={mode}
+                    onClick={() => handleSetRouteMode(menu.targetId, mode)}
+                    className="ctx-btn"
+                  >
+                    <Icon className="w-3.5 h-3.5" />
+                    {title}
+                  </button>
+                ))}
               </div>
             </div>
 

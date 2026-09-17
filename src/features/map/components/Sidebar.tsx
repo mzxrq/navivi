@@ -124,6 +124,7 @@ export function Sidebar() {
       className="pt-10 w-90 shrink-0 bg-white dark:bg-[#09090b] border-r border-zinc-200 dark:border-white/5 flex flex-col h-full select-none z-100 relative shadow-2xl transition-colors"
     >
       <div className="sticky top-0 z-30 bg-white/80 dark:bg-[#09090b]/80 backdrop-blur-xl border-b border-zinc-100 dark:border-white/5 p-4 shrink-0 flex flex-col gap-4">
+        <LocationSearch />
         <OverviewPanel />
       </div>
 
@@ -219,10 +220,9 @@ export function Sidebar() {
       </div>
 
       {/* --- FOOTER TOOLBAR --- */}
-      <div className="shrink-0 px-4 py-3 flex flex-col gap-3 bg-white/90 dark:bg-[#09090b]/90 backdrop-blur-xl border-t border-zinc-100 dark:border-white/5 z-30">
+      <div className="shrink-0 px-4 py-3 flex items-center justify-between gap-3 bg-white/90 dark:bg-[#09090b]/90 backdrop-blur-xl border-t border-zinc-100 dark:border-white/5 z-30">
         {waypoints.length > 0 && (
-          <div className="flex items-center justify-between w-full">
-            <div className="flex items-center bg-black/5 dark:bg-white/5 rounded-full p-1 border border-black/5 dark:border-white/5 transition-all">
+          <div className="flex items-center bg-black/5 dark:bg-white/5 rounded-full p-1 border border-black/5 dark:border-white/5 transition-all shrink-0">
               <button
                 onClick={() => {
                   setIsListEditMode(!isListEditMode);
@@ -277,7 +277,6 @@ export function Sidebar() {
                 )}
               </div>
             </div>
-          </div>
         )}
 
         {/* Generate Primary Action */}
@@ -289,7 +288,7 @@ export function Sidebar() {
             isRendering ||
             isPreviewing
           }
-          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-full bg-zinc-900 hover:bg-black dark:bg-white dark:hover:bg-zinc-200 text-white dark:text-zinc-900 font-bold text-[11px] transition-all disabled:opacity-30 disabled:pointer-events-none shadow-md"
+          className="flex-1 w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-full bg-zinc-900 hover:bg-black dark:bg-white dark:hover:bg-zinc-200 text-white dark:text-zinc-900 font-bold text-[11px] transition-all disabled:opacity-30 disabled:pointer-events-none shadow-md"
         >
           {isRendering ? (
             <>

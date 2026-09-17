@@ -57,8 +57,8 @@ export function MapArea() {
     updateWaypoint,
     setActiveWaypointId,
     setProjectThumbnail,
-      registerThumbnailGetter,
-    } = useWorkspace();
+    registerThumbnailGetter,
+  } = useWorkspace();
   const { handleDroppedFiles, importPhotos } = useFileActions();
 
   // Overlays & Modes
@@ -712,8 +712,6 @@ export function MapArea() {
             is3D ? { source: "mapbox-dem", exaggeration: 1.5 } : undefined
           }
         >
-          
-
           <Source
             id="mapbox-dem"
             type="raster-dem"
@@ -859,7 +857,7 @@ export function MapArea() {
                 </div>
               </Marker>
             );
-            })}
+          })}
 
           {/* drawn nodes */}
           {isDrawMode &&
@@ -886,15 +884,17 @@ export function MapArea() {
                     setIsDirty(true);
                   }}
                 >
-                  <div 
-                    className={`relative group ${isEraserMode ? 'cursor-crosshair' : 'cursor-grab active:cursor-grabbing'}`}
+                  <div
+                    className={`relative group ${isEraserMode ? "cursor-crosshair" : "cursor-grab active:cursor-grabbing"}`}
                     onClick={(e) => {
                       if (isEraserMode) {
                         e.stopPropagation();
                         setWaypoints((prev) =>
                           prev.map((wp) => {
                             if (wp.id === activeWaypointId && wp.customRoute) {
-                              const newRoute = wp.customRoute.filter((_, i) => i !== idx);
+                              const newRoute = wp.customRoute.filter(
+                                (_, i) => i !== idx,
+                              );
                               return { ...wp, customRoute: newRoute };
                             }
                             return wp;
