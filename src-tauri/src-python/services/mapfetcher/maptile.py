@@ -13,7 +13,7 @@ import contextily as cx  # type: ignore
 from dotenv import load_dotenv
 from PIL import Image
 import math
-from typing import Dict, Tuple
+from typing import Dict, Optional, Tuple
 import pandas as pd
 import numpy as np
 
@@ -185,25 +185,76 @@ class TileDownloader:
         path = Path(output_filename)
         return str(path) if path.suffix.lower() == ".png" else str(path.with_suffix(".png"))
 
-    # [Map/Util] Pick a tile zoom level proportional to the physical area being
-    # covered. Always requesting max zoom for a large bounding box means
-    # downloading a huge tile mosaic just to downsample it away, and — for
-    # sparsely-mapped (e.g. rural/mountain) areas — tends to land on a
-    # visibly different fallback style than the well-mapped tiles nearby.
-    @staticmethod
-    def _optimal_zoom_for_span(span_meters: float) -> int:
-        return (
-            20 if span_meters <= 300 else
-            19 if span_meters <= 600 else
-            18 if span_meters <= 1200 else
-            17 if span_meters <= 2500 else
-            16 if span_meters <= 5000 else
-            15 if span_meters <= 10000 else
-            14 if span_meters <= 20000 else
-            13 if span_meters <= 40000 else
-            12 if span_meters <= 80000 else
-            11
+    # "How many real pixels does this provider deliver for one logical
+    # zoom step" — NOT the same number as the provider dict's own
+    # `tileSize`/`zoomOffset` entries, and NOT simply derivable from them
+    # either: textbook zoomOffset math says a 512px tile fetched at
+    # zoomOffset=-1 covers exactly the same ground per logical zoom as a
+    # standard 256px tile (they cancel out), but empirically contextily's
+    # actual fetched mosaic for this Mapbox provider (tileSize=512,
+    # zoomOffset=-1) comes back ~2x denser than that theoretical 256
+    # baseline predicts, even with NO retina suffix — measured directly by
+    # comparing a fetched mosaic's real meters-per-pixel against the
+    # textbook C/(256*2^zoom) formula at several zoom levels. On TOP of
+    # that base ~2x, a "@2x" retina suffix doubles the pixel count AGAIN
+    # for the same z/x/y address (that part IS the documented, expected
+    # behavior). Net: ~512 effective "tile size" with no retina, ~1024
+    # with it. Getting this wrong under-corrects _optimal_zoom_for_span,
+    # which returns a mosaic far bigger than `output_size` — the
+    # subsequent LANCZOS downsize then crushes small label text into
+    # illegibility (or nothing at all): reproduced directly, raw tiles
+    # fetched at the zoom this method picked had clearly readable
+    # place-name labels, yet the final stitched-and-resized overview PNG
+    # showed none, because the real mosaic was ~4x wider than intended.
+    _TILE_SIZE_PX = 256
+    _EARTH_CIRCUMFERENCE_M = 2 * math.pi * 6378137.0
+    # Empirically measured (not theoretically derived — see the multi-
+    # paragraph note above): contextily's actual fetched mosaic for THIS
+    # provider shape (tileSize=512, zoomOffset=-1 — cx.providers.MapBox)
+    # comes back 2.537x denser, in real meters-per-pixel, than the
+    # standard 256px-tile formula predicts — confirmed stable across
+    # zoom 12/14/16 (ratio held at 2.537 every time, not a fluke of one
+    # zoom level). Retina "@2x" multiplies pixel count by another 2x on
+    # top of that, independently confirmed the same way (5.073 ≈
+    # 2.537 * 2). Esri's provider (the token-less fallback) has neither
+    # `tileSize` nor `zoomOffset` set — contextily's own plain-256
+    # defaults apply there, so this calibration must NOT be applied to it.
+    _MAPBOX_TILESIZE512_RESOLUTION_RATIO = 2.537
+
+    # [Map/Util] Pick a tile zoom level proportional to the physical area
+    # being covered, continuously rather than in coarse steps: solves for
+    # the zoom at which `output_px` pixels would span `span_meters` and
+    # rounds UP to the nearest whole zoom. A fixed step table (the old
+    # behavior — kept as a documented illustration of the problem, not
+    # live code) sized correctly at the TOP of each bucket but left a span
+    # near the BOTTOM of one stuck at the same zoom as a span nearly twice
+    # as large: e.g. span=10001m and span=19999m both landed on zoom 14
+    # despite a 2x difference in physical coverage, so the smaller one's
+    # fetched tile mosaic came back well under `output_size` and had to be
+    # upscaled (blurry, and visibly LESS zoomed-in/detailed than the
+    # bucket's zoom number would suggest) to fill the frame. Rounding up
+    # (never down) guarantees the fetched mosaic is always at least
+    # `output_size` — see the `retina` note above for the other half of
+    # getting this right (not OVER-fetching either).
+    @classmethod
+    def _optimal_zoom_for_span(
+        cls,
+        span_meters: float,
+        output_px: int = 1920,
+        retina: bool = False,
+        tilesize_512_quirk: bool = False,
+    ) -> int:
+        if span_meters <= 0:
+            return cls.MAX_ZOOM_LEVEL
+        tile_px = cls._TILE_SIZE_PX
+        if tilesize_512_quirk:
+            tile_px *= cls._MAPBOX_TILESIZE512_RESOLUTION_RATIO
+        if retina:
+            tile_px *= 2
+        exact = math.log2(
+            cls._EARTH_CIRCUMFERENCE_M * output_px / (tile_px * span_meters)
         )
+        return max(1, math.ceil(exact))
 
     # [Map] Fetch a single overview map image covering a whole bounding box
     def fetch_overview_image(
@@ -242,7 +293,18 @@ class TileDownloader:
         meters_per_deg_lat = 111_320.0
         meters_per_deg_lon = 111_320.0 * lon_scale
         span_meters = max((n - s) * meters_per_deg_lat, (e - w) * meters_per_deg_lon)
-        zoom = min(max_zoom, self.MAX_ZOOM_LEVEL, self._optimal_zoom_for_span(span_meters))
+        is_retina = bool(self.provider.get("r")) if hasattr(self.provider, "get") else False
+        tilesize_512_quirk = (
+            hasattr(self.provider, "get") and self.provider.get("tileSize") == 512
+        )
+        zoom = min(
+            max_zoom,
+            self.MAX_ZOOM_LEVEL,
+            self._optimal_zoom_for_span(
+                span_meters, out_w, retina=is_retina,
+                tilesize_512_quirk=tilesize_512_quirk,
+            ),
+        )
         img, extent = None, None
         # [HACK] [Map] Swallows any fetch failure (rate-limit, unavailable zoom, network error alike) and just steps down a zoom level until one succeeds — masks the real cause of a failure that isn't zoom-related.
         while zoom > 0:
@@ -256,7 +318,17 @@ class TileDownloader:
             raise RuntimeError("Failed to download overview map tiles.")
 
         final_path = self._force_png_path(output_filename)
-        cropped_img, new_extent = self._crop_to_aspect_ratio(img, extent, target_ratio)
+        # Web Mercator (EPSG:3857) meters, matching `extent`'s own
+        # convention (RouteGeometryProcessor.project_latlon_to_pixel uses
+        # this identical formula) — the crop's anchor point.
+        _r = 6378137.0
+        target_center = (
+            (w + e) / 2.0 * (_r * math.pi / 180.0),
+            math.log(math.tan(math.pi / 4 + math.radians((s + n) / 2.0) / 2)) * _r,
+        )
+        cropped_img, new_extent = self._crop_to_aspect_ratio(
+            img, extent, target_ratio, target_center=target_center
+        )
 
         Image.fromarray(cropped_img).resize(
             output_size, Image.Resampling.LANCZOS
@@ -518,8 +590,33 @@ class TileDownloader:
 
     # [Map/Util] Crop an image to a specific aspect ratio and adjust the extent accordingly
     def _crop_to_aspect_ratio(
-        self, img: np.ndarray, ext: Tuple, target_ratio: float, **kwargs
+        self,
+        img: np.ndarray,
+        ext: Tuple,
+        target_ratio: float,
+        target_center: Optional[Tuple[float, float]] = None,
+        **kwargs,
     ) -> Tuple[np.ndarray, Tuple]:
+        """Crops the fetched tile mosaic down to `target_ratio`.
+
+        `target_center` (mercator meters (x, y), same convention as `ext`)
+        is the center of the bbox the CALLER actually asked for — pass it
+        whenever known. Tile fetching snaps to whole-tile boundaries, so
+        the mosaic `img`/`ext` routinely covers noticeably more than the
+        requested bbox, and NOT symmetrically: which side gets the extra
+        margin depends on where tile edges happen to fall, unrelated to
+        where the caller's bbox actually sat. Center-cropping on the
+        mosaic's OWN midpoint (the old behavior, still used as a fallback
+        when `target_center` is omitted) inherits that asymmetry — it can
+        trim INTO the caller's intended bbox on one side while leaving
+        pointless extra margin on the other, which is exactly how a route
+        with enough requested padding on paper still ended up clipped off
+        the top of frame: the real crop window had silently drifted south
+        of where the padding calculation assumed it would be centered.
+        Centering on the caller's own target instead keeps the crop
+        anchored to what was actually asked for, clamped so it never
+        reads outside the fetched mosaic's own bounds.
+        """
         h, w = img.shape[:2]
         min_x, max_x, min_y, max_y = ext
         current_ratio = w / h
@@ -528,8 +625,13 @@ class TileDownloader:
 
         if current_ratio > target_ratio:
             target_w = int(round(h * target_ratio))
-            x0 = (w - target_w) // 2
             meters_per_px_x = (max_x - min_x) / w
+            if target_center is not None:
+                cx_px = (target_center[0] - min_x) / meters_per_px_x
+                x0 = int(round(cx_px - target_w / 2.0))
+                x0 = max(0, min(w - target_w, x0))
+            else:
+                x0 = (w - target_w) // 2
             return img[:, x0 : x0 + target_w], (
                 min_x + x0 * meters_per_px_x,
                 max_x - (w - target_w - x0) * meters_per_px_x,
@@ -538,8 +640,14 @@ class TileDownloader:
             )
         else:
             target_h = int(round(w / target_ratio))
-            y0 = (h - target_h) // 2
             meters_per_px_y = (max_y - min_y) / h
+            if target_center is not None:
+                # Row 0 is the NORTH edge (max_y); row increases southward.
+                cy_px = (max_y - target_center[1]) / meters_per_px_y
+                y0 = int(round(cy_px - target_h / 2.0))
+                y0 = max(0, min(h - target_h, y0))
+            else:
+                y0 = (h - target_h) // 2
             # Image row 0 is the NORTH edge (max_y) and row (h-1) is the
             # SOUTH edge (min_y) — row index increases as Y decreases. So
             # the new top row (y0) is the new max_y, and the new bottom row

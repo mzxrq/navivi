@@ -32,6 +32,98 @@ from .helpers import (
     project_route_video_dir,
 )
 
+def _project_color(
+    settings: dict, key: str, default_bgr: tuple
+) -> tuple:
+    """Reads one color setting out of job_config.json, as BGR.
+
+    The app writes colors as RGB triples (it stores exactly what the color
+    picker produced — settings.marker_color [59, 130, 246] is #3B82F6, the
+    blue shown in the editor), while every renderer downstream draws in
+    OpenCV's BGR. Handing the value straight through — which is what this
+    used to do — rendered a project's chosen blue as #F6823B orange, i.e.
+    a configured color came out as its own channel-reversed twin. The
+    channels are swapped here, at the single point where a project's
+    settings become renderer config, so there is exactly one place that
+    knows about the difference.
+
+    `default_bgr` is used unchanged when the project didn't set the key:
+    the defaults live in tuning.py and are already authored in BGR.
+    """
+    raw = settings.get(key)
+    if raw is None:
+        return tuple(default_bgr)
+    try:
+        r, g, b = (int(v) for v in list(raw)[:3])
+    except (TypeError, ValueError):
+        logger.warning(
+            "Step 4: settings.%s is not an [r, g, b] triple (%r) — using the default.",
+            key, raw,
+        )
+        return tuple(default_bgr)
+    return (b, g, r)
+
+
+# How much darker a pin goes once its waypoint has been reached, when the
+# project sets marker_color but no arrived_marker_color of its own: the
+# two defaults in tuning.py sit about this far apart, so one configured
+# color still yields the same "deepens on arrival" pairing rather than
+# leaving every arrived pin on an unrelated stock blue.
+_ARRIVED_COLOR_DARKEN = 0.78
+
+
+def _arrived_marker_color(settings: dict, marker_bgr: tuple) -> tuple:
+    """The color a pin turns once its waypoint has been reached: the
+    project's own arrived_marker_color if it set one, else a darker shade
+    of its marker_color, else the stock default."""
+    if settings.get("arrived_marker_color") is not None:
+        return _project_color(
+            settings, "arrived_marker_color", tuning.DEFAULT_ARRIVED_MARKER_COLOR
+        )
+    if settings.get("marker_color") is not None:
+        return tuple(max(0, min(255, int(c * _ARRIVED_COLOR_DARKEN))) for c in marker_bgr)
+    return tuple(tuning.DEFAULT_ARRIVED_MARKER_COLOR)
+
+
+# The travel mode a project's own Route Line color applies to: the
+# "ordinary" leg, the one that isn't a distinct kind of travel. "direct"
+# and "draw" are already folded into it upstream (tuning.MODE_ALIASES), so
+# naming walking alone covers every leg that isn't genuinely a crossing or
+# a drive.
+_BASE_LINE_MODE = "walking"
+
+
+def _mode_line_color_overrides(settings: dict) -> dict:
+    """Per-mode route-line colors this project overrides, as BGR.
+
+    Two sources, in order. First, the map-appearance panel's Route Line
+    swatch (settings.line_color): it maps onto the ORDINARY leg only, not
+    every mode — leaving ferry/car/airplane on their own accents from
+    tuning.MODE_LINE_COLORS is what keeps a crossing readable as a
+    crossing rather than as more of the same line. Without this the swatch
+    had no visible effect at all on a walking route, since every leg
+    matched a mode in MODE_LINE_COLORS and never reached line_color.
+
+    Second, settings.mode_line_colors — an explicit {"ferry": [r, g, b]}
+    map for a project that wants to recolor a specific mode, which wins
+    over the Route Line swatch for that mode.
+    """
+    overrides = {}
+    if settings.get("line_color") is not None:
+        overrides[_BASE_LINE_MODE] = _project_color(
+            settings, "line_color", tuning.MODE_LINE_COLORS[_BASE_LINE_MODE]
+        )
+    per_mode = settings.get("mode_line_colors") or {}
+    if isinstance(per_mode, dict):
+        for mode, value in per_mode.items():
+            key = str(mode).strip().lower()
+            key = tuning.MODE_ALIASES.get(key, key)
+            overrides[key] = _project_color(
+                {key: value}, key, tuning.MODE_LINE_COLORS.get(key, (110, 110, 110))
+            )
+    return overrides
+
+
 _RENDER_MANIFEST_NAME = ".render_manifest.json"
 
 
@@ -54,12 +146,12 @@ RESIDENTIAL_LEG_RE = re.compile(r"02_waypoint_(\d+)_")
 # tighter (more zoomed-in) crop; bigger ones get a bit more room so nearby
 # pins/labels don't crowd the frame edge.
 _OVERVIEW_PADDING_BY_SPAN_KM = (
-    (1.5, 0.045),
-    (5.0, 0.06),
-    (15.0, 0.07),
-    (40.0, 0.09),
+    (1.5, 0.025),
+    (5.0, 0.035),
+    (15.0, 0.045),
+    (40.0, 0.06),
 )
-_OVERVIEW_PADDING_MAX_SPAN = 0.11
+_OVERVIEW_PADDING_MAX_SPAN = 0.075
 
 # Fallback real-world speed (km/h) used when a leg's own mode has no
 # configured speed AND there's no configured "car" speed to fall back to
@@ -178,11 +270,26 @@ def render_route_video(
         raise ValueError("Cannot render a navigation video from an empty route.")
 
     # 1. Load Config & Settings Early
+    #
+    # Loaded through JobConfigManager (not a plain json.load, as this used
+    # to be) so every path in the file — directory_path, each waypoint's
+    # images/popup_image/popup_video, thumbnail_path, source_files — is
+    # normalized to absolute first (see JobConfigManager._resolve_relative_
+    # paths). job_config.json is written with absolute paths by the app,
+    # but it's also a file people hand-edit or copy between projects/
+    # machines, where a RELATIVE image path ("assets/image/x.jpg") is the
+    # only spelling that still works. Reading it raw here meant every
+    # downstream os.path.exists(popup_image) check (e.g.
+    # graphicengine/popup_box.py's render_popup_box) was resolved against
+    # the process's CWD instead of the project folder — for any project
+    # using relative paths, popup_image silently failed that check and its
+    # card just never rendered, with no error anywhere in the pipeline.
     project_config = {}
     config_path = Path(project_config_path)
+    job_config_mgr: Optional[JobConfigManager] = None
     if config_path.exists():
-        with open(config_path, "r", encoding="utf-8") as f:
-            project_config = json.load(f)
+        job_config_mgr = JobConfigManager(str(config_path))
+        project_config = job_config_mgr.data
 
     project_name = project_config.get("project_name", "Navigation Project")
 
@@ -216,8 +323,10 @@ def render_route_video(
     # the JobConfigManager singleton happens to already be in) so the tile
     # cache always lands under THIS project's directory_path/cache, even
     # when render_route_video runs as its own process/command without
-    # process_gps having initialized the singleton first.
-    fetcher = MapFetcher(job_config=JobConfigManager(str(config_path)))
+    # process_gps having initialized the singleton first. Reuses the same
+    # instance project_config was already loaded from above instead of
+    # constructing (and re-loading/re-normalizing) a second one.
+    fetcher = MapFetcher(job_config=job_config_mgr or JobConfigManager(str(config_path)))
 
     bbox = fetcher.get_bounding_box(
         route_df, padding_factor=_adaptive_overview_padding(route_df)
@@ -395,6 +504,19 @@ def render_route_video(
                 # the OTHER waypoints' sequential numbering — see
                 # spatial_renderer/pins.py's _draw_pin/_pin_color.
                 "is_stopby": bool(wp.get("isStopBy", False)),
+                # The map editor's stop-by-only "Connect to Route" toggle
+                # (see src/components/ui/ContextMenu.tsx). A CONNECTED
+                # stop-by is one the route actually runs through — the
+                # frontend's own routing already includes it in the route
+                # geometry for exactly that reason — so the renderer
+                # treats it as an ordinary stop that merely LOOKS
+                # different (its own arrival, its own popup where it
+                # sits, still drawn as a "・" dot and still skipped by the
+                # numbering). An unconnected one is a landmark the
+                # traveler never actually goes to, and is shown as part
+                # of the previous normal waypoint's stop instead — see
+                # overview.py's _attach_stopby_groups.
+                "connect_to_route": bool(wp.get("connectToRoute", False)),
                 # This waypoint's own true GPS coordinates — separate from
                 # route_points[c_idx] (the nearest point on the RECORDED
                 # TRACK, used for x/y). A stop-by that's only observed from
@@ -729,6 +851,10 @@ def render_route_video(
         _OVERVIEW_MIN_FINAL_DURATION_SECONDS, base_overview_duration / overview_speed_multiplier
     )
 
+    # Resolved once up front: the arrived-pin color derives from it when
+    # the project doesn't name one of its own (see _arrived_marker_color).
+    marker_color_bgr = _project_color(settings, "marker_color", (235, 150, 60))
+
     animator_config = {
         "output_dir": output_video_dir,
         "use_3d_res": use_3d_res,
@@ -760,15 +886,25 @@ def render_route_video(
                 ("hide_upcoming_pins_on_popup", False),
             ]
         },
-        "line_color": tuple(settings.get("line_color", (243, 150, 33))),  # BGR blue
-        "marker_color": tuple(settings.get("marker_color", (235, 150, 60))),  # blue (BGR)
-        "arrived_marker_color": tuple(settings.get("arrived_marker_color", (200, 110, 30))),
-        "card_border_color": tuple(
-            settings.get("card_border_color", tuning.DEFAULT_CARD_BORDER_COLOR)
+        # Colors: authored RGB in job_config.json, drawn BGR — see
+        # _project_color. The defaults passed here are already BGR.
+        "line_color": _project_color(settings, "line_color", (243, 150, 33)),
+        "mode_line_colors": _mode_line_color_overrides(settings),
+        "marker_color": marker_color_bgr,
+        "arrived_marker_color": _arrived_marker_color(settings, marker_color_bgr),
+        "card_border_color": _project_color(
+            settings, "card_border_color", tuning.DEFAULT_CARD_BORDER_COLOR
         ),
-        "route_line_border_color": tuple(
-            settings.get("route_line_border_color", tuning.DEFAULT_LINE_BORDER_COLOR)
+        "route_line_border_color": _project_color(
+            settings, "route_line_border_color", tuning.DEFAULT_LINE_BORDER_COLOR
         ),
+        # Pin colors by role. Unset keys fall through to the defaults on
+        # SpatialRendererBase (start/end/drawn/stop-by) — a project only
+        # needs to name the ones it actually wants to change.
+        "start_pin_color": _project_color(settings, "start_pin_color", tuning.START_PIN_COLOR),
+        "end_pin_color": _project_color(settings, "end_pin_color", tuning.END_PIN_COLOR),
+        "drawn_pin_color": _project_color(settings, "drawn_pin_color", tuning.DRAWN_PIN_COLOR),
+        "stopby_pin_color": _project_color(settings, "stopby_pin_color", tuning.STOPBY_PIN_COLOR),
         "trigger_radius_padding": settings.get("trigger_radius_padding", {}),
         "fullscreen_transition": settings.get("fullscreen_transition", {}),
         # Real-world average speed (km/h) per travel mode — how much

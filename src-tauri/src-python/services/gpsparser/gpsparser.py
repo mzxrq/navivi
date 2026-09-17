@@ -50,14 +50,63 @@ class GPSParser:
         self.precision = 5             # Coordinate rounding precision
         self.min_stop_sec = 180        # Min duration (seconds) to flag a stop as a landmark
 
+    def _config_anchors(self) -> List[Path]:
+        """Directories a RELATIVE path in job_config.json is resolved
+        against, most authoritative first: the folder holding
+        job_config.json itself, then the project's own recorded
+        directory_path, then the process working directory.
+
+        The config file's own folder leads because it's the one anchor
+        that is always correct and always available — a project folder
+        that was renamed or moved still resolves, whereas directory_path
+        is a value written at save time that can be stale (and the CWD is
+        wherever the command happened to be run from, which for
+        `py main.py <config>` is not the project at all)."""
+        anchors: List[Path] = []
+        config_path = getattr(self.config, "config_path", None)
+        if config_path:
+            anchors.append(Path(config_path).resolve().parent)
+        recorded_dir = (
+            self.config.data.get("directory_path")
+            if self.config and hasattr(self.config, "data") else None
+        )
+        if recorded_dir:
+            anchors.append(Path(recorded_dir))
+        anchors.append(Path.cwd())
+        return anchors
+
+    def resolve_config_path(self, value: str) -> Path:
+        """Resolves a path read out of job_config.json, accepting either an
+        absolute path or one relative to the project (see _config_anchors).
+
+        job_config.json is written with absolute paths, but it is also a
+        file people hand-edit and move between machines, where absolute
+        paths from another user's Documents folder are worse than useless
+        — a relative "raw_track.gpx" beside the config is the portable
+        spelling and now works. A relative value used to be resolved
+        against the process CWD, which is why running the renderer from
+        src-python looked for the track in src-python.
+
+        Returns the first candidate that exists; with none existing,
+        returns the first candidate anyway so the caller's error names the
+        path it actually expected rather than the bare relative string."""
+        raw = Path(str(value)).expanduser()
+        if raw.is_absolute():
+            return raw
+        candidates = [anchor / raw for anchor in self._config_anchors()]
+        for candidate in candidates:
+            if candidate.exists():
+                return candidate
+        return candidates[0] if candidates else raw
+
     def get_input_file_path(self) -> Optional[Path]:
         """ Get the input raw file path from the configuration. """
         if self.config and hasattr(self.config, 'data'):
             source_files = self.config.data.get("source_files", {})
             input_file = source_files.get("gps_route") or self.config.data.get("input_file")
             if input_file:
-                return Path(input_file)
-            
+                return self.resolve_config_path(input_file)
+
         logger.warning("Input file not specified in configuration.")
         return None
 
@@ -79,8 +128,18 @@ class GPSParser:
 
         input_format = self.detect_format(str(input_file))
 
-        raw_dir = self.config.data.get("directory_path") if self.config and hasattr(self.config, 'data') else Path.cwd() / "output"
-        output_file_directory = Path(raw_dir) / "gpsdata"
+        # Same relative-or-absolute treatment as the input file: a project
+        # that records a relative (or no) directory_path writes its
+        # gpsdata/ beside its own job_config.json, not into whatever
+        # directory the command was launched from.
+        raw_dir = (
+            self.config.data.get("directory_path")
+            if self.config and hasattr(self.config, "data") else None
+        )
+        if raw_dir:
+            output_file_directory = self.resolve_config_path(raw_dir) / "gpsdata"
+        else:
+            output_file_directory = self._config_anchors()[0] / "gpsdata"
         output_file_directory.mkdir(parents=True, exist_ok=True)
 
         output_algorithm = "iblue747" 

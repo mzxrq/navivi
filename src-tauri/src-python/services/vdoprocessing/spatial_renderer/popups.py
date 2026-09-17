@@ -188,6 +188,96 @@ def _nearest_point_on_polygon(
 
 
 class _PopupMixin:
+    @staticmethod
+    def _attach_stopby_groups(active_popups: List[Dict]) -> None:
+        """Works out which stop-by waypoints are shown as part of which
+        stop, stamping "stopby_group" on each host and "stopby_host" on
+        each stop-by it owns.
+
+        A whole run of consecutive stop-bys — connected or not
+        (job_config's `connectToRoute`, reaching us as
+        data["connect_to_route"] — see render_step.py) — plays as ONE
+        continuous stop: the video stays frozen, showing each stop-by's
+        own card in turn (see _play_stopby_batch), all the way through
+        the run and not resuming the traveling animation again until it
+        reaches the next REAL (non-stop-by) waypoint.
+
+        WHERE that stop freezes depends on whether the run has a
+        connected member:
+
+        * If the run's FIRST stop-by is connected, the route genuinely
+          runs through it — so the traveling animation continues up to
+          THAT point (not stopping short at the real waypoint before it),
+          and it becomes the host every other stop-by in the run (later
+          connected ones included) attaches to. Several connected stops
+          in a row don't each get their own separate freeze/resume —
+          only the first one triggers the stop; the rest just join its
+          group like any other member.
+        * Otherwise (the run starts with an unconnected stop-by), there's
+          no real path point to travel to yet, so it's shown during the
+          previous NORMAL waypoint's stop instead, same as every other
+          member behind it.
+
+        This also covers the route's own start pin (index 0): a stop-by
+        right at the beginning of the trip is played as its own little
+        stop before the traveler sets off, same as any other waypoint's
+        batch — see _animate_overview_frames' own dedicated call for the
+        start pin's group, made once up front rather than through the
+        main per-frame trigger loop (index 0 never "arrives" there the
+        way every other waypoint does).
+
+        A stop-by with no preceding real waypoint at all (nothing to host
+        it) is left ungrouped, and keeps the old pop-on-proximity
+        behaviour — never shown at all would be worse."""
+        host = None
+        # True only for the very next stop-by right after a real waypoint
+        # (or at the very start of active_popups) — i.e. "is `ap` the
+        # FIRST stop-by of a fresh run". Only that first one ever gets a
+        # chance to promote itself to host; every later stop-by in the
+        # same run (connected or not) just joins whatever host the run
+        # already settled on. Cleared the instant any stop-by is seen,
+        # and set again only by the next real waypoint.
+        first_stopby_of_run = False
+        for ap in active_popups:
+            data = ap.get("data") or {}
+            if not data.get("is_stopby"):
+                host = ap
+                ap["stopby_group"] = []
+                first_stopby_of_run = True
+                continue
+            if host is not None and first_stopby_of_run and data.get("connect_to_route"):
+                # The first stop-by since the last real waypoint, and it's
+                # connected: the traveling animation genuinely runs all
+                # the way here, so it becomes the new host for the rest
+                # of the run instead of everything sitting back at the
+                # real waypoint before it.
+                host = ap
+                ap["stopby_group"] = []
+                first_stopby_of_run = False
+                continue
+            first_stopby_of_run = False
+            if host is not None:
+                host.setdefault("stopby_group", []).append(ap)
+                ap["stopby_host"] = host
+
+    @staticmethod
+    def _is_loose_stopby(popup: Dict) -> bool:
+        """True for a stop-by that still pops on its own, on proximity,
+        exempt from the sequential-arrival gate — i.e. an UNCONNECTED one
+        with no host waypoint to be batched at (see _attach_stopby_groups,
+        which only leaves a stop-by hostless when nothing precedes it).
+
+        A connected stop-by is deliberately NOT "loose": the route runs
+        through it, so it arrives in sequence like any ordinary stop. This
+        is the single place that distinction is made, so the trigger loop
+        can't apply one half of it and miss the other."""
+        data = popup.get("data") or {}
+        return (
+            bool(data.get("is_stopby"))
+            and not data.get("connect_to_route")
+            and popup.get("stopby_host") is None
+        )
+
     def _nearest_lattice_slot(
         self,
         pin_x: float,
@@ -786,22 +876,25 @@ class _PopupMixin:
             ),
         )
 
-        lock_frames = (
-            fps * tuning.POPUP_POSITION_LOCK_SECONDS if fps else 0
-        )
-
         def is_locked(bp: Dict) -> bool:
-            """Positioned on an earlier frame and still inside its lock
-            window (see tuning.POPUP_POSITION_LOCK_SECONDS) — its box is
-            fixed for this frame, wherever it happens to be."""
-            total_frames = bp.get("total_frames")
-            frames_left = bp.get("frames_left")
-            return (
-                bp["popup"].get("beside_box") is not None
-                and total_frames is not None
-                and frames_left is not None
-                and (total_frames - frames_left) < lock_frames
-            )
+            """Once a flow-through popup has settled into a spot, it keeps
+            it for the rest of its own display — not just
+            tuning.POPUP_POSITION_LOCK_SECONDS after first appearing.
+
+            That constant used to be the whole lock window: a card's box
+            was only protected from recomputation for its first 2 seconds
+            on screen, then became fair game again for every later frame
+            of a still-long display. Near a dense cluster where several
+            waypoints trigger close together in time, each new arrival's
+            layout pass can re-sort the competing cards and hand an
+            already-settled one a DIFFERENT spot — the card visibly jumps,
+            and for a display lasting well past that 2s window (a long
+            leg's worth of flow-through time), it could jump more than
+            once. A settled card is only ever a genuine obstacle for
+            everyone placed after it (see `reserve` below); nothing
+            requires it to keep re-competing for its own spot once it has
+            one."""
+            return bp["popup"].get("beside_box") is not None
 
         def reserve(bp: Dict) -> None:
             popup = bp["popup"]
@@ -1426,29 +1519,65 @@ class _PopupMixin:
 
         return frame, survivors
 
+    # Bounds for the highlight's close-up: a plain fixed ~300m-across crop
+    # (this used to be the ONLY option) is the tightest the search may go;
+    # roughly 4x that across is the widest it'll pull back to in order to
+    # keep the route through the point in shot. Anything wider than that
+    # stops reading as a "close-up" at all.
+    _HIGHLIGHT_TIGHT_WIDTH_M = 300.0
+    _HIGHLIGHT_WIDE_WIDTH_M = 1200.0
+
     def _fetch_highlight_image(
-        self, lat: float, lng: float, output_size: Tuple[int, int]
+        self, lat: float, lng: float, output_size: Tuple[int, int],
+        next_lat: Optional[float] = None, next_lon: Optional[float] = None,
     ) -> Optional[Tuple[str, Tuple[float, float, float, float]]]:
-        """Fetches a fresh, tightly-cropped (~300m across) map image
-        centered on one lat/lng — a genuinely higher zoom level than the
-        overview's own background, used for the end-of-video "zoom into
-        this place" highlight. Returns (path, extent) so the caller can
-        still project the same lat/lng onto this new image's pixels (for
-        the marker/popup), or None (rather than raising) on any failure —
-        a tile-download hiccup here shouldn't take down a render that's
-        otherwise already finished."""
+        """Fetches a fresh, higher-zoom map image centered on one lat/lng
+        for the end-of-video "zoom into this place" highlight — framed by
+        choose_route_focus_view so the shot shows as much of the route
+        running through this point as it can, rather than a fixed ~300m
+        crop that happens to catch the line or happens to cut it off
+        depending on where the point sits relative to it.
+
+        Returns (path, extent) so the caller can still project the same
+        lat/lng onto this new image's pixels (for the marker/popup), or
+        None (rather than raising) on any failure — a tile-download hiccup
+        here shouldn't take down a render that's otherwise already
+        finished."""
         try:
             from services.mapfetcher.mapfetcher import MapFetcher
+            from services.mapfetcher.mapgeometry import (
+                bbox_for_view, choose_route_focus_view, zoom_for_ground_width,
+            )
 
             job_config = self._get_job_config()
             if not job_config:
                 return None
             fetcher = MapFetcher(job_config=job_config)
-            delta = 0.0015  # ~150-160m in latitude degrees either side
-            bbox = {
-                "min_lat": lat - delta, "max_lat": lat + delta,
-                "min_lon": lng - delta, "max_lon": lng + delta,
-            }
+
+            route_latlon = getattr(self, "_route_latlon_path", None)
+            out_w, _out_h = output_size
+            tight_zoom = zoom_for_ground_width(self._HIGHLIGHT_TIGHT_WIDTH_M, out_w)
+            wide_zoom = zoom_for_ground_width(self._HIGHLIGHT_WIDE_WIDTH_M, out_w)
+            if route_latlon:
+                job_waypoints = job_config.get("waypoints") or []
+                must_fit_latlon = [
+                    (jw["lat"], jw.get("lng", jw.get("lon")))
+                    for jw in job_waypoints
+                    if jw.get("lat") is not None and jw.get("lng", jw.get("lon")) is not None
+                ]
+                center_lon, center_lat, zoom = choose_route_focus_view(
+                    route_latlon, lat, lng, output_size,
+                    min_zoom=wide_zoom, max_zoom=tight_zoom,
+                    next_lat=next_lat, next_lon=next_lon,
+                    must_fit_latlon=must_fit_latlon,
+                )
+                bbox = bbox_for_view(center_lon, center_lat, zoom, output_size)
+            else:
+                delta = 0.0015  # ~150-160m in latitude degrees either side
+                bbox = {
+                    "min_lat": lat - delta, "max_lat": lat + delta,
+                    "min_lon": lng - delta, "max_lon": lng + delta,
+                }
             out_path = str(self.out_dir / "01_overview_highlight.png")
             path, extent, _size = fetcher.fetch_image(bbox, out_path, output_size)
             return path, extent

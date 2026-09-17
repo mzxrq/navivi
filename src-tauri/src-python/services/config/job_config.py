@@ -11,7 +11,7 @@ access to configuration data.
 # [I/O] Import necessary libraries for JSON handling and file path management
 import json
 from pathlib import Path
-from typing import Union, Any, Dict, List, Optional
+from typing import Union, Any, Dict, Final, List, Optional
 
 # [Utility] Import the logging setup for consistent logging across services
 from services.logger.logger import setup_logger
@@ -71,6 +71,76 @@ class JobConfigManager:
         except json.JSONDecodeError as e:
             logger.error(f"Failed to decode JSON from {self.config_path}: {e}")
             raise
+
+        self._resolve_relative_paths()
+
+    # Keys whose values are file paths, resolved on load so everything
+    # downstream can keep treating them as plain absolute paths.
+    _PATH_KEYS_TOP: Final = ("thumbnail_path",)
+    _PATH_KEYS_WAYPOINT: Final = ("images", "popup_image", "popup_video", "customMarker")
+
+    def _resolve_relative_paths(self) -> None:
+        """Rewrites every relative path in the loaded config to an absolute
+        one, anchored at the folder holding job_config.json itself.
+
+        The app writes absolute paths, but the config is also a file people
+        hand-edit, copy between machines and move with the project folder —
+        and absolute paths from someone else's Documents folder are worse
+        than useless there, while a relative "raw_track.gpx" or
+        "assets/image/x.jpg" beside the config travels with it. Before
+        this, a relative value was resolved against the process working
+        directory, so `py main.py <config>` looked for the track next to
+        main.py and failed.
+
+        In memory only: the file on disk is untouched, so a project that
+        deliberately keeps relative paths stays that way. An absolute
+        value is left exactly as it is, so nothing changes for a config
+        the app wrote."""
+        anchor = self.config_path.parent
+
+        def absolute(value: Any) -> Any:
+            if not isinstance(value, str) or not value.strip():
+                return value
+            path = Path(value).expanduser()
+            if path.is_absolute():
+                return value
+            return str((anchor / path).resolve())
+
+        def absolute_each(value: Any) -> Any:
+            if isinstance(value, list):
+                return [absolute(v) for v in value]
+            return absolute(value)
+
+        # directory_path anchors the project's own output (video/, cache/,
+        # gpsdata/ ...). Missing entirely — as in a hand-written config —
+        # means "the folder this config lives in", which is the only
+        # sensible reading and beats every downstream default of the
+        # working directory.
+        directory_path = self.data.get("directory_path")
+        self.data["directory_path"] = (
+            absolute(directory_path) if directory_path else str(anchor)
+        )
+
+        for key in self._PATH_KEYS_TOP:
+            if key in self.data:
+                self.data[key] = absolute_each(self.data[key])
+
+        source_files = self.data.get("source_files")
+        if isinstance(source_files, dict):
+            for key, value in source_files.items():
+                source_files[key] = absolute_each(value)
+
+        points = list(self.data.get("waypoints") or [])
+        for key in ("start_point", "end_point"):
+            point = self.data.get(key)
+            if isinstance(point, dict):
+                points.append(point)
+        for point in points:
+            if not isinstance(point, dict):
+                continue
+            for key in self._PATH_KEYS_WAYPOINT:
+                if key in point:
+                    point[key] = absolute_each(point[key])
 
     # [Util/IO] Save and update operations
     def save(self, target_path: Optional[Union[str, Path]] = None) -> None:

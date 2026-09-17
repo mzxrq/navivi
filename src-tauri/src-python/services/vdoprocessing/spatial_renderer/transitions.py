@@ -312,6 +312,20 @@ class _TransitionMixin:
             is_stopby = bool(jw.get("isStopBy", False))
             if not is_stopby:
                 order += 1
+            # A loop route's job_config waypoints list ends with a
+            # synthetic "(Return)" entry at the SAME coordinates as the
+            # route's own start/end — the real S/E pin already covers
+            # that point (see _is_loop_route's half-green/half-red pin
+            # elsewhere). The exclude_px/exclude_py check below is meant
+            # to filter this out too (same coords as the featured point),
+            # but at this highlight's high zoom, a tiny lat/lng rounding
+            # difference between this entry and the true end_point can
+            # put it just outside that pixel radius — showing up as an
+            # extra, oddly-numbered pin sitting right next to S/E (e.g.
+            # "12" for a 10-stop route). Skipped outright here instead of
+            # relying on the distance check to catch it.
+            if self._is_loop_route and pos == total_wp - 1:
+                continue
             lat, lng = jw.get("lat"), jw.get("lng", jw.get("lon"))
             if lat is None or lng is None:
                 continue
@@ -396,6 +410,40 @@ class _TransitionMixin:
         if lat is None or lng is None:
             return False
 
+        # The adjacent stop in the direction the journey actually
+        # continues from here — biases the highlight's framing (see
+        # choose_route_focus_view's `next_lat`/`next_lon`) so the shot
+        # reads as "here's the stop, and here's the way from it" instead
+        # of centring dead-on with no sense of where the route leads.
+        # Zooming on the START: the next leg is the one heading AWAY from
+        # it, i.e. the first waypoint. Zooming on the END (the
+        # start_point-less fallback above): there's no further leg, so
+        # bias toward the leg that arrives INTO it instead — the last
+        # waypoint — which is the only "direction" left to show.
+        job_waypoints = job_config.get("waypoints") or []
+        if is_start:
+            adjacent = job_waypoints[0] if job_waypoints else job_config.get("end_point")
+        else:
+            adjacent = job_waypoints[-1] if job_waypoints else job_config.get("start_point")
+        next_lat = next_lon = None
+        if isinstance(adjacent, dict):
+            next_lat = adjacent.get("lat")
+            next_lon = adjacent.get("lng", adjacent.get("lon"))
+
+        # Every other waypoint (numbered stops AND stop-bys — a stop-by is
+        # frequently the thing that ends up cropped, since it usually sits
+        # just off the route line rather than on it) worth keeping in shot
+        # alongside the route line itself — see choose_route_focus_view's
+        # own must_fit_latlon docstring for how this is used (a reward,
+        # never a hard requirement, so a genuinely unreachable point at
+        # the chosen zoom is simply left out rather than breaking the
+        # framing search).
+        must_fit_latlon = [
+            (jw["lat"], jw.get("lng", jw.get("lon")))
+            for jw in job_waypoints
+            if jw.get("lat") is not None and jw.get("lng", jw.get("lon")) is not None
+        ]
+
         featured_popup = start_popup or stop_popup
         settings = (job_config.get("settings", {}) or {})
         # "enable_gl_ending_zoom" — the actual job_config.json setting
@@ -405,6 +453,18 @@ class _TransitionMixin:
         use_dynamic_pydeck = bounding_box is not None and (
             bool(settings.get("enable_gl_ending_zoom", False))
             or str(settings.get("overview_background", "")).lower() == "pydeck"
+        )
+        # Diagnostic: pins down WHY this ever silently falls back to the
+        # static-tile Ken Burns path (the try/except below only logs on an
+        # outright exception — a False use_dynamic_pydeck, or a dynamic
+        # capture that returns an empty/falsy result without raising,
+        # leaves no trace otherwise).
+        logger.info(
+            "Ending highlight: use_dynamic_pydeck=%s (bounding_box_present=%s, "
+            "enable_gl_ending_zoom=%s, overview_background=%r)",
+            use_dynamic_pydeck, bounding_box is not None,
+            settings.get("enable_gl_ending_zoom", False),
+            settings.get("overview_background"),
         )
         is_fullscreen = (
             self.enable_fullscreen_popups
@@ -445,10 +505,37 @@ class _TransitionMixin:
                 hold_n = 0 if is_fullscreen else max(1, int(highlight_hold_sec * fps))
                 zoom_n = lead_in_n + wait_n
 
+                # settings.mapbox_style_id lets a project swap in a custom
+                # Mapbox Studio style (e.g. one with larger place-name
+                # text) — same setting TileDownloader._build_provider
+                # already honors for the raster/contextily overview path,
+                # threaded through here too so a project that sets it gets
+                # bigger labels on this GL path as well, not just the
+                # static one. Falls back to pydeck's own default style.
+                style_id = settings.get("mapbox_style_id")
+                map_style = (
+                    f"mapbox://styles/{style_id}" if style_id
+                    else "mapbox://styles/mapbox/streets-v12"
+                )
                 dynamic_frames = capture_pydeck_zoom_sequence(
                     bounding_box, (w, h), lat, lng, zoom_n,
                     zoom_boost=tuning.ENDING_HIGHLIGHT_PYDECK_ZOOM_BOOST,
                     mapbox_key=settings.get("mapbox_api_key"),
+                    map_style=map_style,
+                    # The route this video actually drew (stashed by
+                    # render_overview — the same geometry
+                    # _draw_route_line_on_extent redraws on the close-up),
+                    # so the push settles on a view that keeps the line
+                    # through this point in shot rather than zooming it
+                    # out of frame.
+                    route_latlon=getattr(self, "_route_latlon_path", None),
+                    next_lat=next_lat, next_lon=next_lon,
+                    must_fit_latlon=must_fit_latlon,
+                )
+                logger.info(
+                    "Ending highlight: dynamic pydeck capture returned %d frame(s) "
+                    "(requested zoom_n=%d).",
+                    len(dynamic_frames) if dynamic_frames else 0, zoom_n,
                 )
             except Exception:
                 logger.warning(
@@ -474,26 +561,61 @@ class _TransitionMixin:
                 highlight_popup["x"], highlight_popup["y"] = px, py
                 highlight_popup.pop("pin_x", None)
                 highlight_popup.pop("pin_y", None)
+                # `featured_popup` is the SAME dict active_popups has held
+                # (and mutated) for the whole render — most recently by
+                # the recap that just ran (see _layout_recap_cards), which
+                # stamps "card_scale" (often well under 1.0, packing many
+                # stops into one frame — down to 0.38 for a route with
+                # enough stops), "beside_box" (a position in the WIDE
+                # overview frame, meaningless on this close-up tile's own
+                # extent), "leader_via" and "recap_line_color" directly
+                # onto it. Left in place, popup_card_geometry reads that
+                # leftover card_scale (render_popup_box's own docstring:
+                # "card_scale = float(popup_info.get('card_scale', 1.0))")
+                # and draws this highlight's card at whatever fraction the
+                # recap happened to need — a viewer sees the SAME photo
+                # rendered full-size everywhere else in the video and
+                # shrunk to a fraction of that size here, for no reason
+                # tied to this shot at all. Stripped so this card sizes
+                # itself fresh, same as every other popup draw does.
+                for _stale_key in ("card_scale", "beside_box", "leader_via", "recap_line_color"):
+                    highlight_popup.pop(_stale_key, None)
                 highlight_popup["hud_corner"] = None
                 highlight_popup["draw_leader_line"] = True
                 self._layout_recap_popups([{"popup": highlight_popup, "frames_left": 1}], w, h)
 
                 for frame_idx, (frame_bgr, extent) in enumerate(dynamic_frames):
                     frame_out = frame_bgr.copy()
-                    # Nearby waypoints re-projected fresh against THIS
-                    # frame's own extent (it changes every frame as the
-                    # camera zooms), unlike the featured marker/card
-                    # above, which stays pixel-fixed by construction.
+                    # Re-projected fresh against THIS frame's own extent,
+                    # same as _draw_nearby_waypoints just below — NOT
+                    # pixel-fixed "by construction" as this used to assume:
+                    # that guarantee only holds for the fixed-zoom-boost
+                    # path in capture_pydeck_zoom_sequence: when
+                    # route_latlon is passed (as it is here), the push
+                    # instead straight-line-interpolates center+zoom
+                    # toward choose_route_focus_view's chosen end view,
+                    # which generally does NOT keep this point pinned to
+                    # one screen pixel along the way. Using the LAST
+                    # frame's projection for every earlier frame — the old
+                    # behavior — left the marker sitting wherever that
+                    # final pixel happened to be throughout the whole
+                    # lead-in, including over open water on a route whose
+                    # camera path crosses it, before "snapping" to the
+                    # correct spot only once the push actually finished.
+                    frame_px, frame_py = RouteGeometryProcessor.project_latlon_to_pixel(
+                        lat, lng, extent, w, h
+                    )
+                    frame_px, frame_py = int(frame_px), int(frame_py)
                     # _draw_nearby_waypoints deliberately EXCLUDES the
-                    # featured point itself (px, py) — it's meant to be
-                    # drawn separately below — so without drawing its own
+                    # featured point itself — it's meant to be drawn
+                    # separately below — so without drawing its own
                     # marker unconditionally here too, the start/end pin
                     # was simply missing from every lead-in frame.
                     self._draw_route_line_on_extent(frame_out, w, h, extent)
-                    self._draw_nearby_waypoints(frame_out, w, h, extent, px, py)
+                    self._draw_nearby_waypoints(frame_out, w, h, extent, frame_px, frame_py)
                     if frame_idx < lead_in_n:
                         self.graphics.draw_marker(
-                            frame_out, px, py,
+                            frame_out, frame_px, frame_py,
                             number="S" if is_start else "E",
                             color=self._START_PIN_COLOR if is_start else self._END_PIN_COLOR,
                         )
@@ -503,12 +625,17 @@ class _TransitionMixin:
                         # the map, same as every other waypoint (matches
                         # the static-tile fallback's own lead-in, which
                         # shows no card either); from here on its
-                        # leader-lined card joins it too.
+                        # leader-lined card joins it too. The card's own
+                        # box was already laid out once (above) against
+                        # the final settled position, so only the pin end
+                        # of its leader line needs to track this frame's
+                        # own (by now very close to final) position.
+                        highlight_popup["x"], highlight_popup["y"] = frame_px, frame_py
                         frame_out = self.graphics.render_popup_box(
                             frame_out, highlight_popup, line_only=True
                         )
                         self.graphics.draw_marker(
-                            frame_out, px, py,
+                            frame_out, frame_px, frame_py,
                             number="S" if is_start else "E",
                             color=self._START_PIN_COLOR if is_start else self._END_PIN_COLOR,
                         )
@@ -534,7 +661,9 @@ class _TransitionMixin:
             # Either dynamic pydeck wasn't requested, or it failed —
             # original path: a genuinely higher-zoom SEPARATE image,
             # fetched fresh, cut to after a lead-in push on the wide map.
-            fetched = self._fetch_highlight_image(lat, lng, (w, h))
+            fetched = self._fetch_highlight_image(
+                lat, lng, (w, h), next_lat=next_lat, next_lon=next_lon
+            )
             if not fetched:
                 return False
             highlight_path, highlight_extent = fetched
@@ -591,6 +720,15 @@ class _TransitionMixin:
             # marker actually drawn at (px, py) above.
             highlight_popup.pop("pin_x", None)
             highlight_popup.pop("pin_y", None)
+            # Same reasoning as the dynamic-pydeck branch above: this is
+            # still the SAME dict the recap just stamped its own
+            # (typically shrunk, packing-many-cards) "card_scale" and
+            # frame-specific "beside_box"/"leader_via"/"recap_line_color"
+            # onto — cleared so the highlight's card sizes and positions
+            # itself fresh instead of rendering at whatever fraction the
+            # recap needed.
+            for _stale_key in ("card_scale", "beside_box", "leader_via", "recap_line_color"):
+                highlight_popup.pop(_stale_key, None)
             highlight_popup["hud_corner"] = None  # forces the leader-lined "beside" card style
             highlight_popup["draw_leader_line"] = True
             # Same short-leader-line placement flow-through popups use

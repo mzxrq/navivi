@@ -123,7 +123,7 @@ REPORTED_MODE_SPEED_KMH: Dict[str, float] = {
     "driving": 70.0,
     "airplane": 500.0,
 }
-ANIMATION_SPEED_KMH = 8.0
+ANIMATION_SPEED_KMH = 3.0
 # Fixed anchor "1x" pace every mode's on-screen speed-up factor is computed
 # against — not whatever ANIMATION_SPEED_KMH happens to be configured as
 # (see SpatialRenderer._mode_speed_factor).
@@ -315,10 +315,10 @@ MODE_LINE_COLORS: Dict[str, Tuple[int, int, int]] = {
 # ENDING_HIGHLIGHT_PYDECK_ZOOM_BOOST) — shortened together with
 # BIG_MAP_ZOOM_LEAD_SECONDS below so the SAME total zoom amount plays out
 # over less time, i.e. visibly faster, not just a shorter hold.
-ENDING_HIGHLIGHT_WAIT_SECONDS = 1.4
+ENDING_HIGHLIGHT_WAIT_SECONDS = 0.9
 # Lead-in: how long to push in on the CURRENT wide map (clean, no cards)
 # toward the same point BEFORE that hard cut, and how far.
-BIG_MAP_ZOOM_LEAD_SECONDS = 1.3
+BIG_MAP_ZOOM_LEAD_SECONDS = 0.8
 BIG_MAP_ZOOM_TARGET = 2.6
 # When settings.enable_gl_ending_zoom (or overview_background: "pydeck")
 # is on (see mapfetcher/pydeck_overview.py), the ending highlight's
@@ -327,10 +327,20 @@ BIG_MAP_ZOOM_TARGET = 2.6
 # frames zooming from the wide map all the way in — real map detail
 # revealed as it zooms, rather than a modest digital Ken Burns crop
 # followed by a hard cut to a second static image. In log2 zoom units
-# (each +1 doubles the visual scale) — 3.2 stops around street-label
-# level (road names legible) regardless of the base overview's own zoom,
-# rather than zooming in past that to individual-building/terrain detail.
-ENDING_HIGHLIGHT_PYDECK_ZOOM_BOOST = 3.2
+# (each +1 doubles the visual scale) — 7.0 stops: individual city blocks
+# and building outlines visible, street names clearly legible, matching
+# the tight, block-level reference zoom requested directly against the
+# map editor's own live view — well past plain street-label level,
+# regardless of the base overview's own zoom. This is a CEILING, not a
+# forced amount: when the route is being framed (route_latlon passed to
+# capture_pydeck_zoom_sequence), choose_route_focus_view can still pull
+# back from it to keep the route line in shot, so raising this only ever
+# allows MORE zoom, never forces a tighter shot that would crop the line
+# out — but note choose_route_focus_view tries the TIGHTEST (highest)
+# zoom in range FIRST and only backs off if too little route stays in
+# frame there, so a route that already fits fine at a lower boost will
+# zoom in further now rather than staying put.
+ENDING_HIGHLIGHT_PYDECK_ZOOM_BOOST = 9.5
 
 # --- Popup / transition timing ----------------------------------------------
 POPUP_FADE_SECONDS = 1.5
@@ -440,6 +450,14 @@ POPUP_MIN_WAIT_SECONDS = 6.0
 # it holds for every caller rather than each having to remember its own
 # floor. Covers the whole on-screen life including the fade in/out.
 POPUP_MIN_DISPLAY_SECONDS = 2.0
+# How long each UNCONNECTED stop-by's card is held during the batch shown
+# at the previous normal waypoint's stop (see overview_animation.py's
+# _play_stopby_batch). Per-card, not split across the group: a run of four
+# landmarks holds that stop for four times this, rather than flashing each
+# one by in a quarter of the time. Deliberately equal to
+# POPUP_MIN_DISPLAY_SECONDS — these cards are read at a glance and the
+# stop they extend is already a full stop.
+STOPBY_BATCH_SECONDS = 2.0
 # Hard ceiling on a waypoint's own "freeze_seconds" (job_config's per-stop
 # override for how long its popup photo is held/displayed) — applied
 # wherever that raw job_config value is first read, so every downstream
