@@ -57,10 +57,10 @@ export function WaypointEditor({
   const wpIndex = waypoints.findIndex((w) => w.id === wpId);
 
   const [showArriving, setShowArriving] = useState(
-    !!(wp?.arrivingNarration && wp.arrivingNarration.length > 0)
+    !!(wp?.arrivingNarration && wp.arrivingNarration.length > 0),
   );
   const [showAttraction, setShowAttraction] = useState(
-    !!(wp?.attractionNarration && wp.attractionNarration.length > 0)
+    !!(wp?.attractionNarration && wp.attractionNarration.length > 0),
   );
   const [activeTab, setActiveTab] = useState<"scripts" | "images">("scripts");
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -84,16 +84,18 @@ export function WaypointEditor({
     try {
       const selected = await open({
         multiple: true,
-        filters: [{ name: "Images", extensions: ["svg", "png", "jpg", "jpeg"] }],
+        filters: [
+          { name: "Images", extensions: ["svg", "png", "jpg", "jpeg"] },
+        ],
       });
       if (selected && Array.isArray(selected)) {
         const currentImages = wp.images || [];
         const currentPans = wp.imagePans || [];
         const newImages = [...currentImages, ...selected].slice(0, 3);
-        const newPans = [
-          ...currentPans,
-          ...selected.map(() => "none"),
-        ].slice(0, 3);
+        const newPans = [...currentPans, ...selected.map(() => "none")].slice(
+          0,
+          3,
+        );
         updateWaypoint(wp.id, { images: newImages, imagePans: newPans });
       } else if (selected && typeof selected === "string") {
         const currentImages = wp.images || [];
@@ -127,7 +129,7 @@ export function WaypointEditor({
   const handleGenerateScript = async (
     type: "arriving" | "attraction",
     prompt: string,
-    engine: string
+    engine: string,
   ) => {
     if (type === "arriving" && !showArriving) setShowArriving(true);
     if (type === "attraction" && !showAttraction) setShowAttraction(true);
@@ -139,7 +141,7 @@ export function WaypointEditor({
       if (!hasEngine) {
         showToast(
           `Model "${engine}" not found. Please install it in Ollama.`,
-          "error"
+          "error",
         );
         updateWaypoint(wp.id, { isGeneratingScript: false });
         return;
@@ -171,11 +173,11 @@ export function WaypointEditor({
                   attractionNarration: (w.attractionNarration || "") + chunk,
                 };
               }
-            })
+            }),
           );
         },
         wp.lat,
-        wp.lng
+        wp.lng,
       );
     } catch (err: any) {
       console.error("Script generation failed:", err);
@@ -187,17 +189,19 @@ export function WaypointEditor({
 
   const isStart = wpIndex === 0;
   const isDest = wpIndex === waypoints.length - 1;
-  const isStopBy = wp.isStopBy; 
+  const isStopBy = wp.isStopBy;
 
   return (
     <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-50 pointer-events-none w-full px-4 flex flex-col items-center">
       <div
         className={`flex flex-col bg-white/95 dark:bg-navidark-800/95 backdrop-blur-xl rounded-2xl shadow-[0_-10px_60px_-15px_rgba(0,0,0,0.4)] border border-zinc-200/50 dark:border-white/10 select-none transition-all duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] pointer-events-auto ${
-          isCollapsed ? "w-[300px] h-[52px]" : "w-full max-w-5xl h-[460px] max-h-[50vh]"
+          isCollapsed
+            ? "w-[300px] h-[52px]"
+            : "w-full max-w-5xl h-[460px] max-h-[50vh]"
         } overflow-hidden`}
       >
         {isCollapsed ? (
-          <div 
+          <div
             className="cursor-pointer flex items-center justify-between gap-3 p-2.5 px-5 h-full w-full hover:bg-zinc-50 dark:hover:bg-navidark-700 transition-colors"
             onClick={() => setIsCollapsed(false)}
           >
@@ -209,7 +213,10 @@ export function WaypointEditor({
                 <MapPin className="w-3.5 h-3.5 text-navi" /> {wp.name}
               </h2>
             </div>
-            <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+            <div
+              className="flex items-center gap-1"
+              onClick={(e) => e.stopPropagation()}
+            >
               <button
                 onClick={() => setIsCollapsed(false)}
                 className="p-1.5 rounded-lg hover:bg-zinc-200 dark:hover:bg-navidark-400 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
@@ -228,13 +235,14 @@ export function WaypointEditor({
           <div className="flex-1 flex flex-row min-w-0 h-full overflow-hidden items-stretch text-zinc-900 dark:text-zinc-100">
             {/* --- LEFT COLUMN --- */}
             <div className="w-1/3 min-w-[280px] max-w-[360px] shrink-0 border-r border-zinc-200/50 dark:border-white/10 flex flex-col overflow-y-auto scrollbar-none bg-zinc-50/30 dark:bg-navidark-800/30">
-              
               {/* TOP: Location Name & Toggles */}
               <div className="p-5 pb-5 flex flex-col gap-1">
                 <input
                   type="text"
                   value={wp.name}
-                  onChange={(e) => updateWaypoint(wp.id, { name: e.target.value })}
+                  onChange={(e) =>
+                    updateWaypoint(wp.id, { name: e.target.value })
+                  }
                   className="w-full bg-transparent border-b border-zinc-300 dark:border-white/20 text-2xl font-bold focus:outline-none focus:border-navi pb-1 truncate transition-colors"
                   placeholder="Location Name"
                 />
@@ -245,20 +253,31 @@ export function WaypointEditor({
                 <div className="mt-5 flex flex-col gap-4 pl-1">
                   {/* Skip Asset Generation Toggle */}
                   <div className="flex items-center gap-3">
-                    <label className={`flex items-center gap-3 group ${isStart || isDest ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}>
+                    <label
+                      className={`flex items-center gap-3 group ${isStart || isDest ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}
+                    >
                       <div className="relative inline-flex items-center">
-                        <input 
-                          type="checkbox" 
-                          className="sr-only peer" 
+                        <input
+                          type="checkbox"
+                          className="sr-only peer"
                           checked={wp.skipAssetGeneration || false}
                           disabled={isStart || isDest}
-                          onChange={(e) => updateWaypoint(wp.id, { skipAssetGeneration: e.target.checked })}
+                          onChange={(e) =>
+                            updateWaypoint(wp.id, {
+                              skipAssetGeneration: e.target.checked,
+                            })
+                          }
                         />
                         <div className="w-9 h-5 bg-zinc-200 peer-focus:outline-none rounded-full peer dark:bg-navidark-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-navi-500 border border-zinc-300 dark:border-white/20 peer-disabled:cursor-not-allowed"></div>
                       </div>
-                      <span className="text-[11px] font-bold text-zinc-700 dark:text-zinc-200">Skip in Video Export</span>
+                      <span className="text-[11px] font-bold text-zinc-700 dark:text-zinc-200">
+                        Skip in Video Export
+                      </span>
                     </label>
-                    <Tooltip content="Skips this location during video generation (useful for shaping the route without visiting)." position="top">
+                    <Tooltip
+                      content="Skips this location during video generation (useful for shaping the route without visiting)."
+                      position="top"
+                    >
                       <Info className="w-3.5 h-3.5 text-zinc-400 hover:text-navi transition-colors cursor-help" />
                     </Tooltip>
                   </div>
@@ -267,17 +286,30 @@ export function WaypointEditor({
                   <div className="flex items-center gap-3">
                     <label className="flex items-center gap-3 cursor-pointer group">
                       <div className="relative inline-flex items-center">
-                        <input 
-                          type="checkbox" 
-                          className="sr-only peer" 
-                          checked={wp.pauseAtWaypoint !== undefined ? wp.pauseAtWaypoint : (waypoints[wpIndex + 1]?.isStopBy === true)}
-                          onChange={(e) => updateWaypoint(wp.id, { pauseAtWaypoint: e.target.checked })}
+                        <input
+                          type="checkbox"
+                          className="sr-only peer"
+                          checked={
+                            wp.pauseAtWaypoint !== undefined
+                              ? wp.pauseAtWaypoint
+                              : waypoints[wpIndex + 1]?.isStopBy === true
+                          }
+                          onChange={(e) =>
+                            updateWaypoint(wp.id, {
+                              pauseAtWaypoint: e.target.checked,
+                            })
+                          }
                         />
                         <div className="w-9 h-5 bg-zinc-200 peer-focus:outline-none rounded-full peer dark:bg-navidark-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-navi-500 border border-zinc-300 dark:border-white/20"></div>
                       </div>
-                      <span className="text-[11px] font-bold text-zinc-700 dark:text-zinc-200">Pause at Location</span>
+                      <span className="text-[11px] font-bold text-zinc-700 dark:text-zinc-200">
+                        Pause at Location
+                      </span>
                     </label>
-                    <Tooltip content="Adds a brief pause in the generated video at this waypoint before continuing the journey." position="top">
+                    <Tooltip
+                      content="Adds a brief pause in the generated video at this waypoint before continuing the journey."
+                      position="top"
+                    >
                       <Info className="w-3.5 h-3.5 text-zinc-400 hover:text-navi transition-colors cursor-help" />
                     </Tooltip>
                   </div>
@@ -289,16 +321,24 @@ export function WaypointEditor({
 
               {/* BOTTOM: Action */}
               <div className="p-5 pt-4 flex flex-col gap-4 flex-1">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-800 dark:text-zinc-200">Action</h3>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-800 dark:text-zinc-200">
+                  Action
+                </h3>
 
                 {/* Custom Marker */}
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 border border-dashed border-zinc-300 dark:border-white/20 rounded-lg flex items-center justify-center shrink-0 bg-white dark:bg-navidark-700/50 relative overflow-hidden group shadow-sm">
                     {wp.customMarker ? (
                       <>
-                        <img src={convertFileSrc(wp.customMarker)} alt="Marker" className="w-8 h-8 object-contain" />
-                        <button 
-                          onClick={() => updateWaypoint(wp.id, { customMarker: undefined })}
+                        <img
+                          src={convertFileSrc(wp.customMarker)}
+                          alt="Marker"
+                          className="w-8 h-8 object-contain"
+                        />
+                        <button
+                          onClick={() =>
+                            updateWaypoint(wp.id, { customMarker: undefined })
+                          }
                           className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                         >
                           <Trash2 className="w-4 h-4 text-white" />
@@ -309,13 +349,20 @@ export function WaypointEditor({
                     )}
                   </div>
                   <div className="flex flex-col gap-1.5">
-                    <span className="text-[11px] font-bold text-zinc-700 dark:text-zinc-300">Custom Marker</span>
+                    <span className="text-[11px] font-bold text-zinc-700 dark:text-zinc-300">
+                      Custom Marker
+                    </span>
                     <div className="flex items-center gap-2">
                       <button
                         onClick={async () => {
                           const selected = await open({
                             multiple: false,
-                            filters: [{ name: "Images", extensions: ["svg", "png", "jpg", "jpeg"] }],
+                            filters: [
+                              {
+                                name: "Images",
+                                extensions: ["svg", "png", "jpg", "jpeg"],
+                              },
+                            ],
                           });
                           if (selected && typeof selected === "string") {
                             updateWaypoint(wp.id, { customMarker: selected });
@@ -325,8 +372,13 @@ export function WaypointEditor({
                       >
                         Select
                       </button>
-                      <span className="text-[10px] font-medium text-zinc-500 truncate max-w-[100px]" title={wp.customMarker || ""}>
-                        {wp.customMarker ? wp.customMarker.split(/[\\/]/).pop() : "No file chosen"}
+                      <span
+                        className="text-[10px] font-medium text-zinc-500 truncate max-w-[100px]"
+                        title={wp.customMarker || ""}
+                      >
+                        {wp.customMarker
+                          ? wp.customMarker.split(/[\\/]/).pop()
+                          : "No file chosen"}
                       </span>
                     </div>
                   </div>
@@ -335,69 +387,95 @@ export function WaypointEditor({
                 {/* Waypoint Settings (Grid of buttons with icons) */}
                 <div className="flex flex-col gap-2.5 mt-2">
                   <h3 className="text-[11px] font-bold flex items-center gap-1.5 text-zinc-700 dark:text-zinc-300">
-                    Waypoint settings <Info className="w-3.5 h-3.5 text-zinc-400" />
+                    Waypoint settings{" "}
+                    <Info className="w-3.5 h-3.5 text-zinc-400" />
                   </h3>
-                  
-                  <div className={`grid gap-2 ${isStopBy && !isStart && !isDest ? 'grid-cols-6' : 'grid-cols-5'}`}>
-                    <button 
+
+                  <div
+                    className={`grid gap-2 ${isStopBy && !isStart && !isDest ? "grid-cols-6" : "grid-cols-5"}`}
+                  >
+                    <button
                       onClick={() => updateWaypoint(wp.id, { isStopBy: false })}
-                      className={`flex flex-col items-center justify-center gap-1.5 p-2 rounded-xl border transition-all shadow-sm ${!isStopBy && !isStart && !isDest ? 'bg-navi-50 dark:bg-navi-900/30 border-navi text-navi-700 dark:text-navi-400' : 'bg-white dark:bg-navidark-700 border-zinc-200 dark:border-white/10 hover:border-navi-300 text-zinc-600 dark:text-zinc-300'}`}
+                      className={`flex flex-col items-center justify-center gap-1.5 p-2 rounded-xl border transition-all shadow-sm ${!isStopBy && !isStart && !isDest ? "bg-navi-50 dark:bg-navi-900/30 border-navi text-navi-700 dark:text-navi-400" : "bg-white dark:bg-navidark-700 border-zinc-200 dark:border-white/10 hover:border-navi-300 text-zinc-600 dark:text-zinc-300"}`}
                     >
                       <Navigation className="w-4 h-4" />
-                      <span className="text-[9px] font-bold max-[1414px]:hidden">Node</span>
+                      <span className="text-[9px] font-bold max-[1414px]:hidden">
+                        Node
+                      </span>
                     </button>
-                    
-                    <button 
+
+                    <button
                       onClick={() => updateWaypoint(wp.id, { isStopBy: true })}
-                      className={`flex flex-col items-center justify-center gap-1.5 p-2 rounded-xl border transition-all shadow-sm ${isStopBy && !isStart && !isDest ? 'bg-navi-50 dark:bg-navi-900/30 border-navi text-navi-700 dark:text-navi-400' : 'bg-white dark:bg-navidark-700 border-zinc-200 dark:border-white/10 hover:border-navi-300 text-zinc-600 dark:text-zinc-300'}`}
+                      className={`flex flex-col items-center justify-center gap-1.5 p-2 rounded-xl border transition-all shadow-sm ${isStopBy && !isStart && !isDest ? "bg-navi-50 dark:bg-navi-900/30 border-navi text-navi-700 dark:text-navi-400" : "bg-white dark:bg-navidark-700 border-zinc-200 dark:border-white/10 hover:border-navi-300 text-zinc-600 dark:text-zinc-300"}`}
                     >
                       <MapPinned className="w-4 h-4" />
-                      <span className="text-[9px] font-bold max-[1414px]:hidden">Stop-by</span>
+                      <span className="text-[9px] font-bold max-[1414px]:hidden">
+                        Stop-by
+                      </span>
                     </button>
-                    
+
                     {isStopBy && !isStart && !isDest && (
-                      <button 
-                        onClick={() => updateWaypoint(wp.id, { connectToRoute: wp.connectToRoute === false ? true : false })}
-                        className={`flex flex-col items-center justify-center gap-1.5 p-2 rounded-xl border transition-all shadow-sm ${wp.connectToRoute !== false ? 'bg-emerald-50 dark:bg-emerald-900/30 border-emerald-500 text-emerald-700 dark:text-emerald-400' : 'bg-zinc-100 dark:bg-navidark-600 border-zinc-300 dark:border-white/20 text-zinc-600 dark:text-zinc-400'}`}
-                        title={wp.connectToRoute !== false ? "Connected to route" : "Disconnected from route"}
+                      <button
+                        onClick={() =>
+                          updateWaypoint(wp.id, {
+                            connectToRoute:
+                              wp.connectToRoute === false ? true : false,
+                          })
+                        }
+                        className={`flex flex-col items-center justify-center gap-1.5 p-2 rounded-xl border transition-all shadow-sm ${wp.connectToRoute !== false ? "bg-emerald-50 dark:bg-emerald-900/30 border-emerald-500 text-emerald-700 dark:text-emerald-400" : "bg-zinc-100 dark:bg-navidark-600 border-zinc-300 dark:border-white/20 text-zinc-600 dark:text-zinc-400"}`}
+                        title={
+                          wp.connectToRoute !== false
+                            ? "Connected to route"
+                            : "Disconnected from route"
+                        }
                       >
-                        {wp.connectToRoute !== false ? <LinkIcon className="w-4 h-4" /> : <UnlinkIcon className="w-4 h-4" />}
-                        <span className="text-[9px] font-bold max-[1414px]:hidden">{wp.connectToRoute !== false ? "Linked" : "Unlinked"}</span>
+                        {wp.connectToRoute !== false ? (
+                          <LinkIcon className="w-4 h-4" />
+                        ) : (
+                          <UnlinkIcon className="w-4 h-4" />
+                        )}
+                        <span className="text-[9px] font-bold max-[1414px]:hidden">
+                          {wp.connectToRoute !== false ? "Linked" : "Unlinked"}
+                        </span>
                       </button>
                     )}
 
-                    <button 
+                    <button
                       disabled
-                      className={`flex flex-col items-center justify-center gap-1.5 p-2 rounded-xl border transition-all shadow-sm ${isStart ? 'bg-emerald-50 dark:bg-emerald-900/30 border-emerald-500 text-emerald-700 dark:text-emerald-400' : 'bg-white dark:bg-navidark-700 border-zinc-200 dark:border-white/10 opacity-50'}`}
+                      className={`flex flex-col items-center justify-center gap-1.5 p-2 rounded-xl border transition-all shadow-sm ${isStart ? "bg-emerald-50 dark:bg-emerald-900/30 border-emerald-500 text-emerald-700 dark:text-emerald-400" : "bg-white dark:bg-navidark-700 border-zinc-200 dark:border-white/10 opacity-50"}`}
                     >
                       <PlayCircle className="w-4 h-4" />
-                      <span className="text-[9px] font-bold max-[1414px]:hidden">Start</span>
+                      <span className="text-[9px] font-bold max-[1414px]:hidden">
+                        Start
+                      </span>
                     </button>
 
-                    <button 
+                    <button
                       disabled
-                      className={`flex flex-col items-center justify-center gap-1.5 p-2 rounded-xl border transition-all shadow-sm ${isDest ? 'bg-indigo-50 dark:bg-indigo-900/30 border-indigo-500 text-indigo-700 dark:text-indigo-400' : 'bg-white dark:bg-navidark-700 border-zinc-200 dark:border-white/10 opacity-50'}`}
+                      className={`flex flex-col items-center justify-center gap-1.5 p-2 rounded-xl border transition-all shadow-sm ${isDest ? "bg-indigo-50 dark:bg-indigo-900/30 border-indigo-500 text-indigo-700 dark:text-indigo-400" : "bg-white dark:bg-navidark-700 border-zinc-200 dark:border-white/10 opacity-50"}`}
                     >
                       <CheckCircle2 className="w-4 h-4" />
-                      <span className="text-[9px] font-bold max-[1414px]:hidden">Dest</span>
+                      <span className="text-[9px] font-bold max-[1414px]:hidden">
+                        Dest
+                      </span>
                     </button>
 
-                    <button 
+                    <button
                       onClick={() => removeWaypoint(wp.id)}
                       className="flex flex-col items-center justify-center gap-1.5 p-2 rounded-xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-navidark-700 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 hover:border-red-200 transition-all shadow-sm"
                     >
                       <Trash2 className="w-4 h-4" />
-                      <span className="text-[9px] font-bold max-[1414px]:hidden">Delete</span>
+                      <span className="text-[9px] font-bold max-[1414px]:hidden">
+                        Delete
+                      </span>
                     </button>
                   </div>
                 </div>
-
               </div>
             </div>
 
             {/* --- RIGHT COLUMN --- */}
             <div className="flex-1 flex flex-col min-w-0 bg-white dark:bg-navidark-800">
-              
               {/* Tabs & Window Controls */}
               <div className="flex border-b border-zinc-200/50 dark:border-white/10 h-[56px] shrink-0 bg-zinc-50/50 dark:bg-navidark-800">
                 <button
@@ -441,35 +519,44 @@ export function WaypointEditor({
 
               {/* Tab Content */}
               <div className="flex-1 overflow-y-auto custom-scrollbar p-6 bg-white dark:bg-navidark-800">
-                
                 {activeTab === "scripts" && (
                   <div className="space-y-6 max-w-3xl">
                     {/* Arriving Script */}
                     <div className="flex flex-col gap-3">
-                      <button 
+                      <button
                         onClick={() => setShowArriving(!showArriving)}
                         className="flex items-center gap-2 group w-max"
                       >
                         <Mic className="w-4 h-4 text-zinc-500 dark:text-zinc-400 group-hover:text-navi transition-colors" />
-                        <h3 className="text-sm font-bold text-zinc-800 dark:text-zinc-200">Arriving Script</h3>
+                        <h3 className="text-sm font-bold text-zinc-800 dark:text-zinc-200">
+                          Arriving Script
+                        </h3>
                         {showArriving ? (
                           <ChevronUp className="w-4 h-4 ml-1 text-zinc-400 group-hover:text-zinc-700 transition-colors" />
                         ) : (
                           <ChevronDown className="w-4 h-4 ml-1 text-zinc-400 group-hover:text-zinc-700 transition-colors" />
                         )}
                       </button>
-                      
+
                       {showArriving && (
                         <div className="pl-6">
                           <ScriptInput
                             value={wp.arrivingNarration || ""}
-                            onChange={(v) => updateWaypoint(wp.id, { arrivingNarration: v })}
+                            onChange={(v) =>
+                              updateWaypoint(wp.id, { arrivingNarration: v })
+                            }
                             isGenerating={wp.isGeneratingScript || false}
                             onCancel={() => {
-                              updateWaypoint(wp.id, { isGeneratingScript: false });
-                              invoke("cancel_python_blueprint").catch(console.error);
+                              updateWaypoint(wp.id, {
+                                isGeneratingScript: false,
+                              });
+                              invoke("cancel_python_blueprint").catch(
+                                console.error,
+                              );
                             }}
-                            onGenerate={(prompt, engine) => handleGenerateScript("arriving", prompt, engine)}
+                            onGenerate={(prompt, engine) =>
+                              handleGenerateScript("arriving", prompt, engine)
+                            }
                           />
                         </div>
                       )}
@@ -481,12 +568,14 @@ export function WaypointEditor({
                       <>
                         {/* Attraction Script */}
                         <div className="flex flex-col gap-3">
-                          <button 
+                          <button
                             onClick={() => setShowAttraction(!showAttraction)}
                             className="flex items-center gap-2 group w-max"
                           >
                             <Mic className="w-4 h-4 text-zinc-500 dark:text-zinc-400 group-hover:text-emerald-500 transition-colors" />
-                            <h3 className="text-sm font-bold text-zinc-800 dark:text-zinc-200">Attraction Script</h3>
+                            <h3 className="text-sm font-bold text-zinc-800 dark:text-zinc-200">
+                              Attraction Script
+                            </h3>
                             {showAttraction ? (
                               <ChevronUp className="w-4 h-4 ml-1 text-zinc-400 group-hover:text-zinc-700 transition-colors" />
                             ) : (
@@ -498,13 +587,27 @@ export function WaypointEditor({
                             <div className="pl-6">
                               <ScriptInput
                                 value={wp.attractionNarration || ""}
-                                onChange={(v) => updateWaypoint(wp.id, { attractionNarration: v })}
+                                onChange={(v) =>
+                                  updateWaypoint(wp.id, {
+                                    attractionNarration: v,
+                                  })
+                                }
                                 isGenerating={wp.isGeneratingScript || false}
                                 onCancel={() => {
-                                  updateWaypoint(wp.id, { isGeneratingScript: false });
-                                  invoke("cancel_python_blueprint").catch(console.error);
+                                  updateWaypoint(wp.id, {
+                                    isGeneratingScript: false,
+                                  });
+                                  invoke("cancel_python_blueprint").catch(
+                                    console.error,
+                                  );
                                 }}
-                                onGenerate={(prompt, engine) => handleGenerateScript("attraction", prompt, engine)}
+                                onGenerate={(prompt, engine) =>
+                                  handleGenerateScript(
+                                    "attraction",
+                                    prompt,
+                                    engine,
+                                  )
+                                }
                               />
                             </div>
                           )}
@@ -521,7 +624,8 @@ export function WaypointEditor({
                         Pop-up Images ({wpImages.length}/3)
                       </h3>
                       <p className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400 leading-tight">
-                        Add up to 3 images that will pop up during the narration at this stop.
+                        Add up to 3 images that will pop up during the narration
+                        at this stop.
                       </p>
                     </div>
 
@@ -556,7 +660,9 @@ export function WaypointEditor({
                                 </label>
                                 <select
                                   value={currentPan}
-                                  onChange={(e) => updateImagePan(idx, e.target.value)}
+                                  onChange={(e) =>
+                                    updateImagePan(idx, e.target.value)
+                                  }
                                   className="w-full bg-white dark:bg-navidark-800 border border-zinc-200 dark:border-white/10 text-zinc-700 dark:text-zinc-300 text-xs font-bold rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-navi-500 transition-colors cursor-pointer shadow-sm"
                                 >
                                   {cameraPans.map((pan) => (
@@ -584,7 +690,6 @@ export function WaypointEditor({
                   </div>
                 )}
               </div>
-
             </div>
           </div>
         )}

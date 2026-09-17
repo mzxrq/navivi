@@ -46,9 +46,9 @@ export function MapToolbar({
   const isContextOpen = activeMode === "line" && !!activeWp;
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex max-[1159px]:flex-col min-[1160px]:flex-row gap-2 transition-all">
       {/* PRIMARY TOOLS */}
-      <div className="flex items-center bg-white dark:bg-zinc-900 rounded-4xl shadow-md p-1">
+      <div className="flex max-[1159px]:flex-col min-[1160px]:flex-row items-center bg-white dark:bg-zinc-900 rounded-full max-[1159px]:rounded-3xl shadow-md p-1 transition-all">
         <button
           onClick={() => {
             setIsDrawMode(false);
@@ -83,7 +83,7 @@ export function MapToolbar({
 
       {/* CONTEXTUAL TOOLS */}
       <div
-        className={`flex items-center bg-white dark:bg-zinc-900 rounded-4xl shadow-md dark:border-zinc-800 p-1 transition-all duration-300 overflow-hidden ${isContextOpen ? "max-w-125 opacity-100 translate-x-0" : "max-w-0 opacity-0 -translate-x-4 border-none shadow-none p-0!"}`}
+        className={`flex max-[1159px]:flex-col min-[1160px]:flex-row items-center bg-white dark:bg-zinc-900 rounded-full max-[1159px]:rounded-3xl shadow-md dark:border-zinc-800 p-1 transition-all duration-300 overflow-hidden ${isContextOpen ? "max-[1159px]:max-h-[500px] min-[1160px]:max-w-[500px] opacity-100 translate-x-0 translate-y-0" : "max-[1159px]:max-h-0 min-[1160px]:max-w-0 opacity-0 max-[1159px]:-translate-y-4 min-[1160px]:-translate-x-4 border-none shadow-none p-0!"}`}
       >
         <button
           onClick={() => setIsEraserMode(!isEraserMode)}

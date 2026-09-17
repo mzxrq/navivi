@@ -24,8 +24,8 @@ export function UnifiedLayersPanel({
     <Rnd
       key="anchors-layer-panel"
       default={{
-        x: Math.max(10, window.innerWidth - 660),
-        y: 80,
+        x: window.innerWidth < 1160 ? 80 : Math.max(10, window.innerWidth - 660),
+        y: window.innerWidth < 1160 ? 16 : 80,
         width: 320,
         height: "auto",
       }}
