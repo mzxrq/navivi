@@ -635,7 +635,7 @@ export function WaypointEditor({
                       </p>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                    <div className="flex gap-5 overflow-x-auto custom-scrollbar pb-4 snap-x pr-4">
                       {wpImages.map((img, idx) => {
                         const currentPan = imagePans[idx] || "none";
 
@@ -661,7 +661,7 @@ export function WaypointEditor({
                         return (
                           <div
                             key={`${img}-${idx}`}
-                            className="flex flex-col rounded-[20px] overflow-hidden border border-zinc-200 dark:border-white/10 shadow-sm relative group"
+                            className="shrink-0 w-[240px] snap-start flex flex-col rounded-[20px] overflow-hidden border border-zinc-200 dark:border-white/10 shadow-sm relative group"
                           >
                             <button
                               onClick={() => removeImage(idx)}
@@ -681,7 +681,7 @@ export function WaypointEditor({
                             </div>
 
                             {/* Dark Bottom Half */}
-                            <div className="bg-zinc-950 text-white p-3 flex flex-col">
+                            <div className="bg-zinc-950 text-white p-3 flex flex-col flex-1">
                               <h4 className="font-semibold text-[13px] truncate mb-0.5">
                                 {img.split(/\\|\//).pop()}
                               </h4>
@@ -690,7 +690,7 @@ export function WaypointEditor({
                               </span>
 
                               {/* Buttons Row */}
-                              <div className="flex gap-2 overflow-x-auto custom-scrollbar pb-1">
+                              <div className="flex gap-2 overflow-x-auto custom-scrollbar pb-1 mt-auto">
                                 {cameraPans
                                   .filter((p) => p.value !== "none")
                                   .map((pan) => {
@@ -726,7 +726,7 @@ export function WaypointEditor({
                       {wpImages.length < 3 && (
                         <button
                           onClick={handleImageSelect}
-                          className="h-full min-h-32 bg-zinc-50 dark:bg-navidark-700/50 hover:bg-zinc-100 dark:hover:bg-navidark-600 border border-zinc-300 dark:border-white/20 hover:border-zinc-400 dark:hover:border-white/40 border-dashed rounded-xl py-3 flex flex-col items-center justify-center gap-3 text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300 transition-all group shadow-sm"
+                          className="shrink-0 w-[240px] snap-start h-auto min-h-[200px] bg-zinc-50 dark:bg-navidark-700/50 hover:bg-zinc-100 dark:hover:bg-navidark-600 border border-zinc-300 dark:border-white/20 hover:border-zinc-400 dark:hover:border-white/40 border-dashed rounded-[20px] p-6 flex flex-col items-center justify-center gap-3 text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300 transition-all group shadow-sm"
                         >
                           <ImageIcon className="w-8 h-8 opacity-60 group-hover:opacity-100 transition-opacity" />
                           <span className="text-xs font-bold">+ Add Image</span>
