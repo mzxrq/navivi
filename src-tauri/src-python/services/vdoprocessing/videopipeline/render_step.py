@@ -824,15 +824,14 @@ def render_route_video(
                     # animation. Including the start popup makes the renderer
                     # terminate on the first frame of every leg.
                     "popups": leg_popups,
-                    # Only the very first leg's departure (start_pos == 0,
-                    # the trip's own true first waypoint) ever needs its own
-                    # popup shown here -- every OTHER leg's departure is the
-                    # previous leg's destination, already previewed there
-                    # (see route2vdo.py's dest_popup_image), so re-showing
-                    # it here would just be a duplicate. Only the trip's
-                    # very first waypoint is never anyone's destination and
-                    # so never otherwise gets a residential popup moment.
-                    "trip_start_popup": route_popups[start_idx] if start_pos == 0 else None,
+                    # Every leg's own departure waypoint's popup -- shown at
+                    # this leg's OPENING (shrink), independent of whichever
+                    # PREVIOUS leg's arrival preview (grow, at actual
+                    # arrival) already showed the same waypoint's photo once
+                    # -- each leg gets its own self-contained departure +
+                    # arrival pair rather than relying on the previous leg's
+                    # ending to cover this one's beginning.
+                    "leg_start_popup": route_popups[start_idx],
                     # Symmetric case at the other end: when a trailing
                     # synthetic end_point leg is appended past the last REAL
                     # waypoint (see this function's own start/end-point

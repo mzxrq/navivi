@@ -476,6 +476,14 @@ STOPBY_BATCH_SECONDS = 2.0
 # touch the various built-in DEFAULT values used when a waypoint doesn't
 # set freeze_seconds at all — those are already <= this ceiling.
 POPUP_FREEZE_SECONDS_MAX = 3.0
+# How long a residential leg's AT-ARRIVAL destination photo is held once it
+# has grown to fullscreen (see pedestrian.py's _play_leg_photo_card
+# cut_after path). Deliberately below POPUP_MIN_DISPLAY_SECONDS — and so
+# exempt from that floor — because this one isn't a card to be read: the
+# photo has already been on screen, growing, for most of a second before
+# this hold begins, and the clip hard-cuts the instant the hold ends, so a
+# full 2-3s freeze on a still image just stalls the cut.
+RESIDENTIAL_ARRIVAL_POPUP_HOLD_SECONDS = 1.0
 # [NOTE] [Transition] Fullscreen photo transition plays as an ordered sequence: confirm (pin selected) -> scale (zoom into photo) -> blur -> fade_out; hold_ratio_of_freeze/min_hold_seconds/min_small_hold_seconds bound how long the fullscreen photo is held relative to its freeze duration before the next stage starts.
 FULLSCREEN_TRANSITION_DEFAULTS: Dict[str, float] = {
     "confirm_seconds": 0.4,

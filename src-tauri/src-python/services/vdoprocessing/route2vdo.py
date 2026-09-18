@@ -402,12 +402,11 @@ class RouteAnimator:
                 dest_popup_image = end_popup.get("popup_image_last") or end_popup.get("popup_image")
                 dest_freeze_seconds = end_popup.get("freeze_seconds")
 
-            # Only set on the trip's very first leg (see render_step.py's
-            # "trip_start_popup" comment) -- the trip's own first waypoint
-            # is never anyone's destination, so it never otherwise gets a
-            # residential popup moment; every other leg's departure is the
-            # previous leg's destination, already previewed there.
-            start_popup = res_data.get("trip_start_popup") or {}
+            # Every leg's own departure waypoint's popup (see render_step.py's
+            # "leg_start_popup" comment) -- shown at THIS leg's own opening,
+            # independent of whether the previous leg's arrival preview
+            # already showed the same waypoint's photo once.
+            start_popup = res_data.get("leg_start_popup") or {}
             start_popup_image = start_popup.get("popup_image_last") or start_popup.get("popup_image")
             start_freeze_seconds = start_popup.get("freeze_seconds")
 

@@ -948,7 +948,11 @@ def render_residential_leg_pydeck(
             "GeoJsonLayer", id="route-preview",
             data=_route_linestring_feature(route_preview_path, line_color=upcoming_color),
             stroked=True, filled=False, get_line_color="properties.line_color",
-            line_width_scale=1, line_width_min_pixels=max(2, line_thickness // 3),
+            # Exactly the walked trail's own thickness (see _record_leg's
+            # 'walker-trail' layer) -- the guide line is the SAME road, just
+            # not yet travelled, so a thinner stroke made the trail look like
+            # it was widening as it advanced rather than filling the line in.
+            line_width_scale=1, line_width_min_pixels=line_thickness,
         ),
     ]
     base_layers.extend(_landmark_layers(landmarks or [], id_prefix="leg-landmark"))
@@ -1357,7 +1361,8 @@ async def _record_leg(
 
     async def _play_leg_photo_card(
         image_path, freeze_seconds_raw, card_key: str, marker_px=None, grow: bool = False,
-    ) -> None:
+        cut_after: bool = False, hold_seconds: Optional[float] = None,
+    ) -> bool:
         """Shared by every one of this leg's photo beats -- the opening
         departure preview (`start_popup_image`, only ever set on the trip's
         very first leg), the opening destination preview
@@ -1384,23 +1389,46 @@ async def _record_leg(
         freeze -> fade out -- mirroring `_play_stopby_photo_pause`'s own
         card-then-fullscreen treatment, so the at-arrival preview reads
         consistently with every other in-route popup instead of standing
-        out as the only fullscreen-first one."""
+        out as the only fullscreen-first one.
+
+        `cut_after` (grow only): skips the fade-out -- holds at fullscreen
+        for `freeze_sec` then returns immediately, leaving the fullscreen
+        photo as the last frame written. The caller is expected to end the
+        clip right there (no outro afterward) rather than write anything
+        more after this returns.
+
+        `hold_seconds`: overrides how long the photo is held at its final
+        size, replacing both the waypoint's own `freeze_seconds_raw` AND the
+        POPUP_MIN_DISPLAY_SECONDS floor it would otherwise be clamped to --
+        the at-arrival caller uses it for a hold deliberately shorter than
+        that floor.
+
+        Returns True if it actually played something (a caller that also
+        wants to skip its own post-photo steps, like the outro, checks
+        this instead of re-deriving "did this leg have a photo" itself)."""
         if not image_path or not os.path.exists(image_path):
-            return
+            return False
         img_ext = os.path.splitext(image_path)[1] or ".jpg"
         img_name = f"leg_photo_card_{card_key}{img_ext}"
         shutil.copy2(image_path, os.path.join(html_dir, img_name))
         img_url = f"http://127.0.0.1:{port}/{img_name}"
 
-        freeze_sec = (
-            float(freeze_seconds_raw)
-            if freeze_seconds_raw is not None
-            else tuning.POPUP_MIN_DISPLAY_SECONDS
-        )
-        freeze_sec = min(
-            max(freeze_sec, tuning.POPUP_MIN_DISPLAY_SECONDS),
-            tuning.POPUP_FREEZE_SECONDS_MAX,
-        )
+        if hold_seconds is not None:
+            # Explicit override -- NOT run through the POPUP_MIN_DISPLAY_
+            # SECONDS floor below, since the only caller that passes it
+            # deliberately wants a hold shorter than that floor (see
+            # tuning.RESIDENTIAL_ARRIVAL_POPUP_HOLD_SECONDS).
+            freeze_sec = float(hold_seconds)
+        else:
+            freeze_sec = (
+                float(freeze_seconds_raw)
+                if freeze_seconds_raw is not None
+                else tuning.POPUP_MIN_DISPLAY_SECONDS
+            )
+            freeze_sec = min(
+                max(freeze_sec, tuning.POPUP_MIN_DISPLAY_SECONDS),
+                tuning.POPUP_FREEZE_SECONDS_MAX,
+            )
 
         out_w, out_h = output_size
 
@@ -1539,6 +1567,13 @@ async def _record_leg(
             for _ in range(max(1, int(freeze_sec * fps))):
                 await _write_frame(full_hold_png)
 
+            if cut_after:
+                # No fade-out, no cleanup evaluate -- the fullscreen photo
+                # is meant to be the LAST frame this clip ever writes; the
+                # caller ends the clip right after this returns instead of
+                # continuing on to an outro.
+                return True
+
             fade_frames = max(1, int(0.4 * fps))
             for i in range(fade_frames):
                 alpha = 1.0 - ((i + 1) / fade_frames)
@@ -1559,7 +1594,7 @@ async def _record_leg(
                     if (svg) svg.remove();
                 }"""
             )
-            return
+            return True
 
         await page.evaluate(
             """([url, w, h]) => new Promise((resolve) => {
@@ -1698,6 +1733,7 @@ async def _record_leg(
                 if (svg) svg.remove();
             }"""
         )
+        return True
 
     server, port = start_local_server(html_dir)
     try:
@@ -1832,29 +1868,13 @@ async def _record_leg(
                     if start_popup_image:
                         # Departure photo preview: only ever set on the
                         # trip's very first leg (see `start_popup_image`
-                        # docstring). This leg's OWN destination preview is
-                        # deliberately skipped when this fires -- two
-                        # fullscreen photo beats back to back at the very
-                        # start of the whole video read as redundant, so the
-                        # departure photo wins and the arrival photo is left
-                        # for whichever later leg would otherwise be its own
-                        # first showing (every other leg still gets its own
-                        # arrival preview as normal).
+                        # docstring). Every leg's own DESTINATION photo now
+                        # plays at actual arrival instead (see the `grow=True`
+                        # call further down, right as the walker reaches it)
+                        # -- not here at the opening -- so this departure
+                        # beat is the only thing shown at any leg's opening.
                         await _play_leg_photo_card(
                             start_popup_image, start_popup_freeze_seconds, "start"
-                        )
-                    else:
-                        # Destination photo preview: opens full-bleed over
-                        # this same top-down establishing frame (map + start
-                        # marker + grey route guideline already visible
-                        # underneath), then shrinks down to the normal small
-                        # popup-card size and freezes there -- a "here's
-                        # where you're headed" beat before the card fades
-                        # and the establishing shot zooms in toward the
-                        # start marker below. Skipped entirely when this
-                        # leg's destination has no popup photo.
-                        await _play_leg_photo_card(
-                            dest_popup_image, dest_popup_freeze_seconds, "dest"
                         )
 
                     for i in range(intro_frames):
@@ -2108,26 +2128,28 @@ async def _record_leg(
                     await page.wait_for_timeout(20)
                     last_png_bytes = await page.screenshot()
 
-                    # This leg's own destination preview was skipped at its
-                    # OPENING (see the `start_popup_image` branch above) in
-                    # favor of the departure photo there -- played here
-                    # instead, RIGHT as the walker arrives (before the plain
-                    # hold below), now that the destination pin has a real
-                    # on-screen position to anchor a leader line to (unlike
-                    # at the opening, where it doesn't exist on screen yet).
-                    # Its own fullscreen hold already covers this beat, so
-                    # the generic hold_frames freeze right after is skipped
-                    # for this leg -- playing it AFTER that hold would pop
-                    # the photo up noticeably late, well past the moment of
-                    # arrival instead of right on it.
-                    if start_popup_image:
+                    # EVERY leg's own destination photo plays here, RIGHT as
+                    # the walker arrives (before the plain hold below), now
+                    # that the destination pin has a real on-screen position
+                    # to anchor a leader line to (unlike at the opening,
+                    # where it doesn't exist on screen yet) -- not just
+                    # leg 0's. cut_after=True: no fade-out, no outro
+                    # afterward -- the clip ends right on the fullscreen
+                    # arrival photo, a hard cut instead of fading back to
+                    # the map first. Skipped (falls back to a plain hold +
+                    # the normal outro) only when this leg's destination has
+                    # no popup photo at all.
+                    cut_on_arrival = False
+                    if dest_popup_image:
                         arrival_marker_px = _project_lonlat_to_px(
                             dest_lon, dest_lat, locked_lon, locked_lat, locked_zoom,
                             output_size, pitch=follow_pitch,
                         )
-                        await _play_leg_photo_card(
+                        cut_on_arrival = await _play_leg_photo_card(
                             dest_popup_image, dest_popup_freeze_seconds,
                             "dest_arrival", marker_px=arrival_marker_px, grow=True,
+                            cut_after=True,
+                            hold_seconds=tuning.RESIDENTIAL_ARRIVAL_POPUP_HOLD_SECONDS,
                         )
                     else:
                         hold_frames = max(0, int(arrival_hold_seconds * fps))
@@ -2142,7 +2164,10 @@ async def _record_leg(
                     # (see intro block) starts on its own overview shot and
                     # descends back in -- cutting the two together reads as
                     # the camera changing focus to a new stretch of road.
-                    outro_frames = max(0, int(topdown_transition_seconds * fps))
+                    # Skipped entirely when the arrival photo just cut the
+                    # clip -- there's nothing left to ease back out FROM,
+                    # the fullscreen photo was already the last frame.
+                    outro_frames = 0 if cut_on_arrival else max(0, int(topdown_transition_seconds * fps))
                     if outro_frames > 0:
                         last_row = smooth_df.iloc[-1]
                         for i in range(outro_frames):
