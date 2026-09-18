@@ -196,7 +196,8 @@ def generate_audio(
             "subtitle_paths": [],
         }
     except Exception as e:
-        logger.error("Step 2 failed: TTS Audio generation encountered an error: %s", e)
+        import traceback
+        logger.error("Step 2 failed: TTS Audio generation encountered an error: %s\n%s", e, traceback.format_exc())
         # [NOTE] [TTS] Pad out to one entry per waypoint (rather than discarding) so a mid-loop failure still returns whatever audio was already generated, index-aligned with waypoints.
         pad_count = max(0, len(waypoints) - len(audio_durations))
         audio_durations.extend([0.0] * pad_count)

@@ -12,6 +12,7 @@ import {
   Undo2,
   Redo2,
   Film,
+  Navivi,
 } from "../ui/icons";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { SaveAs } from "./SaveAs";
@@ -189,7 +190,7 @@ export function TitleBar() {
 
             {/* Dropdown Menu */}
             {isMenuOpen && (
-              <div className="absolute top-10 w-56 bg-white dark:bg-navidark-600 border border-zinc-200 dark:border-white/10 rounded-br-2xl shadow-2xl py-1 z-800 text-sm text-zinc-700 dark:text-zinc-300">
+              <div className="absolute top-10 w-56 -left-2 bg-white dark:bg-navidark-600 border border-zinc-200 dark:border-white/10 rounded-br-2xl shadow-2xl py-1 z-800 text-sm text-zinc-700 dark:text-zinc-300">
                 {currentView === "editor" && (
                   <>
                     <button
@@ -324,7 +325,7 @@ export function TitleBar() {
             data-tauri-drag-region
             className="flex items-center justify-center gap-2 text-xs font-medium text-zinc-500 dark:text-zinc-400"
           >
-            <Map className="w-4 h-4 text-navi dark:text-navi pointer-events-none" />
+            <Navivi className="w-4 h-4 text-navi dark:text-navi pointer-events-none" />
             <span className="text-zinc-800 dark:text-zinc-300 pointer-events-none">
               Navivi
             </span>

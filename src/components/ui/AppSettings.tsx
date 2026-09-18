@@ -15,6 +15,7 @@ import {
   Film,
   Sparkles,
   CheckCircle2,
+  NaviviType,
 } from "./icons";
 import { open } from "@tauri-apps/plugin-dialog";
 import { convertFileSrc } from "@tauri-apps/api/core";
@@ -240,8 +241,8 @@ export function AppSettings() {
                     </div>
                   </div>
                 )}
-                <div>
-                  <img src="/public/navivi-type.svg" alt="" />
+                <div className="mt-8 flex justify-center opacity-50">
+                  <NaviviType className="h-6 text-zinc-500" />
                 </div>
               </div>
             )}

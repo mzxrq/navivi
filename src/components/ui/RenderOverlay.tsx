@@ -323,7 +323,7 @@ export function RenderOverlay() {
       showToast("Quick Render started...", "info");
       await invoke("run_python_blueprint", {
         action: metadata.directory_path + "/job_config.json",
-        payload: "concat"
+        payload: "concat",
       });
       showToast("Quick Render complete!", "success");
     } catch (err: any) {
@@ -506,8 +506,8 @@ export function RenderOverlay() {
           {step === "generating" && (
             <div className="flex-1 flex flex-col items-center justify-center text-center animate-in fade-in duration-500 py-12 px-6">
               {status === "processing" ? (
-                <div className="w-full max-w-lg mx-auto">
-                  <div className="relative w-24 h-24 mx-auto mb-8">
+                <div className="w-full max-w-2xl mx-auto flex flex-col items-center">
+                  <div className="relative w-24 h-24 mx-auto mb-6">
                     <div className="absolute inset-0 border-4 border-zinc-100 dark:border-zinc-800 rounded-full"></div>
                     <svg
                       className="absolute inset-0 w-full h-full -rotate-90"
@@ -533,13 +533,42 @@ export function RenderOverlay() {
                     </div>
                   </div>
 
-                  <h3 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100 mb-2">
+                  <h3 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 mb-2">
                     Generating Assets...
                   </h3>
-                  <p className="text-sm text-zinc-500">
-                    Rendering map flythroughs, synthesizing AI voiceovers, and
-                    preparing your timeline.
-                  </p>
+
+                  <div className="mt-4 px-6 py-3 bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 rounded-xl inline-flex items-center gap-3">
+                    <Loader2 className="w-4 h-4 text-navi-500 animate-spin" />
+                    <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                      {(() => {
+                        const latestLog =
+                          logs[logs.length - 1]?.message ||
+                          "Initializing pipeline...";
+                        if (latestLog.includes("Parsing GPS track"))
+                          return "Parsing Maps & GPS Data...";
+                        if (latestLog.includes("Generating TTS"))
+                          return "Synthesizing AI Voiceovers...";
+                        if (latestLog.includes("subtitles"))
+                          return "Generating Subtitles...";
+                        if (
+                          latestLog.includes("attraction video") ||
+                          latestLog.includes("images")
+                        )
+                          return "Rendering Media & Animations...";
+                        if (latestLog.includes("timeline"))
+                          return "Finalizing Project Timeline...";
+                        // Hide raw tracker timestamps for friendliness
+                        const cleanLog = latestLog.replace(
+                          /^\[\d{2}:\d{2}\]\s*(\[\d+\/\d+\])?\s*/,
+                          "",
+                        );
+                        return (
+                          cleanLog.substring(0, 50) +
+                          (cleanLog.length > 50 ? "..." : "")
+                        );
+                      })()}
+                    </span>
+                  </div>
                 </div>
               ) : status === "cancelling" ? (
                 <div className="flex flex-col items-center justify-center">
@@ -552,16 +581,44 @@ export function RenderOverlay() {
                   </p>
                 </div>
               ) : status === "error" ? (
-                <div className="flex flex-col items-center justify-center">
-                  <div className="w-16 h-16 bg-red-50 dark:bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
-                    <AlertTriangle className="w-8 h-8 text-red-500" />
+                <div className="flex flex-col items-center justify-center max-w-lg mx-auto text-center">
+                  <div className="w-20 h-20 bg-red-50 dark:bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <AlertTriangle className="w-10 h-10 text-red-500" />
                   </div>
-                  <h3 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100 mb-2">
+                  <h3 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 mb-2">
                     Generation Failed
                   </h3>
-                  <p className="text-sm text-zinc-500">
-                    Please review the terminal logs below for more details.
-                  </p>
+                  <div className="mt-4 p-4 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 rounded-xl text-left w-full">
+                    <h4 className="text-sm font-bold text-red-800 dark:text-red-400 mb-1">
+                      Error Details:
+                    </h4>
+                    <p className="text-sm text-red-600 dark:text-red-300">
+                      {(() => {
+                        const errLog = [...logs]
+                          .reverse()
+                          .find(
+                            (l) =>
+                              l.type === "error" ||
+                              l.message.includes("[ERROR]"),
+                          );
+                        if (!errLog)
+                          return "An unknown error occurred during rendering.";
+                        let msg = errLog.message.replace(
+                          /^.*?\[ERROR\]\s*/,
+                          "",
+                        );
+                        if (
+                          msg.includes(
+                            "TTS Audio generation encountered an error:",
+                          ) &&
+                          msg.trim().endsWith(":")
+                        ) {
+                          return "The Irodori TTS backend crashed or timed out. Please verify that your local Irodori server is running and accessible on its assigned port.";
+                        }
+                        return msg;
+                      })()}
+                    </p>
+                  </div>
                 </div>
               ) : null}
             </div>
