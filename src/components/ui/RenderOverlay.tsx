@@ -63,11 +63,30 @@ export function RenderOverlay() {
   const [reviewItems, setReviewItems] = useState<ScriptReviewItem[]>([]);
   const [videoItems, setVideoItems] = useState<VideoReviewItem[]>([]); // ✨ NEW: Video Previews
   const [activeAudioId, setActiveAudioId] = useState<string | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const skipVerification = (settings as any).skip_audio_verification === true;
+
+  // Track elapsed time during generating step
+  useEffect(() => {
+    let interval: number | undefined;
+    if (isRendering && step === "generating" && status === "processing") {
+      interval = window.setInterval(() => {
+        setElapsedSeconds((prev) => prev + 1);
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [isRendering, step, status]);
+
+  // Reset timer on new render
+  useEffect(() => {
+    if (!isRendering) {
+      setElapsedSeconds(0);
+    }
+  }, [isRendering]);
 
   // Auto-scroll terminal smoothly
   useEffect(() => {
@@ -404,7 +423,7 @@ export function RenderOverlay() {
       style={{ zIndex: 99999 }}
       className="fixed inset-0 backdrop-blur-sm flex items-center justify-center p-4 sm:p-4 animate-in fade-in duration-300"
     >
-      <div className="w-2xl max-w-2xl bg-white dark:bg-zinc-950 rounded-2xl shadow-[0_0_80px_-15px_rgba(0,0,0,0.5)] border border-zinc-200 dark:border-zinc-800/80 flex flex-col overflow-hidden animate-in zoom-in-95 duration-400">
+      <div className="w-2xl max-w-2xl max-h-[90vh] bg-white dark:bg-zinc-950 rounded-2xl shadow-[0_0_80px_-15px_rgba(0,0,0,0.5)] border border-zinc-200 dark:border-zinc-800/80 flex flex-col overflow-hidden animate-in zoom-in-95 duration-400">
         {/* Header */}
         <div className="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-900/20 shrink-0">
           <div className="flex items-center justify-between mb-8">
@@ -537,37 +556,51 @@ export function RenderOverlay() {
                     Generating Assets...
                   </h3>
 
-                  <div className="mt-4 px-6 py-3 bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 rounded-xl inline-flex items-center gap-3">
-                    <Loader2 className="w-4 h-4 text-navi-500 animate-spin" />
-                    <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                      {(() => {
-                        const latestLog =
-                          logs[logs.length - 1]?.message ||
-                          "Initializing pipeline...";
-                        if (latestLog.includes("Parsing GPS track"))
-                          return "Parsing Maps & GPS Data...";
-                        if (latestLog.includes("Generating TTS"))
-                          return "Synthesizing AI Voiceovers...";
-                        if (latestLog.includes("subtitles"))
-                          return "Generating Subtitles...";
-                        if (
-                          latestLog.includes("attraction video") ||
-                          latestLog.includes("images")
-                        )
-                          return "Rendering Media & Animations...";
-                        if (latestLog.includes("timeline"))
-                          return "Finalizing Project Timeline...";
-                        // Hide raw tracker timestamps for friendliness
-                        const cleanLog = latestLog.replace(
-                          /^\[\d{2}:\d{2}\]\s*(\[\d+\/\d+\])?\s*/,
-                          "",
-                        );
-                        return (
-                          cleanLog.substring(0, 50) +
-                          (cleanLog.length > 50 ? "..." : "")
-                        );
-                      })()}
-                    </span>
+                  <div className="mt-4 px-6 py-3 bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 rounded-xl flex items-center justify-between w-full max-w-sm">
+                    <div className="flex items-center gap-3">
+                      <Loader2 className="w-4 h-4 text-navi-500 animate-spin" />
+                      <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                        {(() => {
+                          const latestLog =
+                            logs[logs.length - 1]?.message ||
+                            "Initializing pipeline...";
+
+                          // Hide raw tracker timestamps for friendliness and extract waypoint progress (e.g. "2/19")
+                          const cleanLog = latestLog.replace(
+                            /^\[\d{2}:\d{2}\]\s*(\[\d+\/\d+\])?\s*/,
+                            "",
+                          );
+                          const fractionMatch =
+                            cleanLog.match(/\b(\d+\/\d+)\b/);
+                          const progress = fractionMatch
+                            ? ` ${fractionMatch[1]}`
+                            : "";
+
+                          if (latestLog.includes("Parsing GPS track"))
+                            return `Parsing Maps & GPS Data${progress}...`;
+                          if (latestLog.includes("Generating TTS"))
+                            return `Synthesizing AI Voiceovers${progress}...`;
+                          if (latestLog.includes("subtitles"))
+                            return `Generating Subtitles${progress}...`;
+                          if (
+                            latestLog.includes("attraction video") ||
+                            latestLog.includes("images")
+                          )
+                            return `Rendering Media & Animations${progress}...`;
+                          if (latestLog.includes("timeline"))
+                            return `Finalizing Project Timeline${progress}...`;
+
+                          return (
+                            cleanLog.substring(0, 50) +
+                            (cleanLog.length > 50 ? "..." : "")
+                          );
+                        })()}
+                      </span>
+                    </div>
+                    <div className="text-xs font-semibold text-zinc-400 tabular-nums ml-4 tracking-wider">
+                      {Math.floor(elapsedSeconds / 60)}:
+                      {(elapsedSeconds % 60).toString().padStart(2, "0")}
+                    </div>
                   </div>
                 </div>
               ) : status === "cancelling" ? (
@@ -626,7 +659,7 @@ export function RenderOverlay() {
 
           {/* STEP 2: VERIFYING */}
           {step === "verifying" && (
-            <div className="flex-1 flex flex-col gap-8 animate-in slide-in-from-right-8 duration-500 p-8">
+            <div className="flex-1 flex flex-col gap-8 animate-in slide-in-from-right-8 duration-500 p-8 overflow-y-auto custom-scrollbar">
               {videoItems.length > 0 && (
                 <div className="space-y-4">
                   <div className="flex items-center gap-2 text-zinc-900 dark:text-zinc-100">

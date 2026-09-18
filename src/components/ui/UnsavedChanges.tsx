@@ -16,7 +16,6 @@ export function UnsavedChanges({
   onDiscard,
   onSave,
 }: UnsavedChangesProps) {
-  
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
       if (e.key === "Escape" && isOpen) onCancel();
@@ -67,6 +66,6 @@ export function UnsavedChanges({
         </div>
       </div>
     </div>,
-    document.body
+    document.body,
   );
 }

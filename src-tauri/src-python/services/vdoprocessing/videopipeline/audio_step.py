@@ -149,20 +149,41 @@ def generate_audio(
                     subtitle_paths.append(None)
                     continue
 
+                # Proactively restart the TTS server every 4 waypoints to prevent RAM/VRAM 
+                # exhaustion on long CPU runs. It will auto-restart on the next call.
+                if idx > 0 and idx % 4 == 0:
+                    logger.info("Proactively restarting TTS server to clear RAM/VRAM...")
+                    client.stop_server()
+                    await asyncio.sleep(2.0)
+
                 tracker.show(f"Generating TTS {idx + 1}/{len(waypoints)}: {label}")
+                
                 try:
                     clip = await generate_waypoint_audio(
                         wp, idx, client, processor, output_dir, force=force
                     )
                 except ValueError:
-                    # Safety net for any other validation inside
-                    # generate_waypoint_audio — the script check above
-                    # should already catch the common case.
+                    # Safety net for missing script
                     audio_durations.append(0.0)
                     audio_pauses.append([])
                     audio_paths.append(None)
                     subtitle_paths.append(None)
                     continue
+                except Exception as exc:
+                    logger.warning("TTS crashed for %s (%s). Restarting server and retrying once...", label, exc)
+                    client.stop_server()
+                    await asyncio.sleep(2.0)
+                    try:
+                        clip = await generate_waypoint_audio(
+                            wp, idx, client, processor, output_dir, force=force
+                        )
+                    except Exception as retry_exc:
+                        logger.error("TTS retry failed for %s (%s). Skipping audio.", label, retry_exc)
+                        audio_durations.append(0.0)
+                        audio_pauses.append([])
+                        audio_paths.append(None)
+                        subtitle_paths.append(None)
+                        continue
 
                 audio_durations.append(clip["duration_seconds"])
                 audio_pauses.append(clip["pauses"])

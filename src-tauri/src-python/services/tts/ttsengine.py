@@ -459,13 +459,12 @@ class IrodoriTTSClient:
 
     async def _post_speech(self, payload: Dict[str, Any]) -> bytes:
         async with httpx.AsyncClient() as client:
-            response = await client.post(self.base_url, json=payload, timeout=30.0)
+            response = await client.post(self.base_url, json=payload, timeout=None)
 
             if response.status_code != 200:
-                logger.info(f"Server returned {response.status_code}: {response.text}")
-                raise Exception(
-                    f"API request failed with status {response.status_code}"
-                )
+                error_msg = f"API request failed with status {response.status_code}: {response.text}"
+                logger.error(error_msg)
+                raise Exception(error_msg)
 
             self._touch_activity()
             return response.content

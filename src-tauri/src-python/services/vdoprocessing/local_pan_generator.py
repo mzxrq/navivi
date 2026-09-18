@@ -139,9 +139,14 @@ def _describe_scene(pil_img: Image.Image) -> str:
 
 
 def _outpaint(raw: Image.Image) -> Image.Image:
-    """SDXL inpainting checkpoint + mirror-seeded extension (see
-    services/model/outpaint_pan.py). Returns a wider canvas; raises on any
-    failure so the caller can fall back to a plain (non-outpainted) pan."""
+    """SDXL inpainting checkpoint + mirror-seeded extension.
+    Returns a wider canvas; raises on any failure so the caller can fall back to a plain (non-outpainted) pan."""
+    
+    # [NOTE] SDXL outpainting is unbearably slow (hours) on CPU. If CUDA isn't available,
+    # skip it immediately so we gracefully fallback to a standard static pan.
+    if not torch.cuda.is_available():
+        raise RuntimeError("CUDA is not available. Skipping SDXL outpainting to prevent endless CPU hang.")
+
     prompt = _describe_scene(raw) + CAPTION_SUFFIX
     logger.info("Outpaint prompt: %s", prompt)
 
