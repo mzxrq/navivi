@@ -377,6 +377,26 @@ class TileDownloader:
         center_lat = chunk_df["latitude"].mean()
         center_lon = chunk_df["longitude"].mean()
 
+        # The wide establishing shot's own multiplier (bbox_multiplier,
+        # normally RESIDENTIAL_WIDE_BBOX_MULTIPLIER=2.5) is tuned for a
+        # genuinely long leg (a multi-km ferry/hike stretch), where zooming
+        # out that much still reads as "establishing". Applied unscaled to
+        # a short, local/residential-scale leg (pins within
+        # RESIDENTIAL_MIN_ZOOM_MAX_PIN_DISTANCE_M of each other — the same
+        # "local" threshold the tight tile's own min-zoom floor uses) it
+        # zoomed out far enough to swallow whole neighboring hills/bays
+        # having nothing to do with this leg's actual walk. Tapered down to
+        # RESIDENTIAL_WIDE_BBOX_MULTIPLIER_LOCAL for those short legs only
+        # (never for the tight tile itself, apply_min_zoom=True, which
+        # always calls in with bbox_multiplier=1.0 anyway).
+        pin_dist_lon_scale = math.cos(math.radians((start_lat + end_lat) / 2.0))
+        pin_distance_for_taper_m = math.hypot(
+            (end_lat - start_lat) * 111_320.0,
+            (end_lon - start_lon) * 111_320.0 * pin_dist_lon_scale,
+        )
+        if not apply_min_zoom and pin_distance_for_taper_m <= tuning.RESIDENTIAL_MIN_ZOOM_MAX_PIN_DISTANCE_M:
+            bbox_multiplier = min(bbox_multiplier, tuning.RESIDENTIAL_WIDE_BBOX_MULTIPLIER_LOCAL)
+
         # Half-extent from the path's own full bounding box — not the
         # straight-line distance between just the two pins — so a loop or
         # detour is guaranteed to stay in frame instead of running off an
@@ -438,17 +458,20 @@ class TileDownloader:
         meters_per_deg_lon = 111_320.0 * math.cos(math.radians(center_lat))
         span_meters = max(lat_span * meters_per_deg_lat, lon_span * meters_per_deg_lon)
 
-        optimal_zoom = (
-            20 if span_meters <= 150 else
-            19 if span_meters <= 350 else
-            18 if span_meters <= 700 else
-            17 if span_meters <= 1400 else
-            16 if span_meters <= 3000 else
-            15 if span_meters <= 6000 else
-            14 if span_meters <= 12000 else
-            13 if span_meters <= 25000 else
-            12 if span_meters <= 50000 else
-            11
+        # Same density-calibrated formula fetch_overview_image uses (see
+        # _optimal_zoom_for_span's docstring) instead of the old fixed
+        # span-threshold table: that table was tuned for plain 256px tiles
+        # and, unaware of this provider's ~2.537x/5.073x (retina) pixel
+        # density, picked a zoom that over-fetched relative to output_size
+        # — the extra LANCZOS downsampling on resize crushed place-name
+        # labels the same way it did on the overview map before that fix.
+        out_w, _out_h_unused = output_size
+        is_retina = bool(self.provider.get("r")) if hasattr(self.provider, "get") else False
+        tilesize_512_quirk = (
+            hasattr(self.provider, "get") and self.provider.get("tileSize") == 512
+        )
+        optimal_zoom = self._optimal_zoom_for_span(
+            span_meters, out_w, retina=is_retina, tilesize_512_quirk=tilesize_512_quirk
         )
         # Ceiling independent of the provider's own MAX_ZOOM_LEVEL (a
         # capability limit, not a "looks good" limit) — a very short/tight

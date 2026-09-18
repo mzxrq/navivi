@@ -275,21 +275,48 @@ class RouteAnimator:
         the same filename it would have had in a full-sequence run.
         """
         from services.vdoprocessing.pydeckrecorder.pedestrian import render_residential_leg_pydeck
+        from services.vdoprocessing.videopipeline.helpers import attraction_output_filename
 
-        # Every leg's own [(lat, lon), ...], in order — used below to build
-        # each leg's "the rest of the trip" context (everything before it
-        # already walked, in blue; everything after it still ahead, in
-        # green — matching the reference's three-way route coloring). A
-        # leg with no usable track still gets a `[]` placeholder so later
-        # legs' indices into this list stay aligned with res_sequence.
-        all_leg_latlon = []
-        for res_data in res_sequence:
-            lats, lons = res_data.get("lats"), res_data.get("lons")
-            all_leg_latlon.append(list(zip(lats, lons)) if lats is not None and lons is not None else [])
+        # Maps a waypoint's stable job_config "id" to its RAW 0-based
+        # position in job_config's own "waypoints" array -- the same index
+        # helpers.attraction_output_filename names that waypoint's
+        # attraction-video file with. Built once here (not from
+        # render_step.py's own res_waypoints, which can have a synthetic
+        # start/end point PREPENDED -- see render_step.py's own comment on
+        # that -- shifting every real position by one) so a connected
+        # stop-by's attraction-video lookup below always matches the file
+        # the attraction pipeline actually produced.
+        waypoint_id_to_idx: Dict[str, int] = {}
+        attraction_dir = None
+        job_config_path = self.config.get("res_route_path")
+        if job_config_path and os.path.exists(job_config_path):
+            try:
+                with open(job_config_path, "r", encoding="utf-8") as f:
+                    _raw_job_config = json.load(f)
+                for _idx, _wp in enumerate(_raw_job_config.get("waypoints", [])):
+                    if _wp.get("id"):
+                        waypoint_id_to_idx[_wp["id"]] = _idx
+                # Route and attraction outputs are SIBLING subfolders under
+                # the same assets/video/ parent (see helpers.py's own
+                # project_route_video_dir/project_attraction_video_dir) --
+                # self.out_dir IS project_route_video_dir already, so its
+                # sibling is exactly project_attraction_video_dir without
+                # needing to re-derive the project root path.
+                attraction_dir = self.out_dir.parent / "attraction"
+            except (OSError, json.JSONDecodeError) as e:
+                logger.warning(f"Could not read job_config for attraction-video lookup: {e}")
+
+        def _attraction_video_for(waypoint_id: Optional[str], label: Optional[str]) -> Optional[str]:
+            if not waypoint_id or waypoint_id not in waypoint_id_to_idx or attraction_dir is None:
+                return None
+            idx = waypoint_id_to_idx[waypoint_id]
+            candidate = attraction_dir / attraction_output_filename(idx, label or f"waypoint_{idx}")
+            return str(candidate) if candidate.exists() else None
 
         output_paths = []
         for i, res_data in enumerate(res_sequence):
-            leg_latlon = all_leg_latlon[i]
+            lats, lons = res_data.get("lats"), res_data.get("lons")
+            leg_latlon = list(zip(lats, lons)) if lats is not None and lons is not None else []
             if len(leg_latlon) < 2:
                 logger.warning(f"Skipping residential leg {i}: no usable lat/lon track.")
                 continue
@@ -318,14 +345,50 @@ class RouteAnimator:
             # real-world (see render_residential_leg_pydeck's docstring).
             target_duration = res_data.get("travel_duration") or res_data.get("segment_duration")
 
-            context_past = [p for leg in all_leg_latlon[:i] for p in leg]
-            context_future = [p for leg in all_leg_latlon[i + 1:] for p in leg]
-
             landmarks = [
-                {"lat": m["lat"], "lon": m.get("lng", m.get("lon")), "label": m.get("label")}
+                {
+                    "lat": m["lat"], "lon": m.get("lng", m.get("lon")), "label": m.get("label"),
+                    # "connectToRoute" stop-bys (job_config.json's own
+                    # per-waypoint toggle -- see mapfetcher.py's own
+                    # "connect_to_route" field) get the full fullscreen
+                    # photo-pause treatment as the walker passes them,
+                    # mirroring the overview's own rule that a connected
+                    # stop-by acts like a real waypoint rather than a
+                    # silent pass-through pin (see render_residential_leg_
+                    # pydeck's `landmarks` docstring).
+                    "connect_to_route": bool(m.get("connect_to_route", False)),
+                    "popup_image": m.get("popup_image"),
+                    "freeze_seconds": m.get("freeze_seconds"),
+                    "image_display": m.get("image_display", "cover"),
+                    # Only set when this connected stop-by's waypoint
+                    # already has a GENERATED attraction video on disk (the
+                    # separate img2vdo.py/attraction_step.py pipeline stage
+                    # -- residential rendering never generates one itself).
+                    # When set, the fullscreen photo-pause cuts the leg
+                    # clip instead of shrinking back to resume the walk in
+                    # place -- see pedestrian.py's `landmarks` docstring.
+                    "attraction_video": _attraction_video_for(m.get("waypoint_id"), m.get("label")),
+                }
                 for m in res_data.get("mid_markers", [])
                 if m.get("lat") is not None and m.get("lng", m.get("lon")) is not None
             ]
+
+            # render_step.py stashes the destination waypoint's own popup
+            # data as the LAST entry of this leg's "popups" list (every
+            # other position is None — a residential clip only ever ends
+            # its route on the arrival stop, never the departure one). Its
+            # photo opens this leg's clip full-bleed before shrinking down
+            # to the normal card size (see render_residential_leg_pydeck's
+            # `dest_popup_image` docstring).
+            dest_popup = next(
+                (p for p in (res_data.get("popups") or []) if p), None
+            ) or {}
+            # "popup_image_last" (not "popup_image") -- residential shows
+            # the LAST of a multi-image waypoint's photos; the overview
+            # animation reads "popup_image" (the first) for this same
+            # waypoint and is unaffected by this choice.
+            dest_popup_image = dest_popup.get("popup_image_last") or dest_popup.get("popup_image")
+            dest_freeze_seconds = dest_popup.get("freeze_seconds")
 
             safe_suffix = (
                 "".join(c for c in str(dest_label) if c.isalnum() or c in (" ", "_", "-"))
@@ -338,13 +401,28 @@ class RouteAnimator:
             chunk_filename = f"02_waypoint_{leg_file_num:02d}_{safe_suffix}.mp4"
 
             output_path = str(self.out_dir / chunk_filename)
-            render_residential_leg_pydeck(
+            # A connected stop-by's fullscreen photo pause (see pedestrian.
+            # py's `landmarks` docstring) can cut this ONE leg into more
+            # than one output file -- render_residential_leg_pydeck always
+            # returns a LIST now, every entry sharing this same leg's own
+            # "02_waypoint_{N:02d}_" filename prefix (just a "_cont{n}"
+            # suffix added per cut), so downstream (render_step.py's audio
+            # mux, timeline_step.py) still resolves each one back to this
+            # leg by filename and mux its FULL narration onto every file --
+            # not a proportional split, just the same audio under each.
+            leg_paths = render_residential_leg_pydeck(
                 leg_latlon, dest_label, output_path, mode=leg_mode,
                 target_duration_seconds=target_duration,
-                context_past_latlon=context_past, context_future_latlon=context_future,
                 landmarks=landmarks, route_chain=leg_labels or None,
+                # Straight-down bird's-eye chase cam (still follows/rotates
+                # with the walker, just never tilts) rather than the
+                # angled 55deg default — settings.res_follow_pitch lets a
+                # project opt back into the tilted look.
+                follow_pitch=self.config.get("res_follow_pitch", 0.0),
+                dest_popup_image=dest_popup_image,
+                dest_popup_freeze_seconds=dest_freeze_seconds,
             )
-            output_paths.append(output_path)
+            output_paths.extend(leg_paths)
 
         return output_paths
 
@@ -422,10 +500,14 @@ class RouteAnimator:
                     )
                 output_paths.append(overview_path)
 
-        # [NOTE] [Core] Render each waypoint-to-waypoint leg. 3D is deliberately opt-in;
-        # projects with use_3d_res=false use the fetched, bounded 2D map tiles.
+        # [NOTE] [Core] Render each waypoint-to-waypoint leg. The GeoJsonLayer
+        # PyDeck chase camera (top-down overview -> tilted follow, per leg)
+        # is now the DEFAULT residential engine — set use_pydeck_pedestrian
+        # to false in a project's settings to opt back into either the
+        # older vehicle-scenegraph use_3d_res pipeline or, with both flags
+        # false, the flat 2D SpatialRenderer.
         if res_sequence and render_mode != "overview":
-            if self.config.get("use_pydeck_pedestrian", False):
+            if self.config.get("use_pydeck_pedestrian", True):
                 logger.info(
                     "Rendering Residential Sequence using GeoJsonLayer PyDeck (chase camera)..."
                 )
