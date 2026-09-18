@@ -304,7 +304,8 @@ _WEBMERCATOR_TILE_PX = 512  # deck.gl/Mapbox GL's own zoom convention (world = 5
 def _fit_view_for_path(
     lons: List[float], lats: List[float],
     output_size: Tuple[int, int],
-    padding_frac: float = 0.25,
+    padding_frac: float = 0.05,
+    pitch: float = 0.0,
 ) -> Tuple[float, float, float]:
     """Center (lon, lat) and Mapbox GL zoom that fits every point of
     `lons`/`lats` inside `output_size`, padded by `padding_frac` on each
@@ -315,6 +316,26 @@ def _fit_view_for_path(
     once."""
     lat_min, lat_max = min(lats), max(lats)
     lon_min, lon_max = min(lons), max(lons)
+    lat_span = lat_max - lat_min
+
+    if pitch > 0:
+        pitch_rad = math.radians(min(pitch, 75.0))
+        # A pitched camera shrinks the horizontal field of view at the bottom
+        # of the screen due to perspective. We must pad the bounding box
+        # proportionately more to keep the bottom corners in frame.
+        # cos(pitch) exactly models the horizontal squeeze at the target plane.
+        # proportionately more to keep the bottom corners in frame, but scale
+        # the effect down so it doesn't zoom out *too* far and make the path tiny.
+        padding_frac += ((1.0 / math.cos(pitch_rad)) - 1.0) * 0.4
+
+        # It also shifts the vertical center of the visible ground plane far
+        # upwards. We counteract this by pulling the camera's target coordinate
+        # south (downwards), so the bounding box remains centered in the
+        # trapezoidal visible area instead of clinging to the bottom edge.
+        lat_shift_frac = math.sin(pitch_rad) * 0.2
+        lat_min -= lat_span * lat_shift_frac
+        lat_max -= lat_span * lat_shift_frac
+
     center_lat = (lat_min + lat_max) / 2.0
     center_lon = (lon_min + lon_max) / 2.0
 
@@ -340,16 +361,15 @@ def _project_lonlat_to_px(
     lon: float, lat: float,
     view_lon: float, view_lat: float, zoom: float,
     output_size: Tuple[int, int],
+    pitch: float = 0.0,
 ) -> Tuple[float, float]:
-    """Screen pixel a (lon, lat) point projects to under a north-up,
-    zero-pitch Mapbox GL view centered on (view_lon, view_lat) at `zoom` --
-    the plain Web Mercator math deck.gl itself uses, reimplemented here so a
-    marker's on-screen position can be computed directly in Python (the
-    LOCKED camera's viewState is already known ahead of time -- see
-    render_residential_leg_pydeck's `locked_lon`/`locked_lat`/`locked_zoom`
-    -- so there's no need to round-trip through the page to ask deck.gl for
-    it). Only valid for pitch 0 / bearing 0, which is what the locked leg
-    camera actually uses."""
+    """Screen pixel a (lon, lat) point projects to under a north-up
+    Mapbox GL view centered on (view_lon, view_lat) at `zoom`, with an
+    optional camera `pitch` (tilt).
+    
+    This matches the Web Mercator projection and 3D camera model deck.gl
+    uses, allowing a marker's on-screen position to be accurately computed
+    in Python (so HTML overlays can be perfectly anchored to it)."""
     scale = _WEBMERCATOR_TILE_PX * (2.0 ** zoom)
 
     def merc_x(lon_: float) -> float:
@@ -361,8 +381,29 @@ def _project_lonlat_to_px(
 
     out_w, out_h = output_size
     center_x, center_y = merc_x(view_lon), merc_y(view_lat)
-    px = out_w / 2.0 + (merc_x(lon) - center_x)
-    py = out_h / 2.0 + (merc_y(lat) - center_y)
+    
+    # World point relative to target
+    dx = merc_x(lon) - center_x
+    dy = center_y - merc_y(lat)  # Mapbox world Y is positive North (up)
+
+    if pitch > 0:
+        # Camera distance to target (deck.gl default altitude is 1.5 viewport heights)
+        d = 1.5 * out_h
+        pitch_rad = math.radians(pitch)
+        sin_p = math.sin(pitch_rad)
+        cos_p = math.cos(pitch_rad)
+        
+        # 3D projection mapping
+        depth = d + dy * sin_p
+        if depth <= 0:
+            depth = 0.0001  # Prevent division by zero behind camera
+            
+        px = out_w / 2.0 + (dx * d / depth)
+        py = out_h / 2.0 - (dy * cos_p * d / depth)
+    else:
+        px = out_w / 2.0 + dx
+        py = out_h / 2.0 - dy
+
     return px, py
 
 
@@ -752,6 +793,8 @@ def render_residential_leg_pydeck(
     topdown_zoom_delta: float = 1.0,
     dest_popup_image: Optional[str] = None,
     dest_popup_freeze_seconds: Optional[float] = None,
+    start_popup_image: Optional[str] = None,
+    start_popup_freeze_seconds: Optional[float] = None,
 ) -> List[str]:
     """Renders one leg as a straight-down, locked-camera video with a live
     turn-by-turn HUD (destination banner + time/distance card) -- the
@@ -820,6 +863,16 @@ def render_residential_leg_pydeck(
     top-down establishing shot (see `topdown_transition_seconds` above)
     zooms in toward the start marker and the walk begins. Skipped entirely
     (clip opens straight on the establishing shot) when there's no photo.
+
+    `start_popup_image`: only ever set on the trip's very first leg (its
+    departure is the trip's own true first waypoint, which is never
+    anyone's destination and so never otherwise gets a residential popup
+    moment — every other leg's departure IS the previous leg's destination,
+    already previewed there via `dest_popup_image`). Gets the exact same
+    fullscreen -> shrink-to-leader-card treatment as `dest_popup_image`
+    (see `_play_leg_photo_card`, the shared implementation) and plays
+    FIRST, right after the warm-up frame, before the destination preview.
+    Skipped entirely when there's no photo.
 
     `dest_label`: the destination waypoint's display label for the banner.
     `mode`: one of _MODE_HUD's keys ("walking", "ferry", "driving",
@@ -933,10 +986,28 @@ def render_residential_leg_pydeck(
     # on the walker every frame the way the old chase-cam did. Capped at
     # follow_zoom so a very short/tight leg's fit-zoom can't exceed the
     # level the rest of this module treats as "close" street level.
+    # The whole-leg "locked" camera: fits the leg's entire path in frame.
+    # SPECIAL CASE: if the leg is interrupted by a connected stop-by photo pause,
+    # compute the bounding box only up to that first stop-by so the camera
+    # tightly frames the segment actually being walked in this clip, instead
+    # of zooming out to fit the entire multi-segment route at once.
+    fit_df = df_raw
+    for lm in (landmarks or []):
+        if lm.get("connect_to_route") and lm.get("popup_image") and lm.get("lat") is not None and lm.get("lon") is not None:
+            sq_dist = (df_raw["lat"] - lm["lat"]) ** 2 + (df_raw["lon"] - lm["lon"]) ** 2
+            closest_idx = int(sq_dist.idxmin())
+            # Use only a minimal +2 buffer. The previous +10 included points
+            # much further down the route, which skewed the bounding box center
+            # and pushed the visible portion off-center.
+            fit_df = df_raw.iloc[:closest_idx + 2]
+            break
+
     locked_lon, locked_lat, locked_zoom = _fit_view_for_path(
-        df_raw["lon"].tolist(), df_raw["lat"].tolist(), output_size,
+        fit_df["lon"].tolist(), fit_df["lat"].tolist(), output_size,
+        padding_frac=0.15, pitch=follow_pitch,
     )
-    locked_zoom = min(locked_zoom, follow_zoom)
+    # Lock max zoom to 17.5 to prevent extreme zoom-in for very short segments
+    locked_zoom = min(locked_zoom, 17.5)
 
     view_state = pdk.ViewState(
         longitude=locked_lon, latitude=locked_lat,
@@ -964,6 +1035,7 @@ def render_residential_leg_pydeck(
             topdown_transition_seconds, topdown_zoom_delta, dest_lat, dest_lon,
             total_leg_km, leg_dist_km, locked_lon, locked_lat, locked_zoom,
             dest_popup_image, dest_popup_freeze_seconds, landmarks,
+            start_popup_image, start_popup_freeze_seconds,
         ))
 
     logger.info(f"Residential leg rendered ({mode}): {produced_paths}")
@@ -972,7 +1044,7 @@ def render_residential_leg_pydeck(
 
 async def _play_stopby_photo_pause(
     page, write_frame, cut_to_new_clip, fps, html_dir, port, stopby,
-    view_lon, view_lat, zoom, output_size, trigger_index,
+    view_lon, view_lat, zoom, output_size, trigger_index, pitch,
 ):
     """Pauses the walk right where it is, for a connected stop-by (see
     `landmarks` docstring): its own photo pops in as a small leader-line
@@ -1023,7 +1095,7 @@ async def _play_stopby_photo_pause(
 
     out_w, out_h = output_size
     marker_x, marker_y = _project_lonlat_to_px(
-        stopby["lon"], stopby["lat"], view_lon, view_lat, zoom, output_size
+        stopby["lon"], stopby["lat"], view_lon, view_lat, zoom, output_size, pitch=pitch
     )
     full_box = (0.0, 0.0, float(out_w), float(out_h))
     # Small leader card, same aspect ratio as the frame itself (keeps the
@@ -1230,6 +1302,7 @@ async def _record_leg(
     total_leg_km=None, leg_dist_km=None,
     locked_lon=None, locked_lat=None, locked_zoom=None,
     dest_popup_image=None, dest_popup_freeze_seconds=None, landmarks=None,
+    start_popup_image=None, start_popup_freeze_seconds=None,
 ):
     from playwright.async_api import async_playwright
     from services.vdoprocessing.vdoeditor import FFmpegEngine
@@ -1281,6 +1354,350 @@ async def _record_leg(
         new_path = f"{stem}_cont{len(produced_paths) + 1}{ext}"
         proc_ref["proc"] = await _spawn_ffmpeg(new_path)
         produced_paths.append(new_path)
+
+    async def _play_leg_photo_card(
+        image_path, freeze_seconds_raw, card_key: str, marker_px=None, grow: bool = False,
+    ) -> None:
+        """Shared by every one of this leg's photo beats -- the opening
+        departure preview (`start_popup_image`, only ever set on the trip's
+        very first leg), the opening destination preview
+        (`dest_popup_image`), and the at-arrival destination preview (see
+        this function's own arrival caller) -- called one after another
+        (never concurrently) on this leg's single page/DOM, so all three
+        safely reuse the same element ids; `card_key` only needs to keep
+        their COPIED IMAGE FILEs distinct (see pedestrian.py's own stop-by
+        trigger_index comment on why a shared filename risks serving the
+        wrong cached photo).
+
+        `marker_px`: where the card's leader line points -- defaults to the
+        viewport's own center (correct for the two OPENING previews, whose
+        camera is centered exactly on the start marker for that whole warm
+        phase -- see the warm_js call). The at-arrival call passes the
+        destination pin's own actual on-screen position instead (projected
+        via `_project_lonlat_to_px`), since the locked camera does NOT
+        recenter on it.
+
+        `grow` (default False): fullscreen photo -> shrink to a small
+        leader-line card -> freeze -> fade out -- used for the two OPENING
+        previews. True reverses the direction -- pops in AT the small card
+        size (leader line already drawn) -> holds -> GROWS to fullscreen ->
+        freeze -> fade out -- mirroring `_play_stopby_photo_pause`'s own
+        card-then-fullscreen treatment, so the at-arrival preview reads
+        consistently with every other in-route popup instead of standing
+        out as the only fullscreen-first one."""
+        if not image_path or not os.path.exists(image_path):
+            return
+        img_ext = os.path.splitext(image_path)[1] or ".jpg"
+        img_name = f"leg_photo_card_{card_key}{img_ext}"
+        shutil.copy2(image_path, os.path.join(html_dir, img_name))
+        img_url = f"http://127.0.0.1:{port}/{img_name}"
+
+        freeze_sec = (
+            float(freeze_seconds_raw)
+            if freeze_seconds_raw is not None
+            else tuning.POPUP_MIN_DISPLAY_SECONDS
+        )
+        freeze_sec = min(
+            max(freeze_sec, tuning.POPUP_MIN_DISPLAY_SECONDS),
+            tuning.POPUP_FREEZE_SECONDS_MAX,
+        )
+
+        out_w, out_h = output_size
+
+        card_w = 360.0
+        # Same aspect ratio as the fullscreen frame itself (not the photo's
+        # own natural aspect ratio) -- with object-fit:cover, changing the
+        # BOX's aspect ratio mid-shrink/grow changes which slice of the
+        # photo is visible, so the image read as swapping to a different
+        # crop/zoom partway through. Keeping the box's aspect ratio
+        # constant throughout means the same crop is shown at every size,
+        # just scaled.
+        card_h = card_w * (float(out_h) / float(out_w))
+        full_box = (0.0, 0.0, float(out_w), float(out_h))
+        if marker_px is None:
+            # The camera is centered exactly on the start marker for this
+            # whole phase (see warm_js in the caller), so its on-screen
+            # position is simply the viewport's own center -- no need to
+            # reproject lon/lat to pixels.
+            marker_px = (out_w / 2.0, out_h / 2.0)
+
+        # Place the popup image floating directly above the marker, instead
+        # of shoving it into a random corner. Target the top of the
+        # teardrop pin (which is 44px tall).
+        leader_target_y = marker_px[1] - 44.0
+        card_gap = 30.0
+        card_left = marker_px[0] - card_w / 2.0
+        card_top = leader_target_y - card_gap - card_h
+        # Clamped to stay fully on screen -- the shrink path's marker_px is
+        # always the viewport center so this never kicks in there, but the
+        # at-arrival grow path's marker_px is the destination pin's REAL
+        # position, which can sit close enough to an edge that the
+        # marker-relative placement above would push the card partway off
+        # frame. The leader line still points at marker_px itself
+        # (unclamped) -- only the card's own box is kept in bounds.
+        edge_margin = 20.0
+        card_left = min(max(card_left, edge_margin), out_w - card_w - edge_margin)
+        card_top = min(max(card_top, edge_margin), out_h - card_h - edge_margin)
+        card_box = (card_left, card_top, card_w, card_h)
+        anchor_x = card_box[0] + card_w / 2.0
+        anchor_y = card_box[1] + card_h
+
+        if grow:
+            # Pop in AT the small card size with the leader line already
+            # drawn (mirrors _play_stopby_photo_pause's own card-then-
+            # fullscreen treatment) -- then grows to fullscreen below,
+            # instead of opening fullscreen and shrinking down.
+            await page.evaluate(
+                """([url, left, top, w, h, x1, y1, x2, y2]) => new Promise((resolve) => {
+                    const img = document.createElement('img');
+                    img.id = 'leg-dest-preview';
+                    img.src = url;
+                    Object.assign(img.style, {
+                        position: 'fixed', zIndex: '9998',
+                        left: left + 'px', top: top + 'px', width: w + 'px', height: h + 'px',
+                        objectFit: 'cover', opacity: '0', borderRadius: '15px',
+                        boxShadow: '0 15px 35px rgba(0,0,0,0.4)',
+                    });
+                    document.body.appendChild(img);
+
+                    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                    svg.id = 'leg-dest-leader';
+                    Object.assign(svg.style, {
+                        position: 'fixed', inset: '0', width: '100vw', height: '100vh',
+                        zIndex: '9997', pointerEvents: 'none',
+                    });
+                    const line = document.createElementNS(svg.namespaceURI, 'line');
+                    line.id = 'leg-dest-leader-line';
+                    line.setAttribute('x1', x1); line.setAttribute('y1', y1);
+                    line.setAttribute('x2', x2); line.setAttribute('y2', y2);
+                    line.setAttribute('stroke', 'white');
+                    line.setAttribute('stroke-width', '3');
+                    line.setAttribute('opacity', '0');
+                    svg.appendChild(line);
+                    document.body.appendChild(svg);
+
+                    if (img.decode) { img.decode().then(resolve).catch(resolve); }
+                    else { img.onload = resolve; img.onerror = resolve; }
+                    setTimeout(resolve, 2000);
+                })""",
+                [
+                    img_url, card_box[0], card_box[1], card_box[2], card_box[3],
+                    anchor_x, anchor_y, marker_px[0], leader_target_y,
+                ],
+            )
+            await _wait_for_paint(page)
+
+            fade_in_frames = max(1, int(0.3 * fps))
+            for i in range(fade_in_frames):
+                alpha = (i + 1) / fade_in_frames
+                await page.evaluate(
+                    """(alpha) => {
+                        const img = document.getElementById('leg-dest-preview');
+                        if (img) img.style.opacity = alpha;
+                        const line = document.getElementById('leg-dest-leader-line');
+                        if (line) line.setAttribute('opacity', alpha);
+                    }""",
+                    alpha,
+                )
+                await _write_frame(await page.screenshot())
+
+            hold_small_png = await page.screenshot()
+            for _ in range(max(1, int(0.4 * fps))):
+                await _write_frame(hold_small_png)
+
+            grow_frames = max(1, int(0.7 * fps))
+            for i in range(grow_frames):
+                t = _ease_in_out_cubic((i + 1) / grow_frames)
+                left = card_box[0] + (full_box[0] - card_box[0]) * t
+                top = card_box[1] + (full_box[1] - card_box[1]) * t
+                w = card_box[2] + (full_box[2] - card_box[2]) * t
+                h = card_box[3] + (full_box[3] - card_box[3]) * t
+                radius = 15.0 * (1.0 - t)
+                # Leader line fades out over the first ~2/3 of the grow so
+                # it's gone well before the card fills the frame (a line
+                # still pointing at a full-bleed image reads as a stray
+                # mark, not a callout).
+                line_alpha = max(0.0, 1.0 - t * 1.5)
+                await page.evaluate(
+                    """([left, top, w, h, radius, alpha]) => {
+                        const img = document.getElementById('leg-dest-preview');
+                        if (img) {
+                            img.style.left = left + 'px';
+                            img.style.top = top + 'px';
+                            img.style.width = w + 'px';
+                            img.style.height = h + 'px';
+                            img.style.borderRadius = radius + 'px';
+                        }
+                        const line = document.getElementById('leg-dest-leader-line');
+                        if (line) line.setAttribute('opacity', alpha);
+                    }""",
+                    [left, top, w, h, radius, line_alpha],
+                )
+                await _write_frame(await page.screenshot())
+
+            full_hold_png = await page.screenshot()
+            for _ in range(max(1, int(freeze_sec * fps))):
+                await _write_frame(full_hold_png)
+
+            fade_frames = max(1, int(0.4 * fps))
+            for i in range(fade_frames):
+                alpha = 1.0 - ((i + 1) / fade_frames)
+                await page.evaluate(
+                    """(alpha) => {
+                        const img = document.getElementById('leg-dest-preview');
+                        if (img) img.style.opacity = alpha;
+                    }""",
+                    alpha,
+                )
+                await _write_frame(await page.screenshot())
+
+            await page.evaluate(
+                """() => {
+                    const img = document.getElementById('leg-dest-preview');
+                    if (img) img.remove();
+                    const svg = document.getElementById('leg-dest-leader');
+                    if (svg) svg.remove();
+                }"""
+            )
+            return
+
+        await page.evaluate(
+            """([url, w, h]) => new Promise((resolve) => {
+                const img = document.createElement('img');
+                img.id = 'leg-dest-preview';
+                img.src = url;
+                Object.assign(img.style, {
+                    position: 'fixed', zIndex: '9998',
+                    left: '0px', top: '0px', width: w + 'px', height: h + 'px',
+                    objectFit: 'cover', opacity: '1',
+                    boxShadow: '0 15px 35px rgba(0,0,0,0.4)',
+                });
+                document.body.appendChild(img);
+                if (img.decode) { img.decode().then(resolve).catch(resolve); }
+                else { img.onload = resolve; img.onerror = resolve; }
+                setTimeout(resolve, 2000);
+            })""",
+            [img_url, out_w, out_h],
+        )
+        await _wait_for_paint(page)
+
+        hold_full_png = await page.screenshot()
+        for _ in range(max(1, int(0.4 * fps))):
+            await _write_frame(hold_full_png)
+
+        # Leader line: a thin callout from the card's near (bottom-left)
+        # corner down to the start marker, with a small dot at the marker
+        # end -- an SVG overlay rather than a deck.gl layer since it needs
+        # to track the CARD's own screen-space animation, not a map
+        # coordinate. Added once here, then just updated in place through
+        # the shrink/freeze/fade phases below.
+        await page.evaluate(
+            """([x2, y2]) => {
+                const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                svg.id = 'leg-dest-leader';
+                Object.assign(svg.style, {
+                    position: 'fixed', inset: '0', width: '100vw', height: '100vh',
+                    zIndex: '9997', pointerEvents: 'none',
+                });
+                const line = document.createElementNS(svg.namespaceURI, 'line');
+                line.id = 'leg-dest-leader-line';
+                line.setAttribute('stroke', 'white');
+                line.setAttribute('stroke-width', '3');
+                line.setAttribute('opacity', '0');
+                svg.appendChild(line);
+                document.body.appendChild(svg);
+            }""",
+            [marker_px[0], leader_target_y],
+        )
+
+        shrink_frames = max(1, int(0.7 * fps))
+        for i in range(shrink_frames):
+            t = _ease_in_out_cubic((i + 1) / shrink_frames)
+            left = full_box[0] + (card_box[0] - full_box[0]) * t
+            top = full_box[1] + (card_box[1] - full_box[1]) * t
+            w = full_box[2] + (card_box[2] - full_box[2]) * t
+            h = full_box[3] + (card_box[3] - full_box[3]) * t
+            radius = 15.0 * t
+            leader_x1 = left + w / 2.0
+            leader_y1 = top + h
+            await page.evaluate(
+                """([left, top, w, h, radius, x1, y1]) => {
+                    const img = document.getElementById('leg-dest-preview');
+                    if (img) {
+                        img.style.left = left + 'px';
+                        img.style.top = top + 'px';
+                        img.style.width = w + 'px';
+                        img.style.height = h + 'px';
+                        img.style.borderRadius = radius + 'px';
+                    }
+                    const line = document.getElementById('leg-dest-leader-line');
+                    if (line) {
+                        line.setAttribute('x1', x1);
+                        line.setAttribute('y1', y1);
+                        line.setAttribute('x2', x1);
+                        line.setAttribute('y2', y1);
+                        line.setAttribute('opacity', '0');
+                    }
+                }""",
+                [left, top, w, h, radius, leader_x1, leader_y1],
+            )
+            png_bytes = await page.screenshot()
+            await _write_frame(png_bytes)
+
+        # The line only draws in once the card has settled at its final
+        # small size -- growing it DURING the shrink (card corner still
+        # moving fast) read as a flickery diagonal streak, not a deliberate
+        # callout.
+        leader_grow_frames = max(1, int(0.3 * fps))
+        anchor_x = card_box[0] + card_w / 2.0
+        anchor_y = card_box[1] + card_h
+        for i in range(leader_grow_frames):
+            t = _ease_in_out_cubic((i + 1) / leader_grow_frames)
+            await page.evaluate(
+                """([x2, y2, alpha]) => {
+                    const line = document.getElementById('leg-dest-leader-line');
+                    if (line) {
+                        line.setAttribute('x2', x2);
+                        line.setAttribute('y2', y2);
+                        line.setAttribute('opacity', alpha);
+                    }
+                }""",
+                [
+                    anchor_x + (marker_px[0] - anchor_x) * t,
+                    anchor_y + (leader_target_y - anchor_y) * t,
+                    t,
+                ],
+            )
+            png_bytes = await page.screenshot()
+            await _write_frame(png_bytes)
+
+        freeze_png = await page.screenshot()
+        for _ in range(max(1, int(freeze_sec * fps))):
+            await _write_frame(freeze_png)
+
+        fade_frames = max(1, int(0.4 * fps))
+        for i in range(fade_frames):
+            alpha = 1.0 - ((i + 1) / fade_frames)
+            await page.evaluate(
+                """([alphaVal]) => {
+                    const img = document.getElementById('leg-dest-preview');
+                    if (img) img.style.opacity = alphaVal;
+                    const svg = document.getElementById('leg-dest-leader');
+                    if (svg) svg.style.opacity = alphaVal;
+                }""",
+                [alpha],
+            )
+            png_bytes = await page.screenshot()
+            await _write_frame(png_bytes)
+
+        await page.evaluate(
+            """() => {
+                const img = document.getElementById('leg-dest-preview');
+                if (img) img.remove();
+                const svg = document.getElementById('leg-dest-leader');
+                if (svg) svg.remove();
+            }"""
+        )
 
     server, port = start_local_server(html_dir)
     try:
@@ -1412,231 +1829,32 @@ async def _record_leg(
                     for _ in range(max(1, int(0.3 * fps))):
                         await _write_frame(warm_png)
 
-                    # Destination photo preview: opens full-bleed over this
-                    # same top-down establishing frame (map + start marker +
-                    # grey route guideline already visible underneath), then
-                    # shrinks down to the normal small popup-card size and
-                    # freezes there -- a "here's where you're headed" beat
-                    # before the card fades and the establishing shot zooms
-                    # in toward the start marker below. Skipped entirely
-                    # when this leg's destination has no popup photo.
-                    if dest_popup_image and os.path.exists(dest_popup_image):
-                        img_ext = os.path.splitext(dest_popup_image)[1] or ".jpg"
-                        dest_img_name = "leg_dest_preview" + img_ext
-                        shutil.copy2(dest_popup_image, os.path.join(html_dir, dest_img_name))
-                        dest_img_url = f"http://127.0.0.1:{port}/{dest_img_name}"
-
-                        freeze_sec = float(dest_popup_freeze_seconds) if dest_popup_freeze_seconds is not None else tuning.POPUP_MIN_DISPLAY_SECONDS
-                        freeze_sec = min(
-                            max(freeze_sec, tuning.POPUP_MIN_DISPLAY_SECONDS),
-                            tuning.POPUP_FREEZE_SECONDS_MAX,
+                    if start_popup_image:
+                        # Departure photo preview: only ever set on the
+                        # trip's very first leg (see `start_popup_image`
+                        # docstring). This leg's OWN destination preview is
+                        # deliberately skipped when this fires -- two
+                        # fullscreen photo beats back to back at the very
+                        # start of the whole video read as redundant, so the
+                        # departure photo wins and the arrival photo is left
+                        # for whichever later leg would otherwise be its own
+                        # first showing (every other leg still gets its own
+                        # arrival preview as normal).
+                        await _play_leg_photo_card(
+                            start_popup_image, start_popup_freeze_seconds, "start"
                         )
-
-                        out_w, out_h = output_size
-                        await page.evaluate(
-                            """([url, w, h]) => new Promise((resolve) => {
-                                const img = document.createElement('img');
-                                img.id = 'leg-dest-preview';
-                                img.src = url;
-                                Object.assign(img.style, {
-                                    position: 'fixed', zIndex: '9998',
-                                    left: '0px', top: '0px', width: w + 'px', height: h + 'px',
-                                    objectFit: 'cover', opacity: '1',
-                                    boxShadow: '0 15px 35px rgba(0,0,0,0.4)',
-                                });
-                                document.body.appendChild(img);
-                                if (img.decode) { img.decode().then(resolve).catch(resolve); }
-                                else { img.onload = resolve; img.onerror = resolve; }
-                                setTimeout(resolve, 2000);
-                            })""",
-                            [dest_img_url, out_w, out_h],
-                        )
-                        await _wait_for_paint(page)
-
-                        card_w = 360.0
-                        # Same aspect ratio as the fullscreen frame itself
-                        # (not the photo's own natural aspect ratio) -- with
-                        # object-fit:cover, changing the BOX's aspect ratio
-                        # mid-shrink changes which slice of the photo is
-                        # visible, so the image read as swapping to a
-                        # different crop/zoom partway through. Keeping the
-                        # box's aspect ratio constant throughout means the
-                        # same crop is shown at every size, just scaled down.
-                        card_h = card_w * (float(out_h) / float(out_w))
-                        full_box = (0.0, 0.0, float(out_w), float(out_h))
-                        side_margin = 50.0
-                        # A random corner each leg (not hard-locked to
-                        # top-right) -- but each corner already has one of
-                        # this leg's own fixed HUD elements sitting in it
-                        # (hud-chain top-left, hud-banner top-right, hud-card
-                        # bottom-right -- see _HUD_CSS), so a flat 50px
-                        # margin on every corner would sit the photo right
-                        # on top of whichever one is there. These clearances
-                        # are each that element's own approximate footprint
-                        # (position + size from _HUD_CSS) plus a gap, so the
-                        # card starts clear of it instead of overlapping;
-                        # bottom-left is the one genuinely empty corner and
-                        # keeps the plain side_margin.
-                        clearance_by_corner = {
-                            "top-left": 110.0,      # clears #hud-chain
-                            "top-right": 110.0,     # clears #hud-banner
-                            "bottom-left": side_margin,
-                            "bottom-right": 170.0,  # clears #hud-card
-                        }
-                        corner_name = random.choice(list(clearance_by_corner))
-                        clearance = clearance_by_corner[corner_name]
-                        card_left = side_margin if "left" in corner_name else out_w - side_margin - card_w
-                        card_top = clearance if "top" in corner_name else out_h - clearance - card_h
-                        card_box = (card_left, card_top, card_w, card_h)
-                        # The camera is centered exactly on the start marker
-                        # for this whole phase (see warm_js above), so its
-                        # on-screen position is simply the viewport's own
-                        # center -- no need to reproject lon/lat to pixels.
-                        marker_px = (out_w / 2.0, out_h / 2.0)
-                        # Leader line anchors at whichever of the card's 4
-                        # corners sits closest to the marker (screen center)
-                        # -- generalizes the callout to any corner the card
-                        # ends up in, not just a hardcoded one.
-                        card_corners = {
-                            "top-left": (card_box[0], card_box[1]),
-                            "top-right": (card_box[0] + card_w, card_box[1]),
-                            "bottom-left": (card_box[0], card_box[1] + card_h),
-                            "bottom-right": (card_box[0] + card_w, card_box[1] + card_h),
-                        }
-                        anchor_name = min(
-                            card_corners,
-                            key=lambda k: (card_corners[k][0] - marker_px[0]) ** 2
-                            + (card_corners[k][1] - marker_px[1]) ** 2,
-                        )
-                        anchor_is_left = "left" in anchor_name
-                        anchor_is_top = "top" in anchor_name
-
-                        hold_full_png = await page.screenshot()
-                        for _ in range(max(1, int(0.4 * fps))):
-                            await _write_frame(hold_full_png)
-
-                        # Leader line: a thin callout from the card's near
-                        # (bottom-left) corner down to the start marker, with
-                        # a small dot at the marker end -- an SVG overlay
-                        # rather than a deck.gl layer since it needs to track
-                        # the CARD's own screen-space animation, not a map
-                        # coordinate. Added once here, then just updated in
-                        # place through the shrink/freeze/fade phases below.
-                        await page.evaluate(
-                            """([x2, y2]) => {
-                                const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-                                svg.id = 'leg-dest-leader';
-                                Object.assign(svg.style, {
-                                    position: 'fixed', inset: '0', width: '100vw', height: '100vh',
-                                    zIndex: '9997', pointerEvents: 'none',
-                                });
-                                const line = document.createElementNS(svg.namespaceURI, 'line');
-                                line.id = 'leg-dest-leader-line';
-                                line.setAttribute('stroke', 'white');
-                                line.setAttribute('stroke-width', '3');
-                                line.setAttribute('opacity', '0');
-                                const dot = document.createElementNS(svg.namespaceURI, 'circle');
-                                dot.id = 'leg-dest-leader-dot';
-                                dot.setAttribute('r', '7');
-                                dot.setAttribute('fill', 'white');
-                                dot.setAttribute('stroke', '#333');
-                                dot.setAttribute('stroke-width', '2');
-                                dot.setAttribute('cx', x2);
-                                dot.setAttribute('cy', y2);
-                                svg.appendChild(line);
-                                svg.appendChild(dot);
-                                document.body.appendChild(svg);
-                            }""",
-                            [marker_px[0], marker_px[1]],
-                        )
-
-                        shrink_frames = max(1, int(0.7 * fps))
-                        for i in range(shrink_frames):
-                            t = _ease_in_out_cubic((i + 1) / shrink_frames)
-                            left = full_box[0] + (card_box[0] - full_box[0]) * t
-                            top = full_box[1] + (card_box[1] - full_box[1]) * t
-                            w = full_box[2] + (card_box[2] - full_box[2]) * t
-                            h = full_box[3] + (card_box[3] - full_box[3]) * t
-                            radius = 15.0 * t
-                            leader_x1 = left if anchor_is_left else left + w
-                            leader_y1 = top if anchor_is_top else top + h
-                            await page.evaluate(
-                                """([left, top, w, h, radius, x1, y1]) => {
-                                    const img = document.getElementById('leg-dest-preview');
-                                    if (img) {
-                                        img.style.left = left + 'px';
-                                        img.style.top = top + 'px';
-                                        img.style.width = w + 'px';
-                                        img.style.height = h + 'px';
-                                        img.style.borderRadius = radius + 'px';
-                                    }
-                                    const line = document.getElementById('leg-dest-leader-line');
-                                    if (line) {
-                                        line.setAttribute('x1', x1);
-                                        line.setAttribute('y1', y1);
-                                        line.setAttribute('x2', x1);
-                                        line.setAttribute('y2', y1);
-                                        line.setAttribute('opacity', '0');
-                                    }
-                                }""",
-                                [left, top, w, h, radius, leader_x1, leader_y1],
-                            )
-                            png_bytes = await page.screenshot()
-                            await _write_frame(png_bytes)
-
-                        # The line only draws in once the card has settled at
-                        # its final small size -- growing it DURING the
-                        # shrink (card corner still moving fast) read as a
-                        # flickery diagonal streak, not a deliberate callout.
-                        leader_grow_frames = max(1, int(0.3 * fps))
-                        anchor_x = card_box[0] if anchor_is_left else card_box[0] + card_w
-                        anchor_y = card_box[1] if anchor_is_top else card_box[1] + card_h
-                        for i in range(leader_grow_frames):
-                            t = _ease_in_out_cubic((i + 1) / leader_grow_frames)
-                            await page.evaluate(
-                                """([x2, y2, alpha]) => {
-                                    const line = document.getElementById('leg-dest-leader-line');
-                                    if (line) {
-                                        line.setAttribute('x2', x2);
-                                        line.setAttribute('y2', y2);
-                                        line.setAttribute('opacity', alpha);
-                                    }
-                                }""",
-                                [
-                                    anchor_x + (marker_px[0] - anchor_x) * t,
-                                    anchor_y + (marker_px[1] - anchor_y) * t,
-                                    t,
-                                ],
-                            )
-                            png_bytes = await page.screenshot()
-                            await _write_frame(png_bytes)
-
-                        freeze_png = await page.screenshot()
-                        for _ in range(max(1, int(freeze_sec * fps))):
-                            await _write_frame(freeze_png)
-
-                        fade_frames = max(1, int(0.4 * fps))
-                        for i in range(fade_frames):
-                            alpha = 1.0 - ((i + 1) / fade_frames)
-                            await page.evaluate(
-                                """([alphaVal]) => {
-                                    const img = document.getElementById('leg-dest-preview');
-                                    if (img) img.style.opacity = alphaVal;
-                                    const svg = document.getElementById('leg-dest-leader');
-                                    if (svg) svg.style.opacity = alphaVal;
-                                }""",
-                                [alpha],
-                            )
-                            png_bytes = await page.screenshot()
-                            await _write_frame(png_bytes)
-
-                        await page.evaluate(
-                            """() => {
-                                const img = document.getElementById('leg-dest-preview');
-                                if (img) img.remove();
-                                const svg = document.getElementById('leg-dest-leader');
-                                if (svg) svg.remove();
-                            }"""
+                    else:
+                        # Destination photo preview: opens full-bleed over
+                        # this same top-down establishing frame (map + start
+                        # marker + grey route guideline already visible
+                        # underneath), then shrinks down to the normal small
+                        # popup-card size and freezes there -- a "here's
+                        # where you're headed" beat before the card fades
+                        # and the establishing shot zooms in toward the
+                        # start marker below. Skipped entirely when this
+                        # leg's destination has no popup photo.
+                        await _play_leg_photo_card(
+                            dest_popup_image, dest_popup_freeze_seconds, "dest"
                         )
 
                     for i in range(intro_frames):
@@ -1711,6 +1929,7 @@ async def _record_leg(
                 # Triggered on whichever walking-loop frame's own position
                 # lands closest to that stop-by's coordinates.
                 stopby_triggers: Dict[int, Dict] = {}
+                _stopby_candidates = []
                 for lm in (landmarks or []):
                     if not (lm.get("connect_to_route") and lm.get("popup_image")):
                         continue
@@ -1718,7 +1937,21 @@ async def _record_leg(
                     if lm_lat is None or lm_lon is None:
                         continue
                     sq_dist = (smooth_df["lat"] - lm_lat) ** 2 + (smooth_df["lon"] - lm_lon) ** 2
-                    stopby_triggers[int(sq_dist.idxmin())] = lm
+                    _stopby_candidates.append((lm, sq_dist))
+                # Assigned nearest-landmark-first, each claiming the closest
+                # frame index not already taken -- two connected stop-bys
+                # close enough together to share the same idxmin() used to
+                # both just get `stopby_triggers[idx] = lm`, so the second
+                # one's write silently clobbered the first: that waypoint's
+                # photo pause never fired at all, only the other one's did
+                # (at ITS OWN, different marker position) -- looking exactly
+                # like "the popup shown isn't for this waypoint".
+                for lm, sq_dist in sorted(_stopby_candidates, key=lambda pair: pair[1].min()):
+                    for idx in sq_dist.to_numpy().argsort():
+                        idx = int(idx)
+                        if idx not in stopby_triggers:
+                            stopby_triggers[idx] = lm
+                            break
 
                 last_png_bytes = None
                 crashed = False
@@ -1797,7 +2030,58 @@ async def _record_leg(
                         await _play_stopby_photo_pause(
                             page, _write_frame, _cut_to_new_clip, fps, html_dir, port,
                             stopby_lm, locked_lon, locked_lat, locked_zoom, output_size, index,
+                            pitch=follow_pitch,
                         )
+                        
+                        # Dynamic hop to the NEXT segment's framing for the new clip!
+                        future_indices = [k for k in stopby_triggers.keys() if k > index]
+                        if future_indices:
+                            next_index = min(future_indices)
+                            next_lm = stopby_triggers[next_index]
+                            n_lat, n_lon = next_lm.get("lat"), next_lm.get("lon")
+                        else:
+                            n_lat, n_lon = dest_lat, dest_lon
+                            
+                        if n_lat is not None and n_lon is not None:
+                            sq_dist_curr = (df_raw["lat"] - row["lat"]) ** 2 + (df_raw["lon"] - row["lon"]) ** 2
+                            curr_df_idx = int(sq_dist_curr.idxmin())
+                            sq_dist_next = (df_raw["lat"] - n_lat) ** 2 + (df_raw["lon"] - n_lon) ** 2
+                            next_df_idx = int(sq_dist_next.idxmin())
+                            
+                            next_fit_df = df_raw.iloc[curr_df_idx : next_df_idx + 2]
+                            if not next_fit_df.empty:
+                                new_lon, new_lat, new_zoom = _fit_view_for_path(
+                                    next_fit_df["lon"].tolist(), next_fit_df["lat"].tolist(), output_size,
+                                    padding_frac=0.15, pitch=follow_pitch,
+                                )
+                                # Lock max zoom to prevent zooming in too much on short segments
+                                new_zoom = min(new_zoom, 17.5)
+                                
+                                hop_frames = max(1, int(1.5 * fps))
+                                for i in range(hop_frames):
+                                    t = _ease_in_out_cubic((i + 1) / hop_frames)
+                                    pan_lon = locked_lon + (new_lon - locked_lon) * t
+                                    pan_lat = locked_lat + (new_lat - locked_lat) * t
+                                    dip = math.sin(t * math.pi) * 1.5
+                                    base_zoom = locked_zoom + (new_zoom - locked_zoom) * t
+                                    pan_zoom = base_zoom - dip
+                                    
+                                    js_hop = f"""
+                                    if (window.deckgl) {{
+                                        window.deckgl.setProps({{
+                                            viewState: {{
+                                                longitude: {pan_lon}, latitude: {pan_lat},
+                                                zoom: {pan_zoom}, pitch: {follow_pitch}, bearing: 0.0,
+                                                transitionDuration: 0
+                                            }}
+                                        }});
+                                    }}"""
+                                    await page.evaluate(js_hop)
+                                    await page.wait_for_timeout(20)
+                                    png_bytes = await page.screenshot()
+                                    await _write_frame(png_bytes)
+                                
+                                locked_lon, locked_lat, locked_zoom = new_lon, new_lat, new_zoom
 
                 # Freeze-frame on arrival: holds the final (arrived) frame
                 # -- destination banner + marker already on screen -- for a
@@ -1824,9 +2108,31 @@ async def _record_leg(
                     await page.wait_for_timeout(20)
                     last_png_bytes = await page.screenshot()
 
-                    hold_frames = max(0, int(arrival_hold_seconds * fps))
-                    for _ in range(hold_frames):
-                        await _write_frame(last_png_bytes)
+                    # This leg's own destination preview was skipped at its
+                    # OPENING (see the `start_popup_image` branch above) in
+                    # favor of the departure photo there -- played here
+                    # instead, RIGHT as the walker arrives (before the plain
+                    # hold below), now that the destination pin has a real
+                    # on-screen position to anchor a leader line to (unlike
+                    # at the opening, where it doesn't exist on screen yet).
+                    # Its own fullscreen hold already covers this beat, so
+                    # the generic hold_frames freeze right after is skipped
+                    # for this leg -- playing it AFTER that hold would pop
+                    # the photo up noticeably late, well past the moment of
+                    # arrival instead of right on it.
+                    if start_popup_image:
+                        arrival_marker_px = _project_lonlat_to_px(
+                            dest_lon, dest_lat, locked_lon, locked_lat, locked_zoom,
+                            output_size, pitch=follow_pitch,
+                        )
+                        await _play_leg_photo_card(
+                            dest_popup_image, dest_popup_freeze_seconds,
+                            "dest_arrival", marker_px=arrival_marker_px, grow=True,
+                        )
+                    else:
+                        hold_frames = max(0, int(arrival_hold_seconds * fps))
+                        for _ in range(hold_frames):
+                            await _write_frame(last_png_bytes)
 
                     # Outro: the reverse of the intro above -- eases the
                     # locked whole-leg framing back OUT to the same top-down

@@ -389,6 +389,27 @@ class RouteAnimator:
             # waypoint and is unaffected by this choice.
             dest_popup_image = dest_popup.get("popup_image_last") or dest_popup.get("popup_image")
             dest_freeze_seconds = dest_popup.get("freeze_seconds")
+            if not dest_popup_image:
+                # A trailing synthetic end_point leg's own destination has
+                # no popup of its own (see render_step.py's
+                # "trip_end_popup" comment) -- fall back to the last REAL
+                # waypoint's own photo so the video's truly final clip still
+                # arrives on a photo instead of nothing. No-op (same value
+                # dest_popup already held) whenever the last real waypoint
+                # IS this leg's own destination, since there's no trailing
+                # synthetic leg in that case.
+                end_popup = res_data.get("trip_end_popup") or {}
+                dest_popup_image = end_popup.get("popup_image_last") or end_popup.get("popup_image")
+                dest_freeze_seconds = end_popup.get("freeze_seconds")
+
+            # Only set on the trip's very first leg (see render_step.py's
+            # "trip_start_popup" comment) -- the trip's own first waypoint
+            # is never anyone's destination, so it never otherwise gets a
+            # residential popup moment; every other leg's departure is the
+            # previous leg's destination, already previewed there.
+            start_popup = res_data.get("trip_start_popup") or {}
+            start_popup_image = start_popup.get("popup_image_last") or start_popup.get("popup_image")
+            start_freeze_seconds = start_popup.get("freeze_seconds")
 
             safe_suffix = (
                 "".join(c for c in str(dest_label) if c.isalnum() or c in (" ", "_", "-"))
@@ -421,6 +442,8 @@ class RouteAnimator:
                 follow_pitch=self.config.get("res_follow_pitch", 0.0),
                 dest_popup_image=dest_popup_image,
                 dest_popup_freeze_seconds=dest_freeze_seconds,
+                start_popup_image=start_popup_image,
+                start_popup_freeze_seconds=start_freeze_seconds,
             )
             output_paths.extend(leg_paths)
 

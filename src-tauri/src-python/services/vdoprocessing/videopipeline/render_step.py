@@ -824,6 +824,32 @@ def render_route_video(
                     # animation. Including the start popup makes the renderer
                     # terminate on the first frame of every leg.
                     "popups": leg_popups,
+                    # Only the very first leg's departure (start_pos == 0,
+                    # the trip's own true first waypoint) ever needs its own
+                    # popup shown here -- every OTHER leg's departure is the
+                    # previous leg's destination, already previewed there
+                    # (see route2vdo.py's dest_popup_image), so re-showing
+                    # it here would just be a duplicate. Only the trip's
+                    # very first waypoint is never anyone's destination and
+                    # so never otherwise gets a residential popup moment.
+                    "trip_start_popup": route_popups[start_idx] if start_pos == 0 else None,
+                    # Symmetric case at the other end: when a trailing
+                    # synthetic end_point leg is appended past the last REAL
+                    # waypoint (see this function's own start/end-point
+                    # padding above), THAT leg's own destination is the
+                    # synthetic end_point -- which, like start_point, has no
+                    # "popup_image" field in job_config's schema, so its
+                    # normal dest popup (leg_popups[-1] above) comes back
+                    # empty and the video's truly final clip would arrive on
+                    # no photo at all. route2vdo.py falls back to this (the
+                    # last REAL waypoint's own popup) only when the leg's
+                    # normal dest popup is empty, so the common case (no
+                    # trailing synthetic leg, the last real waypoint IS the
+                    # final destination) is unaffected -- this would just be
+                    # a duplicate of what leg_popups[-1] already has.
+                    "trip_end_popup": (
+                        route_popups[end_idx] if end_pos == len(waypoints) - 1 else None
+                    ),
                     "mode": leg_mode,
                     "travel_duration": total_time,
                     "segment_duration": total_time,
