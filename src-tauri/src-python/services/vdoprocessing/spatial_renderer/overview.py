@@ -384,7 +384,13 @@ class _OverviewRenderMixin:
 
         intro_freeze_sec = _DEFAULT_INTRO_FREEZE_SECONDS
         if start_popup and "freeze_seconds" in start_popup["data"]:
-            intro_freeze_sec = float(start_popup["data"]["freeze_seconds"])
+            # Floored at POPUP_MIN_DISPLAY_SECONDS, same as every other
+            # freeze_seconds read (see popups.py's own floor) -- this one
+            # reads job_config's raw value directly rather than going
+            # through that shared display path, so it needs its own floor.
+            intro_freeze_sec = max(
+                float(start_popup["data"]["freeze_seconds"]), tuning.POPUP_MIN_DISPLAY_SECONDS
+            )
 
         if start_popup:
             intro_card_scale = self.config.get("overview_intro_card_scale", 1.3)

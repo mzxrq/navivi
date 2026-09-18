@@ -100,15 +100,22 @@ if __name__ == "__main__":
                 # [NOTE] [GPS] Step 1 only: parses raw_track.gpx into a cleaned route + summary, no media generated.
                 result = test_gps(job_config_arg)
             elif mode_arg == "residential":
-                # [NOTE] [Animation] Renders only the per-waypoint leg-by-leg clips (2D or 3D per settings.use_3d_res) — no overview map.
-                result = test_residential_video(job_config_arg, route_dir_arg, force=force_arg)
+                # [NOTE] [Animation] Renders the per-waypoint leg-by-leg clips (2D or 3D per settings.use_3d_res) — no overview map. Optional argv[3] renders just that ONE leg (0-indexed) instead of every leg.
+                leg_index_arg = int(sys.argv[3]) if len(sys.argv) > 3 else None
+                result = test_residential_video(
+                    job_config_arg, route_dir_arg, force=force_arg, leg_index=leg_index_arg
+                )
             elif mode_arg == "tts":
                 # [NOTE] [TTS] Generates narration audio for ONE waypoint (index from argv[3], default 0).
+                # None (not output_dir_arg, which is assets/video) so test_tts
+                # falls back to its own project_audio_dir default (assets/
+                # audio) -- passing output_dir_arg here used to put TTS test
+                # output in the video folder instead of the audio one.
                 waypoint_index_arg = int(sys.argv[3]) if len(sys.argv) > 3 else 0
-                result = test_tts(job_config_arg, output_dir_arg, waypoint_index_arg, force=force_arg)
+                result = test_tts(job_config_arg, None, waypoint_index_arg, force=force_arg)
             elif mode_arg == "tts-all":
                 # [NOTE] [TTS] Generates narration audio for every narrated waypoint.
-                result = test_tts_all(job_config_arg, output_dir_arg, force=force_arg)
+                result = test_tts_all(job_config_arg, None, force=force_arg)
             elif mode_arg == "attraction":
                 # [NOTE] [Animation] Generates ONE waypoint's attraction (pan/outpaint) video from its popup image (index from argv[3], default 0).
                 waypoint_index_arg = int(sys.argv[3]) if len(sys.argv) > 3 else 0

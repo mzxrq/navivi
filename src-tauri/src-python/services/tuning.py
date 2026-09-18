@@ -279,6 +279,15 @@ RESIDENTIAL_WIDE_ZOOM_SECONDS = 1.0
 # enough to read as "establishing". No RESIDENTIAL_MIN_ZOOM floor is
 # applied to the wide tile.
 RESIDENTIAL_WIDE_BBOX_MULTIPLIER = 2.5
+# Wide-shot multiplier used instead of RESIDENTIAL_WIDE_BBOX_MULTIPLIER for
+# a short/local leg (pins within RESIDENTIAL_MIN_ZOOM_MAX_PIN_DISTANCE_M of
+# each other, the same "local" threshold the tight tile's own min-zoom
+# floor uses) — see _compute_residential_bbox's own tapering logic. The
+# full 2.5x multiplier is sized for a multi-km ferry/hike leg; applied to
+# a short in-town walk it zoomed the establishing shot out far enough to
+# swallow whole neighboring hills/bays that have nothing to do with the
+# leg, before zooming sharply back in for the tight tile.
+RESIDENTIAL_WIDE_BBOX_MULTIPLIER_LOCAL = 1.6
 # A leg's wide establishing shot is only worth showing when its two pins
 # are far enough apart that the zoom-in actually reads as "zooming in" —
 # below this straight-line pin distance, the wide and tight tiles end up

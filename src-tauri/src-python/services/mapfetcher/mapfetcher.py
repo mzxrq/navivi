@@ -94,8 +94,17 @@ class MapFetcher:
         max_chunk_distance_meters: float = tuning.RESIDENTIAL_DEFAULT_MAX_CHUNK_DISTANCE_M,
         precomputed_indices: Optional[List[int]] = None,
         merge_stopbys: bool = tuning.DEFAULT_MERGE_STOPBY_WAYPOINTS,
+        leg_index: Optional[int] = None,
     ) -> List[Dict]:
         """Core orchestrator logic utilizing the dedicated Downloader and Geometry classes.
+
+        `leg_index`: when given, only that ONE leg (0-indexed, in travel
+        order, AFTER stop-by merging is applied) is planned/fetched at all
+        -- every other leg's map tile fetch is skipped entirely, not just
+        excluded from the returned sequence. Applied right after `segments`
+        is built below (the point stop-by merging has already resolved),
+        so the leg numbering here always matches the final, merged leg
+        count a caller would see in the full (unfiltered) result.
 
         `merge_stopbys` (default from tuning.DEFAULT_MERGE_STOPBY_WAYPOINTS):
         when True, a stop-by waypoint ("isStopBy": true) does NOT get its own
@@ -163,6 +172,26 @@ class MapFetcher:
                     # the fallback for a stop-by with no coordinate).
                     "lat": waypoints[p].get("lat"),
                     "lng": waypoints[p].get("lng", waypoints[p].get("lon")),
+                    # The map editor's "Connect to Route" toggle -- same
+                    # field render_step.py's own route_popups dict reads
+                    # for the overview path (see its own "connect_to_route"
+                    # comment). Residential reads this to give a connected
+                    # stop-by the full fullscreen photo-pause treatment
+                    # instead of just a silent pass-through dot (see
+                    # pedestrian.py's `landmarks` docstring) -- missing
+                    # entirely from this dict before, so that feature could
+                    # never actually trigger.
+                    "connect_to_route": bool(waypoints[p].get("connectToRoute", False)),
+                    # This waypoint's own stable job_config id -- lets
+                    # route2vdo.py resolve its RAW position in job_config's
+                    # own "waypoints" array (the same 0-based index the
+                    # attraction-video pipeline names its output file
+                    # with -- see helpers.attraction_output_filename) to
+                    # check whether it already has a generated attraction
+                    # video, without trusting this dict's own `p` (which is
+                    # a position in a possibly start/end-point-padded copy
+                    # of that array, not the original one).
+                    "waypoint_id": waypoints[p].get("id"),
                     # Carried through so a merged-in stop-by (drawn as a
                     # plain pass-through pin — see waypoints.py's
                     # mid_marker_pins) can still show its own popup photo
@@ -175,7 +204,7 @@ class MapFetcher:
                     # matched it as a valid path and the card silently
                     # never rendered.
                     "popup_image": (
-                        str(_pi[0])
+                        str(_pi[-1])
                         if isinstance(_pi := waypoints[p].get("popup_image"), list) and _pi
                         else (str(_pi) if _pi else None)
                     ),
@@ -201,6 +230,13 @@ class MapFetcher:
                     stopby_markers,
                 )
             )
+
+        if leg_index is not None:
+            if not (0 <= leg_index < len(segments)):
+                raise ValueError(
+                    f"leg_index {leg_index} out of range — this route has {len(segments)} leg(s) (0-{len(segments) - 1})."
+                )
+            segments = [segments[leg_index]]
 
         # [NEW] Total leg count known up front — lets every per-leg log line
         # show "[i/total]" progress instead of an unbounded counter.
@@ -431,10 +467,13 @@ class MapFetcher:
             # pin drawn as the traveler passes it (see waypoints.py's
             # mid_marker_pins), separate from the real leg-arrival popup
             # mechanism that chunk_labels/chunk_popups above feeds. Still
-            # carries its own popup_image/freeze_seconds/image_display
-            # (added upstream in _pos+1's stopby_markers) through to that
-            # pin, though — dropped here before, which silently kept a
-            # passed stop-by's own photo from ever showing.
+            # carries its own connect_to_route/popup_image/freeze_seconds/
+            # image_display (added upstream in _pos+1's stopby_markers)
+            # through to that pin, though — connect_to_route and
+            # popup_image were each independently dropped here before,
+            # which silently kept a connected stop-by's residential
+            # fullscreen-photo-pause (pedestrian.py's `landmarks`) from
+            # ever triggering, even after the upstream field existed.
             mid_markers = [
                 {
                     "row_idx": m["row_idx"],
@@ -447,6 +486,8 @@ class MapFetcher:
                     # distance rather than actually walked to.
                     "lat": m.get("lat"),
                     "lng": m.get("lng"),
+                    "connect_to_route": bool(m.get("connect_to_route", False)),
+                    "waypoint_id": m.get("waypoint_id"),
                     "popup_image": m.get("popup_image"),
                     "freeze_seconds": (
                         min(float(m["freeze_seconds"]), tuning.POPUP_FREEZE_SECONDS_MAX)

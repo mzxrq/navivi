@@ -473,13 +473,16 @@ class IrodoriTTSClient:
     # [TTS] Makes an HTTP POST request to the local Irodori TTS API to generate speech and returns the raw audio bytes
     async def call_api(self, text: str) -> bytes:
         """Makes an HTTP POST request to the local Irodori TTS API to generate speech.
-        If the connection is refused/closed (server not running), starts it
-        as a subprocess and retries once it's healthy."""
+        If the connection is refused/closed (server not running) OR the
+        connection attempt just times out (server starting up too slowly to
+        accept it yet — httpx.ConnectTimeout is a SEPARATE exception class
+        from ConnectError, not a subclass, so both need to be caught here),
+        starts/waits for it as a subprocess and retries once it's healthy."""
         payload = self.config.to_payload(text)
 
         try:
             return await self._post_speech(payload)
-        except httpx.ConnectError:
+        except (httpx.ConnectError, httpx.ConnectTimeout):
             await self._ensure_server_running()
             return await self._post_speech(payload)
 

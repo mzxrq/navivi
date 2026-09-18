@@ -209,6 +209,7 @@ def render_route_video(
     audio_pauses: Optional[list[Any]] = None,
     force: bool = False,
     render_mode: str = "both",
+    leg_index: Optional[int] = None,
 ) -> list[str]:
     """Generates the visual map animation using synced audio timing.
 
@@ -246,6 +247,14 @@ def render_route_video(
     test_residential_video each produce ONLY the video their name promises,
     instead of both always being bundled into one call regardless of which
     was asked for.
+
+    `leg_index`: when given, renders only that ONE leg of the residential
+    sequence (0-indexed into res_sequence, i.e. the Nth clip in travel
+    order) instead of the whole route — a fast way to sanity-check one
+    leg's rendering without paying for every other leg's map tile
+    fetch/render too. No effect on the overview (render_mode="overview"
+    still renders the whole-route overview regardless). Ignored (renders
+    every leg, as before) when None.
     """
     logger.info("Step 4: Rendering Video Engine — starting.")
 
@@ -307,9 +316,15 @@ def render_route_video(
 
     settings = project_config.get("settings", {})
     waypoints = project_config.get("waypoints", [])
-    # 3D residential rendering is opt-in. The 2D spatial renderer is the
-    # reliable fallback and remains the default for existing projects.
-    use_3d_res = bool(settings.get("use_3d_res", False))
+    # use_pydeck_pedestrian (the GeoJsonLayer chase camera, top-down ->
+    # follow) is now the DEFAULT residential engine — see route2vdo.py's
+    # RouteAnimator.render, which picks it unless a project explicitly sets
+    # it false. use_3d_res (the older vehicle-scenegraph renderer) is opt-in
+    # and only actually used when pydeck-pedestrian is explicitly disabled
+    # (both flags gate the res_sequence build below the same way they gate
+    # RouteAnimator.render's own engine choice, so the two stay in sync).
+    use_pydeck_pedestrian = bool(settings.get("use_pydeck_pedestrian", True))
+    use_3d_res = bool(settings.get("use_3d_res", False)) and not use_pydeck_pedestrian
     subtitle_lang = settings.get("subtitle_language", "en")
 
     audio_durations = audio_durations or []
@@ -489,8 +504,24 @@ def render_route_video(
                 "freeze_seconds": min(
                     float(wp.get("freeze_seconds", 3.0)), tuning.POPUP_FREEZE_SECONDS_MAX
                 ),
+                # A waypoint's own "popup_image" field can hold several
+                # photos (the map editor's multi-image field) -- the
+                # overview animation shows the FIRST one (its own long-
+                # standing behavior; this dict is shared with the overview
+                # path below, not residential-only), same as ever.
                 "popup_image": (
                     str(popup_img[0])
+                    if isinstance(popup_img, list) and popup_img
+                    else (str(popup_img) if popup_img else None)
+                ),
+                # Residential-only variant: the LAST image, used for the
+                # leg's own fullscreen-to-card destination-photo intro (see
+                # route2vdo.py's _render_residential_pydeck and
+                # pydeckrecorder.pedestrian's `dest_popup_image` docstring)
+                # -- kept separate from "popup_image" above so the overview
+                # animation, which reads that same key, is unaffected.
+                "popup_image_last": (
+                    str(popup_img[-1])
                     if isinstance(popup_img, list) and popup_img
                     else (str(popup_img) if popup_img else None)
                 ),
@@ -591,7 +622,7 @@ def render_route_video(
             )
             res_sequence.append({"segment_duration": total_time})
     else:
-        logger.info("Step 4: Generating 2D residential map sequence...")
+        logger.info("Step 4: Generating residential leg sequence (lat/lon per leg)...")
         # Stop-by leg-merging is toggleable per project (default: merge —
         # see tuning.DEFAULT_MERGE_STOPBY_WAYPOINTS); multi-tile chunk
         # splitting is deliberately kept off here (math.inf) even though
@@ -650,6 +681,11 @@ def render_route_video(
             merge_stopbys=bool(
                 settings.get("merge_stopby_waypoints", tuning.DEFAULT_MERGE_STOPBY_WAYPOINTS)
             ),
+            # Filtered HERE (not just on the returned res_sequence below) so
+            # a single-leg test run (main.py ... residential <leg_index>)
+            # skips every other leg's map tile fetch entirely instead of
+            # fetching all of them and discarding everything but one.
+            leg_index=leg_index,
         )
 
         # Maps a waypoint's job_config "id" back to its RAW position in the
@@ -858,7 +894,7 @@ def render_route_video(
     animator_config = {
         "output_dir": output_video_dir,
         "use_3d_res": use_3d_res,
-        "use_pydeck_pedestrian": bool(settings.get("use_pydeck_pedestrian", False)),
+        "use_pydeck_pedestrian": use_pydeck_pedestrian,
         "use_pydeck_overview": bool(settings.get("use_pydeck_overview", False)),
         "res_route_path": project_config_path,
         "leg_durations": seg_durations or None,
@@ -947,6 +983,22 @@ def render_route_video(
         summary["total_duration_seconds"] = sum(mode_duration.values())
     if leg_stats:
         summary["leg_stats"] = leg_stats
+
+    # Only a fallback for the use_3d_res branch above -- the far more common
+    # pydeck/2D branch already filtered res_sequence down to just leg_index
+    # at its own process_residential_sequence(leg_index=...) call, well
+    # before any per-leg map tile fetch ever ran, so res_sequence there is
+    # already length <= 1 and does NOT need (or want) re-slicing here.
+    if leg_index is not None and use_3d_res and res_sequence:
+        if not (0 <= leg_index < len(res_sequence)):
+            raise ValueError(
+                f"leg_index {leg_index} out of range — this route has {len(res_sequence)} leg(s) (0-{len(res_sequence) - 1})."
+            )
+        logger.info(
+            "Step 4: leg_index=%d given — rendering only that one leg of %d.",
+            leg_index, len(res_sequence),
+        )
+        res_sequence = [res_sequence[leg_index]]
 
     output_paths = animator.render(
         img_path=map_output_path,

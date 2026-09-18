@@ -10,6 +10,8 @@ import numpy as np
 import pandas as pd
 import pydeck as pdk
 
+from services import tuning
+
 from .common import MAPBOX_API_KEY, logger, project_root
 from .geomath import calculate_bearing, cumulative_distance_km, offset_point, smooth_bearings
 from .httpserver import start_local_server
@@ -254,7 +256,16 @@ def record_headless_video(
             coin_target = None
             if wp_idx < len(waypoints):
                 wp = waypoints[wp_idx]
-                freeze_frames = int(float(wp.get("freeze_seconds", 0.0)) * render_fps)
+                # A configured freeze_seconds is floored at
+                # tuning.POPUP_MIN_DISPLAY_SECONDS so the popup image never
+                # flashes by too fast to actually see; a waypoint with no
+                # freeze_seconds at all still gets no freeze (0), same as
+                # before.
+                raw_freeze_seconds = wp.get("freeze_seconds")
+                freeze_frames = (
+                    int(max(float(raw_freeze_seconds), tuning.POPUP_MIN_DISPLAY_SECONDS) * render_fps)
+                    if raw_freeze_seconds is not None else 0
+                )
                 image_display = wp.get(
                     "image_display", wp.get("image display", "pip")
                 ).lower()
@@ -265,7 +276,7 @@ def record_headless_video(
 
                 raw_popup = wp.get("popup_image")
                 popup_img = (
-                    str(raw_popup[0])
+                    str(raw_popup[-1])
                     if isinstance(raw_popup, list) and raw_popup
                     else (str(raw_popup) if raw_popup else None)
                 )
@@ -401,13 +412,15 @@ def record_headless_video(
             intro_popup_spec = None
             if leg_idx == 0 and waypoints:
                 intro_wp = waypoints[0]
-                intro_freeze_frames = int(
-                    float(intro_wp.get("freeze_seconds", 0.0)) * render_fps
+                raw_intro_freeze_seconds = intro_wp.get("freeze_seconds")
+                intro_freeze_frames = (
+                    int(max(float(raw_intro_freeze_seconds), tuning.POPUP_MIN_DISPLAY_SECONDS) * render_fps)
+                    if raw_intro_freeze_seconds is not None else 0
                 )
                 if intro_freeze_frames > 0:
                     raw_intro_popup = intro_wp.get("popup_image")
                     intro_popup_img = (
-                        str(raw_intro_popup[0])
+                        str(raw_intro_popup[-1])
                         if isinstance(raw_intro_popup, list) and raw_intro_popup
                         else (str(raw_intro_popup) if raw_intro_popup else None)
                     )

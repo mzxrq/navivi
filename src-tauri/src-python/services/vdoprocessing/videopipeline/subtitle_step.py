@@ -3,6 +3,7 @@ TTS audio, and burns them permanently onto the finished video files
 (Step 5). services/cli/subtitle_commands.py is a thin wrapper over
 build_waypoint_subtitle()/build_subtitles() below."""
 
+import re
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -11,6 +12,17 @@ from services.vdoprocessing.vdoexporter import VideoExporter
 
 from .audio_step import _resolve_narration_script
 from .helpers import logger, output_is_valid
+
+# Same convention render_step.py's own RESIDENTIAL_LEG_RE and
+# timeline_step.py's own mirrored regex use: a residential leg clip's
+# filename embeds its 1-based departure-waypoint position
+# ("02_waypoint_{N:02d}_..."), which is how those two steps look up a
+# clip's narration/subtitle instead of trusting a blind per-clip position
+# (stop-by leg-merging, or one leg producing more than one output file —
+# see pedestrian.py's connected-stop-by cut — can both throw a raw index
+# out of sync with subtitle_paths, which stays one entry per WAYPOINT
+# regardless of how many video files a leg ends up producing).
+_RESIDENTIAL_LEG_RE = re.compile(r"02_waypoint_(\d+)_")
 
 
 def build_waypoint_subtitle(
@@ -118,12 +130,23 @@ def burn_subtitles(
 
     final_videos = []
 
-    # [NOTE] [Subtitle] Matches subtitle_paths[idx] to video_paths[idx] purely by list position — the two lists must stay in the same order upstream or subtitles land on the wrong clip.
+    # [NOTE] [Subtitle] A residential leg clip (filename embeds its 1-based
+    # departure-waypoint position, e.g. "02_waypoint_05_...") is matched to
+    # subtitle_paths by that embedded number, same convention render_step.py's
+    # audio mux and timeline_step.py already use — NOT by raw position in
+    # video_paths, which stop-by leg-merging (or one leg producing more than
+    # one output file — see pedestrian.py's connected-stop-by cut) can throw
+    # out of sync with subtitle_paths (one entry per WAYPOINT, unaffected by
+    # either of those). Anything that doesn't match (overview, attraction,
+    # intro/outro clips) still falls back to its own raw position, unchanged
+    # from before.
     for idx, video_path in enumerate(video_paths):
         original_file = Path(video_path)
+        leg_match = _RESIDENTIAL_LEG_RE.search(original_file.name)
+        sub_idx = (int(leg_match.group(1)) - 1) if leg_match else idx
 
-        if idx < len(subtitle_paths) and subtitle_paths[idx]:
-            sub_path = subtitle_paths[idx]
+        if sub_idx < len(subtitle_paths) and subtitle_paths[sub_idx]:
+            sub_path = subtitle_paths[sub_idx]
             subtitled_output = str(
                 original_file.parent
                 / f"{original_file.stem}_subtitled{original_file.suffix}"
