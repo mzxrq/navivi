@@ -604,7 +604,7 @@ export function MapArea() {
   return (
     <main className="flex-1 relative bg-zinc-100 dark:bg-[#09090b] overflow-hidden transition-colors">
       {/* --- GEOJSON.IO STYLE TOP TOOLBAR --- */}
-      <div className="absolute z-200 transition-all duration-300 max-[1159px]:top-14 max-[1159px]:left-4 max-[1159px]:translate-x-0 min-[1160px]:top-14 min-[1160px]:left-1/2 min-[1160px]:-translate-x-1/2">
+      <div className="absolute z-200 transition-all duration-300 max-[1159px]:top-16 max-[1159px]:left-4 max-[1159px]:translate-x-0 min-[1160px]:top-16 min-[1160px]:left-1/2 min-[1160px]:-translate-x-1/2">
         <MapToolbar
           isAddMode={isAddMode}
           setIsAddMode={setIsAddMode}
@@ -633,7 +633,7 @@ export function MapArea() {
         />
       </div>
 
-      <div className="absolute top-14 right-4 z-200 flex items-center gap-2">
+      <div className="absolute top-16 right-4 z-200 flex items-center gap-2">
         <button
           onClick={() => {
             setViewState((prev) => ({
@@ -919,7 +919,7 @@ export function MapArea() {
       <ElevationProfile />
 
       {/* OVERLAYS */}
-      {waypoints.length === 0 && !isHovering && (
+      {waypoints.length === 0 && settings.weather_sync_enabled && (
         <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none p-6">
           <div className="pointer-events-auto bg-white/90 dark:bg-navidark-800/90 backdrop-blur-md border-2 border-dashed border-zinc-300 dark:border-white/15 rounded-2xl p-8 max-w-md w-full text-center shadow-xl flex flex-col items-center gap-3 transition-all animate-in fade-in zoom-in-95">
             <div className="w-12 h-12 rounded-xl bg-navi/10 text-navi flex items-center justify-center">

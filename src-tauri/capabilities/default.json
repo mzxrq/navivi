@@ -21,6 +21,11 @@
     "fs:allow-copy-file",
     "fs:allow-write-text-file",
     "fs:allow-read-text-file",
+    "http:allow-fetch",
+    {
+      "identifier": "http:default",
+      "allow": [{ "url": "http://**" }, { "url": "https://**" }]
+    },
     {
       "identifier": "fs:scope",
       "allow": [{ "path": "**/*" }]

@@ -8,7 +8,7 @@ export function detectLanguage(...texts: (string | undefined)[]): "Japanese" | "
     return jpRegex.test(combinedText) ? "Japanese" : "English";
 }
 
-export async function checkModelExists(targetModel: string = "gemma2"): Promise<boolean> {
+export async function checkModelExists(targetModel: string = "schroneko/gemma-2-2b-jpn-it"): Promise<boolean> {
     try {
         const res = await fetch(`${OLLAMA_URL}/api/tags`);
         if (!res.ok) return false;
@@ -16,6 +16,57 @@ export async function checkModelExists(targetModel: string = "gemma2"): Promise<
         return data.models.some((m: any) => m.name.includes(targetModel));
     } catch (error) {
         return false;
+    }
+}
+
+export async function getLocalModels(): Promise<string[]> {
+    try {
+        const res = await fetch(`${OLLAMA_URL}/api/tags`);
+        if (!res.ok) return [];
+        const data = await res.json();
+        return data.models.map((m: any) => m.name);
+    } catch (error) {
+        return [];
+    }
+}
+
+export async function pullModelStream(
+    model: string,
+    onProgress: (status: string, completed?: number, total?: number) => void,
+    signal?: AbortSignal
+): Promise<void> {
+    const res = await fetch(`${OLLAMA_URL}/api/pull`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: model, stream: true }),
+        signal,
+    });
+
+    if (!res.ok || !res.body) throw new Error(`HTTP Error: ${res.status}`);
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let buffer = "";
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+            if (line.trim() !== "") {
+                try {
+                    const parsed = JSON.parse(line);
+                    if (parsed.status) {
+                        onProgress(parsed.status, parsed.completed, parsed.total);
+                    }
+                } catch (e) {
+                    console.warn("Failed to parse JSON chunk in pullModelStream:", line);
+                }
+            }
+        }
     }
 }
 
@@ -81,10 +132,14 @@ async function streamLLM(prompt: string, engine: string, onChunk: (text: string)
 
         for (const line of lines) {
             if (line.trim() !== "") {
-                const parsed = JSON.parse(line);
-                if (parsed.response) {
-                    fullText += parsed.response;
-                    onChunk(fullText);
+                try {
+                    const parsed = JSON.parse(line);
+                    if (parsed.response) {
+                        fullText += parsed.response;
+                        onChunk(fullText);
+                    }
+                } catch (e) {
+                    console.warn("Failed to parse JSON chunk in streamLLM:", line);
                 }
             }
         }
@@ -94,7 +149,7 @@ async function streamLLM(prompt: string, engine: string, onChunk: (text: string)
 // ✨ Stream Overview Script
 export async function generateOverviewScriptStream(
     waypoints: string[],
-    engine: string = "gemma2",
+    engine: string = "schroneko/gemma-2-2b-jpn-it",
     theme: string = "",
     onChunk: (text: string) => void
 ): Promise<void> {
@@ -118,7 +173,7 @@ ${themeContext}
 export async function generateWaypointScriptStream(
     locationName: string,
     userPrompt: string,
-    engine: string = "gemma2",
+    engine: string = "schroneko/gemma-2-2b-jpn-it",
     theme: string = "",
     onChunk: (text: string) => void,
     lat: number = 0,
@@ -153,7 +208,7 @@ ${contextStr}
 export async function generateVideoPromptStream(
     locationName: string,
     narrationText: string,
-    engine: string = "gemma2",
+    engine: string = "schroneko/gemma-2-2b-jpn-it",
     onChunk: (text: string) => void
 ): Promise<void> {
     const prompt = `You are an expert video prompt engineer for Wan 2.1 (a high-quality video generation AI).

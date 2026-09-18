@@ -56,6 +56,7 @@ export function WaypointEditor({
     setIsDirty,
     setActiveWaypointId,
     metadata,
+    settings,
   } = useWorkspace();
   const { showToast } = useUI();
 
@@ -135,8 +136,8 @@ export function WaypointEditor({
   const handleGenerateScript = async (
     type: "arriving" | "attraction",
     prompt: string,
-    engine: string,
   ) => {
+    let engine = settings.ai_model || "schroneko/gemma-2-2b-jpn-it";
     if (type === "arriving" && !showArriving) setShowArriving(true);
     if (type === "attraction" && !showAttraction) setShowAttraction(true);
 
@@ -201,9 +202,7 @@ export function WaypointEditor({
     <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-50 pointer-events-none w-full px-4 flex flex-col items-center">
       <div
         className={`flex flex-col bg-white/95 dark:bg-navidark-800/95 backdrop-blur-xl rounded-2xl shadow-[0_-10px_60px_-15px_rgba(0,0,0,0.4)] border border-zinc-200/50 dark:border-white/10 select-none transition-all duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] pointer-events-auto ${
-          isCollapsed
-            ? "w-75 h-13"
-            : "w-full max-w-5xl h-115 max-h-[50vh]"
+          isCollapsed ? "w-75 h-13" : "w-full max-w-5xl h-115 max-h-[50vh]"
         } overflow-hidden`}
       >
         {isCollapsed ? (
@@ -392,7 +391,10 @@ export function WaypointEditor({
 
                 {/* Waypoint Settings (Grid of buttons with icons) */}
                 <div className="flex flex-col gap-2.5 mt-2">
-                  <h3 className="text-[11px] font-bold flex items-center gap-1.5 text-zinc-700 dark:text-zinc-300" title="Change Waypoint Type">
+                  <h3
+                    className="text-[11px] font-bold flex items-center gap-1.5 text-zinc-700 dark:text-zinc-300"
+                    title="Change Waypoint Type"
+                  >
                     Waypoint Settings{" "}
                     <Info className="w-3.5 h-3.5 text-zinc-400" />
                   </h3>
@@ -560,8 +562,8 @@ export function WaypointEditor({
                                 console.error,
                               );
                             }}
-                            onGenerate={(prompt, engine) =>
-                              handleGenerateScript("arriving", prompt, engine)
+                            onGenerate={(prompt) =>
+                              handleGenerateScript("arriving", prompt)
                             }
                           />
                         </div>
@@ -607,11 +609,10 @@ export function WaypointEditor({
                                     console.error,
                                   );
                                 }}
-                                onGenerate={(prompt, engine) =>
+                                onGenerate={(prompt) =>
                                   handleGenerateScript(
                                     "attraction",
                                     prompt,
-                                    engine,
                                   )
                                 }
                               />
@@ -680,8 +681,8 @@ export function WaypointEditor({
                               />
                             </div>
 
-                            {/* Dark Bottom Half */}
-                            <div className="bg-zinc-950 text-white p-3 flex flex-col flex-1">
+                            {/* Bottom Half */}
+                            <div className="bg-white dark:bg-navidark-900 text-zinc-900 dark:text-white p-3 flex flex-col flex-1">
                               <h4 className="font-semibold text-[13px] truncate mb-0.5">
                                 {img.split(/\\|\//).pop()}
                               </h4>
@@ -690,7 +691,7 @@ export function WaypointEditor({
                               </span>
 
                               {/* Buttons Row */}
-                              <div className="flex gap-2 overflow-x-auto custom-scrollbar pb-1 mt-auto">
+                              <div className="grid grid-cols-3 gap-1.5 mt-auto">
                                 {cameraPans
                                   .filter((p) => p.value !== "none")
                                   .map((pan) => {
@@ -704,14 +705,14 @@ export function WaypointEditor({
                                             isSelected ? "none" : pan.value,
                                           )
                                         }
-                                        className={`shrink-0 flex flex-col items-center justify-center w-11 h-11 rounded-xl transition-all duration-200 ${
+                                        className={`flex flex-col items-center justify-center w-full h-10 rounded-xl transition-all duration-200 ${
                                           isSelected
-                                            ? "bg-white/10 text-white shadow-sm ring-1 ring-white/10"
-                                            : "text-zinc-500 hover:text-zinc-200 hover:bg-white/5"
+                                            ? "bg-navi text-white shadow-sm ring-1 ring-navi/30"
+                                            : "bg-zinc-50 dark:bg-navidark-800 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-navidark-700"
                                         }`}
                                       >
                                         {renderPanIcon(pan.value)}
-                                        <span className="text-[8px] font-bold wider leading-tight mt-1 ">
+                                        <span className="text-[8px] font-bold wider leading-tight mt-0.5 truncate w-full text-center px-0.5">
                                           {pan.label}
                                         </span>
                                       </button>

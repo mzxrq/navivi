@@ -74,6 +74,7 @@ export interface ProjectSettings {
   subtitle_margin_v?: number;
   show_route_heatmap?: boolean;
   weather_sync_enabled?: boolean;
+  ai_model?: string;
 }
 
 export interface ProjectMetadata {

@@ -13,13 +13,16 @@ import {
   MapPin,
   Key,
   Film,
+  Sparkles,
+  CheckCircle2,
 } from "./icons";
 import { open } from "@tauri-apps/plugin-dialog";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { useAnimatedUnmount } from "../../hooks/useAnimatedUnmount";
+import { getLocalModels, pullModelStream } from "../../services/ollamaApi";
 
-type SettingsTab = "general" | "appearance" | "api" | "video";
+type SettingsTab = "general" | "appearance" | "api" | "video" | "ai";
 
 export function AppSettings() {
   const { settings, updateSettings, setIsDirty } = useWorkspace();
@@ -92,6 +95,12 @@ export function AppSettings() {
               onClick={() => setActiveTab("video")}
               icon={Film}
               label="Video Editor"
+            />
+            <TabButton
+              active={activeTab === "ai"}
+              onClick={() => setActiveTab("ai")}
+              icon={Sparkles}
+              label="AI Models"
             />
           </div>
 
@@ -433,10 +442,12 @@ export function AppSettings() {
                   <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-widest flex items-center gap-1.5">
                     <Film className="w-3.5 h-3.5" /> Video Editor Settings
                   </label>
-                  
+
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">Target FPS</label>
+                      <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                        Target FPS
+                      </label>
                       <input
                         type="number"
                         value={settings.fps || 60}
@@ -447,40 +458,52 @@ export function AppSettings() {
                         className="w-full bg-zinc-50 dark:bg-navidark-800 border border-zinc-200 dark:border-navidark-400 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 outline-none focus:border-navi focus:ring-1 focus:ring-navi transition-all"
                       />
                     </div>
-                    
+
                     <div className="space-y-2">
-                      <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">Duration (seconds)</label>
+                      <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                        Duration (seconds)
+                      </label>
                       <input
                         type="number"
                         value={settings.duration_seconds || 15}
                         onChange={(e) => {
-                          updateSettings({ duration_seconds: Number(e.target.value) });
+                          updateSettings({
+                            duration_seconds: Number(e.target.value),
+                          });
                           setIsDirty(true);
                         }}
                         className="w-full bg-zinc-50 dark:bg-navidark-800 border border-zinc-200 dark:border-navidark-400 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 outline-none focus:border-navi focus:ring-1 focus:ring-navi transition-all"
                       />
                     </div>
-                    
+
                     <div className="space-y-2">
-                      <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">Residential Duration</label>
+                      <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                        Residential Duration
+                      </label>
                       <input
                         type="number"
                         value={settings.res_duration || 5}
                         onChange={(e) => {
-                          updateSettings({ res_duration: Number(e.target.value) });
+                          updateSettings({
+                            res_duration: Number(e.target.value),
+                          });
                           setIsDirty(true);
                         }}
                         className="w-full bg-zinc-50 dark:bg-navidark-800 border border-zinc-200 dark:border-navidark-400 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 outline-none focus:border-navi focus:ring-1 focus:ring-navi transition-all"
                       />
                     </div>
                   </div>
-                  
+
                   <div className="space-y-2 pt-4 border-t border-zinc-100 dark:border-navidark-700">
-                    <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-widest flex items-center gap-1.5">Subtitle Format</label>
-                    
+                    <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-widest flex items-center gap-1.5">
+                      Subtitle Format
+                    </label>
+
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">Font</label>
+                        <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                          Font
+                        </label>
                         <input
                           type="text"
                           value={settings.subtitle_font || "Calibri"}
@@ -492,19 +515,25 @@ export function AppSettings() {
                         />
                       </div>
                       <div className="space-y-2">
-                        <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">Font Size</label>
+                        <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                          Font Size
+                        </label>
                         <input
                           type="number"
                           value={settings.subtitle_font_size || 30}
                           onChange={(e) => {
-                            updateSettings({ subtitle_font_size: Number(e.target.value) });
+                            updateSettings({
+                              subtitle_font_size: Number(e.target.value),
+                            });
                             setIsDirty(true);
                           }}
                           className="w-full bg-zinc-50 dark:bg-navidark-800 border border-zinc-200 dark:border-navidark-400 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 outline-none focus:border-navi focus:ring-1 focus:ring-navi transition-all"
                         />
                       </div>
                       <div className="space-y-2">
-                        <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">Primary Color (ASS)</label>
+                        <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                          Primary Color (ASS)
+                        </label>
                         <input
                           type="text"
                           value={settings.subtitle_color || "&H00FFFFFF"}
@@ -516,12 +545,18 @@ export function AppSettings() {
                         />
                       </div>
                       <div className="space-y-2">
-                        <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">Outline Color (ASS)</label>
+                        <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                          Outline Color (ASS)
+                        </label>
                         <input
                           type="text"
-                          value={settings.subtitle_outline_color || "&H00000000"}
+                          value={
+                            settings.subtitle_outline_color || "&H00000000"
+                          }
                           onChange={(e) => {
-                            updateSettings({ subtitle_outline_color: e.target.value });
+                            updateSettings({
+                              subtitle_outline_color: e.target.value,
+                            });
                             setIsDirty(true);
                           }}
                           className="w-full bg-zinc-50 dark:bg-navidark-800 border border-zinc-200 dark:border-navidark-400 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 outline-none focus:border-navi focus:ring-1 focus:ring-navi transition-all"
@@ -532,6 +567,9 @@ export function AppSettings() {
                 </div>
               </div>
             )}
+
+            {/* AI MODELS TAB */}
+            {activeTab === "ai" && <AiModelsTab />}
           </div>
         </div>
 
@@ -573,5 +611,226 @@ function TabButton({
       <Icon className="w-4 h-4" />
       {label}
     </button>
+  );
+}
+
+function AiModelsTab() {
+  const { settings, updateSettings, setIsDirty } = useWorkspace();
+  const [localModels, setLocalModels] = useState<string[]>([]);
+  const [downloading, setDownloading] = useState<{
+    [key: string]: {
+      status: string;
+      progress: number;
+      controller?: AbortController;
+    };
+  }>({});
+
+  useEffect(() => {
+    getLocalModels().then(setLocalModels);
+  }, []);
+
+  const recommendedModels = [
+    {
+      id: "schroneko/gemma-2-2b-jpn-it",
+      name: "Gemma 2 (2B JPN IT)",
+      size: "~1.5GB",
+    },
+    { id: "gemma2:2b", name: "Gemma 2 (2B)", size: "~1.6GB" },
+    { id: "qwen2.5:3b", name: "Qwen 2.5 (3B)", size: "~1.9GB" },
+  ];
+
+  const handleDownload = async (modelId: string) => {
+    const controller = new AbortController();
+    setDownloading((prev) => ({
+      ...prev,
+      [modelId]: { status: "Starting...", progress: 0, controller },
+    }));
+
+    try {
+      await pullModelStream(
+        modelId,
+        (status, completed, total) => {
+          let progress = 0;
+          if (completed && total)
+            progress = Math.round((completed / total) * 100);
+
+          setDownloading((prev) => {
+            if (!prev[modelId]) return prev;
+            return {
+              ...prev,
+              [modelId]: {
+                ...prev[modelId],
+                status,
+                progress: progress || prev[modelId].progress,
+              },
+            };
+          });
+        },
+        controller.signal,
+      );
+
+      // on complete
+      setDownloading((prev) => {
+        const next = { ...prev };
+        delete next[modelId];
+        return next;
+      });
+
+      // Refresh models
+      const updated = await getLocalModels();
+      setLocalModels(updated);
+    } catch (error: any) {
+      console.error("Download failed:", error);
+      if (error.name === "AbortError" || error.message?.includes("Abort")) {
+        setDownloading((prev) => {
+          const next = { ...prev };
+          delete next[modelId];
+          return next;
+        });
+      } else {
+        setDownloading((prev) => {
+          if (!prev[modelId]) return prev;
+          // Extract a short error message
+          const errMsg = error.message || String(error);
+          return {
+            ...prev,
+            [modelId]: {
+              ...prev[modelId],
+              status: `Failed: ${errMsg}`,
+              progress: 0,
+            },
+          };
+        });
+      }
+    }
+  };
+
+  const handleCancel = (modelId: string) => {
+    downloading[modelId]?.controller?.abort();
+  };
+
+  return (
+    <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+      <div className="space-y-3">
+        <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-widest flex items-center gap-1.5">
+          <Sparkles className="w-3.5 h-3.5" /> Recommended AI Models
+        </label>
+
+        <div className="border border-zinc-200 dark:border-navidark-400 rounded-lg overflow-hidden bg-white dark:bg-navidark-800">
+          <table className="w-full text-left text-sm text-zinc-700 dark:text-zinc-300">
+            <thead className="bg-zinc-50 dark:bg-navidark-800 border-b border-zinc-200 dark:border-navidark-400">
+              <tr>
+                <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wider text-zinc-500">
+                  Model
+                </th>
+                <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wider text-zinc-500">
+                  Size
+                </th>
+                <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wider text-zinc-500 w-48">
+                  Action
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-100 dark:divide-navidark-400">
+              {recommendedModels.map((model) => {
+                const isLocal = localModels.includes(model.id);
+                const dlStatus = downloading[model.id];
+                const isDownloading = !!dlStatus;
+
+                return (
+                  <tr
+                    key={model.id}
+                    className="hover:bg-zinc-50/50 dark:hover:bg-white/5 transition-colors"
+                  >
+                    <td className="px-4 py-3">
+                      <div className="font-bold text-zinc-900 dark:text-zinc-100">
+                        {model.name}
+                      </div>
+                      <div className="text-[11px] font-mono text-zinc-500 dark:text-zinc-400 mt-0.5">
+                        {model.id}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-zinc-500">
+                      {model.size}
+                    </td>
+                    <td className="px-4 py-3">
+                      {isDownloading ? (
+                        <div className="flex items-center gap-2">
+                          <div className="flex flex-col gap-1.5 w-full min-w-24">
+                            <span
+                              className={`text-[10px] truncate font-medium ${dlStatus.status === "Failed" ? "text-red-500" : "text-navi"}`}
+                            >
+                              {dlStatus.status}
+                            </span>
+                            <div className="w-full bg-zinc-200 dark:bg-navidark-600 h-1.5 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full transition-all duration-300 ease-out ${dlStatus.status === "Failed" ? "bg-red-500" : "bg-navi"}`}
+                                style={{ width: `${dlStatus.progress}%` }}
+                              />
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => handleCancel(model.id)}
+                            className="p-1 rounded-md text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors shrink-0"
+                            title={
+                              dlStatus.status === "Failed"
+                                ? "Clear"
+                                : "Cancel download"
+                            }
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ) : isLocal ? (
+                        <div className="flex items-center gap-1.5 px-2 py-1 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded text-xs font-bold w-max">
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Ready
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => handleDownload(model.id)}
+                          className="px-3 py-1.5 bg-zinc-100 hover:bg-zinc-200 dark:bg-navidark-700 dark:hover:bg-navidark-600 text-zinc-700 dark:text-zinc-200 text-[11px] font-bold rounded-md transition-colors w-full border border-zinc-200/50 dark:border-white/5"
+                        >
+                          Download
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="space-y-3 pt-4 border-t border-zinc-100 dark:border-navidark-700">
+        <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-widest flex items-center gap-1.5">
+          <Sparkles className="w-3.5 h-3.5" /> Active Model
+        </label>
+        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+          Select which model to use for narration synthesis. Only downloaded
+          models are shown.
+        </p>
+        <select
+          value={settings.ai_model || "schroneko/gemma-2-2b-jpn-it"}
+          onChange={(e) => {
+            updateSettings({ ai_model: e.target.value });
+            setIsDirty(true);
+          }}
+          className="w-full bg-zinc-50 dark:bg-navidark-800 border border-zinc-200 dark:border-navidark-400 rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-900 dark:text-zinc-100 outline-none focus:border-navi focus:ring-1 focus:ring-navi transition-all"
+        >
+          {localModels.length === 0 ? (
+            <option value="" disabled>
+              No models installed
+            </option>
+          ) : (
+            localModels.map((modelId) => (
+              <option key={modelId} value={modelId}>
+                {modelId}
+              </option>
+            ))
+          )}
+        </select>
+      </div>
+    </div>
   );
 }

@@ -36,7 +36,7 @@ export function LayerManager({
     <div className="relative z-50">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`flex items-center justify-center gap-2 px-3 h-10 rounded-full transition-all font-bold drop-shadow-xl ${
+        className={`flex items-center justify-center gap-2 px-3 h-10 rounded-full transition-all select-none font-bold drop-shadow-xl ${
           isOpen
             ? "bg-zinc-400 hover:bg-zinc-600 text-white shadow-zinc-200/25"
             : "bg-white dark:bg-zinc-800 text-zinc-700 hover:bg-zinc-200 dark:text-zinc-200 dark:hover:bg-zinc-500"

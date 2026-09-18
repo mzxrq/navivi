@@ -288,16 +288,16 @@ export function Sidebar() {
             isRendering ||
             isPreviewing
           }
-          className="flex-1 w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-full bg-zinc-900 hover:bg-black dark:bg-white dark:hover:bg-zinc-200 text-white dark:text-zinc-900 font-bold text-[11px] transition-all disabled:opacity-30 disabled:pointer-events-none shadow-md"
+          className="flex items-center justify-center gap-2 py-1.5 px-4 rounded-full bg-navi hover:bg-navi-600 text-white font-bold text-[11px] transition-all disabled:opacity-30 disabled:pointer-events-none shadow-md shadow-navi/20"
         >
           {isRendering ? (
             <>
-              <div className="w-3.5 h-3.5 border-2 border-current/30 border-t-current rounded-full animate-spin" />
-              Compiling Video...
+              <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              Generating...
             </>
           ) : (
             <>
-              <Film className="w-3.5 h-3.5 fill-current" /> Compile Video
+              <Film className="w-3.5 h-3.5 fill-current" /> Generate Assets
             </>
           )}
         </button>
