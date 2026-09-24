@@ -267,8 +267,10 @@ class RouteAnimator:
         that number back out of the filename) keep working unmodified.
 
         Mixed per leg, not all-or-nothing: a leg whose mode is in
-        tuning.RESIDENTIAL_2D_FALLBACK_MODES (ferry/airplane) is handed to
-        the flat 2D renderer for that leg alone, and the legs either side of
+        tuning.RESIDENTIAL_2D_FALLBACK_MODES (currently just airplane —
+        ferry now gets the chase camera too, via pedestrian.py's own
+        "ferry" HUD mode) is handed to the flat 2D renderer for that leg
+        alone, and the legs either side of
         it still get the chase camera. render_waypoints names its output
         from each leg's own `start_pos` rather than its position in the list
         it was given, so rendering a single leg through it produces exactly
@@ -314,6 +316,16 @@ class RouteAnimator:
             return str(candidate) if candidate.exists() else None
 
         output_paths = []
+        # Was only ever set once, well before this loop ("Rendering
+        # residential video...") -- gps_commands.py's test_residential_video
+        # (and the real pipeline the same way) then sat on that one static
+        # line for the ENTIRE multi-minute render, across every leg, with no
+        # further tracker calls anywhere in this function, looking frozen
+        # even though work was actively happening. begin_substeps/show_item
+        # give it a live per-leg "[i/N] rendering leg -> label" line instead
+        # -- pedestrian.py's own tracker calls inside render_residential_leg_
+        # pydeck further subdivide THIS leg's own share of that line.
+        tracker.begin_substeps(len(res_sequence))
         for i, res_data in enumerate(res_sequence):
             lats, lons = res_data.get("lats"), res_data.get("lons")
             leg_latlon = list(zip(lats, lons)) if lats is not None and lons is not None else []
@@ -323,6 +335,7 @@ class RouteAnimator:
 
             leg_labels = [l for l in res_data.get("labels", []) if l]
             dest_label = leg_labels[-1] if leg_labels else "目的地"
+            tracker.show_item(i + 1, f"Rendering residential leg {i + 1}/{len(res_sequence)} -> {dest_label}")
             leg_mode = res_data.get("mode") or "walking"
             leg_mode = tuning.MODE_ALIASES.get(str(leg_mode).lower(), str(leg_mode).lower())
 
@@ -389,6 +402,26 @@ class RouteAnimator:
             # waypoint and is unaffected by this choice.
             dest_popup_image = dest_popup.get("popup_image_last") or dest_popup.get("popup_image")
             dest_freeze_seconds = dest_popup.get("freeze_seconds")
+            if not dest_popup_image:
+                # A trailing synthetic end_point leg's own destination has
+                # no popup of its own (see render_step.py's
+                # "trip_end_popup" comment) -- fall back to the last REAL
+                # waypoint's own photo so the video's truly final clip still
+                # arrives on a photo instead of nothing. No-op (same value
+                # dest_popup already held) whenever the last real waypoint
+                # IS this leg's own destination, since there's no trailing
+                # synthetic leg in that case.
+                end_popup = res_data.get("trip_end_popup") or {}
+                dest_popup_image = end_popup.get("popup_image_last") or end_popup.get("popup_image")
+                dest_freeze_seconds = end_popup.get("freeze_seconds")
+
+            # Every leg's own departure waypoint's popup (see render_step.py's
+            # "leg_start_popup" comment) -- shown at THIS leg's own opening,
+            # independent of whether the previous leg's arrival preview
+            # already showed the same waypoint's photo once.
+            start_popup = res_data.get("leg_start_popup") or {}
+            start_popup_image = start_popup.get("popup_image_last") or start_popup.get("popup_image")
+            start_freeze_seconds = start_popup.get("freeze_seconds")
 
             safe_suffix = (
                 "".join(c for c in str(dest_label) if c.isalnum() or c in (" ", "_", "-"))
@@ -421,6 +454,8 @@ class RouteAnimator:
                 follow_pitch=self.config.get("res_follow_pitch", 0.0),
                 dest_popup_image=dest_popup_image,
                 dest_popup_freeze_seconds=dest_freeze_seconds,
+                start_popup_image=start_popup_image,
+                start_popup_freeze_seconds=start_freeze_seconds,
             )
             output_paths.extend(leg_paths)
 
