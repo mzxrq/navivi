@@ -98,12 +98,14 @@ MODE_ALIASES: Dict[str, str] = {"direct": "walking", "draw": "walking"}
 # when the project is otherwise on the pydeck pedestrian pipeline (see
 # route2vdo._render_residential_pydeck). The chase camera is built for
 # ground-level travel: it follows the route at pedestrian zoom with a tilted
-# horizon, which suits walking and driving but not a ferry crossing or a
-# flight, where the "route" is a long featureless line over water or sky and
-# a tilted close-up of it shows nothing. Those legs read far better as a
-# flat, zoomed-out 2D map showing the whole hop. Legs either side of one
-# still render in 3D — the fallback is per leg, not per project.
-RESIDENTIAL_2D_FALLBACK_MODES: Tuple[str, ...] = ("ferry", "airplane")
+# horizon, which suits walking, driving AND a ferry crossing (pedestrian.py's
+# own _MODE_HUD has a dedicated "ferry" entry — icon, "乗船時間" label, 乗船中
+# suffix, 30km/h default pace) but not a flight, where the "route" is a long
+# featureless line over open sky and a tilted close-up of it shows nothing.
+# Those legs read far better as a flat, zoomed-out 2D map showing the whole
+# hop. Legs either side of one still render in 3D — the fallback is per leg,
+# not per project.
+RESIDENTIAL_2D_FALLBACK_MODES: Tuple[str, ...] = ("airplane",)
 
 # --- Mode speeds (km/h) -----------------------------------------------------
 # REPORTED is the real-world speed a leg's distance/time is estimated from
@@ -484,6 +486,13 @@ POPUP_FREEZE_SECONDS_MAX = 3.0
 # this hold begins, and the clip hard-cuts the instant the hold ends, so a
 # full 2-3s freeze on a still image just stalls the cut.
 RESIDENTIAL_ARRIVAL_POPUP_HOLD_SECONDS = 1.0
+# How long a residential leg holds on the plain arrived map (walker gone,
+# destination pin + HUD card showing the leg's own total distance/time)
+# BEFORE the at-arrival photo starts its pop-in -- without this the photo
+# began growing the instant the walker stopped moving, cutting straight
+# from "still walking" to "photo" with no beat to actually register having
+# arrived.
+RESIDENTIAL_ARRIVAL_FREEZE_SECONDS = 1.2
 # [NOTE] [Transition] Fullscreen photo transition plays as an ordered sequence: confirm (pin selected) -> scale (zoom into photo) -> blur -> fade_out; hold_ratio_of_freeze/min_hold_seconds/min_small_hold_seconds bound how long the fullscreen photo is held relative to its freeze duration before the next stage starts.
 FULLSCREEN_TRANSITION_DEFAULTS: Dict[str, float] = {
     "confirm_seconds": 0.4,

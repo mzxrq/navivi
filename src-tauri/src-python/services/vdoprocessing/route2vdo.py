@@ -267,8 +267,10 @@ class RouteAnimator:
         that number back out of the filename) keep working unmodified.
 
         Mixed per leg, not all-or-nothing: a leg whose mode is in
-        tuning.RESIDENTIAL_2D_FALLBACK_MODES (ferry/airplane) is handed to
-        the flat 2D renderer for that leg alone, and the legs either side of
+        tuning.RESIDENTIAL_2D_FALLBACK_MODES (currently just airplane —
+        ferry now gets the chase camera too, via pedestrian.py's own
+        "ferry" HUD mode) is handed to the flat 2D renderer for that leg
+        alone, and the legs either side of
         it still get the chase camera. render_waypoints names its output
         from each leg's own `start_pos` rather than its position in the list
         it was given, so rendering a single leg through it produces exactly
@@ -314,6 +316,16 @@ class RouteAnimator:
             return str(candidate) if candidate.exists() else None
 
         output_paths = []
+        # Was only ever set once, well before this loop ("Rendering
+        # residential video...") -- gps_commands.py's test_residential_video
+        # (and the real pipeline the same way) then sat on that one static
+        # line for the ENTIRE multi-minute render, across every leg, with no
+        # further tracker calls anywhere in this function, looking frozen
+        # even though work was actively happening. begin_substeps/show_item
+        # give it a live per-leg "[i/N] rendering leg -> label" line instead
+        # -- pedestrian.py's own tracker calls inside render_residential_leg_
+        # pydeck further subdivide THIS leg's own share of that line.
+        tracker.begin_substeps(len(res_sequence))
         for i, res_data in enumerate(res_sequence):
             lats, lons = res_data.get("lats"), res_data.get("lons")
             leg_latlon = list(zip(lats, lons)) if lats is not None and lons is not None else []
@@ -323,6 +335,7 @@ class RouteAnimator:
 
             leg_labels = [l for l in res_data.get("labels", []) if l]
             dest_label = leg_labels[-1] if leg_labels else "目的地"
+            tracker.show_item(i + 1, f"Rendering residential leg {i + 1}/{len(res_sequence)} -> {dest_label}")
             leg_mode = res_data.get("mode") or "walking"
             leg_mode = tuning.MODE_ALIASES.get(str(leg_mode).lower(), str(leg_mode).lower())
 

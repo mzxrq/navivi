@@ -22,12 +22,14 @@ import random
 import shutil
 import tempfile
 import urllib.parse
+from html import escape
 from typing import Dict, List, Optional, Tuple
 
 import pandas as pd
 import pydeck as pdk
 
 from services import tuning
+from services.logger.progress import tracker
 
 from .common import MAPBOX_API_KEY, logger
 from .geomath import cumulative_distance_km, haversine_km
@@ -140,31 +142,44 @@ def _landmark_layers(landmarks: List[Dict], id_prefix: str = "stopby") -> List[p
     if not landmarks:
         return []
     dots = [{"lon": lm["lon"], "lat": lm["lat"]} for lm in landmarks]
-    labels = [{"lon": lm["lon"], "lat": lm["lat"], "text": str(lm.get("label") or "")} for lm in landmarks]
-    return [
+    layers = [
         pdk.Layer(
             "ScatterplotLayer", id=f"{id_prefix}-dots", data=dots,
             get_position="[lon, lat]", get_fill_color=[120, 80, 50, 255],
             get_radius=4, radius_min_pixels=6,
             stroked=True, get_line_color=[255, 255, 255, 220], line_width_min_pixels=1,
         ),
-        pdk.Layer(
-            "TextLayer", id=f"{id_prefix}-labels", data=labels,
-            get_position="[lon, lat]", get_text="text", get_size=13,
-            get_color=[40, 30, 20, 255], background=True,
-            get_background_color=[255, 255, 255, 200],
-            # Backtick-wrapped (not just double-quoted) so pydeck's own
-            # quote-stripping (pydeck wraps every plain string kwarg as a
-            # JS expression unless it's itself quote-wrapped -- see
-            # QUOTE_CHARS in pydeck/bindings/layer.py) doesn't eat the CSS
-            # value's OWN double quotes around "Noto Sans JP" -- plain double
-            # quotes here would both fail pydeck's v[0]==v[-1] check (this
-            # string's last char is "f", not a quote) and collide with the
-            # font name's own quoting even if it didn't.
-            font_family='`"Noto Sans JP", sans-serif`',
-            get_pixel_offset="[0, -14]",
-        ),
     ]
+    # Same stadium pill every other place label uses (see
+    # _label_pill_svg_url) rather than a TextLayer's own square background,
+    # so a landmark's name reads as the same kind of thing as a waypoint's.
+    layers.extend(
+        _label_pill_layer(
+            [
+                {"lon": lm["lon"], "lat": lm["lat"], "text": lm.get("label") or ""}
+                for lm in landmarks
+            ],
+            f"{id_prefix}-labels",
+            size_px=26,
+            pixel_offset_y=10,
+        )
+    )
+    return layers
+
+
+def _leg_has_stopby_cut(landmarks: Optional[List[Dict]]) -> bool:
+    """True when a connect-to-route stop-by with its own popup photo will
+    cut this leg into multiple output files right at its fullscreen beat
+    (see render_residential_leg_pydeck's docstring). On such a leg the
+    destination pin/label must stay hidden until arrival, same as before --
+    revealing the leg's real final destination from the very first output
+    file would spoil the stop-by's own mid-leg reveal, which is the segment
+    that file actually ends on."""
+    return any(
+        lm.get("connect_to_route") and lm.get("popup_image")
+        and lm.get("lat") is not None and lm.get("lon") is not None
+        for lm in (landmarks or [])
+    )
 
 
 def _pin_layers(waypoints: List[Dict]) -> List[pdk.Layer]:
@@ -206,23 +221,139 @@ def _pin_layers(waypoints: List[Dict]) -> List[pdk.Layer]:
 # fill-rule="evenodd" (a true hole, not a solid white disc), so the map
 # shows through it exactly like a standard pin icon's punched-out center.
 _TEARDROP_PIN_W, _TEARDROP_PIN_H = 384, 512
-_TEARDROP_PIN_SVG = (
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512" '
-    f'width="{_TEARDROP_PIN_W}" height="{_TEARDROP_PIN_H}">'
-    "<defs>"
-    '<filter id="pinShadow" x="-60%" y="-60%" width="220%" height="220%">'
-    '<feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="#000" flood-opacity="0.4"/>'
-    "</filter>"
-    "</defs>"
-    '<path filter="url(#pinShadow)" fill-rule="evenodd" fill="#e65014" '
-    'stroke="#ffffff" stroke-width="10" '
-    'd="M172.268 501.67C26.97 291.031 0 269.413 0 192 0 85.961 85.961 0 192 0s192 85.961 '
-    "192 192c0 77.413-26.97 99.031-172.268 309.67-9.535 13.774-29.93 13.774-39.464 "
-    "0zM192 272c44.183 0 80-35.817 80-80s-35.817-80-80-80-80 35.817-80 80 35.817 80 80 "
-    '80z"/>'
-    "</svg>"
-)
-_TEARDROP_PIN_URL = "data:image/svg+xml;charset=utf-8," + urllib.parse.quote(_TEARDROP_PIN_SVG)
+# Matches draw_marker's own hole_radius = radius * 0.65, against the
+# 192-unit head radius this path is drawn at.
+_PIN_HOLE_R = 192 * 0.65
+
+
+def _bgr_to_hex(bgr) -> str:
+    """tuning.py's pin colors are OpenCV BGR triples (what the overview's
+    own cv2 drawing takes); SVG needs RGB hex."""
+    b, g, r = (int(c) for c in bgr[:3])
+    return f"#{r:02x}{g:02x}{b:02x}"
+
+
+def _teardrop_pin_svg_url(fill_hex: str, glyph: str = "") -> str:
+    """One pin icon as an SVG data URL: `fill_hex` teardrop body, white
+    outline, a SOLID white center disc with `glyph` ("S"/"E"/a visit-order
+    number) in near-black inside it, plus a drop shadow.
+
+    Built per pin rather than as one shared constant because the overview's
+    pins differ in BOTH color and glyph from stop to stop. The center disc
+    is deliberately filled (the pin used to punch a real hole through to the
+    map via fill-rule="evenodd") -- draw_marker fills it so the glyph reads
+    against the pin's own color instead of against whatever map tile happens
+    to sit underneath.
+    """
+    glyph_svg = (
+        '<text x="192" y="192" text-anchor="middle" dominant-baseline="central" '
+        'font-family="Noto Sans JP, sans-serif" font-weight="700" '
+        f'font-size="{150 if len(glyph) < 2 else 110}" '
+        f'fill="{_bgr_to_hex(tuning.PIN_NUMBER_TEXT_COLOR)}">{glyph}</text>'
+    ) if glyph else ""
+    svg = (
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512" '
+        f'width="{_TEARDROP_PIN_W}" height="{_TEARDROP_PIN_H}">'
+        "<defs>"
+        '<filter id="pinShadow" x="-60%" y="-60%" width="220%" height="220%">'
+        '<feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="#000" flood-opacity="0.4"/>'
+        "</filter>"
+        "</defs>"
+        f'<path filter="url(#pinShadow)" fill="{fill_hex}" '
+        'stroke="#ffffff" stroke-width="10" '
+        'd="M172.268 501.67C26.97 291.031 0 269.413 0 192 0 85.961 85.961 0 192 0s192 85.961 '
+        "192 192c0 77.413-26.97 99.031-172.268 309.67-9.535 13.774-29.93 13.774-39.464 "
+        '0z"/>'
+        f'<circle cx="192" cy="192" r="{_PIN_HOLE_R:.0f}" fill="#ffffff"/>'
+        f"{glyph_svg}"
+        "</svg>"
+    )
+    return "data:image/svg+xml;charset=utf-8," + urllib.parse.quote(svg)
+
+
+# This leg's departure ("S") and arrival ("E") pins, in the overview's own
+# start-green / end-red so both videos' pins read as the same system.
+_START_PIN_URL = _teardrop_pin_svg_url(_bgr_to_hex(tuning.START_PIN_COLOR), "S")
+_DEST_PIN_URL = _teardrop_pin_svg_url(_bgr_to_hex(tuning.END_PIN_COLOR), "E")
+
+# Place-name label pill geometry, in SVG units (the icon is rendered at
+# whatever pixel height its layer's get_size asks for, so these only set the
+# label's own proportions).
+_LABEL_FONT_SIZE = 40
+_LABEL_H = 72
+_LABEL_PAD_X = 30
+
+
+def _label_pill_svg_url(
+    text: str, bg: str = "rgba(30,34,40,0.82)", fg: str = "#ffffff"
+) -> Tuple[str, int]:
+    """A place name in a flowchart-terminator pill (a stadium: rx = half the
+    height, so the ends are true semicircles) as an SVG data URL.
+
+    Rendered as an ICON rather than a TextLayer `background` because that
+    background is strictly rectangular -- deck.gl has no corner radius for
+    it -- and as an icon rather than a DOM overlay because an icon is a real
+    map layer: it tracks the camera through the intro/outro zooms on its
+    own, where a DOM overlay would have to be re-projected by hand every
+    frame.
+
+    Its width is ESTIMATED from the text (CJK glyphs are full-width, Latin
+    roughly half) since the pill has to be sized before the browser ever
+    measures the string -- a few units of slack in the padding covers the
+    estimate being a little off either way. Returns (data url, width) --
+    the caller needs that width for the icon's own descriptor.
+    """
+    def _glyph_w(ch: str) -> float:
+        # CJK/kana/full-width punctuation occupy a full em; almost
+        # everything else in a place name (ASCII, spaces) about half.
+        return 1.0 if ord(ch) > 0x2E7F else 0.55
+
+    text_w = sum(_glyph_w(c) for c in text) * _LABEL_FONT_SIZE
+    width = int(text_w + _LABEL_PAD_X * 2)
+    svg = (
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {_LABEL_H}" '
+        f'width="{width}" height="{_LABEL_H}">'
+        f'<rect x="1" y="1" width="{width - 2}" height="{_LABEL_H - 2}" '
+        f'rx="{(_LABEL_H - 2) / 2:.0f}" ry="{(_LABEL_H - 2) / 2:.0f}" fill="{bg}"/>'
+        f'<text x="{width / 2:.0f}" y="{_LABEL_H / 2:.0f}" text-anchor="middle" '
+        f'dominant-baseline="central" font-family="Noto Sans JP, sans-serif" '
+        f'font-weight="700" font-size="{_LABEL_FONT_SIZE}" fill="{fg}">{escape(text)}</text>'
+        "</svg>"
+    )
+    return "data:image/svg+xml;charset=utf-8," + urllib.parse.quote(svg), width
+
+
+def _label_pill_layer(
+    entries: List[Dict], layer_id: str, size_px: int = 34, pixel_offset_y: int = 0
+) -> List[pdk.Layer]:
+    """One IconLayer of place-name pills. `entries`: [{"lat", "lon",
+    "text"}, ...]. Anchored by its TOP edge (anchorY=0) so each pill hangs
+    just BELOW its own point rather than covering the pin standing above
+    it. `pixel_offset_y`: extra downward push (device pixels) past that
+    anchor -- 0 is fine for a teardrop pin, whose own tip already sits
+    exactly at the point, but a small round marker (e.g. a landmark dot,
+    which is CENTERED on the point) needs a positive offset or the pill's
+    top edge cuts straight through the dot instead of sitting below it."""
+    data = []
+    for e in entries:
+        text = str(e.get("text") or "").strip()
+        if not text:
+            continue
+        url, width = _label_pill_svg_url(text)
+        data.append({
+            "lon": e["lon"], "lat": e["lat"],
+            "icon": {"url": url, "width": width, "height": _LABEL_H, "anchorY": 0},
+        })
+    if not data:
+        return []
+    return [
+        pdk.Layer(
+            "IconLayer", id=layer_id, data=data,
+            get_icon="icon", get_position="[lon, lat]",
+            get_size=size_px, size_units="'pixels'", size_scale=1, pickable=False,
+            get_pixel_offset=f"[0, {pixel_offset_y}]",
+        )
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -346,12 +477,25 @@ def _fit_view_for_path(
     lon_span_m = max((lon_max - lon_min) * meters_per_deg_lon, 1.0)
 
     out_w, out_h = output_size
+    # `padding_frac` alone only pads the path's own geographic bounding box
+    # by a PERCENTAGE of its span -- fine for a long leg, but the start/dest
+    # pins and their name pills take up a FIXED number of screen pixels
+    # (the pin extends ~80px above its point, its label pill another ~40px
+    # below), so on a short/tight leg a percentage of a small span still
+    # isn't enough actual pixels to keep them on screen -- the marker at
+    # the bbox edge gets clipped by the frame. Subtracting this fixed pixel
+    # margin from the usable width/height (on top of the existing
+    # percentage padding) guarantees that much real screen space around the
+    # path regardless of how small its own span is.
+    _marker_margin_px = 100.0
+    usable_h = max(1.0, out_h - 2.0 * _marker_margin_px)
+    usable_w = max(1.0, out_w - 2.0 * _marker_margin_px)
     pad = 1.0 + padding_frac
     zoom_for_lat = math.log2(
-        _WEBMERCATOR_EARTH_CIRCUMFERENCE_M * out_h / (_WEBMERCATOR_TILE_PX * lat_span_m * pad)
+        _WEBMERCATOR_EARTH_CIRCUMFERENCE_M * usable_h / (_WEBMERCATOR_TILE_PX * lat_span_m * pad)
     )
     zoom_for_lon = math.log2(
-        _WEBMERCATOR_EARTH_CIRCUMFERENCE_M * lon_scale * out_w / (_WEBMERCATOR_TILE_PX * lon_span_m * pad)
+        _WEBMERCATOR_EARTH_CIRCUMFERENCE_M * lon_scale * usable_w / (_WEBMERCATOR_TILE_PX * lon_span_m * pad)
     )
     zoom = min(zoom_for_lat, zoom_for_lon)
     return center_lon, center_lat, zoom
@@ -681,23 +825,26 @@ _HUD_CSS = """
 }
 #hud-card {
     position: fixed; bottom: 32px; right: 32px;
-    background: #fff; border: 3px solid #e53935; border-radius: 22px;
-    padding: 18px 36px; display: flex; align-items: center; gap: 28px;
+    background: #fff; border: 3px solid #111; border-radius: 30px;
+    padding: 28px 56px; display: flex; align-items: center; gap: 44px;
     font-family: "Noto Sans JP", sans-serif; box-shadow: 0 6px 20px rgba(0,0,0,0.35);
     z-index: 1000;
 }
 #hud-card .metric { text-align: center; }
-#hud-card .metric .label { font-size: 15px; color: #555; display: flex; align-items: center; justify-content: center; gap: 6px; }
-#hud-card .metric .value { font-size: 32px; font-weight: 700; color: #111; margin-top: 2px; }
-#hud-card .divider { width: 1px; height: 46px; background: #ddd; }
-#hud-card .icon { width: 20px; height: 20px; line-height: 1; }
+#hud-card .metric .label { font-size: 20px; color: #555; display: flex; align-items: center; justify-content: center; gap: 6px; }
+#hud-card .metric .value { font-size: 46px; font-weight: 700; color: #111; margin-top: 2px; }
+#hud-card .divider { width: 1px; height: 64px; background: #ddd; }
+#hud-card .icon { width: 26px; height: 26px; line-height: 1; }
 #hud-card .icon svg { display: block; width: 100%; height: 100%; }
 #hud-banner .icon { font-size: 20px; line-height: 1; }
+/* Sized to match #hud-banner, the pill it sits opposite in the other top
+   corner -- at its old 16px against the banner's 22px the two read as
+   different tiers of information rather than as a pair. */
 #hud-chain {
     position: fixed; top: 24px; left: 24px;
     background: rgba(30, 34, 40, 0.72); color: #fff;
-    font-family: "Noto Sans JP", sans-serif; font-weight: 700; font-size: 16px;
-    padding: 8px 20px; border-radius: 999px; box-shadow: 0 4px 14px rgba(0,0,0,0.35);
+    font-family: "Noto Sans JP", sans-serif; font-weight: 700; font-size: 22px;
+    padding: 12px 28px; border-radius: 999px; box-shadow: 0 4px 14px rgba(0,0,0,0.35);
     white-space: nowrap; z-index: 1000;
 }
 #hud-chain .arrow { opacity: 0.6; margin: 0 6px; }
@@ -710,12 +857,31 @@ _HUD_CSS = """
 # the rest of the card's plain black-on-white styling regardless of the
 # host's emoji font.
 _MODE_ICON_SVG = {
+    # Traced from assets/image/icon/walking.svg (potrace output) rather than
+    # hand-drawn like the other modes below -- a solid walking-pictogram
+    # silhouette instead of a thin line icon.
     "walking": (
-        '<svg viewBox="0 0 24 24" fill="none" stroke="#111" stroke-width="1.8" '
-        'stroke-linecap="round" stroke-linejoin="round">'
-        '<circle cx="13.5" cy="4.5" r="1.8"/>'
-        '<path d="M13 8l-1.5 5 3 6M13 8l-3.5 2 .5 4M9.5 10L7 12l-1 4M13 8l3 1.5 2 3"/>'
-        "</svg>"
+        '<svg viewBox="0 0 757 1280" fill="#111" stroke="none">'
+        '<g transform="translate(0,1280) scale(0.1,-0.1)">'
+        """<path d="M4084 12786 c-416 -68 -756 -378 -860 -785 -125 -485 105 -988 553
+-1210 165 -82 277 -106 478 -105 139 1 173 4 257 27 363 97 649 374 752 728
+75 260 51 520 -69 764 -139 281 -387 483 -690 561 -123 31 -301 40 -421 20z"/>
+<path d="M3765 10455 c-149 -24 -309 -86 -443 -172 -74 -46 -2133 -1715 -2202
+-1783 -60 -59 -99 -121 -124 -197 -22 -70 -474 -2108 -482 -2173 -8 -72 15
+-180 56 -260 87 -172 293 -278 483 -249 91 14 195 68 266 140 91 91 122 163
+177 409 55 250 351 1598 356 1623 2 13 738 620 745 614 1 -1 -254 -1134 -567
+-2518 l-568 -2516 -685 -1150 c-377 -633 -697 -1177 -710 -1209 -91 -218 -88
+-412 9 -613 38 -78 60 -108 132 -181 99 -99 186 -152 304 -187 250 -72 497
+-13 689 164 33 31 80 84 103 117 81 114 1517 2546 1576 2669 l59 122 178 823
+c97 452 180 821 184 820 12 -6 1529 -1669 1529 -1677 0 -16 459 -2425 476
+-2496 58 -253 250 -466 488 -541 330 -104 696 50 852 358 71 140 93 324 60
+499 -8 41 -45 233 -81 425 -36 192 -115 608 -175 924 -60 316 -139 733 -175
+925 -65 345 -95 462 -134 526 -11 18 -442 532 -958 1142 -516 609 -937 1114
+-936 1120 8 44 475 2093 478 2096 2 2 96 -181 208 -406 158 -315 215 -420 251
+-460 57 -63 1612 -1139 1711 -1184 189 -85 399 -46 539 100 173 182 179 463
+13 647 -31 35 -269 204 -785 560 l-740 509 -145 290 c-643 1278 -931 1841
+-966 1888 -257 349 -656 525 -1046 462z"/>"""
+        "</g></svg>"
     ),
     "ferry": (
         '<svg viewBox="0 0 24 24" fill="none" stroke="#111" stroke-width="1.8" '
@@ -751,6 +917,15 @@ _MODE_HUD = {
     "airplane": {"mode": "airplane", "icon": _MODE_ICON_SVG["airplane"], "banner_icon": "✈", "time_label": "飛行時間", "en_route_suffix": " 搭乗中", "default_speed_kmh": 500.0},
 }
 _DEFAULT_MODE_HUD = _MODE_HUD["walking"]
+
+
+def _remaining_minutes(remaining_m: float, remaining_km: float, travel_speed_kmh: float) -> int:
+    """Minutes-left for the HUD card, floored to 1 so a leg that's still
+    actually in progress never displays "0 分" -- except when the distance
+    itself has already rounded down to "0 m" on the card, where a floored
+    "1 分" would contradict the distance sitting right next to it."""
+    minutes = round((remaining_km / travel_speed_kmh) * 60.0)
+    return minutes if round(remaining_m) == 0 else max(1, minutes)
 
 
 def _hud_text(
@@ -821,7 +996,12 @@ def render_residential_leg_pydeck(
     pass-through pin: the moment the walker reaches it, the walk pauses,
     its own photo fades in fullscreen, holds for its (floored/capped)
     `freeze_seconds`, then shrinks back down and fades out right onto that
-    marker's own on-screen position before the walk continues.
+    marker's own on-screen position before the walk continues. One with a
+    `popup_image` but `connect_to_route` False/absent (the route only
+    passes NEAR it) gets a lighter touch instead: a small pip card pops in
+    beside its marker as the walker nears it, holds, and fades back out --
+    no fullscreen growth, no leg cut, since the walk never actually visits
+    it (see `_play_stopby_photo_pause`'s `pip_only` path).
 
     `arrival_hold_seconds`: after the chase camera finishes traveling the
     leg, holds the final (arrived) frame on screen for this many extra
@@ -957,10 +1137,8 @@ def render_residential_leg_pydeck(
     ]
     base_layers.extend(_landmark_layers(landmarks or [], id_prefix="leg-landmark"))
     # The start pin is static (this leg's starting point never moves) so it
-    # goes straight into base_layers and is visible for the whole clip --
-    # unlike the destination pin below, which only appears once the walker
-    # gets close (see _record_leg's main loop) so as not to spoil a
-    # not-yet-reached destination during the top-down establishing shot.
+    # goes straight into base_layers and is visible for the whole clip, same
+    # as the destination pin below.
     start_lat, start_lon = df_raw.iloc[0]["lat"], df_raw.iloc[0]["lon"]
     base_layers.append(
         pdk.Layer(
@@ -968,20 +1146,59 @@ def render_residential_leg_pydeck(
             data=[{
                 "lon": start_lon, "lat": start_lat,
                 "icon": {
-                    "url": _TEARDROP_PIN_URL, "width": _TEARDROP_PIN_W,
+                    "url": _START_PIN_URL, "width": _TEARDROP_PIN_W,
                     "height": _TEARDROP_PIN_H, "anchorY": _TEARDROP_PIN_H,
                 },
             }],
             get_icon="icon", get_position="[lon, lat]",
-            get_size=44, size_units="'pixels'", size_scale=1, pickable=False,
+            get_size=60, size_units="'pixels'", size_scale=1, pickable=False,
         )
     )
-    # NOT added to base_layers -- the destination pin only appears once the
-    # walker crosses arrive_threshold_m (see _record_leg's main loop), same
-    # moment the HUD banner switches to "まもなく"; showing it from the
-    # start would mark the destination in a top-down establishing shot
-    # taken while the walker is still leagues away from it.
+    # The departure's own place name, in the same pill every other label
+    # uses. route_chain is this leg's places in travel order, so its FIRST
+    # entry is the waypoint this pin marks (the chain is omitted on a leg
+    # that has no names at all, in which case the pin just goes unlabelled).
+    start_label = (route_chain[0] if route_chain else "") or ""
+    base_layers.extend(
+        _label_pill_layer(
+            [{"lon": start_lon, "lat": start_lat, "text": start_label}],
+            "leg-start-label",
+            size_px=34,
+            pixel_offset_y=8,
+        )
+    )
+    # Destination pin + name pill. Shown for the WHOLE leg (including the
+    # top-down establishing shot) rather than only once the walker gets
+    # close, so the viewer can see where they're headed from the start --
+    # UNLESS a connect-to-route stop-by is going to cut this leg into
+    # multiple output files first (see `_leg_has_stopby_cut`), in which
+    # case it stays hidden until arrival exactly like before, built
+    # dynamically in `_record_leg` instead, so the mid-leg stop-by segment
+    # doesn't leak the leg's real final destination early.
     dest_lat, dest_lon = df_raw.iloc[-1]["lat"], df_raw.iloc[-1]["lon"]
+    if not _leg_has_stopby_cut(landmarks):
+        base_layers.append(
+            pdk.Layer(
+                "IconLayer", id="leg-dest-pin",
+                data=[{
+                    "lon": dest_lon, "lat": dest_lat,
+                    "icon": {
+                        "url": _DEST_PIN_URL, "width": _TEARDROP_PIN_W,
+                        "height": _TEARDROP_PIN_H, "anchorY": _TEARDROP_PIN_H,
+                    },
+                }],
+                get_icon="icon", get_position="[lon, lat]",
+                get_size=60, size_units="'pixels'", size_scale=1, pickable=False,
+            )
+        )
+        base_layers.extend(
+            _label_pill_layer(
+                [{"lon": dest_lon, "lat": dest_lat, "text": dest_label or ""}],
+                "leg-dest-label",
+                size_px=34,
+                pixel_offset_y=8,
+            )
+        )
 
     # The whole-leg "locked" camera: fits the leg's entire path in frame
     # (not a close street-level follow) and, once the intro's zoom-in
@@ -1049,6 +1266,8 @@ def render_residential_leg_pydeck(
 async def _play_stopby_photo_pause(
     page, write_frame, cut_to_new_clip, fps, html_dir, port, stopby,
     view_lon, view_lat, zoom, output_size, trigger_index, pitch,
+    pip_only: bool = False,
+    advance_frame=None, frame_index: int = 0, frame_total: int = 0,
 ):
     """Pauses the walk right where it is, for a connected stop-by (see
     `landmarks` docstring): its own photo pops in as a small leader-line
@@ -1074,7 +1293,17 @@ async def _play_stopby_photo_pause(
       ("fullscreen"/"cover"): grows to fullscreen like the no-attraction
       case, but ends with a cinematic blur-out (matching popupsequence.
       py's own arrival blur-out) instead of a flat cut, then cuts to a new
-      file that likewise resumes the walk directly."""
+      file that likewise resumes the walk directly.
+
+    `pip_only`: for an UNCONNECTED landmark with its own photo -- the
+    route only passes NEAR it, so unlike a connected stop-by the walk
+    never actually stops there, has no attraction video, and never cuts
+    the leg into an extra file. The walker keeps moving along the route
+    for the whole pop-in/hold/fade-out beat (via `advance_frame`, the
+    caller's own per-frame walker-draw callback) instead of freezing --
+    a "look, passing this" aside, not an arrival. Returns the next
+    unconsumed frame index so the caller's own loop can resume exactly
+    where this left off."""
     photo_path = stopby.get("popup_image")
     if not photo_path or not os.path.exists(photo_path):
         return
@@ -1105,12 +1334,31 @@ async def _play_stopby_photo_pause(
     # Small leader card, same aspect ratio as the frame itself (keeps the
     # object-fit:cover crop identical at every size -- see the leg-opening
     # sequence's own note on why this matters), floated just above the
-    # marker with a leader line connecting its bottom edge down to it.
-    card_w = 220.0
+    # marker with a leader line connecting its bottom edge down to it. Same
+    # size for every card regardless of pip_only -- a pip stays this size
+    # the whole time, a connected stop-by's card only starts here before
+    # growing to fullscreen, but there's no reason for the two to look
+    # like different card sizes in the moment before that growth.
+    card_w = 200.0
     card_h = card_w * (float(out_h) / float(out_w))
     card_gap = 26.0
-    card_box = (marker_x - card_w / 2.0, marker_y - card_gap - card_h, card_w, card_h)
-    anchor_x, anchor_y = marker_x, marker_y - card_gap
+    card_margin = 16.0
+    # Clamped to stay fully inside the frame -- a marker near an edge (see
+    # the screenshot that prompted this: 石標 sitting right near the top
+    # edge) used to float this card straight off-screen, floating it
+    # centered/above the marker unconditionally with no bounds check at
+    # all. The leader line's own anchor point is recomputed from the
+    # CLAMPED box below (its bottom-center), not the marker's raw
+    # position, so it still visibly connects to wherever the card actually
+    # ended up instead of pointing at empty space.
+    card_left = min(
+        max(marker_x - card_w / 2.0, card_margin), out_w - card_w - card_margin
+    )
+    card_top = min(
+        max(marker_y - card_gap - card_h, card_margin), out_h - card_h - card_margin
+    )
+    card_box = (card_left, card_top, card_w, card_h)
+    anchor_x, anchor_y = card_left + card_w / 2.0, card_top + card_h
 
     await page.evaluate(
         """([url, left, top, w, h, ax, ay, mx, my]) => new Promise((resolve) => {
@@ -1151,6 +1399,50 @@ async def _play_stopby_photo_pause(
         [img_url, card_box[0], card_box[1], card_box[2], card_box[3], anchor_x, anchor_y, marker_x, marker_y],
     )
     await _wait_for_paint(page)
+
+    if pip_only:
+        # Unconnected landmark: no growth, no attraction video, no leg
+        # cut, and (unlike the shared pop-in/hold below) no freeze either
+        # -- each rendered step also advances the walker one frame via
+        # the caller's own `advance_frame`, so the dot/trail keep moving
+        # under the card for the whole pop-in/hold/fade-out beat instead
+        # of stalling. Falls back to a plain repeated screenshot (the old
+        # frozen behavior) if the caller didn't wire up `advance_frame`.
+        idx = frame_index
+        pop_frames = max(1, int(0.3 * fps))
+        hold_frames = max(1, int(0.5 * fps))
+        fade_frames = max(1, int(0.4 * fps))
+        for i in range(pop_frames + hold_frames + fade_frames):
+            if i < pop_frames:
+                alpha = _ease_in_out_cubic((i + 1) / pop_frames)
+            elif i < pop_frames + hold_frames:
+                alpha = 1.0
+            else:
+                fade_i = i - (pop_frames + hold_frames)
+                alpha = 1.0 - ((fade_i + 1) / fade_frames)
+            await page.evaluate(
+                """([a]) => {
+                    const img = document.getElementById('stopby-preview');
+                    if (img) img.style.opacity = a;
+                    const line = document.getElementById('stopby-leader-line');
+                    if (line) line.setAttribute('opacity', a);
+                }""",
+                [alpha],
+            )
+            if advance_frame is not None and idx < frame_total:
+                png_bytes = await advance_frame(idx)
+                idx += 1
+                if png_bytes is None:
+                    break
+            else:
+                await write_frame(await page.screenshot())
+        await page.evaluate(
+            """() => {
+                const svg = document.getElementById('stopby-leader'); if (svg) svg.remove();
+                const img = document.getElementById('stopby-preview'); if (img) img.remove();
+            }"""
+        )
+        return idx
 
     # Pop-in: card + leader line fade/ease in together at their fixed,
     # already-final position (no motion yet -- see the growth phase below
@@ -1308,21 +1600,32 @@ async def _record_leg(
     dest_popup_image=None, dest_popup_freeze_seconds=None, landmarks=None,
     start_popup_image=None, start_popup_freeze_seconds=None,
 ):
+    from pathlib import Path
+
     from playwright.async_api import async_playwright
     from services.vdoprocessing.vdoeditor import FFmpegEngine
+    from services.vdoprocessing.vdoexporter import VideoExporter, _replace_with_retry
 
     editor = FFmpegEngine()
 
     async def _spawn_ffmpeg(out_path: str):
+        # Encodes into a private temp file in out_path's own directory
+        # (same convention as VideoExporter, which the overview/waypoints
+        # renderers already use), not out_path itself -- see
+        # `_finalize_clip`, the only place that ever touches out_path, so
+        # a render killed mid-stream leaves only that throwaway temp file
+        # behind instead of a half-written/corrupted final video.
+        temp_path = VideoExporter._make_temp_path(out_path)
         ffmpeg_cmd = [
             editor.resolve_binary(), "-hide_banner", "-loglevel", "error", "-y",
             "-f", "image2pipe", "-vcodec", "png", "-framerate", str(fps), "-i", "-",
             "-c:v", "libx264", *tuning.ffmpeg_thread_args(),
-            "-r", str(fps), "-pix_fmt", "yuv420p", out_path,
+            "-r", str(fps), "-pix_fmt", "yuv420p", temp_path,
         ]
-        return await asyncio.create_subprocess_exec(
+        proc = await asyncio.create_subprocess_exec(
             *ffmpeg_cmd, stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.DEVNULL
         )
+        return proc, temp_path
 
     # A leg normally writes into ONE output file start to finish. A
     # connected stop-by pause (see `landmarks` docstring) can CUT the leg
@@ -1334,29 +1637,47 @@ async def _record_leg(
     # `proc_ref["proc"]` currently points at, so swapping it mid-function
     # (see `_cut_to_new_clip` near the main loop) is transparent to every
     # call site.
-    proc_ref = {"proc": await _spawn_ffmpeg(output_path)}
+    _first_proc, _first_temp = await _spawn_ffmpeg(output_path)
+    proc_ref = {"proc": _first_proc, "temp_path": _first_temp, "real_path": output_path}
     produced_paths = [output_path]
 
     async def _write_frame(png_bytes: bytes) -> None:
         proc_ref["proc"].stdin.write(png_bytes)
         await proc_ref["proc"].stdin.drain()
 
-    async def _cut_to_new_clip() -> None:
-        """Closes the CURRENT output file (waits for ffmpeg to actually
-        finish writing it) and opens a fresh one for `_write_frame` to
-        target from here on -- see `_play_stopby_photo_pause`, the only
-        caller. The continuation file keeps this leg's own "02_waypoint_
-        {N:02d}_" filename prefix (just with a "_cont{n}" suffix inserted)
-        so render_step.py's audio mux and timeline_step.py's own filename
-        parse (both match on that prefix, not the full name) still resolve
-        it to this SAME leg's narration/subtitle -- see route2vdo.py's own
-        note on why both files intentionally get that leg's full audio
-        rather than a proportional split."""
+    async def _finalize_clip() -> None:
+        """Closes the CURRENT clip's ffmpeg process and, only once it's
+        confirmed a clean exit, atomically renames its temp file onto its
+        real target path -- the one moment that real path is ever touched.
+        A crash/nonzero exit instead deletes the temp file and leaves
+        whatever was already at the real path (if anything) untouched."""
         proc_ref["proc"].stdin.close()
         await proc_ref["proc"].wait()
+        if proc_ref["proc"].returncode == 0:
+            _replace_with_retry(proc_ref["temp_path"], proc_ref["real_path"])
+        else:
+            logger.error(
+                f"[ERROR] FFmpeg exited {proc_ref['proc'].returncode} while "
+                f"producing '{proc_ref['real_path']}' -- leaving it untouched."
+            )
+            Path(proc_ref["temp_path"]).unlink(missing_ok=True)
+
+    async def _cut_to_new_clip() -> None:
+        """Finalizes the CURRENT output file (see `_finalize_clip`) and
+        opens a fresh one for `_write_frame` to target from here on -- see
+        `_play_stopby_photo_pause`, the only caller. The continuation file
+        keeps this leg's own "02_waypoint_{N:02d}_" filename prefix (just
+        with a "_cont{n}" suffix inserted) so render_step.py's audio mux
+        and timeline_step.py's own filename parse (both match on that
+        prefix, not the full name) still resolve it to this SAME leg's
+        narration/subtitle -- see route2vdo.py's own note on why both
+        files intentionally get that leg's full audio rather than a
+        proportional split."""
+        await _finalize_clip()
         stem, ext = os.path.splitext(output_path)
         new_path = f"{stem}_cont{len(produced_paths) + 1}{ext}"
-        proc_ref["proc"] = await _spawn_ffmpeg(new_path)
+        new_proc, new_temp = await _spawn_ffmpeg(new_path)
+        proc_ref["proc"], proc_ref["temp_path"], proc_ref["real_path"] = new_proc, new_temp, new_path
         produced_paths.append(new_path)
 
     async def _play_leg_photo_card(
@@ -1819,7 +2140,7 @@ async def _record_leg(
                     first_row = smooth_df.iloc[0]
                     rem_km0 = float(remaining_km.iloc[0])
                     rem_m0 = rem_km0 * 1000.0
-                    rem_min0 = max(1, round((rem_km0 / travel_speed_kmh) * 60.0))
+                    rem_min0 = _remaining_minutes(rem_m0, rem_km0, travel_speed_kmh)
                     banner_text0, dist_text0 = _hud_text(
                         dest_label, rem_m0, rem_min0, arrive_threshold_m, mode=mode_hud["mode"]
                     )
@@ -1887,7 +2208,13 @@ async def _record_leg(
                         js = f"""
                         if (window.deckgl) {{
                             const currentLayers = window.deckgl.props.layers || [];
-                            const staticLayers = currentLayers.filter(l => !['walker-trail', 'walker-dot', 'walker-halo'].includes(l.id));
+                            // Pins/dots redrawn above the route line, and name
+                            // pills above THOSE -- otherwise whichever line/dot
+                            // layer happens to be re-appended after them each
+                            // frame would paint straight over them.
+                            const labelLayers = currentLayers.filter(l => l.id.includes('label'));
+                            const pinLayers = currentLayers.filter(l => !l.id.includes('label') && (l.id.includes('pin') || l.id.includes('dots')));
+                            const staticLayers = currentLayers.filter(l => !['walker-trail', 'walker-dot', 'walker-halo'].includes(l.id) && !l.id.includes('label') && !l.id.includes('pin') && !l.id.includes('dots'));
                             const newHalo = new deck.ScatterplotLayer({{
                                 id: 'walker-halo', data: {walker_json0},
                                 getPosition: d => [d.lon, d.lat], getFillColor: {c_glow},
@@ -1905,7 +2232,7 @@ async def _record_leg(
                                     zoom: {zoom}, pitch: {pitch}, bearing: {bearing},
                                     transitionDuration: 0
                                 }},
-                                layers: [...staticLayers, newHalo, newDot]
+                                layers: [...staticLayers, newHalo, newDot, ...pinLayers, ...labelLayers]
                             }});
                             document.getElementById('hud-banner-text').textContent = {json.dumps(banner_text0)};
                             document.getElementById('hud-time').textContent = {json.dumps(f"{rem_min0} 分")};
@@ -1917,29 +2244,49 @@ async def _record_leg(
                         png_bytes = await page.screenshot()
                         await _write_frame(png_bytes)
 
-                # The destination pin only exists as JS from here on (never
-                # in base_layers) -- see render_residential_leg_pydeck's
-                # docstring: it's added the moment the walker first crosses
-                # arrive_threshold_m, not shown for the whole leg, so it
-                # doesn't mark the destination while the walker is still far
-                # away. Built once and reused (only the include/exclude
-                # below changes per frame).
-                # Teardrop pin (see _TEARDROP_PIN_SVG), colored to match the
-                # overview's own numbered waypoint pins.
-                dest_pin_data_json = json.dumps([{
-                    "lon": dest_lon, "lat": dest_lat,
-                    "icon": {
-                        "url": _TEARDROP_PIN_URL, "width": _TEARDROP_PIN_W,
-                        "height": _TEARDROP_PIN_H, "anchorY": _TEARDROP_PIN_H,
-                    },
-                }]) if dest_lat is not None and dest_lon is not None else None
-                dest_pin_ctor_js = f"""
-                    const newDestPin = new deck.IconLayer({{
-                        id: 'leg-dest-pin', data: {dest_pin_data_json},
-                        getIcon: d => d.icon, getPosition: d => [d.lon, d.lat],
-                        getSize: 44, sizeUnits: 'pixels', sizeScale: 1, pickable: false
-                    }});
-                """ if dest_pin_data_json else ""
+                # On a leg with a connect-to-route stop-by cut (see
+                # `_leg_has_stopby_cut`), the destination pin/label were NOT
+                # put in base_layers (render_residential_leg_pydeck skips
+                # them for exactly this leg) -- built here instead and only
+                # spliced into the per-frame layers once the walker crosses
+                # arrive_threshold_m, same as before this pin started being
+                # shown from the start on ordinary legs, so the mid-leg
+                # stop-by segment's own file doesn't leak the real final
+                # destination early.
+                dest_revealed_from_start = not _leg_has_stopby_cut(landmarks)
+                dest_pin_ctor_js = dest_label_ctor_js = dest_label_layer_js = ""
+                if not dest_revealed_from_start:
+                    dest_pin_data_json = json.dumps([{
+                        "lon": dest_lon, "lat": dest_lat,
+                        "icon": {
+                            "url": _DEST_PIN_URL, "width": _TEARDROP_PIN_W,
+                            "height": _TEARDROP_PIN_H, "anchorY": _TEARDROP_PIN_H,
+                        },
+                    }]) if dest_lat is not None and dest_lon is not None else None
+                    _dest_label_url, _dest_label_w = _label_pill_svg_url(str(dest_label or ""))
+                    dest_label_data_json = json.dumps([{
+                        "lon": dest_lon, "lat": dest_lat,
+                        "icon": {
+                            "url": _dest_label_url, "width": _dest_label_w,
+                            "height": _LABEL_H, "anchorY": 0,
+                        },
+                    }]) if dest_pin_data_json and dest_label else None
+                    dest_label_ctor_js = f"""
+                        const newDestLabel = new deck.IconLayer({{
+                            id: 'leg-dest-label', data: {dest_label_data_json},
+                            getIcon: d => d.icon, getPosition: d => [d.lon, d.lat],
+                            getSize: 34, sizeUnits: 'pixels', sizeScale: 1, pickable: false,
+                            getPixelOffset: [0, 8]
+                        }});
+                    """ if dest_label_data_json else ""
+                    dest_pin_ctor_js = (f"""
+                        const newDestPin = new deck.IconLayer({{
+                            id: 'leg-dest-pin', data: {dest_pin_data_json},
+                            getIcon: d => d.icon, getPosition: d => [d.lon, d.lat],
+                            getSize: 60, sizeUnits: 'pixels', sizeScale: 1, pickable: false
+                        }});
+                    """ + dest_label_ctor_js) if dest_pin_data_json else ""
+                    dest_label_layer_js = ", newDestLabel" if dest_label_data_json else ""
 
                 # Connected stop-by photo pauses (see render_residential_leg_
                 # pydeck's `landmarks` docstring): a merged-in stop-by with
@@ -1973,9 +2320,84 @@ async def _record_leg(
                             stopby_triggers[idx] = lm
                             break
 
+                # Index of the last connect-to-route stop-by on this leg (-1
+                # if there isn't one). Every frame after it belongs to the
+                # FINAL continuation segment -- the one that walks straight
+                # to the leg's real destination with no more stop-bys ahead,
+                # so there's nothing left to spoil by showing the dest pin
+                # from that segment's own start, same as an uncut leg does.
+                last_stopby_index = max(stopby_triggers.keys()) if stopby_triggers else -1
+
+                # Unconnected landmarks with their own photo (the route only
+                # passes NEAR these -- see `landmarks` docstring): a small
+                # pip card pops in beside the marker as the walker nears it
+                # and fades back out, via `_play_stopby_photo_pause`'s own
+                # `pip_only` path -- brief, no fullscreen growth, no leg
+                # cut, unlike a connected stop-by's arrival. Shares the same
+                # nearest-index assignment as stopby_triggers above (and the
+                # same taken-index set, so a landmark sitting right beside a
+                # connected stop-by's own trigger point never clobbers it).
+                pip_triggers: Dict[int, Dict] = {}
+                _pip_candidates = []
+                for lm in (landmarks or []):
+                    if lm.get("connect_to_route") or not lm.get("popup_image"):
+                        continue
+                    lm_lat, lm_lon = lm.get("lat"), lm.get("lon")
+                    if lm_lat is None or lm_lon is None:
+                        continue
+                    sq_dist = (smooth_df["lat"] - lm_lat) ** 2 + (smooth_df["lon"] - lm_lon) ** 2
+                    _pip_candidates.append((lm, sq_dist))
+                _taken_indices = set(stopby_triggers.keys())
+                for lm, sq_dist in sorted(_pip_candidates, key=lambda pair: pair[1].min()):
+                    for idx in sq_dist.to_numpy().argsort():
+                        idx = int(idx)
+                        if idx not in _taken_indices:
+                            pip_triggers[idx] = lm
+                            _taken_indices.add(idx)
+                            break
+
+                # Every trigger index on this leg, connected or not, in
+                # order. A pip popup now keeps the walker moving through
+                # real path frames while its card is up (see
+                # `_play_stopby_photo_pause`'s pip_only branch) -- with two
+                # trigger points close together (an unconnected landmark
+                # sitting right before a connected stop-by, say), that walk-
+                # through could otherwise land PAST the next trigger's own
+                # index before the outer loop ever checks it, silently
+                # skipping that stop-by's pause/cut entirely. Passed to the
+                # pip call below as a hard ceiling so it never advances past
+                # whatever comes next.
+                all_trigger_indices = sorted(set(stopby_triggers.keys()) | set(pip_triggers.keys()))
+
+                # remaining_km's own total (its value at frame 0, before any
+                # distance has been walked) -- the SMOOTH path's cumulative
+                # length, which is not necessarily equal to total_leg_km (the
+                # RAW polyline's length): linearly resampling lon/lat between
+                # sparse raw points cuts corners on any sharp turn or loop,
+                # shortening (or occasionally lengthening) the smooth path
+                # relative to the raw one. On a leg with a tight loop (like a
+                # small-island stop-by circuit) that gap can be large enough
+                # that subtracting a SMOOTH remaining-distance from the RAW
+                # total below would land on the wrong raw point entirely --
+                # exactly where bisect crosses the loop's densely-packed raw
+                # points, a small km error jumps `n_pts` by a visible chunk,
+                # reading as the blue trail blinking ahead of (or behind) the
+                # walker dot right at the loop.
+                smooth_total_km = float(remaining_km.iloc[0]) if len(remaining_km) else 0.0
+
+                frame_total = len(smooth_df)
                 last_png_bytes = None
                 crashed = False
-                for index, row in smooth_df.iterrows():
+
+                async def _draw_walker_frame(index: int):
+                    """Draws/writes exactly one walking frame at `index` and
+                    returns its PNG bytes, or None if ffmpeg crashed (sets
+                    the enclosing `crashed` flag too). Pulled out of the
+                    main loop below so a pip popup's own advance-while-
+                    showing-the-card beat (see `_play_stopby_photo_pause`)
+                    can call this too, instead of freezing the walker."""
+                    nonlocal crashed
+                    row = smooth_df.iloc[index]
                     rem_km = float(remaining_km.iloc[index])
                     # Trail must end exactly where the walker dot actually is
                     # -- picking raw points by ANIMATION-FRAME fraction (the
@@ -1985,8 +2407,14 @@ async def _record_leg(
                     # the blue trail could visibly run ahead of or behind the
                     # dot. Selecting raw points by actual DISTANCE traveled
                     # so far, then appending the dot's own real position as
-                    # the trail's final vertex, keeps the two in exact sync.
-                    traveled_km = max(0.0, (total_leg_km or 0.0) - rem_km)
+                    # the trail's final vertex, keeps the two in exact sync --
+                    # but only once that traveled distance is expressed as a
+                    # FRACTION of the smooth path's own total and rescaled
+                    # onto the raw path's total (see smooth_total_km above),
+                    # rather than mixed directly across the two different
+                    # length scales.
+                    traveled_frac = max(0.0, min(1.0, 1.0 - rem_km / smooth_total_km)) if smooth_total_km > 0 else 0.0
+                    traveled_km = traveled_frac * (total_leg_km or 0.0)
                     n_pts = bisect.bisect_right(leg_dist_km, traveled_km) if leg_dist_km else 0
                     active_trail = all_trail_points[:n_pts] + [[row["lon"], row["lat"]]]
                     trail_geojson = json.dumps(
@@ -1995,16 +2423,30 @@ async def _record_leg(
                     walker_json = json.dumps([{"lon": row["lon"], "lat": row["lat"]}])
 
                     rem_m = rem_km * 1000.0
-                    rem_min = max(1, round((rem_km / travel_speed_kmh) * 60.0))
+                    rem_min = _remaining_minutes(rem_m, rem_km, travel_speed_kmh)
                     banner_text, dist_text = _hud_text(
                         dest_label, rem_m, rem_min, arrive_threshold_m, mode=mode_hud["mode"]
                     )
-                    show_dest_pin = dest_pin_ctor_js and rem_m < arrive_threshold_m
+                    # Only relevant on a stop-by-cut leg (see above) -- an
+                    # ordinary leg already has its destination pin/label
+                    # sitting in base_layers from the start, so there's
+                    # nothing to inject here.
+                    show_dest_pin = (not dest_revealed_from_start) and dest_pin_ctor_js and (
+                        index > last_stopby_index or rem_m < arrive_threshold_m
+                    )
+                    dest_filter = ", 'leg-dest-pin', 'leg-dest-label'" if not dest_revealed_from_start else ""
 
                     js = f"""
                     if (window.deckgl) {{
                         const currentLayers = window.deckgl.props.layers || [];
-                        const staticLayers = currentLayers.filter(l => !['walker-trail', 'walker-dot', 'walker-halo', 'leg-dest-pin'].includes(l.id));
+                        const afterRemoval = currentLayers.filter(l => !['walker-trail', 'walker-dot', 'walker-halo'{dest_filter}].includes(l.id));
+                        // Pins/dots redrawn above the route line, and name
+                        // pills above THOSE -- otherwise whichever line/dot
+                        // layer happens to be re-appended after them each
+                        // frame would paint straight over them.
+                        const labelLayers = afterRemoval.filter(l => l.id.includes('label'));
+                        const pinLayers = afterRemoval.filter(l => !l.id.includes('label') && (l.id.includes('pin') || l.id.includes('dots')));
+                        const staticLayers = afterRemoval.filter(l => !l.id.includes('label') && !l.id.includes('pin') && !l.id.includes('dots'));
                         const newTrail = new deck.GeoJsonLayer({{
                             id: 'walker-trail', data: {trail_geojson},
                             stroked: true, filled: false, getLineColor: d => d.properties.line_color,
@@ -2027,7 +2469,7 @@ async def _record_leg(
                         // keeps whatever view the intro left it at instead of
                         // re-centering on the walker every frame.
                         window.deckgl.setProps({{
-                            layers: [...staticLayers, newTrail, newHalo, newDot{", newDestPin" if show_dest_pin else ""}]
+                            layers: [...staticLayers, newTrail, newHalo, newDot, ...pinLayers{", newDestPin" if show_dest_pin else ""}, ...labelLayers{dest_label_layer_js if show_dest_pin else ""}]
                         }});
                         document.getElementById('hud-banner-text').textContent = {json.dumps(banner_text)};
                         document.getElementById('hud-time').textContent = {json.dumps(f"{rem_min} 分")};
@@ -2039,11 +2481,28 @@ async def _record_leg(
                     png_bytes = await page.screenshot()
                     try:
                         await _write_frame(png_bytes)
-                        last_png_bytes = png_bytes
                     except Exception as e:
                         logger.error(f"[ERROR] FFmpeg crashed: {e}")
                         crashed = True
+                        return None
+                    return png_bytes
+
+                index = 0
+                while index < frame_total and not crashed:
+                    png_bytes = await _draw_walker_frame(index)
+                    if png_bytes is None:
                         break
+                    last_png_bytes = png_bytes
+                    # Throttled (every 5 frames, not every single one) so
+                    # the CLI's live status line actually moves DURING a
+                    # leg's render instead of sitting frozen on whatever
+                    # static "rendering leg N" text route2vdo.py's own
+                    # per-leg tracker call left it on for the whole
+                    # multi-minute walk.
+                    if index % 5 == 0 or index == frame_total - 1:
+                        pct = int(100 * (index + 1) / frame_total) if frame_total else 100
+                        tracker.show(f"{dest_label}: walking frame {index + 1}/{frame_total} ({pct}%)")
+                    row = smooth_df.iloc[index]
 
                     stopby_lm = stopby_triggers.get(index)
                     if stopby_lm is not None:
@@ -2052,7 +2511,7 @@ async def _record_leg(
                             stopby_lm, locked_lon, locked_lat, locked_zoom, output_size, index,
                             pitch=follow_pitch,
                         )
-                        
+
                         # Dynamic hop to the NEXT segment's framing for the new clip!
                         future_indices = [k for k in stopby_triggers.keys() if k > index]
                         if future_indices:
@@ -2103,6 +2562,29 @@ async def _record_leg(
                                 
                                 locked_lon, locked_lat, locked_zoom = new_lon, new_lat, new_zoom
 
+                    pip_lm = pip_triggers.get(index)
+                    if pip_lm is not None:
+                        # Unconnected landmark: no camera hop, no leg cut --
+                        # the walker keeps moving under the pip card itself
+                        # (see `_play_stopby_photo_pause`'s pip_only branch),
+                        # so it hands back whichever frame index it actually
+                        # got to instead of the one it started on. Capped at
+                        # the NEXT trigger's own index (see
+                        # `all_trigger_indices`) so a nearby stop-by right
+                        # after this pip never gets walked straight past.
+                        next_trigger = next(
+                            (k for k in all_trigger_indices if k > index), frame_total
+                        )
+                        index = await _play_stopby_photo_pause(
+                            page, _write_frame, _cut_to_new_clip, fps, html_dir, port,
+                            pip_lm, locked_lon, locked_lat, locked_zoom, output_size, index,
+                            pitch=follow_pitch, pip_only=True,
+                            advance_frame=_draw_walker_frame, frame_index=index + 1, frame_total=next_trigger,
+                        )
+                        continue
+
+                    index += 1
+
                 # Freeze-frame on arrival: holds the final (arrived) frame
                 # -- destination banner + marker already on screen -- for a
                 # few extra seconds instead of cutting away the instant the
@@ -2116,24 +2598,51 @@ async def _record_leg(
                 # layers first lets the actual pin read clearly in the held
                 # frame instead of looking like an oversized blurry circle.
                 if not crashed and last_png_bytes is not None:
+                    # The HUD card's own remaining-distance/time reads "0 m
+                    # / 0 分" the instant the walker arrives (see
+                    # _remaining_minutes) -- correct while still walking,
+                    # but meaningless as a held arrival frame. Swapped here
+                    # for the LEG'S OWN total distance/time instead, so the
+                    # freeze below reads as "here's the walk you just did"
+                    # rather than a nonsense zero.
+                    total_m = (total_leg_km or 0.0) * 1000.0
+                    total_min = _remaining_minutes(total_m, total_leg_km or 0.0, travel_speed_kmh)
+                    total_dist_text = f"{total_m:.0f} m" if total_m < 1000 else f"{total_m / 1000.0:.1f} km"
                     await page.evaluate(
-                        """() => {
+                        """([distText, minText]) => {
                             if (window.deckgl) {
                                 const staticLayers = (window.deckgl.props.layers || [])
                                     .filter(l => !['walker-halo', 'walker-dot'].includes(l.id));
                                 window.deckgl.setProps({ layers: staticLayers });
                             }
-                        }"""
+                            const timeEl = document.getElementById('hud-time');
+                            if (timeEl) timeEl.textContent = minText;
+                            const distEl = document.getElementById('hud-dist');
+                            if (distEl) distEl.textContent = distText;
+                        }""",
+                        [total_dist_text, f"{total_min} 分"],
                     )
                     await page.wait_for_timeout(20)
                     last_png_bytes = await page.screenshot()
 
+                    # Brief hold on this plain arrived frame before the
+                    # photo takes over -- without it, the clip cuts straight
+                    # from "still walking" to "photo popping in" the instant
+                    # the walker stops, with no beat to register arrival.
+                    if dest_popup_image:
+                        pre_popup_hold_frames = max(
+                            1, int(tuning.RESIDENTIAL_ARRIVAL_FREEZE_SECONDS * fps)
+                        )
+                        for _ in range(pre_popup_hold_frames):
+                            await _write_frame(last_png_bytes)
+
                     # EVERY leg's own destination photo plays here, RIGHT as
-                    # the walker arrives (before the plain hold below), now
-                    # that the destination pin has a real on-screen position
-                    # to anchor a leader line to (unlike at the opening,
-                    # where it doesn't exist on screen yet) -- not just
-                    # leg 0's. cut_after=True: no fade-out, no outro
+                    # the walker arrives (before the plain hold below),
+                    # anchoring its leader line to the destination pin's real
+                    # on-screen position under the now-locked camera (unlike
+                    # at the opening, where the topdown-to-locked transition
+                    # is still animating) -- not just leg 0's. cut_after=True:
+                    # no fade-out, no outro
                     # afterward -- the clip ends right on the fullscreen
                     # arrival photo, a hard cut instead of fading back to
                     # the map first. Skipped (falls back to a plain hold +
@@ -2209,6 +2718,5 @@ async def _record_leg(
         server.shutdown()
         server.server_close()
 
-    proc_ref["proc"].stdin.close()
-    await proc_ref["proc"].wait()
+    await _finalize_clip()
     return produced_paths
