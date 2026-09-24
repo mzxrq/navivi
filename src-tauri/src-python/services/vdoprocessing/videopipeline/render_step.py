@@ -399,9 +399,22 @@ def render_route_video(
     # Every mode defaults to the SAME pace (SpatialRenderer's own uniform
     # _DEFAULT_ANIMATION_SPEED_KMH, not a per-mode dict) so a real-world-fast
     # car/ferry leg doesn't get allocated dramatically more/less on-screen
-    # time than a walking one purely from its real-world speed.
+    # time than a walking one purely from its real-world speed — except
+    # walking and ferry, which get their own defaults (see tuning.py's
+    # WALKING/FERRY_ANIMATION_SPEED_FACTOR and SpatialRendererBase.__init__,
+    # which applies the identical adjustment for the overview render).
+    _walking_default_kmh = (
+        SpatialRenderer._DEFAULT_ANIMATION_SPEED_KMH * tuning.WALKING_ANIMATION_SPEED_FACTOR
+    )
+    _default_kmh_by_mode = {
+        "walking": _walking_default_kmh,
+        "ferry": _walking_default_kmh * tuning.FERRY_ANIMATION_SPEED_FACTOR,
+    }
     animation_speed_kmh = {
-        **{mode: SpatialRenderer._DEFAULT_ANIMATION_SPEED_KMH for mode in mode_speed_kmh},
+        **{
+            mode: _default_kmh_by_mode.get(mode, SpatialRenderer._DEFAULT_ANIMATION_SPEED_KMH)
+            for mode in mode_speed_kmh
+        },
         **{
             str(k).lower(): float(v)
             for k, v in (settings.get("animation_speeds_kmh") or {}).items()
@@ -824,6 +837,31 @@ def render_route_video(
                     # animation. Including the start popup makes the renderer
                     # terminate on the first frame of every leg.
                     "popups": leg_popups,
+                    # Every leg's own departure waypoint's popup -- shown at
+                    # this leg's OPENING (shrink), independent of whichever
+                    # PREVIOUS leg's arrival preview (grow, at actual
+                    # arrival) already showed the same waypoint's photo once
+                    # -- each leg gets its own self-contained departure +
+                    # arrival pair rather than relying on the previous leg's
+                    # ending to cover this one's beginning.
+                    "leg_start_popup": route_popups[start_idx],
+                    # Symmetric case at the other end: when a trailing
+                    # synthetic end_point leg is appended past the last REAL
+                    # waypoint (see this function's own start/end-point
+                    # padding above), THAT leg's own destination is the
+                    # synthetic end_point -- which, like start_point, has no
+                    # "popup_image" field in job_config's schema, so its
+                    # normal dest popup (leg_popups[-1] above) comes back
+                    # empty and the video's truly final clip would arrive on
+                    # no photo at all. route2vdo.py falls back to this (the
+                    # last REAL waypoint's own popup) only when the leg's
+                    # normal dest popup is empty, so the common case (no
+                    # trailing synthetic leg, the last real waypoint IS the
+                    # final destination) is unaffected -- this would just be
+                    # a duplicate of what leg_popups[-1] already has.
+                    "trip_end_popup": (
+                        route_popups[end_idx] if end_pos == len(waypoints) - 1 else None
+                    ),
                     "mode": leg_mode,
                     "travel_duration": total_time,
                     "segment_duration": total_time,

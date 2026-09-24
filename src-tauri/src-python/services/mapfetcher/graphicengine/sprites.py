@@ -173,7 +173,8 @@ class _SpriteMixin:
 
     def _get_vehicle_sprite(self, mode: str) -> np.ndarray:
         """Builds (and caches) a simple top-down vehicle silhouette pointing
-        east (angle=0), for draw_transport_icon to rotate to heading."""
+        east (angle=0), for draw_transport_icon to rotate to heading. Not
+        used for "ferry" — see _get_ferry_flat_sprite."""
         cache = self._mode_icon_cache()
         if mode in cache:
             return cache[mode]
@@ -191,17 +192,6 @@ class _SpriteMixin:
                     [cx - int(size * 0.30), cy - int(size * 0.32)],
                     [cx - int(size * 0.10), cy],
                     [cx - int(size * 0.30), cy + int(size * 0.32)],
-                ],
-                dtype=np.int32,
-            )
-        elif mode == "ferry":  # boat — pointed bow, flat stern
-            body = np.array(
-                [
-                    [cx + int(size * 0.45), cy],
-                    [cx + int(size * 0.05), cy - int(size * 0.28)],
-                    [cx - int(size * 0.40), cy - int(size * 0.16)],
-                    [cx - int(size * 0.40), cy + int(size * 0.16)],
-                    [cx + int(size * 0.05), cy + int(size * 0.28)],
                 ],
                 dtype=np.int32,
             )
@@ -225,30 +215,7 @@ class _SpriteMixin:
         cv2.fillPoly(canvas, [outline], white, cv2.LINE_AA)
         cv2.fillPoly(canvas, [body], color, cv2.LINE_AA)
 
-        if mode == "ferry":
-            # A deckhouse + funnel on top of the hull, so it silhouettes as
-            # an actual ferry rather than a generic pointed hull that could
-            # as easily read as a canoe or sailboat.
-            cabin = np.array(
-                [
-                    [cx - int(size * 0.05), cy - int(size * 0.14)],
-                    [cx + int(size * 0.20), cy - int(size * 0.14)],
-                    [cx + int(size * 0.20), cy + int(size * 0.14)],
-                    [cx - int(size * 0.05), cy + int(size * 0.14)],
-                ],
-                dtype=np.int32,
-            )
-            cv2.fillPoly(canvas, [cabin], white, cv2.LINE_AA)
-            mast_x = cx - int(size * 0.08)
-            cv2.line(
-                canvas,
-                (mast_x, cy - int(size * 0.14)),
-                (mast_x, cy - int(size * 0.32)),
-                white,
-                max(2, size // 14),
-                cv2.LINE_AA,
-            )
-        elif mode != "airplane":
+        if mode != "airplane":
             # Windshield accent so the car silhouette doesn't read as just
             # a generic rounded rectangle.
             cv2.rectangle(
@@ -261,6 +228,95 @@ class _SpriteMixin:
             )
 
         cache[mode] = canvas
+        return canvas
+
+    def _get_ferry_flat_sprite(self) -> np.ndarray:
+        """A flat, side-view ferry silhouette that never rotates to heading
+        — unlike every other vehicle mode. A top-down heading-rotated hull
+        silhouette (this sprite's old approach) only had a thin sliver of a
+        profile to work with at actual on-map icon sizes, so it read as a
+        generic directional arrow rather than a recognizable ship no matter
+        how much its proportions were tuned. A flat profile pictogram,
+        shown at a fixed orientation regardless of the ferry's true
+        heading, stays legible at any size — the same convention transit
+        maps use for a boat icon on a ferry line.
+
+        Traced (not hand-tuned by eye) from a specific reference ferry
+        glyph the user supplied — same shape and same normalized 0..1
+        coordinates as icons.py's _draw_ship_icon, just rasterized here via
+        cv2 instead of PIL: a solid deckhouse block (slanted bow pennant,
+        four square windows, a stacked two-tier funnel) floating above a
+        separate, wider hull trapezoid, with a visible gap between the two
+        pieces."""
+        cache = self._mode_icon_cache()
+        if "ferry_flat" in cache:
+            return cache["ferry_flat"]
+
+        size = max(28, int(self.marker_radius * 4.6))
+        canvas = np.zeros((size, size, 4), dtype=np.uint8)
+        color = (*self.MODE_COLORS.get("ferry", self.marker_color), 255)
+        white = (255, 255, 255, 255)
+        cx, cy = size / 2, size / 2
+
+        def pt(nx: float, ny: float, scale: float = 1.0):
+            return (cx + (nx - 0.5) * size * scale, cy + (ny - 0.5) * size * scale)
+
+        def polys(scale: float):
+            return [
+                np.array(
+                    [pt(0.431, 0.250, scale), pt(0.4625, 0.250, scale), pt(0.369, 0.3375, scale)],
+                    dtype=np.int32,
+                ),
+                np.array(
+                    [
+                        pt(0.621, 0.1875, scale), pt(0.735, 0.1875, scale),
+                        pt(0.735, 0.255, scale), pt(0.621, 0.255, scale),
+                    ],
+                    dtype=np.int32,
+                ),
+                np.array(
+                    [
+                        pt(0.621, 0.271, scale), pt(0.735, 0.271, scale),
+                        pt(0.735, 0.3375, scale), pt(0.621, 0.3375, scale),
+                    ],
+                    dtype=np.int32,
+                ),
+                np.array(
+                    [
+                        pt(0.294, 0.3375, scale), pt(0.819, 0.3375, scale), pt(0.819, 0.4375, scale),
+                        pt(0.8625, 0.4375, scale), pt(0.8625, 0.481, scale), pt(0.95, 0.481, scale),
+                        pt(0.95, 0.5375, scale), pt(0.156, 0.5375, scale),
+                    ],
+                    dtype=np.int32,
+                ),
+                np.array(
+                    [
+                        pt(0.0, 0.575, scale), pt(1.0, 0.575, scale),
+                        pt(0.8625, 0.8125, scale), pt(0.1375, 0.8125, scale),
+                    ],
+                    dtype=np.int32,
+                ),
+            ]
+
+        # Halo first (scaled up 15% from the sprite's own center, same
+        # trick _get_vehicle_sprite uses), then the real silhouette on top.
+        for poly in polys(1.15):
+            cv2.fillPoly(canvas, [poly], white, cv2.LINE_AA)
+        for poly in polys(1.0):
+            cv2.fillPoly(canvas, [poly], color, cv2.LINE_AA)
+
+        win = 0.045 * size
+        win_y = pt(0, 0.4375)[1]
+        for wx_n in (0.365, 0.4525, 0.54, 0.6275):
+            wx = pt(wx_n, 0)[0]
+            cv2.rectangle(
+                canvas,
+                (int(wx - win / 2), int(win_y - win / 2)),
+                (int(wx + win / 2), int(win_y + win / 2)),
+                white, -1, cv2.LINE_AA,
+            )
+
+        cache["ferry_flat"] = canvas
         return canvas
 
     @staticmethod
@@ -286,16 +342,24 @@ class _SpriteMixin:
         mode: str = "walking",
     ):
         """Draws the traveler marker for the current leg's travel mode: an
-        animated stick-figure walker for walking, and a heading-rotated
-        vehicle silhouette for airplane/ferry/car(driving) legs. Any other
-        unrecognized mode falls back to a mode-colored marker with a
-        heading arrow."""
+        animated stick-figure walker for walking, a heading-rotated vehicle
+        silhouette for airplane/car(driving) legs, and a flat (never
+        rotated) side-view ship pictogram for ferry legs — see
+        _get_ferry_flat_sprite for why ferry doesn't rotate like the
+        others. Any other unrecognized mode falls back to a mode-colored
+        marker with a heading arrow."""
         mode = (mode or "walking").lower()
         if mode == "walking":
             self.draw_walking_human(frame, cx, cy, frame_count, angle)
             return
 
-        if mode in ("airplane", "ferry", "car", "driving"):
+        if mode == "ferry":
+            sprite = self._get_ferry_flat_sprite()
+            anchor = (sprite.shape[1] // 2, sprite.shape[0] // 2)
+            self.blit_sprite(frame, sprite, anchor, cx, cy)
+            return
+
+        if mode in ("airplane", "car", "driving"):
             sprite = self._rotate_sprite(self._get_vehicle_sprite(mode), angle)
             anchor = (sprite.shape[1] // 2, sprite.shape[0] // 2)
             self.blit_sprite(frame, sprite, anchor, cx, cy)

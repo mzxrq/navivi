@@ -147,5 +147,16 @@ def patch_pydeck_html(html_path: str):
             1,
         )
 
+    # pydeck's bundled createDeck() JS doesn't expose an attributionControl
+    # option to turn off from here, so the "© Mapbox © OpenStreetMap Improve
+    # this map" strip it always adds is hidden via CSS instead -- it has no
+    # place in a rendered video frame.
+    content = content.replace(
+        "</head>",
+        '<style>.mapboxgl-ctrl-attrib, .mapboxgl-ctrl-logo, '
+        '.maplibregl-ctrl-attrib, .maplibregl-ctrl-logo { display: none !important; }</style>\n</head>',
+        1,
+    )
+
     with open(html_path, "w", encoding="utf-8") as f:
         f.write(content)

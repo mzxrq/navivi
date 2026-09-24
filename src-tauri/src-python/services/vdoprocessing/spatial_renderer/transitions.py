@@ -112,23 +112,16 @@ class _TransitionMixin:
         write that final hold itself, since the highlight
         (_render_ending_highlight) may still need to run first.
 
-        The recap ends up showing EVERY waypoint's card together, but
-        reveals them a few at a time rather than cutting straight to a
-        full screen of them. The whole set is laid out up front into the
-        frame's free space (see _layout_recap_cards), which is what makes
-        showing them all at once viable at all — disjoint slots, so no two
+        The recap shows EVERY waypoint's card at once, fading in together
+        from the clean map in a single crossfade rather than trickling in a
+        few at a time. The whole set is laid out up front into the frame's
+        free space (see _layout_recap_cards) — disjoint slots, so no two
         cards can overlap, matched to pins by minimum total leader length,
-        which leaves the lines both short and uncrossed. They're then
-        revealed
-        cumulatively in that same ring order, tuning.RECAP_GROUP_SIZE
-        cards per step, crossfading between steps: because the layout was
-        computed once over the full set, no card ever moves, resizes or
-        recolors as later ones join it. Every pin stays visible from the
-        first step regardless of whether its own card has appeared yet
-        (see _render_recap_frame's group_popups param). All of this is
-        written directly here (not left to the caller's own trailing hold
-        loop), so the returned outro_hold_sec covers only the summary
-        card's own hold on top of the final, complete ring."""
+        which leaves the lines both short and uncrossed — and every pin is
+        already visible on `outro_frame` regardless. All of this is written
+        directly here (not left to the caller's own trailing hold loop), so
+        the returned outro_hold_sec covers only the summary card's own hold
+        on top of the fully-revealed recap."""
         outro_hold_sec = 0.0
 
         if stop_popup:
@@ -164,37 +157,24 @@ class _TransitionMixin:
                     reserved_boxes=reserved_boxes,
                     route_obstacles=route_obstacle_arr,
                 )
-                step = max(1, tuning.RECAP_GROUP_SIZE)
-                # Cumulative prefixes: each step adds `step` more cards to
-                # the ones already up, so the last one holds every card.
-                reveals = [
-                    laid_out[: i + step] for i in range(0, len(laid_out), step)
-                ]
-                per_step_hold = max(
-                    tuning.RECAP_GROUP_MIN_HOLD_SECONDS, total_freeze / len(reveals)
-                )
+                # Every waypoint's card revealed together, in one fade from
+                # the clean map — not a few at a time in route-order groups
+                # (the previous behavior here).
                 fade_frames = max(1, int(tuning.RECAP_GROUP_FADE_SECONDS * fps))
+                hold_frames = max(0, int(total_freeze * fps))
 
-                prev_step_frame = None
-                for shown in reveals:
-                    step_frame = self._render_recap_frame(
-                        outro_frame, active_popups, group_popups=shown
+                final_frame = self._render_recap_frame(
+                    outro_frame, active_popups, group_popups=laid_out
+                )
+                for i in range(fade_frames):
+                    alpha = (i + 1) / fade_frames
+                    video.write(
+                        cv2.addWeighted(final_frame, alpha, outro_frame, 1 - alpha, 0)
                     )
-                    hold_frames = max(0, int(per_step_hold * fps))
-                    if prev_step_frame is None:
-                        for _ in range(hold_frames):
-                            video.write(step_frame)
-                    else:
-                        for i in range(fade_frames):
-                            alpha = (i + 1) / fade_frames
-                            video.write(
-                                cv2.addWeighted(step_frame, alpha, prev_step_frame, 1 - alpha, 0)
-                            )
-                        for _ in range(max(0, hold_frames - fade_frames)):
-                            video.write(step_frame)
-                    prev_step_frame = step_frame
+                for _ in range(max(0, hold_frames - fade_frames)):
+                    video.write(final_frame)
 
-                self.last_frame = prev_step_frame
+                self.last_frame = final_frame
             else:
                 self.last_frame = outro_frame
 
