@@ -15,6 +15,7 @@ import {
 import { Waypoint, RouteMode } from "../../../types/index";
 import { useEffect, useRef, useState } from "react";
 import { useWorkspace } from "../../../hooks/useWorkspace";
+import { t } from "@lingui/core/macro";
 
 interface WaypointItemProps {
   wp: Waypoint;

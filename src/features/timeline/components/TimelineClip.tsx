@@ -4,7 +4,8 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { ClipData } from "../../../types/index";
 import { AudioWaveform } from "./elements/AudioWaveform";
 import { useWorkspace } from "../../../hooks/useWorkspace";
-import { useUI } from "../../../hooks/useUI"; // ✨ NEW: For throwing track-error toasts
+import { useUI } from "../../../hooks/useUI";
+import { t } from "@lingui/core/macro";
 
 interface ClipProps {
   clip: ClipData;

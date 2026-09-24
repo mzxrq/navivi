@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { CheckCircle2, AlertCircle, Info, AlertTriangle, X } from "../ui/icons";
 import { useUI } from "../../hooks/useUI";
+import { t } from "@lingui/core/macro";
 
 function ToastItem({ toast, hideToast }: { toast: any; hideToast: (id: string) => void}) {
     const [isExiting, setIsExiting] = useState(false);

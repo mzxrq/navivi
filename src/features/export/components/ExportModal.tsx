@@ -29,6 +29,7 @@ import {
   compileTimelineManifest,
 } from "../../../services/fileSystem";
 import { useUI } from "../../../hooks/useUI";
+import { t } from "@lingui/core/macro";
 
 export interface ExportModalProps {
   isOpen: boolean;

@@ -1,0 +1,937 @@
+msgid ""
+msgstr ""
+"POT-Creation-Date: 2026-09-24 09:21+0900\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: @lingui/cli\n"
+"Language: en\n"
+
+#. js-lingui-explicit-id
+#: src/components/ui/AppSettings.tsx:278
+msgid "Light"
+msgstr "Light"
+
+#. js-lingui-explicit-id
+#: src/components/ui/AppSettings.tsx:279
+msgid "Dark"
+msgstr "Dark"
+
+#. js-lingui-explicit-id
+#: src/components/ui/AppSettings.tsx:280
+msgid "System"
+msgstr "System"
+
+#. js-lingui-explicit-id
+#: src/components/ui/AppSettings.tsx:307
+msgid "Navi Blue"
+msgstr "Navi Blue"
+
+#. js-lingui-explicit-id
+#: src/components/ui/AppSettings.tsx:312
+msgid "Emerald"
+msgstr "Emerald"
+
+#. js-lingui-explicit-id
+#: src/components/ui/AppSettings.tsx:317
+msgid "Violet"
+msgstr "Violet"
+
+#. js-lingui-explicit-id
+#: src/components/ui/AppSettings.tsx:322
+msgid "Amber"
+msgstr "Amber"
+
+#. js-lingui-explicit-id
+#: src/components/ui/AppSettings.tsx:327
+msgid "Rose"
+msgstr "Rose"
+
+#. js-lingui-explicit-id
+#: src/components/ui/AppSettings.tsx:407
+msgid "Change Marker"
+msgstr "Change Marker"
+
+#. js-lingui-explicit-id
+#: src/components/ui/AppSettings.tsx:408
+msgid "Select Custom Marker"
+msgstr "Select Custom Marker"
+
+#. js-lingui-explicit-id
+#: src/components/ui/AppSettings.tsx:745
+msgid "Starting..."
+msgstr "Starting..."
+
+#: src/components/ui/AppSettings.tsx:145
+msgid "1 minute"
+msgstr "1 minute"
+
+#: src/components/ui/AppSettings.tsx:148
+msgid "10 minutes"
+msgstr "10 minutes"
+
+#: src/components/ui/AppSettings.tsx:139
+msgid "3 seconds"
+msgstr "3 seconds"
+
+#: src/components/ui/AppSettings.tsx:142
+msgid "30 seconds"
+msgstr "30 seconds"
+
+#: src/components/ui/AppSettings.tsx:300
+msgid "Accent Color"
+msgstr "Accent Color"
+
+#: src/components/ui/AppSettings.tsx:830
+msgid "Action"
+msgstr "Action"
+
+#: src/components/ui/AppSettings.tsx:908
+msgid "Active Model"
+msgstr "Active Model"
+
+#: src/components/ui/ContextMenu.tsx:381
+#: src/components/ui/ContextMenu.tsx:735
+msgid "add-audio-track"
+msgstr "Add Audio Track"
+
+#: src/components/ui/ContextMenu.tsx:482
+msgid "add-return-stop"
+msgstr "Add Return Stop"
+
+#: src/components/ui/ContextMenu.tsx:459
+msgid "add-stop-by"
+msgstr "Add Stop By"
+
+#: src/components/ui/ContextMenu.tsx:375
+#: src/components/ui/ContextMenu.tsx:729
+msgid "add-subtitle-track"
+msgstr "Add Subtitle Track"
+
+#: src/components/ui/ContextMenu.tsx:378
+#: src/components/ui/ContextMenu.tsx:732
+msgid "add-visual-track"
+msgstr "Add Visual Track"
+
+#: src/components/ui/ContextMenu.tsx:468
+msgid "add-waypoint-here"
+msgstr "Add Waypoint Here"
+
+#: src/components/ui/ContextMenu.tsx:788
+msgid "advanced-settings"
+msgstr "Advanced Settings"
+
+#: src/components/ui/AppSettings.tsx:107
+msgid "AI Models"
+msgstr "AI Models"
+
+#: src/components/ui/RenderOverlay.tsx:1060
+msgid "An unknown error occurred during rendering."
+msgstr "An unknown error occurred during rendering."
+
+#: src/components/ui/AppSettings.tsx:95
+msgid "API Keys"
+msgstr "API Keys"
+
+#: src/components/ui/TitleBar.tsx:435
+msgid "App Settings"
+msgstr "App Settings"
+
+#: src/components/ui/AppSettings.tsx:89
+msgid "Appearance"
+msgstr "Appearance"
+
+#. placeholder {0}: wp ? wp.name : t`Stop ` + (attrIdx + 1)
+#: src/components/ui/RenderOverlay.tsx:412
+msgid "Attraction Video: {0}"
+msgstr "Attraction Video: {0}"
+
+#. placeholder {0}: item.label
+#: src/components/ui/RenderOverlay.tsx:515
+msgid "Audio regenerated successfully for {0}! Click Listen to verify pronunciation."
+msgstr "Audio regenerated successfully for {0}! Click Listen to verify pronunciation."
+
+#: src/components/ui/RenderOverlay.tsx:520
+msgid "Audio regeneration failed: {err}"
+msgstr "Audio regeneration failed: {err}"
+
+#: src/components/ui/AppSettings.tsx:584
+msgid "Auto-Detect (Recommended)"
+msgstr "Auto-Detect (Recommended)"
+
+#: src/components/ui/AppSettings.tsx:119
+msgid "Auto-Save Interval"
+msgstr "Auto-Save Interval"
+
+#: src/components/ui/RenderOverlay.tsx:899
+msgid "Auto-skipped (Quick Export)"
+msgstr "Auto-skipped (Quick Export)"
+
+#: src/components/ui/RenderOverlay.tsx:905
+msgid "Auto-stitched Video"
+msgstr "Auto-stitched Video"
+
+#: src/components/ui/RenderOverlay.tsx:892
+msgid "Build Assets"
+msgstr "Build Assets"
+
+#: src/components/ui/NewProject.tsx:308
+msgid "cancel"
+msgstr "cancel"
+
+#: src/components/ui/RenderOverlay.tsx:861
+msgid "Cancel"
+msgstr "Cancel"
+
+#: src/components/ui/RenderOverlay.tsx:1032
+msgid "Cancelling process..."
+msgstr "Cancelling process..."
+
+#: src/components/ui/TitleBar.tsx:120
+msgid "Cannot close window. Check Tauri capabilities"
+msgstr "Cannot close window. Check Tauri capabilities"
+
+#: src/components/ui/RenderOverlay.tsx:900
+msgid "Check Audio & Video"
+msgstr "Check Audio & Video"
+
+#: src/components/ui/ContextMenu.tsx:587
+msgid "connect-to-route"
+msgstr "Connect to Route"
+
+#: src/components/ui/AppSettings.tsx:122
+msgid "Controls auto save of editors that have unsaved changes"
+msgstr "Controls auto save of editors that have unsaved changes"
+
+#: src/components/ui/ContextMenu.tsx:609
+msgid "copy-trail"
+msgstr "Copy Trail"
+
+#. placeholder {0}: item.label
+#: src/components/ui/RenderOverlay.tsx:448
+msgid "Could not load audio for {0}"
+msgstr "Could not load audio for {0}"
+
+#: src/components/ui/TitleBar.tsx:255
+msgid "Could not open file location"
+msgstr "Could not open file location"
+
+#: src/components/ui/NewProject.tsx:137
+msgid "create-new-route"
+msgstr "create-new-route"
+
+#: src/components/ui/NewProject.tsx:140
+msgid "create-new-route-detail"
+msgstr "create-new-route-detail"
+
+#: src/components/ui/AppSettings.tsx:354
+msgid "Default marker for all waypoints. Can be overridden per-stop."
+msgstr "Default marker for all waypoints. Can be overridden per-stop."
+
+#: src/components/ui/NewProject.tsx:233
+msgid "default-routing-mode-detail"
+msgstr "default-routing-mode-detail"
+
+#: src/components/ui/ContextMenu.tsx:406
+msgid "delete-clip"
+msgstr "Delete Clip"
+
+#: src/components/ui/ContextMenu.tsx:744
+msgid "delete-empty-track"
+msgstr "Delete Empty Track"
+
+#: src/components/ui/ContextMenu.tsx:388
+msgid "delete-track"
+msgstr "Delete Track"
+
+#: src/components/ui/ContextMenu.tsx:718
+msgid "delete-waypoint"
+msgstr "Delete Waypoint"
+
+#: src/components/ui/ContextMenu.tsx:544
+#: src/components/ui/NewProject.tsx:241
+msgid "direct"
+msgstr "Direct"
+
+#: src/components/ui/RenderOverlay.tsx:802
+msgid "Discard"
+msgstr "Discard"
+
+#: src/components/ui/ContextMenu.tsx:586
+msgid "disconnect-route"
+msgstr "Disconnect route"
+
+#: src/components/ui/AppSettings.tsx:681
+msgid "Done"
+msgstr "Done"
+
+#: src/components/ui/AppSettings.tsx:894
+msgid "Download"
+msgstr "Download"
+
+#: src/components/ui/ContextMenu.tsx:546
+msgid "draw"
+msgstr "Draw"
+
+#: src/components/ui/ContextMenu.tsx:542
+msgid "drive"
+msgstr "Drive"
+
+#: src/components/ui/NewProject.tsx:239
+msgid "DriveLabel"
+msgstr "DriveLabel"
+
+#: src/components/ui/ContextMenu.tsx:779
+#: src/components/ui/ContextMenu.tsx:812
+msgid "duplicate"
+msgstr "Duplicate"
+
+#: src/components/ui/ContextMenu.tsx:399
+msgid "duplicate-clip"
+msgstr "Duplicate Clip"
+
+#: src/components/ui/ContextMenu.tsx:711
+msgid "duplicate-waypoint"
+msgstr "Duplicate Waypoint"
+
+#: src/components/ui/AppSettings.tsx:507
+msgid "Duration (seconds)"
+msgstr "Duration (seconds)"
+
+#: src/components/ui/RenderOverlay.tsx:791
+msgid "Edit the image, script, or route mode in the Waypoint Editor. Click Resume when ready to re-render"
+msgstr "Edit the image, script, or route mode in the Waypoint Editor. Click Resume when ready to re-render"
+
+#: src/components/ui/ContextMenu.tsx:597
+msgid "edit-waypoint"
+msgstr "Edit Waypoint"
+
+#: src/components/ui/RenderOverlay.tsx:777
+msgid "Editing Waypoint on Map"
+msgstr "Editing Waypoint on Map"
+
+#: src/components/ui/RenderOverlay.tsx:1048
+msgid "Error Details:"
+msgstr "Error Details:"
+
+#: src/components/ui/ErrorBoundary.tsx:48
+msgid "errorboundary_error-message"
+msgstr "Unknown error has occurred"
+
+#: src/components/ui/ErrorBoundary.tsx:45
+msgid "errorboundary_reason"
+msgstr "The application encountered an unexpected rendering error. Your saved files are safe"
+
+#: src/components/ui/TitleBar.tsx:335
+msgid "Exit"
+msgstr "Exit"
+
+#: src/components/ui/RenderOverlay.tsx:784
+msgid "Expand Review"
+msgstr "Expand Review"
+
+#: src/components/ui/AppSettings.tsx:233
+msgid "Experimental"
+msgstr "Experimental"
+
+#: src/components/ui/RenderOverlay.tsx:904
+msgid "Export"
+msgstr "Export"
+
+#. placeholder {0}: err?.message || err
+#: src/components/ui/RenderOverlay.tsx:676
+msgid "Export failed: {0}"
+msgstr "Export failed: {0}"
+
+#: src/components/ui/RenderOverlay.tsx:672
+msgid "exportSuccessToastMsg"
+msgstr "exportSuccessToastMsg"
+
+#: src/components/ui/RenderOverlay.tsx:867
+msgid "Failed"
+msgstr "Failed"
+
+#: src/components/ui/RenderOverlay.tsx:290
+msgid "Failed to invoke Python render: {err}"
+msgstr "Failed to invoke Python render: {err}"
+
+#: src/components/ui/TitleBar.tsx:254
+msgid "Failed to open file explorer:"
+msgstr "Failed to open file explorer:"
+
+#: src/components/ui/TitleBar.tsx:285
+msgid "Failed to read project file"
+msgstr "Failed to read project file"
+
+#: src/components/ui/TitleBar.tsx:302
+msgid "Failed to read project folder"
+msgstr "Failed to read project folder"
+
+#: src/components/ui/TitleBar.tsx:136
+msgid "Failed to save project."
+msgstr "Failed to save project."
+
+#: src/components/ui/AppSettings.tsx:180
+#: src/components/ui/NewProject.tsx:276
+msgid "Fast Render Mode"
+msgstr "Fast Render Mode"
+
+#: src/components/ui/ContextMenu.tsx:545
+msgid "ferry"
+msgstr "Ferry"
+
+#: src/components/ui/RenderOverlay.tsx:1013
+msgid "Finalizing Project Timeline{prog}..."
+msgstr "Finalizing Project Timeline{prog}..."
+
+#: src/components/ui/ContextMenu.tsx:543
+msgid "fly"
+msgstr "Fly"
+
+#: src/components/ui/AppSettings.tsx:604
+msgid "Font"
+msgstr "Font"
+
+#: src/components/ui/AppSettings.tsx:618
+msgid "Font Size"
+msgstr "Font Size"
+
+#: src/components/ui/AppSettings.tsx:83
+msgid "General"
+msgstr "General"
+
+#: src/components/ui/RenderOverlay.tsx:981
+msgid "Generating Assets (Quick Export Mode)..."
+msgstr "Generating Assets (Quick Export Mode)..."
+
+#: src/components/ui/RenderOverlay.tsx:982
+msgid "Generating Assets..."
+msgstr "Generating Assets..."
+
+#: src/components/ui/RenderOverlay.tsx:1006
+msgid "Generating Subtitles{prog}..."
+msgstr "Generating Subtitles{prog}..."
+
+#: src/components/ui/RenderOverlay.tsx:1044
+msgid "Generation Failed"
+msgstr "Generation Failed"
+
+#: src/components/ui/RenderOverlay.tsx:771
+msgid "Generation On Hold"
+msgstr "Generation On Hold"
+
+#: src/components/ui/AppSettings.tsx:542
+msgid "Generation Workflow & Hardware Routing"
+msgstr "Generation Workflow & Hardware Routing"
+
+#: src/components/ui/AppSettings.tsx:351
+msgid "Global Route Marker"
+msgstr "Global Route Marker"
+
+#: src/components/ui/AppSettings.tsx:571
+msgid "Hardware Spec Mode (Regeneration Routing)"
+msgstr "Hardware Spec Mode (Regeneration Routing)"
+
+#: src/components/ui/ContextMenu.tsx:336
+msgid "Hide Track"
+msgstr "Hide Track"
+
+#: src/components/ui/ContextMenu.tsx:319
+msgid "hide-track"
+msgstr "hide-track"
+
+#: src/components/ui/AppSettings.tsx:590
+msgid "High-spec Mode"
+msgstr "High-spec Mode"
+
+#. placeholder {0}: spec.gpuRenderer
+#: src/components/ui/RenderOverlay.tsx:535
+msgid "High-spec system detected ({0}). Opening Timeline Editor for custom video trimming and transition adjustments. (Quick export disabled)."
+msgstr "High-spec system detected ({0}). Opening Timeline Editor for custom video trimming and transition adjustments. (Quick export disabled)."
+
+#: src/components/ui/AppSettings.tsx:230
+msgid "Historical Weather Sync"
+msgstr "Historical Weather Sync"
+
+#: src/components/ui/TitleBar.tsx:327
+msgid "Import GPX..."
+msgstr "Import GPX..."
+
+#: src/components/ui/TitleBar.tsx:318
+msgid "Import Photos..."
+msgstr "Import Photos..."
+
+#: src/components/ui/RenderOverlay.tsx:992
+msgid "Initializing pipeline..."
+msgstr "Initializing pipeline..."
+
+#. placeholder {0}: departureIdx + 1
+#. placeholder {1}: wp ? wp.name : t`Stop ` + (departureIdx + 1)
+#. placeholder {2}: nextWp ? nextWp.name : t`Next Stop`
+#: src/components/ui/RenderOverlay.tsx:403
+msgid "Leg {0}: {1} → {2}"
+msgstr "Leg {0}: {1} → {2}"
+
+#: src/components/ui/ContextMenu.tsx:416
+msgid "link-clips"
+msgstr "Link Clips"
+
+#: src/components/ui/ContextMenu.tsx:367
+msgid "lock-track"
+msgstr "Lock Track"
+
+#: src/components/ui/AppSettings.tsx:587
+msgid "Low-spec Mode"
+msgstr "Low-spec Mode"
+
+#: src/components/ui/RenderOverlay.tsx:773
+msgid "Low-Spec Mode"
+msgstr "Low-Spec Mode"
+
+#. placeholder {0}: vid.label
+#: src/components/ui/RenderOverlay.tsx:601
+msgid "Low-spec system: Opened Waypoint Editor for {0}. Adjust image, script, or route mode, then click Resume Generation."
+msgstr "Low-spec system: Opened Waypoint Editor for {0}. Adjust image, script, or route mode, then click Resume Generation."
+
+#: src/components/ui/RenderOverlay.tsx:597
+msgid "lowSpecGenSessionMessage"
+msgstr "lowSpecGenSessionMessage"
+
+#: src/components/ui/TitleBar.tsx:413
+#: src/components/ui/TitleBar.tsx:415
+msgid "Map"
+msgstr "Map"
+
+#: src/components/ui/AppSettings.tsx:443
+msgid "Mapbox API Key"
+msgstr "Mapbox API Key"
+
+#: src/components/ui/AppSettings.tsx:824
+msgid "Model"
+msgstr "Model"
+
+#: src/components/ui/ContextMenu.tsx:352
+msgid "mute-track"
+msgstr "Mute Track"
+
+#: src/components/ui/TitleBar.tsx:273
+msgid "New Project"
+msgstr "New Project"
+
+#: src/components/ui/RenderOverlay.tsx:403
+msgid "Next Stop"
+msgstr "Next Stop"
+
+#: src/components/ui/ContextMenu.tsx:530
+msgid "next-route-mode"
+msgstr "Next Route Mode"
+
+#: src/components/ui/TitleBar.tsx:246
+msgid "No active project folder found"
+msgstr "No active project folder found"
+
+#: src/components/ui/AppSettings.tsx:926
+msgid "No models installed"
+msgstr "No models installed"
+
+#: src/components/ui/ContextMenu.tsx:628
+msgid "no-drawn-trails-found"
+msgstr "No drawn trails found"
+
+#: src/components/ui/LocationSearch.tsx:41
+#: src/components/ui/NewProject.tsx:88
+msgid "no-internet"
+msgstr "no-internet"
+
+#: src/components/ui/ContextMenu.tsx:517
+msgid "normal-node"
+msgstr "Normal Node"
+
+#: src/components/ui/AppSettings.tsx:136
+msgid "Off"
+msgstr "Off"
+
+#: src/components/ui/TitleBar.tsx:290
+msgid "Open Project File..."
+msgstr "Open Project File..."
+
+#: src/components/ui/TitleBar.tsx:307
+msgid "Open Project Folder..."
+msgstr "Open Project Folder..."
+
+#: src/components/ui/ContextMenu.tsx:760
+msgid "open-project"
+msgstr "Open Project"
+
+#: src/components/ui/AppSettings.tsx:462
+msgid "OpenRouteService API Key"
+msgstr "OpenRouteService API Key"
+
+#: src/components/ui/AppSettings.tsx:648
+msgid "Outline Color (ASS)"
+msgstr "Outline Color (ASS)"
+
+#: src/components/ui/RenderOverlay.tsx:1002
+msgid "Parsing Maps & GPS Data{prog}..."
+msgstr "Parsing Maps & GPS Data{prog}..."
+
+#: src/components/ui/AppSettings.tsx:634
+msgid "Primary Color (ASS)"
+msgstr "Primary Color (ASS)"
+
+#: src/components/ui/TitleBar.tsx:150
+msgid "Project duplicated successfully"
+msgstr "Project duplicated successfully"
+
+#: src/components/ui/TitleBar.tsx:282
+#: src/components/ui/TitleBar.tsx:299
+msgid "Project loaded successfully"
+msgstr "Project loaded successfully"
+
+#: src/components/ui/TitleBar.tsx:238
+#: src/components/ui/TitleBar.tsx:379
+msgid "Project Manager"
+msgstr "Project Manager"
+
+#: src/components/ui/AppSettings.tsx:157
+msgid "Project Overrides"
+msgstr "Project Overrides"
+
+#: src/components/ui/TitleBar.tsx:150
+msgid "Project saved"
+msgstr "Project saved"
+
+#: src/components/ui/TitleBar.tsx:131
+msgid "Project saved to {fileName}"
+msgstr "Project saved to {fileName}"
+
+#: src/components/ui/NewProject.tsx:149
+msgid "project-name"
+msgstr "project-name"
+
+#: src/components/ui/NewProject.tsx:156
+msgid "project-name-placeholder"
+msgstr "project-name-placeholder"
+
+#: src/components/ui/ContextMenu.tsx:821
+msgid "properties"
+msgstr "Properties"
+
+#: src/components/ui/RenderOverlay.tsx:846
+msgid "Quick Export"
+msgstr "Quick Export"
+
+#: src/components/ui/AppSettings.tsx:556
+msgid "Quick Export (Auto-stitch on generation)"
+msgstr "Quick Export (Auto-stitch on generation)"
+
+#: src/components/ui/RenderOverlay.tsx:616
+msgid "quickExportToastMsg1"
+msgstr "quickExportToastMsg1"
+
+#: src/components/ui/RenderOverlay.tsx:617
+msgid "quickExportToastMsg2"
+msgstr "quickExportToastMsg2"
+
+#: src/components/ui/AppSettings.tsx:887
+msgid "Ready"
+msgstr "Ready"
+
+#: src/components/ui/AppSettings.tsx:816
+msgid "Recommended AI Models"
+msgstr "Recommended AI Models"
+
+#: src/components/ui/TitleBar.tsx:358
+msgid "Redo (Ctrl+Y)"
+msgstr "Redo (Ctrl+Y)"
+
+#. placeholder {0}: item.label
+#: src/components/ui/RenderOverlay.tsx:502
+msgid "Regenerating audio for {0}..."
+msgstr "Regenerating audio for {0}..."
+
+#: src/components/ui/ErrorBoundary.tsx:56
+#~ msgid "reload-application"
+#~ msgstr "Reload Application"
+
+#: src/components/ui/AppSettings.tsx:378
+msgid "Remove Marker"
+msgstr "Remove Marker"
+
+#: src/components/ui/ContextMenu.tsx:798
+msgid "remove-from-list"
+msgstr "Remove from List"
+
+#: src/components/ui/ContextMenu.tsx:831
+msgid "remove-from-media-pool"
+msgstr "Remove from Media Pool"
+
+#: src/components/ui/ContextMenu.tsx:770
+msgid "rename"
+msgstr "Rename"
+
+#: src/components/ui/RenderOverlay.tsx:262
+msgid "renderFinishCancelMessage"
+msgstr "renderFinishCancelMessage"
+
+#: src/components/ui/RenderOverlay.tsx:275
+msgid "renderFinishErrorMessage"
+msgstr "renderFinishErrorMessage"
+
+#: src/components/ui/RenderOverlay.tsx:240
+msgid "renderFinishSuccessMessage"
+msgstr "renderFinishSuccessMessage"
+
+#: src/components/ui/RenderOverlay.tsx:893
+msgid "Rendering & Synthesis"
+msgstr "Rendering & Synthesis"
+
+#: src/components/ui/RenderOverlay.tsx:1011
+msgid "Rendering Media & Animations{prog}..."
+msgstr "Rendering Media & Animations{prog}..."
+
+#: src/components/ui/RenderOverlay.tsx:346
+msgid "renderRouteOvvNarr"
+msgstr "renderRouteOvvNarr"
+
+#: src/components/ui/RenderOverlay.tsx:170
+msgid "renderTerminalMessage"
+msgstr "renderTerminalMessage"
+
+#: src/components/ui/RenderOverlay.tsx:182
+msgid "renderTerminalStep1"
+msgstr "renderTerminalStep1"
+
+#: src/components/ui/RenderOverlay.tsx:184
+msgid "renderTerminalStep4"
+msgstr "renderTerminalStep4"
+
+#: src/components/ui/RenderOverlay.tsx:187
+msgid "renderTerminalStep6"
+msgstr "renderTerminalStep6"
+
+#: src/components/ui/RenderOverlay.tsx:188
+msgid "renderTerminalTimeline"
+msgstr "renderTerminalTimeline"
+
+#: src/components/ui/AppSettings.tsx:465
+msgid "Required for driving and some hiking routes"
+msgstr "Required for driving and some hiking routes"
+
+#: src/components/ui/AppSettings.tsx:446
+msgid "Required for map rendering and 3D terrain"
+msgstr "Required for map rendering and 3D terrain"
+
+#: src/components/ui/AppSettings.tsx:524
+msgid "Residential Duration"
+msgstr "Residential Duration"
+
+#: src/components/ui/RenderOverlay.tsx:815
+msgid "Resume Generation"
+msgstr "Resume Generation"
+
+#: src/components/ui/ContextMenu.tsx:699
+msgid "retrace-previous-trail"
+msgstr "Retrace Previous Trail"
+
+#: src/components/ui/TitleBar.tsx:262
+msgid "Reveal in File Explorer"
+msgstr "Reveal in File Explorer"
+
+#: src/components/ui/RenderOverlay.tsx:808
+#: src/components/ui/RenderOverlay.tsx:897
+msgid "Review Assets"
+msgstr "Review Assets"
+
+#: src/components/ui/AppSettings.tsx:369
+msgid "Route Marker"
+msgstr "Route Marker"
+
+#: src/components/ui/RenderOverlay.tsx:393
+msgid "routeOvvAnim"
+msgstr "routeOvvAnim"
+
+#: src/components/ui/TitleBar.tsx:228
+msgid "Save As..."
+msgstr "Save As..."
+
+#: src/components/ui/TitleBar.tsx:216
+msgid "Save Project"
+msgstr "Save Project"
+
+#: src/components/ui/TitleBar.tsx:395
+msgid "Saved"
+msgstr "Saved"
+
+#: src/components/ui/RenderOverlay.tsx:625
+msgid "saveTimelineProjectNameDefault"
+msgstr "saveTimelineProjectNameDefault"
+
+#: src/components/ui/LocationSearch.tsx:92
+msgid "search-location"
+msgstr "search-location"
+
+#: src/components/ui/AppSettings.tsx:911
+msgid "Select which model to use for narration synthesis, only downloaded models are shown"
+msgstr "Select which model to use for narration synthesis, only downloaded models are shown"
+
+#: src/components/ui/ContextMenu.tsx:619
+msgid "select-layer-to-copy"
+msgstr "Select layer to copy"
+
+#: src/components/ui/RenderOverlay.tsx:738
+msgid "Sending cancellation signal to backend..."
+msgstr "Sending cancellation signal to backend..."
+
+#: src/components/ui/RenderOverlay.tsx:1035
+msgid "Sending interrupt signal to renderer."
+msgstr "Sending interrupt signal to renderer."
+
+#: src/components/ui/ContextMenu.tsx:450
+#: src/components/ui/ContextMenu.tsx:510
+msgid "set-as-destination"
+msgstr "Set as Destination"
+
+#: src/components/ui/ContextMenu.tsx:441
+#: src/components/ui/ContextMenu.tsx:504
+msgid "set-as-start"
+msgstr "Set as Start"
+
+#: src/components/ui/AppSettings.tsx:66
+msgid "Settings"
+msgstr "Settings"
+
+#: src/components/ui/TitleBar.tsx:381
+msgid "Setup"
+msgstr "Setup"
+
+#: src/components/ui/ContextMenu.tsx:336
+msgid "Show Track"
+msgstr "Show Track"
+
+#: src/components/ui/AppSettings.tsx:827
+msgid "Size"
+msgstr "Size"
+
+#: src/components/ui/AppSettings.tsx:183
+#: src/components/ui/NewProject.tsx:279
+msgid "Skip AI voiceover synthesis and pop-up images during generation"
+msgstr "Skip AI voiceover synthesis and pop-up images during generation"
+
+#: src/components/ui/AppSettings.tsx:561
+msgid "Skips asset review and automatically stitches & exports finished video"
+msgstr "Skips asset review and automatically stitches & exports finished video"
+
+#: src/components/ui/ErrorBoundary.tsx:43
+msgid "something-went-wrong"
+msgstr "Something went wrong"
+
+#: src/components/ui/NewProject.tsx:313
+msgid "start-editing"
+msgstr "start-editing"
+
+#: src/components/ui/NewProject.tsx:178
+msgid "start-search-detail"
+msgstr "start-search-detail"
+
+#: src/components/ui/NewProject.tsx:164
+msgid "start-search-location"
+msgstr "start-search-location"
+
+#: src/components/ui/RenderOverlay.tsx:403
+#: src/components/ui/RenderOverlay.tsx:412
+msgid "Stop "
+msgstr "Stop "
+
+#: src/components/ui/RenderOverlay.tsx:372
+msgid "Stop {stopNum}: {stopName}"
+msgstr "Stop {stopNum}: {stopName}"
+
+#: src/components/ui/ContextMenu.tsx:523
+msgid "stop-by"
+msgstr "Stop-by"
+
+#: src/components/ui/AppSettings.tsx:598
+msgid "Subtitle Format"
+msgstr "Subtitle Format"
+
+#: src/components/ui/AppSettings.tsx:237
+msgid "Synchronize historical weather conditions from photo EXIF dates using Open-Meteo to dynamically apply atmospheric fog and rain effects"
+msgstr "Synchronize historical weather conditions from photo EXIF dates using Open-Meteo to dynamically apply atmospheric fog and rain effects"
+
+#: src/components/ui/RenderOverlay.tsx:1004
+msgid "Synthesizing AI Voiceovers{prog}..."
+msgstr "Synthesizing AI Voiceovers{prog}..."
+
+#: src/components/ui/AppSettings.tsx:492
+msgid "Target FPS"
+msgstr "Target FPS"
+
+#: src/components/ui/TitleBar.tsx:118
+msgid "Tauri Window API error:"
+msgstr "Tauri Window API error:"
+
+#: src/components/ui/TitleBar.tsx:425
+#: src/components/ui/TitleBar.tsx:427
+msgid "Timeline"
+msgstr "Timeline"
+
+#: src/components/ui/AppSettings.tsx:274
+msgid "UI Theme"
+msgstr "UI Theme"
+
+#: src/components/ui/TitleBar.tsx:350
+msgid "Undo (Ctrl+Z)"
+msgstr "Undo (Ctrl+Z)"
+
+#: src/components/ui/ContextMenu.tsx:426
+msgid "unlink-clips"
+msgstr "Unlink clips"
+
+#: src/components/ui/ContextMenu.tsx:367
+msgid "unlock-track"
+msgstr "Unlock track"
+
+#: src/components/ui/ContextMenu.tsx:352
+msgid "unmute-track"
+msgstr "Unmute track"
+
+#: src/components/ui/TitleBar.tsx:395
+msgid "Unsaved"
+msgstr "Unsaved"
+
+#: src/components/ui/NewProject.tsx:32
+#: src/components/ui/NewProject.tsx:112
+#: src/components/ui/TitleBar.tsx:80
+#: src/components/ui/TitleBar.tsx:206
+#: src/components/ui/TitleBar.tsx:496
+msgid "Untitled Project"
+msgstr "Untitled Project"
+
+#: src/components/ui/AppSettings.tsx:101
+msgid "Video Editor"
+msgstr "Video Editor"
+
+#: src/components/ui/AppSettings.tsx:486
+msgid "Video Editor Settings"
+msgstr "Video Editor Settings"
+
+#: src/components/ui/RenderOverlay.tsx:385
+msgid "video-clip"
+msgstr "video-clip"
+
+#: src/components/ui/ContextMenu.tsx:541
+msgid "walk"
+msgstr "Walk"
+
+#: src/components/ui/NewProject.tsx:240
+msgid "WalkLabel"
+msgstr "WalkLabel"
+
+#: src/components/ui/ContextMenu.tsx:660
+msgid "waypoint"
+msgstr "Waypoint"
+
+#: src/components/ui/ContextMenu.tsx:488
+msgid "waypoint-type"
+msgstr "Set Waypoint Type"

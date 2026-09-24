@@ -2,6 +2,8 @@ import { useState } from "react";
 import { MapPinPlus, Trash2 } from "../../../../components/ui/icons";
 import { WaypointTimelineMarker } from "../../../../types";
 import { formatMarkerTime } from "./WaypointMarker";
+import { t } from "@lingui/core/macro";
+
 
 interface MarkersPanelProps {
   markers: WaypointTimelineMarker[];

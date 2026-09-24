@@ -20,6 +20,7 @@ import {
   ArrowDown,
   ZoomIn,
   ZoomOut,
+  Sparkles,
 } from "../../../components/ui/icons";
 import { useWorkspace } from "../../../hooks/useWorkspace";
 import { useUI } from "../../../hooks/useUI";
@@ -31,6 +32,7 @@ import {
   checkModelExists,
   generateWaypointScriptStream,
 } from "../../../services/ollamaApi";
+import { t } from "@lingui/core/macro";
 
 const cameraPans = [
   { value: "none", label: "None" },
@@ -58,7 +60,8 @@ export function WaypointEditor({
     metadata,
     settings,
   } = useWorkspace();
-  const { showToast } = useUI();
+  const { showToast, markedWaypointIds } = useUI();
+  const isMarkedForRegen = markedWaypointIds?.includes(wpId);
 
   const wp = waypoints.find((w) => w.id === wpId);
   const wpIndex = waypoints.findIndex((w) => w.id === wpId);
@@ -254,6 +257,15 @@ export function WaypointEditor({
                 <span className="text-[10px] font-medium text-zinc-500 dark:text-zinc-400 pl-1 mt-1">
                   Get name from coordinate
                 </span>
+
+                {isMarkedForRegen && (
+                  <div className="mt-2.5 p-2 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-start gap-2">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
+                    <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-400 leading-snug">
+                      Marked for Regeneration: Edit image, narration, or route mode, then click Resume Generation.
+                    </span>
+                  </div>
+                )}
 
                 <div className="mt-5 flex flex-col gap-4 pl-1">
                   {/* Skip Asset Generation Toggle */}

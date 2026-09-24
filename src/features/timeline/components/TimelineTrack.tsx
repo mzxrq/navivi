@@ -4,6 +4,7 @@ import { useUI } from "../../../hooks/useUI";
 import { TimelineTrack as TrackType } from "../../../types/index";
 import { TimelineClip } from "./TimelineClip";
 import { TransitionBlock } from "./elements/TransitionBlock";
+import { t } from "@lingui/core/macro";
 
 interface TrackProps {
   track: TrackType;

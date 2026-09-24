@@ -1,4 +1,5 @@
-import React from "react";
+import { t } from "@lingui/core/macro";
+
 import { Volume2, Mic, VolumeX, Gauge } from "lucide-react";
 
 interface InspectorAudioPanelProps {

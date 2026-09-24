@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react";
+import { t } from "@lingui/core/macro";
+import { Trans } from "@lingui/react/macro";
 import { createPortal } from "react-dom";
 import { useUI } from "../../hooks/useUI";
 import { useTheme } from "../../hooks/useTheme";
@@ -22,6 +24,7 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { useAnimatedUnmount } from "../../hooks/useAnimatedUnmount";
 import { getLocalModels, pullModelStream } from "../../services/ollamaApi";
+import { i18n } from "@lingui/core";
 
 type SettingsTab = "general" | "appearance" | "api" | "video" | "ai";
 
@@ -60,7 +63,7 @@ export function AppSettings() {
         {/* Header Section */}
         <div className="px-5 py-4 border-b border-zinc-100 dark:border-navidark-400 bg-zinc-50/50 dark:bg-navidark-800 flex items-center justify-between shrink-0">
           <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-            <Settings className="w-4 h-4 text-navi" /> Settings
+            <Settings className="w-4 h-4 text-navi" /> <Trans>Settings</Trans>
           </h3>
           <button
             onClick={() => setShowAppSettings(false)}
@@ -77,31 +80,31 @@ export function AppSettings() {
               active={activeTab === "general"}
               onClick={() => setActiveTab("general")}
               icon={Settings}
-              label="General"
+              label={t`General`}
             />
             <TabButton
               active={activeTab === "appearance"}
               onClick={() => setActiveTab("appearance")}
               icon={Palette}
-              label="Appearance"
+              label={t`Appearance`}
             />
             <TabButton
               active={activeTab === "api"}
               onClick={() => setActiveTab("api")}
               icon={Key}
-              label="API Keys"
+              label={t`API Keys`}
             />
             <TabButton
               active={activeTab === "video"}
               onClick={() => setActiveTab("video")}
               icon={Film}
-              label="Video Editor"
+              label={t`Video Editor`}
             />
             <TabButton
               active={activeTab === "ai"}
               onClick={() => setActiveTab("ai")}
               icon={Sparkles}
-              label="AI Models"
+              label={t`AI Models`}
             />
           </div>
 
@@ -112,10 +115,13 @@ export function AppSettings() {
               <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
                 <div className="space-y-3">
                   <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-widest flex items-center gap-1.5">
-                    <Save className="w-3.5 h-3.5" /> Auto-Save Interval
+                    <Save className="w-3.5 h-3.5" />{" "}
+                    <Trans>Auto-Save Interval</Trans>
                   </label>
                   <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                    Controls auto save of editors that have unsaved changes
+                    <Trans>
+                      Controls auto save of editors that have unsaved changes
+                    </Trans>
                   </p>
                   <select
                     value={autoSaveInterval}
@@ -126,11 +132,21 @@ export function AppSettings() {
                     }
                     className="w-full bg-zinc-50 dark:bg-navidark-800 border border-zinc-200 dark:border-navidark-400 rounded-lg px-3 py-2.5 text-sm text-zinc-900 dark:text-zinc-100 outline-none focus:border-navi focus:ring-1 focus:ring-navi transition-all"
                   >
-                    <option value={0}>Off</option>
-                    <option value={3}>After Delay (3 seconds)</option>
-                    <option value={30}>30 seconds</option>
-                    <option value={60}>1 minute</option>
-                    <option value={600}>10 minutes</option>
+                    <option value={0}>
+                      <Trans>Off</Trans>
+                    </option>
+                    <option value={3}>
+                      <Trans>3 seconds</Trans>
+                    </option>
+                    <option value={30}>
+                      <Trans>30 seconds</Trans>
+                    </option>
+                    <option value={60}>
+                      <Trans>1 minute</Trans>
+                    </option>
+                    <option value={600}>
+                      <Trans>10 minutes</Trans>
+                    </option>
                   </select>
                 </div>
 
@@ -138,7 +154,7 @@ export function AppSettings() {
                 {currentView === "editor" && (
                   <div className="space-y-3 pt-4 border-t border-zinc-100 dark:border-navidark-700">
                     <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-widest flex items-center gap-1.5">
-                      Project Overrides
+                      <Trans>Project Overrides</Trans>
                     </label>
                     <div
                       onClick={() => {
@@ -161,12 +177,13 @@ export function AppSettings() {
                               : "text-zinc-700 dark:text-zinc-200 group-hover:text-zinc-900 dark:group-hover:text-white"
                           }`}
                         >
-                          Fast Render Mode
+                          <Trans>Fast Render Mode</Trans>
                         </span>
                         <span className="text-[10px] text-zinc-500 dark:text-navidark-150 leading-relaxed">
-                          Skip AI voiceover synthesis and pop-up images during
-                          generation. Perfect for quickly previewing route
-                          paths.
+                          <Trans>
+                            Skip AI voiceover synthesis and pop-up images during
+                            generation
+                          </Trans>
                         </span>
                       </div>
 
@@ -210,16 +227,18 @@ export function AppSettings() {
                                 : "text-zinc-700 dark:text-zinc-200 group-hover:text-zinc-900 dark:group-hover:text-white"
                             }`}
                           >
-                            Historical Weather Sync
+                            <Trans>Historical Weather Sync</Trans>
                           </span>
                           <span className="text-[9px] font-semibold tracking-wider uppercase px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:bg-amber-400/10 dark:text-amber-400 border border-amber-500/20">
-                            Experimental
+                            <Trans>Experimental</Trans>
                           </span>
                         </div>
                         <span className="text-[10px] text-zinc-500 dark:text-navidark-150 leading-relaxed">
-                          Synchronize historical weather conditions from photo
-                          EXIF dates using Open-Meteo to dynamically apply
-                          atmospheric fog and rain effects.
+                          <Trans>
+                            Synchronize historical weather conditions from photo
+                            EXIF dates using Open-Meteo to dynamically apply
+                            atmospheric fog and rain effects
+                          </Trans>
                         </span>
                       </div>
 
@@ -252,13 +271,13 @@ export function AppSettings() {
               <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
                 <div className="space-y-3">
                   <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-widest flex items-center gap-1.5">
-                    <Monitor className="w-3.5 h-3.5" /> UI Theme
+                    <Monitor className="w-3.5 h-3.5" /> <Trans>UI Theme</Trans>
                   </label>
                   <div className="flex p-1 bg-zinc-100 dark:bg-navidark-800 rounded-lg border border-zinc-200 dark:border-navidark-400">
                     {[
-                      { id: "light", icon: Sun, label: "Light" },
-                      { id: "dark", icon: Moon, label: "Dark" },
-                      { id: "system", icon: Monitor, label: "System" },
+                      { id: "light", icon: Sun, label: i18n._("Light") },
+                      { id: "dark", icon: Moon, label: i18n._("Dark") },
+                      { id: "system", icon: Monitor, label: i18n._("System") },
                     ].map((t) => (
                       <button
                         key={t.id}
@@ -277,19 +296,36 @@ export function AppSettings() {
 
                 <div className="space-y-3 pt-4 border-t border-zinc-100 dark:border-navidark-700">
                   <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-widest flex items-center gap-1.5">
-                    <Palette className="w-3.5 h-3.5" /> Accent Color
+                    <Palette className="w-3.5 h-3.5" />{" "}
+                    <Trans>Accent Color</Trans>
                   </label>
                   <div className="flex gap-2">
                     {[
-                      { id: "navi", color: "bg-[#4287f5]", label: "Navi Blue" },
+                      {
+                        id: "navi",
+                        color: "bg-[#4287f5]",
+                        label: i18n._("Navi Blue"),
+                      },
                       {
                         id: "emerald",
                         color: "bg-[#10b981]",
-                        label: "Emerald",
+                        label: i18n._("Emerald"),
                       },
-                      { id: "violet", color: "bg-[#8b5cf6]", label: "Violet" },
-                      { id: "amber", color: "bg-[#f59e0b]", label: "Amber" },
-                      { id: "rose", color: "bg-[#f43f5e]", label: "Rose" },
+                      {
+                        id: "violet",
+                        color: "bg-[#8b5cf6]",
+                        label: i18n._("Violet"),
+                      },
+                      {
+                        id: "amber",
+                        color: "bg-[#f59e0b]",
+                        label: i18n._("Amber"),
+                      },
+                      {
+                        id: "rose",
+                        color: "bg-[#f43f5e]",
+                        label: i18n._("Rose"),
+                      },
                     ].map((t) => (
                       <button
                         key={t.id}
@@ -311,11 +347,14 @@ export function AppSettings() {
 
                 <div className="space-y-3 pt-4 border-t border-zinc-100 dark:border-navidark-700">
                   <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-widest flex items-center gap-1.5">
-                    <MapPin className="w-3.5 h-3.5" /> Global Route Marker
+                    <MapPin className="w-3.5 h-3.5" />{" "}
+                    <Trans>Global Route Marker</Trans>
                   </label>
                   <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                    Default marker for all waypoints. Can be overridden
-                    per-stop.
+                    <Trans>
+                      Default marker for all waypoints. Can be overridden
+                      per-stop.
+                    </Trans>
                   </p>
                   <div className="flex items-center gap-3">
                     {settings.routeMarker ? (
@@ -327,7 +366,7 @@ export function AppSettings() {
                               ? convertFileSrc(settings.routeMarker)
                               : settings.routeMarker
                           }
-                          alt="Route Marker"
+                          alt={t`Route Marker`}
                           className="w-8 h-8 object-contain"
                         />
                         <button
@@ -336,7 +375,7 @@ export function AppSettings() {
                             setIsDirty(true);
                           }}
                           className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md"
-                          title="Remove Marker"
+                          title={t`Remove Marker`}
                         >
                           <X className="w-3 h-3" />
                         </button>
@@ -365,8 +404,8 @@ export function AppSettings() {
                       className="flex-1 py-2 text-xs font-semibold rounded-xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-navidark-600 hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors text-zinc-700 dark:text-zinc-300 shadow-sm"
                     >
                       {settings.routeMarker
-                        ? "Change Marker"
-                        : "Select Custom Marker"}
+                        ? i18n._("Change Marker")
+                        : i18n._("Select Custom Marker")}
                     </button>
                   </div>
                   <div className="flex gap-2 mt-2">
@@ -400,10 +439,11 @@ export function AppSettings() {
               <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
                 <div className="space-y-3">
                   <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-widest flex items-center gap-1.5">
-                    <Key className="w-3.5 h-3.5" /> Mapbox API Key
+                    <Key className="w-3.5 h-3.5" />{" "}
+                    <Trans>Mapbox API Key</Trans>
                   </label>
                   <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                    Required for map rendering and 3D terrain.
+                    <Trans>Required for map rendering and 3D terrain</Trans>
                   </p>
                   <input
                     type="text"
@@ -418,10 +458,11 @@ export function AppSettings() {
                 </div>
                 <div className="space-y-3 pt-4 border-t border-zinc-100 dark:border-navidark-700">
                   <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-widest flex items-center gap-1.5">
-                    <Key className="w-3.5 h-3.5" /> OpenRouteService API Key
+                    <Key className="w-3.5 h-3.5" />{" "}
+                    <Trans>OpenRouteService API Key</Trans>
                   </label>
                   <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                    Required for walking and some driving routes (fallback).
+                    <Trans>Required for driving and some hiking routes</Trans>
                   </p>
                   <input
                     type="text"
@@ -430,7 +471,7 @@ export function AppSettings() {
                       updateSettings({ ors_api_key: e.target.value });
                       setIsDirty(true);
                     }}
-                    placeholder="5b3ce3597851110001cf6248..."
+                    placeholder="API Key"
                     className="w-full bg-zinc-50 dark:bg-navidark-800 border border-zinc-200 dark:border-navidark-400 rounded-lg px-3 py-2.5 text-sm text-zinc-900 dark:text-zinc-100 outline-none focus:border-navi focus:ring-1 focus:ring-navi transition-all"
                   />
                 </div>
@@ -441,13 +482,14 @@ export function AppSettings() {
               <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
                 <div className="space-y-3">
                   <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-widest flex items-center gap-1.5">
-                    <Film className="w-3.5 h-3.5" /> Video Editor Settings
+                    <Film className="w-3.5 h-3.5" />{" "}
+                    <Trans>Video Editor Settings</Trans>
                   </label>
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                        Target FPS
+                        <Trans>Target FPS</Trans>
                       </label>
                       <input
                         type="number"
@@ -462,7 +504,7 @@ export function AppSettings() {
 
                     <div className="space-y-2">
                       <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                        Duration (seconds)
+                        <Trans>Duration (seconds)</Trans>
                       </label>
                       <input
                         type="number"
@@ -479,7 +521,7 @@ export function AppSettings() {
 
                     <div className="space-y-2">
                       <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                        Residential Duration
+                        <Trans>Residential Duration</Trans>
                       </label>
                       <input
                         type="number"
@@ -495,15 +537,71 @@ export function AppSettings() {
                     </div>
                   </div>
 
+                  <div className="space-y-3 pt-4 border-t border-zinc-100 dark:border-navidark-700">
+                    <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-widest flex items-center gap-1.5">
+                      <Trans>Generation Workflow & Hardware Routing</Trans>
+                    </label>
+                    <label className="flex items-start gap-2.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={settings.quick_export || false}
+                        onChange={(e) => {
+                          updateSettings({ quick_export: e.target.checked });
+                          setIsDirty(true);
+                        }}
+                        className="mt-0.5 w-4 h-4 rounded border-zinc-300 text-navi focus:ring-navi"
+                      />
+                      <div className="flex flex-col">
+                        <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">
+                          <Trans>
+                            Quick Export (Auto-stitch on generation)
+                          </Trans>
+                        </span>
+                        <span className="text-[10px] text-zinc-500">
+                          <Trans>
+                            Skips asset review and automatically stitches &
+                            exports finished video
+                          </Trans>
+                        </span>
+                      </div>
+                    </label>
+
+                    <div className="pt-2">
+                      <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                        <Trans>Hardware Spec Mode (Regeneration Routing)</Trans>
+                      </label>
+                      <select
+                        value={settings.hardware_spec_override || "auto"}
+                        onChange={(e) => {
+                          updateSettings({
+                            hardware_spec_override: e.target.value as any,
+                          });
+                          setIsDirty(true);
+                        }}
+                        className="w-full mt-1 bg-zinc-50 dark:bg-navidark-800 border border-zinc-200 dark:border-navidark-400 rounded-lg px-3 py-2 text-xs text-zinc-900 dark:text-zinc-100 outline-none focus:border-navi"
+                      >
+                        <option value="auto">
+                          <Trans>Auto-Detect (Recommended)</Trans>
+                        </option>
+                        <option value="low">
+                          <Trans>Low-spec Mode</Trans>
+                        </option>
+                        <option value="high">
+                          <Trans>High-spec Mode</Trans>
+                        </option>
+                      </select>
+                    </div>
+                  </div>
+
                   <div className="space-y-2 pt-4 border-t border-zinc-100 dark:border-navidark-700">
                     <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-widest flex items-center gap-1.5">
-                      Subtitle Format
+                      <Trans>Subtitle Format</Trans>
                     </label>
 
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                          Font
+                          <Trans>Font</Trans>
                         </label>
                         <input
                           type="text"
@@ -517,7 +615,7 @@ export function AppSettings() {
                       </div>
                       <div className="space-y-2">
                         <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                          Font Size
+                          <Trans>Font Size</Trans>
                         </label>
                         <input
                           type="number"
@@ -533,7 +631,7 @@ export function AppSettings() {
                       </div>
                       <div className="space-y-2">
                         <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                          Primary Color (ASS)
+                          <Trans>Primary Color (ASS)</Trans>
                         </label>
                         <input
                           type="text"
@@ -547,7 +645,7 @@ export function AppSettings() {
                       </div>
                       <div className="space-y-2">
                         <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                          Outline Color (ASS)
+                          <Trans>Outline Color (ASS)</Trans>
                         </label>
                         <input
                           type="text"
@@ -580,7 +678,7 @@ export function AppSettings() {
             onClick={() => setShowAppSettings(false)}
             className="px-5 py-2 bg-navi hover:bg-navi-600 text-white text-xs font-bold rounded-lg transition-colors shadow-sm"
           >
-            Done
+            <Trans>Done</Trans>
           </button>
         </div>
       </div>
@@ -644,7 +742,7 @@ function AiModelsTab() {
     const controller = new AbortController();
     setDownloading((prev) => ({
       ...prev,
-      [modelId]: { status: "Starting...", progress: 0, controller },
+      [modelId]: { status: i18n._("Starting..."), progress: 0, controller },
     }));
 
     try {
@@ -714,7 +812,8 @@ function AiModelsTab() {
     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
       <div className="space-y-3">
         <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-widest flex items-center gap-1.5">
-          <Sparkles className="w-3.5 h-3.5" /> Recommended AI Models
+          <Sparkles className="w-3.5 h-3.5" />{" "}
+          <Trans>Recommended AI Models</Trans>
         </label>
 
         <div className="border border-zinc-200 dark:border-navidark-400 rounded-lg overflow-hidden bg-white dark:bg-navidark-800">
@@ -722,13 +821,13 @@ function AiModelsTab() {
             <thead className="bg-zinc-50 dark:bg-navidark-800 border-b border-zinc-200 dark:border-navidark-400">
               <tr>
                 <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wider text-zinc-500">
-                  Model
+                  <Trans>Model</Trans>
                 </th>
                 <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wider text-zinc-500">
-                  Size
+                  <Trans>Size</Trans>
                 </th>
                 <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wider text-zinc-500 w-48">
-                  Action
+                  <Trans>Action</Trans>
                 </th>
               </tr>
             </thead>
@@ -784,14 +883,15 @@ function AiModelsTab() {
                         </div>
                       ) : isLocal ? (
                         <div className="flex items-center gap-1.5 px-2 py-1 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded text-xs font-bold w-max">
-                          <CheckCircle2 className="w-3.5 h-3.5" /> Ready
+                          <CheckCircle2 className="w-3.5 h-3.5" />{" "}
+                          <Trans>Ready</Trans>
                         </div>
                       ) : (
                         <button
                           onClick={() => handleDownload(model.id)}
                           className="px-3 py-1.5 bg-zinc-100 hover:bg-zinc-200 dark:bg-navidark-700 dark:hover:bg-navidark-600 text-zinc-700 dark:text-zinc-200 text-[11px] font-bold rounded-md transition-colors w-full border border-zinc-200/50 dark:border-white/5"
                         >
-                          Download
+                          <Trans>Download</Trans>
                         </button>
                       )}
                     </td>
@@ -805,11 +905,13 @@ function AiModelsTab() {
 
       <div className="space-y-3 pt-4 border-t border-zinc-100 dark:border-navidark-700">
         <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-widest flex items-center gap-1.5">
-          <Sparkles className="w-3.5 h-3.5" /> Active Model
+          <Sparkles className="w-3.5 h-3.5" /> <Trans>Active Model</Trans>
         </label>
         <p className="text-xs text-zinc-500 dark:text-zinc-400">
-          Select which model to use for narration synthesis. Only downloaded
-          models are shown.
+          <Trans>
+            Select which model to use for narration synthesis, only downloaded
+            models are shown
+          </Trans>
         </p>
         <select
           value={settings.ai_model || "schroneko/gemma-2-2b-jpn-it"}
@@ -821,7 +923,7 @@ function AiModelsTab() {
         >
           {localModels.length === 0 ? (
             <option value="" disabled>
-              No models installed
+              <Trans>No models installed</Trans>
             </option>
           ) : (
             localModels.map((modelId) => (

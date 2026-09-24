@@ -3,6 +3,7 @@ import { useUI } from "./useUI";
 import { open } from "@tauri-apps/plugin-dialog";
 import { readTextFile, readFile, readDir } from "@tauri-apps/plugin-fs";
 import * as exifr from "exifr";
+import { t } from "@lingui/core/macro";
 
 export function useFileActions() {
   const { setRoutePoints, waypoints, setWaypoints, setIsDirty } = useWorkspace();

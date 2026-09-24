@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Rnd } from "react-rnd";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { Waypoint } from "../../../types";
+import { t } from "@lingui/core/macro";
 
 interface UnifiedLayersPanelProps {
   activeWp: Waypoint;

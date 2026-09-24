@@ -2,12 +2,14 @@ import { useState, useEffect, MouseEvent } from "react";
 import { createPortal } from "react-dom";
 import { open } from "@tauri-apps/plugin-dialog";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
-import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
+import { readTextFile, writeTextFile, readDir } from "@tauri-apps/plugin-fs";
+import { join, dirname } from "@tauri-apps/api/path";
 import { useUI } from "../../hooks/useUI";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import {
   Plus,
   FolderOpen,
+  Folder,
   Map,
   Clock,
   LayoutGrid,
@@ -20,6 +22,7 @@ import {
   AlertTriangle,
   Film,
 } from "../ui/icons";
+import { t } from "@lingui/core/macro";
 
 type ModalActionType = "rename" | "duplicate" | "remove" | "settings" | null;
 
@@ -58,27 +61,60 @@ export function ProjectManager() {
   }, [modalState.type]);
 
   const handleQuickRender = async (project: any) => {
-    showToast("Quick Render started for " + project.name, "info");
     try {
+      let configPath = project.path;
+      try {
+        await readDir(project.path);
+        // It's a folder!
+        configPath = await join(project.path, "job_config.json");
+      } catch {
+        // It's a file
+        if (project.path.endsWith(".nvv")) {
+          try {
+            const fileContent = await readTextFile(project.path);
+            JSON.parse(fileContent);
+          } catch {
+            // It might be a legacy .nvv inside a folder
+            const dir = await dirname(project.path);
+            const candidate = await join(dir, "job_config.json");
+            try {
+              const fileContent = await readTextFile(candidate);
+              JSON.parse(fileContent);
+              configPath = candidate;
+            } catch {
+              showToast(
+                "This project is archived. Please open it first to render.",
+                "info",
+              );
+              return;
+            }
+          }
+        }
+      }
+
+      showToast("Quick Render started for " + project.name, "info");
       await invoke("run_python_blueprint", {
-        action: project.path,
+        action: configPath,
         payload: "concat",
       });
       showToast("Quick Render complete for " + project.name, "success");
     } catch (err: any) {
-      showToast("Quick Render failed: " + String(err), "error");
+      showToast(
+        "Could not render project directly: " + (err?.message || err),
+        "error",
+      );
     }
   };
 
-  const handleOpenProject = async (path?: string) => {
+  const handleOpenProject = async (path?: string, isFolder = false) => {
     try {
-      const success = await loadProject(path);
+      const success = await loadProject(path, isFolder);
       if (success) {
         setCurrentView("editor");
         showToast("Project loaded successfully.", "success");
       }
-    } catch (err) {
-      showToast("Failed to load project file.", "error");
+    } catch (err: any) {
+      showToast("Failed to load project: " + (err?.message || err), "error");
     }
   };
 
@@ -99,16 +135,23 @@ export function ProjectManager() {
     e?: MouseEvent,
   ) => {
     if (e) e.stopPropagation();
-    setModalState({ type, project });
 
     if (type === "settings") {
       try {
-        const fileContent = await readTextFile(project.path);
+        let configPath = project.path;
+        try {
+          await readDir(project.path);
+          configPath = await join(project.path, "job_config.json");
+        } catch {}
+        const fileContent = await readTextFile(configPath);
         const data = JSON.parse(fileContent);
         setModalInput(data.settings?.routeMarker || "");
       } catch (err) {
-        showToast("Failed to load project settings", "error");
-        setModalInput("");
+        showToast(
+          "Please open this project first to edit its settings.",
+          "info",
+        );
+        return;
       }
     } else {
       setModalInput(
@@ -147,11 +190,16 @@ export function ProjectManager() {
         }
         showToast("Project renamed successfully.", "success");
       } else if (type === "settings") {
-        const fileContent = await readTextFile(project.path);
+        let configPath = project.path;
+        try {
+          await readDir(project.path);
+          configPath = await join(project.path, "job_config.json");
+        } catch {}
+        const fileContent = await readTextFile(configPath);
         const data = JSON.parse(fileContent);
         if (!data.settings) data.settings = {};
         data.settings.routeMarker = modalInput;
-        await writeTextFile(project.path, JSON.stringify(data, null, 2));
+        await writeTextFile(configPath, JSON.stringify(data, null, 2));
         showToast("Project settings updated.", "success");
       } else if (type === "duplicate") {
         if (!modalInput.trim()) return closeModal();
@@ -184,6 +232,13 @@ export function ProjectManager() {
             onSettings: () =>
               showToast("To change settings, open the project first.", "info"),
             onQuickRender: () => handleQuickRender(project),
+            onReveal: async () => {
+              try {
+                await invoke("open_in_explorer", { path: project.path });
+              } catch {
+                showToast("Could not open file location", "error");
+              }
+            },
             onRemove: () => openModal("remove", project),
           },
         },
@@ -233,10 +288,18 @@ export function ProjectManager() {
           </div>
 
           <button
-            onClick={() => handleOpenProject()}
-            className="flex items-center gap-2 bg-white dark:bg-navidark-700 text-zinc-700 dark:text-zinc-200 border border-zinc-200 dark:border-white/10 px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-zinc-100 dark:hover:bg-navidark-600 transition-all shadow-sm"
+            onClick={() => handleOpenProject(undefined, false)}
+            className="flex items-center gap-2 bg-white dark:bg-navidark-700 text-zinc-700 dark:text-zinc-200 border border-zinc-200 dark:border-white/10 px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-zinc-100 dark:hover:bg-navidark-600 transition-all shadow-sm"
+            title="Open a single project file (.nvv or .zip archive)"
           >
             <FolderOpen className="w-4 h-4" /> Open File...
+          </button>
+          <button
+            onClick={() => handleOpenProject(undefined, true)}
+            className="flex items-center gap-2 bg-white dark:bg-navidark-700 text-zinc-700 dark:text-zinc-200 border border-zinc-200 dark:border-white/10 px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-zinc-100 dark:hover:bg-navidark-600 transition-all shadow-sm"
+            title="Open an entire project folder"
+          >
+            <Folder className="w-4 h-4" /> Open Folder...
           </button>
           <div className="flex items-center gap-3">
             <button
@@ -411,6 +474,25 @@ export function ProjectManager() {
                           <Settings2 className="w-3.5 h-3.5" /> Advanced
                           Settings
                         </button>
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            try {
+                              await invoke("open_in_explorer", {
+                                path: project.path,
+                              });
+                            } catch {
+                              showToast(
+                                "Could not open file location",
+                                "error",
+                              );
+                            }
+                            setActiveMenu(null);
+                          }}
+                          className="w-full text-left px-4 py-2 text-xs font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-navidark-600 flex items-center gap-2"
+                        >
+                          <Folder className="w-3.5 h-3.5" /> Reveal in Explorer
+                        </button>
                         <div className="h-px bg-zinc-200 dark:bg-navidark-400 my-1 mx-2" />
                         <button
                           onClick={(e) => openModal("remove", project, e)}
@@ -532,6 +614,22 @@ export function ProjectManager() {
                         className="w-full text-left px-4 py-2 text-xs font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-navidark-600 flex items-center gap-2"
                       >
                         <Film className="w-3.5 h-3.5" /> Quick Render
+                      </button>
+                      <button
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          try {
+                            await invoke("open_in_explorer", {
+                              path: project.path,
+                            });
+                          } catch {
+                            showToast("Could not open file location", "error");
+                          }
+                          setActiveMenu(null);
+                        }}
+                        className="w-full text-left px-4 py-2 text-xs font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-navidark-600 flex items-center gap-2"
+                      >
+                        <Folder className="w-3.5 h-3.5" /> Reveal in Explorer
                       </button>
 
                       <div className="h-px bg-zinc-200 dark:bg-navidark-400 my-1 mx-2" />

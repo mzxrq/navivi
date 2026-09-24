@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useWorkspace } from "../../../../hooks/useWorkspace";
 import { X, Palette, Route, MapPin, Square } from "../../../../components/ui/icons";
+import { t } from "@lingui/core/macro";
 
 const PRESET_COLORS = [
   "#3b82f6", // Blue

@@ -17,6 +17,7 @@ import {
   Palette,
   Subtitles,
 } from "../../../components/ui/icons";
+import { t } from "@lingui/core/macro";
 
 const FONT_FAMILIES = [
   { label: "Inter (Modern Sans)", value: "Inter, sans-serif" },

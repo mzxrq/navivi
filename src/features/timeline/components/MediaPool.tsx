@@ -15,6 +15,7 @@ import {
   AlertTriangle,
   RefreshCw,
 } from "../../../components/ui/icons";
+import { t } from "@lingui/core/macro";
 
 type MediaType = "all" | "video" | "audio" | "image" | "text";
 

@@ -1,5 +1,7 @@
 import { Component, ErrorInfo, ReactNode } from "react";
 import { AlertTriangle, RefreshCw } from "./icons";
+import { t } from "@lingui/core/macro";
+import { Trans } from "@lingui/react/macro";
 
 interface Props {
   children?: ReactNode;
@@ -38,15 +40,12 @@ export class ErrorBoundary extends Component<Props, State> {
               <AlertTriangle className="w-8 h-8" />
             </div>
             <h1 className="text-xl font-bold text-zinc-900 dark:text-white mb-2">
-              Something went wrong
-            </h1>
+              <Trans>something-went-wrong</Trans> </h1>
             <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-6">
-              The application encountered an unexpected rendering error. Your
-              saved files are safe.
-            </p>
+              <Trans>errorboundary_reason</Trans> </p>
             <div className="bg-zinc-50 dark:bg-zinc-950 p-4 rounded-lg text-left overflow-x-auto mb-6 border border-zinc-200 dark:border-white/5">
               <code className="text-[10px] text-red-600 dark:text-red-400 font-mono whitespace-pre-wrap">
-                {this.state.error?.message || "Unknown error"}
+                {this.state.error?.message || t`errorboundary_error-message`}
               </code>
             </div>
             <button

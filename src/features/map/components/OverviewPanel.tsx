@@ -14,6 +14,7 @@ import {
   generateOverviewScriptStream,
   checkModelExists,
 } from "../../../services/ollamaApi";
+import { t } from "@lingui/core/macro";
 
 export function OverviewPanel() {
   const { waypoints, metadata, updateMetadata, setIsDirty, settings } = useWorkspace();

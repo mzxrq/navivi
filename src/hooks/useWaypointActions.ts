@@ -1,6 +1,7 @@
 import { useWorkspace } from "./useWorkspace";
 import { useUI } from "./useUI";
 import { mapDefaults } from "../config/constants";
+import { t } from "@lingui/core/macro";
 
 export function useWaypointActions() {
   const { updateWaypoint, waypoints, setWaypoints, setIsDirty } = useWorkspace();

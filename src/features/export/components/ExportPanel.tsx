@@ -1,6 +1,7 @@
 
 import { Film, MonitorPlay } from "../../../components/ui/icons";
 import { useWorkspace } from "../../../hooks/useWorkspace";
+import { t } from "@lingui/core/macro";
 
 interface ExportPanelProps {
     onExport: () => void;

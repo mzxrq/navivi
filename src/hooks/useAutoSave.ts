@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useWorkspace } from "./useWorkspace";
 import { useUI } from "./useUI";
-
+import { t } from "@lingui/core/macro";
 export function useAutoSave() {
     const { settings, metadata, isDirty, setIsDirty, saveProject } = useWorkspace();
     const { showToast } = useUI();

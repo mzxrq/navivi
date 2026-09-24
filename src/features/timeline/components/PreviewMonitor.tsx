@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Stage, Layer, Rect } from "react-konva";
 import { TransformableClip } from "./elements/TransformableClip";
+import { t } from "@lingui/core/macro";
 
 interface PreviewMonitorProps {
   activeClips: any[];

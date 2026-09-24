@@ -1,19 +1,27 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import { lingui } from "@lingui/vite-plugin";
 
-// @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
 
 // https://vite.dev/config/
 export default defineConfig(async () => ({
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    react({
+      babel: {
+        plugins: ["@lingui/babel-plugin-lingui-macro"],
+      },
+    }),
+    tailwindcss(),
+    lingui(),
+  ],
 
   clearScreen: false,
   server: {
     port: 1420,
     strictPort: true,
-    host: host || false,
+    host: "127.0.0.1",
     hmr: host
       ? {
         protocol: "ws",

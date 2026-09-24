@@ -9,5 +9,3 @@ In addition to interactive 3D map routing, this repository contains the non-line
 - [Getting started with Navivi](./docs/GETTING_STARTED.md)
 - [Project Features](./docs/FEATURES.md)
 - [Contributor documentation](./CONTRIBUTING.md)
-
-[<img width="600" alt="Navivi map interface preview" src="public/navivi.svg">](#)

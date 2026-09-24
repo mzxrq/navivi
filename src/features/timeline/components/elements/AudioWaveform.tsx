@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AudioWaveformProps } from "../../../../types/index";
 
+
 interface DecodedAudio {
   channelData: Float32Array;
   sampleRate: number;

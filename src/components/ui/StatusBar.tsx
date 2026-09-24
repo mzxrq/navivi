@@ -17,6 +17,7 @@ import {
   Volume2,
   Save,
 } from "../ui/icons";
+import { t } from "@lingui/core/macro";
 
 function NotificationItem({ notif }: { notif: any }) {
   const [copied, setCopied] = useState(false);

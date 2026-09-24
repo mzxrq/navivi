@@ -1,6 +1,6 @@
 use std::net::TcpStream;
 use std::process::{Child, Command, Stdio};
-use std::io::{BufRead, BufReader, Read};
+use std::io::{BufRead, BufReader};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::{thread};
@@ -262,6 +262,7 @@ async fn export_video(app: tauri::AppHandle, project_dir: String) -> Result<(), 
 
     // Call Dev 1's specific command registry handler
     let output = std::process::Command::new("python")
+        .env("PYTHONIOENCODING", "utf-8")
         .arg("src-python/main.py")
         .arg("render_timeline") 
         .arg(&timeline_path)    
@@ -302,17 +303,35 @@ async fn copy_asset_file(source_path: String, target_dir: String) -> Result<Stri
 
 #[tauri::command]
 fn open_in_explorer(path: String) -> Result<(), String> {
+    let p = std::path::Path::new(&path);
     #[cfg(target_os = "windows")]
-    let cmd = "explorer";
+    {
+        let mut cmd = std::process::Command::new("explorer");
+        if p.is_file() {
+            cmd.arg("/select,").arg(&path);
+        } else {
+            cmd.arg(&path);
+        }
+        cmd.spawn().map_err(|e| e.to_string())?;
+    }
     #[cfg(target_os = "macos")]
-    let cmd = "open";
+    {
+        let mut cmd = std::process::Command::new("open");
+        if p.is_file() {
+            cmd.arg("-R").arg(&path);
+        } else {
+            cmd.arg(&path);
+        }
+        cmd.spawn().map_err(|e| e.to_string())?;
+    }
     #[cfg(not(any(target_os = "windows", target_os = "macos")))]
-    let cmd = "xdg-open";
+    {
+        std::process::Command::new("xdg-open")
+            .arg(&path)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
 
-    std::process::Command::new(cmd)
-        .arg(&path)
-        .spawn()
-        .map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -335,6 +354,8 @@ pub fn run() {
             export_video,
             copy_asset_file,
             open_in_explorer,
+            zip_project,
+            unzip_project,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
@@ -349,4 +370,72 @@ pub fn run() {
                 }
             }
         });
+}
+
+use zip::ZipWriter;
+use std::io::{Read, Write};
+use walkdir::WalkDir;
+use zip::ZipArchive;
+
+#[tauri::command]
+async fn zip_project(source_dir: String, dest_file: String) -> Result<(), String> {
+    let path = Path::new(&dest_file);
+    let file = fs::File::create(path).map_err(|e| e.to_string())?;
+    let mut zip = ZipWriter::new(file);
+    let options = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+
+    let walkdir = WalkDir::new(&source_dir);
+    let it = walkdir.into_iter();
+
+    for entry in it.filter_map(|e| e.ok()) {
+        let path = entry.path();
+        let name = path.strip_prefix(Path::new(&source_dir))
+            .unwrap()
+            .to_string_lossy()
+            .into_owned()
+            .replace("\\", "/");
+
+        if name.is_empty() {
+            continue;
+        }
+
+        if path.is_file() {
+            zip.start_file(&name, options).map_err(|e| e.to_string())?;
+            let mut f = fs::File::open(path).map_err(|e| e.to_string())?;
+            let mut buffer = Vec::new();
+            f.read_to_end(&mut buffer).map_err(|e| e.to_string())?;
+            zip.write_all(&buffer).map_err(|e| e.to_string())?;
+        } else if !name.is_empty() {
+            zip.add_directory(&name, options).map_err(|e| e.to_string())?;
+        }
+    }
+    zip.finish().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+async fn unzip_project(source_file: String, dest_dir: String) -> Result<(), String> {
+    let file = fs::File::open(&source_file).map_err(|e| e.to_string())?;
+    let mut archive = ZipArchive::new(file).map_err(|e| e.to_string())?;
+
+    for i in 0..archive.len() {
+        let mut file = archive.by_index(i).map_err(|e| e.to_string())?;
+        let outpath = match file.enclosed_name() {
+            Some(path) => Path::new(&dest_dir).join(path),
+            None => continue,
+        };
+
+        if (*file.name()).ends_with('/') {
+            fs::create_dir_all(&outpath).map_err(|e| e.to_string())?;
+        } else {
+            if let Some(p) = outpath.parent() {
+                if !p.exists() {
+                    fs::create_dir_all(p).map_err(|e| e.to_string())?;
+                }
+            }
+            let mut outfile = fs::File::create(&outpath).map_err(|e| e.to_string())?;
+            std::io::copy(&mut file, &mut outfile).map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(())
 }

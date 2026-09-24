@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Layers, X } from "../../../../components/ui/icons";
 import { mapStyles } from "../../../../config/constants";
+import { t } from "@lingui/core/macro";
 
 interface LayerManagerProps {
   selectedStyle: string;

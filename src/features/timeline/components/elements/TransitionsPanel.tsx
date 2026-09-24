@@ -9,6 +9,7 @@ import {
   Check,
   Clock,
 } from "../../../../components/ui/icons";
+import { t } from "@lingui/core/macro";
 
 export interface TransitionItem {
   shader: string;

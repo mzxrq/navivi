@@ -1,4 +1,4 @@
-import React from "react";
+import { t } from "@lingui/core/macro";
 import { Palette } from "lucide-react";
 
 interface InspectorColorPanelProps {

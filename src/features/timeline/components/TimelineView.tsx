@@ -8,32 +8,11 @@ import { ClipData, WaypointTimelineMarker } from "../../../types/index";
 import { Inspector } from "./Inspector";
 import { ExportModal } from "../../export/components/ExportModal";
 import {
-  ZoomIn,
-  ZoomOut,
-  Play,
-  Pause,
-  SkipBack,
-  SkipForward,
-  MousePointer2,
-  Scissors,
   Sparkles,
-  Magnet,
-  Eye,
-  EyeOff,
-  Volume2,
-  VolumeX,
-  Lock,
-  Unlock,
   Type,
   Film,
   Settings2,
   MapPin,
-  Download,
-  RefreshCw,
-  Maximize,
-  MapPinPlus,
-  UnlinkIcon,
-  Check,
 } from "../../../components/ui/icons";
 import { PreviewMonitor } from "./PreviewMonitor";
 import { TransitionsPanel } from "./elements/TransitionsPanel";
@@ -42,11 +21,11 @@ import { TimelineRuler } from "./elements/TimelineRuler";
 import { TimelineTrackHeaders } from "./elements/TimelineTrackHeaders";
 import { useTimelineAudio } from "../hooks/useTimelineAudio";
 import {
-  WaypointMarker,
   WaypointGuideLine,
   formatMarkerTime,
 } from "./elements/WaypointMarker";
 import { MarkersPanel } from "./elements/MarkersPanel";
+import { t } from "@lingui/core/macro";
 
 export function TimelineView() {
   const {

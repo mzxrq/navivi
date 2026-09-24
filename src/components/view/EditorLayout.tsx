@@ -4,6 +4,7 @@ import { Sidebar } from "../../features/map/components/Sidebar";
 import { TimelineView } from "../../features/timeline/components/TimelineView";
 import { TimelineEditor } from "../../features/map/components/TimelineEditor";
 import { MapIcon, Film } from "../ui/icons";
+import { t } from "@lingui/core/macro";
 
 export function EditorLayout() {
   // 'map' or 'timeline'

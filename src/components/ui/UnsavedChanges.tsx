@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
+import { t } from "@lingui/core/macro";
 
 interface UnsavedChangesProps {
   isOpen: boolean;

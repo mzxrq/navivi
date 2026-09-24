@@ -23,9 +23,16 @@ import { WaypointItem } from "./WaypointItem";
 import { WaypointEditor } from "./WaypointEditor";
 import { LocationSearch } from "../../../components/ui/LocationSearch";
 import { OverviewPanel } from "./OverviewPanel";
+import { t } from "@lingui/core/macro";
 
 export function Sidebar() {
-  const { showToast, isRendering, setIsRendering } = useUI();
+  const {
+    showToast,
+    isRendering,
+    setIsRendering,
+    isRenderCollapsed,
+    setIsRenderCollapsed,
+  } = useUI();
 
   const {
     waypoints,
@@ -87,6 +94,12 @@ export function Sidebar() {
   }, [showGenerateConfirm, activeWaypointId]);
 
   const handleGenerateClick = async () => {
+    if (isRenderCollapsed) {
+      setIsRenderCollapsed(false);
+      await saveProject();
+      setIsRendering(true);
+      return;
+    }
     if (waypoints.length === 0) {
       showToast("Cannot generate: Please add at least one waypoint.", "error");
       return;
@@ -285,12 +298,20 @@ export function Sidebar() {
           disabled={
             waypoints.length === 0 ||
             isListEditMode ||
-            isRendering ||
+            (isRendering && !isRenderCollapsed) ||
             isPreviewing
           }
-          className="flex items-center justify-center gap-2 py-1.5 px-4 rounded-full bg-navi hover:bg-navi-600 text-white font-bold text-[11px] transition-all disabled:opacity-30 disabled:pointer-events-none shadow-md shadow-navi/20"
+          className={`flex items-center justify-center gap-2 py-1.5 px-4 rounded-full text-white font-bold text-[11px] transition-all disabled:opacity-30 disabled:pointer-events-none shadow-md ${
+            isRenderCollapsed
+              ? "bg-amber-500 hover:bg-amber-600 shadow-amber-500/20"
+              : "bg-navi hover:bg-navi-600 shadow-navi/20"
+          }`}
         >
-          {isRendering ? (
+          {isRenderCollapsed ? (
+            <>
+              <Film className="w-3.5 h-3.5 fill-current" /> Resume Generation
+            </>
+          ) : isRendering ? (
             <>
               <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
               Generating...
@@ -316,7 +337,7 @@ export function Sidebar() {
                   render map videos before opening the Timeline.
                 </p>
 
-                {/* ✨ NEW: Skip Rich Media Toggle */}
+                {/* ✨ Skip Rich Media Toggle */}
                 <label className="flex items-start gap-2.5 mt-5 cursor-pointer group">
                   <input
                     type="checkbox"
@@ -334,6 +355,27 @@ export function Sidebar() {
                     <span className="text-[10px] text-zinc-500 dark:text-zinc-400 leading-tight">
                       Generates the map route only. Ignores all pop-up images
                       and AI voice synthesis to save time.
+                    </span>
+                  </div>
+                </label>
+
+                {/* ✨ Quick Export Toggle */}
+                <label className="flex items-start gap-2.5 mt-3.5 cursor-pointer group">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 w-4 h-4 rounded border-zinc-300 text-navi focus:ring-navi bg-white dark:bg-zinc-800 dark:border-zinc-700 transition-colors cursor-pointer"
+                    checked={settings.quick_export || false}
+                    onChange={(e) => {
+                      updateSettings({ quick_export: e.target.checked });
+                      if (setIsDirty) setIsDirty(true);
+                    }}
+                  />
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-sm font-bold text-zinc-800 dark:text-zinc-200 group-hover:text-navi transition-colors flex items-center gap-1.5">
+                      Quick Export (Auto-stitch & Export)
+                    </span>
+                    <span className="text-[10px] text-zinc-500 dark:text-zinc-400 leading-tight">
+                      Automatically stitch all video segments and export upon completion without pausing for asset review.
                     </span>
                   </div>
                 </label>

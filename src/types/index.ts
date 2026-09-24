@@ -75,6 +75,9 @@ export interface ProjectSettings {
   show_route_heatmap?: boolean;
   weather_sync_enabled?: boolean;
   ai_model?: string;
+  quick_export?: boolean;
+  hardware_spec_override?: "auto" | "high" | "low";
+  marked_regeneration_waypoints?: string[];
 }
 
 export interface ProjectMetadata {
@@ -85,6 +88,7 @@ export interface ProjectMetadata {
   created_at: string;
   status: string;
   directory_path: string;
+  archive_path?: string;
   thumbnail_path?: string;
   overview_narration?: string;
 }
@@ -335,7 +339,7 @@ export interface WorkspaceState {
   updateSettings: (data: Partial<ProjectSettings>) => void;
   // FileSystem thingy
   saveProject: (overrideName?: string, asDuplicate?: boolean, safeFolderName?: string, recordVersion?: boolean) => Promise<string | undefined>;
-  loadProject: (forcePath?: string) => Promise<boolean>;
+  loadProject: (forcePath?: string, isFolder?: boolean) => Promise<boolean>;
   recentProjects: RecentProjects[];
   setRecentProjects: Dispatch<SetStateAction<RecentProjects[]>>;
   isDirty: boolean;

@@ -4,6 +4,7 @@ import { useWorkspace } from "../../../hooks/useWorkspace";
 import { useTheme } from "../../../hooks/useTheme";
 import { Film } from "../../../components/ui/icons";
 import { exportVideo } from "../../../services/exportApi";
+import { t } from "@lingui/core/macro";
 
 export function TimelineEditor() {
   const { waypoints, setWaypoints, settings } = useWorkspace();

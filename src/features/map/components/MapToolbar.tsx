@@ -10,6 +10,7 @@ import {
   Ruler,
   Trash2,
 } from "../../../components/ui/icons";
+import { t } from "@lingui/core/macro";
 
 interface MapToolbarProps {
   isAddMode: boolean;

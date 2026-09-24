@@ -29,6 +29,7 @@ import {
 import {
   saveProjectData,
   loadProjectData,
+  scanProjectsOnDisk,
   loadTimelineManifest,
   loadRouteCache,
   saveTimelineManifest,
@@ -43,6 +44,7 @@ import { ClipData, TimelineTrack } from "../types";
 import { useHistory } from "./useHistory";
 import { useUI } from "./useUI";
 import { UnsavedChanges } from "../components/ui/UnsavedChanges";
+import { t } from "@lingui/core/macro";
 
 const WorkspaceContext = createContext<WorkspaceState | undefined>(undefined);
 
@@ -183,6 +185,21 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     return saved ? JSON.parse(saved) : [];
   });
 
+  // Auto-discover existing project folders & archives from disk
+  useEffect(() => {
+    scanProjectsOnDisk().then((discovered) => {
+      if (!discovered || discovered.length === 0) return;
+      setRecentProjects((prev) => {
+        const existingPaths = new Set(prev.map((p) => p.path));
+        const newItems = discovered.filter((d) => !existingPaths.has(d.path));
+        if (newItems.length === 0) return prev;
+        const combined = [...prev, ...newItems].slice(0, 50);
+        localStorage.setItem("navivi-recents", JSON.stringify(combined));
+        return combined;
+      });
+    });
+  }, []);
+
   const [isUnsavedModalOpen, setIsUnsavedModalOpen] = useState(false);
   const [unsavedAction, setUnsavedAction] = useState<(() => void) | null>(null);
 
@@ -211,7 +228,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         const updated = [
           { name, path, lastOpened: Date.now(), thumbnailPath },
           ...filtered,
-        ].slice(0, 10);
+        ].slice(0, 50);
         localStorage.setItem("navivi-recents", JSON.stringify(updated));
         return updated;
       });
@@ -353,17 +370,19 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   ) => {
     // Allowed to save empty project
     if (waypoints.length === 0) {
-      console.warn("No waypoints to save, but saving anyway to preserve metadata.");
+      console.warn(
+        "No waypoints to save, but saving anyway to preserve metadata.",
+      );
     }
 
     const saveRevision = dirtyRevisionRef.current;
-      let freshThumbnail = projectThumbnail;
-      if (thumbnailGetterRef.current) {
-        try {
-          const t = thumbnailGetterRef.current();
-          if (t) freshThumbnail = t;
-        } catch(e) {}
-      }
+    let freshThumbnail = projectThumbnail;
+    if (thumbnailGetterRef.current) {
+      try {
+        const t = thumbnailGetterRef.current();
+        if (t) freshThumbnail = t;
+      } catch (e) {}
+    }
     try {
       const result = await saveProjectData(
         waypoints,
@@ -425,9 +444,12 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const loadProject = async (forcePath?: string): Promise<boolean> => {
+  const loadProject = async (
+    forcePath?: string,
+    isFolder = false,
+  ): Promise<boolean> => {
     try {
-      const result = await loadProjectData(forcePath);
+      const result = await loadProjectData(forcePath, isFolder);
       if (!result) return false;
 
       const { data, selectedPath } = result;
@@ -750,8 +772,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         setRecentProjects,
         projectThumbnail,
         setProjectThumbnail,
-          registerThumbnailGetter,
-          resetWorkspace,
+        registerThumbnailGetter,
+        resetWorkspace,
         routingCache,
         setRoutingCache,
         forceReroute,

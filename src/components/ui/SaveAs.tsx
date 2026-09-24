@@ -4,6 +4,7 @@ import { exists } from "@tauri-apps/plugin-fs";
 import { documentDir, join } from "@tauri-apps/api/path";
 import { Folder, Map, Loader2 } from "./icons";
 import { fileSystem } from "../../config/constants";
+import { t } from "@lingui/core/macro";
 
 interface SaveAsProps {
   isOpen: boolean;
@@ -55,7 +56,11 @@ export function SaveAs({
           baseName.toLowerCase().replace(/[^a-z0-9]+/g, "_") || "untitled";
 
         const docsPath = await documentDir();
-        const projectsRootPath = await join(docsPath, fileSystem.rootFolder, fileSystem.projectsFolder);
+        const projectsRootPath = await join(
+          docsPath,
+          fileSystem.rootFolder,
+          fileSystem.projectsFolder,
+        );
         let currentTestName = sanitizedBase;
         let counter = 1;
 
@@ -69,7 +74,7 @@ export function SaveAs({
         console.error("Failed to check folder existence:", error);
         if (isActive) {
           setFolderPreview(
-            baseName.toLowerCase().replace(/[^a-z0-9]+/g, "_") || "untitled"
+            baseName.toLowerCase().replace(/[^a-z0-9]+/g, "_") || "untitled",
           );
         }
       } finally {
@@ -185,6 +190,6 @@ export function SaveAs({
         </div>
       </div>
     </div>,
-    document.body
+    document.body,
   );
 }

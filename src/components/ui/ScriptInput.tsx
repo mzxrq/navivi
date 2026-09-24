@@ -4,8 +4,9 @@ import {
   Sparkles,
   Square,
   Check,
-  PencilSparkles // ✨ NEW: Using the matching icon from OverviewPanel
+  PencilSparkles
 } from "../ui/icons";
+import { t } from "@lingui/core/macro";
 
 const thinkingSteps = [
   "Detecting context...",

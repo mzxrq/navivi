@@ -35,6 +35,7 @@ import {
   generateMapboxAtmosphereParams,
   WeatherCondition,
 } from "../../../services/weatherService";
+import { t } from "@lingui/core/macro";
 
 export function MapArea() {
   const { theme, mapTheme } = useTheme();

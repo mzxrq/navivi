@@ -1,6 +1,7 @@
 import React from "react";
 import { Eye, EyeOff, Volume2, VolumeX, Lock, Unlock } from "lucide-react";
 import { TimelineData } from "../../../../types/index";
+import { t } from "@lingui/core/macro";
 
 interface TimelineTrackHeadersProps {
   headerRef: React.RefObject<HTMLDivElement | null>;
