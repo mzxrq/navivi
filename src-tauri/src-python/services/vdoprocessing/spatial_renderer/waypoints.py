@@ -1,6 +1,7 @@
 """The per-residential-leg (waypoint chunk) video render entry point."""
 
 import math
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import cv2
@@ -11,6 +12,17 @@ from services.mapfetcher.mapfetcher import MapFetcher
 from services.mapfetcher.mapgeometry import RouteGeometryProcessor
 from services.vdoprocessing.vdoexporter import VideoExporter
 from services import tuning
+
+
+def _output_is_valid(path, min_bytes: int = 1024) -> bool:
+    """Checkpoint helper — see spatial_renderer/overview.py's identical
+    copy for why this is duplicated instead of imported from
+    videopipeline/helpers.py (circular import)."""
+    try:
+        p = Path(path)
+        return p.is_file() and p.stat().st_size >= min_bytes
+    except OSError:
+        return False
 
 
 class _WaypointRenderMixin:
@@ -425,8 +437,17 @@ class _WaypointRenderMixin:
             leg_file_num = res_data.get("start_pos")
             leg_file_num = (leg_file_num + 1) if leg_file_num is not None else (i + 1)
             chunk_filename = f"02_waypoint_{leg_file_num:02d}_{safe_suffix}.mp4"
+            chunk_output_path = str(self.out_dir / chunk_filename)
 
-            video = VideoExporter(str(self.out_dir / chunk_filename), w, h, fps)
+            # Checkpoint: skip straight to the next leg if this one's
+            # output file already exists — simple existence check, no
+            # content hash, so an interrupted run resumes from wherever it
+            # left off instead of redoing every already-finished leg.
+            if self.config.get("checkpoint_enabled", False) and _output_is_valid(chunk_output_path):
+                output_paths.append(chunk_output_path)
+                continue
+
+            video = VideoExporter(chunk_output_path, w, h, fps)
 
             # Wide establishing shot -> zoom crossfade into this leg's
             # close/tight tile — plays once per leg (only res_data entries

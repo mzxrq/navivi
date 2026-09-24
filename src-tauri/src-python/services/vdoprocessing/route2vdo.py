@@ -34,6 +34,17 @@ DEFAULT_MARKER_RADIUS = 24
 DEFAULT_SUMMARY_HOLD_SECONDS = 4.0
 
 
+def _output_is_valid(path, min_bytes: int = 1024) -> bool:
+    """Checkpoint helper — see spatial_renderer/overview.py's identical
+    copy for why this is duplicated instead of imported from
+    videopipeline/helpers.py (circular import)."""
+    try:
+        p = Path(path)
+        return p.is_file() and p.stat().st_size >= min_bytes
+    except OSError:
+        return False
+
+
 class RouteAnimator:
     """Orchestrates the animation pipeline by bridging configurations with Renderers."""
 
@@ -247,6 +258,9 @@ class RouteAnimator:
         title_text = self.config.get("overview_title") or job_config.get("project_name")
 
         output_path = str(self.out_dir / "01_overview.mp4")
+        if self.config.get("checkpoint_enabled", False) and _output_is_valid(output_path):
+            logger.info("Overview video already exists — skipping render: %s", output_path)
+            return output_path
         duration = self.config.get("duration", 30.0)
         return render_overview_video_pydeck(
             route_latlon, waypoints, output_path, duration=duration, fps=fps, title_text=title_text,
@@ -434,6 +448,29 @@ class RouteAnimator:
             chunk_filename = f"02_waypoint_{leg_file_num:02d}_{safe_suffix}.mp4"
 
             output_path = str(self.out_dir / chunk_filename)
+
+            # Checkpoint: a connected stop-by can split ONE leg into
+            # several output files sharing this leg's "02_waypoint_{N:02d}_"
+            # prefix (see the comment just below), so "already rendered" is
+            # checked by that whole prefix, not just the base filename —
+            # otherwise a previously-cut leg would look unfinished (base
+            # file missing) even though every _contN piece is there, and
+            # get re-rendered from scratch. Simple existence check, no
+            # content hash — same resume-not-diff semantics as the overview
+            # checkpoint above.
+            leg_glob_prefix = f"02_waypoint_{leg_file_num:02d}_"
+            existing_leg_files = sorted(
+                p for p in self.out_dir.glob(f"{leg_glob_prefix}*.mp4")
+                if _output_is_valid(p)
+            ) if self.config.get("checkpoint_enabled", False) else []
+            if existing_leg_files:
+                logger.info(
+                    "Residential leg %d already rendered (%d file(s)) — skipping.",
+                    leg_file_num, len(existing_leg_files),
+                )
+                output_paths.extend(str(p) for p in existing_leg_files)
+                continue
+
             # A connected stop-by's fullscreen photo pause (see pedestrian.
             # py's `landmarks` docstring) can cut this ONE leg into more
             # than one output file -- render_residential_leg_pydeck always

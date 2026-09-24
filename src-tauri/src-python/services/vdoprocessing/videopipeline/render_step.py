@@ -1,8 +1,8 @@
 """Step 4: Render the visual map animation, synced to audio timing."""
 
+import hashlib
 import json
 import math
-import os
 import re
 from pathlib import Path
 from typing import Any, Optional
@@ -127,6 +127,63 @@ def _mode_line_color_overrides(settings: dict) -> dict:
 _RENDER_MANIFEST_NAME = ".render_manifest.json"
 
 
+def _render_checkpoint_key(
+    project_config_path: str,
+    cleaned_route: dict,
+    audio_durations: Optional[list[float]],
+    audio_pauses: Optional[list[Any]],
+) -> str:
+    """Fingerprint of every input that can change what render_route_video
+    produces. The checkpoint below used to trust bare output-file
+    existence alone: render once, then edit waypoints/settings/popups in
+    job_config.json and render again, and it silently handed back the
+    STALE video with nothing to say it hadn't actually re-rendered. This
+    hash is stored alongside the manifest and compared on the next run so
+    "the output files still exist" and "nothing that affects them has
+    changed" are no longer treated as the same thing.
+
+    Hashes job_config.json's raw bytes (the file the app writes every
+    edit to — waypoints, settings, popups, colors, all of it) plus the
+    route track and narration timing, since those two aren't part of
+    job_config.json but still change what gets rendered (a different GPS
+    source or re-recorded narration shifts the animation even if the
+    config file itself is untouched).
+
+    route_df's own "timestamp" column is normalized to seconds elapsed
+    since the route's first point before hashing, rather than hashed as
+    the absolute wall-clock values it comes in as. The map editor
+    regenerates raw_track.gpx with fresh `<time>` tags anchored to
+    whatever moment the project was last SAVED (see fileSystem.ts's
+    saveProjectData, not the route itself), on every save whether the
+    route actually changed or not — so the absolute timestamps drift on
+    every save even for byte-identical waypoints/geometry. Hashing them
+    as-is invalidated this checkpoint on every single render regardless
+    of whether anything a viewer would notice had changed. The RELATIVE
+    spacing between points (how long each leg took) is what actually
+    affects the render and is unaffected by when the file was saved, so
+    that's what gets hashed instead.
+    """
+    hasher = hashlib.sha256()
+    try:
+        with open(project_config_path, "rb") as f:
+            hasher.update(f.read())
+    except OSError:
+        pass
+    route_df = cleaned_route.get("route")
+    if route_df is not None:
+        if "timestamp" in route_df.columns:
+            route_df = route_df.copy()
+            ts = pd.to_datetime(route_df["timestamp"])
+            route_df["timestamp"] = (ts - ts.min()).dt.total_seconds()
+        hasher.update(route_df.to_json(orient="split").encode("utf-8"))
+    hasher.update(
+        json.dumps(cleaned_route.get("summary", {}), sort_keys=True, default=str).encode("utf-8")
+    )
+    hasher.update(json.dumps(audio_durations or [], default=str).encode("utf-8"))
+    hasher.update(json.dumps(audio_pauses or [], default=str).encode("utf-8"))
+    return hasher.hexdigest()
+
+
 # Residential-leg clip filename's embedded 1-based departure-waypoint
 # position (see waypoints.py's chunk_filename: "02_waypoint_{N:02d}_...") —
 # used below (and by timeline_step.py's own mirrored match) to look up that
@@ -204,9 +261,9 @@ def render_route_video(
     project_config_path: str = str(DEFAULT_FRONTEND_CONFIG),
     output_video_dir: Optional[str] = None,
     map_output_path: str = str(DEFAULT_MAP_BACKGROUND),
-    audio_paths: Optional[list[str]] = None,
     audio_durations: Optional[list[float]] = None,
     audio_pauses: Optional[list[Any]] = None,
+    overview_audio_duration: Optional[float] = None,
     force: bool = False,
     render_mode: str = "both",
     leg_index: Optional[int] = None,
@@ -216,10 +273,14 @@ def render_route_video(
     Checkpointing: this step's internals branch too heavily (2D/3D
     residential, ferry legs, overview map) to check each sub-output
     individually, so instead a manifest of the exact output paths from the
-    last successful render is written to `.render_manifest.json` in
-    output_video_dir. If that manifest exists and every path it lists is
-    still a valid file, the whole (expensive) render is skipped and those
-    paths are returned directly, unless `force` is set.
+    last successful render — plus a content hash of the inputs that
+    produced them (see _render_checkpoint_key) — is written to
+    `.render_manifest.json` in output_video_dir. If that manifest exists,
+    every path it lists is still a valid file, AND the current inputs hash
+    to the same value stored in the manifest, the whole (expensive) render
+    is skipped and those paths are returned directly. Any of those three
+    failing (a missing/deleted output, or job_config.json/the route/the
+    narration having changed since) re-renders, same as `force` set.
 
     The manifest is only READ (to skip) and WRITTEN when render_mode ==
     "both" — i.e. only run_full_pipeline's own call, gated by its
@@ -248,6 +309,17 @@ def render_route_video(
     instead of both always being bundled into one call regardless of which
     was asked for.
 
+    `overview_audio_duration`: the project's top-level "overview_narration"
+    script's already-synthesized audio length (audio_step.generate_audio's
+    "overview_audio_duration" return key) — used only to size the overview
+    render's own duration (see below) so it's never shorter than its
+    narration; the audio itself is never muxed in here (or anywhere else
+    in this function). Every clip this function produces — overview,
+    residential legs — stays silent; narration stays a separate file/track
+    all the way through the pipeline, only muxed onto its video at final
+    export (VideoExporter.concat_from_timeline), so a frontend NLE editor
+    can still edit video and audio independently up to that point.
+
     `leg_index`: when given, renders only that ONE leg of the residential
     sequence (0-indexed into res_sequence, i.e. the Nth clip in travel
     order) instead of the whole route — a fast way to sanity-check one
@@ -260,19 +332,33 @@ def render_route_video(
 
     manifest_path = Path(output_video_dir) / _RENDER_MANIFEST_NAME
     is_full_pipeline_render = render_mode == "both"
+    checkpoint_key = _render_checkpoint_key(
+        project_config_path, cleaned_route, audio_durations, audio_pauses
+    )
     if is_full_pipeline_render and not force and manifest_path.exists():
         try:
             with open(manifest_path, "r", encoding="utf-8") as f:
-                cached_paths = json.load(f).get("output_paths", [])
+                manifest = json.load(f)
+            cached_paths = manifest.get("output_paths", [])
+            cached_key = manifest.get("input_hash")
         except (OSError, json.JSONDecodeError):
-            cached_paths = []
-        if cached_paths and all(output_is_valid(p) for p in cached_paths):
+            cached_paths, cached_key = [], None
+        if (
+            cached_paths
+            and cached_key == checkpoint_key
+            and all(output_is_valid(p) for p in cached_paths)
+        ):
             logger.info(
                 "Step 4: All %d route/residential video output(s) already "
-                "exist — skipping render.",
+                "exist and inputs are unchanged — skipping render.",
                 len(cached_paths),
             )
             return cached_paths
+        if cached_paths and cached_key != checkpoint_key:
+            logger.info(
+                "Step 4: route/config/narration changed since the last "
+                "render — checkpoint invalidated, re-rendering."
+            )
 
     route_df = cleaned_route.get("route")
     if route_df is None or route_df.empty:
@@ -924,6 +1010,17 @@ def render_route_video(
     overview_duration = max(
         _OVERVIEW_MIN_FINAL_DURATION_SECONDS, base_overview_duration / overview_speed_multiplier
     )
+    # The overview clip's narration is muxed on with `-shortest` (see
+    # VideoEditor.mux_audio_to_video), which truncates the MUXED OUTPUT to
+    # whichever of video/audio is shorter -- since this duration is paced
+    # off the route (leg count/distance), not the narration script, a
+    # longer overview_narration than the route-paced duration above used
+    # to get its own tail cut off by mux, ending mid-sentence. Stretching
+    # the render to at least cover the narration (plus a short tail so the
+    # last word isn't clipped right at the final frame) means the video is
+    # never the shorter stream once mux runs.
+    if overview_audio_duration:
+        overview_duration = max(overview_duration, overview_audio_duration + 1.0)
 
     # Resolved once up front: the arrived-pin color derives from it when
     # the project doesn't name one of its own (see _arrived_marker_color).
@@ -931,6 +1028,18 @@ def render_route_video(
 
     animator_config = {
         "output_dir": output_video_dir,
+        # Gates the per-leg/per-clip "file already exists, skip it" checks
+        # in overview.py/route2vdo.py/waypoints.py — only a real
+        # run_full_pipeline render (render_mode == "both") should ever
+        # resume from partial output like this. A standalone
+        # render_mode="overview"/"residential" call (services/cli/
+        # gps_commands.py's test_overview_video/test_residential_video —
+        # the map editor's own "recreate this video" actions) exists
+        # specifically so a user can force ONE piece to redo; honoring
+        # leftover files from a previous run there would silently no-op
+        # the very action they asked for, exactly the bug this function's
+        # own manifest checkpoint above already had to be fixed for.
+        "checkpoint_enabled": is_full_pipeline_render,
         "use_3d_res": use_3d_res,
         "use_pydeck_pedestrian": use_pydeck_pedestrian,
         "use_pydeck_overview": bool(settings.get("use_pydeck_overview", False)),
@@ -1062,46 +1171,18 @@ def render_route_video(
         overview_extent=extent,
     )
 
-    # --- 2. ADD THIS AUDIO MUXING BLOCK ---
-    if audio_paths:
-        from services.vdoprocessing.vdoeditor import VideoEditor
-
-        editor = VideoEditor()
-        muxed_paths = []
-
-        logger.info("Muxing TTS narration audio into video segments...")
-
-        for v_path in output_paths:
-            filename = Path(v_path).name
-            match = RESIDENTIAL_LEG_RE.search(filename)
-
-            if match:
-                # 1-based in the filename (matches the "Waypoint N" numbering
-                # everywhere else); audio_durations/audio_paths are 0-based.
-                audio_idx = int(match.group(1)) - 1
-                if (
-                    0 <= audio_idx < len(audio_paths)
-                    and audio_paths[audio_idx]
-                    and os.path.exists(audio_paths[audio_idx])
-                ):
-                    try:
-                        muxed = editor.mux_audio_to_video(
-                            video_path=v_path,
-                            audio_path=audio_paths[audio_idx],
-                            output_filename=filename,
-                        )
-                        muxed_paths.append(muxed)
-                    # [NOTE] [Editor] Falls back to the unmuxed video on any mux failure rather than aborting the whole pipeline over one leg's audio.
-                    except Exception as e:
-                        logger.error(f"Failed to mux audio for {v_path}: {e}")
-                        muxed_paths.append(v_path)
-                else:
-                    muxed_paths.append(v_path)
-            else:
-                # This is the 01_overview map, pass it through silently!
-                muxed_paths.append(v_path)
-
-        output_paths = muxed_paths
+    # [NOTE] [Editor] Narration audio is deliberately NOT muxed into these
+    # clips here (or anywhere else in the pipeline) — every rendered video
+    # (overview, residential legs, attraction clips) stays silent all the
+    # way through, and its narration stays a separate file. timeline.json
+    # (see timeline_step.build_timeline) carries each clip's video AND
+    # audio paths as two independent tracks so a frontend NLE editor can
+    # trim/swap/re-time either one without re-touching the other; only the
+    # VERY LAST step — VideoExporter.concat_from_timeline, at final export —
+    # actually muxes each track's audio onto its video, once, right before
+    # concatenation. (This used to mux audio in here per-clip, which baked
+    # narration into the video file itself with no way to edit it
+    # separately afterward.)
     tracker.clear()
     logger.info("Step 4 complete: %d video file(s) produced.", len(output_paths))
 
@@ -1114,7 +1195,10 @@ def render_route_video(
         try:
             Path(output_video_dir).mkdir(parents=True, exist_ok=True)
             with open(manifest_path, "w", encoding="utf-8") as f:
-                json.dump({"output_paths": output_paths}, f, ensure_ascii=False, indent=2)
+                json.dump(
+                    {"output_paths": output_paths, "input_hash": checkpoint_key},
+                    f, ensure_ascii=False, indent=2,
+                )
         except OSError as e:
             logger.warning("Step 4: Failed to write render manifest: %s", e)
 

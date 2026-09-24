@@ -17,7 +17,12 @@ from .helpers import logger, project_subtitle_dir, project_video_dir
 from .intro_step import render_intro_clip
 from .outro_step import render_outro_clip
 from .render_step import render_route_video
-from .subtitle_step import build_subtitles, burn_subtitles
+from .subtitle_step import (
+    build_attraction_subtitles,
+    build_overview_subtitle,
+    build_subtitles,
+    burn_subtitles,
+)
 from .timeline_step import build_timeline
 
 
@@ -71,6 +76,18 @@ def run_full_pipeline(
     subtitle_paths = build_subtitles(
         waypoints, audio_data.get("audio_paths", []), str(subtitle_dir), force=force_regenerate
     )
+    overview_subtitle_path = build_overview_subtitle(
+        job_config.data,
+        audio_data.get("overview_audio_path"),
+        str(subtitle_dir),
+        force=force_regenerate,
+    )
+    attraction_subtitle_paths = build_attraction_subtitles(
+        waypoints,
+        audio_data.get("attraction_audio_paths", []),
+        str(subtitle_dir),
+        force=force_regenerate,
+    )
 
     # --- STEP 3 ---
     # Opt-out per project via job_config.json's settings.enable_attraction_videos
@@ -82,8 +99,8 @@ def run_full_pipeline(
         tracker.stage("Generating attraction videos...")
         attraction_videos = render_attraction_videos(
             str(config_file_path),
-            audio_durations=audio_data.get("audio_durations"),
-            audio_paths=audio_data.get("audio_paths"),
+            audio_durations=audio_data.get("attraction_audio_durations"),
+            audio_paths=audio_data.get("attraction_audio_paths"),
             force=force_regenerate,
         )
 
@@ -116,7 +133,7 @@ def run_full_pipeline(
         output_video_dir=route_video_dir,
         audio_durations=audio_data.get("audio_durations"),
         audio_pauses=audio_data.get("audio_pauses"),
-        audio_paths=audio_data.get("audio_paths"),
+        overview_audio_duration=audio_data.get("overview_audio_duration"),
         force=force_regenerate,
     )
 
@@ -128,6 +145,8 @@ def run_full_pipeline(
         video_paths=all_videos,
         subtitle_paths=subtitle_paths,
         force=force_regenerate,
+        overview_subtitle_path=overview_subtitle_path,
+        attraction_subtitle_paths=attraction_subtitle_paths,
     )
 
     # --- STEP 5b ---
@@ -156,6 +175,10 @@ def run_full_pipeline(
         audio_paths=audio_data.get("audio_paths"),
         subtitle_paths=subtitle_paths,
         project_dir=str(project_dir),
+        overview_audio_path=audio_data.get("overview_audio_path"),
+        overview_subtitle_path=overview_subtitle_path,
+        attraction_audio_paths=audio_data.get("attraction_audio_paths"),
+        attraction_subtitle_paths=attraction_subtitle_paths,
     )
     tracker.clear()
 

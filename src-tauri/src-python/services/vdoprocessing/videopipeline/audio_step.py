@@ -13,7 +13,13 @@ from typing import Any, Dict, Optional
 
 from services.logger.progress import tracker
 
-from .helpers import logger, output_is_valid, project_audio_dir, waypoint_audio_filename
+from .helpers import (
+    attraction_audio_filename,
+    logger,
+    output_is_valid,
+    project_audio_dir,
+    waypoint_audio_filename,
+)
 
 
 def _resolve_narration_script(waypoint: dict) -> Optional[str]:
@@ -26,6 +32,99 @@ def _resolve_narration_script(waypoint: dict) -> Optional[str]:
         waypoint.get("script") or waypoint.get("voiceover")
     )
     return script.strip() if isinstance(script, str) and script.strip() else None
+
+
+def _resolve_attraction_narration_script(waypoint: dict) -> Optional[str]:
+    """The attraction clip's OWN narration — attractionNarration alone (or
+    the legacy "narration" fallback), deliberately never arrivingNarration.
+    Distinct from _resolve_narration_script, which combines both for the
+    waypoint's arrival/leg audio: reusing that combined audio on the
+    attraction clip would replay the arrival narration there too, which is
+    wrong even when attractionNarration IS set, and especially wrong when
+    it's blank — the combined script is then 100% arrival narration, with
+    nothing about the attraction at all."""
+    text = (waypoint.get("attractionNarration") or waypoint.get("narration") or "").strip()
+    return text or None
+
+
+async def generate_attraction_audio_for_waypoint(
+    waypoint: dict,
+    idx: int,
+    client: Any,
+    processor: Any,
+    output_dir: Path,
+    force: bool = False,
+) -> Optional[Dict[str, Any]]:
+    """Generates (or reuses) one waypoint's attraction-only TTS audio, in
+    its own "04_attraction_" filename namespace (see
+    helpers.attraction_audio_filename) so it's never confused with — or
+    accidentally overwritten by — that same waypoint's combined arrival+
+    attraction audio (helpers.waypoint_audio_filename). Returns None (no
+    audio, no subtitle, nothing muxed) when attractionNarration is blank —
+    the attraction clip should stay silent rather than inherit whatever
+    text the arrival narration happens to carry."""
+    script = _resolve_attraction_narration_script(waypoint)
+    if not script:
+        return None
+
+    label = waypoint.get("label", f"Waypoint {idx + 1}")
+    audio_filename = attraction_audio_filename(idx, label)
+    existing_path = Path(output_dir) / audio_filename
+
+    if not force and output_is_valid(existing_path):
+        logger.info(
+            "Step 2: [%d] '%s' attraction narration already exists — skipping TTS.",
+            idx + 1, label,
+        )
+        audio_path = str(existing_path)
+    else:
+        logger.info("Step 2: [%d] Generating attraction narration for: '%s'", idx + 1, label)
+        audio_path = await client.generate_speech(script, output_filename=audio_filename)
+
+    analysis = processor.analyze_pauses(audio_path)
+    return {
+        "text": script,
+        "audio_path": audio_path,
+        "duration_seconds": analysis.get("duration_seconds", 0.0),
+        "pauses": analysis.get("pauses", []),
+    }
+
+
+async def generate_overview_audio(
+    project_config: dict,
+    client: Any,
+    processor: Any,
+    output_dir: Path,
+    force: bool = False,
+) -> Optional[Dict[str, Any]]:
+    """Generates (or reuses) the TTS audio for job_config.json's top-level
+    "overview_narration" script -- the map-editor's OverviewPanel.tsx lets
+    a project set a narration for the whole-route overview clip, separate
+    from any per-waypoint narration, but nothing downstream ever read that
+    field: no audio was ever generated for it, so the overview clip always
+    played silent regardless of what was typed there. Returns None (same
+    as a waypoint with no script) when the field is empty/missing."""
+    script = (project_config.get("overview_narration") or "").strip()
+    if not script:
+        return None
+
+    audio_filename = "00_overview_narration.wav"
+    existing_path = Path(output_dir) / audio_filename
+
+    if not force and output_is_valid(existing_path):
+        logger.info("Step 2: Overview narration audio already exists — skipping TTS.")
+        audio_path = str(existing_path)
+    else:
+        logger.info("Step 2: Generating overview narration audio.")
+        audio_path = await client.generate_speech(script, output_filename=audio_filename)
+
+    analysis = processor.analyze_pauses(audio_path)
+    return {
+        "text": script,
+        "audio_path": audio_path,
+        "duration_seconds": analysis.get("duration_seconds", 0.0),
+        "pauses": analysis.get("pauses", []),
+    }
 
 
 async def generate_waypoint_audio(
@@ -104,7 +203,11 @@ def generate_audio(
     audio_pauses = []
     audio_paths = []
     subtitle_paths = []
+    attraction_audio_paths = []
+    attraction_audio_durations = []
     waypoints = []
+    overview_audio_path = None
+    overview_audio_duration = 0.0
 
     try:
         config_path = Path(project_config_path)
@@ -115,6 +218,10 @@ def generate_audio(
                 "audio_pauses": [],
                 "audio_paths": [],
                 "subtitle_paths": [],
+                "attraction_audio_paths": [],
+                "attraction_audio_durations": [],
+                "overview_audio_path": None,
+                "overview_audio_duration": 0.0,
             }
 
         with open(config_path, "r", encoding="utf-8") as f:
@@ -130,7 +237,41 @@ def generate_audio(
         processor = AudioProcessor(output_dir=output_dir)
 
         # [NOTE] [TTS] Awaits each waypoint in order inside this loop, so despite being async the TTS calls run fully sequentially, not concurrently.
+        # Shared across the overview call AND both waypoint loops below
+        # (arrival+attraction combined, then attraction-only) — restarting
+        # only within one loop's own `idx % 4` used to reset the count back
+        # to zero the moment the second loop started, so a project with
+        # ~19-20 narrated waypoints ran roughly double the TTS calls
+        # (combined-script pass + attraction-only pass) with real restarts
+        # only happening in the first half, then went 15-20+ calls straight
+        # through the second half with no restart at all -- long enough for
+        # the TTS server to exhaust RAM/VRAM on a CPU run and hang/crash
+        # partway through, instead of a clean per-waypoint failure.
+        tts_call_count = 0
+
+        async def _maybe_restart_tts_server():
+            nonlocal tts_call_count
+            tts_call_count += 1
+            if tts_call_count > 1 and (tts_call_count - 1) % 4 == 0:
+                logger.info("Proactively restarting TTS server to clear RAM/VRAM...")
+                client.stop_server()
+                await asyncio.sleep(2.0)
+
         async def _generate_all_speech():
+            nonlocal overview_audio_path, overview_audio_duration
+
+            tracker.show("Generating overview narration audio")
+            try:
+                overview_clip = await generate_overview_audio(
+                    project_config, client, processor, output_dir, force=force
+                )
+            except Exception as exc:
+                logger.warning("Overview narration TTS failed (%s). Leaving overview clip silent.", exc)
+                overview_clip = None
+            if overview_clip:
+                overview_audio_path = overview_clip["audio_path"]
+                overview_audio_duration = overview_clip["duration_seconds"]
+
             for idx, wp in enumerate(waypoints):
                 label = wp.get("label", f"Waypoint {idx + 1}") if isinstance(wp, dict) else f"Waypoint {idx + 1}"
 
@@ -149,12 +290,11 @@ def generate_audio(
                     subtitle_paths.append(None)
                     continue
 
-                # Proactively restart the TTS server every 4 waypoints to prevent RAM/VRAM 
-                # exhaustion on long CPU runs. It will auto-restart on the next call.
-                if idx > 0 and idx % 4 == 0:
-                    logger.info("Proactively restarting TTS server to clear RAM/VRAM...")
-                    client.stop_server()
-                    await asyncio.sleep(2.0)
+                # Proactively restart the TTS server every 4 calls (shared
+                # counter with the attraction-only loop below and the
+                # overview call above) to prevent RAM/VRAM exhaustion on
+                # long CPU runs. It will auto-restart on the next call.
+                await _maybe_restart_tts_server()
 
                 tracker.show(f"Generating TTS {idx + 1}/{len(waypoints)}: {label}")
                 
@@ -192,6 +332,39 @@ def generate_audio(
                 # these audio_paths, not here.
                 subtitle_paths.append(None)
 
+            # Second, independent pass: each waypoint's own ATTRACTION-only
+            # narration (see _resolve_attraction_narration_script) — kept
+            # as its own loop rather than interleaved with the combined-
+            # script loop above, since it needs to run (and correctly
+            # append None) regardless of whether that loop's `continue`
+            # branches fired for this same waypoint.
+            for idx, wp in enumerate(waypoints):
+                if not isinstance(wp, dict) or not _resolve_attraction_narration_script(wp):
+                    attraction_audio_paths.append(None)
+                    attraction_audio_durations.append(0.0)
+                    continue
+
+                await _maybe_restart_tts_server()
+
+                label = wp.get("label", f"Waypoint {idx + 1}")
+                try:
+                    clip = await generate_attraction_audio_for_waypoint(
+                        wp, idx, client, processor, output_dir, force=force
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "Attraction narration TTS failed for '%s' (%s). Leaving that clip silent.",
+                        label, exc,
+                    )
+                    clip = None
+
+                if clip:
+                    attraction_audio_paths.append(clip["audio_path"])
+                    attraction_audio_durations.append(clip["duration_seconds"])
+                else:
+                    attraction_audio_paths.append(None)
+                    attraction_audio_durations.append(0.0)
+
         # Execute the async function synchronously within the pipeline
         asyncio.run(_generate_all_speech())
         tracker.clear()
@@ -202,6 +375,10 @@ def generate_audio(
             "audio_pauses": audio_pauses,
             "audio_paths": audio_paths,
             "subtitle_paths": subtitle_paths,
+            "attraction_audio_paths": attraction_audio_paths,
+            "attraction_audio_durations": attraction_audio_durations,
+            "overview_audio_path": overview_audio_path,
+            "overview_audio_duration": overview_audio_duration,
         }
 
     except ImportError as e:
@@ -215,6 +392,10 @@ def generate_audio(
             "audio_pauses": [],
             "audio_paths": [],
             "subtitle_paths": [],
+            "attraction_audio_paths": [],
+            "attraction_audio_durations": [],
+            "overview_audio_path": None,
+            "overview_audio_duration": 0.0,
         }
     except Exception as e:
         # exc_info=True (not just "%s", e) because some exceptions on this
@@ -232,9 +413,16 @@ def generate_audio(
         audio_pauses.extend([[]] * pad_count)
         audio_paths.extend([None] * pad_count)
         subtitle_paths.extend([None] * pad_count)
+        attraction_pad_count = max(0, len(waypoints) - len(attraction_audio_paths))
+        attraction_audio_paths.extend([None] * attraction_pad_count)
+        attraction_audio_durations.extend([0.0] * attraction_pad_count)
         return {
             "audio_durations": audio_durations,
             "audio_pauses": audio_pauses,
             "audio_paths": audio_paths,
             "subtitle_paths": subtitle_paths,
+            "attraction_audio_paths": attraction_audio_paths,
+            "attraction_audio_durations": attraction_audio_durations,
+            "overview_audio_path": overview_audio_path,
+            "overview_audio_duration": overview_audio_duration,
         }

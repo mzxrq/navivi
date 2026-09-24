@@ -280,7 +280,19 @@ class VideoEditor:
             "0:v:0",
             "-map",
             "1:a:0",
-            "-shortest",
+            # [NOTE] [Editor] Deliberately no -shortest here: that trims the
+            # MUXED OUTPUT to whichever of video/audio is shorter, so a
+            # narration script shorter than its clip's own paced/rendered
+            # duration (a real case for the overview clip, whose duration
+            # is paced off the route, not off the narration) used to cut
+            # the VIDEO short to match the shorter audio -- ending the clip
+            # early mid-scene rather than just playing out silent after the
+            # narration finishes. Without it, the video plays its full
+            # intended length regardless of narration length; the reverse
+            # case (narration longer than the video) is handled upstream
+            # instead, by sizing the render itself to at least cover the
+            # narration before this mux ever runs (see render_step.py's
+            # overview_audio_duration handling).
             str(output_path),
         ]
 

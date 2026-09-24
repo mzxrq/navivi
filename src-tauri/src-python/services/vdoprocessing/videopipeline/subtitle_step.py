@@ -10,7 +10,7 @@ from typing import Any, Dict, Optional
 from services.logger.progress import tracker
 from services.vdoprocessing.vdoexporter import VideoExporter
 
-from .audio_step import _resolve_narration_script
+from .audio_step import _resolve_attraction_narration_script, _resolve_narration_script
 from .helpers import logger, output_is_valid
 
 # Same convention render_step.py's own RESIDENTIAL_LEG_RE and
@@ -23,6 +23,14 @@ from .helpers import logger, output_is_valid
 # out of sync with subtitle_paths, which stays one entry per WAYPOINT
 # regardless of how many video files a leg ends up producing).
 _RESIDENTIAL_LEG_RE = re.compile(r"02_waypoint_(\d+)_")
+# Attraction clip's embedded 0-based waypoint index (matches
+# attraction_step.py's own filename convention and timeline_step.py's
+# identical _ATTRACTION_RE) — same reasoning as the leg regex above:
+# attraction clips aren't necessarily produced in waypoint order, so their
+# position in `video_paths` is not a safe stand-in for their subtitle's
+# index in `subtitle_paths`.
+_ATTRACTION_RE = re.compile(r"04_attraction_(\d+)_")
+_OVERVIEW_FILENAME = "01_overview.mp4"
 
 
 def build_waypoint_subtitle(
@@ -83,6 +91,44 @@ def build_waypoint_subtitle(
     }
 
 
+def build_overview_subtitle(
+    project_config: dict,
+    audio_path: Optional[str],
+    output_dir,
+    force: bool = False,
+) -> Optional[str]:
+    """Builds (or, if already present and not `force`, reuses) the .srt
+    subtitle for job_config.json's top-level "overview_narration" script —
+    the one clip that isn't a waypoint, so it needs its own entry point
+    rather than going through build_waypoint_subtitle. Returns None when
+    there's no narration text configured or no matching audio to time
+    cues against (mirrors build_waypoint_subtitle's own ValueError/
+    FileNotFoundError cases, just swallowed here since the pipeline has
+    nothing waypoint-shaped to skip-and-continue past for this one)."""
+    script = (project_config.get("overview_narration") or "").strip()
+    if not script or not audio_path or not Path(audio_path).exists():
+        return None
+
+    output_dir = Path(output_dir)
+    subtitle_path = output_dir / f"{Path(audio_path).stem}.srt"
+
+    if not force and output_is_valid(subtitle_path, min_bytes=10):
+        return str(subtitle_path)
+
+    from services.localization.subtitle import SRTDocument, SubtitleBuilder
+    from services.tts.ttsengine import AudioProcessor
+
+    analysis = AudioProcessor().analyze_pauses(str(audio_path))
+    cues = SubtitleBuilder.build(
+        text=script,
+        duration_seconds=analysis["duration_seconds"],
+        pauses=analysis["pauses"],
+    )
+    output_dir.mkdir(parents=True, exist_ok=True)
+    SRTDocument.write(cues, str(subtitle_path))
+    return str(subtitle_path)
+
+
 def build_subtitles(
     waypoints: list, audio_paths: list, output_subtitle_dir: str, force: bool = False
 ) -> list:
@@ -112,10 +158,72 @@ def build_subtitles(
     return subtitle_paths
 
 
+def build_attraction_subtitles(
+    waypoints: list, attraction_audio_paths: list, output_subtitle_dir: str, force: bool = False
+) -> list:
+    """Step: builds .srt subtitle files for each waypoint's ATTRACTION-only
+    narration (attractionNarration alone — see
+    audio_step._resolve_attraction_narration_script), matched against
+    `attraction_audio_paths` (audio_data's "attraction_audio_paths", NOT
+    the combined arrival+attraction `audio_paths` build_subtitles() above
+    uses). Kept as its own pass rather than folded into build_subtitles:
+    burning the COMBINED subtitle onto an attraction clip used to show the
+    arrival narration's text on a clip about looking around the place, and
+    showed text at all even when attractionNarration itself was blank."""
+    output_dir = Path(output_subtitle_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    total = len(waypoints)
+    subtitle_paths = []
+
+    for idx, wp in enumerate(waypoints):
+        audio_path = attraction_audio_paths[idx] if idx < len(attraction_audio_paths) else None
+        if not isinstance(wp, dict) or not _resolve_attraction_narration_script(wp) or not audio_path:
+            subtitle_paths.append(None)
+            continue
+
+        tracker.show(f"Generating attraction subtitle {idx + 1}/{total}")
+        script = _resolve_attraction_narration_script(wp)
+        subtitle_path = output_dir / f"{Path(audio_path).stem}.srt"
+
+        if not force and output_is_valid(subtitle_path, min_bytes=10):
+            subtitle_paths.append(str(subtitle_path))
+            continue
+
+        if not Path(audio_path).exists():
+            subtitle_paths.append(None)
+            continue
+
+        try:
+            from services.localization.subtitle import SRTDocument, SubtitleBuilder
+            from services.tts.ttsengine import AudioProcessor
+
+            analysis = AudioProcessor().analyze_pauses(str(audio_path))
+            cues = SubtitleBuilder.build(
+                text=script,
+                duration_seconds=analysis["duration_seconds"],
+                pauses=analysis["pauses"],
+            )
+            SRTDocument.write(cues, str(subtitle_path))
+            subtitle_paths.append(str(subtitle_path))
+        except Exception as e:
+            logger.error("Failed to build attraction subtitle for waypoint %d: %s", idx, e)
+            subtitle_paths.append(None)
+
+    tracker.clear()
+    logger.info(
+        "Attraction subtitle build complete: %d of %d waypoint(s) have subtitles.",
+        sum(1 for p in subtitle_paths if p),
+        total,
+    )
+    return subtitle_paths
+
+
 def burn_subtitles(
     video_paths: list[str],
     subtitle_paths: list[str],
     force: bool = False,
+    overview_subtitle_path: Optional[str] = None,
+    attraction_subtitle_paths: Optional[list[str]] = None,
 ) -> list[str]:
     """Step 5: Permanently burns SRT subtitles onto the finished video files.
 
@@ -128,25 +236,44 @@ def burn_subtitles(
     """
     logger.info("Step 5: Burning subtitles into %d video(s).", len(video_paths))
 
+    attraction_subtitle_paths = attraction_subtitle_paths or []
     final_videos = []
 
-    # [NOTE] [Subtitle] A residential leg clip (filename embeds its 1-based
-    # departure-waypoint position, e.g. "02_waypoint_05_...") is matched to
-    # subtitle_paths by that embedded number, same convention render_step.py's
-    # audio mux and timeline_step.py already use — NOT by raw position in
-    # video_paths, which stop-by leg-merging (or one leg producing more than
-    # one output file — see pedestrian.py's connected-stop-by cut) can throw
-    # out of sync with subtitle_paths (one entry per WAYPOINT, unaffected by
-    # either of those). Anything that doesn't match (overview, attraction,
-    # intro/outro clips) still falls back to its own raw position, unchanged
-    # from before.
+    # [NOTE] [Subtitle] Every clip is matched to its subtitle by the index
+    # embedded in ITS OWN filename (leg/attraction — same regex convention
+    # render_step.py's audio mux and timeline_step.py already use), or by
+    # exact filename for the one-off overview clip — never by raw position
+    # in `video_paths`. This used to fall back to `idx` (list position) for
+    # anything that wasn't a residential leg, which happened to work only
+    # by coincidence when an attraction/overview clip's position matched
+    # some unrelated waypoint's subtitle_paths entry; a project with
+    # attraction videos NOT produced in waypoint order (or any project at
+    # all, for the overview clip, which was never even in subtitle_paths'
+    # index space to begin with) got the wrong subtitle burned on, or a
+    # random one, instead of its own.
     for idx, video_path in enumerate(video_paths):
         original_file = Path(video_path)
-        leg_match = _RESIDENTIAL_LEG_RE.search(original_file.name)
-        sub_idx = (int(leg_match.group(1)) - 1) if leg_match else idx
+        name = original_file.name
+        leg_match = _RESIDENTIAL_LEG_RE.search(name)
+        attraction_match = _ATTRACTION_RE.search(name)
 
-        if sub_idx < len(subtitle_paths) and subtitle_paths[sub_idx]:
-            sub_path = subtitle_paths[sub_idx]
+        if leg_match:
+            sub_idx = int(leg_match.group(1)) - 1
+            sub_path = subtitle_paths[sub_idx] if 0 <= sub_idx < len(subtitle_paths) else None
+        elif attraction_match:
+            sub_idx = int(attraction_match.group(1))
+            sub_path = (
+                attraction_subtitle_paths[sub_idx]
+                if 0 <= sub_idx < len(attraction_subtitle_paths)
+                else None
+            )
+        elif name == _OVERVIEW_FILENAME:
+            sub_path = overview_subtitle_path
+        else:
+            # intro/outro/anything else never had a subtitle to begin with.
+            sub_path = None
+
+        if sub_path:
             subtitled_output = str(
                 original_file.parent
                 / f"{original_file.stem}_subtitled{original_file.suffix}"

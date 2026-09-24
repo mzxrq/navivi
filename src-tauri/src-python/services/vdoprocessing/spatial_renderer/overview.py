@@ -6,6 +6,7 @@ overview_pacing.py and the animation loop itself in overview_animation.py —
 both split out of this file to keep it to the setup/wrap-up orchestration."""
 
 import json
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import cv2
@@ -16,6 +17,18 @@ from services.mapfetcher.mapgeometry import RouteGeometryProcessor
 from services.vdoprocessing.vdoexporter import VideoExporter
 
 from .base import logger
+
+
+def _output_is_valid(path, min_bytes: int = 1024) -> bool:
+    """Local copy of videopipeline/helpers.py's output_is_valid — this
+    package can't import that module (videopipeline/__init__.py eagerly
+    imports render_step.py, which imports spatial_renderer, so the reverse
+    import would be circular; see helpers.py's own PIPELINE_LABELS note)."""
+    try:
+        p = Path(path)
+        return p.is_file() and p.stat().st_size >= min_bytes
+    except OSError:
+        return False
 
 # Overview render tuning constants (magic numbers pulled out of the setup
 # logic below so their purpose has a name; none of these are read from
@@ -43,6 +56,19 @@ class _OverviewRenderMixin:
         bounding_box: Optional[Dict[str, float]] = None,
         extent: Optional[Tuple[float, float, float, float]] = None,
     ) -> str:
+        # Checkpoint: if a previous run already produced this exact output
+        # file, skip straight to returning it instead of redoing the whole
+        # (expensive) overview render. Simple existence check, no content
+        # hash — an interrupted/partial pipeline run resumes from wherever
+        # it left off rather than redoing every already-finished clip; a
+        # genuinely stale file just needs deleting (or force=True further
+        # up the call chain, which clears the whole checkpoint before this
+        # is ever reached) to be regenerated.
+        overview_path = str(self.out_dir / "01_overview.mp4")
+        if self.config.get("checkpoint_enabled", False) and _output_is_valid(overview_path):
+            logger.info("Overview video already exists — skipping render: %s", overview_path)
+            return overview_path
+
         is_video = False
 
         if is_video:

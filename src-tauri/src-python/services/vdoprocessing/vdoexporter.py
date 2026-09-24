@@ -391,10 +391,66 @@ class VideoExporter:
         return output_path
 
     @staticmethod
+    def _mux_track_for_concat(
+        ffmpeg_cmd: str, video_path: Path, audio_path: Optional[str], tmp_dir: Path, index: int
+    ) -> Path:
+        """Combines one timeline track's silent video with its own separate
+        audio track (see timeline_step.build_timeline — video and audio are
+        kept as two independent tracks all the way through the pipeline so
+        a frontend NLE can edit them separately) into a single per-segment
+        file the final concat step below can stream-copy.
+
+        A track with no audio gets silence generated to match its video's
+        own length instead of being left as a bare video stream — the
+        concat demuxer's `-c copy` stream-copy requires every segment to
+        carry the SAME stream layout, so a mix of audio-bearing and
+        audio-less segments would fail or drop audio unpredictably once
+        concatenated. `-shortest` is only used for that silence case (an
+        `anullsrc` stream is infinite and must be capped to the video's own
+        length) — a REAL audio track is deliberately never trimmed to here
+        either, matching mux_audio_to_video's own reasoning: this project's
+        clips are already sized so their own narration fits inside their
+        own video length, so trimming would only ever cut video short.
+        """
+        has_audio = bool(audio_path and Path(audio_path).exists())
+        tmp_out = tmp_dir / f"seg_{index:04d}{video_path.suffix or '.mp4'}"
+
+        cmd = [ffmpeg_cmd, "-y", "-i", str(video_path)]
+        if has_audio:
+            cmd += ["-i", str(Path(audio_path).resolve())]
+        else:
+            cmd += ["-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100"]
+        cmd += [
+            "-map", "0:v:0", "-map", "1:a:0",
+            "-c:v", "copy", "-c:a", "aac", "-ar", "44100", "-ac", "2",
+        ]
+        if not has_audio:
+            cmd.append("-shortest")
+        cmd.append(str(tmp_out))
+
+        result = subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace")
+        if result.returncode != 0 or not tmp_out.exists():
+            logger.error(
+                "concat_from_timeline: failed to mux track %d ('%s'), using it unmuxed: %s",
+                index, video_path, result.stderr,
+            )
+            return video_path
+        return tmp_out
+
+    @staticmethod
     def concat_from_timeline(
         timeline_data: dict, output_path: str, save_json_path: Optional[str] = None
     ) -> str:
-        """NLE Engine: Stitches atomic clips using strict absolute paths and pre-flight file checks."""
+        """NLE Engine: Stitches atomic clips using strict absolute paths and pre-flight file checks.
+
+        Every clip the pipeline produces stays silent, with its narration
+        kept as a separate track in timeline_data (see build_timeline) so a
+        frontend editor can edit video and audio independently — this is
+        the ONE place they're finally combined, muxing each track's own
+        audio onto its video (see _mux_track_for_concat) right before
+        concatenating, rather than baking audio into clips earlier in the
+        pipeline where it could no longer be edited separately.
+        """
         # 1. Save the timeline.json file to the disk
         if save_json_path:
             with open(save_json_path, "w", encoding="utf-8") as f:
@@ -417,55 +473,63 @@ class VideoExporter:
         output_dir = Path(output_path).parent
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        concat_txt = output_dir / f"timeline_{uuid.uuid4().hex}.txt"
-
-        # 2. Write Absolute Paths
-        with open(concat_txt, "w", encoding="utf-8") as f:
-            for track in tracks:
-                clip_path = Path(track["file_path"]).resolve()
-                safe_path = clip_path.as_posix()
-                f.write(f"file 'file:{safe_path}'\n")
-
-        # 3. Execute the seamless stitch
         ffmpeg_cmd = VideoExporter.resolve_ffmpeg()
         if not ffmpeg_cmd:
-            concat_txt.unlink(missing_ok=True)
             raise RuntimeError("FFmpeg binary not found.")
 
-        result = subprocess.run(
-            [
-                ffmpeg_cmd,
-                "-y",
-                "-f",
-                "concat",
-                "-safe",
-                "0",
-                "-i",
-                str(concat_txt),
-                "-c",
-                "copy",
-                str(output_path),
-            ],
-            capture_output=True,
-            encoding="utf-8",
-            errors="replace",
-        )
+        tmp_dir = Path(tempfile.mkdtemp(prefix="navivi_concat_"))
+        try:
+            muxed_paths = [
+                VideoExporter._mux_track_for_concat(
+                    ffmpeg_cmd, Path(track["file_path"]).resolve(), track.get("audio_path"), tmp_dir, i,
+                )
+                for i, track in enumerate(tracks)
+            ]
 
-        # Clean up the temporary FFmpeg text file
-        concat_txt.unlink(missing_ok=True)
+            concat_txt = output_dir / f"timeline_{uuid.uuid4().hex}.txt"
 
-        # 4. Strict Post-flight Check
-        if result.returncode != 0:
-            logger.error("concat_from_timeline failed: %s", result.stderr)
-            raise RuntimeError(f"FFmpeg concat failed: {result.stderr}")
+            # 2. Write Absolute Paths
+            with open(concat_txt, "w", encoding="utf-8") as f:
+                for clip_path in muxed_paths:
+                    f.write(f"file 'file:{clip_path.resolve().as_posix()}'\n")
 
-        final_file = Path(output_path)
-        if not final_file.exists() or final_file.stat().st_size == 0:
-            raise RuntimeError(
-                f"FFmpeg reported success, but the output file is missing or 0 bytes! STDERR: {result.stderr}"
+            # 3. Execute the seamless stitch
+            result = subprocess.run(
+                [
+                    ffmpeg_cmd,
+                    "-y",
+                    "-f",
+                    "concat",
+                    "-safe",
+                    "0",
+                    "-i",
+                    str(concat_txt),
+                    "-c",
+                    "copy",
+                    str(output_path),
+                ],
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace",
             )
 
-        return output_path
+            # Clean up the temporary FFmpeg text file
+            concat_txt.unlink(missing_ok=True)
+
+            # 4. Strict Post-flight Check
+            if result.returncode != 0:
+                logger.error("concat_from_timeline failed: %s", result.stderr)
+                raise RuntimeError(f"FFmpeg concat failed: {result.stderr}")
+
+            final_file = Path(output_path)
+            if not final_file.exists() or final_file.stat().st_size == 0:
+                raise RuntimeError(
+                    f"FFmpeg reported success, but the output file is missing or 0 bytes! STDERR: {result.stderr}"
+                )
+
+            return output_path
+        finally:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
 
     @staticmethod
     def burn_subtitles(

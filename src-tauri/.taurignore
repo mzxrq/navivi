@@ -21,3 +21,5 @@ src-python/services/logs/*.log
 
 # Blanket ignore all log files anywhere in the src-tauri directory just in case
 **/*.log
+assets/assets/image/**/*.png
+assets/assets/**

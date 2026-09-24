@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Optional
 
 from .helpers import logger, project_subtitle_dir
+from services import tuning
 
 # [NOTE] [Core] Waypoint index embedded in attraction clip filenames, e.g. "04_attraction_03_Kabutoyama.mp4" -> waypoint index 3 (matches attraction_step.py's `f"04_attraction_{idx:02d}_{safe_label}.mp4"`).
 _ATTRACTION_RE = re.compile(r"04_attraction_(\d+)_")
@@ -16,6 +17,9 @@ _ATTRACTION_RE = re.compile(r"04_attraction_(\d+)_")
 # skip over a merged-away stop-by) would otherwise throw out of sync with
 # audio_paths/subtitle_paths.
 _RESIDENTIAL_LEG_RE = re.compile(r"02_waypoint_(\d+)_")
+# Overview clip's fixed filename — hardcoded the same way in
+# route2vdo.py/overview.py (no shared tuning.py constant for it).
+_OVERVIEW_FILENAME = "01_overview.mp4"
 
 
 def _find_subtitle(audio_path: Optional[str], subtitles_dir: Path) -> Optional[str]:
@@ -37,63 +41,166 @@ def build_timeline(
     subtitle_paths: Optional[list[str]] = None,
     project_dir: str = ".",
     timeline_path: Optional[str] = None,
+    overview_audio_path: Optional[str] = None,
+    overview_subtitle_path: Optional[str] = None,
+    attraction_audio_paths: Optional[list[str]] = None,
+    attraction_subtitle_paths: Optional[list[str]] = None,
 ) -> str:
-    """Builds timeline.json, one entry per final clip in the exact order the
-    pipeline produced them (video_paths, i.e. overview + residential legs,
-    followed by attraction_videos), each carrying its matching narration
-    audio and subtitle file when one exists.
+    """Builds timeline.json with clips ordered intro -> overview -> for each
+    leg in travel order, that leg's departure waypoint's own attraction
+    video (if it has one) immediately followed by the leg itself -> outro.
+
+    `video_paths`/`attraction_videos` are the pre-subtitle-burn source
+    paths pipeline.py rendered (in the same order/positions it built
+    `final_videos` from: video_paths's clips first, then
+    attraction_videos's, with intro/outro then attached before/after) —
+    used here only to recover each `final_videos` entry's ORIGINAL
+    filename (source_name), since that filename is what carries the
+    waypoint/leg index this function reorders and audio/subtitle-matches
+    by. `final_videos` itself supplies the actual (burned/muxed) paths
+    that end up in the output timeline.
+
+    Previously every residential leg played before any attraction video
+    (route clips, then all attraction clips, in two separate blocks).
+    Interleaved instead: a viewer sees "look around here" (the attraction
+    video) before "now we travel to the next stop" (the leg), matching
+    the actual visit order, rather than a "sightseeing reel" back-to-back
+    with a separate "travel reel".
     """
     audio_paths = audio_paths or []
     subtitle_paths = subtitle_paths or []
+    attraction_audio_paths = attraction_audio_paths or []
+    attraction_subtitle_paths = attraction_subtitle_paths or []
     subtitles_dir = project_subtitle_dir(project_dir)
 
     num_route_videos = len(video_paths)
+    num_attraction_videos = len(attraction_videos)
+    route_pairs = list(zip(video_paths, final_videos[:num_route_videos]))
+    attraction_pairs = list(
+        zip(
+            attraction_videos,
+            final_videos[num_route_videos:num_route_videos + num_attraction_videos],
+        )
+    )
+    # Whatever's left after the route/attraction blocks — just the outro,
+    # when pipeline.py appended one (see build_timeline's caller).
+    trailing_pairs = [
+        (Path(p).name, p) for p in final_videos[num_route_videos + num_attraction_videos:]
+    ]
+
+    intro_pair, overview_pair = None, None
+    legs_by_number: dict[int, list[tuple[str, str]]] = {}
+    leg_order: list[int] = []
+    for source, burned in route_pairs:
+        name = Path(source).name
+        if name == tuning.INTRO_OUTPUT_FILENAME:
+            intro_pair = (source, burned)
+        elif name == _OVERVIEW_FILENAME:
+            overview_pair = (source, burned)
+        else:
+            leg_match = _RESIDENTIAL_LEG_RE.search(name)
+            leg_num = int(leg_match.group(1)) if leg_match else -1
+            if leg_num not in legs_by_number:
+                legs_by_number[leg_num] = []
+                leg_order.append(leg_num)
+            legs_by_number[leg_num].append((source, burned))
+
+    # 0-based waypoint index -> its attraction clip (see _ATTRACTION_RE);
+    # unmatched entries fall under key -1 and are still shown, just at the
+    # end (right before outro) instead of next to a leg they can't be
+    # matched to.
+    attractions_by_idx: dict[int, list[tuple[str, str]]] = {}
+    for source, burned in attraction_pairs:
+        match = _ATTRACTION_RE.search(Path(source).name)
+        wp_idx = int(match.group(1)) if match else -1
+        attractions_by_idx.setdefault(wp_idx, []).append((source, burned))
+
+    def _leg_audio(source_name: str) -> tuple[Optional[str], Optional[str]]:
+        leg_match = _RESIDENTIAL_LEG_RE.search(source_name)
+        if not leg_match:
+            return None, None
+        # 1-based in the filename; audio_paths/subtitle_paths are 0-based.
+        idx = int(leg_match.group(1)) - 1
+        if not (0 <= idx < len(audio_paths)):
+            return None, None
+        audio_path = audio_paths[idx]
+        subtitle_path = (
+            subtitle_paths[idx]
+            if idx < len(subtitle_paths) and subtitle_paths[idx]
+            else _find_subtitle(audio_path, subtitles_dir)
+        )
+        return audio_path, subtitle_path
+
+    def _attraction_audio(source_name: str) -> tuple[Optional[str], Optional[str]]:
+        # [NOTE] [Core] Attraction clips index audio/subtitles directly by
+        # the waypoint index parsed from the filename (not a running
+        # counter), since attraction videos aren't necessarily produced in
+        # waypoint order. Reads attraction_audio_paths/
+        # attraction_subtitle_paths (the clip's OWN attractionNarration-
+        # only audio — see audio_step.generate_attraction_audio_for_waypoint),
+        # NOT the combined arrival+attraction audio_paths/subtitle_paths
+        # above, which belong to the residential leg's own narration.
+        match = _ATTRACTION_RE.search(source_name)
+        if not match:
+            return None, None
+        idx = int(match.group(1))
+        if not (idx < len(attraction_audio_paths)) or not attraction_audio_paths[idx]:
+            return None, None
+        audio_path = attraction_audio_paths[idx]
+        subtitle_path = (
+            attraction_subtitle_paths[idx]
+            if idx < len(attraction_subtitle_paths) and attraction_subtitle_paths[idx]
+            else _find_subtitle(audio_path, subtitles_dir)
+        )
+        return audio_path, subtitle_path
+
+    # Assemble the final ordered (kind, source, burned) sequence: intro,
+    # overview, then per leg (in travel order) that leg's own attraction
+    # clip followed by the leg itself, then any attraction clips that
+    # never matched a leg, then the outro.
+    ordered: list[tuple[str, str, str]] = []
+    if intro_pair:
+        ordered.append(("route", *intro_pair))
+    if overview_pair:
+        ordered.append(("overview", *overview_pair))
+
+    used_attraction_idx = set()
+    for leg_num in leg_order:
+        wp_idx = leg_num - 1
+        for pair in attractions_by_idx.get(wp_idx, []):
+            ordered.append(("attraction", *pair))
+        used_attraction_idx.add(wp_idx)
+        for pair in legs_by_number[leg_num]:
+            ordered.append(("route", *pair))
+
+    for wp_idx, pairs in attractions_by_idx.items():
+        if wp_idx in used_attraction_idx:
+            continue
+        for pair in pairs:
+            ordered.append(("attraction", *pair))
+
+    for name, path in trailing_pairs:
+        ordered.append(("route", name, path))
 
     tracks = []
-    for order, final_path in enumerate(final_videos):
-        if order < num_route_videos:
-            source_name = Path(video_paths[order]).name
+    for order, (kind, source_or_name, burned) in enumerate(ordered):
+        source_name = Path(source_or_name).name
+        if kind == "route":
+            audio_path, subtitle_path = _leg_audio(source_name)
+        elif kind == "overview":
+            # No per-clip index to look up (there's exactly one overview
+            # clip) — its narration audio is already muxed directly into
+            # the video by render_step.py, this is just recorded here for
+            # the editor UI, same as every other track's audio_path.
+            audio_path, subtitle_path = overview_audio_path, overview_subtitle_path
         else:
-            attraction_idx = order - num_route_videos
-            source_name = (
-                Path(attraction_videos[attraction_idx]).name
-                if attraction_idx < len(attraction_videos)
-                else Path(final_path).name
-            )
-
-        audio_path = None
-        subtitle_path = None
-
-        if order < num_route_videos:
-            leg_match = _RESIDENTIAL_LEG_RE.search(source_name)
-            if leg_match:
-                # 1-based in the filename; audio_paths/subtitle_paths are 0-based.
-                leg_audio_idx = int(leg_match.group(1)) - 1
-                if 0 <= leg_audio_idx < len(audio_paths):
-                    audio_path = audio_paths[leg_audio_idx]
-                    subtitle_path = (
-                        subtitle_paths[leg_audio_idx]
-                        if leg_audio_idx < len(subtitle_paths) and subtitle_paths[leg_audio_idx]
-                        else _find_subtitle(audio_path, subtitles_dir)
-                    )
-        else:
-            # [NOTE] [Core] Attraction clips index audio/subtitles directly by the waypoint index parsed from the filename (not a running counter like the residential-leg branch), since attraction videos aren't necessarily produced in waypoint order.
-            match = _ATTRACTION_RE.search(source_name)
-            if match:
-                wp_idx = int(match.group(1))
-                if wp_idx < len(audio_paths):
-                    audio_path = audio_paths[wp_idx]
-                    subtitle_path = (
-                        subtitle_paths[wp_idx]
-                        if wp_idx < len(subtitle_paths) and subtitle_paths[wp_idx]
-                        else _find_subtitle(audio_path, subtitles_dir)
-                    )
+            audio_path, subtitle_path = _attraction_audio(source_name)
 
         tracks.append(
             {
                 "order": order,
-                "clip_name": Path(final_path).stem,
-                "file_path": _resolve(final_path),
+                "clip_name": Path(burned).stem,
+                "file_path": _resolve(burned),
                 "audio_path": _resolve(audio_path),
                 "subtitle_path": _resolve(subtitle_path),
             }
