@@ -221,6 +221,26 @@ class _OverviewRenderMixin:
             # None through.
             ap["border_color"] = pin_color_for_border or self.graphics.marker_color
 
+        # job_config.json's own "waypoints" array here already includes the
+        # route's start (index 0) and end (its last index) as real entries
+        # in their own right (render_step.py's own waypoint-injection loop
+        # special-cases idx==0/idx==len(waypoints)-1 for their labels, but
+        # still builds a popup entry for them the same as every other
+        # waypoint) — so it lines up 1:1, in the same order, with
+        # `active_popups` (built by filtering that SAME per-waypoint
+        # `popups` array route_step.py produced). A previous version of
+        # this loop assumed job_waypoints excluded start/end (true for a
+        # DIFFERENT reader — see waypoints.py/transitions.py's
+        # _draw_nearby_waypoints, which reads job_config's start_point/
+        # end_point directly instead) and shifted by `popup["index"] - 1"
+        # — but `popup["index"]` here is a position in the raw, thousands-
+        # of-points-long animated path, not a small 0..N waypoint count, so
+        # that shift missed the bounds check for virtually every waypoint
+        # beyond the first few, silently skipping this whole block (no
+        # freeze_frame/image_display/popup_video override ever applied)
+        # for most of the route. Zipping by enumerate() position instead —
+        # matching active_popups' own build order to job_waypoints' — is
+        # what actually lines each waypoint up with its own config entry.
         job_waypoints = self._get_job_waypoints()
         for i, popup in enumerate(active_popups):
             if i < len(job_waypoints):
@@ -369,6 +389,31 @@ class _OverviewRenderMixin:
         triggerable.sort(key=lambda ap: ap["expected_frame"])
         stop_expected_frame = stop_popup["expected_frame"] if stop_popup else None
         min_leg_frames = int(fps * max(_MIN_LEG_DISPLAY_SECONDS, tuning.POPUP_MIN_DISPLAY_SECONDS))
+        # Capped at the same POPUP_FREEZE_SECONDS_MAX ceiling every other
+        # popup display duration in this file is bounded by — without it,
+        # the LAST triggerable waypoint before a long uninterrupted stretch
+        # back to the final destination (a "return leg" with no stops of
+        # its own) gets next_frame = stop_expected_frame, at the very end
+        # of the whole video: its card's display time would span that
+        # entire remaining stretch instead of a normal few-second flash,
+        # reported as an old waypoint's popup still sitting on screen deep
+        # into the return leg.
+        max_leg_frames = int(fps * tuning.POPUP_FREEZE_SECONDS_MAX)
+        # The top banner starts anticipating the NEXT waypoint ("まもなく
+        # ...") this many seconds before it's actually reached (see
+        # OVERVIEW_BANNER_NEAR_SECONDS in the main animation loop) — a
+        # popup sized to last right up until that next waypoint's own
+        # expected_frame would still be on screen for the whole length of
+        # that anticipation window, visibly overlapping the "まもなく
+        # <next place>" banner with THIS waypoint's own card. Subtracting
+        # it here means the card finishes (fade-out included) before that
+        # banner even appears. This got noticeably more visible once
+        # walking's own on-screen pace slowed down (see
+        # tuning.WALKING_ANIMATION_SPEED_FACTOR): the same real leg now
+        # spans more animated frames, so the fixed anticipation window
+        # covers proportionally more of a walking leg's own popup display
+        # than it used to.
+        banner_near_frames = int(fps * tuning.OVERVIEW_BANNER_NEAR_SECONDS)
         for i, ap in enumerate(triggerable):
             this_frame = ap["expected_frame"]
             next_frame = (
@@ -377,8 +422,9 @@ class _OverviewRenderMixin:
                 else stop_expected_frame
             )
             if next_frame is not None:
+                raw_gap = next_frame - banner_near_frames - this_frame
                 ap["leg_display_seconds"] = (
-                    max(min_leg_frames, next_frame - this_frame) / fps
+                    min(max_leg_frames, max(min_leg_frames, raw_gap)) / fps
                 )
 
 

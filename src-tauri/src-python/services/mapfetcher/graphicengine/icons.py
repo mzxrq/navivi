@@ -63,22 +63,53 @@ class _IconMixin:
     def _draw_ship_icon(
         self, draw: ImageDraw.ImageDraw, cx: int, cy: int, size: int, color: Tuple
     ):
-        half = size / 2
-        width = max(2, size // 12)
-        hull = [
-            (cx - half, cy + half * 0.3),
-            (cx - half * 0.6, cy + half * 0.8),
-            (cx + half * 0.6, cy + half * 0.8),
-            (cx + half, cy + half * 0.3),
-        ]
-        draw.line(hull + [hull[0]], fill=color, width=width, joint="curve")
-        draw.line(
-            [(cx, cy + half * 0.3), (cx, cy - half)], fill=color, width=width
+        # Traced (not hand-tuned by eye like the other icons in this file)
+        # from a specific reference ferry glyph the user supplied: a solid
+        # deckhouse block — slanted bow pennant, four square windows, a
+        # stacked (not side-by-side) two-tier funnel — floating above a
+        # separate, wider hull trapezoid, with a visible gap between the
+        # two pieces. Coordinates are normalized 0..1 over the glyph's own
+        # square canvas, scaled by `size` here, so they reproduce its exact
+        # proportions rather than approximating them.
+        left, top = cx - size / 2, cy - size / 2
+
+        def pt(nx: float, ny: float) -> Tuple[float, float]:
+            return (left + nx * size, top + ny * size)
+
+        white = (255, 255, 255, 255) if len(color) == 4 else (255, 255, 255)
+
+        draw.polygon(
+            [pt(0.431, 0.250), pt(0.4625, 0.250), pt(0.369, 0.3375)], fill=color
         )
         draw.polygon(
-            [(cx, cy - half), (cx, cy - half * 0.1), (cx + half * 0.6, cy - half * 0.3)],
+            [pt(0.621, 0.1875), pt(0.735, 0.1875), pt(0.735, 0.255), pt(0.621, 0.255)],
             fill=color,
         )
+        draw.polygon(
+            [pt(0.621, 0.271), pt(0.735, 0.271), pt(0.735, 0.3375), pt(0.621, 0.3375)],
+            fill=color,
+        )
+        draw.polygon(
+            [
+                pt(0.294, 0.3375), pt(0.819, 0.3375), pt(0.819, 0.4375),
+                pt(0.8625, 0.4375), pt(0.8625, 0.481), pt(0.95, 0.481),
+                pt(0.95, 0.5375), pt(0.156, 0.5375),
+            ],
+            fill=color,
+        )
+        draw.polygon(
+            [pt(0.0, 0.575), pt(1.0, 0.575), pt(0.8625, 0.8125), pt(0.1375, 0.8125)],
+            fill=color,
+        )
+
+        win = 0.045 * size
+        win_y = pt(0, 0.4375)[1]
+        for wx_n in (0.365, 0.4525, 0.54, 0.6275):
+            wx = pt(wx_n, 0)[0]
+            draw.rectangle(
+                [wx - win / 2, win_y - win / 2, wx + win / 2, win_y + win / 2],
+                fill=white,
+            )
 
     def _draw_car_icon(
         self, draw: ImageDraw.ImageDraw, cx: int, cy: int, size: int, color: Tuple

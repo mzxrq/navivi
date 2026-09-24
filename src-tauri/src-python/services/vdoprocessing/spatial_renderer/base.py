@@ -81,8 +81,23 @@ class _SpatialRendererBase:
             str(k).lower(): float(v)
             for k, v in (config.get("animation_speeds_kmh") or {}).items()
         }
+        # walking and ferry are the two modes that don't share the flat
+        # baseline pace by default (see tuning.py's WALKING/FERRY_
+        # ANIMATION_SPEED_FACTOR) — ferry's own default is derived from
+        # walking's (already-slowed) pace, not the base one, so it stays
+        # visibly faster than a walking leg rather than both landing back
+        # at the same speed. A project's explicit animation_speeds_kmh
+        # override (below) still wins over either of these.
+        _walking_default_kmh = self._DEFAULT_ANIMATION_SPEED_KMH * tuning.WALKING_ANIMATION_SPEED_FACTOR
+        _default_kmh_by_mode = {
+            "walking": _walking_default_kmh,
+            "ferry": _walking_default_kmh * tuning.FERRY_ANIMATION_SPEED_FACTOR,
+        }
         animation_speed_kmh = {
-            **{mode: self._DEFAULT_ANIMATION_SPEED_KMH for mode in mode_speed_kmh},
+            **{
+                mode: _default_kmh_by_mode.get(mode, self._DEFAULT_ANIMATION_SPEED_KMH)
+                for mode in mode_speed_kmh
+            },
             **animation_overrides,
         }
         self._mode_speed_factor = {

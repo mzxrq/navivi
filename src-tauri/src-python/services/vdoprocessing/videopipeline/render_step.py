@@ -399,9 +399,22 @@ def render_route_video(
     # Every mode defaults to the SAME pace (SpatialRenderer's own uniform
     # _DEFAULT_ANIMATION_SPEED_KMH, not a per-mode dict) so a real-world-fast
     # car/ferry leg doesn't get allocated dramatically more/less on-screen
-    # time than a walking one purely from its real-world speed.
+    # time than a walking one purely from its real-world speed — except
+    # walking and ferry, which get their own defaults (see tuning.py's
+    # WALKING/FERRY_ANIMATION_SPEED_FACTOR and SpatialRendererBase.__init__,
+    # which applies the identical adjustment for the overview render).
+    _walking_default_kmh = (
+        SpatialRenderer._DEFAULT_ANIMATION_SPEED_KMH * tuning.WALKING_ANIMATION_SPEED_FACTOR
+    )
+    _default_kmh_by_mode = {
+        "walking": _walking_default_kmh,
+        "ferry": _walking_default_kmh * tuning.FERRY_ANIMATION_SPEED_FACTOR,
+    }
     animation_speed_kmh = {
-        **{mode: SpatialRenderer._DEFAULT_ANIMATION_SPEED_KMH for mode in mode_speed_kmh},
+        **{
+            mode: _default_kmh_by_mode.get(mode, SpatialRenderer._DEFAULT_ANIMATION_SPEED_KMH)
+            for mode in mode_speed_kmh
+        },
         **{
             str(k).lower(): float(v)
             for k, v in (settings.get("animation_speeds_kmh") or {}).items()

@@ -131,6 +131,16 @@ ANIMATION_SPEED_KMH = 3.0
 # (see SpatialRenderer._mode_speed_factor).
 # [NOTE] [Config] Kept independent of REPORTED/ANIMATION_SPEED_KMH so changing either doesn't silently rescale every mode's speed-up factor.
 REFERENCE_SPEED_KMH = 3.0
+# Walking and ferry are the two exceptions to "every mode shares the same
+# ANIMATION_SPEED_KMH pace" above: walking is deliberately shown a bit
+# slower than that shared baseline (reads as a calmer, more deliberate
+# stroll rather than a brisk power-walk), and ferry gets a boost relative
+# to walking's OWN (already-slowed) pace, not the base pace, so a boat
+# crossing still visibly outpaces someone on foot instead of both ending up
+# at the same on-screen speed. car/driving/airplane are untouched by this —
+# see SpatialRendererBase.__init__ for where these apply.
+WALKING_ANIMATION_SPEED_FACTOR = 0.75
+FERRY_ANIMATION_SPEED_FACTOR = 1.5
 
 # --- Pin / line colors (BGR) ------------------------------------------------
 # Matched to the frontend's NaviPin.tsx (src/components/view/mapeditor/
@@ -391,19 +401,10 @@ OVERVIEW_POPUP_TRIGGER_TOLERANCE_SECONDS = 0.2
 # meters, since the 2D overview has no consistent meters-per-pixel scale
 # to compare against.
 OVERVIEW_BANNER_NEAR_SECONDS = 3.0
-# End-of-video recap: every waypoint's photo card ends up on screen at
-# once (laid out around the frame's border by popups.py's
-# _layout_recap_cards), but they arrive this many at a time rather than in
-# one cut, each step crossfading onto the ones already up. Every pin stays
-# visible from the first step regardless of whether its own card has shown
-# yet (see _render_recap_frame's group_popups param).
-RECAP_GROUP_SIZE = 6
-# Floor on how long each reveal step is held on screen, regardless of how
-# the stop waypoint's own freeze_seconds divides across however many steps
-# this route ended up needing — a step flashed by for under this long
-# isn't actually readable.
-RECAP_GROUP_MIN_HOLD_SECONDS = 2.5
-# Crossfade duration between two consecutive recap reveal steps.
+# End-of-video recap: every waypoint's photo card ends up on screen at once
+# (laid out around the frame's border by popups.py's _layout_recap_cards),
+# all fading in together from the clean map in a single crossfade of this
+# duration, rather than a few cards at a time.
 RECAP_GROUP_FADE_SECONDS = 0.4
 # Leader-line/card-border colors cycled by a popup's position around the
 # recap reveal order (see popups.py's _layout_recap_cards) — NOT tied to the

@@ -551,6 +551,24 @@ class _OverviewAnimationMixin:
             # with a stop-by batch, the whole batch too — showing two
             # unrelated waypoints' cards on screen together for seconds.
             frame_before_popups = frame
+            # Once every real waypoint (and every stop-by host) has already
+            # been QUEUED (seq_ptr advances on proximity — see the loop
+            # above — which can be a few frames before that last waypoint's
+            # own cooldown-gated trigger below), nothing is left ahead but
+            # the final destination itself — the "Return" stretch, which
+            # should show just the line, the pins and the "... へ" banner —
+            # no popup card, and no fade transition either (an instant cut
+            # is exactly what was asked for here, not a graceful wrap-up).
+            # `triggered_popup is None` guards the one frame the last
+            # waypoint (or its stop-by host) itself triggers on, so its own
+            # arrival still plays out normally; every OTHER card's own
+            # POPUP_MIN_DISPLAY_SECONDS is no longer at risk from this cut
+            # the way it used to be — each waypoint's own leg_display_seconds
+            # (see overview.py) now already finishes before the NEXT one's
+            # "まもなく" banner even appears, which is well before seq_ptr
+            # can read "done" here.
+            if triggered_popup is None and seq_ptr >= len(sequential_popups):
+                baked_popups = []
             frame, baked_popups = self._composite_baked_popups(
                 frame, baked_popups, w, h, route_obstacle_arr,
                 active_popups=active_popups, total_points=len(points), fps=fps,
@@ -672,8 +690,38 @@ class _OverviewAnimationMixin:
                     # Force every OTHER still-active, not-yet-fading
                     # flow-through card straight into its own fade-out the
                     # moment a later one arrives, instead of letting it
-                    # run out its original clock.
+                    # run out its original clock — but never before it's
+                    # had at least POPUP_MIN_DISPLAY_SECONDS on screen.
+                    # Without that floor, a card whose trigger frame lands
+                    # right before the NEXT waypoint's own trigger (e.g.
+                    # two stops close together) could get wrapped up only
+                    # a frame or two after it first appeared — elapsed
+                    # (total_frames - frames_left) is near zero, so
+                    # wrap_up_frames alone let it fade out almost as soon
+                    # as it faded in, reported as the card "blinking" —
+                    # gone again the instant the next waypoint arrived.
+                    # This floor is a hard, unconditional
+                    # POPUP_MIN_DISPLAY_SECONDS — a previous version of this
+                    # code shrank it under a deep concurrency backlog (many
+                    # waypoints clustered together, more than
+                    # MAX_CONCURRENT_FLOW_POPUPS competing for a display
+                    # slot at once) to stop a late card from waiting so long
+                    # for a free slot that it ended up shown well into the
+                    # FOLLOWING leg. That traded away the one guarantee this
+                    # whole block exists for — reported directly as a popup
+                    # sometimes not staying up for a full 2 seconds. The
+                    # "still showing late into the next leg" case is now
+                    # instead handled at the point the animation actually
+                    # enters that next leg (see the seq_ptr-based wrap-up
+                    # right before _composite_baked_popups above), which
+                    # itself also respects this same floor — so a dense
+                    # cluster may still take a few real seconds to fully
+                    # drain, but no individual card's guaranteed 2 seconds
+                    # is ever cut short to make that happen faster.
                     new_order = triggered_popup.get("order", 0)
+                    min_display_frames = max(
+                        1, int(tuning.POPUP_MIN_DISPLAY_SECONDS * fps)
+                    )
                     for bp in baked_popups:
                         if bp["popup"]["data"].get("freeze_frame", False):
                             continue
@@ -682,7 +730,10 @@ class _OverviewAnimationMixin:
                         wrap_up_frames = bp.get("fade_frames") or max(
                             1, int(self._POPUP_FADE_SECONDS * fps)
                         )
-                        bp["frames_left"] = min(bp["frames_left"], wrap_up_frames)
+                        elapsed = bp.get("total_frames", bp["frames_left"]) - bp["frames_left"]
+                        remaining_for_min_display = max(0, min_display_frames - elapsed)
+                        target_frames_left = max(wrap_up_frames, remaining_for_min_display)
+                        bp["frames_left"] = min(bp["frames_left"], target_frames_left)
 
                     new_bp = self._make_baked_popup(
                         triggered_popup, display_seconds, fps,
@@ -690,6 +741,36 @@ class _OverviewAnimationMixin:
                     )
                     baked_popups.append(new_bp)
                     frame = popup_base_frame
+                    # popup_base_frame is deliberately a clean plate with no
+                    # cards baked in (see frame_before_popups' own comment
+                    # above) — needed so a FREEZE hold reusing this same
+                    # plate for many frames never bakes in a stale card.
+                    # But this flow-through branch only ever writes ONE
+                    # frame from it, right here, before the loop resumes
+                    # normal per-frame compositing next iteration — without
+                    # redrawing every OTHER still-active card (e.g. an
+                    # earlier waypoint's own card, still lingering/fading)
+                    # on this one frame too, it vanished for exactly this
+                    # one frame and popped back on the next, reported as
+                    # the earlier card visibly "blinking" the instant a new
+                    # waypoint arrives.
+                    for other_bp in baked_popups:
+                        if other_bp is new_bp:
+                            continue
+                        other_popup = other_bp["popup"]
+                        if not other_popup.get("beside_box"):
+                            continue
+                        other_hud = other_popup.copy()
+                        other_hud["hud_corner"] = None
+                        other_hud["draw_leader_line"] = True
+                        other_alpha = self._popup_fade_alpha(other_bp)
+                        frame = self.graphics.render_popup_box(
+                            frame, other_hud, alpha=other_alpha, line_only=True
+                        )
+                        self._draw_pin(frame, other_popup, len(points))
+                        frame = self.graphics.render_popup_box(
+                            frame, other_hud, alpha=other_alpha, skip_line=True
+                        )
                     if not is_video:
                         smoothed_angle = self._smoothed_heading(
                             smoothed_angle, cx, cy, prev_cx, prev_cy
