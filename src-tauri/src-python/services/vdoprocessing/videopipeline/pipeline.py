@@ -1,9 +1,11 @@
 """Orchestration entry points: the master pipeline, NLE fast re-render, and step-duration estimates."""
 
 import json
+import time
 from pathlib import Path
 from typing import Optional
 
+from services import tuning
 from services.config.job_config import JobConfigManager
 from services.logger.progress import tracker
 from services.vdoprocessing.vdoexporter import VideoExporter
@@ -90,6 +92,14 @@ def run_full_pipeline(
         # into the renderer below via its own idle timeout.
         from services.vdoprocessing.comfyui_i2v_client import ComfyUII2VClient
         ComfyUII2VClient.stop_server()
+
+        # [NOTE] [GPU] See tuning.GPU_STAGE_COOLDOWN_SECONDS — a brief pause
+        # here before the Chromium/WebGL render stage starts, giving the GPU
+        # a moment to release VRAM/thermal load from the diffusion stage
+        # above instead of jumping straight into another sustained GPU
+        # workload.
+        tracker.stage("Cooling down GPU before video rendering...")
+        time.sleep(tuning.GPU_STAGE_COOLDOWN_SECONDS)
     else:
         tracker.stage("Skipping attraction videos (disabled for this project)...")
         logger.info(

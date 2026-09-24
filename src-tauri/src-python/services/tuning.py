@@ -14,6 +14,19 @@ import json
 import os
 from typing import Dict, List, Tuple
 
+# --- GPU stage cooldown ------------------------------------------------------
+# Pause inserted in pipeline.py between the ComfyUI/Wan2.2 attraction-video
+# stage and the Playwright/Chromium route-video stage right after it — two
+# back-to-back GPU-heavy workloads (diffusion sampling, then forced-GPU WebGL
+# compositing via --use-gl=angle) with no gap between them on an 8GB-class
+# card left driver/VRAM state no time to release, and hit thermal/power
+# protection shutdowns on at least one 8GB laptop GPU (RTX 5060). This isn't
+# a fix for VRAM overcommit itself (neither stage has a hard cap), just a
+# breather so the GPU isn't asked to jump straight from one sustained load
+# into another. Skipped entirely when attraction videos are disabled for a
+# project, since there's nothing to cool down from.
+GPU_STAGE_COOLDOWN_SECONDS = 8.0
+
 # --- FFmpeg resource cap -----------------------------------------------------
 # No ffmpeg call anywhere in this codebase passed -threads before, so every
 # encode/mux/upscale was free to claim every CPU core at once — on a render-
@@ -514,7 +527,7 @@ TRIGGER_RADIUS_PADDING_DEFAULTS: Dict[str, float] = {"overview": 10, "waypoint":
 # bundled instance never collides with a developer's own separately-running
 # ComfyUI on the same machine.
 COMFYUI_BASE_URL = "http://127.0.0.1:8189"
-COMFYUI_UNET_NAME = "Wan2_2-TI2V-5B-Turbo-Q6_K.gguf"
+COMFYUI_UNET_NAME = "Wan2_2-TI2V-5B-Turbo-Q4_K.gguf"
 COMFYUI_CLIP_NAME = "umt5_xxl_fp8_e4m3fn_scaled.safetensors"
 COMFYUI_VAE_NAME = "wan2.2_vae.safetensors"
 # 1280x704 fits comfortably in an 8GB VRAM budget at this quant (see
