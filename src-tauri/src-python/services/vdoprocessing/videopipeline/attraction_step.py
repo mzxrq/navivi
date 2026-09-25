@@ -80,6 +80,12 @@ def generate_waypoint_attraction_video(
     return {"status": "failed", "label": label, "output_filename": output_filename}
 
 
+def is_unvisited_stopby(waypoint: dict) -> bool:
+    """A stop-by waypoint that is not connected to the route: the walker only
+    passes near it, so it has no attraction video."""
+    return bool(waypoint.get("isStopBy")) and not waypoint.get("connectToRoute")
+
+
 def render_attraction_videos(
     project_config_path: str,
     audio_durations: Optional[list[float]] = None,
@@ -137,7 +143,25 @@ def render_attraction_videos(
             )
             continue
 
+        # A stop-by the route only passes near (not connected to it) is never
+        # visited, so it gets no attraction video (and timeline_step never
+        # uses one).
+        if is_unvisited_stopby(wp):
+            logger.info(
+                "Step 3: [%d/%d] Skipping '%s' — stop-by not connected to the route.",
+                idx + 1, len(waypoints), place_label,
+            )
+            continue
+
         tracker.show(f"Generating attraction video {idx + 1}/{len(waypoints)}: {place_label}")
+        # ComfyUI/Wan holds a lot of RAM: with little left, restart its server
+        # (it reloads on the next call) before piling another clip onto it.
+        from services import tuning
+        from services.vdoprocessing.comfyui_i2v_client import ComfyUII2VClient
+
+        tuning.ensure_free_ram(
+            f"attraction video {idx + 1}", relief=ComfyUII2VClient.stop_server
+        )
         logger.info(
             "Step 3: [%d/%d] Generating attraction video for: '%s'",
             idx + 1, len(waypoints), place_label,

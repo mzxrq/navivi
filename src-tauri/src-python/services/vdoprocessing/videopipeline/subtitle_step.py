@@ -8,7 +8,9 @@ import re
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from services.localization.cues import clean_text
 from services.logger.progress import tracker
+from services.vdoprocessing.cliptiming import read_audio_offset
 from services.vdoprocessing.vdoexporter import VideoExporter
 
 from .audio_step import _resolve_attraction_narration_script, _resolve_narration_script
@@ -38,6 +40,28 @@ def _burn_checkpoint_key(video_path: str, sub_path: str) -> str:
     except OSError:
         pass
     return hasher.hexdigest()
+
+
+_SRT_TIME = re.compile(r"(\d+):(\d{2}):(\d{2}),(\d{3})")
+
+
+def shift_srt(sub_path: str, offset_seconds: float) -> str:
+    """A copy of `sub_path` with every cue delayed by `offset_seconds` (the
+    narration starts that far into its clip). Returns the copy's path, named
+    after the offset so a repeat run reuses it."""
+    src = Path(sub_path)
+    dst = src.with_name(f"{src.stem}_shift{int(round(offset_seconds * 1000))}ms.srt")
+
+    def bump(match: "re.Match[str]") -> str:
+        h, m, s, ms = (int(g) for g in match.groups())
+        total = ((h * 60 + m) * 60 + s) * 1000 + ms + int(round(offset_seconds * 1000))
+        h, rem = divmod(total, 3_600_000)
+        m, rem = divmod(rem, 60_000)
+        s, ms = divmod(rem, 1000)
+        return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
+
+    dst.write_text(_SRT_TIME.sub(bump, src.read_text(encoding="utf-8")), encoding="utf-8")
+    return str(dst)
 
 
 def _burn_hash_sidecar(subtitled_output: str) -> Path:
@@ -135,7 +159,7 @@ def build_overview_subtitle(
     cues against (mirrors build_waypoint_subtitle's own ValueError/
     FileNotFoundError cases, just swallowed here since the pipeline has
     nothing waypoint-shaped to skip-and-continue past for this one)."""
-    script = (project_config.get("overview_narration") or "").strip()
+    script = clean_text(project_config.get("overview_narration") or "").strip()
     if not script or not audio_path or not Path(audio_path).exists():
         return None
 
@@ -316,6 +340,10 @@ def burn_subtitles(
         else:
             # intro/outro/anything else never had a subtitle to begin with.
             sub_path = None
+
+        if sub_path and leg_match and read_audio_offset(video_path) > 0.01:
+            # The voice starts after the leg's opening, so its subtitles do too.
+            sub_path = shift_srt(sub_path, read_audio_offset(video_path))
 
         if sub_path:
             subtitled_output = str(

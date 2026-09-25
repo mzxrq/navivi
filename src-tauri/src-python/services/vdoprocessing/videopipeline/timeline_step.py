@@ -5,6 +5,8 @@ import re
 from pathlib import Path
 from typing import Optional
 
+from services.vdoprocessing.cliptiming import read_audio_offset
+
 from .helpers import logger, project_subtitle_dir
 from services import tuning
 
@@ -20,6 +22,50 @@ _RESIDENTIAL_LEG_RE = re.compile(r"02_waypoint_(\d+)_")
 # Overview clip's fixed filename — hardcoded the same way in
 # route2vdo.py/overview.py (no shared tuning.py constant for it).
 _OVERVIEW_FILENAME = "01_overview.mp4"
+
+
+def _unvisited_stopbys(project_dir: str) -> set:
+    """0-based positions of stop-by waypoints that are not connected to the route."""
+    try:
+        with open(Path(project_dir) / "job_config.json", "r", encoding="utf-8") as f:
+            waypoints = json.load(f).get("waypoints", [])
+    except (OSError, json.JSONDecodeError):
+        return set()
+    return {
+        pos for pos, wp in enumerate(waypoints)
+        if wp.get("isStopBy") and not wp.get("connectToRoute")
+    }
+
+
+def _waypoint_ids(project_dir: str) -> dict:
+    """{waypoint id: 0-based position} from the project's job_config.json."""
+    try:
+        with open(Path(project_dir) / "job_config.json", "r", encoding="utf-8") as f:
+            waypoints = json.load(f).get("waypoints", [])
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return {wp.get("id"): pos for pos, wp in enumerate(waypoints) if wp.get("id")}
+
+
+def _piece_target(source: str, waypoint_ids: dict) -> Optional[int]:
+    """0-based position of the waypoint a leg piece walks toward, from the
+    leg's _pieces.json (written by route2vdo.py), or None if unknown."""
+    src = Path(source)
+    match = _RESIDENTIAL_LEG_RE.search(src.name)
+    if not match:
+        return None
+    plan_path = src.parent / f"02_waypoint_{int(match.group(1)):02d}_pieces.json"
+    try:
+        with open(plan_path, "r", encoding="utf-8") as f:
+            pieces = json.load(f).get("pieces", [])
+    except (OSError, json.JSONDecodeError):
+        return None
+    # `source` may be a "_padded" copy (leg_pieces.py); the plan names the original.
+    stem = src.stem.replace("_padded", "")
+    for entry in pieces:
+        if Path(entry.get("file", "")).stem == stem:
+            return waypoint_ids.get(entry.get("target_waypoint_id"))
+    return None
 
 
 def _find_subtitle(audio_path: Optional[str], subtitles_dir: Path) -> Optional[str]:
@@ -46,6 +92,7 @@ def build_timeline(
     attraction_audio_paths: Optional[list[str]] = None,
     attraction_subtitle_paths: Optional[list[str]] = None,
     leg_narration_splits: Optional[dict[str, tuple[Optional[str], Optional[str]]]] = None,
+    attraction_fade_seconds: float = 0.0,
 ) -> str:
     """Builds timeline.json with clips ordered intro -> overview -> for each
     leg in travel order, that leg's departure waypoint's own attraction
@@ -112,9 +159,12 @@ def build_timeline(
     # end (right before outro) instead of next to a leg they can't be
     # matched to.
     attractions_by_idx: dict[int, list[tuple[str, str]]] = {}
+    unvisited = _unvisited_stopbys(project_dir)
     for source, burned in attraction_pairs:
         match = _ATTRACTION_RE.search(Path(source).name)
         wp_idx = int(match.group(1)) if match else -1
+        if wp_idx in unvisited:
+            continue  # a stop-by not connected to the route has no attraction video
         attractions_by_idx.setdefault(wp_idx, []).append((source, burned))
 
     def _leg_audio(source_name: str) -> tuple[Optional[str], Optional[str]]:
@@ -175,20 +225,43 @@ def build_timeline(
     if overview_pair:
         ordered.append(("overview", *overview_pair))
 
-    used_attraction_idx = set()
-    for leg_num in leg_order:
-        wp_idx = leg_num - 1
+    # Every leg piece is followed by the attraction video of the waypoint it
+    # walks TOWARD (its target, from the leg's _pieces.json), so the arrival
+    # photo the leg ends on runs straight into that place's own video. A
+    # waypoint no leg arrives at (the trip's first one) gets its video before
+    # the leg that leaves it; a stop-by merged into a leg, with no piece of
+    # its own, gets its video just before that leg.
+    waypoint_ids = _waypoint_ids(project_dir)
+    placed: set[int] = set()
+    arrived: set[int] = set()
+
+    def add_attraction(wp_idx: int) -> None:
+        if wp_idx in placed:
+            return
+        placed.add(wp_idx)
         for pair in attractions_by_idx.get(wp_idx, []):
             ordered.append(("attraction", *pair))
-        used_attraction_idx.add(wp_idx)
-        for pair in legs_by_number[leg_num]:
-            ordered.append(("route", *pair))
 
-    for wp_idx, pairs in attractions_by_idx.items():
-        if wp_idx in used_attraction_idx:
-            continue
-        for pair in pairs:
-            ordered.append(("attraction", *pair))
+    for leg_num in leg_order:
+        start_pos = leg_num - 1
+        pieces = legs_by_number[leg_num]
+        targets = [_piece_target(source, waypoint_ids) for source, _ in pieces]
+        if start_pos not in arrived or all(t is None for t in targets):
+            add_attraction(start_pos)
+        if targets[-1] is not None:
+            # Stop-bys the leg passes without a piece of their own come before
+            # it, so the leg is still followed directly by its destination's video.
+            for skipped in range(start_pos + 1, targets[-1]):
+                if skipped not in targets:  # a piece's own target follows that piece
+                    add_attraction(skipped)
+        for pair, target in zip(pieces, targets):
+            ordered.append(("route", *pair))
+            if target is not None:
+                arrived.add(target)
+                add_attraction(target)
+
+    for wp_idx in attractions_by_idx:
+        add_attraction(wp_idx)
 
     for name, path in trailing_pairs:
         ordered.append(("route", name, path))
@@ -213,9 +286,26 @@ def build_timeline(
                 "clip_name": Path(burned).stem,
                 "file_path": _resolve(burned),
                 "audio_path": _resolve(audio_path),
+                # Seconds the narration starts into the clip (a leg's opening
+                # before the walker moves) - applied at export; 0 otherwise.
+                "audio_offset": read_audio_offset(source_or_name) if audio_path and kind == "route" else 0.0,
                 "subtitle_path": _resolve(subtitle_path),
             }
         )
+
+    # A leg ends on its destination's fullscreen arrival photo and the
+    # destination's own attraction video comes right after it: dissolve
+    # between them (VideoExporter.concat_from_timeline) instead of cutting from
+    # a frozen photo. Only leg -> attraction joins; never the intro or overview.
+    if attraction_fade_seconds > 0:
+        for k in range(len(tracks) - 1):
+            kind, source, _ = ordered[k]
+            if (
+                kind == "route"
+                and ordered[k + 1][0] == "attraction"
+                and Path(source).name != tuning.INTRO_OUTPUT_FILENAME
+            ):
+                tracks[k]["fade_into_next_seconds"] = attraction_fade_seconds
 
     timeline_data = {"video_tracks": tracks}
 

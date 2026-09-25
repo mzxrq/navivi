@@ -11,6 +11,8 @@ import json
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from services import tuning
+from services.localization.cues import clean_text
 from services.logger.progress import tracker
 
 from .helpers import (
@@ -22,16 +24,55 @@ from .helpers import (
 )
 
 
-def _resolve_narration_script(waypoint: dict) -> Optional[str]:
-    """The waypoint editor writes narration as separate arriving/attraction
-    legs (see WaypointEditor.tsx); "script"/"narration"/"voiceover" are only
-    for older job_config.json files that predate that split."""
+def base_narration_script(waypoint: dict) -> Optional[str]:
+    """The narration the user wrote for a waypoint, timing cue tags included
+    (see localization/cues.py). The waypoint editor writes narration as
+    separate arriving/attraction legs (see WaypointEditor.tsx);
+    "script"/"narration"/"voiceover" are only for older job_config.json files
+    that predate that split."""
     arriving = (waypoint.get("arrivingNarration") or "").strip()
     attraction = (waypoint.get("attractionNarration") or waypoint.get("narration") or "").strip()
     script = " ".join(part for part in (arriving, attraction) if part) or (
         waypoint.get("script") or waypoint.get("voiceover")
     )
     return script.strip() if isinstance(script, str) and script.strip() else None
+
+
+def raw_narration_script(waypoint: dict) -> Optional[str]:
+    """The narration with its cue tags: the version narration_step stored
+    (attached in memory as `_cued_script`) when there is one, else the user's."""
+    return waypoint.get("_cued_script") or base_narration_script(waypoint)
+
+
+def waypoint_cue_key(waypoint: dict, pos: int) -> str:
+    """Key of a waypoint in the cue store (its stable id, else its position)."""
+    return str(waypoint.get("id") or f"wp{pos}")
+
+
+def apply_cued_scripts(waypoints: list, project_dir) -> int:
+    """Attaches each waypoint's stored cued script to the in-memory waypoint as
+    `_cued_script`. job_config.json itself is never touched. Returns how many."""
+    from .narration_step import CueStore
+
+    store = CueStore(project_dir)
+    attached = 0
+    for pos, wp in enumerate(waypoints):
+        if not isinstance(wp, dict):
+            continue
+        wp.pop("_cued_script", None)
+        base = base_narration_script(wp)
+        cued = store.cued_text(waypoint_cue_key(wp, pos), base) if base else None
+        if cued:
+            wp["_cued_script"] = cued
+            attached += 1
+    return attached
+
+
+def _resolve_narration_script(waypoint: dict) -> Optional[str]:
+    """The spoken text of a waypoint's narration: its script without cue tags.
+    TTS and subtitles both go through this, so a tag is never read aloud or
+    burned onto the video."""
+    return clean_text(raw_narration_script(waypoint)).strip() or None
 
 
 def _resolve_attraction_narration_script(waypoint: dict) -> Optional[str]:
@@ -43,7 +84,7 @@ def _resolve_attraction_narration_script(waypoint: dict) -> Optional[str]:
     wrong even when attractionNarration IS set, and especially wrong when
     it's blank — the combined script is then 100% arrival narration, with
     nothing about the attraction at all."""
-    text = (waypoint.get("attractionNarration") or waypoint.get("narration") or "").strip()
+    text = clean_text(waypoint.get("attractionNarration") or waypoint.get("narration") or "").strip()
     return text or None
 
 
@@ -104,7 +145,7 @@ async def generate_overview_audio(
     field: no audio was ever generated for it, so the overview clip always
     played silent regardless of what was typed there. Returns None (same
     as a waypoint with no script) when the field is empty/missing."""
-    script = (project_config.get("overview_narration") or "").strip()
+    script = clean_text(project_config.get("overview_narration") or "").strip()
     if not script:
         return None
 
@@ -228,6 +269,7 @@ def generate_audio(
             project_config = json.load(f)
 
         waypoints = project_config.get("waypoints", [])
+        apply_cued_scripts(waypoints, config_path.parent)
 
         from services.tts.ttsengine import AudioProcessor, IrodoriTTSClient
 
@@ -252,6 +294,12 @@ def generate_audio(
         async def _maybe_restart_tts_server():
             nonlocal tts_call_count
             tts_call_count += 1
+            # Low RAM: restart the server right now instead of waiting for
+            # the every-4-calls schedule below.
+            if (tuning.free_ram_gb() or float("inf")) < tuning.MIN_FREE_RAM_GB:
+                logger.info("Low RAM - restarting TTS server to clear it...")
+                client.stop_server()
+                await asyncio.sleep(2.0)
             if tts_call_count > 1 and (tts_call_count - 1) % 4 == 0:
                 logger.info("Proactively restarting TTS server to clear RAM/VRAM...")
                 client.stop_server()

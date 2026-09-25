@@ -392,7 +392,8 @@ class VideoExporter:
 
     @staticmethod
     def _mux_track_for_concat(
-        ffmpeg_cmd: str, video_path: Path, audio_path: Optional[str], tmp_dir: Path, index: int
+        ffmpeg_cmd: str, video_path: Path, audio_path: Optional[str], tmp_dir: Path, index: int,
+        audio_offset: float = 0.0,
     ) -> Path:
         """Combines one timeline track's silent video with its own separate
         audio track (see timeline_step.build_timeline — video and audio are
@@ -424,6 +425,12 @@ class VideoExporter:
             "-map", "0:v:0", "-map", "1:a:0",
             "-c:v", "copy", "-c:a", "aac", "-ar", "44100", "-ac", "2",
         ]
+        # The narration starts `audio_offset` seconds into the clip (a leg's
+        # silent opening, see services/vdoprocessing/cliptiming.py), so the
+        # voice begins with the walk instead of at the first frame.
+        if has_audio and audio_offset > 0.01:
+            delay_ms = int(round(audio_offset * 1000))
+            cmd += ["-af", f"adelay={delay_ms}|{delay_ms}"]
         if not has_audio:
             cmd.append("-shortest")
         cmd.append(str(tmp_out))
@@ -436,6 +443,60 @@ class VideoExporter:
             )
             return video_path
         return tmp_out
+
+    @staticmethod
+    def _crossfade_pair(
+        ffmpeg_cmd: str, first: Path, second: Path, seconds: float, tmp_dir: Path, index: int
+    ) -> Optional[Path]:
+        """Joins two muxed segments with a crossfade of `seconds` (the first
+        one dissolves into the second) as ONE re-encoded segment, sized and
+        timed like the first. Used where a leg ends on its fullscreen arrival
+        photo and the destination's attraction video follows: instead of a
+        hard cut from a frozen photo, it dissolves into the video. Returns
+        None if it can't be done (the caller then cuts as before)."""
+        from services.tts.ttsengine import FFmpegManager
+
+        try:
+            first_len = FFmpegManager.get_media_duration(str(first))
+            second_len = FFmpegManager.get_media_duration(str(second))
+        except (RuntimeError, OSError) as exc:
+            logger.warning("crossfade: could not probe '%s'/'%s': %s", first, second, exc)
+            return None
+        cap = cv2.VideoCapture(str(first))
+        width, height = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+        cap.release()
+        # The dissolve runs on EXTRA frames: the first clip's last frame (its
+        # photo already at fullscreen) is held for `d` more seconds inside the
+        # dissolve only, so the fade starts the instant the photo is fullscreen
+        # and there is no visible freeze before it. Never longer than half the
+        # second clip.
+        d = min(float(seconds), second_len / 2.0)
+        if width <= 0 or height <= 0 or d < 0.1:
+            return None
+
+        norm = (
+            f"fps={fps:.3f},scale={width}:{height}:force_original_aspect_ratio=decrease,"
+            f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,setsar=1,format=yuv420p"
+        )
+        graph = (
+            f"[0:v]{norm},tpad=stop_mode=clone:stop_duration={d:.3f}[v0];[1:v]{norm}[v1];"
+            f"[v0][v1]xfade=transition=fade:duration={d:.3f}:offset={first_len:.3f}[v];"
+            f"[0:a]apad=pad_dur={d:.3f}[a0];[a0][1:a]acrossfade=d={d:.3f}[a]"
+        )
+        out = tmp_dir / f"seg_{index:04d}_fade.mp4"
+        cmd = [
+            ffmpeg_cmd, "-y", "-i", str(first), "-i", str(second),
+            "-filter_complex", graph, "-map", "[v]", "-map", "[a]",
+            "-c:v", "libx264", "-crf", "18", "-preset", "veryfast", "-pix_fmt", "yuv420p",
+            *tuning.ffmpeg_thread_args(),
+            "-c:a", "aac", "-ar", "44100", "-ac", "2", str(out),
+        ]
+        result = subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace")
+        if result.returncode != 0 or not out.exists():
+            logger.warning("crossfade failed, cutting instead: %s", result.stderr[-400:])
+            return None
+        return out
 
     @staticmethod
     def concat_from_timeline(
@@ -482,9 +543,30 @@ class VideoExporter:
             muxed_paths = [
                 VideoExporter._mux_track_for_concat(
                     ffmpeg_cmd, Path(track["file_path"]).resolve(), track.get("audio_path"), tmp_dir, i,
+                    audio_offset=float(track.get("audio_offset") or 0.0),
                 )
                 for i, track in enumerate(tracks)
             ]
+
+            # A track marked fade_into_next_seconds dissolves into the track
+            # after it (see timeline_step): the pair becomes one segment.
+            joined_paths: List[Path] = []
+            skip_next = False
+            for i, muxed in enumerate(muxed_paths):
+                if skip_next:
+                    skip_next = False
+                    continue
+                fade = float(tracks[i].get("fade_into_next_seconds") or 0.0)
+                if fade > 0 and i + 1 < len(muxed_paths):
+                    merged = VideoExporter._crossfade_pair(
+                        ffmpeg_cmd, muxed, muxed_paths[i + 1], fade, tmp_dir, i
+                    )
+                    if merged is not None:
+                        joined_paths.append(merged)
+                        skip_next = True
+                        continue
+                joined_paths.append(muxed)
+            muxed_paths = joined_paths
 
             concat_txt = output_dir / f"timeline_{uuid.uuid4().hex}.txt"
 

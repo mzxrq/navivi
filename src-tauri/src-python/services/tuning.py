@@ -10,9 +10,12 @@ settings (e.g. settings.mode_speeds_kmh) — these are only the fallback
 defaults.
 """
 
+import gc
 import json
+import logging
 import os
-from typing import Dict, List, Tuple
+import time
+from typing import Callable, Dict, List, Optional, Tuple
 
 # --- GPU stage cooldown ------------------------------------------------------
 # Pause inserted in pipeline.py between the ComfyUI/Wan2.2 attraction-video
@@ -40,6 +43,71 @@ def ffmpeg_thread_args() -> List[str]:
     """The -threads args every ffmpeg subprocess call site should splice
     into its argument list, right after the ffmpeg binary path."""
     return ["-threads", str(FFMPEG_THREADS)]
+
+# --- RAM guard -----------------------------------------------------------------
+# TTS, ComfyUI/Wan, Chromium (the map renderer) and Ollama each hold a lot of
+# RAM, and this pipeline runs them one after another in one long process. Before
+# each heavy stage/unit of work `ensure_free_ram` checks that enough memory is
+# actually free, frees what it can (gc, and any servers the caller can stop),
+# waits for it to come back, and stops the run with a clear message instead of
+# pushing the machine into swap or a hard shutdown. Every stage is checkpointed,
+# so re-running resumes where it stopped. A project can change the limit with
+# job_config.json's settings.min_free_ram_gb (0 turns the guard off).
+MIN_FREE_RAM_GB: float = 3.0
+RAM_WAIT_TIMEOUT_SECONDS: float = 180.0
+_RAM_POLL_SECONDS = 5.0
+
+_ram_logger = logging.getLogger("tuning.ram")
+
+
+def free_ram_gb() -> Optional[float]:
+    """Memory available to new work, in GB (None if it can't be read)."""
+    try:
+        import psutil
+
+        return psutil.virtual_memory().available / 2**30
+    except Exception:
+        return None
+
+
+def ensure_free_ram(
+    label: str,
+    min_free_gb: Optional[float] = None,
+    relief: Optional[Callable[[], None]] = None,
+    timeout: Optional[float] = None,
+) -> None:
+    """Returns once at least `min_free_gb` (default MIN_FREE_RAM_GB) is free.
+    If not: runs gc, calls `relief` once (stop a server, ...), and polls until
+    memory recovers. Raises MemoryError after `timeout` seconds."""
+    limit = MIN_FREE_RAM_GB if min_free_gb is None else float(min_free_gb)
+    if limit <= 0:
+        return
+    free = free_ram_gb()
+    if free is None or free >= limit:
+        return
+    _ram_logger.warning(
+        "Low RAM before %s: %.1f GB free, need %.1f GB - freeing memory.", label, free, limit
+    )
+    gc.collect()
+    if relief is not None:
+        try:
+            relief()
+        except Exception as exc:  # relief is best effort
+            _ram_logger.warning("RAM relief before %s failed: %s", label, exc)
+    deadline = time.monotonic() + (RAM_WAIT_TIMEOUT_SECONDS if timeout is None else timeout)
+    while True:
+        free = free_ram_gb()
+        if free is None or free >= limit:
+            _ram_logger.info("RAM recovered before %s: %.1f GB free.", label, free or 0.0)
+            return
+        if time.monotonic() >= deadline:
+            raise MemoryError(
+                f"Only {free:.1f} GB of RAM is free before {label} (needs {limit:.1f} GB). "
+                "Close other programs and run again - finished steps are kept and skipped."
+            )
+        time.sleep(_RAM_POLL_SECONDS)
+        gc.collect()
+
 
 # --- On-video text labels (Japanese) -----------------------------------------
 # services/ -> up to src-python/ -> assets/config/ — same bundled-relative-
@@ -499,14 +567,14 @@ POPUP_FREEZE_SECONDS_MAX = 3.0
 # photo has already been on screen, growing, for most of a second before
 # this hold begins, and the clip hard-cuts the instant the hold ends, so a
 # full 2-3s freeze on a still image just stalls the cut.
-RESIDENTIAL_ARRIVAL_POPUP_HOLD_SECONDS = 1.0
+RESIDENTIAL_ARRIVAL_POPUP_HOLD_SECONDS = 0.0
 # How long a residential leg holds on the plain arrived map (walker gone,
 # destination pin + HUD card showing the leg's own total distance/time)
 # BEFORE the at-arrival photo starts its pop-in -- without this the photo
 # began growing the instant the walker stopped moving, cutting straight
 # from "still walking" to "photo" with no beat to actually register having
 # arrived.
-RESIDENTIAL_ARRIVAL_FREEZE_SECONDS = 1.2
+RESIDENTIAL_ARRIVAL_FREEZE_SECONDS = 0.0
 # [NOTE] [Transition] Fullscreen photo transition plays as an ordered sequence: confirm (pin selected) -> scale (zoom into photo) -> blur -> fade_out; hold_ratio_of_freeze/min_hold_seconds/min_small_hold_seconds bound how long the fullscreen photo is held relative to its freeze duration before the next stage starts.
 FULLSCREEN_TRANSITION_DEFAULTS: Dict[str, float] = {
     "confirm_seconds": 0.4,

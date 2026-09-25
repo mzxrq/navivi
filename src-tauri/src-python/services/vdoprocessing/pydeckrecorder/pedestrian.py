@@ -30,6 +30,7 @@ import pydeck as pdk
 
 from services import tuning
 from services.logger.progress import tracker
+from services.vdoprocessing.cliptiming import timing_sidecar_path, write_audio_offset
 
 from .common import MAPBOX_API_KEY, logger
 from .geomath import cumulative_distance_km, haversine_km
@@ -944,6 +945,33 @@ def _hud_text(
     return banner, dist_text
 
 
+def _segment_plan(df_raw, leg_dist_km, landmarks, total_seconds):
+    """[(last raw point index, seconds)] for a leg cut at connected stop-bys, from
+    each landmark's own `walk_seconds` (the last piece gets what is left of
+    `total_seconds`). None when the leg has no cut, a landmark has no time, or
+    the stop-bys don't come in route order - the leg then walks at one speed."""
+    if not landmarks or total_seconds is None:
+        return None
+    stops = [
+        lm for lm in landmarks
+        if lm.get("connect_to_route") and lm.get("popup_image")
+        and lm.get("lat") is not None and lm.get("lon") is not None
+    ]
+    if not stops or any(lm.get("walk_seconds") is None for lm in stops):
+        return None
+    plan, prev_idx, used = [], 0, 0.0
+    for lm in stops:
+        sq = (df_raw["lat"] - lm["lat"]) ** 2 + (df_raw["lon"] - lm["lon"]) ** 2
+        idx = int(sq.idxmin())
+        if idx <= prev_idx:
+            return None
+        plan.append((idx, float(lm["walk_seconds"])))
+        prev_idx, used = idx, used + float(lm["walk_seconds"])
+    last = max(1.0, float(total_seconds) - used)
+    plan.append((len(df_raw) - 1, last))
+    return plan
+
+
 def render_residential_leg_pydeck(
     leg_latlon: List[Tuple[float, float]],
     dest_label: str,
@@ -970,6 +998,12 @@ def render_residential_leg_pydeck(
     dest_popup_freeze_seconds: Optional[float] = None,
     start_popup_image: Optional[str] = None,
     start_popup_freeze_seconds: Optional[float] = None,
+    dest_popup_narration_seconds: Optional[float] = None,
+    start_popup_narration_seconds: Optional[float] = None,
+    start_cue_seconds: Optional[float] = None,
+    arrival_photo_hold_seconds: Optional[float] = None,
+    arrival_wait_seconds: Optional[float] = None,
+    dest_image_display: str = "cover",
 ) -> List[str]:
     """Renders one leg as a straight-down, locked-camera video with a live
     turn-by-turn HUD (destination banner + time/distance card) -- the
@@ -1074,6 +1108,39 @@ def render_residential_leg_pydeck(
     leg, e.g. in an isolated test) -- route2vdo.py's real pipeline always
     passes this from the leg's own already-computed target duration.
 
+    `dest_popup_narration_seconds`/`start_popup_narration_seconds`: the
+    narration length of the destination/departure waypoint, passed by
+    route2vdo.py. Accepted for its callers but not used yet: the photo holds
+    do not wait for narration (leg_pieces.py pads the clip's tail instead).
+
+    `start_cue_seconds`: when the leg's narration carries a {start} cue, the
+    second of the narration at which the walker should START moving. The
+    narration then plays from the clip's first frame: if the opening (warm-up,
+    photos, intro zoom) ends before that, its last frame is held until the
+    cue; if it ends after, the narration is delayed by the difference. Left
+    None, the narration is delayed by the whole opening so the voice starts
+    with the walk. Either way the delay is written next to the clip as a
+    `.timing.json` (see services/vdoprocessing/cliptiming.py) for the
+    subtitle burn and final export to apply. Only legs that are not cut by a
+    connected stop-by get one.
+
+    `arrival_photo_hold_seconds`: how long the at-arrival photo stays fullscreen
+    AFTER it has finished growing. The clip's last frames are these, so the
+    caller can dissolve them into the attraction video that follows: the photo
+    grows to fullscreen first, then fades - the fade never overlaps the grow.
+    Defaults to tuning.RESIDENTIAL_ARRIVAL_POPUP_HOLD_SECONDS (0).
+
+    `arrival_wait_seconds`: the walker got to the destination before its
+    narration ended. It stays put on the arrived map for this long (the voice
+    finishing), and only then does the at-arrival photo start to grow. Left
+    None, the old fixed pauses apply (tuning.RESIDENTIAL_ARRIVAL_FREEZE_SECONDS,
+    `arrival_hold_seconds`).
+
+    `dest_image_display`: the destination waypoint's `image_display` from
+    job_config.json decides how its at-arrival photo ends: "pip" keeps a small
+    card (no fullscreen), anything else ("cover"/"fullscreen") grows to
+    fullscreen. Either way the clip then dissolves into the attraction video.
+
     Returns a LIST of output paths, not a single one -- normally just
     `[output_path]`, but a connected stop-by's fullscreen photo pause (see
     `landmarks` above) cuts the leg into an extra file right at its
@@ -1098,13 +1165,16 @@ def render_residential_leg_pydeck(
     leg_dist_km = cumulative_distance_km(df_raw["lon"].tolist(), df_raw["lat"].tolist())
     total_leg_km = leg_dist_km[-1]
 
+    segment_plan = _segment_plan(df_raw, leg_dist_km, landmarks, target_duration_seconds)
     leg_duration = (
         max(1.0, float(target_duration_seconds)) if target_duration_seconds is not None
         else max(3.0, (total_leg_km / travel_speed_kmh) * 3600.0)
     )
     total_frames = max(10, int(leg_duration * fps))
 
-    smooth_df = interpolate_route_data(df_raw, leg_duration, total_frames, total_leg_km, leg_dist_km)
+    smooth_df = interpolate_route_data(
+        df_raw, leg_duration, total_frames, total_leg_km, leg_dist_km, segment_plan=segment_plan
+    )
 
     step_km = [0.0] + [
         haversine_km(
@@ -1256,7 +1326,8 @@ def render_residential_leg_pydeck(
             topdown_transition_seconds, topdown_zoom_delta, dest_lat, dest_lon,
             total_leg_km, leg_dist_km, locked_lon, locked_lat, locked_zoom,
             dest_popup_image, dest_popup_freeze_seconds, landmarks,
-            start_popup_image, start_popup_freeze_seconds,
+            start_popup_image, start_popup_freeze_seconds, start_cue_seconds,
+            arrival_photo_hold_seconds, arrival_wait_seconds, dest_image_display,
         ))
 
     logger.info(f"Residential leg rendered ({mode}): {produced_paths}")
@@ -1268,6 +1339,7 @@ async def _play_stopby_photo_pause(
     view_lon, view_lat, zoom, output_size, trigger_index, pitch,
     pip_only: bool = False,
     advance_frame=None, frame_index: int = 0, frame_total: int = 0,
+    small_hold_seconds: Optional[float] = None,
 ):
     """Pauses the walk right where it is, for a connected stop-by (see
     `landmarks` docstring): its own photo pops in as a small leader-line
@@ -1461,8 +1533,10 @@ async def _play_stopby_photo_pause(
         )
         await write_frame(await page.screenshot())
 
+    # The small card stays up for `small_hold_seconds` when the walker got here
+    # early and is waiting for the narration to finish; only then does it grow.
     hold_png = await page.screenshot()
-    for _ in range(max(1, int(0.5 * fps))):
+    for _ in range(max(1, int((0.5 if small_hold_seconds is None else small_hold_seconds) * fps))):
         await write_frame(hold_png)
 
     if has_attraction and image_display == "pip":
@@ -1518,8 +1592,18 @@ async def _play_stopby_photo_pause(
     # was on screen at full size for a single frame before vanishing; a
     # viewer never actually got to register it fullscreen.
     grown_png = await page.screenshot()
-    for _ in range(max(1, int(freeze_sec * fps))):
+    dissolve = has_attraction and bool(stopby.get("dissolve_into_attraction"))
+    # With a dissolve into the attraction video the photo is not held: the clip
+    # ends as it reaches fullscreen and the dissolve starts right from there.
+    for _ in range(1 if dissolve else max(1, int(freeze_sec * fps))):
         await write_frame(grown_png)
+
+    if has_attraction and dissolve:
+        await page.evaluate(
+            "() => { const img = document.getElementById('stopby-preview'); if (img) img.remove(); }"
+        )
+        await cut_to_new_clip()
+        return
 
     if has_attraction:
         # Cinematic blur-out (same shape as popupsequence.py's own arrival
@@ -1598,7 +1682,8 @@ async def _record_leg(
     total_leg_km=None, leg_dist_km=None,
     locked_lon=None, locked_lat=None, locked_zoom=None,
     dest_popup_image=None, dest_popup_freeze_seconds=None, landmarks=None,
-    start_popup_image=None, start_popup_freeze_seconds=None,
+    start_popup_image=None, start_popup_freeze_seconds=None, start_cue_seconds=None,
+    arrival_photo_hold_seconds=None, arrival_wait_seconds=None, dest_image_display="cover",
 ):
     from pathlib import Path
 
@@ -1641,9 +1726,15 @@ async def _record_leg(
     proc_ref = {"proc": _first_proc, "temp_path": _first_temp, "real_path": output_path}
     produced_paths = [output_path]
 
+    # Frames written so far and the latest one: the opening's length (see
+    # start_cue_seconds) is measured from this, not predicted.
+    frame_state = {"count": 0, "last": None, "cuts": 0, "clip_start": 0}
+
     async def _write_frame(png_bytes: bytes) -> None:
         proc_ref["proc"].stdin.write(png_bytes)
         await proc_ref["proc"].stdin.drain()
+        frame_state["count"] += 1
+        frame_state["last"] = png_bytes
 
     async def _finalize_clip() -> None:
         """Closes the CURRENT clip's ffmpeg process and, only once it's
@@ -1679,10 +1770,14 @@ async def _record_leg(
         new_proc, new_temp = await _spawn_ffmpeg(new_path)
         proc_ref["proc"], proc_ref["temp_path"], proc_ref["real_path"] = new_proc, new_temp, new_path
         produced_paths.append(new_path)
+        frame_state["cuts"] += 1
+        frame_state["clip_start"] = frame_state["count"]
 
     async def _play_leg_photo_card(
         image_path, freeze_seconds_raw, card_key: str, marker_px=None, grow: bool = False,
         cut_after: bool = False, hold_seconds: Optional[float] = None,
+        quick: bool = False, small_hold_seconds: Optional[float] = None,
+        pip_end: bool = False,
     ) -> bool:
         """Shared by every one of this leg's photo beats -- the opening
         departure preview (`start_popup_image`, only ever set on the trip's
@@ -1734,6 +1829,11 @@ async def _record_leg(
         shutil.copy2(image_path, os.path.join(html_dir, img_name))
         img_url = f"http://127.0.0.1:{port}/{img_name}"
 
+        # quick (the at-arrival photo): a brief pop-in and an immediate grow
+        # to fullscreen - a transition, not a beat to sit on.
+        fade_in_s, small_hold_s, grow_s = (0.2, 0.0, 0.6) if quick else (0.3, 0.4, 0.7)
+        if small_hold_seconds is not None:
+            small_hold_s = float(small_hold_seconds)  # arrived early: the small card waits for the voice
         if hold_seconds is not None:
             # Explicit override -- NOT run through the POPUP_MIN_DISPLAY_
             # SECONDS floor below, since the only caller that passes it
@@ -1836,7 +1936,7 @@ async def _record_leg(
             )
             await _wait_for_paint(page)
 
-            fade_in_frames = max(1, int(0.3 * fps))
+            fade_in_frames = max(1, int(fade_in_s * fps))
             for i in range(fade_in_frames):
                 alpha = (i + 1) / fade_in_frames
                 await page.evaluate(
@@ -1851,10 +1951,17 @@ async def _record_leg(
                 await _write_frame(await page.screenshot())
 
             hold_small_png = await page.screenshot()
-            for _ in range(max(1, int(0.4 * fps))):
+            if pip_end:
+                # image_display "pip": the photo stays a small card - it never
+                # grows. It holds (at least a beat, longer if the walker is
+                # waiting for the voice) and the clip ends on it.
+                for _ in range(max(1, int(max(0.5, small_hold_s) * fps))):
+                    await _write_frame(hold_small_png)
+                return True
+            for _ in range(int(small_hold_s * fps) if quick else max(1, int(small_hold_s * fps))):
                 await _write_frame(hold_small_png)
 
-            grow_frames = max(1, int(0.7 * fps))
+            grow_frames = max(1, int(grow_s * fps))
             for i in range(grow_frames):
                 t = _ease_in_out_cubic((i + 1) / grow_frames)
                 left = card_box[0] + (full_box[0] - card_box[0]) * t
@@ -2487,6 +2594,21 @@ async def _record_leg(
                         return None
                     return png_bytes
 
+                # The opening is over: the walker starts moving on the next
+                # frame. Line the narration up with that moment (see
+                # start_cue_seconds) and record the delay beside the clip.
+                lead_in = frame_state["count"] / fps
+                cue = float(start_cue_seconds) if start_cue_seconds is not None else 0.0
+                if lead_in < cue and frame_state["last"] is not None:
+                    for _ in range(int(round((cue - lead_in) * fps))):
+                        await _write_frame(frame_state["last"])
+                write_audio_offset(output_path, max(0.0, lead_in - cue))
+                logger.info(
+                    "Leg opening %.2fs, {start} cue %s -> narration delayed %.2fs.",
+                    lead_in, f"{cue:.2f}s" if start_cue_seconds is not None else "none",
+                    max(0.0, lead_in - cue),
+                )
+
                 index = 0
                 while index < frame_total and not crashed:
                     png_bytes = await _draw_walker_frame(index)
@@ -2506,13 +2628,22 @@ async def _record_leg(
 
                     stopby_lm = stopby_triggers.get(index)
                     if stopby_lm is not None:
+                        # Arrived early: the walker stands here, with the small
+                        # photo card up, until this piece's narration is done;
+                        # then the card grows to fullscreen.
+                        # (the small photo card is up while it waits)
+                        wait_s = float(stopby_lm.get("wait_seconds") or 0.0)
+                        cuts_before = frame_state["cuts"]
                         await _play_stopby_photo_pause(
                             page, _write_frame, _cut_to_new_clip, fps, html_dir, port,
                             stopby_lm, locked_lon, locked_lat, locked_zoom, output_size, index,
                             pitch=follow_pitch,
+                            small_hold_seconds=wait_s if wait_s > 0 else None,
                         )
 
                         # Dynamic hop to the NEXT segment's framing for the new clip!
+                        # (the piece's opening - photo beat and hop - is measured
+                        # below, once the hop is done, as this piece's voice delay)
                         future_indices = [k for k in stopby_triggers.keys() if k > index]
                         if future_indices:
                             next_index = min(future_indices)
@@ -2561,6 +2692,11 @@ async def _record_leg(
                                     await _write_frame(png_bytes)
                                 
                                 locked_lon, locked_lat, locked_zoom = new_lon, new_lat, new_zoom
+
+                        if frame_state["cuts"] > cuts_before:
+                            piece_lead = (frame_state["count"] - frame_state["clip_start"]) / fps
+                            write_audio_offset(proc_ref["real_path"], piece_lead)
+                            logger.info("Piece opening %.2fs -> its narration delayed %.2fs.", piece_lead, piece_lead)
 
                     pip_lm = pip_triggers.get(index)
                     if pip_lm is not None:
@@ -2630,8 +2766,12 @@ async def _record_leg(
                     # from "still walking" to "photo popping in" the instant
                     # the walker stops, with no beat to register arrival.
                     if dest_popup_image:
-                        pre_popup_hold_frames = max(
-                            1, int(tuning.RESIDENTIAL_ARRIVAL_FREEZE_SECONDS * fps)
+                        # Arrived early (arrival_wait_seconds): no plain map freeze -
+                        # the small photo card pops up right away and waits for
+                        # the voice (see small_hold_seconds below).
+                        pre_popup_hold_frames = int(
+                            (0.0 if arrival_wait_seconds is not None
+                             else tuning.RESIDENTIAL_ARRIVAL_FREEZE_SECONDS) * fps
                         )
                         for _ in range(pre_popup_hold_frames):
                             await _write_frame(last_png_bytes)
@@ -2657,11 +2797,20 @@ async def _record_leg(
                         cut_on_arrival = await _play_leg_photo_card(
                             dest_popup_image, dest_popup_freeze_seconds,
                             "dest_arrival", marker_px=arrival_marker_px, grow=True,
-                            cut_after=True,
-                            hold_seconds=tuning.RESIDENTIAL_ARRIVAL_POPUP_HOLD_SECONDS,
+                            cut_after=True, quick=True,
+                            small_hold_seconds=arrival_wait_seconds,
+                            pip_end=str(dest_image_display or "cover").lower() == "pip",
+                            hold_seconds=(
+                                arrival_photo_hold_seconds
+                                if arrival_photo_hold_seconds is not None
+                                else tuning.RESIDENTIAL_ARRIVAL_POPUP_HOLD_SECONDS
+                            ),
                         )
                     else:
-                        hold_frames = max(0, int(arrival_hold_seconds * fps))
+                        hold_frames = max(0, int(
+                            (arrival_wait_seconds if arrival_wait_seconds is not None
+                             else arrival_hold_seconds) * fps
+                        ))
                         for _ in range(hold_frames):
                             await _write_frame(last_png_bytes)
 

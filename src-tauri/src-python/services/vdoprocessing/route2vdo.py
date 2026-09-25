@@ -341,6 +341,8 @@ class RouteAnimator:
         # pydeck further subdivide THIS leg's own share of that line.
         tracker.begin_substeps(len(res_sequence))
         for i, res_data in enumerate(res_sequence):
+            # Each leg launches its own Chromium; don't start one with no RAM left.
+            tuning.ensure_free_ram(f"residential leg {i + 1}", self.config.get("min_free_ram_gb"))
             lats, lons = res_data.get("lats"), res_data.get("lons")
             leg_latlon = list(zip(lats, lons)) if lats is not None and lons is not None else []
             if len(leg_latlon) < 2:
@@ -402,6 +404,13 @@ class RouteAnimator:
                     # clip instead of shrinking back to resume the walk in
                     # place -- see pedestrian.py's `landmarks` docstring.
                     "attraction_video": _attraction_video_for(m.get("waypoint_id"), m.get("label")),
+                    # The photo ends fullscreen and the attraction video
+                    # dissolves in from it (no hold, no blur-out here).
+                    "dissolve_into_attraction": bool(self.config.get("dissolve_into_attraction", False)),
+                    # Audio-first timing of the walk TOWARD this stop and how long
+                    # it waits here for the voice (render_step.py's piece plan).
+                    "walk_seconds": m.get("walk_seconds"),
+                    "wait_seconds": m.get("wait_seconds"),
                 }
                 for m in res_data.get("mid_markers", [])
                 if m.get("lat") is not None and m.get("lng", m.get("lon")) is not None
@@ -464,9 +473,19 @@ class RouteAnimator:
             # the LAST of a multi-image waypoint's photos; the overview
             # animation reads "popup_image" (the first) for this same
             # waypoint and is unaffected by this choice.
-            dest_popup_image = dest_popup.get("popup_image_last") or dest_popup.get("popup_image")
+            # The leg ends on this photo and the destination's attraction video
+            # follows it (timeline_step.py, with a dissolve): that video opens on
+            # the waypoint's FIRST image, so with attraction videos on, the
+            # leg shows the first image too and the two meet on the same frame.
+            # Without them, the last image, as before.
+            dest_popup_image = (
+                dest_popup.get("popup_image")
+                if self.config.get("enable_attraction_videos", True)
+                else dest_popup.get("popup_image_last")
+            ) or dest_popup.get("popup_image_last") or dest_popup.get("popup_image")
             dest_freeze_seconds = dest_popup.get("freeze_seconds")
             dest_narration_seconds = dest_popup.get("audio_duration")
+            dest_image_display = dest_popup.get("image_display") or "cover"
             if not dest_popup_image:
                 # A trailing synthetic end_point leg's own destination has
                 # no popup of its own (see render_step.py's
@@ -480,6 +499,7 @@ class RouteAnimator:
                 dest_popup_image = end_popup.get("popup_image_last") or end_popup.get("popup_image")
                 dest_freeze_seconds = end_popup.get("freeze_seconds")
                 dest_narration_seconds = end_popup.get("audio_duration")
+                dest_image_display = end_popup.get("image_display") or dest_image_display
 
             # Every leg's own departure waypoint's popup (see render_step.py's
             # "leg_start_popup" comment) -- shown at THIS leg's own opening,
@@ -556,6 +576,10 @@ class RouteAnimator:
                 start_popup_image=start_popup_image,
                 start_popup_freeze_seconds=start_freeze_seconds,
                 start_popup_narration_seconds=start_narration_seconds,
+                start_cue_seconds=res_data.get("start_cue_seconds"),
+                arrival_photo_hold_seconds=self.config.get("arrival_photo_hold_seconds"),
+                arrival_wait_seconds=res_data.get("arrival_wait_seconds"),
+                dest_image_display=dest_image_display,
             )
             _write_piece_plan(leg_paths)
             output_paths.extend(leg_paths)

@@ -25,3 +25,4 @@ python-dotenv
 diffusers
 transformers
 accelerate
+psutil

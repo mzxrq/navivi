@@ -19,6 +19,7 @@ from services.localization.localization import format_waypoint_label
 from services.config.job_config import JobConfigManager
 from services import tuning
 
+from .narration_step import MAX_EARLY_ARRIVAL_SECONDS, CueStore, leg_walk_plan
 from .helpers import (
     BASE_DIR,
     DEFAULT_FRONTEND_CONFIG,
@@ -179,6 +180,11 @@ def _render_checkpoint_key(
     hasher.update(
         json.dumps(cleaned_route.get("summary", {}), sort_keys=True, default=str).encode("utf-8")
     )
+    try:
+        with open(Path(project_config_path).parent / ".narration_cues.json", "rb") as f:
+            hasher.update(f.read())  # cue times decide each walk's length
+    except OSError:
+        pass
     hasher.update(json.dumps(audio_durations or [], default=str).encode("utf-8"))
     hasher.update(json.dumps(audio_pauses or [], default=str).encode("utf-8"))
     return hasher.hexdigest()
@@ -691,6 +697,7 @@ def render_route_video(
     # real-world speed instead of raw distance alone — otherwise a long,
     # fast ferry crossing gets allocated MORE screen time than a short
     # walking leg, the opposite of how it should feel.
+    cue_store = CueStore(config_path.parent)
     seg_modes = []
     for seg_i in range(max(0, len(wp_indices) - 1)):
         leg_mode = (
@@ -897,11 +904,66 @@ def render_route_video(
             # (start_pos) — a merged-in stop-by's own narration, if any,
             # is intentionally not played (no dedicated arrival moment for
             # it anymore, matching "just show its pin as we pass").
-            has_audio = start_pos < len(audio_durations) and audio_durations[start_pos] > 0
             distance_fallback = sum(
                 seg_durations[p] for p in range(start_pos, end_pos) if p < len(seg_durations)
             ) or 10.0
-            total_time = audio_durations[start_pos] if has_audio else distance_fallback
+            # Audio first: the narration that plays over each walk is its
+            # DESTINATION's (leg_pieces.py), so its length decides how long the
+            # walk is (see narration_step.leg_walk_plan): the walker may arrive
+            # early (waiting there, at most max_early_arrival_seconds) but never
+            # late. A leg cut at connected stop-bys is planned piece by piece,
+            # each toward its own stop.
+            use_cues = bool(settings.get("use_narration_cues", True))
+            max_wait = float(settings.get("max_early_arrival_seconds", MAX_EARLY_ARRIVAL_SECONDS))
+            stop_positions = [
+                p for p in range(start_pos + 1, min(end_pos, len(waypoints)))
+                if waypoints[p].get("connectToRoute") and waypoints[p].get("isStopBy")
+                and waypoints[p].get("popup_image")
+            ]
+            piece_targets = stop_positions + [end_pos]
+            piece_plans: dict = {}
+            piece_log = []
+            previous = start_pos
+            for target in piece_targets:
+                is_first_piece = previous == start_pos
+                natural = sum(
+                    seg_durations[p] for p in range(previous, target) if p < len(seg_durations)
+                ) or 10.0
+                audio_seconds = audio_durations[target] if target < len(audio_durations) else 0.0
+                piece_plans[target] = (
+                    leg_walk_plan(
+                        cue_store, waypoints[target], target, audio_seconds,
+                        natural_seconds=natural, use_cues=use_cues, max_wait_seconds=max_wait,
+                        ignore_start=not is_first_piece,
+                    )
+                    if target < len(waypoints) else None
+                )
+                if piece_plans[target] is not None:
+                    walk, _, wait = piece_plans[target]
+                    piece_log.append(
+                        f"-> {waypoints[target].get('label')}: walk {walk:.1f}s "
+                        f"({walk / natural:.2f}x natural pace), waits {wait:.1f}s"
+                    )
+                previous = target
+            if end_pos >= len(waypoints) or any(v is None for v in piece_plans.values()):
+                piece_plans = {}
+            if piece_plans:
+                total_time = sum(v[0] for v in piece_plans.values())
+                start_cue_seconds = piece_plans[piece_targets[0]][1]  # the first piece opens the leg
+                arrival_wait_seconds = piece_plans[end_pos][2]
+                marker_plans = {
+                    waypoints[p].get("id"): {"walk_seconds": piece_plans[p][0], "wait_seconds": piece_plans[p][2]}
+                    for p in stop_positions
+                }
+                logger.info(
+                    "Step 4: leg %d->%d follows its narration: %s.",
+                    start_pos + 1, end_pos + 1, "; ".join(piece_log),
+                )
+            else:
+                total_time = distance_fallback
+                start_cue_seconds = None
+                arrival_wait_seconds = None
+                marker_plans = {}
 
             lats_arr, lons_arr = leg_item["lats"], leg_item["lons"]
             seg_dist = (
@@ -972,6 +1034,10 @@ def render_route_video(
                     "mode": leg_mode,
                     "travel_duration": total_time,
                     "segment_duration": total_time,
+                    "start_cue_seconds": start_cue_seconds,
+                    # Arrived early: hold on the arrived map until the voice is
+                    # done, then the fullscreen photo transition.
+                    "arrival_wait_seconds": arrival_wait_seconds,
                     "real_duration_seconds": (
                         (
                             chunk["timestamp"].iloc[-1] - chunk["timestamp"].iloc[0]
@@ -990,6 +1056,12 @@ def render_route_video(
                     # position instead of a blind per-clip counter, which
                     # stop-by merging would otherwise throw out of sync.
                     "start_pos": start_pos,
+                    # Which waypoints this leg runs between: route2vdo writes
+                    # the destination into the leg's _pieces.json so
+                    # leg_pieces.py plays the DESTINATION's narration over the
+                    # walk toward it.
+                    "start_waypoint_id": leg_item.get("start_waypoint_id"),
+                    "end_waypoint_id": leg_item.get("end_waypoint_id"),
                     "wide_img_path": leg_item.get("wide_img_path"),
                     "wide_extent": leg_item.get("wide_extent"),
                     # "pos_in_chunk" (0-based index into this leg's own
@@ -997,7 +1069,11 @@ def render_route_video(
                     # is what waypoints.py actually needs to know when the
                     # traveler has passed a merged-in stop-by along the way.
                     "mid_markers": [
-                        {**m, "pos_in_chunk": m["row_idx"] - start_idx}
+                        {
+                            **m,
+                            "pos_in_chunk": m["row_idx"] - start_idx,
+                            **marker_plans.get(m.get("waypoint_id"), {}),
+                        }
                         for m in leg_item.get("mid_markers", [])
                     ],
                 }
@@ -1061,6 +1137,19 @@ def render_route_video(
         # the very action they asked for, exactly the bug this function's
         # own manifest checkpoint above already had to be fixed for.
         "checkpoint_enabled": is_full_pipeline_render,
+        "min_free_ram_gb": settings.get("min_free_ram_gb"),
+        "enable_attraction_videos": bool(settings.get("enable_attraction_videos", True)),
+        # The at-arrival photo grows to fullscreen and the clip ends right
+        # there - no hold. The dissolve into the attraction video that follows
+        # runs on extra frames added at export (VideoExporter._crossfade_pair),
+        # so it starts the moment the photo is fullscreen.
+        "arrival_photo_hold_seconds": 0.0,
+        # A connected stop-by's fullscreen photo does the same (no hold, no
+        # blur-out) when an attraction video follows it.
+        "dissolve_into_attraction": (
+            bool(settings.get("enable_attraction_videos", True))
+            and float(settings.get("attraction_fade_seconds", 0.8)) > 0
+        ),
         "use_3d_res": use_3d_res,
         "use_pydeck_pedestrian": use_pydeck_pedestrian,
         "use_pydeck_overview": bool(settings.get("use_pydeck_overview", False)),
