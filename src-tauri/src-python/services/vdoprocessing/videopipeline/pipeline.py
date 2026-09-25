@@ -164,6 +164,7 @@ def run_full_pipeline(
         audio_durations=audio_data.get("audio_durations"),
         audio_pauses=audio_data.get("audio_pauses"),
         overview_audio_duration=audio_data.get("overview_audio_duration"),
+        overview_cue_times=audio_data.get("overview_cue_times") if use_cues else None,
         force=force_regenerate,
     )
 

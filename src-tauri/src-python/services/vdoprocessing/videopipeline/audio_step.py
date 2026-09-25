@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from services import tuning
-from services.localization.cues import clean_text
+from services.localization.cues import clean_text, cue_times, strip_cues
 from services.logger.progress import tracker
 
 from .helpers import (
@@ -145,7 +145,8 @@ async def generate_overview_audio(
     field: no audio was ever generated for it, so the overview clip always
     played silent regardless of what was typed there. Returns None (same
     as a waypoint with no script) when the field is empty/missing."""
-    script = clean_text(project_config.get("overview_narration") or "").strip()
+    tagged = project_config.get("overview_narration") or ""
+    script = clean_text(tagged).strip()
     if not script:
         return None
 
@@ -160,11 +161,18 @@ async def generate_overview_audio(
         audio_path = await client.generate_speech(script, output_filename=audio_filename)
 
     analysis = processor.analyze_pauses(audio_path)
+    # Where each cue ({start}, {1}, {2}, {end}) falls in the real audio: the
+    # overview animation lands its stops on them (overview.py).
+    clean, cues = strip_cues(tagged)
+    cue_seconds = cue_times(
+        cues, clean, analysis.get("duration_seconds", 0.0), analysis.get("pauses", [])
+    ) if cues else {}
     return {
         "text": script,
         "audio_path": audio_path,
         "duration_seconds": analysis.get("duration_seconds", 0.0),
         "pauses": analysis.get("pauses", []),
+        "cue_times": cue_seconds,
     }
 
 
@@ -249,6 +257,7 @@ def generate_audio(
     waypoints = []
     overview_audio_path = None
     overview_audio_duration = 0.0
+    overview_cue_times: Dict[str, float] = {}
 
     try:
         config_path = Path(project_config_path)
@@ -306,7 +315,7 @@ def generate_audio(
                 await asyncio.sleep(2.0)
 
         async def _generate_all_speech():
-            nonlocal overview_audio_path, overview_audio_duration
+            nonlocal overview_audio_path, overview_audio_duration, overview_cue_times
 
             tracker.show("Generating overview narration audio")
             try:
@@ -319,6 +328,7 @@ def generate_audio(
             if overview_clip:
                 overview_audio_path = overview_clip["audio_path"]
                 overview_audio_duration = overview_clip["duration_seconds"]
+                overview_cue_times = overview_clip.get("cue_times") or {}
 
             for idx, wp in enumerate(waypoints):
                 label = wp.get("label", f"Waypoint {idx + 1}") if isinstance(wp, dict) else f"Waypoint {idx + 1}"
@@ -427,6 +437,7 @@ def generate_audio(
             "attraction_audio_durations": attraction_audio_durations,
             "overview_audio_path": overview_audio_path,
             "overview_audio_duration": overview_audio_duration,
+            "overview_cue_times": overview_cue_times,
         }
 
     except ImportError as e:
@@ -473,4 +484,5 @@ def generate_audio(
             "attraction_audio_durations": attraction_audio_durations,
             "overview_audio_path": overview_audio_path,
             "overview_audio_duration": overview_audio_duration,
+            "overview_cue_times": overview_cue_times,
         }

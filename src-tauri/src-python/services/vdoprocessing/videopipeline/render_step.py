@@ -270,6 +270,7 @@ def render_route_video(
     audio_durations: Optional[list[float]] = None,
     audio_pauses: Optional[list[Any]] = None,
     overview_audio_duration: Optional[float] = None,
+    overview_cue_times: Optional[dict] = None,
     force: bool = False,
     render_mode: str = "both",
     leg_index: Optional[int] = None,
@@ -1153,6 +1154,9 @@ def render_route_video(
         "use_3d_res": use_3d_res,
         "use_pydeck_pedestrian": use_pydeck_pedestrian,
         "use_pydeck_overview": bool(settings.get("use_pydeck_overview", False)),
+        # Where the narration's cues fall: the overview reaches each cued stop
+        # then (spatial_renderer/overview.py).
+        "overview_cue_seconds": dict(overview_cue_times or {}),
         "res_route_path": project_config_path,
         "leg_durations": seg_durations or None,
         "duration": settings.get("duration", overview_duration),

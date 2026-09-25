@@ -110,6 +110,9 @@ class VideoExporter:
         self.proc = self._open_ffmpeg_writer(self._temp_path)
         self._fallback_path = None
         self._fallback_writer = None
+        # Frames written so far: where in the clip (frames / fps seconds) the
+        # next one lands, for timing that has to meet the narration.
+        self.frames_written = 0
 
         if self.proc is None:
             self._fallback_path = tempfile.mktemp(suffix=".avi")
@@ -191,6 +194,7 @@ class VideoExporter:
         )
 
     def write(self, frame: np.ndarray) -> None:
+        self.frames_written += 1
         if self.proc is not None and self.proc.stdin:
             try:
                 self.proc.stdin.write(frame.tobytes())

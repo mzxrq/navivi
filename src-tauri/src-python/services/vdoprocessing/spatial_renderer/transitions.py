@@ -446,10 +446,7 @@ class _TransitionMixin:
             settings.get("enable_gl_ending_zoom", False),
             settings.get("overview_background"),
         )
-        is_fullscreen = (
-            self.enable_fullscreen_popups
-            and featured_popup["data"].get("image_display") == "fullscreen"
-        )
+        is_fullscreen = False  # the overview always shows the small pip card, whatever image_display says
         highlight_hold_sec = float(
             featured_popup["data"].get("freeze_seconds", self._DEFAULT_FREEZE_SECONDS)
         )

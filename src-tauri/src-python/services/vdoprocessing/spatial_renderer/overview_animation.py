@@ -15,6 +15,7 @@ from services.mapfetcher.mapgeometry import RouteGeometryProcessor
 from services.vdoprocessing.vdoexporter import VideoExporter
 from services.logger.progress import tracker
 from services import tuning
+from .base import logger
 
 # Animation-loop tuning constants (magic numbers pulled out of the loop body
 # below so their purpose has a name; not read from self.config/tuning).
@@ -487,6 +488,12 @@ class _OverviewAnimationMixin:
                 triggered_popup = pending_popups.pop(0)
                 triggered_popup["data"]["triggered"] = True
                 last_trigger_frame = current_frame
+                if triggered_popup.get("cue_frame") is not None:
+                    logger.info(
+                        "Overview stop #%s reached at %.1fs (its cue: %.1fs).",
+                        triggered_popup.get("order"), video.frames_written / fps,
+                        triggered_popup["cue_frame"] / fps,
+                    )
                 # border_color was set once in render_overview's setup,
                 # before any waypoint had "arrived" — for a plain numbered
                 # pin that made it permanently the pre-arrival default
@@ -640,10 +647,7 @@ class _OverviewAnimationMixin:
                 # traveler continues moving past each stop all the way to
                 # the end; a waypoint only freezes if it opts in with
                 # "freeze_frame": true in job_config.json.
-                is_fullscreen = (
-                    self.enable_fullscreen_popups
-                    and triggered_popup["data"].get("image_display") == "fullscreen"
-                )
+                is_fullscreen = False  # the overview always shows the small pip card, whatever image_display says
                 # A waypoint hosting unconnected stop-bys always freezes,
                 # whatever the project asked for: their cards are played
                 # over its held frame (see _play_stopby_batch), and
