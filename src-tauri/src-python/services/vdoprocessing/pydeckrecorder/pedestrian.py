@@ -1667,12 +1667,12 @@ async def _record_leg(
         opens a fresh one for `_write_frame` to target from here on -- see
         `_play_stopby_photo_pause`, the only caller. The continuation file
         keeps this leg's own "02_waypoint_{N:02d}_" filename prefix (just
-        with a "_cont{n}" suffix inserted) so render_step.py's audio mux
-        and timeline_step.py's own filename parse (both match on that
-        prefix, not the full name) still resolve it to this SAME leg's
-        narration/subtitle -- see route2vdo.py's own note on why both
-        files intentionally get that leg's full audio rather than a
-        proportional split."""
+        with a "_cont{n}" suffix inserted) so timeline_step.py's filename
+        parse still resolves it to this SAME leg's narration/subtitle --
+        see route2vdo.py's own note and timeline_step.py's
+        _split_leg_narration_for_pieces for how the leg's one narration
+        track gets split proportionally across however many pieces this
+        produces."""
         await _finalize_clip()
         stem, ext = os.path.splitext(output_path)
         new_path = f"{stem}_cont{len(produced_paths) + 1}{ext}"

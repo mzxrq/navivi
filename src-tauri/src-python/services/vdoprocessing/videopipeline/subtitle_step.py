@@ -3,6 +3,7 @@ TTS audio, and burns them permanently onto the finished video files
 (Step 5). services/cli/subtitle_commands.py is a thin wrapper over
 build_waypoint_subtitle()/build_subtitles() below."""
 
+import hashlib
 import re
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -12,6 +13,35 @@ from services.vdoprocessing.vdoexporter import VideoExporter
 
 from .audio_step import _resolve_attraction_narration_script, _resolve_narration_script
 from .helpers import logger, output_is_valid
+
+
+def _burn_checkpoint_key(video_path: str, sub_path: str) -> str:
+    """Fingerprint of everything that decides what a subtitle-burn produces:
+    the subtitle file's own content (hashed directly — it's tiny) plus the
+    source video's size+mtime (a cheap stand-in for its content; hashing a
+    multi-hundred-MB clip on every checkpoint check would be far too slow
+    to be worth it). Stored in a sidecar next to the burned output so the
+    next run can tell "the subtitle/video changed since this was burned"
+    apart from "nothing changed, safe to skip" — a bare
+    output-file-exists check can't tell those apart, which is exactly how
+    a re-narrated clip kept its OLD subtitle burned in across runs before
+    this existed."""
+    hasher = hashlib.sha256()
+    try:
+        with open(sub_path, "rb") as f:
+            hasher.update(f.read())
+    except OSError:
+        pass
+    try:
+        st = Path(video_path).stat()
+        hasher.update(f"{st.st_size}:{st.st_mtime_ns}".encode("utf-8"))
+    except OSError:
+        pass
+    return hasher.hexdigest()
+
+
+def _burn_hash_sidecar(subtitled_output: str) -> Path:
+    return Path(subtitled_output).with_suffix(Path(subtitled_output).suffix + ".burnhash")
 
 # Same convention render_step.py's own RESIDENTIAL_LEG_RE and
 # timeline_step.py's own mirrored regex use: a residential leg clip's
@@ -224,6 +254,7 @@ def burn_subtitles(
     force: bool = False,
     overview_subtitle_path: Optional[str] = None,
     attraction_subtitle_paths: Optional[list[str]] = None,
+    leg_narration_splits: Optional[dict[str, tuple[Optional[str], Optional[str]]]] = None,
 ) -> list[str]:
     """Step 5: Permanently burns SRT subtitles onto the finished video files.
 
@@ -237,6 +268,7 @@ def burn_subtitles(
     logger.info("Step 5: Burning subtitles into %d video(s).", len(video_paths))
 
     attraction_subtitle_paths = attraction_subtitle_paths or []
+    leg_narration_splits = leg_narration_splits or {}
     final_videos = []
 
     # [NOTE] [Subtitle] Every clip is matched to its subtitle by the index
@@ -259,7 +291,19 @@ def burn_subtitles(
 
         if leg_match:
             sub_idx = int(leg_match.group(1)) - 1
-            sub_path = subtitle_paths[sub_idx] if 0 <= sub_idx < len(subtitle_paths) else None
+            # A leg cut into multiple pieces (connectToRoute stop-by
+            # mid-leg pause) has each piece's own TARGET waypoint's
+            # subtitle precomputed by leg_pieces.compute_leg_narration_
+            # splits, keyed by this (possibly narration-padded) file's own
+            # stem — burning that piece's own target narration instead of
+            # the whole leg's departure subtitle on every piece is what
+            # lets a connected stop-by's own written narration actually
+            # show up as its own piece's subtitle.
+            split = leg_narration_splits.get(original_file.stem)
+            if split and split[1]:
+                sub_path = split[1]
+            else:
+                sub_path = subtitle_paths[sub_idx] if 0 <= sub_idx < len(subtitle_paths) else None
         elif attraction_match:
             sub_idx = int(attraction_match.group(1))
             sub_path = (
@@ -279,7 +323,30 @@ def burn_subtitles(
                 / f"{original_file.stem}_subtitled{original_file.suffix}"
             )
 
-            if not force and output_is_valid(subtitled_output):
+            # [NOTE] [Subtitle] output_is_valid alone (bare existence) used
+            # to be the whole checkpoint here — across the repeated runs a
+            # project naturally goes through while its narration/subtitles
+            # get regenerated, that let an already-burned clip from a
+            # PAST run keep getting reused even after its own source video
+            # or subtitle had since changed (e.g. narration text edited,
+            # or an earlier run's checkpoint bug produced a stale .srt).
+            # The burned video then visibly disagreed with the CURRENT
+            # subtitle file sitting right next to it on disk. A content
+            # hash (subtitle bytes + video size/mtime), stored in a small
+            # sidecar next to the burned output, catches that the same way
+            # render_step.py's own manifest checkpoint does for the whole
+            # render — comparing actual inputs, not just "does a file
+            # exist here."
+            checkpoint_key = _burn_checkpoint_key(video_path, sub_path)
+            sidecar_path = _burn_hash_sidecar(subtitled_output)
+            cached_key = None
+            if sidecar_path.exists():
+                try:
+                    cached_key = sidecar_path.read_text(encoding="utf-8").strip()
+                except OSError:
+                    cached_key = None
+            is_stale = cached_key != checkpoint_key
+            if not force and not is_stale and output_is_valid(subtitled_output):
                 logger.info(
                     "Step 5: [%d/%d] '%s' already subtitled — skipping burn.",
                     idx + 1,
@@ -288,6 +355,12 @@ def burn_subtitles(
                 )
                 final_videos.append(subtitled_output)
                 continue
+            if is_stale and Path(subtitled_output).exists():
+                logger.info(
+                    "Step 5: [%d/%d] '%s' was burned before its current video/"
+                    "subtitle — re-burning.",
+                    idx + 1, len(video_paths), original_file.name,
+                )
 
             tracker.show(
                 f"Burning subtitle {idx + 1}/{len(video_paths)}: {original_file.name}"
@@ -305,6 +378,10 @@ def burn_subtitles(
                     subtitle_file_path=sub_path,
                     output_video_path=subtitled_output,
                 )
+                try:
+                    sidecar_path.write_text(checkpoint_key, encoding="utf-8")
+                except OSError:
+                    pass
                 final_videos.append(result)
             except Exception as e:
                 logger.error(

@@ -213,10 +213,25 @@ export interface WaypointTimelineMarker {
 }
 
 export interface ManifestClip {
-  clip_id: string;
   file_path: string;
-  duration: number;
-  type: string;
+
+  // Written by the frontend's OWN pre-render manifest (compileTimelineManifest
+  // in services/fileSystem.ts) — a snapshot of the in-editor timeline state.
+  clip_id?: string;
+  duration?: number;
+  type?: string;
+
+  // Written by the PYTHON pipeline's timeline_step.build_timeline, which
+  // overwrites this same timeline.json after a full render completes.
+  // Video and audio are kept as separate files/tracks (never muxed) all
+  // the way through the pipeline specifically so this editor can display
+  // and edit them independently — file_path is always a SILENT video
+  // clip; audio_path is its own separate narration track, muxed onto the
+  // video only at final export (VideoExporter.concat_from_timeline).
+  order?: number;
+  clip_name?: string;
+  audio_path?: string | null;
+  subtitle_path?: string | null;
 }
 
 export type AspectRatioType = "16:9" | "9:16";

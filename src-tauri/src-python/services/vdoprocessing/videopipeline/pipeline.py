@@ -15,6 +15,7 @@ from .audio_step import generate_audio, stop_tts_server
 from .gps_step import process_gps
 from .helpers import logger, project_subtitle_dir, project_video_dir
 from .intro_step import render_intro_clip
+from .leg_pieces import compute_leg_narration_splits
 from .outro_step import render_outro_clip
 from .render_step import render_route_video
 from .subtitle_step import (
@@ -137,6 +138,20 @@ def run_full_pipeline(
         force=force_regenerate,
     )
 
+    # A connectToRoute stop-by's fullscreen photo-pause (see pydeckrecorder/
+    # pedestrian.py's `landmarks` docstring) can cut one leg's silent video
+    # into several "_contN" pieces, each one the walk TOWARD its own next
+    # stop. Resolved here (once, from Step 4's pre-burn video_paths) into
+    # each piece's own target narration — padding that piece's video first
+    # if its target's narration runs longer than the piece's own natural
+    # length — and reused by both Step 5's burn below (so the right
+    # subtitle gets burned onto each piece's pixels) and Step 6's
+    # build_timeline (so the right audio gets muxed at final export) — see
+    # leg_pieces.py. video_paths is replaced with the (possibly padded)
+    # result so every later step sees the final piece lengths.
+    video_paths, leg_narration_splits = compute_leg_narration_splits(
+        video_paths, audio_data.get("audio_paths"), subtitle_paths, waypoints, str(project_dir)
+    )
     all_videos = video_paths + attraction_videos
 
     # --- STEP 5 ---
@@ -147,6 +162,7 @@ def run_full_pipeline(
         force=force_regenerate,
         overview_subtitle_path=overview_subtitle_path,
         attraction_subtitle_paths=attraction_subtitle_paths,
+        leg_narration_splits=leg_narration_splits,
     )
 
     # --- STEP 5b ---
@@ -179,6 +195,7 @@ def run_full_pipeline(
         overview_subtitle_path=overview_subtitle_path,
         attraction_audio_paths=audio_data.get("attraction_audio_paths"),
         attraction_subtitle_paths=attraction_subtitle_paths,
+        leg_narration_splits=leg_narration_splits,
     )
     tracker.clear()
 

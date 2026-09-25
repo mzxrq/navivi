@@ -45,6 +45,7 @@ def build_timeline(
     overview_subtitle_path: Optional[str] = None,
     attraction_audio_paths: Optional[list[str]] = None,
     attraction_subtitle_paths: Optional[list[str]] = None,
+    leg_narration_splits: Optional[dict[str, tuple[Optional[str], Optional[str]]]] = None,
 ) -> str:
     """Builds timeline.json with clips ordered intro -> overview -> for each
     leg in travel order, that leg's departure waypoint's own attraction
@@ -71,6 +72,7 @@ def build_timeline(
     subtitle_paths = subtitle_paths or []
     attraction_audio_paths = attraction_audio_paths or []
     attraction_subtitle_paths = attraction_subtitle_paths or []
+    leg_narration_splits = leg_narration_splits or {}
     subtitles_dir = project_subtitle_dir(project_dir)
 
     num_route_videos = len(video_paths)
@@ -123,6 +125,15 @@ def build_timeline(
         idx = int(leg_match.group(1)) - 1
         if not (0 <= idx < len(audio_paths)):
             return None, None
+        # A leg cut into multiple pieces (connectToRoute stop-by mid-leg
+        # pause) has each piece's own TARGET waypoint's narration resolved
+        # by leg_pieces.compute_leg_narration_splits, keyed by that piece's
+        # own (possibly narration-padded) stem — source_name here already
+        # reflects that padding, since pipeline.py replaces video_paths
+        # with the padded result before this function ever sees it.
+        split = leg_narration_splits.get(Path(source_name).stem)
+        if split and split[0]:
+            return split
         audio_path = audio_paths[idx]
         subtitle_path = (
             subtitle_paths[idx]

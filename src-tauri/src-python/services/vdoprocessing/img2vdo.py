@@ -7,6 +7,7 @@ via VideoEditor, and audio synchronization.
 ----------------------------------------------------------------------------
 """
 
+import math
 import os
 import json
 import shutil
@@ -70,18 +71,12 @@ class AttractionVideoGenerator:
     # neither one is a surprise outlier.
     _MAX_GENERATED_CLIP_SECONDS: Final[float] = 5.0
 
-    # Caps how long _resolve_duration_fit will freeze-hold a clip's last
-    # frame to cover an undershoot. A short narration only a little longer
-    # than the clip is fine to pad; a clip that's, say, 20s short of its
-    # narration (routine here, since ComfyUI tops out around ~5s) would
-    # otherwise freeze on a static frame for 20 straight seconds — just as
-    # broken-looking as the slow-motion stretch this replaced, just in a
-    # different way. Past this cap, the clip is deliberately left short
-    # rather than forced to fit; see the warning _resolve_duration_fit logs
-    # when it happens — the fix is for the waypoint to gain another popup
-    # image (covering the rest of the narration with its own clip), not a
-    # bigger freeze.
-    _MAX_HOLD_SECONDS: Final[float] = 3.0
+    # No cap on how long _resolve_duration_fit will freeze-hold a clip's
+    # last frame to cover an undershoot — the attraction clip must stay on
+    # screen for the full narration rather than cutting away mid-sentence,
+    # even when that means a long static hold (ComfyUI tops out around
+    # ~5s, so narration routinely outlasts the generated motion by a lot).
+    _MAX_HOLD_SECONDS: Final[float] = math.inf
 
     # Multi-image waypoints (2+ popup images -> 2+ generated clips) are no
     # longer auto-combined here — combining is deferred until the frontend
@@ -224,14 +219,11 @@ class AttractionVideoGenerator:
     # per-frame drift into obvious, ugly wobble. Holding the last frame
     # keeps the actual generated motion at its native, correct speed and
     # only pads with a static frame, which is unnoticeable by comparison.
-    # Narration-based fitting (trim to match narration if too long, freeze-
-    # hold if too short) is disabled — clips are no longer sized against
-    # target_audio_duration at all. Instead, _resolve_duration_fit only ever
-    # hard-trims a clip down to _MAX_GENERATED_CLIP_SECONDS if it somehow
-    # runs longer than that (generation should already cap it there via
-    # per_clip_duration, but this is the backstop) — never holds/stretches,
-    # and never extends a short clip to "catch up" to the narration.
-    _DURATION_FIT_ENABLED: Final[bool] = False
+    # Narration-based fitting is enabled: a clip that overshoots is trimmed
+    # to target_audio_duration, and a clip that undershoots is held on its
+    # last frame for the full gap (no cap — see _MAX_HOLD_SECONDS above) so
+    # the attraction clip never cuts away before its narration finishes.
+    _DURATION_FIT_ENABLED: Final[bool] = True
 
     def _resolve_duration_fit(
         self,

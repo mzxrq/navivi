@@ -599,10 +599,31 @@ def render_route_video(
             )
 
             popup_img = wp.get("popup_image")
+            # This waypoint's own real narration TTS length (audio_step.py's
+            # audio_durations, 1:1 aligned with THIS SAME
+            # `enumerate(waypoints)`). Stashed on the waypoint dict ITSELF
+            # (mutated in place, not just into route_popups below) so it
+            # rides along for free wherever this exact dict object gets
+            # reused/copied downstream -- notably `res_waypoints = list(
+            # waypoints)` further down, whose entries mapfetcher.py's
+            # process_residential_sequence reads directly to build each
+            # residential leg's own mid_markers/landmarks, a completely
+            # separate code path from route_popups. Residential's
+            # fullscreen popup uses this to make sure its hold never cuts
+            # away before the narration muxed onto that same clip has
+            # actually finished playing -- "freeze_seconds" below is only
+            # ever a short user-set/capped fallback for when there's no
+            # narration at all. See pedestrian.py's `_min_hold_seconds`.
+            wp["_narration_audio_seconds"] = (
+                float(audio_durations[idx])
+                if idx < len(audio_durations) and audio_durations[idx]
+                else None
+            )
             route_popups[route_point_idx] = {
                 "freeze_seconds": min(
                     float(wp.get("freeze_seconds", 3.0)), tuning.POPUP_FREEZE_SECONDS_MAX
                 ),
+                "audio_duration": wp["_narration_audio_seconds"],
                 # A waypoint's own "popup_image" field can hold several
                 # photos (the map editor's multi-image field) -- the
                 # overview animation shows the FIRST one (its own long-

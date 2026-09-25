@@ -387,6 +387,13 @@ class RouteAnimator:
                     "popup_image": m.get("popup_image"),
                     "freeze_seconds": m.get("freeze_seconds"),
                     "image_display": m.get("image_display", "cover"),
+                    # This stop-by's own real narration length (see
+                    # mapfetcher.py's "narration_audio_seconds") -- lets
+                    # pedestrian.py hold its fullscreen photo-pause at least
+                    # this long instead of cutting away at the short fixed
+                    # freeze_seconds cap while the narration is still
+                    # playing underneath.
+                    "narration_audio_seconds": m.get("narration_audio_seconds"),
                     # Only set when this connected stop-by's waypoint
                     # already has a GENERATED attraction video on disk (the
                     # separate img2vdo.py/attraction_step.py pipeline stage
@@ -399,6 +406,49 @@ class RouteAnimator:
                 for m in res_data.get("mid_markers", [])
                 if m.get("lat") is not None and m.get("lng", m.get("lon")) is not None
             ]
+
+            # Every connectToRoute landmark in THIS leg, in the same order
+            # `landmarks` (and therefore pedestrian.py's own cut sequence)
+            # visits them -- each one cuts the leg into one more piece (see
+            # `landmarks` docstring above). Each piece is the WALK TOWARD
+            # its own next stop, so piece[k] (0-based) "targets" landmark[k]
+            # -- its own narration plays during that walk, and its own
+            # fullscreen pause (which follows immediately) holds until that
+            # narration finishes -- except the LAST piece, which has no
+            # landmark ahead of it and targets the leg's actual destination
+            # waypoint instead. Written out as a small sidecar JSON below so
+            # leg_pieces.py's narration split (done later, once audio_paths
+            # are available -- this method has no access to them) knows
+            # which waypoint's own narration belongs to which piece.
+            connected_landmark_ids = [
+                m.get("waypoint_id")
+                for m in res_data.get("mid_markers", [])
+                if m.get("connect_to_route")
+                and m.get("lat") is not None
+                and m.get("lng", m.get("lon")) is not None
+            ]
+            leg_destination_id = res_data.get("end_waypoint_id")
+
+            def _write_piece_plan(piece_paths) -> None:
+                plan = {
+                    "pieces": [
+                        {
+                            "file": Path(p).name,
+                            "target_waypoint_id": (
+                                connected_landmark_ids[idx]
+                                if idx < len(connected_landmark_ids)
+                                else leg_destination_id
+                            ),
+                        }
+                        for idx, p in enumerate(piece_paths)
+                    ]
+                }
+                plan_path = self.out_dir / f"02_waypoint_{leg_file_num:02d}_pieces.json"
+                try:
+                    with open(plan_path, "w", encoding="utf-8") as f:
+                        json.dump(plan, f, ensure_ascii=False)
+                except OSError:
+                    pass
 
             # render_step.py stashes the destination waypoint's own popup
             # data as the LAST entry of this leg's "popups" list (every
@@ -416,6 +466,7 @@ class RouteAnimator:
             # waypoint and is unaffected by this choice.
             dest_popup_image = dest_popup.get("popup_image_last") or dest_popup.get("popup_image")
             dest_freeze_seconds = dest_popup.get("freeze_seconds")
+            dest_narration_seconds = dest_popup.get("audio_duration")
             if not dest_popup_image:
                 # A trailing synthetic end_point leg's own destination has
                 # no popup of its own (see render_step.py's
@@ -428,6 +479,7 @@ class RouteAnimator:
                 end_popup = res_data.get("trip_end_popup") or {}
                 dest_popup_image = end_popup.get("popup_image_last") or end_popup.get("popup_image")
                 dest_freeze_seconds = end_popup.get("freeze_seconds")
+                dest_narration_seconds = end_popup.get("audio_duration")
 
             # Every leg's own departure waypoint's popup (see render_step.py's
             # "leg_start_popup" comment) -- shown at THIS leg's own opening,
@@ -436,6 +488,7 @@ class RouteAnimator:
             start_popup = res_data.get("leg_start_popup") or {}
             start_popup_image = start_popup.get("popup_image_last") or start_popup.get("popup_image")
             start_freeze_seconds = start_popup.get("freeze_seconds")
+            start_narration_seconds = start_popup.get("audio_duration")
 
             safe_suffix = (
                 "".join(c for c in str(dest_label) if c.isalnum() or c in (" ", "_", "-"))
@@ -468,6 +521,11 @@ class RouteAnimator:
                     "Residential leg %d already rendered (%d file(s)) — skipping.",
                     leg_file_num, len(existing_leg_files),
                 )
+                # Rewritten even on a checkpoint skip -- cheap (no ffmpeg),
+                # and keeps it in sync with job_config's CURRENT
+                # connectToRoute/landmark data even when the video itself
+                # wasn't re-rendered this run.
+                _write_piece_plan([str(p) for p in existing_leg_files])
                 output_paths.extend(str(p) for p in existing_leg_files)
                 continue
 
@@ -476,10 +534,13 @@ class RouteAnimator:
             # than one output file -- render_residential_leg_pydeck always
             # returns a LIST now, every entry sharing this same leg's own
             # "02_waypoint_{N:02d}_" filename prefix (just a "_cont{n}"
-            # suffix added per cut), so downstream (render_step.py's audio
-            # mux, timeline_step.py) still resolves each one back to this
-            # leg by filename and mux its FULL narration onto every file --
-            # not a proportional split, just the same audio under each.
+            # suffix added per cut), so downstream (timeline_step.py) still
+            # resolves each one back to this leg by filename -- and, when
+            # there's more than one piece, splits this leg's own narration/
+            # subtitle across them (see leg_pieces.py), each landmark's own
+            # piece opening on ITS OWN narration before continuing the
+            # leg's departure narration, instead of the same departure
+            # narration restarting on every piece.
             leg_paths = render_residential_leg_pydeck(
                 leg_latlon, dest_label, output_path, mode=leg_mode,
                 target_duration_seconds=target_duration,
@@ -491,9 +552,12 @@ class RouteAnimator:
                 follow_pitch=self.config.get("res_follow_pitch", 0.0),
                 dest_popup_image=dest_popup_image,
                 dest_popup_freeze_seconds=dest_freeze_seconds,
+                dest_popup_narration_seconds=dest_narration_seconds,
                 start_popup_image=start_popup_image,
                 start_popup_freeze_seconds=start_freeze_seconds,
+                start_popup_narration_seconds=start_narration_seconds,
             )
+            _write_piece_plan(leg_paths)
             output_paths.extend(leg_paths)
 
         return output_paths
