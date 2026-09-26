@@ -679,10 +679,13 @@ COMFYUI_VAE_NAME = "wan2.2_vae.safetensors"
 COMFYUI_WIDTH = 1280
 COMFYUI_HEIGHT = 704
 COMFYUI_FPS = 24
-# Turbo-model recommended settings (see the model card): 4 steps is enough
-# at CFG 1, euler/simple is a safe default sampler+scheduler pair.
+# Turbo-model recommended settings (see the model card): 4 steps, euler/simple.
+# CFG is 2.0, not the card's 1.0: at CFG 1 ComfyUI skips the negative prompt
+# entirely, so none of COMFYUI_NEGATIVE_PROMPT applied and Wan freely added
+# vehicles, people and hand-held props to scenery. Above 1 each step runs the
+# model twice (~+40s per segment).
 COMFYUI_STEPS = 4
-COMFYUI_CFG = 1.0
+COMFYUI_CFG = 2.0
 COMFYUI_SAMPLER = "euler"
 COMFYUI_SCHEDULER = "simple"
 COMFYUI_MODEL_SHIFT = 8.0
@@ -757,19 +760,19 @@ COMFYUI_NEGATIVE_PROMPT = (
 # waypoint with no preset at all.
 COMFYUI_CAMERA_PAN_PROMPTS: Dict[str, str] = {
     "panright": "very slow steady camera pan to the right, the scene stays exactly the same, "
-                "stable composition, realistic cinematic footage, no people, empty scenery, clear unobstructed view with nothing in the foreground",
+                "stable composition, realistic cinematic footage, no people, empty scenery, clear unobstructed view with nothing in the foreground, no vehicles, no cars, no props, nothing enters the frame",
     "panleft": "very slow steady camera pan to the left, the scene stays exactly the same, "
-               "stable composition, realistic cinematic footage, no people, empty scenery, clear unobstructed view with nothing in the foreground",
+               "stable composition, realistic cinematic footage, no people, empty scenery, clear unobstructed view with nothing in the foreground, no vehicles, no cars, no props, nothing enters the frame",
     "panup": "very slow steady camera tilt upwards, the scene stays exactly the same, "
-             "stable composition, realistic cinematic footage, no people, empty scenery, clear unobstructed view with nothing in the foreground",
+             "stable composition, realistic cinematic footage, no people, empty scenery, clear unobstructed view with nothing in the foreground, no vehicles, no cars, no props, nothing enters the frame",
     "pandown": "very slow steady camera tilt downwards, the scene stays exactly the same, "
-               "stable composition, realistic cinematic footage, no people, empty scenery, clear unobstructed view with nothing in the foreground",
+               "stable composition, realistic cinematic footage, no people, empty scenery, clear unobstructed view with nothing in the foreground, no vehicles, no cars, no props, nothing enters the frame",
     "zoomin": "very slow steady push-in towards the scene, the scene stays exactly the same, "
-              "stable composition, realistic cinematic footage, no people, empty scenery, clear unobstructed view with nothing in the foreground",
+              "stable composition, realistic cinematic footage, no people, empty scenery, clear unobstructed view with nothing in the foreground, no vehicles, no cars, no props, nothing enters the frame",
     "zoomout": "very slow steady pull-back from the scene, the scene stays exactly the same, "
-               "stable composition, realistic cinematic footage, no people, empty scenery, clear unobstructed view with nothing in the foreground",
+               "stable composition, realistic cinematic footage, no people, empty scenery, clear unobstructed view with nothing in the foreground, no vehicles, no cars, no props, nothing enters the frame",
     "none": "very slow steady camera movement, subtle natural ambient motion, "
-            "the scene stays exactly the same, realistic cinematic footage, no people, empty scenery, clear unobstructed view with nothing in the foreground",
+            "the scene stays exactly the same, realistic cinematic footage, no people, empty scenery, clear unobstructed view with nothing in the foreground, no vehicles, no cars, no props, nothing enters the frame",
 }
 COMFYUI_DEFAULT_MOTION_PROMPT = COMFYUI_CAMERA_PAN_PROMPTS["none"]
 # How long the bundled server can sit unused before idle_watchdog.py shuts
