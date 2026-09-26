@@ -62,7 +62,7 @@ export function WaypointEditor({
     metadata,
     settings,
   } = useWorkspace();
-  const { showToast, markedWaypointIds } = useUI();
+  const { showToast, markedWaypointIds, isRendering } = useUI();
   const isMarkedForRegen = markedWaypointIds?.includes(wpId);
 
   const wp = waypoints.find((w) => w.id === wpId);
@@ -210,7 +210,8 @@ export function WaypointEditor({
           isCollapsed ? "w-75 h-13" : "w-full max-w-5xl h-115 max-h-[50vh]"
         } overflow-hidden`}
       >
-        {isCollapsed ? (
+        {isRendering && <div className="absolute inset-0 z-[60] cursor-not-allowed bg-zinc-900/5 dark:bg-white/5" />}
+          {isCollapsed ? (
           <div
             className="cursor-pointer flex items-center justify-between gap-3 p-2.5 px-5 h-full w-full hover:bg-zinc-50 dark:hover:bg-navidark-700 transition-colors"
             onClick={() => setIsCollapsed(false)}

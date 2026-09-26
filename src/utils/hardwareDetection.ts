@@ -1,8 +1,3 @@
-/**
- * Hardware capability detector for Navivi video generation & timeline customization.
- * Evaluates whether the user's system meets requirements for heavy real-time timeline editing
- * or should be routed to low-spec map-based waypoint regeneration.
- */
 import { t } from "@lingui/core/macro";
 
 export interface SystemHardwareInfo {
@@ -101,8 +96,8 @@ export function detectHardwareSpec(
       (deviceMemoryGb ? deviceMemoryGb >= 32 : false));
 
   const details = isHighSpec
-    ? `High-spec system detected: ${gpuRenderer} (${logicalCores} CPU threads)`
-    : `Low-spec system detected: ${gpuRenderer} (Integrated graphics / no discrete GPU, ${logicalCores} CPU threads)`;
+    ? t`High-spec system detected: ${gpuRenderer} (${logicalCores} CPU threads)`
+    : t`Low-spec system detected: ${gpuRenderer} (Integrated graphics / no discrete GPU, ${logicalCores} CPU threads)`;
 
   return {
     isHighSpec,

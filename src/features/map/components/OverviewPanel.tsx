@@ -60,7 +60,7 @@ export function OverviewPanel() {
         (chunk) => {
           updateMetadata({ overview_narration: chunk });
         },
-        controller.signal,
+        controller.signal
       );
       setIsDirty(true);
       showToast(t`Overview script compiled!`, "success");

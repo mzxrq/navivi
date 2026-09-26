@@ -29,7 +29,8 @@ import {
   compileTimelineManifest,
 } from "../../../services/fileSystem";
 import { useUI } from "../../../hooks/useUI";
-import { t } from "@lingui/core/macro"; import { Trans } from "@lingui/react/macro";
+import { t } from "@lingui/core/macro";
+import { Trans } from "@lingui/react/macro";
 
 export interface ExportModalProps {
   isOpen: boolean;
@@ -92,8 +93,7 @@ const getBitratePresets = (): BitratePreset[] => [
   {
     id: "high",
     label: t`High Quality`,
-    description:
-      t`Maximum quality for archival and master presentation (50 Mbps 4K / 20 Mbps 1080p)`,
+    description: t`Maximum quality for archival and master presentation (50 Mbps 4K / 20 Mbps 1080p)`,
     rates: {
       "4k": 50000,
       "1080p": 20000,
@@ -103,8 +103,7 @@ const getBitratePresets = (): BitratePreset[] => [
   {
     id: "standard",
     label: t`Balanced / Standard`,
-    description:
-      t`Optimal balance between quality and file size for web & YouTube (25 Mbps 4K / 10 Mbps 1080p)`,
+    description: t`Optimal balance between quality and file size for web & YouTube (25 Mbps 4K / 10 Mbps 1080p)`,
     rates: {
       "4k": 25000,
       "1080p": 10000,
@@ -114,8 +113,7 @@ const getBitratePresets = (): BitratePreset[] => [
   {
     id: "draft",
     label: t`Fast`,
-    description:
-      t`Fastest export with compact file size for quick previews (12 Mbps 4K / 5 Mbps 1080p)`,
+    description: t`Fastest export with compact file size for quick previews (12 Mbps 4K / 5 Mbps 1080p)`,
     rates: {
       "4k": 12000,
       "1080p": 5000,
@@ -148,9 +146,11 @@ export function ExportModal({
 }: ExportModalProps) {
   const { showToast } = useUI();
 
-  const initialAspectRatio: AspectRatioType = "16:9";
+  const initialAspectRatio: AspectRatioType =
+    settings?.default_export_ratio || "16:9";
 
-  const initialResolution: ResolutionTier = "1080p";
+  const initialResolution: ResolutionTier =
+    settings?.default_export_resolution || "1080p";
 
   const initialFps = settings?.fps === 60 ? 60 : settings?.fps === 24 ? 24 : 30;
 
@@ -166,8 +166,8 @@ export function ExportModal({
   // Sync settings if modal opens afresh
   useEffect(() => {
     if (isOpen) {
-      setAspectRatio("16:9");
-      setResolutionTier("1080p");
+      setAspectRatio(settings?.default_export_ratio || "16:9");
+      setResolutionTier(settings?.default_export_resolution || "1080p");
 
       if (settings?.fps && [24, 30, 60].includes(settings.fps)) {
         setFps(settings.fps);
@@ -202,7 +202,8 @@ export function ExportModal({
 
   const activeBitratePreset = useMemo(
     () =>
-      getBitratePresets().find((b) => b.id === bitrateTier) || getBitratePresets()[1],
+      getBitratePresets().find((b) => b.id === bitrateTier) ||
+      getBitratePresets()[1],
     [bitrateTier],
   );
 
@@ -404,7 +405,10 @@ export function ExportModal({
                 <Trans>Export & Render Video</Trans>
               </h2>
               <p className="text-xs text-zinc-400">
-                <Trans>Configure aspect ratio, quality profiles, and compile timeline manifest</Trans>
+                <Trans>
+                  Configure aspect ratio, quality profiles, and compile timeline
+                  manifest
+                </Trans>
               </p>
             </div>
           </div>
@@ -425,13 +429,13 @@ export function ExportModal({
             <div className="flex items-center justify-between mb-2.5">
               <label className="text-xs font-bold uppercase tracking-wider text-zinc-300 flex items-center gap-1.5">
                 <Sliders className="w-3.5 h-3.5 text-navi" />
-                <span><Trans>Aspect Ratio & Platform Target</Trans></span>
+                <span>
+                  <Trans>Aspect Ratio & Platform Target</Trans>
+                </span>
               </label>
               {/* Live aspect ratio badge */}
               <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-navi/20 text-navi border border-navi/30 animate-pulse">
-                {aspectRatio === "16:9"
-                  ? t`16:9 Landscape`
-                  : t`9:16 Vertical`}
+                {aspectRatio === "16:9" ? t`16:9 Landscape` : t`9:16 Vertical`}
               </span>
             </div>
 
@@ -458,7 +462,7 @@ export function ExportModal({
                   <Trans>Desktop & YouTube</Trans>
                 </div>
                 <div className="text-xs text-zinc-400 mt-0.5">
-                  <Trans>Standard widescreen (1920ÁE080)</Trans>
+                  <Trans>Standard widescreen (1920x1080)</Trans>
                 </div>
               </button>
 
@@ -484,7 +488,7 @@ export function ExportModal({
                   <Trans>Shorts, Reels & TikTok</Trans>
                 </div>
                 <div className="text-xs text-zinc-400 mt-0.5">
-                  <Trans>Vertical portrait format (1080ÁE920)</Trans>
+                  <Trans>Vertical portrait format (1080x1920)</Trans>
                 </div>
               </button>
             </div>
@@ -596,11 +600,15 @@ export function ExportModal({
             <div className="flex items-center justify-between border-b border-zinc-800/80 pb-2">
               <div className="flex items-center gap-2 text-xs font-bold text-zinc-300 uppercase tracking-wide">
                 <HardDrive className="w-3.5 h-3.5 text-navi" />
-                <span><Trans>Export Summary</Trans></span>
+                <span>
+                  <Trans>Export Summary</Trans>
+                </span>
               </div>
               <div className="flex items-center gap-1 text-xs text-navi font-bold">
                 <CheckCircle className="w-3.5 h-3.5" />
-                <span><Trans>Ready to Compile</Trans></span>
+                <span>
+                  <Trans>Ready to Compile</Trans>
+                </span>
               </div>
             </div>
 
@@ -670,7 +678,9 @@ export function ExportModal({
             title="Download compiled timeline manifest JSON without starting video render"
           >
             <FileCode className="w-4 h-4 text-navi" />
-            <span><Trans>Export JSON Manifest Only</Trans></span>
+            <span>
+              <Trans>Export JSON Manifest Only</Trans>
+            </span>
           </button>
 
           <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
@@ -697,7 +707,9 @@ export function ExportModal({
               ) : (
                 <>
                   <Download className="w-4 h-4" />
-                  <span><Trans>Export Video</Trans></span>
+                  <span>
+                    <Trans>Export Video</Trans>
+                  </span>
                 </>
               )}
             </button>

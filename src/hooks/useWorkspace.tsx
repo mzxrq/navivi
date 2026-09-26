@@ -102,7 +102,7 @@ const getDefaultTimeline = (): TimelineData => ({
 });
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
-  const { editorMode } = useUI();
+  const { editorMode, isRendering } = useUI();
   const [isDirty, setIsDirtyState] = useState(false);
   const [isProjectLoading, setIsProjectLoading] = useState(false);
   const dirtyRevisionRef = useRef(0);
@@ -441,7 +441,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
       console.log(`Saved successfully to: ${result.projectDir}`);
       setProjectThumbnail(result.thumbnailPath || null);
-      addToRecents(result.projName, result.nvvPath, result.thumbnailPath);
+      addToRecents(result.projName, result.nvvPath || result.projectDir, result.thumbnailPath);
 
       return result.projectDir;
     } catch (error) {
@@ -553,6 +553,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+        if (isRendering) return;
       const activeEl = document.activeElement;
       const isTyping =
         activeEl?.tagName === "INPUT" ||
@@ -578,7 +579,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [editorMode, undoMap, redoMap, undoTimeline, redoTimeline]);
+  }, [editorMode, undoMap, redoMap, undoTimeline, redoTimeline, isRendering]);
 
   const autoLoadTimeline = async (projectDir: string) => {
     const manifest = await loadTimelineManifest(projectDir);

@@ -254,32 +254,66 @@ export function TimelineTrackHeaders({
 
                     {/* Track volume slider for Audio tracks */}
                     {isAudioTrack && (
-                      <div
-                        className="flex items-center gap-1 flex-1 min-w-0"
-                        title={`Track Volume: ${Math.round((track.volume ?? 1.0) * 100)}%`}
-                      >
-                        <input
-                          type="range"
-                          min="0"
-                          max="150"
-                          step="5"
-                          value={Math.round((track.volume ?? 1.0) * 100)}
-                          onChange={(e) => {
-                            const newVol = parseFloat(e.target.value) / 100;
-                            setTimeline({
-                              ...timeline,
-                              tracks: timeline.tracks.map((t) =>
-                                t.id === track.id
-                                  ? { ...t, volume: newVol }
-                                  : t,
-                              ),
-                            });
-                          }}
-                          className="w-full h-1 accent-[#36604C] dark:accent-[#93C9B2] bg-zinc-200 dark:bg-zinc-700 rounded cursor-pointer"
-                        />
-                        <span className="text-[8px] font-mono text-zinc-400 w-5 text-right shrink-0">
-                          {Math.round((track.volume ?? 1.0) * 100)}%
-                        </span>
+                      <div className="flex flex-col flex-1 gap-1">
+                        <div
+                          className="flex items-center gap-1 w-full"
+                          title={`Track Volume: ${Math.round((track.volume ?? 1.0) * 100)}%`}
+                        >
+                          <input
+                            type="range"
+                            min="0"
+                            max="150"
+                            step="5"
+                            value={Math.round((track.volume ?? 1.0) * 100)}
+                            onChange={(e) => {
+                              const newVol = parseFloat(e.target.value) / 100;
+                              setTimeline({
+                                ...timeline,
+                                tracks: timeline.tracks.map((t) =>
+                                  t.id === track.id
+                                    ? { ...t, volume: newVol }
+                                    : t,
+                                ),
+                              });
+                            }}
+                            className="w-full h-1 accent-[#36604C] dark:accent-[#93C9B2] bg-zinc-200 dark:bg-zinc-700 rounded cursor-pointer"
+                          />
+                          <span className="text-[8px] font-mono text-zinc-400 w-5 text-right shrink-0">
+                            {Math.round((track.volume ?? 1.0) * 100)}%
+                          </span>
+                        </div>
+                        {track.duckingEnabled && (
+                          <div
+                            className="flex items-center gap-1 w-full"
+                            title={`Ducking Attenuation: ${Math.round((track.duckingAmount ?? 0.25) * 100)}%`}
+                          >
+                            <input
+                              type="range"
+                              min="0"
+                              max="100"
+                              step="5"
+                              value={Math.round(
+                                (track.duckingAmount ?? 0.25) * 100,
+                              )}
+                              onChange={(e) => {
+                                const newDuck =
+                                  parseFloat(e.target.value) / 100;
+                                setTimeline({
+                                  ...timeline,
+                                  tracks: timeline.tracks.map((t) =>
+                                    t.id === track.id
+                                      ? { ...t, duckingAmount: newDuck }
+                                      : t,
+                                  ),
+                                });
+                              }}
+                              className="w-full h-1 accent-amber-500 bg-zinc-200 dark:bg-zinc-700 rounded cursor-pointer"
+                            />
+                            <span className="text-[8px] font-mono text-amber-500/70 w-5 text-right shrink-0">
+                              {Math.round((track.duckingAmount ?? 0.25) * 100)}%
+                            </span>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

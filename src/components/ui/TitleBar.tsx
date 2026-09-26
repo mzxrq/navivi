@@ -30,6 +30,7 @@ export function TitleBar() {
     setEditorMode,
     showToast,
     setShowAppSettings,
+    isRendering
   } = useUI();
 
   const {
@@ -185,8 +186,7 @@ export function TitleBar() {
         {/* --- LEFT: MENU & DOCUMENT ACTIONS --- */}
         <div className="flex items-center h-full shrink-0 px-2">
           <div className="relative h-full flex items-center" ref={menuRef}>
-            <button
-              onClick={() => setIsMenuOpen(!isMenuOpen)}
+            <button disabled={isRendering} onClick={() => setIsMenuOpen(!isMenuOpen)}
               className={`h-7 px-3 flex items-center justify-center rounded-lg font-medium transition-all ${isMenuOpen ? "bg-zinc-800 text-white dark:bg-white dark:text-zinc-900 shadow-md" : "text-zinc-600 dark:text-zinc-300 hover:bg-black/5 dark:hover:bg-white/10"}`}
             >
               <Menu className="w-4 h-4" />
@@ -420,8 +420,7 @@ export function TitleBar() {
           {/* Map / Timeline Toggle */}
           {currentView === "editor" && (
             <div className="flex bg-black/5 dark:bg-white/5 rounded-full p-0.5 border border-black/5 dark:border-white/5 shadow-inner mr-4">
-              <button
-                onClick={() => setEditorMode("map")}
+              <button disabled={isRendering} onClick={() => setEditorMode("map")}
                 className={`flex items-center gap-1.5 px-3 py-1 text-[11px] font-bold rounded-full transition-all ${
                   editorMode === "map"
                     ? "bg-white dark:bg-zinc-800 text-navi-600 dark:text-navi-400 shadow-sm"
@@ -432,8 +431,7 @@ export function TitleBar() {
                 <Map className="w-3.5 h-3.5" /> <Trans>Map</Trans>
               </button>
 
-              <button
-                onClick={() => setEditorMode("timeline")}
+              <button disabled={isRendering} onClick={() => setEditorMode("timeline")}
                 className={`flex items-center gap-1.5 px-3 py-1 text-[11px] font-bold rounded-full transition-all ${
                   editorMode === "timeline"
                     ? "bg-white dark:bg-zinc-800 text-navi-600 dark:text-navi-400 shadow-sm"

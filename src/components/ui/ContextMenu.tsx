@@ -1,3 +1,4 @@
+import { useUI } from "../../hooks/useUI";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 import { useEffect, useState } from "react";
@@ -53,6 +54,7 @@ export interface ContextMenuState {
 }
 
 export function ContextMenu() {
+  const { isRendering } = useUI();
   const [menu, setMenu] = useState<ContextMenuState | null>(null);
   const {
     timeline,

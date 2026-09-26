@@ -45,6 +45,9 @@ interface UIState {
   setMarkedWaypointIds: React.Dispatch<React.SetStateAction<string[]>>;
   generationSessionInfo: { activeLeg?: string; waypointId?: string; message?: string } | null;
   setGenerationSessionInfo: (info: { activeLeg?: string; waypointId?: string; message?: string } | null) => void;
+  // auto-director
+  autoDirectorData: any;
+  setAutoDirectorData: (data: any) => void;
 }
 
 // create context
@@ -69,6 +72,7 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({
     waypointId?: string;
     message?: string;
   } | null>(null);
+  const [autoDirectorData, setAutoDirectorData] = useState<any>(null);
 
   // han
   const clearNotifications = () => {
@@ -119,6 +123,8 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({
         setMarkedWaypointIds,
         generationSessionInfo,
         setGenerationSessionInfo,
+        autoDirectorData,
+        setAutoDirectorData,
       }}
     >
       {children}

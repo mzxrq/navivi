@@ -1,4 +1,4 @@
-import { useLingui } from "@lingui/react";
+﻿import { useLingui } from "@lingui/react";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 import { convertFileSrc } from "@tauri-apps/api/core";
@@ -456,6 +456,40 @@ export function AppSettings() {
                       </button>
                     ))}
                   </div>
+                </div>
+
+                <div className="space-y-3 pt-4 border-t border-zinc-100 dark:border-navidark-700">
+                  <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-widest flex items-center gap-1.5">
+                    <MapPin className="w-3.5 h-3.5" />{" "}
+                    <Trans>Map Features</Trans>
+                  </label>
+                  <label className="flex items-center gap-3 cursor-pointer group">
+                    <div className="relative flex items-center">
+                      <input
+                        type="checkbox"
+                        className="peer sr-only"
+                        checked={settings.show_route_heatmap || false}
+                        onChange={(e) => {
+                          updateSettings({
+                            show_route_heatmap: e.target.checked,
+                          });
+                          setIsDirty(true);
+                        }}
+                      />
+                      <div className="w-8 h-4.5 bg-zinc-300 dark:bg-zinc-700 rounded-full peer-checked:bg-navi transition-colors duration-200" />
+                      <div className="absolute left-0.5 top-0.5 w-3.5 h-3.5 bg-white rounded-full shadow-sm peer-checked:translate-x-3.5 transition-transform duration-200" />
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 group-hover:text-navi transition-colors">
+                        <Trans>Show Route Elevation Heatmap</Trans>
+                      </span>
+                      <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                        <Trans>
+                          Color GPX routes dynamically based on steepness
+                        </Trans>
+                      </span>
+                    </div>
+                  </label>
                 </div>
               </div>
             )}

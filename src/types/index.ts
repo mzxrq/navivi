@@ -63,6 +63,9 @@ export interface ProjectSettings {
   auto_save_interval: number;
   skip_rich_media?: boolean;
   default_route_mode?: RouteMode;
+  default_export_resolution?: "4k" | "1080p" | "720p";
+  default_export_ratio?: "16:9" | "9:16";
+  default_ducking_level?: number;
   subtitle_font?: string; // either uses Calibri or some nice looking font as default
   subtitle_font_size?: number; // could be at least size 30
   subtitle_color?: string; // This uses ASS color format, &HAABBGGRR -- alpha,  blue-green-red
@@ -75,6 +78,7 @@ export interface ProjectSettings {
   ai_model?: string;
   quick_export?: boolean;
   hardware_spec_override?: "auto" | "high" | "low";
+  show_render_terminal?: boolean;
   marked_regeneration_waypoints?: string[];
 }
 

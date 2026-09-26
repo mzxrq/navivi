@@ -88,7 +88,7 @@ export function MediaPool() {
       cancelled = true;
     };
   }, [importedAssets.length]);
-  // ✨ TRUE DISK SCANNER
+
   useEffect(() => {
     const buildAssets = async () => {
       if (!metadata?.directory_path) return;
@@ -174,7 +174,7 @@ export function MediaPool() {
         multiple: true,
         filters: [
           {
-            name: "Media",
+            name: t`Media`,
             extensions: [
               "mp4",
               "mov",
@@ -350,7 +350,15 @@ export function MediaPool() {
                 : "text-zinc-500 hover:text-zinc-700 dark:text-navidark-125 dark:hover:text-white"
             }`}
           >
-            {type}
+            {type === "all"
+              ? t`all`
+              : type === "video"
+                ? t`video`
+                : type === "audio"
+                  ? t`audio`
+                  : type === "image"
+                    ? t`image`
+                    : t`text`}
           </button>
         ))}
       </div>

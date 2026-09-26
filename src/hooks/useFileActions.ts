@@ -8,7 +8,7 @@ import { t } from "@lingui/core/macro";
 
 export function useFileActions() {
   const { setRoutePoints, waypoints, setWaypoints, setIsDirty } = useWorkspace();
-  const { showToast } = useUI();
+  const { showToast, setAutoDirectorData } = useUI();
 
   const handleDroppedFiles = async (paths: string[]) => {
     try {
@@ -53,6 +53,10 @@ export function useFileActions() {
           }
         } else if (path.toLowerCase().endsWith(".gpx")) {
           await importRouteFile(path);
+          return;
+        } else if (path.toLowerCase().endsWith(".txt") || path.toLowerCase().endsWith(".md")) {
+          const fileContent = await readTextFile(path);
+          setAutoDirectorData({ state: "processing", content: fileContent });
           return;
         }
       }
@@ -104,11 +108,17 @@ export function useFileActions() {
     try {
       const selectedPath = filePath || await open({
         multiple: false,
-        filters: [{ name: t`GPS Files`, extensions: ["json", "gpx", "fit", "tcx", "kml"] }],
+        filters: [{ name: t`GPS/Text Files`, extensions: ["json", "gpx", "fit", "tcx", "kml", "txt", "md"] }],
       });
 
       if (typeof selectedPath !== "string") return;
       
+      if (selectedPath.toLowerCase().endsWith(".txt") || selectedPath.toLowerCase().endsWith(".md")) {
+        const fileContent = await readTextFile(selectedPath);
+        setAutoDirectorData({ state: "processing", content: fileContent });
+        return;
+      }
+
       let fileContent = "";
 
       if (selectedPath.toLowerCase().endsWith(".gpx")) {

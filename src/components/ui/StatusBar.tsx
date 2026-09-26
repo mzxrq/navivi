@@ -188,7 +188,7 @@ export function StatusBar() {
   };
 
   return (
-    <div className="h-7 bg-white dark:bg-navidark-900 border-t border-zinc-200 dark:border-navidark-400 flex items-center justify-between px-3 text-[10px] font-medium text-zinc-500 z-900 select-none relative">
+    <div className="h-7 bg-white dark:bg-navidark-900 border-t border-zinc-200 dark:border-navidark-400 flex items-center justify-between px-3 text-[10px] font-medium text-zinc-500 z-9999 select-none relative">
       {/* --- LEFT: MODE-SPECIFIC METRICS --- */}
       <div className="flex items-center gap-3">
         {editorMode === "map" ? (

@@ -127,7 +127,8 @@ export function Sidebar() {
       ref={sidebarRef}
       className="pt-10 w-90 shrink-0 bg-white dark:bg-[#09090b] border-r border-zinc-200 dark:border-white/5 flex flex-col h-full select-none z-100 relative shadow-2xl transition-colors"
     >
-      <div className="sticky top-0 z-30 bg-white/80 dark:bg-[#09090b]/80 backdrop-blur-xl border-b border-zinc-100 dark:border-white/5 p-4 shrink-0 flex flex-col gap-4">
+      {isRendering && <div className="absolute inset-0 z-[60] cursor-not-allowed" />}
+        <div className="sticky top-0 z-30 bg-white/80 dark:bg-[#09090b]/80 backdrop-blur-xl border-b border-zinc-100 dark:border-white/5 p-4 shrink-0 flex flex-col gap-4">
         <LocationSearch />
         <OverviewPanel />
       </div>

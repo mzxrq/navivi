@@ -18,7 +18,9 @@ import {
   Maximize,
   RefreshCw,
   Download,
+  Music,
 } from "../../../../components/ui/icons";
+import { open } from "@tauri-apps/plugin-dialog";
 import { ClipData, TimelineData } from "../../../../types/index";
 import { useWorkspace } from "../../../../hooks/useWorkspace";
 import { useUI } from "../../../../hooks/useUI";
@@ -162,6 +164,50 @@ export function TimelineToolbar({
           title={t`Add Custom Text`}
         >
           <Type className="w-4 h-4" />
+        </button>
+        
+        <button
+          onClick={async () => {
+            const selected = await open({
+              multiple: false,
+              filters: [
+                {
+                  name: "Audio",
+                  extensions: ["mp3", "wav", "ogg"],
+                },
+              ],
+            });
+            if (selected && typeof selected === "string") {
+              const filename = selected.split(/[/\\]/).pop() || "Audio";
+              const audioTrack = sortedTracks.find((t) => t.id === "track-audio-2") || sortedTracks.find((t) => t.type === "audio");
+              if (!audioTrack) {
+                showToast(t`No audio track found`, "error");
+                return;
+              }
+              const newClip: ClipData = {
+                id: crypto.randomUUID(),
+                trackId: audioTrack.id,
+                type: "audio",
+                label: filename,
+                source: selected,
+                startTime: currentTime,
+                duration: 10, // Default duration, will ideally be updated after loading
+                volume: 1.0,
+                fadeIn: 1.0,
+                fadeOut: 1.0,
+                ducking: true, // Background music should duck during voiceovers
+              };
+              setTimeline({
+                ...timeline,
+                clips: [...timeline.clips, newClip],
+              });
+              showToast(t`Background music added to A2: Music track`, "success");
+            }
+          }}
+          className="p-1.5 rounded transition-colors text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
+          title={t`Add Background Music`}
+        >
+          <Music className="w-4 h-4" />
         </button>
 
         <div className="w-px h-4 bg-zinc-300 dark:bg-navidark-400 mx-1" />

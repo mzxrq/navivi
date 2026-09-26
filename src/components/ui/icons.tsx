@@ -117,6 +117,7 @@ export {
   Box,
   SwitchCamera,
   Lightbulb,
+  Music,
 } from "lucide-react";
 export {
   ArrowLeft,

@@ -44,7 +44,7 @@ export const saveProjectData = async (
     archivePath = await join(defaultSaveDir, `${projName}.${fileSystem.extensions.project}`);
   }
 
-  if (!archivePath || asDuplicate) {
+  if (asDuplicate) {
     const defaultSaveDir = await join(docsPath, fileSystem.rootFolder, fileSystem.projectsFolder);
     if (!(await exists(defaultSaveDir))) {
       await mkdir(defaultSaveDir, { recursive: true });
@@ -57,6 +57,10 @@ export const saveProjectData = async (
     archivePath = res;
     // Update name based on file name chosen
     projName = await basename(archivePath, `.${fileSystem.extensions.project}`);
+  } else if (!archivePath && !metadata.directory_path) {
+    // If it's a completely new project and they just hit Save, let's auto-generate a workspace
+    // without forcing a .nvv prompt, OR auto-save the .nvv silently.
+    // The safest is to just leave archivePath empty and let it be a workspace-only project!
   }
 
   // Workspaces directory (where the files are actually extracted and worked on)
@@ -286,7 +290,9 @@ export const saveProjectData = async (
   await writeTextFile(routeCachePath, JSON.stringify(cleanCache));
 
   // Zip the workspace into the single .nvv archive file
-  await invoke("zip_project", { sourceDir: projectDir, destFile: archivePath });
+  if (archivePath) {
+    await invoke("zip_project", { sourceDir: projectDir, destFile: archivePath });
+  }
 
   return { projectDir, projId, projName, nvvPath: archivePath, thumbnailPath };
 };
@@ -558,7 +564,7 @@ export async function toAbsoluteProjectPath(filePath: string | undefined, projec
     if (await exists(filePath)) {
       return filePath;
     }
-  } catch {}
+  } catch { }
 
   const assetsIdx = normFile.indexOf("/assets/");
   if (assetsIdx !== -1) {
@@ -580,7 +586,7 @@ export function compileTimelineManifest(
     if (!p) return "";
     return projectDir ? toRelativeProjectPath(p, projectDir) : p;
   };
-  
+
   // find master audio track
   const audioTrack = timeline.tracks.find((t) => t.type === "audio");
   const audioClip = audioTrack

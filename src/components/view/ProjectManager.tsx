@@ -1,8 +1,7 @@
 import { useState, useEffect, MouseEvent } from "react";
 import { createPortal } from "react-dom";
-import { open } from "@tauri-apps/plugin-dialog";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
-import { readTextFile, writeTextFile, readDir } from "@tauri-apps/plugin-fs";
+import { readTextFile, readDir } from "@tauri-apps/plugin-fs";
 import { join, dirname } from "@tauri-apps/api/path";
 import { useUI } from "../../hooks/useUI";
 import { useWorkspace } from "../../hooks/useWorkspace";
@@ -18,14 +17,14 @@ import {
   Trash2,
   Copy,
   Edit3,
-  Settings2,
   AlertTriangle,
   Film,
 } from "../ui/icons";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
+import { ProjectSettingsModal } from "./ProjectSettingsModal";
 
-type ModalActionType = "rename" | "duplicate" | "remove" | null;
+type ModalActionType = "rename" | "duplicate" | "remove" | "settings" | null;
 
 export function ProjectManager() {
   const { setCurrentView, showToast } = useUI();
@@ -209,8 +208,7 @@ export function ProjectManager() {
             onOpen: () => handleOpenProject(project.path),
             onRename: () => openModal("rename", project),
             onDuplicate: () => openModal("duplicate", project),
-            onSettings: () =>
-              showToast(t`To change settings, open the project first`, "info"),
+            onSettings: () => openModal("settings", project),
             onQuickRender: () => handleQuickRender(project),
             onReveal: async () => {
               try {
@@ -231,7 +229,7 @@ export function ProjectManager() {
   return (
     <>
       {isProjectLoading && (
-        <div className="fixed inset-0 z-[9999] bg-white/60 dark:bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center animate-in fade-in duration-300">
+        <div className="fixed inset-0 z-9999 bg-white/60 dark:bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center animate-in fade-in duration-300">
           <div className="w-16 h-16 border-4 border-navi/30 border-t-navi rounded-full animate-spin"></div>
           <p className="mt-4 text-sm font-bold text-navi animate-pulse">
             Reading Project File...
@@ -655,86 +653,94 @@ export function ProjectManager() {
         )}
 
         {/* SLEEK ACTION MODALS */}
-        {modalState.type &&
-          createPortal(
-            <div className="fixed inset-0 z-99999 bg-zinc-950/40 backdrop-blur-[2px] flex items-center justify-center p-4 animate-in fade-in duration-200">
-              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200">
-                <div className="p-5">
-                  <h3 className="text-base font-bold text-zinc-900 dark:text-white mb-2 flex items-center gap-2">
-                    {modalState.type === "remove" && (
-                      <>
-                        <AlertTriangle className="w-4 h-4 text-red-500" />{" "}
-                        <Trans>Remove Project</Trans>
-                      </>
-                    )}
-                    {modalState.type === "rename" && (
-                      <>
-                        <Edit3 className="w-4 h-4 text-navi-500" />{" "}
-                        <Trans>Rename Project</Trans>
-                      </>
-                    )}
-                    {modalState.type === "duplicate" && (
-                      <>
-                        <Copy className="w-4 h-4 text-navi-500" />{" "}
-                        <Trans>Duplicate Project</Trans>
-                      </>
-                    )}
-                  </h3>
+        {modalState.type === "settings" && modalState.project
+          ? createPortal(
+              <ProjectSettingsModal
+                project={modalState.project}
+                onClose={closeModal}
+              />,
+              document.body,
+            )
+          : modalState.type &&
+            createPortal(
+              <div className="fixed inset-0 z-99999 bg-zinc-950/40 backdrop-blur-[2px] flex items-center justify-center p-4 animate-in fade-in duration-200">
+                <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200">
+                  <div className="p-5">
+                    <h3 className="text-base font-bold text-zinc-900 dark:text-white mb-2 flex items-center gap-2">
+                      {modalState.type === "remove" && (
+                        <>
+                          <AlertTriangle className="w-4 h-4 text-red-500" />{" "}
+                          <Trans>Remove Project</Trans>
+                        </>
+                      )}
+                      {modalState.type === "rename" && (
+                        <>
+                          <Edit3 className="w-4 h-4 text-navi-500" />{" "}
+                          <Trans>Rename Project</Trans>
+                        </>
+                      )}
+                      {modalState.type === "duplicate" && (
+                        <>
+                          <Copy className="w-4 h-4 text-navi-500" />{" "}
+                          <Trans>Duplicate Project</Trans>
+                        </>
+                      )}
+                    </h3>
 
-                  {modalState.type === "remove" ? (
-                    <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                      <Trans>
-                        Are you sure you want to remove{" "}
-                        <strong className="text-zinc-800 dark:text-zinc-200">
-                          {modalState.project?.name}
-                        </strong>{" "}
-                        from your recent list? The original files will remain on
-                        your computer.
-                      </Trans>
-                    </p>
-                  ) : (
-                    <div className="space-y-3 mt-4">
-                      <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                        {modalState.type === "rename"
-                          ? t`New Project Name`
-                          : t`Duplicate Project Name`}
-                      </label>
-                      <input
-                        type="text"
-                        value={modalInput}
-                        onChange={(e) => setModalInput(e.target.value)}
-                        className="w-full bg-zinc-50 dark:bg-navidark-800 border border-zinc-200 dark:border-navidark-400 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-white outline-none focus:border-navi focus:ring-1 focus:ring-navi transition-all"
-                        autoFocus
-                      />
-                    </div>
-                  )}
-                </div>
+                    {modalState.type === "remove" ? (
+                      <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
+                        <Trans>
+                          Are you sure you want to remove{" "}
+                          <strong className="text-zinc-800 dark:text-zinc-200">
+                            {modalState.project?.name}
+                          </strong>{" "}
+                          from your recent list? The original files will remain
+                          on your computer.
+                        </Trans>
+                      </p>
+                    ) : (
+                      <div className="space-y-3 mt-4">
+                        <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                          {modalState.type === "rename"
+                            ? t`New Project Name`
+                            : t`Duplicate Project Name`}
+                        </label>
+                        <input
+                          type="text"
+                          value={modalInput}
+                          onChange={(e) => setModalInput(e.target.value)}
+                          className="w-full bg-zinc-50 dark:bg-navidark-800 border border-zinc-200 dark:border-navidark-400 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-white outline-none focus:border-navi focus:ring-1 focus:ring-navi transition-all"
+                          autoFocus
+                        />
+                      </div>
+                    )}
+                  </div>
 
-                <div className="p-4 bg-zinc-50 dark:bg-black/20 border-t border-zinc-100 dark:border-white/5 flex items-center justify-end gap-3">
-                  <button
-                    onClick={closeModal}
-                    className="px-4 py-2 text-xs font-bold text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-lg transition-colors"
-                  >
-                    <Trans>Cancel</Trans>
-                  </button>
-                  <button
-                    onClick={executeModalAction}
-                    disabled={
-                      modalState.type !== "remove" && !modalInput.trim()
-                    }
-                    className={`px-4 py-2 text-white text-xs font-bold rounded-lg shadow-md transition-colors disabled:opacity-50 ${
-                      modalState.type === "remove"
-                        ? "bg-red-500 hover:bg-red-600"
-                        : "bg-navi hover:bg-navi-600"
-                    }`}
-                  >
-                    {modalState.type === "remove" ? t`Remove` : t`Confirm`}
-                  </button>
+                  <div className="p-4 bg-zinc-50 dark:bg-black/20 border-t border-zinc-100 dark:border-white/5 flex items-center justify-end gap-3">
+                    <button
+                      onClick={closeModal}
+                      className="px-4 py-2 text-xs font-bold text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-lg transition-colors"
+                    >
+                      <Trans>Cancel</Trans>
+                    </button>
+                    <button
+                      onClick={executeModalAction}
+                      disabled={
+                        modalState.type !== "remove" && !modalInput.trim()
+                      }
+                      className={`px-4 py-2 text-white text-xs font-bold rounded-lg shadow-md transition-colors disabled:opacity-50 ${
+                        modalState.type === "remove"
+                          ? "bg-red-500 hover:bg-red-600"
+                          : "bg-navi hover:bg-navi-600"
+                      }`}
+                    >
+                      {modalState.type === "remove" ? t`Remove` : t`Confirm`}
+                    </button>
+                  </div>
                 </div>
-              </div>
-            </div>,
-            document.body,
-          )}
+              </div>,
+              document.body,
+            )}
       </div>
     </>
   );
