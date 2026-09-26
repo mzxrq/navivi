@@ -80,6 +80,81 @@ def _fps(video_path: str) -> float:
     return fps if fps and fps > 0 else float(tuning.COMFYUI_FPS)
 
 
+def _scale_about_centre(frame: np.ndarray, scale: float) -> np.ndarray:
+    h, w = frame.shape[:2]
+    m = np.array(
+        [[scale, 0.0, w / 2 * (1 - scale)], [0.0, scale, h / 2 * (1 - scale)]],
+        dtype=np.float32,
+    )
+    return cv2.warpAffine(frame, m, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REFLECT)
+
+
+def zoom_out_scales(gap: float, fps: float, frames: int):
+    """(the whole clip's starting zoom, [zoom of each tail frame]): the tail
+    eases from that zoom back to exactly 1.0 (the full picture) - full speed
+    from the join, slowing to a stop at the end (see _progress). The zoom is
+    tuning.ATTRACTION_SLOW_MOVE_ZOOM_PER_SEC's worth of the gap, at most
+    ATTRACTION_SLOW_MOVE_MAX_ZOOM_OUT."""
+    travel = _progress(gap, gap)
+    total = min(tuning.ATTRACTION_SLOW_MOVE_ZOOM_PER_SEC * travel, tuning.ATTRACTION_SLOW_MOVE_MAX_ZOOM_OUT)
+    start = 1.0 + total
+    tail = [start - total * (_progress(i / fps, gap) / travel if travel > 0 else 1.0) for i in range(1, frames + 1)]
+    return start, tail
+
+
+def _extend_with_zoom_out(video_path: str, gap: float, output_path: str) -> Optional[str]:
+    """video_path shown slightly zoomed in, then a slow centred zoom-out over
+    its last frame back to the full picture, lasting `gap` seconds. The Wan
+    part and the tail go through the same scaling, so the join doesn't move
+    by even a pixel. One encode, no separate tail file."""
+    from services.tts.ttsengine import FFmpegManager
+
+    fps = _fps(video_path)
+    frames = max(1, int(round(gap * fps)))
+    start, tail = zoom_out_scales(gap, fps, frames)
+
+    cap = cv2.VideoCapture(video_path)
+    ok, first = cap.read()
+    if not ok:
+        cap.release()
+        return None
+    h, w = first.shape[:2]
+    proc = subprocess.Popen(
+        [
+            FFmpegManager.resolve_ffmpeg_bin(), "-y", "-loglevel", "error",
+            "-f", "rawvideo", "-pix_fmt", "bgr24", "-s", f"{w}x{h}", "-r", f"{fps:.3f}", "-i", "-",
+            "-c:v", "libx264", *tuning.ffmpeg_thread_args(), "-crf", "18", "-preset", "fast",
+            "-pix_fmt", "yuv420p", output_path,
+        ],
+        stdin=subprocess.PIPE, stderr=subprocess.PIPE,
+    )
+    try:
+        last = first
+        frame = first
+        while frame is not None:
+            last = frame
+            proc.stdin.write(_scale_about_centre(frame, start).tobytes())
+            ok, frame = cap.read()
+            if not ok:
+                frame = None
+        for scale in tail:
+            proc.stdin.write(_scale_about_centre(last, scale).tobytes())
+        proc.stdin.close()
+        if proc.wait() != 0:
+            logger.warning("Zoom-out tail failed: %s", proc.stderr.read().decode("utf-8", "replace"))
+            return None
+    except Exception:
+        proc.kill()
+        raise
+    finally:
+        cap.release()
+    logger.info(
+        "Filled %.1fs after %s with a slow zoom-out (clip shown at %.1f%%, ending at 100%%).",
+        gap, video_path, start * 100,
+    )
+    return output_path
+
+
 def extend_with_slow_move(
     video_path: str, target_duration: float, camera_pan, output_path: str,
     rng: Optional[random.Random] = None,
@@ -98,6 +173,8 @@ def extend_with_slow_move(
         gap = target_duration - current
         if gap <= 0.05:
             return None
+        if tuning.ATTRACTION_SLOW_MOVE_STYLE == "zoomout":
+            return _extend_with_zoom_out(video_path, gap, output_path)
         frame = _last_frame(video_path)
         if frame is None:
             return None

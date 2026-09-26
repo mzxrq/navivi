@@ -30,14 +30,45 @@ def is_unvisited_stopby(waypoint: dict) -> bool:
     return isinstance(waypoint, dict) and bool(waypoint.get("isStopBy")) and not waypoint.get("connectToRoute")
 
 
-def base_narration_script(waypoint: dict) -> Optional[str]:
+# Whether a leg speaks only its route (arriving) narration. On when the
+# project makes attraction videos (the pipeline sets it, see
+# set_route_only_legs): each waypoint's attraction clip plays its
+# attractionNarration, so the leg speaking it too played the same text twice,
+# back to back. Off (the CLI modes, or attraction videos turned off): the leg
+# carries both, since nothing else would speak the attraction text.
+_ROUTE_ONLY_LEGS = False
+
+
+def set_route_only_legs(on: bool) -> None:
+    global _ROUTE_ONLY_LEGS
+    _ROUTE_ONLY_LEGS = bool(on)
+
+
+def has_own_attraction_clip(waypoint: dict) -> bool:
+    """The waypoint gets an attraction clip that speaks its attraction text:
+    it has that text and a photo (attraction_step makes clips from
+    popup_image), and the walker actually goes there."""
+    return (
+        isinstance(waypoint, dict)
+        and not is_unvisited_stopby(waypoint)
+        and bool((waypoint.get("attractionNarration") or waypoint.get("narration") or "").strip())
+        and bool(waypoint.get("popup_image"))
+    )
+
+
+def base_narration_script(waypoint: dict, route_only: Optional[bool] = None) -> Optional[str]:
     """The narration the user wrote for a waypoint, timing cue tags included
     (see localization/cues.py). The waypoint editor writes narration as
     separate arriving/attraction legs (see WaypointEditor.tsx);
     "script"/"narration"/"voiceover" are only for older job_config.json files
-    that predate that split."""
+    that predate that split. With route-only legs (see _ROUTE_ONLY_LEGS) a
+    waypoint with its own attraction clip keeps only its arriving part."""
+    if route_only is None:
+        route_only = _ROUTE_ONLY_LEGS
     arriving = (waypoint.get("arrivingNarration") or "").strip()
     attraction = (waypoint.get("attractionNarration") or waypoint.get("narration") or "").strip()
+    if route_only and has_own_attraction_clip(waypoint):
+        attraction = ""
     script = " ".join(part for part in (arriving, attraction) if part) or (
         waypoint.get("script") or waypoint.get("voiceover")
     )
@@ -211,6 +242,24 @@ async def generate_overview_audio(
     }
 
 
+def _spoken_text_path(audio_path) -> Path:
+    """Beside each waypoint's audio: the exact text it speaks."""
+    return Path(str(audio_path) + ".txt")
+
+
+def _spoken_text_matches(audio_path, script: str, waypoint: dict) -> bool:
+    """Whether the audio already on disk speaks `script`. Audio made before
+    this note existed spoke the full arriving + attraction text, so without a
+    note that is what it is taken to say."""
+    note = _spoken_text_path(audio_path)
+    try:
+        return note.read_text(encoding="utf-8") == script
+    except OSError:
+        legacy = clean_text(base_narration_script(waypoint, route_only=False) or "")
+        # Spacing aside: a cued script joins its parts without the space.
+        return "".join(legacy.split()) == "".join(script.split())
+
+
 async def generate_waypoint_audio(
     waypoint: dict,
     idx: int,
@@ -236,7 +285,7 @@ async def generate_waypoint_audio(
     audio_filename = waypoint_audio_filename(idx, label)
     existing_path = Path(output_dir) / audio_filename
 
-    if not force and output_is_valid(existing_path):
+    if not force and output_is_valid(existing_path) and _spoken_text_matches(existing_path, script, waypoint):
         logger.info(
             "Step 2: [%d] '%s' already exists — skipping TTS.", idx + 1, label
         )
@@ -244,6 +293,10 @@ async def generate_waypoint_audio(
     else:
         logger.info("Step 2: [%d] Generating audio for: '%s'", idx + 1, label)
         audio_path = await client.generate_speech(script, output_filename=audio_filename)
+        try:
+            _spoken_text_path(audio_path).write_text(script, encoding="utf-8")
+        except OSError:
+            pass
 
     analysis = processor.analyze_pauses(audio_path)
     return {

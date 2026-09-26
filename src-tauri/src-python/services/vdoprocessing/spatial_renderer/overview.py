@@ -362,6 +362,9 @@ class _OverviewRenderMixin:
         # animated phase and, since cards composite after pins every frame,
         # visually erase that waypoint marker for as long as it's shown.
         pin_obstacles = self._pin_obstacle_points(active_popups)
+        # Pins alone, for the "photo straight above its pin" check in
+        # _layout_beside_popups (which may lie over the route, not a pin).
+        self._layout_pin_obstacles = pin_obstacles
         if len(pin_obstacles):
             route_obstacle_arr = np.vstack([route_obstacle_arr, pin_obstacles])
 
@@ -686,6 +689,10 @@ class _OverviewRenderMixin:
                 [{"popup": c, "frames_left": 1} for c in intro_cards], w, h,
                 card_w=footprint_w, card_h=footprint_h,
                 route_obstacles=route_obstacle_arr)
+            # The photo sits on top of its own pin whenever there's room
+            # above it (the free layout above could put it on any side,
+            # e.g. hanging below the start pin).
+            self._place_cards_above_pins(intro_cards, w, h, footprint_w, footprint_h)
             for c in intro_cards:
                 c["hud_corner"] = None
                 c["draw_leader_line"] = True

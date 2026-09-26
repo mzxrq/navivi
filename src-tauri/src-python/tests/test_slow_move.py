@@ -89,3 +89,27 @@ class TestRandomDrift:
             dx, dy, rate = slow_move._random_drift(rng)
             assert (dx * dx + dy * dy) ** 0.5 <= 1.0 + 1e-9
             assert 0.75 * base <= rate <= 1.25 * base
+
+
+class TestZoomOut:
+    def test_eases_back_to_the_full_picture(self):
+        start, tail = slow_move.zoom_out_scales(6.0, 24, 144)
+        assert start > 1.0
+        assert tail[-1] == pytest.approx(1.0, abs=1e-6)
+        assert all(b <= a for a, b in zip(tail, tail[1:]))  # only ever zooms out
+        assert start - tail[0] < 0.002  # no jump at the join
+
+    def test_never_crops_more_than_the_limit(self):
+        from services import tuning
+
+        start, _ = slow_move.zoom_out_scales(60.0, 24, 1440)
+        assert start - 1.0 <= tuning.ATTRACTION_SLOW_MOVE_MAX_ZOOM_OUT + 1e-9
+
+    def test_clip_is_extended_with_a_zoom_out(self, tmp_path, monkeypatch):
+        from services import tuning
+
+        monkeypatch.setattr(tuning, "ATTRACTION_SLOW_MOVE_STYLE", "zoomout")
+        src, out = tmp_path / "in.mp4", tmp_path / "out.mp4"
+        _clip(src, 1.0)
+        assert slow_move.extend_with_slow_move(str(src), 3.0, "pan-right", str(out)) == str(out)
+        assert FFmpegManager.get_media_duration(str(out)) == pytest.approx(3.0, abs=0.1)

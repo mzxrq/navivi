@@ -383,6 +383,15 @@ DEFAULT_USE_PYDECK_OVERVIEW = True
 # wrote win. Overridable per project via job_config.json's
 # settings.auto_overview_cues.
 DEFAULT_AUTO_OVERVIEW_CUES = True
+# Whether a leg narration with no cue tags gets them placed automatically
+# (videopipeline/narration_step.cued_script): the walker must have arrived by
+# the moment the attraction text starts, since that text opens by naming the
+# place ("こちらが加太の石標です", "『常行寺』に到着しました"). Without cues the
+# walk only had to arrive by the END of the voice, so the place was named
+# while the walker was still on its way. Tags only, never words, stored in
+# .narration_cues.json; tags the user wrote win. Overridable per project via
+# job_config.json's settings.auto_narration_cues.
+DEFAULT_AUTO_NARRATION_CUES = True
 # Every residential leg opens on a brief WIDE shot of the whole leg, then
 # zooms — a scale+crossfade between two separately-fetched static tiles,
 # not a continuous crop within one image — into the existing tight/close
@@ -712,6 +721,12 @@ COMFYUI_MAX_FRAMES = 89  # ~3.7s @ 24fps (was 121 ~5s, then 65 ~2.7s — middle 
 # segment adds ~2 minutes of GPU time and drift: segments only see the
 # previous last frame, not the photo, so changes compound (4 segments turned
 # a painted wall into a van driving in). 1 turns extension off.
+# 2 (the user's choice, for more real camera motion). The second segment is
+# where damage showed before the scene-lock prompts and colour pass: a road
+# sign's arrow turned into another symbol, a pole's black/yellow stripes
+# went solid yellow, and a teal stain spread over a grey street (石標).
+# 1 = one Wan segment, then only slow_move.py's plain 2D push-in, which
+# can't invent anything.
 COMFYUI_EXTEND_MAX_SEGMENTS = 2
 # After the Wan motion runs out, a moving preset's clip continues as a slow
 # push-in/drift over its last frame (vdoprocessing/slow_move.py) instead of
@@ -719,6 +734,13 @@ COMFYUI_EXTEND_MAX_SEGMENTS = 2
 # fraction per second (0.012 = +1.2%/s, ~10% over an 8s gap; each clip
 # randomises it by +/-25%). The "none" preset stays a still photo.
 ATTRACTION_SLOW_MOVE_ZOOM_PER_SEC = 0.012
+# How that remaining time moves (the user's choice): "zoomout" eases slowly
+# back out to the full picture, centred, ending right as the narration ends;
+# to have picture to zoom out into, the whole clip is shown zoomed in by that
+# same amount (never more than ATTRACTION_SLOW_MOVE_MAX_ZOOM_OUT), so the join
+# doesn't jump. "drift" is the earlier slow push-in in a random direction.
+ATTRACTION_SLOW_MOVE_STYLE = "zoomout"
+ATTRACTION_SLOW_MOVE_MAX_ZOOM_OUT = 0.12
 # Wan grades its clips (contrast, saturation and brightness climb, and jump
 # again at each extension segment), so every Wan clip gets its colours pulled
 # back to its photo afterwards (vdoprocessing/color_match.py): each frame's

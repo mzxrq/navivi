@@ -18,6 +18,7 @@ from typing import Optional
 
 from services.localization.cues import cue_tags, cue_times, strip_cues
 
+from . import audio_step
 from .audio_step import OVERVIEW_CUE_KEY, base_narration_script, raw_narration_script, waypoint_cue_key
 
 _STORE_NAME = ".narration_cues.json"
@@ -75,13 +76,17 @@ class CueStore:
 def cued_script(waypoint: dict) -> Optional[str]:
     """The waypoint's narration with timing cues. The user's own tags win; a
     script with none gets: {start} once the arriving line has set the scene
-    (the walk begins), {arrive} where the attraction text begins ("we are
-    nearly there") and {end} after its first sentence (the stop is reached)."""
+    (the walk begins) and {end} where the attraction text begins - the stop
+    is reached by then, because that text opens by naming the place ("こちら
+    が加太の石標です"). {end} used to sit after the attraction text's first
+    sentence, so the name was spoken while the walker was still moving."""
     base = base_narration_script(waypoint)
     if not base or cue_tags(base):
         return base
     arriving = (waypoint.get("arrivingNarration") or "").strip()
     attraction = (waypoint.get("attractionNarration") or waypoint.get("narration") or "").strip()
+    if audio_step._ROUTE_ONLY_LEGS and audio_step.has_own_attraction_clip(waypoint):
+        attraction = ""  # its attraction clip speaks it (see audio_step)
     if not arriving and not attraction:
         return base
     arriving_sentences = _sentences(arriving)
@@ -90,17 +95,20 @@ def cued_script(waypoint: dict) -> Optional[str]:
         out += "{start}" + "".join(arriving_sentences[1:])
     attraction_sentences = _sentences(attraction)
     if attraction_sentences:
-        out += "{arrive}" + attraction_sentences[0] + "{end}" + "".join(attraction_sentences[1:])
+        out += "{end}" + "".join(attraction_sentences)
     return out if cue_tags(out) else base
 
 
 def add_default_cues(project_config_path: str) -> int:
     """Stores a cued version of every waypoint narration that has none yet.
     Tags never change what is spoken, so audio already made stays valid.
-    Returns how many were added. Opt-in: settings.auto_narration_cues=true."""
+    Returns how many were added. On by default (tuning.DEFAULT_AUTO_NARRATION_CUES);
+    settings.auto_narration_cues=false turns it off."""
     config_path = Path(project_config_path)
     project = json.loads(config_path.read_text(encoding="utf-8"))
-    if not project.get("settings", {}).get("auto_narration_cues", False):
+    from services import tuning
+
+    if not project.get("settings", {}).get("auto_narration_cues", tuning.DEFAULT_AUTO_NARRATION_CUES):
         return 0
     store = CueStore(config_path.parent)
     added = 0

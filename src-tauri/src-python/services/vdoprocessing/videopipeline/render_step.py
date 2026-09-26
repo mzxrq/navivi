@@ -75,6 +75,45 @@ def _project_color(
 _ARRIVED_COLOR_DARKEN = 0.78
 
 
+def overview_pin_glyphs(waypoints: list) -> dict:
+    """{waypoint position: the glyph its pin shows on the overview}: "S" for
+    the first, "E" for the last, "・" for a stop-by, and 1, 2, 3... for the
+    rest in visit order - the same numbering as spatial_renderer's
+    _pin_label_and_color (S and stop-bys don't take a number), so a leg's
+    map can show "pin 1 -> pin 2" exactly as the overview does."""
+    glyphs = {}
+    order = 0
+    last = len(waypoints) - 1
+    for pos, wp in enumerate(waypoints):
+        if wp.get("isStopBy"):
+            glyphs[pos] = "・"
+            continue
+        if pos == 0:
+            glyphs[pos] = "S"
+            continue
+        order += 1
+        glyphs[pos] = "E" if pos == last and order != 1 else str(order)
+    return glyphs
+
+
+def _leg_pin(glyph, settings: dict, arrived: bool) -> Optional[dict]:
+    """One end of a leg's pin, in the overview's colors: S green, E red, a
+    stop-by brown, a numbered stop the marker color (the darker "arrived"
+    shade for the pin the leg departs from, which is already visited)."""
+    if not glyph:
+        return None
+    if glyph == "S":
+        color = tuning.START_PIN_COLOR
+    elif glyph == "E":
+        color = tuning.END_PIN_COLOR
+    elif glyph == "・":
+        color = tuning.STOPBY_PIN_COLOR
+    else:
+        marker = _project_color(settings, "marker_color", (235, 150, 60))
+        color = _arrived_marker_color(settings, marker) if arrived else marker
+    return {"glyph": glyph, "color": tuple(int(c) for c in color)}
+
+
 def _arrived_marker_color(settings: dict, marker_bgr: tuple) -> tuple:
     """The color a pin turns once its waypoint has been reached: the
     project's own arrived_marker_color if it set one, else a darker shade
@@ -836,6 +875,14 @@ def render_route_video(
         id_to_position = {
             wp.get("id"): pos for pos, wp in enumerate(waypoints) if wp.get("id")
         }
+        # Each leg's two pins show the overview's own glyphs (S, 1, 2 ... E).
+        # Counted over res_waypoints, which carries a separate start_point/
+        # end_point when the project has one, exactly as the overview does.
+        _glyph_by_pos = overview_pin_glyphs(res_waypoints)
+        glyph_by_id = {
+            wp.get("id"): _glyph_by_pos[pos]
+            for pos, wp in enumerate(res_waypoints) if wp.get("id")
+        }
 
         for seq_idx, leg_item in enumerate(sequence_data):
             start_idx, end_idx = leg_item["start_idx"], leg_item["end_idx"]
@@ -1048,6 +1095,16 @@ def render_route_video(
                     # Arrived early: hold on the arrived map until the voice is
                     # done, then the fullscreen photo transition.
                     "arrival_wait_seconds": arrival_wait_seconds,
+                    "start_pin": _leg_pin(
+                        glyph_by_id.get(leg_item.get("start_waypoint_id"))
+                        or ("S" if seq_idx == 0 else None),
+                        settings, arrived=True,
+                    ),
+                    "dest_pin": _leg_pin(
+                        glyph_by_id.get(leg_item.get("end_waypoint_id"))
+                        or ("E" if seq_idx == len(sequence_data) - 1 else None),
+                        settings, arrived=False,
+                    ),
                     "real_duration_seconds": (
                         (
                             chunk["timestamp"].iloc[-1] - chunk["timestamp"].iloc[0]

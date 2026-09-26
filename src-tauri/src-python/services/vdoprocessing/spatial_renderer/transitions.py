@@ -560,6 +560,9 @@ class _TransitionMixin:
                 highlight_popup["hud_corner"] = None
                 highlight_popup["draw_leader_line"] = True
                 self._layout_recap_popups([{"popup": highlight_popup, "frames_left": 1}], w, h)
+                # The photo sits on top of its pin (the free layout could
+                # hang it below the start pin).
+                self._place_cards_above_pins([highlight_popup], w, h, *self.graphics.beside_card_footprint())
 
                 for frame_idx, (frame_bgr, extent) in enumerate(dynamic_frames):
                     frame_out = frame_bgr.copy()
@@ -714,6 +717,8 @@ class _TransitionMixin:
             # fallback placement (meant for corner-avoidance, not a tight
             # leader line) can land the card far across the frame.
             self._layout_recap_popups([{"popup": highlight_popup, "frames_left": 1}], w, h)
+            # The photo sits on top of its pin (the free layout can hang it below).
+            self._place_cards_above_pins([highlight_popup], w, h, *self.graphics.beside_card_footprint())
 
             # Line, then marker, then card — in that order — so the
             # leader line sits BEHIND both the marker pin and the card it

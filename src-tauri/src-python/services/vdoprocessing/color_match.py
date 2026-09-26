@@ -61,10 +61,13 @@ def _smooth(stats: List[np.ndarray], radius: int) -> List[np.ndarray]:
 def correct_frame(frame_bgr: np.ndarray, frame_stats: np.ndarray, target_stats: np.ndarray,
                   strength: float = 1.0) -> np.ndarray:
     """frame_bgr with its LAB mean/spread moved to target_stats (strength
-    1.0 = fully, 0 = untouched). The spread gain is clamped so a nearly flat
-    frame can't be blown up."""
+    1.0 = fully, 0 = untouched). The lightness gain is clamped so a nearly
+    flat frame can't be blown up, and the colour (a/b) gain never goes above
+    1: it only takes back saturation Wan added, so it can never amplify a
+    faint tint Wan left in a grey area into a visible colour."""
     lab = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2LAB).astype(np.float32)
     gain = np.clip(target_stats[1] / frame_stats[1], 0.5, 2.0)
+    gain[1:] = np.minimum(gain[1:], 1.0)
     corrected = (lab - frame_stats[0]) * gain + target_stats[0]
     if strength < 1.0:
         corrected = lab + (corrected - lab) * strength

@@ -12,7 +12,7 @@ from services.logger.progress import tracker
 from services.vdoprocessing.vdoexporter import VideoExporter
 
 from .attraction_step import render_attraction_videos
-from .audio_step import apply_cued_scripts, generate_audio, stop_tts_server
+from .audio_step import apply_cued_scripts, generate_audio, set_route_only_legs, stop_tts_server
 from .gps_step import process_gps
 from .helpers import logger, project_subtitle_dir, project_video_dir
 from .intro_step import render_intro_clip
@@ -75,11 +75,16 @@ def run_full_pipeline(
     # The script's own timing cues ({start}/{arrive}/{end}) tell the video where
     # the voice is: the walker has to have arrived by {arrive}. They are never
     # spoken. settings.use_narration_cues=false ignores them; a script without
-    # any uses the "at most 3 s early" rule. settings.auto_narration_cues adds
-    # default cues to scripts that have none (stored beside job_config.json).
+    # any uses the "at most 3 s early" rule. Scripts that have none get default
+    # cues (stored beside job_config.json): on by default
+    # (tuning.DEFAULT_AUTO_NARRATION_CUES), settings.auto_narration_cues=false
+    # turns it off.
     use_cues = bool(job_config.get("settings", {}).get("use_narration_cues", True))
-    if job_config.get("settings", {}).get("auto_narration_cues", False):
-        add_default_cues(str(config_file_path))
+    # With attraction videos on, each attraction clip speaks its waypoint's
+    # attraction text, so a leg speaks only its route (arriving) text -
+    # otherwise the same attraction text played twice, leg then clip.
+    set_route_only_legs(bool(job_config.get("settings", {}).get("enable_attraction_videos", True)))
+    add_default_cues(str(config_file_path))
     # {n} / {go} for a hand-written overview script, so the overview stops at
     # each waypoint while it is described (on by default:
     # tuning.DEFAULT_AUTO_OVERVIEW_CUES; settings.auto_overview_cues=false turns it off).

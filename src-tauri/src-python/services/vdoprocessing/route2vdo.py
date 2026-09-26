@@ -45,6 +45,31 @@ def _output_is_valid(path, min_bytes: int = 1024) -> bool:
         return False
 
 
+def _leg_fingerprint(leg_latlon, dest_label, leg_kwargs: Dict[str, Any]) -> str:
+    """Hash of everything a residential leg's clip is rendered from (its
+    route piece, destination and every render argument - walk length,
+    photos, cue timing)."""
+    import hashlib
+
+    def plain(obj):
+        if hasattr(obj, "tolist"):  # numpy arrays/scalars
+            return obj.tolist()
+        return str(obj)
+
+    payload = json.dumps(
+        {"latlon": leg_latlon, "dest": dest_label, "kwargs": leg_kwargs},
+        sort_keys=True, default=plain, ensure_ascii=False,
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _stored_fingerprint(path: Path) -> Optional[str]:
+    try:
+        return json.loads(path.read_text(encoding="utf-8")).get("fingerprint")
+    except (OSError, ValueError, AttributeError):
+        return None
+
+
 class RouteAnimator:
     """Orchestrates the animation pipeline by bridging configurations with Renderers."""
 
@@ -532,10 +557,49 @@ class RouteAnimator:
             # content hash — same resume-not-diff semantics as the overview
             # checkpoint above.
             leg_glob_prefix = f"02_waypoint_{leg_file_num:02d}_"
+            leg_kwargs = dict(
+                mode=leg_mode,
+                target_duration_seconds=target_duration,
+                landmarks=landmarks, route_chain=leg_labels or None,
+                # Straight-down bird's-eye chase cam (still follows/rotates
+                # with the walker, just never tilts) rather than the
+                # angled 55deg default — settings.res_follow_pitch lets a
+                # project opt back into the tilted look.
+                follow_pitch=self.config.get("res_follow_pitch", 0.0),
+                dest_popup_image=dest_popup_image,
+                dest_popup_freeze_seconds=dest_freeze_seconds,
+                dest_popup_narration_seconds=dest_narration_seconds,
+                start_popup_image=start_popup_image,
+                start_popup_freeze_seconds=start_freeze_seconds,
+                start_popup_narration_seconds=start_narration_seconds,
+                start_cue_seconds=res_data.get("start_cue_seconds"),
+                arrival_photo_hold_seconds=self.config.get("arrival_photo_hold_seconds"),
+                arrival_wait_seconds=res_data.get("arrival_wait_seconds"),
+                dest_image_display=dest_image_display,
+                start_pin=res_data.get("start_pin"),
+                dest_pin=res_data.get("dest_pin"),
+            )
+            # Everything this leg's clip is made from. Existing files are
+            # only reused when it matches what they were rendered from: a
+            # bare existence check kept legs rendered with an old walk
+            # timing (e.g. before the arrival cue moved) forever.
+            leg_fingerprint = _leg_fingerprint(leg_latlon, dest_label, leg_kwargs)
+            fingerprint_path = self.out_dir / f"{leg_glob_prefix}inputs.json"
             existing_leg_files = sorted(
                 p for p in self.out_dir.glob(f"{leg_glob_prefix}*.mp4")
                 if _output_is_valid(p)
             ) if self.config.get("checkpoint_enabled", False) else []
+            if existing_leg_files and _stored_fingerprint(fingerprint_path) != leg_fingerprint:
+                logger.info(
+                    "Residential leg %d inputs changed since it was rendered — re-rendering.",
+                    leg_file_num,
+                )
+                # Its old pieces (a changed leg can cut into a different
+                # number of _contN files) must not be picked up again.
+                for old in self.out_dir.glob(f"{leg_glob_prefix}*"):
+                    if old.suffix in (".mp4", ".json") and old.name != fingerprint_path.name:
+                        old.unlink(missing_ok=True)
+                existing_leg_files = []
             if existing_leg_files:
                 logger.info(
                     "Residential leg %d already rendered (%d file(s)) — skipping.",
@@ -562,25 +626,12 @@ class RouteAnimator:
             # leg's departure narration, instead of the same departure
             # narration restarting on every piece.
             leg_paths = render_residential_leg_pydeck(
-                leg_latlon, dest_label, output_path, mode=leg_mode,
-                target_duration_seconds=target_duration,
-                landmarks=landmarks, route_chain=leg_labels or None,
-                # Straight-down bird's-eye chase cam (still follows/rotates
-                # with the walker, just never tilts) rather than the
-                # angled 55deg default — settings.res_follow_pitch lets a
-                # project opt back into the tilted look.
-                follow_pitch=self.config.get("res_follow_pitch", 0.0),
-                dest_popup_image=dest_popup_image,
-                dest_popup_freeze_seconds=dest_freeze_seconds,
-                dest_popup_narration_seconds=dest_narration_seconds,
-                start_popup_image=start_popup_image,
-                start_popup_freeze_seconds=start_freeze_seconds,
-                start_popup_narration_seconds=start_narration_seconds,
-                start_cue_seconds=res_data.get("start_cue_seconds"),
-                arrival_photo_hold_seconds=self.config.get("arrival_photo_hold_seconds"),
-                arrival_wait_seconds=res_data.get("arrival_wait_seconds"),
-                dest_image_display=dest_image_display,
+                leg_latlon, dest_label, output_path, **leg_kwargs,
             )
+            if leg_paths:
+                fingerprint_path.write_text(
+                    json.dumps({"fingerprint": leg_fingerprint}), encoding="utf-8"
+                )
             _write_piece_plan(leg_paths)
             output_paths.extend(leg_paths)
 

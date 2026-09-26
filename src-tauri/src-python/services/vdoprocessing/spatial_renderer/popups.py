@@ -424,6 +424,12 @@ class _PopupMixin:
         # the pin (very common, it just arrived there) doesn't get planted
         # on immediately, but no longer than that.
         lead_offset = self.graphics.marker_radius + 20
+        # Every pin's drawn silhouette (overview.py sets it), kept apart from
+        # the route line so "straight above the pin" can ignore the line but
+        # never cover another pin. See free_spot.
+        pin_pts = getattr(self, "_layout_pin_obstacles", None)
+        own_half_w = float(self.graphics.marker_radius) + 4.0
+        own_head = 2.5 * float(self.graphics.marker_radius) + 4.0
 
         def free_spot(x: float, y: float) -> Optional[Tuple[float, float]]:
             # Seed the search directly above the pin (centered on it)
@@ -477,12 +483,37 @@ class _PopupMixin:
                 ax, ay = _anchor_point(x, y, bx, by, card_w, card_h)
                 return _leader_crosses_placed([(x, y), (ax, ay)], placed, placed_lines)
 
+            def _above_is_clear(bx: float, by: float, pin_x: float, pin_y: float) -> bool:
+                rx0, ry0, rx1, ry1 = (
+                    bx - card_gap, by - card_gap,
+                    bx + card_w + card_gap, by + card_h + card_gap,
+                )
+                if any(
+                    rx0 < px1 and rx1 > px0 and ry0 < py1 and ry1 > py0
+                    for (px0, py0, px1, py1) in placed
+                ):
+                    return False
+                if pin_pts is None or not len(pin_pts):
+                    return True
+                px, py = pin_pts[:, 0], pin_pts[:, 1]
+                inside = (px >= rx0) & (px <= rx1) & (py >= ry0) & (py <= ry1)
+                own = (
+                    (np.abs(px - pin_x) <= own_half_w)
+                    & (py >= pin_y - own_head) & (py <= pin_y + 4.0)
+                )
+                return not bool(np.any(inside & ~own))
+
             # Two passes: prefer a spot whose leader line crosses nothing, but track
             # the first merely-non-overlapping spot as a fallback in case
             # nothing crossing-free turns up before the spiral runs out.
             fallback: Optional[Tuple[float, float]] = None
 
             bx, by = clamp(start_x, start_y)
+            # The photo belongs on top of its pin: straight above wins even
+            # when it lies over the route line, as long as it covers no other
+            # card and no OTHER pin (its own pin's head sits just below it).
+            if start_y < y and _above_is_clear(bx, by, x, y) and not crosses(bx, by):
+                return bx, by
             if not overlaps(bx, by):
                 fallback = (bx, by)
                 if not crosses(bx, by):
@@ -570,6 +601,40 @@ class _PopupMixin:
             placed.append((box_x, box_y, box_x + card_w, box_y + card_h))
             anchor_x, anchor_y = _anchor_point(pin_x, pin_y, box_x, box_y, card_w, card_h)
             placed_lines.append([(pin_x, pin_y), (anchor_x, anchor_y)])
+
+    def _place_cards_above_pins(
+        self,
+        cards: List[Dict],
+        w: int,
+        h: int,
+        card_w: int,
+        card_h: int,
+        margin: int = 20,
+        gap: int = 12,
+    ) -> None:
+        """Moves each card to sit straight above its own pin, centred on it,
+        with its bottom edge just over the pin's head (a pin is drawn upward
+        from its coordinate, ~2.5 radii tall - see _pin_obstacle_points).
+        A card keeps its current spot when there is no room above the pin
+        (a pin near the top edge) or when the spot above would overlap a
+        card already placed here."""
+        head_top = 2.5 * float(self.graphics.marker_radius) + 4.0
+        placed: List[Tuple[float, float, float, float]] = []
+        for card in cards:
+            pin_x = card.get("pin_x", card["x"])
+            pin_y = card.get("pin_y", card["y"])
+            box_y = pin_y - head_top - gap - card_h
+            box_x = max(margin, min(pin_x - card_w / 2, w - card_w - margin))
+            fits = box_y >= margin and not any(
+                box_x < px1 + gap and box_x + card_w > px0 - gap
+                and box_y < py1 + gap and box_y + card_h > py0 - gap
+                for (px0, py0, px1, py1) in placed
+            )
+            if fits:
+                card["beside_box"] = (int(box_x), int(box_y))
+            box = card.get("beside_box")
+            if box is not None:
+                placed.append((box[0], box[1], box[0] + card_w, box[1] + card_h))
 
     def _layout_recap_popups(
         self,

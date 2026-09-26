@@ -273,9 +273,20 @@ def _teardrop_pin_svg_url(fill_hex: str, glyph: str = "") -> str:
 
 
 # This leg's departure ("S") and arrival ("E") pins, in the overview's own
-# start-green / end-red so both videos' pins read as the same system.
+# start-green / end-red so both videos' pins read as the same system. Used
+# when the caller doesn't pass the overview's own pin for either end (see
+# _leg_pin_url).
 _START_PIN_URL = _teardrop_pin_svg_url(_bgr_to_hex(tuning.START_PIN_COLOR), "S")
 _DEST_PIN_URL = _teardrop_pin_svg_url(_bgr_to_hex(tuning.END_PIN_COLOR), "E")
+
+
+def _leg_pin_url(pin: Optional[Dict], fallback: str) -> str:
+    """The pin icon for one end of a leg: the overview's own glyph and color
+    for that waypoint ({"glyph": "S"/"3"/"E", "color": BGR}), so a leg reads
+    as "pin 1 -> pin 2" of the overview; `fallback` when not given."""
+    if not pin or not pin.get("glyph") or pin.get("color") is None:
+        return fallback
+    return _teardrop_pin_svg_url(_bgr_to_hex(pin["color"]), str(pin["glyph"]))
 
 # Place-name label pill geometry, in SVG units (the icon is rendered at
 # whatever pixel height its layer's get_size asks for, so these only set the
@@ -1004,6 +1015,8 @@ def render_residential_leg_pydeck(
     arrival_photo_hold_seconds: Optional[float] = None,
     arrival_wait_seconds: Optional[float] = None,
     dest_image_display: str = "cover",
+    start_pin: Optional[Dict] = None,
+    dest_pin: Optional[Dict] = None,
 ) -> List[str]:
     """Renders one leg as a straight-down, locked-camera video with a live
     turn-by-turn HUD (destination banner + time/distance card) -- the
@@ -1216,7 +1229,7 @@ def render_residential_leg_pydeck(
             data=[{
                 "lon": start_lon, "lat": start_lat,
                 "icon": {
-                    "url": _START_PIN_URL, "width": _TEARDROP_PIN_W,
+                    "url": _leg_pin_url(start_pin, _START_PIN_URL), "width": _TEARDROP_PIN_W,
                     "height": _TEARDROP_PIN_H, "anchorY": _TEARDROP_PIN_H,
                 },
             }],
@@ -1253,7 +1266,7 @@ def render_residential_leg_pydeck(
                 data=[{
                     "lon": dest_lon, "lat": dest_lat,
                     "icon": {
-                        "url": _DEST_PIN_URL, "width": _TEARDROP_PIN_W,
+                        "url": _leg_pin_url(dest_pin, _DEST_PIN_URL), "width": _TEARDROP_PIN_W,
                         "height": _TEARDROP_PIN_H, "anchorY": _TEARDROP_PIN_H,
                     },
                 }],
@@ -1328,6 +1341,7 @@ def render_residential_leg_pydeck(
             dest_popup_image, dest_popup_freeze_seconds, landmarks,
             start_popup_image, start_popup_freeze_seconds, start_cue_seconds,
             arrival_photo_hold_seconds, arrival_wait_seconds, dest_image_display,
+            dest_pin_url=_leg_pin_url(dest_pin, _DEST_PIN_URL),
         ))
 
     logger.info(f"Residential leg rendered ({mode}): {produced_paths}")
@@ -1690,6 +1704,7 @@ async def _record_leg(
     dest_popup_image=None, dest_popup_freeze_seconds=None, landmarks=None,
     start_popup_image=None, start_popup_freeze_seconds=None, start_cue_seconds=None,
     arrival_photo_hold_seconds=None, arrival_wait_seconds=None, dest_image_display="cover",
+    dest_pin_url=_DEST_PIN_URL,
 ):
     from pathlib import Path
 
@@ -2296,8 +2311,16 @@ async def _record_leg(
                     # shot it's supposed to match once tiles finish loading.
                     await page.wait_for_timeout(1500)
                     warm_png = await page.screenshot(**_FRAME_SHOT)
-                    for _ in range(max(1, int(0.3 * fps))):
-                        await _write_frame(warm_png)
+                    # The brief establishing hold only when the leg opens on
+                    # the map. A leg that opens on its departure photo goes
+                    # straight to that fullscreen photo: the hold showed as a
+                    # blink of bare map between the previous clip (the
+                    # attraction photo) and the photo shrinking into place.
+                    # The voice delay below is counted from the frames
+                    # actually written, so it stays in sync either way.
+                    if not start_popup_image:
+                        for _ in range(max(1, int(0.3 * fps))):
+                            await _write_frame(warm_png)
 
                     if start_popup_image:
                         # Departure photo preview: only ever set on the
@@ -2372,7 +2395,7 @@ async def _record_leg(
                     dest_pin_data_json = json.dumps([{
                         "lon": dest_lon, "lat": dest_lat,
                         "icon": {
-                            "url": _DEST_PIN_URL, "width": _TEARDROP_PIN_W,
+                            "url": dest_pin_url, "width": _TEARDROP_PIN_W,
                             "height": _TEARDROP_PIN_H, "anchorY": _TEARDROP_PIN_H,
                         },
                     }]) if dest_lat is not None and dest_lon is not None else None

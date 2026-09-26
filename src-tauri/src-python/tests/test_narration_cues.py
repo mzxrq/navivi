@@ -46,8 +46,12 @@ class TestCues:
 class TestDefaultCues:
     def test_placement_follows_the_project_convention(self):
         cued = cued_script({"arrivingNarration": ARRIVING, "attractionNarration": ATTRACTION})
-        assert cue_tags(cued) == ["start", "arrive", "end"]
+        assert cue_tags(cued) == ["start", "end"]
         assert clean_text(cued) == ARRIVING + ATTRACTION
+
+    def test_arrival_is_before_the_attraction_text_names_the_place(self):
+        cued = cued_script({"arrivingNarration": ARRIVING, "attractionNarration": ATTRACTION})
+        assert cued.endswith("{end}" + ATTRACTION)
 
     def test_users_own_cues_are_kept(self):
         assert cued_script({"arrivingNarration": "あ。{end}い。"}) == "あ。{end}い。"
@@ -59,7 +63,7 @@ class TestDefaultCues:
         assert add_default_cues(str(config)) == 1
         waypoints = json.loads(config.read_text(encoding="utf-8"))["waypoints"]
         audio_step.apply_cued_scripts(waypoints, tmp_path)
-        assert cue_tags(audio_step.raw_narration_script(waypoints[0])) == ["start", "arrive", "end"]
+        assert cue_tags(audio_step.raw_narration_script(waypoints[0])) == ["start", "end"]
         assert audio_step._resolve_narration_script(waypoints[0]) == ARRIVING + ATTRACTION
         assert cue_tags(json.loads(config.read_text(encoding="utf-8"))["waypoints"][0]["arrivingNarration"]) == []
         assert add_default_cues(str(config)) == 0  # idempotent
@@ -70,11 +74,13 @@ class TestDefaultCues:
         assert store.cued_text("b", "old script") == "old {end}script"
         assert store.cued_text("b", "edited") is None
 
-    def test_off_unless_asked_for(self, tmp_path):
+    def test_on_by_default_and_can_be_turned_off(self, tmp_path):
         config = tmp_path / "job_config.json"
         wp = {"id": "b", "arrivingNarration": ARRIVING, "attractionNarration": ATTRACTION}
-        config.write_text(json.dumps({"waypoints": [wp], "settings": {}}), encoding="utf-8")
+        config.write_text(json.dumps({"waypoints": [wp], "settings": {"auto_narration_cues": False}}), encoding="utf-8")
         assert add_default_cues(str(config)) == 0
+        config.write_text(json.dumps({"waypoints": [wp], "settings": {}}), encoding="utf-8")
+        assert add_default_cues(str(config)) == 1
 
 
 class TestWalkPlan:
@@ -84,7 +90,7 @@ class TestWalkPlan:
         config.write_text(json.dumps({"waypoints": [wp], "settings": {"auto_narration_cues": True}}), encoding="utf-8")
         add_default_cues(str(config))
         record_cue_times(str(config), {"audio_durations": [20.0], "audio_pauses": [[]]})
-        assert set(CueStore(tmp_path).cue_times_for("b")) == {"start", "arrive", "end"}
+        assert set(CueStore(tmp_path).cue_times_for("b")) == {"start", "end"}
 
     def test_the_end_cue_is_the_moment_it_must_have_arrived(self, tmp_path):
         store = CueStore(tmp_path)
