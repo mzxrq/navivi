@@ -58,6 +58,9 @@ class AttractionVideoGenerator:
     # ones get a tighter overshoot cap since concatenation compounds error.
     _AUDIO_DURATION_TOLERANCE_SECONDS: Final[float] = 3.0
     _MULTI_IMAGE_OVERSHOOT_TOLERANCE_SECONDS: Final[float] = 2.0
+    # How close to its narration an attraction clip must end: closer than a
+    # frame or so is left alone, anything more is trimmed or filled.
+    _EXACT_FIT_SLACK_SECONDS: Final[float] = 0.05
 
     # Caps how long a single generated clip is actually asked to run for
     # (the `duration_sec` passed to _generate_single_clip), regardless of
@@ -70,6 +73,14 @@ class AttractionVideoGenerator:
     # _DURATION_FIT_ENABLED). Applied uniformly to both generators so
     # neither one is a surprise outlier.
     _MAX_GENERATED_CLIP_SECONDS: Final[float] = 5.0
+    # ComfyUI's own ceiling once sequential extension is on: up to
+    # tuning.COMFYUI_EXTEND_MAX_SEGMENTS chained segments (see
+    # comfyui_i2v_client._resolve_segments). The 5s cap above then applies
+    # only to the local pan/zoom fallback it was written for.
+    _MAX_EXTENDED_CLIP_SECONDS: Final[float] = max(
+        _MAX_GENERATED_CLIP_SECONDS,
+        tuning.COMFYUI_EXTEND_MAX_SEGMENTS * tuning.COMFYUI_MAX_FRAMES / tuning.COMFYUI_FPS + 0.5,
+    )
 
     # No cap on how long _resolve_duration_fit will freeze-hold a clip's
     # last frame to cover an undershoot — the attraction clip must stay on
@@ -144,6 +155,32 @@ class AttractionVideoGenerator:
     # pan/zoom generator (local_pan_generator.py) so a waypoint never
     # hard-fails just because the local GPU service had a bad run. See
     # services/model/ for the exploration that led to the local fallback.
+    @staticmethod
+    def _still_clip(image_path: str, output_path: str, duration_sec: float) -> Optional[str]:
+        """The photo as a still clip, cropped to fill the attraction frame
+        (same size/fps as a Wan clip). None if ffmpeg fails."""
+        import subprocess
+
+        from services.tts.ttsengine import FFmpegManager
+
+        OUT_W, OUT_H = tuning.COMFYUI_WIDTH, tuning.COMFYUI_HEIGHT
+        cmd = [
+            FFmpegManager.resolve_ffmpeg_bin(), "-y", "-loglevel", "error",
+            "-loop", "1", "-i", image_path, "-t", f"{max(1.0, duration_sec):.3f}",
+            "-vf", (
+                f"scale={OUT_W}:{OUT_H}:force_original_aspect_ratio=increase,"
+                f"crop={OUT_W}:{OUT_H},fps={tuning.COMFYUI_FPS},format=yuv420p"
+            ),
+            "-c:v", "libx264", *tuning.ffmpeg_thread_args(), "-crf", "18", "-preset", "fast",
+            output_path,
+        ]
+        result = subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace")
+        if result.returncode != 0:
+            logger.error("Still clip failed for %s: %s", image_path, result.stderr.strip())
+            return None
+        logger.info("Still clip (camera preset 'none') for %s", image_path)
+        return output_path
+
     def _generate_single_clip(
         self,
         local_image_path: str,
@@ -160,8 +197,18 @@ class AttractionVideoGenerator:
         process_attraction_video."""
         save_path = Path(save_path) if save_path else self.output_dir / f"raw_{uuid.uuid4().hex[:6]}.mp4"
 
+        from services.vdoprocessing.camera_pan import STILL_PRESET, normalize_camera_pan
+
+        # The editor's "None" preset: the photo itself, held still (the
+        # duration fit then holds it until the narration ends) - no ComfyUI.
+        if normalize_camera_pan(prompt_text) == STILL_PRESET:
+            return self._still_clip(local_image_path, str(save_path), duration_sec)
+
+        from services.gpu_cooldown import wait_for_gpu_cooldown
         from services.vdoprocessing.comfyui_i2v_client import ComfyUII2VClient
 
+        # Wan runs the GPU flat out; a hot GPU gets a short breather first.
+        wait_for_gpu_cooldown(f"Wan clip for {Path(local_image_path).name}")
         try:
             ComfyUII2VClient().generate_clip(
                 image_path=local_image_path,
@@ -188,7 +235,7 @@ class AttractionVideoGenerator:
             generate_local_clip(
                 image_path=local_image_path,
                 output_path=str(save_path),
-                duration_sec=duration_sec,
+                duration_sec=min(duration_sec, self._MAX_GENERATED_CLIP_SECONDS),
                 camera_pan_hint=prompt_text,
             )
             return str(save_path)
@@ -230,6 +277,7 @@ class AttractionVideoGenerator:
         video_path: str,
         target_audio_duration: float,
         overshoot_tolerance: float,
+        generation_cap: bool = True,
     ) -> Tuple[Optional[float], Optional[float]]:
         from services.tts.ttsengine import FFmpegManager
 
@@ -238,19 +286,25 @@ class AttractionVideoGenerator:
             return None, None
 
         # Flat hard cap, independent of narration length — trim only, no
-        # hold/stretch, regardless of _DURATION_FIT_ENABLED below.
-        if current_duration > self._MAX_GENERATED_CLIP_SECONDS:
-            return self._MAX_GENERATED_CLIP_SECONDS, None
+        # hold/stretch, regardless of _DURATION_FIT_ENABLED below. Only for a
+        # clip straight out of a generator: one already extended by the slow
+        # move or combined from several photos is meant to be long.
+        if generation_cap and current_duration > self._MAX_EXTENDED_CLIP_SECONDS:
+            return self._MAX_EXTENDED_CLIP_SECONDS, None
 
         if not self._DURATION_FIT_ENABLED:
             return None, None
         if target_audio_duration <= 0:
             return None, None
 
+        # Exact fit: an attraction clip lasts exactly as long as its
+        # narration. A gap inside `overshoot_tolerance` used to be left for
+        # the export to freeze (a visible freeze at the end), so any gap or
+        # overrun past _EXACT_FIT_SLACK_SECONDS is now fitted here instead.
         overshoot = current_duration - target_audio_duration
-        if overshoot > overshoot_tolerance:
+        if overshoot > self._EXACT_FIT_SLACK_SECONDS:
             return target_audio_duration, None
-        if overshoot < -overshoot_tolerance:
+        if overshoot < -self._EXACT_FIT_SLACK_SECONDS:
             capped_hold_to = min(target_audio_duration, current_duration + self._MAX_HOLD_SECONDS)
             if capped_hold_to < target_audio_duration - 0.05:
                 logger.warning(
@@ -276,6 +330,8 @@ class AttractionVideoGenerator:
         output_filename: str,
         overshoot_tolerance: float,
         place_label: Optional[str] = None,
+        camera_pan=None,
+        generation_cap: bool = True,
     ) -> str:
         """Trims/stretches video_path to within tolerance of
         target_audio_duration, upscales it, and (if place_label is given)
@@ -286,9 +342,32 @@ class AttractionVideoGenerator:
         without losing the whole clip). Narration audio is intentionally
         NOT muxed in here — see process_attraction_video's docstring for
         why."""
+        from services.vdoprocessing.camera_pan import STILL_PRESET, normalize_camera_pan
+
+        # A still photo ("none") is simply held to the narration length - the
+        # raw-clip cap is for generated motion, and made a still stop at ~8s.
+        if normalize_camera_pan(camera_pan) == STILL_PRESET:
+            generation_cap = False
         trim_to, hold_to = self._resolve_duration_fit(
-            video_path, target_audio_duration, overshoot_tolerance
+            video_path, target_audio_duration, overshoot_tolerance, generation_cap
         )
+        # A moving preset keeps moving until the narration ends (a slow
+        # push-in/drift over the clip's last frame) instead of freezing it -
+        # to the FULL narration length, since a gap inside the tolerance
+        # above isn't held here but frozen later by the export. "none" (a
+        # still photo) keeps the plain hold.
+        from services.vdoprocessing.slow_move import extend_with_slow_move, is_moving_preset
+
+        moved_path = self.output_dir / f"moved_{Path(output_filename).stem}.mp4"
+        if trim_to is None and target_audio_duration > 0 and is_moving_preset(camera_pan):
+            moved = extend_with_slow_move(
+                video_path, target_audio_duration, camera_pan, str(moved_path),
+            )
+            if moved:
+                video_path = moved
+                trim_to, hold_to = self._resolve_duration_fit(
+                    video_path, target_audio_duration, overshoot_tolerance, generation_cap=False
+                )
 
         final_path = self.output_dir / output_filename
         if final_path.exists():
@@ -300,26 +379,29 @@ class AttractionVideoGenerator:
         # passes over the same clip. finalize_clip fuses whichever of those
         # are actually needed into one filter graph and one encode.
         try:
-            VideoExporter.finalize_clip(
-                input_video_path=video_path,
-                output_video_path=str(final_path),
-                trim_to=trim_to,
-                hold_to=hold_to,
-                scale_to=(self._TARGET_WIDTH, self._TARGET_HEIGHT),
-                sharpen=tuning.ATTRACTION_UPSCALE_SHARPEN,
-                label_text=place_label,
-            )
-            return str(final_path)
-        except Exception as exc:
-            logger.warning(
-                "Fused finalize (trim/scale/label in one pass) failed for %s "
-                "(%s: %s) — falling back to the slower per-stage pipeline.",
-                video_path, type(exc).__name__, exc,
-            )
+            try:
+                VideoExporter.finalize_clip(
+                    input_video_path=video_path,
+                    output_video_path=str(final_path),
+                    trim_to=trim_to,
+                    hold_to=hold_to,
+                    scale_to=(self._TARGET_WIDTH, self._TARGET_HEIGHT),
+                    sharpen=tuning.ATTRACTION_UPSCALE_SHARPEN,
+                    label_text=place_label,
+                )
+                return str(final_path)
+            except Exception as exc:
+                logger.warning(
+                    "Fused finalize (trim/scale/label in one pass) failed for %s "
+                    "(%s: %s) — falling back to the slower per-stage pipeline.",
+                    video_path, type(exc).__name__, exc,
+                )
 
-        return self._fit_and_finalize_stagewise(
-            video_path, trim_to, hold_to, final_path, place_label
-        )
+            return self._fit_and_finalize_stagewise(
+                video_path, trim_to, hold_to, final_path, place_label
+            )
+        finally:
+            moved_path.unlink(missing_ok=True)
 
     # [Core] Slow-path fallback for _fit_and_finalize: the original
     # three-separate-ffmpeg-passes implementation, kept so a fused-pass
@@ -477,6 +559,111 @@ class AttractionVideoGenerator:
         logger.info(f"Waypoint video deliverable complete (finalized): {final_output}")
         return final_output
 
+    def _fit_clip_to_share(
+        self, clip_path: str, share: float, camera_pan, out_path: Path,
+    ) -> str:
+        """One photo's clip made exactly `share` seconds long: trimmed if
+        longer; if shorter, continued with the slow move for a moving preset,
+        or held still for "none". Returns the path to use (clip_path itself
+        when it already fits)."""
+        from services.tts.ttsengine import FFmpegManager
+        from services.vdoprocessing.slow_move import extend_with_slow_move, is_moving_preset
+
+        duration = FFmpegManager.get_media_duration(clip_path)
+        if abs(duration - share) <= 0.05:
+            return clip_path
+        if duration > share:
+            return self.editor.trim_video_duration(clip_path, share, str(out_path))
+        if is_moving_preset(camera_pan):
+            moved = extend_with_slow_move(clip_path, share, camera_pan, str(out_path))
+            if moved:
+                return moved
+        return self.editor.hold_last_frame(clip_path, share, str(out_path))
+
+    @staticmethod
+    def _concat_reencoded(paths: List[str], output_path: str) -> None:
+        """Joins clips in order, re-encoded at one size/fps: the pieces come
+        from different encoders (Wan, still photo, slow-move tail), which a
+        stream-copy join can glitch on."""
+        import subprocess
+
+        from services.tts.ttsengine import FFmpegManager
+
+        w, h, fps = tuning.COMFYUI_WIDTH, tuning.COMFYUI_HEIGHT, tuning.COMFYUI_FPS
+        inputs, chains = [], []
+        for i, path in enumerate(paths):
+            inputs += ["-i", path]
+            chains.append(
+                f"[{i}:v]scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},"
+                f"fps={fps},setsar=1,format=yuv420p[v{i}]"
+            )
+        graph = ";".join(chains) + ";" + "".join(f"[v{i}]" for i in range(len(paths)))
+        graph += f"concat=n={len(paths)}:v=1:a=0[out]"
+        result = subprocess.run(
+            [FFmpegManager.resolve_ffmpeg_bin(), "-y", "-loglevel", "error", *inputs,
+             "-filter_complex", graph, "-map", "[out]",
+             "-c:v", "libx264", *tuning.ffmpeg_thread_args(), "-crf", "18", "-preset", "fast",
+             "-pix_fmt", "yuv420p", output_path],
+            capture_output=True, encoding="utf-8", errors="replace",
+        )
+        if result.returncode != 0:
+            raise RuntimeError(f"joining attraction clips failed: {result.stderr.strip()}")
+
+    def _combine_clips(
+        self,
+        clips: List[str],
+        presets: List,
+        target_audio_duration: float,
+        output_filename: str,
+        place_label: Optional[str],
+    ) -> Optional[str]:
+        """A multi-photo waypoint's clips as one deliverable: each fitted to
+        an equal share of the narration (_fit_clip_to_share), joined in
+        order, then finalized like a single clip."""
+        stem = Path(output_filename).stem
+        share = target_audio_duration / len(clips) if target_audio_duration > 0 else None
+        temps: List[str] = []
+        try:
+            fitted = []
+            for i, (clip, preset) in enumerate(zip(clips, presets)):
+                if share is None:
+                    fitted.append(clip)
+                    continue
+                path = self._fit_clip_to_share(
+                    clip, share, preset, self.output_dir / f"share_{stem}_{i:02d}.mp4"
+                )
+                if path != clip:
+                    temps.append(path)
+                fitted.append(path)
+            combined = str(self.output_dir / f"combined_{stem}.mp4")
+            temps.append(combined)
+            self._concat_reencoded(fitted, combined)
+            logger.info(
+                "Combined %d photo clips (%.1fs each) for %s.",
+                len(clips), share or 0.0, output_filename,
+            )
+            final_output = self._fit_and_finalize(
+                combined, target_audio_duration, output_filename,
+                self._MULTI_IMAGE_OVERSHOOT_TOLERANCE_SECONDS, place_label=place_label,
+                generation_cap=False,
+            )
+        except Exception as exc:
+            logger.error("Combining clips for %s failed: %s", output_filename, exc)
+            return None
+        finally:
+            for path in temps:
+                Path(path).unlink(missing_ok=True)
+
+        for clip in clips:
+            if os.path.exists(clip) and clip != final_output:
+                try:
+                    os.remove(clip)
+                except OSError:
+                    pass
+        self._pending_manifest_path(output_filename).unlink(missing_ok=True)
+        logger.info(f"Waypoint video deliverable complete: {final_output}")
+        return final_output
+
     # [NOTE] [Animation] Main processing function for attraction video generation
     def process_attraction_video(
         self,
@@ -537,22 +724,6 @@ class AttractionVideoGenerator:
             )
             return str(final_path)
 
-        manifest_path = self._pending_manifest_path(output_filename)
-        if not force and manifest_path.exists():
-            try:
-                with open(manifest_path, "r", encoding="utf-8") as f:
-                    existing_manifest = json.load(f)
-            except (OSError, json.JSONDecodeError):
-                existing_manifest = {}
-            existing_clips = existing_manifest.get("clip_paths", [])
-            if existing_clips and all(output_is_valid(c) for c in existing_clips):
-                logger.info(
-                    "Waypoint already has %d clip(s) pending approval — "
-                    "leaving as-is (call attraction-finalize once ready).",
-                    len(existing_clips),
-                )
-                return None
-
         # Regenerating this waypoint — clear out whatever a previous run
         # left behind (old deliverable, old pending manifest + its clips)
         # before doing any fresh work. Deterministic per-image raw clips
@@ -583,16 +754,19 @@ class AttractionVideoGenerator:
         # in one waypoint (so the concatenated result lands near the target
         # instead of badly overshooting); fall back to a reasonable default
         # when there's no narration yet to size against.
-        _DEFAULT_CLIP_SECONDS = 6.0
+        # No narration: one normal Wan generation per photo (a single
+        # COMFYUI_MAX_FRAMES segment, ~3.7s), no extension.
+        _DEFAULT_CLIP_SECONDS = tuning.COMFYUI_MAX_FRAMES / tuning.COMFYUI_FPS
         per_clip_duration = (
             (target_audio_duration / len(image_list))
             if target_audio_duration > 0
             else _DEFAULT_CLIP_SECONDS
         )
-        per_clip_duration = min(per_clip_duration, self._MAX_GENERATED_CLIP_SECONDS)
+        per_clip_duration = min(per_clip_duration, self._MAX_EXTENDED_CLIP_SECONDS)
 
         stem = Path(output_filename).stem
         generated_clips = []
+        clip_presets = []
         for idx, img_path in enumerate(image_list):
             # Match image index to prompt index (fallback to the last prompt if we run out)
             current_prompt = (
@@ -608,6 +782,7 @@ class AttractionVideoGenerator:
                     idx + 1, len(image_list), raw_clip_path,
                 )
                 generated_clips.append(str(raw_clip_path))
+                clip_presets.append(current_prompt)
                 continue
 
             logger.info(
@@ -618,32 +793,21 @@ class AttractionVideoGenerator:
             )
             if clip:
                 generated_clips.append(clip)
+                clip_presets.append(current_prompt)
 
         if not generated_clips:
             logger.error("Failed to generate any video clips.")
             return None
 
-        # 2. Multiple images -> don't auto-combine. Park the raw clips in a
-        # pending manifest and stop here; finalize_pending_video() combines
-        # them once the frontend has reviewed and approved the set.
+        # 2. Multiple images -> combined here, in order, each photo taking an
+        # equal share of the narration, so the whole clip lasts as long as
+        # the narration. (It used to be parked for an approval step nothing
+        # in the app ever triggers, so these waypoints had no attraction
+        # video at all.)
         if len(generated_clips) > 1:
-            manifest_path = self._pending_manifest_path(output_filename)
-            manifest = {
-                "clip_paths": generated_clips,
-                "target_audio_duration": target_audio_duration,
-                "audio_path": audio_path,
-                "output_filename": output_filename,
-                "place_label": place_label,
-            }
-            with open(manifest_path, "w", encoding="utf-8") as f:
-                json.dump(manifest, f, ensure_ascii=False, indent=2)
-            logger.info(
-                "Waypoint has %d clips — combining deferred pending approval. "
-                "Manifest written to %s. Call finalize_pending_video() once ready.",
-                len(generated_clips),
-                manifest_path,
+            return self._combine_clips(
+                generated_clips, clip_presets, target_audio_duration, output_filename, place_label,
             )
-            return None
 
         # 3. Single image: fit duration, place at output_filename, upscale.
         # Narration audio is NOT muxed in here — see docstring.
@@ -653,6 +817,7 @@ class AttractionVideoGenerator:
             output_filename,
             overshoot_tolerance=self._AUDIO_DURATION_TOLERANCE_SECONDS,
             place_label=place_label,
+            camera_pan=prompt_list[0] if prompt_list else None,
         )
 
         # Cleanup intermediate raw clip

@@ -230,25 +230,28 @@ def _crop_rect(cx: float, cy: float, half_w: float, half_h: float, sw: int, sh: 
 # [NOTE] [Animation] Maps the job config's "camera_pans" hint strings (currently used as raw
 # ComfyUI prompt text, e.g. "panright") to (pan_dx_sign, zoom_start, zoom_end).
 # zoom<1 = zoomed in; zoom=1 = the widened canvas's own full "contain" fit.
+# (horizontal pan sign, vertical pan sign, zoom start, zoom end) per editor
+# preset, keyed by camera_pan.normalize_camera_pan. Negative y is up.
 _CAMERA_PAN_PRESETS = {
-    "panright": (1, 0.85, 1.0),
-    "panleft": (-1, 0.85, 1.0),
-    "zoomin": (0, 1.0, 0.75),
-    "zoomout": (0, 0.75, 1.0),
-    "none": (0, 0.92, 0.92),
+    "panright": (1, 0, 0.85, 1.0),
+    "panleft": (-1, 0, 0.85, 1.0),
+    "panup": (0, -1, 0.85, 1.0),
+    "pandown": (0, 1, 0.85, 1.0),
+    "zoomin": (0, 0, 1.0, 0.75),
+    "zoomout": (0, 0, 0.75, 1.0),
+    "none": (0, 0, 0.92, 0.92),
 }
-_DEFAULT_PRESET = (1, 0.85, 1.0)
+_DEFAULT_PRESET = (1, 0, 0.85, 1.0)
 
 
 def _resolve_camera_pan(camera_pan_hint) -> tuple:
-    if isinstance(camera_pan_hint, list):
-        camera_pan_hint = camera_pan_hint[0] if camera_pan_hint else None
-    key = str(camera_pan_hint).strip().lower() if camera_pan_hint else ""
-    return _CAMERA_PAN_PRESETS.get(key, _DEFAULT_PRESET)
+    from services.vdoprocessing.camera_pan import normalize_camera_pan
+
+    return _CAMERA_PAN_PRESETS.get(normalize_camera_pan(camera_pan_hint), _DEFAULT_PRESET)
 
 
 def _render_pan(image: Image.Image, output_path: str, duration_sec: float, camera_pan_hint) -> None:
-    pan_dx_sign, zoom_start, zoom_end = _resolve_camera_pan(camera_pan_hint)
+    pan_dx_sign, pan_dy_sign, zoom_start, zoom_end = _resolve_camera_pan(camera_pan_hint)
 
     src = np.array(image.convert("RGB"))
     sh, sw = src.shape[:2]
@@ -264,14 +267,16 @@ def _render_pan(image: Image.Image, output_path: str, duration_sec: float, camer
     # scaled by the tightest zoom level so the crop rect never runs past the
     # source image edges regardless of pan direction.
     pan_budget = (sw - fit_w * min(zoom_start, zoom_end)) * 0.4
+    pan_budget_y = (sh - fit_h * min(zoom_start, zoom_end)) * 0.4
     cx0, cy0 = sw / 2, sh / 2
 
     for i in range(num_frames):
         t = _ease_in_out(i / max(1, num_frames - 1))
         zoom = zoom_start + (zoom_end - zoom_start) * t
         cx = cx0 + pan_dx_sign * pan_budget * t
+        cy = cy0 + pan_dy_sign * pan_budget_y * t
         half_w, half_h = fit_w * zoom / 2, fit_h * zoom / 2
-        x0, y0, x1, y1 = _crop_rect(cx, cy0, half_w, half_h, sw, sh)
+        x0, y0, x1, y1 = _crop_rect(cx, cy, half_w, half_h, sw, sh)
         crop = src[y0:y1, x0:x1]
         frame = cv2.resize(crop, (OUT_W, OUT_H), interpolation=cv2.INTER_LANCZOS4)
         writer.write(cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
