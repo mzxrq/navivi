@@ -774,6 +774,33 @@ OUTRO_GRID_COLS_MAX = 5
 OUTRO_CARD_MARGIN = 18
 OUTRO_CARD_ASPECT = 4 / 3  # thumbnail width:height
 
+# Outro style: "scroll" (the default) lays every waypoint card out three to a
+# row under the title and slowly scrolls down the page, credits-style, until
+# the last row; "grid" is the single held frame above. Overridable per project
+# via job_config.json's settings.outro_style.
+DEFAULT_OUTRO_STYLE = "scroll"
+OUTRO_SCROLL_COLS = 3
+OUTRO_SCROLL_MARGIN = 40  # px between cards
+# Empty space left and right of the cards, like a centred container's padding.
+OUTRO_SCROLL_SIDE_PADDING = 170
+OUTRO_SCROLL_LABEL_FONT_SIZE = 20
+OUTRO_SCROLL_LABEL_MIN_FONT_SIZE = 15  # a long name shrinks to this before "…"
+OUTRO_SCROLL_BADGE_FONT_SIZE = 18
+OUTRO_SCROLL_BADGE_RADIUS = 18
+# Scroll speed in px per second, given for the 704-high outro canvas (scaled
+# with the real frame size, then rounded to a whole number of px per frame),
+# and the holds on the first screen and at the end. The page scrolls until
+# every card has left the top of the screen, so the end hold is on the empty
+# background.
+OUTRO_SCROLL_SPEED_PX = 100
+OUTRO_SCROLL_START_HOLD_SECONDS = 1.0
+OUTRO_SCROLL_END_HOLD_SECONDS = 0.5
+# Longest the scroll itself may take; a very long page scrolls faster instead.
+OUTRO_SCROLL_MAX_SECONDS = 30.0
+# Height of the soft fade at the top and bottom screen edges, so cards ease
+# in and out of view instead of being cut by the frame edge.
+OUTRO_SCROLL_EDGE_FADE_PX = 56
+
 # When a clip's narration outlasts its video, the export holds the video's last
 # frame until the narration ends plus this many seconds (so the picture never
 # ends while the voice is still speaking).
