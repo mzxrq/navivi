@@ -8,6 +8,7 @@ that logs are consistently formatted and directed
 
 import sys
 import logging
+import os
 from pathlib import Path
 
 # [I/O] Log file path
@@ -36,7 +37,10 @@ def setup_logger(name: str):
         # logging silently landed elsewhere.
         log_dir = Path(__file__).resolve().parent
         log_dir.mkdir(parents=True, exist_ok=True)
-        file_handler = logging.FileHandler(log_dir / "app.log", encoding="utf-8")
+        # NAVIVI_LOG_FILE redirects it (the test suite does, so fake test
+        # values never land in the real app.log).
+        log_path = Path(os.environ.get("NAVIVI_LOG_FILE") or log_dir / "app.log")
+        file_handler = logging.FileHandler(log_path, encoding="utf-8")
         file_handler.setLevel(logging.INFO)
         file_formatter = logging.Formatter(
             "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
