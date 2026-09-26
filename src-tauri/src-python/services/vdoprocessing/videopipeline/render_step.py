@@ -4,6 +4,7 @@ import hashlib
 import json
 import math
 import re
+from services.localization.cues import tags_at_sentence_start
 from pathlib import Path
 from typing import Any, Optional
 
@@ -342,6 +343,7 @@ def render_route_video(
     checkpoint_key = _render_checkpoint_key(
         project_config_path, cleaned_route, audio_durations, audio_pauses
     )
+    overview_stale = False
     if is_full_pipeline_render and not force and manifest_path.exists():
         try:
             with open(manifest_path, "r", encoding="utf-8") as f:
@@ -366,6 +368,12 @@ def render_route_video(
                 "Step 4: route/config/narration changed since the last "
                 "render — checkpoint invalidated, re-rendering."
             )
+            # The overview also skips itself when its file exists; its script,
+            # cues and stops may be what changed, so it must be rendered again.
+            # The old file is NOT deleted: the new render is written aside and
+            # only replaces it once it is complete, so an interrupted run
+            # never leaves the project without an overview.
+            overview_stale = True
 
     route_df = cleaned_route.get("route")
     if route_df is None or route_df.empty:
@@ -1137,7 +1145,10 @@ def render_route_video(
         # leftover files from a previous run there would silently no-op
         # the very action they asked for, exactly the bug this function's
         # own manifest checkpoint above already had to be fixed for.
-        "checkpoint_enabled": is_full_pipeline_render,
+        # --force redoes every clip, so no per-file "already exists" skipping either.
+        "checkpoint_enabled": is_full_pipeline_render and not force,
+        # Inputs changed since the last render: the existing overview is stale.
+        "overview_rerender": overview_stale,
         "min_free_ram_gb": settings.get("min_free_ram_gb"),
         "enable_attraction_videos": bool(settings.get("enable_attraction_videos", True)),
         # The at-arrival photo grows to fullscreen and the clip ends right
@@ -1157,6 +1168,11 @@ def render_route_video(
         # Where the narration's cues fall: the overview reaches each cued stop
         # then (spatial_renderer/overview.py).
         "overview_cue_seconds": dict(overview_cue_times or {}),
+        # A cue at the start of a sentence: the voice starts talking about that
+        # stop at the cue, so the walker waits there a moment (this many seconds)
+        # to stay in step with it.
+        "overview_cue_wait_tags": tags_at_sentence_start(project_config.get("overview_narration")),
+        "overview_cue_wait_seconds": float(settings.get("overview_cue_wait_seconds", 2.0)),
         "res_route_path": project_config_path,
         "leg_durations": seg_durations or None,
         "duration": settings.get("duration", overview_duration),

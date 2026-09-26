@@ -31,6 +31,25 @@ def test_gps(job_config_path: str) -> Dict[str, Any]:
     }
 
 
+def _existing_narration(config_path: str) -> dict:
+    """Narration lengths / pauses / overview cues from the audio on disk, with
+    the per-waypoint cue times stored (no TTS). Cues are left out when the
+    project turns them off (settings.use_narration_cues=false)."""
+    import json
+
+    from services.vdoprocessing.videopipeline.audio_step import existing_audio_data
+    from services.vdoprocessing.videopipeline.narration_step import record_cue_times
+
+    audio = existing_audio_data(config_path)
+    with open(config_path, "r", encoding="utf-8") as f:
+        use_cues = bool(json.load(f).get("settings", {}).get("use_narration_cues", True))
+    if use_cues:
+        record_cue_times(config_path, audio)
+    else:
+        audio["overview_cue_times"] = {}
+    return audio
+
+
 def test_overview_video(
     job_config_path: str, output_video_dir: str = None, force: bool = False
 ) -> Dict[str, Any]:
@@ -52,10 +71,15 @@ def test_overview_video(
     _tracker.clear()
 
     _tracker.show("Rendering overview video...")
+    # The overview follows its narration's cues: read the audio already made
+    # (never generated here) so this stand-alone render matches the full pipeline.
+    audio = _existing_narration(str(config_path))
     video_paths = render_route_video(
         cleaned_route=cleaned_route,
         project_config_path=str(config_path),
         output_video_dir=output_video_dir,
+        overview_audio_duration=audio.get("overview_audio_duration"),
+        overview_cue_times=audio.get("overview_cue_times"),
         force=force,
         render_mode="overview",
     )
@@ -107,10 +131,13 @@ def test_residential_video(
     _tracker.clear()
 
     _tracker.show("Rendering residential video...")
+    audio = _existing_narration(str(config_path))
     video_paths = render_route_video(
         cleaned_route=cleaned_route,
         project_config_path=str(config_path),
         output_video_dir=str(output_video_dir),
+        audio_durations=audio.get("audio_durations"),
+        audio_pauses=audio.get("audio_pauses"),
         force=force,
         render_mode="residential",
         leg_index=leg_index,

@@ -160,3 +160,11 @@ def test_subtitles_and_export_delay_by_the_clip_opening(tmp_path):
     srt = tmp_path / "a.srt"
     srt.write_text("1\n00:00:01,500 --> 00:00:59,900\nこんにちは\n", encoding="utf-8")
     assert "00:00:08,100 --> 00:01:06,500" in open(shift_srt(str(srt), 6.6), encoding="utf-8").read()
+
+
+def test_cues_at_the_start_of_a_sentence_are_found():
+    from services.localization.cues import tags_at_sentence_start
+
+    text = "{start}はじめです。{1}つぎへ向かい{2}ます。\n{3}おわり。{end}"
+    # {1} and {end} close a sentence, {2} is mid-sentence: only passage openers wait
+    assert tags_at_sentence_start(text) == ["start", "3"]

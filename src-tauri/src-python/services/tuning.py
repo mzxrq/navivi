@@ -721,11 +721,25 @@ OUTRO_GRID_COLS_MAX = 5
 OUTRO_CARD_MARGIN = 18
 OUTRO_CARD_ASPECT = 4 / 3  # thumbnail width:height
 
+# When a clip's narration outlasts its video, the export holds the video's last
+# frame until the narration ends plus this many seconds (so the picture never
+# ends while the voice is still speaking).
+AUDIO_END_HOLD_SECONDS = 0.5
+
 # --- TTS narration (Irodori-TTS) --------------------------------------------
 # Fallback defaults for services.tts.ttsengine.TTSConfig — job_config.json
 # can still override per-project via settings.tts, same pattern as
 # settings.mode_speeds_kmh above.
 TTS_MODEL = "irodori-tts"
+# Device the Irodori TTS server runs its model and codec on: "cpu", "cuda" or
+# "auto" (the GPU when there is one). The environment variable
+# NAVIVI_TTS_DEVICE overrides it. A long text in one request drove the GPU to
+# ~98% load / ~7.8 GB VRAM and hard-shut the PC (hypervisor error), so text is
+# split into short chunks (below) that are spoken one at a time and joined.
+TTS_DEVICE = "auto"
+# Longest text sent to the TTS server in one request, in characters: about 15
+# seconds of speech at the project's measured ~4.4 characters per second.
+TTS_MAX_CHUNK_CHARS = 60
 TTS_VOICE = "test1"  # Irodori's only bundled voice preset as of writing
 # [Config] Playback speed multiplier sent to the Irodori TTS server; 1.0 = the
 # model's natural pace. The server itself clamps to [0.25, 4.0], but TTSConfig

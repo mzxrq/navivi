@@ -16,11 +16,17 @@ from services.vdoprocessing.vdoexporter import VideoExporter
 from services.logger.progress import tracker
 from services import tuning
 from .base import logger
+from .overview_timing import warp_path
 
 # Animation-loop tuning constants (magic numbers pulled out of the loop body
 # below so their purpose has a name; not read from self.config/tuning).
 _MIN_TRIGGER_GAP_FLOOR_SECONDS = 0.15  # floor effective_gap_frames shrinks to for a deep backlog
-_DEFAULT_FREEZE_SECONDS = 4.0  # fallback display duration when a popup sets no freeze_seconds
+_DEFAULT_FREEZE_SECONDS = 4.0
+# Longest the overview walker waits at a stop for the voice to reach its cue.
+_MAX_CUE_WAIT_SECONDS = 20.0
+# A walk re-timed to meet its cue runs at most this much slower / faster than
+# planned (see _animate_overview_frames' _catch_up).
+_CATCH_UP_RANGE = (0.6, 1.5)  # fallback display duration when a popup sets no freeze_seconds
 
 
 class _OverviewAnimationMixin:
@@ -304,7 +310,74 @@ class _OverviewAnimationMixin:
                 route_obstacles=route_obstacle_arr, draw_host_card=False,
             )
 
-        for current_frame, path_point in enumerate(smooth_path):
+        # A cued stop can ask the walker to wait there for a moment: the same
+        # path frame is played again `wait["n"]` more times (its popup keeps
+        # fading in), so the picture stays in step with the voice.
+        wait = {"n": 0}
+        # After a stop (its wait, card hold or stop-by cards) the walk to the
+        # NEXT cued stop is re-timed once so it still gets there on its cue -
+        # but only within _CATCH_UP_RANGE of its planned pace, so it never
+        # rushes or crawls (an unreachable cue just lands a little late/early).
+        route = {"path": smooth_path, "cum": cum_smooth_dist, "catch_up": False}
+
+        def _path_frames():
+            i = 0
+            while i < len(route["path"]):
+                yield i, route["path"][i]
+                while wait["n"] > 0:
+                    wait["n"] -= 1
+                    yield i, route["path"][i]
+                i += 1
+
+        def _catch_up(index: int) -> None:
+            ahead = [
+                ap for ap in active_popups
+                if ap.get("cue_frame") is not None and ap.get("expected_frame") is not None
+                and ap["expected_frame"] > index and not ap["data"].get("triggered")
+            ]
+            if not ahead:
+                return
+            nxt = min(ahead, key=lambda ap: ap["expected_frame"])
+            end = int(nxt["expected_frame"])
+            planned = end - index
+            if planned < 2:
+                return
+            wanted = int(nxt["cue_frame"]) - video.frames_written
+            lo, hi = _CATCH_UP_RANGE
+            new_len = int(round(min(max(wanted, planned / hi), planned / lo)))
+            if abs(new_len - planned) < 2:
+                return
+            path, cum = route["path"], route["cum"]
+            xs, ys = [0.0, float(new_len)], [0.0, float(planned)]
+            seg, seg_cum = warp_path(
+                path[index:end + 1], cum[index:end + 1] if cum is not None else None,
+                xs, ys, out_len=new_len + 1,
+            )
+            route["path"] = np.concatenate([path[:index], seg, path[end + 1:]])
+            if cum is not None:
+                route["cum"] = np.concatenate([cum[:index], seg_cum, cum[end + 1:]])
+            shift = new_len - planned
+            for ap in active_popups:
+                ef = ap.get("expected_frame")
+                if ef is None or ef <= index:
+                    continue
+                ap["expected_frame"] = (
+                    index + int(round((ef - index) * new_len / planned)) if ef <= end else ef + shift
+                )
+            logger.info(
+                "Overview: walk to stop #%s re-timed %.1fs -> %.1fs to meet its cue.",
+                nxt.get("order"), planned / fps, new_len / fps,
+            )
+
+        last_index = -1
+        for current_frame, path_point in _path_frames():
+            if current_frame != last_index:
+                if route["catch_up"]:
+                    route["catch_up"] = False
+                    _catch_up(current_frame)
+                    path_point = route["path"][current_frame]
+                smooth_path, cum_smooth_dist = route["path"], route["cum"]
+                last_index = current_frame
             if is_video:
                 ret, vid_frame = cap.read()
                 if ret:
@@ -488,6 +561,7 @@ class _OverviewAnimationMixin:
                 triggered_popup = pending_popups.pop(0)
                 triggered_popup["data"]["triggered"] = True
                 last_trigger_frame = current_frame
+                route["catch_up"] = True
                 if triggered_popup.get("cue_frame") is not None:
                     logger.info(
                         "Overview stop #%s reached at %.1fs (its cue: %.1fs).",
@@ -662,6 +736,24 @@ class _OverviewAnimationMixin:
                 )
 
                 if not freeze_frame_on:
+                    # Reached before the voice gets to this stop's cue: the
+                    # walker stops here and the picture holds (the card
+                    # showing) until the voice catches up, then walks on.
+                    # A cue at the start of a sentence always waits at least
+                    # cue_wait_frames.
+                    cue_frame = triggered_popup.get("cue_frame")
+                    early = (
+                        int(cue_frame) - video.frames_written - 1 if cue_frame is not None else 0
+                    )
+                    wait["n"] = max(
+                        int(triggered_popup.get("cue_wait_frames") or 0),
+                        min(max(0, early), int(_MAX_CUE_WAIT_SECONDS * fps)),
+                    )
+                    if early > 0:
+                        logger.info(
+                            "Overview stop #%s reached %.1fs before its cue: waiting %.1fs.",
+                            triggered_popup.get("order"), early / fps, wait["n"] / fps,
+                        )
                     # [NOTE] [Animation] Flow-through: the traveler keeps moving — no held
                     # frame, no arrival pause. The popup card rides along as
                     # a HUD overlay beside the waypoint's own pin (with a
@@ -674,7 +766,7 @@ class _OverviewAnimationMixin:
                     display_seconds = float(
                         triggered_popup.get("leg_display_seconds")
                         or triggered_popup["data"].get("freeze_seconds", _DEFAULT_FREEZE_SECONDS)
-                    )
+                    ) + wait["n"] / fps  # the card stays up while the walker waits
                     # pending_popups here is whatever's LEFT after this one
                     # was just popped off the front — i.e. how many other
                     # already-triggered popups are still queued behind it,

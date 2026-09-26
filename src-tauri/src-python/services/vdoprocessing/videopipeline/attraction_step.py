@@ -80,10 +80,7 @@ def generate_waypoint_attraction_video(
     return {"status": "failed", "label": label, "output_filename": output_filename}
 
 
-def is_unvisited_stopby(waypoint: dict) -> bool:
-    """A stop-by waypoint that is not connected to the route: the walker only
-    passes near it, so it has no attraction video."""
-    return bool(waypoint.get("isStopBy")) and not waypoint.get("connectToRoute")
+from .audio_step import is_unvisited_stopby  # noqa: E402,F401  (shared rule: see audio_step)
 
 
 def render_attraction_videos(

@@ -14,7 +14,7 @@ each pipeline step's test_* command lives next to its own concerns:
 
 from .helpers import _output_dir_from_config, _video_safe_label, _load_tts_waypoints
 from .gps_commands import test_gps, test_overview_video, test_residential_video
-from .tts_commands import test_tts, test_tts_all
+from .tts_commands import test_tts, test_tts_all, test_attraction_tts, test_attraction_tts_all
 from .attraction_commands import (
     test_attraction_video,
     test_attraction_videos,
@@ -33,6 +33,8 @@ __all__ = [
     "test_residential_video",
     "test_tts",
     "test_tts_all",
+    "test_attraction_tts",
+    "test_attraction_tts_all",
     "test_attraction_video",
     "test_attraction_videos",
     "test_attraction_finalize",

@@ -73,7 +73,11 @@ class _OverviewRenderMixin:
         # up the call chain, which clears the whole checkpoint before this
         # is ever reached) to be regenerated.
         overview_path = str(self.out_dir / "01_overview.mp4")
-        if self.config.get("checkpoint_enabled", False) and _output_is_valid(overview_path):
+        if (
+            self.config.get("checkpoint_enabled", False)
+            and not self.config.get("overview_rerender", False)
+            and _output_is_valid(overview_path)
+        ):
             logger.info("Overview video already exists — skipping render: %s", overview_path)
             return overview_path
 
@@ -403,6 +407,20 @@ class _OverviewRenderMixin:
                 return int(np.searchsorted(cum_smooth_dist, target_dist))
             return int(frac * (num_frames_lookup - 1))
 
+        # A cue at the start of a sentence: the walker waits at that stop for a
+        # moment (its popup fading in) so the picture stays in step with the voice.
+        wait_tags = {str(t) for t in (self.config.get("overview_cue_wait_tags") or [])}
+        wait_frames = int(fps * float(self.config.get("overview_cue_wait_seconds", 2.0)))
+        for ap in active_popups:
+            numbered = (
+                ap["index"] != 0 and not ap["data"].get("is_stopby")
+                and (not stop_popup or ap["index"] != stop_popup["index"])
+            )
+            ap["cue_wait_frames"] = (
+                wait_frames if audio_cues and numbered and str(ap.get("order")) in wait_tags
+                and str(ap.get("order")) in audio_cues else 0
+            )
+
         # No leg between two waypoints (start and end included) animates for
         # longer than this: a longer one is played faster.
         cap_frames = int(fps * float(self.config.get("overview_max_leg_seconds", 10.0)))
@@ -436,7 +454,7 @@ class _OverviewRenderMixin:
             def _hold_frames(ap) -> int:
                 group = ap.get("stopby_group") or []
                 if not (ap["data"].get("freeze_frame", False) or group):
-                    return 0
+                    return ap.get("cue_wait_frames", 0)  # the wait at a cued stop
                 return int(fps * (
                     float(self.post_arrival_hold_seconds)
                     + max(float(ap["data"].get("freeze_seconds", 4.0)), tuning.POPUP_MIN_DISPLAY_SECONDS)
@@ -455,16 +473,19 @@ class _OverviewRenderMixin:
                 int(fps * len(start_popup.get("stopby_group") or []) * tuning.STOPBY_BATCH_SECONDS)
                 if start_popup else 0
             )
+            # The walk may be stretched back out to the length the cues need: the
+            # leg cap shortened the natural path, but each cued stop still has its
+            # own time (and is itself no more than one cap after the last).
+            room = max(len(smooth_arr_lookup), num_frames)
             target_frames = stop_targets(
                 natural_frames, audio_cues, walk_start_frames + start_batch, fps,
-                len(smooth_arr_lookup), holds=hold_before, cap_frames=cap_frames or None,
+                room, holds=hold_before, cap_frames=cap_frames or None,
             )
             if target_frames:
                 # The last leg (after the last stop) is capped too: the walk
                 # ends at most one cap after it.
                 total_out = min(
-                    len(smooth_arr_lookup),
-                    max(target_frames.values()) + (cap_frames or len(smooth_arr_lookup)) + 1,
+                    room, max(target_frames.values()) + (cap_frames or room) + 1
                 )
                 xs, ys = warp_controls(natural_frames, target_frames, total_out, len(smooth_arr_lookup))
                 smooth_path, cum_smooth_dist = warp_path(

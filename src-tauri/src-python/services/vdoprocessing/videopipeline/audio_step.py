@@ -24,6 +24,12 @@ from .helpers import (
 )
 
 
+def is_unvisited_stopby(waypoint: dict) -> bool:
+    """A stop-by the route only passes near (not connected to it): the walker
+    never goes there, so it gets no narration audio and no attraction video."""
+    return isinstance(waypoint, dict) and bool(waypoint.get("isStopBy")) and not waypoint.get("connectToRoute")
+
+
 def base_narration_script(waypoint: dict) -> Optional[str]:
     """The narration the user wrote for a waypoint, timing cue tags included
     (see localization/cues.py). The waypoint editor writes narration as
@@ -221,6 +227,57 @@ async def generate_waypoint_audio(
     }
 
 
+def existing_audio_data(project_config_path: str) -> dict:
+    """The result generate_audio() would give, built only from the narration
+    audio already on disk: no TTS server is started and nothing is generated (a
+    missing clip counts as silent). For the stand-alone overview / residential
+    commands, which must still follow the narration (its length and cues)."""
+    from services.tts.ttsengine import AudioProcessor
+
+    config_path = Path(project_config_path)
+    with open(config_path, "r", encoding="utf-8") as f:
+        project_config = json.load(f)
+    waypoints = project_config.get("waypoints", [])
+    apply_cued_scripts(waypoints, config_path.parent)
+    audio_dir = project_audio_dir(config_path.parent)
+    processor = AudioProcessor(output_dir=audio_dir)
+
+    data: Dict[str, Any] = {
+        "audio_durations": [], "audio_pauses": [], "audio_paths": [], "subtitle_paths": [],
+        "attraction_audio_paths": [], "attraction_audio_durations": [],
+        "overview_audio_path": None, "overview_audio_duration": 0.0, "overview_cue_times": {},
+    }
+
+    def analyse(path: Path):
+        return processor.analyze_pauses(str(path)) if output_is_valid(path) else None
+
+    for idx, wp in enumerate(waypoints):
+        label = wp.get("label", f"Waypoint {idx + 1}") if isinstance(wp, dict) else ""
+        skip = not isinstance(wp, dict) or is_unvisited_stopby(wp)
+        main_path = audio_dir / waypoint_audio_filename(idx, label)
+        main = None if skip or not _resolve_narration_script(wp) else analyse(main_path)
+        data["audio_durations"].append(main["duration_seconds"] if main else 0.0)
+        data["audio_pauses"].append(main["pauses"] if main else [])
+        data["audio_paths"].append(str(main_path) if main else None)
+        data["subtitle_paths"].append(None)
+        attraction_path = audio_dir / attraction_audio_filename(idx, label)
+        attraction = None if skip or not _resolve_attraction_narration_script(wp) else analyse(attraction_path)
+        data["attraction_audio_durations"].append(attraction["duration_seconds"] if attraction else 0.0)
+        data["attraction_audio_paths"].append(str(attraction_path) if attraction else None)
+
+    tagged = project_config.get("overview_narration") or ""
+    overview_path = audio_dir / "00_overview_narration.wav"
+    overview = analyse(overview_path) if clean_text(tagged).strip() else None
+    if overview:
+        clean, cues = strip_cues(tagged)
+        data["overview_audio_path"] = str(overview_path)
+        data["overview_audio_duration"] = overview["duration_seconds"]
+        data["overview_cue_times"] = (
+            cue_times(cues, clean, overview["duration_seconds"], overview["pauses"]) if cues else {}
+        )
+    return data
+
+
 def stop_tts_server() -> None:
     """Force-stops the TTS server immediately after use — its idle timeout
     would otherwise keep it loaded in VRAM, contending with the attraction
@@ -337,10 +394,12 @@ def generate_audio(
                 # touching the TTS server — a waypoint with no narration
                 # text has nothing to generate, so skip it outright instead
                 # of attempting (and silently failing) the call.
-                if not isinstance(wp, dict) or not _resolve_narration_script(wp):
+                if not isinstance(wp, dict) or is_unvisited_stopby(wp) or not _resolve_narration_script(wp):
                     logger.info(
-                        "Step 2: [%d] Skipping '%s' — no narration script configured.",
+                        "Step 2: [%d] Skipping '%s' — %s.",
                         idx + 1, label,
+                        "stop-by not connected to the route" if is_unvisited_stopby(wp)
+                        else "no narration script configured",
                     )
                     audio_durations.append(0.0)
                     audio_pauses.append([])
@@ -397,7 +456,7 @@ def generate_audio(
             # append None) regardless of whether that loop's `continue`
             # branches fired for this same waypoint.
             for idx, wp in enumerate(waypoints):
-                if not isinstance(wp, dict) or not _resolve_attraction_narration_script(wp):
+                if not isinstance(wp, dict) or is_unvisited_stopby(wp) or not _resolve_attraction_narration_script(wp):
                     attraction_audio_paths.append(None)
                     attraction_audio_durations.append(0.0)
                     continue

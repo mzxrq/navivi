@@ -23,6 +23,8 @@ from services.cli import (
     test_residential_video,
     test_tts,
     test_tts_all,
+    test_attraction_tts,
+    test_attraction_tts_all,
     test_attraction_video,
     test_attraction_videos,
     test_attraction_finalize,
@@ -41,7 +43,7 @@ if __name__ == "__main__":
     if len(sys.argv) < 2:
         print(
             "Usage: python main.py <path/to/job_config.json> "
-            "[gps|overview|residential|tts|tts-all|attraction|attraction-all|"
+            "[gps|overview|residential|tts|tts-all|attraction-tts|attraction-tts-all|attraction|attraction-all|"
             "attraction-finalize|intro|outro|subtitle|subtitle-all|concat|transition|all] "
             "[waypoint_index] [--force]\n"
             "       (output dir is always <job_config's directory_path>/video)\n"
@@ -116,6 +118,13 @@ if __name__ == "__main__":
             elif mode_arg == "tts-all":
                 # [NOTE] [TTS] Generates narration audio for every narrated waypoint.
                 result = test_tts_all(job_config_arg, None, force=force_arg)
+            elif mode_arg == "attraction-tts":
+                # [NOTE] [TTS] Generates the attraction-only narration audio for ONE waypoint (index from argv[3], default 0).
+                waypoint_index_arg = int(sys.argv[3]) if len(sys.argv) > 3 else 0
+                result = test_attraction_tts(job_config_arg, None, waypoint_index_arg, force=force_arg)
+            elif mode_arg == "attraction-tts-all":
+                # [NOTE] [TTS] Generates the attraction-only narration audio for every waypoint that has one (unconnected stop-bys are skipped).
+                result = test_attraction_tts_all(job_config_arg, None, force=force_arg)
             elif mode_arg == "attraction":
                 # [NOTE] [Animation] Generates ONE waypoint's attraction (pan/outpaint) video from its popup image (index from argv[3], default 0).
                 waypoint_index_arg = int(sys.argv[3]) if len(sys.argv) > 3 else 0

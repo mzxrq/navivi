@@ -431,7 +431,7 @@ class _TransitionMixin:
         # "pydeck" as an alternate opt-in, since a project already using
         # pydeck for its overview background naturally wants this too).
         use_dynamic_pydeck = bounding_box is not None and (
-            bool(settings.get("enable_gl_ending_zoom", False))
+            bool(settings.get("enable_gl_ending_zoom", True))  # on by default; false turns the pydeck zoom off
             or str(settings.get("overview_background", "")).lower() == "pydeck"
         )
         # Diagnostic: pins down WHY this ever silently falls back to the
@@ -443,7 +443,7 @@ class _TransitionMixin:
             "Ending highlight: use_dynamic_pydeck=%s (bounding_box_present=%s, "
             "enable_gl_ending_zoom=%s, overview_background=%r)",
             use_dynamic_pydeck, bounding_box is not None,
-            settings.get("enable_gl_ending_zoom", False),
+            settings.get("enable_gl_ending_zoom", True),
             settings.get("overview_background"),
         )
         is_fullscreen = False  # the overview always shows the small pip card, whatever image_display says

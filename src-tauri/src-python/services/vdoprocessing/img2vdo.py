@@ -96,7 +96,7 @@ class AttractionVideoGenerator:
     # pending manifest + its now-superseded raw clips — so regenerating
     # doesn't silently leak old files that nothing else will ever clean up.
     def _clear_stale_outputs(self, output_filename: str) -> None:
-        final_path = self.editor._resolve_output_path(output_filename, "video")
+        final_path = self.output_dir / output_filename
         if final_path.exists():
             try:
                 final_path.unlink()
@@ -290,7 +290,7 @@ class AttractionVideoGenerator:
             video_path, target_audio_duration, overshoot_tolerance
         )
 
-        final_path = self.editor._resolve_output_path(output_filename, "video")
+        final_path = self.output_dir / output_filename
         if final_path.exists():
             final_path.unlink()
 
@@ -529,7 +529,7 @@ class AttractionVideoGenerator:
         if not image_list:
             return None
 
-        final_path = self.editor._resolve_output_path(output_filename, "video")
+        final_path = self.output_dir / output_filename
         if not force and output_is_valid(final_path):
             logger.info(
                 "Waypoint deliverable already exists — skipping generation: %s",
