@@ -29,6 +29,16 @@ from typing import Callable, Dict, List, Optional, Tuple
 # into another. Skipped entirely when attraction videos are disabled for a
 # project, since there's nothing to cool down from.
 GPU_STAGE_COOLDOWN_SECONDS = 8.0
+# Before each Wan attraction clip (services/gpu_cooldown.py): if the GPU is at
+# or above GPU_COOLDOWN_START_C, wait until it is down to GPU_COOLDOWN_RESUME_C
+# (checked every GPU_COOLDOWN_POLL_SECONDS), but never longer than
+# GPU_COOLDOWN_MAX_WAIT_SECONDS. Back-to-back clips otherwise keep an 8GB
+# laptop card near 77C for the whole attraction step. Still-photo clips
+# ("none" preset) skip this - they don't use the GPU.
+GPU_COOLDOWN_START_C = 70
+GPU_COOLDOWN_RESUME_C = 60
+GPU_COOLDOWN_POLL_SECONDS = 3.0
+GPU_COOLDOWN_MAX_WAIT_SECONDS = 120.0
 
 # --- FFmpeg resource cap -----------------------------------------------------
 # No ffmpeg call anywhere in this codebase passed -threads before, so every
@@ -648,7 +658,19 @@ TRIGGER_RADIUS_PADDING_DEFAULTS: Dict[str, float] = {"overview": 10, "waypoint":
 # bundled instance never collides with a developer's own separately-running
 # ComfyUI on the same machine.
 COMFYUI_BASE_URL = "http://127.0.0.1:8189"
-COMFYUI_UNET_NAME = "Wan2_2-TI2V-5B-Turbo-Q4_K.gguf"
+# From huggingface.co/hum-ma/Wan2.2-TI2V-5B-Turbo-GGUF, placed in
+# bin/ComfyUI/models/diffusion_models. Must be the exact filename there: a
+# name ComfyUI doesn't have makes it reject every clip, and the attraction
+# step then silently falls back to plain pan/zoom for all of them.
+COMFYUI_UNET_NAME = "Wan2_2-TI2V-5B-Turbo-Q4_K_M.gguf"
+# Attraction clips are decoded with ComfyUI's VAEDecodeTiled: frames in
+# spatial tiles of this many px (with this overlap) and this many frames at a
+# time. A single full-size decode doesn't fit in 8 GB of VRAM next to the Wan
+# model and crawls in system RAM instead.
+COMFYUI_VAE_TILE_SIZE = 512
+COMFYUI_VAE_TILE_OVERLAP = 64
+COMFYUI_VAE_TEMPORAL_SIZE = 32
+COMFYUI_VAE_TEMPORAL_OVERLAP = 8
 COMFYUI_CLIP_NAME = "umt5_xxl_fp8_e4m3fn_scaled.safetensors"
 COMFYUI_VAE_NAME = "wan2.2_vae.safetensors"
 # 1280x704 fits comfortably in an 8GB VRAM budget at this quant (see
@@ -679,24 +701,77 @@ COMFYUI_MODEL_SHIFT = 8.0
 # Turbo checkpoint is distilled specifically for 4 steps).
 COMFYUI_MIN_FRAMES = 25  # ~1s @ 24fps
 COMFYUI_MAX_FRAMES = 89  # ~3.7s @ 24fps (was 121 ~5s, then 65 ~2.7s — middle ground)
+# Sequential extension: when a narration outlasts one COMFYUI_MAX_FRAMES
+# segment, the attraction clip is built from up to this many segments in ONE
+# ComfyUI graph, each segment started from the previous segment's last frame
+# (so the motion carries on instead of the last frame freezing). 2 segments
+# is ~7.3s; anything longer is still held on the last frame. Each extra
+# segment adds ~2 minutes of GPU time and drift: segments only see the
+# previous last frame, not the photo, so changes compound (4 segments turned
+# a painted wall into a van driving in). 1 turns extension off.
+COMFYUI_EXTEND_MAX_SEGMENTS = 2
+# After the Wan motion runs out, a moving preset's clip continues as a slow
+# push-in/drift over its last frame (vdoprocessing/slow_move.py) instead of
+# freezing, in a random direction per clip: the frame grows by about this
+# fraction per second (0.012 = +1.2%/s, ~10% over an 8s gap; each clip
+# randomises it by +/-25%). The "none" preset stays a still photo.
+ATTRACTION_SLOW_MOVE_ZOOM_PER_SEC = 0.012
+# Wan2.2's standard (Chinese) negative prompt, then two additions:
+# - no duplicated props: duplicated/repeated objects, copy-pasted or mirrored
+#   elements, the same object appearing twice, cloned people, objects
+#   appearing from or vanishing into nothing, objects melting into each other,
+#   extra objects, warped buildings/structures, wrong perspective, new
+#   vehicles, objects entering the frame, scene content changing, fast
+#   motion, camera shake;
+# - scenery only: people, figures, pedestrians, crowds, tourists, passers-by,
+#   walking or appearing people (attraction clips never show people);
+# - scenery only: foreground objects, objects in front of the lens, first-
+#   person view, hands, hand-held objects, toys, weapons, objects entering
+#   from the frame edge, anything blocking the view (a toy-like gadget rose
+#   into a street shot from the bottom edge);
+# - cinematic realism: cartoon, anime, CG/3D render look, plastic texture,
+#   painting, over-sharpened, flicker, unnatural motion, morphing scenery.
 COMFYUI_NEGATIVE_PROMPT = (
     "色调艳丽，过曝，静态，细节模糊不清，字幕，风格，作品，画作，画面，静止，"
     "整体发灰，最差质量，低质量，JPEG压缩残留，丑陋的，残缺的，多余的手指，"
     "画得不好的手部，画得不好的脸部，畸形的，毁容的，形态畸形的肢体，手指融合，"
-    "静止不动的画面，杂乱的背景，三条腿，背景人很多，倒着走"
+    "静止不动的画面，杂乱的背景，三条腿，背景人很多，倒着走，"
+    "重复的物体，重复的道具，重复的建筑，复制粘贴的元素，镜像重复，同一物体出现两次，"
+    "克隆的人物，重复的人物，物体凭空出现，物体凭空消失，物体相互融合，多余的物体，"
+    "建筑变形，结构扭曲，透视错误，新出现的车辆，物体进入画面，场景内容改变，快速运动，镜头晃动，"
+    "人，人物，行人，人群，游客，路人，走动的人，出现的人，"
+    "前景物体，镜头前的物体，第一人称视角，手，手持物体，玩具，武器，从画面边缘进入的物体，遮挡画面，"
+    "卡通，动漫，CG渲染，3D渲染感，塑料质感，绘画感，过度锐化，画面闪烁，"
+    "不自然的运动，场景变形"
 )
 # Maps attraction_step.py's camera_pans vocabulary (also used by
 # local_pan_generator.py's _CAMERA_PAN_PRESETS) to an English motion prompt
 # Wan responds to — camera_pans entries are otherwise just short keywords,
 # not descriptive prose.
+# Every move is deliberately very slow over a scene that stays the same: a
+# fast or vague move gives Wan room to invent things (a painted wall turned
+# into a van driving in), and that compounds across extension segments.
+# Keys are the editor's presets normalised (vdoprocessing/camera_pan.py).
+# "none" never reaches Wan - that preset holds the photo still instead (see
+# img2vdo._generate_single_clip); its prompt here is the default for a
+# waypoint with no preset at all.
 COMFYUI_CAMERA_PAN_PROMPTS: Dict[str, str] = {
-    "panright": "smooth cinematic camera pan to the right across the scene, natural motion",
-    "panleft": "smooth cinematic camera pan to the left across the scene, natural motion",
-    "zoomin": "slow cinematic zoom in on the scene, natural motion",
-    "zoomout": "slow cinematic zoom out from the scene, natural motion",
-    "none": "subtle natural ambient motion, gentle cinematic movement",
+    "panright": "very slow steady camera pan to the right, the scene stays exactly the same, "
+                "stable composition, realistic cinematic footage, no people, empty scenery, clear unobstructed view with nothing in the foreground",
+    "panleft": "very slow steady camera pan to the left, the scene stays exactly the same, "
+               "stable composition, realistic cinematic footage, no people, empty scenery, clear unobstructed view with nothing in the foreground",
+    "panup": "very slow steady camera tilt upwards, the scene stays exactly the same, "
+             "stable composition, realistic cinematic footage, no people, empty scenery, clear unobstructed view with nothing in the foreground",
+    "pandown": "very slow steady camera tilt downwards, the scene stays exactly the same, "
+               "stable composition, realistic cinematic footage, no people, empty scenery, clear unobstructed view with nothing in the foreground",
+    "zoomin": "very slow steady push-in towards the scene, the scene stays exactly the same, "
+              "stable composition, realistic cinematic footage, no people, empty scenery, clear unobstructed view with nothing in the foreground",
+    "zoomout": "very slow steady pull-back from the scene, the scene stays exactly the same, "
+               "stable composition, realistic cinematic footage, no people, empty scenery, clear unobstructed view with nothing in the foreground",
+    "none": "very slow steady camera movement, subtle natural ambient motion, "
+            "the scene stays exactly the same, realistic cinematic footage, no people, empty scenery, clear unobstructed view with nothing in the foreground",
 }
-COMFYUI_DEFAULT_MOTION_PROMPT = "subtle natural ambient motion, gentle cinematic movement"
+COMFYUI_DEFAULT_MOTION_PROMPT = COMFYUI_CAMERA_PAN_PROMPTS["none"]
 # How long the bundled server can sit unused before idle_watchdog.py shuts
 # it down — mirrors IrodoriTTSClient's reasoning (10 min covers gaps between
 # waypoints in one run without wasting VRAM/RAM long after the job ends).

@@ -1,5 +1,5 @@
 """ComfyUI-backed image-to-video client for attraction clips
-(Wan2.2-TI2V-5B-Turbo-GGUF, Q6_K quant).
+(Wan2.2-TI2V-5B-Turbo-GGUF, Q4_K_M quant - see tuning.COMFYUI_UNET_NAME).
 
 Talks to the bundled ComfyUI install at src-python/bin/ComfyUI over its
 REST API (submit a workflow graph, poll for completion, download the
@@ -16,13 +16,14 @@ generation fails.
 from __future__ import annotations
 
 import copy
+import math
 import os
 import subprocess
 import sys
 import time
 import uuid
 from pathlib import Path
-from typing import Any, Dict, Final, Optional
+from typing import Any, Dict, Final, Optional, Tuple
 from urllib.parse import urlsplit
 
 import httpx
@@ -120,10 +121,20 @@ _WORKFLOW_TEMPLATE: Dict[str, Any] = {
         "class_type": "KSampler",
         "_meta": {"title": "KSampler"},
     },
+    # Tiled, not plain VAEDecode: decoding all frames at full size in one
+    # pass needs more VRAM than an 8 GB card has left with the Wan model still
+    # loaded, spills into system RAM and takes 10+ minutes per clip; in
+    # tiles/frame chunks it fits (see tuning.COMFYUI_VAE_TILE_*).
     "8": {
-        "inputs": {"samples": ["3", 0], "vae": ["39", 0]},
-        "class_type": "VAEDecode",
-        "_meta": {"title": "VAE Decode"},
+        "inputs": {
+            "samples": ["3", 0], "vae": ["39", 0],
+            "tile_size": tuning.COMFYUI_VAE_TILE_SIZE,
+            "overlap": tuning.COMFYUI_VAE_TILE_OVERLAP,
+            "temporal_size": tuning.COMFYUI_VAE_TEMPORAL_SIZE,
+            "temporal_overlap": tuning.COMFYUI_VAE_TEMPORAL_OVERLAP,
+        },
+        "class_type": "VAEDecodeTiled",
+        "_meta": {"title": "VAE Decode (Tiled)"},
     },
     "57": {
         "inputs": {
@@ -158,6 +169,19 @@ def _resolve_frame_length(duration_sec: float) -> int:
     return max(tuning.COMFYUI_MIN_FRAMES, min(tuning.COMFYUI_MAX_FRAMES, length))
 
 
+def _resolve_segments(duration_sec: float) -> Tuple[int, int]:
+    """(segment count, frames per segment) for a clip of duration_sec. One
+    segment sized to the duration when it fits in COMFYUI_MAX_FRAMES;
+    otherwise full-length segments, as many as the duration needs, capped
+    at tuning.COMFYUI_EXTEND_MAX_SEGMENTS."""
+    one = _resolve_frame_length(duration_sec)
+    segment_sec = tuning.COMFYUI_MAX_FRAMES / tuning.COMFYUI_FPS
+    if duration_sec <= segment_sec or tuning.COMFYUI_EXTEND_MAX_SEGMENTS <= 1:
+        return 1, one
+    count = min(tuning.COMFYUI_EXTEND_MAX_SEGMENTS, math.ceil(duration_sec / segment_sec))
+    return count, tuning.COMFYUI_MAX_FRAMES
+
+
 def _resolve_motion_prompt(camera_pan_hint: Any) -> str:
     """camera_pans entries (attraction_step.py) are short keywords
     (panright/panleft/zoomin/zoomout/none) shared with
@@ -165,9 +189,12 @@ def _resolve_motion_prompt(camera_pan_hint: Any) -> str:
     Anything not in that vocabulary (e.g. a waypoint label used as a
     fallback prompt) is treated as a scene description and given a generic
     motion suffix instead."""
+    from services.vdoprocessing.camera_pan import normalize_camera_pan
+
     if isinstance(camera_pan_hint, list):
         camera_pan_hint = camera_pan_hint[0] if camera_pan_hint else None
-    key = str(camera_pan_hint).strip().lower() if camera_pan_hint else ""
+    # "zoom-in" / "Zoom In" / "zoom_in" all mean the "zoomin" preset.
+    key = normalize_camera_pan(camera_pan_hint)
 
     if key in tuning.COMFYUI_CAMERA_PAN_PROMPTS:
         return tuning.COMFYUI_CAMERA_PAN_PROMPTS[key]
@@ -394,13 +421,50 @@ class ComfyUII2VClient:
         prompt_text: str,
         length: int,
         filename_prefix: str,
+        segments: int = 1,
     ) -> Dict[str, Any]:
+        """The template graph, filled in. With segments > 1 it is extended in
+        place (sequential extension, unrolled): each extra segment takes the
+        previous segment's decoded LAST frame as its start image, samples and
+        decodes `length` more frames, drops its own first frame (a copy of
+        that start frame), and all segments are batched together before
+        CreateVideo - one graph, so the model stays loaded throughout."""
         graph = copy.deepcopy(_WORKFLOW_TEMPLATE)
         graph["56"]["inputs"]["image"] = uploaded_image_name
         graph["55"]["inputs"]["length"] = length
         graph["6"]["inputs"]["text"] = prompt_text
         graph["3"]["inputs"]["seed"] = uuid.uuid4().int & 0xFFFFFFFFFFFF
         graph["58"]["inputs"]["filename_prefix"] = filename_prefix
+
+        parts = [["8", 0]]
+        previous_decode = "8"
+        for k in range(1, segments):
+            graph[f"ext{k}_last"] = {
+                "inputs": {"image": [previous_decode, 0], "batch_index": -1, "length": 1},
+                "class_type": "ImageFromBatch",
+            }
+            latent = copy.deepcopy(graph["55"])
+            latent["inputs"]["start_image"] = [f"ext{k}_last", 0]
+            graph[f"ext{k}_latent"] = latent
+            sampler = copy.deepcopy(graph["3"])
+            sampler["inputs"]["latent_image"] = [f"ext{k}_latent", 0]
+            sampler["inputs"]["seed"] = uuid.uuid4().int & 0xFFFFFFFFFFFF
+            graph[f"ext{k}_sample"] = sampler
+            decode = copy.deepcopy(graph["8"])
+            decode["inputs"]["samples"] = [f"ext{k}_sample", 0]
+            graph[f"ext{k}_decode"] = decode
+            graph[f"ext{k}_trim"] = {
+                "inputs": {"image": [f"ext{k}_decode", 0], "batch_index": 1, "length": 4096},
+                "class_type": "ImageFromBatch",
+            }
+            parts.append([f"ext{k}_trim", 0])
+            previous_decode = f"ext{k}_decode"
+        if segments > 1:
+            graph["ext_batch"] = {
+                "inputs": {f"images.image{i}": part for i, part in enumerate(parts)},
+                "class_type": "BatchImagesNode",
+            }
+            graph["57"]["inputs"]["images"] = ["ext_batch", 0]
         return graph
 
     def _submit(self, client: httpx.Client, graph: Dict[str, Any]) -> str:
@@ -491,23 +555,23 @@ class ComfyUII2VClient:
         camera_pan_hint: Any = None,
     ) -> str:
         """Generates one attraction clip via the bundled ComfyUI server
-        (Wan2.2-TI2V-5B-Turbo-GGUF Q6_K image-to-video) and saves it to
+        (Wan2.2-TI2V-5B-Turbo-GGUF image-to-video) and saves it to
         output_path. Raises on any failure (server unreachable, execution
         error, timeout) — callers should catch and fall back to
         local_pan_generator.generate_local_clip."""
         self._ensure_server_running()
 
-        length = _resolve_frame_length(duration_sec)
+        segments, length = _resolve_segments(duration_sec)
         prompt_text = _resolve_motion_prompt(camera_pan_hint)
         filename_prefix = f"attraction/{uuid.uuid4().hex[:8]}"
 
         with httpx.Client() as client:
             uploaded_name = self._upload_image(client, image_path)
-            graph = self._build_graph(uploaded_name, prompt_text, length, filename_prefix)
+            graph = self._build_graph(uploaded_name, prompt_text, length, filename_prefix, segments)
             prompt_id = self._submit(client, graph)
             logger.info(
-                "Submitted ComfyUI I2V job %s (length=%d frames, prompt=%r)",
-                prompt_id, length, prompt_text,
+                "Submitted ComfyUI I2V job %s (%d segment(s) x %d frames, prompt=%r)",
+                prompt_id, segments, length, prompt_text,
             )
             video_outputs = self._wait_for_result(client, prompt_id)
             self._touch_activity()
