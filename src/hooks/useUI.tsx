@@ -57,15 +57,6 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({
   const [currentView, setCurrentView] = useState<AppView>("title_screen");
   const [editorMode, setEditorMode] = useState<EditorMode>("map");
   const [activeToasts, setActiveToasts] = useState<AppNotification[]>([]);
-  // const [toast, setToast] = useState<{
-  //   message: string;
-  //   type: "success" | "error" | "warning" | "info";
-  //   visible: boolean;
-  // }>({
-  //   message: "",
-  //   type: "info",
-  //   visible: false,
-  // });
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [showAppSettings, setShowAppSettings] = useState(false);
   const [isRendering, setIsRendering] = useState(false);

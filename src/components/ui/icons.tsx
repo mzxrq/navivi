@@ -114,6 +114,9 @@ export {
   Globe,
   ChevronUp,
   ChevronLeftCircle,
+  Box,
+  SwitchCamera,
+  Lightbulb,
 } from "lucide-react";
 export {
   ArrowLeft,

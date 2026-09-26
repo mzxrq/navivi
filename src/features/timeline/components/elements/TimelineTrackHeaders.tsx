@@ -2,6 +2,7 @@ import React from "react";
 import { Eye, EyeOff, Volume2, VolumeX, Lock, Unlock } from "lucide-react";
 import { TimelineData } from "../../../../types/index";
 import { t } from "@lingui/core/macro";
+import { Trans } from "@lingui/react/macro";
 
 interface TimelineTrackHeadersProps {
   headerRef: React.RefObject<HTMLDivElement | null>;
@@ -12,7 +13,10 @@ interface TimelineTrackHeadersProps {
   editingTrackId: string | null;
   setEditingTrackId: (id: string | null) => void;
   handleUpdateTrackName: (id: string, name: string) => void;
-  handleToggleTrackProp: (id: string, prop: "isHidden" | "isMuted" | "isLocked") => void;
+  handleToggleTrackProp: (
+    id: string,
+    prop: "isHidden" | "isMuted" | "isLocked",
+  ) => void;
   isDuckingActive: boolean;
 }
 
@@ -31,8 +35,8 @@ export function TimelineTrackHeaders({
   return (
     <div className="w-48 flex flex-col shrink-0 border-r border-zinc-300 dark:border-navidark-400 bg-zinc-50 dark:bg-navidark-800 z-40">
       <div className="h-8 w-full border-b border-zinc-300 dark:border-navidark-400 shrink-0 flex items-center px-3 bg-zinc-200/90 dark:bg-navidark-800/90">
-        <span className="text-[9px] font-bold text-zinc-400 dark:text-zinc-500 tracking-widest">
-          TRACKS
+        <span className="text-[9px] font-bold text-zinc-400 dark:text-zinc-500 ">
+          <Trans>Tracks</Trans>
         </span>
       </div>
       <div
@@ -53,11 +57,9 @@ export function TimelineTrackHeaders({
         }}
       >
         <div className="pb-32">
-          {/* ✨ MAPPING OVER SORTED TRACKS */}
           {sortedTracks.map((track, idx) => {
             const prevTrack = sortedTracks[idx - 1];
-            const isNewGroup =
-              !prevTrack || prevTrack.type !== track.type;
+            const isNewGroup = !prevTrack || prevTrack.type !== track.type;
 
             const isMainTrack =
               track.type === "video" ||
@@ -68,8 +70,8 @@ export function TimelineTrackHeaders({
               <React.Fragment key={track.id}>
                 {isNewGroup && (
                   <div className="h-6 w-full bg-zinc-200 dark:bg-navidark-900 border-b border-zinc-300 dark:border-navidark-700 flex items-center px-3 sticky top-0 z-10 shadow-sm">
-                    <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest">
-                      {track.type} TRACKS
+                    <span className="text-[9px] font-bold text-zinc-500">
+                      <Trans>{track.type} tracks</Trans>
                     </span>
                   </div>
                 )}
@@ -87,14 +89,12 @@ export function TimelineTrackHeaders({
                     const sourceTrackId = e.dataTransfer.getData(
                       "application/navivi-track",
                     );
-                    if (!sourceTrackId || sourceTrackId === track.id)
-                      return;
+                    if (!sourceTrackId || sourceTrackId === track.id) return;
 
                     const sourceTrack = timeline.tracks.find(
                       (t) => t.id === sourceTrackId,
                     );
-                    if (!sourceTrack || sourceTrack.type !== track.type)
-                      return;
+                    if (!sourceTrack || sourceTrack.type !== track.type) return;
 
                     setTimeline({
                       ...timeline,
@@ -192,12 +192,12 @@ export function TimelineTrackHeaders({
                         title={
                           track.duckingEnabled
                             ? isDuckingActive
-                              ? "Auto-Ducking Actively Attenuating (Click to disable)"
-                              : "Auto-Ducking Armed (Click to disable)"
-                            : "Enable Auto-Ducking on this track"
+                              ? t`Auto-Ducking Actively Attenuating`
+                              : t`Auto-Ducking Armed (Click to disable)`
+                            : t`Enable Auto-Ducking`
                         }
                       >
-                        DUCK
+                        <Trans>Duck</Trans>
                       </button>
                     )}
                   </div>
@@ -210,6 +210,9 @@ export function TimelineTrackHeaders({
                             handleToggleTrackProp(track.id, "isHidden")
                           }
                           className={`p-1 rounded transition-colors ${track.isHidden ? "text-red-500 bg-red-50 dark:bg-red-500/10" : "text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200"}`}
+                          title={
+                            track.isHidden ? t`Unhide Track` : t`Hide Track`
+                          }
                         >
                           {track.isHidden ? (
                             <EyeOff className="w-3.5 h-3.5" />
@@ -224,7 +227,7 @@ export function TimelineTrackHeaders({
                           }
                           className={`p-1 rounded transition-colors ${track.isMuted ? "text-red-500 bg-red-50 dark:bg-red-500/10" : "text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200"}`}
                           title={
-                            track.isMuted ? "Unmute Track" : "Mute Track"
+                            track.isMuted ? t`Unmute Track` : t`Mute Track`
                           }
                         >
                           {track.isMuted ? (
@@ -239,9 +242,7 @@ export function TimelineTrackHeaders({
                           handleToggleTrackProp(track.id, "isLocked")
                         }
                         className={`p-1 rounded transition-colors ${track.isLocked ? "text-red-500 bg-red-50 dark:bg-red-500/10" : "text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200"}`}
-                        title={
-                          track.isLocked ? "Unlock Track" : "Lock Track"
-                        }
+                        title={track.isLocked ? t`Unlock Track` : t`Lock Track`}
                       >
                         {track.isLocked ? (
                           <Lock className="w-3 h-3" />
@@ -264,8 +265,7 @@ export function TimelineTrackHeaders({
                           step="5"
                           value={Math.round((track.volume ?? 1.0) * 100)}
                           onChange={(e) => {
-                            const newVol =
-                              parseFloat(e.target.value) / 100;
+                            const newVol = parseFloat(e.target.value) / 100;
                             setTimeline({
                               ...timeline,
                               tracks: timeline.tracks.map((t) =>
@@ -290,6 +290,5 @@ export function TimelineTrackHeaders({
         </div>
       </div>
     </div>
-
   );
 }

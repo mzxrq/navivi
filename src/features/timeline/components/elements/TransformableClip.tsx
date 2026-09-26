@@ -177,7 +177,6 @@ export function TransformableClip({
     }
   }, [clip.source, clip.type, videoElement, imageElement]);
 
-  // Trigger layer redraw when color adjustment effects change
   useEffect(() => {
     shapeRef.current?.getLayer()?.batchDraw();
   }, [
@@ -186,7 +185,6 @@ export function TransformableClip({
     clip.effects?.saturation,
   ]);
 
-  // Animation Loop
   useEffect(() => {
     const isPrevVideo = prevMediaElement instanceof HTMLVideoElement;
     if ((clip.type !== "video" && !isPrevVideo) || !shapeRef.current) return;
@@ -256,7 +254,6 @@ export function TransformableClip({
     prevMediaElement,
   ]);
 
-  // ✨ RENDER LOOP: Calculate Progress & Draw WebGL
   let transitionProgress = 0;
   const clipTime = currentTime - clip.startTime;
   if (
@@ -378,7 +375,7 @@ export function TransformableClip({
   const rotation = clip.rotation || 0;
 
   let currentOpacity = 1;
-  // Don't apply fade opacity if we are using GL transitions
+  // don't apply fade opacity if we are using GL transitions
   if (!clip.transitionIn?.startsWith("glsl-") && clip.fadeIn && clipTime < clip.fadeIn && clipTime >= 0) {
     currentOpacity = clipTime / clip.fadeIn;
   } else if (!clip.transitionOut?.startsWith("glsl-") && clip.fadeOut && clipTime > clip.duration - clip.fadeOut) {
@@ -423,7 +420,7 @@ export function TransformableClip({
             });
           }}
         >
-          {/* Layer 1 (Base): Normal KonvaText with default fill color, stroke, and drop shadow */}
+          {/* Base: Normal KonvaText with default fill color, stroke, and drop shadow */}
           <KonvaText
             ref={textRef}
             text={textContent}
@@ -442,7 +439,7 @@ export function TransformableClip({
             shadowOpacity={shadowOpacity}
           />
 
-          {/* Layer 2 (Highlight): Wrapped inside a Konva Group with horizontal clipping */}
+          {/* Highlight: Wrapped inside a Konva Group with horizontal clipping */}
           {isKaraoke && clipProgress > 0 && (
             <KonvaGroup
               clip={{

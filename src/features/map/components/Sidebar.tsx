@@ -20,10 +20,10 @@ import {
 import { useWorkspace } from "../../../hooks/useWorkspace";
 import { useUI } from "../../../hooks/useUI";
 import { WaypointItem } from "./WaypointItem";
-import { WaypointEditor } from "./WaypointEditor";
 import { LocationSearch } from "../../../components/ui/LocationSearch";
 import { OverviewPanel } from "./OverviewPanel";
 import { t } from "@lingui/core/macro";
+import { Trans } from "@lingui/react/macro";
 
 export function Sidebar() {
   const {
@@ -40,11 +40,9 @@ export function Sidebar() {
     saveProject,
     activeWaypointId,
     setActiveWaypointId,
-    forceReroute,
     setIsDirty,
     settings,
     updateSettings,
-    routeSegments,
   } = useWorkspace();
 
   const [isListEditMode, setIsListEditMode] = useState(false);
@@ -101,7 +99,7 @@ export function Sidebar() {
       return;
     }
     if (waypoints.length === 0) {
-      showToast("Cannot generate: Please add at least one waypoint.", "error");
+      showToast(t`Cannot generate: Please add at least one waypoint.`, "error");
       return;
     }
     setShowGenerateConfirm(true);
@@ -109,7 +107,7 @@ export function Sidebar() {
 
   const executeGenerate = async () => {
     setShowGenerateConfirm(false);
-    await saveProject(); // ✨ Settings are already updated by the checkbox below
+    await saveProject();
     setIsRendering(true);
   };
 
@@ -122,13 +120,6 @@ export function Sidebar() {
     newWaypoints.splice(result.destination.index, 0, reorderedItem);
 
     setWaypoints(newWaypoints);
-  };
-
-  const handleReverseRoute = () => {
-    if (waypoints.length < 2) return;
-    setWaypoints([...waypoints].reverse());
-    if (setIsDirty) setIsDirty(true);
-    showToast("Route reversed successfully.", "info");
   };
 
   return (
@@ -147,10 +138,10 @@ export function Sidebar() {
           <div className="p-8 mt-10 mx-5 rounded-2xl border border-dashed border-zinc-300 dark:border-white/10 bg-black/5 dark:bg-white/5 text-center shrink-0 transition-colors animate-in fade-in">
             <Route className="w-10 h-10 mb-3 mx-auto opacity-20 text-zinc-500" />
             <p className="text-xs font-semibold text-zinc-500">
-              No stops added yet.
+              <Trans>No stops added yet</Trans>
             </p>
             <p className="text-[10px] text-zinc-400 mt-1.5">
-              Click the map or drop a GPS file to start building your route.
+              <Trans>Click the map or drop a GPS file to start building your route</Trans>
             </p>
           </div>
         ) : (
@@ -274,7 +265,7 @@ export function Sidebar() {
                     onClick={() => setShowClearConfirm(false)}
                     className="px-2 h-full text-[10px] font-bold text-zinc-500 hover:bg-black/5 dark:hover:bg-white/10 rounded-full transition-colors"
                   >
-                    Cancel
+                    <Trans>Cancel</Trans>
                   </button>
                   <button
                     onClick={() => {
@@ -284,7 +275,7 @@ export function Sidebar() {
                     }}
                     className="px-2 h-full text-[10px] font-bold text-white bg-red-500 hover:bg-red-600 rounded-full transition-colors shadow-sm"
                   >
-                    Clear
+                    <Trans>Clear</Trans>
                   </button>
                 </div>
               )}
@@ -309,16 +300,16 @@ export function Sidebar() {
         >
           {isRenderCollapsed ? (
             <>
-              <Film className="w-3.5 h-3.5 fill-current" /> Resume Generation
+              <Film className="w-3.5 h-3.5 fill-current" /> <Trans>Resume Generation</Trans>
             </>
           ) : isRendering ? (
             <>
               <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              Generating...
+              <Trans>Generating...</Trans>
             </>
           ) : (
             <>
-              <Film className="w-3.5 h-3.5 fill-current" /> Generate Assets
+              <Film className="w-3.5 h-3.5 fill-current" /> <Trans>Generate Assets</Trans>
             </>
           )}
         </button>
@@ -330,11 +321,10 @@ export function Sidebar() {
             <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200">
               <div className="p-5">
                 <h3 className="text-base font-bold text-zinc-900 dark:text-white mb-2">
-                  Ready to Generate?
+                  <Trans>Ready to Generate?</Trans>
                 </h3>
                 <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                  This will save your project, synthesize AI voiceovers, and
-                  render map videos before opening the Timeline.
+                  <Trans>This will save your project, synthesize AI voiceovers, and render map videos before opening the Timeline.</Trans>
                 </p>
 
                 {/* ✨ Skip Rich Media Toggle */}
@@ -350,11 +340,10 @@ export function Sidebar() {
                   />
                   <div className="flex flex-col gap-0.5">
                     <span className="text-sm font-bold text-zinc-800 dark:text-zinc-200 group-hover:text-navi transition-colors">
-                      Skip Rich Media (Fast Render)
+                      <Trans>Skip Rich Media (Fast Render)</Trans>
                     </span>
                     <span className="text-[10px] text-zinc-500 dark:text-zinc-400 leading-tight">
-                      Generates the map route only. Ignores all pop-up images
-                      and AI voice synthesis to save time.
+                      <Trans>Generates the map route only. Ignores all pop-up images and AI voice synthesis to save time.</Trans>
                     </span>
                   </div>
                 </label>
@@ -372,10 +361,10 @@ export function Sidebar() {
                   />
                   <div className="flex flex-col gap-0.5">
                     <span className="text-sm font-bold text-zinc-800 dark:text-zinc-200 group-hover:text-navi transition-colors flex items-center gap-1.5">
-                      Quick Export (Auto-stitch & Export)
+                      <Trans>Quick Export (Auto-stitch & Export)</Trans>
                     </span>
                     <span className="text-[10px] text-zinc-500 dark:text-zinc-400 leading-tight">
-                      Automatically stitch all video segments and export upon completion without pausing for asset review.
+                      <Trans>Automatically stitch all video segments and export upon completion without pausing for asset review</Trans>
                     </span>
                   </div>
                 </label>
@@ -386,13 +375,13 @@ export function Sidebar() {
                   onClick={() => setShowGenerateConfirm(false)}
                   className="px-4 py-2 text-xs font-bold text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-lg transition-colors"
                 >
-                  Cancel
+                  <Trans>Cancel</Trans>
                 </button>
                 <button
                   onClick={executeGenerate}
                   className="px-4 py-2 bg-navi hover:bg-navi-600 text-white text-xs font-bold rounded-lg shadow-md transition-colors"
                 >
-                  Generate Assets
+                  <Trans>Generate Assets</Trans>
                 </button>
               </div>
             </div>

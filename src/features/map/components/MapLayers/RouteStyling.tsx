@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useWorkspace } from "../../../../hooks/useWorkspace";
 import { X, Palette, Route, MapPin, Square } from "../../../../components/ui/icons";
 import { t } from "@lingui/core/macro";
+import { Trans } from "@lingui/react/macro";
 
 const PRESET_COLORS = [
   "#3b82f6", // Blue
@@ -65,7 +66,7 @@ const ColorPicker = ({
             value={currentHex}
             onChange={(e) => onChange(hexToRgb(e.target.value))}
             className="absolute -top-2 -left-2 w-12 h-12 opacity-0 cursor-pointer z-10"
-            title="Custom Color"
+            title={t`Custom Color`}
           />
           <div className="absolute inset-0 bg-linear-to-br from-red-500 via-green-500 to-blue-500 opacity-20 group-hover:opacity-50 transition-opacity" />
         </div>
@@ -87,21 +88,21 @@ export function RouteStyling() {
             ? "bg-zinc-400 hover:bg-zinc-600 text-white shadow-zinc-200/25"
             : "bg-white dark:bg-zinc-800 text-zinc-700 hover:bg-zinc-200 dark:text-zinc-200 dark:hover:bg-zinc-500"
         }`}
-        title="Route Lines Config"
+        title={t`Route Lines Config`}
       >
         <Palette className="w-3.5 h-3.5" />
       </button>
 
-      {/* 🛠️ The Popup renders below it */}
       {isOpen && (
         <div className="absolute top-12 right-0 w-64 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-xl border border-zinc-200 dark:border-white/10 rounded-2xl shadow-2xl p-5 z-40 animate-in fade-in zoom-in-95">
           <div className="flex justify-between">
             <h3 className="text-sm font-bold text-zinc-800 dark:text-zinc-200 flex items-center gap-2">
-              <Palette className="w-4 h-4 text-zinc-500" /> Map Appearance
+              <Palette className="w-4 h-4 text-zinc-500" /> <Trans>Map Appearance</Trans>
             </h3>
             <button
               onClick={() => setIsOpen(false)}
               className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors p-1"
+              title={t`Close`}
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -133,7 +134,7 @@ export function RouteStyling() {
               <div className="space-y-2 pt-1 flex flex-col justify-end">
                 <div className="flex justify-between items-end">
                   <label className="text-xs font-semibold text-zinc-600 dark:text-zinc-400">
-                    Border Width
+                    <Trans>Border Width</Trans>
                   </label>
                   <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
                     {settings.route_line_border_thickness || 0}px
@@ -156,7 +157,7 @@ export function RouteStyling() {
               <div className="space-y-2 pt-1">
                 <div className="flex justify-between items-end">
                   <label className="text-xs font-semibold text-zinc-600 dark:text-zinc-400">
-                    Line Thickness
+                    <Trans>Line Thickness</Trans>
                   </label>
                   <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
                     {settings.line_thickness}px
@@ -178,10 +179,10 @@ export function RouteStyling() {
               <label className="flex items-center justify-between pt-3 border-t border-zinc-200/80 dark:border-zinc-800 cursor-pointer select-none group">
                 <div className="flex flex-col">
                   <span className="text-xs font-semibold text-zinc-600 dark:text-zinc-400 group-hover:text-zinc-900 dark:group-hover:text-white transition-colors">
-                    Gradient Heatmap
+                    <Trans>Gradient Heatmap</Trans>
                   </span>
                   <span className="text-[10px] text-zinc-500">
-                    Color route lines by slope gradient
+                    <Trans>Color route lines by slope gradient</Trans>
                   </span>
                 </div>
                 <div className="relative flex items-center">

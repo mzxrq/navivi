@@ -353,7 +353,7 @@ export function RenderOverlay() {
     for (let i = 0; i < waypoints.length; i++) {
       const wp = waypoints[i];
       const text =
-        wp.attractionNarration || wp.narration || wp.arrivingNarration || "";
+        wp.attractionNarration || wp.arrivingNarration || "";
 
       if (text.trim()) {
         const prefix = `02_waypoint_${String(i + 1).padStart(2, "0")}_`;
@@ -474,7 +474,6 @@ export function RenderOverlay() {
         updateMetadata({ overview_narration: newText });
       } else {
         updateWaypoint(item.id, {
-          narration: newText,
           attractionNarration: newText,
           arrivingNarration: newText,
         });
@@ -1076,15 +1075,15 @@ export function RenderOverlay() {
                   <Cpu className="w-5 h-5 text-navi-500 shrink-0" />
                   <div>
                     <h4 className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
-                      System Capability Check:{" "}
+                      <Trans>System Capability Check:{" "}</Trans>
                       {hardwareSpec.isHighSpec
-                        ? "High-Spec (Discrete GPU)"
-                        : "Low-Spec (Integrated Graphics)"}
+                        ? t`High-Spec (Discrete GPU)`
+                        : t`Low-Spec (Integrated Graphics)`}
                     </h4>
                     <p className="text-[11px] text-zinc-500 mt-0.5">
                       {hardwareSpec.isHighSpec
-                        ? "Regenerating a video leg will switch to the Timeline Editor for manual customization."
-                        : "Regenerating a video leg will return to the Map Editor with the active layer opened to adjust images, script, or route mode."}
+                        ? t`Regenerating a video leg will switch to the Timeline Editor for manual customization`
+                        : t`Regenerating a video leg will return to the Map Editor with the active layer opened to adjust images, script, or route mode`}
                     </p>
                   </div>
                 </div>
@@ -1100,11 +1099,11 @@ export function RenderOverlay() {
                     <div className="flex items-center gap-2">
                       <Film className="w-5 h-5 text-navi-500" />
                       <h3 className="text-sm font-semibold tracking-wide uppercase">
-                        Rendered Videos ({videoItems.length})
+                        <Trans>Rendered Videos ({videoItems.length})</Trans>
                       </h3>
                     </div>
                     <span className="text-xs text-zinc-500">
-                      Verify that video visuals are factually correct
+                      <Trans>Verify that video visuals are factually correct</Trans>
                     </span>
                   </div>
 
@@ -1138,10 +1137,10 @@ export function RenderOverlay() {
                             <button
                               onClick={() => handleRegenerateVideo(vid)}
                               className="px-3 py-1.5 rounded-lg bg-zinc-100 hover:bg-amber-500/10 text-zinc-700 hover:text-amber-600 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:text-amber-400 text-xs font-semibold shrink-0 transition-colors flex items-center gap-1.5"
-                              title="Regenerate this specific residential leg"
+                              title={t`Regenerate this specific residential leg`}
                             >
                               <RotateCcw className="w-3.5 h-3.5" />
-                              Regenerate
+                              <Trans>Regenerate</Trans>
                             </button>
                           )}
                         </div>
@@ -1157,18 +1156,18 @@ export function RenderOverlay() {
                   <div className="flex items-center gap-2">
                     <Mic className="w-5 h-5 text-navi-500" />
                     <h3 className="text-sm font-semibold tracking-wide uppercase">
-                      Audio Narration & Pronunciation Review ({reviewItems.length})
+                      <Trans>Audio Narration & Pronunciation Review ({reviewItems.length})</Trans>
                     </h3>
                   </div>
                   <span className="text-xs text-zinc-500">
-                    Listen to ensure Irodori TTS pronunciation is accurate
+                    <Trans>Listen to ensure Irodori TTS pronunciation is accurate</Trans>
                   </span>
                 </div>
 
                 {reviewItems.length === 0 ? (
                   <div className="px-4 py-8 text-center bg-zinc-50 dark:bg-zinc-900/50 rounded-xl border border-dashed border-zinc-200 dark:border-zinc-800">
                     <p className="text-sm text-zinc-500 italic">
-                      No voiceover scripts were found in this generation.
+                      <Trans>No voiceover scripts were found in this generation.</Trans>
                     </p>
                   </div>
                 ) : (
@@ -1198,18 +1197,18 @@ export function RenderOverlay() {
                                   className={`w-4 h-4 ${activeAudioId === item.id ? "animate-pulse" : ""}`}
                                 />
                                 {activeAudioId === item.id
-                                  ? "Playing..."
-                                  : "Listen"}
+                                  ? t`Playing...`
+                                  : t`Listen`}
                               </button>
 
                               {!isEditing && (
                                 <button
                                   onClick={() => handleInitiateAudioRegen(item)}
                                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-amber-50 hover:bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 dark:hover:bg-amber-900/50 transition-colors"
-                                  title="Clear generated audio and re-enter pronunciation"
+                                  title={t`Clear generated audio and re-enter pronunciation`}
                                 >
                                   <RotateCcw className="w-3.5 h-3.5" />
-                                  Regenerate Audio
+                                  <Trans>Regenerate Audio</Trans>
                                 </button>
                               )}
                             </div>
@@ -1222,14 +1221,10 @@ export function RenderOverlay() {
                                 <Info className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
                                 <div>
                                   <h4 className="text-xs font-bold text-amber-900 dark:text-amber-300">
-                                    Japanese Pronunciation & Intonation Guidance
+                                    <Trans>Japanese Pronunciation & Intonation Guidance</Trans>
                                   </h4>
                                   <p className="text-[11px] text-amber-800 dark:text-amber-400 leading-relaxed mt-0.5">
-                                    If Irodori TTS mispronounces words or lacks intonation,
-                                    input the script reading in <strong>Hiragana</strong> or{" "}
-                                    <strong>Katakana</strong> (e.g. ひらがな / カタカナ)
-                                    instead of Kanji. Kanji characters lack explicit pitch-accent
-                                    information.
+                                    <Trans>If Irodori TTS mispronounces words or lacks intonation, input the script reading in <strong>Hiragana</strong> or{" "}<strong>Katakana</strong> (e.g. ひらがな / カタカナ) instead of Kanji. Kanji characters lack explicit pitch-accent information.</Trans>
                                   </p>
                                 </div>
                               </div>
@@ -1240,7 +1235,7 @@ export function RenderOverlay() {
                                   setEditingAudioText(e.target.value)
                                 }
                                 className="w-full bg-white dark:bg-zinc-950 border border-amber-300 dark:border-amber-800 rounded-lg p-3 text-sm text-zinc-800 dark:text-zinc-200 focus:outline-none focus:ring-2 focus:ring-amber-500/50 resize-y min-h-24 custom-scrollbar"
-                                placeholder="Enter pronunciation reading in Hiragana/Katakana..."
+                                placeholder={t`Enter pronunciation reading in Hiragana/Katakana...`}
                               />
 
                               <div className="flex items-center justify-end gap-2">
@@ -1249,7 +1244,7 @@ export function RenderOverlay() {
                                   disabled={isRegeneratingAudio}
                                   className="px-3 py-1.5 text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-lg transition-colors"
                                 >
-                                  Cancel
+                                  <Trans>Cancel</Trans>
                                 </button>
                                 <button
                                   onClick={() => handleExecuteAudioRegen(item)}
@@ -1259,12 +1254,12 @@ export function RenderOverlay() {
                                   {isRegeneratingAudio ? (
                                     <>
                                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                      Synthesizing...
+                                      <Trans>Synthesizing...</Trans>
                                     </>
                                   ) : (
                                     <>
                                       <Mic className="w-3.5 h-3.5" />
-                                      Synthesize Audio Now
+                                      <Trans>Synthesize Audio Now</Trans>
                                     </>
                                   )}
                                 </button>
@@ -1272,7 +1267,7 @@ export function RenderOverlay() {
                             </div>
                           ) : (
                             <p className="text-xs text-zinc-600 dark:text-zinc-400 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg p-3 leading-relaxed">
-                              {item.text || "(Empty script)"}
+                              {item.text || t`(Empty script)`}
                             </p>
                           )}
                         </div>
@@ -1289,11 +1284,10 @@ export function RenderOverlay() {
             <div className="flex-1 flex flex-col items-center justify-center text-center animate-in fade-in duration-500 py-12 px-6">
               <Loader2 className="w-14 h-14 text-navi-500 animate-spin mb-6 mx-auto" />
               <h3 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 mb-2">
-                Stitching Videos & Finalizing Export...
+                <Trans>Stitching Videos & Finalizing Export...</Trans>
               </h3>
               <p className="text-sm text-zinc-500 max-w-md">
-                Combining all route segments, narration voiceovers, and transitions
-                into your completed master navigation video.
+                <Trans>Combining all route segments, narration voiceovers, and transitions into your completed master navigation video.</Trans>
               </p>
             </div>
           )}
@@ -1306,21 +1300,20 @@ export function RenderOverlay() {
               </div>
               <h3 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 mb-2">
                 {isQuickExportDone
-                  ? "Quick Export Complete!"
-                  : "Video Exported Successfully!"}
+                  ? t`Quick Export Complete!`
+                  : t`Video Exported Successfully!`}
               </h3>
               <p className="text-sm text-zinc-500 max-w-md mb-6 leading-relaxed">
                 {isQuickExportDone
-                  ? "All media was automatically generated, stitched, and exported to your project folder without stopping for manual review."
-                  : "Assets accepted and stitched into your final deliverable video."}
+                  ? t`All media was automatically generated, stitched, and exported to your project folder without stopping for manual review`
+                  : t`Assets accepted and stitched into your final deliverable video`}
               </p>
 
               {isQuickExportDone && (
                 <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 rounded-xl p-3 max-w-md text-left mb-6">
                   <p className="text-[11px] text-amber-800 dark:text-amber-300">
-                    💡 <strong>Quick Export Notice:</strong> To customize
-                    individual video clips or fix TTS pronunciation, uncheck "Quick
-                    Export" in generation settings and re-run.
+                    <Trans>💡 <strong>Quick Export Notice:</strong> To customize
+                    individual video clips or fix TTS pronunciation, uncheck "Quick Export" in generation settings and re-run.</Trans>
                   </p>
                 </div>
               )}
@@ -1330,7 +1323,7 @@ export function RenderOverlay() {
                   onClick={handleOpenExplorer}
                   className="px-5 py-2.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 dark:bg-zinc-800 dark:hover:bg-zinc-700 dark:text-zinc-200 text-xs font-semibold rounded-xl transition-all flex items-center gap-2"
                 >
-                  <Folder className="w-4 h-4" /> Open Project Folder
+                  <Folder className="w-4 h-4" /> <Trans>Open Project Folder</Trans>
                 </button>
                 {!isQuickExportDone && (
                   <button
@@ -1343,14 +1336,14 @@ export function RenderOverlay() {
                     }}
                     className="px-5 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-semibold rounded-xl transition-all flex items-center gap-2"
                   >
-                    <Film className="w-4 h-4" /> View in Timeline
+                    <Film className="w-4 h-4" /> <Trans>View in Timeline</Trans>
                   </button>
                 )}
                 <button
                   onClick={() => setIsRendering(false)}
                   className="px-6 py-2.5 bg-navi-500 hover:bg-navi-600 text-white text-xs font-bold rounded-xl shadow-lg shadow-navi-500/20 transition-all flex items-center gap-2"
                 >
-                  <CheckCircle className="w-4 h-4" /> Done
+                  <CheckCircle className="w-4 h-4" /> <Trans>Done</Trans>
                 </button>
               </div>
             </div>
@@ -1362,7 +1355,7 @@ export function RenderOverlay() {
           <div className="p-6 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 flex items-center justify-between shrink-0">
             <span className="text-xs text-zinc-500 flex items-center gap-1.5">
               <Settings2 className="w-4 h-4" />
-              Accept assets to automatically stitch and export
+              <Trans>Accept assets to automatically stitch and export</Trans>
             </span>
             <div className="flex items-center gap-3">
               <button
@@ -1376,14 +1369,14 @@ export function RenderOverlay() {
                 className="px-4 py-2.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700 text-xs font-semibold rounded-xl transition-all flex items-center gap-2"
               >
                 <Film className="w-4 h-4" />
-                Customize in Timeline
+                <Trans>Customize in Timeline</Trans>
               </button>
               <button
                 onClick={() => handleStitchAndExport(false)}
                 className="px-6 py-2.5 bg-navi-500 hover:bg-navi-600 text-white text-sm font-semibold rounded-xl shadow-lg shadow-navi-500/20 transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center gap-2"
               >
                 <CheckCircle className="w-4 h-4" />
-                Accept Assets & Export Video
+                <Trans>Accept Assets & Export Video</Trans>
               </button>
             </div>
           </div>
@@ -1442,7 +1435,7 @@ export function RenderOverlay() {
               }}
               className="px-5 py-2.5 bg-zinc-800 text-zinc-200 text-sm font-semibold rounded-lg hover:bg-zinc-700 transition-colors"
             >
-              Retry
+              <Trans>Retry</Trans>
             </button>
           </div>
         )}

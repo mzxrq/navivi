@@ -18,6 +18,7 @@ import {
   Save,
 } from "../ui/icons";
 import { t } from "@lingui/core/macro";
+import { Trans } from "@lingui/react/macro";
 
 function NotificationItem({ notif }: { notif: any }) {
   const [copied, setCopied] = useState(false);
@@ -54,7 +55,7 @@ function NotificationItem({ notif }: { notif: any }) {
         <button
           onClick={handleCopy}
           className="opacity-0 group-hover:opacity-100 p-1 bg-zinc-200 dark:bg-navidark-600 rounded text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white transition-all shrink-0 mt-0.5"
-          title="Copy message"
+          title={t`Copy Message`}
         >
           {copied ? (
             <CheckCircle2 className="w-3 h-3 text-emerald-500" />
@@ -118,7 +119,6 @@ export function StatusBar() {
   const populatedStops = waypoints.filter(
     (wp) =>
       (wp.images && wp.images.length > 0) ||
-      wp.narration ||
       wp.arrivingNarration ||
       wp.attractionNarration,
   ).length;
@@ -142,7 +142,7 @@ export function StatusBar() {
 
   const handleCreateVersion = async () => {
     if (!metadata.directory_path || !metadata.project_id) {
-      setHistoryError("Save the project before creating a version.");
+      setHistoryError(t`Save the project before creating a version`);
       return;
     }
     setHistoryBusy(true);
@@ -152,7 +152,7 @@ export function StatusBar() {
       setVersionLabel("");
     } catch (error) {
       console.error("Failed to create project version:", error);
-      setHistoryError("Could not save this version.");
+      setHistoryError(t`Could not save this version`);
     } finally {
       setHistoryBusy(false);
     }
@@ -163,25 +163,25 @@ export function StatusBar() {
     setHistoryError(null);
     try {
       const restored = await restoreVersion(versionId);
-      if (!restored) setHistoryError("This version is no longer available.");
+      if (!restored) setHistoryError(t`This version is no longer available`);
     } catch (error) {
       console.error("Failed to restore project version:", error);
-      setHistoryError("Could not restore this version.");
+      setHistoryError(t`Could not restore this version`);
     } finally {
       setHistoryBusy(false);
     }
   };
 
   const handleDeleteVersion = async (versionId: string) => {
-    if (!window.confirm("Delete this saved version?")) return;
+    if (!window.confirm(t`Delete this saved version?`)) return;
     setHistoryBusy(true);
     setHistoryError(null);
     try {
       const deleted = await deleteVersion(versionId);
-      if (!deleted) setHistoryError("This version could not be deleted.");
+      if (!deleted) setHistoryError(t`This version could not be deleted`);
     } catch (error) {
       console.error("Failed to delete project version:", error);
-      setHistoryError("Could not delete this version.");
+      setHistoryError(t`Could not delete this version`);
     } finally {
       setHistoryBusy(false);
     }
@@ -195,47 +195,51 @@ export function StatusBar() {
           <>
             <span
               className="flex items-center gap-1.5 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors"
-              title="Total stops on the map"
+              title={t`Total stops on the map`}
             >
-              <Map className="w-3 h-3 text-navi" /> {waypoints.length} Stops
+              <Map className="w-3 h-3 text-navi" /> {waypoints.length}{" "}
+              <Trans>Stops</Trans>
             </span>
             <div className="w-px h-3 bg-zinc-300 dark:bg-navidark-400" />
             <span
               className="flex items-center gap-1.5 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors"
-              title="Stops containing custom images or AI scripts"
+              title={t`Stops containing custom images or AI scripts`}
             >
-              <Volume2 className="w-3 h-3" /> {populatedStops} Rich Media
+              <Volume2 className="w-3 h-3" /> {populatedStops}{" "}
+              <Trans>Rich Media</Trans>
             </span>
             <div className="w-px h-3 bg-zinc-300 dark:bg-navidark-400" />
             <span
               className="flex items-center gap-1.5 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors"
-              title="Estimated time for the Python backend to synthesize AI voiceovers and encode the video"
+              title={t`Estimated time for the Python backend to synthesize AI voiceovers and encode the video`}
             >
-              <Clock className="w-3 h-3" /> Est. Render: ~{estRenderMinutes}m
+              <Clock className="w-3 h-3" /> <Trans>Est. Render:</Trans> ~
+              {estRenderMinutes}m
             </span>
           </>
         ) : (
           <>
             <span
               className="flex items-center gap-1.5 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors"
-              title="Total video duration"
+              title={t`Total video duration`}
             >
-              <Clock className="w-3 h-3 text-navi" /> Duration:{" "}
+              <Clock className="w-3 h-3 text-navi" /> <Trans>Duration:</Trans>{" "}
               {totalDuration.toFixed(1)}s
             </span>
             <div className="w-px h-3 bg-zinc-300 dark:bg-navidark-400" />
             <span
               className="flex items-center gap-1.5 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors"
-              title="Total tracks in the timeline"
+              title={t`Total tracks in the timeline`}
             >
-              <Menu className="w-3 h-3" /> {timeline.tracks.length} Tracks
+              <Menu className="w-3 h-3" /> {timeline.tracks.length}{" "}
+              <Trans>Tracks</Trans>
             </span>
             <div className="w-px h-3 bg-zinc-300 dark:bg-navidark-400" />
             <span
               className="flex items-center gap-1.5 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors"
-              title="Total individual clips"
+              title={t`Total individual clips`}
             >
-              <Film className="w-3 h-3" /> {totalClips} Clips
+              <Film className="w-3 h-3" /> {totalClips} <Trans>Clips</Trans>
             </span>
           </>
         )}
@@ -247,18 +251,18 @@ export function StatusBar() {
         {isDirty ? (
           <span
             className="flex items-center gap-1.5 text-amber-600 dark:text-amber-500 cursor-help"
-            title="Unsaved Changes - Press Ctrl+S to save"
+            title={t`Unsaved Changes - Press Ctrl+S to save`}
           >
             <CircleDashed className="w-3.5 h-3.5 animate-[spin_3s_linear_infinite]" />
-            Unsaved
+            <Trans>Unsaved</Trans>
           </span>
         ) : (
           <span
             className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-500 opacity-70 cursor-help"
-            title="All changes safely stored to disk"
+            title={t`All changes safely stored to disk`}
           >
             <CheckCircle2 className="w-3.5 h-3.5" />
-            Saved
+            <Trans>Saved</Trans>
           </span>
         )}
 
@@ -269,7 +273,7 @@ export function StatusBar() {
           onClick={toggleHistory}
           className={`transition-colors flex items-center gap-1 ${showHistory ? "text-navi" : "hover:text-zinc-800 dark:hover:text-zinc-200"}`}
         >
-          <History className="w-3.5 h-3.5" /> History
+          <History className="w-3.5 h-3.5" /> <Trans>History</Trans>
         </button>
 
         {renderHistory && (
@@ -282,7 +286,7 @@ export function StatusBar() {
           >
             <div className="flex items-center justify-between p-3 border-b border-zinc-100 dark:border-navidark-400 bg-zinc-50 dark:bg-navidark-900/50">
               <span className="text-xs font-bold text-zinc-700 dark:text-zinc-200">
-                Version History
+                <Trans>Version History</Trans>
               </span>
               <button
                 onClick={() => setShowHistory(false)}
@@ -300,7 +304,7 @@ export function StatusBar() {
                     onKeyDown={(event) => {
                       if (event.key === "Enter") void handleCreateVersion();
                     }}
-                    placeholder="Version label"
+                    placeholder={t`Version label`}
                     className="min-w-0 flex-1 rounded border border-zinc-200 dark:border-navidark-500 bg-white dark:bg-navidark-900 px-2 py-1.5 text-[11px] outline-none focus:border-navi"
                     disabled={historyBusy}
                   />
@@ -312,7 +316,7 @@ export function StatusBar() {
                       !metadata.project_id
                     }
                     className="rounded bg-navi px-2 text-white transition-opacity hover:opacity-85 disabled:opacity-50"
-                    title="Save current version"
+                    title={t`Save current version`}
                   >
                     <Save className="w-3.5 h-3.5" />
                   </button>
@@ -328,11 +332,11 @@ export function StatusBar() {
                     <History className="w-6 h-6 opacity-20 mb-1" />
                     <p>
                       {metadata.directory_path
-                        ? "No saved versions yet."
-                        : "Save the project to enable version history."}
+                        ? t`No saved versions yet`
+                        : t`Save the project to enable version history`}
                     </p>
                     <p className="text-[10px]">
-                      Save a version to create a restore point.
+                      <Trans>Save a version to create a restore point</Trans>
                     </p>
                   </div>
                 ) : (
@@ -348,8 +352,8 @@ export function StatusBar() {
                           </p>
                           <p className="text-[9px] text-zinc-400 font-mono">
                             {new Date(version.createdAt).toLocaleString()} ·{" "}
-                            {version.waypointCount} stops · {version.clipCount}{" "}
-                            clips
+                            {version.waypointCount} <Trans>stops</Trans> ·{" "}
+                            {version.clipCount} <Trans>clips</Trans>
                           </p>
                         </div>
                         <div className="flex shrink-0 items-center gap-1">
@@ -359,7 +363,7 @@ export function StatusBar() {
                             }
                             disabled={historyBusy}
                             className="rounded p-1 text-zinc-400 hover:bg-zinc-200 hover:text-navi dark:hover:bg-navidark-600 disabled:opacity-50"
-                            title="Restore version"
+                            title={t`Restore version`}
                           >
                             <History className="w-3.5 h-3.5" />
                           </button>
@@ -367,7 +371,7 @@ export function StatusBar() {
                             onClick={() => void handleDeleteVersion(version.id)}
                             disabled={historyBusy}
                             className="rounded p-1 text-zinc-400 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-950/30 disabled:opacity-50"
-                            title="Delete version"
+                            title={t`Delete version`}
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -385,7 +389,7 @@ export function StatusBar() {
         <button
           onClick={toggleNotifications}
           className={`transition-colors relative ${showNotifications ? "text-navi" : "hover:text-zinc-800 dark:hover:text-zinc-200"}`}
-          title="System Logs & Notifications"
+          title={t`System Logs & Notifications`}
         >
           <Bell className="w-3.5 h-3.5" />
           {hasUnread && (
@@ -404,14 +408,14 @@ export function StatusBar() {
           >
             <div className="flex items-center justify-between p-3 border-b border-zinc-100 dark:border-navidark-400 bg-zinc-50 dark:bg-navidark-900/50">
               <span className="text-xs font-bold text-zinc-700 dark:text-zinc-200">
-                System Log
+                <Trans>System Log</Trans>
               </span>
 
               <button
                 onClick={clearNotifications}
                 className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 hover:text-red-500 transition-colors"
                 disabled={!notifications || notifications.length === 0}
-                title="Clear All Notifications"
+                title={t`Clear All Notifications`}
               >
                 <Trash2 className="w-3.5 h-3.5 hover:text-red-400" />
               </button>
@@ -420,7 +424,7 @@ export function StatusBar() {
             <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1">
               {!notifications || notifications.length === 0 ? (
                 <div className="p-4 text-center text-zinc-400">
-                  No recent activity.
+                  <Trans>No recent activity</Trans>
                 </div>
               ) : (
                 notifications.map((notif: any) => (

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { join } from "@tauri-apps/api/path";
 import { open } from "@tauri-apps/plugin-dialog";
-import { readDir, exists } from "@tauri-apps/plugin-fs"; // ✨ NEW: Native filesystem scanner
+import { readDir, exists } from "@tauri-apps/plugin-fs";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { invoke } from "@tauri-apps/api/core";
 import { useWorkspace } from "../../../hooks/useWorkspace";
@@ -15,7 +15,8 @@ import {
   AlertTriangle,
   RefreshCw,
 } from "../../../components/ui/icons";
-import { t } from "@lingui/core/macro";
+import { t, plural } from "@lingui/core/macro";
+import { Trans } from "@lingui/react/macro";
 
 type MediaType = "all" | "video" | "audio" | "image" | "text";
 
@@ -95,8 +96,6 @@ export function MediaPool() {
       const projectDir = metadata.directory_path;
       const baseAssetsDir = await join(projectDir, "assets");
       const generated: MediaAsset[] = [];
-
-      // The new strict folder structure mapped to ClipKinds
       const folders = [
         { name: "video", type: "video" as const, recursive: true },
         { name: "audio", type: "audio" as const, recursive: false },
@@ -119,7 +118,6 @@ export function MediaPool() {
                   continue;
                 }
                 if (entry.isFile && !entry.name.startsWith(".")) {
-                  // Ignore hidden files like .DS_Store
                   const filePath = await join(currentFolderPath, entry.name);
                   let durationStr =
                     folder.type === "image" || folder.type === "text"
@@ -198,7 +196,7 @@ export function MediaPool() {
       const newAssets: MediaAsset[] = [];
 
       if (!metadata?.directory_path) {
-        throw new Error("Save the project before importing media.");
+        throw new Error(t`Save the project before importing media`);
       }
 
       for (const path of filePaths) {
@@ -227,7 +225,7 @@ export function MediaPool() {
               sourcePath: path,
               targetDir,
             });
-        let durationStr = "00:05";
+        let durationStr = "00:00";
 
         if (type === "audio" || type === "video") {
           const safeUrl = convertFileSrc(path);
@@ -260,12 +258,15 @@ export function MediaPool() {
 
       setImportedAssets((prev) => [...prev, ...newAssets]);
       showToast(
-        `${newAssets.length} media asset(s) copied into the project.`,
+        plural(newAssets.length, {
+          one: "1 media asset copied into the project.",
+          other: "# media assets copied into the project.",
+        }),
         "success",
       );
     } catch (error) {
       console.error("Failed to import media:", error);
-      showToast("Failed to import media into the project.", "error");
+      showToast(t`Failed to import media into the project`, "error");
     }
   };
 
@@ -302,7 +303,7 @@ export function MediaPool() {
       <div className="p-3 border-b border-zinc-200 dark:border-navidark-300 space-y-3">
         <div className="flex items-center justify-between text-xs font-bold text-zinc-700 dark:text-zinc-200 uppercase tracking-wider">
           <span>
-            Media Pool{" "}
+            <Trans>Media Pool </Trans>
             <span className="text-[9px] font-normal text-zinc-400">
               {allAssets.length}
             </span>
@@ -311,14 +312,14 @@ export function MediaPool() {
             <button
               onClick={handleImportMedia}
               className="bg-navi hover:bg-navi-600 text-white text-[10px] px-2 py-1 rounded transition-colors flex items-center gap-1 shadow-sm"
-              title="Import External Media"
+              title={t`Import External Media`}
             >
               <span className="text-sm leading-none">+</span> Import
             </button>
             <button
               onClick={() => setRefreshToken((token) => token + 1)}
               className="text-zinc-400 hover:text-red-500 transition-colors"
-              title="Refresh asset library"
+              title={t`Refresh asset library`}
             >
               <RefreshCw className="w-3.5 h-3.5" />
             </button>
@@ -329,7 +330,7 @@ export function MediaPool() {
           <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400" />
           <input
             type="text"
-            placeholder="Search assets"
+            placeholder={t`Search assets`}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full bg-zinc-100 dark:bg-navidark-900 border border-zinc-200 dark:border-navidark-400 rounded-md py-1.5 pl-8 pr-2 text-xs text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-400 focus:outline-none focus:border-navi focus:ring-1 focus:ring-navi transition-all"
@@ -358,7 +359,7 @@ export function MediaPool() {
       <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1">
         {filteredAssets.length === 0 ? (
           <div className="text-center py-8 text-xs text-zinc-400">
-            No assets found in /assets directory.
+            <Trans>No assets found in directory</Trans>
           </div>
         ) : (
           filteredAssets.map((asset) => (
@@ -370,7 +371,7 @@ export function MediaPool() {
                 if (asset.missing) {
                   e.preventDefault();
                   showToast(
-                    "This asset is missing from the project.",
+                    t`This asset is missing from the project`,
                     "warning",
                   );
                   return;
@@ -432,7 +433,9 @@ export function MediaPool() {
                   {asset.name}
                 </p>
                 {asset.missing && (
-                  <p className="text-[10px] text-red-500">Missing file</p>
+                  <p className="text-[10px] text-red-500">
+                    <Trans>Missing file</Trans>
+                  </p>
                 )}
                 {asset.duration && (
                   <p className="text-[10px] text-zinc-400 font-mono">

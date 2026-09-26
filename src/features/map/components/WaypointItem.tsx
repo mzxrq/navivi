@@ -1,21 +1,20 @@
+import { useEffect, useRef, useState } from "react";
 import {
-  GripVertical,
+  Car,
+  ChevronRight,
   Edit2,
-  X,
+  Footprints,
+  GripVertical,
   ImageIcon,
   Mic,
-  Car,
-  Footprints,
-  Ruler,
-  Plane,
   Pencil,
-  ChevronRight,
+  Plane,
+  Ruler,
   Ship,
+  X,
 } from "../../../components/ui/icons";
-import { Waypoint, RouteMode } from "../../../types/index";
-import { useEffect, useRef, useState } from "react";
 import { useWorkspace } from "../../../hooks/useWorkspace";
-import { t } from "@lingui/core/macro";
+import { RouteMode, Waypoint } from "../../../types/index";
 
 interface WaypointItemProps {
   wp: Waypoint;
@@ -76,14 +75,12 @@ export function WaypointItem({
     displayLabel = normalIndex.toString();
   }
 
-  // ✨ FIXED: Check all three possible script locations
   const hasScript = !!(
-    wp.narration ||
     wp.arrivingNarration ||
     wp.attractionNarration
   );
   const scriptPreview =
-    wp.arrivingNarration || wp.attractionNarration || wp.narration || "";
+    wp.arrivingNarration || wp.attractionNarration || "";
 
   return (
     <div

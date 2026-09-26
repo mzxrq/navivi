@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { CheckCircle2, AlertCircle, Info, AlertTriangle, X } from "../ui/icons";
 import { useUI } from "../../hooks/useUI";
-import { t } from "@lingui/core/macro";
 
 function ToastItem({ toast, hideToast }: { toast: any; hideToast: (id: string) => void}) {
     const [isExiting, setIsExiting] = useState(false);
@@ -42,7 +41,7 @@ function ToastItem({ toast, hideToast }: { toast: any; hideToast: (id: string) =
             </div>
 
             <div className="flex-1 min-w-0 flex flex-col">
-                <span className="text-[10px] font-bold uppercase tracking-wider opacity-80 mb-0.5">
+                <span className="text-[10px] font-bold capitalize opacity-80 mb-0.5">
                     {toast.type}
                 </span>
                 <span className="text-xs font-medium text-zinc-700 dark:text-zinc-200 leading-snug wrap-break-word">

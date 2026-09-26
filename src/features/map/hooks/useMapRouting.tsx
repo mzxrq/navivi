@@ -2,8 +2,6 @@ import { useRef, useEffect } from "react";
 import { useWorkspace } from "../../../hooks/useWorkspace";
 import {
   getCurve,
-  OsmNode,
-  getDistanceKm,
   fillRouteCoordinates,
 } from "../../../utils/mapUtils";
 import bezierSpline from "@turf/bezier-spline";
@@ -66,7 +64,7 @@ const fetchSingleSegment = async (
         throw new Error("no_route");
       }
     } catch (error) {
-      console.warn("[ORS Walking] Failed, falling back to OSRM foot:", error);
+      console.warn("[ORS Walk] Failed, falling back to OSRM foot:", error);
       try {
         const osrmUrl = `https://router.project-osrm.org/route/v1/foot/${wp1.lng},${wp1.lat};${wp2.lng},${wp2.lat}?overview=full&geometries=geojson`;
 
@@ -252,7 +250,6 @@ export function useMapRouting() {
     }, 800);
 
     return () => {
-      isCancelled: true;
       clearTimeout(debounce);
     };
   }, [waypoints, setRouteSegments, routingCache, setRoutingCache]);

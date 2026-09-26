@@ -6,13 +6,13 @@ import { ThemeProvider } from "./hooks/useTheme";
 import { WorkspaceProvider } from "./hooks/useWorkspace";
 import { UIProvider } from "./hooks/useUI";
 import { ErrorBoundary } from "./components/ui/ErrorBoundary";
-
 import { i18n } from "@lingui/core";
 import { I18nProvider } from "@lingui/react";
 import { dynamicActivate } from "./i18n";
 
-// Initialize with a default language
-dynamicActivate("ja").then(() => {
+const savedLocale = localStorage.getItem("navivi_locale") || "en";
+
+dynamicActivate(savedLocale).then(() => {
   ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     <React.StrictMode>
       <ErrorBoundary>

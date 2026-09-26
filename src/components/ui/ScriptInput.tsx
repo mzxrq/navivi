@@ -1,19 +1,14 @@
 import { useEffect, useState } from "react";
-import {
-  Mic,
-  Sparkles,
-  Square,
-  Check,
-  PencilSparkles
-} from "../ui/icons";
+import { Mic, Sparkles, Square, Check, PencilSparkles } from "../ui/icons";
 import { t } from "@lingui/core/macro";
+import { Trans } from "@lingui/react/macro";
 
-const thinkingSteps = [
-  "Detecting context...",
-  "Searching for location facts...",
-  "Cross-checking building data...",
-  "Drafting narration...",
-  "Polishing voiceover tone...",
+const getThinkingSteps = () => [
+  t`Detecting context...`,
+  t`Searching...`,
+  t`Cross-checking building data...`,
+  t`Drafting narration...`,
+  t`Polishing voiceover tone...`,
 ];
 
 interface ScriptInputProps {
@@ -47,7 +42,7 @@ export function ScriptInput({
     }
     const interval = setInterval(() => {
       setCurrentStepIndex((prev) =>
-        prev < thinkingSteps.length - 1 ? prev + 1 : prev,
+        prev < getThinkingSteps.length - 1 ? prev + 1 : prev,
       );
     }, 1800);
     return () => clearInterval(interval);
@@ -57,8 +52,7 @@ export function ScriptInput({
 
   const handleGenerateClick = () => {
     if (!localPrompt.trim()) return;
-    // ✨ FIXED: Force gemma2 just like OverviewPanel
-    onGenerate(localPrompt, "gemma2", language); 
+    onGenerate(localPrompt, "gemma2", language);
   };
 
   const handleSaveClick = () => {
@@ -69,7 +63,7 @@ export function ScriptInput({
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
-          <Mic className="w-3.5 h-3.5 text-zinc-400" /> AI Script
+          <Mic className="w-3.5 h-3.5 text-zinc-400" /> <Trans>Script</Trans>
         </label>
 
         <div className="flex items-center gap-2">
@@ -80,7 +74,7 @@ export function ScriptInput({
               className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-bold transition-all bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20 border border-red-200 dark:border-red-500/20 shadow-sm"
             >
               <Square className="w-3 h-3 fill-current" />
-              Cancel
+              <Trans>cancel</Trans>
             </button>
           ) : (
             <button
@@ -90,7 +84,7 @@ export function ScriptInput({
               className="shrink-0 flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed bg-navi-50 dark:bg-navi-500/10 text-navi-700 dark:text-navi-300 hover:bg-navi-100 dark:hover:bg-navi-500/20 border border-navi-200 dark:border-navi-500/20 shadow-sm"
             >
               <PencilSparkles className="w-3 h-3" />
-              Auto-Write
+              <Trans>Auto-Write</Trans>
             </button>
           )}
         </div>
@@ -101,7 +95,7 @@ export function ScriptInput({
           value={localPrompt}
           onChange={(e) => setLocalPrompt(e.target.value)}
           disabled={isGenerating}
-          placeholder="Type a prompt or write your own script..."
+          placeholder={t`Type a prompt or write your own script...`}
           className="w-full h-full resize-none p-3 text-xs custom-scrollbar bg-white dark:bg-navidark-800 text-zinc-900 dark:text-zinc-100 focus:outline-none disabled:opacity-50 pb-10"
         />
 
@@ -111,13 +105,13 @@ export function ScriptInput({
               onClick={handleSaveClick}
               disabled={!hasUnsavedChanges}
               className={`flex items-center gap-1 px-3 py-1 rounded-md text-[10px] font-bold transition-all shadow-sm ${
-                hasUnsavedChanges 
-                  ? "bg-navi hover:bg-navi-600 text-white" 
+                hasUnsavedChanges
+                  ? "bg-navi hover:bg-navi-600 text-white"
                   : "bg-zinc-100 dark:bg-navidark-500 text-zinc-400 dark:text-zinc-500 cursor-default"
               }`}
             >
               <Check className="w-3 h-3" />
-              {hasUnsavedChanges ? "Save" : "Saved"}
+              {hasUnsavedChanges ? t`Save` : t`Saved`}
             </button>
           </div>
         )}
@@ -127,10 +121,10 @@ export function ScriptInput({
             <div className="flex flex-col items-center gap-2">
               <Sparkles className="w-5 h-5 text-navi-400 animate-bounce" />
               <div className="text-[10px] font-bold text-navi-600 dark:text-navi-300 tracking-wide uppercase">
-                AI is writing...
+                <Trans>Working on it...</Trans>
               </div>
               <div className="text-[9px] font-medium text-zinc-500 dark:text-zinc-400 animate-fade-in text-center mb-1">
-                {thinkingSteps[currentStepIndex]}
+                {getThinkingSteps()}
               </div>
               <div className="w-20 h-1 bg-navi-100 dark:bg-navi-900/50 rounded-full overflow-hidden">
                 <div className="h-full bg-navi-500 rounded-full w-full animate-[pulse_1s_ease-in-out_infinite]"></div>

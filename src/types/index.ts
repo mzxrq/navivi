@@ -1,7 +1,6 @@
 import type { Dispatch, SetStateAction, } from "react";
 
 export type RouteMode = "driving" | "walking" | "direct" | "curve" | "ferry" | "calculating" | "draw";
-// export type TrackType = "video" | "audio" | "image" | "text";
 export type TrackKind = "video" | "overlay" | "subtitle" | "audio";
 export type ClipKind = "video" | "audio" | "image" | "text" | "subtitle";
 
@@ -15,7 +14,6 @@ export interface Waypoint {
   imageDisplay?: "pip" | "fullscreen";
   imagePans?: string[];
   imageTransitions?: string[];
-  narration?: string;
   arrivingNarration?: string;
   attractionNarration?: string;
   isGeneratingAudio?: boolean;
@@ -221,6 +219,10 @@ export interface ManifestClip {
   file_path: string;
   duration: number;
   type: string;
+  order?: number;
+  clip_name?: string;
+  audio_path?: string;
+  subtitle_path?: string;
 }
 
 export type AspectRatioType = "16:9" | "9:16";
@@ -301,6 +303,7 @@ export interface ProjectVersionSnapshot extends ProjectVersion {
 
 // Global State Interface
 export interface WorkspaceState {
+  isProjectLoading: boolean;
   // Waypoints
   waypoints: Waypoint[];
   setWaypoints: Dispatch<SetStateAction<Waypoint[]>>;
@@ -309,7 +312,7 @@ export interface WorkspaceState {
   redoMap: () => void;
   canUndoMap: boolean;
   canRedoMap: boolean;
-  // Timeline History (NEWest Feature as of right now (2026-08-26 15:52:49))
+  // Timeline History (2026-08-26 15:52:49)
   timeline: TimelineData;
   setTimeline: (data: TimelineData) => void;
   autoLoadTimeline: (projectDir: string) => Promise<void>;

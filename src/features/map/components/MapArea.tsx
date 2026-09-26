@@ -36,6 +36,7 @@ import {
   WeatherCondition,
 } from "../../../services/weatherService";
 import { t } from "@lingui/core/macro";
+import { Trans } from "@lingui/react/macro";
 
 export function MapArea() {
   const { theme, mapTheme } = useTheme();
@@ -55,7 +56,6 @@ export function MapArea() {
   } = useWorkspace();
   const { handleDroppedFiles, importPhotos } = useFileActions();
 
-  // Overlays & Modes
   const [isHovering, setIsHovering] = useState(false);
   const [isAddMode, setIsAddMode] = useState(false);
   const [isDrawMode, setIsDrawMode] = useState(false);
@@ -78,7 +78,6 @@ export function MapArea() {
   const [weatherCondition, setWeatherCondition] =
     useState<WeatherCondition>("clear");
 
-  // Mapbox View State
   const [viewState, setViewState] = useState({
     longitude: settings.start_coords?.[1] || 135.5023,
     latitude: settings.start_coords?.[0] || 34.6937,
@@ -140,7 +139,6 @@ export function MapArea() {
         (theme === "system" &&
           window.matchMedia("(prefers-color-scheme: dark)").matches)));
 
-  // Style Switcher
   const [selectedStyle, setSelectedStyle] = useState<string>(() =>
     isDarkMap ? "dark" : "outdoors",
   );
@@ -237,7 +235,7 @@ export function MapArea() {
   const handleAddWaypoint = async (lat: number, lng: number) => {
     if (waypoints.length >= mapDefaults.maxWaypoints) {
       showToast(
-        `Routes are limited to ${mapDefaults.maxWaypoints} waypoints in this preview build.`,
+        t`Routes are limited to ${mapDefaults.maxWaypoints} waypoints in this preview build.`,
         "warning",
       );
       return;
@@ -251,11 +249,11 @@ export function MapArea() {
         id: newId,
         lat,
         lng,
-        name: "Locating...",
+        name: t`Locating...`,
         images: [],
         imagePans: [],
         narration: "",
-        routeMode: settings.default_route_mode || "driving",
+        routeMode: settings.default_route_mode || "walking",
       },
     ]);
     setIsDirty(true);
@@ -277,7 +275,7 @@ export function MapArea() {
     } catch (error) {
       setWaypoints((prev) =>
         prev.map((wp) =>
-          wp.id === newId ? { ...wp, name: `Unknown Location` } : wp,
+          wp.id === newId ? { ...wp, name: t`Unknown Location` } : wp,
         ),
       );
     }
@@ -293,11 +291,11 @@ export function MapArea() {
       id: newId,
       lat,
       lng,
-      name: "Locating...",
+      name: t`Locating...`,
       images: [],
       imagePans: [],
       narration: "",
-      routeMode: settings.default_route_mode || "driving",
+      routeMode: settings.default_route_mode || "walking",
     };
 
     setWaypoints((prev) => {
@@ -312,14 +310,14 @@ export function MapArea() {
       );
       const data = await res.json();
       const placeName =
-        data.name || data.address?.road || data.address?.city || `Waypoint`;
+        data.name || data.address?.road || data.address?.city || t`Waypoint`;
       setWaypoints((prev) =>
         prev.map((wp) => (wp.id === newId ? { ...wp, name: placeName } : wp)),
       );
     } catch {
       setWaypoints((prev) =>
         prev.map((wp) =>
-          wp.id === newId ? { ...wp, name: `Unknown Location` } : wp,
+          wp.id === newId ? { ...wp, name: t`Unknown Location` } : wp,
         ),
       );
     }
@@ -334,11 +332,11 @@ export function MapArea() {
         id: newId,
         lat,
         lng,
-        name: "Locating...",
+        name: t`Locating...`,
         images: [],
         imagePans: [],
         narration: "",
-        routeMode: settings.default_route_mode || "driving",
+        routeMode: settings.default_route_mode || "walking",
         isStopBy: true,
       },
     ]);
@@ -350,14 +348,14 @@ export function MapArea() {
       );
       const data = await res.json();
       const placeName =
-        data.name || data.address?.road || data.address?.city || `Stop By`;
+        data.name || data.address?.road || data.address?.city || t`Stop By`;
       setWaypoints((prev) =>
         prev.map((wp) => (wp.id === newId ? { ...wp, name: placeName } : wp)),
       );
     } catch {
       setWaypoints((prev) =>
         prev.map((wp) =>
-          wp.id === newId ? { ...wp, name: `Unknown Location` } : wp,
+          wp.id === newId ? { ...wp, name: t`Unknown Location` } : wp,
         ),
       );
     }
@@ -535,47 +533,6 @@ export function MapArea() {
   const mapboxToken =
     settings?.mapbox_api_key || import.meta.env.VITE_MAPBOX_TOKEN;
 
-  const handleDrawUpdate = (e: { features: any[] }) => {
-    if (!e.features || e.features.length === 0) return;
-
-    // Mapbox Draw outputs GeoJSON [lng, lat]
-    // We need to convert it back to [lat, lng] for Navivi's customRoute
-    const coordinates = e.features[0].geometry.coordinates as [
-      number,
-      number,
-    ][];
-    const naviviRoute = coordinates.map(
-      (coord) => [coord[1], coord[0]] as [number, number],
-    );
-
-    if (activeWaypointId) {
-      setWaypoints((prev) =>
-        prev.map((wp) => {
-          if (wp.id === activeWaypointId) {
-            return { ...wp, customRoute: naviviRoute };
-          }
-          return wp;
-        }),
-      );
-    } else {
-      // Create new waypoint if none is selected
-      const newId = crypto.randomUUID();
-      const newWp: Waypoint = {
-        id: newId,
-        name: "Custom Route",
-        lat: naviviRoute[0][0],
-        lng: naviviRoute[0][1],
-        customRoute: naviviRoute,
-        isStopBy: false,
-        routeMode: "driving",
-      };
-      setWaypoints((prev) => [...prev, newWp]);
-      setActiveWaypointId(newId);
-      setIsDrawMode(false); // Switch to select mode to prevent accidental subsequent draws
-    }
-    setIsDirty(true);
-  };
-
   const handleZoomToFit = () => {
     if (!activeWp || !activeWp.customRoute || activeWp.customRoute.length === 0)
       return;
@@ -643,7 +600,7 @@ export function MapArea() {
               bearing: 0,
             }));
           }}
-          title="Reset View (North)"
+          title={t`Reset View (North)`}
           className="flex items-center justify-center w-10 h-10 rounded-full bg-white dark:bg-zinc-800 text-zinc-700 hover:bg-zinc-200 dark:text-zinc-200 dark:hover:bg-zinc-500 transition-all font-bold drop-shadow-md shadow-md"
         >
           <Navigation
@@ -729,10 +686,10 @@ export function MapArea() {
 
             if (isStart) {
               pinType = "start";
-              label = "S";
+              label = t`S`;
             } else if (isEnd) {
               pinType = "end";
-              label = "E";
+              label = t`E`;
             } else if (wp.isStopBy) {
               pinType = "stopby";
               let stopByIndex = 0;
@@ -762,7 +719,7 @@ export function MapArea() {
                     onContextMenu={(e) => handleMarkerContextMenu(e, wp.id)}
                   >
                     <div className="bg-zinc-900 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-lg border border-white/20 mb-1 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                      {wp.name || `Waypoint`}
+                      {wp.name || t`Waypoint`}
                     </div>
                     {wp.customMarker || settings.routeMarker ? (
                       <img
@@ -778,7 +735,7 @@ export function MapArea() {
                               )
                             : wp.customMarker || settings.routeMarker
                         }
-                        alt="Custom Marker"
+                        alt={t`Custom Marker`}
                         className="w-10 h-10 object-contain drop-shadow-xl"
                       />
                     ) : (
@@ -812,7 +769,7 @@ export function MapArea() {
                   onContextMenu={(e) => handleMarkerContextMenu(e, wp.id)}
                 >
                   <div className="bg-zinc-900 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-lg border border-white/20 mb-1 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                    {wp.name || `Waypoint`}
+                    {wp.name || t`Waypoint`}
                   </div>
 
                   {wp.customMarker || settings.routeMarker ? (
@@ -829,7 +786,7 @@ export function MapArea() {
                             )
                           : wp.customMarker || settings.routeMarker
                       }
-                      alt="Custom Marker"
+                      alt={t`Custom Marker`}
                       className="w-10 h-10 object-contain drop-shadow-xl"
                     />
                   ) : (
@@ -904,7 +861,7 @@ export function MapArea() {
                       </span>
                     </div>
                     <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 opacity-0 group-hover:opacity-100 transition-opacity bg-zinc-900 text-white text-[9px] font-bold px-1.5 py-0.5 rounded pointer-events-none whitespace-nowrap">
-                      Anchor {idx + 1}
+                      <Trans>Anchor {idx + 1}</Trans>
                     </div>
                   </div>
                 </Marker>
@@ -927,18 +884,17 @@ export function MapArea() {
               <ImageIcon className="w-6 h-6" />
             </div>
             <h3 className="text-sm font-bold text-zinc-900 dark:text-white">
-              Drop photos here to auto-plot your route
+              <Trans>Drop photos here to auto-plot your route</Trans>
             </h3>
             <p className="text-xs text-zinc-500 dark:text-zinc-400 max-w-xs leading-relaxed">
-              EXIF GPS tags from your travel photos will automatically generate
-              sequenced stops on the map.
+              <Trans>EXIF GPS tags from your travel photos will automatically generate sequenced stops on the map.</Trans>
             </p>
             <button
               onClick={importPhotos}
               className="mt-1 px-3.5 py-1.5 bg-navi hover:bg-navi-600 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors flex items-center gap-1.5"
             >
               <ImageIcon className="w-3.5 h-3.5" />
-              Select Photos...
+              <Trans>Select Photos...</Trans>
             </button>
           </div>
         </div>
@@ -950,7 +906,7 @@ export function MapArea() {
             <UploadCloud className="w-8 h-8" />
           </div>
           <p className="text-zinc-900 dark:text-zinc-200 font-medium text-lg">
-            Drop photos or GPS files to plot route
+            <Trans>Drop photos or GPS files to plot route</Trans>
           </p>
         </div>
       )}
@@ -959,7 +915,7 @@ export function MapArea() {
         <div className="absolute inset-0 z-600 bg-white/50 dark:bg-zinc-950/50 backdrop-blur-sm flex flex-col items-center justify-center transition-all animate-in fade-in">
           <div className="w-12 h-12 border-4 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin mb-4" />
           <p className="text-zinc-900 dark:text-zinc-200 font-bold text-sm tracking-widest uppercase">
-            Parsing Route Data...
+            <Trans>Parsing Route Data...</Trans>
           </p>
         </div>
       )}

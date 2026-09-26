@@ -22,7 +22,6 @@ import { SaveAs } from "./SaveAs";
 import { UnsavedChanges } from "./UnsavedChanges";
 import { useFileActions } from "../../hooks/useFileActions";
 
-
 export function TitleBar() {
   const {
     currentView,
@@ -195,7 +194,7 @@ export function TitleBar() {
 
             {/* Dropdown Menu */}
             {isMenuOpen && (
-              <div className="absolute top-10 w-56 -left-2 bg-white dark:bg-navidark-600 border border-zinc-200 dark:border-white/10 rounded-br-2xl shadow-2xl py-1 z-800 text-sm text-zinc-700 dark:text-zinc-300">
+              <div className="absolute top-10 min-w-56 w-max -left-2 bg-white dark:bg-navidark-600 border border-zinc-200 dark:border-white/10 rounded-br-2xl shadow-2xl py-1 z-800 text-sm text-zinc-700 dark:text-zinc-300 whitespace-nowrap tracking-tighter">
                 {currentView === "editor" && (
                   <>
                     <button
@@ -213,7 +212,9 @@ export function TitleBar() {
                       }}
                       className="w-full flex items-center justify-between px-4 py-1.5 hover:bg-zinc-100 dark:hover:bg-navidark-400 transition-colors"
                     >
-                      <span><Trans>Save Project</Trans></span>
+                      <span>
+                        <Trans>Save Project</Trans>
+                      </span>
                       <span className="text-xs text-zinc-400">Ctrl+S</span>
                     </button>
 
@@ -225,7 +226,9 @@ export function TitleBar() {
                       }}
                       className="w-full flex items-center justify-between px-4 py-1.5 hover:bg-zinc-100 dark:hover:bg-navidark-400 transition-colors"
                     >
-                      <span><Trans>Save As...</Trans></span>
+                      <span>
+                        <Trans>Save As...</Trans>
+                      </span>
                       <span className="text-xs text-zinc-400">
                         Ctrl+Shift+S
                       </span>
@@ -235,7 +238,9 @@ export function TitleBar() {
                       onClick={() => handleSafeNavigation("title_screen")}
                       className="w-full flex items-center justify-between px-4 py-1.5 hover:bg-zinc-100 dark:hover:bg-navidark-400 transition-colors"
                     >
-                      <span><Trans>Project Manager</Trans></span>
+                      <span>
+                        <Trans>Project Manager</Trans>
+                      </span>
                     </button>
                     <button
                       onClick={async () => {
@@ -270,7 +275,9 @@ export function TitleBar() {
                   onClick={() => handleSafeNavigation("new_project")}
                   className="w-full flex items-center justify-between px-4 py-1.5 hover:bg-zinc-100 dark:hover:bg-navidark-400 transition-colors"
                 >
-                  <span><Trans>New Project</Trans></span>
+                  <span>
+                    <Trans>New Project</Trans>
+                  </span>
                 </button>
                 <button
                   onClick={async () => {
@@ -287,7 +294,9 @@ export function TitleBar() {
                   }}
                   className="w-full flex items-center justify-between px-4 py-1.5 hover:bg-zinc-100 dark:hover:bg-navidark-400 transition-colors"
                 >
-                  <span><Trans>Open Project File...</Trans></span>
+                  <span>
+                    <Trans>Open Project File...</Trans>
+                  </span>
                 </button>
                 <button
                   onClick={async () => {
@@ -304,7 +313,9 @@ export function TitleBar() {
                   }}
                   className="w-full flex items-center justify-between px-4 py-1.5 hover:bg-zinc-100 dark:hover:bg-navidark-400 transition-colors"
                 >
-                  <span><Trans>Open Project Folder...</Trans></span>
+                  <span>
+                    <Trans>Open Project Folder...</Trans>
+                  </span>
                 </button>
 
                 <div className="h-px bg-zinc-200 dark:bg-white/5 my-1 mx-2" />
@@ -315,7 +326,9 @@ export function TitleBar() {
                   }}
                   className="w-full flex items-center justify-between px-4 py-1.5 hover:bg-zinc-100 dark:hover:bg-navidark-400 transition-colors"
                 >
-                  <span><Trans>Import Photos...</Trans></span>
+                  <span>
+                    <Trans>Import Photos...</Trans>
+                  </span>
                 </button>
                 <button
                   onClick={async () => {
@@ -324,7 +337,9 @@ export function TitleBar() {
                   }}
                   className="w-full flex items-center justify-between px-4 py-1.5 hover:bg-zinc-100 dark:hover:bg-navidark-400 transition-colors"
                 >
-                  <span><Trans>Import GPX...</Trans></span>
+                  <span>
+                    <Trans>Import GPX...</Trans>
+                  </span>
                 </button>
 
                 <div className="h-px bg-zinc-200 dark:bg-white/5 my-1 mx-2" />
@@ -332,7 +347,9 @@ export function TitleBar() {
                   onClick={() => handleWindow("close")}
                   className="w-full flex items-center justify-between px-4 py-1.5 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10 dark:hover:text-red-400 transition-colors"
                 >
-                  <span><Trans>Exit</Trans></span>
+                  <span>
+                    <Trans>Exit</Trans>
+                  </span>
                 </button>
               </div>
             )}

@@ -522,12 +522,65 @@ export async function appendToRenderLog(message: string) {
   }
 };
 
+export function normalizePathSeparators(p: string): string {
+  return p.replace(/\\/g, "/");
+}
+
+export function toRelativeProjectPath(filePath: string | undefined, projectDir: string): string {
+  if (!filePath) return "";
+  const normFile = normalizePathSeparators(filePath);
+  const normProj = normalizePathSeparators(projectDir).replace(/\/+$/, "");
+
+  // If filePath starts with projectDir, strip it
+  if (normFile.toLowerCase().startsWith(normProj.toLowerCase() + "/")) {
+    return normFile.slice(normProj.length + 1);
+  }
+
+  // If it's already a relative path (e.g. "assets/video/..."), return normalized
+  if (!/^[a-zA-Z]:\//.test(normFile) && !normFile.startsWith("/")) {
+    return normFile;
+  }
+
+  return normFile;
+}
+
+export async function toAbsoluteProjectPath(filePath: string | undefined, projectDir: string): Promise<string> {
+  if (!filePath) return "";
+  const normFile = normalizePathSeparators(filePath);
+  const isWindowsAbs = /^[a-zA-Z]:\//.test(normFile);
+  const isUnixAbs = normFile.startsWith("/");
+
+  if (!isWindowsAbs && !isUnixAbs) {
+    return await join(projectDir, filePath.replace(/\//g, "\\"));
+  }
+
+  try {
+    if (await exists(filePath)) {
+      return filePath;
+    }
+  } catch {}
+
+  const assetsIdx = normFile.indexOf("/assets/");
+  if (assetsIdx !== -1) {
+    const relAsset = normFile.slice(assetsIdx + 1);
+    return await join(projectDir, relAsset.replace(/\//g, "\\"));
+  }
+
+  return filePath;
+}
+
 export function compileTimelineManifest(
   projectName: string,
   timeline: TimelineData,
   renderSettings?: RenderSettings,
   markers?: TimelineManifest["markers"],
+  projectDir?: string,
 ): TimelineManifest & ExportManifestPayload {
+  const toRel = (p: string | undefined): string => {
+    if (!p) return "";
+    return projectDir ? toRelativeProjectPath(p, projectDir) : p;
+  };
+  
   // find master audio track
   const audioTrack = timeline.tracks.find((t) => t.type === "audio");
   const audioClip = audioTrack
@@ -544,7 +597,7 @@ export function compileTimelineManifest(
     const track = timeline.tracks.find((t) => t.id === clip.trackId);
     videoTracks.push({
       clip_id: clip.id,
-      file_path: clip.source || "",
+      file_path: toRel(clip.source),
       duration: clip.duration,
       type: track?.name.toLowerCase().includes("popup")
         ? "static_popup"
@@ -566,13 +619,22 @@ export function compileTimelineManifest(
   const bitrateKbps = renderSettings?.bitrateKbps || 10000;
   const nowIso = new Date().toISOString();
 
+  // Convert clips inside ui_state and manifest to relative paths
+  const relativeClips = timeline.clips.map((c) => ({
+    ...c,
+    source: c.source ? toRel(c.source) : c.source,
+  }));
+
   // build final json manifest payload
   const manifest: TimelineManifest & ExportManifestPayload = {
     project_name: projectName,
     total_duration_seconds: totalDuration,
     video_tracks: videoTracks,
-    audio_track: audioClip?.source || undefined,
-    ui_state: timeline,
+    audio_track: audioClip?.source ? toRel(audioClip.source) : undefined,
+    ui_state: {
+      ...timeline,
+      clips: relativeClips,
+    },
     render_settings: renderSettings,
     aspect_ratio: aspectRatio,
     resolution: resolution,
@@ -580,7 +642,7 @@ export function compileTimelineManifest(
     bitrate_kbps: bitrateKbps,
     skip_rich_media: renderSettings?.skipRichMedia ?? false,
     tracks: timeline.tracks,
-    clips: timeline.clips,
+    clips: relativeClips,
     transitions: timeline.transitions || [],
     markers: markers || timeline.markers || [],
     exported_at: nowIso,
@@ -606,7 +668,7 @@ export async function saveTimelineManifest(
 ): Promise<boolean> {
   /**
    * convert react timeline state into timeline.json manifest
-   * and saves it for python backend to process
+   * and saves it with relative paths for portability
    */
   try {
     const manifestPath = await join(projectDir, "timeline.json");
@@ -627,6 +689,7 @@ export async function saveTimelineManifest(
       timeline,
       renderSettings,
       markers,
+      projectDir,
     );
 
     // write to disk formatted cleanly
@@ -653,6 +716,41 @@ export async function loadTimelineManifest(projectDir: string): Promise<Timeline
     // read and parse json
     const fileContents = await readTextFile(manifestPath);
     const manifest: TimelineManifest = JSON.parse(fileContents);
+
+    if (manifest.video_tracks) {
+      for (const track of manifest.video_tracks) {
+        if (track.file_path) {
+          track.file_path = await toAbsoluteProjectPath(track.file_path, projectDir);
+        }
+        if (track.audio_path) {
+          track.audio_path = await toAbsoluteProjectPath(track.audio_path, projectDir);
+        }
+        if (track.subtitle_path) {
+          track.subtitle_path = await toAbsoluteProjectPath(track.subtitle_path, projectDir);
+        }
+      }
+    }
+
+    if (manifest.audio_track) {
+      manifest.audio_track = await toAbsoluteProjectPath(manifest.audio_track, projectDir);
+    }
+
+    if (manifest.ui_state?.clips) {
+      for (const clip of manifest.ui_state.clips) {
+        if (clip.source) {
+          clip.source = await toAbsoluteProjectPath(clip.source, projectDir);
+        }
+      }
+    }
+
+    if (manifest.clips) {
+      for (const clip of manifest.clips) {
+        if (clip.source) {
+          clip.source = await toAbsoluteProjectPath(clip.source, projectDir);
+        }
+      }
+    }
+
     return manifest;
   } catch (error) {
     console.error("Failed to load or parse timeline manifest:", error);

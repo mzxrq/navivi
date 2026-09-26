@@ -1,14 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { AudioWaveformProps } from "../../../../types/index";
-
-
 interface DecodedAudio {
   channelData: Float32Array;
   sampleRate: number;
   duration: number;
 }
 
-// Singleton in-memory decoded audio cache to avoid redundant network fetches and decodes
 const audioBufferCache = new Map<string, Promise<DecodedAudio>>();
 
 function getDecodedAudio(src: string): Promise<DecodedAudio> {
@@ -22,8 +19,6 @@ function getDecodedAudio(src: string): Promise<DecodedAudio> {
       throw new Error(`Failed to fetch audio source: ${response.statusText}`);
     }
     const arrayBuffer = await response.arrayBuffer();
-
-    // Use OfflineAudioContext or fallback AudioContext with guaranteed closure
     const OfflineCtx =
       window.OfflineAudioContext || (window as any).webkitOfflineAudioContext;
     const audioCtx = OfflineCtx
@@ -44,7 +39,6 @@ function getDecodedAudio(src: string): Promise<DecodedAudio> {
     }
   })();
 
-  // If decoding fails, remove from cache so future attempts can retry
   decodePromise.catch(() => {
     audioBufferCache.delete(src);
   });
@@ -66,7 +60,6 @@ export function AudioWaveform({
   const [isLoading, setIsLoading] = useState(true);
   const [decodedAudio, setDecodedAudio] = useState<DecodedAudio | null>(null);
 
-  // 1. Fetch & decode with singleton cache
   useEffect(() => {
     if (!src) {
       setIsLoading(false);
@@ -97,7 +90,6 @@ export function AudioWaveform({
     };
   }, [src]);
 
-  // 2. High-DPI canvas render with temporal windowing & performance downsampling stride
   useEffect(() => {
     if (!decodedAudio || !width || !height || width <= 0 || height <= 0) return;
 
@@ -110,7 +102,6 @@ export function AudioWaveform({
     const pixelWidth = Math.max(1, Math.floor(width));
     const pixelHeight = Math.max(1, Math.floor(height));
 
-    // Configure high-DPI canvas internal buffer
     canvas.width = Math.floor(pixelWidth * dpr);
     canvas.height = Math.floor(pixelHeight * dpr);
 
@@ -121,7 +112,6 @@ export function AudioWaveform({
     const { channelData, sampleRate, duration: totalDuration } = decodedAudio;
     const totalSamples = channelData.length;
 
-    // Temporal Windowing: slice accurately from sourceOffset for duration
     const validOffset = Math.max(0, sourceOffset);
     const startSample = Math.min(
       totalSamples,
@@ -140,8 +130,6 @@ export function AudioWaveform({
 
     const windowSamples = endSample - startSample;
     const samplesPerPixel = windowSamples / pixelWidth;
-
-    // Performance Downsampling: stride through samplesPerPixel with a max sub-sampling count
     const stride = Math.max(1, Math.floor(samplesPerPixel / 32));
     const effectiveVol = Math.max(0, volume);
     const midHeight = pixelHeight / 2;

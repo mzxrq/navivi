@@ -1,35 +1,38 @@
-import { useState, useEffect } from "react";
+import { useLingui } from "@lingui/react";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
+import { convertFileSrc } from "@tauri-apps/api/core";
+import { open } from "@tauri-apps/plugin-dialog";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { useUI } from "../../hooks/useUI";
+import { useAnimatedUnmount } from "../../hooks/useAnimatedUnmount";
 import { useTheme } from "../../hooks/useTheme";
+import { useUI } from "../../hooks/useUI";
+import { useWorkspace } from "../../hooks/useWorkspace";
+import { getLocalModels, pullModelStream } from "../../services/ollamaApi";
+import { dynamicActivate } from "../../i18n";
 import {
-  X,
-  Moon,
-  Sun,
+  CheckCircle2,
+  Film,
+  Key,
+  MapPin,
   Monitor,
-  Settings,
+  Moon,
+  NaviviType,
   Palette,
   Save,
-  MapPin,
-  Key,
-  Film,
+  Settings,
   Sparkles,
-  CheckCircle2,
-  NaviviType,
+  Sun,
+  X,
+  Globe,
 } from "./icons";
-import { open } from "@tauri-apps/plugin-dialog";
-import { convertFileSrc } from "@tauri-apps/api/core";
-import { useWorkspace } from "../../hooks/useWorkspace";
-import { useAnimatedUnmount } from "../../hooks/useAnimatedUnmount";
-import { getLocalModels, pullModelStream } from "../../services/ollamaApi";
-import { i18n } from "@lingui/core";
 
 type SettingsTab = "general" | "appearance" | "api" | "video" | "ai";
 
 export function AppSettings() {
   const { settings, updateSettings, setIsDirty } = useWorkspace();
+  const { i18n } = useLingui();
   const { showAppSettings, setShowAppSettings, currentView } = useUI();
   const { theme, setTheme, accentTheme, setAccentTheme } = useTheme();
 
@@ -113,6 +116,29 @@ export function AppSettings() {
             {/* GENERAL TAB */}
             {activeTab === "general" && (
               <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+                <div className="space-y-3">
+                  <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-widest flex items-center gap-1.5">
+                    <Globe className="w-3.5 h-3.5" /> <Trans>Language</Trans>
+                  </label>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                    <Trans>
+                      Choose your preferred language for the application
+                    </Trans>
+                  </p>
+                  <select
+                    value={i18n.locale}
+                    onChange={(e) => {
+                      const newLocale = e.target.value;
+                      localStorage.setItem("navivi_locale", newLocale);
+                      dynamicActivate(newLocale);
+                    }}
+                    className="w-full bg-zinc-50 dark:bg-navidark-800 border border-zinc-200 dark:border-navidark-400 rounded-lg px-3 py-2.5 text-sm text-zinc-900 dark:text-zinc-100 outline-none focus:border-navi focus:ring-1 focus:ring-navi transition-all"
+                  >
+                    <option value="en">English</option>
+                    <option value="ja">日本語</option>
+                  </select>
+                </div>
+
                 <div className="space-y-3">
                   <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-widest flex items-center gap-1.5">
                     <Save className="w-3.5 h-3.5" />{" "}
@@ -715,6 +741,7 @@ function TabButton({
 
 function AiModelsTab() {
   const { settings, updateSettings, setIsDirty } = useWorkspace();
+  const { i18n } = useLingui();
   const [localModels, setLocalModels] = useState<string[]>([]);
   const [downloading, setDownloading] = useState<{
     [key: string]: {

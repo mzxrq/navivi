@@ -1,5 +1,4 @@
 import { ReactNode } from "react";
-import { t } from "@lingui/core/macro";
 
 interface TooltipProps {
   children: ReactNode;

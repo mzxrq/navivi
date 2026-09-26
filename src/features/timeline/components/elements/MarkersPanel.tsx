@@ -3,7 +3,7 @@ import { MapPinPlus, Trash2 } from "../../../../components/ui/icons";
 import { WaypointTimelineMarker } from "../../../../types";
 import { formatMarkerTime } from "./WaypointMarker";
 import { t } from "@lingui/core/macro";
-
+import { Trans } from "@lingui/react/macro";
 
 interface MarkersPanelProps {
   markers: WaypointTimelineMarker[];
@@ -29,17 +29,17 @@ export function MarkersPanel({
       <div className="flex items-center justify-between border-b border-zinc-200 p-3 dark:border-navidark-700">
         <div>
           <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
-            Timeline markers
+            <Trans>Timeline markers</Trans>
           </h3>
           <p className="text-[10px] text-zinc-500">
-            Waypoint-linked and custom markers
+            <Trans>Waypoint-linked and custom markers</Trans>
           </p>
         </div>
         <button
           type="button"
           onClick={onAdd}
           className="flex items-center gap-1 rounded bg-navi px-2 py-1 text-[10px] font-bold text-white"
-          title={`Add marker at ${formatMarkerTime(currentTime)}`}
+          title={t`Add marker at ${formatMarkerTime(currentTime)}`}
         >
           <MapPinPlus className="h-3.5 w-3.5" /> Add
         </button>
@@ -48,9 +48,11 @@ export function MarkersPanel({
         {markers.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center p-6 text-center text-xs text-zinc-400">
             <MapPinPlus className="mb-2 h-7 w-7 opacity-40" />
-            <p>No timeline markers yet.</p>
+            <p>
+              <Trans>No timeline markers yet</Trans>
+            </p>
             <p className="mt-1 text-[10px]">
-              Add one at the current playhead position.
+              <Trans>Add one at the current playhead position</Trans>
             </p>
           </div>
         ) : (
@@ -66,7 +68,7 @@ export function MarkersPanel({
                     type="button"
                     onClick={() => onSeek(marker.time)}
                     className="min-w-0 flex-1 text-left"
-                    title="Seek to marker"
+                    title={t`Seek to marker`}
                   >
                     {isEditing ? (
                       <input
@@ -90,7 +92,7 @@ export function MarkersPanel({
                     )}
                     <span className="font-mono text-[10px] text-zinc-400">
                       {formatMarkerTime(marker.time)}
-                      {marker.waypointId ? " · waypoint" : ""}
+                      {marker.waypointId ? t` · waypoint` : ""}
                     </span>
                   </button>
                   <input
@@ -104,13 +106,13 @@ export function MarkersPanel({
                       })
                     }
                     className="w-16 rounded border border-zinc-200 bg-transparent px-1 py-0.5 text-[10px] font-mono dark:border-navidark-600"
-                    title="Marker time in seconds"
+                    title={t`Marker time in seconds`}
                   />
                   <button
                     type="button"
                     onClick={() => setEditingId(marker.id)}
                     className="text-[10px] text-zinc-400 hover:text-navi"
-                    title="Rename marker"
+                    title={t`Rename marker`}
                   >
                     Edit
                   </button>
@@ -118,7 +120,7 @@ export function MarkersPanel({
                     type="button"
                     onClick={() => onDelete(marker.id)}
                     className="text-zinc-400 hover:text-red-500"
-                    title="Delete marker"
+                    title={t`Delete marker`}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>

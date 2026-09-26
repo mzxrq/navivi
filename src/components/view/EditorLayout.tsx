@@ -2,9 +2,9 @@ import { useState } from "react";
 import { MapArea } from "../../features/map/components/MapArea";
 import { Sidebar } from "../../features/map/components/Sidebar";
 import { TimelineView } from "../../features/timeline/components/TimelineView";
-import { TimelineEditor } from "../../features/map/components/TimelineEditor";
 import { MapIcon, Film } from "../ui/icons";
 import { t } from "@lingui/core/macro";
+import { Trans } from "@lingui/react/macro";
 
 export function EditorLayout() {
   // 'map' or 'timeline'
@@ -24,7 +24,7 @@ export function EditorLayout() {
                 : "text-zinc-500 hover:text-zinc-700 dark:text-navidark-125 dark:hover:text-white"
             }`}
           >
-            <MapIcon className="w-3.5 h-3.5" /> Map
+            <MapIcon className="w-3.5 h-3.5" /> <Trans>Map</Trans>
           </button>
 
           <button
@@ -35,7 +35,7 @@ export function EditorLayout() {
                 : "text-zinc-500 hover:text-zinc-700 dark:text-navidark-125 dark:hover:text-white"
             }`}
           >
-            <Film className="w-3.5 h-3.5" /> Timeline
+            <Film className="w-3.5 h-3.5" /> <Trans>Timeline</Trans>
           </button>
         </div>
       </header>
@@ -45,13 +45,8 @@ export function EditorLayout() {
         {editorMode === "map" ? (
           <>
             <Sidebar />
-            <div className="flex-1 flex flex-col relative min-w-0">
-              <div className="flex-1 relative min-h-0">
-                <MapArea />
-              </div>
-              <div className="h-48 shrink-0 bg-white dark:bg-navidark-900 z-50">
-                <TimelineEditor />
-              </div>
+            <div className="flex-1 relative min-w-0 h-full">
+              <MapArea />
             </div>
           </>
         ) : (

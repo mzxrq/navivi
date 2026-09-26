@@ -11,8 +11,8 @@ use std::fs;
 
 struct BlueprintState {
     process: Mutex<Option<Child>>,
-    // start_render's spawned child wasn't tracked anywhere before — only
-    // run_python_blueprint's was — so a force-killed app left it (and
+    // start_render's spawned child wasn't tracked anywhere before  Eonly
+    // run_python_blueprint's was  Eso a force-killed app left it (and
     // whatever Python server it had itself started, e.g. the bundled TTS/
     // ComfyUI servers) running with no supervising process at all.
     render_process: Mutex<Option<Child>>,
@@ -335,11 +335,39 @@ fn open_in_explorer(path: String) -> Result<(), String> {
     Ok(())
 }
 
+
+#[tauri::command]
+async fn convert_gps_to_gpx(input_path: String, input_format: String) -> Result<String, String> {
+    let output = std::process::Command::new("gpsbabel")
+        .arg("-i")
+        .arg(&input_format)
+        .arg("-f")
+        .arg(&input_path)
+        .arg("-o")
+        .arg("gpx")
+        .arg("-F")
+        .arg("-")
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if output.status.success() {
+        Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+    } else {
+        let err = String::from_utf8_lossy(&output.stderr).into_owned();
+        if err.is_empty() {
+            Err("gpsbabel failed without error output. Is it installed?".to_string())
+        } else {
+            Err(err)
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_http::init())
         .manage(BlueprintState {
             process: Mutex::new(None),
             render_process: Mutex::new(None),
@@ -356,13 +384,14 @@ pub fn run() {
             open_in_explorer,
             zip_project,
             unzip_project,
+            convert_gps_to_gpx,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app_handle, event| {
             // A force-closed window (or OS shutdown) previously left any
-            // running Python worker — and whatever bundled server it had
-            // itself spawned (TTS/ComfyUI) — running with nothing left to
+            // running Python worker  Eand whatever bundled server it had
+            // itself spawned (TTS/ComfyUI)  Erunning with nothing left to
             // supervise it. Kill whatever this app is still tracking on exit.
             if let tauri::RunEvent::ExitRequested { .. } = event {
                 if let Some(state) = app_handle.try_state::<BlueprintState>() {

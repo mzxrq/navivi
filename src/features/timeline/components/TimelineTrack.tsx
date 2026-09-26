@@ -5,6 +5,7 @@ import { TimelineTrack as TrackType } from "../../../types/index";
 import { TimelineClip } from "./TimelineClip";
 import { TransitionBlock } from "./elements/TransitionBlock";
 import { t } from "@lingui/core/macro";
+import { Trans } from "@lingui/react/macro";
 
 interface TrackProps {
   track: TrackType;
@@ -38,8 +39,8 @@ export function TimelineTrack({
   const dragCounter = useRef(0);
 
   const trackClips = timeline.clips.filter((clip) => clip.trackId === track.id);
-  // Support both strict types and fallback to name checking just in case
-  const isMainTrack = track.type === "video" || track.name.toLowerCase().includes("video");
+  const isMainTrack =
+    track.type === "video" || track.name.toLowerCase().includes("video");
   const trackHeight = isMainTrack ? "h-20" : "h-14";
 
   const handleDragEnter = (e: React.DragEvent) => {
@@ -84,14 +85,15 @@ export function TimelineTrack({
     const zoomRatio = pxPs * timeline.zoomMultiplier;
     const dropTime = Math.max(0, dropX / zoomRatio);
 
-    // ✨ TRANSITION DROP HANDLING (Checked FIRST!)
     if (asset.type === "transition") {
       if (track.type !== "video") {
-        showToast("Transitions can only be placed on video tracks.", "warning");
+        showToast(t`Transitions can only be placed on video tracks`, "warning");
         return;
       }
 
-      const sortedClips = [...trackClips].sort((a, b) => a.startTime - b.startTime);
+      const sortedClips = [...trackClips].sort(
+        (a, b) => a.startTime - b.startTime,
+      );
       let bestCut = null;
       let minDiff = Infinity;
 
@@ -104,7 +106,8 @@ export function TimelineTrack({
         // If they are physically touching (or close to it)
         if (Math.abs(cutTime - rightClip.startTime) < 0.1) {
           const diff = Math.abs(cutTime - dropTime);
-          if (diff < minDiff && diff < 1.5) { // Drop must be within 1.5s of the cut
+          if (diff < minDiff && diff < 1.5) {
+            // Drop must be within 1.5s of the cut
             minDiff = diff;
             bestCut = { left: leftClip, right: rightClip, cutTime };
           }
@@ -112,7 +115,10 @@ export function TimelineTrack({
       }
 
       if (!bestCut) {
-        showToast("Drop transitions directly on the cut between two clips!", "warning");
+        showToast(
+          t`Please drop transitions directly on the cut between two clips`,
+          "warning",
+        );
         return;
       }
 
@@ -128,9 +134,9 @@ export function TimelineTrack({
         trackId: track.id,
         fromClipId: bestCut.left.id,
         toClipId: bestCut.right.id,
-        type: asset.shader, // e.g., "glsl-dreamy"
+        type: asset.shader,
         duration: transDuration,
-        startTime: bestCut.cutTime - transDuration / 2, // Center it exactly on the cut!
+        startTime: bestCut.cutTime - transDuration / 2,
       };
 
       const updatedClips = timeline.clips.map((c) => {
@@ -155,8 +161,7 @@ export function TimelineTrack({
       const filteredTransitions = (timeline.transitions || []).filter(
         (t) =>
           !(
-            t.fromClipId === bestCut.left.id &&
-            t.toClipId === bestCut.right.id
+            t.fromClipId === bestCut.left.id && t.toClipId === bestCut.right.id
           ),
       );
 
@@ -166,23 +171,25 @@ export function TimelineTrack({
         transitions: [...filteredTransitions, newTransition],
       });
       showToast(
-        `Applied ${asset.name || "transition"} between clips`,
+        t`Applied ${asset.name || "transition"} between clips`,
         "success",
       );
       return;
     }
 
-    // ✨ STRICT TRACK TYPE VALIDATION
     if (track.type === "video" && asset.type === "audio") {
-      showToast("Cannot place Audio on a Video track.", "error");
+      showToast(t`Cannot place Audio on a Video track`, "error");
       return;
     }
     if (track.type === "audio" && asset.type !== "audio") {
-      showToast("Audio tracks only accept Audio files.", "error");
+      showToast(t`Audio tracks only accept Audio files`, "error");
       return;
     }
     if (track.type === "subtitle") {
-      showToast("Subtitles are managed automatically or via text clips.", "warning");
+      showToast(
+        t`Subtitles are managed automatically or via text clips.`,
+        "warning",
+      );
       if (asset.type !== "text") return;
     }
 
@@ -220,7 +227,6 @@ export function TimelineTrack({
 
     let newClips = [...timeline.clips];
 
-    // If dropping a Video, automatically extract and drop the Audio onto an audio track
     if (isVideoFile) {
       const audioTrack = timeline.tracks.find((t) => t.type === "audio");
       if (audioTrack) {
@@ -229,21 +235,21 @@ export function TimelineTrack({
           id: crypto.randomUUID(),
           trackId: audioTrack.id,
           type: "audio",
-          label: `${asset.name} (Audio)`,
+          label: t`${asset.name} (Audio)`,
         });
       } else {
-        showToast("No Audio track available to spawn video audio.", "warning");
+        showToast(t`No Audio track available to spawn video audio`, "warning");
       }
     }
 
-    const targetNeighbors = newClips.filter(c => c.trackId === track.id);
-    const overlapping = targetNeighbors.some(c => {
+    const targetNeighbors = newClips.filter((c) => c.trackId === track.id);
+    const overlapping = targetNeighbors.some((c) => {
       const cEnd = c.startTime + c.duration;
-      return (finalStart < cEnd && finalEnd > c.startTime);
+      return finalStart < cEnd && finalEnd > c.startTime;
     });
 
     if (overlapping) {
-      showToast("Cannot drop here: overlaps with another clip.", "error");
+      showToast(t`Cannot drop here: overlaps with another clip`, "error");
       return;
     }
 
@@ -304,15 +310,15 @@ export function TimelineTrack({
           />
         ))}
 
-{(timeline.transitions || [])
-          .filter(t => t.trackId === track.id)
-          .map(transition => (
-            <TransitionBlock 
-              key={transition.id} 
-              transition={transition} 
-              pixelsPerSecond={pxPs * timeline.zoomMultiplier} 
+        {(timeline.transitions || [])
+          .filter((t) => t.trackId === track.id)
+          .map((transition) => (
+            <TransitionBlock
+              key={transition.id}
+              transition={transition}
+              pixelsPerSecond={pxPs * timeline.zoomMultiplier}
             />
-        ))}
+          ))}
       </div>
     </div>
   );

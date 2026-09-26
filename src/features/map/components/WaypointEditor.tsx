@@ -21,6 +21,7 @@ import {
   ZoomIn,
   ZoomOut,
   Sparkles,
+  SwitchCamera,
 } from "../../../components/ui/icons";
 import { useWorkspace } from "../../../hooks/useWorkspace";
 import { useUI } from "../../../hooks/useUI";
@@ -33,6 +34,7 @@ import {
   generateWaypointScriptStream,
 } from "../../../services/ollamaApi";
 import { t } from "@lingui/core/macro";
+import { Trans } from "@lingui/react/macro";
 
 const cameraPans = [
   { value: "none", label: "None" },
@@ -150,7 +152,7 @@ export function WaypointEditor({
       const hasEngine = await checkModelExists(engine);
       if (!hasEngine) {
         showToast(
-          `Model "${engine}" not found. Please install it in Ollama.`,
+          t`Model "${engine}" not found. Please install it from the App Settings`,
           "error",
         );
         updateWaypoint(wp.id, { isGeneratingScript: false });
@@ -191,7 +193,7 @@ export function WaypointEditor({
       );
     } catch (err: any) {
       console.error("Script generation failed:", err);
-      showToast(err.message || "Failed to generate script", "error");
+      showToast(err.message || t`Failed to generate script`, "error");
     } finally {
       updateWaypoint(wp.id, { isGeneratingScript: false });
     }
@@ -215,7 +217,7 @@ export function WaypointEditor({
           >
             <div className="flex flex-col min-w-0 pointer-events-none">
               <span className="text-[10px] font-bold text-navi dark:text-navi-400  widest opacity-80 mb-0.5">
-                Editing Waypoint
+                <Trans>Editing Waypoint</Trans>
               </span>
               <h2 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 truncate flex items-center gap-2">
                 <MapPin className="w-3.5 h-3.5 text-navi" /> {wp.name}
@@ -252,17 +254,20 @@ export function WaypointEditor({
                     updateWaypoint(wp.id, { name: e.target.value })
                   }
                   className="w-full bg-transparent border-b border-zinc-300 dark:border-white/20 text-2xl font-bold focus:outline-none focus:border-navi pb-1 truncate transition-colors"
-                  placeholder="Location Name"
+                  placeholder={t`Location Name`}
                 />
                 <span className="text-[10px] font-medium text-zinc-500 dark:text-zinc-400 pl-1 mt-1">
-                  Get name from coordinate
+                  <Trans>Get name from coordinate</Trans>
                 </span>
 
                 {isMarkedForRegen && (
                   <div className="mt-2.5 p-2 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-start gap-2">
                     <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
                     <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-400 leading-snug">
-                      Marked for Regeneration: Edit image, narration, or route mode, then click Resume Generation.
+                      <Trans>
+                        Marked for Regeneration: Edit image, narration, or route
+                        mode, then click Resume Generation
+                      </Trans>
                     </span>
                   </div>
                 )}
@@ -288,11 +293,11 @@ export function WaypointEditor({
                         <div className="w-9 h-5 bg-zinc-200 peer-focus:outline-none rounded-full peer dark:bg-navidark-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-0.5after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-navi-500 border border-zinc-300 dark:border-white/20 peer-disabled:cursor-not-allowed"></div>
                       </div>
                       <span className="text-[11px] font-bold text-zinc-700 dark:text-zinc-200">
-                        Skip in Video Export
+                        <Trans>Skip in Video Export</Trans>
                       </span>
                     </label>
                     <Tooltip
-                      content="Skips this location during video generation (useful for shaping the route without visiting)."
+                      content={t`Skips this location during video generation`}
                       position="top"
                     >
                       <Info className="w-3.5 h-3.5 text-zinc-400 hover:text-navi transition-colors cursor-help" />
@@ -320,11 +325,11 @@ export function WaypointEditor({
                         <div className="w-9 h-5 bg-zinc-200 peer-focus:outline-none rounded-full peer dark:bg-navidark-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-0.5after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-navi-500 border border-zinc-300 dark:border-white/20"></div>
                       </div>
                       <span className="text-[11px] font-bold text-zinc-700 dark:text-zinc-200">
-                        Pause at Location
+                        <Trans>Pause at Location</Trans>
                       </span>
                     </label>
                     <Tooltip
-                      content="Adds a brief pause in the generated video at this waypoint before continuing the journey."
+                      content={t`Adds a brief pause in the generated video at this waypoint before continuing the journey`}
                       position="top"
                     >
                       <Info className="w-3.5 h-3.5 text-zinc-400 hover:text-navi transition-colors cursor-help" />
@@ -339,7 +344,7 @@ export function WaypointEditor({
               {/* BOTTOM: Action */}
               <div className="p-5 pt-4 flex flex-col gap-4 flex-1">
                 <h3 className="text-xs font-bold  wider text-zinc-800 dark:text-zinc-200">
-                  Action
+                  <Trans>Action</Trans>
                 </h3>
 
                 {/* Custom Marker */}
@@ -367,7 +372,7 @@ export function WaypointEditor({
                   </div>
                   <div className="flex flex-col gap-1.5">
                     <span className="text-[11px] font-bold text-zinc-700 dark:text-zinc-300">
-                      Custom Marker
+                      <Trans>Custom Marker</Trans>
                     </span>
                     <div className="flex items-center gap-2">
                       <button
@@ -387,7 +392,7 @@ export function WaypointEditor({
                         }}
                         className="bg-navi-500 hover:bg-navi-600 text-white px-2.5 py-1 rounded-md text-[10px] font-bold shadow-sm transition-colors"
                       >
-                        Select
+                        <Trans>Select</Trans>
                       </button>
                       <span
                         className="text-[10px] font-medium text-zinc-500 truncate max-w-25"
@@ -395,7 +400,7 @@ export function WaypointEditor({
                       >
                         {wp.customMarker
                           ? wp.customMarker.split(/[\\/]/).pop()
-                          : "No file chosen"}
+                          : t`"No file chosen"`}
                       </span>
                     </div>
                   </div>
@@ -405,9 +410,9 @@ export function WaypointEditor({
                 <div className="flex flex-col gap-2.5 mt-2">
                   <h3
                     className="text-[11px] font-bold flex items-center gap-1.5 text-zinc-700 dark:text-zinc-300"
-                    title="Change Waypoint Type"
+                    title={t`Change Waypoint Type`}
                   >
-                    Waypoint Settings{" "}
+                    <Trans>Waypoint Settings </Trans>
                     <Info className="w-3.5 h-3.5 text-zinc-400" />
                   </h3>
 
@@ -420,7 +425,7 @@ export function WaypointEditor({
                     >
                       <Navigation className="w-4 h-4" />
                       <span className="text-[9px] font-bold max-[1414px]:hidden">
-                        Node
+                        <Trans>Node</Trans>
                       </span>
                     </button>
 
@@ -430,7 +435,7 @@ export function WaypointEditor({
                     >
                       <MapPinned className="w-4 h-4" />
                       <span className="text-[9px] font-bold max-[1414px]:hidden">
-                        Stop-by
+                        <Trans>Stop-by</Trans>
                       </span>
                     </button>
 
@@ -445,8 +450,8 @@ export function WaypointEditor({
                         className={`flex flex-col items-center justify-center gap-1.5 p-2 rounded-xl border transition-all shadow-sm ${wp.connectToRoute !== false ? "bg-emerald-50 dark:bg-emerald-900/30 border-emerald-500 text-emerald-700 dark:text-emerald-400" : "bg-zinc-100 dark:bg-navidark-600 border-zinc-300 dark:border-white/20 text-zinc-600 dark:text-zinc-400"}`}
                         title={
                           wp.connectToRoute !== false
-                            ? "Connected to route"
-                            : "Disconnected from route"
+                            ? t`Connected to route`
+                            : t`Disconnected from route`
                         }
                       >
                         {wp.connectToRoute !== false ? (
@@ -455,7 +460,9 @@ export function WaypointEditor({
                           <UnlinkIcon className="w-4 h-4" />
                         )}
                         <span className="text-[9px] font-bold max-[1414px]:hidden">
-                          {wp.connectToRoute !== false ? "Linked" : "Unlinked"}
+                          {wp.connectToRoute !== false
+                            ? t`Linked`
+                            : t`Unlinked`}
                         </span>
                       </button>
                     )}
@@ -466,7 +473,7 @@ export function WaypointEditor({
                     >
                       <PlayCircle className="w-4 h-4" />
                       <span className="text-[9px] font-bold max-[1414px]:hidden">
-                        Start
+                        <Trans>Start</Trans>
                       </span>
                     </button>
 
@@ -476,7 +483,7 @@ export function WaypointEditor({
                     >
                       <CheckCircle2 className="w-4 h-4" />
                       <span className="text-[9px] font-bold max-[1414px]:hidden">
-                        Dest
+                        <Trans>Dest</Trans>
                       </span>
                     </button>
 
@@ -486,7 +493,7 @@ export function WaypointEditor({
                     >
                       <Trash2 className="w-4 h-4" />
                       <span className="text-[9px] font-bold max-[1414px]:hidden">
-                        Delete
+                        <Trans>Delete</Trans>
                       </span>
                     </button>
                   </div>
@@ -506,7 +513,7 @@ export function WaypointEditor({
                       : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 border-r border-zinc-200/50 dark:border-white/10"
                   }`}
                 >
-                  Narration Script
+                  <Trans>Narration Script</Trans>
                 </button>
                 <button
                   onClick={() => setActiveTab("images")}
@@ -516,13 +523,13 @@ export function WaypointEditor({
                       : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 border-r border-zinc-200/50 dark:border-white/10"
                   }`}
                 >
-                  Image
+                  <Trans>Image</Trans>
                 </button>
 
                 <div className="ml-auto flex items-center px-4 gap-1">
                   <button
                     onClick={() => setIsCollapsed(true)}
-                    title="Collapse"
+                    title={t`Collapse`}
                     className="p-1.5 rounded-lg hover:bg-zinc-200 dark:hover:bg-navidark-600 transition-colors"
                   >
                     <ChevronDown className="w-5 h-5 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100" />
@@ -549,7 +556,7 @@ export function WaypointEditor({
                       >
                         <Mic className="w-4 h-4 text-zinc-500 dark:text-zinc-400 group-hover:text-navi transition-colors" />
                         <h3 className="text-sm font-bold text-zinc-800 dark:text-zinc-200">
-                          Arriving Script
+                          <Trans>Arriving Script</Trans>
                         </h3>
                         {showArriving ? (
                           <ChevronUp className="w-4 h-4 ml-1 text-zinc-400 group-hover:text-zinc-700 transition-colors" />
@@ -594,7 +601,7 @@ export function WaypointEditor({
                           >
                             <Mic className="w-4 h-4 text-zinc-500 dark:text-zinc-400 group-hover:text-emerald-500 transition-colors" />
                             <h3 className="text-sm font-bold text-zinc-800 dark:text-zinc-200">
-                              Attraction Script
+                              <Trans>Attraction Script</Trans>
                             </h3>
                             {showAttraction ? (
                               <ChevronUp className="w-4 h-4 ml-1 text-zinc-400 group-hover:text-zinc-700 transition-colors" />
@@ -622,10 +629,7 @@ export function WaypointEditor({
                                   );
                                 }}
                                 onGenerate={(prompt) =>
-                                  handleGenerateScript(
-                                    "attraction",
-                                    prompt,
-                                  )
+                                  handleGenerateScript("attraction", prompt)
                                 }
                               />
                             </div>
@@ -640,11 +644,13 @@ export function WaypointEditor({
                   <div className="space-y-5 max-w-3xl">
                     <div className="flex flex-col gap-1">
                       <h3 className="text-xs font-bold text-zinc-800 dark:text-zinc-200  wider">
-                        Pop-up Images ({wpImages.length}/3)
+                        <Trans>Pop-up Images ({wpImages.length}/3)</Trans>
                       </h3>
                       <p className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400 leading-tight">
-                        Add up to 3 images that will pop up during the narration
-                        at this stop.
+                        <Trans>
+                          Add up to 3 images that will pop up during the
+                          narration at this stop
+                        </Trans>
                       </p>
                     </div>
 
@@ -679,7 +685,7 @@ export function WaypointEditor({
                             <button
                               onClick={() => removeImage(idx)}
                               className="absolute top-2 right-2 p-1.5 bg-black/60 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-20 hover:bg-red-500 backdrop-blur-sm"
-                              title="Remove Image"
+                              title={t`Remove Image`}
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -688,7 +694,7 @@ export function WaypointEditor({
                             <div className="relative w-full aspect-4/3 bg-zinc-100 dark:bg-zinc-800">
                               <img
                                 src={convertFileSrc(img)}
-                                alt={`Waypoint ${idx}`}
+                                alt={t`Waypoint ${idx}`}
                                 className="w-full h-full object-cover"
                               />
                             </div>
@@ -699,7 +705,8 @@ export function WaypointEditor({
                                 {img.split(/\\|\//).pop()}
                               </h4>
                               <span className="text-[10px] text-zinc-500 mb-3 wide">
-                                Camera angle
+                                <SwitchCamera className="w-3.5 h-3.5" />{" "}
+                                <Trans>Camera Angle</Trans>
                               </span>
 
                               {/* Buttons Row */}
@@ -742,7 +749,11 @@ export function WaypointEditor({
                           className="shrink-0 w-60 snap-start h-auto min-h-50 bg-zinc-50 dark:bg-navidark-700/50 hover:bg-zinc-100 dark:hover:bg-navidark-600 border border-zinc-300 dark:border-white/20 hover:border-zinc-400 dark:hover:border-white/40 border-dashed rounded-[20px] p-6 flex flex-col items-center justify-center gap-3 text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300 transition-all group shadow-sm"
                         >
                           <ImageIcon className="w-8 h-8 opacity-60 group-hover:opacity-100 transition-opacity" />
-                          <span className="text-xs font-bold">+ Add Image</span>
+                          <Trans>
+                            <span className="text-xs font-bold">
+                              + Add Image
+                            </span>
+                          </Trans>
                         </button>
                       )}
                     </div>

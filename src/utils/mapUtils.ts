@@ -82,11 +82,6 @@ export function pruneRouteCache(
     return cleanCache;
 }
 
-export interface OsmNode {
-    lat: number;
-    lon: number;
-}
-
 export const getDistanceKm = (lat1: number, lon1: number, lat2: number, lon2: number) => {
     const R = 6371; // earth radius
     const dLat = (lat2 - lat1) * (Math.PI / 180);
