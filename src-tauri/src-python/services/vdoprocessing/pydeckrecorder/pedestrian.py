@@ -1334,6 +1334,12 @@ def render_residential_leg_pydeck(
     return produced_paths
 
 
+# Screenshot options for every frame a residential leg pipes into ffmpeg
+# (read as mjpeg - see _record_leg's _spawn_ffmpeg). All frames of one pipe
+# must share this format.
+_FRAME_SHOT = {"type": "jpeg", "quality": tuning.LEG_FRAME_JPEG_QUALITY}
+
+
 async def _play_stopby_photo_pause(
     page, write_frame, cut_to_new_clip, fps, html_dir, port, stopby,
     view_lon, view_lat, zoom, output_size, trigger_index, pitch,
@@ -1507,7 +1513,7 @@ async def _play_stopby_photo_pause(
                 if png_bytes is None:
                     break
             else:
-                await write_frame(await page.screenshot())
+                await write_frame(await page.screenshot(**_FRAME_SHOT))
         await page.evaluate(
             """() => {
                 const svg = document.getElementById('stopby-leader'); if (svg) svg.remove();
@@ -1531,11 +1537,11 @@ async def _play_stopby_photo_pause(
             }""",
             [alpha],
         )
-        await write_frame(await page.screenshot())
+        await write_frame(await page.screenshot(**_FRAME_SHOT))
 
     # The small card stays up for `small_hold_seconds` when the walker got here
     # early and is waiting for the narration to finish; only then does it grow.
-    hold_png = await page.screenshot()
+    hold_png = await page.screenshot(**_FRAME_SHOT)
     for _ in range(max(1, int((0.5 if small_hold_seconds is None else small_hold_seconds) * fps))):
         await write_frame(hold_png)
 
@@ -1579,7 +1585,7 @@ async def _play_stopby_photo_pause(
             }""",
             [left, top, w, h, radius, max(0.0, 1.0 - t * 2.0)],
         )
-        await write_frame(await page.screenshot())
+        await write_frame(await page.screenshot(**_FRAME_SHOT))
 
     # The leader line/dot have no further use once fullscreen -- gone
     # before the cut so the NEW clip never inherits a stray leftover node.
@@ -1591,7 +1597,7 @@ async def _play_stopby_photo_pause(
     # used to run straight into the cut with no pause at all, so the photo
     # was on screen at full size for a single frame before vanishing; a
     # viewer never actually got to register it fullscreen.
-    grown_png = await page.screenshot()
+    grown_png = await page.screenshot(**_FRAME_SHOT)
     dissolve = has_attraction and bool(stopby.get("dissolve_into_attraction"))
     # With a dissolve into the attraction video the photo is not held: the clip
     # ends as it reaches fullscreen and the dissolve starts right from there.
@@ -1625,7 +1631,7 @@ async def _play_stopby_photo_pause(
                 }""",
                 [blur_px, alpha],
             )
-            await write_frame(await page.screenshot())
+            await write_frame(await page.screenshot(**_FRAME_SHOT))
 
         await page.evaluate(
             "() => { const img = document.getElementById('stopby-preview'); if (img) img.remove(); }"
@@ -1635,7 +1641,7 @@ async def _play_stopby_photo_pause(
 
     await cut_to_new_clip()
 
-    fullscreen_png = await page.screenshot()
+    fullscreen_png = await page.screenshot(**_FRAME_SHOT)
     for _ in range(max(1, int(freeze_sec * fps))):
         await write_frame(fullscreen_png)
 
@@ -1666,7 +1672,7 @@ async def _play_stopby_photo_pause(
             }""",
             [left, top, w, h, radius, alpha],
         )
-        await write_frame(await page.screenshot())
+        await write_frame(await page.screenshot(**_FRAME_SHOT))
 
     await page.evaluate(
         "() => { const img = document.getElementById('stopby-preview'); if (img) img.remove(); }"
@@ -1703,7 +1709,7 @@ async def _record_leg(
         temp_path = VideoExporter._make_temp_path(out_path)
         ffmpeg_cmd = [
             editor.resolve_binary(), "-hide_banner", "-loglevel", "error", "-y",
-            "-f", "image2pipe", "-vcodec", "png", "-framerate", str(fps), "-i", "-",
+            "-f", "image2pipe", "-vcodec", "mjpeg", "-framerate", str(fps), "-i", "-",
             "-c:v", "libx264", *tuning.ffmpeg_thread_args(),
             "-r", str(fps), "-pix_fmt", "yuv420p", temp_path,
         ]
@@ -1948,9 +1954,9 @@ async def _record_leg(
                     }""",
                     alpha,
                 )
-                await _write_frame(await page.screenshot())
+                await _write_frame(await page.screenshot(**_FRAME_SHOT))
 
-            hold_small_png = await page.screenshot()
+            hold_small_png = await page.screenshot(**_FRAME_SHOT)
             if pip_end:
                 # image_display "pip": the photo stays a small card - it never
                 # grows. It holds (at least a beat, longer if the walker is
@@ -1989,9 +1995,9 @@ async def _record_leg(
                     }""",
                     [left, top, w, h, radius, line_alpha],
                 )
-                await _write_frame(await page.screenshot())
+                await _write_frame(await page.screenshot(**_FRAME_SHOT))
 
-            full_hold_png = await page.screenshot()
+            full_hold_png = await page.screenshot(**_FRAME_SHOT)
             for _ in range(max(1, int(freeze_sec * fps))):
                 await _write_frame(full_hold_png)
 
@@ -2012,7 +2018,7 @@ async def _record_leg(
                     }""",
                     alpha,
                 )
-                await _write_frame(await page.screenshot())
+                await _write_frame(await page.screenshot(**_FRAME_SHOT))
 
             await page.evaluate(
                 """() => {
@@ -2044,7 +2050,7 @@ async def _record_leg(
         )
         await _wait_for_paint(page)
 
-        hold_full_png = await page.screenshot()
+        hold_full_png = await page.screenshot(**_FRAME_SHOT)
         for _ in range(max(1, int(0.4 * fps))):
             await _write_frame(hold_full_png)
 
@@ -2104,7 +2110,7 @@ async def _record_leg(
                 }""",
                 [left, top, w, h, radius, leader_x1, leader_y1],
             )
-            png_bytes = await page.screenshot()
+            png_bytes = await page.screenshot(**_FRAME_SHOT)
             await _write_frame(png_bytes)
 
         # The line only draws in once the card has settled at its final
@@ -2131,10 +2137,10 @@ async def _record_leg(
                     t,
                 ],
             )
-            png_bytes = await page.screenshot()
+            png_bytes = await page.screenshot(**_FRAME_SHOT)
             await _write_frame(png_bytes)
 
-        freeze_png = await page.screenshot()
+        freeze_png = await page.screenshot(**_FRAME_SHOT)
         for _ in range(max(1, int(freeze_sec * fps))):
             await _write_frame(freeze_png)
 
@@ -2150,7 +2156,7 @@ async def _record_leg(
                 }""",
                 [alpha],
             )
-            png_bytes = await page.screenshot()
+            png_bytes = await page.screenshot(**_FRAME_SHOT)
             await _write_frame(png_bytes)
 
         await page.evaluate(
@@ -2289,7 +2295,7 @@ async def _record_leg(
                     # as noticeably more zoomed-in than the establishing
                     # shot it's supposed to match once tiles finish loading.
                     await page.wait_for_timeout(1500)
-                    warm_png = await page.screenshot()
+                    warm_png = await page.screenshot(**_FRAME_SHOT)
                     for _ in range(max(1, int(0.3 * fps))):
                         await _write_frame(warm_png)
 
@@ -2348,7 +2354,7 @@ async def _record_leg(
                         """
                         await page.evaluate(js)
                         await page.wait_for_timeout(50)
-                        png_bytes = await page.screenshot()
+                        png_bytes = await page.screenshot(**_FRAME_SHOT)
                         await _write_frame(png_bytes)
 
                 # On a leg with a connect-to-route stop-by cut (see
@@ -2584,8 +2590,8 @@ async def _record_leg(
                     }}
                     """
                     await page.evaluate(js)
-                    await page.wait_for_timeout(20)
-                    png_bytes = await page.screenshot()
+                    await _wait_for_paint(page)
+                    png_bytes = await page.screenshot(**_FRAME_SHOT)
                     try:
                         await _write_frame(png_bytes)
                     except Exception as e:
@@ -2687,8 +2693,8 @@ async def _record_leg(
                                         }});
                                     }}"""
                                     await page.evaluate(js_hop)
-                                    await page.wait_for_timeout(20)
-                                    png_bytes = await page.screenshot()
+                                    await _wait_for_paint(page)
+                                    png_bytes = await page.screenshot(**_FRAME_SHOT)
                                     await _write_frame(png_bytes)
                                 
                                 locked_lon, locked_lat, locked_zoom = new_lon, new_lat, new_zoom
@@ -2758,8 +2764,8 @@ async def _record_leg(
                         }""",
                         [total_dist_text, f"{total_min} 分"],
                     )
-                    await page.wait_for_timeout(20)
-                    last_png_bytes = await page.screenshot()
+                    await _wait_for_paint(page)
+                    last_png_bytes = await page.screenshot(**_FRAME_SHOT)
 
                     # Brief hold on this plain arrived frame before the
                     # photo takes over -- without it, the clip cuts straight
@@ -2848,7 +2854,7 @@ async def _record_leg(
                             """
                             await page.evaluate(js)
                             await page.wait_for_timeout(50)
-                            png_bytes = await page.screenshot()
+                            png_bytes = await page.screenshot(**_FRAME_SHOT)
                             await _write_frame(png_bytes)
 
                         # Same tile warm-up problem as the intro's, mirrored:
@@ -2858,7 +2864,7 @@ async def _record_leg(
                         # clip ends on this frame (it's also what the NEXT
                         # leg's own intro warm-up starts from, visually).
                         await page.wait_for_timeout(400)
-                        final_topdown_png = await page.screenshot()
+                        final_topdown_png = await page.screenshot(**_FRAME_SHOT)
                         for _ in range(max(1, int(0.3 * fps))):
                             await _write_frame(final_topdown_png)
             finally:

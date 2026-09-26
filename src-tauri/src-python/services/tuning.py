@@ -580,6 +580,10 @@ OVERVIEW_MIN_LEG_SECONDS = 2.0
 # Overview: a pin the walker reaches pops in - grows from its tip with a slight
 # overshoot over this long - instead of appearing all at once.
 PIN_POP_SECONDS = 0.35
+# pydeck residential legs: every frame is a headless-Chromium screenshot piped
+# into ffmpeg. JPEG at this quality instead of PNG - a 1080p PNG encode was the
+# slowest part of each frame, and the video is re-encoded to H.264 anyway.
+LEG_FRAME_JPEG_QUALITY = 92
 # Beside-the-pin cards (overview flow-through, intro, stop-by batches) are
 # placed as close round their pin as they fit, so the leader line stays short:
 # candidate spots in this many directions, out to this far (px); a spot on the
