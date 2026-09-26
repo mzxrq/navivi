@@ -719,7 +719,15 @@ COMFYUI_EXTEND_MAX_SEGMENTS = 2
 # fraction per second (0.012 = +1.2%/s, ~10% over an 8s gap; each clip
 # randomises it by +/-25%). The "none" preset stays a still photo.
 ATTRACTION_SLOW_MOVE_ZOOM_PER_SEC = 0.012
-# Wan2.2's standard (Chinese) negative prompt, then two additions:
+# Wan grades its clips (contrast, saturation and brightness climb, and jump
+# again at each extension segment), so every Wan clip gets its colours pulled
+# back to its photo afterwards (vdoprocessing/color_match.py): each frame's
+# LAB mean and spread matched to the photo's, at this strength (1.0 = fully),
+# with the correction averaged over this many seconds so it can't flicker.
+ATTRACTION_COLOR_MATCH = True
+ATTRACTION_COLOR_MATCH_STRENGTH = 1.0
+ATTRACTION_COLOR_MATCH_SMOOTH_SECONDS = 1.0
+# Wan2.2's standard (Chinese) negative prompt, then additions:
 # - no duplicated props: duplicated/repeated objects, copy-pasted or mirrored
 #   elements, the same object appearing twice, cloned people, objects
 #   appearing from or vanishing into nothing, objects melting into each other,
@@ -731,7 +739,18 @@ ATTRACTION_SLOW_MOVE_ZOOM_PER_SEC = 0.012
 # - scenery only: foreground objects, objects in front of the lens, first-
 #   person view, hands, hand-held objects, toys, weapons, objects entering
 #   from the frame edge, anything blocking the view (a toy-like gadget rose
-#   into a street shot from the bottom edge);
+#   into a street shot from the bottom edge), and the camera operator's
+#   shadow or new shadows creeping into the frame (a dark shadow grew at the
+#   bottom of a 石標 clip);
+# - no colour grading: colour grading, filters, oversaturation, too much
+#   contrast, colour casts, vignetting, HDR look, blown highlights,
+#   brightness/colour/lighting changing, flashing (a 石標 clip went from the
+#   photo's natural colours to a punchy graded look, brighter again in its
+#   second segment - color_match.py also corrects this afterwards);
+# - no warping: warped/garbled/morphing text, deformed or changing signs,
+#   road signs and signboards, bent straight lines, wavy/rubbery surfaces,
+#   jelly/rolling-shutter wobble, fisheye or lens distortion, objects changing
+#   shape (the 石標 clip's road-sign arrow bent into a different symbol);
 # - cinematic realism: cartoon, anime, CG/3D render look, plastic texture,
 #   painting, over-sharpened, flicker, unnatural motion, morphing scenery.
 COMFYUI_NEGATIVE_PROMPT = (
@@ -744,8 +763,24 @@ COMFYUI_NEGATIVE_PROMPT = (
     "建筑变形，结构扭曲，透视错误，新出现的车辆，物体进入画面，场景内容改变，快速运动，镜头晃动，"
     "人，人物，行人，人群，游客，路人，走动的人，出现的人，"
     "前景物体，镜头前的物体，第一人称视角，手，手持物体，玩具，武器，从画面边缘进入的物体，遮挡画面，"
+    "拍摄者的影子，人影，新出现的阴影，阴影移动，"
+    "调色，色彩分级，滤镜，饱和度过高，对比度过高，色偏，偏色，暗角，HDR效果，高光溢出，"
+    "亮度变化，颜色变化，光线变化，画面变亮，画面变暗，闪光，"
+    "文字扭曲，文字变形，乱码文字，文字变化，标志变形，标志变化，路标扭曲，招牌变形，"
+    "直线弯曲，线条扭曲，画面扭曲，波浪变形，橡胶质感，果冻效应，鱼眼畸变，镜头畸变，物体形状改变，"
     "卡通，动漫，CG渲染，3D渲染感，塑料质感，绘画感，过度锐化，画面闪烁，"
     "不自然的运动，场景变形"
+)
+# What every motion prompt adds after its camera move: the scene, its colours
+# and its shapes stay exactly as in the photo (see COMFYUI_NEGATIVE_PROMPT for
+# what each part is guarding against).
+_COMFYUI_SCENE_LOCK = (
+    "the scene stays exactly the same, stable composition, realistic cinematic footage, "
+    "original colors and lighting of the photo unchanged, natural colors, no color grading, "
+    "constant brightness, every sign and all text stay sharp, readable and unchanged, "
+    "straight lines stay straight, buildings and objects keep their exact shape, "
+    "no people, empty scenery, clear unobstructed view with nothing in the foreground, "
+    "no new shadows, no vehicles, no cars, no props, nothing enters the frame"
 )
 # Maps attraction_step.py's camera_pans vocabulary (also used by
 # local_pan_generator.py's _CAMERA_PAN_PRESETS) to an English motion prompt
@@ -759,20 +794,13 @@ COMFYUI_NEGATIVE_PROMPT = (
 # img2vdo._generate_single_clip); its prompt here is the default for a
 # waypoint with no preset at all.
 COMFYUI_CAMERA_PAN_PROMPTS: Dict[str, str] = {
-    "panright": "very slow steady camera pan to the right, the scene stays exactly the same, "
-                "stable composition, realistic cinematic footage, no people, empty scenery, clear unobstructed view with nothing in the foreground, no vehicles, no cars, no props, nothing enters the frame",
-    "panleft": "very slow steady camera pan to the left, the scene stays exactly the same, "
-               "stable composition, realistic cinematic footage, no people, empty scenery, clear unobstructed view with nothing in the foreground, no vehicles, no cars, no props, nothing enters the frame",
-    "panup": "very slow steady camera tilt upwards, the scene stays exactly the same, "
-             "stable composition, realistic cinematic footage, no people, empty scenery, clear unobstructed view with nothing in the foreground, no vehicles, no cars, no props, nothing enters the frame",
-    "pandown": "very slow steady camera tilt downwards, the scene stays exactly the same, "
-               "stable composition, realistic cinematic footage, no people, empty scenery, clear unobstructed view with nothing in the foreground, no vehicles, no cars, no props, nothing enters the frame",
-    "zoomin": "very slow steady push-in towards the scene, the scene stays exactly the same, "
-              "stable composition, realistic cinematic footage, no people, empty scenery, clear unobstructed view with nothing in the foreground, no vehicles, no cars, no props, nothing enters the frame",
-    "zoomout": "very slow steady pull-back from the scene, the scene stays exactly the same, "
-               "stable composition, realistic cinematic footage, no people, empty scenery, clear unobstructed view with nothing in the foreground, no vehicles, no cars, no props, nothing enters the frame",
-    "none": "very slow steady camera movement, subtle natural ambient motion, "
-            "the scene stays exactly the same, realistic cinematic footage, no people, empty scenery, clear unobstructed view with nothing in the foreground, no vehicles, no cars, no props, nothing enters the frame",
+    "panright": "very slow steady camera pan to the right, " + _COMFYUI_SCENE_LOCK,
+    "panleft": "very slow steady camera pan to the left, " + _COMFYUI_SCENE_LOCK,
+    "panup": "very slow steady camera tilt upwards, " + _COMFYUI_SCENE_LOCK,
+    "pandown": "very slow steady camera tilt downwards, " + _COMFYUI_SCENE_LOCK,
+    "zoomin": "very slow steady push-in towards the scene, " + _COMFYUI_SCENE_LOCK,
+    "zoomout": "very slow steady pull-back from the scene, " + _COMFYUI_SCENE_LOCK,
+    "none": "very slow steady camera movement, subtle natural ambient motion, " + _COMFYUI_SCENE_LOCK,
 }
 COMFYUI_DEFAULT_MOTION_PROMPT = COMFYUI_CAMERA_PAN_PROMPTS["none"]
 # How long the bundled server can sit unused before idle_watchdog.py shuts

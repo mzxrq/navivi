@@ -216,13 +216,19 @@ class AttractionVideoGenerator:
                 duration_sec=duration_sec,
                 camera_pan_hint=prompt_text,
             )
-            return str(save_path)
         except Exception as exc:
             logger.warning(
                 "ComfyUI clip generation failed for %s (%s: %s) — falling back "
                 "to local pan/zoom generator.",
                 local_image_path, type(exc).__name__, exc,
             )
+        else:
+            # Wan grades its output (contrast, saturation, brightness jumps
+            # between segments); put the photo's own colours back.
+            from services.vdoprocessing.color_match import match_clip_to_photo
+
+            match_clip_to_photo(str(save_path), local_image_path)
+            return str(save_path)
 
         try:
             # [FIXME] [Animation] Import moved inside this try — it previously sat
