@@ -17,7 +17,7 @@ from .gps_step import process_gps
 from .helpers import logger, project_subtitle_dir, project_video_dir
 from .intro_step import render_intro_clip
 from .leg_pieces import compute_leg_narration_splits
-from .narration_step import add_default_cues, record_cue_times
+from .narration_step import add_default_cues, add_overview_cues, record_cue_times
 from .outro_step import render_outro_clip
 from .render_step import render_route_video
 from .subtitle_step import (
@@ -80,6 +80,10 @@ def run_full_pipeline(
     use_cues = bool(job_config.get("settings", {}).get("use_narration_cues", True))
     if job_config.get("settings", {}).get("auto_narration_cues", False):
         add_default_cues(str(config_file_path))
+    # {n} / {go} for a hand-written overview script, so the overview stops at
+    # each waypoint while it is described (on by default:
+    # tuning.DEFAULT_AUTO_OVERVIEW_CUES; settings.auto_overview_cues=false turns it off).
+    add_overview_cues(str(config_file_path))
     audio_data = generate_audio(
         cleaned_route, str(config_file_path), force=force_regenerate
     )

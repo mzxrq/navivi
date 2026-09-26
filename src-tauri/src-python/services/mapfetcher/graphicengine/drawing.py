@@ -100,6 +100,7 @@ class _DrawingMixin:
         color: Optional[Tuple[int, int, int]] = None,
         split_color: Optional[Tuple[int, int, int]] = None,
         is_circle: bool = False,
+        scale: float = 1.0,
     ):
         """Draws a classic Google-Maps-style teardrop map-pin marker with
         its TIP anchored at (cx, cy) — the actual waypoint coordinate —
@@ -118,9 +119,16 @@ class _DrawingMixin:
         route's "E" pin, which sits on the exact same spot as "S": half
         `color` (the start's green) and half `split_color` (the end's
         red) reads as "this one point is both" instead of just showing
-        one color and losing that it's the same place as the departure."""
+        one color and losing that it's the same place as the departure.
+
+        `scale` sizes the pin about its tip (a pin popping in grows from the
+        spot it marks); below 0.6 its label is left off - too small to read."""
         pin_color = color if color is not None else self.marker_color
-        radius = int(self.marker_radius)
+        radius = int(self.marker_radius * scale)
+        if radius < 2:
+            return
+        if scale < 0.6:
+            number = None
         head_cy = cy - int(radius * _PIN_HEAD_OFFSET_RATIO)
 
         if is_circle:

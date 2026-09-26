@@ -625,14 +625,16 @@ class RouteAnimator:
 
         if render_mode != "residential":
             tracker.show("Rendering overview video...")
-            # [NOTE] [Core] Overview kept on the 2D spatial_renderer path
-            # deliberately, independent of use_pydeck_pedestrian (which
-            # still governs residential below) — the GeoJsonLayer overview
+            # [NOTE] [Core] The GeoJsonLayer pydeck overview
             # (_render_overview_pydeck/render_overview_video_pydeck in
-            # pydeckrecorder.pedestrian) works and is tested, just not
-            # preferred for this project yet. Flip use_pydeck_overview in
-            # settings to opt back in without any code change.
-            if self.config.get("use_pydeck_overview", False):
+            # pydeckrecorder.pedestrian) is the default
+            # (tuning.DEFAULT_USE_PYDECK_OVERVIEW), independent of
+            # use_pydeck_pedestrian (which governs residential below).
+            # It renders on the GPU and does not follow the narration's cues
+            # (stop holds, stop-by timing, ending fitted to the voice) — the
+            # 2D spatial_renderer path below does; settings.use_pydeck_overview
+            # = false selects it.
+            if self.config.get("use_pydeck_overview", tuning.DEFAULT_USE_PYDECK_OVERVIEW):
                 logger.info("Rendering Overview using GeoJsonLayer PyDeck...")
                 overview_path = self._render_overview_pydeck(
                     img_path, points, labels, popups,
@@ -651,13 +653,20 @@ class RouteAnimator:
                 # that blur is meant to be the video's actual last frame, so
                 # freezing on top of it just makes playback linger instead
                 # of ending right when the blur finishes.
+                hold_seconds = self.config.get("summary_hold", DEFAULT_SUMMARY_HOLD_SECONDS)
+                if self.config.get("overview_audio_seconds") and self.config.get("overview_cue_seconds"):
+                    # Narrated: the renderer already fitted the ending to the
+                    # voice (overview_timing.fit_ending); a fixed hold here
+                    # would run the video past it. Only an unspoken gap left
+                    # (the voice still going) is held - the mux holds that too.
+                    rendered = getattr(self.spatial_renderer, "last_rendered_seconds", None)
+                    hold_seconds = max(
+                        0.0, float(self.config["overview_audio_seconds"]) - float(rendered or 0.0)
+                    ) if rendered else 0.0
+                    if hold_seconds < 0.1:  # a rounding remainder, not worth a re-encode
+                        hold_seconds = 0.0
                 if not self.spatial_renderer.last_ending_hard_ended:
-                    self._freeze_video_end(
-                        overview_path,
-                        hold_seconds=self.config.get(
-                            "summary_hold", DEFAULT_SUMMARY_HOLD_SECONDS
-                        ),
-                    )
+                    self._freeze_video_end(overview_path, hold_seconds=hold_seconds)
                 output_paths.append(overview_path)
 
         # [NOTE] [Core] Render each waypoint-to-waypoint leg. The GeoJsonLayer

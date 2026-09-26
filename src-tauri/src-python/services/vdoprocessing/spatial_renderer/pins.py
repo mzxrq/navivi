@@ -5,6 +5,8 @@ from typing import Dict, List
 
 import numpy as np
 
+from services import tuning
+
 
 class _PinMixin:
     def _build_freeze_frame(
@@ -185,8 +187,25 @@ class _PinMixin:
             if not moved:
                 break
 
+    @staticmethod
+    def _pin_pop_scale(wp: Dict, now_frame: int, fps: float) -> float:
+        """Size of a pin that popped in at wp["pop_frame"] (the video frame the
+        walker reached it), `now_frame` frames into the video: grows from
+        nothing with a slight overshoot (ease-out-back) over
+        tuning.PIN_POP_SECONDS, then stays at 1. 1 for a pin with no pop."""
+        start = wp.get("pop_frame")
+        if start is None:
+            return 1.0
+        duration = max(1.0, tuning.PIN_POP_SECONDS * fps)
+        t = (now_frame - start) / duration
+        if t >= 1.0:
+            return 1.0
+        t = max(0.0, t)
+        c1 = 1.70158
+        return 1 + (c1 + 1) * (t - 1) ** 3 + c1 * (t - 1) ** 2
+
     def _draw_pin(
-        self, frame: np.ndarray, wp: Dict, total_points: int
+        self, frame: np.ndarray, wp: Dict, total_points: int, scale: float = 1.0,
     ) -> None:
         """Draws one waypoint's pin at its real position (wp["x"]/wp["y"]
         — "pin_x"/"pin_y" is the same point now, see _declutter_pins).
@@ -205,7 +224,8 @@ class _PinMixin:
         px, py = int(wp.get("pin_x", wp["x"])), int(wp.get("pin_y", wp["y"]))
         is_circle = bool(wp.get("data", {}).get("is_stopby"))
         self.graphics.draw_marker(
-            frame, px, py, number=label, color=pin_color, split_color=split_color, is_circle=is_circle
+            frame, px, py, number=label, color=pin_color, split_color=split_color, is_circle=is_circle,
+            scale=scale,
         )
 
     def _pin_label_and_color(self, wp: Dict, total_points: int):

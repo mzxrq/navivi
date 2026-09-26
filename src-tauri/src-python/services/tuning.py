@@ -361,6 +361,18 @@ RESIDENTIAL_TILE_FETCH_WORKERS = 4
 # (False — the old behavior). Overridable per project via job_config.json's
 # settings.merge_stopby_waypoints.
 DEFAULT_MERGE_STOPBY_WAYPOINTS = True
+# Whether the overview map animation is rendered with pydeck (a 3D WebGL map in
+# headless Chromium) instead of the flat static-tile renderer. Overridable per
+# project via job_config.json's settings.use_pydeck_overview. Note: pydeck
+# renders on the GPU.
+DEFAULT_USE_PYDECK_OVERVIEW = True
+# Whether a hand-written overview narration gets {n} / {go} cue tags placed
+# automatically (localization/overview_cues.py), so the overview walker stops
+# at each waypoint while the voice describes it, then heads on. Only tags are
+# added (stored in .narration_cues.json), never words, and tags the user
+# wrote win. Overridable per project via job_config.json's
+# settings.auto_overview_cues.
+DEFAULT_AUTO_OVERVIEW_CUES = True
 # Every residential leg opens on a brief WIDE shot of the whole leg, then
 # zooms — a scale+crossfade between two separately-fetched static tiles,
 # not a continuous crop within one image — into the existing tight/close
@@ -418,6 +430,10 @@ MODE_LINE_COLORS: Dict[str, Tuple[int, int, int]] = {
 # BIG_MAP_ZOOM_LEAD_SECONDS below so the SAME total zoom amount plays out
 # over less time, i.e. visibly faster, not just a shorter hold.
 ENDING_HIGHLIGHT_WAIT_SECONDS = 0.9
+# How long the ending highlight holds its pip picture (the start point's photo
+# card) before the video ends. It used to be that waypoint's own
+# freeze_seconds (3s by default) - a long stare at the last frame; kept short.
+ENDING_HIGHLIGHT_PIP_HOLD_SECONDS = 1.5
 # Lead-in: how long to push in on the CURRENT wide map (clean, no cards)
 # toward the same point BEFORE that hard cut, and how far.
 BIG_MAP_ZOOM_LEAD_SECONDS = 0.8
@@ -551,6 +567,39 @@ POPUP_MIN_DISPLAY_SECONDS = 2.0
 # POPUP_MIN_DISPLAY_SECONDS — these cards are read at a glance and the
 # stop they extend is already a full stop.
 STOPBY_BATCH_SECONDS = 2.0
+# An overview waypoint card stays FULLY shown (after its fade-in, before its
+# fade-out) at least this long, even when the walker has already reached the
+# next waypoint: POPUP_MIN_DISPLAY_SECONDS counts the fades, which left a card
+# passed on the way readable for barely half a second.
+OVERVIEW_POPUP_MIN_HOLD_SECONDS = 2.0
+# Overview: the walker takes at least this long from one numbered stop to the
+# next, however close they are (stops a few hundred metres apart used to flash
+# past in a fraction of a second, their cards all popping up at once). The
+# overview script gives each passed leg about as long (WAY_SECONDS_PER_LEG).
+OVERVIEW_MIN_LEG_SECONDS = 2.0
+# Overview: a pin the walker reaches pops in - grows from its tip with a slight
+# overshoot over this long - instead of appearing all at once.
+PIN_POP_SECONDS = 0.35
+# Beside-the-pin cards (overview flow-through, intro, stop-by batches) are
+# placed as close round their pin as they fit, so the leader line stays short:
+# candidate spots in this many directions, out to this far (px); a spot on the
+# far side of the pin from its side of the frame counts this much longer. Only
+# when nothing fits that close does the wider side-of-frame search run.
+POPUP_NEAR_DIRECTIONS = 16
+POPUP_NEAR_MAX_LEADER_PX = 200
+POPUP_NEAR_OFF_SIDE_PX = 40
+# Shown in the overview's bottom-left while the FIRST stop-by cards play: a
+# ribbon title and a card saying those round markers are optional extras.
+STOPBY_NOTICE_TITLE = "追加の見どころ（まるのマーカー）"
+# Line breaks are kept (a long line still wraps to the card).
+STOPBY_NOTICE_BODY = (
+    "まるのマーカーは、ルートの近くにある\n"
+    "追加の見どころです。"
+    "立ち寄るかどうかは自由。\n"
+    "時間や体力に合わせて決めてください。"
+)
+STOPBY_NOTICE_RIBBON_COLOR: Tuple[int, int, int] = (40, 110, 220)  # BGR, warm orange ribbon
+STOPBY_NOTICE_FADE_SECONDS = 0.6
 # Hard ceiling on a waypoint's own "freeze_seconds" (job_config's per-stop
 # override for how long its popup photo is held/displayed) — applied
 # wherever that raw job_config value is first read, so every downstream
@@ -745,7 +794,7 @@ TTS_VOICE = "test1"  # Irodori's only bundled voice preset as of writing
 # model's natural pace. The server itself clamps to [0.25, 4.0], but TTSConfig
 # validates this too so a bad value fails fast with a readable message
 # instead of a 422 from the API after a network round-trip.
-TTS_SPEED = 1.0
+TTS_SPEED = 1.25
 TTS_MIN_SPEED = 0.25
 TTS_MAX_SPEED = 4.0
 TTS_RESPONSE_FORMAT = None  # None = let the server use its own default (wav)

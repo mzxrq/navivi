@@ -447,9 +447,9 @@ class _TransitionMixin:
             settings.get("overview_background"),
         )
         is_fullscreen = False  # the overview always shows the small pip card, whatever image_display says
-        highlight_hold_sec = float(
-            featured_popup["data"].get("freeze_seconds", self._DEFAULT_FREEZE_SECONDS)
-        )
+        # The pip picture is held only briefly (tuning), not the waypoint's
+        # own freeze_seconds: it is the last beat of the video.
+        highlight_hold_sec = float(tuning.ENDING_HIGHLIGHT_PIP_HOLD_SECONDS)
 
         highlight_bg = None
         highlight_extent = None

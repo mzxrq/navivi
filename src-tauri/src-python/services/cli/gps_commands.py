@@ -38,8 +38,9 @@ def _existing_narration(config_path: str) -> dict:
     import json
 
     from services.vdoprocessing.videopipeline.audio_step import existing_audio_data
-    from services.vdoprocessing.videopipeline.narration_step import record_cue_times
+    from services.vdoprocessing.videopipeline.narration_step import add_overview_cues, record_cue_times
 
+    add_overview_cues(config_path)  # tags only: the audio on disk stays valid
     audio = existing_audio_data(config_path)
     with open(config_path, "r", encoding="utf-8") as f:
         use_cues = bool(json.load(f).get("settings", {}).get("use_narration_cues", True))

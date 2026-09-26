@@ -77,3 +77,31 @@ def test_short_legs_are_left_alone():
     path = np.zeros((500, 2))
     out, _ = cap_segments(path, None, [0, 200, 499], 300)
     assert out is path
+
+
+def test_an_overview_card_is_fully_shown_at_least_the_minimum_hold():
+    from services import tuning
+    from services.vdoprocessing.spatial_renderer.popups import _PopupMixin
+
+    fps = 30
+    for asked in (0.3, 2.0, 8.0):  # a very short leg, the old floor, a long one
+        bp = _PopupMixin._make_baked_popup(
+            {"data": {}}, asked, fps, min_hold_seconds=tuning.OVERVIEW_POPUP_MIN_HOLD_SECONDS
+        )
+        fully_shown = bp["total_frames"] - 2 * bp["fade_frames"]
+        assert fully_shown >= int(tuning.OVERVIEW_POPUP_MIN_HOLD_SECONDS * fps)
+    assert _PopupMixin._make_baked_popup({"data": {}}, 8.0, fps)["total_frames"] == 8 * fps  # long ones untouched
+    # a card over a frozen map (a stop-by batch) keeps its own length: the
+    # floor would lengthen the freeze itself
+    assert _PopupMixin._make_baked_popup({"data": {}}, 2.0, fps)["total_frames"] == 2 * fps
+
+
+def test_stops_close_together_are_not_rushed():
+    """Stops a few hundred metres apart (natural spacing 0.3s) are still
+    walked at least min_leg_frames apart - reached late rather than flashed past."""
+    from services.vdoprocessing.spatial_renderer.overview_timing import stop_targets
+
+    natural = {1: 30, 2: 39, 3: 48, 4: 57}
+    targets = stop_targets(natural, {"1": 1.0, "4": 2.2}, 0, 30, 2000, min_leg_frames=60)
+    gaps = [targets[n + 1] - targets[n] for n in range(1, 4)]
+    assert all(g >= 60 for g in gaps)

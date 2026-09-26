@@ -74,6 +74,21 @@ def apply_cued_scripts(waypoints: list, project_dir) -> int:
     return attached
 
 
+OVERVIEW_CUE_KEY = "overview"
+
+
+def overview_tagged_script(project_config: dict, project_dir) -> str:
+    """The overview narration with its cue tags: the version narration_step
+    stored (auto-placed {n} / {go}) when it was made from this exact script,
+    else the user's own."""
+    from .narration_step import CueStore
+
+    base = project_config.get("overview_narration") or ""
+    if base and project_dir is not None:
+        return CueStore(project_dir).cued_text(OVERVIEW_CUE_KEY, base) or base
+    return base
+
+
 def _resolve_narration_script(waypoint: dict) -> Optional[str]:
     """The spoken text of a waypoint's narration: its script without cue tags.
     TTS and subtitles both go through this, so a tag is never read aloud or
@@ -101,6 +116,7 @@ async def generate_attraction_audio_for_waypoint(
     processor: Any,
     output_dir: Path,
     force: bool = False,
+    project_dir=None,
 ) -> Optional[Dict[str, Any]]:
     """Generates (or reuses) one waypoint's attraction-only TTS audio, in
     its own "04_attraction_" filename namespace (see
@@ -143,6 +159,7 @@ async def generate_overview_audio(
     processor: Any,
     output_dir: Path,
     force: bool = False,
+    project_dir=None,
 ) -> Optional[Dict[str, Any]]:
     """Generates (or reuses) the TTS audio for job_config.json's top-level
     "overview_narration" script -- the map-editor's OverviewPanel.tsx lets
@@ -151,7 +168,7 @@ async def generate_overview_audio(
     field: no audio was ever generated for it, so the overview clip always
     played silent regardless of what was typed there. Returns None (same
     as a waypoint with no script) when the field is empty/missing."""
-    tagged = project_config.get("overview_narration") or ""
+    tagged = overview_tagged_script(project_config, project_dir)
     script = clean_text(tagged).strip()
     if not script:
         return None
@@ -173,6 +190,18 @@ async def generate_overview_audio(
     cue_seconds = cue_times(
         cues, clean, analysis.get("duration_seconds", 0.0), analysis.get("pauses", [])
     ) if cues else {}
+    # The overview is sized first (60-90s) and its script to it: say when the
+    # real voice misses that by more than the 3s the video can absorb.
+    from services.localization.overview_script import (
+        in_overview_range, overview_target_seconds, visible_waypoints,
+    )
+
+    target = overview_target_seconds(project_config, len(visible_waypoints(project_config)))
+    spoken = analysis.get("duration_seconds", 0.0)
+    (logger.info if in_overview_range(spoken) else logger.warning)(
+        "Overview narration is %.1fs (aimed at %.0fs; the overview must be 60-90s).",
+        spoken, target,
+    )
     return {
         "text": script,
         "audio_path": audio_path,
@@ -265,7 +294,7 @@ def existing_audio_data(project_config_path: str) -> dict:
         data["attraction_audio_durations"].append(attraction["duration_seconds"] if attraction else 0.0)
         data["attraction_audio_paths"].append(str(attraction_path) if attraction else None)
 
-    tagged = project_config.get("overview_narration") or ""
+    tagged = overview_tagged_script(project_config, config_path.parent)
     overview_path = audio_dir / "00_overview_narration.wav"
     overview = analyse(overview_path) if clean_text(tagged).strip() else None
     if overview:
@@ -377,7 +406,8 @@ def generate_audio(
             tracker.show("Generating overview narration audio")
             try:
                 overview_clip = await generate_overview_audio(
-                    project_config, client, processor, output_dir, force=force
+                    project_config, client, processor, output_dir, force=force,
+                    project_dir=config_path.parent,
                 )
             except Exception as exc:
                 logger.warning("Overview narration TTS failed (%s). Leaving overview clip silent.", exc)

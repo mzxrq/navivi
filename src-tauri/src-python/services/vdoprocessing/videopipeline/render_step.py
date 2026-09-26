@@ -20,6 +20,7 @@ from services.localization.localization import format_waypoint_label
 from services.config.job_config import JobConfigManager
 from services import tuning
 
+from .audio_step import overview_tagged_script
 from .narration_step import MAX_EARLY_ARRIVAL_SECONDS, CueStore, leg_walk_plan
 from .helpers import (
     BASE_DIR,
@@ -1164,14 +1165,19 @@ def render_route_video(
         ),
         "use_3d_res": use_3d_res,
         "use_pydeck_pedestrian": use_pydeck_pedestrian,
-        "use_pydeck_overview": bool(settings.get("use_pydeck_overview", False)),
+        "use_pydeck_overview": bool(settings.get("use_pydeck_overview", tuning.DEFAULT_USE_PYDECK_OVERVIEW)),
         # Where the narration's cues fall: the overview reaches each cued stop
         # then (spatial_renderer/overview.py).
         "overview_cue_seconds": dict(overview_cue_times or {}),
+        # The narration's length: with cues, the overview's ending is fitted
+        # so the video ends with the voice.
+        "overview_audio_seconds": float(overview_audio_duration or 0.0),
         # A cue at the start of a sentence: the voice starts talking about that
         # stop at the cue, so the walker waits there a moment (this many seconds)
         # to stay in step with it.
-        "overview_cue_wait_tags": tags_at_sentence_start(project_config.get("overview_narration")),
+        "overview_cue_wait_tags": tags_at_sentence_start(
+            overview_tagged_script(project_config, config_path.parent)
+        ),
         "overview_cue_wait_seconds": float(settings.get("overview_cue_wait_seconds", 2.0)),
         "res_route_path": project_config_path,
         "leg_durations": seg_durations or None,
