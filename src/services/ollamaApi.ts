@@ -11,10 +11,19 @@ export function detectLanguage(...texts: (string | undefined)[]): "Japanese" | "
 export async function checkModelExists(targetModel: string = "schroneko/gemma-2-2b-jpn-it"): Promise<boolean> {
     try {
         const res = await fetch(`${OLLAMA_URL}/api/tags`);
-        if (!res.ok) return false;
+        if (!res.ok) {
+            console.error(`Ollama /api/tags answered HTTP ${res.status}`);
+            return false;
+        }
         const data = await res.json();
-        return data.models.some((m: any) => m.name.includes(targetModel));
+        // Ollama lists a model as "<name>:<tag>" (e.g. ":latest"); accept either form.
+        const wanted = targetModel.replace(/:latest$/, "");
+        return (data.models ?? []).some((m: any) =>
+            [m.name, m.model].some((n) => typeof n === "string" && n.replace(/:latest$/, "").includes(wanted)),
+        );
     } catch (error) {
+        // Not "model missing": Ollama itself could not be reached.
+        console.error("Could not reach Ollama at " + OLLAMA_URL, error);
         return false;
     }
 }
