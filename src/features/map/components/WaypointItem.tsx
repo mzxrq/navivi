@@ -13,6 +13,7 @@ import {
   Ship,
   X,
   Navigation,
+  Route,
 } from "../../../components/ui/icons";
 import { useWorkspace } from "../../../hooks/useWorkspace";
 import { useUI } from "../../../hooks/useUI";
@@ -216,11 +217,13 @@ export function WaypointItem({
           {!isLast && (
             <div className="mt-2 flex items-center gap-2 flex-wrap">
               <div
-                className="flex items-center bg-zinc-100 dark:bg-black/20 rounded-md p-0.5 border border-zinc-200 dark:border-white/5 cursor-pointer"
+                className="flex items-center bg-zinc-100 dark:bg-black/20 rounded-md p-0.5 border border-zinc-200 dark:border-white/5 cursor-pointer min-h-[22px]"
                 onClick={(e) => {
                   e.stopPropagation();
                   setIsModeExpanded(!isModeExpanded);
                 }}
+                onMouseEnter={() => setIsModeExpanded(true)}
+                onMouseLeave={() => setIsModeExpanded(false)}
               >
                 {[
                   { id: "walking", icon: Footprints, title: "Walk" },
@@ -238,10 +241,14 @@ export function WaypointItem({
                       key={mode.id}
                       onClick={(e) => {
                         e.stopPropagation();
-                        updateWaypoint(wp.id, {
-                          routeMode: mode.id as RouteMode,
-                        });
-                        setIsModeExpanded(false);
+                        if (isModeActive && !isModeExpanded) {
+                          setIsModeExpanded(true);
+                        } else {
+                          updateWaypoint(wp.id, {
+                            routeMode: mode.id as RouteMode,
+                          });
+                          setIsModeExpanded(false);
+                        }
                       }}
                       className={`p-1 rounded transition-colors ${
                         isModeActive
@@ -266,15 +273,14 @@ export function WaypointItem({
                         new CustomEvent("enter-via-mode", { detail: { wpId: wp.id } })
                       );
                     }}
-                    className="flex items-center gap-1 text-[9px] font-semibold text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-500/10 hover:bg-violet-100 dark:hover:bg-violet-500/20 px-2 py-0.5 rounded-full transition-colors"
-                    title="Add via points to nudge the route"
+                    className="p-1 rounded text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 dark:hover:text-zinc-200 dark:hover:bg-zinc-800 transition-colors"
+                    title="Adjust Route (Add via points to nudge)"
                   >
-                    <Navigation className="w-2.5 h-2.5" />
-                    Adjust Route
+                    <Route className="w-3.5 h-3.5" />
                   </button>
                   {wp.viaPoints && wp.viaPoints.length > 0 && (
                     <div className="flex items-center gap-1">
-                      <span className="text-[9px] bg-violet-100 dark:bg-violet-500/20 text-violet-600 dark:text-violet-300 px-1.5 py-0.5 rounded-full font-bold">
+                      <span className="text-[9px] bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded-full font-bold">
                         {wp.viaPoints.length} via
                       </span>
                       <button
@@ -285,7 +291,7 @@ export function WaypointItem({
                         className="text-[9px] text-zinc-400 hover:text-red-500 transition-colors"
                         title="Clear all via points"
                       >
-                        <X className="w-2.5 h-2.5" />
+                        <X className="w-3 h-3" />
                       </button>
                     </div>
                   )}
