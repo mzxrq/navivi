@@ -491,14 +491,31 @@ export function MapArea() {
         const nextWp = waypoints[wpIndex + 1];
         const map = mapRef.current;
         if (map) {
-          const lats = [wp.lat, nextWp.lat, ...(wp.viaPoints || []).map(v => v[0])];
-          const lngs = [wp.lng, nextWp.lng, ...(wp.viaPoints || []).map(v => v[1])];
+          // Use the actual routed segment positions for accurate bounding box
+          let lats = [wp.lat, nextWp.lat, ...(wp.viaPoints || []).map(v => v[0])];
+          let lngs = [wp.lng, nextWp.lng, ...(wp.viaPoints || []).map(v => v[1])];
+          
+          if (routeSegments[wpIndex] && routeSegments[wpIndex].positions) {
+            lats = routeSegments[wpIndex].positions.map(p => p[0]);
+            lngs = routeSegments[wpIndex].positions.map(p => p[1]);
+          }
+          
           const minLat = Math.min(...lats);
           const maxLat = Math.max(...lats);
           const minLng = Math.min(...lngs);
           const maxLng = Math.max(...lngs);
           
-          map.fitBounds([ [minLng, minLat], [maxLng, maxLat] ], { padding: 80, duration: 800 });
+          setTimeout(() => {
+            try {
+              if (minLng === maxLng && minLat === maxLat) {
+                map.getMap().flyTo({ center: [minLng, minLat], zoom: 15, duration: 800 });
+              } else {
+                map.getMap().fitBounds([ [minLng, minLat], [maxLng, maxLat] ], { padding: 80, duration: 800 });
+              }
+            } catch (e) {
+              console.error("[Navivi] Failed to fitBounds:", e);
+            }
+          }, 150);
         }
       }
     }) as EventListener;
@@ -514,7 +531,7 @@ export function MapArea() {
       window.removeEventListener("enter-via-mode", handleEnterVia);
       window.removeEventListener("exit-via-mode", handleExitVia);
     };
-  }, [waypoints]);
+  }, [waypoints, routeSegments]);
 
   useEffect(() => {
     const handleHover = ((e: CustomEvent) =>
