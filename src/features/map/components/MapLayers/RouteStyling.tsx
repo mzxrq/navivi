@@ -39,7 +39,6 @@ const ColorPicker = ({
   const currentHex = rgbToHex(color);
   return (
     <div className="flex-1 space-y-1.5">
-      {/* ✨ Added Icon and Flex Layout to the label */}
       <label className="text-xs font-semibold text-zinc-600 dark:text-zinc-400 flex items-center gap-1.5">
         <Icon className="w-3.5 h-3.5" />
         {label}
@@ -49,7 +48,6 @@ const ColorPicker = ({
           <button
             key={c}
             onClick={() => onChange(hexToRgb(c))}
-            /* ✨ Transformed into a rounded rectangle (w-8 h-5 rounded-md) */
             className={`w-8 h-5 rounded-md border-2 ${
               currentHex === c
                 ? "border-navi scale-110 shadow-sm"
@@ -112,19 +110,19 @@ export function RouteStyling() {
             <div className="flex flex-col gap-4">
               <ColorPicker
                 icon={Route}
-                label="Route Line"
+                label={t`Route Line`}
                 color={settings.line_color || [0, 200, 255]}
                 onChange={(c) => updateSettings({ line_color: c })}
               />
               <ColorPicker
                 icon={MapPin}
-                label="Marker"
+                label={t`Marker`}
                 color={settings.marker_color || [0, 0, 255]}
                 onChange={(c) => updateSettings({ marker_color: c })}
               />
               <ColorPicker
                 icon={Square}
-                label="Border"
+                label={t`Border`}
                 color={settings.route_line_border_color || [255, 255, 255]}
                 onChange={(c) => updateSettings({ route_line_border_color: c })}
               />
@@ -195,7 +193,7 @@ export function RouteStyling() {
                       })
                     }
                     className="sr-only"
-                    aria-label="Gradient Heatmap"
+                    aria-label={t`Gradient Heatmap`}
                   />
                   <div
                     className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-200 ease-in-out ${
