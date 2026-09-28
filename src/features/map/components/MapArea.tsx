@@ -11,6 +11,7 @@ import {
   UploadCloud,
   Navigation,
   ImageIcon,
+  X,
 } from "../../../components/ui/icons";
 import { MapToolbar } from "./MapToolbar";
 import "@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css";
@@ -1126,15 +1127,15 @@ export function MapArea() {
       )}
       {/* --- VIA MODE BANNER --- */}
       {isViaMode && (
-        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-300 pointer-events-none animate-in fade-in zoom-in-95 duration-200">
-          <div className="bg-violet-600 text-white text-xs font-bold px-4 py-2 rounded-full shadow-xl flex items-center gap-2 pointer-events-auto">
-            <div className="w-2 h-2 rounded-full bg-white/60 animate-pulse" />
-            <span>Click map to add via point · Right-click marker to remove · Esc to exit</span>
+        <div className="absolute bottom-12 left-1/2 -translate-x-1/2 z-300 pointer-events-none animate-in fade-in slide-in-from-bottom-4 duration-200">
+          <div className="bg-zinc-900/90 dark:bg-zinc-100/90 backdrop-blur-sm text-white dark:text-zinc-900 text-[10px] font-bold px-3 py-1.5 rounded-full shadow-lg border border-zinc-800 dark:border-zinc-200 flex items-center gap-1.5 pointer-events-auto">
+            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            <span>Via Mode: Click to nudge route, Right-click to remove</span>
             <button
               onClick={() => { setIsViaMode(false); viaTargetWpIdRef.current = null; window.dispatchEvent(new CustomEvent("exit-via-mode")); }}
-              className="ml-1 w-4 h-4 rounded-full bg-white/20 hover:bg-white/40 flex items-center justify-center transition-colors"
+              className="ml-1 text-zinc-400 dark:text-zinc-500 hover:text-white dark:hover:text-zinc-900 transition-colors"
             >
-              <span className="text-[10px] leading-none">✕</span>
+              <X className="w-3 h-3" />
             </button>
           </div>
         </div>
