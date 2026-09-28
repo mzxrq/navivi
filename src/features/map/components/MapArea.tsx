@@ -359,9 +359,8 @@ export function MapArea() {
 
     const newId = Math.random().toString(36).substring(7);
 
-    setWaypoints((prev) => [
-      ...prev,
-      {
+    setWaypoints((prev) => {
+      const newWp = {
         id: newId,
         lat,
         lng,
@@ -370,8 +369,18 @@ export function MapArea() {
         imagePans: [],
         narration: "",
         routeMode: settings.default_route_mode || "walking",
-      },
-    ]);
+      };
+      
+      if (activeWaypointId) {
+        const activeIndex = prev.findIndex(w => w.id === activeWaypointId);
+        if (activeIndex !== -1) {
+          const nextWaypoints = [...prev];
+          nextWaypoints.splice(activeIndex + 1, 0, newWp as any);
+          return nextWaypoints;
+        }
+      }
+      return [...prev, newWp as any];
+    });
     setIsDirty(true);
 
     try {
