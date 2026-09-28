@@ -646,7 +646,7 @@ RESIDENTIAL_ARRIVAL_POPUP_HOLD_SECONDS = 0.0
 # began growing the instant the walker stopped moving, cutting straight
 # from "still walking" to "photo" with no beat to actually register having
 # arrived.
-RESIDENTIAL_ARRIVAL_FREEZE_SECONDS = 0.0
+RESIDENTIAL_ARRIVAL_FREEZE_SECONDS = 1.0
 # [NOTE] [Transition] Fullscreen photo transition plays as an ordered sequence: confirm (pin selected) -> scale (zoom into photo) -> blur -> fade_out; hold_ratio_of_freeze/min_hold_seconds/min_small_hold_seconds bound how long the fullscreen photo is held relative to its freeze duration before the next stage starts.
 FULLSCREEN_TRANSITION_DEFAULTS: Dict[str, float] = {
     "confirm_seconds": 0.4,
