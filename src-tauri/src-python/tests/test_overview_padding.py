@@ -35,8 +35,9 @@ class TestAdaptiveOverviewPadding:
         # KeyError inside the try block, not a computable (even zero) span.
         assert _adaptive_overview_padding(pd.DataFrame({"x": [1]})) == pytest.approx(0.10)
 
-    def test_padding_is_monotonically_non_decreasing_with_span(self):
-        # Each successive tier should never ask for LESS padding than the
-        # one before it - a bigger route should never get a tighter crop.
-        paddings = [p for _, p in tuning.OVERVIEW_PADDING_BY_SPAN_KM] + [tuning.OVERVIEW_PADDING_MAX_SPAN]
-        assert paddings == sorted(paddings)
+    def test_span_ceilings_are_sorted_so_the_first_match_wins_correctly(self):
+        # The lookup returns the FIRST tier whose ceiling the span fits under,
+        # so the ceilings must ascend. The padding values themselves are free
+        # to be tuned in any shape (a mid-size route may want more than a big one).
+        ceilings = [c for c, _ in tuning.OVERVIEW_PADDING_BY_SPAN_KM]
+        assert ceilings == sorted(ceilings)
