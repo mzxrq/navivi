@@ -483,6 +483,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         directory_path: data.directory_path || "",
         thumbnail_path: data.thumbnail_path || "",
         overview_narration: data.overview_narration || "",
+        video_title: data.video_title || "",
+        video_subtitle: data.video_subtitle || "",
+        enable_intro: data.enable_intro ?? true,
       });
 
       if (data.settings) setSettings(data.settings);
@@ -681,8 +684,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       });
 
       // The pipeline keeps every clip's own narration as a SEPARATE file
-      // (see timeline_step.build_timeline's audio_path/subtitle_path) —
-      // never muxed into the video — specifically so it shows up here as
+      // (see timeline_step.build_timeline's audio_path/subtitle_path)  E
+      // never muxed into the video  Especifically so it shows up here as
       // its own editable clip instead of being silently stuck inside the
       // video. Given the SAME start/duration as its video sibling so the
       // two stay visually aligned on their own tracks; the audio file

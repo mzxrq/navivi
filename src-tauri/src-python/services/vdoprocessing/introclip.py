@@ -167,7 +167,7 @@ def _format_ass_timestamp(seconds: float) -> str:
     return f"{hours}:{minutes:02d}:{secs:02d}.{cs:02d}"
 
 
-def _write_title_ass(text: str, duration_sec: float, tmp_dir: Path) -> Path:
+def _write_title_ass(title: str, subtitle: str, duration_sec: float, tmp_dir: Path) -> Path:
     """Writes a throwaway single-line .ass (not .srt) spanning the whole
     intro, with inline ASS override tags on the dialogue line itself giving
     the TITLE TEXT its own "pop in" transition — a combined scale-up +
@@ -194,7 +194,13 @@ def _write_title_ass(text: str, duration_sec: float, tmp_dir: Path) -> Path:
     )
     # Braces would be parsed as an ASS override-tag delimiter if left in —
     # strip them from arbitrary project-name text rather than escaping.
-    safe_text = (text or "").replace("{", "").replace("}", "")
+    safe_title = (title or "").replace("{", "").replace("}", "")
+    safe_subtitle = (subtitle or "").replace("{", "").replace("}", "")
+    if safe_subtitle:
+        subtitle_fs = int(tuning.INTRO_TITLE_FONT_SIZE * 0.6)
+        safe_text = f"{safe_title}\\N{{\\fs{subtitle_fs}}}{safe_subtitle}"
+    else:
+        safe_text = safe_title
     end_ts = _format_ass_timestamp(duration_sec)
 
     ass_path = tmp_dir / f"intro_title_{uuid.uuid4().hex[:8]}.ass"
@@ -239,7 +245,8 @@ def _pick_random_images(waypoints: List[Dict[str, Any]], count: int) -> List[str
 
 def generate_intro_clip(
     video_dir: str,
-    project_name: str,
+    title: str,
+    subtitle: str,
     waypoints: List[Dict[str, Any]],
     output_filename: str = tuning.INTRO_OUTPUT_FILENAME,
 ) -> Optional[str]:
@@ -292,7 +299,7 @@ def generate_intro_clip(
         )
         _crossfade_chain(per_clip_raw_paths, per_clip_sec, crossfade_sec, str(combined_path))
 
-        title_path = _write_title_ass(project_name or "", total_sec, video_dir_path)
+        title_path = _write_title_ass(title or "", subtitle or "", total_sec, video_dir_path)
 
         # [HACK] [Subtitle] Absolute, forward-slashed, colon-escaped path — libass's
         # subtitles filter needs this exact escaping, same as combine_video_and_audio.

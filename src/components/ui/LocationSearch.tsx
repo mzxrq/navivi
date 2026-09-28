@@ -2,8 +2,7 @@ import { useState, useEffect } from "react";
 import { Search, Loader2, MapPin, X } from "./icons";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { t } from "@lingui/core/macro";
-import { Trans } from "@lingui/react/macro";
-import { i18n } from "@lingui/core";
+import { useLingui } from "@lingui/react";
 
 interface SearchResult {
   place_id: number;
@@ -17,9 +16,22 @@ export function LocationSearch() {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  const [countryCode, setCountryCode] = useState<string>("");
   const { setWaypoints, setIsDirty } = useWorkspace();
+  const { i18n } = useLingui();
 
-  const currentLang = "en";
+  const currentLang = i18n.locale || "en";
+
+  useEffect(() => {
+    fetch("https://api.country.is/")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.country) {
+          setCountryCode(data.country.toLowerCase());
+        }
+      })
+      .catch((err) => console.error("Could not determine IP country:", err));
+  }, []);
 
   useEffect(() => {
     if (!query.trim()) {
@@ -32,12 +44,15 @@ export function LocationSearch() {
     setIsSearching(true);
     const delayDebounceFn = setTimeout(async () => {
       try {
-        const res = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
-            query,
-          )}&limit=5&accept-language=${currentLang}`,
-        );
+        let url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
+          query,
+        )}&limit=5&accept-language=${currentLang}`;
+        
+        if (countryCode) {
+          url += `&countrycodes=${countryCode}`;
+        }
 
+        const res = await fetch(url);
         if (!res.ok) throw new Error(t`no-internet`);
 
         const data = await res.json();
@@ -51,7 +66,7 @@ export function LocationSearch() {
     }, 600);
 
     return () => clearTimeout(delayDebounceFn);
-  }, [query, currentLang]);
+  }, [query, currentLang, countryCode]);
 
   const handleSelectPlace = (place: SearchResult) => {
     const lat = parseFloat(place.lat);

@@ -1,104 +1,39 @@
-import { useState, useRef } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { useState } from "react";
 import {
-  Sparkles,
   PencilSparkles,
-  Square,
   ChevronUp,
   ChevronDown,
+  MonitorPlay,
+  Info,
 } from "../../../components/ui/icons";
+import { Tooltip } from "../../../components/ui/Tooltip";
 import { useWorkspace } from "../../../hooks/useWorkspace";
-import { useUI } from "../../../hooks/useUI";
-import {
-  generateOverviewScriptStream,
-  checkModelExists,
-} from "../../../services/ollamaApi";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 
 export function OverviewPanel() {
-  const { waypoints, metadata, updateMetadata, setIsDirty, settings } =
-    useWorkspace();
-  const { showToast } = useUI();
-
-  const aiEnabled = !!settings.ai_features_enabled;
+  const { metadata, updateMetadata, setIsDirty } = useWorkspace();
 
   const [showOverview, setShowOverview] = useState(
-    !!metadata.overview_narration || !!metadata.theme,
+    !!metadata.video_title ||
+      !!metadata.video_subtitle ||
+      !!metadata.theme ||
+      metadata.enable_intro !== false,
   );
-  const [isGeneratingOverview, setIsGeneratingOverview] = useState(false);
-  const abortControllerRef = useRef<AbortController | null>(null);
 
-  const handleGenerateOverview = async () => {
-    const waypointNames = waypoints
-      .map((wp) => wp.name)
-      .filter((name) => name && name !== "Locating...");
-
-    if (waypointNames.length === 0) {
-      return showToast(t`Please add some waypoints!`, "info");
-    }
-
-    let engine = settings.ai_model || "schroneko/gemma-2-2b-jpn-it";
-    const hasModel = await checkModelExists(engine);
-    if (!hasModel) {
-      return showToast(
-        t`Model "${engine}" not found. Please install it from the Settings.`,
-        "error",
-      );
-    }
-
-    setIsGeneratingOverview(true);
-    showToast(t`Generating with ${engine}...`, "info");
-
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
-
-    try {
-      await generateOverviewScriptStream(
-        waypointNames,
-        engine,
-        metadata.theme || "",
-        (chunk) => {
-          updateMetadata({ overview_narration: chunk });
-        },
-        controller.signal,
-      );
-      setIsDirty(true);
-      showToast(t`Overview script compiled!`, "success");
-    } catch (error: any) {
-      if (error?.name === "AbortError") {
-        showToast(t`Overview generation canceled.`, "info");
-        return;
-      }
-      const errorDetail =
-        error?.message ||
-        (typeof error === "string" ? error : JSON.stringify(error));
-      showToast(t`Overview generation failed: ${errorDetail}`, "error");
-    } finally {
-      setIsGeneratingOverview(false);
-      abortControllerRef.current = null;
-    }
-  };
-
-  const handleCancel = () => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
-    }
-    setIsGeneratingOverview(false);
-    invoke("cancel_python_blueprint").catch(console.error);
-    showToast(t`Overview generation canceled.`, "info");
-  };
+  const hasData =
+    !!metadata.video_title || !!metadata.video_subtitle || !!metadata.theme;
+  const isEnabled = metadata.enable_intro !== false;
+  const [showPreview, setShowPreview] = useState(false);
 
   if (!showOverview) {
-    const hasData = !!metadata.overview_narration || !!metadata.theme;
     return (
       <button
         onClick={() => setShowOverview(true)}
         className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl border border-dashed border-zinc-300 dark:border-white/10 text-xs font-semibold text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-black/5 dark:hover:bg-white/5 transition-colors shrink-0"
       >
         <span>
-          {hasData ? t`Course Concept & Intro` : t`+ Add Course Theme & Intro`}
+          {hasData ? t`Intro Screen Settings` : t`+ Add Intro Screen`}
         </span>
         {hasData && <ChevronDown className="w-3.5 h-3.5" />}
       </button>
@@ -106,11 +41,11 @@ export function OverviewPanel() {
   }
 
   return (
-    <div className="space-y-3 bg-zinc-50/50 dark:bg-navidark-800/50 p-3 rounded-xl border border-zinc-200/80 dark:border-navidark-700 shrink-0">
-      <div className="flex justify-between items-center">
+    <div className="bg-zinc-50/50 dark:bg-navidark-800/50 p-3.5 rounded-xl border border-zinc-200/80 dark:border-navidark-700 shrink-0 shadow-sm">
+      <div className="flex justify-between items-center mb-4">
         <label className="text-[11px] font-bold text-zinc-800 dark:text-zinc-200 tracking-wide uppercase flex items-center gap-1.5">
           <PencilSparkles className="w-3.5 h-3.5 text-navi" />
-          <Trans>Course Concept & Intro</Trans>
+          <Trans>Intro Screen</Trans>
         </label>
         <button
           onClick={() => setShowOverview(false)}
@@ -121,66 +56,104 @@ export function OverviewPanel() {
         </button>
       </div>
 
-      {/* Theme Input — always visible */}
-      <div className="space-y-1.5">
-        <input
-          type="text"
-          value={metadata.theme || ""}
-          onChange={(e) => {
-            updateMetadata({ theme: e.target.value });
-            setIsDirty(true);
-          }}
-          placeholder={t`Course Theme`}
-          className="w-full bg-white dark:bg-navidark-900 border border-zinc-200 dark:border-navidark-700 rounded-lg px-2.5 py-2 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-navi dark:focus:border-navi focus:ring-1 focus:ring-navi/30 shadow-sm transition-all"
-        />
-      </div>
-
-      {/* Narration textarea + Auto-Write — only when AI features are enabled */}
-      {aiEnabled && (
-        <div className="relative w-full h-28 rounded-lg overflow-hidden shadow-sm border border-zinc-200 dark:border-navidark-700 focus-within:border-navi dark:focus-within:border-navi focus-within:ring-1 focus-within:ring-navi/30 transition-all">
-          <textarea
-            value={metadata.overview_narration || ""}
-            onChange={(e) => {
-              updateMetadata({ overview_narration: e.target.value });
-              setIsDirty(true);
-            }}
-            disabled={isGeneratingOverview}
-            placeholder={t`Opening Narration...`}
-            className="w-full h-full resize-none p-3 pb-10 text-xs custom-scrollbar bg-white dark:bg-navidark-900 text-zinc-900 dark:text-zinc-100 focus:outline-none disabled:opacity-50 leading-relaxed"
-          />
-
-          <div className="absolute bottom-2 right-2 flex items-center gap-2 z-20">
-            {isGeneratingOverview ? (
-              <button
-                onClick={handleCancel}
-                className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-all bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-500/20 shadow-sm"
-              >
-                <Square className="w-3 h-3 fill-current" />{" "}
-                <Trans>Cancel</Trans>
-              </button>
-            ) : (
-              <button
-                onClick={handleGenerateOverview}
-                disabled={isGeneratingOverview || waypoints.length === 0}
-                className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed bg-navi hover:bg-navi-600 text-white shadow-md shadow-navi/20"
-              >
-                <Sparkles className="w-3 h-3" /> <Trans>Auto-Write</Trans>
-              </button>
-            )}
+      <div className="space-y-4">
+        {/* Enable Toggle */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-medium text-zinc-700 dark:text-zinc-200">
+              <Trans>Generate Intro Video</Trans>
+            </span>
+            <Tooltip content={<div className="w-48 text-center leading-snug"><Trans>This creates a cinematic title card at the very beginning of your exported video.</Trans></div>} position="top">
+              <Info className="w-3.5 h-3.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors cursor-help" />
+            </Tooltip>
           </div>
+          <label className="relative inline-flex items-center cursor-pointer">
+            <input
+              type="checkbox"
+              className="sr-only peer"
+              checked={isEnabled}
+              onChange={(e) => {
+                updateMetadata({ enable_intro: e.target.checked });
+                setIsDirty(true);
+              }}
+            />
+            <div className="w-8 h-4.5 bg-zinc-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-navi/30 rounded-full peer dark:bg-navidark-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-3.5 after:w-3.5 after:transition-all dark:border-navidark-600 peer-checked:bg-navi"></div>
+          </label>
+        </div>
 
-          {isGeneratingOverview && (
-            <div className="absolute inset-0 bg-white/80 dark:bg-navidark-900/80 backdrop-blur-[2px] flex flex-col items-center justify-center z-10 animate-in fade-in">
-              <div className="flex flex-col items-center gap-3">
-                <Sparkles className="w-6 h-6 text-navi animate-bounce" />
-                <div className="text-[10px] font-bold text-navi tracking-wider uppercase">
-                  <Trans>Synthesizing...</Trans>
+
+        {/* Title & Subtitle */}
+        {isEnabled && (
+          <div className="space-y-3 pt-1 animate-in slide-in-from-top-2 fade-in duration-200">
+            <div>
+              <label className="block text-[10px] font-semibold text-zinc-500 dark:text-zinc-400 mb-1.5 uppercase tracking-wide">
+                <Trans>Video Title</Trans>
+              </label>
+              <input
+                type="text"
+                value={metadata.video_title || ""}
+                onChange={(e) => {
+                  updateMetadata({ video_title: e.target.value });
+                  setIsDirty(true);
+                }}
+                placeholder={metadata.project_name || t`Title`}
+                className="w-full bg-white dark:bg-navidark-900 border border-zinc-200 dark:border-navidark-700 rounded-lg px-2.5 py-2 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-navi dark:focus:border-navi focus:ring-1 focus:ring-navi/30 shadow-sm transition-all placeholder:text-zinc-400 dark:placeholder:text-zinc-600"
+              />
+              <p className="text-[9px] text-zinc-400 dark:text-zinc-500 mt-1">
+                <Trans>Leave blank to use the project name.</Trans>
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-semibold text-zinc-500 dark:text-zinc-400 mb-1.5 uppercase tracking-wide">
+                <Trans>Subtitle / Description</Trans>
+              </label>
+              <input
+                type="text"
+                value={metadata.video_subtitle || ""}
+                onChange={(e) => {
+                  updateMetadata({ video_subtitle: e.target.value });
+                  setIsDirty(true);
+                }}
+                placeholder={t`E.g. Tomogashima and Kada area...`}
+                className="w-full bg-white dark:bg-navidark-900 border border-zinc-200 dark:border-navidark-700 rounded-lg px-2.5 py-2 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-navi dark:focus:border-navi focus:ring-1 focus:ring-navi/30 shadow-sm transition-all placeholder:text-zinc-400 dark:placeholder:text-zinc-600"
+              />
+            </div>
+
+            <div className="mt-2 pt-2 border-t border-zinc-200 dark:border-navidark-600">
+              <button
+                onClick={() => setShowPreview(!showPreview)}
+                className="w-full flex items-center justify-between py-1.5 px-2 -mx-2 rounded-lg text-[10px] font-semibold text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors uppercase tracking-wide"
+              >
+                <div className="flex items-center gap-1.5">
+                  <MonitorPlay className="w-3.5 h-3.5" />
+                  <Trans>Live Preview</Trans>
+                </div>
+                {showPreview ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              </button>
+              
+              {showPreview && (
+                <div className="mt-2 aspect-video w-full bg-zinc-950 rounded-md overflow-hidden flex flex-col items-center justify-center p-4 relative shadow-inner ring-1 ring-white/10 animate-in fade-in zoom-in-95 duration-200">
+                {/* Simulated Map Background */}
+                <div className="absolute inset-0 bg-linear-to-br from-zinc-800/40 to-black/80 mix-blend-overlay" />
+                
+                {/* Text Layout */}
+                <div className="relative z-10 text-center flex flex-col items-center gap-1.5 w-full">
+                  <h4 className="text-white font-bold text-sm tracking-wide shadow-sm drop-shadow-md truncate w-full px-2" style={{ textShadow: "0 2px 4px rgba(0,0,0,0.8)" }}>
+                    {metadata.video_title || metadata.project_name || t`Project Title`}
+                  </h4>
+                  {(metadata.video_subtitle || !metadata.video_title) && (
+                    <p className="text-zinc-300 text-[9px] w-full px-2 truncate drop-shadow-md" style={{ textShadow: "0 1px 2px rgba(0,0,0,0.8)" }}>
+                      {metadata.video_subtitle || t`Subtitle description...`}
+                    </p>
+                  )}
                 </div>
               </div>
+              )}
             </div>
-          )}
-        </div>
-      )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

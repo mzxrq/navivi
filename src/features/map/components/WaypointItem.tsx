@@ -12,6 +12,7 @@ import {
   Ruler,
   Ship,
   X,
+  Navigation,
 } from "../../../components/ui/icons";
 import { useWorkspace } from "../../../hooks/useWorkspace";
 import { useUI } from "../../../hooks/useUI";
@@ -248,6 +249,42 @@ export function WaypointItem({
                   );
                 })}
               </div>
+
+              {/* Via point adjust button + badge */}
+              {(wp.routeMode === "walking" || wp.routeMode === "driving" || wp.routeMode === "ferry") && (
+                <div className="flex items-center gap-1.5 mt-1.5">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      window.dispatchEvent(
+                        new CustomEvent("enter-via-mode", { detail: { wpId: wp.id } })
+                      );
+                    }}
+                    className="flex items-center gap-1 text-[9px] font-semibold text-violet-500 dark:text-violet-400 hover:text-violet-700 dark:hover:text-violet-300 transition-colors"
+                    title="Add via points to nudge the route"
+                  >
+                    <Navigation className="w-2.5 h-2.5" />
+                    Adjust Route
+                  </button>
+                  {wp.viaPoints && wp.viaPoints.length > 0 && (
+                    <div className="flex items-center gap-1">
+                      <span className="text-[9px] bg-violet-100 dark:bg-violet-500/20 text-violet-600 dark:text-violet-300 px-1.5 py-0.5 rounded-full font-bold">
+                        {wp.viaPoints.length} via
+                      </span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          updateWaypoint(wp.id, { viaPoints: [] });
+                        }}
+                        className="text-[9px] text-zinc-400 hover:text-red-500 transition-colors"
+                        title="Clear all via points"
+                      >
+                        <X className="w-2.5 h-2.5" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>

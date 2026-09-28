@@ -25,11 +25,13 @@ export interface Waypoint {
   customRoute?: [number, number][];
   connectToRoute?: boolean;
   skipAssetGeneration?: boolean;
+  isStub?: boolean;
   pauseAtWaypoint?: boolean;
   isGeneratingScript?: boolean;
   markers?: WaypointTimelineMarker[];
   isStopBy?: boolean;
   drawStyle?: "linear" | "spline";
+  viaPoints?: [number, number][]; // intermediate routing nudge points for the outgoing leg
   curveOffset?: number;
   timelineOffset?: number;
   videoOffset?: number;
@@ -94,6 +96,9 @@ export interface ProjectMetadata {
   archive_path?: string;
   thumbnail_path?: string;
   overview_narration?: string;
+  video_title?: string;
+  video_subtitle?: string;
+  enable_intro?: boolean;
 }
 // end dev 1 settings
 
@@ -223,7 +228,7 @@ export interface ManifestClip {
   file_path: string;
 
   // Written by the frontend's OWN pre-render manifest (compileTimelineManifest
-  // in services/fileSystem.ts) — a snapshot of the in-editor timeline state.
+  // in services/fileSystem.ts)  Ea snapshot of the in-editor timeline state.
   clip_id?: string;
   duration?: number;
   type?: string;
@@ -232,7 +237,7 @@ export interface ManifestClip {
   // overwrites this same timeline.json after a full render completes.
   // Video and audio are kept as separate files/tracks (never muxed) all
   // the way through the pipeline specifically so this editor can display
-  // and edit them independently — file_path is always a SILENT video
+  // and edit them independently  Efile_path is always a SILENT video
   // clip; audio_path is its own separate narration track, muxed onto the
   // video only at final export (VideoExporter.concat_from_timeline).
   order?: number;
@@ -373,3 +378,4 @@ export interface WorkspaceState {
   restoreVersion: (versionId: string) => Promise<boolean>;
   deleteVersion: (versionId: string) => Promise<boolean>;
 }
+

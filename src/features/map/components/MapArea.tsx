@@ -60,6 +60,8 @@ export function MapArea() {
   const [isAddMode, setIsAddMode] = useState(false);
   const [isDrawMode, setIsDrawMode] = useState(false);
   const [isEraserMode, setIsEraserMode] = useState(false);
+  const [isViaMode, setIsViaMode] = useState(false);
+  const viaTargetWpIdRef = useRef<string | null>(null);
   const [addType, setAddType] = useState<"normal" | "start" | "end" | "stopby">(
     "normal",
   );
@@ -169,16 +171,7 @@ export function MapArea() {
         maxLat = Math.max(maxLat, wp.lat);
       });
 
-      routeSegments.forEach((seg) => {
-        if (seg.customRoute) {
-          seg.customRoute.forEach((coord) => {
-            minLng = Math.min(minLng, coord[1]);
-            minLat = Math.min(minLat, coord[0]);
-            maxLng = Math.max(maxLng, coord[1]);
-            maxLat = Math.max(maxLat, coord[0]);
-          });
-        }
-      });
+
 
       if (minLng !== Infinity) {
         if (minLng === maxLng && minLat === maxLat) {
@@ -243,6 +236,22 @@ export function MapArea() {
               routeMode: "draw",
               customRoute: [...existing, [e.lngLat.lat, e.lngLat.lng]],
             };
+          }
+          return wp;
+        }),
+      );
+      setIsDirty(true);
+      return;
+    }
+
+    // Via-point placement mode
+    if (isViaMode && viaTargetWpIdRef.current) {
+      const targetId = viaTargetWpIdRef.current;
+      setWaypoints((prev) =>
+        prev.map((wp) => {
+          if (wp.id === targetId) {
+            const existing = wp.viaPoints || [];
+            return { ...wp, viaPoints: [...existing, [e.lngLat.lat, e.lngLat.lng] as [number, number]] };
           }
           return wp;
         }),
@@ -443,6 +452,26 @@ export function MapArea() {
     }
   };
 
+  // Listen for sidebar "Adjust Route" button
+  useEffect(() => {
+    const handleEnterVia = ((e: CustomEvent) => {
+      viaTargetWpIdRef.current = e.detail.wpId;
+      setIsViaMode(true);
+      setIsAddMode(false);
+      setIsDrawMode(false);
+    }) as EventListener;
+    const handleExitVia = (() => {
+      setIsViaMode(false);
+      viaTargetWpIdRef.current = null;
+    }) as EventListener;
+    window.addEventListener("enter-via-mode", handleEnterVia);
+    window.addEventListener("exit-via-mode", handleExitVia);
+    return () => {
+      window.removeEventListener("enter-via-mode", handleEnterVia);
+      window.removeEventListener("exit-via-mode", handleExitVia);
+    };
+  }, []);
+
   useEffect(() => {
     const handleHover = ((e: CustomEvent) =>
       setEleHoverPoint(e.detail)) as EventListener;
@@ -469,6 +498,21 @@ export function MapArea() {
       map.off("style.load", loadModels);
     };
   }, [selectedStyle]);
+
+  // Exit via mode if active waypoint changes away
+  useEffect(() => {
+    if (isViaMode) {
+      const onKey = (e: KeyboardEvent) => {
+        if (e.key === "Escape") {
+          setIsViaMode(false);
+          viaTargetWpIdRef.current = null;
+          window.dispatchEvent(new CustomEvent("exit-via-mode"));
+        }
+      };
+      window.addEventListener("keydown", onKey);
+      return () => window.removeEventListener("keydown", onKey);
+    }
+  }, [isViaMode]);
 
   // Historical Weather Sync
   useEffect(() => {
@@ -716,8 +760,9 @@ export function MapArea() {
       {/* MAPBOX CANVAS */}
       <div className="absolute inset-0 z-0">
         <Map
+          reuseMaps={true}
           ref={mapRef}
-          cursor={isEraserMode ? "crosshair" : ""}
+          cursor={isEraserMode || isViaMode ? "crosshair" : ""}
           {...viewState}
           onMove={(evt: ViewStateChangeEvent) => setViewState(evt.viewState)}
           onLoad={handleMapLoad}
@@ -739,7 +784,7 @@ export function MapArea() {
           mapboxAccessToken={mapboxToken}
           attributionControl={false}
           dragRotate={true}
-          doubleClickZoom={!isDrawMode}
+          doubleClickZoom={!isDrawMode && !isViaMode}
           maxZoom={20}
           terrain={
             is3D ? { source: "mapbox-dem", exaggeration: 1.5 } : undefined
@@ -892,6 +937,57 @@ export function MapArea() {
             );
           })}
 
+          {/* via-point nudge markers */}
+          {waypoints.map((wp) =>
+            (wp.viaPoints || []).map((pos, idx) => (
+              <Marker
+                key={`via-${wp.id}-${idx}`}
+                latitude={pos[0]}
+                longitude={pos[1]}
+                draggable
+                onDragEnd={(e) => {
+                  setWaypoints((prev) =>
+                    prev.map((w) => {
+                      if (w.id === wp.id && w.viaPoints) {
+                        const updated = [...w.viaPoints];
+                        updated[idx] = [e.lngLat.lat, e.lngLat.lng];
+                        return { ...w, viaPoints: updated };
+                      }
+                      return w;
+                    }),
+                  );
+                  setIsDirty(true);
+                }}
+              >
+                <div
+                  className="relative group cursor-grab active:cursor-grabbing"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    // Right-click or Ctrl+Click to remove
+                  }}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setWaypoints((prev) =>
+                      prev.map((w) => {
+                        if (w.id === wp.id && w.viaPoints) {
+                          return { ...w, viaPoints: w.viaPoints.filter((_, i) => i !== idx) };
+                        }
+                        return w;
+                      }),
+                    );
+                    setIsDirty(true);
+                  }}
+                >
+                  <div className="w-4 h-4 bg-violet-500 border-2 border-white dark:border-zinc-900 rounded-full shadow-md group-hover:scale-125 group-hover:bg-violet-400 transition-all" />
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 opacity-0 group-hover:opacity-100 transition-opacity bg-zinc-900 text-white text-[9px] font-bold px-1.5 py-0.5 rounded pointer-events-none whitespace-nowrap">
+                    Via {idx + 1} · Right-click to remove
+                  </div>
+                </div>
+              </Marker>
+            ))
+          )}
+
           {/* drawn nodes */}
           {isDrawMode &&
             activeWaypointId &&
@@ -1004,6 +1100,22 @@ export function MapArea() {
           </p>
         </div>
       )}
+      {/* --- VIA MODE BANNER --- */}
+      {isViaMode && (
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-300 pointer-events-none animate-in fade-in zoom-in-95 duration-200">
+          <div className="bg-violet-600 text-white text-xs font-bold px-4 py-2 rounded-full shadow-xl flex items-center gap-2 pointer-events-auto">
+            <div className="w-2 h-2 rounded-full bg-white/60 animate-pulse" />
+            <span>Click map to add via point · Right-click marker to remove · Esc to exit</span>
+            <button
+              onClick={() => { setIsViaMode(false); viaTargetWpIdRef.current = null; window.dispatchEvent(new CustomEvent("exit-via-mode")); }}
+              className="ml-1 w-4 h-4 rounded-full bg-white/20 hover:bg-white/40 flex items-center justify-center transition-colors"
+            >
+              <span className="text-[10px] leading-none">✕</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* --- FLOATING WAYPOINT EDITOR --- */}
       {activeWaypointId && !isDrawMode && !isAddMode && (
         <WaypointEditor
