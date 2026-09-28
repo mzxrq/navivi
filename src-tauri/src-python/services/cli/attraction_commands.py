@@ -12,11 +12,11 @@ from services.vdoprocessing.videopipeline.attraction_step import (
     generate_waypoint_attraction_video,
 )
 from services.vdoprocessing.videopipeline.helpers import (
+    attraction_audio_filename,
     attraction_output_filename,
     output_is_valid,
     project_attraction_video_dir,
     project_audio_dir,
-    waypoint_audio_filename,
 )
 from .helpers import _load_tts_waypoints
 
@@ -24,11 +24,15 @@ from .helpers import _load_tts_waypoints
 def _resolve_attraction_audio(
     config_path: Path, waypoint_index: int, label: Any
 ) -> Dict[str, Any]:
-    """Looks up the waypoint's already-generated TTS audio (by the shared
-    naming convention) and its duration, for the CLI's single-waypoint
-    attraction test where a full audio_durations/audio_paths list from the
-    TTS step isn't available."""
-    audio_path = project_audio_dir(config_path.parent) / waypoint_audio_filename(waypoint_index, label)
+    """Looks up the waypoint's already-generated attraction-only TTS audio
+    (attraction_audio_filename's own "04_attraction_" namespace, NOT
+    waypoint_audio_filename's "02_waypoint_" combined arrival+attraction
+    audio - see helpers.attraction_audio_filename) and its duration, for the
+    CLI's single-waypoint attraction test where a full audio_durations/
+    audio_paths list from the TTS step isn't available. Using the combined
+    file here used to size the clip to the wrong (shorter, arrival-only)
+    duration whenever route-only legs are on (audio_step.set_route_only_legs)."""
+    audio_path = project_audio_dir(config_path.parent) / attraction_audio_filename(waypoint_index, label)
     if not output_is_valid(audio_path):
         return {"audio_path": None, "duration_seconds": 0.0}
 
