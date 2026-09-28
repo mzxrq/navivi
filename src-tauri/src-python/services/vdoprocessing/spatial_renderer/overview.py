@@ -6,6 +6,7 @@ overview_pacing.py and the animation loop itself in overview_animation.py —
 both split out of this file to keep it to the setup/wrap-up orchestration."""
 
 import json
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import cv2
@@ -16,6 +17,31 @@ from services.mapfetcher.mapgeometry import RouteGeometryProcessor
 from services.vdoprocessing.vdoexporter import VideoExporter
 
 from .base import logger
+from .overview_timing import (
+    AUDIO_MATCH_TOLERANCE_SECONDS,
+    MAX_WALK_SPEEDUP,
+    MIN_STOP_GAP_FRAMES,
+    animation_frames,
+    ending_seconds,
+    fit_ending,
+    intro_frame_count,
+    cap_segments,
+    stop_targets,
+    warp_controls,
+    warp_path,
+)
+
+
+def _output_is_valid(path, min_bytes: int = 1024) -> bool:
+    """Local copy of videopipeline/helpers.py's output_is_valid — this
+    package can't import that module (videopipeline/__init__.py eagerly
+    imports render_step.py, which imports spatial_renderer, so the reverse
+    import would be circular; see helpers.py's own PIPELINE_LABELS note)."""
+    try:
+        p = Path(path)
+        return p.is_file() and p.stat().st_size >= min_bytes
+    except OSError:
+        return False
 
 # Overview render tuning constants (magic numbers pulled out of the setup
 # logic below so their purpose has a name; none of these are read from
@@ -43,6 +69,23 @@ class _OverviewRenderMixin:
         bounding_box: Optional[Dict[str, float]] = None,
         extent: Optional[Tuple[float, float, float, float]] = None,
     ) -> str:
+        # Checkpoint: if a previous run already produced this exact output
+        # file, skip straight to returning it instead of redoing the whole
+        # (expensive) overview render. Simple existence check, no content
+        # hash — an interrupted/partial pipeline run resumes from wherever
+        # it left off rather than redoing every already-finished clip; a
+        # genuinely stale file just needs deleting (or force=True further
+        # up the call chain, which clears the whole checkpoint before this
+        # is ever reached) to be regenerated.
+        overview_path = str(self.out_dir / "01_overview.mp4")
+        if (
+            self.config.get("checkpoint_enabled", False)
+            and not self.config.get("overview_rerender", False)
+            and _output_is_valid(overview_path)
+        ):
+            logger.info("Overview video already exists — skipping render: %s", overview_path)
+            return overview_path
+
         is_video = False
 
         if is_video:
@@ -63,6 +106,37 @@ class _OverviewRenderMixin:
 
         duration = self.config.get("duration", 30.0)
         num_frames = max(_MIN_OVERVIEW_FRAMES, int(duration * fps))
+        # the stop-by notice plays with the first stop-by batch of each video
+        self._stopby_notice_shown = False
+
+        # Cues only: the narration's {start} / {n} / {end} tags (already turned
+        # into seconds of the real audio) say when the route sets off and when
+        # each numbered stop is reached (see overview_timing.py). Without cues the
+        # overview is paced by the route alone, as before. Nothing is sped up to
+        # make the video match the length of the voice.
+        audio_cues = dict(self.config.get("overview_cue_seconds") or {})
+        walk_start_frames = 0
+        if audio_cues:
+            first = popups[0] if popups else None
+            if first:
+                intro_freeze = _DEFAULT_INTRO_FREEZE_SECONDS
+                if "freeze_seconds" in first:
+                    intro_freeze = max(float(first["freeze_seconds"]), tuning.POPUP_MIN_DISPLAY_SECONDS)
+                clean_hold = min(
+                    intro_freeze * _INTRO_CLEAN_HOLD_FRACTION_OF_FREEZE,
+                    float(self.config.get("overview_intro_clean_hold_seconds", 1.5)),
+                )
+                walk_start_frames = intro_frame_count(
+                    intro_freeze, clean_hold, max(1, int(tuning.POPUP_FADE_SECONDS * fps)), fps
+                )
+            if audio_cues.get("start") is not None:
+                walk_start_frames = max(walk_start_frames, int(round(audio_cues["start"] * fps)))
+            # Long enough to reach the last cued stop (and the {end} cue).
+            num_frames = max(num_frames, animation_frames(audio_cues, walk_start_frames, fps))
+            logger.info(
+                "Overview follows its narration cues %s: walk starts at %.1fs and takes %.1fs.",
+                sorted(audio_cues), walk_start_frames / fps, num_frames / fps,
+            )
 
         start_label, end_label = "開始", "終点"
         for ancestor_dir in [self.out_dir] + list(self.out_dir.parents):
@@ -288,6 +362,9 @@ class _OverviewRenderMixin:
         # animated phase and, since cards composite after pins every frame,
         # visually erase that waypoint marker for as long as it's shown.
         pin_obstacles = self._pin_obstacle_points(active_popups)
+        # Pins alone, for the "photo straight above its pin" check in
+        # _layout_beside_popups (which may lie over the route, not a pin).
+        self._layout_pin_obstacles = pin_obstacles
         if len(pin_obstacles):
             route_obstacle_arr = np.vstack([route_obstacle_arr, pin_obstacles])
 
@@ -339,6 +416,123 @@ class _OverviewRenderMixin:
                 target_dist = frac * total_smooth_dist
                 return int(np.searchsorted(cum_smooth_dist, target_dist))
             return int(frac * (num_frames_lookup - 1))
+
+        # A cue at the start of a sentence: the walker waits at that stop for a
+        # moment (its popup fading in) so the picture stays in step with the voice.
+        wait_tags = {str(t) for t in (self.config.get("overview_cue_wait_tags") or [])}
+        wait_frames = int(fps * float(self.config.get("overview_cue_wait_seconds", 2.0)))
+        for ap in active_popups:
+            numbered = (
+                ap["index"] != 0 and not ap["data"].get("is_stopby")
+                and (not stop_popup or ap["index"] != stop_popup["index"])
+            )
+            ap["cue_wait_frames"] = (
+                wait_frames if audio_cues and numbered and str(ap.get("order")) in wait_tags
+                and str(ap.get("order")) in audio_cues else 0
+            )
+            # A {go} after the stop's cue: the walker stops there for the whole
+            # description (its {n} to its {go}), then heads on.
+            arrive_at = audio_cues.get(str(ap.get("order")))
+            depart_at = audio_cues.get(f"go{ap.get('order')}")
+            if numbered and arrive_at is not None and depart_at is not None and depart_at > arrive_at:
+                ap["cue_wait_frames"] = int(round((depart_at - arrive_at) * fps))
+
+        # No leg between two waypoints (start and end included) animates for
+        # longer than this: a longer one is played faster.
+        cap_frames = int(fps * float(self.config.get("overview_max_leg_seconds", 10.0)))
+        if cap_frames > 0:
+            marks = [0, num_frames_lookup - 1] + [
+                min(num_frames_lookup - 1, _estimate_frame(ap["index"]))
+                for ap in active_popups
+                if ap["index"] != 0 and not ap["data"].get("is_stopby")
+            ]
+            capped, capped_cum = cap_segments(smooth_arr_lookup, cum_smooth_dist, marks, cap_frames)
+            if len(capped) != num_frames_lookup:
+                logger.info(
+                    "Overview legs capped at %.0fs: walk %.1fs -> %.1fs.",
+                    cap_frames / fps, num_frames_lookup / fps, len(capped) / fps,
+                )
+                smooth_path, cum_smooth_dist = capped, capped_cum
+                smooth_arr_lookup = np.asarray(smooth_path, dtype=float)
+                num_frames_lookup = len(smooth_arr_lookup)
+
+        # Retime the walk so each stop is reached when its cue is spoken: the
+        # traveler speeds up / slows down between stops (route shape kept).
+        if audio_cues:
+            natural_frames = {
+                ap["order"]: _estimate_frame(ap["index"])
+                for ap in active_popups
+                if ap["index"] != 0 and not ap["data"].get("is_stopby")
+                and (not stop_popup or ap["index"] != stop_popup["index"])
+            }
+            # Popups that freeze the map (and stop-by batches) add frames ahead of
+            # the stops after them: how many, so a stop still lands on its cue.
+            def _hold_frames(ap) -> int:
+                group = ap.get("stopby_group") or []
+                if not (ap["data"].get("freeze_frame", False) or group):
+                    return ap.get("cue_wait_frames", 0)  # the wait at a cued stop
+                return int(fps * (
+                    float(self.post_arrival_hold_seconds)
+                    + max(float(ap["data"].get("freeze_seconds", 4.0)), tuning.POPUP_MIN_DISPLAY_SECONDS)
+                    + len(group) * tuning.STOPBY_BATCH_SECONDS
+                ))
+
+            hosts = [
+                (_estimate_frame(ap["index"]), _hold_frames(ap)) for ap in active_popups
+                if ap["index"] != 0 and (not stop_popup or ap["index"] != stop_popup["index"])
+                and ap.get("stopby_host") is None
+            ]
+            hold_before = {
+                n: sum(h for f, h in hosts if f < frame) for n, frame in natural_frames.items()
+            }
+            start_batch = (
+                int(fps * len(start_popup.get("stopby_group") or []) * tuning.STOPBY_BATCH_SECONDS)
+                if start_popup else 0
+            )
+            # The walk may be stretched back out to the length the cues need: the
+            # leg cap shortened the natural path, but each cued stop still has its
+            # own time (and is itself no more than one cap after the last).
+            room = max(len(smooth_arr_lookup), num_frames)
+            target_frames = stop_targets(
+                natural_frames, audio_cues, walk_start_frames + start_batch, fps,
+                room, holds=hold_before, cap_frames=cap_frames or None,
+                min_leg_frames=int(fps * tuning.OVERVIEW_MIN_LEG_SECONDS),
+            )
+            if target_frames:
+                # The last leg (after the last stop) is capped too: the walk
+                # ends at most one cap after it.
+                total_out = min(
+                    room, max(target_frames.values()) + (cap_frames or room) + 1
+                )
+                # An {end} cue: the way back ends when the voice gets there
+                # (the ending then plays over the closing line).
+                if audio_cues.get("end") is not None:
+                    end_in_walk = int(round(audio_cues["end"] * fps)) - (
+                        walk_start_frames + start_batch + sum(h for _, h in hosts)
+                    )
+                    total_out = max(
+                        max(target_frames.values()) + MIN_STOP_GAP_FRAMES, min(room, end_in_walk)
+                    )
+                # The way back is never cut shorter than its natural pace sped
+                # up MAX_WALK_SPEEDUP times (and one leg cap): a voice that got
+                # there early leaves the ending to absorb it, not a walker that
+                # jumps home in a few frames.
+                last_n = max(target_frames, key=target_frames.get)
+                natural_back = len(smooth_arr_lookup) - 1 - natural_frames[last_n]
+                min_back = int(natural_back / MAX_WALK_SPEEDUP)
+                if cap_frames:
+                    min_back = min(min_back, cap_frames)
+                total_out = max(total_out, target_frames[last_n] + min_back)
+                xs, ys = warp_controls(natural_frames, target_frames, total_out, len(smooth_arr_lookup))
+                smooth_path, cum_smooth_dist = warp_path(
+                    smooth_arr_lookup, cum_smooth_dist, xs, ys, out_len=total_out
+                )
+                smooth_arr_lookup = np.asarray(smooth_path, dtype=float)
+                num_frames_lookup = len(smooth_arr_lookup)
+                logger.info(
+                    "Overview stops retimed to cues: %s.",
+                    ", ".join(f"#{n} {natural_frames[n] / fps:.1f}s->{t / fps:.1f}s" for n, t in target_frames.items()),
+                )
 
         def _expected_frame(px: float, py: float, search_from: int, search_to: int) -> int:
             window = smooth_arr_lookup[search_from:search_to + 1]
@@ -495,6 +689,10 @@ class _OverviewRenderMixin:
                 [{"popup": c, "frames_left": 1} for c in intro_cards], w, h,
                 card_w=footprint_w, card_h=footprint_h,
                 route_obstacles=route_obstacle_arr)
+            # The photo sits on top of its own pin whenever there's room
+            # above it (the free layout above could put it on any side,
+            # e.g. hanging below the start pin).
+            self._place_cards_above_pins(intro_cards, w, h, footprint_w, footprint_h)
             for c in intro_cards:
                 c["hud_corner"] = None
                 c["draw_leader_line"] = True
@@ -608,6 +806,24 @@ class _OverviewRenderMixin:
             # — see _render_ending_highlight.
             self.last_frame = clean_frame
 
+        if audio_cues and start_popup:
+            # The voice's {start} (or a short intro) leaves the map waiting
+            # until the route sets off.
+            for _ in range(max(0, walk_start_frames - video.frames_written)):
+                video.write(clean_frame)
+
+        for ap in active_popups:
+            seconds = audio_cues.get(str(ap.get("order")))
+            numbered = (
+                ap["index"] != 0 and not ap["data"].get("is_stopby")
+                and (not stop_popup or ap["index"] != stop_popup["index"])
+            )
+            ap["cue_frame"] = int(round(seconds * fps)) if numbered and seconds is not None else None
+            depart = audio_cues.get(f"go{ap.get('order')}")
+            ap["depart_frame"] = (
+                int(round(depart * fps)) if ap["cue_frame"] is not None and depart is not None
+                and depart > seconds else None
+            )
         pre_popup_frame = self._animate_overview_frames(
             video, current_bg, cap, is_video, w, h, fps,
             smooth_path, mode_breakpoints, cum_smooth_dist, total_smooth_dist,
@@ -644,6 +860,26 @@ class _OverviewRenderMixin:
             video, stop_popup, summary_card, active_popups, w, h, fps,
             route_obstacle_arr, reserved_boxes, pre_popup_frame,
         )
+        # With narration, the ending lasts as long as its closing line: the
+        # summary hold and the last pause stretch or shrink so the video ends
+        # with the voice (see overview_timing.fit_ending).
+        end_pause_sec = float(self.config.get("pause", 2.0))
+        audio_seconds = float(self.config.get("overview_audio_seconds") or 0.0)
+        if audio_seconds and audio_cues:
+            highlight_on = bool(stop_popup and self.config.get("enable_ending_highlight", True))
+            featured = start_popup or stop_popup
+            highlight_hold = tuning.ENDING_HIGHLIGHT_PIP_HOLD_SECONDS if featured else 0.0
+            remaining = audio_seconds - video.frames_written / fps
+            planned = (outro_hold_sec, end_pause_sec)
+            outro_hold_sec, end_pause_sec = fit_ending(
+                remaining, ending_seconds(0.0, 0.0, 0.0, highlight_hold, 0.0, highlight_on),
+                outro_hold_sec, end_pause_sec,
+            )
+            logger.info(
+                "Overview ending fitted to the closing line (%.1fs of voice left): "
+                "summary hold %.1fs -> %.1fs, last pause %.1fs -> %.1fs.",
+                remaining, planned[0], outro_hold_sec, planned[1], end_pause_sec,
+            )
         for _ in range(int(outro_hold_sec * fps)):
             video.write(self.last_frame)
 
@@ -663,8 +899,15 @@ class _OverviewRenderMixin:
         # The fullscreen ending highlight, when it plays, IS the video's
         # last frame — no trailing pause on the map afterward.
         if not hard_ended:
-            for _ in range(int(self.config.get("pause", 2.0) * fps)):
+            for _ in range(int(end_pause_sec * fps)):
                 video.write(self.last_frame)
+        self.last_rendered_seconds = video.frames_written / fps
+        if audio_seconds and audio_cues:
+            gap = video.frames_written / fps - audio_seconds
+            (logger.warning if abs(gap) > AUDIO_MATCH_TOLERANCE_SECONDS else logger.info)(
+                "Overview video %.1fs, narration %.1fs (%+.1fs; allowed ±%.0fs).",
+                video.frames_written / fps, audio_seconds, gap, AUDIO_MATCH_TOLERANCE_SECONDS,
+            )
 
         self.last_ending_hard_ended = hard_ended
 

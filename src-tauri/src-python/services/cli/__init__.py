@@ -8,13 +8,14 @@ each pipeline step's test_* command lives next to its own concerns:
 - attraction_commands: attraction/pan-zoom video generation
 - subtitle_commands: subtitle generation from TTS audio
 - intro_outro_commands: intro/outro clip generation
+- script_commands: drafting the overview narration from the route
 - combine_commands: video concat, the transition editor, and test_all
   (which runs every isolated stage above as one combined project test)
 """
 
 from .helpers import _output_dir_from_config, _video_safe_label, _load_tts_waypoints
 from .gps_commands import test_gps, test_overview_video, test_residential_video
-from .tts_commands import test_tts, test_tts_all
+from .tts_commands import test_tts, test_tts_all, test_attraction_tts, test_attraction_tts_all
 from .attraction_commands import (
     test_attraction_video,
     test_attraction_videos,
@@ -23,6 +24,7 @@ from .attraction_commands import (
 from .subtitle_commands import test_subtitle, test_subtitles
 from .intro_outro_commands import test_intro_video, test_outro_video
 from .combine_commands import test_video_concat, test_transition_editor, test_all
+from .script_commands import test_overview_script
 
 __all__ = [
     "_output_dir_from_config",
@@ -33,6 +35,8 @@ __all__ = [
     "test_residential_video",
     "test_tts",
     "test_tts_all",
+    "test_attraction_tts",
+    "test_attraction_tts_all",
     "test_attraction_video",
     "test_attraction_videos",
     "test_attraction_finalize",
@@ -43,4 +47,5 @@ __all__ = [
     "test_video_concat",
     "test_transition_editor",
     "test_all",
+    "test_overview_script",
 ]

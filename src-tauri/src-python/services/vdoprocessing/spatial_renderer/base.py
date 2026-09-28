@@ -313,9 +313,23 @@ class _SpatialRendererBase:
             if potential_path.exists():
                 try:
                     with open(potential_path, "r", encoding="utf-8") as f:
-                        return json.load(f)
+                        data = json.load(f)
                 except Exception:
-                    pass
+                    continue
+                # Unlike JobConfigManager (job_config.py:119-121), this is a
+                # raw json.load with no directory_path normalization — a
+                # config file on disk that never had directory_path written
+                # into it left callers like MapFetcher.fetch_image falling
+                # back to a bare "assets" relative path, which resolves
+                # against the SIDECAR PROCESS's cwd (src-tauri) instead of
+                # the project folder, writing map images into
+                # src-tauri/assets/assets/image/map/ rather than the
+                # project's own directory. search_dir is exactly the folder
+                # this job_config.json was actually found in, so anchor it
+                # here the same way JobConfigManager would.
+                if not data.get("directory_path"):
+                    data["directory_path"] = str(search_dir)
+                return data
         return None
 
     def _get_job_waypoints(self) -> List[Dict]:

@@ -1,9 +1,10 @@
 """Step 4: Render the visual map animation, synced to audio timing."""
 
+import hashlib
 import json
 import math
-import os
 import re
+from services.localization.cues import tags_at_sentence_start
 from pathlib import Path
 from typing import Any, Optional
 
@@ -19,6 +20,8 @@ from services.localization.localization import format_waypoint_label
 from services.config.job_config import JobConfigManager
 from services import tuning
 
+from .audio_step import overview_tagged_script
+from .narration_step import MAX_EARLY_ARRIVAL_SECONDS, CueStore, leg_walk_plan
 from .helpers import (
     BASE_DIR,
     DEFAULT_FRONTEND_CONFIG,
@@ -70,6 +73,45 @@ def _project_color(
 # color still yields the same "deepens on arrival" pairing rather than
 # leaving every arrived pin on an unrelated stock blue.
 _ARRIVED_COLOR_DARKEN = 0.78
+
+
+def overview_pin_glyphs(waypoints: list) -> dict:
+    """{waypoint position: the glyph its pin shows on the overview}: "S" for
+    the first, "E" for the last, "・" for a stop-by, and 1, 2, 3... for the
+    rest in visit order - the same numbering as spatial_renderer's
+    _pin_label_and_color (S and stop-bys don't take a number), so a leg's
+    map can show "pin 1 -> pin 2" exactly as the overview does."""
+    glyphs = {}
+    order = 0
+    last = len(waypoints) - 1
+    for pos, wp in enumerate(waypoints):
+        if wp.get("isStopBy"):
+            glyphs[pos] = "・"
+            continue
+        if pos == 0:
+            glyphs[pos] = "S"
+            continue
+        order += 1
+        glyphs[pos] = "E" if pos == last and order != 1 else str(order)
+    return glyphs
+
+
+def _leg_pin(glyph, settings: dict, arrived: bool) -> Optional[dict]:
+    """One end of a leg's pin, in the overview's colors: S green, E red, a
+    stop-by brown, a numbered stop the marker color (the darker "arrived"
+    shade for the pin the leg departs from, which is already visited)."""
+    if not glyph:
+        return None
+    if glyph == "S":
+        color = tuning.START_PIN_COLOR
+    elif glyph == "E":
+        color = tuning.END_PIN_COLOR
+    elif glyph == "・":
+        color = tuning.STOPBY_PIN_COLOR
+    else:
+        marker = _project_color(settings, "marker_color", (235, 150, 60))
+        color = _arrived_marker_color(settings, marker) if arrived else marker
+    return {"glyph": glyph, "color": tuple(int(c) for c in color)}
 
 
 def _arrived_marker_color(settings: dict, marker_bgr: tuple) -> tuple:
@@ -125,6 +167,68 @@ def _mode_line_color_overrides(settings: dict) -> dict:
 
 
 _RENDER_MANIFEST_NAME = ".render_manifest.json"
+
+
+def _render_checkpoint_key(
+    project_config_path: str,
+    cleaned_route: dict,
+    audio_durations: Optional[list[float]],
+    audio_pauses: Optional[list[Any]],
+) -> str:
+    """Fingerprint of every input that can change what render_route_video
+    produces. The checkpoint below used to trust bare output-file
+    existence alone: render once, then edit waypoints/settings/popups in
+    job_config.json and render again, and it silently handed back the
+    STALE video with nothing to say it hadn't actually re-rendered. This
+    hash is stored alongside the manifest and compared on the next run so
+    "the output files still exist" and "nothing that affects them has
+    changed" are no longer treated as the same thing.
+
+    Hashes job_config.json's raw bytes (the file the app writes every
+    edit to — waypoints, settings, popups, colors, all of it) plus the
+    route track and narration timing, since those two aren't part of
+    job_config.json but still change what gets rendered (a different GPS
+    source or re-recorded narration shifts the animation even if the
+    config file itself is untouched).
+
+    route_df's own "timestamp" column is normalized to seconds elapsed
+    since the route's first point before hashing, rather than hashed as
+    the absolute wall-clock values it comes in as. The map editor
+    regenerates raw_track.gpx with fresh `<time>` tags anchored to
+    whatever moment the project was last SAVED (see fileSystem.ts's
+    saveProjectData, not the route itself), on every save whether the
+    route actually changed or not — so the absolute timestamps drift on
+    every save even for byte-identical waypoints/geometry. Hashing them
+    as-is invalidated this checkpoint on every single render regardless
+    of whether anything a viewer would notice had changed. The RELATIVE
+    spacing between points (how long each leg took) is what actually
+    affects the render and is unaffected by when the file was saved, so
+    that's what gets hashed instead.
+    """
+    hasher = hashlib.sha256()
+    try:
+        with open(project_config_path, "rb") as f:
+            hasher.update(f.read())
+    except OSError:
+        pass
+    route_df = cleaned_route.get("route")
+    if route_df is not None:
+        if "timestamp" in route_df.columns:
+            route_df = route_df.copy()
+            ts = pd.to_datetime(route_df["timestamp"])
+            route_df["timestamp"] = (ts - ts.min()).dt.total_seconds()
+        hasher.update(route_df.to_json(orient="split").encode("utf-8"))
+    hasher.update(
+        json.dumps(cleaned_route.get("summary", {}), sort_keys=True, default=str).encode("utf-8")
+    )
+    try:
+        with open(Path(project_config_path).parent / ".narration_cues.json", "rb") as f:
+            hasher.update(f.read())  # cue times decide each walk's length
+    except OSError:
+        pass
+    hasher.update(json.dumps(audio_durations or [], default=str).encode("utf-8"))
+    hasher.update(json.dumps(audio_pauses or [], default=str).encode("utf-8"))
+    return hasher.hexdigest()
 
 
 # Residential-leg clip filename's embedded 1-based departure-waypoint
@@ -204,9 +308,10 @@ def render_route_video(
     project_config_path: str = str(DEFAULT_FRONTEND_CONFIG),
     output_video_dir: Optional[str] = None,
     map_output_path: str = str(DEFAULT_MAP_BACKGROUND),
-    audio_paths: Optional[list[str]] = None,
     audio_durations: Optional[list[float]] = None,
     audio_pauses: Optional[list[Any]] = None,
+    overview_audio_duration: Optional[float] = None,
+    overview_cue_times: Optional[dict] = None,
     force: bool = False,
     render_mode: str = "both",
     leg_index: Optional[int] = None,
@@ -216,10 +321,14 @@ def render_route_video(
     Checkpointing: this step's internals branch too heavily (2D/3D
     residential, ferry legs, overview map) to check each sub-output
     individually, so instead a manifest of the exact output paths from the
-    last successful render is written to `.render_manifest.json` in
-    output_video_dir. If that manifest exists and every path it lists is
-    still a valid file, the whole (expensive) render is skipped and those
-    paths are returned directly, unless `force` is set.
+    last successful render — plus a content hash of the inputs that
+    produced them (see _render_checkpoint_key) — is written to
+    `.render_manifest.json` in output_video_dir. If that manifest exists,
+    every path it lists is still a valid file, AND the current inputs hash
+    to the same value stored in the manifest, the whole (expensive) render
+    is skipped and those paths are returned directly. Any of those three
+    failing (a missing/deleted output, or job_config.json/the route/the
+    narration having changed since) re-renders, same as `force` set.
 
     The manifest is only READ (to skip) and WRITTEN when render_mode ==
     "both" — i.e. only run_full_pipeline's own call, gated by its
@@ -248,6 +357,17 @@ def render_route_video(
     instead of both always being bundled into one call regardless of which
     was asked for.
 
+    `overview_audio_duration`: the project's top-level "overview_narration"
+    script's already-synthesized audio length (audio_step.generate_audio's
+    "overview_audio_duration" return key) — used only to size the overview
+    render's own duration (see below) so it's never shorter than its
+    narration; the audio itself is never muxed in here (or anywhere else
+    in this function). Every clip this function produces — overview,
+    residential legs — stays silent; narration stays a separate file/track
+    all the way through the pipeline, only muxed onto its video at final
+    export (VideoExporter.concat_from_timeline), so a frontend NLE editor
+    can still edit video and audio independently up to that point.
+
     `leg_index`: when given, renders only that ONE leg of the residential
     sequence (0-indexed into res_sequence, i.e. the Nth clip in travel
     order) instead of the whole route — a fast way to sanity-check one
@@ -260,19 +380,40 @@ def render_route_video(
 
     manifest_path = Path(output_video_dir) / _RENDER_MANIFEST_NAME
     is_full_pipeline_render = render_mode == "both"
+    checkpoint_key = _render_checkpoint_key(
+        project_config_path, cleaned_route, audio_durations, audio_pauses
+    )
+    overview_stale = False
     if is_full_pipeline_render and not force and manifest_path.exists():
         try:
             with open(manifest_path, "r", encoding="utf-8") as f:
-                cached_paths = json.load(f).get("output_paths", [])
+                manifest = json.load(f)
+            cached_paths = manifest.get("output_paths", [])
+            cached_key = manifest.get("input_hash")
         except (OSError, json.JSONDecodeError):
-            cached_paths = []
-        if cached_paths and all(output_is_valid(p) for p in cached_paths):
+            cached_paths, cached_key = [], None
+        if (
+            cached_paths
+            and cached_key == checkpoint_key
+            and all(output_is_valid(p) for p in cached_paths)
+        ):
             logger.info(
                 "Step 4: All %d route/residential video output(s) already "
-                "exist — skipping render.",
+                "exist and inputs are unchanged — skipping render.",
                 len(cached_paths),
             )
             return cached_paths
+        if cached_paths and cached_key != checkpoint_key:
+            logger.info(
+                "Step 4: route/config/narration changed since the last "
+                "render — checkpoint invalidated, re-rendering."
+            )
+            # The overview also skips itself when its file exists; its script,
+            # cues and stops may be what changed, so it must be rendered again.
+            # The old file is NOT deleted: the new render is written aside and
+            # only replaces it once it is complete, so an interrupted run
+            # never leaves the project without an overview.
+            overview_stale = True
 
     route_df = cleaned_route.get("route")
     if route_df is None or route_df.empty:
@@ -513,10 +654,31 @@ def render_route_video(
             )
 
             popup_img = wp.get("popup_image")
+            # This waypoint's own real narration TTS length (audio_step.py's
+            # audio_durations, 1:1 aligned with THIS SAME
+            # `enumerate(waypoints)`). Stashed on the waypoint dict ITSELF
+            # (mutated in place, not just into route_popups below) so it
+            # rides along for free wherever this exact dict object gets
+            # reused/copied downstream -- notably `res_waypoints = list(
+            # waypoints)` further down, whose entries mapfetcher.py's
+            # process_residential_sequence reads directly to build each
+            # residential leg's own mid_markers/landmarks, a completely
+            # separate code path from route_popups. Residential's
+            # fullscreen popup uses this to make sure its hold never cuts
+            # away before the narration muxed onto that same clip has
+            # actually finished playing -- "freeze_seconds" below is only
+            # ever a short user-set/capped fallback for when there's no
+            # narration at all. See pedestrian.py's `_min_hold_seconds`.
+            wp["_narration_audio_seconds"] = (
+                float(audio_durations[idx])
+                if idx < len(audio_durations) and audio_durations[idx]
+                else None
+            )
             route_popups[route_point_idx] = {
                 "freeze_seconds": min(
                     float(wp.get("freeze_seconds", 3.0)), tuning.POPUP_FREEZE_SECONDS_MAX
                 ),
+                "audio_duration": wp["_narration_audio_seconds"],
                 # A waypoint's own "popup_image" field can hold several
                 # photos (the map editor's multi-image field) -- the
                 # overview animation shows the FIRST one (its own long-
@@ -584,6 +746,7 @@ def render_route_video(
     # real-world speed instead of raw distance alone — otherwise a long,
     # fast ferry crossing gets allocated MORE screen time than a short
     # walking leg, the opposite of how it should feel.
+    cue_store = CueStore(config_path.parent)
     seg_modes = []
     for seg_i in range(max(0, len(wp_indices) - 1)):
         leg_mode = (
@@ -712,6 +875,14 @@ def render_route_video(
         id_to_position = {
             wp.get("id"): pos for pos, wp in enumerate(waypoints) if wp.get("id")
         }
+        # Each leg's two pins show the overview's own glyphs (S, 1, 2 ... E).
+        # Counted over res_waypoints, which carries a separate start_point/
+        # end_point when the project has one, exactly as the overview does.
+        _glyph_by_pos = overview_pin_glyphs(res_waypoints)
+        glyph_by_id = {
+            wp.get("id"): _glyph_by_pos[pos]
+            for pos, wp in enumerate(res_waypoints) if wp.get("id")
+        }
 
         for seq_idx, leg_item in enumerate(sequence_data):
             start_idx, end_idx = leg_item["start_idx"], leg_item["end_idx"]
@@ -790,11 +961,66 @@ def render_route_video(
             # (start_pos) — a merged-in stop-by's own narration, if any,
             # is intentionally not played (no dedicated arrival moment for
             # it anymore, matching "just show its pin as we pass").
-            has_audio = start_pos < len(audio_durations) and audio_durations[start_pos] > 0
             distance_fallback = sum(
                 seg_durations[p] for p in range(start_pos, end_pos) if p < len(seg_durations)
             ) or 10.0
-            total_time = audio_durations[start_pos] if has_audio else distance_fallback
+            # Audio first: the narration that plays over each walk is its
+            # DESTINATION's (leg_pieces.py), so its length decides how long the
+            # walk is (see narration_step.leg_walk_plan): the walker may arrive
+            # early (waiting there, at most max_early_arrival_seconds) but never
+            # late. A leg cut at connected stop-bys is planned piece by piece,
+            # each toward its own stop.
+            use_cues = bool(settings.get("use_narration_cues", True))
+            max_wait = float(settings.get("max_early_arrival_seconds", MAX_EARLY_ARRIVAL_SECONDS))
+            stop_positions = [
+                p for p in range(start_pos + 1, min(end_pos, len(waypoints)))
+                if waypoints[p].get("connectToRoute") and waypoints[p].get("isStopBy")
+                and waypoints[p].get("popup_image")
+            ]
+            piece_targets = stop_positions + [end_pos]
+            piece_plans: dict = {}
+            piece_log = []
+            previous = start_pos
+            for target in piece_targets:
+                is_first_piece = previous == start_pos
+                natural = sum(
+                    seg_durations[p] for p in range(previous, target) if p < len(seg_durations)
+                ) or 10.0
+                audio_seconds = audio_durations[target] if target < len(audio_durations) else 0.0
+                piece_plans[target] = (
+                    leg_walk_plan(
+                        cue_store, waypoints[target], target, audio_seconds,
+                        natural_seconds=natural, use_cues=use_cues, max_wait_seconds=max_wait,
+                        ignore_start=not is_first_piece,
+                    )
+                    if target < len(waypoints) else None
+                )
+                if piece_plans[target] is not None:
+                    walk, _, wait = piece_plans[target]
+                    piece_log.append(
+                        f"-> {waypoints[target].get('label')}: walk {walk:.1f}s "
+                        f"({walk / natural:.2f}x natural pace), waits {wait:.1f}s"
+                    )
+                previous = target
+            if end_pos >= len(waypoints) or any(v is None for v in piece_plans.values()):
+                piece_plans = {}
+            if piece_plans:
+                total_time = sum(v[0] for v in piece_plans.values())
+                start_cue_seconds = piece_plans[piece_targets[0]][1]  # the first piece opens the leg
+                arrival_wait_seconds = piece_plans[end_pos][2]
+                marker_plans = {
+                    waypoints[p].get("id"): {"walk_seconds": piece_plans[p][0], "wait_seconds": piece_plans[p][2]}
+                    for p in stop_positions
+                }
+                logger.info(
+                    "Step 4: leg %d->%d follows its narration: %s.",
+                    start_pos + 1, end_pos + 1, "; ".join(piece_log),
+                )
+            else:
+                total_time = distance_fallback
+                start_cue_seconds = None
+                arrival_wait_seconds = None
+                marker_plans = {}
 
             lats_arr, lons_arr = leg_item["lats"], leg_item["lons"]
             seg_dist = (
@@ -865,6 +1091,20 @@ def render_route_video(
                     "mode": leg_mode,
                     "travel_duration": total_time,
                     "segment_duration": total_time,
+                    "start_cue_seconds": start_cue_seconds,
+                    # Arrived early: hold on the arrived map until the voice is
+                    # done, then the fullscreen photo transition.
+                    "arrival_wait_seconds": arrival_wait_seconds,
+                    "start_pin": _leg_pin(
+                        glyph_by_id.get(leg_item.get("start_waypoint_id"))
+                        or ("S" if seq_idx == 0 else None),
+                        settings, arrived=True,
+                    ),
+                    "dest_pin": _leg_pin(
+                        glyph_by_id.get(leg_item.get("end_waypoint_id"))
+                        or ("E" if seq_idx == len(sequence_data) - 1 else None),
+                        settings, arrived=False,
+                    ),
                     "real_duration_seconds": (
                         (
                             chunk["timestamp"].iloc[-1] - chunk["timestamp"].iloc[0]
@@ -883,6 +1123,12 @@ def render_route_video(
                     # position instead of a blind per-clip counter, which
                     # stop-by merging would otherwise throw out of sync.
                     "start_pos": start_pos,
+                    # Which waypoints this leg runs between: route2vdo writes
+                    # the destination into the leg's _pieces.json so
+                    # leg_pieces.py plays the DESTINATION's narration over the
+                    # walk toward it.
+                    "start_waypoint_id": leg_item.get("start_waypoint_id"),
+                    "end_waypoint_id": leg_item.get("end_waypoint_id"),
                     "wide_img_path": leg_item.get("wide_img_path"),
                     "wide_extent": leg_item.get("wide_extent"),
                     # "pos_in_chunk" (0-based index into this leg's own
@@ -890,7 +1136,11 @@ def render_route_video(
                     # is what waypoints.py actually needs to know when the
                     # traveler has passed a merged-in stop-by along the way.
                     "mid_markers": [
-                        {**m, "pos_in_chunk": m["row_idx"] - start_idx}
+                        {
+                            **m,
+                            "pos_in_chunk": m["row_idx"] - start_idx,
+                            **marker_plans.get(m.get("waypoint_id"), {}),
+                        }
                         for m in leg_item.get("mid_markers", [])
                     ],
                 }
@@ -924,6 +1174,17 @@ def render_route_video(
     overview_duration = max(
         _OVERVIEW_MIN_FINAL_DURATION_SECONDS, base_overview_duration / overview_speed_multiplier
     )
+    # The overview clip's narration is muxed on with `-shortest` (see
+    # VideoEditor.mux_audio_to_video), which truncates the MUXED OUTPUT to
+    # whichever of video/audio is shorter -- since this duration is paced
+    # off the route (leg count/distance), not the narration script, a
+    # longer overview_narration than the route-paced duration above used
+    # to get its own tail cut off by mux, ending mid-sentence. Stretching
+    # the render to at least cover the narration (plus a short tail so the
+    # last word isn't clipped right at the final frame) means the video is
+    # never the shorter stream once mux runs.
+    if overview_audio_duration:
+        overview_duration = max(overview_duration, overview_audio_duration + 1.0)
 
     # Resolved once up front: the arrived-pin color derives from it when
     # the project doesn't name one of its own (see _arrived_marker_color).
@@ -931,9 +1192,50 @@ def render_route_video(
 
     animator_config = {
         "output_dir": output_video_dir,
+        # Gates the per-leg/per-clip "file already exists, skip it" checks
+        # in overview.py/route2vdo.py/waypoints.py — only a real
+        # run_full_pipeline render (render_mode == "both") should ever
+        # resume from partial output like this. A standalone
+        # render_mode="overview"/"residential" call (services/cli/
+        # gps_commands.py's test_overview_video/test_residential_video —
+        # the map editor's own "recreate this video" actions) exists
+        # specifically so a user can force ONE piece to redo; honoring
+        # leftover files from a previous run there would silently no-op
+        # the very action they asked for, exactly the bug this function's
+        # own manifest checkpoint above already had to be fixed for.
+        # --force redoes every clip, so no per-file "already exists" skipping either.
+        "checkpoint_enabled": is_full_pipeline_render and not force,
+        # Inputs changed since the last render: the existing overview is stale.
+        "overview_rerender": overview_stale,
+        "min_free_ram_gb": settings.get("min_free_ram_gb"),
+        "enable_attraction_videos": bool(settings.get("enable_attraction_videos", True)),
+        # The at-arrival photo grows to fullscreen and the clip ends right
+        # there - no hold. The dissolve into the attraction video that follows
+        # runs on extra frames added at export (VideoExporter._crossfade_pair),
+        # so it starts the moment the photo is fullscreen.
+        "arrival_photo_hold_seconds": 0.0,
+        # A connected stop-by's fullscreen photo does the same (no hold, no
+        # blur-out) when an attraction video follows it.
+        "dissolve_into_attraction": (
+            bool(settings.get("enable_attraction_videos", True))
+            and float(settings.get("attraction_fade_seconds", 0.8)) > 0
+        ),
         "use_3d_res": use_3d_res,
         "use_pydeck_pedestrian": use_pydeck_pedestrian,
-        "use_pydeck_overview": bool(settings.get("use_pydeck_overview", False)),
+        "use_pydeck_overview": bool(settings.get("use_pydeck_overview", tuning.DEFAULT_USE_PYDECK_OVERVIEW)),
+        # Where the narration's cues fall: the overview reaches each cued stop
+        # then (spatial_renderer/overview.py).
+        "overview_cue_seconds": dict(overview_cue_times or {}),
+        # The narration's length: with cues, the overview's ending is fitted
+        # so the video ends with the voice.
+        "overview_audio_seconds": float(overview_audio_duration or 0.0),
+        # A cue at the start of a sentence: the voice starts talking about that
+        # stop at the cue, so the walker waits there a moment (this many seconds)
+        # to stay in step with it.
+        "overview_cue_wait_tags": tags_at_sentence_start(
+            overview_tagged_script(project_config, config_path.parent)
+        ),
+        "overview_cue_wait_seconds": float(settings.get("overview_cue_wait_seconds", 2.0)),
         "res_route_path": project_config_path,
         "leg_durations": seg_durations or None,
         "duration": settings.get("duration", overview_duration),
@@ -1062,46 +1364,18 @@ def render_route_video(
         overview_extent=extent,
     )
 
-    # --- 2. ADD THIS AUDIO MUXING BLOCK ---
-    if audio_paths:
-        from services.vdoprocessing.vdoeditor import VideoEditor
-
-        editor = VideoEditor()
-        muxed_paths = []
-
-        logger.info("Muxing TTS narration audio into video segments...")
-
-        for v_path in output_paths:
-            filename = Path(v_path).name
-            match = RESIDENTIAL_LEG_RE.search(filename)
-
-            if match:
-                # 1-based in the filename (matches the "Waypoint N" numbering
-                # everywhere else); audio_durations/audio_paths are 0-based.
-                audio_idx = int(match.group(1)) - 1
-                if (
-                    0 <= audio_idx < len(audio_paths)
-                    and audio_paths[audio_idx]
-                    and os.path.exists(audio_paths[audio_idx])
-                ):
-                    try:
-                        muxed = editor.mux_audio_to_video(
-                            video_path=v_path,
-                            audio_path=audio_paths[audio_idx],
-                            output_filename=filename,
-                        )
-                        muxed_paths.append(muxed)
-                    # [NOTE] [Editor] Falls back to the unmuxed video on any mux failure rather than aborting the whole pipeline over one leg's audio.
-                    except Exception as e:
-                        logger.error(f"Failed to mux audio for {v_path}: {e}")
-                        muxed_paths.append(v_path)
-                else:
-                    muxed_paths.append(v_path)
-            else:
-                # This is the 01_overview map, pass it through silently!
-                muxed_paths.append(v_path)
-
-        output_paths = muxed_paths
+    # [NOTE] [Editor] Narration audio is deliberately NOT muxed into these
+    # clips here (or anywhere else in the pipeline) — every rendered video
+    # (overview, residential legs, attraction clips) stays silent all the
+    # way through, and its narration stays a separate file. timeline.json
+    # (see timeline_step.build_timeline) carries each clip's video AND
+    # audio paths as two independent tracks so a frontend NLE editor can
+    # trim/swap/re-time either one without re-touching the other; only the
+    # VERY LAST step — VideoExporter.concat_from_timeline, at final export —
+    # actually muxes each track's audio onto its video, once, right before
+    # concatenation. (This used to mux audio in here per-clip, which baked
+    # narration into the video file itself with no way to edit it
+    # separately afterward.)
     tracker.clear()
     logger.info("Step 4 complete: %d video file(s) produced.", len(output_paths))
 
@@ -1114,7 +1388,10 @@ def render_route_video(
         try:
             Path(output_video_dir).mkdir(parents=True, exist_ok=True)
             with open(manifest_path, "w", encoding="utf-8") as f:
-                json.dump({"output_paths": output_paths}, f, ensure_ascii=False, indent=2)
+                json.dump(
+                    {"output_paths": output_paths, "input_hash": checkpoint_key},
+                    f, ensure_ascii=False, indent=2,
+                )
         except OSError as e:
             logger.warning("Step 4: Failed to write render manifest: %s", e)
 

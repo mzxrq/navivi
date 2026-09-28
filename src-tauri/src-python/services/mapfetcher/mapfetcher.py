@@ -218,6 +218,13 @@ class MapFetcher:
                     # below) only applies when a waypoint explicitly asks
                     # for it.
                     "image_display": waypoints[p].get("image_display", "cover"),
+                    # This stop-by's own real narration TTS length — see
+                    # render_step.py's own "_narration_audio_seconds"
+                    # comment for how it lands on this exact dict object.
+                    # Residential's fullscreen/pip popup uses it so a
+                    # connected stop-by's pause never cuts away before its
+                    # own narration (muxed onto that same clip) finishes.
+                    "narration_audio_seconds": waypoints[p].get("_narration_audio_seconds"),
                 }
                 for p in range(start_pos + 1, end_pos)
             ]

@@ -431,7 +431,7 @@ class _TransitionMixin:
         # "pydeck" as an alternate opt-in, since a project already using
         # pydeck for its overview background naturally wants this too).
         use_dynamic_pydeck = bounding_box is not None and (
-            bool(settings.get("enable_gl_ending_zoom", False))
+            bool(settings.get("enable_gl_ending_zoom", True))  # on by default; false turns the pydeck zoom off
             or str(settings.get("overview_background", "")).lower() == "pydeck"
         )
         # Diagnostic: pins down WHY this ever silently falls back to the
@@ -443,16 +443,13 @@ class _TransitionMixin:
             "Ending highlight: use_dynamic_pydeck=%s (bounding_box_present=%s, "
             "enable_gl_ending_zoom=%s, overview_background=%r)",
             use_dynamic_pydeck, bounding_box is not None,
-            settings.get("enable_gl_ending_zoom", False),
+            settings.get("enable_gl_ending_zoom", True),
             settings.get("overview_background"),
         )
-        is_fullscreen = (
-            self.enable_fullscreen_popups
-            and featured_popup["data"].get("image_display") == "fullscreen"
-        )
-        highlight_hold_sec = float(
-            featured_popup["data"].get("freeze_seconds", self._DEFAULT_FREEZE_SECONDS)
-        )
+        is_fullscreen = False  # the overview always shows the small pip card, whatever image_display says
+        # The pip picture is held only briefly (tuning), not the waypoint's
+        # own freeze_seconds: it is the last beat of the video.
+        highlight_hold_sec = float(tuning.ENDING_HIGHLIGHT_PIP_HOLD_SECONDS)
 
         highlight_bg = None
         highlight_extent = None
@@ -563,6 +560,9 @@ class _TransitionMixin:
                 highlight_popup["hud_corner"] = None
                 highlight_popup["draw_leader_line"] = True
                 self._layout_recap_popups([{"popup": highlight_popup, "frames_left": 1}], w, h)
+                # The photo sits on top of its pin (the free layout could
+                # hang it below the start pin).
+                self._place_cards_above_pins([highlight_popup], w, h, *self.graphics.beside_card_footprint())
 
                 for frame_idx, (frame_bgr, extent) in enumerate(dynamic_frames):
                     frame_out = frame_bgr.copy()
@@ -717,6 +717,8 @@ class _TransitionMixin:
             # fallback placement (meant for corner-avoidance, not a tight
             # leader line) can land the card far across the frame.
             self._layout_recap_popups([{"popup": highlight_popup, "frames_left": 1}], w, h)
+            # The photo sits on top of its pin (the free layout can hang it below).
+            self._place_cards_above_pins([highlight_popup], w, h, *self.graphics.beside_card_footprint())
 
             # Line, then marker, then card — in that order — so the
             # leader line sits BEHIND both the marker pin and the card it

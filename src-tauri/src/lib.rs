@@ -367,6 +367,8 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        // The frontend's Ollama calls (src/services/ollamaApi.ts) go through
+        // @tauri-apps/plugin-http; without this they fail with "plugin http not found".
         .plugin(tauri_plugin_http::init())
         .manage(BlueprintState {
             process: Mutex::new(None),

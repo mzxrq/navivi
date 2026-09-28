@@ -667,16 +667,44 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         }
       }
 
+      const clipStart = trackRunningTime[targetTrackId];
+
       newClips.push({
         id: item.clip_id || crypto.randomUUID(),
         trackId: targetTrackId,
-        label: item.file_path.split(/[/\\]/).pop() || "Video Clip",
-        startTime: trackRunningTime[targetTrackId],
+        label: item.clip_name || item.file_path.split(/[/\\]/).pop() || "Video Clip",
+        startTime: clipStart,
         duration: safeDuration,
         sourceDuration: safeDuration,
         source: item.file_path,
         type: "video",
       });
+
+      // The pipeline keeps every clip's own narration as a SEPARATE file
+      // (see timeline_step.build_timeline's audio_path/subtitle_path) —
+      // never muxed into the video — specifically so it shows up here as
+      // its own editable clip instead of being silently stuck inside the
+      // video. Given the SAME start/duration as its video sibling so the
+      // two stay visually aligned on their own tracks; the audio file
+      // itself may be shorter (silence for the remainder, same as final
+      // export's own behavior) but is never longer, per render_step.py's
+      // own duration-fitting.
+      if (item.audio_path) {
+        newClips.push({
+          id: crypto.randomUUID(),
+          trackId: "track-audio-1",
+          label:
+            (item.clip_name ? `${item.clip_name} (narration)` : null) ||
+            item.audio_path.split(/[/\\]/).pop() ||
+            "Narration",
+          startTime: clipStart,
+          duration: safeDuration,
+          sourceDuration: safeDuration,
+          source: item.audio_path,
+          type: "audio",
+          audioRole: "voice",
+        });
+      }
 
       trackRunningTime[targetTrackId] += safeDuration;
     }

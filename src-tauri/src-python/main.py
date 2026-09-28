@@ -23,6 +23,8 @@ from services.cli import (
     test_residential_video,
     test_tts,
     test_tts_all,
+    test_attraction_tts,
+    test_attraction_tts_all,
     test_attraction_video,
     test_attraction_videos,
     test_attraction_finalize,
@@ -34,6 +36,7 @@ from services.cli import (
     test_transition_editor,
     test_all,
     test_overview_video,
+    test_overview_script,
 )
 
 
@@ -41,9 +44,9 @@ if __name__ == "__main__":
     if len(sys.argv) < 2:
         print(
             "Usage: python main.py <path/to/job_config.json> "
-            "[gps|overview|residential|tts|tts-all|attraction|attraction-all|"
-            "attraction-finalize|intro|outro|subtitle|subtitle-all|concat|transition|all] "
-            "[waypoint_index] [--force]\n"
+            "[gps|overview|residential|tts|tts-all|attraction-tts|attraction-tts-all|attraction|attraction-all|"
+            "attraction-finalize|intro|outro|subtitle|subtitle-all|concat|transition|all|overview-script] "
+            "[waypoint_index] [--force] [--no-llm]\n"
             "       (output dir is always <job_config's directory_path>/video)\n"
             "       (--force bypasses checkpointing and regenerates everything)\n"
             "       python main.py full_pipeline <source_path> [output_dir] [--force]\n"
@@ -58,6 +61,10 @@ if __name__ == "__main__":
     force_arg = "--force" in sys.argv
     if force_arg:
         sys.argv = [arg for arg in sys.argv if arg != "--force"]
+    # --no-llm: overview-script builds its draft from the route facts alone.
+    no_llm_arg = "--no-llm" in sys.argv
+    if no_llm_arg:
+        sys.argv = [arg for arg in sys.argv if arg != "--no-llm"]
 
     try:
         command_arg = sys.argv[1]
@@ -116,6 +123,13 @@ if __name__ == "__main__":
             elif mode_arg == "tts-all":
                 # [NOTE] [TTS] Generates narration audio for every narrated waypoint.
                 result = test_tts_all(job_config_arg, None, force=force_arg)
+            elif mode_arg == "attraction-tts":
+                # [NOTE] [TTS] Generates the attraction-only narration audio for ONE waypoint (index from argv[3], default 0).
+                waypoint_index_arg = int(sys.argv[3]) if len(sys.argv) > 3 else 0
+                result = test_attraction_tts(job_config_arg, None, waypoint_index_arg, force=force_arg)
+            elif mode_arg == "attraction-tts-all":
+                # [NOTE] [TTS] Generates the attraction-only narration audio for every waypoint that has one (unconnected stop-bys are skipped).
+                result = test_attraction_tts_all(job_config_arg, None, force=force_arg)
             elif mode_arg == "attraction":
                 # [NOTE] [Animation] Generates ONE waypoint's attraction (pan/outpaint) video from its popup image (index from argv[3], default 0).
                 waypoint_index_arg = int(sys.argv[3]) if len(sys.argv) > 3 else 0
@@ -155,6 +169,9 @@ if __name__ == "__main__":
             elif mode_arg == "transition":
                 # [NOTE] [Transition] Renders the overview/storyboard map animation, including configured popup transitions — thin wrapper over test_overview_video.
                 result = test_transition_editor(job_config_arg, route_dir_arg, force=force_arg)
+            elif mode_arg == "overview-script":
+                # [NOTE] [LLM] Drafts a tour-guide overview narration from the route (the way between stops, each stop described, {n}/{go} cues) into overview_script_draft.txt — never over overview_narration.
+                result = test_overview_script(job_config_arg, use_llm=not no_llm_arg)
             elif mode_arg == "all":
                 # [NOTE] [Core] Runs every isolated stage above (TTS, attractions, subtitles, overview+residential, concat) as one combined project test — NOT the same as full_pipeline (no subtitle burn-in / timeline.json, see above). test_all splits route/attraction outputs into their own subfolders internally.
                 result = test_all(job_config_arg, output_dir_arg, force=force_arg)

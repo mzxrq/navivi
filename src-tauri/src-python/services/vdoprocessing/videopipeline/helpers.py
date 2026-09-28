@@ -81,6 +81,16 @@ def attraction_output_filename(idx: int, label) -> str:
     return f"04_attraction_{idx:02d}_{safe_label(label, f'waypoint_{idx}')}.mp4"
 
 
+def attraction_audio_filename(idx: int, label) -> str:
+    """Canonical TTS audio filename for waypoint `idx`'s ATTRACTION-only
+    narration (0-based) — deliberately its own "04_attraction_" namespace,
+    distinct from waypoint_audio_filename's "02_waypoint_" arrival+
+    attraction COMBINED audio. The attraction clip must only ever play its
+    own attractionNarration text (or nothing, when that field is blank),
+    never the arrival narration that combined audio also carries."""
+    return f"04_attraction_{idx:02d}_{safe_label(label, f'waypoint_{idx}')}.wav"
+
+
 # Every generated output (audio, video, subtitles) lives grouped under the
 # project's assets/ folder, alongside the raw input assets (popup images)
 # that already live there — e.g. <project>/assets/audio, not

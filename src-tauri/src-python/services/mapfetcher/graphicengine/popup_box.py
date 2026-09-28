@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Tuple
 
 import cv2
 import numpy as np
-from PIL import Image, ImageDraw, ImageFilter
+from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
 from services.mapfetcher.mapgeometry import RouteGeometryProcessor
 from services import tuning
@@ -426,14 +426,24 @@ class _PopupBoxMixin:
                 base_pil.paste(pil_canvas, (0, 0), pil_canvas)
 
                 pil_img = Image.fromarray(cv2.cvtColor(pop_img, cv2.COLOR_BGR2RGB))
-                mask = Image.new("L", (pw, ph), 255)
+                # Transparent everywhere but the rounded photo shape: the mask
+                # used to start fully opaque (255), so drawing the rounded
+                # rectangle in 255 changed nothing and the photo was pasted
+                # square over the card's rounded top corners.
+                mask = Image.new("L", (pw, ph), 0)
                 mask_draw = ImageDraw.Draw(mask)
                 # Photo is full-bleed (flush to the card's left/right/top
                 # edges, no white margin) — its mask uses the SAME corner
                 # radius as the outer card (14) so the photo's own rounded
                 # corners line up with the card's, instead of a smaller
                 # radius leaving a sliver of white card visible behind it.
-                mask_draw.rounded_rectangle([0, 0, pw, ph], radius=14, fill=255)
+                # With the name printed under it, the photo's bottom edge
+                # meets that white caption area, so only its top is rounded.
+                caption_below = has_label and not is_cover
+                mask_draw.rounded_rectangle(
+                    [0, 0, pw - 1, ph - 1], radius=14, fill=255,
+                    corners=(True, True, not caption_below, not caption_below),
+                )
 
                 photo_x = box_x
                 photo_y = box_y
@@ -487,6 +497,11 @@ class _PopupBoxMixin:
                             scrim_draw.line(
                                 [(0, gy), (pw, gy)], fill=(0, 0, 0, int(150 * (1 - t)))
                             )
+                        # clipped to the photo's rounded corners, so the dark
+                        # gradient does not square them off again
+                        scrim.putalpha(ImageChops.multiply(
+                            scrim.getchannel("A"), mask.crop((0, 0, pw, scrim_h))
+                        ))
                         base_pil.paste(scrim, (photo_x, photo_y), scrim)
                         line_y = photo_y + max(pad, (scrim_h - text_h) // 2)
                         for line in label_lines:

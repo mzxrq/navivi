@@ -6,7 +6,7 @@
 - attraction_step.py: Step 3 — ComfyUI attraction videos (render_attraction_videos)
 - intro_step.py: post-Step-3 — title intro from a random attraction clip (render_intro_clip)
 - render_step.py: Step 4 — map animation render (render_route_video)
-- outro_step.py: post-Step-4 — end-of-video "places visited" card grid (render_outro_clip)
+- outro_step.py: post-Step-4 — end-of-video "places visited" outro, scrolling cards or grid (render_outro_clip)
 - subtitle_step.py: Step 5 — burn subtitles (burn_subtitles)
 - timeline_step.py: Step 6 — assemble timeline.json (build_timeline)
 - pipeline.py: orchestration entry points (run_full_pipeline, render_from_timeline,

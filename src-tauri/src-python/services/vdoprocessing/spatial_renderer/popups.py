@@ -424,6 +424,12 @@ class _PopupMixin:
         # the pin (very common, it just arrived there) doesn't get planted
         # on immediately, but no longer than that.
         lead_offset = self.graphics.marker_radius + 20
+        # Every pin's drawn silhouette (overview.py sets it), kept apart from
+        # the route line so "straight above the pin" can ignore the line but
+        # never cover another pin. See free_spot.
+        pin_pts = getattr(self, "_layout_pin_obstacles", None)
+        own_half_w = float(self.graphics.marker_radius) + 4.0
+        own_head = 2.5 * float(self.graphics.marker_radius) + 4.0
 
         def free_spot(x: float, y: float) -> Optional[Tuple[float, float]]:
             # Seed the search directly above the pin (centered on it)
@@ -477,12 +483,37 @@ class _PopupMixin:
                 ax, ay = _anchor_point(x, y, bx, by, card_w, card_h)
                 return _leader_crosses_placed([(x, y), (ax, ay)], placed, placed_lines)
 
+            def _above_is_clear(bx: float, by: float, pin_x: float, pin_y: float) -> bool:
+                rx0, ry0, rx1, ry1 = (
+                    bx - card_gap, by - card_gap,
+                    bx + card_w + card_gap, by + card_h + card_gap,
+                )
+                if any(
+                    rx0 < px1 and rx1 > px0 and ry0 < py1 and ry1 > py0
+                    for (px0, py0, px1, py1) in placed
+                ):
+                    return False
+                if pin_pts is None or not len(pin_pts):
+                    return True
+                px, py = pin_pts[:, 0], pin_pts[:, 1]
+                inside = (px >= rx0) & (px <= rx1) & (py >= ry0) & (py <= ry1)
+                own = (
+                    (np.abs(px - pin_x) <= own_half_w)
+                    & (py >= pin_y - own_head) & (py <= pin_y + 4.0)
+                )
+                return not bool(np.any(inside & ~own))
+
             # Two passes: prefer a spot whose leader line crosses nothing, but track
             # the first merely-non-overlapping spot as a fallback in case
             # nothing crossing-free turns up before the spiral runs out.
             fallback: Optional[Tuple[float, float]] = None
 
             bx, by = clamp(start_x, start_y)
+            # The photo belongs on top of its pin: straight above wins even
+            # when it lies over the route line, as long as it covers no other
+            # card and no OTHER pin (its own pin's head sits just below it).
+            if start_y < y and _above_is_clear(bx, by, x, y) and not crosses(bx, by):
+                return bx, by
             if not overlaps(bx, by):
                 fallback = (bx, by)
                 if not crosses(bx, by):
@@ -570,6 +601,40 @@ class _PopupMixin:
             placed.append((box_x, box_y, box_x + card_w, box_y + card_h))
             anchor_x, anchor_y = _anchor_point(pin_x, pin_y, box_x, box_y, card_w, card_h)
             placed_lines.append([(pin_x, pin_y), (anchor_x, anchor_y)])
+
+    def _place_cards_above_pins(
+        self,
+        cards: List[Dict],
+        w: int,
+        h: int,
+        card_w: int,
+        card_h: int,
+        margin: int = 20,
+        gap: int = 12,
+    ) -> None:
+        """Moves each card to sit straight above its own pin, centred on it,
+        with its bottom edge just over the pin's head (a pin is drawn upward
+        from its coordinate, ~2.5 radii tall - see _pin_obstacle_points).
+        A card keeps its current spot when there is no room above the pin
+        (a pin near the top edge) or when the spot above would overlap a
+        card already placed here."""
+        head_top = 2.5 * float(self.graphics.marker_radius) + 4.0
+        placed: List[Tuple[float, float, float, float]] = []
+        for card in cards:
+            pin_x = card.get("pin_x", card["x"])
+            pin_y = card.get("pin_y", card["y"])
+            box_y = pin_y - head_top - gap - card_h
+            box_x = max(margin, min(pin_x - card_w / 2, w - card_w - margin))
+            fits = box_y >= margin and not any(
+                box_x < px1 + gap and box_x + card_w > px0 - gap
+                and box_y < py1 + gap and box_y + card_h > py0 - gap
+                for (px0, py0, px1, py1) in placed
+            )
+            if fits:
+                card["beside_box"] = (int(box_x), int(box_y))
+            box = card.get("beside_box")
+            if box is not None:
+                placed.append((box[0], box[1], box[0] + card_w, box[1] + card_h))
 
     def _layout_recap_popups(
         self,
@@ -735,6 +800,54 @@ class _PopupMixin:
             vert_ok = (cby + card_h <= pin_y + 1) if vside == "top" else (cby >= pin_y - 1)
             return horiz_ok and vert_ok
 
+        pin_r = float(self.graphics.marker_radius)
+
+        def covers_pin(bx: float, by: float, pin_x: float, pin_y: float) -> bool:
+            # the pin's head sits above its tip (pin_x, pin_y)
+            return (
+                bx - 8 < pin_x + pin_r and bx + card_w + 8 > pin_x - pin_r
+                and by - 8 < pin_y + 4 and by + card_h + 8 > pin_y - 2.6 * pin_r
+            )
+
+        def near_spot(
+            x: float, y: float, ox: float, oy: float, hside: str, vside: str,
+            via: Optional[Tuple[float, float]],
+        ) -> Optional[Tuple[float, float]]:
+            """The spot round (ox, oy) with the shortest leader line: rings of
+            candidates (tuning.POPUP_NEAR_DIRECTIONS directions, out to
+            tuning.POPUP_NEAR_MAX_LEADER_PX), each card placed so the edge
+            nearest the pin faces it. A card may not overlap another card or
+            the route, cover its own pin, or cut across another card's line;
+            one on the far side of its pin from its frame side costs a
+            little more (tuning.POPUP_NEAR_OFF_SIDE_PX). None when nothing
+            fits that close."""
+            best, best_cost = None, float("inf")
+            steps = int(tuning.POPUP_NEAR_DIRECTIONS)
+            gap = pin_r + 14.0
+            while gap <= tuning.POPUP_NEAR_MAX_LEADER_PX:
+                for k in range(steps):
+                    theta = 2 * math.pi * k / steps
+                    cos_t, sin_t = math.cos(theta), math.sin(theta)
+                    ax, ay = ox + gap * cos_t, oy - pin_r + gap * sin_t  # round the pin's head
+                    bx, by = clamp(
+                        ax - card_w / 2 + cos_t * card_w / 2, ay - card_h / 2 + sin_t * card_h / 2
+                    )
+                    if covers_pin(bx, by, x, y) or overlaps(bx, by):
+                        continue
+                    if leader_crosses_placed(x, y, bx, by, via):
+                        continue
+                    start = via if via is not None else (x, y)
+                    anchor = _anchor_point(start[0], start[1], bx, by, card_w, card_h)
+                    cost = math.hypot(anchor[0] - start[0], anchor[1] - start[1])
+                    if not quadrant_ok(hside, vside, bx, by, x, y):
+                        cost += tuning.POPUP_NEAR_OFF_SIDE_PX
+                    if cost < best_cost:
+                        best, best_cost = (bx, by), cost
+                if best is not None and best_cost <= gap:
+                    break  # nothing further out can be shorter
+                gap += 16.0
+            return best
+
         def free_spot(
             x: float, y: float,
             origin: Optional[Tuple[float, float]] = None,
@@ -782,6 +895,15 @@ class _PopupMixin:
             # of this pin (horizontally OR vertically) is exactly the
             # "left pin's card popped up on the right" bug, so that's
             # rejected same as an overlap would be.
+            # Nearest first: a card as close round its own pin as it fits
+            # (any side - the side rules above are only a preference here),
+            # so the leader line stays short. The searches below, which keep
+            # to the pin's side of the frame, are the fallback for a pin
+            # with nothing free close by.
+            near = near_spot(x, y, ox, oy, hside, vside, via)
+            if near is not None:
+                return near
+
             candidates: List[Tuple[float, float]] = [(start_x, start_y)]
             for (px0, py0, px1, py1) in placed:
                 candidates.append((px1 + card_gap, py0))
@@ -1251,6 +1373,7 @@ class _PopupMixin:
     @classmethod
     def _make_baked_popup(
         cls, popup: Dict, display_seconds: float, fps: int, queue_depth: int = 0,
+        min_hold_seconds: float = 0.0,
     ) -> Dict:
         """A baked_popups entry: `popup` is the waypoint dict itself (later
         copied and handed to render_popup_box); the rest is bookkeeping for
@@ -1287,7 +1410,13 @@ class _PopupMixin:
         # Floored at POPUP_MIN_DISPLAY_SECONDS: this is the single point
         # every popup's display duration passes through on its way to
         # frames, so enforcing the minimum here covers every caller.
+        # `min_hold_seconds`: fully shown at least this long between its
+        # fades - for a card that stays up while the walker moves on
+        # (tuning.OVERVIEW_POPUP_MIN_HOLD_SECONDS). Not for a card played
+        # over a frozen map: that would lengthen the freeze itself.
         display_seconds = max(float(display_seconds), tuning.POPUP_MIN_DISPLAY_SECONDS)
+        if min_hold_seconds > 0:
+            display_seconds = max(display_seconds, min_hold_seconds + 2 * cls._POPUP_FADE_SECONDS)
         total_frames = max(1, int(display_seconds * fps))
         fade_frames = max(1, min(int(cls._POPUP_FADE_SECONDS * fps), total_frames // 4))
         backlog_wait_seconds = queue_depth * tuning.OVERVIEW_POPUP_MIN_TRIGGER_GAP_SECONDS
@@ -1323,7 +1452,24 @@ class _PopupMixin:
         elapsed = bp.get("total_frames", bp["frames_left"]) - bp["frames_left"]
         alpha_in = min(1.0, elapsed / fade_frames)
         alpha_out = min(1.0, bp["frames_left"] / fade_frames)
-        return max(0.0, min(alpha_in, alpha_out))
+        t = max(0.0, min(alpha_in, alpha_out))
+        return t * t * (3 - 2 * t)  # smoothstep: eases in and out, no linear snap at either end
+
+    # A card grows from this fraction of its size as it fades in (and shrinks
+    # back toward it as it fades out), about its centre - a soft pop rather
+    # than a flat cross-fade.
+    _POPUP_ENTER_SCALE = 0.88
+
+    @classmethod
+    def _popup_enter_scale(cls, bp: Dict) -> float:
+        """Size factor for a baked popup's card at its current countdown
+        position: ease-out cubic from _POPUP_ENTER_SCALE to 1 over its fade-in,
+        back down over its fade-out, 1 in between."""
+        fade_frames = cls._popup_fade_frames(bp)
+        elapsed = bp.get("total_frames", bp["frames_left"]) - bp["frames_left"]
+        t = max(0.0, min(1.0, elapsed / fade_frames, bp["frames_left"] / fade_frames))
+        eased = 1 - (1 - t) ** 3
+        return cls._POPUP_ENTER_SCALE + (1 - cls._POPUP_ENTER_SCALE) * eased
 
     # How far below its final resting spot a popup card starts before
     # sliding up into place (and how far it slides back down when it's
@@ -1462,7 +1608,16 @@ class _PopupMixin:
             # no "below its real spot" that would read as a slide.
             if hud_popup.get("beside_box"):
                 bx, by = hud_popup["beside_box"]
-                hud_popup["beside_box"] = (bx, int(by + self._popup_slide_offset_y(bp)))
+                by = int(by + self._popup_slide_offset_y(bp))
+                # ...and grows into its full size about its centre.
+                grow = self._popup_enter_scale(bp)
+                if grow < 0.999:
+                    base = float(hud_popup.get("card_scale", 1.0))
+                    full_w, full_h = self.graphics.beside_card_footprint(base)
+                    now_w, now_h = self.graphics.beside_card_footprint(base * grow)
+                    bx, by = int(bx + (full_w - now_w) / 2), int(by + (full_h - now_h) / 2)
+                    hud_popup["card_scale"] = base * grow
+                hud_popup["beside_box"] = (bx, by)
             hud_popups[i] = hud_popup
 
         any_leader_line = False
@@ -1482,7 +1637,8 @@ class _PopupMixin:
         if any_leader_line:
             for wp in active_popups or []:
                 if wp["data"].get("arrived") or wp["index"] == 0:
-                    self._draw_pin(frame, wp, total_points)
+                    self._draw_pin(frame, wp, total_points, scale=self._pin_pop_scale(
+                        wp, getattr(self, "_pop_now", 0), fps or 30))
 
         survivors = []
         for i, bp in enumerate(baked_popups):

@@ -80,12 +80,24 @@ def generate_waypoint_attraction_video(
     return {"status": "failed", "label": label, "output_filename": output_filename}
 
 
+from .audio_step import is_unvisited_stopby  # noqa: E402,F401  (shared rule: see audio_step)
+
+
 def render_attraction_videos(
     project_config_path: str,
     audio_durations: Optional[list[float]] = None,
     audio_paths: Optional[list[str]] = None,
     force: bool = False,
 ) -> list[str]:
+    # [NOTE] [Core] `audio_durations`/`audio_paths` are each waypoint's own
+    # ATTRACTION-only narration (audio_data's "attraction_audio_durations"/
+    # "attraction_audio_paths" — see audio_step.py's
+    # generate_attraction_audio_for_waypoint), NOT the combined arrival+
+    # attraction audio used for the residential leg's own narration.
+    # Reusing that combined audio here used to replay the arrival
+    # narration onto the attraction clip too, and — when attractionNarration
+    # was blank — give the attraction clip 100% arrival-narration audio/
+    # subtitles instead of staying silent, which is what it should do.
     """Step 3: Generates AI videos for individual attractions via the
     bundled ComfyUI server (Wan2.2 image-to-video), falling back to the
     local outpaint+pan generator per-clip on failure."""
@@ -128,7 +140,25 @@ def render_attraction_videos(
             )
             continue
 
+        # A stop-by the route only passes near (not connected to it) is never
+        # visited, so it gets no attraction video (and timeline_step never
+        # uses one).
+        if is_unvisited_stopby(wp):
+            logger.info(
+                "Step 3: [%d/%d] Skipping '%s' — stop-by not connected to the route.",
+                idx + 1, len(waypoints), place_label,
+            )
+            continue
+
         tracker.show(f"Generating attraction video {idx + 1}/{len(waypoints)}: {place_label}")
+        # ComfyUI/Wan holds a lot of RAM: with little left, restart its server
+        # (it reloads on the next call) before piling another clip onto it.
+        from services import tuning
+        from services.vdoprocessing.comfyui_i2v_client import ComfyUII2VClient
+
+        tuning.ensure_free_ram(
+            f"attraction video {idx + 1}", relief=ComfyUII2VClient.stop_server
+        )
         logger.info(
             "Step 3: [%d/%d] Generating attraction video for: '%s'",
             idx + 1, len(waypoints), place_label,
@@ -154,6 +184,12 @@ def render_attraction_videos(
                 "Step 3: [%d/%d] '%s' complete -> %s",
                 idx + 1, len(waypoints), place_label, result["video_path"],
             )
+            # Narration audio is deliberately NOT muxed in here — this clip
+            # stays silent, same as every other clip the pipeline produces
+            # (see render_step.py's own note). Its narration audio (already
+            # generated above, result["audio_path"]) is wired into
+            # timeline.json as a separate track by pipeline.py's own
+            # attraction_audio_paths, and only muxed at final export.
             generated_videos.append(result["video_path"])
         elif result["status"] == "pending":
             logger.info(

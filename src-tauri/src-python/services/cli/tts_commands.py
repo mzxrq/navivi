@@ -8,7 +8,12 @@ import asyncio
 
 from services.logger.logger import setup_logger
 from services.logger.progress import tracker as _tracker
-from services.vdoprocessing.videopipeline.audio_step import generate_waypoint_audio
+from services.vdoprocessing.videopipeline.audio_step import (
+    _resolve_attraction_narration_script,
+    generate_attraction_audio_for_waypoint,
+    generate_waypoint_audio,
+    is_unvisited_stopby,
+)
 from services.vdoprocessing.videopipeline.helpers import project_audio_dir
 from .helpers import _load_tts_waypoints
 
@@ -124,3 +129,88 @@ def test_tts_all(
         "audio_dir": str(output_dir),
         "clips": clips,
     }
+
+
+def _attraction_tts_skip_reason(waypoint) -> str:
+    """Why a waypoint gets no attraction narration ("" when it does)."""
+    if not isinstance(waypoint, dict):
+        return "not a waypoint"
+    if is_unvisited_stopby(waypoint):
+        return "stop-by not connected to the route"
+    if not _resolve_attraction_narration_script(waypoint):
+        return "no attraction narration"
+    return ""
+
+
+def test_attraction_tts(
+    job_config_path: str,
+    output_audio_dir: str = None,
+    waypoint_index: int = 0,
+    force: bool = False,
+) -> Dict[str, Any]:
+    """Generate the attraction-only narration audio (the clip the attraction
+    video plays) for one waypoint."""
+    config_path, waypoints = _load_tts_waypoints(job_config_path)
+    if waypoint_index < 0 or waypoint_index >= len(waypoints):
+        raise IndexError(
+            f"waypoint_index must be between 0 and {len(waypoints) - 1}, got {waypoint_index}"
+        )
+    waypoint = waypoints[waypoint_index]
+    reason = _attraction_tts_skip_reason(waypoint)
+    if reason:
+        logger.info("test_attraction_tts: waypoint %d skipped (%s).", waypoint_index, reason)
+        return {"success": True, "skipped": reason, "clip": None}
+
+    output_dir = Path(output_audio_dir) if output_audio_dir else project_audio_dir(config_path.parent)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    from services.tts.ttsengine import AudioProcessor, IrodoriTTSClient
+
+    client = IrodoriTTSClient(output_dir=output_dir)
+    processor = AudioProcessor(output_dir=output_dir)
+    label = waypoint.get("label", f"Waypoint {waypoint_index + 1}")
+    _tracker.show(f"Generating attraction TTS: {label}")
+    try:
+        clip = asyncio.run(
+            generate_attraction_audio_for_waypoint(
+                waypoint, waypoint_index, client, processor, output_dir, force=force
+            )
+        )
+    finally:
+        _tracker.clear()
+    return {"success": True, "audio_dir": str(output_dir), "clip": clip}
+
+
+def test_attraction_tts_all(
+    job_config_path: str,
+    output_audio_dir: str = None,
+    force: bool = False,
+) -> Dict[str, Any]:
+    """Generate the attraction-only narration audio for every waypoint that
+    has one (stop-bys not connected to the route are skipped)."""
+    config_path, waypoints = _load_tts_waypoints(job_config_path)
+    output_dir = Path(output_audio_dir) if output_audio_dir else project_audio_dir(config_path.parent)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    from services.tts.ttsengine import AudioProcessor, IrodoriTTSClient
+
+    client = IrodoriTTSClient(output_dir=output_dir)
+    processor = AudioProcessor(output_dir=output_dir)
+    todo = [(i, w) for i, w in enumerate(waypoints) if not _attraction_tts_skip_reason(w)]
+
+    async def generate_all() -> list:
+        clips = []
+        for n, (index, waypoint) in enumerate(todo, 1):
+            label = waypoint.get("label", f"Waypoint {index + 1}")
+            _tracker.show(f"Generating attraction TTS {n}/{len(todo)}: {label}")
+            clips.append(
+                await generate_attraction_audio_for_waypoint(
+                    waypoint, index, client, processor, output_dir, force=force
+                )
+            )
+        return clips
+
+    try:
+        clips = asyncio.run(generate_all())
+    finally:
+        _tracker.clear()
+    logger.info("test_attraction_tts_all: %d clip(s), %d waypoint(s) skipped.", len(clips), len(waypoints) - len(todo))
+    return {"success": True, "audio_dir": str(output_dir), "clips": clips, "skipped": len(waypoints) - len(todo)}

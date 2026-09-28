@@ -3,6 +3,8 @@
 surface as a subtly wrong render.
 """
 
+import pytest
+
 from services import tuning
 
 
@@ -57,3 +59,40 @@ class TestOutroConstants:
 class TestTTSConstants:
     def test_default_speed_within_allowed_bounds(self):
         assert tuning.TTS_MIN_SPEED <= tuning.TTS_SPEED <= tuning.TTS_MAX_SPEED
+
+
+class TestEnsureFreeRam:
+    def test_returns_immediately_when_enough_is_free(self, monkeypatch):
+        monkeypatch.setattr(tuning, "free_ram_gb", lambda: 20.0)
+        tuning.ensure_free_ram("x", 3.0, relief=lambda: pytest.fail("no relief needed"))
+
+    def test_disabled_with_zero(self, monkeypatch):
+        monkeypatch.setattr(tuning, "free_ram_gb", lambda: 0.1)
+        tuning.ensure_free_ram("x", 0)
+
+    def test_unreadable_memory_does_not_block(self, monkeypatch):
+        monkeypatch.setattr(tuning, "free_ram_gb", lambda: None)
+        tuning.ensure_free_ram("x", 3.0)
+
+    def test_relief_runs_once_and_recovery_continues(self, monkeypatch):
+        readings = iter([1.0, 1.0, 5.0])
+        monkeypatch.setattr(tuning, "free_ram_gb", lambda: next(readings))
+        monkeypatch.setattr(tuning, "_RAM_POLL_SECONDS", 0)
+        calls = []
+        tuning.ensure_free_ram("x", 3.0, relief=lambda: calls.append(1))
+        assert calls == [1]
+
+    def test_raises_a_clear_error_when_memory_never_recovers(self, monkeypatch):
+        monkeypatch.setattr(tuning, "free_ram_gb", lambda: 0.5)
+        monkeypatch.setattr(tuning, "_RAM_POLL_SECONDS", 0)
+        with pytest.raises(MemoryError, match="video rendering"):
+            tuning.ensure_free_ram("video rendering", 3.0, timeout=0.05)
+
+    def test_a_failing_relief_is_survived(self, monkeypatch):
+        readings = iter([1.0, 9.0])
+        monkeypatch.setattr(tuning, "free_ram_gb", lambda: next(readings))
+
+        def boom():
+            raise RuntimeError("server gone")
+
+        tuning.ensure_free_ram("x", 3.0, relief=boom)

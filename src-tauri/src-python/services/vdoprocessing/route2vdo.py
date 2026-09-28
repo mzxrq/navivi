@@ -34,6 +34,42 @@ DEFAULT_MARKER_RADIUS = 24
 DEFAULT_SUMMARY_HOLD_SECONDS = 4.0
 
 
+def _output_is_valid(path, min_bytes: int = 1024) -> bool:
+    """Checkpoint helper — see spatial_renderer/overview.py's identical
+    copy for why this is duplicated instead of imported from
+    videopipeline/helpers.py (circular import)."""
+    try:
+        p = Path(path)
+        return p.is_file() and p.stat().st_size >= min_bytes
+    except OSError:
+        return False
+
+
+def _leg_fingerprint(leg_latlon, dest_label, leg_kwargs: Dict[str, Any]) -> str:
+    """Hash of everything a residential leg's clip is rendered from (its
+    route piece, destination and every render argument - walk length,
+    photos, cue timing)."""
+    import hashlib
+
+    def plain(obj):
+        if hasattr(obj, "tolist"):  # numpy arrays/scalars
+            return obj.tolist()
+        return str(obj)
+
+    payload = json.dumps(
+        {"latlon": leg_latlon, "dest": dest_label, "kwargs": leg_kwargs},
+        sort_keys=True, default=plain, ensure_ascii=False,
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _stored_fingerprint(path: Path) -> Optional[str]:
+    try:
+        return json.loads(path.read_text(encoding="utf-8")).get("fingerprint")
+    except (OSError, ValueError, AttributeError):
+        return None
+
+
 class RouteAnimator:
     """Orchestrates the animation pipeline by bridging configurations with Renderers."""
 
@@ -247,6 +283,9 @@ class RouteAnimator:
         title_text = self.config.get("overview_title") or job_config.get("project_name")
 
         output_path = str(self.out_dir / "01_overview.mp4")
+        if self.config.get("checkpoint_enabled", False) and _output_is_valid(output_path):
+            logger.info("Overview video already exists — skipping render: %s", output_path)
+            return output_path
         duration = self.config.get("duration", 30.0)
         return render_overview_video_pydeck(
             route_latlon, waypoints, output_path, duration=duration, fps=fps, title_text=title_text,
@@ -327,6 +366,8 @@ class RouteAnimator:
         # pydeck further subdivide THIS leg's own share of that line.
         tracker.begin_substeps(len(res_sequence))
         for i, res_data in enumerate(res_sequence):
+            # Each leg launches its own Chromium; don't start one with no RAM left.
+            tuning.ensure_free_ram(f"residential leg {i + 1}", self.config.get("min_free_ram_gb"))
             lats, lons = res_data.get("lats"), res_data.get("lons")
             leg_latlon = list(zip(lats, lons)) if lats is not None and lons is not None else []
             if len(leg_latlon) < 2:
@@ -373,6 +414,13 @@ class RouteAnimator:
                     "popup_image": m.get("popup_image"),
                     "freeze_seconds": m.get("freeze_seconds"),
                     "image_display": m.get("image_display", "cover"),
+                    # This stop-by's own real narration length (see
+                    # mapfetcher.py's "narration_audio_seconds") -- lets
+                    # pedestrian.py hold its fullscreen photo-pause at least
+                    # this long instead of cutting away at the short fixed
+                    # freeze_seconds cap while the narration is still
+                    # playing underneath.
+                    "narration_audio_seconds": m.get("narration_audio_seconds"),
                     # Only set when this connected stop-by's waypoint
                     # already has a GENERATED attraction video on disk (the
                     # separate img2vdo.py/attraction_step.py pipeline stage
@@ -381,10 +429,60 @@ class RouteAnimator:
                     # clip instead of shrinking back to resume the walk in
                     # place -- see pedestrian.py's `landmarks` docstring.
                     "attraction_video": _attraction_video_for(m.get("waypoint_id"), m.get("label")),
+                    # The photo ends fullscreen and the attraction video
+                    # dissolves in from it (no hold, no blur-out here).
+                    "dissolve_into_attraction": bool(self.config.get("dissolve_into_attraction", False)),
+                    # Audio-first timing of the walk TOWARD this stop and how long
+                    # it waits here for the voice (render_step.py's piece plan).
+                    "walk_seconds": m.get("walk_seconds"),
+                    "wait_seconds": m.get("wait_seconds"),
                 }
                 for m in res_data.get("mid_markers", [])
                 if m.get("lat") is not None and m.get("lng", m.get("lon")) is not None
             ]
+
+            # Every connectToRoute landmark in THIS leg, in the same order
+            # `landmarks` (and therefore pedestrian.py's own cut sequence)
+            # visits them -- each one cuts the leg into one more piece (see
+            # `landmarks` docstring above). Each piece is the WALK TOWARD
+            # its own next stop, so piece[k] (0-based) "targets" landmark[k]
+            # -- its own narration plays during that walk, and its own
+            # fullscreen pause (which follows immediately) holds until that
+            # narration finishes -- except the LAST piece, which has no
+            # landmark ahead of it and targets the leg's actual destination
+            # waypoint instead. Written out as a small sidecar JSON below so
+            # leg_pieces.py's narration split (done later, once audio_paths
+            # are available -- this method has no access to them) knows
+            # which waypoint's own narration belongs to which piece.
+            connected_landmark_ids = [
+                m.get("waypoint_id")
+                for m in res_data.get("mid_markers", [])
+                if m.get("connect_to_route")
+                and m.get("lat") is not None
+                and m.get("lng", m.get("lon")) is not None
+            ]
+            leg_destination_id = res_data.get("end_waypoint_id")
+
+            def _write_piece_plan(piece_paths) -> None:
+                plan = {
+                    "pieces": [
+                        {
+                            "file": Path(p).name,
+                            "target_waypoint_id": (
+                                connected_landmark_ids[idx]
+                                if idx < len(connected_landmark_ids)
+                                else leg_destination_id
+                            ),
+                        }
+                        for idx, p in enumerate(piece_paths)
+                    ]
+                }
+                plan_path = self.out_dir / f"02_waypoint_{leg_file_num:02d}_pieces.json"
+                try:
+                    with open(plan_path, "w", encoding="utf-8") as f:
+                        json.dump(plan, f, ensure_ascii=False)
+                except OSError:
+                    pass
 
             # render_step.py stashes the destination waypoint's own popup
             # data as the LAST entry of this leg's "popups" list (every
@@ -400,8 +498,19 @@ class RouteAnimator:
             # the LAST of a multi-image waypoint's photos; the overview
             # animation reads "popup_image" (the first) for this same
             # waypoint and is unaffected by this choice.
-            dest_popup_image = dest_popup.get("popup_image_last") or dest_popup.get("popup_image")
+            # The leg ends on this photo and the destination's attraction video
+            # follows it (timeline_step.py, with a dissolve): that video opens on
+            # the waypoint's FIRST image, so with attraction videos on, the
+            # leg shows the first image too and the two meet on the same frame.
+            # Without them, the last image, as before.
+            dest_popup_image = (
+                dest_popup.get("popup_image")
+                if self.config.get("enable_attraction_videos", True)
+                else dest_popup.get("popup_image_last")
+            ) or dest_popup.get("popup_image_last") or dest_popup.get("popup_image")
             dest_freeze_seconds = dest_popup.get("freeze_seconds")
+            dest_narration_seconds = dest_popup.get("audio_duration")
+            dest_image_display = dest_popup.get("image_display") or "cover"
             if not dest_popup_image:
                 # A trailing synthetic end_point leg's own destination has
                 # no popup of its own (see render_step.py's
@@ -414,6 +523,8 @@ class RouteAnimator:
                 end_popup = res_data.get("trip_end_popup") or {}
                 dest_popup_image = end_popup.get("popup_image_last") or end_popup.get("popup_image")
                 dest_freeze_seconds = end_popup.get("freeze_seconds")
+                dest_narration_seconds = end_popup.get("audio_duration")
+                dest_image_display = end_popup.get("image_display") or dest_image_display
 
             # Every leg's own departure waypoint's popup (see render_step.py's
             # "leg_start_popup" comment) -- shown at THIS leg's own opening,
@@ -422,6 +533,7 @@ class RouteAnimator:
             start_popup = res_data.get("leg_start_popup") or {}
             start_popup_image = start_popup.get("popup_image_last") or start_popup.get("popup_image")
             start_freeze_seconds = start_popup.get("freeze_seconds")
+            start_narration_seconds = start_popup.get("audio_duration")
 
             safe_suffix = (
                 "".join(c for c in str(dest_label) if c.isalnum() or c in (" ", "_", "-"))
@@ -434,17 +546,19 @@ class RouteAnimator:
             chunk_filename = f"02_waypoint_{leg_file_num:02d}_{safe_suffix}.mp4"
 
             output_path = str(self.out_dir / chunk_filename)
-            # A connected stop-by's fullscreen photo pause (see pedestrian.
-            # py's `landmarks` docstring) can cut this ONE leg into more
-            # than one output file -- render_residential_leg_pydeck always
-            # returns a LIST now, every entry sharing this same leg's own
-            # "02_waypoint_{N:02d}_" filename prefix (just a "_cont{n}"
-            # suffix added per cut), so downstream (render_step.py's audio
-            # mux, timeline_step.py) still resolves each one back to this
-            # leg by filename and mux its FULL narration onto every file --
-            # not a proportional split, just the same audio under each.
-            leg_paths = render_residential_leg_pydeck(
-                leg_latlon, dest_label, output_path, mode=leg_mode,
+
+            # Checkpoint: a connected stop-by can split ONE leg into
+            # several output files sharing this leg's "02_waypoint_{N:02d}_"
+            # prefix (see the comment just below), so "already rendered" is
+            # checked by that whole prefix, not just the base filename —
+            # otherwise a previously-cut leg would look unfinished (base
+            # file missing) even though every _contN piece is there, and
+            # get re-rendered from scratch. Simple existence check, no
+            # content hash — same resume-not-diff semantics as the overview
+            # checkpoint above.
+            leg_glob_prefix = f"02_waypoint_{leg_file_num:02d}_"
+            leg_kwargs = dict(
+                mode=leg_mode,
                 target_duration_seconds=target_duration,
                 landmarks=landmarks, route_chain=leg_labels or None,
                 # Straight-down bird's-eye chase cam (still follows/rotates
@@ -454,9 +568,71 @@ class RouteAnimator:
                 follow_pitch=self.config.get("res_follow_pitch", 0.0),
                 dest_popup_image=dest_popup_image,
                 dest_popup_freeze_seconds=dest_freeze_seconds,
+                dest_popup_narration_seconds=dest_narration_seconds,
                 start_popup_image=start_popup_image,
                 start_popup_freeze_seconds=start_freeze_seconds,
+                start_popup_narration_seconds=start_narration_seconds,
+                start_cue_seconds=res_data.get("start_cue_seconds"),
+                arrival_photo_hold_seconds=self.config.get("arrival_photo_hold_seconds"),
+                arrival_wait_seconds=res_data.get("arrival_wait_seconds"),
+                dest_image_display=dest_image_display,
+                start_pin=res_data.get("start_pin"),
+                dest_pin=res_data.get("dest_pin"),
             )
+            # Everything this leg's clip is made from. Existing files are
+            # only reused when it matches what they were rendered from: a
+            # bare existence check kept legs rendered with an old walk
+            # timing (e.g. before the arrival cue moved) forever.
+            leg_fingerprint = _leg_fingerprint(leg_latlon, dest_label, leg_kwargs)
+            fingerprint_path = self.out_dir / f"{leg_glob_prefix}inputs.json"
+            existing_leg_files = sorted(
+                p for p in self.out_dir.glob(f"{leg_glob_prefix}*.mp4")
+                if _output_is_valid(p)
+            ) if self.config.get("checkpoint_enabled", False) else []
+            if existing_leg_files and _stored_fingerprint(fingerprint_path) != leg_fingerprint:
+                logger.info(
+                    "Residential leg %d inputs changed since it was rendered — re-rendering.",
+                    leg_file_num,
+                )
+                # Its old pieces (a changed leg can cut into a different
+                # number of _contN files) must not be picked up again.
+                for old in self.out_dir.glob(f"{leg_glob_prefix}*"):
+                    if old.suffix in (".mp4", ".json") and old.name != fingerprint_path.name:
+                        old.unlink(missing_ok=True)
+                existing_leg_files = []
+            if existing_leg_files:
+                logger.info(
+                    "Residential leg %d already rendered (%d file(s)) — skipping.",
+                    leg_file_num, len(existing_leg_files),
+                )
+                # Rewritten even on a checkpoint skip -- cheap (no ffmpeg),
+                # and keeps it in sync with job_config's CURRENT
+                # connectToRoute/landmark data even when the video itself
+                # wasn't re-rendered this run.
+                _write_piece_plan([str(p) for p in existing_leg_files])
+                output_paths.extend(str(p) for p in existing_leg_files)
+                continue
+
+            # A connected stop-by's fullscreen photo pause (see pedestrian.
+            # py's `landmarks` docstring) can cut this ONE leg into more
+            # than one output file -- render_residential_leg_pydeck always
+            # returns a LIST now, every entry sharing this same leg's own
+            # "02_waypoint_{N:02d}_" filename prefix (just a "_cont{n}"
+            # suffix added per cut), so downstream (timeline_step.py) still
+            # resolves each one back to this leg by filename -- and, when
+            # there's more than one piece, splits this leg's own narration/
+            # subtitle across them (see leg_pieces.py), each landmark's own
+            # piece opening on ITS OWN narration before continuing the
+            # leg's departure narration, instead of the same departure
+            # narration restarting on every piece.
+            leg_paths = render_residential_leg_pydeck(
+                leg_latlon, dest_label, output_path, **leg_kwargs,
+            )
+            if leg_paths:
+                fingerprint_path.write_text(
+                    json.dumps({"fingerprint": leg_fingerprint}), encoding="utf-8"
+                )
+            _write_piece_plan(leg_paths)
             output_paths.extend(leg_paths)
 
         return output_paths
@@ -500,14 +676,16 @@ class RouteAnimator:
 
         if render_mode != "residential":
             tracker.show("Rendering overview video...")
-            # [NOTE] [Core] Overview kept on the 2D spatial_renderer path
-            # deliberately, independent of use_pydeck_pedestrian (which
-            # still governs residential below) — the GeoJsonLayer overview
+            # [NOTE] [Core] The GeoJsonLayer pydeck overview
             # (_render_overview_pydeck/render_overview_video_pydeck in
-            # pydeckrecorder.pedestrian) works and is tested, just not
-            # preferred for this project yet. Flip use_pydeck_overview in
-            # settings to opt back in without any code change.
-            if self.config.get("use_pydeck_overview", False):
+            # pydeckrecorder.pedestrian) is the default
+            # (tuning.DEFAULT_USE_PYDECK_OVERVIEW), independent of
+            # use_pydeck_pedestrian (which governs residential below).
+            # It renders on the GPU and does not follow the narration's cues
+            # (stop holds, stop-by timing, ending fitted to the voice) — the
+            # 2D spatial_renderer path below does; settings.use_pydeck_overview
+            # = false selects it.
+            if self.config.get("use_pydeck_overview", tuning.DEFAULT_USE_PYDECK_OVERVIEW):
                 logger.info("Rendering Overview using GeoJsonLayer PyDeck...")
                 overview_path = self._render_overview_pydeck(
                     img_path, points, labels, popups,
@@ -526,13 +704,20 @@ class RouteAnimator:
                 # that blur is meant to be the video's actual last frame, so
                 # freezing on top of it just makes playback linger instead
                 # of ending right when the blur finishes.
+                hold_seconds = self.config.get("summary_hold", DEFAULT_SUMMARY_HOLD_SECONDS)
+                if self.config.get("overview_audio_seconds") and self.config.get("overview_cue_seconds"):
+                    # Narrated: the renderer already fitted the ending to the
+                    # voice (overview_timing.fit_ending); a fixed hold here
+                    # would run the video past it. Only an unspoken gap left
+                    # (the voice still going) is held - the mux holds that too.
+                    rendered = getattr(self.spatial_renderer, "last_rendered_seconds", None)
+                    hold_seconds = max(
+                        0.0, float(self.config["overview_audio_seconds"]) - float(rendered or 0.0)
+                    ) if rendered else 0.0
+                    if hold_seconds < 0.1:  # a rounding remainder, not worth a re-encode
+                        hold_seconds = 0.0
                 if not self.spatial_renderer.last_ending_hard_ended:
-                    self._freeze_video_end(
-                        overview_path,
-                        hold_seconds=self.config.get(
-                            "summary_hold", DEFAULT_SUMMARY_HOLD_SECONDS
-                        ),
-                    )
+                    self._freeze_video_end(overview_path, hold_seconds=hold_seconds)
                 output_paths.append(overview_path)
 
         # [NOTE] [Core] Render each waypoint-to-waypoint leg. The GeoJsonLayer

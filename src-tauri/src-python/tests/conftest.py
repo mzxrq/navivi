@@ -1,7 +1,12 @@
 """Shared pytest fixtures for the src-python test suite."""
 
+import os
 import sys
+import tempfile
 from pathlib import Path
+
+# Test logging goes to a throwaway file, not the real services/logger/app.log.
+os.environ.setdefault("NAVIVI_LOG_FILE", str(Path(tempfile.gettempdir()) / "navivi-tests.log"))
 
 # Ensure `services.*` imports resolve regardless of the invocation cwd.
 ROOT = Path(__file__).resolve().parent.parent

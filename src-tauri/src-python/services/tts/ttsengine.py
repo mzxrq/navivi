@@ -9,6 +9,7 @@ Extracted from tts.py to improve modularity.
 from __future__ import annotations
 
 import asyncio
+import re
 import httpx
 import sys
 import time
@@ -363,12 +364,20 @@ class IrodoriTTSClient:
                     popen_kwargs["start_new_session"] = True
                 log_path = self._SERVER_DIR / "server.log"
                 log_file = open(log_path, "ab")
+                device = os.environ.get("NAVIVI_TTS_DEVICE") or tuning.TTS_DEVICE
+                server_env = {
+                    **os.environ,
+                    "IRODORI_MODEL_DEVICE": device,
+                    "IRODORI_CODEC_DEVICE": device,
+                }
+                logger.info("Irodori TTS server device: %s.", device)
                 IrodoriTTSClient._server_process = subprocess.Popen(
                     [
                         str(self._SERVER_VENV_PYTHON), "-m", "irodori_openai_tts",
                         "--host", "127.0.0.1", "--port", str(port),
                     ],
                     cwd=str(self._SERVER_DIR),
+                    env=server_env,
                     stdout=log_file,
                     stderr=subprocess.STDOUT,
                     **popen_kwargs,
@@ -493,12 +502,74 @@ class IrodoriTTSClient:
         filename = output_filename or f"{uuid.uuid4()}.wav"
         file_path = self.output_dir / filename
 
-        audio_content = await self.call_api(text)
+        # A long text in one request overloads the GPU (see tuning.TTS_DEVICE):
+        # speak it in short chunks, one request at a time, and join them.
+        chunks = split_text_for_tts(text, tuning.TTS_MAX_CHUNK_CHARS)
+        if len(chunks) <= 1:
+            audio_content = await self.call_api(text)
+            with open(file_path, "wb") as f:
+                f.write(audio_content)
+            return str(file_path)
 
-        with open(file_path, "wb") as f:
-            f.write(audio_content)
-
+        logger.info("TTS text of %d characters split into %d chunks.", len(text), len(chunks))
+        parts: List[Path] = []
+        try:
+            for i, chunk in enumerate(chunks):
+                part = file_path.with_name(f"{file_path.stem}.part{i:02d}.wav")
+                with open(part, "wb") as f:
+                    f.write(await self.call_api(chunk))
+                parts.append(part)
+            AudioProcessor(output_dir=self.output_dir).concatenate_files(
+                [str(p) for p in parts], str(file_path)
+            )
+        finally:
+            for part in parts:
+                part.unlink(missing_ok=True)
         return str(file_path)
+
+
+_SENTENCE_END = re.compile(r"(?<=[。！？!?\n])")
+_CLAUSE_END = re.compile(r"(?<=[、，,])")
+
+
+def split_text_for_tts(text: str, max_chars: int) -> List[str]:
+    """Splits `text` into pieces of at most `max_chars` characters for separate
+    TTS requests: whole sentences are grouped together up to the limit, a
+    sentence that is too long is cut at its commas, and only as a last resort
+    in the middle of a clause. The pieces joined give back exactly `text`."""
+    text = text or ""
+    if len(text) <= max_chars:
+        return [text] if text else []
+
+    def cut(piece: str) -> List[str]:
+        if len(piece) <= max_chars:
+            return [piece]
+        out, cur = [], ""
+        for clause in (c for c in _CLAUSE_END.split(piece) if c):
+            while len(clause) > max_chars:  # no comma to cut at
+                if cur:
+                    out.append(cur)
+                    cur = ""
+                out.append(clause[:max_chars])
+                clause = clause[max_chars:]
+            if cur and len(cur) + len(clause) > max_chars:
+                out.append(cur)
+                cur = ""
+            cur += clause
+        if cur:
+            out.append(cur)
+        return out
+
+    chunks, cur = [], ""
+    for sentence in (s for s in _SENTENCE_END.split(text) if s):
+        for piece in cut(sentence):
+            if cur and len(cur) + len(piece) > max_chars:
+                chunks.append(cur)
+                cur = ""
+            cur += piece
+    if cur:
+        chunks.append(cur)
+    return chunks
 
 
 # [Core] AudioProcessor : Handles wave pause analysis, silence synthesis, and file concatenations.

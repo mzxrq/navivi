@@ -1,22 +1,40 @@
 """Orchestration entry points: the master pipeline, NLE fast re-render, and step-duration estimates."""
 
+import copy
 import json
+import time
 from pathlib import Path
 from typing import Optional
 
+from services import tuning
 from services.config.job_config import JobConfigManager
 from services.logger.progress import tracker
 from services.vdoprocessing.vdoexporter import VideoExporter
 
 from .attraction_step import render_attraction_videos
-from .audio_step import generate_audio, stop_tts_server
+from .audio_step import apply_cued_scripts, generate_audio, set_route_only_legs, stop_tts_server
 from .gps_step import process_gps
 from .helpers import logger, project_subtitle_dir, project_video_dir
 from .intro_step import render_intro_clip
+from .leg_pieces import compute_leg_narration_splits
+from .narration_step import add_default_cues, add_overview_cues, record_cue_times
 from .outro_step import render_outro_clip
 from .render_step import render_route_video
-from .subtitle_step import build_subtitles, burn_subtitles
+from .subtitle_step import (
+    build_attraction_subtitles,
+    build_overview_subtitle,
+    build_subtitles,
+    burn_subtitles,
+)
 from .timeline_step import build_timeline
+
+
+def _stop_gpu_servers() -> None:
+    """Frees the RAM/VRAM the narration and diffusion servers still hold."""
+    stop_tts_server()
+    from services.vdoprocessing.comfyui_i2v_client import ComfyUII2VClient
+
+    ComfyUII2VClient.stop_server()
 
 
 def run_full_pipeline(
@@ -45,6 +63,7 @@ def run_full_pipeline(
     route_video_dir = str(Path(output_video_dir) / "route")
 
     waypoints = job_config.get("waypoints", [])
+    min_free_ram = job_config.get("settings", {}).get("min_free_ram_gb")
 
     # [NOTE] [Core] total=8 (the "[n/N]" denominator) is only set on this first stage() call — later stage() calls rely on the tracker remembering it rather than re-declaring it each time.
     tracker.stage("Parsing GPS track...", total=8)
@@ -52,9 +71,30 @@ def run_full_pipeline(
 
     # --- STEP 2 ---
     tracker.stage("Generating TTS narration...")
+    tuning.ensure_free_ram("TTS narration", min_free_ram)
+    # The script's own timing cues ({start}/{arrive}/{end}) tell the video where
+    # the voice is: the walker has to have arrived by {arrive}. They are never
+    # spoken. settings.use_narration_cues=false ignores them; a script without
+    # any uses the "at most 3 s early" rule. Scripts that have none get default
+    # cues (stored beside job_config.json): on by default
+    # (tuning.DEFAULT_AUTO_NARRATION_CUES), settings.auto_narration_cues=false
+    # turns it off.
+    use_cues = bool(job_config.get("settings", {}).get("use_narration_cues", True))
+    # With attraction videos on, each attraction clip speaks its waypoint's
+    # attraction text, so a leg speaks only its route (arriving) text -
+    # otherwise the same attraction text played twice, leg then clip.
+    set_route_only_legs(bool(job_config.get("settings", {}).get("enable_attraction_videos", True)))
+    add_default_cues(str(config_file_path))
+    # {n} / {go} for a hand-written overview script, so the overview stops at
+    # each waypoint while it is described (on by default:
+    # tuning.DEFAULT_AUTO_OVERVIEW_CUES; settings.auto_overview_cues=false turns it off).
+    add_overview_cues(str(config_file_path))
     audio_data = generate_audio(
         cleaned_route, str(config_file_path), force=force_regenerate
     )
+    # Where each cue falls in the real audio; render_step sizes each walk from it.
+    if use_cues:
+        record_cue_times(str(config_file_path), audio_data)
 
     # [NOTE] [TTS] Force-stop the TTS server now instead of leaving it to its
     # idle timeout — otherwise it stays loaded in VRAM while the attraction
@@ -66,8 +106,24 @@ def run_full_pipeline(
     # --- STEP 2b ---
     tracker.stage("Generating subtitles...")
     subtitle_dir = project_subtitle_dir(project_dir)
+    # Subtitles carry the same cue-free text the audio speaks. Done on a copy
+    # so nothing added here leaks into job_config's own waypoints.
+    waypoints = copy.deepcopy(waypoints)
+    apply_cued_scripts(waypoints, project_dir)
     subtitle_paths = build_subtitles(
         waypoints, audio_data.get("audio_paths", []), str(subtitle_dir), force=force_regenerate
+    )
+    overview_subtitle_path = build_overview_subtitle(
+        job_config.data,
+        audio_data.get("overview_audio_path"),
+        str(subtitle_dir),
+        force=force_regenerate,
+    )
+    attraction_subtitle_paths = build_attraction_subtitles(
+        waypoints,
+        audio_data.get("attraction_audio_paths", []),
+        str(subtitle_dir),
+        force=force_regenerate,
     )
 
     # --- STEP 3 ---
@@ -78,10 +134,11 @@ def run_full_pipeline(
     # project that only wants the route/overview video.
     if job_config.get("settings", {}).get("enable_attraction_videos", True):
         tracker.stage("Generating attraction videos...")
+        tuning.ensure_free_ram("attraction videos", min_free_ram, relief=stop_tts_server)
         attraction_videos = render_attraction_videos(
             str(config_file_path),
-            audio_durations=audio_data.get("audio_durations"),
-            audio_paths=audio_data.get("audio_paths"),
+            audio_durations=audio_data.get("attraction_audio_durations"),
+            audio_paths=audio_data.get("attraction_audio_paths"),
             force=force_regenerate,
         )
 
@@ -90,6 +147,14 @@ def run_full_pipeline(
         # into the renderer below via its own idle timeout.
         from services.vdoprocessing.comfyui_i2v_client import ComfyUII2VClient
         ComfyUII2VClient.stop_server()
+
+        # [NOTE] [GPU] See tuning.GPU_STAGE_COOLDOWN_SECONDS — a brief pause
+        # here before the Chromium/WebGL render stage starts, giving the GPU
+        # a moment to release VRAM/thermal load from the diffusion stage
+        # above instead of jumping straight into another sustained GPU
+        # workload.
+        tracker.stage("Cooling down GPU before video rendering...")
+        time.sleep(tuning.GPU_STAGE_COOLDOWN_SECONDS)
     else:
         tracker.stage("Skipping attraction videos (disabled for this project)...")
         logger.info(
@@ -100,25 +165,51 @@ def run_full_pipeline(
 
     # --- STEP 4 ---
     tracker.stage("Rendering overview & residential video...")
+    tuning.ensure_free_ram("video rendering", min_free_ram, relief=_stop_gpu_servers)
     video_paths = render_route_video(
         cleaned_route=cleaned_route,
         project_config_path=str(config_file_path),
         output_video_dir=route_video_dir,
         audio_durations=audio_data.get("audio_durations"),
         audio_pauses=audio_data.get("audio_pauses"),
-        audio_paths=audio_data.get("audio_paths"),
+        overview_audio_duration=audio_data.get("overview_audio_duration"),
+        overview_cue_times=audio_data.get("overview_cue_times") if use_cues else None,
         force=force_regenerate,
     )
 
+    # A connectToRoute stop-by's fullscreen photo-pause (see pydeckrecorder/
+    # pedestrian.py's `landmarks` docstring) can cut one leg's silent video
+    # into several "_contN" pieces, each one the walk TOWARD its own next
+    # stop. Resolved here (once, from Step 4's pre-burn video_paths) into
+    # each piece's own target narration — padding that piece's video first
+    # if its target's narration runs longer than the piece's own natural
+    # length — and reused by both Step 5's burn below (so the right
+    # subtitle gets burned onto each piece's pixels) and Step 6's
+    # build_timeline (so the right audio gets muxed at final export) — see
+    # leg_pieces.py. video_paths is replaced with the (possibly padded)
+    # result so every later step sees the final piece lengths.
+    video_paths, leg_narration_splits = compute_leg_narration_splits(
+        video_paths, audio_data.get("audio_paths"), subtitle_paths, waypoints, str(project_dir)
+    )
     all_videos = video_paths + attraction_videos
 
     # --- STEP 5 ---
-    tracker.stage("Burning subtitles...")
-    final_videos = burn_subtitles(
-        video_paths=all_videos,
-        subtitle_paths=subtitle_paths,
-        force=force_regenerate,
-    )
+    # Off by default: subtitles are still built (.srt files, listed per clip in
+    # timeline.json) but not burned onto the video. settings.burn_subtitles
+    # turns the burn back on.
+    if job_config.get("settings", {}).get("burn_subtitles", False):
+        tracker.stage("Burning subtitles...")
+        final_videos = burn_subtitles(
+            video_paths=all_videos,
+            subtitle_paths=subtitle_paths,
+            force=force_regenerate,
+            overview_subtitle_path=overview_subtitle_path,
+            attraction_subtitle_paths=attraction_subtitle_paths,
+            leg_narration_splits=leg_narration_splits,
+        )
+    else:
+        tracker.stage("Skipping subtitle burn (settings.burn_subtitles is off)...")
+        final_videos = list(all_videos)
 
     # --- STEP 5b ---
     # Intro/outro carry no narration, so they deliberately bypass subtitle
@@ -146,6 +237,16 @@ def run_full_pipeline(
         audio_paths=audio_data.get("audio_paths"),
         subtitle_paths=subtitle_paths,
         project_dir=str(project_dir),
+        overview_audio_path=audio_data.get("overview_audio_path"),
+        overview_subtitle_path=overview_subtitle_path,
+        attraction_audio_paths=audio_data.get("attraction_audio_paths"),
+        attraction_subtitle_paths=attraction_subtitle_paths,
+        leg_narration_splits=leg_narration_splits,
+        # settings.attraction_fade_seconds: how long a leg's arrival photo
+        # dissolves into the attraction video after it (0 = hard cut).
+        attraction_fade_seconds=float(
+            job_config.get("settings", {}).get("attraction_fade_seconds", 0.8)
+        ),
     )
     tracker.clear()
 

@@ -76,13 +76,31 @@ def interpolate_route_data(
     total_frames: int,
     total_leg_km: float,
     leg_dist_km: list,
+    segment_plan: "list[tuple[int, float]] | None" = None,
 ) -> pd.DataFrame:
+    """`segment_plan`: [(last raw point index of a segment, seconds it takes)]
+    in route order, covering the whole leg. Each segment then takes exactly its
+    own time (constant speed inside it), so a leg cut at stop-bys can give every
+    piece its own length. None: one constant speed over the whole leg."""
     # [NOTE] [Animation] Each raw route point gets a timestamp proportional
     # to its cumulative distance along the leg (not evenly spaced in time),
     # so a constant-speed vehicle really does move at constant speed once
     # resampled below -- dense stretches of raw points don't slow the
     # animation down relative to sparse ones.
-    if total_leg_km > 0:
+    if segment_plan and total_leg_km > 0:
+        times = []
+        seg = 0
+        seg_start_idx, seg_start_time = 0, 0.0
+        for i, d in enumerate(leg_dist_km):
+            while seg < len(segment_plan) - 1 and i > segment_plan[seg][0]:
+                seg_start_idx, seg_start_time = segment_plan[seg][0], seg_start_time + segment_plan[seg][1]
+                seg += 1
+            end_idx, seconds = segment_plan[seg]
+            d0, d1 = leg_dist_km[seg_start_idx], leg_dist_km[min(end_idx, len(leg_dist_km) - 1)]
+            frac = 1.0 if d1 <= d0 else min(1.0, max(0.0, (d - d0) / (d1 - d0)))
+            times.append(seg_start_time + frac * seconds)
+        df_raw["time_sec"] = times
+    elif total_leg_km > 0:
         df_raw["time_sec"] = [(d / total_leg_km) * leg_duration for d in leg_dist_km]
     else:
         df_raw["time_sec"] = np.linspace(0, leg_duration, num=len(df_raw))

@@ -90,6 +90,11 @@ def _replace_with_retry(src: str, dst: str) -> None:
             time.sleep(_REPLACE_RETRY_DELAY_SECONDS)
 
 
+# Every concat segment is written with this MP4 video time base, so the final
+# stream-copy join never mixes time bases (see concat_from_timeline).
+_TIMESCALE = 15360
+
+
 class VideoExporter:
     def __init__(self, output_path: str, width: int, height: int, fps: int):
         self.width = width
@@ -110,6 +115,9 @@ class VideoExporter:
         self.proc = self._open_ffmpeg_writer(self._temp_path)
         self._fallback_path = None
         self._fallback_writer = None
+        # Frames written so far: where in the clip (frames / fps seconds) the
+        # next one lands, for timing that has to meet the narration.
+        self.frames_written = 0
 
         if self.proc is None:
             self._fallback_path = tempfile.mktemp(suffix=".avi")
@@ -191,6 +199,7 @@ class VideoExporter:
         )
 
     def write(self, frame: np.ndarray) -> None:
+        self.frames_written += 1
         if self.proc is not None and self.proc.stdin:
             try:
                 self.proc.stdin.write(frame.tobytes())
@@ -391,10 +400,216 @@ class VideoExporter:
         return output_path
 
     @staticmethod
+    def _mux_track_for_concat(
+        ffmpeg_cmd: str, video_path: Path, audio_path: Optional[str], tmp_dir: Path, index: int,
+        audio_offset: float = 0.0, target_size: Optional[Tuple[int, int]] = None,
+        target_fps: Optional[float] = None,
+    ) -> Path:
+        """Combines one timeline track's silent video with its own separate
+        audio track (see timeline_step.build_timeline — video and audio are
+        kept as two independent tracks all the way through the pipeline so
+        a frontend NLE can edit them separately) into a single per-segment
+        file the final concat step below can stream-copy.
+
+        A track with no audio gets silence generated to match its video's
+        own length instead of being left as a bare video stream — the
+        concat demuxer's `-c copy` stream-copy requires every segment to
+        carry the SAME stream layout, so a mix of audio-bearing and
+        audio-less segments would fail or drop audio unpredictably once
+        concatenated. `-shortest` is only used for that silence case (an
+        `anullsrc` stream is infinite and must be capped to the video's own
+        length) — a REAL audio track is deliberately never trimmed to here
+        either, matching mux_audio_to_video's own reasoning: this project's
+        clips are already sized so their own narration fits inside their
+        own video length, so trimming would only ever cut video short.
+        """
+        has_audio = bool(audio_path and Path(audio_path).exists())
+        tmp_out = tmp_dir / f"seg_{index:04d}{video_path.suffix or '.mp4'}"
+
+        # The narration (plus its start delay) can outlast the video: the
+        # picture would end while the voice is still speaking, and every clip
+        # after it would drift against its sound. Hold the last frame until the
+        # voice is done, and a little beyond (tuning.AUDIO_END_HOLD_SECONDS).
+        hold_extra = 0.0
+        if has_audio:
+            try:
+                from services.tts.ttsengine import FFmpegManager
+
+                needed = (
+                    max(0.0, audio_offset)
+                    + FFmpegManager.get_media_duration(str(audio_path))
+                    + tuning.AUDIO_END_HOLD_SECONDS
+                )
+                hold_extra = needed - FFmpegManager.get_media_duration(str(video_path))
+            except (RuntimeError, OSError) as exc:
+                logger.warning("concat_from_timeline: could not probe track %d for its audio end: %s", index, exc)
+            if hold_extra < 0.05:
+                hold_extra = 0.0
+
+        # Every segment must have the same picture size: the concat step below
+        # stream-copies, and a clip of another size (the 1280x704 intro/outro
+        # cards among 1920x1080 clips) would break the joined video. A clip of
+        # another size is scaled to fit and letterboxed.
+        filters: List[str] = []
+        if target_size:
+            size = VideoExporter._video_size(video_path)
+            if size and size != target_size:
+                tw, th = target_size
+                filters.append(
+                    f"scale={tw}:{th}:force_original_aspect_ratio=decrease,"
+                    f"pad={tw}:{th}:(ow-iw)/2:(oh-ih)/2,setsar=1"
+                )
+                logger.info("Track %d: %s scaled to %dx%d.", index, f"{size[0]}x{size[1]}", tw, th)
+        # ...and the same frame rate: segments at 24/25/30 fps joined by stream
+        # copy lose their timing (the video ended minutes before the audio).
+        if target_fps:
+            clip_fps = VideoExporter._video_fps(video_path)
+            if clip_fps and abs(clip_fps - target_fps) > 0.01:
+                filters.append(f"fps={target_fps:g}")
+                logger.info("Track %d: %.3g fps converted to %g fps.", index, clip_fps, target_fps)
+        if hold_extra:
+            logger.info("Track %d: holding its last frame %.2fs so the video lasts as long as its audio.", index, hold_extra)
+            filters.append(f"tpad=stop_mode=clone:stop_duration={hold_extra:.3f}")
+
+        cmd = [ffmpeg_cmd, "-y", "-i", str(video_path)]
+        if has_audio:
+            cmd += ["-i", str(Path(audio_path).resolve())]
+        else:
+            cmd += ["-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100"]
+        cmd += ["-map", "0:v:0", "-map", "1:a:0"]
+        if filters:
+            cmd += [
+                "-vf", ",".join(filters),
+                "-c:v", "libx264", "-crf", "18", "-preset", "fast", "-pix_fmt", "yuv420p",
+            ]
+        else:
+            cmd += ["-c:v", "copy"]
+        cmd += ["-c:a", "aac", "-ar", "44100", "-ac", "2"]
+        # The narration starts `audio_offset` seconds into the clip (a leg's
+        # silent opening, see services/vdoprocessing/cliptiming.py), so the
+        # voice begins with the walk instead of at the first frame. The audio
+        # is then padded with silence up to the video's end (-shortest cuts at
+        # the video): every segment's audio must last exactly as long as its
+        # video, or each later clip's sound starts early in the joined video.
+        audio_filters = []
+        if has_audio and audio_offset > 0.01:
+            delay_ms = int(round(audio_offset * 1000))
+            audio_filters.append(f"adelay={delay_ms}|{delay_ms}")
+        if has_audio:
+            audio_filters.append("apad")
+        if audio_filters:
+            cmd += ["-af", ",".join(audio_filters)]
+        cmd += ["-shortest", "-video_track_timescale", str(_TIMESCALE)]
+        cmd.append(str(tmp_out))
+
+        result = subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace")
+        if result.returncode != 0 or not tmp_out.exists():
+            logger.error(
+                "concat_from_timeline: failed to mux track %d ('%s'), using it unmuxed: %s",
+                index, video_path, result.stderr,
+            )
+            return video_path
+        return tmp_out
+
+    @staticmethod
+    def _video_fps(path: Path) -> Optional[float]:
+        cap = cv2.VideoCapture(str(path))
+        try:
+            fps = float(cap.get(cv2.CAP_PROP_FPS) or 0.0)
+        finally:
+            cap.release()
+        return fps if fps > 0 else None
+
+    @staticmethod
+    def _video_size(path: Path) -> Optional[Tuple[int, int]]:
+        cap = cv2.VideoCapture(str(path))
+        try:
+            w, h = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        finally:
+            cap.release()
+        return (w, h) if w > 0 and h > 0 else None
+
+    @staticmethod
+    def _timeline_size(timeline_data: dict, tracks: list) -> Optional[Tuple[int, int]]:
+        """The size the finished video has: the timeline's own resolution when
+        it states one, else the size most of its clips already have."""
+        res = timeline_data.get("resolution")
+        if isinstance(res, dict) and int(res.get("width") or 0) > 0 and int(res.get("height") or 0) > 0:
+            return int(res["width"]), int(res["height"])
+        sizes = [VideoExporter._video_size(Path(t["file_path"])) for t in tracks]
+        sizes = [sz for sz in sizes if sz]
+        return max(set(sizes), key=sizes.count) if sizes else None
+
+    @staticmethod
+    def _crossfade_pair(
+        ffmpeg_cmd: str, first: Path, second: Path, seconds: float, tmp_dir: Path, index: int,
+        target_fps: Optional[float] = None,
+    ) -> Optional[Path]:
+        """Joins two muxed segments with a crossfade of `seconds` (the first
+        one dissolves into the second) as ONE re-encoded segment, sized and
+        timed like the first. Used where a leg ends on its fullscreen arrival
+        photo and the destination's attraction video follows: instead of a
+        hard cut from a frozen photo, it dissolves into the video. Returns
+        None if it can't be done (the caller then cuts as before)."""
+        from services.tts.ttsengine import FFmpegManager
+
+        try:
+            first_len = FFmpegManager.get_media_duration(str(first))
+            second_len = FFmpegManager.get_media_duration(str(second))
+        except (RuntimeError, OSError) as exc:
+            logger.warning("crossfade: could not probe '%s'/'%s': %s", first, second, exc)
+            return None
+        cap = cv2.VideoCapture(str(first))
+        width, height = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        fps = target_fps or cap.get(cv2.CAP_PROP_FPS) or 30.0
+        cap.release()
+        # The dissolve runs on EXTRA frames: the first clip's last frame (its
+        # photo already at fullscreen) is held for `d` more seconds inside the
+        # dissolve only, so the fade starts the instant the photo is fullscreen
+        # and there is no visible freeze before it. Never longer than half the
+        # second clip.
+        d = min(float(seconds), second_len / 2.0)
+        if width <= 0 or height <= 0 or d < 0.1:
+            return None
+
+        norm = (
+            f"fps={fps:.3f},scale={width}:{height}:force_original_aspect_ratio=decrease,"
+            f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,setsar=1,format=yuv420p"
+        )
+        graph = (
+            f"[0:v]{norm},tpad=stop_mode=clone:stop_duration={d:.3f}[v0];[1:v]{norm}[v1];"
+            f"[v0][v1]xfade=transition=fade:duration={d:.3f}:offset={first_len:.3f}[v];"
+            f"[0:a]apad=pad_dur={d:.3f}[a0];[a0][1:a]acrossfade=d={d:.3f},apad[a]"
+        )
+        out = tmp_dir / f"seg_{index:04d}_fade.mp4"
+        cmd = [
+            ffmpeg_cmd, "-y", "-i", str(first), "-i", str(second),
+            "-filter_complex", graph, "-map", "[v]", "-map", "[a]",
+            "-c:v", "libx264", "-crf", "18", "-preset", "veryfast", "-pix_fmt", "yuv420p",
+            *tuning.ffmpeg_thread_args(),
+            "-c:a", "aac", "-ar", "44100", "-ac", "2",
+            "-shortest", "-video_track_timescale", str(_TIMESCALE), str(out),
+        ]
+        result = subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace")
+        if result.returncode != 0 or not out.exists():
+            logger.warning("crossfade failed, cutting instead: %s", result.stderr[-400:])
+            return None
+        return out
+
+    @staticmethod
     def concat_from_timeline(
         timeline_data: dict, output_path: str, save_json_path: Optional[str] = None
     ) -> str:
-        """NLE Engine: Stitches atomic clips using strict absolute paths and pre-flight file checks."""
+        """NLE Engine: Stitches atomic clips using strict absolute paths and pre-flight file checks.
+
+        Every clip the pipeline produces stays silent, with its narration
+        kept as a separate track in timeline_data (see build_timeline) so a
+        frontend editor can edit video and audio independently — this is
+        the ONE place they're finally combined, muxing each track's own
+        audio onto its video (see _mux_track_for_concat) right before
+        concatenating, rather than baking audio into clips earlier in the
+        pipeline where it could no longer be edited separately.
+        """
         # 1. Save the timeline.json file to the disk
         if save_json_path:
             with open(save_json_path, "w", encoding="utf-8") as f:
@@ -417,55 +632,87 @@ class VideoExporter:
         output_dir = Path(output_path).parent
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        concat_txt = output_dir / f"timeline_{uuid.uuid4().hex}.txt"
-
-        # 2. Write Absolute Paths
-        with open(concat_txt, "w", encoding="utf-8") as f:
-            for track in tracks:
-                clip_path = Path(track["file_path"]).resolve()
-                safe_path = clip_path.as_posix()
-                f.write(f"file 'file:{safe_path}'\n")
-
-        # 3. Execute the seamless stitch
         ffmpeg_cmd = VideoExporter.resolve_ffmpeg()
         if not ffmpeg_cmd:
-            concat_txt.unlink(missing_ok=True)
             raise RuntimeError("FFmpeg binary not found.")
 
-        result = subprocess.run(
-            [
-                ffmpeg_cmd,
-                "-y",
-                "-f",
-                "concat",
-                "-safe",
-                "0",
-                "-i",
-                str(concat_txt),
-                "-c",
-                "copy",
-                str(output_path),
-            ],
-            capture_output=True,
-            encoding="utf-8",
-            errors="replace",
-        )
+        tmp_dir = Path(tempfile.mkdtemp(prefix="navivi_concat_"))
+        target_size = VideoExporter._timeline_size(timeline_data, tracks)
+        target_fps = float(timeline_data.get("fps") or 30)
+        try:
+            muxed_paths = [
+                VideoExporter._mux_track_for_concat(
+                    ffmpeg_cmd, Path(track["file_path"]).resolve(), track.get("audio_path"), tmp_dir, i,
+                    audio_offset=float(track.get("audio_offset") or 0.0), target_size=target_size,
+                    target_fps=target_fps,
+                )
+                for i, track in enumerate(tracks)
+            ]
 
-        # Clean up the temporary FFmpeg text file
-        concat_txt.unlink(missing_ok=True)
+            # A track marked fade_into_next_seconds dissolves into the track
+            # after it (see timeline_step): the pair becomes one segment.
+            joined_paths: List[Path] = []
+            skip_next = False
+            for i, muxed in enumerate(muxed_paths):
+                if skip_next:
+                    skip_next = False
+                    continue
+                fade = float(tracks[i].get("fade_into_next_seconds") or 0.0)
+                if fade > 0 and i + 1 < len(muxed_paths):
+                    merged = VideoExporter._crossfade_pair(
+                        ffmpeg_cmd, muxed, muxed_paths[i + 1], fade, tmp_dir, i, target_fps=target_fps
+                    )
+                    if merged is not None:
+                        joined_paths.append(merged)
+                        skip_next = True
+                        continue
+                joined_paths.append(muxed)
+            muxed_paths = joined_paths
 
-        # 4. Strict Post-flight Check
-        if result.returncode != 0:
-            logger.error("concat_from_timeline failed: %s", result.stderr)
-            raise RuntimeError(f"FFmpeg concat failed: {result.stderr}")
+            concat_txt = output_dir / f"timeline_{uuid.uuid4().hex}.txt"
 
-        final_file = Path(output_path)
-        if not final_file.exists() or final_file.stat().st_size == 0:
-            raise RuntimeError(
-                f"FFmpeg reported success, but the output file is missing or 0 bytes! STDERR: {result.stderr}"
+            # 2. Write Absolute Paths
+            with open(concat_txt, "w", encoding="utf-8") as f:
+                for clip_path in muxed_paths:
+                    f.write(f"file 'file:{clip_path.resolve().as_posix()}'\n")
+
+            # 3. Execute the seamless stitch
+            result = subprocess.run(
+                [
+                    ffmpeg_cmd,
+                    "-y",
+                    "-f",
+                    "concat",
+                    "-safe",
+                    "0",
+                    "-i",
+                    str(concat_txt),
+                    "-c",
+                    "copy",
+                    str(output_path),
+                ],
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace",
             )
 
-        return output_path
+            # Clean up the temporary FFmpeg text file
+            concat_txt.unlink(missing_ok=True)
+
+            # 4. Strict Post-flight Check
+            if result.returncode != 0:
+                logger.error("concat_from_timeline failed: %s", result.stderr)
+                raise RuntimeError(f"FFmpeg concat failed: {result.stderr}")
+
+            final_file = Path(output_path)
+            if not final_file.exists() or final_file.stat().st_size == 0:
+                raise RuntimeError(
+                    f"FFmpeg reported success, but the output file is missing or 0 bytes! STDERR: {result.stderr}"
+                )
+
+            return output_path
+        finally:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
 
     @staticmethod
     def burn_subtitles(

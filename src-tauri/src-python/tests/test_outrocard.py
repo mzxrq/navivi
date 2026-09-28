@@ -110,3 +110,83 @@ class TestBuildFrame:
         waypoints = [{"label": "Ghost Town", "popup_image": str(tmp_path / "nope.jpg")}]
         frame = outrocard._build_frame("My Trip", waypoints)
         assert frame.size == (outrocard._CANVAS_W, outrocard._CANVAS_H)
+
+
+SIZE = (outrocard._CANVAS_W, outrocard._CANVAS_H)
+
+
+class TestBuildScrollPage:
+    def _waypoints(self, tmp_path, n):
+        img_path = tmp_path / "a.jpg"
+        Image.new("RGB", (200, 150), (10, 20, 30)).save(img_path)
+        return [{"label": f"Place {i}", "popup_image": str(img_path)} for i in range(n)]
+
+    def _page(self, tmp_path, n, size=SIZE):
+        return outrocard._build_scroll_page("My Trip", self._waypoints(tmp_path, n), size)
+
+    def test_ends_with_one_empty_screen_so_cards_scroll_off(self, tmp_path):
+        page = self._page(tmp_path, 3)
+        assert page.width == SIZE[0]
+        bottom = page.crop((0, page.height - SIZE[1], page.width, page.height))
+        assert bottom.getcolors() == [(page.width * SIZE[1], outrocard.tuning.OUTRO_BG_COLOR)]
+
+    def test_cards_stay_inside_the_side_padding(self, tmp_path):
+        page = self._page(tmp_path, 6)
+        pad = outrocard.tuning.OUTRO_SCROLL_SIDE_PADDING
+        cards = page.crop((0, outrocard._HEADER_HEIGHT, page.width, page.height))
+        for side in (cards.crop((0, 0, pad, cards.height)),
+                     cards.crop((page.width - pad, 0, page.width, cards.height))):
+            assert side.getcolors() == [(side.width * side.height, outrocard.tuning.OUTRO_BG_COLOR)]
+
+    def test_page_grows_by_one_row_per_three_cards(self, tmp_path):
+        six, nine, twelve = (self._page(tmp_path, n) for n in (6, 9, 12))
+        assert twelve.height - nine.height == nine.height - six.height > 0
+
+    def test_every_card_is_shown_past_the_grid_cap(self, tmp_path):
+        n = outrocard.tuning.OUTRO_MAX_CARDS + 4
+        rows = -(-n // outrocard.tuning.OUTRO_SCROLL_COLS)
+        assert self._page(tmp_path, n).height >= outrocard._HEADER_HEIGHT + rows * 100
+
+    def test_drawn_at_the_video_size_not_stretched(self, tmp_path):
+        small = self._page(tmp_path, 6)
+        big = self._page(tmp_path, 6, (1920, 1080))
+        assert big.width == 1920
+        # Everything scales with the frame: the page keeps its proportions.
+        assert abs(big.height / 1080 - small.height / SIZE[1]) < 0.02
+
+
+class TestScrollOffsets:
+    def test_nothing_to_scroll_is_held_still(self):
+        offsets = outrocard._scroll_offsets(0, 30)
+        assert set(offsets) == {0}
+        assert len(offsets) == round(outrocard.tuning.OUTRO_DURATION_SECONDS * 30)
+
+    def test_scrolls_from_top_to_bottom_and_never_backwards(self):
+        offsets = outrocard._scroll_offsets(1500, 30)
+        assert offsets[0] == 0 and offsets[-1] == 1500
+        assert all(b >= a for a, b in zip(offsets, offsets[1:]))
+
+    def test_holds_the_first_screen_and_the_end(self):
+        fps = 30
+        offsets = outrocard._scroll_offsets(1500, fps)
+        start = round(outrocard.tuning.OUTRO_SCROLL_START_HOLD_SECONDS * fps)
+        end = round(outrocard.tuning.OUTRO_SCROLL_END_HOLD_SECONDS * fps)
+        assert set(offsets[:start]) == {0}
+        assert set(offsets[-end:]) == {1500}
+
+    def test_moves_the_same_whole_step_every_frame_while_cruising(self):
+        fps = 30
+        offsets = outrocard._scroll_offsets(3000, fps, scale=1080 / 704)
+        steps = [b - a for a, b in zip(offsets, offsets[1:]) if b != a]
+        top = max(steps)
+        assert top == round(outrocard.tuning.OUTRO_SCROLL_SPEED_PX * 1080 / 704 / fps)
+        # Only the short ease at each end and at most one short
+        # leftover step differ from the cruising step.
+        assert sum(1 for st in steps if st != top) <= 2 * (top - 1) + 1
+
+    def test_very_long_page_is_capped(self):
+        fps = 30
+        t = outrocard.tuning
+        offsets = outrocard._scroll_offsets(100_000, fps)
+        cap = t.OUTRO_SCROLL_MAX_SECONDS + t.OUTRO_SCROLL_START_HOLD_SECONDS + t.OUTRO_SCROLL_END_HOLD_SECONDS
+        assert len(offsets) <= round(cap * fps) + 2 * 40

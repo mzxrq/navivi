@@ -157,6 +157,112 @@ class _CardMixin:
         out.paste(canvas, (pad, pad), canvas)
         return out
 
+    def _stopby_notice_layout(self, w: int, h: int):
+        """Fonts, wrapped body lines and every box of the stop-by notice for
+        a w x h frame: (scale, title_font, body_font, lines, ribbon box,
+        body box). Shared by the drawing and by `stopby_notice_box`."""
+        s = h / 1080.0
+        margin = int(28 * s)
+        title_font = self._load_font(self.FONT_CANDIDATES_BOLD, int(26 * s))
+        body_font = self._load_font(self.FONT_CANDIDATES_REGULAR, int(21 * s))
+        probe = ImageDraw.Draw(Image.new("RGB", (8, 8)))
+        icon_d = int(26 * s)
+        text_x0 = int(22 * s) + icon_d + int(14 * s)
+        # As wide as its longest line (so the given line breaks hold), within
+        # a sensible range; anything longer still wraps.
+        longest = max(
+            (probe.textlength(p, font=body_font) for p in tuning.STOPBY_NOTICE_BODY.split(chr(10))),
+            default=0,
+        )
+        body_w = int(min(0.45 * w, max(360 * s, text_x0 + longest + 24 * s)))
+        text_w = body_w - text_x0 - int(20 * s)
+        lines: List[str] = []
+        for paragraph in tuning.STOPBY_NOTICE_BODY.split(chr(10)):
+            line = ""
+            for ch in paragraph:
+                if line and probe.textlength(line + ch, font=body_font) > text_w:
+                    lines.append(line)
+                    line = ""
+                line += ch
+            if line:
+                lines.append(line)
+        line_h = int(body_font.size * 1.45)
+        body_h = int(18 * s) * 2 + line_h * len(lines)
+        body_x0 = margin
+        body_y1 = h - margin
+        body_y0 = body_y1 - body_h
+        title_w = int(probe.textlength(tuning.STOPBY_NOTICE_TITLE, font=title_font))
+        ribbon_h = int(50 * s)
+        ribbon_x0 = body_x0 - int(10 * s)
+        ribbon_y1 = body_y0 + int(12 * s)  # overlaps the body card's top edge
+        ribbon = (ribbon_x0, ribbon_y1 - ribbon_h, ribbon_x0 + title_w + int(44 * s), ribbon_y1)
+        body = (body_x0, body_y0, body_x0 + body_w, body_y1)
+        return s, title_font, body_font, lines, ribbon, body
+
+    def stopby_notice_box(self, w: int, h: int) -> Tuple[int, int, int, int]:
+        """(x0, y0, x1, y1) the notice covers, so cards can be kept off it."""
+        _, _, _, _, ribbon, body = self._stopby_notice_layout(w, h)
+        return (min(ribbon[0], body[0]), ribbon[1], max(ribbon[2], body[2]), body[3])
+
+    def render_stopby_notice(
+        self, frame: np.ndarray, alpha: float = 1.0,
+        marker_color: Tuple[int, int, int] = tuning.STOPBY_PIN_COLOR,
+    ) -> np.ndarray:
+        """Bottom-left notice for the round stop-by markers: a ribbon with
+        tuning.STOPBY_NOTICE_TITLE over a white rounded card with the marker
+        itself and tuning.STOPBY_NOTICE_BODY (they are optional extras).
+        `alpha` fades it as one unit. Colors are BGR, like the frame."""
+        if alpha <= 0:
+            return frame
+        h, w = frame.shape[:2]
+        s, title_font, body_font, lines, ribbon, body = self._stopby_notice_layout(w, h)
+        layer = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+
+        # soft shadow under both cards
+        shadow = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        sd = ImageDraw.Draw(shadow)
+        sd.rounded_rectangle([body[0] - 4, body[1] + 2, body[2] + 4, body[3] + 10],
+                             radius=int(20 * s), fill=(0, 0, 0, 70))
+        sd.rounded_rectangle([ribbon[0], ribbon[1] + 4, ribbon[2], ribbon[3] + 6],
+                             radius=int(12 * s), fill=(0, 0, 0, 60))
+        layer.alpha_composite(shadow.filter(ImageFilter.GaussianBlur(radius=10 * s)))
+        d = ImageDraw.Draw(layer)
+
+        # body card
+        d.rounded_rectangle(body, radius=int(16 * s), fill=(255, 255, 255, 245))
+        icon_d = int(26 * s)
+        ix = body[0] + int(22 * s)
+        iy = body[1] + int(18 * s) + int(body_font.size * 1.45 - icon_d) // 2 + int(4 * s)
+        ring = int(3 * s) + 1
+        d.ellipse([ix - ring, iy - ring, ix + icon_d + ring, iy + icon_d + ring],
+                  fill=(200, 200, 200, 255))
+        d.ellipse([ix - ring + 1, iy - ring + 1, ix + icon_d + ring - 1, iy + icon_d + ring - 1],
+                  fill=(255, 255, 255, 255))
+        d.ellipse([ix, iy, ix + icon_d, iy + icon_d], fill=tuple(reversed(marker_color)) + (255,))
+        tx = ix + icon_d + int(14 * s)
+        ty = body[1] + int(18 * s) + int(4 * s)
+        for line in lines:
+            d.text((tx, ty), line, font=body_font, fill=(45, 45, 45, 255))
+            ty += int(body_font.size * 1.45)
+
+        # ribbon: a banded title with a folded tail under its left end
+        rgb = tuple(reversed(tuning.STOPBY_NOTICE_RIBBON_COLOR))
+        dark = tuple(int(c * 0.6) for c in rgb)
+        fold = int(10 * s)
+        d.polygon([(ribbon[0], ribbon[3]), (ribbon[0] + fold, ribbon[3]),
+                   (ribbon[0] + fold, ribbon[3] + fold)], fill=dark + (255,))
+        d.rounded_rectangle(ribbon, radius=int(10 * s), fill=rgb + (255,))
+        tb = d.textbbox((0, 0), tuning.STOPBY_NOTICE_TITLE, font=title_font)
+        d.text((ribbon[0] + int(22 * s), (ribbon[1] + ribbon[3]) // 2 - (tb[1] + tb[3]) // 2),
+               tuning.STOPBY_NOTICE_TITLE, font=title_font, fill=(255, 255, 255, 255))
+
+        if alpha < 1.0:
+            a = layer.getchannel("A").point(lambda v: int(v * alpha))
+            layer.putalpha(a)
+        base = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGBA))
+        base.alpha_composite(layer)
+        return cv2.cvtColor(np.asarray(base), cv2.COLOR_RGBA2BGR)
+
     def create_summary_card(
         self,
         distance_km: float,
