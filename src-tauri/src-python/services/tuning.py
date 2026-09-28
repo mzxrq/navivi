@@ -596,6 +596,35 @@ STOPBY_BATCH_SECONDS = 2.0
 # next waypoint: POPUP_MIN_DISPLAY_SECONDS counts the fades, which left a card
 # passed on the way readable for barely half a second.
 OVERVIEW_POPUP_MIN_HOLD_SECONDS = 2.0
+# Overview map padding, scaled to how physically big the route actually is
+# (bounding-box diagonal, in km) - a flat percentage padding looks right at
+# one scale and wrong at another: 10% margin around a route that spans 40km
+# is a lot of genuinely useful breathing room, but the same 10% around a
+# route that spans 800m is still a huge, mostly-empty gap with the pins
+# clustered tiny in the middle. Smaller routes get a tighter (more zoomed-in)
+# crop; bigger ones get more room so nearby pins/labels don't crowd the
+# frame edge. (span_km ceiling, padding_factor) pairs, checked in order -
+# the first ceiling the route's own span fits under wins.
+# TileDownloader._optimal_zoom_for_span rounds the padded span's zoom UP to
+# the nearest WHOLE level (never down), and zoom is log2-scaled - so most
+# padding changes land inside the same whole level and change nothing
+# visible; only enough padding to push past the NEXT level's threshold
+# changes the fetched crop at all, and that jump is a big, discrete step
+# (confirmed on this project's own route, span ~7.5km: 0.05-0.50 all stayed
+# at zoom 13 - identical crop; 0.70 dropped to zoom 12 - roughly 2x the
+# area, at which point the card layout (built for the tighter crop) started
+# overlapping/crowding, so that's a real regression, not just "more
+# zoomed out"). Kept modest for now, matching zoom 13 on that route -
+# raise a tier past its own threshold only once the card layout can also
+# handle the wider crop it produces.
+OVERVIEW_PADDING_BY_SPAN_KM: Tuple[Tuple[float, float], ...] = (
+    (1.5, 0.025),
+    (5.0, 0.035),
+    (15.0, 0.065),
+    (40.0, 0.065),
+)
+# Above the largest span_km ceiling in OVERVIEW_PADDING_BY_SPAN_KM.
+OVERVIEW_PADDING_MAX_SPAN = 0.08
 # Overview: the walker takes at least this long from one numbered stop to the
 # next, however close they are (stops a few hundred metres apart used to flash
 # past in a fraction of a second, their cards all popping up at once). The

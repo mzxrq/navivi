@@ -241,22 +241,6 @@ def _render_checkpoint_key(
 RESIDENTIAL_LEG_RE = re.compile(r"02_waypoint_(\d+)_")
 
 
-# Overview map padding, scaled to how physically big the route actually
-# is (bounding-box diagonal, in km) — a flat percentage padding looks
-# right at one scale and wrong at another: 10% margin around a route that
-# spans 40km is a lot of genuinely useful breathing room, but the same
-# 10% around a route that spans 800m is still a huge, mostly-empty gap
-# with the pins clustered tiny in the middle. Smaller routes get a
-# tighter (more zoomed-in) crop; bigger ones get a bit more room so nearby
-# pins/labels don't crowd the frame edge.
-_OVERVIEW_PADDING_BY_SPAN_KM = (
-    (1.5, 0.025),
-    (5.0, 0.035),
-    (15.0, 0.045),
-    (40.0, 0.06),
-)
-_OVERVIEW_PADDING_MAX_SPAN = 0.075
-
 # Fallback real-world speed (km/h) used when a leg's own mode has no
 # configured speed AND there's no configured "car" speed to fall back to
 # either (see mode_speed_kmh.get(mode) or mode_speed_kmh.get("car", ...)
@@ -282,9 +266,9 @@ _OVERVIEW_MIN_FINAL_DURATION_SECONDS = 10.0
 
 def _adaptive_overview_padding(route_df: pd.DataFrame) -> float:
     """Picks the overview map's padding_factor from the route's own
-    bounding-box diagonal distance (km) — see _OVERVIEW_PADDING_BY_SPAN_KM
-    above. Falls back to the old flat 10% if the span can't be computed
-    (e.g. a single-point route)."""
+    bounding-box diagonal distance (km) — see tuning.OVERVIEW_PADDING_BY_SPAN_KM.
+    Falls back to the old flat 10% if the span can't be computed (e.g. a
+    single-point route)."""
     try:
         min_lat, max_lat = route_df["latitude"].min(), route_df["latitude"].max()
         min_lon, max_lon = route_df["longitude"].min(), route_df["longitude"].max()
@@ -297,10 +281,10 @@ def _adaptive_overview_padding(route_df: pd.DataFrame) -> float:
     except (KeyError, ValueError, IndexError):
         return 0.10
 
-    for max_span, padding in _OVERVIEW_PADDING_BY_SPAN_KM:
+    for max_span, padding in tuning.OVERVIEW_PADDING_BY_SPAN_KM:
         if span_km <= max_span:
             return padding
-    return _OVERVIEW_PADDING_MAX_SPAN
+    return tuning.OVERVIEW_PADDING_MAX_SPAN
 
 
 def render_route_video(
