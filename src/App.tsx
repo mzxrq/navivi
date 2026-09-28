@@ -14,12 +14,12 @@ import { invoke } from "@tauri-apps/api/core";
 import { StatusBar } from "./components/ui/StatusBar";
 import { ContextMenu } from "./components/ui/ContextMenu";
 import { useAutoSave } from "./hooks/useAutoSave";
+import { AutoDirectorModal } from "./components/ui/AutoDirectorModal";
 
 export default function App() {
   const { currentView, editorMode, showToast } = useUI();
   useAutoSave();
 
-  // ✨ FIXED: Use a ref to guarantee the Ollama check only ever runs once
   const hasCheckedOllama = useRef(false);
 
   useEffect(() => {
@@ -39,7 +39,7 @@ export default function App() {
       }
     };
     initializeOllama();
-  }, []); // ✨ FIXED: Removed showToast from dependency array
+  }, []); 
 
   return (
     <div
@@ -77,6 +77,7 @@ export default function App() {
       <ContextMenu />
       <Toast />
       {currentView === "editor" && <StatusBar />}
+      <AutoDirectorModal />
     </div>
   );
 }

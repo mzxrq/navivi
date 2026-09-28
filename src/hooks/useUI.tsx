@@ -38,6 +38,16 @@ interface UIState {
   clearNotifications: () => void;
   hideToast: (id: string) => void;
   activeToasts: AppNotification[];
+  // render collapse & session state
+  isRenderCollapsed: boolean;
+  setIsRenderCollapsed: (collapsed: boolean) => void;
+  markedWaypointIds: string[];
+  setMarkedWaypointIds: React.Dispatch<React.SetStateAction<string[]>>;
+  generationSessionInfo: { activeLeg?: string; waypointId?: string; message?: string } | null;
+  setGenerationSessionInfo: (info: { activeLeg?: string; waypointId?: string; message?: string } | null) => void;
+  // auto-director
+  autoDirectorData: any;
+  setAutoDirectorData: (data: any) => void;
 }
 
 // create context
@@ -50,20 +60,19 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({
   const [currentView, setCurrentView] = useState<AppView>("title_screen");
   const [editorMode, setEditorMode] = useState<EditorMode>("map");
   const [activeToasts, setActiveToasts] = useState<AppNotification[]>([]);
-  // const [toast, setToast] = useState<{
-  //   message: string;
-  //   type: "success" | "error" | "warning" | "info";
-  //   visible: boolean;
-  // }>({
-  //   message: "",
-  //   type: "info",
-  //   visible: false,
-  // });
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [showAppSettings, setShowAppSettings] = useState(false);
   const [isRendering, setIsRendering] = useState(false);
   const [renderLogs, setRenderLogs] = useState("");
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isRenderCollapsed, setIsRenderCollapsed] = useState(false);
+  const [markedWaypointIds, setMarkedWaypointIds] = useState<string[]>([]);
+  const [generationSessionInfo, setGenerationSessionInfo] = useState<{
+    activeLeg?: string;
+    waypointId?: string;
+    message?: string;
+  } | null>(null);
+  const [autoDirectorData, setAutoDirectorData] = useState<any>(null);
 
   // han
   const clearNotifications = () => {
@@ -108,6 +117,14 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({
         setShowAppSettings,
         notifications,
         clearNotifications,
+        isRenderCollapsed,
+        setIsRenderCollapsed,
+        markedWaypointIds,
+        setMarkedWaypointIds,
+        generationSessionInfo,
+        setGenerationSessionInfo,
+        autoDirectorData,
+        setAutoDirectorData,
       }}
     >
       {children}

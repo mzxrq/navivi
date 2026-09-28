@@ -1,6 +1,9 @@
 import { useState, useEffect } from "react";
 import { Search, Loader2, MapPin, X } from "./icons";
 import { useWorkspace } from "../../hooks/useWorkspace";
+import { t } from "@lingui/core/macro";
+import { Trans } from "@lingui/react/macro";
+import { i18n } from "@lingui/core";
 
 interface SearchResult {
   place_id: number;
@@ -35,7 +38,7 @@ export function LocationSearch() {
           )}&limit=5&accept-language=${currentLang}`,
         );
 
-        if (!res.ok) throw new Error("No Internet Connection.");
+        if (!res.ok) throw new Error(t`no-internet`);
 
         const data = await res.json();
         setResults(data);
@@ -86,7 +89,7 @@ export function LocationSearch() {
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search location..."
+          placeholder={t`search-location`}
           className="w-full bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5 focus:ring-1 focus:ring-zinc-400 dark:focus:ring-zinc-600 text-xs rounded-xl pl-9 pr-8 py-2.5 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none transition-all shadow-sm"
         />
 

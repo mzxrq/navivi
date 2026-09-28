@@ -1,5 +1,5 @@
-import React from "react";
-import { Sparkles } from "lucide-react";
+import { t } from "@lingui/core/macro"; import { Trans } from "@lingui/react/macro";
+import { Sparkles } from "../../../../../components/ui/icons";
 
 interface InspectorTransitionsPanelProps {
   selectedClip: any;
@@ -17,12 +17,12 @@ export function InspectorTransitionsPanel({
   return (
     <div className="space-y-3 pt-3 border-t border-zinc-200 dark:border-navidark-400">
       <h5 className="flex items-center gap-2 text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
-        <Sparkles className="w-3 h-3" /> Transitions
+        <Sparkles className="w-3 h-3" /> <Trans>Transitions</Trans>
       </h5>
       <div className="space-y-2">
         <div>
           <label className="text-[10px] text-zinc-400 block mb-1">
-            In-Transition
+            <Trans>In-Transition</Trans>
           </label>
           <select
             value={selectedClip.transitionIn || "none"}
@@ -104,26 +104,26 @@ export function InspectorTransitionsPanel({
             }}
             className="w-full bg-zinc-50 dark:bg-navidark-900 border border-zinc-200 dark:border-navidark-400 rounded p-2 text-xs text-zinc-800 dark:text-zinc-200 cursor-pointer"
           >
-            <option value="none">None</option>
-            <option value="glsl-crossfade">Crossfade (GLSL)</option>
-            <option value="glsl-wipe">Wipe (GLSL)</option>
-            <option value="glsl-slide">Slide (GLSL)</option>
-            <option value="glsl-dissolve">Dissolve (GLSL)</option>
-            <option value="glsl-dreamy">Dreamy (GLSL)</option>
+            <option value="none"><Trans>None</Trans></option>
+            <option value="glsl-crossfade"><Trans>Crossfade</Trans></option>
+            <option value="glsl-wipe"><Trans>Wipe</Trans></option>
+            <option value="glsl-slide"><Trans>Slide</Trans></option>
+            <option value="glsl-dissolve"><Trans>Dissolve</Trans></option>
+            <option value="glsl-dreamy"><Trans>Dreamy</Trans></option>
             <option value="glsl-directionalwarp">
-              Directional Warp (GLSL)
+              <Trans>Directional Warp</Trans>
             </option>
-            <option value="glsl-pixelize">Pixelize (GLSL)</option>
-            <option value="glsl-multiply_blend">Multiply Blend (GLSL)</option>
-            <option value="glsl-crosswarp">Cross Warp (GLSL)</option>
-            <option value="glsl-burn">Burn (GLSL)</option>
-            <option value="crossfade">Opacity Fade</option>
-            <option value="fade-black">Fade from Black</option>
+            <option value="glsl-pixelize"><Trans>Pixelize</Trans></option>
+            <option value="glsl-multiply_blend"><Trans>Multiply Blend</Trans></option>
+            <option value="glsl-crosswarp"><Trans>Cross Warp</Trans></option>
+            <option value="glsl-burn"><Trans>Burn</Trans></option>
+            <option value="crossfade"><Trans>Opacity Fade</Trans></option>
+            <option value="fade-black"><Trans>Fade to Black</Trans></option>
           </select>
         </div>
         <div>
           <label className="text-[10px] text-zinc-400 block mb-1">
-            Out-Transition
+            <Trans>Out-Transition</Trans>
           </label>
           <select
             value={selectedClip.transitionOut || "none"}
@@ -198,21 +198,21 @@ export function InspectorTransitionsPanel({
             }}
             className="w-full bg-zinc-50 dark:bg-navidark-900 border border-zinc-200 dark:border-navidark-400 rounded p-2 text-xs text-zinc-800 dark:text-zinc-200 cursor-pointer"
           >
-            <option value="none">None</option>
-            <option value="glsl-crossfade">Crossfade (GLSL)</option>
-            <option value="glsl-wipe">Wipe (GLSL)</option>
-            <option value="glsl-slide">Slide (GLSL)</option>
-            <option value="glsl-dissolve">Dissolve (GLSL)</option>
-            <option value="glsl-dreamy">Dreamy (GLSL)</option>
+            <option value="none"><Trans>None</Trans></option>
+            <option value="glsl-crossfade"><Trans>Crossfade</Trans></option>
+            <option value="glsl-wipe"><Trans>Wipe</Trans></option>
+            <option value="glsl-slide"><Trans>Slide</Trans></option>
+            <option value="glsl-dissolve"><Trans>Dissolve</Trans></option>
+            <option value="glsl-dreamy"><Trans>Dreamy</Trans></option>
             <option value="glsl-directionalwarp">
-              Directional Warp (GLSL)
+              <Trans>Directional Warp</Trans>
             </option>
-            <option value="glsl-pixelize">Pixelize (GLSL)</option>
-            <option value="glsl-multiply_blend">Multiply Blend (GLSL)</option>
-            <option value="glsl-crosswarp">Cross Warp (GLSL)</option>
-            <option value="glsl-burn">Burn (GLSL)</option>
-            <option value="crossfade">Opacity Fade</option>
-            <option value="fade-black">Fade to Black</option>
+            <option value="glsl-pixelize"><Trans>Pixelize</Trans></option>
+            <option value="glsl-multiply_blend"><Trans>Multiply Blend</Trans></option>
+            <option value="glsl-crosswarp"><Trans>Cross Warp</Trans></option>
+            <option value="glsl-burn"><Trans>Burn</Trans></option>
+            <option value="crossfade"><Trans>Opacity Fade</Trans></option>
+            <option value="fade-black"><Trans>Fade to Black</Trans></option>
           </select>
         </div>
       </div>

@@ -149,3 +149,7 @@ body {
     @apply dark:hover:bg-zinc-800 dark:hover:text-zinc-100;
   }
 }
+
+@keyframes shimmer {
+  100% { transform: translateX(150%) skewX(-12deg); }
+}

@@ -4,7 +4,9 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { ClipData } from "../../../types/index";
 import { AudioWaveform } from "./elements/AudioWaveform";
 import { useWorkspace } from "../../../hooks/useWorkspace";
-import { useUI } from "../../../hooks/useUI"; // ✨ NEW: For throwing track-error toasts
+import { useUI } from "../../../hooks/useUI";
+import { t } from "@lingui/core/macro";
+import { Trans } from "@lingui/react/macro";
 
 interface ClipProps {
   clip: ClipData;
@@ -32,11 +34,8 @@ export function TimelineClip({
 }: ClipProps) {
   const { timeline, setTimeline } = useWorkspace();
   const { showToast } = useUI();
-
-  // ✨ LINK LAYERS FIX: Real-time visual delta state
   const [dragDeltaX, setDragDeltaX] = useState<number>(0);
 
-  // Listen for sibling clips being dragged
   useEffect(() => {
     if (!clip.groupId) return;
 
@@ -61,7 +60,7 @@ export function TimelineClip({
   }, [clip.groupId, clip.id]);
 
   const globalXPos = clip.startTime * pixelsPerSecond;
-  const xPos = Math.max(0, globalXPos + dragDeltaX); // Prevent dragging visually past 00:00
+  const xPos = Math.max(0, globalXPos + dragDeltaX);
   const clipWidth = Math.max(clip.duration * pixelsPerSecond, 10);
   const height = isMainTrack ? 80 : 56;
 
@@ -232,7 +231,7 @@ export function TimelineClip({
 
       if (overlapping) {
         showToast(
-          "Cannot move clip here: overlaps with existing clips.",
+          t`Cannot move clip here: overlaps with existing clips`,
           "error",
         );
         return; // Revert
@@ -277,7 +276,6 @@ export function TimelineClip({
       size={{ width: clipWidth, height: height }}
       maxWidth={maxClipWidth}
       disableDragging={isLocked}
-      // ✨ REMOVED bounds="parent" to allow vertical track crossing
       resizeHandleClasses={{
         left: "hover:bg-white/30 transition-colors z-50",
         right: "hover:bg-white/30 transition-colors z-50",
@@ -326,8 +324,6 @@ export function TimelineClip({
       onDrag={(_e, data) => {
         const newDeltaX = data.x - globalXPos;
         setDragDeltaX(newDeltaX);
-
-        // Broadcast movement to linked siblings instantly
         if (clip.groupId) {
           window.dispatchEvent(
             new CustomEvent("group-drag", {
@@ -342,8 +338,6 @@ export function TimelineClip({
       }}
       onDragStop={(e, data) => {
         setDragDeltaX(0);
-
-        // Stop sibling broadcast
         if (clip.groupId) {
           window.dispatchEvent(
             new CustomEvent("group-drag-stop", {
@@ -353,8 +347,6 @@ export function TimelineClip({
         }
 
         let targetTrackId = clip.trackId;
-
-        // ✨ CROSS-TRACK DETECTION
         const clientX =
           "clientX" in e
             ? (e as MouseEvent).clientX
@@ -434,10 +426,14 @@ export function TimelineClip({
       <span className="text-[10px] font-bold tracking-wide truncate pointer-events-none select-none relative z-20 drop-shadow-md flex items-center gap-1">
         <span>{clip.label}</span>
         {clip.isMuted && (
-          <span className="text-[8px] bg-red-500/80 text-white px-1 py-0.5 rounded font-mono">MUTED</span>
+          <span className="text-[8px] bg-red-500/80 text-white px-1 py-0.5 rounded ">
+            <Trans>Muted</Trans>
+          </span>
         )}
         {clip.ducking && (
-          <span className="text-[8px] bg-amber-500/80 text-white px-1 py-0.5 rounded font-mono">DUCK</span>
+          <span className="text-[8px] bg-amber-500/80 text-white px-1 py-0.5 rounded ">
+            <Trans>Duck</Trans>
+          </span>
         )}
       </span>
 

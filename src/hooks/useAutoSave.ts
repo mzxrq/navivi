@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useWorkspace } from "./useWorkspace";
 import { useUI } from "./useUI";
-
+import { t } from "@lingui/core/macro";
 export function useAutoSave() {
     const { settings, metadata, isDirty, setIsDirty, saveProject } = useWorkspace();
     const { showToast } = useUI();
@@ -30,7 +30,7 @@ export function useAutoSave() {
                 await saveProjectRef.current(undefined, undefined, undefined, false);
             } catch (error) {
                 console.error("Auto-save failed:", error);
-                showToastRef.current("Auto-save failed", "error");
+                showToastRef.current(t`Auto-save failed`, "error");
             } finally {
                 savingRef.current = false;
             }

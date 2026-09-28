@@ -15,6 +15,8 @@ import {
   X,
   Info,
 } from "../ui/icons";
+import { t } from "@lingui/core/macro";
+import { Trans } from "@lingui/react/macro";
 
 interface SearchResult {
   place_id: number;
@@ -27,7 +29,7 @@ export function NewProject() {
   const { setCurrentView } = useUI();
   const { updateMetadata, updateSettings, resetWorkspace } = useWorkspace();
 
-  const [projectName, setProjectName] = useState("Untitled Project");
+  const [projectName, setProjectName] = useState(t`Untitled Project`);
   const [travelMode, setTravelMode] = useState<"driving" | "walking" | "curve">(
     "driving",
   );
@@ -83,7 +85,7 @@ export function NewProject() {
             originQuery,
           )}&limit=5&accept-language=en`,
         );
-        if (!res.ok) throw new Error("No Internet Connection.");
+        if (!res.ok) throw new Error(t`no-internet`);
         const data = await res.json();
         setSearchResults(data);
         setShowDropdown(true);
@@ -107,7 +109,7 @@ export function NewProject() {
     resetWorkspace();
 
     updateMetadata({
-      project_name: projectName || "Untitled Project",
+      project_name: projectName || t`Untitled Project`,
       project_id: "",
       status: "initialized",
     });
@@ -132,10 +134,10 @@ export function NewProject() {
           </div>
           <div>
             <h2 className="text-xl font-bold text-zinc-900 dark:text-white tracking-tight">
-              Create New Route
+              <Trans>create-new-route</Trans>{" "}
             </h2>
             <p className="text-sm text-zinc-500 dark:text-navidark-125 mt-0.5">
-              Set your starting coordinates and routing behavior.
+              <Trans>create-new-route-detail</Trans>{" "}
             </p>
           </div>
         </div>
@@ -144,14 +146,14 @@ export function NewProject() {
           {/* Project Name (Fused Input) */}
           <div className="space-y-2">
             <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-150 uppercase tracking-widest flex items-center gap-1.5">
-              Project Name
+              <Trans>project-name</Trans>{" "}
             </label>
             <input
               type="text"
               value={projectName}
               onChange={(e) => setProjectName(e.target.value)}
               className="w-full bg-zinc-100 dark:bg-navidark-800 border-none rounded-lg px-4 py-3 text-sm font-semibold text-zinc-900 dark:text-white outline-none focus:ring-2 focus:ring-navi/50 transition-all shadow-inner placeholder-zinc-400 dark:placeholder-navidark-200"
-              placeholder="e.g. Kyoto Temple Run"
+              placeholder={t`project-name-placeholder`}
               autoFocus
             />
           </div>
@@ -159,7 +161,7 @@ export function NewProject() {
           {/* Searchable Starting Location (Fused Input) */}
           <div className="space-y-2" ref={searchRef}>
             <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-150 uppercase tracking-widest flex items-center gap-1.5">
-              Starting Origin
+              <Trans>start-search-location</Trans>{" "}
             </label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
@@ -173,7 +175,7 @@ export function NewProject() {
                 onFocus={() => {
                   if (searchResults.length > 0) setShowDropdown(true);
                 }}
-                placeholder="Search for a city, landmark, or address..."
+                placeholder={t`start-search-detail`}
                 className="w-full bg-zinc-100 dark:bg-navidark-800 border-none rounded-lg pl-10 pr-10 py-3 text-sm font-semibold text-zinc-900 dark:text-white outline-none focus:ring-2 focus:ring-navi/50 transition-all shadow-inner placeholder-zinc-400 dark:placeholder-navidark-200"
               />
 
@@ -224,19 +226,19 @@ export function NewProject() {
           <div className="space-y-2 pt-2">
             <div className="flex flex-col gap-1">
               <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-150 uppercase tracking-widest flex items-center gap-1.5">
-                <Navigation className="w-3.5 h-3.5" /> Default Routing Mode
+                <Navigation className="w-3.5 h-3.5" /> t`default-routing-mode`
               </label>
               <p className="text-[10px] text-zinc-500 dark:text-navidark-150 flex items-center gap-1">
-                <Info className="w-3 h-3" /> Sets the default pathfinding engine
-                when placing waypoints.
+                <Info className="w-3 h-3" />{" "}
+                <Trans>default-routing-mode-detail</Trans>{" "}
               </p>
             </div>
 
             <div className="grid grid-cols-3 gap-2">
               {[
-                { id: "driving", icon: Car, label: "Driving" },
-                { id: "walking", icon: Footprints, label: "Walking" },
-                { id: "curve", icon: Plane, label: "Direct/Fly" },
+                { id: "driving", icon: Car, label: t`DriveLabel` },
+                { id: "walking", icon: Footprints, label: t`WalkLabel` },
+                { id: "curve", icon: Plane, label: t`direct` },
               ].map((mode) => (
                 <button
                   key={mode.id}
@@ -271,11 +273,13 @@ export function NewProject() {
                       : "text-zinc-700 dark:text-zinc-200 group-hover:text-zinc-900 dark:group-hover:text-white"
                   }`}
                 >
-                  Fast Render Mode
+                  <Trans>Fast Render Mode</Trans>{" "}
                 </span>
                 <span className="text-[10px] text-zinc-500 dark:text-navidark-150 leading-relaxed">
-                  Skip AI voiceover synthesis and pop-up images during
-                  generation. Perfect for quickly previewing route paths.
+                  <Trans>
+                    Skip AI voiceover synthesis and pop-up images during
+                    generation
+                  </Trans>{" "}
                 </span>
               </div>
 
@@ -301,13 +305,12 @@ export function NewProject() {
             onClick={() => setCurrentView("title_screen")}
             className="px-5 py-2.5 text-xs font-bold text-zinc-500 dark:text-navidark-125 hover:bg-zinc-100 dark:hover:bg-navidark-800 hover:text-zinc-800 dark:hover:text-white rounded-xl transition-colors"
           >
-            Cancel
-          </button>
+            <Trans>cancel</Trans> </button>
           <button
             onClick={handleCreate}
             className="px-6 py-2.5 rounded-xl bg-navi hover:bg-navi-600 text-white text-xs font-bold transition-all flex items-center gap-2 shadow-md hover:shadow-lg"
           >
-            Start Editing <ChevronRight className="w-4 h-4 opacity-70" />
+            <Trans>start-editing</Trans> <ChevronRight className="w-4 h-4 opacity-70" />
           </button>
         </div>
       </div>

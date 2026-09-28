@@ -1,6 +1,6 @@
 use std::net::TcpStream;
 use std::process::{Child, Command, Stdio};
-use std::io::{BufRead, BufReader, Read};
+use std::io::{BufRead, BufReader};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::{thread};
@@ -11,8 +11,8 @@ use std::fs;
 
 struct BlueprintState {
     process: Mutex<Option<Child>>,
-    // start_render's spawned child wasn't tracked anywhere before — only
-    // run_python_blueprint's was — so a force-killed app left it (and
+    // start_render's spawned child wasn't tracked anywhere before  Eonly
+    // run_python_blueprint's was  Eso a force-killed app left it (and
     // whatever Python server it had itself started, e.g. the bundled TTS/
     // ComfyUI servers) running with no supervising process at all.
     render_process: Mutex<Option<Child>>,
@@ -262,6 +262,7 @@ async fn export_video(app: tauri::AppHandle, project_dir: String) -> Result<(), 
 
     // Call Dev 1's specific command registry handler
     let output = std::process::Command::new("python")
+        .env("PYTHONIOENCODING", "utf-8")
         .arg("src-python/main.py")
         .arg("render_timeline") 
         .arg(&timeline_path)    
@@ -302,18 +303,63 @@ async fn copy_asset_file(source_path: String, target_dir: String) -> Result<Stri
 
 #[tauri::command]
 fn open_in_explorer(path: String) -> Result<(), String> {
+    let p = std::path::Path::new(&path);
     #[cfg(target_os = "windows")]
-    let cmd = "explorer";
+    {
+        let mut cmd = std::process::Command::new("explorer");
+        if p.is_file() {
+            cmd.arg("/select,").arg(&path);
+        } else {
+            cmd.arg(&path);
+        }
+        cmd.spawn().map_err(|e| e.to_string())?;
+    }
     #[cfg(target_os = "macos")]
-    let cmd = "open";
+    {
+        let mut cmd = std::process::Command::new("open");
+        if p.is_file() {
+            cmd.arg("-R").arg(&path);
+        } else {
+            cmd.arg(&path);
+        }
+        cmd.spawn().map_err(|e| e.to_string())?;
+    }
     #[cfg(not(any(target_os = "windows", target_os = "macos")))]
-    let cmd = "xdg-open";
+    {
+        std::process::Command::new("xdg-open")
+            .arg(&path)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
 
-    std::process::Command::new(cmd)
-        .arg(&path)
-        .spawn()
-        .map_err(|e| e.to_string())?;
     Ok(())
+}
+
+
+#[tauri::command]
+async fn convert_gps_to_gpx(input_path: String, input_format: String) -> Result<String, String> {
+    let output = std::process::Command::new("gpsbabel")
+        .arg("-i")
+        .arg(&input_format)
+        .arg("-f")
+        .arg(&input_path)
+        .arg("-o")
+        .arg("gpx")
+        .arg("-F")
+        .arg("-")
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if output.status.success() {
+        Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+    } else {
+        let err = String::from_utf8_lossy(&output.stderr).into_owned();
+        if err.is_empty() {
+            Err("gpsbabel failed without error output. Is it installed?".to_string())
+        } else {
+            Err(err)
+        }
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -338,13 +384,16 @@ pub fn run() {
             export_video,
             copy_asset_file,
             open_in_explorer,
+            zip_project,
+            unzip_project,
+            convert_gps_to_gpx,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app_handle, event| {
             // A force-closed window (or OS shutdown) previously left any
-            // running Python worker — and whatever bundled server it had
-            // itself spawned (TTS/ComfyUI) — running with nothing left to
+            // running Python worker  Eand whatever bundled server it had
+            // itself spawned (TTS/ComfyUI)  Erunning with nothing left to
             // supervise it. Kill whatever this app is still tracking on exit.
             if let tauri::RunEvent::ExitRequested { .. } = event {
                 if let Some(state) = app_handle.try_state::<BlueprintState>() {
@@ -352,4 +401,72 @@ pub fn run() {
                 }
             }
         });
+}
+
+use zip::ZipWriter;
+use std::io::{Read, Write};
+use walkdir::WalkDir;
+use zip::ZipArchive;
+
+#[tauri::command]
+async fn zip_project(source_dir: String, dest_file: String) -> Result<(), String> {
+    let path = Path::new(&dest_file);
+    let file = fs::File::create(path).map_err(|e| e.to_string())?;
+    let mut zip = ZipWriter::new(file);
+    let options = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+
+    let walkdir = WalkDir::new(&source_dir);
+    let it = walkdir.into_iter();
+
+    for entry in it.filter_map(|e| e.ok()) {
+        let path = entry.path();
+        let name = path.strip_prefix(Path::new(&source_dir))
+            .unwrap()
+            .to_string_lossy()
+            .into_owned()
+            .replace("\\", "/");
+
+        if name.is_empty() {
+            continue;
+        }
+
+        if path.is_file() {
+            zip.start_file(&name, options).map_err(|e| e.to_string())?;
+            let mut f = fs::File::open(path).map_err(|e| e.to_string())?;
+            let mut buffer = Vec::new();
+            f.read_to_end(&mut buffer).map_err(|e| e.to_string())?;
+            zip.write_all(&buffer).map_err(|e| e.to_string())?;
+        } else if !name.is_empty() {
+            zip.add_directory(&name, options).map_err(|e| e.to_string())?;
+        }
+    }
+    zip.finish().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+async fn unzip_project(source_file: String, dest_dir: String) -> Result<(), String> {
+    let file = fs::File::open(&source_file).map_err(|e| e.to_string())?;
+    let mut archive = ZipArchive::new(file).map_err(|e| e.to_string())?;
+
+    for i in 0..archive.len() {
+        let mut file = archive.by_index(i).map_err(|e| e.to_string())?;
+        let outpath = match file.enclosed_name() {
+            Some(path) => Path::new(&dest_dir).join(path),
+            None => continue,
+        };
+
+        if (*file.name()).ends_with('/') {
+            fs::create_dir_all(&outpath).map_err(|e| e.to_string())?;
+        } else {
+            if let Some(p) = outpath.parent() {
+                if !p.exists() {
+                    fs::create_dir_all(p).map_err(|e| e.to_string())?;
+                }
+            }
+            let mut outfile = fs::File::create(&outpath).map_err(|e| e.to_string())?;
+            std::io::copy(&mut file, &mut outfile).map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(())
 }

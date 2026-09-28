@@ -1,4 +1,6 @@
 import { useEffect, useState, useRef } from "react";
+import { t } from "@lingui/core/macro";
+import { Trans } from "@lingui/react/macro";
 import { useUI } from "../../hooks/useUI";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import {
@@ -7,14 +9,15 @@ import {
   Minus,
   Square,
   Map,
-  ChevronRight,
   Settings2,
   Undo2,
   Redo2,
   Film,
   Navivi,
+  Folder,
 } from "../ui/icons";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { invoke } from "@tauri-apps/api/core";
 import { SaveAs } from "./SaveAs";
 import { UnsavedChanges } from "./UnsavedChanges";
 import { useFileActions } from "../../hooks/useFileActions";
@@ -27,6 +30,7 @@ export function TitleBar() {
     setEditorMode,
     showToast,
     setShowAppSettings,
+    isRendering
   } = useUI();
 
   const {
@@ -73,7 +77,7 @@ export function TitleBar() {
     if (setMetadata) {
       setMetadata((prevMetadata) => ({
         ...prevMetadata,
-        project_name: "Untitled Project",
+        project_name: t`Untitled Project`,
         project_id: undefined,
         directory_path: "",
         created_at: new Date().toISOString(),
@@ -111,9 +115,9 @@ export function TitleBar() {
       if (action === "maximize") await appWindow.toggleMaximize();
       if (action === "close") await appWindow.close();
     } catch (err) {
-      console.error("Tauri Window API error:", err);
+      console.error(t`Tauri Window API error:`, err);
       if (action === "close") {
-        showToast("Cannot close window. Check Tauri capabilities.", "error");
+        showToast(t`Cannot close window. Check Tauri capabilities`, "error");
       }
     }
   };
@@ -123,12 +127,13 @@ export function TitleBar() {
     try {
       const path = await saveProject();
       if (path) {
-        showToast(`Project saved to ${path.split(/[/\\]/).pop()}`, "success");
+        const fileName = path.split(/[/\\]/).filter(Boolean).pop() ?? "";
+        showToast(t`Project saved to ${fileName}`, "success");
         return true;
       }
       return false;
     } catch (err) {
-      showToast("Failed to save project.", "error");
+      showToast(t`Failed to save project.`, "error");
       return false;
     }
   };
@@ -142,7 +147,7 @@ export function TitleBar() {
       const path = await saveProject(newName, isDuplicate, safeFolderName);
       if (path) {
         showToast(
-          isDuplicate ? "Project duplicated successfully." : "Project saved",
+          isDuplicate ? t`Project duplicated successfully` : t`Project saved`,
           "success",
         );
 
@@ -181,8 +186,7 @@ export function TitleBar() {
         {/* --- LEFT: MENU & DOCUMENT ACTIONS --- */}
         <div className="flex items-center h-full shrink-0 px-2">
           <div className="relative h-full flex items-center" ref={menuRef}>
-            <button
-              onClick={() => setIsMenuOpen(!isMenuOpen)}
+            <button disabled={isRendering} onClick={() => setIsMenuOpen(!isMenuOpen)}
               className={`h-7 px-3 flex items-center justify-center rounded-lg font-medium transition-all ${isMenuOpen ? "bg-zinc-800 text-white dark:bg-white dark:text-zinc-900 shadow-md" : "text-zinc-600 dark:text-zinc-300 hover:bg-black/5 dark:hover:bg-white/10"}`}
             >
               <Menu className="w-4 h-4" />
@@ -190,7 +194,7 @@ export function TitleBar() {
 
             {/* Dropdown Menu */}
             {isMenuOpen && (
-              <div className="absolute top-10 w-56 -left-2 bg-white dark:bg-navidark-600 border border-zinc-200 dark:border-white/10 rounded-br-2xl shadow-2xl py-1 z-800 text-sm text-zinc-700 dark:text-zinc-300">
+              <div className="absolute top-10 min-w-56 w-max -left-2 bg-white dark:bg-navidark-600 border border-zinc-200 dark:border-white/10 rounded-br-2xl shadow-2xl py-1 z-800 text-sm text-zinc-700 dark:text-zinc-300 whitespace-nowrap tracking-tighter">
                 {currentView === "editor" && (
                   <>
                     <button
@@ -198,7 +202,7 @@ export function TitleBar() {
                         setIsMenuOpen(false);
                         if (
                           !metadata.project_id &&
-                          metadata.project_name === "Untitled Project"
+                          metadata.project_name === t`Untitled Project`
                         ) {
                           setSaveMode("initial");
                           setShowSaveAs(true);
@@ -208,7 +212,9 @@ export function TitleBar() {
                       }}
                       className="w-full flex items-center justify-between px-4 py-1.5 hover:bg-zinc-100 dark:hover:bg-navidark-400 transition-colors"
                     >
-                      <span>Save Project</span>
+                      <span>
+                        <Trans>Save Project</Trans>
+                      </span>
                       <span className="text-xs text-zinc-400">Ctrl+S</span>
                     </button>
 
@@ -220,7 +226,9 @@ export function TitleBar() {
                       }}
                       className="w-full flex items-center justify-between px-4 py-1.5 hover:bg-zinc-100 dark:hover:bg-navidark-400 transition-colors"
                     >
-                      <span>Save As...</span>
+                      <span>
+                        <Trans>Save As...</Trans>
+                      </span>
                       <span className="text-xs text-zinc-400">
                         Ctrl+Shift+S
                       </span>
@@ -230,7 +238,34 @@ export function TitleBar() {
                       onClick={() => handleSafeNavigation("title_screen")}
                       className="w-full flex items-center justify-between px-4 py-1.5 hover:bg-zinc-100 dark:hover:bg-navidark-400 transition-colors"
                     >
-                      <span>Project Manager</span>
+                      <span>
+                        <Trans>Project Manager</Trans>
+                      </span>
+                    </button>
+                    <button
+                      onClick={async () => {
+                        setIsMenuOpen(false);
+                        const targetPath =
+                          metadata.archive_path || metadata.directory_path;
+                        if (!targetPath) {
+                          showToast(t`No active project folder found`, "info");
+                          return;
+                        }
+                        try {
+                          await invoke("open_in_explorer", {
+                            path: targetPath,
+                          });
+                        } catch (err) {
+                          console.error(t`Failed to open file explorer:`, err);
+                          showToast(t`Could not open file location`, "error");
+                        }
+                      }}
+                      className="w-full flex items-center justify-between px-4 py-1.5 hover:bg-zinc-100 dark:hover:bg-navidark-400 transition-colors"
+                    >
+                      <span className="flex items-center gap-2">
+                        <Folder className="w-3.5 h-3.5 text-zinc-400" />
+                        <Trans>Reveal in File Explorer</Trans>
+                      </span>
                     </button>
                     <div className="h-px bg-zinc-200 dark:bg-white/5 my-1 mx-2" />
                   </>
@@ -240,7 +275,9 @@ export function TitleBar() {
                   onClick={() => handleSafeNavigation("new_project")}
                   className="w-full flex items-center justify-between px-4 py-1.5 hover:bg-zinc-100 dark:hover:bg-navidark-400 transition-colors"
                 >
-                  <span>New Project</span>
+                  <span>
+                    <Trans>New Project</Trans>
+                  </span>
                 </button>
                 <button
                   onClick={async () => {
@@ -249,15 +286,36 @@ export function TitleBar() {
                       const success = await loadProject();
                       if (success) {
                         setCurrentView("editor");
-                        showToast("Project loaded successfully.", "success");
+                        showToast(t`Project loaded successfully`, "success");
                       }
                     } catch (err) {
-                      showToast("Failed to read project file.", "error");
+                      showToast(t`Failed to read project file`, "error");
                     }
                   }}
                   className="w-full flex items-center justify-between px-4 py-1.5 hover:bg-zinc-100 dark:hover:bg-navidark-400 transition-colors"
                 >
-                  <span>Open Project...</span>
+                  <span>
+                    <Trans>Open Project File...</Trans>
+                  </span>
+                </button>
+                <button
+                  onClick={async () => {
+                    setIsMenuOpen(false);
+                    try {
+                      const success = await loadProject(undefined, true);
+                      if (success) {
+                        setCurrentView("editor");
+                        showToast(t`Project loaded successfully`, "success");
+                      }
+                    } catch (err) {
+                      showToast(t`Failed to read project folder`, "error");
+                    }
+                  }}
+                  className="w-full flex items-center justify-between px-4 py-1.5 hover:bg-zinc-100 dark:hover:bg-navidark-400 transition-colors"
+                >
+                  <span>
+                    <Trans>Open Project Folder...</Trans>
+                  </span>
                 </button>
 
                 <div className="h-px bg-zinc-200 dark:bg-white/5 my-1 mx-2" />
@@ -268,7 +326,9 @@ export function TitleBar() {
                   }}
                   className="w-full flex items-center justify-between px-4 py-1.5 hover:bg-zinc-100 dark:hover:bg-navidark-400 transition-colors"
                 >
-                  <span>Import Photos...</span>
+                  <span>
+                    <Trans>Import Photos...</Trans>
+                  </span>
                 </button>
                 <button
                   onClick={async () => {
@@ -277,7 +337,9 @@ export function TitleBar() {
                   }}
                   className="w-full flex items-center justify-between px-4 py-1.5 hover:bg-zinc-100 dark:hover:bg-navidark-400 transition-colors"
                 >
-                  <span>Import GPX...</span>
+                  <span>
+                    <Trans>Import GPX...</Trans>
+                  </span>
                 </button>
 
                 <div className="h-px bg-zinc-200 dark:bg-white/5 my-1 mx-2" />
@@ -285,7 +347,9 @@ export function TitleBar() {
                   onClick={() => handleWindow("close")}
                   className="w-full flex items-center justify-between px-4 py-1.5 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10 dark:hover:text-red-400 transition-colors"
                 >
-                  <span>Exit</span>
+                  <span>
+                    <Trans>Exit</Trans>
+                  </span>
                 </button>
               </div>
             )}
@@ -300,7 +364,7 @@ export function TitleBar() {
                 onClick={handleUndo}
                 disabled={!canUndo}
                 className="h-full px-3 flex items-center hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors disabled:opacity-30 disabled:hover:bg-transparent"
-                title="Undo (Ctrl+Z)"
+                title={t`Undo (Ctrl+Z)`}
               >
                 <Undo2 className="w-3.5 h-3.5" />
               </button>
@@ -308,7 +372,7 @@ export function TitleBar() {
                 onClick={handleRedo}
                 disabled={!canRedo}
                 className="h-full px-3 flex items-center hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors disabled:opacity-30 disabled:hover:bg-transparent"
-                title="Redo (Ctrl+Y)"
+                title={t`Redo (Ctrl+Y)`}
               >
                 <Redo2 className="w-3.5 h-3.5" />
               </button>
@@ -326,19 +390,17 @@ export function TitleBar() {
             className="flex items-center justify-center gap-2 text-xs font-medium text-zinc-500 dark:text-zinc-400"
           >
             <Navivi className="w-4 h-4 text-navi dark:text-navi pointer-events-none" />
-            <span className="text-zinc-800 dark:text-zinc-300 pointer-events-none">
-              Navivi
-            </span>
-            <ChevronRight className="w-3 h-3 opacity-50 pointer-events-none" />
+
             <span className="text-zinc-800 dark:text-zinc-200 pointer-events-none font-semibold">
-              {currentView === "title_screen"
-                ? "Project Manager"
-                : currentView === "new_project"
-                  ? "Setup"
-                  : metadata.project_name}
+              {currentView === "title_screen" ? (
+                <Trans>Project Manager</Trans>
+              ) : currentView === "new_project" ? (
+                <Trans>Setup</Trans>
+              ) : (
+                metadata.project_name
+              )}
             </span>
 
-            {/* ✨ NEW: Informative Status Pill */}
             {currentView === "editor" && (
               <span
                 className={`text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded-sm font-bold ml-2 transition-colors pointer-events-none ${
@@ -347,7 +409,7 @@ export function TitleBar() {
                     : "bg-emerald-100 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400"
                 }`}
               >
-                {isDirty ? "Unsaved" : "Saved"}
+                {isDirty ? t`Unsaved` : t`Saved`}
               </span>
             )}
           </div>
@@ -358,26 +420,26 @@ export function TitleBar() {
           {/* Map / Timeline Toggle */}
           {currentView === "editor" && (
             <div className="flex bg-black/5 dark:bg-white/5 rounded-full p-0.5 border border-black/5 dark:border-white/5 shadow-inner mr-4">
-              <button
-                onClick={() => setEditorMode("map")}
+              <button disabled={isRendering} onClick={() => setEditorMode("map")}
                 className={`flex items-center gap-1.5 px-3 py-1 text-[11px] font-bold rounded-full transition-all ${
                   editorMode === "map"
                     ? "bg-white dark:bg-zinc-800 text-navi-600 dark:text-navi-400 shadow-sm"
                     : "text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
                 }`}
+                title={t`Map`}
               >
-                <Map className="w-3.5 h-3.5" /> Map
+                <Map className="w-3.5 h-3.5" /> <Trans>Map</Trans>
               </button>
 
-              <button
-                onClick={() => setEditorMode("timeline")}
+              <button disabled={isRendering} onClick={() => setEditorMode("timeline")}
                 className={`flex items-center gap-1.5 px-3 py-1 text-[11px] font-bold rounded-full transition-all ${
                   editorMode === "timeline"
                     ? "bg-white dark:bg-zinc-800 text-navi-600 dark:text-navi-400 shadow-sm"
                     : "text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
                 }`}
+                title={t`Timeline`}
               >
-                <Film className="w-3.5 h-3.5" /> Timeline
+                <Film className="w-3.5 h-3.5" /> <Trans>Timeline</Trans>
               </button>
             </div>
           )}
@@ -385,7 +447,7 @@ export function TitleBar() {
           <button
             onClick={() => setShowAppSettings(true)}
             className="h-full px-4 text-zinc-600 dark:text-zinc-400 hover:bg-black/5 dark:hover:bg-white/10 hover:text-zinc-900 dark:hover:text-white transition-colors"
-            title="App Settings"
+            title={t`App Settings`}
           >
             <Settings2 className="w-4 h-4" />
           </button>
@@ -446,7 +508,7 @@ export function TitleBar() {
         onSave={async () => {
           if (
             !metadata.project_id &&
-            metadata.project_name === "Untitled Project"
+            metadata.project_name === t`Untitled Project`
           ) {
             setSaveMode("initial");
             setShowSaveAs(true);

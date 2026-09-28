@@ -1,15 +1,20 @@
-import React from "react";
-import { ImageIcon } from "lucide-react";
+import { t } from "@lingui/core/macro";
+import { Trans } from "@lingui/react/macro";
+import { ImageIcon } from "../../../../../components/ui/icons";
 
 interface InspectorTransformPanelProps {
-  selectedClip: any; updateClip: (updates: any) => void;
+  selectedClip: any;
+  updateClip: (updates: any) => void;
 }
 
-export function InspectorTransformPanel({ selectedClip, updateClip }: InspectorTransformPanelProps) {
+export function InspectorTransformPanel({
+  selectedClip,
+  updateClip,
+}: InspectorTransformPanelProps) {
   return (
-<div className="space-y-3 pt-3 border-t border-zinc-200 dark:border-navidark-400">
+    <div className="space-y-3 pt-3 border-t border-zinc-200 dark:border-navidark-400">
       <h5 className="flex items-center gap-2 text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
-        <ImageIcon className="w-3 h-3" /> Transform
+        <ImageIcon className="w-3 h-3" /> <Trans>Transform</Trans>
       </h5>
       <div className="grid grid-cols-2 gap-3">
         <div className="flex items-center gap-2">
@@ -17,9 +22,7 @@ export function InspectorTransformPanel({ selectedClip, updateClip }: InspectorT
           <input
             type="number"
             value={Math.round(selectedClip.x || 0)}
-            onChange={(e) =>
-              updateClip({ x: parseInt(e.target.value) || 0 })
-            }
+            onChange={(e) => updateClip({ x: parseInt(e.target.value) || 0 })}
             className="w-full bg-zinc-50 dark:bg-navidark-900 border border-zinc-200 dark:border-navidark-400 rounded p-1.5 text-xs font-mono focus:border-navi"
           />
         </div>
@@ -28,14 +31,14 @@ export function InspectorTransformPanel({ selectedClip, updateClip }: InspectorT
           <input
             type="number"
             value={Math.round(selectedClip.y || 0)}
-            onChange={(e) =>
-              updateClip({ y: parseInt(e.target.value) || 0 })
-            }
+            onChange={(e) => updateClip({ y: parseInt(e.target.value) || 0 })}
             className="w-full bg-zinc-50 dark:bg-navidark-900 border border-zinc-200 dark:border-navidark-400 rounded p-1.5 text-xs font-mono focus:border-navi"
           />
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-xs text-zinc-400 w-4">Scl</span>
+          <span className="text-xs text-zinc-400 w-4">
+            <Trans>Scale</Trans>
+          </span>
           <input
             type="number"
             step="0.1"
@@ -50,7 +53,9 @@ export function InspectorTransformPanel({ selectedClip, updateClip }: InspectorT
           />
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-xs text-zinc-400 w-4">Rot</span>
+          <span className="text-xs text-zinc-400 w-4">
+            <Trans>Rotation</Trans>
+          </span>
           <input
             type="number"
             value={Math.round(selectedClip.rotation || 0)}
@@ -62,6 +67,5 @@ export function InspectorTransformPanel({ selectedClip, updateClip }: InspectorT
         </div>
       </div>
     </div>
-
   );
 }

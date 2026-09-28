@@ -1,7 +1,6 @@
 import type { Dispatch, SetStateAction, } from "react";
 
 export type RouteMode = "driving" | "walking" | "direct" | "curve" | "ferry" | "calculating" | "draw";
-// export type TrackType = "video" | "audio" | "image" | "text";
 export type TrackKind = "video" | "overlay" | "subtitle" | "audio";
 export type ClipKind = "video" | "audio" | "image" | "text" | "subtitle";
 
@@ -15,7 +14,6 @@ export interface Waypoint {
   imageDisplay?: "pip" | "fullscreen";
   imagePans?: string[];
   imageTransitions?: string[];
-  narration?: string;
   arrivingNarration?: string;
   attractionNarration?: string;
   isGeneratingAudio?: boolean;
@@ -65,6 +63,9 @@ export interface ProjectSettings {
   auto_save_interval: number;
   skip_rich_media?: boolean;
   default_route_mode?: RouteMode;
+  default_export_resolution?: "4k" | "1080p" | "720p";
+  default_export_ratio?: "16:9" | "9:16";
+  default_ducking_level?: number;
   subtitle_font?: string; // either uses Calibri or some nice looking font as default
   subtitle_font_size?: number; // could be at least size 30
   subtitle_color?: string; // This uses ASS color format, &HAABBGGRR -- alpha,  blue-green-red
@@ -75,6 +76,10 @@ export interface ProjectSettings {
   show_route_heatmap?: boolean;
   weather_sync_enabled?: boolean;
   ai_model?: string;
+  quick_export?: boolean;
+  hardware_spec_override?: "auto" | "high" | "low";
+  show_render_terminal?: boolean;
+  marked_regeneration_waypoints?: string[];
 }
 
 export interface ProjectMetadata {
@@ -85,6 +90,7 @@ export interface ProjectMetadata {
   created_at: string;
   status: string;
   directory_path: string;
+  archive_path?: string;
   thumbnail_path?: string;
   overview_narration?: string;
 }
@@ -312,6 +318,7 @@ export interface ProjectVersionSnapshot extends ProjectVersion {
 
 // Global State Interface
 export interface WorkspaceState {
+  isProjectLoading: boolean;
   // Waypoints
   waypoints: Waypoint[];
   setWaypoints: Dispatch<SetStateAction<Waypoint[]>>;
@@ -320,7 +327,7 @@ export interface WorkspaceState {
   redoMap: () => void;
   canUndoMap: boolean;
   canRedoMap: boolean;
-  // Timeline History (NEWest Feature as of right now (2026-08-26 15:52:49))
+  // Timeline History (2026-08-26 15:52:49)
   timeline: TimelineData;
   setTimeline: (data: TimelineData) => void;
   autoLoadTimeline: (projectDir: string) => Promise<void>;
@@ -350,7 +357,7 @@ export interface WorkspaceState {
   updateSettings: (data: Partial<ProjectSettings>) => void;
   // FileSystem thingy
   saveProject: (overrideName?: string, asDuplicate?: boolean, safeFolderName?: string, recordVersion?: boolean) => Promise<string | undefined>;
-  loadProject: (forcePath?: string) => Promise<boolean>;
+  loadProject: (forcePath?: string, isFolder?: boolean) => Promise<boolean>;
   recentProjects: RecentProjects[];
   setRecentProjects: Dispatch<SetStateAction<RecentProjects[]>>;
   isDirty: boolean;

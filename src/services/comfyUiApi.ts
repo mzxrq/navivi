@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { appDataDir, join } from '@tauri-apps/api/path';
-
+import { t } from "@lingui/core/macro";
 /**
  * Triggers ComfyUI Wan 2.2 Image-to-Video generation using the Python backend.
  * @param imagePath The local path to the input image.

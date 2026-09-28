@@ -1,36 +1,41 @@
+import { useUI } from "../../hooks/useUI";
+import { t } from "@lingui/core/macro";
+import { Trans } from "@lingui/react/macro";
 import { useEffect, useState } from "react";
-import { useWorkspace } from "../../hooks/useWorkspace";
 import { useWaypointActions } from "../../hooks/useWaypointActions";
+import { useWorkspace } from "../../hooks/useWorkspace";
 import {
-  Plus,
-  Trash2,
-  WP,
-  MapPinned,
-  MapPinPlus,
+  Car,
+  ChevronRight,
+  Copy,
+  CopyPlus,
   CornerDownLeft,
   Edit,
-  CopyPlus,
-  MapPinPen,
-  ChevronRight,
-  LinkIcon,
-  UnlinkIcon,
-  FolderOpen,
   Edit3,
-  Copy,
-  Settings2,
   Eye,
   EyeOff,
+  Film,
+  Folder,
+  FolderOpen,
+  Footprints,
+  LinkIcon,
+  Lock,
+  MapPinned,
+  MapPinPen,
+  MapPinPlus,
+  Pencil,
+  Plane,
+  Plus,
+  Route,
+  Ruler,
+  Settings2,
+  Ship,
+  Trash2,
+  UnlinkIcon,
+  Unlock,
   Volume2,
   VolumeX,
-  Lock,
-  Unlock,
-  Footprints,
-  Car,
-  Plane,
-  Ruler,
-  Ship,
-  Pencil,
-  Route,
+  WP,
 } from "../ui/icons";
 
 export interface ContextMenuState {
@@ -49,6 +54,7 @@ export interface ContextMenuState {
 }
 
 export function ContextMenu() {
+  const { isRendering } = useUI();
   const [menu, setMenu] = useState<ContextMenuState | null>(null);
   const {
     timeline,
@@ -56,7 +62,7 @@ export function ContextMenu() {
     waypoints,
     setWaypoints,
     setActiveWaypointId,
-    setIsDirty, // ✨ Added to safely trigger route re-calculations
+    setIsDirty,
   } = useWorkspace();
   const { addReturnStop } = useWaypointActions();
 
@@ -142,10 +148,7 @@ export function ContextMenu() {
     if (trackToDelete?.type === "video") {
       const visualTracks = timeline.tracks.filter((t) => t.type === "video");
       if (visualTracks.length <= 1) {
-        // Cannot delete the last visual track
         setMenu(null);
-        // Dispatch toast manually since showToast isn't directly available here
-        // Wait, actually I can just do it silently or leave it since it's a UI constraint.
         return;
       }
     }
@@ -316,7 +319,7 @@ export function ContextMenu() {
               }}
               className="ctx-btn"
             >
-              <Edit className="w-3.5 h-3.5" /> Rename Track
+              <Edit className="w-3.5 h-3.5" /> <Trans>hide-track</Trans>
             </button>
             <div className="my-1 border-t border-zinc-200 dark:border-white/10" />
 
@@ -333,7 +336,7 @@ export function ContextMenu() {
                 ) : (
                   <EyeOff className="w-3.5 h-3.5" />
                 )}
-                {menu.data?.isHidden ? "Show Track" : "Hide Track"}
+                {menu.data?.isHidden ? t`Show Track` : t`Hide Track`}
               </button>
             )}
             {menu.data?.isAudioTrack && (
@@ -349,7 +352,7 @@ export function ContextMenu() {
                 ) : (
                   <VolumeX className="w-3.5 h-3.5" />
                 )}
-                {menu.data?.isMuted ? "Unmute Track" : "Mute Track"}
+                {menu.data?.isMuted ? t`unmute-track` : t`mute-track`}
               </button>
             )}
             <button
@@ -364,7 +367,7 @@ export function ContextMenu() {
               ) : (
                 <Lock className="w-3.5 h-3.5" />
               )}
-              {menu.data?.isLocked ? "Unlock Track" : "Lock Track"}
+              {menu.data?.isLocked ? t`unlock-track` : t`lock-track`}
             </button>
 
             <div className="my-1 border-t border-zinc-200 dark:border-white/10" />
@@ -372,20 +375,20 @@ export function ContextMenu() {
               onClick={() => handleAddTrack("subtitle")}
               className="ctx-btn"
             >
-              <Plus className="w-3.5 h-3.5" /> Add Subtitle Track
+              <Plus className="w-3.5 h-3.5" /> <Trans>add-subtitle-track</Trans>
             </button>
             <button onClick={() => handleAddTrack("video")} className="ctx-btn">
-              <Plus className="w-3.5 h-3.5" /> Add Visual Track
+              <Plus className="w-3.5 h-3.5" /> <Trans>add-visual-track</Trans>
             </button>
             <button onClick={() => handleAddTrack("audio")} className="ctx-btn">
-              <Plus className="w-3.5 h-3.5" /> Add Audio Track
+              <Plus className="w-3.5 h-3.5" /> <Trans>add-audio-track</Trans>
             </button>
             <div className="my-1 border-t border-zinc-200 dark:border-white/10" />
             <button
               onClick={() => handleDeleteTrack(menu.targetId)}
               className="ctx-btn text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10"
             >
-              <Trash2 className="w-3.5 h-3.5" /> Delete Track
+              <Trash2 className="w-3.5 h-3.5" /> <Trans>delete-track</Trans>
             </button>
           </>
         )}
@@ -396,14 +399,14 @@ export function ContextMenu() {
               onClick={() => handleDuplicateClip(menu.targetId)}
               className="ctx-btn"
             >
-              <CopyPlus className="w-3.5 h-3.5" /> Duplicate Clip
+              <CopyPlus className="w-3.5 h-3.5" /> <Trans>duplicate-clip</Trans>
             </button>
             <div className="my-1 border-t border-zinc-200 dark:border-white/10" />
             <button
               onClick={() => handleDeleteClip(menu.targetId)}
               className="ctx-btn text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10"
             >
-              <Trash2 className="w-3.5 h-3.5" /> Delete Clip
+              <Trash2 className="w-3.5 h-3.5" /> <Trans>delete-clip</Trans>
             </button>
             <div className="my-1 border-t border-zinc-200 dark:border-white/10" />
             <button
@@ -413,7 +416,7 @@ export function ContextMenu() {
               }}
               className="ctx-btn"
             >
-              <LinkIcon className="w-3.5 h-3.5" /> Link Clips
+              <LinkIcon className="w-3.5 h-3.5" /> <Trans>link-clips</Trans>
             </button>
 
             <button
@@ -423,7 +426,7 @@ export function ContextMenu() {
               }}
               className="ctx-btn"
             >
-              <UnlinkIcon className="w-3.5 h-3.5" /> Unlink Clips
+              <UnlinkIcon className="w-3.5 h-3.5" /> <Trans>unlink-clips</Trans>
             </button>
           </>
         )}
@@ -438,7 +441,7 @@ export function ContextMenu() {
               className="ctx-btn"
             >
               <MapPinned className="w-3.5 h-3.5" />
-              Set as Start
+              <Trans>set-as-start</Trans>{" "}
             </button>
             <button
               onClick={() => {
@@ -448,7 +451,7 @@ export function ContextMenu() {
               className="ctx-btn"
             >
               <div className="w-3.5 h-3.5" />
-              Set as Destination
+              <Trans>set-as-destination</Trans>{" "}
             </button>
             <button
               onClick={() => {
@@ -458,7 +461,7 @@ export function ContextMenu() {
               className="ctx-btn text-amber-600 dark:text-amber-500"
             >
               <div className="w-3.5 h-3.5" />
-              Add Stop By
+              <Trans>add-stop-by</Trans>{" "}
             </button>
             <div className="my-1 border-t border-zinc-200 dark:border-white/10" />
             <button
@@ -468,7 +471,7 @@ export function ContextMenu() {
               }}
               className="ctx-btn"
             >
-              <WP className="w-3.5 h-3.5" /> Add Waypoint Here
+              <WP className="w-3.5 h-3.5" /> <Trans>add-waypoint-here</Trans>
             </button>
           </>
         )}
@@ -482,13 +485,15 @@ export function ContextMenu() {
               }}
               className="ctx-btn"
             >
-              <CornerDownLeft className="w-3.5 h-3.5" /> Add Return Stop
+              <CornerDownLeft className="w-3.5 h-3.5" />{" "}
+              <Trans>add-return-stop</Trans>
             </button>
 
             <div className="relative group">
               <button className="ctx-btn w-full flex items-center justify-between">
                 <span className="flex items-center gap-2">
-                  <MapPinPen className="w-3.5 h-3.5" /> Waypoint Type
+                  <MapPinPen className="w-3.5 h-3.5" />{" "}
+                  <Trans>waypoint-type</Trans>
                 </span>
                 <ChevronRight className="w-3.5 h-3.5 opacity-50" />
               </button>
@@ -504,14 +509,14 @@ export function ContextMenu() {
                   className="ctx-btn"
                 >
                   <MapPinned className="w-3.5 h-3.5" />
-                  Set as Start
+                  <Trans>set-as-start</Trans>{" "}
                 </button>
                 <button
                   onClick={() => handleSetWaypointType(menu.targetId, "end")}
                   className="ctx-btn"
                 >
                   <div className="w-3.5 h-3.5" />
-                  Set as Destination
+                  <Trans>set-as-destination</Trans>{" "}
                 </button>
                 <div className="my-1 border-t border-zinc-200 dark:border-white/10" />
                 <button
@@ -519,14 +524,14 @@ export function ContextMenu() {
                   className="ctx-btn text-blue-600 dark:text-blue-400"
                 >
                   <MapPinPlus className="w-3.5 h-3.5" />
-                  Normal Node
+                  <Trans>normal-node</Trans>{" "}
                 </button>
                 <button
                   onClick={() => handleSetWaypointType(menu.targetId, "stopby")}
                   className="ctx-btn text-amber-600 dark:text-amber-500"
                 >
                   <div className="w-3.5 h-3.5" />
-                  Stop By
+                  <Trans>stop-by</Trans>{" "}
                 </button>
               </div>
             </div>
@@ -534,7 +539,8 @@ export function ContextMenu() {
             <div className="relative group mt-1">
               <button className="ctx-btn w-full flex items-center justify-between">
                 <span className="flex items-center gap-2">
-                  <Route className="w-3.5 h-3.5" /> Next Route Mode
+                  <Route className="w-3.5 h-3.5" />{" "}
+                  <Trans>next-route-mode</Trans>
                 </span>
                 <ChevronRight className="w-3.5 h-3.5 opacity-50" />
               </button>
@@ -545,12 +551,12 @@ export function ContextMenu() {
                 }`}
               >
                 {[
-                  { mode: "walking", icon: Footprints, title: "Walk" },
-                  { mode: "driving", icon: Car, title: "Drive" },
-                  { mode: "curve", icon: Plane, title: "Fly" },
-                  { mode: "direct", icon: Ruler, title: "Direct" },
-                  { mode: "ferry", icon: Ship, title: "Ferry" },
-                  { mode: "draw", icon: Pencil, title: "Draw" },
+                  { mode: "walking", icon: Footprints, title: t`walk` },
+                  { mode: "driving", icon: Car, title: t`drive` },
+                  { mode: "curve", icon: Plane, title: t`fly` },
+                  { mode: "direct", icon: Ruler, title: t`direct` },
+                  { mode: "ferry", icon: Ship, title: t`ferry` },
+                  { mode: "draw", icon: Pencil, title: t`draw` },
                 ].map(({ mode, icon: Icon, title }) => (
                   <button
                     key={mode}
@@ -590,8 +596,8 @@ export function ContextMenu() {
                     <LinkIcon className="w-3.5 h-3.5" />
                   )}
                   {targetWp.connectToRoute
-                    ? "Disconnect Route"
-                    : "Connect to Route"}
+                    ? t`disconnect-route`
+                    : t`connect-to-route`}
                 </button>
                 <div className="my-1 border-t border-zinc-200 dark:border-white/10" />
               </>
@@ -601,7 +607,7 @@ export function ContextMenu() {
               onClick={() => handleEditWaypoint(menu.targetId)}
               className="ctx-btn"
             >
-              <Edit className="w-3.5 h-3.5" /> Edit Waypoint
+              <Edit className="w-3.5 h-3.5" /> <Trans>edit-waypoint</Trans>
             </button>
 
             {/* Copy Trail / Retrace Back features for empty drawn routes */}
@@ -613,7 +619,8 @@ export function ContextMenu() {
                   <div className="relative group/copy-trail">
                     <button className="ctx-btn w-full flex items-center justify-between text-navi-600 dark:text-navi-400">
                       <span className="flex items-center gap-2">
-                        <Copy className="w-3.5 h-3.5" /> Copy Trail
+                        <Copy className="w-3.5 h-3.5" />{" "}
+                        <Trans>copy-trail</Trans>
                       </span>
                       <ChevronRight className="w-3.5 h-3.5 opacity-50" />
                     </button>
@@ -623,7 +630,7 @@ export function ContextMenu() {
                       }`}
                     >
                       <div className="px-3 py-1.5 text-[10px] font-bold text-zinc-500 uppercase tracking-wider border-b border-zinc-100 dark:border-white/5 mb-1">
-                        Select Layer to Copy
+                        <Trans>select-layer-to-copy</Trans>{" "}
                       </div>
                       <div className="max-h-40 overflow-y-auto custom-scrollbar">
                         {waypoints.filter(
@@ -633,7 +640,7 @@ export function ContextMenu() {
                             w.customRoute.length > 0,
                         ).length === 0 ? (
                           <div className="px-4 py-2 text-xs text-zinc-500 italic">
-                            No drawn trails found
+                            <Trans>no-drawn-trails-found</Trans>{" "}
                           </div>
                         ) : (
                           waypoints
@@ -666,7 +673,7 @@ export function ContextMenu() {
                                 }}
                                 className="ctx-btn truncate block w-full text-left"
                               >
-                                {w.name || "Waypoint"}
+                                {w.name || t`waypoint`}
                               </button>
                             ))
                         )}
@@ -705,8 +712,8 @@ export function ContextMenu() {
                           }}
                           className="ctx-btn text-amber-600 dark:text-amber-400"
                         >
-                          <CornerDownLeft className="w-3.5 h-3.5" /> Retrace
-                          Previous Trail
+                          <CornerDownLeft className="w-3.5 h-3.5" />{" "}
+                          <Trans>retrace-previous-trail</Trans>{" "}
                         </button>
                       );
                     }
@@ -719,14 +726,15 @@ export function ContextMenu() {
               onClick={() => handleDupeWaypoint(menu.targetId)}
               className="ctx-btn"
             >
-              <CopyPlus className="w-3.5 h-3.5" /> Duplicate Waypoint
+              <CopyPlus className="w-3.5 h-3.5" />{" "}
+              <Trans>duplicate-waypoint</Trans>
             </button>
             <div className="my-1 border-t border-zinc-200 dark:border-white/10" />
             <button
               onClick={() => handleDeleteWaypoint(menu.targetId)}
               className="ctx-btn text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10"
             >
-              <Trash2 className="w-3.5 h-3.5" /> Delete Waypoint
+              <Trash2 className="w-3.5 h-3.5" /> <Trans>delete-waypoint</Trans>
             </button>
           </>
         )}
@@ -737,13 +745,13 @@ export function ContextMenu() {
               onClick={() => handleAddTrack("subtitle")}
               className="ctx-btn"
             >
-              <Plus className="w-3.5 h-3.5" /> Add Subtitle Track
+              <Plus className="w-3.5 h-3.5" /> <Trans>add-subtitle-track</Trans>
             </button>
             <button onClick={() => handleAddTrack("video")} className="ctx-btn">
-              <Plus className="w-3.5 h-3.5" /> Add Visual Track
+              <Plus className="w-3.5 h-3.5" /> <Trans>add-visual-track</Trans>
             </button>
             <button onClick={() => handleAddTrack("audio")} className="ctx-btn">
-              <Plus className="w-3.5 h-3.5" /> Add Audio Track
+              <Plus className="w-3.5 h-3.5" /> <Trans>add-audio-track</Trans>
             </button>
             <div className="my-1 border-t border-zinc-200 dark:border-white/10" />
             {menu.targetId && (
@@ -752,7 +760,8 @@ export function ContextMenu() {
                   onClick={() => handleDeleteTrack(menu.targetId)}
                   className="ctx-btn text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10"
                 >
-                  <Trash2 className="w-3.5 h-3.5" /> Delete Empty Track
+                  <Trash2 className="w-3.5 h-3.5" />{" "}
+                  <Trans>delete-empty-track</Trans>
                 </button>
               </>
             )}
@@ -768,7 +777,7 @@ export function ContextMenu() {
               }}
               className="ctx-btn"
             >
-              <FolderOpen className="w-3.5 h-3.5" /> Open Project
+              <FolderOpen className="w-3.5 h-3.5" /> <Trans>open-project</Trans>
             </button>
             <div className="my-1 border-t border-zinc-200 dark:border-white/10" />
             <button
@@ -778,7 +787,7 @@ export function ContextMenu() {
               }}
               className="ctx-btn"
             >
-              <Edit3 className="w-3.5 h-3.5" /> Rename
+              <Edit3 className="w-3.5 h-3.5" /> <Trans>rename</Trans>
             </button>
             <button
               onClick={() => {
@@ -787,17 +796,28 @@ export function ContextMenu() {
               }}
               className="ctx-btn"
             >
-              <Copy className="w-3.5 h-3.5" /> Duplicate
+              <Copy className="w-3.5 h-3.5" /> <Trans>duplicate</Trans>
             </button>
             <button
               onClick={() => {
-                if (menu.data?.onSettings) menu.data.onSettings();
+                if (menu.data?.onQuickRender) menu.data.onQuickRender();
                 setMenu(null);
               }}
               className="ctx-btn"
             >
-              <Settings2 className="w-3.5 h-3.5" /> Advanced Settings
+              <Film className="w-3.5 h-3.5" /> <Trans>Quick Render</Trans>
             </button>
+            <button
+              onClick={() => {
+                if (menu.data?.onReveal) menu.data.onReveal();
+                setMenu(null);
+              }}
+              className="ctx-btn"
+            >
+              <Folder className="w-3.5 h-3.5" />{" "}
+              <Trans>Reveal in File Explorer</Trans>
+            </button>
+
             <div className="my-1 border-t border-zinc-200 dark:border-white/10" />
             <button
               onClick={() => {
@@ -806,7 +826,7 @@ export function ContextMenu() {
               }}
               className="ctx-btn text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10"
             >
-              <Trash2 className="w-3.5 h-3.5" /> Remove from list
+              <Trash2 className="w-3.5 h-3.5" /> <Trans>remove-from-list</Trans>
             </button>
           </>
         )}
@@ -820,7 +840,26 @@ export function ContextMenu() {
               }}
               className="ctx-btn"
             >
-              <Copy className="w-3.5 h-3.5" /> Duplicate
+              <Copy className="w-3.5 h-3.5" /> <Trans>duplicate</Trans>
+            </button>
+            <button
+              onClick={() => {
+                if (menu.data?.onQuickRender) menu.data.onQuickRender();
+                setMenu(null);
+              }}
+              className="ctx-btn"
+            >
+              <Film className="w-3.5 h-3.5" /> <Trans>Quick Render</Trans>
+            </button>
+            <button
+              onClick={() => {
+                if (menu.data?.onReveal) menu.data.onReveal();
+                setMenu(null);
+              }}
+              className="ctx-btn"
+            >
+              <Folder className="w-3.5 h-3.5" />{" "}
+              <Trans>Reveal in File Explorer</Trans>
             </button>
             <button
               onClick={() => {
@@ -829,7 +868,7 @@ export function ContextMenu() {
               }}
               className="ctx-btn"
             >
-              <Settings2 className="w-3.5 h-3.5" /> Properties
+              <Settings2 className="w-3.5 h-3.5" /> <Trans>properties</Trans>
             </button>
             <div className="my-1 border-t border-zinc-200 dark:border-white/10" />
             <button
@@ -839,7 +878,8 @@ export function ContextMenu() {
               }}
               className="ctx-btn text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10"
             >
-              <Trash2 className="w-3.5 h-3.5" /> Remove from Mediapool
+              <Trash2 className="w-3.5 h-3.5" />{" "}
+              <Trans>remove-from-media-pool</Trans>
             </button>
           </>
         )}

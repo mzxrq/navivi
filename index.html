@@ -33,43 +33,103 @@
           color: #18181b;
           font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
           z-index: 9999;
+          transition: opacity 0.5s ease, visibility 0.5s ease;
         }
-        .navivi-spinner {
-          width: 48px;
-          height: 48px;
-          border: 4px solid #f4f4f5;
-          border-top-color: #0ea5e9; /* Sky 500 / Navi brand color */
-          border-radius: 50%;
-          animation: spin 1s linear infinite;
+
+        .navivi-logo-anim {
+          width: 96px;
+          height: 96px;
           margin-bottom: 24px;
+          animation: pulse-glow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+          /* Optional: Add a subtle drop shadow */
+          filter: drop-shadow(0 10px 15px rgba(0, 0, 0, 0.1));
         }
-        .navivi-splash p {
-          font-weight: 600;
-          font-size: 14px;
-          letter-spacing: 0.05em;
+
+        @keyframes pulse-glow {
+          0%, 100% {
+            transform: scale(1);
+            opacity: 1;
+          }
+          50% {
+            transform: scale(0.95);
+            opacity: 0.7;
+          }
+        }
+
+        /* Discord-style loading text */
+        .navivi-splash-text {
+          font-weight: 800;
+          font-size: 12px;
+          letter-spacing: 0.05px;
           text-transform: uppercase;
-          opacity: 0.6;
+          color: #71717a;
+          display: flex;
+          align-items: center;
         }
-        @keyframes spin {
-          to { transform: rotate(360deg); }
+
+        /* Animated Ellipsis */
+        .dots::after {
+          content: '';
+          display: inline-block;
+          width: 1em;
+          text-align: left;
+          animation: dots 1.5s steps(4, end) infinite;
         }
+
+        @keyframes dots {
+          0% { content: ''; }
+          25% { content: '.'; }
+          50% { content: '..'; }
+          75% { content: '...'; }
+          100% { content: ''; }
+        }
+
         /* Automatically switch to dark mode if system is dark */
         @media (prefers-color-scheme: dark) {
           .navivi-splash {
             background-color: #09090b; /* Zinc 950 */
-            color: #f4f4f5;
           }
-          .navivi-spinner {
-            border-color: #27272a; /* Zinc 800 */
-            border-top-color: #0ea5e9;
+          .navivi-logo-anim {
+            filter: drop-shadow(0 10px 15px rgba(0, 0, 0, 0.5));
+          }
+          .navivi-splash-text {
+            color: #a1a1aa; /* Zinc 400 */
           }
         }
       </style>
+
       <div class="navivi-splash">
-        <div class="navivi-spinner"></div>
-        <p>Loading Workspace..</p>
+        <svg class="navivi-logo-anim" xmlns="http://www.w3.org/2000/svg"
+          viewBox="26 12 160 160">
+          <defs>
+            <lineargradient id="splashGradient" x1="30" y1="125" x2="160"
+              y2="40" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#3b82f6" />
+              <stop offset="45%" stop-color="#8b5cf6" />
+              <stop offset="100%" stop-color="#ff7e5f" />
+            </lineargradient>
+          </defs>
+          <path
+            d="M 60 150 L 72 65 Q 75 40 88 65 L 122 127.5 Q 135 150 137.5 136.75 L 144 97"
+            fill="none" stroke="url(#splashGradient)" stroke-width="22"
+            stroke-linecap="round" stroke-linejoin="round" />
+          <circle cx="60" cy="150" r="18" fill="url(#splashGradient)" />
+          <circle cx="60" cy="150" r="9" fill="#fff" />
+          <path fill="url(#splashGradient)" stroke="url(#splashGradient)"
+            stroke-width="19" stroke-linejoin="round"
+            transform="translate(140, 25) scale(0.42)"
+            d="m21.65 118.46c-10.06-2.7-20.47-45.45-21-53.76-0.54-8.58-0.03-21.19 2.59-30.99 5-18.64 26.18-29.12 47.4-23.43 21.21 5.68 34.32 25.35 29.33 43.99-2.44 9.1-9.3 20.05-14.44 27.82-7.16 10.83-33.02 39.28-43.88 36.37z" />
+          <path fill="#fff" stroke="#fff" stroke-width="8"
+            stroke-linejoin="round" d="m153 41 9 8-10 5z" />
+        </svg>
+
+        <!-- Discord-style Loading Text -->
+        <div class="navivi-splash-text">
+          <span>Starting</span><span class="dots"></span>
+        </div>
       </div>
     </div>
+
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

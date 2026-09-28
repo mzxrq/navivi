@@ -1,0 +1,1 @@
+/*eslint-disable*/module.exports={messages:JSON.parse("{\"RDjuBN\":[\"セットアップ\"],\"mYy6lf\":[\"プロジェクトマネージャー\"]}")};

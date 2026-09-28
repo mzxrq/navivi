@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import { Layers, X } from "../../../../components/ui/icons";
 import { mapStyles } from "../../../../config/constants";
+import { t } from "@lingui/core/macro";
+import { Trans } from "@lingui/react/macro";
 
 interface LayerManagerProps {
   selectedStyle: string;
@@ -41,10 +43,12 @@ export function LayerManager({
             ? "bg-zinc-400 hover:bg-zinc-600 text-white shadow-zinc-200/25"
             : "bg-white dark:bg-zinc-800 text-zinc-700 hover:bg-zinc-200 dark:text-zinc-200 dark:hover:bg-zinc-500"
         }`}
-        title="Layer Manager"
+        title={t`Layer Manager`}
       >
         <Layers className="w-4 h-4" />
-        <span className="text-xs">Layers</span>
+        <span className="text-xs">
+          <Trans>Layers</Trans>
+        </span>
       </button>
 
       {isOpen && (
@@ -54,11 +58,13 @@ export function LayerManager({
         >
           <div className="flex justify-between pb-4">
             <h3 className="text-sm font-bold text-zinc-800 dark:text-zinc-200 flex items-center gap-2">
-              <Layers className="w-4 h-4 text-zinc-500" /> Layer Manager
+              <Layers className="w-4 h-4 text-zinc-500" />{" "}
+              <Trans>Layer Manager</Trans>
             </h3>
             <button
               onClick={() => setIsOpen(false)}
               className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors p-1"
+              title={t`Close`}
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -69,10 +75,10 @@ export function LayerManager({
             <label className="flex items-center justify-between pb-4 border-b border-zinc-200/80 dark:border-zinc-800 cursor-pointer select-none group">
               <div className="flex flex-col pr-4">
                 <span className="text-xs font-semibold text-zinc-600 dark:text-zinc-400 group-hover:text-zinc-900 dark:group-hover:text-white transition-colors">
-                  Enable 3D Terrain
+                  <Trans>Enable 3D Terrain</Trans>
                 </span>
                 <span className="text-[10px] text-zinc-500">
-                  Show elevation and 3D buildings.
+                  <Trans>Show elevation and 3D buildings</Trans>
                 </span>
               </div>
 
@@ -101,9 +107,9 @@ export function LayerManager({
             {/* Base Map Styles (Vertical List) */}
             <div className="flex flex-col gap-3 pt-4">
               <h4 className="text-xs font-semibold text-zinc-600 dark:text-zinc-400">
-                Base Map Style
+                <Trans>Base Map Style</Trans>
               </h4>
-              {/* ✨ Increased max height to accommodate taller boxes */}
+
               <div className="grid grid-cols-1 gap-2 max-h-36 overflow-y-auto custom-scrollbar p-1">
                 {mapStyles.map((style: any) => {
                   const isSelected = selectedStyle === style.id;
@@ -124,7 +130,6 @@ export function LayerManager({
                     if (style.id === "light") mbStyle = "light-v11";
                     if (style.id === "standard") mbStyle = "streets-v12";
 
-                    // ✨ Increased requested image resolution to stay crisp
                     previewUrl = `https://api.mapbox.com/styles/v1/mapbox/${mbStyle}/static/${previewLon},${previewLat},${previewZ}/300x100?access_token=${mapboxToken}`;
                   }
 
@@ -142,7 +147,6 @@ export function LayerManager({
                         className="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-110"
                         style={{ backgroundImage: `url('${previewUrl}')` }}
                       />
-                      {/* Subtler gradient overlay so the map is highly visible */}
                       <div
                         className={`absolute inset-0 transition-colors ${
                           isSelected
@@ -150,7 +154,6 @@ export function LayerManager({
                             : "bg-linear-to-t from-black/60 via-black/10 to-transparent group-hover:from-black/50"
                         }`}
                       />
-                      {/* ✨ Shifted text to the bottom left corner */}
                       <div className="absolute inset-0 p-3 flex items-end">
                         <span className="text-xs font-bold text-white drop-shadow-md truncate">
                           {style.label.split(" (")[0]}

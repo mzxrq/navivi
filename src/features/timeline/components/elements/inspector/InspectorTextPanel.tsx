@@ -1,21 +1,22 @@
-import React from "react";
-import { Type, Subtitles, Check } from "lucide-react";
+import { t } from "@lingui/core/macro";
+import { Trans } from "@lingui/react/macro";
+import { Type, Subtitles, Check } from "../../../../../components/ui/icons";
 
 const FONT_FAMILIES = [
-  { label: "Inter (Modern Sans)", value: "Inter, sans-serif" },
-  { label: "Roboto (Clean Sans)", value: "Roboto, sans-serif" },
-  { label: "Noto Sans JP (Japanese)", value: "'Noto Sans JP', sans-serif" },
-  { label: "Arial (Standard)", value: "Arial, sans-serif" },
-  { label: "Impact (Bold Headline)", value: "Impact, sans-serif" },
-  { label: "Georgia (Classic Serif)", value: "Georgia, serif" },
-  { label: "Courier New (Monospace)", value: "'Courier New', monospace" },
+  { label: "Inter", value: "Inter, sans-serif" },
+  { label: "Roboto", value: "Roboto, sans-serif" },
+  { label: "Noto Sans JP", value: "'Noto Sans JP', sans-serif" },
+  { label: "Arial", value: "Arial, sans-serif" },
+  { label: "Impact", value: "Impact, sans-serif" },
+  { label: "Georgia", value: "Georgia, serif" },
+  { label: "Courier New", value: "'Courier New', monospace" },
 ];
 
-const STYLE_PRESETS = [
+const getStylePresets = () => [
   {
     id: "standard",
-    name: "Standard Subtitle",
-    desc: "Crisp white text with black stroke",
+    name: t`Standard Subtitle`,
+    desc: t`Crisp white text with black stroke`,
     style: {
       fontFamily: "Inter, sans-serif",
       fontSize: 48,
@@ -32,8 +33,8 @@ const STYLE_PRESETS = [
   },
   {
     id: "karaoke",
-    name: "Karaoke Glow",
-    desc: "Golden dynamic highlight and glow",
+    name: t`Karaoke Glow`,
+    desc: t`Golden dynamic highlight and glow`,
     style: {
       fontFamily: "'Noto Sans JP', sans-serif",
       fontSize: 52,
@@ -50,8 +51,8 @@ const STYLE_PRESETS = [
   },
   {
     id: "impact",
-    name: "Punchy Impact",
-    desc: "Heavy yellow headline with thick outline",
+    name: t`Punchy Impact`,
+    desc: t`Heavy yellow headline with thick outline`,
     style: {
       fontFamily: "Impact, sans-serif",
       fontSize: 60,
@@ -68,8 +69,8 @@ const STYLE_PRESETS = [
   },
   {
     id: "minimal",
-    name: "Minimalist",
-    desc: "Clean modern sans-serif",
+    name: t`Minimalist`,
+    desc: t`Clean modern sans-serif`,
     style: {
       fontFamily: "Roboto, sans-serif",
       fontSize: 40,
@@ -105,20 +106,20 @@ export function InspectorTextPanel({
           ) : (
             <Type className="w-3.5 h-3.5 text-navi" />
           )}
-          Typography & Subtitles
+          <Trans>Typography & Subtitles</Trans>
         </h5>
         <span className="text-[10px] font-semibold text-navi px-1.5 py-0.5 rounded bg-navi/10 dark:bg-navi/20">
-          {selectedClip.type === "subtitle" ? "Subtitle" : "Rich Text"}
+          {selectedClip.type === "subtitle" ? t`Subtitle` : t`Rich Text`}
         </span>
       </div>
 
       {/* Quick Style Presets */}
       <div className="space-y-1.5">
         <label className="text-[10px] text-zinc-400 block font-medium">
-          Style Presets
+          <Trans>Style Presets</Trans>
         </label>
         <div className="grid grid-cols-2 gap-1.5">
-          {STYLE_PRESETS.map((preset) => (
+          {getStylePresets().map((preset) => (
             <button
               key={preset.id}
               type="button"
@@ -140,20 +141,20 @@ export function InspectorTextPanel({
       {/* Content Textarea */}
       <div className="space-y-1.5">
         <label className="text-[10px] text-zinc-400 block font-medium">
-          Content
+          <Trans>Content</Trans>
         </label>
         <textarea
           value={selectedClip.text || ""}
           onChange={(e) => updateClip({ text: e.target.value })}
           className="w-full bg-zinc-50 dark:bg-navidark-900 border border-zinc-200 dark:border-navidark-400 rounded p-2 text-xs text-zinc-800 dark:text-zinc-200 h-20 custom-scrollbar focus:border-navi focus:outline-none"
-          placeholder="Enter subtitle or display text..."
+          placeholder={t`Enter subtitle or display text...`}
         />
       </div>
 
       {/* Font Family Selector */}
       <div className="space-y-1.5">
         <label className="text-[10px] text-zinc-400 block font-medium">
-          Font Family
+          <Trans>Font Family</Trans>
         </label>
         <select
           value={
@@ -176,7 +177,7 @@ export function InspectorTextPanel({
       <div className="space-y-1.5 bg-zinc-50 dark:bg-navidark-900 p-2.5 rounded border border-zinc-200 dark:border-navidark-700">
         <div className="flex justify-between items-center text-xs">
           <span className="font-semibold text-zinc-700 dark:text-zinc-300">
-            Font Size
+            <Trans>Font Size</Trans>
           </span>
           <div className="flex items-center gap-2 font-mono text-[11px]">
             <span className="text-zinc-800 dark:text-zinc-200 font-bold">
@@ -199,7 +200,6 @@ export function InspectorTextPanel({
           <input
             type="number"
             min="12"
-            max="144"
             value={selectedClip.fontSize || selectedClip.style?.fontSize || 48}
             onChange={(e) =>
               updateTextStyle({ fontSize: parseInt(e.target.value) || 48 })
@@ -211,7 +211,7 @@ export function InspectorTextPanel({
         {/* Text Fill Color */}
         <div className="pt-2 mt-2 border-t border-zinc-200 dark:border-navidark-700 flex items-center justify-between">
           <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-            Text Color
+            <Trans>Text Color</Trans>
           </span>
           <div className="flex items-center gap-2">
             <span className="text-[10px] font-mono text-zinc-400 uppercase">
@@ -267,14 +267,16 @@ export function InspectorTextPanel({
               }}
               className="accent-navi rounded"
             />
-            <span>Text Outline / Stroke</span>
+            <span>
+              <Trans>Stroke</Trans>
+            </span>
           </label>
           <span className="text-[10px] uppercase font-bold text-zinc-400">
             {(selectedClip.strokeWidth ??
               selectedClip.style?.strokeWidth ??
               0) > 0
-              ? "Active"
-              : "Off"}
+              ? t`Active`
+              : t`Off`}
           </span>
         </div>
 
@@ -283,7 +285,7 @@ export function InspectorTextPanel({
           <div className="space-y-2 pt-2 border-t border-zinc-200 dark:border-navidark-700">
             <div className="flex items-center justify-between">
               <span className="text-[11px] text-zinc-500 dark:text-zinc-400">
-                Outline Color
+                <Trans>Outline Color</Trans>
               </span>
               <div className="flex items-center gap-2">
                 <span className="text-[10px] font-mono text-zinc-400 uppercase">
@@ -312,7 +314,9 @@ export function InspectorTextPanel({
 
             <div className="space-y-1">
               <div className="flex justify-between items-center text-[11px] text-zinc-500 dark:text-zinc-400">
-                <span>Stroke Width</span>
+                <span>
+                  <Trans>Stroke Width</Trans>
+                </span>
                 <span className="font-mono text-navi font-bold">
                   {selectedClip.strokeWidth ??
                     selectedClip.style?.strokeWidth ??
@@ -383,13 +387,15 @@ export function InspectorTextPanel({
               }}
               className="accent-navi rounded"
             />
-            <span>Drop Shadow</span>
+            <span>
+              <Trans>Drop Shadow</Trans>
+            </span>
           </label>
           <span className="text-[10px] uppercase font-bold text-zinc-400">
             {(selectedClip.shadowBlur ?? selectedClip.style?.shadowBlur ?? 0) >
             0
-              ? "Active"
-              : "Off"}
+              ? t`Active`
+              : t`Off`}
           </span>
         </div>
 
@@ -400,7 +406,7 @@ export function InspectorTextPanel({
           <div className="space-y-2 pt-2 border-t border-zinc-200 dark:border-navidark-700">
             <div className="flex items-center justify-between">
               <span className="text-[11px] text-zinc-500 dark:text-zinc-400">
-                Shadow Color
+                <Trans>Shadow Color</Trans>
               </span>
               <div className="flex items-center gap-2">
                 <input
@@ -426,7 +432,9 @@ export function InspectorTextPanel({
 
             <div className="space-y-1">
               <div className="flex justify-between items-center text-[11px] text-zinc-500 dark:text-zinc-400">
-                <span>Shadow Blur</span>
+                <span>
+                  <Trans>Shadow Blur</Trans>
+                </span>
                 <span className="font-mono text-navi font-bold">
                   {selectedClip.shadowBlur ??
                     selectedClip.style?.shadowBlur ??
@@ -452,7 +460,9 @@ export function InspectorTextPanel({
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1">
                 <div className="flex justify-between items-center text-[10px] text-zinc-500 dark:text-zinc-400">
-                  <span>Offset X</span>
+                  <span>
+                    <Trans>Offset X</Trans>
+                  </span>
                   <span className="font-mono text-zinc-700 dark:text-zinc-300">
                     {selectedClip.shadowOffsetX ??
                       selectedClip.style?.shadowOffsetX ??
@@ -480,7 +490,9 @@ export function InspectorTextPanel({
               </div>
               <div className="space-y-1">
                 <div className="flex justify-between items-center text-[10px] text-zinc-500 dark:text-zinc-400">
-                  <span>Offset Y</span>
+                  <span>
+                    <Trans>Offset Y</Trans>
+                  </span>
                   <span className="font-mono text-zinc-700 dark:text-zinc-300">
                     {selectedClip.shadowOffsetY ??
                       selectedClip.style?.shadowOffsetY ??
@@ -531,24 +543,28 @@ export function InspectorTextPanel({
               }}
               className="accent-amber-500 rounded"
             />
-            <span>Karaoke Timing Mode</span>
+            <span>
+              <Trans>Karaoke Timing Mode</Trans>
+            </span>
           </label>
           <span className="text-[10px] uppercase font-bold text-amber-500">
             {(selectedClip.karaoke ?? selectedClip.style?.karaoke)
-              ? "Active"
-              : "Off"}
+              ? t`Active`
+              : t`Off`}
           </span>
         </div>
         <p className="text-[10px] text-zinc-400 leading-normal">
-          Progressively illuminates text in sync with clip duration during
-          playback.
+          <Trans>
+            Progressively illuminates text in sync with clip duration during
+            playback
+          </Trans>
         </p>
 
         {(selectedClip.karaoke ?? selectedClip.style?.karaoke) && (
           <div className="space-y-2 pt-2 border-t border-zinc-200 dark:border-navidark-700">
             <div className="flex items-center justify-between">
               <span className="text-[11px] text-zinc-500 dark:text-zinc-400">
-                Highlight Color
+                <Trans>Highlight Color</Trans>
               </span>
               <div className="flex items-center gap-2">
                 <span className="text-[10px] font-mono text-amber-500 font-bold uppercase">
@@ -579,13 +595,15 @@ export function InspectorTextPanel({
 
             {/* Swatches */}
             <div className="flex items-center gap-1.5 pt-1">
-              <span className="text-[9px] text-zinc-400 mr-1">Presets:</span>
+              <span className="text-[9px] text-zinc-400 mr-1">
+                <Trans>Presets</Trans>
+              </span>
               {[
-                { name: "Gold", color: "#ffd700" },
-                { name: "Amber", color: "#f59e0b" },
-                { name: "Sky", color: "#38bdf8" },
-                { name: "Pink", color: "#ec4899" },
-                { name: "Emerald", color: "#10b981" },
+                { name: t`Gold`, color: "#ffd700" },
+                { name: t`Amber`, color: "#f59e0b" },
+                { name: t`Sky Blue`, color: "#38bdf8" },
+                { name: t`Vivid Rose`, color: "#ec4899" },
+                { name: t`Emerald`, color: "#10b981" },
               ].map((swatch) => (
                 <button
                   key={swatch.color}

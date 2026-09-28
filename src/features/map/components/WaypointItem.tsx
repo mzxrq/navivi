@@ -1,20 +1,21 @@
+import { useEffect, useRef, useState } from "react";
 import {
-  GripVertical,
+  Car,
+  ChevronRight,
   Edit2,
-  X,
+  Footprints,
+  GripVertical,
   ImageIcon,
   Mic,
-  Car,
-  Footprints,
-  Ruler,
-  Plane,
   Pencil,
-  ChevronRight,
+  Plane,
+  Ruler,
   Ship,
+  X,
 } from "../../../components/ui/icons";
-import { Waypoint, RouteMode } from "../../../types/index";
-import { useEffect, useRef, useState } from "react";
 import { useWorkspace } from "../../../hooks/useWorkspace";
+import { useUI } from "../../../hooks/useUI";
+import { RouteMode, Waypoint } from "../../../types/index";
 
 interface WaypointItemProps {
   wp: Waypoint;
@@ -35,8 +36,8 @@ export function WaypointItem({
   onEdit,
   onDelete,
 }: WaypointItemProps) {
-  const { activeWaypointId, setActiveWaypointId, updateWaypoint, waypoints } =
-    useWorkspace();
+  const { activeWaypointId, setActiveWaypointId, updateWaypoint, waypoints } = useWorkspace();
+  const { isRendering } = useUI();
   const itemRef = useRef<HTMLDivElement>(null);
   const [isExpanded, setIsExpanded] = useState(false);
   const isActive = activeWaypointId === wp.id;
@@ -75,14 +76,12 @@ export function WaypointItem({
     displayLabel = normalIndex.toString();
   }
 
-  // ✨ FIXED: Check all three possible script locations
   const hasScript = !!(
-    wp.narration ||
     wp.arrivingNarration ||
     wp.attractionNarration
   );
   const scriptPreview =
-    wp.arrivingNarration || wp.attractionNarration || wp.narration || "";
+    wp.arrivingNarration || wp.attractionNarration || "";
 
   return (
     <div
@@ -117,11 +116,7 @@ export function WaypointItem({
     >
       {/* 1. Delete Action */}
       {isListEditMode && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete();
-          }}
+        <button disabled={isRendering} onClick={(e) => { e.stopPropagation(); onDelete(); }}
           className="shrink-0 mx-2 flex items-center justify-center text-red-500 dark:text-red-400/70 hover:text-red-800 dark:hover:text-red-400 transition-all animate-in slide-in-from-left-2"
         >
           <div className="w-5 h-5 rounded-full bg-red-100 dark:bg-red-500/10 flex items-center justify-center">

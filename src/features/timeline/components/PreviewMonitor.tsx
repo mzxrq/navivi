@@ -20,8 +20,6 @@ export function PreviewMonitor({
   onUpdateClip,
 }: PreviewMonitorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-
-  // ✨ FIX 1: Provide a fallback size so it never renders at 0x0
   const LOGICAL_WIDTH = 1920;
   const LOGICAL_HEIGHT = 1080;
   const [dimensions, setDimensions] = useState({
@@ -39,8 +37,6 @@ export function PreviewMonitor({
         const scale = Math.min(width / LOGICAL_WIDTH, height / LOGICAL_HEIGHT);
         const newWidth = LOGICAL_WIDTH * scale;
         const newHeight = LOGICAL_HEIGHT * scale;
-
-        // ✨ FIX 2: Check pixel width difference instead of scale to guarantee it updates on first load
         if (Math.abs(prev.width - newWidth) > 1) {
           return { width: newWidth, height: newHeight, scale };
         }

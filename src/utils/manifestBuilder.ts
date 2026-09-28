@@ -46,17 +46,16 @@ export function buildAssetManifest(
     }
 
     // Only create a location segment if there's media or narration to play
-    if (locationMedia.length > 0 || wp.audioUrl || wp.narration || wp.arrivingNarration || wp.attractionNarration) {
+    if (locationMedia.length > 0 || wp.audioUrl || wp.arrivingNarration || wp.attractionNarration) {
       segments.push({
         id: `loc_${wp.id}`,
         name: `Location: ${wp.name}`,
         type: "location_media",
         duration_sec: (locationMedia.length * 5) || 5, // 5s per media item
         visuals: locationMedia,
-        narration: wp.audioUrl || wp.narration || wp.arrivingNarration || wp.attractionNarration ? {
+        narration: wp.audioUrl || wp.arrivingNarration || wp.attractionNarration ? {
           audio_path: wp.audioUrl,
           start_time_offset: 0.5,
-          base_text: wp.narration,
           arriving_text: wp.arrivingNarration,
           attraction_text: wp.attractionNarration
         } : undefined,

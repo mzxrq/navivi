@@ -1,5 +1,7 @@
-import { Scissors, Box } from "lucide-react";
+import { useEffect } from "react";
 import {
+  Scissors,
+  Box,
   MousePointer2,
   MapPin,
   Pencil,
@@ -10,6 +12,8 @@ import {
   Ruler,
   Trash2,
 } from "../../../components/ui/icons";
+import { t } from "@lingui/core/macro";
+import { Trans } from "@lingui/react/macro";
 
 interface MapToolbarProps {
   isAddMode: boolean;
@@ -45,6 +49,64 @@ export function MapToolbar({
   const activeMode = isDrawMode ? "line" : isAddMode ? "point" : "select";
   const isContextOpen = activeMode === "line" && !!activeWp;
 
+  // Listen to keyboard shortcut keybinds: V (Select), P (Point/Waypoint), L (Line/Draw), E (Eraser), Escape
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Do not trigger shortcuts if user is typing in an input, textarea, or contentEditable element
+      const activeEl = document.activeElement as HTMLElement | null;
+      const activeTag = activeEl?.tagName.toLowerCase();
+      if (
+        activeTag === "input" ||
+        activeTag === "textarea" ||
+        activeEl?.isContentEditable
+      ) {
+        return;
+      }
+
+      // Do not intercept browser/system modifiers (Ctrl+V paste, Ctrl+P print, Ctrl+L, etc.)
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+      switch (e.key.toLowerCase()) {
+        case "v":
+          e.preventDefault();
+          setIsDrawMode(false);
+          setIsAddMode(false);
+          break;
+        case "p":
+          e.preventDefault();
+          setIsAddMode(true);
+          setIsDrawMode(false);
+          break;
+        case "l":
+          e.preventDefault();
+          setIsDrawMode(true);
+          setIsAddMode(false);
+          break;
+        case "e":
+          if (activeMode === "line" && activeWp) {
+            e.preventDefault();
+            setIsEraserMode(!isEraserMode);
+          }
+          break;
+        case "escape":
+          setIsDrawMode(false);
+          setIsAddMode(false);
+          setIsEraserMode(false);
+          break;
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [
+    activeMode,
+    activeWp,
+    isEraserMode,
+    setIsAddMode,
+    setIsDrawMode,
+    setIsEraserMode,
+  ]);
+
   return (
     <div className="flex max-[1159px]:flex-col min-[1160px]:flex-row gap-2 transition-all">
       {/* PRIMARY TOOLS */}
@@ -54,7 +116,7 @@ export function MapToolbar({
             setIsDrawMode(false);
             setIsAddMode(false);
           }}
-          title="Select (V)"
+          title={t`Select (V)`}
           className={`p-2 rounded-4xl transition-colors ${activeMode === "select" ? "bg-navi/10 text-navi" : "text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"}`}
         >
           <MousePointer2 className="w-4 h-4" />
@@ -64,7 +126,7 @@ export function MapToolbar({
             setIsAddMode(true);
             setIsDrawMode(false);
           }}
-          title="Add Waypoint (P)"
+          title={t`Add Waypoint (P)`}
           className={`p-2 rounded-4xl transition-colors ${activeMode === "point" ? "bg-navi/10 text-navi" : "text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"}`}
         >
           <MapPin className="w-4 h-4" />
@@ -74,7 +136,7 @@ export function MapToolbar({
             setIsDrawMode(true);
             setIsAddMode(false);
           }}
-          title="Draw Custom Route (L)"
+          title={t`Draw Custom Route (L)`}
           className={`p-2 rounded-4xl transition-colors ${activeMode === "line" ? "bg-navi/10 text-navi" : "text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"}`}
         >
           <Pencil className="w-4 h-4" />
@@ -87,7 +149,7 @@ export function MapToolbar({
       >
         <button
           onClick={() => setIsEraserMode(!isEraserMode)}
-          title="Eraser"
+          title={t`Eraser`}
           tabIndex={isContextOpen ? 0 : -1}
           className={`p-2 rounded-4xl transition-colors ${isEraserMode ? "text-red-500 bg-red-50 dark:bg-red-500/10" : "text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"}`}
         >
@@ -96,7 +158,7 @@ export function MapToolbar({
 
         <button
           onClick={onToggleSpline}
-          title="Toggle Smooth Spline"
+          title={t`Toggle Smooth Spline`}
           tabIndex={isContextOpen ? 0 : -1}
           className={`p-2 rounded-4xl transition-colors ${activeWp?.drawStyle === "spline" ? "text-amber-500 bg-amber-50 dark:bg-amber-500/10" : "text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"}`}
         >
@@ -105,7 +167,7 @@ export function MapToolbar({
 
         <button
           onClick={onZoomTo}
-          title="Zoom to Fit Route"
+          title={t`Zoom to Fit`}
           tabIndex={isContextOpen ? 0 : -1}
           className="p-2 rounded-4xl transition-colors text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
         >
@@ -116,7 +178,7 @@ export function MapToolbar({
 
         <button
           onClick={onSimplifyRoute}
-          title="Simplify Route (Reduce Points)"
+          title={t`Simplify Route`}
           tabIndex={isContextOpen ? 0 : -1}
           className="p-2 rounded-4xl transition-colors text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
         >
@@ -124,7 +186,7 @@ export function MapToolbar({
         </button>
         <button
           onClick={onBufferRoute}
-          title="Buffer Route"
+          title={t`Buffer Route`}
           tabIndex={isContextOpen ? 0 : -1}
           className="p-2 rounded-4xl transition-colors text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
         >
@@ -132,7 +194,7 @@ export function MapToolbar({
         </button>
         <button
           onClick={onShowInfo}
-          title="Geometry Information"
+          title={t`Geometry Information`}
           tabIndex={isContextOpen ? 0 : -1}
           className="p-2 rounded-4xl transition-colors text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
         >
@@ -143,7 +205,7 @@ export function MapToolbar({
 
         <button
           onClick={onClearRoute}
-          title="Clear Route"
+          title={t`Clear Route`}
           tabIndex={isContextOpen ? 0 : -1}
           className="p-2 rounded-4xl transition-colors text-zinc-500 hover:text-red-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
         >

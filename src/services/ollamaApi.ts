@@ -118,11 +118,12 @@ async function fetchKeylessWebContext(searchTerms: string): Promise<string> {
 }
 
 // ✨ NEW: Unified Streaming Engine
-async function streamLLM(prompt: string, engine: string, onChunk: (text: string) => void) {
+async function streamLLM(prompt: string, engine: string, onChunk: (text: string) => void, signal?: AbortSignal) {
     const res = await fetch(`${OLLAMA_URL}/api/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ model: engine, prompt, stream: true }),
+        signal,
     });
 
     if (!res.ok || !res.body) throw new Error(`HTTP Error: ${res.status}`);
@@ -160,7 +161,8 @@ export async function generateOverviewScriptStream(
     waypoints: string[],
     engine: string = "schroneko/gemma-2-2b-jpn-it",
     theme: string = "",
-    onChunk: (text: string) => void
+    onChunk: (text: string) => void,
+    signal?: AbortSignal
 ): Promise<void> {
     const routeNames = waypoints.join("、");
     const themeContext = theme ? `このコースの全体テーマは「${theme}」です。` : "";
@@ -175,7 +177,7 @@ ${themeContext}
 2. 音声合成で読み上げるため、効果音や映像の指示（例：[波の音]、[カメラがズーム]など）は絶対に書かないこと。
 3. 歓迎の挨拶から始めること。`;
 
-    await streamLLM(prompt, engine, onChunk);
+    await streamLLM(prompt, engine, onChunk, signal);
 }
 
 // ✨ Stream Waypoint Script
@@ -211,6 +213,26 @@ ${contextStr}
 3. 簡潔に、その場所の魅力や歴史が伝わるようにすること。`;
 
     await streamLLM(prompt, engine, onChunk);
+}
+
+export async function extractLocationsFromDocument(
+    text: string,
+    engine: string = "schroneko/gemma-2-2b-jpn-it"
+): Promise<string[]> {
+    const prompt = `Extract a list of geographic locations mentioned in the following text, in chronological order. Return ONLY a JSON array of strings, e.g. ["Paris", "London"]. No other text. Text: ${text}`;
+    
+    let result = "";
+    try {
+        await streamLLM(prompt, engine, (chunk) => {
+            result = chunk;
+        });
+        const match = result.match(/\[.*\]/s);
+        if (match) return JSON.parse(match[0]);
+        return JSON.parse(result);
+    } catch (e) {
+        console.warn("Failed to extract locations", e);
+        return [];
+    }
 }
 
 // ✨ Stream Video Prompt for Wan 2.1

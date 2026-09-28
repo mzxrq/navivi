@@ -4,6 +4,8 @@ import { exists } from "@tauri-apps/plugin-fs";
 import { documentDir, join } from "@tauri-apps/api/path";
 import { Folder, Map, Loader2 } from "./icons";
 import { fileSystem } from "../../config/constants";
+import { t } from "@lingui/core/macro";
+import { Trans } from "@lingui/react/macro";
 
 interface SaveAsProps {
   isOpen: boolean;
@@ -55,7 +57,11 @@ export function SaveAs({
           baseName.toLowerCase().replace(/[^a-z0-9]+/g, "_") || "untitled";
 
         const docsPath = await documentDir();
-        const projectsRootPath = await join(docsPath, fileSystem.rootFolder, fileSystem.projectsFolder);
+        const projectsRootPath = await join(
+          docsPath,
+          fileSystem.rootFolder,
+          fileSystem.projectsFolder,
+        );
         let currentTestName = sanitizedBase;
         let counter = 1;
 
@@ -69,7 +75,7 @@ export function SaveAs({
         console.error("Failed to check folder existence:", error);
         if (isActive) {
           setFolderPreview(
-            baseName.toLowerCase().replace(/[^a-z0-9]+/g, "_") || "untitled"
+            baseName.toLowerCase().replace(/[^a-z0-9]+/g, "_") || "untitled",
           );
         }
       } finally {
@@ -101,12 +107,12 @@ export function SaveAs({
           </div>
           <div>
             <h3 className="text-sm font-bold text-zinc-900 dark:text-white">
-              {mode === "initial" ? "Save New Project" : "Save Project As"}
+              {mode === "initial" ? t`Save New Project` : t`Save Project As`}
             </h3>
             <p className="text-[10px] text-zinc-500 dark:text-navidark-125 mt-0.5">
               {mode === "initial"
-                ? "Name your project to continue."
-                : "Create a copy of this workspace."}
+                ? t`Name your project to continue`
+                : t`Create a copy of this workspace`}
             </p>
           </div>
         </div>
@@ -114,7 +120,7 @@ export function SaveAs({
         {/* Body Section */}
         <div className="p-5">
           <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5">
-            Project Name
+            <Trans>Project Name</Trans>
           </label>
           <input
             type="text"
@@ -127,7 +133,7 @@ export function SaveAs({
             }
             className="w-full bg-zinc-50 dark:bg-navidark-800 border border-zinc-200 dark:border-navidark-400 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-white mb-5 outline-none focus:border-navi focus:ring-1 focus:ring-navi transition-all shadow-sm"
             autoFocus
-            placeholder="Your Project Name Here"
+            placeholder={t`Your Project Name Here`}
             spellCheck={false}
           />
 
@@ -137,11 +143,11 @@ export function SaveAs({
             <div className="overflow-hidden w-full">
               <div className="flex items-center justify-between mb-0.5">
                 <div className="text-[10px] font-semibold text-zinc-700 dark:text-zinc-300">
-                  Save Location
+                  <Trans>Save Location</Trans>
                 </div>
                 {isChecking && (
                   <div className="flex items-center gap-1 text-[9px] text-zinc-400 dark:text-navidark-150 font-medium">
-                    <Loader2 className="w-2.5 h-2.5 animate-spin" /> Checking...
+                    <Loader2 className="w-2.5 h-2.5 animate-spin" /> <Trans>Checking...</Trans>
                   </div>
                 )}
               </div>
@@ -172,7 +178,7 @@ export function SaveAs({
             onClick={onClose}
             className="px-4 py-2 text-xs font-semibold text-zinc-600 dark:text-navidark-150 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-navidark-700 rounded-lg transition-colors"
           >
-            Cancel
+            <Trans>cancel</Trans>
           </button>
 
           <button
@@ -180,11 +186,11 @@ export function SaveAs({
             disabled={!isValid}
             className="flex items-center justify-center min-w-17.5 px-4 py-2 bg-navi disabled:bg-navi/50 disabled:cursor-not-allowed text-white text-xs font-bold rounded-lg hover:bg-navi-600 transition-colors shadow-sm"
           >
-            {isChecking ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save"}
+            {isChecking ? <Loader2 className="w-4 h-4 animate-spin" /> : t`Save`}
           </button>
         </div>
       </div>
     </div>,
-    document.body
+    document.body,
   );
 }

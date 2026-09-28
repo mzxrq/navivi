@@ -29,6 +29,7 @@ import {
 import {
   saveProjectData,
   loadProjectData,
+  scanProjectsOnDisk,
   loadTimelineManifest,
   loadRouteCache,
   saveTimelineManifest,
@@ -43,6 +44,7 @@ import { ClipData, TimelineTrack } from "../types";
 import { useHistory } from "./useHistory";
 import { useUI } from "./useUI";
 import { UnsavedChanges } from "../components/ui/UnsavedChanges";
+import { t } from "@lingui/core/macro";
 
 const WorkspaceContext = createContext<WorkspaceState | undefined>(undefined);
 
@@ -61,42 +63,48 @@ const DefaultMetadata: ProjectMetadata = {
   thumbnail_path: "",
 };
 
-const DefaultTimeline: TimelineData = {
+const getDefaultTimeline = (): TimelineData => ({
   tracks: [
     {
       id: "track-subtitles",
-      name: "T1: Subtitles",
+      name: t`Subtitles`,
       type: "subtitle",
       orderIndex: 0,
     },
     {
       id: "track-video-2",
-      name: "V2: Pop-ups",
+      name: t`Video 2`,
       type: "video",
       orderIndex: 100,
     },
     {
       id: "track-video-1",
-      name: "V1: Main Video",
+      name: t`Video 1`,
       type: "video",
       orderIndex: 101,
     },
     {
       id: "track-audio-1",
-      name: "A1: Voiceovers",
+      name: t`Audio 1`,
       type: "audio",
       orderIndex: 200,
     },
-    { id: "track-audio-2", name: "A2: Music", type: "audio", orderIndex: 201 },
+    {
+      id: "track-audio-2",
+      name: t`Audio 2`,
+      type: "audio",
+      orderIndex: 201,
+    },
   ],
   clips: [],
   transitions: [],
   zoomMultiplier: 1.0,
-};
+});
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
-  const { editorMode } = useUI();
+  const { editorMode, isRendering } = useUI();
   const [isDirty, setIsDirtyState] = useState(false);
+  const [isProjectLoading, setIsProjectLoading] = useState(false);
   const dirtyRevisionRef = useRef(0);
   const setIsDirty = useCallback((dirty: boolean) => {
     if (dirty) dirtyRevisionRef.current += 1;
@@ -138,7 +146,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     canUndo: canUndoTimeline,
     canRedo: canRedoTimeline,
     reset: resetTimelineHistory,
-  } = useHistory<TimelineData>(DefaultTimeline, 50);
+  } = useHistory<TimelineData>(getDefaultTimeline(), 50);
 
   const setTimeline = useCallback(
     (action: React.SetStateAction<TimelineData>) => {
@@ -183,6 +191,21 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     return saved ? JSON.parse(saved) : [];
   });
 
+  // Auto-discover existing project folders & archives from disk
+  useEffect(() => {
+    scanProjectsOnDisk().then((discovered) => {
+      if (!discovered || discovered.length === 0) return;
+      setRecentProjects((prev) => {
+        const existingPaths = new Set(prev.map((p) => p.path));
+        const newItems = discovered.filter((d) => !existingPaths.has(d.path));
+        if (newItems.length === 0) return prev;
+        const combined = [...prev, ...newItems].slice(0, 50);
+        localStorage.setItem("navivi-recents", JSON.stringify(combined));
+        return combined;
+      });
+    });
+  }, []);
+
   const [isUnsavedModalOpen, setIsUnsavedModalOpen] = useState(false);
   const [unsavedAction, setUnsavedAction] = useState<(() => void) | null>(null);
 
@@ -211,7 +234,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         const updated = [
           { name, path, lastOpened: Date.now(), thumbnailPath },
           ...filtered,
-        ].slice(0, 10);
+        ].slice(0, 50);
         localStorage.setItem("navivi-recents", JSON.stringify(updated));
         return updated;
       });
@@ -353,17 +376,19 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   ) => {
     // Allowed to save empty project
     if (waypoints.length === 0) {
-      console.warn("No waypoints to save, but saving anyway to preserve metadata.");
+      console.warn(
+        "No waypoints to save, but saving anyway to preserve metadata.",
+      );
     }
 
     const saveRevision = dirtyRevisionRef.current;
-      let freshThumbnail = projectThumbnail;
-      if (thumbnailGetterRef.current) {
-        try {
-          const t = thumbnailGetterRef.current();
-          if (t) freshThumbnail = t;
-        } catch(e) {}
-      }
+    let freshThumbnail = projectThumbnail;
+    if (thumbnailGetterRef.current) {
+      try {
+        const t = thumbnailGetterRef.current();
+        if (t) freshThumbnail = t;
+      } catch (e) {}
+    }
     try {
       const result = await saveProjectData(
         waypoints,
@@ -416,7 +441,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
       console.log(`Saved successfully to: ${result.projectDir}`);
       setProjectThumbnail(result.thumbnailPath || null);
-      addToRecents(result.projName, result.nvvPath, result.thumbnailPath);
+      addToRecents(result.projName, result.nvvPath || result.projectDir, result.thumbnailPath);
 
       return result.projectDir;
     } catch (error) {
@@ -425,9 +450,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const loadProject = async (forcePath?: string): Promise<boolean> => {
+  const loadProject = async (
+    forcePath?: string,
+    isFolder = false,
+  ): Promise<boolean> => {
+    setIsProjectLoading(true);
     try {
-      const result = await loadProjectData(forcePath);
+      const result = await loadProjectData(forcePath, isFolder);
       if (!result) return false;
 
       const { data, selectedPath } = result;
@@ -482,7 +511,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           videoUrl: wp.videoUrl,
         })),
       );
-      resetTimelineHistory(DefaultTimeline);
+      resetTimelineHistory(getDefaultTimeline());
       await autoLoadTimeline(data.directory_path);
 
       setVersions(
@@ -501,13 +530,15 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error("Failed to load project:", error);
       throw error;
+    } finally {
+      setIsProjectLoading(false);
     }
   };
 
   const resetWorkspace = () => {
     setActiveWaypointId(null);
     resetWaypointHistory([]);
-    resetTimelineHistory(DefaultTimeline);
+    resetTimelineHistory(getDefaultTimeline());
     setRouteSegments([]);
     setMetadata({
       ...DefaultMetadata,
@@ -522,6 +553,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+        if (isRendering) return;
       const activeEl = document.activeElement;
       const isTyping =
         activeEl?.tagName === "INPUT" ||
@@ -547,18 +579,18 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [editorMode, undoMap, redoMap, undoTimeline, redoTimeline]);
+  }, [editorMode, undoMap, redoMap, undoTimeline, redoTimeline, isRendering]);
 
   const autoLoadTimeline = async (projectDir: string) => {
     const manifest = await loadTimelineManifest(projectDir);
     if (!manifest) {
-      resetTimelineHistory(DefaultTimeline);
+      resetTimelineHistory(getDefaultTimeline());
       return;
     }
 
     if (manifest.ui_state) {
       resetTimelineHistory({
-        ...DefaultTimeline,
+        ...getDefaultTimeline(),
         ...manifest.ui_state,
         transitions: manifest.ui_state.transitions || [],
         markers: manifest.ui_state.markers || manifest.markers || [],
@@ -778,8 +810,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         setRecentProjects,
         projectThumbnail,
         setProjectThumbnail,
-          registerThumbnailGetter,
-          resetWorkspace,
+        registerThumbnailGetter,
+        resetWorkspace,
         routingCache,
         setRoutingCache,
         forceReroute,
@@ -790,6 +822,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         createVersion,
         restoreVersion,
         deleteVersion: removeVersion,
+        isProjectLoading,
       }}
     >
       {children}

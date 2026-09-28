@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { Rnd } from "react-rnd";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronUp, Trash2 } from "../../../components/ui/icons";
 import { Waypoint } from "../../../types";
+import { t } from "@lingui/core/macro";
+import { Trans } from "@lingui/react/macro";
 
 interface UnifiedLayersPanelProps {
   activeWp: Waypoint;
@@ -60,13 +62,13 @@ export function UnifiedLayersPanel({
             <div className="relative group/copy">
               <button
                 className="px-2 py-1 bg-black/5 hover:bg-black/10 dark:bg-white/10 dark:hover:bg-white/20 rounded text-[10px] font-bold uppercase tracking-wider transition-colors flex items-center gap-1 shrink-0"
-                title="Copy a trail from another waypoint"
+                title={t`Copy a trail from another waypoint`}
               >
-                Copy
+                <Trans>Copy</Trans>
               </button>
               <div className="absolute left-0 top-full mt-2 w-48 bg-white dark:bg-navidark-800 border border-zinc-200 dark:border-navidark-400 rounded-xl shadow-xl py-1.5 z-50 opacity-0 invisible group-hover/copy:opacity-100 group-hover/copy:visible transition-all">
                 <div className="px-3 py-1.5 text-[10px] font-bold text-zinc-500 uppercase tracking-wider border-b border-zinc-100 dark:border-white/5 mb-1">
-                  Select Layer to Copy
+                  <Trans>Select Layer to Copy</Trans>
                 </div>
                 <div className="max-h-40 overflow-y-auto custom-scrollbar">
                   {waypoints.filter(
@@ -76,7 +78,7 @@ export function UnifiedLayersPanel({
                       w.customRoute.length > 0,
                   ).length === 0 ? (
                     <div className="px-4 py-2 text-xs text-zinc-500 italic">
-                      No drawn trails found
+                      <Trans>No drawn trails found</Trans>
                     </div>
                   ) : (
                     waypoints
@@ -100,7 +102,7 @@ export function UnifiedLayersPanel({
                           }}
                           className="w-full text-left px-4 py-2 text-xs font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-navidark-600 truncate"
                         >
-                          {w.name || "Waypoint"}
+                          {w.name || t`Waypoint`}
                         </button>
                       ))
                   )}
@@ -114,6 +116,7 @@ export function UnifiedLayersPanel({
               setIsDrawStatusCollapsed(!isDrawStatusCollapsed);
             }}
             className="p-1 hover:bg-black/10 dark:hover:bg-white/10 rounded text-zinc-500 shrink-0"
+            title={isDrawStatusCollapsed ? t`Collapse` : t`Expand`}
           >
             {isDrawStatusCollapsed ? (
               <ChevronDown className="w-4 h-4" />
@@ -127,7 +130,7 @@ export function UnifiedLayersPanel({
           <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col p-1 max-h-100">
             {!activeWp.customRoute || activeWp.customRoute.length === 0 ? (
               <div className="px-4 py-3 text-xs text-zinc-500 italic text-center">
-                No anchors drawn yet
+                <Trans>No anchors drawn yet</Trans>
               </div>
             ) : (
               activeWp.customRoute.map((anchor, idx) => (
@@ -158,9 +161,9 @@ export function UnifiedLayersPanel({
                         setIsDirty(true);
                       }}
                       className="p-1 hover:bg-zinc-200 dark:hover:bg-zinc-600 rounded text-zinc-500 disabled:opacity-30"
-                      title="Move Up"
+                      title={t`Move Up`}
                     >
-                      Up
+                      <ChevronUp className="w-3.5 h-3.5" />
                     </button>
                     <button
                       disabled={idx === (activeWp.customRoute?.length ?? 0) - 1}
@@ -176,9 +179,9 @@ export function UnifiedLayersPanel({
                         setIsDirty(true);
                       }}
                       className="p-1 hover:bg-zinc-200 dark:hover:bg-zinc-600 rounded text-zinc-500 disabled:opacity-30"
-                      title="Move Down"
+                      title={t`Move Down`}
                     >
-                      Dn
+                      <ChevronDown className="w-3.5 h-3.5" />
                     </button>
                     <button
                       onClick={() => {
@@ -190,9 +193,9 @@ export function UnifiedLayersPanel({
                         setIsDirty(true);
                       }}
                       className="p-1 hover:bg-red-100 dark:hover:bg-red-500/20 hover:text-red-500 rounded text-zinc-500"
-                      title="Delete Anchor"
+                      title={t`Delete Anchor`}
                     >
-                      X
+                      <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 </div>

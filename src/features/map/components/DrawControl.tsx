@@ -9,7 +9,7 @@ type DrawControlProps = ConstructorParameters<typeof MapboxDraw>[0] & {
   onUpdate?: (evt: { features: any[]; action: string }) => void;
   onDelete?: (evt: { features: any[] }) => void;
   initialFeatures?: any[];
-  drawRef?: React.MutableRefObject<MapboxDraw | null>;
+  drawRef?: React.RefObject<MapboxDraw | null>;
 };
 
 export default function DrawControl({

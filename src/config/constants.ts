@@ -8,6 +8,7 @@ export const appConfig = {
 export const fileSystem = {
     rootFolder: "Navivi",
     projectsFolder: "Projects",
+    workspacesFolder: "Workspaces",
     assetsFolder: "assets",
     configFile: "job_config.json",
     gpxFile: "raw_track.gpx",
@@ -47,6 +48,8 @@ export const defaultProjectSettings = {
     auto_save_interval: 3,
     show_route_heatmap: false,
     weather_sync_enabled: false,
+    quick_export: false,
+    hardware_spec_override: "auto" as "auto" | "high" | "low",
 };
 
 export const mapStyles = [

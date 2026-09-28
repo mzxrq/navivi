@@ -1,10 +1,11 @@
 import { documentDir, join, basename, dirname } from "@tauri-apps/api/path";
-import { writeTextFile, writeFile, mkdir, exists, copyFile, readTextFile, BaseDirectory, open as fsOpen } from "@tauri-apps/plugin-fs";
-import { open as dialogOpen } from "@tauri-apps/plugin-dialog";
+import { writeTextFile, writeFile, mkdir, exists, copyFile, readTextFile, readDir, BaseDirectory, open as fsOpen } from "@tauri-apps/plugin-fs";
+import { open as dialogOpen, save as dialogSave } from "@tauri-apps/plugin-dialog";
+import { invoke } from "@tauri-apps/api/core";
 import { appConfig, fileSystem } from "../config/constants";
 import { buildAssetManifest } from "../utils/manifestBuilder";
-import { TimelineData, TimelineManifest, ManifestClip, RenderSettings, ExportManifestPayload } from "../types";
-
+import { TimelineData, TimelineManifest, ManifestClip, RenderSettings, ExportManifestPayload, RecentProjects } from "../types";
+import { t } from "@lingui/core/macro";
 
 // Haversine distance calculator
 function calculateDistance(pos1: [number, number], pos2: [number, number]) {
@@ -30,26 +31,57 @@ export const saveProjectData = async (
   thumbnailDataUrl?: string | null,
 ) => {
   const docsPath = await documentDir();
-  const projectRoot = await join(docsPath, fileSystem.rootFolder, fileSystem.projectsFolder);
-
-  if (!(await exists(projectRoot))) {
-    await mkdir(projectRoot, { recursive: true });
-  }
 
   let projName = overrideName || metadata.project_name || appConfig.defaultProjectName;
-  let projId = asDuplicate ? "" : metadata.project_id;
+
+  // Ask for archive destination if this is a new project or "Save As" (asDuplicate)
+  let archivePath = metadata.archive_path;
+
+  // If it's a legacy project being upgraded, archivePath is INSIDE directory_path!
+  // We must force a new archivePath OUTSIDE the legacy folder so it doesn't zip itself.
+  if (archivePath && metadata.directory_path && archivePath.startsWith(metadata.directory_path)) {
+    const defaultSaveDir = await join(docsPath, fileSystem.rootFolder, fileSystem.projectsFolder);
+    archivePath = await join(defaultSaveDir, `${projName}.${fileSystem.extensions.project}`);
+  }
+
+  if (asDuplicate) {
+    const defaultSaveDir = await join(docsPath, fileSystem.rootFolder, fileSystem.projectsFolder);
+    if (!(await exists(defaultSaveDir))) {
+      await mkdir(defaultSaveDir, { recursive: true });
+    }
+    const res = await dialogSave({
+      defaultPath: await join(defaultSaveDir, `${projName}.${fileSystem.extensions.project}`),
+      filters: [{ name: `${appConfig.name} Project`, extensions: [fileSystem.extensions.project] }],
+    });
+    if (!res) throw new Error("Save cancelled by user");
+    archivePath = res;
+    // Update name based on file name chosen
+    projName = await basename(archivePath, `.${fileSystem.extensions.project}`);
+  } else if (!archivePath && !metadata.directory_path) {
+    // If it's a completely new project and they just hit Save, let's auto-generate a workspace
+    // without forcing a .nvv prompt, OR auto-save the .nvv silently.
+    // The safest is to just leave archivePath empty and let it be a workspace-only project!
+  }
+
+  // Workspaces directory (where the files are actually extracted and worked on)
+  const workspaceRoot = await join(docsPath, fileSystem.rootFolder, fileSystem.workspacesFolder);
+  if (!(await exists(workspaceRoot))) {
+    await mkdir(workspaceRoot, { recursive: true });
+  }
+
+  let projId = metadata.project_id || "";
   let projectDir = "";
 
   if (safeFolderName) {
     projId = safeFolderName;
   }
 
-  if (projId && !asDuplicate && !safeFolderName) {
-    projectDir = await join(projectRoot, projId);
+  if (projId && !asDuplicate && !safeFolderName && metadata.directory_path) {
+    projectDir = metadata.directory_path; // Use existing workspace directory!
   } else {
     let safeName = safeFolderName || projName.toLowerCase().replace(/[^a-z0-9]+/g, "_") || `untitled_${new Date().toISOString()}`.toLowerCase().replace(/[^a-z0-9]+/g, "_");
     projId = safeName;
-    projectDir = await join(projectRoot, projId);
+    projectDir = await join(workspaceRoot, projId);
 
     if (!safeFolderName) {
       let counter = 1;
@@ -59,7 +91,7 @@ export const saveProjectData = async (
         counter++;
         projName = `${baseProjName} (${counter})`;
         projId = `${baseSafeName}_${counter}`;
-        projectDir = await join(projectRoot, projId);
+        projectDir = await join(workspaceRoot, projId);
       }
     }
   }
@@ -211,6 +243,7 @@ export const saveProjectData = async (
     created_at: metadata.created_at,
     theme: metadata.theme,
     status: "saved",
+    archive_path: archivePath,
     thumbnail_path: thumbnailPath,
     source_files: { gps_route: "raw_track.gpx" },
     settings: settings,
@@ -256,27 +289,108 @@ export const saveProjectData = async (
   const routeCachePath = await join(projectDir, ".routecache.json");
   await writeTextFile(routeCachePath, JSON.stringify(cleanCache));
 
-  return { projectDir, projId, projName, nvvPath, thumbnailPath };
+  // Zip the workspace into the single .nvv archive file
+  if (archivePath) {
+    await invoke("zip_project", { sourceDir: projectDir, destFile: archivePath });
+  }
+
+  return { projectDir, projId, projName, nvvPath: archivePath, thumbnailPath };
 };
 
-export const loadProjectData = async (forcePath?: string) => {
+export const loadProjectData = async (forcePath?: string, isFolder = false) => {
   let selectedPath = forcePath;
 
   if (!selectedPath) {
-    const res = await dialogOpen({
-      multiple: false,
-      filters: [{ name: `${appConfig.name} Project`, extensions: [fileSystem.extensions.project] }],
-    });
-    if (!res || typeof res !== 'string') return null;
-    selectedPath = res;
+    if (isFolder) {
+      const res = await dialogOpen({
+        multiple: false,
+        directory: true,
+      });
+      if (!res || typeof res !== 'string') return null;
+      selectedPath = res;
+    } else {
+      const res = await dialogOpen({
+        multiple: false,
+        filters: [{ name: `${appConfig.name} Project`, extensions: [fileSystem.extensions.project, 'zip'] }],
+      });
+      if (!res || typeof res !== 'string') return null;
+      selectedPath = res;
+    }
   }
 
-  const fileContent = await readTextFile(selectedPath);
-  const data = JSON.parse(fileContent);
+  const docsPath = await documentDir();
+  let projectDir = "";
+  let fileContent = "";
+  let isDirectory = false;
 
-  // Resolve relative paths back to absolute based on the .nvv file location
-  const projectDir = await dirname(selectedPath);
+  // 1. Check if selectedPath is a folder (Option B: folder-based project)
+  try {
+    const entries = await readDir(selectedPath);
+    isDirectory = true;
+    projectDir = selectedPath;
+
+    // Search for a .nvv file inside the folder
+    const nvvEntry = entries.find(e => e.name?.endsWith(`.${fileSystem.extensions.project}`));
+    if (nvvEntry && nvvEntry.name) {
+      const nvvPath = await join(selectedPath, nvvEntry.name);
+      fileContent = await readTextFile(nvvPath);
+    } else {
+      // Fallback to job_config.json
+      const configPath = await join(selectedPath, "job_config.json");
+      if (await exists(configPath)) {
+        fileContent = await readTextFile(configPath);
+      } else {
+        throw new Error("No Navivi project file or job_config.json found in the selected folder.");
+      }
+    }
+  } catch (err: any) {
+    if (isDirectory) throw err;
+    // Not a directory, so proceed to handle as a file
+  }
+
+  // 2. If it's a file: handle as ZIP archive or standalone JSON
+  if (!isDirectory) {
+    try {
+      // Attempt to unzip it into a Workspace folder (in case it is a single-file ZIP archive)
+      const workspaceId = Date.now().toString();
+      const workspaceDir = await join(docsPath, fileSystem.rootFolder, fileSystem.workspacesFolder, workspaceId);
+
+      await invoke("unzip_project", { sourceFile: selectedPath, destDir: workspaceDir });
+
+      // If we reach here, it was a valid ZIP project file!
+      projectDir = workspaceDir;
+
+      // Find the .nvv file inside the unzipped workspace
+      const projectName = await basename(selectedPath, `.${fileSystem.extensions.project}`);
+      const nvvPath = await join(workspaceDir, `${projectName}.${fileSystem.extensions.project}`);
+
+      if (await exists(nvvPath)) {
+        fileContent = await readTextFile(nvvPath);
+      } else {
+        // Find ANY .nvv file if the name changed
+        const entries = await readDir(workspaceDir);
+        const nvvEntry = entries.find(e => e.name?.endsWith(`.${fileSystem.extensions.project}`));
+        if (nvvEntry && nvvEntry.name) {
+          fileContent = await readTextFile(await join(workspaceDir, nvvEntry.name));
+        } else {
+          const configPath = await join(workspaceDir, "job_config.json");
+          if (await exists(configPath)) {
+            fileContent = await readTextFile(configPath);
+          } else {
+            throw new Error("No .nvv file or job_config.json found in archive");
+          }
+        }
+      }
+    } catch (err) {
+      // Unzip failed, so it must be a legacy uncompressed JSON file
+      projectDir = await dirname(selectedPath);
+      fileContent = await readTextFile(selectedPath);
+    }
+  }
+
+  const data = JSON.parse(fileContent);
   data.directory_path = projectDir;
+  data.archive_path = selectedPath; // Save the path to the .nvv archive or folder
 
   if (data.thumbnail_path && !data.thumbnail_path.match(/^[a-zA-Z]:\\/) && !data.thumbnail_path.startsWith('/')) {
     data.thumbnail_path = await join(projectDir, data.thumbnail_path);
@@ -317,6 +431,77 @@ export const loadProjectData = async (forcePath?: string) => {
   return { data, selectedPath };
 };
 
+export const scanProjectsOnDisk = async (): Promise<RecentProjects[]> => {
+  try {
+    const docsPath = await documentDir();
+    const projectsRoot = await join(docsPath, fileSystem.rootFolder, fileSystem.projectsFolder);
+    if (!(await exists(projectsRoot))) return [];
+
+    const entries = await readDir(projectsRoot);
+    const discovered: RecentProjects[] = [];
+
+    for (const entry of entries) {
+      if (!entry.name) continue;
+      const fullPath = await join(projectsRoot, entry.name);
+
+      // Check if folder
+      try {
+        const subEntries = await readDir(fullPath);
+        const nvvFile = subEntries.find(s => s.name?.endsWith(`.${fileSystem.extensions.project}`));
+        const hasJobConfig = subEntries.some(s => s.name === "job_config.json");
+
+        if (nvvFile || hasJobConfig) {
+          let projName = entry.name;
+          let thumbnailPath: string | undefined = undefined;
+
+          // Check for thumbnail
+          const thumbEntry = subEntries.find(s => s.name?.toLowerCase().startsWith("thumbnail."));
+          if (thumbEntry && thumbEntry.name) {
+            thumbnailPath = await join(fullPath, thumbEntry.name);
+          }
+
+          try {
+            const configPath = await join(fullPath, nvvFile?.name || "job_config.json");
+            const content = await readTextFile(configPath);
+            const parsed = JSON.parse(content);
+            if (parsed.project_name) projName = parsed.project_name;
+            if (parsed.thumbnail_path) {
+              if (parsed.thumbnail_path.match(/^[a-zA-Z]:\\/) || parsed.thumbnail_path.startsWith('/')) {
+                thumbnailPath = parsed.thumbnail_path;
+              } else {
+                thumbnailPath = await join(fullPath, parsed.thumbnail_path);
+              }
+            }
+          } catch { }
+
+          const projectTarget = nvvFile ? await join(fullPath, nvvFile.name) : fullPath;
+          discovered.push({
+            name: projName,
+            path: projectTarget,
+            lastOpened: Date.now(),
+            thumbnailPath,
+          });
+        }
+      } catch {
+        // Entry is a single file (.nvv or .zip archive)
+        if (entry.name.endsWith(`.${fileSystem.extensions.project}`)) {
+          const cleanName = entry.name.replace(new RegExp(`\\.${fileSystem.extensions.project}$`), "");
+          discovered.push({
+            name: cleanName,
+            path: fullPath,
+            lastOpened: Date.now(),
+          });
+        }
+      }
+    }
+
+    return discovered;
+  } catch (err) {
+    console.warn("Failed to scan projects on disk:", err);
+    return [];
+  }
+};
+
 export async function appendToRenderLog(message: string) {
   try {
     const hasDir = await exists('', { baseDir: BaseDirectory.AppLog });
@@ -343,12 +528,65 @@ export async function appendToRenderLog(message: string) {
   }
 };
 
+export function normalizePathSeparators(p: string): string {
+  return p.replace(/\\/g, "/");
+}
+
+export function toRelativeProjectPath(filePath: string | undefined, projectDir: string): string {
+  if (!filePath) return "";
+  const normFile = normalizePathSeparators(filePath);
+  const normProj = normalizePathSeparators(projectDir).replace(/\/+$/, "");
+
+  // If filePath starts with projectDir, strip it
+  if (normFile.toLowerCase().startsWith(normProj.toLowerCase() + "/")) {
+    return normFile.slice(normProj.length + 1);
+  }
+
+  // If it's already a relative path (e.g. "assets/video/..."), return normalized
+  if (!/^[a-zA-Z]:\//.test(normFile) && !normFile.startsWith("/")) {
+    return normFile;
+  }
+
+  return normFile;
+}
+
+export async function toAbsoluteProjectPath(filePath: string | undefined, projectDir: string): Promise<string> {
+  if (!filePath) return "";
+  const normFile = normalizePathSeparators(filePath);
+  const isWindowsAbs = /^[a-zA-Z]:\//.test(normFile);
+  const isUnixAbs = normFile.startsWith("/");
+
+  if (!isWindowsAbs && !isUnixAbs) {
+    return await join(projectDir, filePath.replace(/\//g, "\\"));
+  }
+
+  try {
+    if (await exists(filePath)) {
+      return filePath;
+    }
+  } catch { }
+
+  const assetsIdx = normFile.indexOf("/assets/");
+  if (assetsIdx !== -1) {
+    const relAsset = normFile.slice(assetsIdx + 1);
+    return await join(projectDir, relAsset.replace(/\//g, "\\"));
+  }
+
+  return filePath;
+}
+
 export function compileTimelineManifest(
   projectName: string,
   timeline: TimelineData,
   renderSettings?: RenderSettings,
   markers?: TimelineManifest["markers"],
+  projectDir?: string,
 ): TimelineManifest & ExportManifestPayload {
+  const toRel = (p: string | undefined): string => {
+    if (!p) return "";
+    return projectDir ? toRelativeProjectPath(p, projectDir) : p;
+  };
+
   // find master audio track
   const audioTrack = timeline.tracks.find((t) => t.type === "audio");
   const audioClip = audioTrack
@@ -365,7 +603,7 @@ export function compileTimelineManifest(
     const track = timeline.tracks.find((t) => t.id === clip.trackId);
     videoTracks.push({
       clip_id: clip.id,
-      file_path: clip.source || "",
+      file_path: toRel(clip.source),
       duration: clip.duration,
       type: track?.name.toLowerCase().includes("popup")
         ? "static_popup"
@@ -387,13 +625,22 @@ export function compileTimelineManifest(
   const bitrateKbps = renderSettings?.bitrateKbps || 10000;
   const nowIso = new Date().toISOString();
 
+  // Convert clips inside ui_state and manifest to relative paths
+  const relativeClips = timeline.clips.map((c) => ({
+    ...c,
+    source: c.source ? toRel(c.source) : c.source,
+  }));
+
   // build final json manifest payload
   const manifest: TimelineManifest & ExportManifestPayload = {
     project_name: projectName,
     total_duration_seconds: totalDuration,
     video_tracks: videoTracks,
-    audio_track: audioClip?.source || undefined,
-    ui_state: timeline,
+    audio_track: audioClip?.source ? toRel(audioClip.source) : undefined,
+    ui_state: {
+      ...timeline,
+      clips: relativeClips,
+    },
     render_settings: renderSettings,
     aspect_ratio: aspectRatio,
     resolution: resolution,
@@ -401,7 +648,7 @@ export function compileTimelineManifest(
     bitrate_kbps: bitrateKbps,
     skip_rich_media: renderSettings?.skipRichMedia ?? false,
     tracks: timeline.tracks,
-    clips: timeline.clips,
+    clips: relativeClips,
     transitions: timeline.transitions || [],
     markers: markers || timeline.markers || [],
     exported_at: nowIso,
@@ -427,15 +674,28 @@ export async function saveTimelineManifest(
 ): Promise<boolean> {
   /**
    * convert react timeline state into timeline.json manifest
-   * and saves it for python backend to process
+   * and saves it with relative paths for portability
    */
   try {
     const manifestPath = await join(projectDir, "timeline.json");
+    if ((!timeline?.clips || timeline.clips.length === 0) && (await exists(manifestPath))) {
+      try {
+        const existingRaw = await readTextFile(manifestPath);
+        const existingData = JSON.parse(existingRaw);
+        if (existingData?.video_tracks && existingData.video_tracks.length > 0) {
+          console.log("Preserving existing timeline.json because in-memory timeline clips are empty.");
+          return true;
+        }
+      } catch (e) {
+        // Fall through
+      }
+    }
     const manifest = compileTimelineManifest(
       projectName,
       timeline,
       renderSettings,
       markers,
+      projectDir,
     );
 
     // write to disk formatted cleanly
@@ -462,6 +722,41 @@ export async function loadTimelineManifest(projectDir: string): Promise<Timeline
     // read and parse json
     const fileContents = await readTextFile(manifestPath);
     const manifest: TimelineManifest = JSON.parse(fileContents);
+
+    if (manifest.video_tracks) {
+      for (const track of manifest.video_tracks) {
+        if (track.file_path) {
+          track.file_path = await toAbsoluteProjectPath(track.file_path, projectDir);
+        }
+        if (track.audio_path) {
+          track.audio_path = await toAbsoluteProjectPath(track.audio_path, projectDir);
+        }
+        if (track.subtitle_path) {
+          track.subtitle_path = await toAbsoluteProjectPath(track.subtitle_path, projectDir);
+        }
+      }
+    }
+
+    if (manifest.audio_track) {
+      manifest.audio_track = await toAbsoluteProjectPath(manifest.audio_track, projectDir);
+    }
+
+    if (manifest.ui_state?.clips) {
+      for (const clip of manifest.ui_state.clips) {
+        if (clip.source) {
+          clip.source = await toAbsoluteProjectPath(clip.source, projectDir);
+        }
+      }
+    }
+
+    if (manifest.clips) {
+      for (const clip of manifest.clips) {
+        if (clip.source) {
+          clip.source = await toAbsoluteProjectPath(clip.source, projectDir);
+        }
+      }
+    }
+
     return manifest;
   } catch (error) {
     console.error("Failed to load or parse timeline manifest:", error);

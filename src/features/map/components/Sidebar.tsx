@@ -20,12 +20,19 @@ import {
 import { useWorkspace } from "../../../hooks/useWorkspace";
 import { useUI } from "../../../hooks/useUI";
 import { WaypointItem } from "./WaypointItem";
-import { WaypointEditor } from "./WaypointEditor";
 import { LocationSearch } from "../../../components/ui/LocationSearch";
 import { OverviewPanel } from "./OverviewPanel";
+import { t } from "@lingui/core/macro";
+import { Trans } from "@lingui/react/macro";
 
 export function Sidebar() {
-  const { showToast, isRendering, setIsRendering } = useUI();
+  const {
+    showToast,
+    isRendering,
+    setIsRendering,
+    isRenderCollapsed,
+    setIsRenderCollapsed,
+  } = useUI();
 
   const {
     waypoints,
@@ -33,11 +40,9 @@ export function Sidebar() {
     saveProject,
     activeWaypointId,
     setActiveWaypointId,
-    forceReroute,
     setIsDirty,
     settings,
     updateSettings,
-    routeSegments,
   } = useWorkspace();
 
   const [isListEditMode, setIsListEditMode] = useState(false);
@@ -87,8 +92,14 @@ export function Sidebar() {
   }, [showGenerateConfirm, activeWaypointId]);
 
   const handleGenerateClick = async () => {
+    if (isRenderCollapsed) {
+      setIsRenderCollapsed(false);
+      await saveProject();
+      setIsRendering(true);
+      return;
+    }
     if (waypoints.length === 0) {
-      showToast("Cannot generate: Please add at least one waypoint.", "error");
+      showToast(t`Cannot generate: Please add at least one waypoint.`, "error");
       return;
     }
     setShowGenerateConfirm(true);
@@ -96,7 +107,7 @@ export function Sidebar() {
 
   const executeGenerate = async () => {
     setShowGenerateConfirm(false);
-    await saveProject(); // ✨ Settings are already updated by the checkbox below
+    await saveProject();
     setIsRendering(true);
   };
 
@@ -111,19 +122,13 @@ export function Sidebar() {
     setWaypoints(newWaypoints);
   };
 
-  const handleReverseRoute = () => {
-    if (waypoints.length < 2) return;
-    setWaypoints([...waypoints].reverse());
-    if (setIsDirty) setIsDirty(true);
-    showToast("Route reversed successfully.", "info");
-  };
-
   return (
     <aside
       ref={sidebarRef}
       className="pt-10 w-90 shrink-0 bg-white dark:bg-[#09090b] border-r border-zinc-200 dark:border-white/5 flex flex-col h-full select-none z-100 relative shadow-2xl transition-colors"
     >
-      <div className="sticky top-0 z-30 bg-white/80 dark:bg-[#09090b]/80 backdrop-blur-xl border-b border-zinc-100 dark:border-white/5 p-4 shrink-0 flex flex-col gap-4">
+      {isRendering && <div className="absolute inset-0 z-[60] cursor-not-allowed" />}
+        <div className="sticky top-0 z-30 bg-white/80 dark:bg-[#09090b]/80 backdrop-blur-xl border-b border-zinc-100 dark:border-white/5 p-4 shrink-0 flex flex-col gap-4">
         <LocationSearch />
         <OverviewPanel />
       </div>
@@ -134,10 +139,10 @@ export function Sidebar() {
           <div className="p-8 mt-10 mx-5 rounded-2xl border border-dashed border-zinc-300 dark:border-white/10 bg-black/5 dark:bg-white/5 text-center shrink-0 transition-colors animate-in fade-in">
             <Route className="w-10 h-10 mb-3 mx-auto opacity-20 text-zinc-500" />
             <p className="text-xs font-semibold text-zinc-500">
-              No stops added yet.
+              <Trans>No stops added yet</Trans>
             </p>
             <p className="text-[10px] text-zinc-400 mt-1.5">
-              Click the map or drop a GPS file to start building your route.
+              <Trans>Click the map or drop a GPS file to start building your route</Trans>
             </p>
           </div>
         ) : (
@@ -261,7 +266,7 @@ export function Sidebar() {
                     onClick={() => setShowClearConfirm(false)}
                     className="px-2 h-full text-[10px] font-bold text-zinc-500 hover:bg-black/5 dark:hover:bg-white/10 rounded-full transition-colors"
                   >
-                    Cancel
+                    <Trans>Cancel</Trans>
                   </button>
                   <button
                     onClick={() => {
@@ -271,7 +276,7 @@ export function Sidebar() {
                     }}
                     className="px-2 h-full text-[10px] font-bold text-white bg-red-500 hover:bg-red-600 rounded-full transition-colors shadow-sm"
                   >
-                    Clear
+                    <Trans>Clear</Trans>
                   </button>
                 </div>
               )}
@@ -285,19 +290,27 @@ export function Sidebar() {
           disabled={
             waypoints.length === 0 ||
             isListEditMode ||
-            isRendering ||
+            (isRendering && !isRenderCollapsed) ||
             isPreviewing
           }
-          className="flex items-center justify-center gap-2 py-1.5 px-4 rounded-full bg-navi hover:bg-navi-600 text-white font-bold text-[11px] transition-all disabled:opacity-30 disabled:pointer-events-none shadow-md shadow-navi/20"
+          className={`flex items-center justify-center gap-2 py-1.5 px-4 rounded-full text-white font-bold text-[11px] transition-all disabled:opacity-30 disabled:pointer-events-none shadow-md ${
+            isRenderCollapsed
+              ? "bg-amber-500 hover:bg-amber-600 shadow-amber-500/20"
+              : "bg-navi hover:bg-navi-600 shadow-navi/20"
+          }`}
         >
-          {isRendering ? (
+          {isRenderCollapsed ? (
+            <>
+              <Film className="w-3.5 h-3.5 fill-current" /> <Trans>Resume Generation</Trans>
+            </>
+          ) : isRendering ? (
             <>
               <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              Generating...
+              <Trans>Generating...</Trans>
             </>
           ) : (
             <>
-              <Film className="w-3.5 h-3.5 fill-current" /> Generate Assets
+              <Film className="w-3.5 h-3.5 fill-current" /> <Trans>Generate Assets</Trans>
             </>
           )}
         </button>
@@ -309,14 +322,13 @@ export function Sidebar() {
             <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200">
               <div className="p-5">
                 <h3 className="text-base font-bold text-zinc-900 dark:text-white mb-2">
-                  Ready to Generate?
+                  <Trans>Ready to Generate?</Trans>
                 </h3>
                 <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                  This will save your project, synthesize AI voiceovers, and
-                  render map videos before opening the Timeline.
+                  <Trans>This will save your project, synthesize AI voiceovers, and render map videos before opening the Timeline.</Trans>
                 </p>
 
-                {/* ✨ NEW: Skip Rich Media Toggle */}
+                {/* ✨ Skip Rich Media Toggle */}
                 <label className="flex items-start gap-2.5 mt-5 cursor-pointer group">
                   <input
                     type="checkbox"
@@ -329,11 +341,31 @@ export function Sidebar() {
                   />
                   <div className="flex flex-col gap-0.5">
                     <span className="text-sm font-bold text-zinc-800 dark:text-zinc-200 group-hover:text-navi transition-colors">
-                      Skip Rich Media (Fast Render)
+                      <Trans>Skip Rich Media (Fast Render)</Trans>
                     </span>
                     <span className="text-[10px] text-zinc-500 dark:text-zinc-400 leading-tight">
-                      Generates the map route only. Ignores all pop-up images
-                      and AI voice synthesis to save time.
+                      <Trans>Generates the map route only. Ignores all pop-up images and AI voice synthesis to save time.</Trans>
+                    </span>
+                  </div>
+                </label>
+
+                {/* ✨ Quick Export Toggle */}
+                <label className="flex items-start gap-2.5 mt-3.5 cursor-pointer group">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 w-4 h-4 rounded border-zinc-300 text-navi focus:ring-navi bg-white dark:bg-zinc-800 dark:border-zinc-700 transition-colors cursor-pointer"
+                    checked={settings.quick_export || false}
+                    onChange={(e) => {
+                      updateSettings({ quick_export: e.target.checked });
+                      if (setIsDirty) setIsDirty(true);
+                    }}
+                  />
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-sm font-bold text-zinc-800 dark:text-zinc-200 group-hover:text-navi transition-colors flex items-center gap-1.5">
+                      <Trans>Quick Export (Auto-stitch & Export)</Trans>
+                    </span>
+                    <span className="text-[10px] text-zinc-500 dark:text-zinc-400 leading-tight">
+                      <Trans>Automatically stitch all video segments and export upon completion without pausing for asset review</Trans>
                     </span>
                   </div>
                 </label>
@@ -344,13 +376,13 @@ export function Sidebar() {
                   onClick={() => setShowGenerateConfirm(false)}
                   className="px-4 py-2 text-xs font-bold text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-lg transition-colors"
                 >
-                  Cancel
+                  <Trans>Cancel</Trans>
                 </button>
                 <button
                   onClick={executeGenerate}
                   className="px-4 py-2 bg-navi hover:bg-navi-600 text-white text-xs font-bold rounded-lg shadow-md transition-colors"
                 >
-                  Generate Assets
+                  <Trans>Generate Assets</Trans>
                 </button>
               </div>
             </div>

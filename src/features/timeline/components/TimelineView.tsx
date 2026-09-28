@@ -8,32 +8,11 @@ import { ClipData, WaypointTimelineMarker } from "../../../types/index";
 import { Inspector } from "./Inspector";
 import { ExportModal } from "../../export/components/ExportModal";
 import {
-  ZoomIn,
-  ZoomOut,
-  Play,
-  Pause,
-  SkipBack,
-  SkipForward,
-  MousePointer2,
-  Scissors,
   Sparkles,
-  Magnet,
-  Eye,
-  EyeOff,
-  Volume2,
-  VolumeX,
-  Lock,
-  Unlock,
   Type,
   Film,
   Settings2,
   MapPin,
-  Download,
-  RefreshCw,
-  Maximize,
-  MapPinPlus,
-  UnlinkIcon,
-  Check,
 } from "../../../components/ui/icons";
 import { PreviewMonitor } from "./PreviewMonitor";
 import { TransitionsPanel } from "./elements/TransitionsPanel";
@@ -41,12 +20,10 @@ import { TimelineToolbar } from "./elements/TimelineToolbar";
 import { TimelineRuler } from "./elements/TimelineRuler";
 import { TimelineTrackHeaders } from "./elements/TimelineTrackHeaders";
 import { useTimelineAudio } from "../hooks/useTimelineAudio";
-import {
-  WaypointMarker,
-  WaypointGuideLine,
-  formatMarkerTime,
-} from "./elements/WaypointMarker";
+import { WaypointGuideLine, formatMarkerTime } from "./elements/WaypointMarker";
 import { MarkersPanel } from "./elements/MarkersPanel";
+import { t, plural } from "@lingui/core/macro";
+import { Trans } from "@lingui/react/macro";
 
 export function TimelineView() {
   const {
@@ -75,7 +52,6 @@ export function TimelineView() {
   const [currentTime, setCurrentTime] = useState(0);
   const [isScrubbing, setIsScrubbing] = useState(false);
 
-  // Audio Playback & Auto-Ducking synchronization hook
   const { isDuckingActive } = useTimelineAudio({
     timeline,
     currentTime,
@@ -120,7 +96,6 @@ export function TimelineView() {
 
   const pixelsPerSecond = 20 * timeline.zoomMultiplier;
 
-  // ✨ SORT TRACKS BY ORDER INDEX
   const sortedTracks = useMemo(() => {
     return [...timeline.tracks].sort((a, b) => {
       const getBase = (type: string) =>
@@ -131,7 +106,6 @@ export function TimelineView() {
     });
   }, [timeline.tracks]);
 
-  // ✨ Calculate track bounds using the SORTED tracks
   const trackBounds = useMemo(() => {
     let y = 0;
     let currentType: string | null = null;
@@ -328,7 +302,13 @@ export function TimelineView() {
 
             setTimeline({ ...timeline, tracks: newTracks, clips: newClips });
             setSelectedClipIds(pastedClipIds);
-            showToast(`Pasted ${pastedClipIds.length} clip(s)`, "success");
+            showToast(
+              plural(pastedClipIds.length, {
+                one: "Pasted 1 clip",
+                other: "Pasted # clips",
+              }),
+              "success",
+            );
           } else {
             setActiveTool("pointer");
           }
@@ -342,7 +322,13 @@ export function TimelineView() {
             );
             if (toCopy.length > 0) {
               setCopiedClips(toCopy);
-              showToast(`Copied ${toCopy.length} clip(s)`, "success");
+              showToast(
+                plural(toCopy.length, {
+                  one: "Copied 1 clip",
+                  other: "Copied # clips",
+                }),
+                "success",
+              );
             }
           } else setActiveTool("razor");
           break;
@@ -371,7 +357,13 @@ export function TimelineView() {
                 ),
               });
               setSelectedClipIds([]);
-              showToast(`Cut ${toCopy.length} clip(s)`, "success");
+              showToast(
+                plural(toCopy.length, {
+                  one: "Cut 1 clip",
+                  other: "Cut # clips",
+                }),
+                "success",
+              );
             }
           }
           break;
@@ -395,10 +387,10 @@ export function TimelineView() {
                     : c,
                 ),
               });
-              showToast("Clips unlinked", "success");
+              showToast(t`Clips unlinked`, "success");
             } else {
               if (selectedClipIds.length < 2) {
-                showToast("Select at least 2 clips to link", "warning");
+                showToast(t`Select at least 2 clips to link`, "warning");
                 return;
               }
               const newGroupId = crypto.randomUUID();
@@ -410,7 +402,7 @@ export function TimelineView() {
                     : c,
                 ),
               });
-              showToast("Clips linked", "success");
+              showToast(t`Clips linked`, "success");
             }
           }
           break;
@@ -610,11 +602,11 @@ export function TimelineView() {
       ) {
         return false;
       }
-      
+
       // The transition for nextClip happens from [nextClip.startTime - fadeIn/2, nextClip.startTime + fadeIn/2]
       const transitionStart = nextClip.startTime - nextClip.fadeIn / 2;
       const transitionEnd = nextClip.startTime + nextClip.fadeIn / 2;
-      
+
       return (
         clip.startTime < nextClip.startTime &&
         clip.startTime + clip.duration >= nextClip.startTime &&
@@ -665,7 +657,7 @@ export function TimelineView() {
         selectedClipIds.includes(c.id) ? { ...c, groupId: undefined } : c,
       ),
     });
-    showToast("Clips unlinked", "success");
+    showToast(t`Clips unlinked`, "success");
   };
 
   const handleLink = () => {
@@ -677,7 +669,7 @@ export function TimelineView() {
         selectedClipIds.includes(c.id) ? { ...c, groupId: newGroupId } : c,
       ),
     });
-    showToast("Clips linked", "success");
+    showToast(t`Clips linked`, "success");
   };
 
   useEffect(() => {
@@ -811,7 +803,7 @@ export function TimelineView() {
     );
     if (linkedWaypoint) {
       showToast(
-        `${linkedWaypoint.name} already has a marker at this time.`,
+        t`${linkedWaypoint.name} already has a marker at this time.`,
         "info",
       );
       setRightPanelTab("markers");
@@ -821,7 +813,7 @@ export function TimelineView() {
       ...existingMarkers,
       {
         id: crypto.randomUUID(),
-        name: `Marker ${existingMarkers.length + 1}`,
+        name: t`Marker ${existingMarkers.length + 1}`,
         time: Math.max(0, currentTime),
         index: existingMarkers.length + 1,
       },
@@ -922,7 +914,7 @@ export function TimelineView() {
               )
             }
             className={`p-2 rounded-xl transition-colors ${rightPanelTab === "media" ? "bg-navi/10 text-navi" : "text-zinc-500 hover:bg-zinc-200 dark:hover:bg-white/5 dark:text-zinc-400"}`}
-            title="Media Pool"
+            title={t`Media Pool`}
           >
             <Film className="w-5 h-5" />
           </button>
@@ -933,7 +925,7 @@ export function TimelineView() {
               )
             }
             className={`p-2 rounded-xl transition-colors ${rightPanelTab === "objects" ? "bg-navi/10 text-navi" : "text-zinc-500 hover:bg-zinc-200 dark:hover:bg-white/5 dark:text-zinc-400"}`}
-            title="Add Object"
+            title={t`Add Object`}
           >
             <Type className="w-5 h-5" />
           </button>
@@ -944,7 +936,7 @@ export function TimelineView() {
               )
             }
             className={`p-2 rounded-xl transition-colors ${rightPanelTab === "transitions" ? "bg-navi/10 text-navi" : "text-zinc-500 hover:bg-zinc-200 dark:hover:bg-white/5 dark:text-zinc-400"}`}
-            title="Transitions"
+            title={t`Transitions`}
           >
             <Sparkles className="w-5 h-5" />
           </button>
@@ -956,7 +948,7 @@ export function TimelineView() {
               )
             }
             className={`p-2 rounded-xl transition-colors ${rightPanelTab === "inspector" ? "bg-navi/10 text-navi" : "text-zinc-500 hover:bg-zinc-200 dark:hover:bg-white/5 dark:text-zinc-400"}`}
-            title="Inspector"
+            title={t`Inspector`}
           >
             <Settings2 className="w-5 h-5" />
           </button>
@@ -970,7 +962,9 @@ export function TimelineView() {
               {rightPanelTab === "objects" && (
                 <div className="p-4 text-center text-sm text-zinc-500">
                   <Type className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                  <p>Drag and drop texts or shapes.</p>
+                  <p>
+                    <Trans>Drag and drop texts or shapes</Trans>
+                  </p>
                   <button
                     onClick={() => {
                       const popupTrack = sortedTracks.find(
@@ -981,8 +975,8 @@ export function TimelineView() {
                         id: crypto.randomUUID(),
                         trackId: popupTrack.id,
                         type: "text" as any,
-                        label: "Custom Text",
-                        text: "Enter text here...",
+                        label: t`Custom Text`,
+                        text: t`Enter text here...`,
                         startTime: currentTime,
                         duration: 5,
                         x: 960,
@@ -994,11 +988,11 @@ export function TimelineView() {
                         ...timeline,
                         clips: [...timeline.clips, newTextClip],
                       });
-                      showToast("Text added to timeline", "success");
+                      showToast(t`Text added to timeline`, "success");
                     }}
                     className="mt-4 px-4 py-2 bg-navi text-white rounded-md w-full"
                   >
-                    Add Text Layer
+                    <Trans>Add Text Layer</Trans>
                   </button>
                 </div>
               )}
@@ -1051,7 +1045,6 @@ export function TimelineView() {
         </div>
       </div>
 
-      {/* ✨ RESIZER BAR */}
       <div
         className="h-1.5 cursor-row-resize bg-zinc-200 dark:bg-zinc-800 hover:bg-navi dark:hover:bg-navi transition-colors shrink-0 z-40 relative"
         onMouseDown={() => {
@@ -1165,7 +1158,6 @@ export function TimelineView() {
                   />
                 )}
 
-                {/* ✨ MAPPING OVER SORTED TRACKS */}
                 {sortedTracks.map((track, idx) => {
                   const prevTrack = sortedTracks[idx - 1];
                   const isNewGroup =
@@ -1210,11 +1202,11 @@ export function TimelineView() {
                       #{hoveredMarker.index} {hoveredMarker.name}
                     </span>
                   </div>
-                  <span className="font-mono text-[10px] text-zinc-300">
+                  <span className=" text-[10px] text-zinc-300">
                     {formatMarkerTime(hoveredMarker.time)}
                   </span>
                   <span className="text-[9px] text-zinc-400">
-                    Click marker to jump playhead
+                    <Trans>Click marker to jump playhead</Trans>
                   </span>
                 </div>
               </div>
@@ -1232,7 +1224,7 @@ export function TimelineView() {
         settings={settings}
         duration={maxClipEnd}
         onExportSuccess={() => {
-          showToast("Export process started", "success");
+          showToast(t`Export process started`, "success");
         }}
       />
     </div>

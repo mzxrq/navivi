@@ -7,10 +7,14 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "extract": "lingui extract",
+    "compile": "lingui compile --typescript"
   },
   "dependencies": {
     "@hello-pangea/dnd": "^18.0.1",
+    "@lingui/core": "^6.8.0",
+    "@lingui/react": "^6.8.0",
     "@mapbox/mapbox-gl-draw": "^1.5.2",
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-dialog": "^2.7.2",
@@ -26,6 +30,7 @@
     "konva": "^10.3.2",
     "lucide-react": "^1.28.0",
     "mapbox-gl": "^3.29.0",
+    "puppeteer": "^25.12.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-konva": "^19.2.5",
@@ -34,13 +39,23 @@
     "tailwindcss-animate": "^1.0.7"
   },
   "devDependencies": {
+    "@babel/core": "^8.0.6",
+    "@babel/preset-react": "^8.0.1",
+    "@babel/preset-typescript": "^8.0.1",
+    "@lingui/babel-plugin-lingui-macro": "^6.8.0",
+    "@lingui/cli": "^6.8.0",
+    "@lingui/format-po": "^6.8.0",
+    "@lingui/vite-plugin": "^6.8.0",
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/vite": "^4.3.3",
     "@tauri-apps/cli": "^2",
     "@types/mapbox-gl": "^3.4.1",
+    "@types/node": "^26.6.3",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",
     "autoprefixer": "^10.5.4",
+    "babel-plugin-macros": "^3.1.0",
     "postcss": "^8.5.25",
     "tailwindcss": "^4.3.3",
     "ts-morph": "^28.0.0",
@@ -49,6 +64,7 @@
     "vite-tsconfig-paths": "^6.1.1"
   },
   "allowScripts": {
-    "esbuild@0.28.1": true
+    "esbuild@0.28.1": true,
+    "puppeteer@25.12.0": true
   }
 }

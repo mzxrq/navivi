@@ -1,6 +1,7 @@
 import React, { memo } from "react";
 import { MapPin } from "lucide-react";
 import { WaypointTimelineMarker } from "../../../../types/index";
+import { t } from "@lingui/core/macro"; import { Trans } from "@lingui/react/macro";
 
 export interface WaypointMarkerProps {
   marker: WaypointTimelineMarker;
@@ -55,10 +56,10 @@ export const WaypointMarker = memo(function WaypointMarker({
       onMouseLeave={() => {
         onHover?.(null);
       }}
-      title={`Waypoint #${marker.index}: ${marker.name} (${formattedTime}) - Click to jump playhead`}
+      title={t`Waypoint #${marker.index}: ${marker.name} (${formattedTime}) - Click to jump playhead`}
       role="button"
       tabIndex={0}
-      aria-label={`Waypoint ${marker.index}: ${marker.name} at ${formattedTime}`}
+      aria-label={t`Waypoint ${marker.index}: ${marker.name} at ${formattedTime}`}
     >
       {/* Pin Badge */}
       <div
@@ -87,7 +88,7 @@ export const WaypointMarker = memo(function WaypointMarker({
             {formattedTime}
           </span>
           <span className="text-[8px] text-zinc-400">
-            Click to jump playhead
+            <Trans>Click to jump playhead</Trans>
           </span>
         </div>
       </div>
@@ -111,7 +112,7 @@ export const WaypointGuideLine = memo(function WaypointGuideLine({
       key={`guide-${marker.id}`}
       className="absolute top-0 bottom-0 border-l border-dashed border-amber-500/40 pointer-events-none z-10"
       style={{ left: `${xPosition}px` }}
-      title={`Waypoint #${marker.index}: ${marker.name}`}
+      title={t`Waypoint #${marker.index}: ${marker.name}`}
     />
   );
 });
