@@ -154,6 +154,46 @@ export function MapArea() {
     });
 
     captureMapThumbnail();
+
+    // Auto-fit bounds if we have existing waypoints
+    if (waypoints.length > 0) {
+      let minLng = Infinity;
+      let minLat = Infinity;
+      let maxLng = -Infinity;
+      let maxLat = -Infinity;
+
+      waypoints.forEach((wp) => {
+        minLng = Math.min(minLng, wp.lng);
+        minLat = Math.min(minLat, wp.lat);
+        maxLng = Math.max(maxLng, wp.lng);
+        maxLat = Math.max(maxLat, wp.lat);
+      });
+
+      routeSegments.forEach((seg) => {
+        if (seg.customRoute) {
+          seg.customRoute.forEach((coord) => {
+            minLng = Math.min(minLng, coord[1]);
+            minLat = Math.min(minLat, coord[0]);
+            maxLng = Math.max(maxLng, coord[1]);
+            maxLat = Math.max(maxLat, coord[0]);
+          });
+        }
+      });
+
+      if (minLng !== Infinity) {
+        if (minLng === maxLng && minLat === maxLat) {
+          map.flyTo({ center: [minLng, minLat], zoom: 14, duration: 1000 });
+        } else {
+          map.fitBounds(
+            [
+              [minLng, minLat],
+              [maxLng, maxLat],
+            ],
+            { padding: 80, duration: 1000 },
+          );
+        }
+      }
+    }
   };
 
   useEffect(() => {
