@@ -401,17 +401,7 @@ export function TitleBar() {
               )}
             </span>
 
-            {currentView === "editor" && (
-              <span
-                className={`text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded-sm font-bold ml-2 transition-colors pointer-events-none ${
-                  isDirty
-                    ? "bg-amber-100 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400"
-                    : "bg-emerald-100 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400"
-                }`}
-              >
-                {isDirty ? t`Unsaved` : t`Saved`}
-              </span>
-            )}
+
           </div>
         </div>
 
