@@ -447,7 +447,7 @@ export function WaypointEditor({
                     >
                       <Navigation className="w-4 h-4" />
                       <span className="text-[9px] font-bold max-[1414px]:hidden">
-                        <Trans>Node</Trans>
+                        <Trans>Stub</Trans>
                       </span>
                     </button>
 
