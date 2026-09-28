@@ -299,10 +299,15 @@ WAYPOINT_LABEL_FONT_SCALE = 0.85
 SUMMARY_CARD_LABEL_FONT_SIZE = 20
 SUMMARY_CARD_VALUE_FONT_SIZE = 34
 # Which summary-card template render_summary_card picks: "glass" (the
-# original wide stat pill/column card, cards.py's create_summary_card) or
+# original wide stat pill/column card, cards.py's create_summary_card),
 # "taskbar" (a narrow Windows-notification-flyout-style list,
-# create_summary_card_taskbar). Overridable per project via
-# job_config.json's settings.summary_card_style.
+# create_summary_card_taskbar), "stacked" (two rows, each just an icon and a
+# number — walking figure + distance, clock + duration, no labels —
+# create_summary_card_stacked), or "columns" (columns again, colored per
+# mode like "stacked", but each column is a tall icon spanning its label +
+# value stacked beside it, then a small clock+duration row underneath — the
+# user's own sketch, refined over two rounds — create_summary_card_columns).
+# Overridable per project via job_config.json's settings.summary_card_style.
 DEFAULT_SUMMARY_CARD_STYLE = "glass"
 # Floor on the residential-chunk zoom level computed from a leg's physical
 # span (see TileDownloader.fetch_residential_chunk) — a leg whose path

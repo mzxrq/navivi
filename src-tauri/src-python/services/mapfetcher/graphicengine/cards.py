@@ -27,10 +27,18 @@ _NESTED_LABEL_KEYS = ("mode_name", "mode_duration_label")
 _CARD_BG_COLOR: Tuple[int, int, int, int] = (255, 255, 255, 240)
 _CARD_TEXT_COLOR: Tuple[int, int, int, int] = (35, 35, 35, 255)
 _CARD_LABEL_COLOR: Tuple[int, int, int, int] = (110, 110, 110, 255)
-# Total column/row always reads as blue rather than borrowing whichever
-# mode happens to be self.line_color — it summarizes across modes, not
-# one of them.
-_TOTAL_ACCENT_COLOR: Tuple[int, int, int, int] = (232, 115, 26, 255)  # BGR for RGB (26, 115, 232)
+# Total column/row always reads in this same neutral dark color rather than
+# borrowing whichever mode happens to be self.line_color, or one of the
+# per-mode accent colors below - it summarizes across modes, not one of
+# them, and every _mode_accent color is a vivid, fully-saturated hue
+# (MODE_LINE_COLORS), so a plain near-black can never coincidentally match
+# one, unlike a specific color pick could as modes are added. (This used to
+# be a literal copy of walking's own BGR tuple, meant to read as blue once
+# reversed for PIL - but this file draws directly in PIL's RGB space and
+# never reverses it, so it rendered as orange instead, indistinguishable
+# from ferry's own orange - see _mode_accent's own reversal for how a mode
+# color is actually meant to make that BGR->RGB trip.)
+_TOTAL_ACCENT_COLOR: Tuple[int, int, int, int] = _CARD_TEXT_COLOR
 
 
 def merge_summary_card_labels(overrides: Optional[Dict]) -> Dict:
@@ -122,8 +130,10 @@ class _CardMixin:
         canvas-wide BGR swap at the end — ties each mode's stat
         column/row back to its own line color on the map instead of
         every one sharing one generic accent. "total" isn't a real
-        travel mode with a line color of its own, so it always gets a
-        fixed blue (_TOTAL_ACCENT_COLOR)."""
+        travel mode with a line color of its own, so it always gets the
+        same neutral dark color instead (_TOTAL_ACCENT_COLOR) — never one
+        of the vivid per-mode accents, so it can't end up looking like
+        whichever mode happens to also be that hue (walking's blue, say)."""
         if mode == "total":
             return _TOTAL_ACCENT_COLOR
         return tuple(reversed(self.MODE_COLORS.get(mode, self.line_color))) + (255,)
@@ -536,6 +546,262 @@ class _CardMixin:
         canvas = canvas.resize((w, h), Image.Resampling.LANCZOS)
         return np.array(canvas)[:, :, [2, 1, 0, 3]]
 
+    def create_summary_card_stacked(
+        self,
+        distance_km: float,
+        duration_seconds: float,
+        mode_breakdown: Optional[Dict[str, float]] = None,
+        mode_duration: Optional[Dict[str, float]] = None,
+    ) -> np.ndarray:
+        """Third summary-card template: the user's own sketch — stacked
+        rows, each just an icon and a number, no captions explaining what
+        each one is (create_summary_card's pill/column and
+        create_summary_card_taskbar's notification flyout both spell that
+        out with a label; this one assumes the viewer already knows).
+
+        A single-mode trip (or no mode_breakdown at all) is two rows: a
+        walking figure beside the total distance, a clock beside the total
+        duration, both in plain text color — that single mode already IS
+        the total, same reasoning create_summary_card's own single-column
+        pill uses. More than one mode gets a "route mode" block per mode
+        (distance row, then duration row, each colored in that mode's own
+        route-line accent — see _mode_accent) plus a Total block in
+        _TOTAL_ACCENT_COLOR, the same color language create_summary_card's
+        multi-column layout already uses, just as rows instead of columns."""
+        scale = 2
+
+        font_value = self._load_font(
+            self.FONT_CANDIDATES_BOLD, tuning.SUMMARY_CARD_VALUE_FONT_SIZE * scale
+        )
+
+        def fmt_distance(km: float) -> str:
+            return f"{km * 1000:.0f} m" if km < 1 else f"{km:.1f} km"
+
+        def fmt_duration(seconds: float) -> str:
+            return self._format_duration_ja(seconds) if seconds > 0 else "--"
+
+        mode_duration = mode_duration or {}
+        multi_mode = bool(mode_breakdown) and len(mode_breakdown) > 1
+        icon_size = 34 * scale
+        icon_text_gap = 16 * scale
+        row_gap = 14 * scale
+        margin_x, margin_y = 26 * scale, 20 * scale
+        border_rgba = tuple(reversed(self.card_border_color)) + (255,)
+
+        # blocks: a list of rows, each (icon_fn, text, color); block_sizes
+        # says how many consecutive rows belong to the same mode, so the
+        # (slightly larger) gap between blocks can be told apart from the
+        # (smaller) gap between a mode's own distance/time rows.
+        if multi_mode:
+            blocks: List[List[Tuple]] = []
+            for mode, dist in sorted(mode_breakdown.items(), key=lambda kv: -kv[1]):
+                accent = self._mode_accent(mode)
+                mode_icon = (lambda d, cx, cy, sz, col, m=mode: self._draw_mode_icon(d, m, cx, cy, sz, col))
+                blocks.append([
+                    (mode_icon, fmt_distance(dist), accent),
+                    (self._draw_clock_icon, fmt_duration(mode_duration.get(mode, 0.0)), accent),
+                ])
+            blocks.append([
+                (self._draw_ruler_icon, fmt_distance(distance_km), _TOTAL_ACCENT_COLOR),
+                (self._draw_clock_icon, fmt_duration(duration_seconds), _TOTAL_ACCENT_COLOR),
+            ])
+            block_gap = 22 * scale
+        else:
+            blocks = [[
+                (self._draw_walking_icon, fmt_distance(distance_km), _CARD_TEXT_COLOR),
+                (self._draw_clock_icon, fmt_duration(duration_seconds), _CARD_TEXT_COLOR),
+            ]]
+            block_gap = row_gap
+
+        rows = [row for block in blocks for row in block]
+
+        probe_draw = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+        row_h = max(icon_size, font_value.getmetrics()[0])
+        content_w = max(
+            icon_size + icon_text_gap + probe_draw.textlength(text, font=font_value)
+            for _, text, _ in rows
+        )
+        content_h = (
+            row_h * len(rows)
+            + row_gap * sum(len(block) - 1 for block in blocks)
+            + block_gap * (len(blocks) - 1)
+        )
+
+        card_w_px = int(content_w + margin_x * 2)
+        card_h_px = int(content_h + margin_y * 2)
+        canvas = Image.new("RGBA", (card_w_px, card_h_px), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(canvas)
+
+        card_radius_px = 20 * scale
+        draw.rounded_rectangle(
+            [0, 0, card_w_px - 1, card_h_px - 1],
+            radius=card_radius_px,
+            fill=_CARD_BG_COLOR,
+            outline=border_rgba if self.card_border_thickness else None,
+            width=self.card_border_thickness * scale,
+        )
+
+        text_ascent = font_value.getmetrics()[0]
+        row_cy = margin_y + row_h / 2
+        for block_idx, block in enumerate(blocks):
+            for row_idx, (icon_fn, text, color) in enumerate(block):
+                icon_fn(draw, margin_x + icon_size / 2, row_cy, icon_size, color)
+                text_x = margin_x + icon_size + icon_text_gap
+                draw.text((text_x, row_cy - text_ascent / 2), text, font=font_value, fill=color)
+                row_cy += row_h + (row_gap if row_idx < len(block) - 1 else 0)
+            if block_idx < len(blocks) - 1:
+                row_cy += block_gap
+
+        canvas = self._add_card_shadow(canvas, card_radius_px, border_rgba[:3], scale)
+        w, h = canvas.size[0] // scale, canvas.size[1] // scale
+        canvas = canvas.resize((w, h), Image.Resampling.LANCZOS)
+        return np.array(canvas)[:, :, [2, 1, 0, 3]]
+
+    def create_summary_card_columns(
+        self,
+        distance_km: float,
+        duration_seconds: float,
+        mode_breakdown: Optional[Dict[str, float]] = None,
+        mode_duration: Optional[Dict[str, float]] = None,
+    ) -> np.ndarray:
+        """Fourth summary-card template: still split into columns like
+        create_summary_card's own multi-column layout, colored per mode like
+        create_summary_card_stacked. Each mode-column is itself two columns
+        (the user's own sketch, refined over four rounds): a fixed-width
+        icon column on the left holding BOTH icons — the mode icon on top
+        (sized to span the label+value pair beside it) and the clock icon
+        below it, each horizontally centered on the SAME vertical line so
+        the two icons align — then a text column on the right where the
+        label, value and time all share one left edge (the time line is
+        just its own text now, no icon glued to it — that icon lives in the
+        icon column instead). Weights differ per line: label Regular, value
+        ExtraBold, time Bold (tuning.SUMMARY_CARD_LABEL_FONT_SIZE/
+        VALUE_FONT_SIZE size the label/value; time reuses the label size).
+        A single mode (or no breakdown at all) is one column, no dividers,
+        in plain text color; more than one mode gets one column per mode
+        plus a Total column, colored via _mode_accent / _TOTAL_ACCENT_COLOR
+        — same reasoning create_summary_card's own single-vs-multi split
+        uses."""
+        scale = 2
+        font_label = self._load_font(
+            self.FONT_CANDIDATES_REGULAR, tuning.SUMMARY_CARD_LABEL_FONT_SIZE * scale
+        )
+        font_value = self._load_font(
+            self.FONT_CANDIDATES_EXTRABOLD, tuning.SUMMARY_CARD_VALUE_FONT_SIZE * scale
+        )
+        font_time = self._load_font(
+            self.FONT_CANDIDATES_BOLD, tuning.SUMMARY_CARD_LABEL_FONT_SIZE * scale
+        )
+
+        def fmt_distance(km: float) -> str:
+            return f"{km * 1000:.0f} m" if km < 1 else f"{km:.1f} km"
+
+        def fmt_duration(seconds: float) -> str:
+            return self._format_duration_ja(seconds) if seconds > 0 else "--"
+
+        mode_duration = mode_duration or {}
+        multi_mode = bool(mode_breakdown) and len(mode_breakdown) > 1
+        if multi_mode:
+            columns = [
+                (self._mode_name_ja(mode), mode, dist, mode_duration.get(mode, 0.0), self._mode_accent(mode))
+                for mode, dist in sorted(mode_breakdown.items(), key=lambda kv: -kv[1])
+            ]
+            columns.append((
+                self.summary_card_labels["total_label"], "total", distance_km, duration_seconds,
+                _TOTAL_ACCENT_COLOR,
+            ))
+        elif mode_breakdown and len(mode_breakdown) == 1:
+            (single_mode,) = mode_breakdown.keys()
+            columns = [(
+                self._mode_name_ja(single_mode), single_mode, distance_km, duration_seconds,
+                _CARD_TEXT_COLOR,
+            )]
+        else:
+            columns = [(
+                self.summary_card_labels["distance_label"], "walking", distance_km, duration_seconds,
+                _CARD_TEXT_COLOR,
+            )]
+
+        label_ascent, _ = font_label.getmetrics()
+        value_ascent, _ = font_value.getmetrics()
+        time_ascent, _ = font_time.getmetrics()
+        line_gap = 6 * scale
+        row_gap = 10 * scale  # between the label/value pair and the time line
+        group_h = label_ascent + line_gap + value_ascent  # the mode icon spans exactly this
+        icon_size = group_h
+        clock_icon_size = label_ascent  # matches the label line's own height
+        time_row_h = max(clock_icon_size, time_ascent)
+        content_h = group_h + row_gap + time_row_h
+        icon_col_w = icon_size  # widest of the two icons - both center on this column
+        icon_col_gap = 14 * scale
+        col_pad_x = 26 * scale
+        margin_y = 22 * scale
+        border_rgba = tuple(reversed(self.card_border_color)) + (255,)
+
+        probe_draw = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+        rows = []  # (label, mode, dist_str, dur_str, color, text_w)
+        for label, mode, dist, dur, color in columns:
+            dist_s, dur_s = fmt_distance(dist), fmt_duration(dur)
+            text_w = max(
+                probe_draw.textlength(label, font=font_label),
+                probe_draw.textlength(dist_s, font=font_value),
+                probe_draw.textlength(dur_s, font=font_time),
+            )
+            rows.append((label, mode, dist_s, dur_s, color, text_w))
+
+        col_w = icon_col_w + icon_col_gap + max(r[5] for r in rows) + col_pad_x * 2
+        card_w_px = int(col_w * len(rows))
+        card_h_px = int(content_h + margin_y * 2)
+
+        canvas = Image.new("RGBA", (card_w_px, card_h_px), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(canvas)
+        card_radius_px = 18 * scale
+        draw.rounded_rectangle(
+            [0, 0, card_w_px - 1, card_h_px - 1],
+            radius=card_radius_px,
+            fill=_CARD_BG_COLOR,
+            outline=border_rgba if self.card_border_thickness else None,
+            width=self.card_border_thickness * scale,
+        )
+
+        divider_color = (0, 0, 0, 30)
+        for i, (label_text, mode, dist_s, dur_s, color, text_w) in enumerate(rows):
+            col_x0 = col_w * i + col_pad_x
+            if i > 0:
+                x_div = col_w * i
+                draw.line(
+                    [(x_div, 18 * scale), (x_div, card_h_px - 18 * scale)],
+                    fill=divider_color, width=2 * scale,
+                )
+
+            icon_fn = (
+                self._draw_ruler_icon if mode == "total"
+                else (lambda d, cx, cy, sz, col, m=mode: self._draw_mode_icon(d, m, cx, cy, sz, col))
+            )
+            icon_cx = col_x0 + icon_col_w / 2  # both icons share this x - vertical alignment
+            # Mode icon, centered on the label/value pair's own height.
+            icon_fn(draw, icon_cx, margin_y + group_h / 2, icon_size, color)
+            # Clock icon, directly below it, centered on the time line's
+            # height - same icon_cx, so the two icons line up vertically.
+            time_y = margin_y + group_h + row_gap
+            self._draw_clock_icon(draw, icon_cx, time_y + time_row_h / 2, clock_icon_size, color)
+
+            # Text column: one shared left edge for every line, including
+            # the time line - no icon glued to it here anymore.
+            text_x = col_x0 + icon_col_w + icon_col_gap
+            y = margin_y
+            draw.text((text_x, y), label_text, font=font_label, fill=color)
+            y += label_ascent + line_gap
+            draw.text((text_x, y), dist_s, font=font_value, fill=color)
+            draw.text(
+                (text_x, time_y + (time_row_h - time_ascent) / 2), dur_s, font=font_time, fill=color,
+            )
+
+        canvas = self._add_card_shadow(canvas, card_radius_px, border_rgba[:3], scale)
+        w, h = canvas.size[0] // scale, canvas.size[1] // scale
+        canvas = canvas.resize((w, h), Image.Resampling.LANCZOS)
+        return np.array(canvas)[:, :, [2, 1, 0, 3]]
+
     def create_summary_card_taskbar(
         self,
         distance_km: float,
@@ -835,20 +1101,30 @@ class _CardMixin:
 
     def render_summary_card(self, card_size: Optional[Tuple[int, int]] = None, **kwargs) -> np.ndarray:
         """Shared dispatch point for every summary-card call site: picks
-        create_summary_card (the original wide pill/column card — kept
-        exactly as-is) vs create_summary_card_taskbar (the new narrow
-        notification-flyout template) based on self.summary_card_style,
-        which GraphicsEngine sets from job_config.json's
-        settings.summary_card_style (default "glass" — see
-        tuning.DEFAULT_SUMMARY_CARD_STYLE). Call sites should use this
-        instead of calling either create_summary_card* method directly, so
-        a project can opt into the new template without every call site
-        needing its own if/else."""
+        create_summary_card (the original wide pill/column card), the
+        narrow notification-flyout create_summary_card_taskbar, the
+        minimal two-row create_summary_card_stacked (icon + number, no
+        labels), or create_summary_card_columns (columns again, colored per
+        mode, but a tall icon spanning the label+value inside each one —
+        the user's own sketch), based on self.summary_card_style, which
+        GraphicsEngine sets from job_config.json's settings.summary_card_style
+        (default "glass" — see tuning.DEFAULT_SUMMARY_CARD_STYLE). Call
+        sites should use this instead of calling any create_summary_card*
+        method directly, so a project can opt into a different template
+        without every call site needing its own if/else."""
         style = getattr(self, "summary_card_style", tuning.DEFAULT_SUMMARY_CARD_STYLE)
         if style == "taskbar":
             if card_size is not None:
                 kwargs.setdefault("min_card_width", card_size[0])
             return self.create_summary_card_taskbar(**kwargs)
+        if style == "stacked":
+            kwargs.pop("title", None)
+            kwargs.pop("max_title_width", None)
+            return self.create_summary_card_stacked(**kwargs)
+        if style == "columns":
+            kwargs.pop("title", None)
+            kwargs.pop("max_title_width", None)
+            return self.create_summary_card_columns(**kwargs)
         # create_summary_card (the pill/column style) has no concept of a
         # custom header title — a caller passing `title` (e.g. a per-leg
         # "{from} → {to}" route line) only meant it for the taskbar
