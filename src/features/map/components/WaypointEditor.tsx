@@ -210,8 +210,10 @@ export function WaypointEditor({
           isCollapsed ? "w-75 h-13" : "w-full max-w-5xl h-115 max-h-[50vh]"
         } overflow-hidden`}
       >
-        {isRendering && <div className="absolute inset-0 z-[60] cursor-not-allowed bg-zinc-900/5 dark:bg-white/5" />}
-          {isCollapsed ? (
+        {isRendering && (
+          <div className="absolute inset-0 z-60 cursor-not-allowed bg-zinc-900/5 dark:bg-white/5" />
+        )}
+        {isCollapsed ? (
           <div
             className="cursor-pointer flex items-center justify-between gap-3 p-2.5 px-5 h-full w-full hover:bg-zinc-50 dark:hover:bg-navidark-700 transition-colors"
             onClick={() => setIsCollapsed(false)}
@@ -257,9 +259,28 @@ export function WaypointEditor({
                   className="w-full bg-transparent border-b border-zinc-300 dark:border-white/20 text-2xl font-bold focus:outline-none focus:border-navi pb-1 truncate transition-colors"
                   placeholder={t`Location Name`}
                 />
-                <span className="text-[10px] font-medium text-zinc-500 dark:text-zinc-400 pl-1 mt-1">
+                <button
+                  onClick={async () => {
+                    updateWaypoint(wp.id, { name: t`Locating...` });
+                    try {
+                      const res = await fetch(
+                        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${wp.lat}&lon=${wp.lng}`,
+                      );
+                      const data = await res.json();
+                      const placeName =
+                        data.name ||
+                        data.address?.road ||
+                        data.address?.city ||
+                        t`Unknown Location`;
+                      updateWaypoint(wp.id, { name: placeName });
+                    } catch {
+                      updateWaypoint(wp.id, { name: t`Unknown Location` });
+                    }
+                  }}
+                  className="text-[10px] font-medium text-navi hover:text-navi-600 dark:text-navi dark:hover:text-navi-400 pl-1 mt-1 text-left transition-colors cursor-pointer hover:underline"
+                >
                   <Trans>Get name from coordinate</Trans>
-                </span>
+                </button>
 
                 {isMarkedForRegen && (
                   <div className="mt-2.5 p-2 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-start gap-2">
@@ -413,7 +434,7 @@ export function WaypointEditor({
                     className="text-[11px] font-bold flex items-center gap-1.5 text-zinc-700 dark:text-zinc-300"
                     title={t`Change Waypoint Type`}
                   >
-                    <Trans>Waypoint Settings </Trans>
+                    <Trans>Waypoint Settings</Trans>
                     <Info className="w-3.5 h-3.5 text-zinc-400" />
                   </h3>
 
@@ -585,6 +606,7 @@ export function WaypointEditor({
                             onGenerate={(prompt) =>
                               handleGenerateScript("arriving", prompt)
                             }
+                            aiEnabled={!!settings.ai_features_enabled}
                           />
                         </div>
                       )}
@@ -632,6 +654,7 @@ export function WaypointEditor({
                                 onGenerate={(prompt) =>
                                   handleGenerateScript("attraction", prompt)
                                 }
+                                aiEnabled={!!settings.ai_features_enabled}
                               />
                             </div>
                           )}

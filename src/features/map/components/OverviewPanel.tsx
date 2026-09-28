@@ -6,7 +6,6 @@ import {
   Square,
   ChevronUp,
   ChevronDown,
-  X,
 } from "../../../components/ui/icons";
 import { useWorkspace } from "../../../hooks/useWorkspace";
 import { useUI } from "../../../hooks/useUI";
@@ -21,6 +20,8 @@ export function OverviewPanel() {
   const { waypoints, metadata, updateMetadata, setIsDirty, settings } =
     useWorkspace();
   const { showToast } = useUI();
+
+  const aiEnabled = !!settings.ai_features_enabled;
 
   const [showOverview, setShowOverview] = useState(
     !!metadata.overview_narration || !!metadata.theme,
@@ -60,7 +61,7 @@ export function OverviewPanel() {
         (chunk) => {
           updateMetadata({ overview_narration: chunk });
         },
-        controller.signal
+        controller.signal,
       );
       setIsDirty(true);
       showToast(t`Overview script compiled!`, "success");
@@ -120,7 +121,7 @@ export function OverviewPanel() {
         </button>
       </div>
 
-      {/* ✨ NEW: Theme Input */}
+      {/* Theme Input — always visible */}
       <div className="space-y-1.5">
         <input
           type="text"
@@ -134,48 +135,52 @@ export function OverviewPanel() {
         />
       </div>
 
-      <div className="relative w-full h-28 rounded-lg overflow-hidden shadow-sm border border-zinc-200 dark:border-navidark-700 focus-within:border-navi dark:focus-within:border-navi focus-within:ring-1 focus-within:ring-navi/30 transition-all">
-        <textarea
-          value={metadata.overview_narration || ""}
-          onChange={(e) => {
-            updateMetadata({ overview_narration: e.target.value });
-            setIsDirty(true);
-          }}
-          disabled={isGeneratingOverview}
-          placeholder={t`Opening Narration...`}
-          className="w-full h-full resize-none p-3 pb-10 text-xs custom-scrollbar bg-white dark:bg-navidark-900 text-zinc-900 dark:text-zinc-100 focus:outline-none disabled:opacity-50 leading-relaxed"
-        />
+      {/* Narration textarea + Auto-Write — only when AI features are enabled */}
+      {aiEnabled && (
+        <div className="relative w-full h-28 rounded-lg overflow-hidden shadow-sm border border-zinc-200 dark:border-navidark-700 focus-within:border-navi dark:focus-within:border-navi focus-within:ring-1 focus-within:ring-navi/30 transition-all">
+          <textarea
+            value={metadata.overview_narration || ""}
+            onChange={(e) => {
+              updateMetadata({ overview_narration: e.target.value });
+              setIsDirty(true);
+            }}
+            disabled={isGeneratingOverview}
+            placeholder={t`Opening Narration...`}
+            className="w-full h-full resize-none p-3 pb-10 text-xs custom-scrollbar bg-white dark:bg-navidark-900 text-zinc-900 dark:text-zinc-100 focus:outline-none disabled:opacity-50 leading-relaxed"
+          />
 
-        <div className="absolute bottom-2 right-2 flex items-center gap-2 z-20">
-          {isGeneratingOverview ? (
-            <button
-              onClick={handleCancel}
-              className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-all bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-500/20 shadow-sm"
-            >
-              <Square className="w-3 h-3 fill-current" /> <Trans>Cancel</Trans>
-            </button>
-          ) : (
-            <button
-              onClick={handleGenerateOverview}
-              disabled={isGeneratingOverview || waypoints.length === 0}
-              className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed bg-navi hover:bg-navi-600 text-white shadow-md shadow-navi/20"
-            >
-              <Sparkles className="w-3 h-3" /> <Trans>Auto-Write</Trans>
-            </button>
-          )}
-        </div>
+          <div className="absolute bottom-2 right-2 flex items-center gap-2 z-20">
+            {isGeneratingOverview ? (
+              <button
+                onClick={handleCancel}
+                className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-all bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-500/20 shadow-sm"
+              >
+                <Square className="w-3 h-3 fill-current" />{" "}
+                <Trans>Cancel</Trans>
+              </button>
+            ) : (
+              <button
+                onClick={handleGenerateOverview}
+                disabled={isGeneratingOverview || waypoints.length === 0}
+                className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed bg-navi hover:bg-navi-600 text-white shadow-md shadow-navi/20"
+              >
+                <Sparkles className="w-3 h-3" /> <Trans>Auto-Write</Trans>
+              </button>
+            )}
+          </div>
 
-        {isGeneratingOverview && (
-          <div className="absolute inset-0 bg-white/80 dark:bg-navidark-900/80 backdrop-blur-[2px] flex flex-col items-center justify-center z-10 animate-in fade-in">
-            <div className="flex flex-col items-center gap-3">
-              <Sparkles className="w-6 h-6 text-navi animate-bounce" />
-              <div className="text-[10px] font-bold text-navi tracking-wider uppercase">
-                <Trans>Synthesizing...</Trans>
+          {isGeneratingOverview && (
+            <div className="absolute inset-0 bg-white/80 dark:bg-navidark-900/80 backdrop-blur-[2px] flex flex-col items-center justify-center z-10 animate-in fade-in">
+              <div className="flex flex-col items-center gap-3">
+                <Sparkles className="w-6 h-6 text-navi animate-bounce" />
+                <div className="text-[10px] font-bold text-navi tracking-wider uppercase">
+                  <Trans>Synthesizing...</Trans>
+                </div>
               </div>
             </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

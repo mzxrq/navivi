@@ -50,6 +50,7 @@ export const defaultProjectSettings = {
     weather_sync_enabled: false,
     quick_export: false,
     hardware_spec_override: "auto" as "auto" | "high" | "low",
+    ai_features_enabled: false,
 };
 
 export const mapStyles = [

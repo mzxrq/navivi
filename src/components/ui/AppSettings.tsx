@@ -1,4 +1,4 @@
-﻿import { useLingui } from "@lingui/react";
+import { useLingui } from "@lingui/react";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 import { convertFileSrc } from "@tauri-apps/api/core";
@@ -179,6 +179,65 @@ export function AppSettings() {
                 {/* FAST RENDER MODE */}
                 {currentView === "editor" && (
                   <div className="space-y-3 pt-4 border-t border-zinc-100 dark:border-navidark-700">
+                    <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-widest flex items-center gap-1.5">
+                      <Trans>Advanced Features</Trans>
+                    </label>
+
+                    {/* ENABLE AI FEATURES TOGGLE */}
+                    <div
+                      onClick={() => {
+                        updateSettings({
+                          ai_features_enabled: !settings.ai_features_enabled,
+                        });
+                        setIsDirty(true);
+                      }}
+                      className={`flex items-center justify-between p-4 rounded-xl border-2 transition-all cursor-pointer select-none group ${
+                        settings.ai_features_enabled
+                          ? "border-navi bg-navi-50/50 dark:border-navi/50 dark:bg-navi/10 shadow-sm"
+                          : "border-zinc-200 dark:border-navidark-400 bg-zinc-50 dark:bg-navidark-800 hover:border-zinc-300 dark:hover:border-navidark-300"
+                      }`}
+                    >
+                      <div className="flex flex-col gap-1 pr-6">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`text-xs font-bold transition-colors ${
+                              settings.ai_features_enabled
+                                ? "text-navi-700 dark:text-navi-400"
+                                : "text-zinc-700 dark:text-zinc-200 group-hover:text-zinc-900 dark:group-hover:text-white"
+                            }`}
+                          >
+                            <Trans>Enable AI Features</Trans>
+                          </span>
+                          <span className="text-[9px] font-semibold tracking-wider uppercase px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-600 dark:bg-violet-400/10 dark:text-violet-400 border border-violet-500/20">
+                            <Trans>Requires Ollama</Trans>
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-zinc-500 dark:text-navidark-150 leading-relaxed">
+                          <Trans>
+                            Show Auto-Write script buttons and overview
+                            narration. Requires Ollama to be installed and
+                            running locally.
+                          </Trans>
+                        </span>
+                      </div>
+
+                      <div
+                        className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-200 ease-in-out ${
+                          settings.ai_features_enabled
+                            ? "bg-navi"
+                            : "bg-zinc-300 dark:bg-zinc-700"
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform duration-200 ease-in-out ${
+                            settings.ai_features_enabled
+                              ? "translate-x-4.5"
+                              : "translate-x-0.5"
+                          }`}
+                        />
+                      </div>
+                    </div>
+
                     <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-widest flex items-center gap-1.5">
                       <Trans>Project Overrides</Trans>
                     </label>

@@ -9,37 +9,14 @@ import { AppSettings } from "./components/ui/AppSettings";
 import { Toast } from "./components/ui/Toast";
 import { useUI } from "./hooks/useUI";
 import "./App.css";
-import { useEffect, useRef } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import { StatusBar } from "./components/ui/StatusBar";
 import { ContextMenu } from "./components/ui/ContextMenu";
 import { useAutoSave } from "./hooks/useAutoSave";
 import { AutoDirectorModal } from "./components/ui/AutoDirectorModal";
 
 export default function App() {
-  const { currentView, editorMode, showToast } = useUI();
+  const { currentView, editorMode } = useUI();
   useAutoSave();
-
-  const hasCheckedOllama = useRef(false);
-
-  useEffect(() => {
-    if (hasCheckedOllama.current) return;
-    hasCheckedOllama.current = true;
-
-    const initializeOllama = async () => {
-      try {
-        const res = await invoke<string>("wake_up_ollama");
-        console.log(res);
-      } catch (error) {
-        console.warn(error);
-        showToast(
-          "△ Ollama not found. If you wish to use Auto Write function, please install Ollama from App Settings.",
-          "warning",
-        );
-      }
-    };
-    initializeOllama();
-  }, []); 
 
   return (
     <div

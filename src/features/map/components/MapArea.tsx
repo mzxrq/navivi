@@ -72,6 +72,7 @@ export function MapArea() {
     typeof setTimeout
   > | null>(null);
   const rightClickStartRef = useRef<{ x: number; y: number } | null>(null);
+  const isContextLostRef = useRef(false);
 
   const [eleHoverPoint, setEleHoverPoint] = useState<number[] | null>(null);
   const [vehicleGeoJson, setVehicleGeoJson] = useState<any>(null);
@@ -90,6 +91,7 @@ export function MapArea() {
 
   useEffect(() => {
     registerThumbnailGetter(() => {
+      if (isContextLostRef.current) return null;
       try {
         const canvas = mapRef.current?.getMap().getCanvas();
         return canvas ? canvas.toDataURL("image/png") : null;
@@ -100,10 +102,12 @@ export function MapArea() {
   }, [registerThumbnailGetter]);
 
   const captureMapThumbnail = () => {
+    if (isContextLostRef.current) return;
     if (thumbnailCaptureTimeoutRef.current) {
       clearTimeout(thumbnailCaptureTimeoutRef.current);
     }
     thumbnailCaptureTimeoutRef.current = setTimeout(() => {
+      if (isContextLostRef.current) return;
       const canvas = mapRef.current?.getMap().getCanvas();
       if (!canvas) return;
       try {
@@ -112,6 +116,44 @@ export function MapArea() {
         console.warn("Unable to capture map thumbnail:", error);
       }
     }, 250);
+  };
+
+  // Called by <Map onLoad>: canvas now exists, safe to attach WebGL handlers
+  const handleMapLoad = () => {
+    const map = mapRef.current?.getMap();
+    if (!map) return;
+
+    const canvas = map.getCanvas();
+
+    // Prevent the browser from discarding the context silently
+    const handleContextLost = (e: Event) => {
+      e.preventDefault();
+      isContextLostRef.current = true;
+      console.warn("[Navivi] WebGL context lost – pausing map operations.");
+    };
+    const handleContextRestored = () => {
+      isContextLostRef.current = false;
+      console.info("[Navivi] WebGL context restored.");
+    };
+    canvas.addEventListener("webglcontextlost", handleContextLost);
+    canvas.addEventListener("webglcontextrestored", handleContextRestored);
+
+    // Suppress Mapbox-internal "object does not belong to this context" errors
+    // that fire during style reloads — they are benign and self-resolving
+    map.on("error", (e: any) => {
+      const msg: string = e?.error?.message ?? "";
+      if (
+        msg.includes("does not belong to this context") ||
+        msg.includes("deleteVertexArray") ||
+        msg.includes("INVALID_OPERATION")
+      ) {
+        // swallow — Mapbox recovers on its own after a style reload
+        return;
+      }
+      console.error("[Navivi] Mapbox error:", e);
+    });
+
+    captureMapThumbnail();
   };
 
   useEffect(() => {
@@ -635,11 +677,10 @@ export function MapArea() {
       <div className="absolute inset-0 z-0">
         <Map
           ref={mapRef}
-          preserveDrawingBuffer
           cursor={isEraserMode ? "crosshair" : ""}
           {...viewState}
           onMove={(evt: ViewStateChangeEvent) => setViewState(evt.viewState)}
-          onLoad={captureMapThumbnail}
+          onLoad={handleMapLoad}
           onMoveEnd={captureMapThumbnail}
           onClick={handleMapClick}
           onContextMenu={handleMapContextMenu}
@@ -659,6 +700,7 @@ export function MapArea() {
           attributionControl={false}
           dragRotate={true}
           doubleClickZoom={!isDrawMode}
+          maxZoom={20}
           terrain={
             is3D ? { source: "mapbox-dem", exaggeration: 1.5 } : undefined
           }
@@ -887,7 +929,10 @@ export function MapArea() {
               <Trans>Drop photos here to auto-plot your route</Trans>
             </h3>
             <p className="text-xs text-zinc-500 dark:text-zinc-400 max-w-xs leading-relaxed">
-              <Trans>EXIF GPS tags from your travel photos will automatically generate sequenced stops on the map.</Trans>
+              <Trans>
+                EXIF GPS tags from your travel photos will automatically
+                generate sequenced stops on the map.
+              </Trans>
             </p>
             <button
               onClick={importPhotos}

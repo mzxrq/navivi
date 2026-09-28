@@ -17,6 +17,7 @@ interface ScriptInputProps {
   onGenerate: (prompt: string, engine: string, language: string) => void;
   isGenerating: boolean;
   onCancel?: () => void;
+  aiEnabled?: boolean;
 }
 
 export function ScriptInput({
@@ -25,6 +26,7 @@ export function ScriptInput({
   onGenerate,
   isGenerating,
   onCancel,
+  aiEnabled = false,
 }: ScriptInputProps) {
   const [localPrompt, setLocalPrompt] = useState(value);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
@@ -67,26 +69,27 @@ export function ScriptInput({
         </label>
 
         <div className="flex items-center gap-2">
-          {/* Toggle between Auto-Write and Cancel */}
-          {isGenerating ? (
-            <button
-              onClick={onCancel}
-              className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-bold transition-all bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20 border border-red-200 dark:border-red-500/20 shadow-sm"
-            >
-              <Square className="w-3 h-3 fill-current" />
-              <Trans>cancel</Trans>
-            </button>
-          ) : (
-            <button
-              onClick={handleGenerateClick}
-              disabled={!localPrompt.trim()}
-              // ✨ FIXED: Match OverviewPanel styling exactly
-              className="shrink-0 flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed bg-navi-50 dark:bg-navi-500/10 text-navi-700 dark:text-navi-300 hover:bg-navi-100 dark:hover:bg-navi-500/20 border border-navi-200 dark:border-navi-500/20 shadow-sm"
-            >
-              <PencilSparkles className="w-3 h-3" />
-              <Trans>Auto-Write</Trans>
-            </button>
-          )}
+          {/* Toggle between Auto-Write and Cancel — only when AI features enabled */}
+          {aiEnabled &&
+            (isGenerating ? (
+              <button
+                onClick={onCancel}
+                className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-bold transition-all bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20 border border-red-200 dark:border-red-500/20 shadow-sm"
+              >
+                <Square className="w-3 h-3 fill-current" />
+                <Trans>cancel</Trans>
+              </button>
+            ) : (
+              <button
+                onClick={handleGenerateClick}
+                disabled={!localPrompt.trim()}
+                // ✨ FIXED: Match OverviewPanel styling exactly
+                className="shrink-0 flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed bg-navi-50 dark:bg-navi-500/10 text-navi-700 dark:text-navi-300 hover:bg-navi-100 dark:hover:bg-navi-500/20 border border-navi-200 dark:border-navi-500/20 shadow-sm"
+              >
+                <PencilSparkles className="w-3 h-3" />
+                <Trans>Auto-Write</Trans>
+              </button>
+            ))}
         </div>
       </div>
 

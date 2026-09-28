@@ -80,6 +80,7 @@ export interface ProjectSettings {
   hardware_spec_override?: "auto" | "high" | "low";
   show_render_terminal?: boolean;
   marked_regeneration_waypoints?: string[];
+  ai_features_enabled?: boolean;
 }
 
 export interface ProjectMetadata {
