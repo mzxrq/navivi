@@ -1,9 +1,6 @@
 import { useRef, useEffect } from "react";
 import { useWorkspace } from "../../../hooks/useWorkspace";
-import {
-  getCurve,
-  fillRouteCoordinates,
-} from "../../../utils/mapUtils";
+import { getCurve, fillRouteCoordinates } from "../../../utils/mapUtils";
 import bezierSpline from "@turf/bezier-spline";
 import { lineString } from "@turf/helpers";
 
@@ -25,6 +22,115 @@ const fetchWithTimeout = async (
   }
 };
 
+const fetchPairSegment = async (
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number,
+  mode: string,
+  apiKey: string,
+) => {
+  let positions: [number, number][] = [];
+
+  if (mode === "curve") {
+    positions = getCurve([lat1, lng1], [lat2, lng2]);
+  } else if (mode === "walking" || mode === "ferry") {
+    try {
+      if (!apiKey) throw new Error("missing_api_key");
+      const url = `https://api.openrouteservice.org/v2/directions/foot-hiking?api_key=${apiKey}&start=${lng1},${lat1}&end=${lng2},${lat2}`;
+      const response = await fetchWithTimeout(url);
+      if (!response.ok) throw new Error(`HTTP_${response.status}`);
+      const data = await response.json();
+      if (data.features && data.features.length > 0) {
+        positions = data.features[0].geometry.coordinates.map(
+          (coord: [number, number]) => [coord[1], coord[0]],
+        );
+      } else {
+        throw new Error("no_route");
+      }
+    } catch (error) {
+      console.warn("[ORS Walk] Failed, falling back to OSRM foot:", error);
+      try {
+        const osrmUrl = `https://router.project-osrm.org/route/v1/foot/${lng1},${lat1};${lng2},${lat2}?overview=full&geometries=geojson`;
+        const osrmRes = await fetchWithTimeout(osrmUrl);
+        const osrmData = await osrmRes.json();
+        if (osrmData.routes && osrmData.routes.length > 0) {
+          positions = osrmData.routes[0].geometry.coordinates.map(
+            (coord: [number, number]) => [coord[1], coord[0]],
+          );
+        } else {
+          positions = [[lat1, lng1], [lat2, lng2]];
+        }
+      } catch {
+        positions = [[lat1, lng1], [lat2, lng2]];
+      }
+    }
+  } else {
+    // driving
+    try {
+      const url = `https://router.project-osrm.org/route/v1/driving/${lng1},${lat1};${lng2},${lat2}?overview=full&geometries=geojson`;
+      const response = await fetchWithTimeout(url);
+      const data = await response.json();
+      if (data.routes && data.routes.length > 0) {
+        positions = data.routes[0].geometry.coordinates.map(
+          (coord: [number, number]) => [coord[1], coord[0]],
+        );
+      } else {
+        positions = [[lat1, lng1], [lat2, lng2]];
+      }
+    } catch (error) {
+      positions = [[lat1, lng1], [lat2, lng2]];
+    }
+  }
+
+  return positions;
+};
+
+const fetchSegmentWithVia = async (
+  wp1: any,
+  wp2: any,
+  mode: string,
+  apiKey: string,
+) => {
+  const points: [number, number][] = [
+    [wp1.lat, wp1.lng],
+    ...(wp1.viaPoints || []),
+    [wp2.lat, wp2.lng],
+  ];
+
+  let fullPositions: [number, number][] = [];
+
+  for (let i = 0; i < points.length - 1; i++) {
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const segmentPositions = await fetchPairSegment(
+      p1[0], p1[1],
+      p2[0], p2[1],
+      mode,
+      apiKey
+    );
+    
+    // Stitch segments, avoiding duplicate end-start coordinates
+    if (i === 0) {
+      fullPositions = segmentPositions;
+    } else {
+      if (segmentPositions.length > 0 && fullPositions.length > 0) {
+        const lastFull = fullPositions[fullPositions.length - 1];
+        const firstSeg = segmentPositions[0];
+        if (lastFull[0] === firstSeg[0] && lastFull[1] === firstSeg[1]) {
+          fullPositions = [...fullPositions, ...segmentPositions.slice(1)];
+        } else {
+          fullPositions = [...fullPositions, ...segmentPositions];
+        }
+      } else {
+        fullPositions = [...fullPositions, ...segmentPositions];
+      }
+    }
+  }
+
+  return fullPositions;
+};
+
 const fetchSingleSegment = async (
   index: number,
   wp1: any,
@@ -43,74 +149,8 @@ const fetchSingleSegment = async (
   } else if (mode === "draw") {
     const customNodes = wp1.customRoute || [];
     positions = [[wp1.lat, wp1.lng], ...customNodes, [wp2.lat, wp2.lng]];
-  } else if (mode === "curve") {
-    // curve
-    positions = getCurve([wp1.lat, wp1.lng], [wp2.lat, wp2.lng]);
-  } else if (mode === "walking" || mode === "ferry") {
-    // walking + ferry
-    try {
-      if (!apiKey) throw new Error("missing_api_key");
-      const url = `https://api.openrouteservice.org/v2/directions/foot-hiking?api_key=${apiKey}&start=${wp1.lng},${wp1.lat}&end=${wp2.lng},${wp2.lat}`;
-
-      const response = await fetchWithTimeout(url);
-      if (!response.ok) throw new Error(`HTTP_${response.status}`);
-
-      const data = await response.json();
-      if (data.features && data.features.length > 0) {
-        positions = data.features[0].geometry.coordinates.map(
-          (coord: [number, number]) => [coord[1], coord[0]],
-        );
-      } else {
-        throw new Error("no_route");
-      }
-    } catch (error) {
-      console.warn("[ORS Walk] Failed, falling back to OSRM foot:", error);
-      try {
-        const osrmUrl = `https://router.project-osrm.org/route/v1/foot/${wp1.lng},${wp1.lat};${wp2.lng},${wp2.lat}?overview=full&geometries=geojson`;
-
-        const osrmRes = await fetchWithTimeout(osrmUrl);
-        const osrmData = await osrmRes.json();
-
-        if (osrmData.routes && osrmData.routes.length > 0) {
-          positions = osrmData.routes[0].geometry.coordinates.map(
-            (coord: [number, number]) => [coord[1], coord[0]],
-          );
-        } else {
-          positions = [
-            [wp1.lat, wp1.lng],
-            [wp2.lat, wp2.lng],
-          ];
-        }
-      } catch {
-        positions = [
-          [wp1.lat, wp1.lng],
-          [wp2.lat, wp2.lng],
-        ];
-      }
-    }
   } else {
-    // driving
-    try {
-      const url = `https://router.project-osrm.org/route/v1/driving/${wp1.lng},${wp1.lat};${wp2.lng},${wp2.lat}?overview=full&geometries=geojson`;
-      const response = await fetchWithTimeout(url);
-      const data = await response.json();
-
-      if (data.routes && data.routes.length > 0) {
-        positions = data.routes[0].geometry.coordinates.map(
-          (coord: [number, number]) => [coord[1], coord[0]],
-        );
-      } else {
-        positions = [
-          [wp1.lat, wp1.lng],
-          [wp2.lat, wp2.lng],
-        ];
-      }
-    } catch (error) {
-      positions = [
-        [wp1.lat, wp1.lng],
-        [wp2.lat, wp2.lng],
-      ];
-    }
+    positions = await fetchSegmentWithVia(wp1, wp2, mode, apiKey);
   }
 
   return { index, positions, mode, cacheKey };
@@ -151,10 +191,13 @@ export function useMapRouting() {
     for (let i = 0; i < routedWaypoints.length - 1; i++) {
       const wp1 = routedWaypoints[i];
       const wp2 = routedWaypoints[i + 1];
-      const mode = wp1.routeMode || "walking";
+      const mode = wp1.routeMode || "driving";
       const customHash =
         mode === "draw" ? JSON.stringify(wp1.customRoute || []) : "";
-      const cacheKey = `${wp1.lat.toFixed(5)},${wp1.lng.toFixed(5)}|${wp2.lat.toFixed(5)},${wp2.lng.toFixed(5)}|${mode}|${customHash}`;
+      const viaHash = 
+        wp1.viaPoints ? JSON.stringify(wp1.viaPoints) : "";
+        
+      const cacheKey = `${wp1.lat.toFixed(5)},${wp1.lng.toFixed(5)}|${wp2.lat.toFixed(5)},${wp2.lng.toFixed(5)}|${mode}|${customHash}|${viaHash}`;
 
       // straight line but mode is neither Direct or Draw, ignore cache
       const cachedData = routingCache[cacheKey];
@@ -162,7 +205,8 @@ export function useMapRouting() {
         cachedData &&
         cachedData.length === 2 &&
         mode !== "direct" &&
-        mode !== "draw";
+        mode !== "draw" && 
+        !(wp1.viaPoints && wp1.viaPoints.length > 0);
 
       if (cachedData && !isFailedCache) {
         newSegments[i] = { positions: cachedData, mode };
@@ -250,7 +294,8 @@ export function useMapRouting() {
     }, 800);
 
     return () => {
+      isCancelled = true;
       clearTimeout(debounce);
     };
-  }, [waypoints, setRouteSegments, routingCache, setRoutingCache]);
+  }, [waypoints, setRouteSegments, routingCache, setRoutingCache, settings.ors_api_key]);
 }

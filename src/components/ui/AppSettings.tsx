@@ -820,13 +820,13 @@ function TabButton({
   return (
     <button
       onClick={onClick}
-      className={`w-full flex items-center gap-2 px-3 py-2 text-xs font-bold rounded-md transition-colors ${
+      className={`w-full flex items-center gap-2 px-3 py-2 text-xs font-bold rounded-md transition-colors text-nowrap ${
         active
           ? "bg-white dark:bg-navidark-600 text-navi shadow-sm border border-zinc-200 dark:border-transparent"
           : "text-zinc-500 dark:text-navidark-150 hover:bg-zinc-200/50 dark:hover:bg-navidark-700 hover:text-zinc-800 dark:hover:text-zinc-200 border border-transparent"
       }`}
     >
-      <Icon className="w-4 h-4" />
+      <Icon className="w-3 h-3" />
       {label}
     </button>
   );

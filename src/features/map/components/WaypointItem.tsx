@@ -251,7 +251,7 @@ export function WaypointItem({
               </div>
 
               {/* Via point adjust button + badge */}
-              {(wp.routeMode === "walking" || wp.routeMode === "driving" || wp.routeMode === "ferry") && (
+              {(!wp.routeMode || wp.routeMode === "walking" || wp.routeMode === "driving" || wp.routeMode === "ferry") && (
                 <div className="flex items-center gap-1.5 mt-1.5">
                   <button
                     onClick={(e) => {
