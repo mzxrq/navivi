@@ -36,9 +36,11 @@ import {
   WeatherCondition,
 } from "../../../services/weatherService";
 import { t } from "@lingui/core/macro";
+import { useLingui } from "@lingui/react";
 import { Trans } from "@lingui/react/macro";
 
 export function MapArea() {
+  const { i18n } = useLingui();
   const { theme, mapTheme } = useTheme();
   const { showToast, isRendering } = useUI();
   const {
@@ -89,6 +91,7 @@ export function MapArea() {
     bearing: 0,
   });
 
+
   useMapRouting();
 
   useEffect(() => {
@@ -126,6 +129,13 @@ export function MapArea() {
     if (!map) return;
 
     const canvas = map.getCanvas();
+
+    try {
+      if (typeof map.setLanguage === "function") {
+        map.setLanguage(i18n.locale);
+      }
+    } catch (e) {}
+
 
     // Prevent the browser from discarding the context silently
     const handleContextLost = (e: Event) => {
@@ -217,6 +227,20 @@ export function MapArea() {
   const [selectedStyle, setSelectedStyle] = useState<string>(() =>
     isDarkMap ? "dark" : "outdoors",
   );
+
+  // Mapbox UI/Label Localization
+  useEffect(() => {
+    const map = mapRef.current?.getMap();
+    if (!map) return;
+    try {
+      if (typeof map.setLanguage === "function") {
+        map.setLanguage(i18n.locale);
+      }
+    } catch (e) {
+      console.warn("[Navivi] Could not set map language:", e);
+    }
+  }, [i18n.locale, selectedStyle, mapRef.current]);
+
 
   useEffect(() => {
     const timer = setTimeout(() => {
