@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Rnd } from "react-rnd";
-import { ChevronDown, ChevronUp, Trash2 } from "../../../components/ui/icons";
+import { ChevronDown, ChevronUp, Trash2, GripVertical } from "../../../components/ui/icons";
+import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
 import { Waypoint } from "../../../types";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
@@ -21,6 +22,28 @@ export function UnifiedLayersPanel({
   setIsDirty,
 }: UnifiedLayersPanelProps) {
   const [isDrawStatusCollapsed, setIsDrawStatusCollapsed] = useState(false);
+  const [selectedAnchorIdx, setSelectedAnchorIdx] = useState<number | null>(null);
+
+  useEffect(() => {
+    const handleSync = ((e: CustomEvent) => setSelectedAnchorIdx(e.detail.index)) as EventListener;
+    window.addEventListener("select-anchor", handleSync);
+    return () => window.removeEventListener("select-anchor", handleSync);
+  }, []);
+
+  const handleDragEnd = (result: DropResult) => {
+    if (!result.destination) return;
+    const startIndex = result.source.index;
+    const endIndex = result.destination.index;
+    if (startIndex === endIndex) return;
+
+    if (activeWp.customRoute) {
+      const newRoute = Array.from(activeWp.customRoute);
+      const [removed] = newRoute.splice(startIndex, 1);
+      newRoute.splice(endIndex, 0, removed);
+      updateWaypoint(activeWp.id, { customRoute: newRoute });
+      setIsDirty(true);
+    }
+  };
 
   return (
     <Rnd
@@ -47,7 +70,7 @@ export function UnifiedLayersPanel({
             >
               {activeWp.name}
             </span>
-            <span className="text-xs opacity-50 font-black shrink-0">ↁE</span>
+            <span className="text-xs opacity-50 font-black shrink-0">→</span>
             <span
               className="text-xs font-bold text-zinc-700 dark:text-zinc-300 truncate max-w-24"
               title={nextWp.name}
@@ -133,73 +156,77 @@ export function UnifiedLayersPanel({
                 <Trans>No anchors drawn yet</Trans>
               </div>
             ) : (
-              activeWp.customRoute.map((anchor, idx) => (
-                <div
-                  key={`anchor-mgr-${idx}`}
-                  className="flex items-center justify-between p-1 hover:bg-zinc-100 dark:hover:bg-zinc-700 rounded group/anchor"
-                >
-                  <div className="flex items-center gap-2">
-                    <div className="w-5 h-5 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center text-[10px] font-black shrink-0">
-                      {idx + 1}
+              <DragDropContext onDragEnd={handleDragEnd}>
+                <Droppable droppableId="anchors-list">
+                  {(provided) => (
+                    <div
+                      {...provided.droppableProps}
+                      ref={provided.innerRef}
+                      className="flex flex-col"
+                    >
+                      {activeWp.customRoute!.map((anchor, idx) => (
+                        <Draggable
+                          key={`anchor-${idx}-${anchor[0]}-${anchor[1]}`}
+                          draggableId={`anchor-${idx}`}
+                          index={idx}
+                        >
+                          {(provided, snapshot) => (
+                            <div
+                              ref={provided.innerRef}
+                              {...provided.draggableProps}
+                              onClick={() => {
+                                const newIdx = selectedAnchorIdx === idx ? null : idx;
+                                setSelectedAnchorIdx(newIdx);
+                                window.dispatchEvent(new CustomEvent("select-anchor", { detail: { index: newIdx } }));
+                              }}
+                              className={`flex items-center justify-between p-1 rounded group/anchor transition-all duration-200 cursor-pointer ${
+                                snapshot.isDragging
+                                  ? "bg-zinc-100 dark:bg-zinc-700 shadow-md z-50"
+                                  : selectedAnchorIdx === idx
+                                  ? "bg-blue-50 dark:bg-blue-900/30 ring-1 ring-blue-500/50"
+                                  : "hover:bg-zinc-100 dark:hover:bg-zinc-700"
+                              }`}
+                              style={provided.draggableProps.style}
+                            >
+                              <div className="flex items-center gap-2">
+                                <div 
+                                  {...provided.dragHandleProps}
+                                  className="w-5 h-5 flex items-center justify-center text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 cursor-grab active:cursor-grabbing shrink-0"
+                                >
+                                  <GripVertical className="w-3.5 h-3.5" />
+                                </div>
+                                <div className="w-5 h-5 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center text-[10px] font-black shrink-0">
+                                  {idx + 1}
+                                </div>
+                                <span className="text-xs text-zinc-700 dark:text-zinc-300 font-mono truncate">
+                                  {anchor[0].toFixed(5)}, {anchor[1].toFixed(5)}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1 opacity-0 group-hover/anchor:opacity-100 transition-opacity">
+                                <button
+                                  onClick={() => {
+                                    const newRoute = [...activeWp.customRoute!];
+                                    newRoute.splice(idx, 1);
+                                    updateWaypoint(activeWp.id, {
+                                      customRoute: newRoute,
+                                    });
+                                    setIsDirty(true);
+                                  }}
+                                  className="p-1 hover:bg-red-100 dark:hover:bg-red-500/20 hover:text-red-500 rounded text-zinc-500"
+                                  title={t`Delete Anchor`}
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </Draggable>
+                      ))}
+                      {provided.placeholder}
                     </div>
-                    <span className="text-xs text-zinc-700 dark:text-zinc-300 font-mono truncate">
-                      {anchor[0].toFixed(5)}, {anchor[1].toFixed(5)}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1 opacity-0 group-hover/anchor:opacity-100 transition-opacity">
-                    <button
-                      disabled={idx === 0}
-                      onClick={() => {
-                        const newRoute = [...activeWp.customRoute!];
-                        [newRoute[idx - 1], newRoute[idx]] = [
-                          newRoute[idx],
-                          newRoute[idx - 1],
-                        ];
-                        updateWaypoint(activeWp.id, {
-                          customRoute: newRoute,
-                        });
-                        setIsDirty(true);
-                      }}
-                      className="p-1 hover:bg-zinc-200 dark:hover:bg-zinc-600 rounded text-zinc-500 disabled:opacity-30"
-                      title={t`Move Up`}
-                    >
-                      <ChevronUp className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      disabled={idx === (activeWp.customRoute?.length ?? 0) - 1}
-                      onClick={() => {
-                        const newRoute = [...activeWp.customRoute!];
-                        [newRoute[idx + 1], newRoute[idx]] = [
-                          newRoute[idx],
-                          newRoute[idx + 1],
-                        ];
-                        updateWaypoint(activeWp.id, {
-                          customRoute: newRoute,
-                        });
-                        setIsDirty(true);
-                      }}
-                      className="p-1 hover:bg-zinc-200 dark:hover:bg-zinc-600 rounded text-zinc-500 disabled:opacity-30"
-                      title={t`Move Down`}
-                    >
-                      <ChevronDown className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={() => {
-                        const newRoute = [...activeWp.customRoute!];
-                        newRoute.splice(idx, 1);
-                        updateWaypoint(activeWp.id, {
-                          customRoute: newRoute,
-                        });
-                        setIsDirty(true);
-                      }}
-                      className="p-1 hover:bg-red-100 dark:hover:bg-red-500/20 hover:text-red-500 rounded text-zinc-500"
-                      title={t`Delete Anchor`}
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              ))
+                  )}
+                </Droppable>
+              </DragDropContext>
             )}
           </div>
         )}

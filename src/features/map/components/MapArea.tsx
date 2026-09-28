@@ -256,10 +256,18 @@ export function MapArea() {
         prev.map((wp) => {
           if (wp.id === activeWaypointId) {
             const existing = wp.customRoute || [];
+            let newRoute = [...existing];
+            const insertIdx = activeAnchorIndexRef.current;
+            if (insertIdx !== null && insertIdx >= 0 && insertIdx < newRoute.length) {
+              newRoute.splice(insertIdx + 1, 0, [e.lngLat.lat, e.lngLat.lng]);
+              window.dispatchEvent(new CustomEvent("select-anchor", { detail: { index: insertIdx + 1 } }));
+            } else {
+              newRoute = [...existing, [e.lngLat.lat, e.lngLat.lng]];
+            }
             return {
               ...wp,
               routeMode: "draw",
-              customRoute: [...existing, [e.lngLat.lat, e.lngLat.lng]],
+              customRoute: newRoute,
             };
           }
           return wp;
@@ -538,6 +546,15 @@ export function MapArea() {
       setEleHoverPoint(e.detail)) as EventListener;
     window.addEventListener("elevation-hover", handleHover);
     return () => window.removeEventListener("elevation-hover", handleHover);
+  }, []);
+
+  const activeAnchorIndexRef = useRef<number | null>(null);
+  useEffect(() => {
+    const handleSelectAnchor = ((e: CustomEvent) => {
+      activeAnchorIndexRef.current = e.detail.index;
+    }) as EventListener;
+    window.addEventListener("select-anchor", handleSelectAnchor);
+    return () => window.removeEventListener("select-anchor", handleSelectAnchor);
   }, []);
 
   useEffect(() => {
