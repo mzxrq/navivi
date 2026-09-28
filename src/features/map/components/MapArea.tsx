@@ -11,7 +11,7 @@ import {
   UploadCloud,
   Navigation,
   ImageIcon,
-  X,
+  X
 } from "../../../components/ui/icons";
 import { MapToolbar } from "./MapToolbar";
 import "@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css";
@@ -484,18 +484,37 @@ export function MapArea() {
       setIsViaMode(true);
       setIsAddMode(false);
       setIsDrawMode(false);
+
+      const wpIndex = waypoints.findIndex(w => w.id === e.detail.wpId);
+      if (wpIndex !== -1 && wpIndex < waypoints.length - 1) {
+        const wp = waypoints[wpIndex];
+        const nextWp = waypoints[wpIndex + 1];
+        const map = mapRef.current;
+        if (map) {
+          const lats = [wp.lat, nextWp.lat, ...(wp.viaPoints || []).map(v => v[0])];
+          const lngs = [wp.lng, nextWp.lng, ...(wp.viaPoints || []).map(v => v[1])];
+          const minLat = Math.min(...lats);
+          const maxLat = Math.max(...lats);
+          const minLng = Math.min(...lngs);
+          const maxLng = Math.max(...lngs);
+          
+          map.fitBounds([ [minLng, minLat], [maxLng, maxLat] ], { padding: 80, duration: 800 });
+        }
+      }
     }) as EventListener;
+    
     const handleExitVia = (() => {
       setIsViaMode(false);
       viaTargetWpIdRef.current = null;
     }) as EventListener;
+    
     window.addEventListener("enter-via-mode", handleEnterVia);
     window.addEventListener("exit-via-mode", handleExitVia);
     return () => {
       window.removeEventListener("enter-via-mode", handleEnterVia);
       window.removeEventListener("exit-via-mode", handleExitVia);
     };
-  }, []);
+  }, [waypoints]);
 
   useEffect(() => {
     const handleHover = ((e: CustomEvent) =>
@@ -1127,7 +1146,7 @@ export function MapArea() {
       )}
       {/* --- VIA MODE BANNER --- */}
       {isViaMode && (
-        <div className="absolute bottom-12 left-1/2 -translate-x-1/2 z-300 pointer-events-none animate-in fade-in slide-in-from-bottom-4 duration-200">
+        <div className="absolute z-200 pointer-events-none animate-in fade-in zoom-in-95 duration-200 max-[1159px]:top-[120px] max-[1159px]:left-4 max-[1159px]:translate-x-0 min-[1160px]:top-[120px] min-[1160px]:left-1/2 min-[1160px]:-translate-x-1/2">
           <div className="bg-zinc-900/90 dark:bg-zinc-100/90 backdrop-blur-sm text-white dark:text-zinc-900 text-[10px] font-bold px-3 py-1.5 rounded-full shadow-lg border border-zinc-800 dark:border-zinc-200 flex items-center gap-1.5 pointer-events-auto">
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             <span>Via Mode: Click to nudge route, Right-click to remove</span>

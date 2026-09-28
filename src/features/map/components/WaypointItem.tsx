@@ -280,9 +280,13 @@ export function WaypointItem({
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      window.dispatchEvent(
-                        new CustomEvent("enter-via-mode", { detail: { wpId: wp.id } })
-                      );
+                      if (isViaActive) {
+                        window.dispatchEvent(new CustomEvent("exit-via-mode"));
+                      } else {
+                        window.dispatchEvent(
+                          new CustomEvent("enter-via-mode", { detail: { wpId: wp.id } })
+                        );
+                      }
                     }}
                     className={`p-1 rounded transition-all ${
                       isViaActive 
