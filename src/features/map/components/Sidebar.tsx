@@ -162,7 +162,7 @@ export function Sidebar() {
                         key={wp.id}
                         draggableId={wp.id}
                         index={i}
-                        isDragDisabled={!isListEditMode}
+                        isDragDisabled={isListEditMode}
                       >
                         {(provided, snapshot) => (
                           <div
