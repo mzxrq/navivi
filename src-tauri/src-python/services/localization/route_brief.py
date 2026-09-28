@@ -302,6 +302,7 @@ def journeys(brief: dict, stops: Optional[set] = None) -> List[dict]:
                 + (brief.get("start_hold", 0.0) if not out else 0.0), 2
             ),
             "hold_at_to": last.get("hold_at_to", 0.0),
+            "batch": list(last.get("batch", [])),
             "legs": len(legs),
             # (host, [stop-bys]) for every batch shown on the way
             "via_batches": [(l["to"], l["batch"]) for l in legs[:-1] if l.get("batch")],

@@ -149,6 +149,7 @@ def _tour_project():
     project["waypoints"][1]["attractionNarration"] = "古い寺は四百年の歴史があります。駅から歩いて5分です。"
     project["waypoints"][3]["attractionNarration"] = "川の渡しは昔からの船着き場です。"
     project["waypoints"][4]["attractionNarration"] = "島の神社は海の神を祀ります。"
+    project.setdefault("settings", {})["overview_describe_stops"] = True  # these tests cover the per-stop descriptions
     return project, cache
 
 
@@ -272,7 +273,7 @@ def _long_route(stops=10):
         wps.append(_wp(f"場所{n}", 35.0, 139.0 + 0.004 * n,
                        attractionNarration="ここは古い町並みが残る場所です。" * n))
     wps.append(_wp("起点 (Return)", 35.0, 139.0 + 0.004 * (stops + 1)))
-    return {"waypoints": wps, "settings": {}}
+    return {"waypoints": wps, "settings": {"overview_describe_stops": True}}
 
 
 class TestHighlights:
@@ -317,3 +318,33 @@ class TestHighlights:
         stops = plan_budget(project, build_brief(project, {}))["stops"]
         numbered = [t for t in cue_tags(script) if t.isdigit()]
         assert numbered == [str(n) for n in stops]
+
+
+class TestOverviewIsSeparateFromStopNarration:
+    """By default the overview tells only the journey: a stop's own narration
+    (its leg / attraction clip's job) is never repeated in it."""
+
+    def _project(self):
+        project, cache = _tour_project()
+        project["settings"].pop("overview_describe_stops")
+        return project, cache
+
+    def test_no_stop_description_and_each_stop_named_at_most_once_per_line(self):
+        project, cache = self._project()
+        asked = []
+        script, report = build_tour_script(project, cache, generate=lambda p, n: asked.append(p) or None)
+        assert "四百年の歴史" not in script and "海の神を祀ります" not in script
+        assert not any("■ 場所:" in p and "参考" in p for p in asked)  # no describe prompt is ever built
+        assert cue_tags(script) == ["start", "1", "go1", "2", "go2", "3", "go3", "end"]
+        stops = {r["kind"]: r["text"] for r in report if r["kind"].startswith("stop")}
+        assert stops["stop2"] == stops["stop3"] == ""
+        assert stops["stop1"] == "大きな橋も、この近くにあります。"  # hosts a stop-by card: says what is around
+
+    def test_time_goes_to_the_way_lines_and_the_overview_still_fits(self):
+        from services.localization.overview_script import in_overview_range, plan_budget
+
+        project, cache = self._project()
+        budget = plan_budget(project, build_brief(project, cache))
+        # only the stop that hosts a stop-by batch keeps time (the map freezes there)
+        assert [n for n, v in budget["describe"].items() if v] == [1]
+        assert in_overview_range(budget["estimated"])

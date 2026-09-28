@@ -46,6 +46,19 @@ MAX_LAST_STOP_SECONDS = 8.0
 SET_OFF_TEXT = "さあ、町へ出発しましょう。"
 MIN_SET_OFF_SECONDS = 2.5
 
+# Whether the overview describes each stop. Off: the overview only tells the
+# journey (intro, the way between stops, closing) and names a stop once, where
+# its pin appears - the description of a place is that waypoint's own
+# narration (played by its leg and attraction clip), and repeating it here made
+# the two say the same things and the place names come up over and over.
+# settings.overview_describe_stops turns the old per-stop descriptions back on.
+DESCRIBE_STOPS_DEFAULT = False
+
+
+def describes_stops(project: dict) -> bool:
+    return bool(project.get("settings", {}).get("overview_describe_stops", DESCRIBE_STOPS_DEFAULT))
+
+
 Generate = Callable[[str, int], Optional[str]]  # (prompt, max_chars) -> text
 
 
@@ -456,6 +469,7 @@ def plan_budget(project: dict, brief: dict) -> dict:
     places = {n: w for n, w in enumerate(visible_waypoints(project), start=1)}
     target = overview_target_seconds(project, len(places))
     closing = closing_seconds(project)
+    describing = describes_stops(project)
     hosts = {l["to_number"]: l["hold_at_to"] for l in brief["legs"]
              if l["to_number"] is not None and l.get("hold_at_to")}
     forced = {n for n, w in places.items() if w.get("overviewHighlight") is True}
@@ -464,7 +478,7 @@ def plan_budget(project: dict, brief: dict) -> dict:
     def plan(stops: set) -> Tuple[List[dict], List[float], Dict[int, float], float]:
         trips = journeys(brief, stops)
         ways = [_way_seconds(t) for t in trips]
-        describe = {n: (hosts[n] if n in hosts else DESCRIBE_TARGET_SECONDS) for n in stops}
+        describe = {n: (hosts[n] if n in hosts else (DESCRIBE_TARGET_SECONDS if describing else 0.0)) for n in stops}
         return trips, ways, describe, INTRO_SECONDS + sum(ways) + sum(describe.values()) + closing
 
     stops = set(hosts) | forced
@@ -480,7 +494,7 @@ def plan_budget(project: dict, brief: dict) -> dict:
     # Time left over: longer descriptions (not a batch host's - its freeze is
     # fixed), then longer way lines.
     spare = target - estimated
-    flexible = [n for n in stops if n not in hosts]
+    flexible = [n for n in stops if n not in hosts] if describing else []
     if spare > 0 and flexible:
         each = min(spare / len(flexible), DESCRIBE_MAX_SECONDS - DESCRIBE_TARGET_SECONDS)
         for n in flexible:
@@ -607,6 +621,16 @@ def build_tour_script(
         if n is None:
             continue
         label = trip["to"]
+        if not describes_stops(project):
+            # A stop that hosts stop-by cards freezes the map: say what is
+            # around it (never the stop's own description or name again).
+            names = trip.get("batch") or []
+            text = f"{'や'.join(names[:3])}も、この近くにあります。" if names and budget["describe"].get(n) else ""
+            report.append({"kind": f"stop{n}", "text": text, "used": "template", "raw": None,
+                           "budget_chars": chars(budget["describe"].get(n, 0.0))})
+            parts.append("{%d}%s{go}" % (n, text))
+            previous = text or previous
+            continue
         describe_chars = chars(budget["describe"][n])
         facts = _facts(places.get(n, {}))
         about = "".join(
