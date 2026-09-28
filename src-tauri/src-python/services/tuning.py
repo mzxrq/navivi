@@ -636,7 +636,7 @@ STOPBY_NOTICE_FADE_SECONDS = 0.6
 # automatically bounded without each one needing its own cap. Doesn't
 # touch the various built-in DEFAULT values used when a waypoint doesn't
 # set freeze_seconds at all — those are already <= this ceiling.
-POPUP_FREEZE_SECONDS_MAX = 3.0
+POPUP_FREEZE_SECONDS_MAX = 1.0
 # How long a residential leg's AT-ARRIVAL destination photo is held once it
 # has grown to fullscreen (see pedestrian.py's _play_leg_photo_card
 # cut_after path). Deliberately below POPUP_MIN_DISPLAY_SECONDS — and so
