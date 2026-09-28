@@ -39,7 +39,7 @@ export function WaypointItem({
   onEdit,
   onDelete,
 }: WaypointItemProps) {
-  const { activeWaypointId, setActiveWaypointId, updateWaypoint, waypoints } = useWorkspace();
+  const { activeWaypointId, setActiveWaypointId, updateWaypoint, waypoints, routeSegments } = useWorkspace();
   const { isRendering } = useUI();
   const itemRef = useRef<HTMLDivElement>(null);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -256,9 +256,25 @@ export function WaypointItem({
                         if (isModeActive && !isModeExpanded) {
                           setIsModeExpanded(true);
                         } else {
-                          updateWaypoint(wp.id, {
-                            routeMode: mode.id as RouteMode,
-                          });
+                          if (mode.id === "draw" && wp.routeMode !== "draw") {
+                            const routedWaypoints = waypoints.filter((w) => !w.isStopBy || w.connectToRoute);
+                            const routedIndex = routedWaypoints.findIndex((w) => w.id === wp.id);
+                            let newCustomRoute = wp.customRoute || [];
+                            if (routedIndex !== -1 && routeSegments && routeSegments[routedIndex]) {
+                              const seg = routeSegments[routedIndex];
+                              if (seg && seg.positions && seg.positions.length > 2) {
+                                newCustomRoute = seg.positions.slice(1, -1);
+                              }
+                            }
+                            updateWaypoint(wp.id, {
+                              routeMode: "draw",
+                              customRoute: newCustomRoute,
+                            });
+                          } else {
+                            updateWaypoint(wp.id, {
+                              routeMode: mode.id as RouteMode,
+                            });
+                          }
                           setIsModeExpanded(false);
                         }
                       }}
