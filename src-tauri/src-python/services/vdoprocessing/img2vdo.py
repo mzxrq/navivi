@@ -75,11 +75,16 @@ class AttractionVideoGenerator:
     _MAX_GENERATED_CLIP_SECONDS: Final[float] = 5.0
     # ComfyUI's own ceiling once sequential extension is on: up to
     # tuning.COMFYUI_EXTEND_MAX_SEGMENTS chained segments (see
-    # comfyui_i2v_client._resolve_segments). The 5s cap above then applies
-    # only to the local pan/zoom fallback it was written for.
-    _MAX_EXTENDED_CLIP_SECONDS: Final[float] = max(
-        _MAX_GENERATED_CLIP_SECONDS,
-        tuning.COMFYUI_EXTEND_MAX_SEGMENTS * tuning.COMFYUI_MAX_FRAMES / tuning.COMFYUI_FPS + 0.5,
+    # comfyui_i2v_client._resolve_segments) - or no ceiling at all when that's
+    # None (chains to the whole narration; the user's choice). The 5s cap
+    # above then applies only to the local pan/zoom fallback it was written
+    # for.
+    _MAX_EXTENDED_CLIP_SECONDS: Final[float] = (
+        math.inf if tuning.COMFYUI_EXTEND_MAX_SEGMENTS is None
+        else max(
+            _MAX_GENERATED_CLIP_SECONDS,
+            tuning.COMFYUI_EXTEND_MAX_SEGMENTS * tuning.COMFYUI_MAX_FRAMES / tuning.COMFYUI_FPS + 0.5,
+        )
     )
 
     # No cap on how long _resolve_duration_fit will freeze-hold a clip's
@@ -357,15 +362,21 @@ class AttractionVideoGenerator:
         trim_to, hold_to = self._resolve_duration_fit(
             video_path, target_audio_duration, overshoot_tolerance, generation_cap
         )
-        # A moving preset keeps moving until the narration ends (a slow
-        # push-in/drift over the clip's last frame) instead of freezing it -
-        # to the FULL narration length, since a gap inside the tolerance
-        # above isn't held here but frozen later by the export. "none" (a
-        # still photo) keeps the plain hold.
+        # A moving preset used to keep moving via slow_move.py's push-in/
+        # drift over the clip's last frame instead of freezing - now unused
+        # by default (tuning.ATTRACTION_CHAIN_TO_FULL_LENGTH): with
+        # COMFYUI_EXTEND_MAX_SEGMENTS uncapped, generate_clip already chains
+        # Wan segments all the way to target_audio_duration, so there's
+        # normally no gap left to fill here at all. Any small gap left (or
+        # the switch turned off) falls through to the plain last-frame hold
+        # in _resolve_duration_fit above.
         from services.vdoprocessing.slow_move import extend_with_slow_move, is_moving_preset
 
         moved_path = self.output_dir / f"moved_{Path(output_filename).stem}.mp4"
-        if trim_to is None and target_audio_duration > 0 and is_moving_preset(camera_pan):
+        if (
+            trim_to is None and target_audio_duration > 0 and is_moving_preset(camera_pan)
+            and not tuning.ATTRACTION_CHAIN_TO_FULL_LENGTH
+        ):
             moved = extend_with_slow_move(
                 video_path, target_audio_duration, camera_pan, str(moved_path),
             )
@@ -580,7 +591,7 @@ class AttractionVideoGenerator:
             return clip_path
         if duration > share:
             return self.editor.trim_video_duration(clip_path, share, str(out_path))
-        if is_moving_preset(camera_pan):
+        if is_moving_preset(camera_pan) and not tuning.ATTRACTION_CHAIN_TO_FULL_LENGTH:
             moved = extend_with_slow_move(clip_path, share, camera_pan, str(out_path))
             if moved:
                 return moved

@@ -719,31 +719,60 @@ COMFYUI_MODEL_SHIFT = 8.0
 COMFYUI_MIN_FRAMES = 25  # ~1s @ 24fps
 COMFYUI_MAX_FRAMES = 89  # ~3.7s @ 24fps (was 121 ~5s, then 65 ~2.7s — middle ground)
 # Sequential extension: when a narration outlasts one COMFYUI_MAX_FRAMES
-# segment, the attraction clip is built from up to this many segments in ONE
-# ComfyUI graph, each segment started from the previous segment's last frame
-# (so the motion carries on instead of the last frame freezing). 2 segments
-# is ~7.3s; anything longer is still held on the last frame. Each extra
-# segment adds ~2 minutes of GPU time and drift: segments only see the
-# previous last frame, not the photo, so changes compound (4 segments turned
-# a painted wall into a van driving in). 1 turns extension off.
-# 2 (the user's choice, for more real camera motion). The second segment is
-# where damage showed before the scene-lock prompts and colour pass: a road
-# sign's arrow turned into another symbol, a pole's black/yellow stripes
-# went solid yellow, and a teal stain spread over a grey street (石標).
-# 1 = one Wan segment, then only slow_move.py's plain 2D push-in, which
-# can't invent anything.
-COMFYUI_EXTEND_MAX_SEGMENTS = 2
+# segment, the attraction clip is built from more segments, each one started
+# from the previous segment's last frame (so the motion carries on instead of
+# the last frame freezing) - see COMFYUI_CHAIN_LAST_FRAME below for how they
+# are actually chained. None (the user's choice): no cap - chain as many
+# segments as it takes to cover the WHOLE narration, so the clip is real Wan
+# motion end to end and slow_move.py's push-in/zoom-out tail
+# (ATTRACTION_CHAIN_TO_FULL_LENGTH below) is never needed. A number caps it
+# at that many segments instead (the remainder falls back to slow_move.py);
+# 1 turns extension off entirely (one Wan segment, then the plain tail).
+# Before last-frame chaining this drifted badly past 2 segments (segments
+# only saw the previous last frame, not the photo, so changes compounded - 4
+# segments turned a painted wall into a van driving in); last-frame chaining
+# colour-matches the handed-on frame back to the photo every time
+# (COMFYUI_CHAIN_COLOR_MATCH), which is what makes chaining to full length
+# safe to leave uncapped.
+COMFYUI_EXTEND_MAX_SEGMENTS: Optional[int] = None
+# HOW the segments are chained.
+# True ("last frame" chaining): each segment is its own ComfyUI job, started
+# from a real PNG of the previous segment's last frame - so that frame can be
+# colour-matched back to the photo BEFORE it is handed on
+# (COMFYUI_CHAIN_COLOR_MATCH), which stops Wan's grading compounding from one
+# segment into the next, and each segment can carry its own prompt and be
+# re-rolled on its own. The segments are joined with ffmpeg, each one after
+# the first losing its opening frame (a re-render of the frame it started
+# from).
+# False: the old single graph, every segment unrolled into it, chained on the
+# decoded tensor. One job (the model is never reloaded, so it is faster), but
+# the drift carries straight through and every segment shares one prompt.
+COMFYUI_CHAIN_LAST_FRAME = True
+# Colour-match a chained frame to the photo before the next segment starts
+# from it (see color_match.py, the same pass the finished clip gets).
+COMFYUI_CHAIN_COLOR_MATCH = True
+# When segments now chain to the full narration length (COMFYUI_EXTEND_MAX_SEGMENTS
+# = None), the generated clip already reaches the narration's end on its own,
+# so img2vdo.py skips slow_move.py's push-in/zoom-out tail entirely (the user's
+# choice: chain, don't zoom out) - a moving preset falls through to the plain
+# last-frame freeze if there's still a small gap. False restores the old
+# behaviour (slow_move fills whatever a capped/single segment doesn't reach).
+ATTRACTION_CHAIN_TO_FULL_LENGTH = True
 # After the Wan motion runs out, a moving preset's clip continues as a slow
 # push-in/drift over its last frame (vdoprocessing/slow_move.py) instead of
 # freezing, in a random direction per clip: the frame grows by about this
 # fraction per second (0.012 = +1.2%/s, ~10% over an 8s gap; each clip
 # randomises it by +/-25%). The "none" preset stays a still photo.
 ATTRACTION_SLOW_MOVE_ZOOM_PER_SEC = 0.012
-# How that remaining time moves (the user's choice): "zoomout" eases slowly
-# back out to the full picture, centred, ending right as the narration ends;
-# to have picture to zoom out into, the whole clip is shown zoomed in by that
-# same amount (never more than ATTRACTION_SLOW_MOVE_MAX_ZOOM_OUT), so the join
-# doesn't jump. "drift" is the earlier slow push-in in a random direction.
+# How that remaining time moves, WHEN there is any left to fill this way -
+# with ATTRACTION_CHAIN_TO_FULL_LENGTH on (the default), Wan chains all the
+# way to the narration's end and this tail is never reached; it only applies
+# with that switch off, or when COMFYUI_EXTEND_MAX_SEGMENTS caps the chain
+# short of the narration. "zoomout" eases slowly back out to the full
+# picture, centred, ending right as the narration ends; to have picture to
+# zoom out into, the whole clip is shown zoomed in by that same amount (never
+# more than ATTRACTION_SLOW_MOVE_MAX_ZOOM_OUT), so the join doesn't jump.
+# "drift" is the earlier slow push-in in a random direction.
 ATTRACTION_SLOW_MOVE_STYLE = "zoomout"
 ATTRACTION_SLOW_MOVE_MAX_ZOOM_OUT = 0.12
 # Wan grades its clips (contrast, saturation and brightness climb, and jump
