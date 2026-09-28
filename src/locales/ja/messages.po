@@ -125,10 +125,6 @@ msgstr "{0} トラック"
 msgid "{0}% reduction ({1} dB)"
 msgstr "{0}% 削減率 ({1} dB)"
 
-#: src/features/map/components/OverviewPanel.tsx:101
-#~ msgid "+ Add Course Theme & Intro"
-#~ msgstr "+ コースのテーマ＆イントロを追加"
-
 #: src/features/map/components/OverviewPanel.tsx:36
 msgid "+ Add Intro Screen"
 msgstr "+ イントロ動画を追加"
@@ -763,15 +759,6 @@ msgstr "このバージョンを復元できませんでした"
 msgid "Could not save this version"
 msgstr "このバージョンを保存できませんでした"
 
-#: src/features/map/components/OverviewPanel.tsx:101
-#: src/features/map/components/OverviewPanel.tsx:113
-#~ msgid "Course Concept & Intro"
-#~ msgstr "コースのコンセプトとイントロ"
-
-#: src/features/map/components/OverviewPanel.tsx:133
-#~ msgid "Course Theme"
-#~ msgstr "コースのテーマ"
-
 #: src/components/ui/SaveAs.tsx:115
 msgid "Create a copy of this workspace"
 msgstr "このワークスペースのコピーを作成"
@@ -1381,10 +1368,6 @@ msgstr "アセットを生成中..."
 msgid "Generating Subtitles{prog}..."
 msgstr "字幕を生成中{prog}..."
 
-#: src/features/map/components/OverviewPanel.tsx:51
-#~ msgid "Generating with {engine}..."
-#~ msgstr "{engine} で生成中..."
-
 #: src/features/map/components/Sidebar.tsx:309
 msgid "Generating..."
 msgstr "生成中..."
@@ -1590,7 +1573,7 @@ msgstr "レイヤー"
 
 #: src/features/map/components/OverviewPanel.tsx:103
 msgid "Leave blank to use the project name."
-msgstr ""
+msgstr "空欄のままにすればプロジェクト名を使用します"
 
 #. placeholder {0}: departureIdx + 1
 #. placeholder {1}: wp ? wp.name : t`Stop ` + (departureIdx + 1)
@@ -1625,7 +1608,7 @@ msgstr "Irodori TTSの発音が正確か再生して確認します"
 
 #: src/features/map/components/OverviewPanel.tsx:130
 msgid "Live Preview"
-msgstr ""
+msgstr "ライブプレビュー"
 
 #: src/features/map/components/MapArea.tsx:343
 #: src/features/map/components/MapArea.tsx:385
@@ -1751,10 +1734,6 @@ msgstr "モデル"
 #: src/features/map/components/WaypointEditor.tsx:155
 msgid "Model \"{engine}\" not found. Please install it from the App Settings"
 msgstr "モデル {engine} が見つかりません。アプリ設定からインストールしてください"
-
-#: src/features/map/components/OverviewPanel.tsx:45
-#~ msgid "Model \"{engine}\" not found. Please install it from the Settings."
-#~ msgstr "モデル {engine} が見つかりません。アプリ設定からインストールしてください"
 
 #: src/features/map/components/UnifiedLayersPanel.tsx:182
 msgid "Move Down"
@@ -1930,17 +1909,9 @@ msgstr "不透明度フェード"
 msgid "Open a single project file (.nvv or .zip archive)"
 msgstr "単一のプロジェクトファイル (.nvvまたは.zipアーカイブ)を開く"
 
-#: src/components/view/ProjectManager.tsx:290
-#~ msgid "Open an entire project folder"
-#~ msgstr "プロジェクトフォルダ全体を開く"
-
 #: src/components/view/ProjectManager.tsx:286
 msgid "Open File..."
 msgstr "ファイルを開く..."
-
-#: src/components/view/ProjectManager.tsx:292
-#~ msgid "Open Folder..."
-#~ msgstr "フォルダを開く..."
 
 #: src/components/view/ProjectManager.tsx:426
 #: src/components/view/ProjectManager.tsx:594
@@ -1962,10 +1933,6 @@ msgstr "フォルダを開く..."
 #: src/components/ui/ContextMenu.tsx:780
 msgid "open-project"
 msgstr "プロジェクトを開く"
-
-#: src/features/map/components/OverviewPanel.tsx:148
-#~ msgid "Opening Narration..."
-#~ msgstr "オープニングナレーション..."
 
 #: src/components/ui/AppSettings.tsx:581
 msgid "OpenRouteService API Key"
@@ -1990,19 +1957,6 @@ msgstr "縁取りの色"
 #: src/features/export/components/ExportModal.tsx:663
 msgid "Output File:"
 msgstr "出力ファイル:"
-
-#: src/features/map/components/OverviewPanel.tsx:70
-#: src/features/map/components/OverviewPanel.tsx:90
-#~ msgid "Overview generation canceled."
-#~ msgstr "概要の生成がキャンセルされました"
-
-#: src/features/map/components/OverviewPanel.tsx:76
-#~ msgid "Overview generation failed: {errorDetail}"
-#~ msgstr "概要の生成に失敗しました: {errorDetail}"
-
-#: src/features/map/components/OverviewPanel.tsx:67
-#~ msgid "Overview script compiled!"
-#~ msgstr "概要スクリプトがコンパイルされました"
 
 #: src/components/ui/RenderOverlay.tsx:1048
 msgid "Parsing Maps & GPS Data{prog}..."
@@ -2033,10 +1987,6 @@ msgstr "再生・一時停止 (Space)"
 #: src/components/ui/RenderOverlay.tsx:1256
 msgid "Playing..."
 msgstr "再生中..."
-
-#: src/features/map/components/OverviewPanel.tsx:38
-#~ msgid "Please add some waypoints!"
-#~ msgstr "いくつかポイントを追加してください"
 
 #: src/features/timeline/components/TimelineTrack.tsx:119
 msgid "Please drop transitions directly on the cut between two clips"
@@ -2131,15 +2081,15 @@ msgstr "プロジェクトを{fileName}に保存しました"
 
 #: src/components/view/ProjectSettingsModal.tsx:98
 msgid "Project Settings"
-msgstr "プロジェクト設定が更新されました"
+msgstr "プロジェクト設定"
 
 #: src/components/view/ProjectSettingsModal.tsx:84
 msgid "Project settings saved"
-msgstr "プロジェクト設定をほぞんしました"
+msgstr "プロジェクト設定を保存しました"
 
 #: src/features/map/components/OverviewPanel.tsx:143
 msgid "Project Title"
-msgstr ""
+msgstr "プロジェクトタイトル"
 
 #: src/components/ui/NewProject.tsx:149
 msgid "project-name"
@@ -2206,7 +2156,7 @@ msgstr "レーザーツール (C)"
 
 #: src/components/view/ProjectManager.tsx:236
 msgid "Reading Project File..."
-msgstr ""
+msgstr "プロジェクトファイルを読み込み中..."
 
 #: src/components/ui/AppSettings.tsx:1007
 msgid "Ready"
@@ -2827,11 +2777,11 @@ msgstr "字幕"
 
 #: src/features/map/components/OverviewPanel.tsx:109
 msgid "Subtitle / Description"
-msgstr ""
+msgstr "サブタイトル / 説明"
 
 #: src/features/map/components/OverviewPanel.tsx:147
 msgid "Subtitle description..."
-msgstr ""
+msgstr "サブタイトルの説明..."
 
 #: src/components/ui/AppSettings.tsx:717
 msgid "Subtitle Format"
@@ -2868,10 +2818,6 @@ msgstr "合成中..."
 #: src/components/ui/RenderOverlay.tsx:1125
 msgid "System Capability Check:"
 msgstr "システム性能チェック:"
-
-#: src/components/ui/RenderOverlay.tsx:1123
-#~ msgid "System Capability Check: "
-#~ msgstr "システム性能チェック"
 
 #: src/components/ui/StatusBar.tsx:411
 msgid "System Log"
@@ -2919,11 +2865,7 @@ msgstr "このアセットはプロジェクトから欠落しています"
 
 #: src/features/map/components/OverviewPanel.tsx:66
 msgid "This creates a cinematic title card at the very beginning of your exported video."
-msgstr ""
-
-#: src/features/map/components/OverviewPanel.tsx:79
-#~ msgid "This creates a cinematic title card at the very beginning of your exported video. Customize the text below."
-#~ msgstr ""
+msgstr "これにより、エクスポートした動画の冒頭に、映画のようなタイトルカードが表示されます"
 
 #: src/components/view/ProjectManager.tsx:92
 msgid "This project is archived. Please open it first to render"
@@ -2965,7 +2907,7 @@ msgstr "タイムラインを再読み込みしました"
 
 #: src/features/map/components/OverviewPanel.tsx:99
 msgid "Title"
-msgstr ""
+msgstr "タイトル"
 
 #: src/features/map/components/MapToolbar.tsx:161
 msgid "Toggle Smooth Spline"
@@ -3132,7 +3074,7 @@ msgstr "動画のエクスポートに成功しました"
 
 #: src/features/map/components/OverviewPanel.tsx:90
 msgid "Video Title"
-msgstr ""
+msgstr "ビデオタイトル"
 
 #: src/components/ui/RenderOverlay.tsx:389
 msgid "video-clip"

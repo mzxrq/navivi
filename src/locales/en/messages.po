@@ -125,10 +125,6 @@ msgstr "{0} tracks"
 msgid "{0}% reduction ({1} dB)"
 msgstr "{0}% reduction ({1} dB)"
 
-#: src/features/map/components/OverviewPanel.tsx:101
-#~ msgid "+ Add Course Theme & Intro"
-#~ msgstr "+ Add Course Theme & Intro"
-
 #: src/features/map/components/OverviewPanel.tsx:36
 msgid "+ Add Intro Screen"
 msgstr "+ Add Intro Screen"
@@ -763,15 +759,6 @@ msgstr "Could not restore this version"
 msgid "Could not save this version"
 msgstr "Could not save this version"
 
-#: src/features/map/components/OverviewPanel.tsx:101
-#: src/features/map/components/OverviewPanel.tsx:113
-#~ msgid "Course Concept & Intro"
-#~ msgstr "Course Concept & Intro"
-
-#: src/features/map/components/OverviewPanel.tsx:133
-#~ msgid "Course Theme"
-#~ msgstr "Course Theme"
-
 #: src/components/ui/SaveAs.tsx:115
 msgid "Create a copy of this workspace"
 msgstr "Create a copy of this workspace"
@@ -1381,10 +1368,6 @@ msgstr "Generating Assets..."
 msgid "Generating Subtitles{prog}..."
 msgstr "Generating Subtitles{prog}..."
 
-#: src/features/map/components/OverviewPanel.tsx:51
-#~ msgid "Generating with {engine}..."
-#~ msgstr "Generating with {engine}..."
-
 #: src/features/map/components/Sidebar.tsx:309
 msgid "Generating..."
 msgstr "Generating..."
@@ -1752,10 +1735,6 @@ msgstr "Model"
 msgid "Model \"{engine}\" not found. Please install it from the App Settings"
 msgstr "Model \"{engine}\" not found. Please install it from the App Settings"
 
-#: src/features/map/components/OverviewPanel.tsx:45
-#~ msgid "Model \"{engine}\" not found. Please install it from the Settings."
-#~ msgstr "Model \"{engine}\" not found. Please install it from the Settings."
-
 #: src/features/map/components/UnifiedLayersPanel.tsx:182
 msgid "Move Down"
 msgstr "Move Down"
@@ -1930,17 +1909,9 @@ msgstr "Opacity Fade"
 msgid "Open a single project file (.nvv or .zip archive)"
 msgstr "Open a single project file (.nvv or .zip archive)"
 
-#: src/components/view/ProjectManager.tsx:290
-#~ msgid "Open an entire project folder"
-#~ msgstr "Open an entire project folder"
-
 #: src/components/view/ProjectManager.tsx:286
 msgid "Open File..."
 msgstr "Open File..."
-
-#: src/components/view/ProjectManager.tsx:292
-#~ msgid "Open Folder..."
-#~ msgstr "Open Folder..."
 
 #: src/components/view/ProjectManager.tsx:426
 #: src/components/view/ProjectManager.tsx:594
@@ -1962,10 +1933,6 @@ msgstr "Open Project Folder..."
 #: src/components/ui/ContextMenu.tsx:780
 msgid "open-project"
 msgstr "Open Project"
-
-#: src/features/map/components/OverviewPanel.tsx:148
-#~ msgid "Opening Narration..."
-#~ msgstr "Opening Narration..."
 
 #: src/components/ui/AppSettings.tsx:581
 msgid "OpenRouteService API Key"
@@ -1990,19 +1957,6 @@ msgstr "Outline Color (ASS)"
 #: src/features/export/components/ExportModal.tsx:663
 msgid "Output File:"
 msgstr "Output File:"
-
-#: src/features/map/components/OverviewPanel.tsx:70
-#: src/features/map/components/OverviewPanel.tsx:90
-#~ msgid "Overview generation canceled."
-#~ msgstr "Overview generation canceled."
-
-#: src/features/map/components/OverviewPanel.tsx:76
-#~ msgid "Overview generation failed: {errorDetail}"
-#~ msgstr "Overview generation failed: {errorDetail}"
-
-#: src/features/map/components/OverviewPanel.tsx:67
-#~ msgid "Overview script compiled!"
-#~ msgstr "Overview script compiled!"
 
 #: src/components/ui/RenderOverlay.tsx:1048
 msgid "Parsing Maps & GPS Data{prog}..."
@@ -2033,10 +1987,6 @@ msgstr "Play/Pause (Space)"
 #: src/components/ui/RenderOverlay.tsx:1256
 msgid "Playing..."
 msgstr "Playing..."
-
-#: src/features/map/components/OverviewPanel.tsx:38
-#~ msgid "Please add some waypoints!"
-#~ msgstr "Please add some waypoints!"
 
 #: src/features/timeline/components/TimelineTrack.tsx:119
 msgid "Please drop transitions directly on the cut between two clips"
@@ -2869,10 +2819,6 @@ msgstr "Synthesizing..."
 msgid "System Capability Check:"
 msgstr "System Capability Check:"
 
-#: src/components/ui/RenderOverlay.tsx:1123
-#~ msgid "System Capability Check: "
-#~ msgstr "System Capability Check: "
-
 #: src/components/ui/StatusBar.tsx:411
 msgid "System Log"
 msgstr "System Log"
@@ -2920,10 +2866,6 @@ msgstr "This asset is missing from the project"
 #: src/features/map/components/OverviewPanel.tsx:66
 msgid "This creates a cinematic title card at the very beginning of your exported video."
 msgstr "This creates a cinematic title card at the very beginning of your exported video."
-
-#: src/features/map/components/OverviewPanel.tsx:79
-#~ msgid "This creates a cinematic title card at the very beginning of your exported video. Customize the text below."
-#~ msgstr "This creates a cinematic title card at the very beginning of your exported video. Customize the text below."
 
 #: src/components/view/ProjectManager.tsx:92
 msgid "This project is archived. Please open it first to render"
