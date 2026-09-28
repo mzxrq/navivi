@@ -826,17 +826,26 @@ COMFYUI_NEGATIVE_PROMPT = (
     "直线弯曲，线条扭曲，画面扭曲，波浪变形，橡胶质感，果冻效应，鱼眼畸变，镜头畸变，物体形状改变，"
     "卡通，动漫，CG渲染，3D渲染感，塑料质感，绘画感，过度锐化，画面闪烁，"
     "不自然的运动，场景变形"
+    "曝光过度, 曝光不足, 欠曝, 死白, 死黑, 极度刺眼, 强光刺眼, "
+    "忽明忽暗, 曝光不稳定, 频闪, 暗淡无光, 漆黑一片, 阴暗压抑, "
+    "失去暗部细节, 失去亮部细节, 亮部糊化, 阴影死黑, 光照不均, "
+    "刺目的对比, 光晕泛滥, 雾蒙蒙的光线, 虚假的光照, 违背物理的光线, "
+    "闪烁的光线, 光源跳动, 强光直射, 灰暗无光, 亮度跳变, 异常反光"
+    "新出现的物体, 凭空出现的道具, 从画面边缘进入的物体, 遮挡画面的物体, 前景遮挡物, "
+    "摄像机, 相机, 拿相机的手, 机械臂, 拍摄设备, 穿帮镜头, 第三人称视角拍摄者, "
+    "人, 人物, 行人, 走动的人, 突然出现的人影, 奔跑的人, 游客, 围观者, "
+    "漂浮的物体, 随机生成的杂物, 幻觉生成的物体, 不合逻辑的物体, "
+    "场景突变, 结构突变, 镜头移动时的扭曲, 破坏场景连贯性的元素, 非纯风景"
 )
 # What every motion prompt adds after its camera move: the scene, its colours
 # and its shapes stay exactly as in the photo (see COMFYUI_NEGATIVE_PROMPT for
 # what each part is guarding against).
 _COMFYUI_SCENE_LOCK = (
-    "the scene stays exactly the same, stable composition, realistic cinematic footage, "
-    "original colors and lighting of the photo unchanged, natural colors, no color grading, "
-    "constant brightness, every sign and all text stay sharp, readable and unchanged, "
-    "straight lines stay straight, buildings and objects keep their exact shape, "
-    "no people, empty scenery, clear unobstructed view with nothing in the foreground, "
-    "no new shadows, no vehicles, no cars, no props, nothing enters the frame"
+    "perfectly stable scene composition, continuous unbroken landscape, pure empty scenery, "
+    "completely deserted environment, realistic cinematic footage, smooth horizontal panning shot, "
+    "seamless camera movement, strictly locked exposure, perfectly matched original colors, "
+    "consistent natural lighting, clear unobstructed view, absolute visual consistency from edge to edge, "
+    "perfectly preserved architectural details, sharp and legible text, deep depth of field"
 )
 # Maps attraction_step.py's camera_pans vocabulary (also used by
 # local_pan_generator.py's _CAMERA_PAN_PRESETS) to an English motion prompt
@@ -850,12 +859,36 @@ _COMFYUI_SCENE_LOCK = (
 # img2vdo._generate_single_clip); its prompt here is the default for a
 # waypoint with no preset at all.
 COMFYUI_CAMERA_PAN_PROMPTS: Dict[str, str] = {
-    "panright": "very slow steady camera pan to the right, " + _COMFYUI_SCENE_LOCK,
-    "panleft": "very slow steady camera pan to the left, " + _COMFYUI_SCENE_LOCK,
-    "panup": "very slow steady camera tilt upwards, " + _COMFYUI_SCENE_LOCK,
-    "pandown": "very slow steady camera tilt downwards, " + _COMFYUI_SCENE_LOCK,
-    "zoomin": "very slow steady push-in towards the scene, " + _COMFYUI_SCENE_LOCK,
-    "zoomout": "very slow steady pull-back from the scene, " + _COMFYUI_SCENE_LOCK,
+    "panright": (
+        "Camera: pan right. Movement: rotate the view horizontally from left to right from one fixed point. "
+        "Speed: smooth constant rotation. Framing: keep the horizon level while new space enters from the right "
+        "side of the frame. End: settle on a clear final composition."
+    ),
+    "panleft": (
+        "Camera: pan left. Movement: rotate the view horizontally from right to left from one fixed point. "
+        "Speed: smooth constant rotation. Framing: keep the horizon level while new space enters from the left "
+        "side of the frame. End: settle on a clear final composition."
+    ),
+    "panup": (
+        "Camera: tilt up. Movement: rotate the view upward from one fixed point. "
+        "Speed: smooth constant tilt. Framing: keep the vertical subject or architecture centered as the frame "
+        "travels upward. End: land on the upper target."
+    ),
+    "pandown": (
+        "Camera: tilt down. Movement: rotate the view downward from one fixed point. "
+        "Speed: smooth constant tilt. Framing: keep the vertical subject or architecture centered as the frame "
+        "travels downward. End: land on the lower target."
+    ),
+    "zoomin": (
+        "Camera: slow zoom in. Movement: slowly increase lens focal length toward a tighter frame. "
+        "Speed: gradual and even. Framing: keep the main visual target readable as it becomes larger in frame. "
+        "End: finish on a stable tighter composition."
+    ),
+    "zoomout": (
+        "Camera: slow zoom out. Movement: slowly decrease lens focal length toward a wider frame. "
+        "Speed: gradual and even. Framing: keep the main visual target readable as more surrounding space appears. "
+        "End: finish on a stable wider composition."
+    ),
     "none": "very slow steady camera movement, subtle natural ambient motion, " + _COMFYUI_SCENE_LOCK,
 }
 COMFYUI_DEFAULT_MOTION_PROMPT = COMFYUI_CAMERA_PAN_PROMPTS["none"]
