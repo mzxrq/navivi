@@ -63,7 +63,7 @@ msgid "Starting..."
 msgstr "Starting..."
 
 #: src/features/timeline/components/elements/MarkersPanel.tsx:95
-msgid " · waypoint" 
+msgid " · waypoint"
 msgstr " · waypoint"
 
 #: src/features/map/components/WaypointEditor.tsx:425
@@ -129,7 +129,7 @@ msgstr "{0}% reduction ({1} dB)"
 #~ msgid "+ Add Course Theme & Intro"
 #~ msgstr "+ Add Course Theme & Intro"
 
-#: src/features/map/components/OverviewPanel.tsx:33
+#: src/features/map/components/OverviewPanel.tsx:36
 msgid "+ Add Intro Screen"
 msgstr "+ Add Intro Screen"
 
@@ -311,7 +311,7 @@ msgid "An unknown error occurred during rendering."
 msgstr "An unknown error occurred during rendering."
 
 #. placeholder {0}: idx + 1
-#: src/features/map/components/MapArea.tsx:938
+#: src/features/map/components/MapArea.tsx:1042
 msgid "Anchor {0}"
 msgstr "Anchor {0}"
 
@@ -808,8 +808,8 @@ msgstr "Crossfade"
 msgid "Custom Color"
 msgstr "Custom Color"
 
-#: src/features/map/components/MapArea.tsx:812
-#: src/features/map/components/MapArea.tsx:863
+#: src/features/map/components/MapArea.tsx:865
+#: src/features/map/components/MapArea.tsx:916
 #: src/features/map/components/WaypointEditor.tsx:397
 msgid "Custom Marker"
 msgstr "Custom Marker"
@@ -979,11 +979,11 @@ msgstr "Drive"
 msgid "DriveLabel"
 msgstr "Drive"
 
-#: src/features/map/components/MapArea.tsx:961
+#: src/features/map/components/MapArea.tsx:1065
 msgid "Drop photos here to auto-plot your route"
 msgstr "Drop photos here to auto-plot your route"
 
-#: src/features/map/components/MapArea.tsx:986
+#: src/features/map/components/MapArea.tsx:1090
 msgid "Drop photos or GPS files to plot route"
 msgstr "Drop photos or GPS files to plot route"
 
@@ -1030,11 +1030,11 @@ msgstr "Duration (seconds)"
 msgid "Duration:"
 msgstr "Duration:"
 
-#: src/features/map/components/MapArea.tsx:766
+#: src/features/map/components/MapArea.tsx:819
 msgid "E"
 msgstr "E"
 
-#: src/features/map/components/OverviewPanel.tsx:116
+#: src/features/map/components/OverviewPanel.tsx:118
 msgid "E.g. Tomogashima and Kada area..."
 msgstr "E.g. Tomogashima and Kada area..."
 
@@ -1118,7 +1118,7 @@ msgstr "Estimated time for the Python backend to synthesize AI voiceovers and en
 msgid "Ethereal sinusoidal wave distortion and color blend"
 msgstr "Ethereal sinusoidal wave distortion and color blend"
 
-#: src/features/map/components/MapArea.tsx:964
+#: src/features/map/components/MapArea.tsx:1068
 msgid "EXIF GPS tags from your travel photos will automatically generate sequenced stops on the map."
 msgstr "EXIF GPS tags from your travel photos will automatically generate sequenced stops on the map."
 
@@ -1361,7 +1361,7 @@ msgstr "General"
 msgid "Generate Assets"
 msgstr "Generate Assets"
 
-#: src/features/map/components/OverviewPanel.tsx:60
+#: src/features/map/components/OverviewPanel.tsx:64
 msgid "Generate Intro Video"
 msgstr "Generate Intro Video"
 
@@ -1472,7 +1472,7 @@ msgstr "High-spec Mode"
 msgid "High-spec system detected ({0}). Opening Timeline Editor for custom video trimming and transition adjustments. (Quick export disabled)."
 msgstr "High-spec system detected ({0}). Opening Timeline Editor for custom video trimming and transition adjustments. (Quick export disabled)."
 
-#: src/utils/hardwareDetection.ts:99
+#: src/utils/hardwareDetection.ts:129
 msgid "High-spec system detected: {gpuRenderer} ({logicalCores} CPU threads)"
 msgstr "High-spec system detected: {gpuRenderer} ({logicalCores} CPU threads)"
 
@@ -1543,11 +1543,11 @@ msgstr "Initializing pipeline..."
 msgid "Inspector"
 msgstr "Inspector"
 
-#: src/features/map/components/OverviewPanel.tsx:45
+#: src/features/map/components/OverviewPanel.tsx:48
 msgid "Intro Screen"
 msgstr "Intro Screen"
 
-#: src/features/map/components/OverviewPanel.tsx:33
+#: src/features/map/components/OverviewPanel.tsx:36
 msgid "Intro Screen Settings"
 msgstr "Intro Screen Settings"
 
@@ -1588,7 +1588,7 @@ msgstr "Layer Manager"
 msgid "Layers"
 msgstr "Layers"
 
-#: src/features/map/components/OverviewPanel.tsx:101
+#: src/features/map/components/OverviewPanel.tsx:103
 msgid "Leave blank to use the project name."
 msgstr "Leave blank to use the project name."
 
@@ -1623,13 +1623,13 @@ msgstr "Listen"
 msgid "Listen to ensure Irodori TTS pronunciation is accurate"
 msgstr "Listen to ensure Irodori TTS pronunciation is accurate"
 
-#: src/features/map/components/OverviewPanel.tsx:124
+#: src/features/map/components/OverviewPanel.tsx:130
 msgid "Live Preview"
 msgstr "Live Preview"
 
-#: src/features/map/components/MapArea.tsx:325
-#: src/features/map/components/MapArea.tsx:367
-#: src/features/map/components/MapArea.tsx:408
+#: src/features/map/components/MapArea.tsx:343
+#: src/features/map/components/MapArea.tsx:385
+#: src/features/map/components/MapArea.tsx:426
 #: src/features/map/components/WaypointEditor.tsx:264
 #: src/hooks/useWaypointActions.ts:24
 #: src/hooks/useWaypointActions.ts:62
@@ -1668,7 +1668,7 @@ msgstr "Low-spec Mode"
 msgid "Low-Spec Mode"
 msgstr "Low-Spec Mode"
 
-#: src/utils/hardwareDetection.ts:100
+#: src/utils/hardwareDetection.ts:130
 msgid "Low-spec system detected: {gpuRenderer} (Integrated graphics / no discrete GPU, {logicalCores} CPU threads)"
 msgstr "Low-spec system detected: {gpuRenderer} (Integrated graphics / no discrete GPU, {logicalCores} CPU threads)"
 
@@ -2008,7 +2008,7 @@ msgstr "Output File:"
 msgid "Parsing Maps & GPS Data{prog}..."
 msgstr "Parsing Maps & GPS Data{prog}..."
 
-#: src/features/map/components/MapArea.tsx:995
+#: src/features/map/components/MapArea.tsx:1099
 msgid "Parsing Route Data..."
 msgstr "Parsing Route Data..."
 
@@ -2137,7 +2137,7 @@ msgstr "Project Settings"
 msgid "Project settings saved"
 msgstr "Project settings saved"
 
-#: src/features/map/components/OverviewPanel.tsx:134
+#: src/features/map/components/OverviewPanel.tsx:143
 msgid "Project Title"
 msgstr "Project Title"
 
@@ -2384,7 +2384,7 @@ msgstr "Reset all color adjustments to 0"
 msgid "Reset to 100% (0 dB)"
 msgstr "Reset to 100% (0 dB)"
 
-#: src/features/map/components/MapArea.tsx:676
+#: src/features/map/components/MapArea.tsx:729
 msgid "Reset View (North)"
 msgstr "Reset View (North)"
 
@@ -2458,11 +2458,11 @@ msgid "routeOvvAnim"
 msgstr "Route Overview Narration"
 
 #. placeholder {0}: mapDefaults.maxWaypoints
-#: src/features/map/components/MapArea.tsx:311
+#: src/features/map/components/MapArea.tsx:329
 msgid "Routes are limited to {0} waypoints in this preview build."
 msgstr "Routes are limited to {0} waypoints in this preview build."
 
-#: src/features/map/components/MapArea.tsx:763
+#: src/features/map/components/MapArea.tsx:816
 msgid "S"
 msgstr "S"
 
@@ -2598,7 +2598,7 @@ msgstr "Select Custom Marker"
 msgid "Select Layer to Copy"
 msgstr "Select Layer to Copy"
 
-#: src/features/map/components/MapArea.tsx:974
+#: src/features/map/components/MapArea.tsx:1078
 msgid "Select Photos..."
 msgstr "Select Photos..."
 
@@ -2777,7 +2777,7 @@ msgstr "Stop {0}"
 msgid "Stop {stopNum}: {stopName}"
 msgstr "Stop {stopNum}: {stopName}"
 
-#: src/features/map/components/MapArea.tsx:424
+#: src/features/map/components/MapArea.tsx:442
 msgid "Stop By"
 msgstr "Stop By"
 
@@ -2825,11 +2825,11 @@ msgstr "Style Presets"
 msgid "Subtitle"
 msgstr "Subtitle"
 
-#: src/features/map/components/OverviewPanel.tsx:107
+#: src/features/map/components/OverviewPanel.tsx:109
 msgid "Subtitle / Description"
 msgstr "Subtitle / Description"
 
-#: src/features/map/components/OverviewPanel.tsx:138
+#: src/features/map/components/OverviewPanel.tsx:147
 msgid "Subtitle description..."
 msgstr "Subtitle description..."
 
@@ -2917,9 +2917,13 @@ msgstr "Text Color"
 msgid "This asset is missing from the project"
 msgstr "This asset is missing from the project"
 
+#: src/features/map/components/OverviewPanel.tsx:66
+msgid "This creates a cinematic title card at the very beginning of your exported video."
+msgstr "This creates a cinematic title card at the very beginning of your exported video."
+
 #: src/features/map/components/OverviewPanel.tsx:79
-msgid "This creates a cinematic title card at the very beginning of your exported video. Customize the text below."
-msgstr "This creates a cinematic title card at the very beginning of your exported video. Customize the text below."
+#~ msgid "This creates a cinematic title card at the very beginning of your exported video. Customize the text below."
+#~ msgstr "This creates a cinematic title card at the very beginning of your exported video. Customize the text below."
 
 #: src/components/view/ProjectManager.tsx:92
 msgid "This project is archived. Please open it first to render"
@@ -2959,7 +2963,7 @@ msgstr "Timeline markers"
 msgid "Timeline reloaded"
 msgstr "Timeline reloaded"
 
-#: src/features/map/components/OverviewPanel.tsx:97
+#: src/features/map/components/OverviewPanel.tsx:99
 msgid "Title"
 msgstr "Title"
 
@@ -3022,9 +3026,9 @@ msgstr "Undo (Ctrl+Z)"
 msgid "Unhide Track"
 msgstr "Unhide Track"
 
-#: src/features/map/components/MapArea.tsx:351
-#: src/features/map/components/MapArea.tsx:393
-#: src/features/map/components/MapArea.tsx:431
+#: src/features/map/components/MapArea.tsx:369
+#: src/features/map/components/MapArea.tsx:411
+#: src/features/map/components/MapArea.tsx:449
 #: src/features/map/components/WaypointEditor.tsx:274
 #: src/features/map/components/WaypointEditor.tsx:277
 #: src/hooks/useWaypointActions.ts:55
@@ -3126,7 +3130,7 @@ msgstr "Video Editor Settings"
 msgid "Video Exported Successfully!"
 msgstr "Video Exported Successfully!"
 
-#: src/features/map/components/OverviewPanel.tsx:88
+#: src/features/map/components/OverviewPanel.tsx:90
 msgid "Video Title"
 msgstr "Video Title"
 
@@ -3158,9 +3162,9 @@ msgstr "Walk"
 msgid "waypoint"
 msgstr "Waypoint"
 
-#: src/features/map/components/MapArea.tsx:386
-#: src/features/map/components/MapArea.tsx:796
-#: src/features/map/components/MapArea.tsx:846
+#: src/features/map/components/MapArea.tsx:404
+#: src/features/map/components/MapArea.tsx:849
+#: src/features/map/components/MapArea.tsx:899
 #: src/features/map/components/UnifiedLayersPanel.tsx:105
 msgid "Waypoint"
 msgstr "Waypoint"

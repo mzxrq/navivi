@@ -129,9 +129,9 @@ msgstr "{0}% 削減率 ({1} dB)"
 #~ msgid "+ Add Course Theme & Intro"
 #~ msgstr "+ コースのテーマ＆イントロを追加"
 
-#: src/features/map/components/OverviewPanel.tsx:33
+#: src/features/map/components/OverviewPanel.tsx:36
 msgid "+ Add Intro Screen"
-msgstr ""
+msgstr "+ イントロ動画を追加"
 
 #: src/features/map/components/WaypointEditor.tsx:776
 msgid "<0>+ Add Image</0>"
@@ -284,7 +284,7 @@ msgstr "詳細設定"
 #: src/components/view/ProjectManager.tsx:448
 #: src/components/view/ProjectManager.tsx:616
 msgid "Advanced Settings"
-msgstr ""
+msgstr "詳細設定"
 
 #: src/components/ui/AppSettings.tsx:110
 msgid "AI Models"
@@ -311,7 +311,7 @@ msgid "An unknown error occurred during rendering."
 msgstr "レンダリング中に予期せぬエラーが発生しました"
 
 #. placeholder {0}: idx + 1
-#: src/features/map/components/MapArea.tsx:938
+#: src/features/map/components/MapArea.tsx:1042
 msgid "Anchor {0}"
 msgstr "アンカー{0}"
 
@@ -808,8 +808,8 @@ msgstr "クロスフェード"
 msgid "Custom Color"
 msgstr "カスタムカラー"
 
-#: src/features/map/components/MapArea.tsx:812
-#: src/features/map/components/MapArea.tsx:863
+#: src/features/map/components/MapArea.tsx:865
+#: src/features/map/components/MapArea.tsx:916
 #: src/features/map/components/WaypointEditor.tsx:397
 msgid "Custom Marker"
 msgstr "カスタムマーカー"
@@ -979,11 +979,11 @@ msgstr "ドライブ"
 msgid "DriveLabel"
 msgstr "ドライブ"
 
-#: src/features/map/components/MapArea.tsx:961
+#: src/features/map/components/MapArea.tsx:1065
 msgid "Drop photos here to auto-plot your route"
 msgstr "ここに写真をドロップしてルートを自動作成"
 
-#: src/features/map/components/MapArea.tsx:986
+#: src/features/map/components/MapArea.tsx:1090
 msgid "Drop photos or GPS files to plot route"
 msgstr "写真またはGPSファイルをドロップしてルートを作成"
 
@@ -1030,13 +1030,13 @@ msgstr "再生時間 (秒)"
 msgid "Duration:"
 msgstr "再生時間:"
 
-#: src/features/map/components/MapArea.tsx:766
+#: src/features/map/components/MapArea.tsx:819
 msgid "E"
 msgstr "終"
 
-#: src/features/map/components/OverviewPanel.tsx:116
+#: src/features/map/components/OverviewPanel.tsx:118
 msgid "E.g. Tomogashima and Kada area..."
-msgstr ""
+msgstr "ここにサブタイトルを入れます..."
 
 #: src/components/ui/RenderOverlay.tsx:828
 msgid "Edit the image, script, or route mode in the Waypoint Editor. Click Resume when ready to re-render"
@@ -1118,7 +1118,7 @@ msgstr "PythonバックエンドがAI音声を合成し、動画をエンコー�
 msgid "Ethereal sinusoidal wave distortion and color blend"
 msgstr "幻想的な正弦波の歪みとカラーブレンド"
 
-#: src/features/map/components/MapArea.tsx:964
+#: src/features/map/components/MapArea.tsx:1068
 msgid "EXIF GPS tags from your travel photos will automatically generate sequenced stops on the map."
 msgstr "旅行写真のEXIF GPSタグから、マップ上に順序付けられたポイントが自動生成されます"
 
@@ -1361,9 +1361,9 @@ msgstr "一般"
 msgid "Generate Assets"
 msgstr "アセットを生成"
 
-#: src/features/map/components/OverviewPanel.tsx:60
+#: src/features/map/components/OverviewPanel.tsx:64
 msgid "Generate Intro Video"
-msgstr ""
+msgstr "イントロ動画を生成"
 
 #: src/features/map/components/Sidebar.tsx:347
 msgid "Generates the map route only. Ignores all pop-up images and AI voice synthesis to save time."
@@ -1472,7 +1472,7 @@ msgstr "ハイスペックモード"
 msgid "High-spec system detected ({0}). Opening Timeline Editor for custom video trimming and transition adjustments. (Quick export disabled)."
 msgstr "ハイスペックシステムが検出されました ({0})。カスタムビデオのトリミングとトランジション調整のため、タイムラインエディタを開きます (クイックエクスポートは無効かされています)"
 
-#: src/utils/hardwareDetection.ts:99
+#: src/utils/hardwareDetection.ts:129
 msgid "High-spec system detected: {gpuRenderer} ({logicalCores} CPU threads)"
 msgstr "ハイスペックシステムが検出されました: {gpuRenderer} (CPUスレッド数: {logicalCores})"
 
@@ -1543,13 +1543,13 @@ msgstr "パイプラインを初期化しています..."
 msgid "Inspector"
 msgstr "インスペクタ"
 
-#: src/features/map/components/OverviewPanel.tsx:45
+#: src/features/map/components/OverviewPanel.tsx:48
 msgid "Intro Screen"
-msgstr ""
+msgstr "イントロ動画"
 
-#: src/features/map/components/OverviewPanel.tsx:33
+#: src/features/map/components/OverviewPanel.tsx:36
 msgid "Intro Screen Settings"
-msgstr ""
+msgstr "イントロ画面設定"
 
 #: src/components/ui/RenderOverlay.tsx:1282
 msgid "Japanese Pronunciation & Intonation Guidance"
@@ -1588,7 +1588,7 @@ msgstr "レイヤーマネージャー"
 msgid "Layers"
 msgstr "レイヤー"
 
-#: src/features/map/components/OverviewPanel.tsx:101
+#: src/features/map/components/OverviewPanel.tsx:103
 msgid "Leave blank to use the project name."
 msgstr ""
 
@@ -1623,13 +1623,13 @@ msgstr "再生"
 msgid "Listen to ensure Irodori TTS pronunciation is accurate"
 msgstr "Irodori TTSの発音が正確か再生して確認します"
 
-#: src/features/map/components/OverviewPanel.tsx:124
+#: src/features/map/components/OverviewPanel.tsx:130
 msgid "Live Preview"
 msgstr ""
 
-#: src/features/map/components/MapArea.tsx:325
-#: src/features/map/components/MapArea.tsx:367
-#: src/features/map/components/MapArea.tsx:408
+#: src/features/map/components/MapArea.tsx:343
+#: src/features/map/components/MapArea.tsx:385
+#: src/features/map/components/MapArea.tsx:426
 #: src/features/map/components/WaypointEditor.tsx:264
 #: src/hooks/useWaypointActions.ts:24
 #: src/hooks/useWaypointActions.ts:62
@@ -1668,7 +1668,7 @@ msgstr "ロースペックモード"
 msgid "Low-Spec Mode"
 msgstr "ロースペックモード"
 
-#: src/utils/hardwareDetection.ts:100
+#: src/utils/hardwareDetection.ts:130
 msgid "Low-spec system detected: {gpuRenderer} (Integrated graphics / no discrete GPU, {logicalCores} CPU threads)"
 msgstr "ロースペックシステムが検出されました: {gpuRenderer} (統合グラフィックス / ディスクリートGPUなし、CPUスレッド数: {logicalCores})"
 
@@ -2008,7 +2008,7 @@ msgstr "出力ファイル:"
 msgid "Parsing Maps & GPS Data{prog}..."
 msgstr "マップとGPSデータを解析中{prog}..."
 
-#: src/features/map/components/MapArea.tsx:995
+#: src/features/map/components/MapArea.tsx:1099
 msgid "Parsing Route Data..."
 msgstr "ルートデータを解析中..."
 
@@ -2137,7 +2137,7 @@ msgstr "プロジェクト設定が更新されました"
 msgid "Project settings saved"
 msgstr "プロジェクト設定をほぞんしました"
 
-#: src/features/map/components/OverviewPanel.tsx:134
+#: src/features/map/components/OverviewPanel.tsx:143
 msgid "Project Title"
 msgstr ""
 
@@ -2384,7 +2384,7 @@ msgstr "すべてのカラー調整を０にリセット"
 msgid "Reset to 100% (0 dB)"
 msgstr "元に戻す"
 
-#: src/features/map/components/MapArea.tsx:676
+#: src/features/map/components/MapArea.tsx:729
 msgid "Reset View (North)"
 msgstr "ビューをリセット (北)"
 
@@ -2458,11 +2458,11 @@ msgid "routeOvvAnim"
 msgstr "ルート概要ナレーション"
 
 #. placeholder {0}: mapDefaults.maxWaypoints
-#: src/features/map/components/MapArea.tsx:311
+#: src/features/map/components/MapArea.tsx:329
 msgid "Routes are limited to {0} waypoints in this preview build."
 msgstr "このプレビュービルドでは、ルートは {0} 個のポイントに制限されています"
 
-#: src/features/map/components/MapArea.tsx:763
+#: src/features/map/components/MapArea.tsx:816
 msgid "S"
 msgstr "始"
 
@@ -2598,7 +2598,7 @@ msgstr "カスタムマーカーを選択"
 msgid "Select Layer to Copy"
 msgstr "コピーするレイヤーを選択"
 
-#: src/features/map/components/MapArea.tsx:974
+#: src/features/map/components/MapArea.tsx:1078
 msgid "Select Photos..."
 msgstr "写真を選択..."
 
@@ -2777,7 +2777,7 @@ msgstr "地点 {0}"
 msgid "Stop {stopNum}: {stopName}"
 msgstr "地点 {stopNum}: {stopName}"
 
-#: src/features/map/components/MapArea.tsx:424
+#: src/features/map/components/MapArea.tsx:442
 msgid "Stop By"
 msgstr "経由地"
 
@@ -2825,11 +2825,11 @@ msgstr "スタイルプリセット"
 msgid "Subtitle"
 msgstr "字幕"
 
-#: src/features/map/components/OverviewPanel.tsx:107
+#: src/features/map/components/OverviewPanel.tsx:109
 msgid "Subtitle / Description"
 msgstr ""
 
-#: src/features/map/components/OverviewPanel.tsx:138
+#: src/features/map/components/OverviewPanel.tsx:147
 msgid "Subtitle description..."
 msgstr ""
 
@@ -2917,9 +2917,13 @@ msgstr "テキストの色"
 msgid "This asset is missing from the project"
 msgstr "このアセットはプロジェクトから欠落しています"
 
-#: src/features/map/components/OverviewPanel.tsx:79
-msgid "This creates a cinematic title card at the very beginning of your exported video. Customize the text below."
+#: src/features/map/components/OverviewPanel.tsx:66
+msgid "This creates a cinematic title card at the very beginning of your exported video."
 msgstr ""
+
+#: src/features/map/components/OverviewPanel.tsx:79
+#~ msgid "This creates a cinematic title card at the very beginning of your exported video. Customize the text below."
+#~ msgstr ""
 
 #: src/components/view/ProjectManager.tsx:92
 msgid "This project is archived. Please open it first to render"
@@ -2959,7 +2963,7 @@ msgstr "タイムラインマーカー"
 msgid "Timeline reloaded"
 msgstr "タイムラインを再読み込みしました"
 
-#: src/features/map/components/OverviewPanel.tsx:97
+#: src/features/map/components/OverviewPanel.tsx:99
 msgid "Title"
 msgstr ""
 
@@ -3022,9 +3026,9 @@ msgstr "元に戻す (Ctrl+Z)"
 msgid "Unhide Track"
 msgstr "トラックを表示"
 
-#: src/features/map/components/MapArea.tsx:351
-#: src/features/map/components/MapArea.tsx:393
-#: src/features/map/components/MapArea.tsx:431
+#: src/features/map/components/MapArea.tsx:369
+#: src/features/map/components/MapArea.tsx:411
+#: src/features/map/components/MapArea.tsx:449
 #: src/features/map/components/WaypointEditor.tsx:274
 #: src/features/map/components/WaypointEditor.tsx:277
 #: src/hooks/useWaypointActions.ts:55
@@ -3126,7 +3130,7 @@ msgstr "ビデオエディタ設定"
 msgid "Video Exported Successfully!"
 msgstr "動画のエクスポートに成功しました"
 
-#: src/features/map/components/OverviewPanel.tsx:88
+#: src/features/map/components/OverviewPanel.tsx:90
 msgid "Video Title"
 msgstr ""
 
@@ -3158,9 +3162,9 @@ msgstr "徒歩"
 msgid "waypoint"
 msgstr "ポイント"
 
-#: src/features/map/components/MapArea.tsx:386
-#: src/features/map/components/MapArea.tsx:796
-#: src/features/map/components/MapArea.tsx:846
+#: src/features/map/components/MapArea.tsx:404
+#: src/features/map/components/MapArea.tsx:849
+#: src/features/map/components/MapArea.tsx:899
 #: src/features/map/components/UnifiedLayersPanel.tsx:105
 msgid "Waypoint"
 msgstr "ポイント"

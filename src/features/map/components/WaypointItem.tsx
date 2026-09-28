@@ -41,6 +41,7 @@ export function WaypointItem({
   const { isRendering } = useUI();
   const itemRef = useRef<HTMLDivElement>(null);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isModeExpanded, setIsModeExpanded] = useState(false);
   const isActive = activeWaypointId === wp.id;
 
   useEffect(() => {
@@ -211,13 +212,16 @@ export function WaypointItem({
             </div>
           )}
 
-          {/* Simple Inline Route Mode Selector */}
+          {/* Minimal Inline Route Mode Selector */}
           {!isLast && (
-            <div className="mt-2.5 flex items-center gap-2">
-              <span className="text-[9px] font-bold text-zinc-400 dark:text-zinc-600 uppercase tracking-widest">
-                To Next
-              </span>
-              <div className="flex items-center bg-zinc-100 dark:bg-black/20 rounded-md p-0.5 border border-zinc-200 dark:border-white/5">
+            <div className="mt-2 flex items-center gap-2 flex-wrap">
+              <div
+                className="flex items-center bg-zinc-100 dark:bg-black/20 rounded-md p-0.5 border border-zinc-200 dark:border-white/5 cursor-pointer"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsModeExpanded(!isModeExpanded);
+                }}
+              >
                 {[
                   { id: "walking", icon: Footprints, title: "Walk" },
                   { id: "driving", icon: Car, title: "Drive" },
@@ -227,6 +231,7 @@ export function WaypointItem({
                   { id: "draw", icon: Pencil, title: "Draw" },
                 ].map((mode) => {
                   const isModeActive = (wp.routeMode || "driving") === mode.id;
+                  if (!isModeActive && !isModeExpanded) return null;
                   const Icon = mode.icon;
                   return (
                     <button
@@ -236,6 +241,7 @@ export function WaypointItem({
                         updateWaypoint(wp.id, {
                           routeMode: mode.id as RouteMode,
                         });
+                        setIsModeExpanded(false);
                       }}
                       className={`p-1 rounded transition-colors ${
                         isModeActive
@@ -252,7 +258,7 @@ export function WaypointItem({
 
               {/* Via point adjust button + badge */}
               {(!wp.routeMode || wp.routeMode === "walking" || wp.routeMode === "driving" || wp.routeMode === "ferry") && (
-                <div className="flex items-center gap-1.5 mt-1.5">
+                <div className="flex items-center gap-1.5">
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -260,7 +266,7 @@ export function WaypointItem({
                         new CustomEvent("enter-via-mode", { detail: { wpId: wp.id } })
                       );
                     }}
-                    className="flex items-center gap-1 text-[9px] font-semibold text-violet-500 dark:text-violet-400 hover:text-violet-700 dark:hover:text-violet-300 transition-colors"
+                    className="flex items-center gap-1 text-[9px] font-semibold text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-500/10 hover:bg-violet-100 dark:hover:bg-violet-500/20 px-2 py-0.5 rounded-full transition-colors"
                     title="Add via points to nudge the route"
                   >
                     <Navigation className="w-2.5 h-2.5" />

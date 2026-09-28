@@ -55,16 +55,16 @@ const fetchSingleSegment = async (
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": apiKey,
+          Authorization: apiKey,
         },
         body: JSON.stringify({
-          coordinates: points.map(p => [p[1], p[0]]) // [lng, lat]
-        })
+          coordinates: points.map((p) => [p[1], p[0]]), // [lng, lat]
+        }),
       });
-      
+
       if (!response.ok) throw new Error(`HTTP_${response.status}`);
       const data = await response.json();
-      
+
       if (data.routes && data.routes.length > 0) {
         positions = data.routes[0].geometry.coordinates.map(
           (coord: [number, number]) => [coord[1], coord[0]],
@@ -79,11 +79,11 @@ const fetchSingleSegment = async (
     } catch (error) {
       console.warn("[ORS Walk] Failed, falling back to OSRM foot:", error);
       try {
-        const coordsStr = points.map(p => `${p[1]},${p[0]}`).join(";");
+        const coordsStr = points.map((p) => `${p[1]},${p[0]}`).join(";");
         const osrmUrl = `https://router.project-osrm.org/route/v1/foot/${coordsStr}?overview=full&geometries=geojson`;
         const osrmRes = await fetchWithTimeout(osrmUrl);
         const osrmData = await osrmRes.json();
-        
+
         if (osrmData.routes && osrmData.routes.length > 0) {
           positions = osrmData.routes[0].geometry.coordinates.map(
             (coord: [number, number]) => [coord[1], coord[0]],
@@ -98,11 +98,11 @@ const fetchSingleSegment = async (
   } else {
     // driving
     try {
-      const coordsStr = points.map(p => `${p[1]},${p[0]}`).join(";");
+      const coordsStr = points.map((p) => `${p[1]},${p[0]}`).join(";");
       const url = `https://router.project-osrm.org/route/v1/driving/${coordsStr}?overview=full&geometries=geojson`;
       const response = await fetchWithTimeout(url);
       const data = await response.json();
-      
+
       if (data.routes && data.routes.length > 0) {
         positions = data.routes[0].geometry.coordinates.map(
           (coord: [number, number]) => [coord[1], coord[0]],
@@ -156,9 +156,8 @@ export function useMapRouting() {
       const mode = wp1.routeMode || "driving";
       const customHash =
         mode === "draw" ? JSON.stringify(wp1.customRoute || []) : "";
-      const viaHash = 
-        wp1.viaPoints ? JSON.stringify(wp1.viaPoints) : "";
-        
+      const viaHash = wp1.viaPoints ? JSON.stringify(wp1.viaPoints) : "";
+
       const cacheKey = `${wp1.lat.toFixed(5)},${wp1.lng.toFixed(5)}|${wp2.lat.toFixed(5)},${wp2.lng.toFixed(5)}|${mode}|${customHash}|${viaHash}`;
 
       // straight line but mode is neither Direct or Draw, ignore cache
@@ -167,7 +166,7 @@ export function useMapRouting() {
         cachedData &&
         cachedData.length === 2 &&
         mode !== "direct" &&
-        mode !== "draw" && 
+        mode !== "draw" &&
         !(wp1.viaPoints && wp1.viaPoints.length > 0);
 
       if (cachedData && !isFailedCache) {
@@ -266,5 +265,11 @@ export function useMapRouting() {
       isCancelled = true;
       clearTimeout(debounce);
     };
-  }, [waypoints, setRouteSegments, routingCache, setRoutingCache, settings.ors_api_key]);
+  }, [
+    waypoints,
+    setRouteSegments,
+    routingCache,
+    setRoutingCache,
+    settings.ors_api_key,
+  ]);
 }
