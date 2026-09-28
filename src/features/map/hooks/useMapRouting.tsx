@@ -22,115 +22,6 @@ const fetchWithTimeout = async (
   }
 };
 
-const fetchPairSegment = async (
-  lat1: number,
-  lng1: number,
-  lat2: number,
-  lng2: number,
-  mode: string,
-  apiKey: string,
-) => {
-  let positions: [number, number][] = [];
-
-  if (mode === "curve") {
-    positions = getCurve([lat1, lng1], [lat2, lng2]);
-  } else if (mode === "walking" || mode === "ferry") {
-    try {
-      if (!apiKey) throw new Error("missing_api_key");
-      const url = `https://api.openrouteservice.org/v2/directions/foot-hiking?api_key=${apiKey}&start=${lng1},${lat1}&end=${lng2},${lat2}`;
-      const response = await fetchWithTimeout(url);
-      if (!response.ok) throw new Error(`HTTP_${response.status}`);
-      const data = await response.json();
-      if (data.features && data.features.length > 0) {
-        positions = data.features[0].geometry.coordinates.map(
-          (coord: [number, number]) => [coord[1], coord[0]],
-        );
-      } else {
-        throw new Error("no_route");
-      }
-    } catch (error) {
-      console.warn("[ORS Walk] Failed, falling back to OSRM foot:", error);
-      try {
-        const osrmUrl = `https://router.project-osrm.org/route/v1/foot/${lng1},${lat1};${lng2},${lat2}?overview=full&geometries=geojson`;
-        const osrmRes = await fetchWithTimeout(osrmUrl);
-        const osrmData = await osrmRes.json();
-        if (osrmData.routes && osrmData.routes.length > 0) {
-          positions = osrmData.routes[0].geometry.coordinates.map(
-            (coord: [number, number]) => [coord[1], coord[0]],
-          );
-        } else {
-          positions = [[lat1, lng1], [lat2, lng2]];
-        }
-      } catch {
-        positions = [[lat1, lng1], [lat2, lng2]];
-      }
-    }
-  } else {
-    // driving
-    try {
-      const url = `https://router.project-osrm.org/route/v1/driving/${lng1},${lat1};${lng2},${lat2}?overview=full&geometries=geojson`;
-      const response = await fetchWithTimeout(url);
-      const data = await response.json();
-      if (data.routes && data.routes.length > 0) {
-        positions = data.routes[0].geometry.coordinates.map(
-          (coord: [number, number]) => [coord[1], coord[0]],
-        );
-      } else {
-        positions = [[lat1, lng1], [lat2, lng2]];
-      }
-    } catch (error) {
-      positions = [[lat1, lng1], [lat2, lng2]];
-    }
-  }
-
-  return positions;
-};
-
-const fetchSegmentWithVia = async (
-  wp1: any,
-  wp2: any,
-  mode: string,
-  apiKey: string,
-) => {
-  const points: [number, number][] = [
-    [wp1.lat, wp1.lng],
-    ...(wp1.viaPoints || []),
-    [wp2.lat, wp2.lng],
-  ];
-
-  let fullPositions: [number, number][] = [];
-
-  for (let i = 0; i < points.length - 1; i++) {
-    const p1 = points[i];
-    const p2 = points[i + 1];
-    const segmentPositions = await fetchPairSegment(
-      p1[0], p1[1],
-      p2[0], p2[1],
-      mode,
-      apiKey
-    );
-    
-    // Stitch segments, avoiding duplicate end-start coordinates
-    if (i === 0) {
-      fullPositions = segmentPositions;
-    } else {
-      if (segmentPositions.length > 0 && fullPositions.length > 0) {
-        const lastFull = fullPositions[fullPositions.length - 1];
-        const firstSeg = segmentPositions[0];
-        if (lastFull[0] === firstSeg[0] && lastFull[1] === firstSeg[1]) {
-          fullPositions = [...fullPositions, ...segmentPositions.slice(1)];
-        } else {
-          fullPositions = [...fullPositions, ...segmentPositions];
-        }
-      } else {
-        fullPositions = [...fullPositions, ...segmentPositions];
-      }
-    }
-  }
-
-  return fullPositions;
-};
-
 const fetchSingleSegment = async (
   index: number,
   wp1: any,
@@ -141,16 +32,87 @@ const fetchSingleSegment = async (
 ) => {
   let positions: [number, number][] = [];
 
+  const points: [number, number][] = [
+    [wp1.lat, wp1.lng],
+    ...(wp1.viaPoints || []),
+    [wp2.lat, wp2.lng],
+  ];
+
   if (mode === "direct") {
-    positions = [
-      [wp1.lat, wp1.lng],
-      [wp2.lat, wp2.lng],
-    ];
+    positions = points;
   } else if (mode === "draw") {
     const customNodes = wp1.customRoute || [];
     positions = [[wp1.lat, wp1.lng], ...customNodes, [wp2.lat, wp2.lng]];
+  } else if (mode === "curve") {
+    // curve only supports 2 points, just use start and end
+    positions = getCurve([wp1.lat, wp1.lng], [wp2.lat, wp2.lng]);
+  } else if (mode === "walking" || mode === "ferry") {
+    try {
+      if (!apiKey) throw new Error("missing_api_key");
+      // Use ORS POST endpoint which supports multiple coordinates
+      const url = `https://api.openrouteservice.org/v2/directions/foot-hiking/geojson`;
+      const response = await fetchWithTimeout(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": apiKey,
+        },
+        body: JSON.stringify({
+          coordinates: points.map(p => [p[1], p[0]]) // [lng, lat]
+        })
+      });
+      
+      if (!response.ok) throw new Error(`HTTP_${response.status}`);
+      const data = await response.json();
+      
+      if (data.routes && data.routes.length > 0) {
+        positions = data.routes[0].geometry.coordinates.map(
+          (coord: [number, number]) => [coord[1], coord[0]],
+        );
+      } else if (data.features && data.features.length > 0) {
+        positions = data.features[0].geometry.coordinates.map(
+          (coord: [number, number]) => [coord[1], coord[0]],
+        );
+      } else {
+        throw new Error("no_route");
+      }
+    } catch (error) {
+      console.warn("[ORS Walk] Failed, falling back to OSRM foot:", error);
+      try {
+        const coordsStr = points.map(p => `${p[1]},${p[0]}`).join(";");
+        const osrmUrl = `https://router.project-osrm.org/route/v1/foot/${coordsStr}?overview=full&geometries=geojson`;
+        const osrmRes = await fetchWithTimeout(osrmUrl);
+        const osrmData = await osrmRes.json();
+        
+        if (osrmData.routes && osrmData.routes.length > 0) {
+          positions = osrmData.routes[0].geometry.coordinates.map(
+            (coord: [number, number]) => [coord[1], coord[0]],
+          );
+        } else {
+          positions = points;
+        }
+      } catch {
+        positions = points;
+      }
+    }
   } else {
-    positions = await fetchSegmentWithVia(wp1, wp2, mode, apiKey);
+    // driving
+    try {
+      const coordsStr = points.map(p => `${p[1]},${p[0]}`).join(";");
+      const url = `https://router.project-osrm.org/route/v1/driving/${coordsStr}?overview=full&geometries=geojson`;
+      const response = await fetchWithTimeout(url);
+      const data = await response.json();
+      
+      if (data.routes && data.routes.length > 0) {
+        positions = data.routes[0].geometry.coordinates.map(
+          (coord: [number, number]) => [coord[1], coord[0]],
+        );
+      } else {
+        positions = points;
+      }
+    } catch (error) {
+      positions = points;
+    }
   }
 
   return { index, positions, mode, cacheKey };
@@ -219,6 +181,12 @@ export function useMapRouting() {
         if (mode === "draw") {
           const customNodes = wp1.customRoute || [];
           rawPoints = [[wp1.lat, wp1.lng], ...customNodes, [wp2.lat, wp2.lng]];
+        } else if (mode === "direct") {
+          rawPoints = [
+            [wp1.lat, wp1.lng],
+            ...(wp1.viaPoints || []),
+            [wp2.lat, wp2.lng],
+          ];
         }
         let dense: [number, number][] = [];
 
@@ -242,6 +210,7 @@ export function useMapRouting() {
         newSegments[i] = {
           positions: [
             [wp1.lat, wp1.lng],
+            ...(wp1.viaPoints || []),
             [wp2.lat, wp2.lng],
           ],
           mode: "calculating",
@@ -277,7 +246,7 @@ export function useMapRouting() {
         setRouteSegments([...latestSegmentsRef.current]);
 
         if (
-          res.positions.length > 2 ||
+          res.positions.length > (item.wp1.viaPoints?.length || 0) + 2 ||
           res.mode === "direct" ||
           res.mode === "draw"
         ) {
@@ -288,7 +257,7 @@ export function useMapRouting() {
         }
 
         if (i < fetchQueue.length - 1) {
-          await new Promise((resolve) => setTimeout(resolve, 400));
+          await new Promise((resolve) => setTimeout(resolve, 800));
         }
       }
     }, 800);
