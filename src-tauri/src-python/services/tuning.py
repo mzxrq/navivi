@@ -618,13 +618,13 @@ OVERVIEW_POPUP_MIN_HOLD_SECONDS = 2.0
 # raise a tier past its own threshold only once the card layout can also
 # handle the wider crop it produces.
 OVERVIEW_PADDING_BY_SPAN_KM: Tuple[Tuple[float, float], ...] = (
-    (1.5, 0.04),
-    (5.0, 0.08),
-    (15.0, 0.12),
-    (40.0, 0.15),
+    (1.5, 0.08),
+    (5.0, 0.12),
+    (15.0, 0.20),
+    (40.0, 0.25),
 )
 # Above the largest span_km ceiling in OVERVIEW_PADDING_BY_SPAN_KM.
-OVERVIEW_PADDING_MAX_SPAN = 0.15
+OVERVIEW_PADDING_MAX_SPAN = 0.25
 # Overview: the walker takes at least this long from one numbered stop to the
 # next, however close they are (stops a few hundred metres apart used to flash
 # past in a fraction of a second, their cards all popping up at once). The

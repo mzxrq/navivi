@@ -2318,18 +2318,17 @@ async def _record_leg(
                     # attraction photo) and the photo shrinking into place.
                     # The voice delay below is counted from the frames
                     # actually written, so it stays in sync either way.
-                    if not start_popup_image:
+                    # Play the destination photo as a fullscreen shrink preview at
+                    # the start of the leg. The user specifically requested this back.
+                    if not dest_popup_image and not start_popup_image:
                         for _ in range(max(1, int(0.3 * fps))):
                             await _write_frame(warm_png)
-
-                    if start_popup_image:
-                        # Departure photo preview: only ever set on the
-                        # trip's very first leg (see `start_popup_image`
-                        # docstring). Every leg's own DESTINATION photo now
-                        # plays at actual arrival instead (see the `grow=True`
-                        # call further down, right as the walker reaches it)
-                        # -- not here at the opening -- so this departure
-                        # beat is the only thing shown at any leg's opening.
+                    
+                    if dest_popup_image:
+                        await _play_leg_photo_card(
+                            dest_popup_image, dest_popup_freeze_seconds, "dest_opening"
+                        )
+                    elif start_popup_image:
                         await _play_leg_photo_card(
                             start_popup_image, start_popup_freeze_seconds, "start"
                         )

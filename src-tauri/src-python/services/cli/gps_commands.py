@@ -177,3 +177,37 @@ def test_residential_video(
         "success": bool(video_paths),
         "video_paths": video_paths,
     }
+
+def test_recap_frame(
+    job_config_path: str,
+    output_video_dir: str = None,
+) -> Dict[str, Any]:
+    """Generates just a single static PNG preview of the final overview recap frame."""
+    config_path = Path(job_config_path)
+    if not config_path.exists():
+        raise FileNotFoundError(f"job_config.json not found: {config_path}")
+
+    from services.helpers import project_route_video_dir
+    output_video_dir = Path(output_video_dir) if output_video_dir else project_route_video_dir(config_path.parent)
+    output_video_dir.mkdir(parents=True, exist_ok=True)
+
+    from services.vdoprocessing.videopipeline import process_gps, render_route_video
+
+    _tracker.show("Parsing GPS track...")
+    cleaned_route = process_gps(str(config_path))
+    _tracker.clear()
+
+    _tracker.show("Generating recap preview...")
+    video_paths = render_route_video(
+        cleaned_route=cleaned_route,
+        project_config_path=str(config_path),
+        output_video_dir=str(output_video_dir),
+        force=True,
+        render_mode="recap_frame",
+    )
+    _tracker.clear()
+
+    return {
+        "success": bool(video_paths),
+        "video_paths": video_paths,
+    }
