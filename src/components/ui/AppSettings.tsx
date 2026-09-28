@@ -61,7 +61,7 @@ export function AppSettings() {
       className={`fixed inset-0 z-99999 flex items-center justify-center bg-zinc-950/40 backdrop-blur-[2px] select-none ${isAnimatingOut ? "animate-out fade-out duration-200" : "animate-in fade-in duration-200"}`}
     >
       <div
-        className={`w-135 bg-white dark:bg-navidark-900 border border-zinc-200 dark:border-navidark-400 rounded-xl shadow-2xl overflow-hidden flex flex-col ${isAnimatingOut ? "animate-out zoom-out-95 duration-200" : "animate-in zoom-in-95 duration-200"}`}
+        className={`w-[650px] max-w-[95vw] h-[550px] max-h-[95vh] bg-white dark:bg-navidark-900 border border-zinc-200 dark:border-navidark-400 rounded-xl shadow-2xl overflow-hidden flex flex-col ${isAnimatingOut ? "animate-out zoom-out-95 duration-200" : "animate-in zoom-in-95 duration-200"}`}
       >
         {/* Header Section */}
         <div className="px-5 py-4 border-b border-zinc-100 dark:border-navidark-400 bg-zinc-50/50 dark:bg-navidark-800 flex items-center justify-between shrink-0">
@@ -76,9 +76,9 @@ export function AppSettings() {
           </button>
         </div>
 
-        <div className="flex min-h-90">
+        <div className="flex flex-1 overflow-hidden">
           {/* Sidebar Tabs */}
-          <div className="w-36 bg-zinc-50 dark:bg-navidark-800 border-r border-zinc-100 dark:border-navidark-400 p-2 flex flex-col gap-1 shrink-0">
+          <div className="w-36 bg-zinc-50 dark:bg-navidark-800 border-r border-zinc-100 dark:border-navidark-400 p-2 flex flex-col gap-1 shrink-0 overflow-y-auto custom-scrollbar">
             <TabButton
               active={activeTab === "general"}
               onClick={() => setActiveTab("general")}
