@@ -177,12 +177,12 @@ export function WaypointEditor({
               if (type === "arriving") {
                 return {
                   ...w,
-                  arrivingNarration: (w.arrivingNarration || "") + chunk,
+                  arrivingNarration: chunk,
                 };
               } else {
                 return {
                   ...w,
-                  attractionNarration: (w.attractionNarration || "") + chunk,
+                  attractionNarration: chunk,
                 };
               }
             }),
@@ -190,6 +190,7 @@ export function WaypointEditor({
         },
         wp.lat,
         wp.lng,
+        wp.images || []
       );
     } catch (err: any) {
       console.error("Script generation failed:", err);
