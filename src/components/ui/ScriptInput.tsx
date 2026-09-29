@@ -69,57 +69,44 @@ export function ScriptInput({
     onGenerate(localPrompt, "gemma2", language);
   };
 
-  const extractPronunciation = (text: string): string => {
-    // Note: Half and full width parenthesis match
-    const regex =
+  /**
+   * Scans `text` for:
+   *   1. 漢字(kana) / 漢字（kana） annotations — extract reading + strip parens
+   *   2. Any standalone kanji group not already in the dictionary — add with empty reading
+   * Returns the cleaned text (annotation parens stripped).
+   */
+  const processKanjiAndDict = (text: string): string => {
+    const newDict = [...(settings.pronunciation_dictionary || [])];
+    let hasDictUpdate = false;
+
+    // Pass 1: explicit 漢字(よみ) annotations — extract reading + strip parens
+    const annotationRegex =
       /([\u4E00-\u9FAF\u3400-\u4DBF]+)[(（]([\u3040-\u309F\u30A0-\u30FF]*)[)）]/g;
     let match;
-    let hasDictUpdate = false;
-    const newDict = [...(settings.pronunciation_dictionary || [])];
-
-    while ((match = regex.exec(text)) !== null) {
+    while ((match = annotationRegex.exec(text)) !== null) {
       const kanji = match[1];
       const kana = match[2];
-
-      const exists = newDict.find((entry) => entry.word === kanji);
+      const exists = newDict.find((e) => e.word === kanji);
       if (exists) {
-        exists.reading = kana;
+        if (kana) exists.reading = kana;
       } else {
         newDict.push({ word: kanji, reading: kana });
       }
       hasDictUpdate = true;
     }
 
-    if (hasDictUpdate) {
-      updateSettings({ pronunciation_dictionary: newDict });
-      setIsDirty(true);
-      return text.replace(
-        /([\u4E00-\u9FAF\u3400-\u4DBF]+)[(（][\u3040-\u309F\u30A0-\u30FF]*[)）]/g,
-        "$1",
-      );
-    }
-    return text;
-  };
+    // Strip the (furigana) annotations from the saved text
+    const cleaned = text.replace(
+      /([\u4E00-\u9FAF\u3400-\u4DBF]+)[(（][\u3040-\u309F\u30A0-\u30FF]*[)）]/g,
+      "$1",
+    );
 
-  // Extract on AI generation completion
-  useEffect(() => {
-    if (!isGenerating && value !== localPrompt) {
-      const cleaned = extractPronunciation(value);
-      if (cleaned !== value) {
-        onChange(cleaned);
-      }
-    }
-  }, [isGenerating]);
-
-  const handleScanKanji = () => {
-    const kanjiRegex = /([\u4E00-\u9FAF\u3400-\u4DBF]+)/g;
-    let match;
-    let hasDictUpdate = false;
-    const newDict = [...(settings.pronunciation_dictionary || [])];
-
-    while ((match = kanjiRegex.exec(localPrompt)) !== null) {
+    // Pass 2: auto-detect every standalone kanji group, add to dict with empty reading
+    // if not already present (user fills readings in the Pronunciation tab)
+    const kanjiOnlyRegex = /([\u4E00-\u9FAF\u3400-\u4DBF]+)/g;
+    while ((match = kanjiOnlyRegex.exec(cleaned)) !== null) {
       const kanji = match[1];
-      const exists = newDict.find((entry) => entry.word === kanji);
+      const exists = newDict.find((e) => e.word === kanji);
       if (!exists) {
         newDict.push({ word: kanji, reading: "" });
         hasDictUpdate = true;
@@ -130,13 +117,30 @@ export function ScriptInput({
       updateSettings({ pronunciation_dictionary: newDict });
       setIsDirty(true);
     }
-    // Return focus to textarea
+
+    return cleaned;
+  };
+
+  // Auto-scan when AI generation finishes
+  useEffect(() => {
+    if (!isGenerating && value) {
+      const cleaned = processKanjiAndDict(value);
+      if (cleaned !== value) {
+        onChange(cleaned);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isGenerating]);
+
+  const handleScanKanji = () => {
+    // Manual scan button: same auto-scan logic run immediately on current local text
+    processKanjiAndDict(localPrompt);
     textareaRef.current?.focus();
   };
 
   const handleSaveClick = (e: React.MouseEvent) => {
     e.preventDefault();
-    const cleaned = extractPronunciation(localPrompt);
+    const cleaned = processKanjiAndDict(localPrompt);
     onChange(cleaned);
     setLocalPrompt(cleaned);
   };
