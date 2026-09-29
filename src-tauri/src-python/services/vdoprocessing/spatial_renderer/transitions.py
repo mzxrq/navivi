@@ -13,6 +13,10 @@ from services import tuning
 
 from .base import logger
 
+# The ending highlight's final hold stretches for leftover narration (see
+# _render_ending_highlight's remaining_audio_seconds), but never past this.
+_MAX_ENDING_HIGHLIGHT_HOLD_SECONDS = 15.0
+
 
 class _TransitionMixin:
     # Divisor/floor used to size _blur_out's max Gaussian kernel radius
@@ -123,6 +127,9 @@ class _TransitionMixin:
         the returned outro_hold_sec covers only the summary card's own hold
         on top of the fully-revealed recap."""
         outro_hold_sec = 0.0
+        outro_frame = None
+        final_frame = None
+        hold_frames = 0
 
         if stop_popup:
             # Clean plate (see pre_popup_frame's own comment above) rather
@@ -150,6 +157,7 @@ class _TransitionMixin:
             total_freeze = float(
                 stop_popup["data"].get("freeze_seconds", self._DEFAULT_FREEZE_SECONDS)
             )
+            hold_frames = max(0, int(total_freeze * fps))
 
             if all_recap_popups:
                 laid_out = self._layout_recap_cards(
@@ -157,41 +165,35 @@ class _TransitionMixin:
                     reserved_boxes=reserved_boxes,
                     route_obstacles=route_obstacle_arr,
                 )
-                # Every waypoint's card revealed together, in one fade from
-                # the clean map — not a few at a time in route-order groups
-                # (the previous behavior here).
-                fade_frames = max(1, int(tuning.RECAP_GROUP_FADE_SECONDS * fps))
-                hold_frames = max(0, int(total_freeze * fps))
-
                 final_frame = self._render_recap_frame(
                     outro_frame, active_popups, group_popups=laid_out
                 )
-                for i in range(fade_frames):
-                    alpha = (i + 1) / fade_frames
-                    video.write(
-                        cv2.addWeighted(final_frame, alpha, outro_frame, 1 - alpha, 0)
-                    )
-                for _ in range(max(0, hold_frames - fade_frames)):
-                    video.write(final_frame)
-
-                self.last_frame = final_frame
             else:
-                self.last_frame = outro_frame
+                final_frame = outro_frame
 
+        # The summary card is composited onto the SAME target frame the
+        # recap cards fade into, and both cross-fade in together below —
+        # it used to fade in on its own, after the recap cards had already
+        # settled and held, which read as two separate reveals.
         if summary_card is not None:
-            fade_frames = max(1, int(self.config.get("summary_fade", 0.5) * fps))
-            for frame_idx in range(fade_frames):
-                video.write(
-                    self.graphics.composite_card_on_frame(
-                        self.last_frame, summary_card, alpha=(frame_idx + 1) / fade_frames
-                    )
-                )
-            self.last_frame = self.graphics.composite_card_on_frame(
-                self.last_frame, summary_card, alpha=1.0
-            )
+            base = final_frame if final_frame is not None else self.last_frame
+            final_frame = self.graphics.composite_card_on_frame(base, summary_card, alpha=1.0)
             outro_hold_sec = max(
                 outro_hold_sec, float(self.config.get("summary_hold", 4.0))
             )
+
+        if final_frame is not None:
+            source = outro_frame if outro_frame is not None else self.last_frame
+            fade_sec = max(
+                tuning.RECAP_GROUP_FADE_SECONDS, float(self.config.get("summary_fade", 0.5))
+            )
+            fade_frames = max(1, int(fade_sec * fps))
+            for i in range(fade_frames):
+                alpha = (i + 1) / fade_frames
+                video.write(cv2.addWeighted(final_frame, alpha, source, 1 - alpha, 0))
+            for _ in range(max(0, hold_frames - fade_frames)):
+                video.write(final_frame)
+            self.last_frame = final_frame
 
         return outro_hold_sec
 
@@ -342,6 +344,7 @@ class _TransitionMixin:
         start_popup: Optional[Dict] = None,
         clean_map_frame: Optional[np.ndarray] = None,
         bounding_box: Optional[Dict[str, float]] = None,
+        remaining_audio_seconds: Optional[float] = None,
     ) -> bool:
         """End-of-video highlight: a hard cut (no transition) from the
         recap straight to a freshly fetched, genuinely higher-zoom map
@@ -382,7 +385,14 @@ class _TransitionMixin:
         trailing pause. Returns False otherwise (pip hold, or this highlight
         didn't run at all — no point to zoom to, or the image fetch
         failed — never worth losing an otherwise-finished render over), in
-        which case the caller's normal trailing pause still applies."""
+        which case the caller's normal trailing pause still applies.
+
+        `remaining_audio_seconds`, when given, is how much narration is
+        still left to play once this highlight starts — its own final hold
+        stretches to cover that (never shrinks below the tuning default),
+        so the highlight stays up until the closing line (distance/stats)
+        finishes, rather than the caller's own fixed floor cutting it off
+        early with narration still playing over a frozen last frame."""
         job_config = self._get_job_config() or {}
         is_start = bool(job_config.get("start_point"))
         zoom_point = job_config.get("start_point") or job_config.get("end_point") or {}
@@ -448,8 +458,13 @@ class _TransitionMixin:
         )
         is_fullscreen = False  # the overview always shows the small pip card, whatever image_display says
         # The pip picture is held only briefly (tuning), not the waypoint's
-        # own freeze_seconds: it is the last beat of the video.
+        # own freeze_seconds — unless there's still narration left once the
+        # lead-in + wait have played, in which case the hold stretches to
+        # cover it (capped, so a bad audio-length reading can't run away).
         highlight_hold_sec = float(tuning.ENDING_HIGHLIGHT_PIP_HOLD_SECONDS)
+        if remaining_audio_seconds is not None:
+            needed = remaining_audio_seconds - self._BIG_MAP_ZOOM_LEAD_SECONDS - self._ENDING_HIGHLIGHT_WAIT_SECONDS
+            highlight_hold_sec = max(highlight_hold_sec, min(needed, _MAX_ENDING_HIGHLIGHT_HOLD_SECONDS))
 
         highlight_bg = None
         highlight_extent = None
