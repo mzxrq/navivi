@@ -76,6 +76,7 @@ export function WaypointEditor({
   );
   const [activeTab, setActiveTab] = useState<"scripts" | "images">("scripts");
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [thoughtProcess, setThoughtProcess] = useState("");
 
   useEffect(() => {
     setIsCollapsed(false);
@@ -147,6 +148,7 @@ export function WaypointEditor({
     if (type === "attraction" && !showAttraction) setShowAttraction(true);
 
     try {
+      setThoughtProcess("");
       updateWaypoint(wp.id, { isGeneratingScript: true });
 
       const hasEngine = await checkModelExists(engine);
@@ -591,6 +593,7 @@ export function WaypointEditor({
                       {showArriving && (
                         <div className="pl-6">
                           <ScriptInput
+                            thoughtProcess={thoughtProcess}
                             value={wp.arrivingNarration || ""}
                             onChange={(v) =>
                               updateWaypoint(wp.id, { arrivingNarration: v })
@@ -637,6 +640,7 @@ export function WaypointEditor({
                           {showAttraction && (
                             <div className="pl-6">
                               <ScriptInput
+                                thoughtProcess={thoughtProcess}
                                 value={wp.attractionNarration || ""}
                                 onChange={(v) =>
                                   updateWaypoint(wp.id, {

@@ -128,8 +128,11 @@ async function fetchKeylessWebContext(searchTerms: string): Promise<string> {
 }
 
 // ✨ NEW: Unified Streaming Engine
-async function streamLLM(prompt: string, engine: string, onChunk: (text: string) => void, signal?: AbortSignal, images?: string[]) {
+async function streamLLM(prompt: string, engine: string, onChunk: (text: string) => void, signal?: AbortSignal, images?: string[], onThought?: (text: string) => void) {
     const payload: any = { model: engine, prompt, stream: true };
+    if (engine.toLowerCase().includes("gemma-4") || engine.toLowerCase().includes("gemma4")) {
+        payload.system = "<|think|>";
+    }
     if (images && images.length > 0) {
         payload.images = images;
     }
@@ -146,7 +149,6 @@ async function streamLLM(prompt: string, engine: string, onChunk: (text: string)
     const reader = res.body.getReader();
     const decoder = new TextDecoder("utf-8");
     let fullText = "";
-    let lastCleanLength = 0;
     let buffer = "";
     while (true) {
         const { done, value } = await reader.read();
@@ -163,16 +165,22 @@ async function streamLLM(prompt: string, engine: string, onChunk: (text: string)
                     if (parsed.response) {
                         fullText += parsed.response;
                         
+                        let thoughtBlocks = [];
+                        const matches = fullText.matchAll(/<(?:think|\|channel>thought|thought)>([\s\S]*?)(?:<\/(?:think|thought)>|<channel\|>|$)/g);
+                        for (const m of matches) {
+                            thoughtBlocks.push(m[1]);
+                        }
+                        const allThoughts = thoughtBlocks.join("\n");
+                        
                         let currentClean = fullText;
                         currentClean = currentClean.replace(/<think>[\s\S]*?(<\/think>|$)/g, "");
                         currentClean = currentClean.replace(/<\|channel>thought[\s\S]*?(<channel\|>|$)/g, "");
                         currentClean = currentClean.replace(/<\|think\|>[\s\S]*?(<turn\|>|$)/g, "");
                         currentClean = currentClean.replace(/<thought>[\s\S]*?(<\/thought>|$)/g, "");
 
-                        if (currentClean.length > lastCleanLength) {
-                            const chunkToEmit = currentClean.substring(lastCleanLength);
-                            lastCleanLength = currentClean.length;
-                            onChunk(chunkToEmit);
+                        onChunk(currentClean);
+                        if (onThought && allThoughts) {
+                            onThought(allThoughts);
                         }
                     }
                 } catch (e) {
@@ -216,7 +224,8 @@ export async function generateWaypointScriptStream(
     onChunk: (text: string) => void,
     lat: number = 0,
     lng: number = 0,
-    imagePaths: string[] = []
+    imagePaths: string[] = [],
+    onThought?: (text: string) => void
 ): Promise<void> {
     let contextStr = "";
 
@@ -251,7 +260,7 @@ ${contextStr}
         }
     }
 
-    await streamLLM(prompt, engine, onChunk, undefined, base64Images);
+    await streamLLM(prompt, engine, onChunk, undefined, base64Images, onThought);
 }
 
 export async function extractLocationsFromDocument(

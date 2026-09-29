@@ -18,6 +18,7 @@ interface ScriptInputProps {
   isGenerating: boolean;
   onCancel?: () => void;
   aiEnabled?: boolean;
+  thoughtProcess?: string;
 }
 
 export function ScriptInput({
@@ -27,6 +28,7 @@ export function ScriptInput({
   isGenerating,
   onCancel,
   aiEnabled = false,
+  thoughtProcess = "",
 }: ScriptInputProps) {
   const [localPrompt, setLocalPrompt] = useState(value);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
@@ -70,10 +72,10 @@ export function ScriptInput({
 
         <div className="flex items-center gap-2">
           {aiEnabled && isGenerating && (
-            <div className="flex items-center gap-1.5 px-2 text-navi-500 dark:text-navi-400 animate-fade-in">
-              <Sparkles className="w-3.5 h-3.5 animate-pulse" />
-              <span className="text-[10px] font-bold uppercase tracking-wider animate-pulse min-w-[120px] text-right">
-                {getThinkingSteps()[currentStepIndex] || getThinkingSteps()[0]}
+            <div className="flex items-center gap-1.5 px-2 text-navi-500 dark:text-navi-400 animate-fade-in overflow-hidden whitespace-nowrap max-w-[200px]">
+              <Sparkles className="w-3.5 h-3.5 animate-pulse shrink-0" />
+              <span className="text-[10px] font-bold uppercase tracking-wider animate-pulse truncate" title={thoughtProcess}>
+                {thoughtProcess ? thoughtProcess.split("\n").filter(l => l.trim()).pop() : (getThinkingSteps()[currentStepIndex] || getThinkingSteps()[0])}
               </span>
             </div>
           )}
