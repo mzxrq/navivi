@@ -27,7 +27,7 @@ export interface Waypoint {
   skipAssetGeneration?: boolean;
   isStub?: boolean;
   pauseAtWaypoint?: boolean;
-  isGeneratingScript?: boolean;
+  generatingScriptType?: "arriving" | "attraction" | null;
   markers?: WaypointTimelineMarker[];
   isStopBy?: boolean;
   drawStyle?: "linear" | "spline";

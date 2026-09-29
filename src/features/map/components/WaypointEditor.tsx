@@ -149,7 +149,7 @@ export function WaypointEditor({
 
     try {
       setThoughtProcess("");
-      updateWaypoint(wp.id, { isGeneratingScript: true });
+      updateWaypoint(wp.id, { generatingScriptType: type });
 
       const hasEngine = await checkModelExists(engine);
       if (!hasEngine) {
@@ -157,7 +157,7 @@ export function WaypointEditor({
           t`Model "${engine}" not found. Please install it from the App Settings`,
           "error",
         );
-        updateWaypoint(wp.id, { isGeneratingScript: false });
+        updateWaypoint(wp.id, { generatingScriptType: null });
         return;
       }
 
@@ -198,7 +198,7 @@ export function WaypointEditor({
       console.error("Script generation failed:", err);
       showToast(err.message || t`Failed to generate script`, "error");
     } finally {
-      updateWaypoint(wp.id, { isGeneratingScript: false });
+      updateWaypoint(wp.id, { generatingScriptType: null });
     }
   };
 
@@ -598,10 +598,10 @@ export function WaypointEditor({
                             onChange={(v) =>
                               updateWaypoint(wp.id, { arrivingNarration: v })
                             }
-                            isGenerating={wp.isGeneratingScript || false}
+                            isGenerating={wp.generatingScriptType === "arriving"}
                             onCancel={() => {
                               updateWaypoint(wp.id, {
-                                isGeneratingScript: false,
+                                generatingScriptType: null,
                               });
                               invoke("cancel_python_blueprint").catch(
                                 console.error,
@@ -647,10 +647,10 @@ export function WaypointEditor({
                                     attractionNarration: v,
                                   })
                                 }
-                                isGenerating={wp.isGeneratingScript || false}
+                                isGenerating={wp.generatingScriptType === "attraction"}
                                 onCancel={() => {
                                   updateWaypoint(wp.id, {
-                                    isGeneratingScript: false,
+                                    generatingScriptType: null,
                                   });
                                   invoke("cancel_python_blueprint").catch(
                                     console.error,
