@@ -369,6 +369,8 @@ class IrodoriTTSClient:
                     **os.environ,
                     "IRODORI_MODEL_DEVICE": device,
                     "IRODORI_CODEC_DEVICE": device,
+                    "IRODORI_HF_CHECKPOINT": "Aratako/Irodori-TTS-v4.1-Small-Quantized/int8-weight-only",
+                    "IRODORI_MODEL_PRECISION": "bf16",
                 }
                 logger.info("Irodori TTS server device: %s.", device)
                 IrodoriTTSClient._server_process = subprocess.Popen(
