@@ -49,9 +49,22 @@ def test_long_text_is_spoken_in_chunks_and_joined(tmp_path, monkeypatch):
         return _wav_bytes(tmp_path / "src.wav", 1.0)
 
     monkeypatch.setattr(client, "call_api", fake_call)
-    text = "これは長い文章です。" * 12  # 108 characters
+    text = "これは長い文章です。" * 12  # 12 identical 10-char sentences, 120 characters
     out = asyncio.run(client.generate_speech(text, "long.wav"))
+    # Sentences packed up to TTS_MAX_CHUNK_CHARS per request (not one
+    # request per sentence - see split_text_for_tts): 6 sentences (60
+    # chars) fit exactly per chunk, so 12 sentences make 2 chunks/requests
+    # - and fake_call returns a fixed 1.0s clip per REQUEST regardless of
+    # how much text it was given, so 2 requests = 2.0s of "speech". A short
+    # randomized silence is inserted between chunks (not between every
+    # sentence within one), so the joined duration is that 2.0s plus 1 gap
+    # somewhere in tuning's [MIN, MAX] range.
     assert len(sent) == 2 and "".join(sent) == text
+    from services import tuning
+    min_total = 2.0 + 1 * tuning.TTS_SENTENCE_GAP_MIN_SECONDS
+    max_total = 2.0 + 1 * tuning.TTS_SENTENCE_GAP_MAX_SECONDS
     with wave.open(out, "rb") as wf:
-        assert abs(wf.getnframes() / wf.getframerate() - 2.0) < 0.05
+        duration = wf.getnframes() / wf.getframerate()
+        assert min_total - 0.05 <= duration <= max_total + 0.05
     assert not list(tmp_path.glob("*.part*.wav"))
+    assert not list(tmp_path.glob("*.gap*.wav"))

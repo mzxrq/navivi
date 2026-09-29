@@ -221,8 +221,8 @@ async def generate_overview_audio(
     cue_seconds = cue_times(
         cues, clean, analysis.get("duration_seconds", 0.0), analysis.get("pauses", [])
     ) if cues else {}
-    # The overview is sized first (60-90s) and its script to it: say when the
-    # real voice misses that by more than the 3s the video can absorb.
+    # The overview is sized first (60-120s) and its script to it: say when
+    # the real voice misses that by more than the 3s the video can absorb.
     from services.localization.overview_script import (
         in_overview_range, overview_target_seconds, visible_waypoints,
     )
@@ -230,7 +230,7 @@ async def generate_overview_audio(
     target = overview_target_seconds(project_config, len(visible_waypoints(project_config)))
     spoken = analysis.get("duration_seconds", 0.0)
     (logger.info if in_overview_range(spoken) else logger.warning)(
-        "Overview narration is %.1fs (aimed at %.0fs; the overview must be 60-90s).",
+        "Overview narration is %.1fs (aimed at %.0fs; the overview must be 60-120s).",
         spoken, target,
     )
     return {

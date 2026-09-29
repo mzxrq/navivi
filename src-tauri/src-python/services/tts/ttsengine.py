@@ -9,6 +9,7 @@ Extracted from tts.py to improve modularity.
 from __future__ import annotations
 
 import asyncio
+import random
 import re
 import httpx
 import sys
@@ -504,6 +505,16 @@ class IrodoriTTSClient:
 
         # A long text in one request overloads the GPU (see tuning.TTS_DEVICE):
         # speak it in short chunks, one request at a time, and join them.
+        # Packed (split_text_for_tts groups whole sentences up to
+        # TTS_MAX_CHUNK_CHARS per request) rather than one request per
+        # sentence (split_sentences_for_tts) - CPU inference (tuning's
+        # current TTS_DEVICE default) makes many small sequential requests
+        # far slower than a few packed ones. The gap inserted below still
+        # lands at every CHUNK boundary (so a multi-sentence chunk plays
+        # with no pause between ITS OWN sentences, only after the chunk as
+        # a whole) - less granular than a pause after every single
+        # sentence, but still nowhere near as rushed/robotic as one
+        # continuous zero-gap synthesis of the whole text.
         chunks = split_text_for_tts(text, tuning.TTS_MAX_CHUNK_CHARS)
         if len(chunks) <= 1:
             audio_content = await self.call_api(text)
@@ -511,25 +522,73 @@ class IrodoriTTSClient:
                 f.write(audio_content)
             return str(file_path)
 
-        logger.info("TTS text of %d characters split into %d chunks.", len(text), len(chunks))
-        parts: List[Path] = []
+        logger.info("TTS text of %d characters split into %d chunk(s).", len(text), len(chunks))
+        processor = AudioProcessor(output_dir=self.output_dir)
+        parts: List[str] = []
+        gaps: List[str] = []
         try:
+            sample_rate: Optional[int] = None
+            channels: Optional[int] = None
             for i, chunk in enumerate(chunks):
                 part = file_path.with_name(f"{file_path.stem}.part{i:02d}.wav")
                 with open(part, "wb") as f:
                     f.write(await self.call_api(chunk))
-                parts.append(part)
-            AudioProcessor(output_dir=self.output_dir).concatenate_files(
-                [str(p) for p in parts], str(file_path)
-            )
+                parts.append(str(part))
+                if sample_rate is None:  # once is enough, every part shares the server's format
+                    sample_rate, channels = FFmpegManager.get_audio_format(str(part))
+
+            # Interleave a short, randomized pause after every sentence but
+            # the last (nothing to breathe before at the very end).
+            interleaved: List[str] = []
+            for i, part in enumerate(parts):
+                interleaved.append(part)
+                if i < len(parts) - 1:
+                    gap_seconds = random.uniform(
+                        tuning.TTS_SENTENCE_GAP_MIN_SECONDS, tuning.TTS_SENTENCE_GAP_MAX_SECONDS
+                    )
+                    gap_path = str(file_path.with_name(f"{file_path.stem}.gap{i:02d}.wav"))
+                    processor.make_silent_audio(
+                        gap_seconds, gap_path,
+                        sample_rate=sample_rate or 44100, channels=channels or 1,
+                        as_wav=True,
+                    )
+                    gaps.append(gap_path)
+                    interleaved.append(gap_path)
+
+            processor.concatenate_files(interleaved, str(file_path))
         finally:
-            for part in parts:
-                part.unlink(missing_ok=True)
+            for p in parts + gaps:
+                Path(p).unlink(missing_ok=True)
         return str(file_path)
 
 
 _SENTENCE_END = re.compile(r"(?<=[。！？!?\n])")
 _CLAUSE_END = re.compile(r"(?<=[、，,])")
+
+
+def _cut_to_chars(piece: str, max_chars: int) -> List[str]:
+    """A single sentence (or any piece), forced under `max_chars`: cut at its
+    commas, and only as a last resort in the middle of a clause. Shared by
+    split_text_for_tts (which then re-packs pieces up to max_chars) and
+    split_sentences_for_tts (which doesn't re-pack - see its own docstring
+    for why)."""
+    if len(piece) <= max_chars:
+        return [piece]
+    out, cur = [], ""
+    for clause in (c for c in _CLAUSE_END.split(piece) if c):
+        while len(clause) > max_chars:  # no comma to cut at
+            if cur:
+                out.append(cur)
+                cur = ""
+            out.append(clause[:max_chars])
+            clause = clause[max_chars:]
+        if cur and len(cur) + len(clause) > max_chars:
+            out.append(cur)
+            cur = ""
+        cur += clause
+    if cur:
+        out.append(cur)
+    return out
 
 
 def split_text_for_tts(text: str, max_chars: int) -> List[str]:
@@ -541,28 +600,9 @@ def split_text_for_tts(text: str, max_chars: int) -> List[str]:
     if len(text) <= max_chars:
         return [text] if text else []
 
-    def cut(piece: str) -> List[str]:
-        if len(piece) <= max_chars:
-            return [piece]
-        out, cur = [], ""
-        for clause in (c for c in _CLAUSE_END.split(piece) if c):
-            while len(clause) > max_chars:  # no comma to cut at
-                if cur:
-                    out.append(cur)
-                    cur = ""
-                out.append(clause[:max_chars])
-                clause = clause[max_chars:]
-            if cur and len(cur) + len(clause) > max_chars:
-                out.append(cur)
-                cur = ""
-            cur += clause
-        if cur:
-            out.append(cur)
-        return out
-
     chunks, cur = [], ""
     for sentence in (s for s in _SENTENCE_END.split(text) if s):
-        for piece in cut(sentence):
+        for piece in _cut_to_chars(sentence, max_chars):
             if cur and len(cur) + len(piece) > max_chars:
                 chunks.append(cur)
                 cur = ""
@@ -570,6 +610,29 @@ def split_text_for_tts(text: str, max_chars: int) -> List[str]:
     if cur:
         chunks.append(cur)
     return chunks
+
+
+def split_sentences_for_tts(text: str, max_chars: int) -> List[str]:
+    """Splits `text` into ONE chunk per sentence - unlike split_text_for_tts,
+    never packs several short sentences into one chunk. Used by
+    generate_speech so every sentence becomes its own TTS request with a
+    short silence inserted after it (see tuning.TTS_SENTENCE_GAP_*_SECONDS):
+    concatenating whole-text-in-one-request audio (or even
+    split_text_for_tts's packed multi-sentence chunks) butt-joins sentences
+    with zero gap, which reads as rushed/robotic rather than naturally
+    spoken. A sentence longer than `max_chars` is still cut at its commas
+    (GPU-safety, same as split_text_for_tts) - it becomes several
+    consecutive chunks with no gap between them (they're one sentence, a
+    mid-sentence pause would sound wrong), only the boundary AFTER the full
+    sentence gets a gap."""
+    text = text or ""
+    if not text:
+        return []
+    return [
+        piece
+        for sentence in (s for s in _SENTENCE_END.split(text) if s)
+        for piece in _cut_to_chars(sentence, max_chars)
+    ]
 
 
 # [Core] AudioProcessor : Handles wave pause analysis, silence synthesis, and file concatenations.

@@ -46,17 +46,22 @@ MAX_LAST_STOP_SECONDS = 8.0
 SET_OFF_TEXT = "さあ、町へ出発しましょう。"
 MIN_SET_OFF_SECONDS = 2.5
 
-# Whether the overview describes each stop. Off: the overview only tells the
-# journey (intro, the way between stops, closing) and names a stop once, where
-# its pin appears - the description of a place is that waypoint's own
-# narration (played by its leg and attraction clip), and repeating it here made
-# the two say the same things and the place names come up over and over.
-# settings.overview_describe_stops turns the old per-stop descriptions back on.
-DESCRIBE_STOPS_DEFAULT = False
+# Whether the overview describes each stop. On (tuning.DEFAULT_OVERVIEW_DESCRIBE_STOPS):
+# every numbered stop gets its own short description pulled from its
+# attractionNarration/arrivingNarration (see _facts), not just a name where
+# its pin appears - a stop is otherwise a silent pause between "heading to
+# X" and "leaving X", with nothing said about X itself at the map-overview
+# level (its OWN narration, played later by its leg/attraction clip, is a
+# separate pass over the same place). settings.overview_describe_stops
+# overrides per project.
 
 
 def describes_stops(project: dict) -> bool:
-    return bool(project.get("settings", {}).get("overview_describe_stops", DESCRIBE_STOPS_DEFAULT))
+    from services import tuning
+
+    return bool(project.get("settings", {}).get(
+        "overview_describe_stops", tuning.DEFAULT_OVERVIEW_DESCRIBE_STOPS
+    ))
 
 
 Generate = Callable[[str, int], Optional[str]]  # (prompt, max_chars) -> text
@@ -99,6 +104,22 @@ def _fit_sentences(text: str, limit: int) -> str:
             return ""
         out += sentence
     return out
+
+
+# Rotated instead of a single fixed phrase, so a run with several stops
+# whose own facts didn't pan out (_looks_ok rejected them) doesn't say
+# "到着しました" at every one of them - picked by waypoint number, so the
+# same stop always falls back to the same phrasing across reruns.
+_ARRIVAL_FALLBACK_PHRASES = [
+    "{label}に着きました。",
+    "ここが{label}です。",
+    "{label}へやってきました。",
+    "続いて{label}です。",
+]
+
+
+def _arrival_fallback(label: str, n: int) -> str:
+    return _ARRIVAL_FALLBACK_PHRASES[n % len(_ARRIVAL_FALLBACK_PHRASES)].format(label=label)
 
 
 def _template(labels: List[str], kind: str = "") -> str:
@@ -259,10 +280,10 @@ DESCRIBE_CHARS = 80
 TRANSITION_CHARS = 50
 
 # The overview's length comes first; the script is sized to it. Default: 20s
-# plus 7s per stop, kept within 60-90s (settings.overview_target_seconds
+# plus 7s per stop, kept within 60-120s (settings.overview_target_seconds
 # overrides). The voice is then within AUDIO_MATCH_TOLERANCE_SECONDS of it.
 TARGET_MIN_SECONDS = 60.0
-TARGET_MAX_SECONDS = 90.0
+TARGET_MAX_SECONDS = 120.0
 TARGET_BASE_SECONDS = 20.0
 TARGET_SECONDS_PER_STOP = 7.0
 # Shares of the target: the intro plays over the intro card; a way line is
@@ -279,8 +300,14 @@ DESCRIBE_MAX_SECONDS = 15.0
 # a leg faster, tuning.OVERVIEW_MIN_LEG_SECONDS), so a way line past several
 # stops is at least this long per leg.
 WAY_SECONDS_PER_LEG = 2.0
-# A highlight's description: two or three sentences.
-DESCRIBE_TARGET_SECONDS = 9.0
+# A highlight's description: one short sentence/clause, not two or three -
+# every numbered stop needs a share of the 60-90s target (see plan_budget),
+# so a long per-stop description was crowding several stops out of the
+# budget entirely (unable to fit their own {n} cue's trip+description
+# within target at all - see plan's greedy stops.add loop). Short keeps
+# every stop affordable; DESCRIBE_MAX_SECONDS still lets a stop with real
+# spare time left over say more.
+DESCRIBE_TARGET_SECONDS = 4.0
 _MIN_WAY_CHARS = 6
 
 # A sentence claiming a time or distance: the way lines tell those (from the
@@ -347,7 +374,20 @@ def _pieces_text(journey: dict) -> str:
     return "、".join(f"{names.get(p['mode'], p['mode'])}{p['minutes']}分" for p in journey["pieces"])
 
 
-def _transition_prompt(journey: dict, previous: str, limit: int) -> str:
+# A model's way0 (the transition right after the opening greeting) routinely
+# re-greets/re-welcomes despite _transition_prompt's first=True instruction
+# not to - this catches it so `ask()` falls back to the safe template text
+# instead of shipping a script with the welcome line said twice in a row.
+_GREETING = re.compile(r"こんにちは|ようこそ|はじめまして|皆さん|旅へ出|旅に出かけ")
+
+# _transition_prompt / _describe_prompt both ask the model not to write this,
+# but small local models routinely ignore a single negative instruction (see
+# _GREETING above) - checked here too so a slip falls back to
+# _arrival_fallback's rotation instead of shipping the phrase anyway.
+_ARRIVED_PHRASE = re.compile(r"到着しました")
+
+
+def _transition_prompt(journey: dict, previous: str, limit: int, first: bool = False) -> str:
     lines = [
         f"■ 出発: {journey['from']}",
         f"■ 到着: {journey['to']}" + ("（出発地へ戻る）" if journey["is_return"] else ""),
@@ -356,9 +396,16 @@ def _transition_prompt(journey: dict, previous: str, limit: int) -> str:
     ]
     if journey.get("via"):
         lines.append(f"■ 立ち寄る場所: {'、'.join(journey['via'])}")
-    seen = list(journey.get("passes", [])) + [n for _, names in journey.get("via_batches", []) for n in names]
+    # Each via_batches name's own short fact (route_brief._short_fact, from
+    # its attractionNarration), when it has one - given to the model too,
+    # not just the template fallback (_transition_prompt's caller), so a
+    # model-written line can also say what one of these actually IS instead
+    # of just listing names it has no context for.
+    via_facts = {n: f for _, names, facts in journey.get("via_batches", []) for n, f in zip(names, facts or [])}
+    seen = list(journey.get("passes", [])) + [n for _, names, *_ in journey.get("via_batches", []) for n in names]
     if seen:
-        lines.append(f"■ 途中に見える場所: {'、'.join(seen)}")
+        described = "、".join(f"{n}（{via_facts[n]}）" if via_facts.get(n) else n for n in seen)
+        lines.append(f"■ 途中に見える場所: {described}")
     if journey["winding"]:
         lines.append("■ 道: 曲がりくねった道")
     return (
@@ -368,6 +415,13 @@ def _transition_prompt(journey: dict, previous: str, limit: int) -> str:
         + (f"■ 直前のナレーション: {previous}\n" if previous else "")
         + f"■ 条件: 日本語の話し言葉で1〜2文、{limit}文字以内。上の情報にない地名・数字・方角は書かない。"
           "到着地の名前を必ず含める。記号・括弧・番号・英語は使わず、本文のみを出力。"
+          "「到着しました」は使わず、別の言い回しにする。"
+        # This is the FIRST transition, right after the opening greeting
+        # (■ 直前のナレーション above IS that greeting) — without this the
+        # model routinely re-greets/re-welcomes here too, duplicating the
+        # intro word-for-word right at the top of the script.
+        + ("挨拶・歓迎の言葉（「こんにちは」「ようこそ」など）は直前のナレーションで済んでいるので、"
+           "ここでは繰り返さず、道案内から始める。" if first else "")
     )
 
 
@@ -378,6 +432,7 @@ def _describe_prompt(label: str, facts: str, previous: str, limit: int) -> str:
         + (f"■ 直前のナレーション: {previous}\n" if previous else "")
         + f"■ 条件: 日本語の話し言葉で2〜3文、{limit}文字以内。参考情報にない事実は書かない。"
           "場所の名前を必ず含める。道順や移動の話はしない。記号・括弧・番号・英語は使わず、本文のみを出力。"
+          "「到着しました」は使わず、別の言い回しで場所を紹介する。"
     )
 
 
@@ -508,7 +563,7 @@ def plan_budget(project: dict, brief: dict) -> dict:
             ways = [w + (use * r / total_room if r > 0 else 0.0) for w, r in zip(ways, room)]
             spare -= use
     if spare > 0:
-        # Still short of 60-90s (few stops, little to say): the overview's
+        # Still short of 60-120s (few stops, little to say): the overview's
         # length is the rule, so the descriptions (else the way lines) take it.
         if flexible:
             for n in flexible:
@@ -527,8 +582,8 @@ def plan_budget(project: dict, brief: dict) -> dict:
         "ways": ways,
         "describe": describe,
         "estimated": estimated,
-        # the overview stays within 60-90s (the video then follows the voice
-        # to within AUDIO_MATCH_TOLERANCE_SECONDS)
+        # the overview stays within 60-120s (the video then follows the
+        # voice to within AUDIO_MATCH_TOLERANCE_SECONDS)
         "fits": in_overview_range(estimated),
     }
 
@@ -601,17 +656,57 @@ def build_tour_script(
             told = "まずは" + told[len("次は"):]  # setting off: nothing came before
         # The map freezes on the way to show stop-by cards: tell what they are
         # while they are up, so the voice does not run ahead of the walker.
-        for host, names in trip.get("via_batches", []):
-            line = f"{host}のあたりでは、{'や'.join(names[:3])}が見えてきます。"
-            if len(told) + len(line) <= way_chars * 1.15:
-                # after the setting-off sentence ("まずは西へ。"), before the arrival
-                head, dot, rest = told.partition("。")
-                told = head + dot + line + rest if rest else told + line
+        for host, names, facts in trip.get("via_batches", []):
+            # Every stop-by in the group named, never truncated to the
+            # first 3: a waypoint dropped here was never named ANYWHERE in
+            # the script (it has no {n} cue of its own - this mention is
+            # its only chance). Same reasoning as route_brief.transition_
+            # texts's via/passes uncapping.
+            shown = names
+            shown_fact = (facts[0] if facts else "").strip()
+            # Lead with the first one's own short fact (from whatever the
+            # user already wrote for it), when there is one - a bare list
+            # of names read out is easy to tune out; naming what even ONE
+            # of them actually is gives the voice something to say besides
+            # "these places exist". The rest, if any, still just get named.
+            if shown_fact:
+                rest = "、".join(shown[1:])
+                line = f"{host}のあたりでは、{shown_fact}の{shown[0]}{'や' + rest if rest else ''}が見えてきます。"
+            else:
+                line = f"{host}のあたりでは、{'や'.join(shown)}が見えてきます。"
+            # Always inserted, even past the way segment's own character
+            # budget (unlike before) - a name silently dropped for staying
+            # under budget defeats guaranteeing every waypoint gets named;
+            # plan_budget's overall target absorbs the odd longer line via
+            # its own spare-time redistribution (see plan_budget's "spare"
+            # handling) rather than this dropping content outright.
+            head, dot, rest_told = told.partition("。")
+            told = head + dot + line + rest_told if rest_told else told + line
         way = ask(
-            f"way{i}", _transition_prompt(trip, previous, way_chars), way_chars,
+            f"way{i}", _transition_prompt(trip, previous, way_chars, first=(i == 0)), way_chars,
             lambda t, trip=trip, first=(i == 0), limit=way_chars: (
                 check_transition(t, trip, limit)
+                and not _ARRIVED_PHRASE.search(t)
                 and not (first and t.startswith(("次は", "次に", "続いて")))
+                # The intro (■ 直前のナレーション) already greeted the
+                # listener — reject a way0 that greets again, rather than
+                # ship a script that opens with the same "welcome" line
+                # twice in a row (see _transition_prompt's first=True note).
+                and not (first and _GREETING.search(t))
+                # The model was GIVEN these stop-by names+facts (■ 途中に見
+                # える場所, above) but is free-form otherwise, and routinely
+                # drops some or all of them — require EVERY one to guarantee
+                # the coverage promise ("every waypoint gets named") holds
+                # regardless of whether the model's own text or the `told`
+                # fallback (which the via_batches loop above always names
+                # every one of them into) ends up used. Also every "via"
+                # (a numbered waypoint skipped over, not its own stop) —
+                # same guarantee, same reasoning.
+                and all(
+                    _names_in(t, n)
+                    for _, names, *_ in trip.get("via_batches", []) for n in names
+                )
+                and all(_names_in(t, n) for n in trip.get("via", []))
             ),
             told,
         )
@@ -639,12 +734,13 @@ def build_tour_script(
         ).strip()
         fallback = _fill_sentences(about, describe_chars) if about else ""
         if not _looks_ok(fallback, describe_chars, over=1.6):
-            fallback = f"{label}に到着しました。"
+            fallback = _arrival_fallback(label, n)
         describe = ask(
             f"stop{n}", _describe_prompt(label, facts, previous, describe_chars), describe_chars,
             lambda t, label=label: (
                 _looks_ok(t, describe_chars, over=1.2) and _names_in(t, label)
                 and not _ROUTE_CLAIM.search(t) and not _MOVING_ON.search(t)
+                and not _ARRIVED_PHRASE.search(t)
             ),
             fallback,
         )

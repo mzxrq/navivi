@@ -397,6 +397,15 @@ DEFAULT_AUTO_OVERVIEW_CUES = True
 # .narration_cues.json; tags the user wrote win. Overridable per project via
 # job_config.json's settings.auto_narration_cues.
 DEFAULT_AUTO_NARRATION_CUES = True
+# Whether a numbered overview stop gets its own short description (pulled
+# from its attractionNarration/arrivingNarration, see overview_script.py's
+# _facts) while the walker is stopped there, the same way a passed-by
+# stop-by's own fact gets woven into the via_batches mention. Off used to
+# mean a numbered stop was named ("{n}...{go}") but never actually
+# described - just a silent pause between "heading to X" and "leaving X".
+# Overridable per project via job_config.json's
+# settings.overview_describe_stops.
+DEFAULT_OVERVIEW_DESCRIBE_STOPS = True
 # Every residential leg opens on a brief WIDE shot of the whole leg, then
 # zooms — a scale+crossfade between two separately-fetched static tiles,
 # not a continuous crop within one image — into the existing tight/close
@@ -587,10 +596,32 @@ POPUP_MIN_DISPLAY_SECONDS = 2.0
 # at the previous normal waypoint's stop (see overview_animation.py's
 # _play_stopby_batch). Per-card, not split across the group: a run of four
 # landmarks holds that stop for four times this, rather than flashing each
-# one by in a quarter of the time. Deliberately equal to
-# POPUP_MIN_DISPLAY_SECONDS — these cards are read at a glance and the
-# stop they extend is already a full stop.
-STOPBY_BATCH_SECONDS = 2.0
+# one by in a quarter of the time. Deliberately BELOW the general
+# POPUP_MIN_DISPLAY_SECONDS floor (2.0s) - the batch calls now pass
+# min_display_seconds=STOPBY_BATCH_SECONDS explicitly to _make_baked_popup
+# so this value actually takes effect instead of being clamped back up to
+# 2.0s. A quick pop-in/pop-out per card (rather than each one settling in
+# for a full 2s read) is the intended feel here - the cards are landmarks
+# merely passed, not stopped at; the narration only briefly names them
+# (overview_script.py's via_batches), so a snappy "these exist" beat reads
+# better than a leisurely one, and it keeps the cue-timing math (this
+# value is also what overview.py's _hold_frames/start_batch reserve) from
+# pushing later cued stops late to compensate for a long batch freeze.
+STOPBY_BATCH_SECONDS = 1.0
+# At most this many stop-bys in a group get their own held card (and count
+# toward the extra hold time reserved before the next cued stop — see
+# overview.py's _hold_frames/start_batch and route_brief.py's plan_budget).
+# The narration only ever names up to 3 of them ("や"-joined, capped at
+# names[:3] in overview_script.py's via_batches line) regardless of group
+# size, so a bigger group held card-by-card at STOPBY_BATCH_SECONDS each
+# made the video sit frozen well past when the voice had already moved on
+# (5 stop-bys = 10s held, for a single ~3s spoken clause) — the retiming
+# then had to shove every later cued stop's arrival back to compensate,
+# reading as "arrives late". Any stop-by beyond this cap still gets its pin
+# drawn (it WAS passed, the map should say so) but no card/extra hold time,
+# same fallback already used when there's no free screen space for a card
+# (see _play_stopby_batch).
+STOPBY_BATCH_MAX_HELD = 4
 # An overview waypoint card stays FULLY shown (after its fade-in, before its
 # fade-out) at least this long, even when the walker has already reached the
 # next waypoint: POPUP_MIN_DISPLAY_SECONDS counts the fades, which left a card
@@ -673,7 +704,7 @@ POPUP_FREEZE_SECONDS_MAX = 1.0
 # photo has already been on screen, growing, for most of a second before
 # this hold begins, and the clip hard-cuts the instant the hold ends, so a
 # full 2-3s freeze on a still image just stalls the cut.
-RESIDENTIAL_ARRIVAL_POPUP_HOLD_SECONDS = 0.0
+RESIDENTIAL_ARRIVAL_POPUP_HOLD_SECONDS = 1.0
 # How long a residential leg holds on the plain arrived map (walker gone,
 # destination pin + HUD card showing the leg's own total distance/time)
 # BEFORE the at-arrival photo starts its pop-in -- without this the photo
@@ -839,32 +870,22 @@ ATTRACTION_COLOR_MATCH_SMOOTH_SECONDS = 1.0
 # - cinematic realism: cartoon, anime, CG/3D render look, plastic texture,
 #   painting, over-sharpened, flicker, unnatural motion, morphing scenery.
 COMFYUI_NEGATIVE_PROMPT = (
-    "色调艳丽，过曝，静态，细节模糊不清，字幕，风格，作品，画作，画面，静止，"
-    "整体发灰，最差质量，低质量，JPEG压缩残留，丑陋的，残缺的，多余的手指，"
-    "画得不好的手部，画得不好的脸部，畸形的，毁容的，形态畸形的肢体，手指融合，"
-    "静止不动的画面，杂乱的背景，三条腿，背景人很多，倒着走，"
-    "重复的物体，重复的道具，重复的建筑，复制粘贴的元素，镜像重复，同一物体出现两次，"
-    "克隆的人物，重复的人物，物体凭空出现，物体凭空消失，物体相互融合，多余的物体，"
-    "建筑变形，结构扭曲，透视错误，新出现的车辆，物体进入画面，场景内容改变，快速运动，镜头晃动，"
-    "人，人物，行人，人群，游客，路人，走动的人，出现的人，"
-    "前景物体，镜头前的物体，第一人称视角，手，手持物体，玩具，武器，从画面边缘进入的物体，遮挡画面，"
-    "拍摄者的影子，人影，新出现的阴影，阴影移动，"
-    "调色，色彩分级，滤镜，饱和度过高，对比度过高，色偏，偏色，暗角，HDR效果，高光溢出，"
-    "亮度变化，颜色变化，光线变化，画面变亮，画面变暗，闪光，"
-    "文字扭曲，文字变形，乱码文字，文字变化，标志变形，标志变化，路标扭曲，招牌变形，"
-    "直线弯曲，线条扭曲，画面扭曲，波浪变形，橡胶质感，果冻效应，鱼眼畸变，镜头畸变，物体形状改变，"
-    "卡通，动漫，CG渲染，3D渲染感，塑料质感，绘画感，过度锐化，画面闪烁，"
-    "不自然的运动，场景变形"
-    "曝光过度, 曝光不足, 欠曝, 死白, 死黑, 极度刺眼, 强光刺眼, "
-    "忽明忽暗, 曝光不稳定, 频闪, 暗淡无光, 漆黑一片, 阴暗压抑, "
-    "失去暗部细节, 失去亮部细节, 亮部糊化, 阴影死黑, 光照不均, "
-    "刺目的对比, 光晕泛滥, 雾蒙蒙的光线, 虚假的光照, 违背物理的光线, "
-    "闪烁的光线, 光源跳动, 强光直射, 灰暗无光, 亮度跳变, 异常反光"
-    "新出现的物体, 凭空出现的道具, 从画面边缘进入的物体, 遮挡画面的物体, 前景遮挡物, "
-    "摄像机, 相机, 拿相机的手, 机械臂, 拍摄设备, 穿帮镜头, 第三人称视角拍摄者, "
-    "人, 人物, 行人, 走动的人, 突然出现的人影, 奔跑的人, 游客, 围观者, "
-    "漂浮的物体, 随机生成的杂物, 幻觉生成的物体, 不合逻辑的物体, "
-    "场景突变, 结构突变, 镜头移动时的扭曲, 破坏场景连贯性的元素, 非纯风景"
+    # 1. Core Exclusions: People, vehicles, and unnecessary props are strictly prohibited 
+    "人, 人物, 行人, 游客, 人影, 摩托车, 自行车, 汽车, 车辆, 交通工具, 机器设备, 头盔, "
+    "手, 拿相机的手, 摄像机, 拍摄设备, 凭空出现的道具, 随机生成的杂物, 漂浮的物体, "
+    "前景物体, 前景遮挡物, 从边缘进入画面的物体, 幻觉生成的物体, 非纯风景, "
+    
+    # 2. Stable shots and camera movement
+    "场景突变, 结构突变, 建筑变形, 透视错误, 镜头扭曲, 快速运动, 镜头晃动, 不自然的运动, "
+    "重复的物体, 重复的建筑, 复制粘贴的元素, 镜像重复, 物体凭空出现, 物体相互融合, "
+    
+    # 3. Lighting and Image Quality Control
+    "曝光过度, 欠曝, 死白, 死黑, 频闪, 忽明忽暗, 曝光不稳定, 闪烁的光线, 光源跳动, "
+    "刺目的对比, 违背物理的光线, 异常反光, 调色, 滤镜, 饱和度过高, 色偏, 整体发灰, "
+    
+    # 4. Fundamental Flaws and Style
+    "文字扭曲, 乱码文字, 标志变形, 路标扭曲, 细节模糊不清, JPEG压缩残留, 最差质量, 低质量, "
+    "卡通, 动漫, CG渲染, 3D渲染感, 塑料质感, 绘画感, 画面闪烁"
 )
 # What every motion prompt adds after its camera move: the scene, its colours
 # and its shapes stay exactly as in the photo (see COMFYUI_NEGATIVE_PROMPT for
@@ -1038,12 +1059,29 @@ TTS_MODEL = "irodori-tts"
 # Device the Irodori TTS server runs its model and codec on: "cpu", "cuda" or
 # "auto" (the GPU when there is one). The environment variable
 # NAVIVI_TTS_DEVICE overrides it. A long text in one request drove the GPU to
-# ~98% load / ~7.8 GB VRAM and hard-shut the PC (hypervisor error), so text is
-# split into short chunks (below) that are spoken one at a time and joined.
-TTS_DEVICE = "auto"
+# ~98% load / ~7.8 GB VRAM and hard-shut the PC (hypervisor error) more than
+# once - splitting text into short chunks (below), spoken one at a time and
+# joined, made each individual request safer, but "auto" still puts every
+# one of those chunks on the GPU when there is one, so the same crash was
+# still reachable given enough chunks back to back. Defaulting to "cpu"
+# instead trades TTS speed for not crashing the machine, on this project and
+# every other real one - NAVIVI_TTS_DEVICE=cuda opts back into GPU when
+# that tradeoff is wanted (the server reads its device at spawn time only;
+# an already-running server needs restarting to pick up a changed value).
+TTS_DEVICE = "cpu"
 # Longest text sent to the TTS server in one request, in characters: about 15
 # seconds of speech at the project's measured ~4.4 characters per second.
 TTS_MAX_CHUNK_CHARS = 60
+# generate_speech now always splits multi-sentence text at sentence
+# boundaries (never packing two sentences into one TTS request, unlike the
+# old chunking that only split when TTS_MAX_CHUNK_CHARS was exceeded) and
+# inserts a short procedural silence between each sentence's own audio -
+# butt-joining separately-synthesized sentences with zero gap reads as
+# rushed/robotic; a real speaker breathes between them. Randomized per gap
+# (uniform in this range) rather than fixed, so a long narration doesn't
+# have a metronome-regular click between every sentence.
+TTS_SENTENCE_GAP_MIN_SECONDS = 0.25
+TTS_SENTENCE_GAP_MAX_SECONDS = 0.5
 TTS_VOICE = "test1"  # Irodori's only bundled voice preset as of writing
 # [Config] Playback speed multiplier sent to the Irodori TTS server; 1.0 = the
 # model's natural pace. The server itself clamps to [0.25, 4.0], but TTSConfig

@@ -95,8 +95,11 @@ class _OverviewAnimationMixin:
         notice_total = 1
         if notice:
             reserved.append(self.graphics.stopby_notice_box(w, h))
-            per_card = self._make_baked_popup(stopby_group[0], tuning.STOPBY_BATCH_SECONDS, fps)["total_frames"]
-            notice_total = max(1, per_card * len(stopby_group))
+            per_card = self._make_baked_popup(
+                stopby_group[0], tuning.STOPBY_BATCH_SECONDS, fps,
+                min_display_seconds=tuning.STOPBY_BATCH_SECONDS,
+            )["total_frames"]
+            notice_total = max(1, per_card * min(len(stopby_group), tuning.STOPBY_BATCH_MAX_HELD))
             notice_fade = max(1, int(tuning.STOPBY_NOTICE_FADE_SECONDS * fps))
         # Every landmark's own reserved box below (after it's shown) needs
         # this regardless of whether the host itself has a card — computed
@@ -137,9 +140,21 @@ class _OverviewAnimationMixin:
         # in this renderer uses, so a line crossing an earlier landmark's
         # pin never paints over it.
         shown: List[Dict] = []
-        for stopby in stopby_group:
+        for batch_index, stopby in enumerate(stopby_group):
             stopby["data"]["arrived"] = True
             stopby["data"]["triggered"] = True
+
+            # Only the first STOPBY_BATCH_MAX_HELD get their own held card —
+            # the narration never names more than a few of them either way
+            # (overview_script.py's via_batches, names[:3]), so a longer
+            # group held every card in turn used to sit the video frozen
+            # well past when the voice had already moved on. The rest still
+            # get their pin (they WERE passed) via the same "no room for a
+            # card" fallback below, just skipped straight there.
+            if batch_index >= tuning.STOPBY_BATCH_MAX_HELD:
+                self._draw_pin(plate, stopby, total_points)
+                shown.append(stopby)
+                continue
 
             hud = stopby.copy()
             hud["hud_corner"] = None
@@ -158,7 +173,10 @@ class _OverviewAnimationMixin:
                 shown.append(stopby)
                 continue
 
-            bp = self._make_baked_popup(stopby, tuning.STOPBY_BATCH_SECONDS, fps)
+            bp = self._make_baked_popup(
+                stopby, tuning.STOPBY_BATCH_SECONDS, fps,
+                min_display_seconds=tuning.STOPBY_BATCH_SECONDS,
+            )
             total_frames = bp["total_frames"]
             for i in range(total_frames):
                 # Drives _popup_fade_alpha/_popup_slide_offset_y's shared

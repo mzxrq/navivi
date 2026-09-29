@@ -20,6 +20,7 @@ from services.localization.cues import cue_tags, cue_times, strip_cues
 
 from . import audio_step
 from .audio_step import OVERVIEW_CUE_KEY, base_narration_script, raw_narration_script, waypoint_cue_key
+from .helpers import logger
 
 _STORE_NAME = ".narration_cues.json"
 _SENTENCE_END = re.compile(r"(?<=[。！？!?\n])")
@@ -128,13 +129,84 @@ def add_default_cues(project_config_path: str) -> int:
     return added
 
 
+def ensure_overview_narration(project_config_path: str) -> bool:
+    """Auto-generates job_config.json's top-level "overview_narration" from
+    the route itself (services/localization/overview_script.build_tour_script
+    -- route facts, distances/times, each stop's own narration, fed to the
+    LLM, with {start}/{n}/{go}/{end} cues already placed in the output --
+    the exact same logic services/cli/script_commands.test_overview_script's
+    CLI mode uses) whenever it's missing or stale for the project's current
+    waypoints. There is no manual-edit UI for this field anymore -- this is
+    now the only thing that ever sets it, so it always runs ahead of
+    add_overview_cues below (which tags a HUMAN-written overview_narration
+    that has none yet; here the generated text already carries its own
+    cues, so add_overview_cues's own `store.cued_text(...)` check then
+    correctly finds nothing further to do).
+
+    Skipped (returns False, no LLM call) whenever overview_narration is
+    already non-empty AND either (a) it predates this feature --
+    project["overview_narration_is_auto"] isn't set, meaning it was
+    hand-written/legacy, which this never overwrites -- or (b) it WAS
+    auto-generated and still matches the project's current set of
+    waypoint ids (project["overview_narration_source_ids"]), i.e. the
+    route hasn't changed since. Only an auto-generated script that's gone
+    stale (ids differ) or a truly blank field ever triggers a fresh
+    generation -- a human-written script is never silently replaced."""
+    config_path = Path(project_config_path)
+    try:
+        project = json.loads(config_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+
+    waypoints = project.get("waypoints", [])
+    if not waypoints:
+        return False
+    current_ids = ",".join(
+        str(wp.get("id", "")) for wp in waypoints if isinstance(wp, dict)
+    )
+    existing = (project.get("overview_narration") or "").strip()
+    was_auto = project.get("overview_narration_is_auto") is True
+    if existing and (not was_auto or project.get("overview_narration_source_ids") == current_ids):
+        return False  # hand-written, or auto-generated and still fresh
+
+    from services.cli.script_commands import DEFAULT_SCRIPT_MODEL
+    from services.localization.overview_script import build_tour_script, ollama_generate
+
+    try:
+        cache = json.loads((config_path.parent / ".routecache.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        cache = {}
+    model = project.get("settings", {}).get("overview_script_model", DEFAULT_SCRIPT_MODEL)
+    try:
+        script, _report = build_tour_script(project, cache, ollama_generate(model))
+    except Exception as e:
+        logger.warning("Step 2: auto overview-narration generation failed: %s", e)
+        return False
+    if not script:
+        return False
+
+    project["overview_narration"] = script
+    project["overview_narration_is_auto"] = True
+    project["overview_narration_source_ids"] = current_ids
+    config_path.write_text(json.dumps(project, ensure_ascii=False, indent=2), encoding="utf-8")
+    logger.info("Step 2: auto-generated overview_narration (%d chars).", len(script))
+    return True
+
+
 def add_overview_cues(project_config_path: str) -> bool:
     """Stores the overview narration with {n} / {go} tags placed (see
     localization/overview_cues.py), so the walker stops at each waypoint while
     the voice describes it. Words are never changed, so audio already made
     stays valid; the user's own tags win. On by default (tuning.DEFAULT_AUTO_OVERVIEW_CUES);
     settings.auto_overview_cues=false turns it off.
-    Returns whether a new tagged version was stored."""
+    Returns whether a new tagged version was stored.
+
+    Always calls ensure_overview_narration first (see its docstring) so a
+    project with no hand-written overview_narration gets one auto-generated
+    -- with its own cues already placed -- before this function's own
+    (human-script-only) auto-tagging logic runs."""
+    ensure_overview_narration(project_config_path)
+
     from services.localization.overview_cues import auto_tag_overview
     from services.localization.overview_script import visible_waypoints
 

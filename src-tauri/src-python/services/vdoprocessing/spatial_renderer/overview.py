@@ -472,10 +472,11 @@ class _OverviewRenderMixin:
                 group = ap.get("stopby_group") or []
                 if not (ap["data"].get("freeze_frame", False) or group):
                     return ap.get("cue_wait_frames", 0)  # the wait at a cued stop
+                held = min(len(group), tuning.STOPBY_BATCH_MAX_HELD)
                 return int(fps * (
                     float(self.post_arrival_hold_seconds)
                     + max(float(ap["data"].get("freeze_seconds", 4.0)), tuning.POPUP_MIN_DISPLAY_SECONDS)
-                    + len(group) * tuning.STOPBY_BATCH_SECONDS
+                    + held * tuning.STOPBY_BATCH_SECONDS
                 ))
 
             hosts = [
@@ -487,7 +488,8 @@ class _OverviewRenderMixin:
                 n: sum(h for f, h in hosts if f < frame) for n, frame in natural_frames.items()
             }
             start_batch = (
-                int(fps * len(start_popup.get("stopby_group") or []) * tuning.STOPBY_BATCH_SECONDS)
+                int(fps * min(len(start_popup.get("stopby_group") or []), tuning.STOPBY_BATCH_MAX_HELD)
+                    * tuning.STOPBY_BATCH_SECONDS)
                 if start_popup else 0
             )
             # The walk may be stretched back out to the length the cues need: the

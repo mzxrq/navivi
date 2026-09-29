@@ -1271,9 +1271,12 @@ class _PopupMixin:
         slot_arr = np.asarray(slots, dtype=float) + np.array(
             [card_w / 2.0, card_h / 2.0]
         )
-        cost = np.hypot(
-            slot_arr[None, :, 0] - pin_arr[:, None, 0],
-            slot_arr[None, :, 1] - pin_arr[:, None, 1],
+        # Use SQUARED Euclidean distance. This mathematically prevents leader
+        # line crossings even in 1D collinear cases where standard Euclidean
+        # distance would result in a tie and arbitrary assignment.
+        cost = (
+            (slot_arr[None, :, 0] - pin_arr[:, None, 0]) ** 2
+            + (slot_arr[None, :, 1] - pin_arr[:, None, 1]) ** 2
         )
         slot_for = list(linear_sum_assignment(cost)[1])
 
@@ -1414,7 +1417,7 @@ class _PopupMixin:
     @classmethod
     def _make_baked_popup(
         cls, popup: Dict, display_seconds: float, fps: int, queue_depth: int = 0,
-        min_hold_seconds: float = 0.0,
+        min_hold_seconds: float = 0.0, min_display_seconds: Optional[float] = None,
     ) -> Dict:
         """A baked_popups entry: `popup` is the waypoint dict itself (later
         copied and handed to render_popup_box); the rest is bookkeeping for
@@ -1451,11 +1454,18 @@ class _PopupMixin:
         # Floored at POPUP_MIN_DISPLAY_SECONDS: this is the single point
         # every popup's display duration passes through on its way to
         # frames, so enforcing the minimum here covers every caller.
+        # `min_display_seconds`: an explicit override for a caller that
+        # deliberately wants a shorter floor than the global default (e.g.
+        # a stop-by batch card, tuning.STOPBY_BATCH_SECONDS - several of
+        # these play back to back, so the usual "long enough to read one
+        # name" floor stacks into a much longer freeze than intended; see
+        # _play_stopby_batch). Falls back to POPUP_MIN_DISPLAY_SECONDS.
         # `min_hold_seconds`: fully shown at least this long between its
         # fades - for a card that stays up while the walker moves on
         # (tuning.OVERVIEW_POPUP_MIN_HOLD_SECONDS). Not for a card played
         # over a frozen map: that would lengthen the freeze itself.
-        display_seconds = max(float(display_seconds), tuning.POPUP_MIN_DISPLAY_SECONDS)
+        floor = tuning.POPUP_MIN_DISPLAY_SECONDS if min_display_seconds is None else min_display_seconds
+        display_seconds = max(float(display_seconds), floor)
         if min_hold_seconds > 0:
             display_seconds = max(display_seconds, min_hold_seconds + 2 * cls._POPUP_FADE_SECONDS)
         total_frames = max(1, int(display_seconds * fps))

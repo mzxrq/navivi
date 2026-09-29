@@ -240,12 +240,12 @@ class TestTourScript:
 
 
 class TestBudget:
-    def test_the_target_follows_the_stops_within_60_to_90s(self):
+    def test_the_target_follows_the_stops_within_60_to_120s(self):
         from services.localization.overview_script import overview_target_seconds
 
         assert overview_target_seconds({}, 3) == 60.0
         assert overview_target_seconds({}, 8) == 76.0
-        assert overview_target_seconds({}, 20) == 90.0
+        assert overview_target_seconds({}, 20) == 120.0
         assert overview_target_seconds({"settings": {"overview_target_seconds": 45}}, 20) == 45.0
 
     def test_the_pieces_add_up_to_the_target(self):
@@ -299,7 +299,7 @@ class TestHighlights:
         project["waypoints"].insert(2, _wp("小さな碑", 35.0005, 139.0045, isStopBy=True))  # after 場所1
         budget = plan_budget(project, build_brief(project, {}))
         assert 1 in budget["stops"]
-        assert budget["describe"][1] == 1.0 + 2.0 + 2.0  # post-arrival + card + one stop-by
+        assert budget["describe"][1] == 1.0 + 2.0 + 1.0  # post-arrival + card + one stop-by (STOPBY_BATCH_SECONDS)
 
     def test_the_waypoint_flag_forces_or_skips_a_stop(self):
         from services.localization.overview_script import plan_budget
@@ -321,12 +321,14 @@ class TestHighlights:
 
 
 class TestOverviewIsSeparateFromStopNarration:
-    """By default the overview tells only the journey: a stop's own narration
-    (its leg / attraction clip's job) is never repeated in it."""
+    """With overview_describe_stops off, the overview tells only the
+    journey: a stop's own narration (its leg / attraction clip's job) is
+    never repeated in it. (Since tuning.DEFAULT_OVERVIEW_DESCRIBE_STOPS,
+    this is now an explicit opt-out rather than the default.)"""
 
     def _project(self):
         project, cache = _tour_project()
-        project["settings"].pop("overview_describe_stops")
+        project["settings"]["overview_describe_stops"] = False
         return project, cache
 
     def test_no_stop_description_and_each_stop_named_at_most_once_per_line(self):

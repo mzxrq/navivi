@@ -42,8 +42,9 @@ def test_overview_script(job_config_path: str, use_llm: bool = True) -> Dict[str
         "draft_path": str(draft),
         "model": model if use_llm else None,
         "spoken_chars": spoken,
-        # The overview aims at target_seconds and must stay within 60-90s;
-        # checked again on the real audio after TTS.
+        # The overview aims at target_seconds and must stay within 60-120s
+        # (overview_script.TARGET_MIN/MAX_SECONDS); checked again on the
+        # real audio after TTS.
         "target_seconds": round(budget["target"], 1),
         "estimated_seconds": round(estimated, 1),
         "within_60_90s": in_overview_range(estimated),
