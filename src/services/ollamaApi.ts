@@ -68,7 +68,10 @@ export async function pullModelStream(
     let buffer = "";
     while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done) {
+            if (consoleBuffer) console.log("%c[Ollama Stream] %c" + consoleBuffer, "color: #a855f7; font-weight: bold;", "color: inherit;");
+            break;
+        }
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split("\n");
@@ -153,9 +156,13 @@ async function streamLLM(prompt: string, engine: string, onChunk: (text: string)
     const decoder = new TextDecoder("utf-8");
     let fullText = "";
     let buffer = "";
+    let consoleBuffer = "";
     while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done) {
+            if (consoleBuffer) console.log("%c[Ollama Stream] %c" + consoleBuffer, "color: #a855f7; font-weight: bold;", "color: inherit;");
+            break;
+        }
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split("\n");
@@ -167,6 +174,15 @@ async function streamLLM(prompt: string, engine: string, onChunk: (text: string)
                     const parsed = JSON.parse(line);
                     if (parsed.response) {
                         fullText += parsed.response;
+                        
+                        consoleBuffer += parsed.response;
+                        if (consoleBuffer.includes("\n")) {
+                            const consoleLines = consoleBuffer.split("\n");
+                            for (let i = 0; i < consoleLines.length - 1; i++) {
+                                console.log("%c[Ollama Stream] %c" + consoleLines[i], "color: #a855f7; font-weight: bold;", "color: inherit;");
+                            }
+                            consoleBuffer = consoleLines[consoleLines.length - 1];
+                        }
                         
                         let thoughtBlocks = [];
                         const matches = fullText.matchAll(/(?:<think>|<\|channel>thought|<thought>)([\s\S]*?)(?:<\/think>|<\/thought>|<channel\|>|$)/g);
