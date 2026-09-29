@@ -131,7 +131,10 @@ async function fetchKeylessWebContext(searchTerms: string): Promise<string> {
 async function streamLLM(prompt: string, engine: string, onChunk: (text: string) => void, signal?: AbortSignal, images?: string[], onThought?: (text: string) => void) {
     const payload: any = { model: engine, prompt, stream: true };
     if (engine.toLowerCase().includes("gemma-4") || engine.toLowerCase().includes("gemma4")) {
-        payload.system = "<|think|>";
+        // Force raw mode for gemma-4 to ensure exact token sequences for Thinking Mode
+        payload.raw = true;
+        payload.prompt = `<bos><|turn>system\n<|think|><turn|>\n<|turn>user\n${prompt}<turn|>\n<|turn>model\n`;
+        delete payload.system;
     }
     if (images && images.length > 0) {
         payload.images = images;
@@ -258,7 +261,7 @@ ${contextStr}
 ルール:
 1. 日本語の「です・ます調」で、親しみやすい言葉遣いにすること。
 2. 音声合成で読み上げるため、括弧書き（感情（例：[笑顔で]など））は絶対に書かないこと。
-3. 簡潔に、1〜2段落でまとめること。
+3. 簡潔に、3〜4段落でまとめること。
 4. 提供された画像がある場合は、その写真に写っている風景や特徴も自然に描写に組み込んでください。`;
 
     const base64Images: string[] = [];
