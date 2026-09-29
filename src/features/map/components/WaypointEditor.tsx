@@ -192,7 +192,12 @@ export function WaypointEditor({
         },
         wp.lat,
         wp.lng,
-        wp.images || []
+        wp.images || [],
+        (thoughtChunk) => {
+          setThoughtProcess(thoughtChunk);
+        },
+        type,
+        isStart
       );
     } catch (err: any) {
       console.error("Script generation failed:", err);
