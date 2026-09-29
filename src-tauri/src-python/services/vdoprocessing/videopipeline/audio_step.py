@@ -141,34 +141,14 @@ def _resolve_attraction_narration_script(waypoint: dict) -> Optional[str]:
 
 
 def apply_pronunciation_dictionary(text: str, dictionary: list) -> str:
-    """Apply the project pronunciation dictionary to *text* before TTS.
-
-    Replacement strategy:
-    - Entries with an empty reading are skipped (user hasn't filled it in yet).
-    - Replacements are applied longest-word-first so that a multi-kanji entry
-      like 「和歌山」 is substituted before a shorter entry like「和」 would
-      inadvertently break it into 「わ歌山」.
-    - Uses simple str.replace which is the correct approach for Japanese since
-      Japanese text has no word-boundary separators between words.
-    """
     if not text or not dictionary:
         return text
-
-    # Only entries with both word and a non-empty reading are applied
-    valid = [
-        (entry["word"], entry["reading"])
-        for entry in dictionary
-        if entry.get("word") and entry.get("reading")
-    ]
-    # Longest word first to avoid partial matches
-    valid.sort(key=lambda x: len(x[0]), reverse=True)
-
-    for word, reading in valid:
-        text = text.replace(word, reading)
-
+    for entry in dictionary:
+        word = entry.get("word")
+        reading = entry.get("reading")
+        if word and reading:
+            text = text.replace(word, reading)
     return text
-
-
 
 async def generate_attraction_audio_for_waypoint(
     waypoint: dict,

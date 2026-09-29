@@ -868,7 +868,7 @@ export function RenderOverlay() {
       className="fixed inset-0 pointer-events-auto flex items-center justify-center p-4 sm:p-4 animate-in fade-in duration-300"
     >
       <div className="flex flex-col xl:flex-row items-center xl:items-stretch justify-center gap-4 max-h-[92vh] w-full max-w-[90vw] xl:max-w-7xl pointer-events-none">
-        <div className="w-full max-w-3xl shrink-0 flex-1 bg-white dark:bg-zinc-950 rounded-2xl shadow-[0_0_80px_-15px_rgba(0,0,0,0.5)] border border-zinc-200 dark:border-zinc-800/80 flex flex-col overflow-hidden animate-in zoom-in-95 duration-400 pointer-events-auto">
+        <div className="w-full max-w-3xl shrink-0 flex-1 bg-white dark:bg-zinc-950 rounded-2xl shadow-[0_0_80px_-15px_rgba(0,0,0,0.5)] border border-zinc-200 dark:border-zinc-800/80 flex flex-col overflow-hidden animate-in zoom-in-95 duration-400 pointer-events-auto select-none">
           {/* Header */}
           <div className="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-900/20 shrink-0">
             <div className="flex items-center justify-between mb-6">

@@ -63,7 +63,7 @@ def ffmpeg_thread_args() -> List[str]:
 # pushing the machine into swap or a hard shutdown. Every stage is checkpointed,
 # so re-running resumes where it stopped. A project can change the limit with
 # job_config.json's settings.min_free_ram_gb (0 turns the guard off).
-MIN_FREE_RAM_GB: float = 3.0
+MIN_FREE_RAM_GB: float = 1.0
 RAM_WAIT_TIMEOUT_SECONDS: float = 180.0
 _RAM_POLL_SECONDS = 5.0
 
