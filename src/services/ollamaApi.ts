@@ -166,7 +166,7 @@ async function streamLLM(prompt: string, engine: string, onChunk: (text: string)
                         fullText += parsed.response;
                         
                         let thoughtBlocks = [];
-                        const matches = fullText.matchAll(/<(?:think|\|channel>thought|thought)>([\s\S]*?)(?:<\/(?:think|thought)>|<channel\|>|$)/g);
+                        const matches = fullText.matchAll(/(?:<think>|<\|channel>thought|<thought>)([\s\S]*?)(?:<\/think>|<\/thought>|<channel\|>|$)/g);
                         for (const m of matches) {
                             thoughtBlocks.push(m[1]);
                         }
