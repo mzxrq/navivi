@@ -225,7 +225,9 @@ export async function generateWaypointScriptStream(
     lat: number = 0,
     lng: number = 0,
     imagePaths: string[] = [],
-    onThought?: (text: string) => void
+    onThought?: (text: string) => void,
+    scriptType: "arriving" | "attraction" = "attraction",
+    isFirstWaypoint: boolean = false
 ): Promise<void> {
     let contextStr = "";
 
