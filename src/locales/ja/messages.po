@@ -74,6 +74,11 @@ msgstr "選択されていません"
 msgid "(Empty script)"
 msgstr "(未入力)"
 
+#. placeholder {0}: wp.images.length
+#: src/features/map/components/WaypointItem.tsx:210
+msgid "{0, plural, one {# Image} other {# Images}}"
+msgstr "{0, plural, other {#枚の画像}}"
+
 #. placeholder {0}: newAssets.length
 #: src/features/timeline/components/MediaPool.tsx:261
 msgid "{0, plural, one {1 media asset copied into the project.} other {# media assets copied into the project.}}"

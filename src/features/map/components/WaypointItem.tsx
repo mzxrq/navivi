@@ -1,5 +1,5 @@
 import { t } from "@lingui/core/macro";
-import { Trans } from "@lingui/react/macro";
+import { Trans, Plural } from "@lingui/react/macro";
 import { useEffect, useRef, useState } from "react";
 import {
   Car,
@@ -207,7 +207,7 @@ export function WaypointItem({
                   {wp.images && wp.images.length > 0 && (
                     <div className="flex items-center gap-1.5">
                       <ImageIcon className="w-3 h-3 text-emerald-500" />
-                      {wp.images.length} Image{wp.images.length > 1 ? "s" : ""}
+                      <Plural value={wp.images.length} one="# Image" other="# Images" />
                     </div>
                   )}
                   {hasScript && (
