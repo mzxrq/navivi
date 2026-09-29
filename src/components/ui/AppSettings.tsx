@@ -714,7 +714,69 @@ export function AppSettings() {
                     </div>
                   </div>
 
-                  <div className="space-y-2 pt-4 border-t border-zinc-100 dark:border-navidark-700">
+                  
+                  <div className="pt-2">
+                    <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                      <Trans>TTS Pronunciation Dictionary</Trans>
+                    </label>
+                    <p className="text-[10px] text-zinc-500 mb-2 mt-0.5">
+                      <Trans>Correct words or kanji that are read incorrectly by the AI voice.</Trans>
+                    </p>
+                    <div className="flex flex-col gap-2">
+                      {(settings.pronunciation_dictionary || []).map((entry, idx) => (
+                        <div key={idx} className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            placeholder={t`Word (e.g. 加太)`}
+                            value={entry.word}
+                            onChange={(e) => {
+                              const newDict = [...(settings.pronunciation_dictionary || [])];
+                              newDict[idx].word = e.target.value;
+                              updateSettings({ pronunciation_dictionary: newDict });
+                              setIsDirty(true);
+                            }}
+                            className="w-1/2 bg-zinc-50 dark:bg-navidark-800 border border-zinc-200 dark:border-navidark-400 rounded-md px-2 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 outline-none focus:border-navi"
+                          />
+                          <input
+                            type="text"
+                            placeholder={t`Reading (e.g. かだ)`}
+                            value={entry.reading}
+                            onChange={(e) => {
+                              const newDict = [...(settings.pronunciation_dictionary || [])];
+                              newDict[idx].reading = e.target.value;
+                              updateSettings({ pronunciation_dictionary: newDict });
+                              setIsDirty(true);
+                            }}
+                            className="w-1/2 bg-zinc-50 dark:bg-navidark-800 border border-zinc-200 dark:border-navidark-400 rounded-md px-2 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 outline-none focus:border-navi"
+                          />
+                          <button
+                            onClick={() => {
+                              const newDict = [...(settings.pronunciation_dictionary || [])];
+                              newDict.splice(idx, 1);
+                              updateSettings({ pronunciation_dictionary: newDict });
+                              setIsDirty(true);
+                            }}
+                            className="p-1.5 text-zinc-400 hover:text-red-500 transition-colors"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                      <button
+                        onClick={() => {
+                          const newDict = [...(settings.pronunciation_dictionary || [])];
+                          newDict.push({ word: "", reading: "" });
+                          updateSettings({ pronunciation_dictionary: newDict });
+                          setIsDirty(true);
+                        }}
+                        className="self-start text-[10px] font-semibold text-navi-600 dark:text-navi-400 hover:text-navi-700 dark:hover:text-navi-300 flex items-center gap-1 py-1"
+                      >
+                        + <Trans>Add word</Trans>
+                      </button>
+                    </div>
+                  </div>
+
+<div className="space-y-2 pt-4 border-t border-zinc-100 dark:border-navidark-700">
                     <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-widest flex items-center gap-1.5">
                       <Trans>Subtitle Format</Trans>
                     </label>

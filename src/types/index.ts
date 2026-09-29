@@ -83,6 +83,7 @@ export interface ProjectSettings {
   show_render_terminal?: boolean;
   marked_regeneration_waypoints?: string[];
   ai_features_enabled?: boolean;
+  pronunciation_dictionary?: Array<{ word: string; reading: string }>;
 }
 
 export interface ProjectMetadata {

@@ -140,6 +140,16 @@ def _resolve_attraction_narration_script(waypoint: dict) -> Optional[str]:
     return text or None
 
 
+def apply_pronunciation_dictionary(text: str, dictionary: list) -> str:
+    if not text or not dictionary:
+        return text
+    for entry in dictionary:
+        word = entry.get("word")
+        reading = entry.get("reading")
+        if word and reading:
+            text = text.replace(word, reading)
+    return text
+
 async def generate_attraction_audio_for_waypoint(
     waypoint: dict,
     idx: int,
@@ -148,6 +158,7 @@ async def generate_attraction_audio_for_waypoint(
     output_dir: Path,
     force: bool = False,
     project_dir=None,
+    pronunciation_dict: list = [],
 ) -> Optional[Dict[str, Any]]:
     """Generates (or reuses) one waypoint's attraction-only TTS audio, in
     its own "04_attraction_" filename namespace (see
@@ -160,6 +171,7 @@ async def generate_attraction_audio_for_waypoint(
     script = _resolve_attraction_narration_script(waypoint)
     if not script:
         return None
+    tts_script = apply_pronunciation_dictionary(script, pronunciation_dict)
 
     label = waypoint.get("label", f"Waypoint {idx + 1}")
     audio_filename = attraction_audio_filename(idx, label)
@@ -173,7 +185,7 @@ async def generate_attraction_audio_for_waypoint(
         audio_path = str(existing_path)
     else:
         logger.info("Step 2: [%d] Generating attraction narration for: '%s'", idx + 1, label)
-        audio_path = await client.generate_speech(script, output_filename=audio_filename)
+        audio_path = await client.generate_speech(tts_script, output_filename=audio_filename)
 
     analysis = processor.analyze_pauses(audio_path)
     return {
@@ -191,6 +203,7 @@ async def generate_overview_audio(
     output_dir: Path,
     force: bool = False,
     project_dir=None,
+    pronunciation_dict: list = [],
 ) -> Optional[Dict[str, Any]]:
     """Generates (or reuses) the TTS audio for job_config.json's top-level
     "overview_narration" script -- the map-editor's OverviewPanel.tsx lets
@@ -203,6 +216,7 @@ async def generate_overview_audio(
     script = clean_text(tagged).strip()
     if not script:
         return None
+    tts_script = apply_pronunciation_dictionary(script, pronunciation_dict)
 
     audio_filename = "00_overview_narration.wav"
     existing_path = Path(output_dir) / audio_filename
@@ -212,7 +226,7 @@ async def generate_overview_audio(
         audio_path = str(existing_path)
     else:
         logger.info("Step 2: Generating overview narration audio.")
-        audio_path = await client.generate_speech(script, output_filename=audio_filename)
+        audio_path = await client.generate_speech(tts_script, output_filename=audio_filename)
 
     analysis = processor.analyze_pauses(audio_path)
     # Where each cue ({start}, {1}, {2}, {end}) falls in the real audio: the
@@ -267,6 +281,7 @@ async def generate_waypoint_audio(
     processor: Any,
     output_dir: Path,
     force: bool = False,
+    pronunciation_dict: list = [],
 ) -> Dict[str, Any]:
     """Generates (or, if already present and not `force`, reuses) one
     waypoint's TTS audio and its pause/duration analysis. Raises ValueError
@@ -280,6 +295,7 @@ async def generate_waypoint_audio(
     script = _resolve_narration_script(waypoint)
     if not script:
         raise ValueError(f"Waypoint {idx} has no script, narration, or voiceover text")
+    tts_script = apply_pronunciation_dictionary(script, pronunciation_dict)
 
     label = waypoint.get("label", f"Waypoint {idx + 1}")
     audio_filename = waypoint_audio_filename(idx, label)
@@ -415,6 +431,8 @@ def generate_audio(
 
         with open(config_path, "r", encoding="utf-8") as f:
             project_config = json.load(f)
+            
+        p_dict = project_config.get("settings", {}).get("pronunciation_dictionary", [])
 
         waypoints = project_config.get("waypoints", [])
         apply_cued_scripts(waypoints, config_path.parent)
@@ -500,7 +518,7 @@ def generate_audio(
                 
                 try:
                     clip = await generate_waypoint_audio(
-                        wp, idx, client, processor, output_dir, force=force
+                        wp, idx, client, processor, output_dir, force=force, pronunciation_dict=p_dict
                     )
                 except ValueError:
                     # Safety net for missing script
@@ -549,7 +567,7 @@ def generate_audio(
                 label = wp.get("label", f"Waypoint {idx + 1}")
                 try:
                     clip = await generate_attraction_audio_for_waypoint(
-                        wp, idx, client, processor, output_dir, force=force
+                        wp, idx, client, processor, output_dir, force=force, pronunciation_dict=p_dict
                     )
                 except Exception as exc:
                     logger.warning(

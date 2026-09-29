@@ -58,7 +58,7 @@ msgid "Select Custom Marker"
 msgstr "カスタムマーカーを選択"
 
 #. js-lingui-explicit-id
-#: src/components/ui/AppSettings.tsx:869
+#: src/components/ui/AppSettings.tsx:931
 msgid "Starting..."
 msgstr "ダウンロード開始中..."
 
@@ -190,7 +190,7 @@ msgstr "アセットを承認して動画をエクスポート"
 msgid "Accept assets to automatically stitch and export"
 msgstr "アセットを承認すると、自動的に結合してエクスポートされます"
 
-#: src/components/ui/AppSettings.tsx:986
+#: src/components/ui/AppSettings.tsx:1048
 #: src/features/map/components/WaypointEditor.tsx:388
 msgid "Action"
 msgstr "アクション"
@@ -206,7 +206,7 @@ msgstr "操作"
 msgid "Active"
 msgstr "有効"
 
-#: src/components/ui/AppSettings.tsx:939
+#: src/components/ui/AppSettings.tsx:1001
 msgid "Active Model"
 msgstr "使用中のモデル"
 
@@ -246,6 +246,10 @@ msgstr "この地点のナレーション中にポップアップ表示させる
 #: src/features/map/components/MapToolbar.tsx:129
 msgid "Add Waypoint (P)"
 msgstr "ポイントを追加 (P)"
+
+#: src/components/ui/AppSettings.tsx:774
+msgid "Add word"
+msgstr "単語を追加"
 
 #: src/components/ui/ContextMenu.tsx:384
 #: src/components/ui/ContextMenu.tsx:754
@@ -748,6 +752,10 @@ msgstr "メッセージをコピー"
 msgid "copy-trail"
 msgstr "軌跡をコピー"
 
+#: src/components/ui/AppSettings.tsx:723
+msgid "Correct words or kanji that are read incorrectly by the AI voice."
+msgstr "AI音声が誤って読み上げる単語や漢字を修正します。"
+
 #: src/components/ui/StatusBar.tsx:184
 msgid "Could not delete this version"
 msgstr "このバージョンを削除できませんでした。"
@@ -940,7 +948,7 @@ msgstr "次のプロジェクトへの変更を保存しますか: "
 msgid "Don't Save"
 msgstr "保存しない"
 
-#: src/components/ui/AppSettings.tsx:804
+#: src/components/ui/AppSettings.tsx:866
 #: src/components/ui/RenderOverlay.tsx:1425
 msgid "Done"
 msgstr "完了"
@@ -949,7 +957,7 @@ msgstr "完了"
 msgid "Double-sided horizontal perspective warp effect"
 msgstr "両面水平パースペクティブワープ効果"
 
-#: src/components/ui/AppSettings.tsx:1053
+#: src/components/ui/AppSettings.tsx:1115
 msgid "Download"
 msgstr "ダウンロード"
 
@@ -1358,7 +1366,7 @@ msgstr "飛行"
 msgid "Fly"
 msgstr "飛行"
 
-#: src/components/ui/AppSettings.tsx:725
+#: src/components/ui/AppSettings.tsx:787
 msgid "Font"
 msgstr "フォント"
 
@@ -1366,7 +1374,7 @@ msgstr "フォント"
 msgid "Font Family"
 msgstr "フォントファミリー"
 
-#: src/components/ui/AppSettings.tsx:739
+#: src/components/ui/AppSettings.tsx:801
 #: src/features/timeline/components/elements/inspector/InspectorTextPanel.tsx:180
 msgid "Font Size"
 msgstr "フォントサイズ"
@@ -1777,7 +1785,7 @@ msgstr "ミニマリスト"
 msgid "Missing file"
 msgstr "ファイルが見つかりません"
 
-#: src/components/ui/AppSettings.tsx:980
+#: src/components/ui/AppSettings.tsx:1042
 msgid "Model"
 msgstr "モデル"
 
@@ -1876,7 +1884,7 @@ msgstr "選択した写真にGPS位置データが見つかりません"
 msgid "No locations found in document"
 msgstr "ドキュメントに場所が見つかりませんでした"
 
-#: src/components/ui/AppSettings.tsx:957
+#: src/components/ui/AppSettings.tsx:1019
 msgid "No models installed"
 msgstr "インストールされているモデルがありません"
 
@@ -1992,7 +2000,7 @@ msgstr "アウトトランジション"
 msgid "Outline Color"
 msgstr "縁取りの色"
 
-#: src/components/ui/AppSettings.tsx:769
+#: src/components/ui/AppSettings.tsx:831
 msgid "Outline Color (ASS)"
 msgstr "縁取りの色"
 
@@ -2059,7 +2067,7 @@ msgstr "プリセット"
 msgid "Preview"
 msgstr "プレビュー"
 
-#: src/components/ui/AppSettings.tsx:755
+#: src/components/ui/AppSettings.tsx:817
 msgid "Primary Color (ASS)"
 msgstr "メインの色"
 
@@ -2196,11 +2204,15 @@ msgstr "動画を結合してエクスポートしています..."
 msgid "Razor Tool (C)"
 msgstr "レーザーツール (C)"
 
+#: src/components/ui/AppSettings.tsx:742
+msgid "Reading (e.g. かだ)"
+msgstr "読み方 (例: かだ)"
+
 #: src/components/view/ProjectManager.tsx:236
 msgid "Reading Project File..."
 msgstr "プロジェクトファイルを読み込み中..."
 
-#: src/components/ui/AppSettings.tsx:1046
+#: src/components/ui/AppSettings.tsx:1108
 msgid "Ready"
 msgstr "準備完了"
 
@@ -2212,7 +2224,7 @@ msgstr "コンパイルの準備完了"
 msgid "Ready to Generate?"
 msgstr "生成する準備はできましたか？"
 
-#: src/components/ui/AppSettings.tsx:972
+#: src/components/ui/AppSettings.tsx:1034
 msgid "Recommended AI Models"
 msgstr "推奨AIモデル"
 
@@ -2597,7 +2609,7 @@ msgstr "コピーするレイヤーを選択"
 msgid "Select Photos..."
 msgstr "写真を選択..."
 
-#: src/components/ui/AppSettings.tsx:942
+#: src/components/ui/AppSettings.tsx:1004
 msgid "Select which model to use for narration synthesis, only downloaded models are shown"
 msgstr "ナレーション合成に使用するモデルを選択します。ダウンロード済みのモデルのみが表示されます"
 
@@ -2671,7 +2683,7 @@ msgstr "トラックを表示"
 msgid "Simplify Route"
 msgstr "ルートを簡略化"
 
-#: src/components/ui/AppSettings.tsx:983
+#: src/components/ui/AppSettings.tsx:1045
 msgid "Size"
 msgstr "サイズ"
 
@@ -2828,7 +2840,7 @@ msgstr "サブタイトル / 説明"
 msgid "Subtitle description..."
 msgstr "サブタイトルの説明..."
 
-#: src/components/ui/AppSettings.tsx:719
+#: src/components/ui/AppSettings.tsx:781
 msgid "Subtitle Format"
 msgstr "字幕フォーマット"
 
@@ -2992,6 +3004,10 @@ msgstr "トランジション"
 #: src/features/timeline/components/TimelineTrack.tsx:90
 msgid "Transitions can only be placed on video tracks"
 msgstr "トランジションはビデオトラックにのみ配置できます"
+
+#: src/components/ui/AppSettings.tsx:720
+msgid "TTS Pronunciation Dictionary"
+msgstr "TTS 発音辞書"
 
 #: src/components/ui/ScriptInput.tsx:111
 msgid "Type a prompt or write your own script..."
@@ -3207,6 +3223,10 @@ msgstr "ポイントのタイプ"
 #: src/features/timeline/components/elements/TransitionsPanel.tsx:35
 msgid "Wipe"
 msgstr "ワイプ"
+
+#: src/components/ui/AppSettings.tsx:730
+msgid "Word (e.g. 加太)"
+msgstr "単語 (例: 加太)"
 
 #: src/components/ui/AutoDirectorModal.tsx:87
 msgid "Writing scripts with AI..."
