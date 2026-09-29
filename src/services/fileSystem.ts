@@ -217,10 +217,8 @@ export const saveProjectData = async (
     })
   );
 
-  const firstUploadedImage = processedWaypoints.find(
-    (wp) => wp.images && wp.images.length > 0,
-  )?.images?.[0];
-  let thumbnailPath = firstUploadedImage;
+  let thumbnailPath = metadata.thumbnail_path;
+  
   if (thumbnailDataUrl?.startsWith("data:image/")) {
     const base64 = thumbnailDataUrl.split(",", 2)[1];
     if (base64) {
@@ -231,6 +229,11 @@ export const saveProjectData = async (
         Uint8Array.from(atob(base64), (char) => char.charCodeAt(0)),
       );
     }
+  } else if (!thumbnailPath) {
+    const firstUploadedImage = processedWaypoints.find(
+      (wp) => wp.images && wp.images.length > 0,
+    )?.images?.[0];
+    thumbnailPath = firstUploadedImage;
   }
 
   const startWp = processedWaypoints[0];

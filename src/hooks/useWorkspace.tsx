@@ -399,7 +399,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         overrideName,
         asDuplicate,
         safeFolderName,
-        projectThumbnail,
+        freshThumbnail,
       );
 
       await saveTimelineManifest(result.projectDir, result.projName, timeline);
