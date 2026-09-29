@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   ChevronUp,
   ChevronDown,
@@ -77,6 +77,7 @@ export function WaypointEditor({
   const [activeTab, setActiveTab] = useState<"scripts" | "images">("scripts");
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [thoughtProcess, setThoughtProcess] = useState("");
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     setIsCollapsed(false);
@@ -147,6 +148,11 @@ export function WaypointEditor({
     if (type === "arriving" && !showArriving) setShowArriving(true);
     if (type === "attraction" && !showAttraction) setShowAttraction(true);
 
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
+
     try {
       setThoughtProcess("");
       updateWaypoint(wp.id, { generatingScriptType: type });
@@ -197,11 +203,16 @@ export function WaypointEditor({
           setThoughtProcess(thoughtChunk);
         },
         type,
-        isStart
+        isStart,
+        abortControllerRef.current.signal
       );
     } catch (err: any) {
-      console.error("Script generation failed:", err);
-      showToast(err.message || t`Failed to generate script`, "error");
+      if (err.name === "AbortError") {
+        console.log("Script generation aborted");
+      } else {
+        console.error("Script generation failed:", err);
+        showToast(err.message || t`Failed to generate script`, "error");
+      }
     } finally {
       updateWaypoint(wp.id, { generatingScriptType: null });
     }
@@ -608,6 +619,10 @@ export function WaypointEditor({
                               updateWaypoint(wp.id, {
                                 generatingScriptType: null,
                               });
+                              if (abortControllerRef.current) {
+                                abortControllerRef.current.abort();
+                                abortControllerRef.current = null;
+                              }
                               invoke("cancel_python_blueprint").catch(
                                 console.error,
                               );
@@ -657,6 +672,10 @@ export function WaypointEditor({
                                   updateWaypoint(wp.id, {
                                     generatingScriptType: null,
                                   });
+                                  if (abortControllerRef.current) {
+                                    abortControllerRef.current.abort();
+                                    abortControllerRef.current = null;
+                                  }
                                   invoke("cancel_python_blueprint").catch(
                                     console.error,
                                   );

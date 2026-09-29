@@ -230,7 +230,8 @@ export async function generateWaypointScriptStream(
     imagePaths: string[] = [],
     onThought?: (text: string) => void,
     scriptType: "arriving" | "attraction" = "attraction",
-    isFirstWaypoint: boolean = false
+    isFirstWaypoint: boolean = false,
+    signal?: AbortSignal
 ): Promise<void> {
     let contextStr = "";
 
@@ -274,7 +275,7 @@ ${contextStr}
         }
     }
 
-    await streamLLM(prompt, engine, onChunk, undefined, base64Images, onThought);
+    await streamLLM(prompt, engine, onChunk, signal, base64Images, onThought);
 }
 
 export async function extractLocationsFromDocument(
