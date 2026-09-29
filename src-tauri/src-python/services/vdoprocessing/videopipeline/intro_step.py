@@ -25,13 +25,22 @@ def render_intro_clip(project_config_path: str) -> Optional[str]:
     from services.vdoprocessing.introclip import generate_intro_clip
 
     job_config = JobConfigManager(config_path)
+    if job_config.get("enable_intro") is False:
+        logger.info("Intro step: skipped because enable_intro is False.")
+        return None
+
     project_name = job_config.get("project_name", "")
+    video_title = job_config.get("video_title")
+    if not video_title:
+        video_title = project_name
+    video_subtitle = job_config.get("video_subtitle", "")
+
     waypoints = job_config.get("waypoints", [])
     video_dir = project_video_dir(job_config.get("directory_path", config_path.parent))
 
     logger.info("Intro step: building intro clip for project '%s'.", project_name)
     intro_path = generate_intro_clip(
-        video_dir=str(video_dir), project_name=project_name, waypoints=waypoints
+        video_dir=str(video_dir), title=video_title, subtitle=video_subtitle, waypoints=waypoints
     )
 
     if intro_path:

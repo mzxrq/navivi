@@ -217,10 +217,8 @@ export const saveProjectData = async (
     })
   );
 
-  const firstUploadedImage = processedWaypoints.find(
-    (wp) => wp.images && wp.images.length > 0,
-  )?.images?.[0];
-  let thumbnailPath = firstUploadedImage;
+  let thumbnailPath = metadata.thumbnail_path;
+  
   if (thumbnailDataUrl?.startsWith("data:image/")) {
     const base64 = thumbnailDataUrl.split(",", 2)[1];
     if (base64) {
@@ -231,6 +229,11 @@ export const saveProjectData = async (
         Uint8Array.from(atob(base64), (char) => char.charCodeAt(0)),
       );
     }
+  } else if (!thumbnailPath) {
+    const firstUploadedImage = processedWaypoints.find(
+      (wp) => wp.images && wp.images.length > 0,
+    )?.images?.[0];
+    thumbnailPath = firstUploadedImage;
   }
 
   const startWp = processedWaypoints[0];
@@ -241,13 +244,17 @@ export const saveProjectData = async (
     user_id: metadata.user_id,
     project_name: projName,
     created_at: metadata.created_at,
+      updated_at: Date.now(),
     theme: metadata.theme,
     status: "saved",
     archive_path: archivePath,
     thumbnail_path: thumbnailPath,
     source_files: { gps_route: "raw_track.gpx" },
     settings: settings,
-    overview_narration: metadata.overview_narration || "",
+    overview_narration: "",
+    video_title: metadata.video_title || "",
+    video_subtitle: metadata.video_subtitle || "",
+    enable_intro: metadata.enable_intro ?? true,
     start_point: startWp ? { lat: startWp.lat, lng: startWp.lng, label: startWp.label } : null,
     end_point: endWp ? { lat: endWp.lat, lng: endWp.lng, label: endWp.label } : null,
     waypoints: processedWaypoints,
@@ -460,11 +467,14 @@ export const scanProjectsOnDisk = async (): Promise<RecentProjects[]> => {
             thumbnailPath = await join(fullPath, thumbEntry.name);
           }
 
+          let fileTime = Date.now();
           try {
             const configPath = await join(fullPath, nvvFile?.name || "job_config.json");
             const content = await readTextFile(configPath);
             const parsed = JSON.parse(content);
             if (parsed.project_name) projName = parsed.project_name;
+            if (parsed.updated_at) fileTime = parsed.updated_at;
+            else if (parsed.created_at) fileTime = new Date(parsed.created_at).getTime();
             if (parsed.thumbnail_path) {
               if (parsed.thumbnail_path.match(/^[a-zA-Z]:\\/) || parsed.thumbnail_path.startsWith('/')) {
                 thumbnailPath = parsed.thumbnail_path;
@@ -478,7 +488,7 @@ export const scanProjectsOnDisk = async (): Promise<RecentProjects[]> => {
           discovered.push({
             name: projName,
             path: projectTarget,
-            lastOpened: Date.now(),
+            lastOpened: fileTime,
             thumbnailPath,
           });
         }
@@ -700,7 +710,7 @@ export async function saveTimelineManifest(
 
     // write to disk formatted cleanly
     await writeTextFile(manifestPath, JSON.stringify(manifest, null, 2));
-    console.log("✓ timeline.json successfully saved.");
+    console.log("✁Etimeline.json successfully saved.");
     return true;
   } catch (error) {
     console.error("Failed to save timeline.json:", error);

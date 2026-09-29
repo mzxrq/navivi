@@ -352,6 +352,8 @@ export function RenderOverlay() {
     // 2. Waypoint Narrations
     for (let i = 0; i < waypoints.length; i++) {
       const wp = waypoints[i];
+      if (wp.skipAssetGeneration || wp.isStub) continue;
+
       const text = wp.attractionNarration || wp.arrivingNarration || "";
 
       if (text.trim()) {
@@ -866,7 +868,7 @@ export function RenderOverlay() {
       className="fixed inset-0 pointer-events-auto flex items-center justify-center p-4 sm:p-4 animate-in fade-in duration-300"
     >
       <div className="flex flex-col xl:flex-row items-center xl:items-stretch justify-center gap-4 max-h-[92vh] w-full max-w-[90vw] xl:max-w-7xl pointer-events-none">
-        <div className="w-full max-w-3xl shrink-0 flex-1 bg-white dark:bg-zinc-950 rounded-2xl shadow-[0_0_80px_-15px_rgba(0,0,0,0.5)] border border-zinc-200 dark:border-zinc-800/80 flex flex-col overflow-hidden animate-in zoom-in-95 duration-400 pointer-events-auto">
+        <div className="w-full max-w-3xl shrink-0 flex-1 bg-white dark:bg-zinc-950 rounded-2xl shadow-[0_0_80px_-15px_rgba(0,0,0,0.5)] border border-zinc-200 dark:border-zinc-800/80 flex flex-col overflow-hidden animate-in zoom-in-95 duration-400 pointer-events-auto select-none">
           {/* Header */}
           <div className="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-900/20 shrink-0">
             <div className="flex items-center justify-between mb-6">
@@ -900,7 +902,7 @@ export function RenderOverlay() {
               {status === "error" && (
                 <div className="flex items-center gap-2 text-red-500 bg-red-50 dark:bg-red-500/10 px-4 py-2 rounded-lg">
                   <XCircle className="w-4 h-4" />
-                  <span className="text-sm font-medium">
+                  <span className="text-sm font-medium text-nowrap">
                     <Trans>Failed</Trans>
                   </span>
                 </div>
@@ -1120,7 +1122,7 @@ export function RenderOverlay() {
                     <Cpu className="w-5 h-5 text-navi-500 shrink-0" />
                     <div>
                       <h4 className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
-                        <Trans>System Capability Check: </Trans>
+                        <Trans>System Capability Check:</Trans>
                         {hardwareSpec.isHighSpec
                           ? t`High-Spec (Discrete GPU)`
                           : t`Low-Spec (Integrated Graphics)`}
@@ -1484,8 +1486,8 @@ export function RenderOverlay() {
         </div>
 
         {/* Terminal Log Output */}
-        <div className="w-full max-w-3xl xl:w-[450px] xl:max-w-none shrink-0 bg-zinc-950 rounded-2xl border border-zinc-800 shadow-2xl flex flex-col overflow-hidden pointer-events-auto animate-in slide-in-from-top-4 xl:slide-in-from-left-4 duration-300">
-          <div className="flex-1 min-h-[16rem] xl:min-h-0 bg-zinc-950 p-6 flex flex-col font-mono text-[11px] leading-relaxed relative">
+        <div className="w-full max-w-3xl xl:w-112.5 xl:max-w-none shrink-0 bg-zinc-950 rounded-2xl border border-zinc-800 shadow-2xl flex flex-col overflow-hidden pointer-events-auto animate-in slide-in-from-top-4 xl:slide-in-from-left-4 duration-300">
+          <div className="flex-1 min-h-64 xl:min-h-0 bg-zinc-950 p-6 flex flex-col font-mono text-[11px] leading-relaxed relative">
             <div className="absolute top-0 left-0 right-0 h-4 bg-linear-to-b from-zinc-950 to-transparent z-10 pointer-events-none"></div>
             <div
               ref={scrollRef}

@@ -30,7 +30,7 @@ export function TitleBar() {
     setEditorMode,
     showToast,
     setShowAppSettings,
-    isRendering
+    isRendering,
   } = useUI();
 
   const {
@@ -186,7 +186,9 @@ export function TitleBar() {
         {/* --- LEFT: MENU & DOCUMENT ACTIONS --- */}
         <div className="flex items-center h-full shrink-0 px-2">
           <div className="relative h-full flex items-center" ref={menuRef}>
-            <button disabled={isRendering} onClick={() => setIsMenuOpen(!isMenuOpen)}
+            <button
+              disabled={isRendering}
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
               className={`h-7 px-3 flex items-center justify-center rounded-lg font-medium transition-all ${isMenuOpen ? "bg-zinc-800 text-white dark:bg-white dark:text-zinc-900 shadow-md" : "text-zinc-600 dark:text-zinc-300 hover:bg-black/5 dark:hover:bg-white/10"}`}
             >
               <Menu className="w-4 h-4" />
@@ -357,7 +359,6 @@ export function TitleBar() {
 
           <div className="w-px h-5 my-auto bg-zinc-200 dark:bg-white/10 mx-1"></div>
 
-          {/* ✨ MOVED: Undo/Redo safely tucked away from the close button */}
           {currentView === "editor" && (
             <div className="flex items-center h-full text-zinc-600 dark:text-zinc-400 px-1">
               <button
@@ -389,8 +390,6 @@ export function TitleBar() {
             data-tauri-drag-region
             className="flex items-center justify-center gap-2 text-xs font-medium text-zinc-500 dark:text-zinc-400"
           >
-            <Navivi className="w-4 h-4 text-navi dark:text-navi pointer-events-none" />
-
             <span className="text-zinc-800 dark:text-zinc-200 pointer-events-none font-semibold">
               {currentView === "title_screen" ? (
                 <Trans>Project Manager</Trans>
@@ -400,18 +399,6 @@ export function TitleBar() {
                 metadata.project_name
               )}
             </span>
-
-            {currentView === "editor" && (
-              <span
-                className={`text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded-sm font-bold ml-2 transition-colors pointer-events-none ${
-                  isDirty
-                    ? "bg-amber-100 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400"
-                    : "bg-emerald-100 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400"
-                }`}
-              >
-                {isDirty ? t`Unsaved` : t`Saved`}
-              </span>
-            )}
           </div>
         </div>
 
@@ -420,7 +407,9 @@ export function TitleBar() {
           {/* Map / Timeline Toggle */}
           {currentView === "editor" && (
             <div className="flex bg-black/5 dark:bg-white/5 rounded-full p-0.5 border border-black/5 dark:border-white/5 shadow-inner mr-4">
-              <button disabled={isRendering} onClick={() => setEditorMode("map")}
+              <button
+                disabled={isRendering}
+                onClick={() => setEditorMode("map")}
                 className={`flex items-center gap-1.5 px-3 py-1 text-[11px] font-bold rounded-full transition-all ${
                   editorMode === "map"
                     ? "bg-white dark:bg-zinc-800 text-navi-600 dark:text-navi-400 shadow-sm"
@@ -431,7 +420,9 @@ export function TitleBar() {
                 <Map className="w-3.5 h-3.5" /> <Trans>Map</Trans>
               </button>
 
-              <button disabled={isRendering} onClick={() => setEditorMode("timeline")}
+              <button
+                disabled={isRendering}
+                onClick={() => setEditorMode("timeline")}
                 className={`flex items-center gap-1.5 px-3 py-1 text-[11px] font-bold rounded-full transition-all ${
                   editorMode === "timeline"
                     ? "bg-white dark:bg-zinc-800 text-navi-600 dark:text-navi-400 shadow-sm"

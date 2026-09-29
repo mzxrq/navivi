@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   ChevronUp,
   ChevronDown,
@@ -22,6 +22,7 @@ import {
   ZoomOut,
   Sparkles,
   SwitchCamera,
+  Settings2,
 } from "../../../components/ui/icons";
 import { useWorkspace } from "../../../hooks/useWorkspace";
 import { useUI } from "../../../hooks/useUI";
@@ -62,7 +63,7 @@ export function WaypointEditor({
     metadata,
     settings,
   } = useWorkspace();
-  const { showToast, markedWaypointIds, isRendering } = useUI();
+  const { showToast, markedWaypointIds, isRendering, setShowAppSettings } = useUI();
   const isMarkedForRegen = markedWaypointIds?.includes(wpId);
 
   const wp = waypoints.find((w) => w.id === wpId);
@@ -76,6 +77,8 @@ export function WaypointEditor({
   );
   const [activeTab, setActiveTab] = useState<"scripts" | "images">("scripts");
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [thoughtProcess, setThoughtProcess] = useState("");
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     setIsCollapsed(false);
@@ -146,8 +149,14 @@ export function WaypointEditor({
     if (type === "arriving" && !showArriving) setShowArriving(true);
     if (type === "attraction" && !showAttraction) setShowAttraction(true);
 
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
+
     try {
-      updateWaypoint(wp.id, { isGeneratingScript: true });
+      setThoughtProcess("");
+      updateWaypoint(wp.id, { generatingScriptType: type });
 
       const hasEngine = await checkModelExists(engine);
       if (!hasEngine) {
@@ -155,7 +164,7 @@ export function WaypointEditor({
           t`Model "${engine}" not found. Please install it from the App Settings`,
           "error",
         );
-        updateWaypoint(wp.id, { isGeneratingScript: false });
+        updateWaypoint(wp.id, { generatingScriptType: null });
         return;
       }
 
@@ -177,12 +186,12 @@ export function WaypointEditor({
               if (type === "arriving") {
                 return {
                   ...w,
-                  arrivingNarration: (w.arrivingNarration || "") + chunk,
+                  arrivingNarration: chunk,
                 };
               } else {
                 return {
                   ...w,
-                  attractionNarration: (w.attractionNarration || "") + chunk,
+                  attractionNarration: chunk,
                 };
               }
             }),
@@ -190,12 +199,23 @@ export function WaypointEditor({
         },
         wp.lat,
         wp.lng,
+        wp.images || [],
+        (thoughtChunk) => {
+          setThoughtProcess(thoughtChunk);
+        },
+        type,
+        isStart,
+        abortControllerRef.current.signal
       );
     } catch (err: any) {
-      console.error("Script generation failed:", err);
-      showToast(err.message || t`Failed to generate script`, "error");
+      if (err.name === "AbortError") {
+        console.log("Script generation aborted");
+      } else {
+        console.error("Script generation failed:", err);
+        showToast(err.message || t`Failed to generate script`, "error");
+      }
     } finally {
-      updateWaypoint(wp.id, { isGeneratingScript: false });
+      updateWaypoint(wp.id, { generatingScriptType: null });
     }
   };
 
@@ -447,7 +467,7 @@ export function WaypointEditor({
                     >
                       <Navigation className="w-4 h-4" />
                       <span className="text-[9px] font-bold max-[1414px]:hidden">
-                        <Trans>Node</Trans>
+                        <Trans>Stub</Trans>
                       </span>
                     </button>
 
@@ -569,7 +589,19 @@ export function WaypointEditor({
               {/* Tab Content */}
               <div className="flex-1 overflow-y-auto custom-scrollbar p-6 bg-white dark:bg-navidark-800">
                 {activeTab === "scripts" && (
-                  <div className="space-y-6 max-w-3xl">
+                                      <div className="space-y-6 max-w-3xl">
+                      <div className="flex justify-end mb-[-1rem]">
+                        <button
+                          onClick={() => {
+                            setShowAppSettings(true);
+                            setTimeout(() => window.dispatchEvent(new CustomEvent("open-app-settings-tab", { detail: "tts_dictionary" })), 50);
+                          }}
+                          className="text-[10px] font-semibold text-navi-600 dark:text-navi-400 hover:text-navi-700 dark:hover:text-navi-300 flex items-center gap-1 bg-navi-50/50 dark:bg-navi-900/20 px-2 py-1 rounded-md border border-navi-100 dark:border-navi-800 transition-colors"
+                        >
+                          <Settings2 className="w-3 h-3" />
+                          <Trans>TTS Pronunciation Dictionary</Trans>
+                        </button>
+                      </div>
                     {/* Arriving Script */}
                     <div className="flex flex-col gap-3">
                       <button
@@ -590,15 +622,20 @@ export function WaypointEditor({
                       {showArriving && (
                         <div className="pl-6">
                           <ScriptInput
+                            thoughtProcess={thoughtProcess}
                             value={wp.arrivingNarration || ""}
                             onChange={(v) =>
                               updateWaypoint(wp.id, { arrivingNarration: v })
                             }
-                            isGenerating={wp.isGeneratingScript || false}
+                            isGenerating={wp.generatingScriptType === "arriving"}
                             onCancel={() => {
                               updateWaypoint(wp.id, {
-                                isGeneratingScript: false,
+                                generatingScriptType: null,
                               });
+                              if (abortControllerRef.current) {
+                                abortControllerRef.current.abort();
+                                abortControllerRef.current = null;
+                              }
                               invoke("cancel_python_blueprint").catch(
                                 console.error,
                               );
@@ -636,17 +673,22 @@ export function WaypointEditor({
                           {showAttraction && (
                             <div className="pl-6">
                               <ScriptInput
+                                thoughtProcess={thoughtProcess}
                                 value={wp.attractionNarration || ""}
                                 onChange={(v) =>
                                   updateWaypoint(wp.id, {
                                     attractionNarration: v,
                                   })
                                 }
-                                isGenerating={wp.isGeneratingScript || false}
+                                isGenerating={wp.generatingScriptType === "attraction"}
                                 onCancel={() => {
                                   updateWaypoint(wp.id, {
-                                    isGeneratingScript: false,
+                                    generatingScriptType: null,
                                   });
+                                  if (abortControllerRef.current) {
+                                    abortControllerRef.current.abort();
+                                    abortControllerRef.current = null;
+                                  }
                                   invoke("cancel_python_blueprint").catch(
                                     console.error,
                                   );

@@ -1,3 +1,5 @@
+import { t } from "@lingui/core/macro";
+import { Trans, Plural } from "@lingui/react/macro";
 import { useEffect, useRef, useState } from "react";
 import {
   Car,
@@ -9,12 +11,13 @@ import {
   Mic,
   Pencil,
   Plane,
+  Route,
   Ruler,
   Ship,
   X,
 } from "../../../components/ui/icons";
-import { useWorkspace } from "../../../hooks/useWorkspace";
 import { useUI } from "../../../hooks/useUI";
+import { useWorkspace } from "../../../hooks/useWorkspace";
 import { RouteMode, Waypoint } from "../../../types/index";
 
 interface WaypointItemProps {
@@ -36,10 +39,23 @@ export function WaypointItem({
   onEdit,
   onDelete,
 }: WaypointItemProps) {
-  const { activeWaypointId, setActiveWaypointId, updateWaypoint, waypoints } = useWorkspace();
+  const { activeWaypointId, setActiveWaypointId, updateWaypoint, waypoints, routeSegments } = useWorkspace();
   const { isRendering } = useUI();
   const itemRef = useRef<HTMLDivElement>(null);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isModeExpanded, setIsModeExpanded] = useState(false);
+  const [isViaActive, setIsViaActive] = useState(false);
+
+  useEffect(() => {
+    const handleEnter = (e: any) => setIsViaActive(e.detail.wpId === wp.id);
+    const handleExit = () => setIsViaActive(false);
+    window.addEventListener("enter-via-mode", handleEnter);
+    window.addEventListener("exit-via-mode", handleExit);
+    return () => {
+      window.removeEventListener("enter-via-mode", handleEnter);
+      window.removeEventListener("exit-via-mode", handleExit);
+    };
+  }, [wp.id]);
   const isActive = activeWaypointId === wp.id;
 
   useEffect(() => {
@@ -183,7 +199,7 @@ export function WaypointItem({
                 >
                   <ChevronRight className="w-3.5 h-3.5" />
                 </span>
-                Assets & Media
+                <Trans>Assets & Media</Trans>
               </button>
 
               {isExpanded && (
@@ -191,14 +207,13 @@ export function WaypointItem({
                   {wp.images && wp.images.length > 0 && (
                     <div className="flex items-center gap-1.5">
                       <ImageIcon className="w-3 h-3 text-emerald-500" />
-                      {wp.images.length} Image{wp.images.length > 1 ? "s" : ""}
+                      <Plural value={wp.images.length} one="# Image" other="# Images" />
                     </div>
                   )}
                   {hasScript && (
                     <div className="flex flex-col gap-0.5">
                       <div className="flex items-center gap-1.5">
-                        <Mic className="w-3 h-3 text-navi-400" /> Voiceover
-                        Script
+                        <Mic className="w-3 h-3 text-navi-400" />
                       </div>
                       <span className="pl-4.5 italic text-zinc-400 dark:text-zinc-500 truncate max-w-50">
                         "{scriptPreview.substring(0, 30)}..."
@@ -210,31 +225,58 @@ export function WaypointItem({
             </div>
           )}
 
-          {/* Simple Inline Route Mode Selector */}
+          {/* Minimal Inline Route Mode Selector */}
           {!isLast && (
-            <div className="mt-2.5 flex items-center gap-2">
-              <span className="text-[9px] font-bold text-zinc-400 dark:text-zinc-600 uppercase tracking-widest">
-                To Next
-              </span>
-              <div className="flex items-center bg-zinc-100 dark:bg-black/20 rounded-md p-0.5 border border-zinc-200 dark:border-white/5">
+            <div className="mt-2 flex items-center gap-2 flex-wrap">
+              <div
+                className="flex items-center bg-zinc-100 dark:bg-black/20 rounded-md p-0.5 border border-zinc-200 dark:border-white/5 cursor-pointer min-h-5.5"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsModeExpanded(!isModeExpanded);
+                }}
+                onMouseEnter={() => setIsModeExpanded(true)}
+                onMouseLeave={() => setIsModeExpanded(false)}
+              >
                 {[
-                  { id: "walking", icon: Footprints, title: "Walk" },
-                  { id: "driving", icon: Car, title: "Drive" },
-                  { id: "curve", icon: Plane, title: "Fly" },
-                  { id: "direct", icon: Ruler, title: "Direct" },
-                  { id: "ferry", icon: Ship, title: "Ferry" },
-                  { id: "draw", icon: Pencil, title: "Draw" },
+                  { id: "walking", icon: Footprints, title: t`Walk` },
+                  { id: "driving", icon: Car, title: t`Drive` },
+                  { id: "curve", icon: Plane, title: t`Fly` },
+                  { id: "direct", icon: Ruler, title: t`Direct` },
+                  { id: "ferry", icon: Ship, title: t`Ferry` },
+                  { id: "draw", icon: Pencil, title: t`Draw` },
                 ].map((mode) => {
                   const isModeActive = (wp.routeMode || "driving") === mode.id;
+                  if (!isModeActive && !isModeExpanded) return null;
                   const Icon = mode.icon;
                   return (
                     <button
                       key={mode.id}
                       onClick={(e) => {
                         e.stopPropagation();
-                        updateWaypoint(wp.id, {
-                          routeMode: mode.id as RouteMode,
-                        });
+                        if (isModeActive && !isModeExpanded) {
+                          setIsModeExpanded(true);
+                        } else {
+                          if (mode.id === "draw" && wp.routeMode !== "draw") {
+                            const routedWaypoints = waypoints.filter((w) => !w.isStopBy || w.connectToRoute);
+                            const routedIndex = routedWaypoints.findIndex((w) => w.id === wp.id);
+                            let newCustomRoute = wp.customRoute || [];
+                            if (routedIndex !== -1 && routeSegments && routeSegments[routedIndex]) {
+                              const seg = routeSegments[routedIndex];
+                              if (seg && seg.positions && seg.positions.length > 2) {
+                                newCustomRoute = seg.positions.slice(1, -1);
+                              }
+                            }
+                            updateWaypoint(wp.id, {
+                              routeMode: "draw",
+                              customRoute: newCustomRoute,
+                            });
+                          } else {
+                            updateWaypoint(wp.id, {
+                              routeMode: mode.id as RouteMode,
+                            });
+                          }
+                          setIsModeExpanded(false);
+                        }
                       }}
                       className={`p-1 rounded transition-colors ${
                         isModeActive
@@ -248,6 +290,48 @@ export function WaypointItem({
                   );
                 })}
               </div>
+
+              {(!wp.routeMode || wp.routeMode === "walking" || wp.routeMode === "driving" || wp.routeMode === "ferry") && (
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (isViaActive) {
+                        window.dispatchEvent(new CustomEvent("exit-via-mode"));
+                      } else {
+                        window.dispatchEvent(
+                          new CustomEvent("enter-via-mode", { detail: { wpId: wp.id } })
+                        );
+                      }
+                    }}
+                    className={`p-1 rounded transition-all ${
+                      isViaActive 
+                        ? "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 shadow-sm ring-1 ring-blue-500/50" 
+                        : "text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 dark:hover:text-zinc-200 dark:hover:bg-zinc-800"
+                    }`}
+                    title={t`Adjust Route (Add via points to nudge)`}
+                  >
+                    <Route className="w-3.5 h-3.5" />
+                  </button>
+                  {wp.viaPoints && wp.viaPoints.length > 0 && (
+                    <div className="flex items-center gap-1">
+                      <span className="text-[9px] bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded-full font-bold">
+                        {wp.viaPoints.length} via
+                      </span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          updateWaypoint(wp.id, { viaPoints: [] });
+                        }}
+                        className="text-[9px] text-zinc-400 hover:text-red-500 transition-colors"
+                        title={t`Clear all via points`}
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -261,7 +345,7 @@ export function WaypointItem({
                 handleSelect();
               }}
               className="p-1.5 hover:bg-navi/60 dark:hover:bg-zinc-800 rounded-md text-zinc-400 hover:text-navi-800 dark:hover:text-navi transition-colors"
-              title="Edit Stop"
+              title={t`Edit Stop`}
             >
               <Edit2 className="w-3.5 h-3.5" />
             </button>

@@ -1,7 +1,7 @@
 import { useLingui } from "@lingui/react";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
@@ -26,9 +26,16 @@ import {
   Sun,
   X,
   Globe,
+  Mic,
 } from "./icons";
 
-type SettingsTab = "general" | "appearance" | "api" | "video" | "ai";
+type SettingsTab =
+  | "general"
+  | "appearance"
+  | "api"
+  | "video"
+  | "ai"
+  | "tts_dictionary";
 
 export function AppSettings() {
   const { settings, updateSettings, setIsDirty } = useWorkspace();
@@ -37,6 +44,17 @@ export function AppSettings() {
   const { theme, setTheme, accentTheme, setAccentTheme } = useTheme();
 
   const [activeTab, setActiveTab] = useState<SettingsTab>("general");
+
+  useEffect(() => {
+    const handleOpenTab = (e: CustomEvent) => {
+      if (e.detail) {
+        setActiveTab(e.detail as SettingsTab);
+      }
+    };
+    window.addEventListener("open-app-settings-tab" as any, handleOpenTab);
+    return () =>
+      window.removeEventListener("open-app-settings-tab" as any, handleOpenTab);
+  }, []);
   const { shouldRender, isAnimatingOut } = useAnimatedUnmount(
     showAppSettings,
     150,
@@ -61,10 +79,10 @@ export function AppSettings() {
       className={`fixed inset-0 z-99999 flex items-center justify-center bg-zinc-950/40 backdrop-blur-[2px] select-none ${isAnimatingOut ? "animate-out fade-out duration-200" : "animate-in fade-in duration-200"}`}
     >
       <div
-        className={`w-135 bg-white dark:bg-navidark-900 border border-zinc-200 dark:border-navidark-400 rounded-xl shadow-2xl overflow-hidden flex flex-col ${isAnimatingOut ? "animate-out zoom-out-95 duration-200" : "animate-in zoom-in-95 duration-200"}`}
+        className={`w-162.5 max-w-[95vw] h-137.5 max-h-[95vh] bg-white dark:bg-navidark-900 border border-zinc-200 dark:border-navidark-400 rounded-xl shadow-2xl overflow-hidden flex flex-col ${isAnimatingOut ? "animate-out zoom-out-95 duration-200" : "animate-in zoom-in-95 duration-200"}`}
       >
         {/* Header Section */}
-        <div className="px-5 py-4 border-b border-zinc-100 dark:border-navidark-400 bg-zinc-50/50 dark:bg-navidark-800 flex items-center justify-between shrink-0">
+        <div className="px-5 py-3 border-b border-zinc-100 dark:border-navidark-400 bg-zinc-50/50 dark:bg-navidark-800 flex items-center justify-between shrink-0">
           <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
             <Settings className="w-4 h-4 text-navi" /> <Trans>Settings</Trans>
           </h3>
@@ -76,9 +94,9 @@ export function AppSettings() {
           </button>
         </div>
 
-        <div className="flex min-h-90">
+        <div className="flex flex-1 overflow-hidden">
           {/* Sidebar Tabs */}
-          <div className="w-36 bg-zinc-50 dark:bg-navidark-800 border-r border-zinc-100 dark:border-navidark-400 p-2 flex flex-col gap-1 shrink-0">
+          <div className="w-40 bg-zinc-50 dark:bg-navidark-800 border-r border-zinc-100 dark:border-navidark-400 p-2 flex flex-col gap-1 shrink-0 overflow-y-auto custom-scrollbar">
             <TabButton
               active={activeTab === "general"}
               onClick={() => setActiveTab("general")}
@@ -104,11 +122,19 @@ export function AppSettings() {
               label={t`Video Editor`}
             />
             <TabButton
-              active={activeTab === "ai"}
-              onClick={() => setActiveTab("ai")}
-              icon={Sparkles}
-              label={t`AI Models`}
+              active={activeTab === "tts_dictionary"}
+              onClick={() => setActiveTab("tts_dictionary")}
+              icon={Mic}
+              label={t`Pronunciation`}
             />
+            {settings.ai_features_enabled && (
+              <TabButton
+                active={activeTab === "ai"}
+                onClick={() => setActiveTab("ai")}
+                icon={Sparkles}
+                label={t`AI Models`}
+              />
+            )}
           </div>
 
           {/* Body Section */}
@@ -786,8 +812,176 @@ export function AppSettings() {
               </div>
             )}
 
+            {/* TTS DICTIONARY TAB */}
+            {activeTab === "tts_dictionary" && (
+              <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+                <div className="space-y-3">
+                  <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-widest flex items-center gap-1.5">
+                    <Mic className="w-3.5 h-3.5" />{" "}
+                    <Trans>TTS Pronunciation Dictionary</Trans>
+                  </label>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                    <Trans>
+                      Correct words or kanji that are read incorrectly by the AI
+                      voice. You can auto-extract entries from scripts by typing{" "}
+                      <code className="font-mono bg-zinc-100 dark:bg-zinc-800 px-1 rounded">
+                        漢字(よみがな)
+                      </code>{" "}
+                      in any narration script.
+                    </Trans>
+                  </p>
+                </div>
+
+                <div className="flex flex-col gap-2 max-w-xl">
+                  {/* Header row */}
+                  {(settings.pronunciation_dictionary || []).length > 0 && (
+                    <div className="flex items-center gap-2 pb-1 border-b border-zinc-100 dark:border-navidark-500">
+                      <span className="w-1/2 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                        <Trans>Word / Kanji</Trans>
+                      </span>
+                      <span className="w-1/2 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                        <Trans>Reading (Furigana)</Trans>
+                      </span>
+                      <span className="w-7" />
+                    </div>
+                  )}
+
+                  {(settings.pronunciation_dictionary || []).map(
+                    (entry, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          placeholder={t`Word (e.g. 加太)`}
+                          value={entry.word}
+                          onChange={(e) => {
+                            const newDict = [
+                              ...(settings.pronunciation_dictionary || []),
+                            ];
+                            newDict[idx] = {
+                              ...newDict[idx],
+                              word: e.target.value,
+                            };
+                            updateSettings({
+                              pronunciation_dictionary: newDict,
+                            });
+                            setIsDirty(true);
+                          }}
+                          className="w-1/2 bg-zinc-50 dark:bg-navidark-800 border border-zinc-200 dark:border-navidark-400 rounded-md px-2 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 outline-none focus:border-navi"
+                        />
+                        <input
+                          type="text"
+                          placeholder={t`Reading (e.g. かだ)`}
+                          value={entry.reading}
+                          onChange={(e) => {
+                            const newDict = [
+                              ...(settings.pronunciation_dictionary || []),
+                            ];
+                            newDict[idx] = {
+                              ...newDict[idx],
+                              reading: e.target.value,
+                            };
+                            updateSettings({
+                              pronunciation_dictionary: newDict,
+                            });
+                            setIsDirty(true);
+                          }}
+                          className="w-1/2 bg-zinc-50 dark:bg-navidark-800 border border-zinc-200 dark:border-navidark-400 rounded-md px-2 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 outline-none focus:border-navi"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newDict = [
+                              ...(settings.pronunciation_dictionary || []),
+                            ];
+                            newDict.splice(idx, 1);
+                            updateSettings({
+                              pronunciation_dictionary: newDict,
+                            });
+                            setIsDirty(true);
+                          }}
+                          className="p-1.5 text-zinc-400 hover:text-red-500 transition-colors"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ),
+                  )}
+
+                  {(settings.pronunciation_dictionary || []).length === 0 && (
+                    <div className="text-center py-8 text-zinc-400 dark:text-zinc-600">
+                      <Mic className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                      <p className="text-xs">
+                        <Trans>No entries yet.</Trans>
+                      </p>
+                      <p className="text-[10px] mt-1">
+                        <Trans>
+                          Add words below or extract them from narration
+                          scripts.
+                        </Trans>
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-3 mt-2 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newDict = [
+                          ...(settings.pronunciation_dictionary || []),
+                        ];
+                        newDict.push({ word: "", reading: "" });
+                        updateSettings({ pronunciation_dictionary: newDict });
+                        setIsDirty(true);
+                      }}
+                      className="text-[10px] font-semibold text-navi-600 dark:text-navi-400 hover:text-navi-700 dark:hover:text-navi-300 flex items-center gap-1 py-1"
+                    >
+                      + <Trans>Add word</Trans>
+                    </button>
+
+                    {(settings.pronunciation_dictionary || []).some(e => !e.reading && e.word) && (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const dict = settings.pronunciation_dictionary || [];
+                          const emptyWords = dict
+                            .filter(e => e.word && !e.reading)
+                            .map(e => e.word);
+                          if (emptyWords.length === 0) return;
+
+                          try {
+                            const res = await invoke<string>("run_python_blueprint", {
+                              action: "get_furigana",
+                              payload: JSON.stringify(emptyWords),
+                            });
+                            const parsed = JSON.parse(res);
+                            if (parsed.success && parsed.readings) {
+                              const newDict = dict.map(e => ({
+                                ...e,
+                                reading: (!e.reading && parsed.readings[e.word])
+                                  ? parsed.readings[e.word]
+                                  : e.reading,
+                              }));
+                              updateSettings({ pronunciation_dictionary: newDict });
+                              setIsDirty(true);
+                            }
+                          } catch (err) {
+                            console.error("get_furigana failed:", err);
+                          }
+                        }}
+                        className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 flex items-center gap-1 py-1 border border-amber-200 dark:border-amber-700 rounded-md px-2 bg-amber-50 dark:bg-amber-900/20"
+                      >
+                        ✨ <Trans>Auto-fill readings</Trans>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* AI MODELS TAB */}
-            {activeTab === "ai" && <AiModelsTab />}
+            {activeTab === "ai" && settings.ai_features_enabled && (
+              <AiModelsTab />
+            )}
           </div>
         </div>
 
@@ -820,7 +1014,7 @@ function TabButton({
   return (
     <button
       onClick={onClick}
-      className={`w-full flex items-center gap-2 px-3 py-2 text-xs font-bold rounded-md transition-colors ${
+      className={`w-full flex items-center gap-2 px-3 py-2 text-xs font-bold rounded-md transition-colors text-nowrap ${
         active
           ? "bg-white dark:bg-navidark-600 text-navi shadow-sm border border-zinc-200 dark:border-transparent"
           : "text-zinc-500 dark:text-navidark-150 hover:bg-zinc-200/50 dark:hover:bg-navidark-700 hover:text-zinc-800 dark:hover:text-zinc-200 border border-transparent"
@@ -930,6 +1124,38 @@ function AiModelsTab() {
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+      <div className="space-y-3 pt-4 border-t border-zinc-100 dark:border-navidark-700">
+        <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-tighter flex items-center gap-1.5">
+          <Sparkles className="w-3.5 h-3.5" /> <Trans>Active Model</Trans>
+        </label>
+        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+          <Trans>
+            Select which model to use for narration synthesis, only downloaded
+            models are shown
+          </Trans>
+        </p>
+        <select
+          value={settings.ai_model || "schroneko/gemma-2-2b-jpn-it"}
+          onChange={(e) => {
+            updateSettings({ ai_model: e.target.value });
+            setIsDirty(true);
+          }}
+          className="w-full bg-zinc-50 dark:bg-navidark-800 border border-zinc-200 dark:border-navidark-400 rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-900 dark:text-zinc-100 outline-none focus:border-navi focus:ring-1 focus:ring-navi transition-all"
+        >
+          {localModels.length === 0 ? (
+            <option value="" disabled>
+              <Trans>No models installed</Trans>
+            </option>
+          ) : (
+            localModels.map((modelId) => (
+              <option key={modelId} value={modelId}>
+                {modelId}
+              </option>
+            ))
+          )}
+        </select>
+      </div>
+
       <div className="space-y-3">
         <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-widest flex items-center gap-1.5">
           <Sparkles className="w-3.5 h-3.5" />{" "}
@@ -953,7 +1179,10 @@ function AiModelsTab() {
             </thead>
             <tbody className="divide-y divide-zinc-100 dark:divide-navidark-400">
               {recommendedModels.map((model) => {
-                const isLocal = localModels.includes(model.id);
+                const isLocal = localModels.some(
+                  (local) =>
+                    local === model.id || local.startsWith(model.id + ":"),
+                );
                 const dlStatus = downloading[model.id];
                 const isDownloading = !!dlStatus;
 
@@ -1021,38 +1250,6 @@ function AiModelsTab() {
             </tbody>
           </table>
         </div>
-      </div>
-
-      <div className="space-y-3 pt-4 border-t border-zinc-100 dark:border-navidark-700">
-        <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-widest flex items-center gap-1.5">
-          <Sparkles className="w-3.5 h-3.5" /> <Trans>Active Model</Trans>
-        </label>
-        <p className="text-xs text-zinc-500 dark:text-zinc-400">
-          <Trans>
-            Select which model to use for narration synthesis, only downloaded
-            models are shown
-          </Trans>
-        </p>
-        <select
-          value={settings.ai_model || "schroneko/gemma-2-2b-jpn-it"}
-          onChange={(e) => {
-            updateSettings({ ai_model: e.target.value });
-            setIsDirty(true);
-          }}
-          className="w-full bg-zinc-50 dark:bg-navidark-800 border border-zinc-200 dark:border-navidark-400 rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-900 dark:text-zinc-100 outline-none focus:border-navi focus:ring-1 focus:ring-navi transition-all"
-        >
-          {localModels.length === 0 ? (
-            <option value="" disabled>
-              <Trans>No models installed</Trans>
-            </option>
-          ) : (
-            localModels.map((modelId) => (
-              <option key={modelId} value={modelId}>
-                {modelId}
-              </option>
-            ))
-          )}
-        </select>
       </div>
     </div>
   );

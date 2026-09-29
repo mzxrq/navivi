@@ -1,6 +1,16 @@
 import { fetch } from '@tauri-apps/plugin-http';
+import { readFile } from '@tauri-apps/plugin-fs';
 
 const OLLAMA_URL = "http://127.0.0.1:11434";
+function uint8ArrayToBase64(bytes: Uint8Array): string {
+    const chunk = 0x8000;
+    const c = [];
+    for (let i = 0; i < bytes.length; i += chunk) {
+        c.push(String.fromCharCode.apply(null, bytes.subarray(i, i + chunk) as any));
+    }
+    return btoa(c.join(""));
+}
+
 
 export function detectLanguage(...texts: (string | undefined)[]): "Japanese" | "English" {
     const combinedText = texts.filter(Boolean).join(" ");
@@ -58,7 +68,10 @@ export async function pullModelStream(
     let buffer = "";
     while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done) {
+            
+            break;
+        }
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split("\n");
@@ -118,11 +131,22 @@ async function fetchKeylessWebContext(searchTerms: string): Promise<string> {
 }
 
 // ✨ NEW: Unified Streaming Engine
-async function streamLLM(prompt: string, engine: string, onChunk: (text: string) => void, signal?: AbortSignal) {
+async function streamLLM(prompt: string, engine: string, onChunk: (text: string) => void, signal?: AbortSignal, images?: string[], onThought?: (text: string) => void) {
+    const payload: any = { model: engine, prompt, stream: true };
+    if (engine.toLowerCase().includes("gemma-4") || engine.toLowerCase().includes("gemma4")) {
+        // Force raw mode for gemma-4 to ensure exact token sequences for Thinking Mode
+        payload.raw = true;
+        payload.prompt = `<bos><|turn>system\n<|think|><turn|>\n<|turn>user\n${prompt}<turn|>\n<|turn>model\n`;
+        delete payload.system;
+    }
+    if (images && images.length > 0) {
+        payload.images = images;
+    }
+
     const res = await fetch(`${OLLAMA_URL}/api/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: engine, prompt, stream: true }),
+        body: JSON.stringify(payload),
         signal,
     });
 
@@ -132,9 +156,13 @@ async function streamLLM(prompt: string, engine: string, onChunk: (text: string)
     const decoder = new TextDecoder("utf-8");
     let fullText = "";
     let buffer = "";
+    let consoleBuffer = "";
     while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done) {
+            if (consoleBuffer) console.log("%c[Ollama Stream] %c" + consoleBuffer, "color: #a855f7; font-weight: bold;", "color: inherit;");
+            break;
+        }
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split("\n");
@@ -146,7 +174,33 @@ async function streamLLM(prompt: string, engine: string, onChunk: (text: string)
                     const parsed = JSON.parse(line);
                     if (parsed.response) {
                         fullText += parsed.response;
-                        onChunk(fullText);
+                        
+                        consoleBuffer += parsed.response;
+                        if (consoleBuffer.includes("\n")) {
+                            const consoleLines = consoleBuffer.split("\n");
+                            for (let i = 0; i < consoleLines.length - 1; i++) {
+                                console.log("%c[Ollama Stream] %c" + consoleLines[i], "color: #a855f7; font-weight: bold;", "color: inherit;");
+                            }
+                            consoleBuffer = consoleLines[consoleLines.length - 1];
+                        }
+                        
+                        let thoughtBlocks = [];
+                        const matches = fullText.matchAll(/(?:<think>|<\|channel>thought|<thought>)([\s\S]*?)(?:<\/think>|<\/thought>|<channel\|>|$)/g);
+                        for (const m of matches) {
+                            thoughtBlocks.push(m[1]);
+                        }
+                        const allThoughts = thoughtBlocks.join("\n");
+                        
+                        let currentClean = fullText;
+                        currentClean = currentClean.replace(/<think>[\s\S]*?(<\/think>|$)/g, "");
+                        currentClean = currentClean.replace(/<\|channel>thought[\s\S]*?(<channel\|>|$)/g, "");
+                        currentClean = currentClean.replace(/<\|think\|>[\s\S]*?(<turn\|>|$)/g, "");
+                        currentClean = currentClean.replace(/<thought>[\s\S]*?(<\/thought>|$)/g, "");
+
+                        onChunk(currentClean);
+                        if (onThought && allThoughts) {
+                            onThought(allThoughts);
+                        }
                     }
                 } catch (e) {
                     console.warn("Failed to parse JSON chunk in streamLLM:", line);
@@ -189,6 +243,11 @@ export async function generateWaypointScriptStream(
     onChunk: (text: string) => void,
     lat: number = 0,
     lng: number = 0,
+    imagePaths: string[] = [],
+    onThought?: (text: string) => void,
+    scriptType: "arriving" | "attraction" = "attraction",
+    isFirstWaypoint: boolean = false,
+    signal?: AbortSignal
 ): Promise<void> {
     let contextStr = "";
 
@@ -200,19 +259,39 @@ export async function generateWaypointScriptStream(
 
     const themeContext = theme ? `この旅のテーマは「${theme}」です。` : "";
 
-    const prompt = `あなたは旅行番組のプロのナレーターです。
-${themeContext}
-現在地「${locationName}」に到着した際、または紹介する際のナレーションを2〜3文で作成してください。
+    let roleContext = "";
+    if (scriptType === "arriving") {
+        if (isFirstWaypoint) {
+            roleContext = `ここから旅がスタートします。「${locationName}」からの出発を盛り上げるような、ワクワクする導入のナレーション（出発ナレーション）を作成してください。`;
+        } else {
+            roleContext = `前の場所から移動し、目的地である「${locationName}」に近づき、到着するまでの道中や、見えてきた時の期待感を煽るような「到着ナレーション」を作成してください。具体的な歴史や深い見どころの解説は次のナレーションに譲り、ここでは「移動から到着までの風景や高揚感」にフォーカスしてください。`;
+        }
+    } else {
+        roleContext = `現在地「${locationName}」に到着した後の、具体的な見どころや歴史、魅力を深く紹介する「見どころ解説ナレーション」を作成してください。`;
+    }
 
-コンテキスト・要望: ${userPrompt}
+    const prompt = `あなたは旅行番組のプロのナレーターです。${themeContext}
+${roleContext}
+コンテキストや要望: ${userPrompt}
 ${contextStr}
 
 ルール:
 1. 日本語の「です・ます調」で、親しみやすい言葉遣いにすること。
-2. 音声合成で読み上げるため、括弧書きの指示（例：[笑顔で]など）は絶対に書かないこと。
-3. 簡潔に、その場所の魅力や歴史が伝わるようにすること。`;
+2. 音声合成で読み上げるため、括弧書き（感情（例：[笑顔で]など））は絶対に書かないこと。
+3. 簡潔に、1つの短い段落（3〜4文程度）にまとめること。
+4. 提供された画像がある場合は、その写真に写っている風景や特徴も自然に描写に組み込んでください。`;
 
-    await streamLLM(prompt, engine, onChunk);
+    const base64Images: string[] = [];
+    for (const p of imagePaths) {
+        try {
+            const bytes = await readFile(p);
+            base64Images.push(uint8ArrayToBase64(bytes));
+        } catch (e) {
+            console.warn("Failed to load image for vision context", e);
+        }
+    }
+
+    await streamLLM(prompt, engine, onChunk, signal, base64Images, onThought);
 }
 
 export async function extractLocationsFromDocument(

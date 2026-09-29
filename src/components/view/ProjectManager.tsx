@@ -19,6 +19,7 @@ import {
   Edit3,
   AlertTriangle,
   Film,
+  Settings,
 } from "../ui/icons";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
@@ -231,8 +232,8 @@ export function ProjectManager() {
       {isProjectLoading && (
         <div className="fixed inset-0 z-9999 bg-white/60 dark:bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center animate-in fade-in duration-300">
           <div className="w-16 h-16 border-4 border-navi/30 border-t-navi rounded-full animate-spin"></div>
-          <p className="mt-4 text-sm font-bold text-navi animate-pulse">
-            Reading Project File...
+          <p className="mt-4 text-sm font-bold text-navi animate-pulse tracking-tight">
+            <Trans>Reading Project File...</Trans>
           </p>
         </div>
       )}
@@ -241,10 +242,10 @@ export function ProjectManager() {
         {/* Top Header Bar */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-10 gap-6">
           <div>
-            <h1 className="text-3xl font-extrabold text-zinc-900 dark:text-white tracking-tight">
+            <h1 className="text-3xl font-extrabold text-zinc-900 dark:text-white tracking-tighter">
               <Trans>Project Manager</Trans>
             </h1>
-            <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-2">
+            <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-2 tracking-tight">
               <Trans>
                 Select a recent route or create a new workspace to begin
               </Trans>
@@ -279,22 +280,15 @@ export function ProjectManager() {
 
             <button
               onClick={() => handleOpenProject(undefined, false)}
-              className="flex items-center gap-2 bg-white dark:bg-navidark-700 text-zinc-700 dark:text-zinc-200 border border-zinc-200 dark:border-white/10 px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-zinc-100 dark:hover:bg-navidark-600 transition-all shadow-sm"
+              className="flex items-center gap-2 bg-white dark:bg-navidark-700 text-zinc-700 dark:text-zinc-200 border border-zinc-200 dark:border-white/10 px-4 py-2.5 rounded-xl text-sm hover:bg-zinc-100 dark:hover:bg-navidark-600 transition-all shadow-sm text-nowrap"
               title={t`Open a single project file (.nvv or .zip archive)`}
             >
               <FolderOpen className="w-4 h-4" /> <Trans>Open File...</Trans>
             </button>
-            <button
-              onClick={() => handleOpenProject(undefined, true)}
-              className="flex items-center gap-2 bg-white dark:bg-navidark-700 text-zinc-700 dark:text-zinc-200 border border-zinc-200 dark:border-white/10 px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-zinc-100 dark:hover:bg-navidark-600 transition-all shadow-sm"
-              title={t`Open an entire project folder`}
-            >
-              <Folder className="w-4 h-4" /> <Trans>Open Folder...</Trans>
-            </button>
             <div className="flex items-center gap-3">
               <button
                 onClick={handleNewProject}
-                className="flex items-center gap-2 bg-navi text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-navi/90 shadow-md hover:shadow-lg transition-all"
+                className="flex items-center gap-2 bg-navi text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-navi/90 shadow-md hover:shadow-lg transition-all text-nowrap"
               >
                 <Plus className="w-4 h-4" /> <Trans>New Project</Trans>
               </button>
@@ -345,16 +339,16 @@ export function ProjectManager() {
                     showToast("Failed to load demo route", "error");
                   }
                 }}
-                className="group flex cursor-pointer bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-500/30 rounded-2xl overflow-visible hover:border-emerald-400 dark:hover:border-emerald-500 transition-all duration-200 hover:shadow-lg"
+                className="group flex cursor-pointer bg-navi-50 dark:bg-navi-900/20 border border-navi-200 dark:border-navi-500/30 rounded-2xl overflow-visible hover:border-navi-400 dark:hover:border-navi-500 transition-all duration-200 hover:shadow-lg"
               >
-                <div className="w-1/3 min-w-30 bg-emerald-100 dark:bg-emerald-900/50 flex items-center justify-center relative overflow-hidden rounded-l-2xl shrink-0">
-                  <Map className="w-8 h-8 text-emerald-500 dark:text-emerald-400" />
+                <div className="w-1/3 min-w-30 bg-navi-100 dark:bg-navi-900/50 flex items-center justify-center relative overflow-hidden rounded-l-2xl shrink-0">
+                  <Map className="w-8 h-8 text-navi-500 dark:text-navi-400" />
                 </div>
-                <div className="p-4 w-full flex flex-col justify-center flex-1 min-w-0 border-l border-emerald-100 dark:border-emerald-500/20">
-                  <h3 className="font-bold text-sm text-emerald-900 dark:text-emerald-100">
+                <div className="p-4 w-full flex flex-col justify-center flex-1 min-w-0 border-l border-navi-100 dark:border-navi-500/20">
+                  <h3 className="font-bold text-sm text-navi-900 dark:text-navi-100">
                     <Trans>Kyoto Demo Route</Trans>
                   </h3>
-                  <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1">
+                  <p className="text-xs text-navi-600 dark:text-navi-400 mt-1">
                     <Trans>Pre-configured sample project</Trans>
                   </p>
                 </div>
@@ -386,7 +380,7 @@ export function ProjectManager() {
               <div
                 key={project.path}
                 onClick={() => handleOpenProject(project.path)}
-                onContextMenu={(e) => handleContextMenu(e, project)} // ✨ Trigger global context menu
+                onContextMenu={(e) => handleContextMenu(e, project)}
                 className="group flex cursor-pointer bg-white dark:bg-navidark-700 border border-zinc-200 dark:border-white/10 rounded-2xl overflow-visible hover:border-navi dark:hover:border-navi transition-all duration-200 hover:shadow-lg"
               >
                 <div className="w-1/3 min-w-30 bg-linear-to-br from-zinc-100 to-zinc-200 dark:from-navidark-600 dark:to-navidark-800 flex items-center justify-center relative overflow-hidden rounded-l-2xl shrink-0">
@@ -426,7 +420,7 @@ export function ProjectManager() {
                               e.stopPropagation();
                               handleOpenProject(project.path);
                             }}
-                            className="w-full text-left px-4 py-2 text-xs font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-navidark-600 flex items-center gap-2"
+                            className="w-full text-left px-4 py-2 text-xs text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-navidark-600 flex items-center gap-2"
                           >
                             <FolderOpen className="w-3.5 h-3.5" />{" "}
                             <Trans>Open Project</Trans>
@@ -434,17 +428,24 @@ export function ProjectManager() {
                           <div className="h-px bg-zinc-200 dark:bg-navidark-400 my-1 mx-2" />
                           <button
                             onClick={(e) => openModal("rename", project, e)}
-                            className="w-full text-left px-4 py-2 text-xs font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-navidark-600 flex items-center gap-2"
+                            className="w-full text-left px-4 py-2 text-xs text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-navidark-600 flex items-center gap-2"
                           >
                             <Edit3 className="w-3.5 h-3.5" />{" "}
                             <Trans>Rename</Trans>
                           </button>
                           <button
                             onClick={(e) => openModal("duplicate", project, e)}
-                            className="w-full text-left px-4 py-2 text-xs font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-navidark-600 flex items-center gap-2"
+                            className="w-full text-left px-4 py-2 text-xs text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-navidark-600 flex items-center gap-2"
                           >
                             <Copy className="w-3.5 h-3.5" />{" "}
                             <Trans>Duplicate</Trans>
+                          </button>
+                          <button
+                            onClick={(e) => openModal("settings", project, e)}
+                            className="w-full text-left px-4 py-2 text-xs text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-navidark-600 flex items-center gap-2"
+                          >
+                            <Settings className="w-3.5 h-3.5" />{" "}
+                            <Trans>Advanced Settings</Trans>
                           </button>
                           <button
                             onClick={(e) => {
@@ -452,7 +453,7 @@ export function ProjectManager() {
                               handleQuickRender(project);
                               setActiveMenu(null);
                             }}
-                            className="w-full text-left px-4 py-2 text-xs font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-navidark-600 flex items-center gap-2"
+                            className="w-full text-left px-4 py-2 text-xs text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-navidark-600 flex items-center gap-2"
                           >
                             <Film className="w-3.5 h-3.5" />{" "}
                             <Trans>Quick Render</Trans>
@@ -472,7 +473,7 @@ export function ProjectManager() {
                               }
                               setActiveMenu(null);
                             }}
-                            className="w-full text-left px-4 py-2 text-xs font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-navidark-600 flex items-center gap-2"
+                            className="w-full text-left px-4 py-2 text-xs text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-navidark-600 flex items-center gap-2"
                           >
                             <Folder className="w-3.5 h-3.5" />{" "}
                             <Trans>Reveal in Explorer</Trans>
@@ -480,7 +481,7 @@ export function ProjectManager() {
                           <div className="h-px bg-zinc-200 dark:bg-navidark-400 my-1 mx-2" />
                           <button
                             onClick={(e) => openModal("remove", project, e)}
-                            className="w-full text-left px-4 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 flex items-center gap-2"
+                            className="w-full text-left px-4 py-2 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 flex items-center gap-2"
                           >
                             <Trash2 className="w-3.5 h-3.5" />{" "}
                             <Trans>Remove from List</Trans>
@@ -493,10 +494,14 @@ export function ProjectManager() {
                   <div className="flex items-center gap-2 mt-4 text-[11px] font-medium text-zinc-500 dark:text-zinc-400 bg-zinc-50 dark:bg-navidark-800 w-fit px-2 py-1 rounded-md pointer-events-none">
                     <Clock className="w-3 h-3" />
                     <span>
-                      {new Date(project.lastOpened).toLocaleDateString(
-                        undefined,
-                        { month: "short", day: "numeric", year: "numeric" },
-                      )}
+                      {new Date(project.lastOpened).toLocaleString(undefined, {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        second: "2-digit",
+                      })}
                     </span>
                   </div>
                 </div>
@@ -506,7 +511,7 @@ export function ProjectManager() {
         ) : (
           /* Table/List View */
           <div className="flex flex-col border border-zinc-200 dark:border-navidark-400 bg-white dark:bg-navidark-700 rounded-xl shadow-sm overflow-hidden mb-12">
-            <div className="grid grid-cols-12 gap-4 px-5 py-3 bg-zinc-50 dark:bg-navidark-800 border-b border-zinc-200 dark:border-navidark-400 text-xs font-bold text-zinc-500 uppercase tracking-wider">
+            <div className="grid grid-cols-12 gap-4 px-5 py-3 bg-zinc-50 dark:bg-navidark-800 border-b border-zinc-200 dark:border-navidark-400 text-xs text-zinc-500 uppercase tracking-wider">
               <div className="col-span-9 sm:col-span-4 pl-8">
                 <Trans>Project Name</Trans>
               </div>
@@ -558,14 +563,14 @@ export function ProjectManager() {
                   </div>
 
                   <div className="col-span-2 hidden sm:flex items-center justify-end text-xs font-medium text-zinc-500 dark:text-zinc-400 pr-4 pointer-events-none">
-                    {new Date(project.lastOpened).toLocaleDateString(
-                      undefined,
-                      {
-                        month: "short",
-                        day: "numeric",
-                        year: "numeric",
-                      },
-                    )}
+                    {new Date(project.lastOpened).toLocaleString(undefined, {
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      second: "2-digit",
+                    })}
                   </div>
 
                   <div className="col-span-3 sm:col-span-1 flex items-center justify-end relative">
@@ -583,7 +588,7 @@ export function ProjectManager() {
                             e.stopPropagation();
                             handleOpenProject(project.path);
                           }}
-                          className="w-full text-left px-4 py-2 text-xs font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-navidark-600 flex items-center gap-2"
+                          className="w-full text-left px-4 py-2 text-xs text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-navidark-600 flex items-center gap-2"
                         >
                           <FolderOpen className="w-3.5 h-3.5" />{" "}
                           <Trans>Open Project</Trans>
@@ -591,17 +596,24 @@ export function ProjectManager() {
                         <div className="my-1 border-t border-zinc-200 dark:border-white/10" />
                         <button
                           onClick={(e) => openModal("rename", project, e)}
-                          className="w-full text-left px-4 py-2 text-xs font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-navidark-600 flex items-center gap-2"
+                          className="w-full text-left px-4 py-2 text-xs text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-navidark-600 flex items-center gap-2"
                         >
                           <Edit3 className="w-3.5 h-3.5" />{" "}
                           <Trans>Rename</Trans>
                         </button>
                         <button
                           onClick={(e) => openModal("duplicate", project, e)}
-                          className="w-full text-left px-4 py-2 text-xs font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-navidark-600 flex items-center gap-2"
+                          className="w-full text-left px-4 py-2 text-xs text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-navidark-600 flex items-center gap-2"
                         >
                           <Copy className="w-3.5 h-3.5" />{" "}
                           <Trans>Duplicate</Trans>
+                        </button>
+                        <button
+                          onClick={(e) => openModal("settings", project, e)}
+                          className="w-full text-left px-4 py-2 text-xs text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-navidark-600 flex items-center gap-2"
+                        >
+                          <Settings className="w-3.5 h-3.5" />{" "}
+                          <Trans>Advanced Settings</Trans>
                         </button>
                         <button
                           onClick={(e) => {
@@ -609,7 +621,7 @@ export function ProjectManager() {
                             handleQuickRender(project);
                             setActiveMenu(null);
                           }}
-                          className="w-full text-left px-4 py-2 text-xs font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-navidark-600 flex items-center gap-2"
+                          className="w-full text-left px-4 py-2 text-xs text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-navidark-600 flex items-center gap-2"
                         >
                           <Film className="w-3.5 h-3.5" />{" "}
                           <Trans>Quick Render</Trans>
@@ -629,7 +641,7 @@ export function ProjectManager() {
                             }
                             setActiveMenu(null);
                           }}
-                          className="w-full text-left px-4 py-2 text-xs font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-navidark-600 flex items-center gap-2"
+                          className="w-full text-left px-4 py-2 text-xs text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-navidark-600 flex items-center gap-2"
                         >
                           <Folder className="w-3.5 h-3.5" />{" "}
                           <Trans>Reveal in Explorer</Trans>
@@ -638,7 +650,7 @@ export function ProjectManager() {
                         <div className="h-px bg-zinc-200 dark:bg-navidark-400 my-1 mx-2" />
                         <button
                           onClick={(e) => openModal("remove", project, e)}
-                          className="w-full text-left px-4 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 flex items-center gap-2"
+                          className="w-full text-left px-4 py-2 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 flex items-center gap-2"
                         >
                           <Trash2 className="w-3.5 h-3.5" />{" "}
                           <Trans>Remove from List</Trans>
@@ -666,7 +678,7 @@ export function ProjectManager() {
               <div className="fixed inset-0 z-99999 bg-zinc-950/40 backdrop-blur-[2px] flex items-center justify-center p-4 animate-in fade-in duration-200">
                 <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200">
                   <div className="p-5">
-                    <h3 className="text-base font-bold text-zinc-900 dark:text-white mb-2 flex items-center gap-2">
+                    <h3 className="text-base text-zinc-900 dark:text-white mb-2 flex items-center gap-2">
                       {modalState.type === "remove" && (
                         <>
                           <AlertTriangle className="w-4 h-4 text-red-500" />{" "}
@@ -700,7 +712,7 @@ export function ProjectManager() {
                       </p>
                     ) : (
                       <div className="space-y-3 mt-4">
-                        <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                        <label className="text-xs text-zinc-700 dark:text-zinc-300">
                           {modalState.type === "rename"
                             ? t`New Project Name`
                             : t`Duplicate Project Name`}
@@ -745,3 +757,4 @@ export function ProjectManager() {
     </>
   );
 }
+

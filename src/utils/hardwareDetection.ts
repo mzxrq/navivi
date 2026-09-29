@@ -9,44 +9,38 @@ export interface SystemHardwareInfo {
   details: string;
 }
 
-export function detectHardwareSpec(
-  override?: "auto" | "high" | "low"
-): SystemHardwareInfo {
-  if (override === "high") {
-    return {
-      isHighSpec: true,
-      gpuRenderer: "Manual Override (High-Spec)",
-      hasDedicatedGpu: true,
-      logicalCores: navigator.hardwareConcurrency || 8,
-      details: "Hardware spec manually overridden to High-Spec",
-    };
-  }
-  if (override === "low") {
-    return {
-      isHighSpec: false,
-      gpuRenderer: "Manual Override (Low-Spec)",
-      hasDedicatedGpu: false,
-      logicalCores: navigator.hardwareConcurrency || 4,
-      details: "Hardware spec manually overridden to Low-Spec",
-    };
-  }
+// ─── Module-level singleton ────────────────────────────────────────────────────
+// We detect the GPU renderer exactly ONCE by creating a temporary WebGL canvas.
+// Re-detecting on every React render would exhaust the browser's WebGL context
+// limit (~16), evicting the Mapbox context and causing the cascade of
+// "INVALID_OPERATION: object does not belong to this context" errors.
+let _cachedAutoResult: Omit<SystemHardwareInfo, "details"> | null = null;
+
+function getAutoHardwareInfo(): Omit<SystemHardwareInfo, "details"> {
+  if (_cachedAutoResult) return _cachedAutoResult;
 
   let gpuRenderer = "Unknown GPU";
-  let logicalCores = navigator.hardwareConcurrency || 4;
-  let deviceMemoryGb: number | undefined = (navigator as any).deviceMemory;
+  const logicalCores = navigator.hardwareConcurrency || 4;
+  const deviceMemoryGb: number | undefined = (navigator as any).deviceMemory;
 
   try {
     const canvas = document.createElement("canvas");
+    // Request a low-power context so we don't steal a high-performance slot
     const gl =
-      canvas.getContext("webgl") ||
-      (canvas.getContext("experimental-webgl") as WebGLRenderingContext | null);
+      (canvas.getContext("webgl", { powerPreference: "low-power" }) as WebGLRenderingContext | null) ||
+      (canvas.getContext("experimental-webgl", { powerPreference: "low-power" }) as WebGLRenderingContext | null);
     if (gl) {
       const ext = gl.getExtension("WEBGL_debug_renderer_info");
       if (ext) {
-        gpuRenderer =
-          gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) || "Unknown GPU";
+        gpuRenderer = gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) || "Unknown GPU";
       }
+      // Immediately lose the context so the browser reclaims it.
+      const loseCtx = gl.getExtension("WEBGL_lose_context");
+      loseCtx?.loseContext();
     }
+    // Detach from the DOM (it was never attached, but this signals GC intent)
+    canvas.width = 0;
+    canvas.height = 0;
   } catch (e) {
     console.warn("Could not query WebGL renderer info:", e);
   }
@@ -95,16 +89,45 @@ export function detectHardwareSpec(
       logicalCores >= 12 &&
       (deviceMemoryGb ? deviceMemoryGb >= 32 : false));
 
-  const details = isHighSpec
-    ? t`High-spec system detected: ${gpuRenderer} (${logicalCores} CPU threads)`
-    : t`Low-spec system detected: ${gpuRenderer} (Integrated graphics / no discrete GPU, ${logicalCores} CPU threads)`;
-
-  return {
+  _cachedAutoResult = {
     isHighSpec,
     gpuRenderer,
     hasDedicatedGpu,
     logicalCores,
     deviceMemoryGb,
-    details,
   };
+
+  return _cachedAutoResult;
+}
+
+export function detectHardwareSpec(
+  override?: "auto" | "high" | "low"
+): SystemHardwareInfo {
+  if (override === "high") {
+    return {
+      isHighSpec: true,
+      gpuRenderer: "Manual Override (High-Spec)",
+      hasDedicatedGpu: true,
+      logicalCores: navigator.hardwareConcurrency || 8,
+      details: "Hardware spec manually overridden to High-Spec",
+    };
+  }
+  if (override === "low") {
+    return {
+      isHighSpec: false,
+      gpuRenderer: "Manual Override (Low-Spec)",
+      hasDedicatedGpu: false,
+      logicalCores: navigator.hardwareConcurrency || 4,
+      details: "Hardware spec manually overridden to Low-Spec",
+    };
+  }
+
+  const { isHighSpec, gpuRenderer, hasDedicatedGpu, logicalCores, deviceMemoryGb } =
+    getAutoHardwareInfo();
+
+  const details = isHighSpec
+    ? t`High-spec system detected: ${gpuRenderer} (${logicalCores} CPU threads)`
+    : t`Low-spec system detected: ${gpuRenderer} (Integrated graphics / no discrete GPU, ${logicalCores} CPU threads)`;
+
+  return { isHighSpec, gpuRenderer, hasDedicatedGpu, logicalCores, deviceMemoryGb, details };
 }

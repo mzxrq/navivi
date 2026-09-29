@@ -524,7 +524,7 @@ export function ContextMenu() {
                   className="ctx-btn text-blue-600 dark:text-blue-400"
                 >
                   <MapPinPlus className="w-3.5 h-3.5" />
-                  <Trans>normal-node</Trans>{" "}
+                  <Trans>stub-node</Trans>{" "}
                 </button>
                 <button
                   onClick={() => handleSetWaypointType(menu.targetId, "stopby")}
