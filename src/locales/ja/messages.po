@@ -368,7 +368,7 @@ msgstr "アスペクト比とプラットフォーム設定"
 
 #: src/features/map/components/WaypointItem.tsx:202
 msgid "Assets & Media"
-msgstr ""
+msgstr "アセット＆メディア"
 
 #: src/components/ui/RenderOverlay.tsx:1383
 msgid "Assets accepted and stitched into your final deliverable video"
@@ -503,7 +503,7 @@ msgstr "ビットレートのプリセット"
 
 #: src/features/map/components/MapLayers/RouteStyling.tsx:125
 msgid "Border"
-msgstr ""
+msgstr "枠線"
 
 #: src/features/map/components/MapLayers/RouteStyling.tsx:135
 msgid "Border Width"
@@ -615,7 +615,7 @@ msgstr "すべての通知を消去"
 
 #: src/features/map/components/WaypointItem.tsx:327
 msgid "Clear all via points"
-msgstr ""
+msgstr "すべての経由地をクリア"
 
 #: src/components/ui/RenderOverlay.tsx:1266
 msgid "Clear generated audio and re-enter pronunciation"
@@ -897,7 +897,7 @@ msgstr "直線"
 
 #: src/features/map/components/WaypointItem.tsx:244
 msgid "Direct"
-msgstr ""
+msgstr "直線"
 
 #: src/features/timeline/components/elements/inspector/InspectorTransitionsPanel.tsx:114
 #: src/features/timeline/components/elements/inspector/InspectorTransitionsPanel.tsx:208
@@ -970,7 +970,7 @@ msgstr "手書き"
 
 #: src/features/map/components/WaypointItem.tsx:246
 msgid "Draw"
-msgstr ""
+msgstr "描画"
 
 #: src/features/map/components/MapToolbar.tsx:139
 msgid "Draw Custom Route (L)"
@@ -988,7 +988,7 @@ msgstr "ドライブ"
 
 #: src/features/map/components/WaypointItem.tsx:242
 msgid "Drive"
-msgstr ""
+msgstr "車"
 
 #: src/components/ui/NewProject.tsx:239
 msgid "DriveLabel"
@@ -1055,7 +1055,7 @@ msgstr "ここにサブタイトルを入れます..."
 
 #: src/features/map/components/WaypointItem.tsx:348
 msgid "Edit Stop"
-msgstr ""
+msgstr "立ち寄り地点を編集"
 
 #: src/components/ui/RenderOverlay.tsx:828
 msgid "Edit the image, script, or route mode in the Waypoint Editor. Click Resume when ready to re-render"
@@ -1331,7 +1331,7 @@ msgstr "フェリー"
 
 #: src/features/map/components/WaypointItem.tsx:245
 msgid "Ferry"
-msgstr ""
+msgstr "フェリー"
 
 #: src/components/view/ProjectManager.tsx:519
 msgid "File Path"
@@ -1351,7 +1351,7 @@ msgstr "飛行"
 
 #: src/features/map/components/WaypointItem.tsx:243
 msgid "Fly"
-msgstr ""
+msgstr "飛行"
 
 #: src/components/ui/AppSettings.tsx:725
 msgid "Font"
@@ -1737,7 +1737,7 @@ msgstr "再生成のマークが付けられました: 画像、ナレーショ�
 
 #: src/features/map/components/MapLayers/RouteStyling.tsx:119
 msgid "Marker"
-msgstr ""
+msgstr "マーカー"
 
 #. placeholder {0}: existingMarkers.length + 1
 #: src/features/timeline/components/TimelineView.tsx:816
