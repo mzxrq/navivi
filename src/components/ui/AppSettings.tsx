@@ -1,7 +1,7 @@
 import { useLingui } from "@lingui/react";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
@@ -29,7 +29,13 @@ import {
   Mic,
 } from "./icons";
 
-type SettingsTab = "general" | "appearance" | "api" | "video" | "ai" | "tts_dictionary";
+type SettingsTab =
+  | "general"
+  | "appearance"
+  | "api"
+  | "video"
+  | "ai"
+  | "tts_dictionary";
 
 export function AppSettings() {
   const { settings, updateSettings, setIsDirty } = useWorkspace();
@@ -37,7 +43,7 @@ export function AppSettings() {
   const { showAppSettings, setShowAppSettings, currentView } = useUI();
   const { theme, setTheme, accentTheme, setAccentTheme } = useTheme();
 
-    const [activeTab, setActiveTab] = useState<SettingsTab>("general");
+  const [activeTab, setActiveTab] = useState<SettingsTab>("general");
 
   useEffect(() => {
     const handleOpenTab = (e: CustomEvent) => {
@@ -46,7 +52,8 @@ export function AppSettings() {
       }
     };
     window.addEventListener("open-app-settings-tab" as any, handleOpenTab);
-    return () => window.removeEventListener("open-app-settings-tab" as any, handleOpenTab);
+    return () =>
+      window.removeEventListener("open-app-settings-tab" as any, handleOpenTab);
   }, []);
   const { shouldRender, isAnimatingOut } = useAnimatedUnmount(
     showAppSettings,
@@ -731,10 +738,7 @@ export function AppSettings() {
                     </div>
                   </div>
 
-                  
-
-
-<div className="space-y-2 pt-4 border-t border-zinc-100 dark:border-navidark-700">
+                  <div className="space-y-2 pt-4 border-t border-zinc-100 dark:border-navidark-700">
                     <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-widest flex items-center gap-1.5">
                       <Trans>Subtitle Format</Trans>
                     </label>
@@ -813,12 +817,17 @@ export function AppSettings() {
               <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
                 <div className="space-y-3">
                   <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-widest flex items-center gap-1.5">
-                    <Mic className="w-3.5 h-3.5" /> <Trans>TTS Pronunciation Dictionary</Trans>
+                    <Mic className="w-3.5 h-3.5" />{" "}
+                    <Trans>TTS Pronunciation Dictionary</Trans>
                   </label>
                   <p className="text-xs text-zinc-500 dark:text-zinc-400">
                     <Trans>
-                      Correct words or kanji that are read incorrectly by the AI voice.
-                      You can auto-extract entries from scripts by typing <code className="font-mono bg-zinc-100 dark:bg-zinc-800 px-1 rounded">漢字(よみがな)</code> in any narration script.
+                      Correct words or kanji that are read incorrectly by the AI
+                      voice. You can auto-extract entries from scripts by typing{" "}
+                      <code className="font-mono bg-zinc-100 dark:bg-zinc-800 px-1 rounded">
+                        漢字(よみがな)
+                      </code>{" "}
+                      in any narration script.
                     </Trans>
                   </p>
                 </div>
@@ -827,73 +836,144 @@ export function AppSettings() {
                   {/* Header row */}
                   {(settings.pronunciation_dictionary || []).length > 0 && (
                     <div className="flex items-center gap-2 pb-1 border-b border-zinc-100 dark:border-navidark-500">
-                      <span className="w-1/2 text-[10px] font-bold text-zinc-400 uppercase tracking-wider"><Trans>Word / Kanji</Trans></span>
-                      <span className="w-1/2 text-[10px] font-bold text-zinc-400 uppercase tracking-wider"><Trans>Reading (Furigana)</Trans></span>
+                      <span className="w-1/2 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                        <Trans>Word / Kanji</Trans>
+                      </span>
+                      <span className="w-1/2 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                        <Trans>Reading (Furigana)</Trans>
+                      </span>
                       <span className="w-7" />
                     </div>
                   )}
 
-                  {(settings.pronunciation_dictionary || []).map((entry, idx) => (
-                    <div key={idx} className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        placeholder={t`Word (e.g. 加太)`}
-                        value={entry.word}
-                        onChange={(e) => {
-                          const newDict = [...(settings.pronunciation_dictionary || [])];
-                          newDict[idx] = { ...newDict[idx], word: e.target.value };
-                          updateSettings({ pronunciation_dictionary: newDict });
-                          setIsDirty(true);
-                        }}
-                        className="w-1/2 bg-zinc-50 dark:bg-navidark-800 border border-zinc-200 dark:border-navidark-400 rounded-md px-2 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 outline-none focus:border-navi"
-                      />
-                      <input
-                        type="text"
-                        placeholder={t`Reading (e.g. かだ)`}
-                        value={entry.reading}
-                        onChange={(e) => {
-                          const newDict = [...(settings.pronunciation_dictionary || [])];
-                          newDict[idx] = { ...newDict[idx], reading: e.target.value };
-                          updateSettings({ pronunciation_dictionary: newDict });
-                          setIsDirty(true);
-                        }}
-                        className="w-1/2 bg-zinc-50 dark:bg-navidark-800 border border-zinc-200 dark:border-navidark-400 rounded-md px-2 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 outline-none focus:border-navi"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const newDict = [...(settings.pronunciation_dictionary || [])];
-                          newDict.splice(idx, 1);
-                          updateSettings({ pronunciation_dictionary: newDict });
-                          setIsDirty(true);
-                        }}
-                        className="p-1.5 text-zinc-400 hover:text-red-500 transition-colors"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ))}
+                  {(settings.pronunciation_dictionary || []).map(
+                    (entry, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          placeholder={t`Word (e.g. 加太)`}
+                          value={entry.word}
+                          onChange={(e) => {
+                            const newDict = [
+                              ...(settings.pronunciation_dictionary || []),
+                            ];
+                            newDict[idx] = {
+                              ...newDict[idx],
+                              word: e.target.value,
+                            };
+                            updateSettings({
+                              pronunciation_dictionary: newDict,
+                            });
+                            setIsDirty(true);
+                          }}
+                          className="w-1/2 bg-zinc-50 dark:bg-navidark-800 border border-zinc-200 dark:border-navidark-400 rounded-md px-2 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 outline-none focus:border-navi"
+                        />
+                        <input
+                          type="text"
+                          placeholder={t`Reading (e.g. かだ)`}
+                          value={entry.reading}
+                          onChange={(e) => {
+                            const newDict = [
+                              ...(settings.pronunciation_dictionary || []),
+                            ];
+                            newDict[idx] = {
+                              ...newDict[idx],
+                              reading: e.target.value,
+                            };
+                            updateSettings({
+                              pronunciation_dictionary: newDict,
+                            });
+                            setIsDirty(true);
+                          }}
+                          className="w-1/2 bg-zinc-50 dark:bg-navidark-800 border border-zinc-200 dark:border-navidark-400 rounded-md px-2 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 outline-none focus:border-navi"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newDict = [
+                              ...(settings.pronunciation_dictionary || []),
+                            ];
+                            newDict.splice(idx, 1);
+                            updateSettings({
+                              pronunciation_dictionary: newDict,
+                            });
+                            setIsDirty(true);
+                          }}
+                          className="p-1.5 text-zinc-400 hover:text-red-500 transition-colors"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ),
+                  )}
 
                   {(settings.pronunciation_dictionary || []).length === 0 && (
                     <div className="text-center py-8 text-zinc-400 dark:text-zinc-600">
                       <Mic className="w-8 h-8 mx-auto mb-2 opacity-40" />
-                      <p className="text-xs"><Trans>No entries yet.</Trans></p>
-                      <p className="text-[10px] mt-1"><Trans>Add words below or extract them from narration scripts.</Trans></p>
+                      <p className="text-xs">
+                        <Trans>No entries yet.</Trans>
+                      </p>
+                      <p className="text-[10px] mt-1">
+                        <Trans>
+                          Add words below or extract them from narration
+                          scripts.
+                        </Trans>
+                      </p>
                     </div>
                   )}
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const newDict = [...(settings.pronunciation_dictionary || [])];
-                      newDict.push({ word: "", reading: "" });
-                      updateSettings({ pronunciation_dictionary: newDict });
-                      setIsDirty(true);
-                    }}
-                    className="self-start text-[10px] font-semibold text-navi-600 dark:text-navi-400 hover:text-navi-700 dark:hover:text-navi-300 flex items-center gap-1 py-1 mt-1"
-                  >
-                    + <Trans>Add word</Trans>
-                  </button>
+                  <div className="flex items-center gap-3 mt-2 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newDict = [
+                          ...(settings.pronunciation_dictionary || []),
+                        ];
+                        newDict.push({ word: "", reading: "" });
+                        updateSettings({ pronunciation_dictionary: newDict });
+                        setIsDirty(true);
+                      }}
+                      className="text-[10px] font-semibold text-navi-600 dark:text-navi-400 hover:text-navi-700 dark:hover:text-navi-300 flex items-center gap-1 py-1"
+                    >
+                      + <Trans>Add word</Trans>
+                    </button>
+
+                    {(settings.pronunciation_dictionary || []).some(e => !e.reading && e.word) && (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const dict = settings.pronunciation_dictionary || [];
+                          const emptyWords = dict
+                            .filter(e => e.word && !e.reading)
+                            .map(e => e.word);
+                          if (emptyWords.length === 0) return;
+
+                          try {
+                            const res = await invoke<string>("run_python_blueprint", {
+                              action: "get_furigana",
+                              payload: JSON.stringify(emptyWords),
+                            });
+                            const parsed = JSON.parse(res);
+                            if (parsed.success && parsed.readings) {
+                              const newDict = dict.map(e => ({
+                                ...e,
+                                reading: (!e.reading && parsed.readings[e.word])
+                                  ? parsed.readings[e.word]
+                                  : e.reading,
+                              }));
+                              updateSettings({ pronunciation_dictionary: newDict });
+                              setIsDirty(true);
+                            }
+                          } catch (err) {
+                            console.error("get_furigana failed:", err);
+                          }
+                        }}
+                        className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 flex items-center gap-1 py-1 border border-amber-200 dark:border-amber-700 rounded-md px-2 bg-amber-50 dark:bg-amber-900/20"
+                      >
+                        ✨ <Trans>Auto-fill readings</Trans>
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             )}

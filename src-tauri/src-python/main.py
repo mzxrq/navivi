@@ -68,6 +68,22 @@ if __name__ == "__main__":
 
     try:
         command_arg = sys.argv[1]
+
+        # [NOTE] [Furigana] Lightweight utility action: given a JSON array of
+        # kanji strings (argv[2]), returns a JSON object mapping each word to
+        # its pykakasi-derived hiragana reading.  Used by the frontend
+        # Pronunciation Dictionary to auto-fill readings for detected kanji.
+        if command_arg == "get_furigana":
+            import pykakasi
+            words = json.loads(sys.argv[2]) if len(sys.argv) > 2 else []
+            kks = pykakasi.kakasi()
+            readings = {}
+            for word in words:
+                items = kks.convert(word)
+                readings[word] = "".join(item["hira"] for item in items)
+            print(json.dumps({"success": True, "readings": readings}, ensure_ascii=False))
+            sys.exit(0)
+
         if command_arg == "full_pipeline":
             if len(sys.argv) < 3:
                 raise ValueError("full_pipeline requires a source path")
