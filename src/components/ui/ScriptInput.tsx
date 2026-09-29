@@ -44,7 +44,7 @@ export function ScriptInput({
     }
     const interval = setInterval(() => {
       setCurrentStepIndex((prev) =>
-        prev < getThinkingSteps.length - 1 ? prev + 1 : prev,
+        prev < getThinkingSteps().length - 1 ? prev + 1 : prev,
       );
     }, 1800);
     return () => clearInterval(interval);
@@ -69,6 +69,14 @@ export function ScriptInput({
         </label>
 
         <div className="flex items-center gap-2">
+          {aiEnabled && isGenerating && (
+            <div className="flex items-center gap-1.5 px-2 text-navi-500 dark:text-navi-400 animate-fade-in">
+              <Sparkles className="w-3.5 h-3.5 animate-pulse" />
+              <span className="text-[10px] font-bold uppercase tracking-wider animate-pulse min-w-[120px] text-right">
+                {getThinkingSteps()[currentStepIndex] || getThinkingSteps()[0]}
+              </span>
+            </div>
+          )}
           {/* Toggle between Auto-Write and Cancel — only when AI features enabled */}
           {aiEnabled &&
             (isGenerating ? (
@@ -97,9 +105,9 @@ export function ScriptInput({
         <textarea
           value={localPrompt}
           onChange={(e) => setLocalPrompt(e.target.value)}
-          disabled={isGenerating}
+          readOnly={isGenerating}
           placeholder={t`Type a prompt or write your own script...`}
-          className="w-full h-full resize-none p-3 text-xs custom-scrollbar bg-white dark:bg-navidark-800 text-zinc-900 dark:text-zinc-100 focus:outline-none disabled:opacity-50 pb-10"
+          className="w-full h-full resize-none p-3 text-xs custom-scrollbar bg-white dark:bg-navidark-800 text-zinc-900 dark:text-zinc-100 focus:outline-none readOnly:opacity-80 pb-10"
         />
 
         {!isGenerating && (
@@ -119,22 +127,7 @@ export function ScriptInput({
           </div>
         )}
 
-        {isGenerating && (
-          <div className="absolute inset-0 bg-white/70 dark:bg-navidark-900/70 backdrop-blur-[2px] flex flex-col items-center justify-center z-10">
-            <div className="flex flex-col items-center gap-2">
-              <Sparkles className="w-5 h-5 text-navi-400 animate-bounce" />
-              <div className="text-[10px] font-bold text-navi-600 dark:text-navi-300 tracking-wide uppercase">
-                <Trans>Working on it...</Trans>
-              </div>
-              <div className="text-[9px] font-medium text-zinc-500 dark:text-zinc-400 animate-fade-in text-center mb-1">
-                {getThinkingSteps()}
-              </div>
-              <div className="w-20 h-1 bg-navi-100 dark:bg-navi-900/50 rounded-full overflow-hidden">
-                <div className="h-full bg-navi-500 rounded-full w-full animate-[pulse_1s_ease-in-out_infinite]"></div>
-              </div>
-            </div>
-          </div>
-        )}
+
       </div>
     </div>
   );
