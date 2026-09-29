@@ -789,7 +789,9 @@ export function AppSettings() {
             )}
 
             {/* AI MODELS TAB */}
-            {activeTab === "ai" && settings.ai_features_enabled && <AiModelsTab />}
+            {activeTab === "ai" && settings.ai_features_enabled && (
+              <AiModelsTab />
+            )}
           </div>
         </div>
 
@@ -932,6 +934,38 @@ function AiModelsTab() {
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+      <div className="space-y-3 pt-4 border-t border-zinc-100 dark:border-navidark-700">
+        <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-tighter flex items-center gap-1.5">
+          <Sparkles className="w-3.5 h-3.5" /> <Trans>Active Model</Trans>
+        </label>
+        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+          <Trans>
+            Select which model to use for narration synthesis, only downloaded
+            models are shown
+          </Trans>
+        </p>
+        <select
+          value={settings.ai_model || "schroneko/gemma-2-2b-jpn-it"}
+          onChange={(e) => {
+            updateSettings({ ai_model: e.target.value });
+            setIsDirty(true);
+          }}
+          className="w-full bg-zinc-50 dark:bg-navidark-800 border border-zinc-200 dark:border-navidark-400 rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-900 dark:text-zinc-100 outline-none focus:border-navi focus:ring-1 focus:ring-navi transition-all"
+        >
+          {localModels.length === 0 ? (
+            <option value="" disabled>
+              <Trans>No models installed</Trans>
+            </option>
+          ) : (
+            localModels.map((modelId) => (
+              <option key={modelId} value={modelId}>
+                {modelId}
+              </option>
+            ))
+          )}
+        </select>
+      </div>
+
       <div className="space-y-3">
         <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-widest flex items-center gap-1.5">
           <Sparkles className="w-3.5 h-3.5" />{" "}
@@ -955,7 +989,10 @@ function AiModelsTab() {
             </thead>
             <tbody className="divide-y divide-zinc-100 dark:divide-navidark-400">
               {recommendedModels.map((model) => {
-                const isLocal = localModels.some(local => local === model.id || local.startsWith(model.id + ":"));
+                const isLocal = localModels.some(
+                  (local) =>
+                    local === model.id || local.startsWith(model.id + ":"),
+                );
                 const dlStatus = downloading[model.id];
                 const isDownloading = !!dlStatus;
 
@@ -1023,38 +1060,6 @@ function AiModelsTab() {
             </tbody>
           </table>
         </div>
-      </div>
-
-      <div className="space-y-3 pt-4 border-t border-zinc-100 dark:border-navidark-700">
-        <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-widest flex items-center gap-1.5">
-          <Sparkles className="w-3.5 h-3.5" /> <Trans>Active Model</Trans>
-        </label>
-        <p className="text-xs text-zinc-500 dark:text-zinc-400">
-          <Trans>
-            Select which model to use for narration synthesis, only downloaded
-            models are shown
-          </Trans>
-        </p>
-        <select
-          value={settings.ai_model || "schroneko/gemma-2-2b-jpn-it"}
-          onChange={(e) => {
-            updateSettings({ ai_model: e.target.value });
-            setIsDirty(true);
-          }}
-          className="w-full bg-zinc-50 dark:bg-navidark-800 border border-zinc-200 dark:border-navidark-400 rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-900 dark:text-zinc-100 outline-none focus:border-navi focus:ring-1 focus:ring-navi transition-all"
-        >
-          {localModels.length === 0 ? (
-            <option value="" disabled>
-              <Trans>No models installed</Trans>
-            </option>
-          ) : (
-            localModels.map((modelId) => (
-              <option key={modelId} value={modelId}>
-                {modelId}
-              </option>
-            ))
-          )}
-        </select>
       </div>
     </div>
   );
