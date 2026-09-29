@@ -103,12 +103,14 @@ export function AppSettings() {
               icon={Film}
               label={t`Video Editor`}
             />
-            <TabButton
-              active={activeTab === "ai"}
-              onClick={() => setActiveTab("ai")}
-              icon={Sparkles}
-              label={t`AI Models`}
-            />
+            {settings.ai_features_enabled && (
+              <TabButton
+                active={activeTab === "ai"}
+                onClick={() => setActiveTab("ai")}
+                icon={Sparkles}
+                label={t`AI Models`}
+              />
+            )}
           </div>
 
           {/* Body Section */}
@@ -787,7 +789,7 @@ export function AppSettings() {
             )}
 
             {/* AI MODELS TAB */}
-            {activeTab === "ai" && <AiModelsTab />}
+            {activeTab === "ai" && settings.ai_features_enabled && <AiModelsTab />}
           </div>
         </div>
 
@@ -953,7 +955,7 @@ function AiModelsTab() {
             </thead>
             <tbody className="divide-y divide-zinc-100 dark:divide-navidark-400">
               {recommendedModels.map((model) => {
-                const isLocal = localModels.includes(model.id);
+                const isLocal = localModels.some(local => local === model.id || local.startsWith(model.id + ":"));
                 const dlStatus = downloading[model.id];
                 const isDownloading = !!dlStatus;
 
