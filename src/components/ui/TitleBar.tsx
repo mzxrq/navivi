@@ -359,7 +359,6 @@ export function TitleBar() {
 
           <div className="w-px h-5 my-auto bg-zinc-200 dark:bg-white/10 mx-1"></div>
 
-          {/* ✨ MOVED: Undo/Redo safely tucked away from the close button */}
           {currentView === "editor" && (
             <div className="flex items-center h-full text-zinc-600 dark:text-zinc-400 px-1">
               <button
@@ -391,8 +390,6 @@ export function TitleBar() {
             data-tauri-drag-region
             className="flex items-center justify-center gap-2 text-xs font-medium text-zinc-500 dark:text-zinc-400"
           >
-            <Navivi className="w-4 h-4 text-navi dark:text-navi pointer-events-none" />
-
             <span className="text-zinc-800 dark:text-zinc-200 pointer-events-none font-semibold">
               {currentView === "title_screen" ? (
                 <Trans>Project Manager</Trans>

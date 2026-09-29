@@ -69,7 +69,7 @@ export async function pullModelStream(
     while (true) {
         const { done, value } = await reader.read();
         if (done) {
-            if (consoleBuffer) console.log("%c[Ollama Stream] %c" + consoleBuffer, "color: #a855f7; font-weight: bold;", "color: inherit;");
+            
             break;
         }
 
