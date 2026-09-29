@@ -239,17 +239,26 @@ export async function generateWaypointScriptStream(
 
     const themeContext = theme ? `この旅のテーマは「${theme}」です。` : "";
 
-    const prompt = `あなたは旅行番組のプロのナレーターです。
-${themeContext}
-現在地「${locationName}」に到着した際、または紹介する際のナレーションを2〜3文で作成してください。
+    let roleContext = "";
+    if (scriptType === "arriving") {
+        if (isFirstWaypoint) {
+            roleContext = `ここから旅がスタートします。「${locationName}」からの出発を盛り上げるような、ワクワクする導入のナレーション（出発ナレーション）を作成してください。`;
+        } else {
+            roleContext = `前の場所から移動し、目的地である「${locationName}」に近づき、到着するまでの道中や、見えてきた時の期待感を煽るような「到着ナレーション」を作成してください。具体的な歴史や深い見どころの解説は次のナレーションに譲り、ここでは「移動から到着までの風景や高揚感」にフォーカスしてください。`;
+        }
+    } else {
+        roleContext = `現在地「${locationName}」に到着した後の、具体的な見どころや歴史、魅力を深く紹介する「見どころ解説ナレーション」を作成してください。`;
+    }
 
-コンテキスト・要望: ${userPrompt}
+    const prompt = `あなたは旅行番組のプロのナレーターです。${themeContext}
+${roleContext}
+コンテキストや要望: ${userPrompt}
 ${contextStr}
 
 ルール:
 1. 日本語の「です・ます調」で、親しみやすい言葉遣いにすること。
-2. 音声合成で読み上げるため、括弧書きの指示（例：[笑顔で]など）は絶対に書かないこと。
-3. 簡潔に、その場所の魅力や歴史が伝わるようにすること。
+2. 音声合成で読み上げるため、括弧書き（感情（例：[笑顔で]など））は絶対に書かないこと。
+3. 簡潔に、1〜2段落でまとめること。
 4. 提供された画像がある場合は、その写真に写っている風景や特徴も自然に描写に組み込んでください。`;
 
     const base64Images: string[] = [];
