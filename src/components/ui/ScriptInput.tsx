@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Mic, Sparkles, Square, Check, PencilSparkles } from "../ui/icons";
+import { Mic, Sparkles, Square, Check,
+  BookOpen, PencilSparkles } from "../ui/icons";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 import { useWorkspace } from "../../hooks/useWorkspace";
@@ -63,7 +64,7 @@ export function ScriptInput({
 
   
   const extractPronunciation = (text: string): string => {
-    const regex = /([\u4E00-\u9FAF\u3400-\u4DBF]+)[(（]([\u3040-\u309F\u30A0-\u30FF]+)[)）]/g;
+    const regex = /([\u4E00-\u9FAF\u3400-\u4DBF]+)[(（]([\u3040-\u309F\u30A0-\u30FF]*)[)）]/g;
     let match;
     let hasDictUpdate = false;
     const newDict = [...(settings.pronunciation_dictionary || [])];
@@ -84,9 +85,32 @@ export function ScriptInput({
     if (hasDictUpdate) {
       updateSettings({ pronunciation_dictionary: newDict });
       setIsDirty(true);
-      return text.replace(/([\u4E00-\u9FAF\u3400-\u4DBF]+)[(（][\u3040-\u309F\u30A0-\u30FF]+[)）]/g, "$1");
+      return text.replace(/([\u4E00-\u9FAF\u3400-\u4DBF]+)[(（][\u3040-\u309F\u30A0-\u30FF]*[)）]/g, "$1");
     }
     return text;
+  };
+
+  
+  const handleScanKanji = () => {
+    // Finds all contiguous kanji blocks and extracts them to the dictionary
+    const kanjiRegex = /([\u4E00-\u9FAF\u3400-\u4DBF]+)/g;
+    let match;
+    let hasDictUpdate = false;
+    const newDict = [...(settings.pronunciation_dictionary || [])];
+    
+    while ((match = kanjiRegex.exec(localPrompt)) !== null) {
+      const kanji = match[1];
+      const exists = newDict.find(entry => entry.word === kanji);
+      if (!exists) {
+        newDict.push({ word: kanji, reading: "" });
+        hasDictUpdate = true;
+      }
+    }
+    
+    if (hasDictUpdate) {
+      updateSettings({ pronunciation_dictionary: newDict });
+      setIsDirty(true);
+    }
   };
 
   const handleSaveClick = () => {

@@ -592,7 +592,10 @@ export function WaypointEditor({
                                       <div className="space-y-6 max-w-3xl">
                       <div className="flex justify-end mb-[-1rem]">
                         <button
-                          onClick={() => setShowAppSettings(true)}
+                          onClick={() => {
+                            setShowAppSettings(true);
+                            setTimeout(() => window.dispatchEvent(new CustomEvent("open-app-settings-tab", { detail: "tts_dictionary" })), 50);
+                          }}
                           className="text-[10px] font-semibold text-navi-600 dark:text-navi-400 hover:text-navi-700 dark:hover:text-navi-300 flex items-center gap-1 bg-navi-50/50 dark:bg-navi-900/20 px-2 py-1 rounded-md border border-navi-100 dark:border-navi-800 transition-colors"
                         >
                           <Settings2 className="w-3 h-3" />

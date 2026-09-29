@@ -3,6 +3,7 @@ export {
   AlertTriangle,
   RefreshCw, //ErrorBoundary
   X,
+  BookOpen,
   Key,
   ExternalLink,
   Moon,
