@@ -8,57 +8,57 @@ msgstr ""
 "Language: en\n"
 
 #. js-lingui-explicit-id
-#: src/components/ui/AppSettings.tsx:363
+#: src/components/ui/AppSettings.tsx:382
 msgid "Light"
 msgstr "Light"
 
 #. js-lingui-explicit-id
-#: src/components/ui/AppSettings.tsx:364
+#: src/components/ui/AppSettings.tsx:383
 msgid "Dark"
 msgstr "Dark"
 
 #. js-lingui-explicit-id
-#: src/components/ui/AppSettings.tsx:365
+#: src/components/ui/AppSettings.tsx:384
 msgid "System"
 msgstr "System"
 
 #. js-lingui-explicit-id
-#: src/components/ui/AppSettings.tsx:392
+#: src/components/ui/AppSettings.tsx:411
 msgid "Navi Blue"
 msgstr "Navi Blue"
 
 #. js-lingui-explicit-id
-#: src/components/ui/AppSettings.tsx:397
+#: src/components/ui/AppSettings.tsx:416
 msgid "Emerald"
 msgstr "Emerald"
 
 #. js-lingui-explicit-id
-#: src/components/ui/AppSettings.tsx:402
+#: src/components/ui/AppSettings.tsx:421
 msgid "Violet"
 msgstr "Violet"
 
 #. js-lingui-explicit-id
-#: src/components/ui/AppSettings.tsx:407
+#: src/components/ui/AppSettings.tsx:426
 msgid "Amber"
 msgstr "Amber"
 
 #. js-lingui-explicit-id
-#: src/components/ui/AppSettings.tsx:412
+#: src/components/ui/AppSettings.tsx:431
 msgid "Rose"
 msgstr "Rose"
 
 #. js-lingui-explicit-id
-#: src/components/ui/AppSettings.tsx:492
+#: src/components/ui/AppSettings.tsx:511
 msgid "Change Marker"
 msgstr "Change Marker"
 
 #. js-lingui-explicit-id
-#: src/components/ui/AppSettings.tsx:493
+#: src/components/ui/AppSettings.tsx:512
 msgid "Select Custom Marker"
 msgstr "Select Custom Marker"
 
 #. js-lingui-explicit-id
-#: src/components/ui/AppSettings.tsx:865
+#: src/components/ui/AppSettings.tsx:889
 msgid "Starting..."
 msgstr "Starting..."
 
@@ -66,13 +66,18 @@ msgstr "Starting..."
 msgid " · waypoint"
 msgstr " · waypoint"
 
-#: src/features/map/components/WaypointEditor.tsx:425
+#: src/features/map/components/WaypointEditor.tsx:445
 msgid "\"No file chosen\""
 msgstr "No file chosen"
 
 #: src/components/ui/RenderOverlay.tsx:1341
 msgid "(Empty script)"
 msgstr "(Empty script)"
+
+#. placeholder {0}: wp.images.length
+#: src/features/map/components/WaypointItem.tsx:210
+msgid "{0, plural, one {# Image} other {# Images}}"
+msgstr "{0, plural, one {# Image} other {# Images}}"
 
 #. placeholder {0}: newAssets.length
 #: src/features/timeline/components/MediaPool.tsx:261
@@ -129,7 +134,7 @@ msgstr "{0}% reduction ({1} dB)"
 msgid "+ Add Intro Screen"
 msgstr "+ Add Intro Screen"
 
-#: src/features/map/components/WaypointEditor.tsx:776
+#: src/features/map/components/WaypointEditor.tsx:818
 msgid "<0>+ Add Image</0>"
 msgstr "<0>+ Add Image</0>"
 
@@ -145,11 +150,11 @@ msgstr "<0>Muted</0>"
 msgid "💡 <0>Quick Export Notice:</0> To customize individual video clips or fix TTS pronunciation, uncheck \"Quick Export\" in generation settings and re-run."
 msgstr "💡 <0>Quick Export Notice:</0> To customize individual video clips or fix TTS pronunciation, uncheck \"Quick Export\" in generation settings and re-run."
 
-#: src/components/ui/AppSettings.tsx:171
+#: src/components/ui/AppSettings.tsx:190
 msgid "1 minute"
 msgstr "1 minute"
 
-#: src/components/ui/AppSettings.tsx:174
+#: src/components/ui/AppSettings.tsx:193
 msgid "10 minutes"
 msgstr "10 minutes"
 
@@ -157,11 +162,11 @@ msgstr "10 minutes"
 msgid "16:9 Landscape"
 msgstr "16:9 Landscape"
 
-#: src/components/ui/AppSettings.tsx:165
+#: src/components/ui/AppSettings.tsx:184
 msgid "3 seconds"
 msgstr "3 seconds"
 
-#: src/components/ui/AppSettings.tsx:168
+#: src/components/ui/AppSettings.tsx:187
 msgid "30 seconds"
 msgstr "30 seconds"
 
@@ -169,7 +174,7 @@ msgstr "30 seconds"
 msgid "9:16 Vertical"
 msgstr "9:16 Vertical"
 
-#: src/components/ui/AppSettings.tsx:385
+#: src/components/ui/AppSettings.tsx:404
 msgid "Accent Color"
 msgstr "Accent Color"
 
@@ -185,8 +190,8 @@ msgstr "Accept Assets & Export Video"
 msgid "Accept assets to automatically stitch and export"
 msgstr "Accept assets to automatically stitch and export"
 
-#: src/components/ui/AppSettings.tsx:950
-#: src/features/map/components/WaypointEditor.tsx:369
+#: src/components/ui/AppSettings.tsx:1006
+#: src/features/map/components/WaypointEditor.tsx:389
 msgid "Action"
 msgstr "Action"
 
@@ -201,7 +206,7 @@ msgstr "Actions"
 msgid "Active"
 msgstr "Active"
 
-#: src/components/ui/AppSettings.tsx:1028
+#: src/components/ui/AppSettings.tsx:959
 msgid "Active Model"
 msgstr "Active Model"
 
@@ -234,13 +239,17 @@ msgstr "Add one at the current playhead position"
 msgid "Add Text Layer"
 msgstr "Add Text Layer"
 
-#: src/features/map/components/WaypointEditor.tsx:674
+#: src/features/map/components/WaypointEditor.tsx:716
 msgid "Add up to 3 images that will pop up during the narration at this stop"
 msgstr "Add up to 3 images that will pop up during the narration at this stop"
 
 #: src/features/map/components/MapToolbar.tsx:129
 msgid "Add Waypoint (P)"
 msgstr "Add Waypoint (P)"
+
+#: src/components/ui/AppSettings.tsx:774
+#~ msgid "Add word"
+#~ msgstr "Add word"
 
 #: src/components/ui/ContextMenu.tsx:384
 #: src/components/ui/ContextMenu.tsx:754
@@ -269,7 +278,7 @@ msgstr "Add Visual Track"
 msgid "add-waypoint-here"
 msgstr "Add Waypoint Here"
 
-#: src/features/map/components/WaypointEditor.tsx:354
+#: src/features/map/components/WaypointEditor.tsx:374
 msgid "Adds a brief pause in the generated video at this waypoint before continuing the journey"
 msgstr "Adds a brief pause in the generated video at this waypoint before continuing the journey"
 
@@ -277,7 +286,7 @@ msgstr "Adds a brief pause in the generated video at this waypoint before contin
 msgid "Adjust Route (Add via points to nudge)"
 msgstr "Adjust Route (Add via points to nudge)"
 
-#: src/components/ui/AppSettings.tsx:183
+#: src/components/ui/AppSettings.tsx:202
 msgid "Advanced Features"
 msgstr "Advanced Features"
 
@@ -286,7 +295,7 @@ msgstr "Advanced Features"
 msgid "Advanced Settings"
 msgstr "Advanced Settings"
 
-#: src/components/ui/AppSettings.tsx:110
+#: src/components/ui/AppSettings.tsx:128
 msgid "AI Models"
 msgstr "AI Models"
 
@@ -319,15 +328,15 @@ msgstr "Anchor {0}"
 msgid "Angular diagonal stretch and perspective displacement"
 msgstr "Angular diagonal stretch and perspective displacement"
 
-#: src/components/ui/AppSettings.tsx:98
+#: src/components/ui/AppSettings.tsx:109
 msgid "API Keys"
 msgstr "API Keys"
 
-#: src/components/ui/TitleBar.tsx:444
+#: src/components/ui/TitleBar.tsx:441
 msgid "App Settings"
 msgstr "App Settings"
 
-#: src/components/ui/AppSettings.tsx:92
+#: src/components/ui/AppSettings.tsx:103
 msgid "Appearance"
 msgstr "Appearance"
 
@@ -358,7 +367,7 @@ msgstr "Apply to selected clip"
 msgid "Are you sure you want to remove <0>{0}</0> from your recent list? The original files will remain on your computer."
 msgstr "Are you sure you want to remove <0>{0}</0> from your recent list? The original files will remain on your computer."
 
-#: src/features/map/components/WaypointEditor.tsx:581
+#: src/features/map/components/WaypointEditor.tsx:613
 msgid "Arriving Script"
 msgstr "Arriving Script"
 
@@ -378,7 +387,7 @@ msgstr "Assets accepted and stitched into your final deliverable video"
 msgid "Attenuation"
 msgstr "Attenuation"
 
-#: src/features/map/components/WaypointEditor.tsx:627
+#: src/features/map/components/WaypointEditor.tsx:664
 msgid "Attraction Script"
 msgstr "Attraction Script"
 
@@ -433,7 +442,7 @@ msgstr "Audio tracks only accept Audio files"
 msgid "Auto"
 msgstr "Auto"
 
-#: src/components/ui/AppSettings.tsx:703
+#: src/components/ui/AppSettings.tsx:722
 msgid "Auto-Detect (Recommended)"
 msgstr "Auto-Detect (Recommended)"
 
@@ -465,7 +474,7 @@ msgstr "Auto-Ducking Armed (Click to disable)"
 msgid "Auto-save failed"
 msgstr "Auto-save failed"
 
-#: src/components/ui/AppSettings.tsx:145
+#: src/components/ui/AppSettings.tsx:164
 msgid "Auto-Save Interval"
 msgstr "Auto-Save Interval"
 
@@ -477,7 +486,7 @@ msgstr "Auto-skipped (Quick Export)"
 msgid "Auto-stitched Video"
 msgstr "Auto-stitched Video"
 
-#: src/components/ui/ScriptInput.tsx:90
+#: src/components/ui/ScriptInput.tsx:156
 msgid "Auto-Write"
 msgstr "Auto-Write"
 
@@ -527,13 +536,13 @@ msgstr "Build Assets"
 msgid "Burn"
 msgstr "Burn"
 
-#: src/features/map/components/WaypointEditor.tsx:733
+#: src/features/map/components/WaypointEditor.tsx:775
 msgid "Camera Angle"
 msgstr "Camera Angle"
 
 #: src/components/ui/NewProject.tsx:308
 #: src/components/ui/SaveAs.tsx:181
-#: src/components/ui/ScriptInput.tsx:80
+#: src/components/ui/ScriptInput.tsx:146
 #: src/components/ui/UnsavedChanges.tsx:50
 msgid "cancel"
 msgstr "Cancel"
@@ -581,7 +590,7 @@ msgstr "Cannot place Audio on a Video track"
 msgid "Change Marker"
 msgstr "Change Marker"
 
-#: src/features/map/components/WaypointEditor.tsx:435
+#: src/features/map/components/WaypointEditor.tsx:455
 msgid "Change Waypoint Type"
 msgstr "Change Waypoint Type"
 
@@ -593,7 +602,7 @@ msgstr "Check Audio & Video"
 msgid "Checking..."
 msgstr "Checking..."
 
-#: src/components/ui/AppSettings.tsx:124
+#: src/components/ui/AppSettings.tsx:143
 msgid "Choose your preferred language for the application"
 msgstr "Choose your preferred language for the application"
 
@@ -666,7 +675,7 @@ msgid "Close"
 msgstr "Close"
 
 #: src/features/map/components/UnifiedLayersPanel.tsx:142
-#: src/features/map/components/WaypointEditor.tsx:554
+#: src/features/map/components/WaypointEditor.tsx:574
 msgid "Collapse"
 msgstr "Collapse"
 
@@ -674,7 +683,7 @@ msgstr "Collapse"
 msgid "Color Adjustments"
 msgstr "Color Adjustments"
 
-#: src/components/ui/AppSettings.tsx:546
+#: src/components/ui/AppSettings.tsx:565
 msgid "Color GPX routes dynamically based on steepness"
 msgstr "Color GPX routes dynamically based on steepness"
 
@@ -702,7 +711,7 @@ msgstr "Confirm"
 msgid "connect-to-route"
 msgstr "Connect to Route"
 
-#: src/features/map/components/WaypointEditor.tsx:475
+#: src/features/map/components/WaypointEditor.tsx:495
 msgid "Connected to route"
 msgstr "Connected to route"
 
@@ -719,7 +728,7 @@ msgstr "Context from document: {0}"
 msgid "Contrast"
 msgstr "Contrast"
 
-#: src/components/ui/AppSettings.tsx:148
+#: src/components/ui/AppSettings.tsx:167
 msgid "Controls auto save of editors that have unsaved changes"
 msgstr "Controls auto save of editors that have unsaved changes"
 
@@ -742,6 +751,10 @@ msgstr "Copy Message"
 #: src/components/ui/ContextMenu.tsx:623
 msgid "copy-trail"
 msgstr "Copy Trail"
+
+#: src/components/ui/AppSettings.tsx:723
+#~ msgid "Correct words or kanji that are read incorrectly by the AI voice."
+#~ msgstr "Correct words or kanji that are read incorrectly by the AI voice."
 
 #: src/components/ui/StatusBar.tsx:184
 msgid "Could not delete this version"
@@ -797,7 +810,7 @@ msgstr "Crisp white text with black stroke"
 msgid "Cross Warp"
 msgstr "Cross Warp"
 
-#: src/components/ui/ScriptInput.tsx:9
+#: src/components/ui/ScriptInput.tsx:11
 msgid "Cross-checking building data..."
 msgstr "Cross-checking building data..."
 
@@ -813,7 +826,7 @@ msgstr "Custom Color"
 
 #: src/features/map/components/MapArea.tsx:943
 #: src/features/map/components/MapArea.tsx:994
-#: src/features/map/components/WaypointEditor.tsx:397
+#: src/features/map/components/WaypointEditor.tsx:417
 msgid "Custom Marker"
 msgstr "Custom Marker"
 
@@ -826,7 +839,7 @@ msgstr "Custom Text"
 msgid "Customize in Timeline"
 msgstr "Customize in Timeline"
 
-#: src/components/ui/AppSettings.tsx:439
+#: src/components/ui/AppSettings.tsx:458
 msgid "Default marker for all waypoints. Can be overridden per-stop."
 msgstr "Default marker for all waypoints. Can be overridden per-stop."
 
@@ -834,7 +847,7 @@ msgstr "Default marker for all waypoints. Can be overridden per-stop."
 msgid "default-routing-mode-detail"
 msgstr "Sets the default pathfinding engine when placing waypoints"
 
-#: src/features/map/components/WaypointEditor.tsx:518
+#: src/features/map/components/WaypointEditor.tsx:538
 msgid "Delete"
 msgstr "Delete"
 
@@ -882,11 +895,11 @@ msgstr "Delete Waypoint"
 msgid "Desktop & YouTube"
 msgstr "Desktop & YouTube"
 
-#: src/features/map/components/WaypointEditor.tsx:508
+#: src/features/map/components/WaypointEditor.tsx:528
 msgid "Dest"
 msgstr "Dest"
 
-#: src/components/ui/ScriptInput.tsx:7
+#: src/components/ui/ScriptInput.tsx:9
 msgid "Detecting context..."
 msgstr "Detecting context..."
 
@@ -913,7 +926,7 @@ msgstr "Discard"
 msgid "disconnect-route"
 msgstr "Disconnect route"
 
-#: src/features/map/components/WaypointEditor.tsx:476
+#: src/features/map/components/WaypointEditor.tsx:496
 msgid "Disconnected from route"
 msgstr "Disconnected from route"
 
@@ -935,7 +948,7 @@ msgstr "Do you want to save the changes you made to "
 msgid "Don't Save"
 msgstr "Don't Save"
 
-#: src/components/ui/AppSettings.tsx:800
+#: src/components/ui/AppSettings.tsx:824
 #: src/components/ui/RenderOverlay.tsx:1425
 msgid "Done"
 msgstr "Done"
@@ -944,11 +957,11 @@ msgstr "Done"
 msgid "Double-sided horizontal perspective warp effect"
 msgstr "Double-sided horizontal perspective warp effect"
 
-#: src/components/ui/AppSettings.tsx:1014
+#: src/components/ui/AppSettings.tsx:1073
 msgid "Download"
 msgstr "Download"
 
-#: src/components/ui/ScriptInput.tsx:10
+#: src/components/ui/ScriptInput.tsx:12
 msgid "Drafting narration..."
 msgstr "Drafting narration..."
 
@@ -1037,7 +1050,7 @@ msgstr "Duplicate Clip"
 msgid "duplicate-waypoint"
 msgstr "Duplicate Waypoint"
 
-#: src/components/ui/AppSettings.tsx:626
+#: src/components/ui/AppSettings.tsx:645
 msgid "Duration (seconds)"
 msgstr "Duration (seconds)"
 
@@ -1065,7 +1078,7 @@ msgstr "Edit the image, script, or route mode in the Waypoint Editor. Click Resu
 msgid "edit-waypoint"
 msgstr "Edit Waypoint"
 
-#: src/features/map/components/WaypointEditor.tsx:223
+#: src/features/map/components/WaypointEditor.tsx:243
 msgid "Editing Waypoint"
 msgstr "Editing Waypoint"
 
@@ -1081,7 +1094,7 @@ msgstr "Emerald"
 msgid "Enable 3D Terrain"
 msgstr "Enable 3D Terrain"
 
-#: src/components/ui/AppSettings.tsx:209
+#: src/components/ui/AppSettings.tsx:228
 msgid "Enable AI Features"
 msgstr "Enable AI Features"
 
@@ -1153,7 +1166,7 @@ msgstr "Expand"
 msgid "Expand Review"
 msgstr "Expand Review"
 
-#: src/components/ui/AppSettings.tsx:318
+#: src/components/ui/AppSettings.tsx:337
 msgid "Experimental"
 msgstr "Experimental"
 
@@ -1240,7 +1253,7 @@ msgstr "Failed to duplicate project"
 msgid "Failed to export JSON: {0}"
 msgstr "Failed to export JSON: {0}"
 
-#: src/features/map/components/WaypointEditor.tsx:196
+#: src/features/map/components/WaypointEditor.tsx:215
 msgid "Failed to generate script"
 msgstr "Failed to generate script"
 
@@ -1316,7 +1329,7 @@ msgstr "Failed to write timeline.json manifest"
 msgid "Fast"
 msgstr "Fast"
 
-#: src/components/ui/AppSettings.tsx:265
+#: src/components/ui/AppSettings.tsx:284
 #: src/components/ui/NewProject.tsx:276
 msgid "Fast Render Mode"
 msgstr "Fast Render Mode"
@@ -1353,7 +1366,7 @@ msgstr "Fly"
 msgid "Fly"
 msgstr "Fly"
 
-#: src/components/ui/AppSettings.tsx:723
+#: src/components/ui/AppSettings.tsx:745
 msgid "Font"
 msgstr "Font"
 
@@ -1361,7 +1374,7 @@ msgstr "Font"
 msgid "Font Family"
 msgstr "Font Family"
 
-#: src/components/ui/AppSettings.tsx:737
+#: src/components/ui/AppSettings.tsx:759
 #: src/features/timeline/components/elements/inspector/InspectorTextPanel.tsx:180
 msgid "Font Size"
 msgstr "Font Size"
@@ -1379,7 +1392,7 @@ msgstr "Framerate"
 msgid "Framerate (FPS)"
 msgstr "Framerate (FPS)"
 
-#: src/components/ui/AppSettings.tsx:86
+#: src/components/ui/AppSettings.tsx:97
 msgid "General"
 msgstr "General"
 
@@ -1420,7 +1433,7 @@ msgstr "Generation Failed"
 msgid "Generation On Hold"
 msgstr "Generation On Hold"
 
-#: src/components/ui/AppSettings.tsx:661
+#: src/components/ui/AppSettings.tsx:680
 msgid "Generation Workflow & Hardware Routing"
 msgstr "Generation Workflow & Hardware Routing"
 
@@ -1428,11 +1441,11 @@ msgstr "Generation Workflow & Hardware Routing"
 msgid "Geometry Information"
 msgstr "Geometry Information"
 
-#: src/features/map/components/WaypointEditor.tsx:282
+#: src/features/map/components/WaypointEditor.tsx:302
 msgid "Get name from coordinate"
 msgstr "Get name from coordinate"
 
-#: src/components/ui/AppSettings.tsx:436
+#: src/components/ui/AppSettings.tsx:455
 #: src/components/view/ProjectSettingsModal.tsx:107
 msgid "Global Route Marker"
 msgstr "Global Route Marker"
@@ -1458,7 +1471,7 @@ msgstr "Gradient Heatmap"
 msgid "Grid View"
 msgstr "Grid View"
 
-#: src/components/ui/AppSettings.tsx:690
+#: src/components/ui/AppSettings.tsx:709
 msgid "Hardware Spec Mode (Regeneration Routing)"
 msgstr "Hardware Spec Mode (Regeneration Routing)"
 
@@ -1487,7 +1500,7 @@ msgstr "High-exposure film burn and fiery glow reveal"
 msgid "High-Spec (Discrete GPU)"
 msgstr "High-Spec (Discrete GPU)"
 
-#: src/components/ui/AppSettings.tsx:709
+#: src/components/ui/AppSettings.tsx:728
 msgid "High-spec Mode"
 msgstr "High-spec Mode"
 
@@ -1504,7 +1517,7 @@ msgstr "High-spec system detected: {gpuRenderer} ({logicalCores} CPU threads)"
 msgid "Highlight Color"
 msgstr "Highlight Color"
 
-#: src/components/ui/AppSettings.tsx:315
+#: src/components/ui/AppSettings.tsx:334
 msgid "Historical Weather Sync"
 msgstr "Historical Weather Sync"
 
@@ -1524,7 +1537,7 @@ msgstr "If Irodori TTS mispronounces words or lacks intonation, input the script
 msgid "image"
 msgstr "image"
 
-#: src/features/map/components/WaypointEditor.tsx:548
+#: src/features/map/components/WaypointEditor.tsx:568
 msgid "Image"
 msgstr "Image"
 
@@ -1591,7 +1604,7 @@ msgstr "Karaoke Timing Mode"
 msgid "Kyoto Demo Route"
 msgstr "Kyoto Demo Route"
 
-#: src/components/ui/AppSettings.tsx:121
+#: src/components/ui/AppSettings.tsx:140
 msgid "Language"
 msgstr "Language"
 
@@ -1635,7 +1648,7 @@ msgstr "Linear directional wipe from left to right"
 msgid "link-clips"
 msgstr "Link Clips"
 
-#: src/features/map/components/WaypointEditor.tsx:486
+#: src/features/map/components/WaypointEditor.tsx:506
 msgid "Linked"
 msgstr "Linked"
 
@@ -1654,13 +1667,13 @@ msgstr "Live Preview"
 #: src/features/map/components/MapArea.tsx:376
 #: src/features/map/components/MapArea.tsx:418
 #: src/features/map/components/MapArea.tsx:459
-#: src/features/map/components/WaypointEditor.tsx:264
+#: src/features/map/components/WaypointEditor.tsx:284
 #: src/hooks/useWaypointActions.ts:24
 #: src/hooks/useWaypointActions.ts:62
 msgid "Locating..."
 msgstr "Locating..."
 
-#: src/features/map/components/WaypointEditor.tsx:260
+#: src/features/map/components/WaypointEditor.tsx:280
 msgid "Location Name"
 msgstr "Location Name"
 
@@ -1684,7 +1697,7 @@ msgstr "Lorem ipsum"
 msgid "Low-Spec (Integrated Graphics)"
 msgstr "Low-Spec (Integrated Graphics)"
 
-#: src/components/ui/AppSettings.tsx:706
+#: src/components/ui/AppSettings.tsx:725
 msgid "Low-spec Mode"
 msgstr "Low-spec Mode"
 
@@ -1713,8 +1726,8 @@ msgstr "Luminance photographic multiply overlay"
 msgid "Manage timeline markers"
 msgstr "Manage timeline markers"
 
-#: src/components/ui/TitleBar.tsx:421
-#: src/components/ui/TitleBar.tsx:423
+#: src/components/ui/TitleBar.tsx:418
+#: src/components/ui/TitleBar.tsx:420
 #: src/components/view/EditorLayout.tsx:27
 msgid "Map"
 msgstr "Map"
@@ -1723,15 +1736,15 @@ msgstr "Map"
 msgid "Map Appearance"
 msgstr "Map Appearance"
 
-#: src/components/ui/AppSettings.tsx:523
+#: src/components/ui/AppSettings.tsx:542
 msgid "Map Features"
 msgstr "Map Features"
 
-#: src/components/ui/AppSettings.tsx:562
+#: src/components/ui/AppSettings.tsx:581
 msgid "Mapbox API Key"
 msgstr "Mapbox API Key"
 
-#: src/features/map/components/WaypointEditor.tsx:289
+#: src/features/map/components/WaypointEditor.tsx:309
 msgid "Marked for Regeneration: Edit image, narration, or route mode, then click Resume Generation"
 msgstr "Marked for Regeneration: Edit image, narration, or route mode, then click Resume Generation"
 
@@ -1772,11 +1785,11 @@ msgstr "Minimalist"
 msgid "Missing file"
 msgstr "Missing file"
 
-#: src/components/ui/AppSettings.tsx:944
+#: src/components/ui/AppSettings.tsx:1000
 msgid "Model"
 msgstr "Model"
 
-#: src/features/map/components/WaypointEditor.tsx:155
+#: src/features/map/components/WaypointEditor.tsx:164
 msgid "Model \"{engine}\" not found. Please install it from the App Settings"
 msgstr "Model \"{engine}\" not found. Please install it from the App Settings"
 
@@ -1814,7 +1827,7 @@ msgstr "Name your project to continue"
 msgid "Narration"
 msgstr "Narration"
 
-#: src/features/map/components/WaypointEditor.tsx:538
+#: src/features/map/components/WaypointEditor.tsx:558
 msgid "Narration Script"
 msgstr "Narration Script"
 
@@ -1871,7 +1884,7 @@ msgstr "No GPS location data found in selected photos"
 msgid "No locations found in document"
 msgstr "No locations found in document"
 
-#: src/components/ui/AppSettings.tsx:1046
+#: src/components/ui/AppSettings.tsx:977
 msgid "No models installed"
 msgstr "No models installed"
 
@@ -1921,7 +1934,7 @@ msgstr "No Internet Connection"
 msgid "None"
 msgstr "None"
 
-#: src/components/ui/AppSettings.tsx:162
+#: src/components/ui/AppSettings.tsx:181
 #: src/features/timeline/components/elements/inspector/InspectorAudioPanel.tsx:187
 #: src/features/timeline/components/elements/inspector/InspectorTextPanel.tsx:279
 #: src/features/timeline/components/elements/inspector/InspectorTextPanel.tsx:398
@@ -1971,7 +1984,7 @@ msgstr "Open Project Folder..."
 msgid "open-project"
 msgstr "Open Project"
 
-#: src/components/ui/AppSettings.tsx:581
+#: src/components/ui/AppSettings.tsx:600
 msgid "OpenRouteService API Key"
 msgstr "OpenRouteService API Key"
 
@@ -1987,7 +2000,7 @@ msgstr "Out-Transition"
 msgid "Outline Color"
 msgstr "Outline Color"
 
-#: src/components/ui/AppSettings.tsx:767
+#: src/components/ui/AppSettings.tsx:789
 msgid "Outline Color (ASS)"
 msgstr "Outline Color (ASS)"
 
@@ -2003,7 +2016,7 @@ msgstr "Parsing Maps & GPS Data{prog}..."
 msgid "Parsing Route Data..."
 msgstr "Parsing Route Data..."
 
-#: src/features/map/components/WaypointEditor.tsx:350
+#: src/features/map/components/WaypointEditor.tsx:370
 msgid "Pause at Location"
 msgstr "Pause at Location"
 
@@ -2029,12 +2042,12 @@ msgstr "Playing..."
 msgid "Please drop transitions directly on the cut between two clips"
 msgstr "Please drop transitions directly on the cut between two clips"
 
-#: src/components/ui/ScriptInput.tsx:11
+#: src/components/ui/ScriptInput.tsx:13
 msgid "Polishing voiceover tone..."
 msgstr "Polishing voiceover tone..."
 
 #. placeholder {0}: wpImages.length
-#: src/features/map/components/WaypointEditor.tsx:671
+#: src/features/map/components/WaypointEditor.tsx:713
 msgid "Pop-up Images ({0}/3)"
 msgstr "Pop-up Images ({0}/3)"
 
@@ -2054,7 +2067,7 @@ msgstr "Presets"
 msgid "Preview"
 msgstr "Preview"
 
-#: src/components/ui/AppSettings.tsx:753
+#: src/components/ui/AppSettings.tsx:775
 msgid "Primary Color (ASS)"
 msgstr "Primary Color (ASS)"
 
@@ -2086,7 +2099,7 @@ msgid "Project loaded successfully"
 msgstr "Project loaded successfully"
 
 #: src/components/ui/TitleBar.tsx:244
-#: src/components/ui/TitleBar.tsx:398
+#: src/components/ui/TitleBar.tsx:395
 #: src/components/view/ProjectManager.tsx:246
 msgid "Project Manager"
 msgstr "Project Manager"
@@ -2096,7 +2109,7 @@ msgstr "Project Manager"
 msgid "Project Name"
 msgstr "Project Name"
 
-#: src/components/ui/AppSettings.tsx:242
+#: src/components/ui/AppSettings.tsx:261
 msgid "Project Overrides"
 msgstr "Project Overrides"
 
@@ -2136,6 +2149,10 @@ msgstr "Untitled Project"
 msgid "project-name-placeholder"
 msgstr "Kyoto Sightseeing"
 
+#: src/components/ui/AppSettings.tsx:121
+msgid "Pronunciation"
+msgstr "Pronunciation"
+
 #: src/components/ui/ContextMenu.tsx:871
 msgid "properties"
 msgstr "Properties"
@@ -2156,7 +2173,7 @@ msgstr "Quick Export"
 msgid "Quick Export (Auto-stitch & Export)"
 msgstr "Quick Export (Auto-stitch & Export)"
 
-#: src/components/ui/AppSettings.tsx:675
+#: src/components/ui/AppSettings.tsx:694
 msgid "Quick Export (Auto-stitch on generation)"
 msgstr "Quick Export (Auto-stitch on generation)"
 
@@ -2191,11 +2208,15 @@ msgstr "Stitching videos together and exporting..."
 msgid "Razor Tool (C)"
 msgstr "Razor Tool (C)"
 
+#: src/components/ui/AppSettings.tsx:742
+#~ msgid "Reading (e.g. かだ)"
+#~ msgstr "Reading (e.g. かだ)"
+
 #: src/components/view/ProjectManager.tsx:236
 msgid "Reading Project File..."
 msgstr "Reading Project File..."
 
-#: src/components/ui/AppSettings.tsx:1007
+#: src/components/ui/AppSettings.tsx:1066
 msgid "Ready"
 msgstr "Ready"
 
@@ -2207,11 +2228,11 @@ msgstr "Ready to Compile"
 msgid "Ready to Generate?"
 msgstr "Ready to Generate?"
 
-#: src/components/ui/AppSettings.tsx:936
+#: src/components/ui/AppSettings.tsx:992
 msgid "Recommended AI Models"
 msgstr "Recommended AI Models"
 
-#: src/components/ui/TitleBar.tsx:377
+#: src/components/ui/TitleBar.tsx:376
 msgid "Redo (Ctrl+Y)"
 msgstr "Redo (Ctrl+Y)"
 
@@ -2261,11 +2282,11 @@ msgstr "Remove"
 msgid "Remove from List"
 msgstr "Remove from List"
 
-#: src/features/map/components/WaypointEditor.tsx:712
+#: src/features/map/components/WaypointEditor.tsx:754
 msgid "Remove Image"
 msgstr "Remove Image"
 
-#: src/components/ui/AppSettings.tsx:463
+#: src/components/ui/AppSettings.tsx:482
 msgid "Remove Marker"
 msgstr "Remove Marker"
 
@@ -2351,15 +2372,15 @@ msgstr "Step 6 complete"
 msgid "renderTerminalTimeline"
 msgstr "timeline written"
 
-#: src/components/ui/AppSettings.tsx:584
+#: src/components/ui/AppSettings.tsx:603
 msgid "Required for driving and some hiking routes"
 msgstr "Required for driving and some hiking routes"
 
-#: src/components/ui/AppSettings.tsx:565
+#: src/components/ui/AppSettings.tsx:584
 msgid "Required for map rendering and 3D terrain"
 msgstr "Required for map rendering and 3D terrain"
 
-#: src/components/ui/AppSettings.tsx:212
+#: src/components/ui/AppSettings.tsx:231
 msgid "Requires Ollama"
 msgstr "Requires Ollama"
 
@@ -2375,7 +2396,7 @@ msgstr "Reset to 100% (0 dB)"
 msgid "Reset View (North)"
 msgstr "Reset View (North)"
 
-#: src/components/ui/AppSettings.tsx:643
+#: src/components/ui/AppSettings.tsx:662
 msgid "Residential Duration"
 msgstr "Residential Duration"
 
@@ -2440,7 +2461,7 @@ msgstr "Route Line"
 msgid "Route Lines Config"
 msgstr "Route Lines Config"
 
-#: src/components/ui/AppSettings.tsx:454
+#: src/components/ui/AppSettings.tsx:473
 msgid "Route Marker"
 msgstr "Route Marker"
 
@@ -2462,7 +2483,7 @@ msgid "Saturation"
 msgstr "Saturation"
 
 #: src/components/ui/SaveAs.tsx:189
-#: src/components/ui/ScriptInput.tsx:117
+#: src/components/ui/ScriptInput.tsx:183
 #: src/components/ui/UnsavedChanges.tsx:65
 msgid "Save"
 msgstr "Save"
@@ -2511,7 +2532,7 @@ msgstr "Save the project before importing media"
 msgid "Save the project to enable version history"
 msgstr "Save the project to enable version history"
 
-#: src/components/ui/ScriptInput.tsx:117
+#: src/components/ui/ScriptInput.tsx:183
 #: src/components/ui/StatusBar.tsx:265
 msgid "Saved"
 msgstr "Saved"
@@ -2524,7 +2545,7 @@ msgstr "Project"
 msgid "Scale"
 msgstr "Scale"
 
-#: src/components/ui/ScriptInput.tsx:68
+#: src/components/ui/ScriptInput.tsx:126
 msgid "Script"
 msgstr "Script"
 
@@ -2540,7 +2561,7 @@ msgstr "Search transitions..."
 msgid "search-location"
 msgstr "Search Location"
 
-#: src/components/ui/ScriptInput.tsx:8
+#: src/components/ui/ScriptInput.tsx:10
 msgid "Searching..."
 msgstr "Searching..."
 
@@ -2548,7 +2569,7 @@ msgstr "Searching..."
 msgid "Seek to marker"
 msgstr "Seek to marker"
 
-#: src/features/map/components/WaypointEditor.tsx:417
+#: src/features/map/components/WaypointEditor.tsx:437
 msgid "Select"
 msgstr "Select"
 
@@ -2592,7 +2613,7 @@ msgstr "Select Layer to Copy"
 msgid "Select Photos..."
 msgstr "Select Photos..."
 
-#: src/components/ui/AppSettings.tsx:1031
+#: src/components/ui/AppSettings.tsx:962
 msgid "Select which model to use for narration synthesis, only downloaded models are shown"
 msgstr "Select which model to use for narration synthesis, only downloaded models are shown"
 
@@ -2622,7 +2643,7 @@ msgstr "Set as Destination"
 msgid "set-as-start"
 msgstr "Set as Start"
 
-#: src/components/ui/AppSettings.tsx:69
+#: src/components/ui/AppSettings.tsx:80
 msgid "Settings"
 msgstr "Settings"
 
@@ -2630,7 +2651,7 @@ msgstr "Settings"
 msgid "Settings Applied"
 msgstr "Settings Applied"
 
-#: src/components/ui/TitleBar.tsx:400
+#: src/components/ui/TitleBar.tsx:397
 msgid "Setup"
 msgstr "Setup"
 
@@ -2646,7 +2667,7 @@ msgstr "Shadow Color"
 msgid "Shorts, Reels & TikTok"
 msgstr "Shorts, Reels & TikTok"
 
-#: src/components/ui/AppSettings.tsx:216
+#: src/components/ui/AppSettings.tsx:235
 msgid "Show Auto-Write script buttons and overview narration. Requires Ollama to be installed and running locally."
 msgstr "Show Auto-Write script buttons and overview narration. Requires Ollama to be installed and running locally."
 
@@ -2654,7 +2675,7 @@ msgstr "Show Auto-Write script buttons and overview narration. Requires Ollama t
 msgid "Show elevation and 3D buildings"
 msgstr "Show elevation and 3D buildings"
 
-#: src/components/ui/AppSettings.tsx:543
+#: src/components/ui/AppSettings.tsx:562
 msgid "Show Route Elevation Heatmap"
 msgstr "Show Route Elevation Heatmap"
 
@@ -2666,16 +2687,16 @@ msgstr "Show Track"
 msgid "Simplify Route"
 msgstr "Simplify Route"
 
-#: src/components/ui/AppSettings.tsx:947
+#: src/components/ui/AppSettings.tsx:1003
 msgid "Size"
 msgstr "Size"
 
-#: src/components/ui/AppSettings.tsx:268
+#: src/components/ui/AppSettings.tsx:287
 #: src/components/ui/NewProject.tsx:279
 msgid "Skip AI voiceover synthesis and pop-up images during generation"
 msgstr "Skip AI voiceover synthesis and pop-up images during generation"
 
-#: src/features/map/components/WaypointEditor.tsx:318
+#: src/features/map/components/WaypointEditor.tsx:338
 msgid "Skip in Video Export"
 msgstr "Skip in Video Export"
 
@@ -2683,11 +2704,11 @@ msgstr "Skip in Video Export"
 msgid "Skip Rich Media (Fast Render)"
 msgstr "Skip Rich Media (Fast Render)"
 
-#: src/components/ui/AppSettings.tsx:680
+#: src/components/ui/AppSettings.tsx:699
 msgid "Skips asset review and automatically stitches & exports finished video"
 msgstr "Skips asset review and automatically stitches & exports finished video"
 
-#: src/features/map/components/WaypointEditor.tsx:322
+#: src/features/map/components/WaypointEditor.tsx:342
 msgid "Skips this location during video generation"
 msgstr "Skips this location during video generation"
 
@@ -2733,7 +2754,7 @@ msgstr "Standard Web Video"
 msgid "Standard widescreen (1920x1080)"
 msgstr "Standard widescreen (1920x1080)"
 
-#: src/features/map/components/WaypointEditor.tsx:498
+#: src/features/map/components/WaypointEditor.tsx:518
 msgid "Start"
 msgstr "Start"
 
@@ -2775,7 +2796,7 @@ msgstr "Stop By"
 msgid "stop-by"
 msgstr "Stop-by"
 
-#: src/features/map/components/WaypointEditor.tsx:460
+#: src/features/map/components/WaypointEditor.tsx:480
 msgid "Stop-by"
 msgstr "Stop-by"
 
@@ -2799,7 +2820,7 @@ msgstr "Stroke"
 msgid "Stroke Width"
 msgstr "Stroke Width"
 
-#: src/features/map/components/WaypointEditor.tsx:450
+#: src/features/map/components/WaypointEditor.tsx:470
 msgid "Stub"
 msgstr "Stub"
 
@@ -2823,7 +2844,7 @@ msgstr "Subtitle / Description"
 msgid "Subtitle description..."
 msgstr "Subtitle description..."
 
-#: src/components/ui/AppSettings.tsx:717
+#: src/components/ui/AppSettings.tsx:739
 msgid "Subtitle Format"
 msgstr "Subtitle Format"
 
@@ -2839,7 +2860,7 @@ msgstr "Subtitles are managed automatically or via text clips."
 msgid "Successfully processed the document. Here is the proposed route and script:"
 msgstr "Successfully processed the document. Here is the proposed route and script:"
 
-#: src/components/ui/AppSettings.tsx:322
+#: src/components/ui/AppSettings.tsx:341
 msgid "Synchronize historical weather conditions from photo EXIF dates using Open-Meteo to dynamically apply atmospheric fog and rain effects"
 msgstr "Synchronize historical weather conditions from photo EXIF dates using Open-Meteo to dynamically apply atmospheric fog and rain effects"
 
@@ -2875,7 +2896,7 @@ msgstr "Table View"
 msgid "Target Canvas"
 msgstr "Target Canvas"
 
-#: src/components/ui/AppSettings.tsx:611
+#: src/components/ui/AppSettings.tsx:630
 msgid "Target FPS"
 msgstr "Target FPS"
 
@@ -2923,8 +2944,8 @@ msgstr "This version is no longer available"
 msgid "This will save your project, synthesize AI voiceovers, and render map videos before opening the Timeline."
 msgstr "This will save your project, synthesize AI voiceovers, and render map videos before opening the Timeline."
 
-#: src/components/ui/TitleBar.tsx:434
-#: src/components/ui/TitleBar.tsx:436
+#: src/components/ui/TitleBar.tsx:431
+#: src/components/ui/TitleBar.tsx:433
 #: src/components/view/EditorLayout.tsx:38
 msgid "Timeline"
 msgstr "Timeline"
@@ -2988,7 +3009,11 @@ msgstr "Transitions"
 msgid "Transitions can only be placed on video tracks"
 msgstr "Transitions can only be placed on video tracks"
 
-#: src/components/ui/ScriptInput.tsx:101
+#: src/features/map/components/WaypointEditor.tsx:602
+msgid "TTS Pronunciation Dictionary"
+msgstr "TTS Pronunciation Dictionary"
+
+#: src/components/ui/ScriptInput.tsx:167
 msgid "Type a prompt or write your own script..."
 msgstr "Type a prompt or write your own script..."
 
@@ -2996,11 +3021,11 @@ msgstr "Type a prompt or write your own script..."
 msgid "Typography & Subtitles"
 msgstr "Typography & Subtitles"
 
-#: src/components/ui/AppSettings.tsx:359
+#: src/components/ui/AppSettings.tsx:378
 msgid "UI Theme"
 msgstr "UI Theme"
 
-#: src/components/ui/TitleBar.tsx:369
+#: src/components/ui/TitleBar.tsx:368
 msgid "Undo (Ctrl+Z)"
 msgstr "Undo (Ctrl+Z)"
 
@@ -3011,8 +3036,8 @@ msgstr "Unhide Track"
 #: src/features/map/components/MapArea.tsx:402
 #: src/features/map/components/MapArea.tsx:444
 #: src/features/map/components/MapArea.tsx:482
-#: src/features/map/components/WaypointEditor.tsx:274
-#: src/features/map/components/WaypointEditor.tsx:277
+#: src/features/map/components/WaypointEditor.tsx:294
+#: src/features/map/components/WaypointEditor.tsx:297
 #: src/hooks/useWaypointActions.ts:55
 #: src/hooks/useWaypointActions.ts:72
 #: src/hooks/useWaypointActions.ts:76
@@ -3027,7 +3052,7 @@ msgstr "Unlink selected clips"
 msgid "unlink-clips"
 msgstr "Unlink clips"
 
-#: src/features/map/components/WaypointEditor.tsx:487
+#: src/features/map/components/WaypointEditor.tsx:507
 msgid "Unlinked"
 msgstr "Unlinked"
 
@@ -3067,7 +3092,7 @@ msgstr "Unsaved Changes - Press Ctrl+S to save"
 #: src/components/ui/NewProject.tsx:112
 #: src/components/ui/TitleBar.tsx:80
 #: src/components/ui/TitleBar.tsx:207
-#: src/components/ui/TitleBar.tsx:505
+#: src/components/ui/TitleBar.tsx:502
 msgid "Untitled Project"
 msgstr "Untitled Project"
 
@@ -3099,11 +3124,11 @@ msgstr "Video 1"
 msgid "Video 2"
 msgstr "Video 2"
 
-#: src/components/ui/AppSettings.tsx:104
+#: src/components/ui/AppSettings.tsx:115
 msgid "Video Editor"
 msgstr "Video Editor"
 
-#: src/components/ui/AppSettings.tsx:605
+#: src/components/ui/AppSettings.tsx:624
 msgid "Video Editor Settings"
 msgstr "Video Editor Settings"
 
@@ -3169,7 +3194,7 @@ msgstr "Waypoint {0}"
 msgid "Waypoint {0}: {1} at {formattedTime}"
 msgstr "Waypoint {0}: {1} at {formattedTime}"
 
-#: src/features/map/components/WaypointEditor.tsx:721
+#: src/features/map/components/WaypointEditor.tsx:763
 msgid "Waypoint {idx}"
 msgstr "Waypoint {idx}"
 
@@ -3185,7 +3210,7 @@ msgstr "Waypoint #{0}: {1}"
 msgid "Waypoint #{0}: {1} ({formattedTime}) - Click to jump playhead"
 msgstr "Waypoint #{0}: {1} ({formattedTime}) - Click to jump playhead"
 
-#: src/features/map/components/WaypointEditor.tsx:437
+#: src/features/map/components/WaypointEditor.tsx:457
 msgid "Waypoint Settings"
 msgstr "Waypoint Settings"
 
@@ -3203,9 +3228,9 @@ msgstr "Set Waypoint Type"
 msgid "Wipe"
 msgstr "Wipe"
 
-#: src/components/ui/ScriptInput.tsx:127
-msgid "Working on it..."
-msgstr "Working on it..."
+#: src/components/ui/AppSettings.tsx:730
+#~ msgid "Word (e.g. 加太)"
+#~ msgstr "Word (e.g. 加太)"
 
 #: src/components/ui/AutoDirectorModal.tsx:87
 msgid "Writing scripts with AI..."
