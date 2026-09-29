@@ -35,6 +35,7 @@ from services.cli import (
     test_video_concat,
     test_transition_editor,
     test_all,
+    test_overview_map,
     test_overview_video,
     test_overview_script,
 )
@@ -44,7 +45,7 @@ if __name__ == "__main__":
     if len(sys.argv) < 2:
         print(
             "Usage: python main.py <path/to/job_config.json> "
-            "[gps|overview|residential|tts|tts-all|attraction-tts|attraction-tts-all|attraction|attraction-all|"
+            "[gps|map|overview|residential|tts|tts-all|attraction-tts|attraction-tts-all|attraction|attraction-all|"
             "attraction-finalize|intro|outro|subtitle|subtitle-all|concat|transition|all|overview-script] "
             "[waypoint_index] [--force] [--no-llm]\n"
             "       (output dir is always <job_config's directory_path>/video)\n"
@@ -122,6 +123,9 @@ if __name__ == "__main__":
             if mode_arg == "gps":
                 # [NOTE] [GPS] Step 1 only: parses raw_track.gpx into a cleaned route + summary, no media generated.
                 result = test_gps(job_config_arg)
+            elif mode_arg == "map":
+                # [NOTE] [Map] Fetches only the overview's background map image (same bbox/padding/crop as the real render, no video) - a seconds-long way to check framing. Optional argv[3] is the output png path.
+                result = test_overview_map(job_config_arg, sys.argv[3] if len(sys.argv) > 3 else None)
             elif mode_arg == "residential":
                 # [NOTE] [Animation] Renders the per-waypoint leg-by-leg clips (2D or 3D per settings.use_3d_res) — no overview map. Optional argv[3] renders just that ONE leg (0-indexed) instead of every leg.
                 leg_index_arg = int(sys.argv[3]) if len(sys.argv) > 3 else None

@@ -1,6 +1,7 @@
 """Fullscreen popup scale-up transition, B-roll playback, and the consolidated
 freeze -> scale -> optional B-roll -> hold -> fade sequence."""
 
+import math
 import os
 from typing import Dict, List, Tuple
 
@@ -138,9 +139,9 @@ class _FullscreenMixin:
                 break
 
             fh, fw = frame.shape[:2]
-            # [NOTE] [Animation] "Cover" scaling: scales by the LARGER of the two ratios so the frame fully fills target_w x target_h with no letterboxing, then center-crops the overflow off whichever axis ends up oversized.
+            # [NOTE] [Animation] "Cover" scaling: scales by the LARGER of the two ratios so the frame fully fills target_w x target_h with no letterboxing, then center-crops the overflow off whichever axis ends up oversized. Rounded UP (ceil, not truncated) so the scaled frame can never come out a pixel short of target_w/target_h and leave a sliver of whatever's behind it exposed at the crop's edge.
             scale = max(target_w / fw, target_h / fh)
-            new_w, new_h = int(fw * scale), int(fh * scale)
+            new_w, new_h = math.ceil(fw * scale), math.ceil(fh * scale)
             resized = cv2.resize(frame, (new_w, new_h))
 
             y_offset = (new_h - target_h) // 2

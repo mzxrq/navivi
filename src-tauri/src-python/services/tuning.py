@@ -299,10 +299,15 @@ WAYPOINT_LABEL_FONT_SCALE = 0.85
 SUMMARY_CARD_LABEL_FONT_SIZE = 20
 SUMMARY_CARD_VALUE_FONT_SIZE = 34
 # Which summary-card template render_summary_card picks: "glass" (the
-# original wide stat pill/column card, cards.py's create_summary_card) or
+# original wide stat pill/column card, cards.py's create_summary_card),
 # "taskbar" (a narrow Windows-notification-flyout-style list,
-# create_summary_card_taskbar). Overridable per project via
-# job_config.json's settings.summary_card_style.
+# create_summary_card_taskbar), "stacked" (two rows, each just an icon and a
+# number — walking figure + distance, clock + duration, no labels —
+# create_summary_card_stacked), or "columns" (columns again, colored per
+# mode like "stacked", but each column is a tall icon spanning its label +
+# value stacked beside it, then a small clock+duration row underneath — the
+# user's own sketch, refined over two rounds — create_summary_card_columns).
+# Overridable per project via job_config.json's settings.summary_card_style.
 DEFAULT_SUMMARY_CARD_STYLE = "glass"
 # Floor on the residential-chunk zoom level computed from a leg's physical
 # span (see TileDownloader.fetch_residential_chunk) — a leg whose path
@@ -392,6 +397,15 @@ DEFAULT_AUTO_OVERVIEW_CUES = True
 # .narration_cues.json; tags the user wrote win. Overridable per project via
 # job_config.json's settings.auto_narration_cues.
 DEFAULT_AUTO_NARRATION_CUES = True
+# Whether a numbered overview stop gets its own short description (pulled
+# from its attractionNarration/arrivingNarration, see overview_script.py's
+# _facts) while the walker is stopped there, the same way a passed-by
+# stop-by's own fact gets woven into the via_batches mention. Off used to
+# mean a numbered stop was named ("{n}...{go}") but never actually
+# described - just a silent pause between "heading to X" and "leaving X".
+# Overridable per project via job_config.json's
+# settings.overview_describe_stops.
+DEFAULT_OVERVIEW_DESCRIBE_STOPS = True
 # Every residential leg opens on a brief WIDE shot of the whole leg, then
 # zooms — a scale+crossfade between two separately-fetched static tiles,
 # not a continuous crop within one image — into the existing tight/close
@@ -582,15 +596,66 @@ POPUP_MIN_DISPLAY_SECONDS = 2.0
 # at the previous normal waypoint's stop (see overview_animation.py's
 # _play_stopby_batch). Per-card, not split across the group: a run of four
 # landmarks holds that stop for four times this, rather than flashing each
-# one by in a quarter of the time. Deliberately equal to
-# POPUP_MIN_DISPLAY_SECONDS — these cards are read at a glance and the
-# stop they extend is already a full stop.
-STOPBY_BATCH_SECONDS = 2.0
+# one by in a quarter of the time. Deliberately BELOW the general
+# POPUP_MIN_DISPLAY_SECONDS floor (2.0s) - the batch calls now pass
+# min_display_seconds=STOPBY_BATCH_SECONDS explicitly to _make_baked_popup
+# so this value actually takes effect instead of being clamped back up to
+# 2.0s. A quick pop-in/pop-out per card (rather than each one settling in
+# for a full 2s read) is the intended feel here - the cards are landmarks
+# merely passed, not stopped at; the narration only briefly names them
+# (overview_script.py's via_batches), so a snappy "these exist" beat reads
+# better than a leisurely one, and it keeps the cue-timing math (this
+# value is also what overview.py's _hold_frames/start_batch reserve) from
+# pushing later cued stops late to compensate for a long batch freeze.
+STOPBY_BATCH_SECONDS = 1.0
+# At most this many stop-bys in a group get their own held card (and count
+# toward the extra hold time reserved before the next cued stop — see
+# overview.py's _hold_frames/start_batch and route_brief.py's plan_budget).
+# The narration only ever names up to 3 of them ("や"-joined, capped at
+# names[:3] in overview_script.py's via_batches line) regardless of group
+# size, so a bigger group held card-by-card at STOPBY_BATCH_SECONDS each
+# made the video sit frozen well past when the voice had already moved on
+# (5 stop-bys = 10s held, for a single ~3s spoken clause) — the retiming
+# then had to shove every later cued stop's arrival back to compensate,
+# reading as "arrives late". Any stop-by beyond this cap still gets its pin
+# drawn (it WAS passed, the map should say so) but no card/extra hold time,
+# same fallback already used when there's no free screen space for a card
+# (see _play_stopby_batch).
+STOPBY_BATCH_MAX_HELD = 4
 # An overview waypoint card stays FULLY shown (after its fade-in, before its
 # fade-out) at least this long, even when the walker has already reached the
 # next waypoint: POPUP_MIN_DISPLAY_SECONDS counts the fades, which left a card
 # passed on the way readable for barely half a second.
 OVERVIEW_POPUP_MIN_HOLD_SECONDS = 2.0
+# Overview map padding, scaled to how physically big the route actually is
+# (bounding-box diagonal, in km) - a flat percentage padding looks right at
+# one scale and wrong at another: 10% margin around a route that spans 40km
+# is a lot of genuinely useful breathing room, but the same 10% around a
+# route that spans 800m is still a huge, mostly-empty gap with the pins
+# clustered tiny in the middle. Smaller routes get a tighter (more zoomed-in)
+# crop; bigger ones get more room so nearby pins/labels don't crowd the
+# frame edge. (span_km ceiling, padding_factor) pairs, checked in order -
+# the first ceiling the route's own span fits under wins.
+# TileDownloader._optimal_zoom_for_span rounds the padded span's zoom UP to
+# the nearest WHOLE level (never down), and zoom is log2-scaled - so most
+# padding changes land inside the same whole level and change nothing
+# visible; only enough padding to push past the NEXT level's threshold
+# changes the fetched crop at all, and that jump is a big, discrete step
+# (confirmed on this project's own route, span ~7.5km: 0.05-0.50 all stayed
+# at zoom 13 - identical crop; 0.70 dropped to zoom 12 - roughly 2x the
+# area, at which point the card layout (built for the tighter crop) started
+# overlapping/crowding, so that's a real regression, not just "more
+# zoomed out"). Kept modest for now, matching zoom 13 on that route -
+# raise a tier past its own threshold only once the card layout can also
+# handle the wider crop it produces.
+OVERVIEW_PADDING_BY_SPAN_KM: Tuple[Tuple[float, float], ...] = (
+    (1.5, 0.08),
+    (5.0, 0.12),
+    (15.0, 0.20),
+    (40.0, 0.25),
+)
+# Above the largest span_km ceiling in OVERVIEW_PADDING_BY_SPAN_KM.
+OVERVIEW_PADDING_MAX_SPAN = 0.25
 # Overview: the walker takes at least this long from one numbered stop to the
 # next, however close they are (stops a few hundred metres apart used to flash
 # past in a fraction of a second, their cards all popping up at once). The
@@ -631,7 +696,7 @@ STOPBY_NOTICE_FADE_SECONDS = 0.6
 # automatically bounded without each one needing its own cap. Doesn't
 # touch the various built-in DEFAULT values used when a waypoint doesn't
 # set freeze_seconds at all — those are already <= this ceiling.
-POPUP_FREEZE_SECONDS_MAX = 3.0
+POPUP_FREEZE_SECONDS_MAX = 1.0
 # How long a residential leg's AT-ARRIVAL destination photo is held once it
 # has grown to fullscreen (see pedestrian.py's _play_leg_photo_card
 # cut_after path). Deliberately below POPUP_MIN_DISPLAY_SECONDS — and so
@@ -639,14 +704,14 @@ POPUP_FREEZE_SECONDS_MAX = 3.0
 # photo has already been on screen, growing, for most of a second before
 # this hold begins, and the clip hard-cuts the instant the hold ends, so a
 # full 2-3s freeze on a still image just stalls the cut.
-RESIDENTIAL_ARRIVAL_POPUP_HOLD_SECONDS = 0.0
+RESIDENTIAL_ARRIVAL_POPUP_HOLD_SECONDS = 1.0
 # How long a residential leg holds on the plain arrived map (walker gone,
 # destination pin + HUD card showing the leg's own total distance/time)
 # BEFORE the at-arrival photo starts its pop-in -- without this the photo
 # began growing the instant the walker stopped moving, cutting straight
 # from "still walking" to "photo" with no beat to actually register having
 # arrived.
-RESIDENTIAL_ARRIVAL_FREEZE_SECONDS = 0.0
+RESIDENTIAL_ARRIVAL_FREEZE_SECONDS = 1.0
 # [NOTE] [Transition] Fullscreen photo transition plays as an ordered sequence: confirm (pin selected) -> scale (zoom into photo) -> blur -> fade_out; hold_ratio_of_freeze/min_hold_seconds/min_small_hold_seconds bound how long the fullscreen photo is held relative to its freeze duration before the next stage starts.
 FULLSCREEN_TRANSITION_DEFAULTS: Dict[str, float] = {
     "confirm_seconds": 0.4,
@@ -714,31 +779,60 @@ COMFYUI_MODEL_SHIFT = 8.0
 COMFYUI_MIN_FRAMES = 25  # ~1s @ 24fps
 COMFYUI_MAX_FRAMES = 89  # ~3.7s @ 24fps (was 121 ~5s, then 65 ~2.7s — middle ground)
 # Sequential extension: when a narration outlasts one COMFYUI_MAX_FRAMES
-# segment, the attraction clip is built from up to this many segments in ONE
-# ComfyUI graph, each segment started from the previous segment's last frame
-# (so the motion carries on instead of the last frame freezing). 2 segments
-# is ~7.3s; anything longer is still held on the last frame. Each extra
-# segment adds ~2 minutes of GPU time and drift: segments only see the
-# previous last frame, not the photo, so changes compound (4 segments turned
-# a painted wall into a van driving in). 1 turns extension off.
-# 2 (the user's choice, for more real camera motion). The second segment is
-# where damage showed before the scene-lock prompts and colour pass: a road
-# sign's arrow turned into another symbol, a pole's black/yellow stripes
-# went solid yellow, and a teal stain spread over a grey street (石標).
-# 1 = one Wan segment, then only slow_move.py's plain 2D push-in, which
-# can't invent anything.
-COMFYUI_EXTEND_MAX_SEGMENTS = 2
+# segment, the attraction clip is built from more segments, each one started
+# from the previous segment's last frame (so the motion carries on instead of
+# the last frame freezing) - see COMFYUI_CHAIN_LAST_FRAME below for how they
+# are actually chained. None (the user's choice): no cap - chain as many
+# segments as it takes to cover the WHOLE narration, so the clip is real Wan
+# motion end to end and slow_move.py's push-in/zoom-out tail
+# (ATTRACTION_CHAIN_TO_FULL_LENGTH below) is never needed. A number caps it
+# at that many segments instead (the remainder falls back to slow_move.py);
+# 1 turns extension off entirely (one Wan segment, then the plain tail).
+# Before last-frame chaining this drifted badly past 2 segments (segments
+# only saw the previous last frame, not the photo, so changes compounded - 4
+# segments turned a painted wall into a van driving in); last-frame chaining
+# colour-matches the handed-on frame back to the photo every time
+# (COMFYUI_CHAIN_COLOR_MATCH), which is what makes chaining to full length
+# safe to leave uncapped.
+COMFYUI_EXTEND_MAX_SEGMENTS: Optional[int] = None
+# HOW the segments are chained.
+# True ("last frame" chaining): each segment is its own ComfyUI job, started
+# from a real PNG of the previous segment's last frame - so that frame can be
+# colour-matched back to the photo BEFORE it is handed on
+# (COMFYUI_CHAIN_COLOR_MATCH), which stops Wan's grading compounding from one
+# segment into the next, and each segment can carry its own prompt and be
+# re-rolled on its own. The segments are joined with ffmpeg, each one after
+# the first losing its opening frame (a re-render of the frame it started
+# from).
+# False: the old single graph, every segment unrolled into it, chained on the
+# decoded tensor. One job (the model is never reloaded, so it is faster), but
+# the drift carries straight through and every segment shares one prompt.
+COMFYUI_CHAIN_LAST_FRAME = True
+# Colour-match a chained frame to the photo before the next segment starts
+# from it (see color_match.py, the same pass the finished clip gets).
+COMFYUI_CHAIN_COLOR_MATCH = True
+# When segments now chain to the full narration length (COMFYUI_EXTEND_MAX_SEGMENTS
+# = None), the generated clip already reaches the narration's end on its own,
+# so img2vdo.py skips slow_move.py's push-in/zoom-out tail entirely (the user's
+# choice: chain, don't zoom out) - a moving preset falls through to the plain
+# last-frame freeze if there's still a small gap. False restores the old
+# behaviour (slow_move fills whatever a capped/single segment doesn't reach).
+ATTRACTION_CHAIN_TO_FULL_LENGTH = True
 # After the Wan motion runs out, a moving preset's clip continues as a slow
 # push-in/drift over its last frame (vdoprocessing/slow_move.py) instead of
 # freezing, in a random direction per clip: the frame grows by about this
 # fraction per second (0.012 = +1.2%/s, ~10% over an 8s gap; each clip
 # randomises it by +/-25%). The "none" preset stays a still photo.
 ATTRACTION_SLOW_MOVE_ZOOM_PER_SEC = 0.012
-# How that remaining time moves (the user's choice): "zoomout" eases slowly
-# back out to the full picture, centred, ending right as the narration ends;
-# to have picture to zoom out into, the whole clip is shown zoomed in by that
-# same amount (never more than ATTRACTION_SLOW_MOVE_MAX_ZOOM_OUT), so the join
-# doesn't jump. "drift" is the earlier slow push-in in a random direction.
+# How that remaining time moves, WHEN there is any left to fill this way -
+# with ATTRACTION_CHAIN_TO_FULL_LENGTH on (the default), Wan chains all the
+# way to the narration's end and this tail is never reached; it only applies
+# with that switch off, or when COMFYUI_EXTEND_MAX_SEGMENTS caps the chain
+# short of the narration. "zoomout" eases slowly back out to the full
+# picture, centred, ending right as the narration ends; to have picture to
+# zoom out into, the whole clip is shown zoomed in by that same amount (never
+# more than ATTRACTION_SLOW_MOVE_MAX_ZOOM_OUT), so the join doesn't jump.
+# "drift" is the earlier slow push-in in a random direction.
 ATTRACTION_SLOW_MOVE_STYLE = "zoomout"
 ATTRACTION_SLOW_MOVE_MAX_ZOOM_OUT = 0.12
 # Wan grades its clips (contrast, saturation and brightness climb, and jump
@@ -776,33 +870,32 @@ ATTRACTION_COLOR_MATCH_SMOOTH_SECONDS = 1.0
 # - cinematic realism: cartoon, anime, CG/3D render look, plastic texture,
 #   painting, over-sharpened, flicker, unnatural motion, morphing scenery.
 COMFYUI_NEGATIVE_PROMPT = (
-    "色调艳丽，过曝，静态，细节模糊不清，字幕，风格，作品，画作，画面，静止，"
-    "整体发灰，最差质量，低质量，JPEG压缩残留，丑陋的，残缺的，多余的手指，"
-    "画得不好的手部，画得不好的脸部，畸形的，毁容的，形态畸形的肢体，手指融合，"
-    "静止不动的画面，杂乱的背景，三条腿，背景人很多，倒着走，"
-    "重复的物体，重复的道具，重复的建筑，复制粘贴的元素，镜像重复，同一物体出现两次，"
-    "克隆的人物，重复的人物，物体凭空出现，物体凭空消失，物体相互融合，多余的物体，"
-    "建筑变形，结构扭曲，透视错误，新出现的车辆，物体进入画面，场景内容改变，快速运动，镜头晃动，"
-    "人，人物，行人，人群，游客，路人，走动的人，出现的人，"
-    "前景物体，镜头前的物体，第一人称视角，手，手持物体，玩具，武器，从画面边缘进入的物体，遮挡画面，"
-    "拍摄者的影子，人影，新出现的阴影，阴影移动，"
-    "调色，色彩分级，滤镜，饱和度过高，对比度过高，色偏，偏色，暗角，HDR效果，高光溢出，"
-    "亮度变化，颜色变化，光线变化，画面变亮，画面变暗，闪光，"
-    "文字扭曲，文字变形，乱码文字，文字变化，标志变形，标志变化，路标扭曲，招牌变形，"
-    "直线弯曲，线条扭曲，画面扭曲，波浪变形，橡胶质感，果冻效应，鱼眼畸变，镜头畸变，物体形状改变，"
-    "卡通，动漫，CG渲染，3D渲染感，塑料质感，绘画感，过度锐化，画面闪烁，"
-    "不自然的运动，场景变形"
+    # 1. Core Exclusions: People, vehicles, and unnecessary props are strictly prohibited 
+    "人, 人物, 行人, 游客, 人影, 摩托车, 自行车, 汽车, 车辆, 交通工具, 机器设备, 头盔, "
+    "手, 拿相机的手, 摄像机, 拍摄设备, 凭空出现的道具, 随机生成的杂物, 漂浮的物体, "
+    "前景物体, 前景遮挡物, 从边缘进入画面的物体, 幻觉生成的物体, 非纯风景, "
+    
+    # 2. Stable shots and camera movement
+    "场景突变, 结构突变, 建筑变形, 透视错误, 镜头扭曲, 快速运动, 镜头晃动, 不自然的运动, "
+    "重复的物体, 重复的建筑, 复制粘贴的元素, 镜像重复, 物体凭空出现, 物体相互融合, "
+    
+    # 3. Lighting and Image Quality Control
+    "曝光过度, 欠曝, 死白, 死黑, 频闪, 忽明忽暗, 曝光不稳定, 闪烁的光线, 光源跳动, "
+    "刺目的对比, 违背物理的光线, 异常反光, 调色, 滤镜, 饱和度过高, 色偏, 整体发灰, "
+    
+    # 4. Fundamental Flaws and Style
+    "文字扭曲, 乱码文字, 标志变形, 路标扭曲, 细节模糊不清, JPEG压缩残留, 最差质量, 低质量, "
+    "卡通, 动漫, CG渲染, 3D渲染感, 塑料质感, 绘画感, 画面闪烁"
 )
 # What every motion prompt adds after its camera move: the scene, its colours
 # and its shapes stay exactly as in the photo (see COMFYUI_NEGATIVE_PROMPT for
 # what each part is guarding against).
 _COMFYUI_SCENE_LOCK = (
-    "the scene stays exactly the same, stable composition, realistic cinematic footage, "
-    "original colors and lighting of the photo unchanged, natural colors, no color grading, "
-    "constant brightness, every sign and all text stay sharp, readable and unchanged, "
-    "straight lines stay straight, buildings and objects keep their exact shape, "
-    "no people, empty scenery, clear unobstructed view with nothing in the foreground, "
-    "no new shadows, no vehicles, no cars, no props, nothing enters the frame"
+    "perfectly stable scene composition, continuous unbroken landscape, pure empty scenery, "
+    "completely deserted environment, realistic cinematic footage, smooth horizontal panning shot, "
+    "seamless camera movement, strictly locked exposure, perfectly matched original colors, "
+    "consistent natural lighting, clear unobstructed view, absolute visual consistency from edge to edge, "
+    "perfectly preserved architectural details, sharp and legible text, deep depth of field"
 )
 # Maps attraction_step.py's camera_pans vocabulary (also used by
 # local_pan_generator.py's _CAMERA_PAN_PRESETS) to an English motion prompt
@@ -816,12 +909,36 @@ _COMFYUI_SCENE_LOCK = (
 # img2vdo._generate_single_clip); its prompt here is the default for a
 # waypoint with no preset at all.
 COMFYUI_CAMERA_PAN_PROMPTS: Dict[str, str] = {
-    "panright": "very slow steady camera pan to the right, " + _COMFYUI_SCENE_LOCK,
-    "panleft": "very slow steady camera pan to the left, " + _COMFYUI_SCENE_LOCK,
-    "panup": "very slow steady camera tilt upwards, " + _COMFYUI_SCENE_LOCK,
-    "pandown": "very slow steady camera tilt downwards, " + _COMFYUI_SCENE_LOCK,
-    "zoomin": "very slow steady push-in towards the scene, " + _COMFYUI_SCENE_LOCK,
-    "zoomout": "very slow steady pull-back from the scene, " + _COMFYUI_SCENE_LOCK,
+    "panright": (
+        "Camera: pan right. Movement: rotate the view horizontally from left to right from one fixed point. "
+        "Speed: smooth constant rotation. Framing: keep the horizon level while new space enters from the right "
+        "side of the frame. End: settle on a clear final composition."
+    ),
+    "panleft": (
+        "Camera: pan left. Movement: rotate the view horizontally from right to left from one fixed point. "
+        "Speed: smooth constant rotation. Framing: keep the horizon level while new space enters from the left "
+        "side of the frame. End: settle on a clear final composition."
+    ),
+    "panup": (
+        "Camera: tilt up. Movement: rotate the view upward from one fixed point. "
+        "Speed: smooth constant tilt. Framing: keep the vertical subject or architecture centered as the frame "
+        "travels upward. End: land on the upper target."
+    ),
+    "pandown": (
+        "Camera: tilt down. Movement: rotate the view downward from one fixed point. "
+        "Speed: smooth constant tilt. Framing: keep the vertical subject or architecture centered as the frame "
+        "travels downward. End: land on the lower target."
+    ),
+    "zoomin": (
+        "Camera: slow zoom in. Movement: slowly increase lens focal length toward a tighter frame. "
+        "Speed: gradual and even. Framing: keep the main visual target readable as it becomes larger in frame. "
+        "End: finish on a stable tighter composition."
+    ),
+    "zoomout": (
+        "Camera: slow zoom out. Movement: slowly decrease lens focal length toward a wider frame. "
+        "Speed: gradual and even. Framing: keep the main visual target readable as more surrounding space appears. "
+        "End: finish on a stable wider composition."
+    ),
     "none": "very slow steady camera movement, subtle natural ambient motion, " + _COMFYUI_SCENE_LOCK,
 }
 COMFYUI_DEFAULT_MOTION_PROMPT = COMFYUI_CAMERA_PAN_PROMPTS["none"]
@@ -942,12 +1059,29 @@ TTS_MODEL = "irodori-tts"
 # Device the Irodori TTS server runs its model and codec on: "cpu", "cuda" or
 # "auto" (the GPU when there is one). The environment variable
 # NAVIVI_TTS_DEVICE overrides it. A long text in one request drove the GPU to
-# ~98% load / ~7.8 GB VRAM and hard-shut the PC (hypervisor error), so text is
-# split into short chunks (below) that are spoken one at a time and joined.
-TTS_DEVICE = "auto"
+# ~98% load / ~7.8 GB VRAM and hard-shut the PC (hypervisor error) more than
+# once - splitting text into short chunks (below), spoken one at a time and
+# joined, made each individual request safer, but "auto" still puts every
+# one of those chunks on the GPU when there is one, so the same crash was
+# still reachable given enough chunks back to back. Defaulting to "cpu"
+# instead trades TTS speed for not crashing the machine, on this project and
+# every other real one - NAVIVI_TTS_DEVICE=cuda opts back into GPU when
+# that tradeoff is wanted (the server reads its device at spawn time only;
+# an already-running server needs restarting to pick up a changed value).
+TTS_DEVICE = "cpu"
 # Longest text sent to the TTS server in one request, in characters: about 15
 # seconds of speech at the project's measured ~4.4 characters per second.
 TTS_MAX_CHUNK_CHARS = 60
+# generate_speech now always splits multi-sentence text at sentence
+# boundaries (never packing two sentences into one TTS request, unlike the
+# old chunking that only split when TTS_MAX_CHUNK_CHARS was exceeded) and
+# inserts a short procedural silence between each sentence's own audio -
+# butt-joining separately-synthesized sentences with zero gap reads as
+# rushed/robotic; a real speaker breathes between them. Randomized per gap
+# (uniform in this range) rather than fixed, so a long narration doesn't
+# have a metronome-regular click between every sentence.
+TTS_SENTENCE_GAP_MIN_SECONDS = 0.25
+TTS_SENTENCE_GAP_MAX_SECONDS = 0.5
 TTS_VOICE = "test1"  # Irodori's only bundled voice preset as of writing
 # [Config] Playback speed multiplier sent to the Irodori TTS server; 1.0 = the
 # model's natural pace. The server itself clamps to [0.25, 4.0], but TTSConfig

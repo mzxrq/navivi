@@ -1100,6 +1100,7 @@ class _PopupMixin:
         card_h: int,
         reserved_boxes: Optional[List[Tuple[float, float, float, float]]] = None,
         route_obstacles: Optional[np.ndarray] = None,
+        centers: Optional[List[Tuple[float, float]]] = None,
     ) -> List[Tuple[int, int]]:
         """Candidate card positions on a disjoint lattice covering the WHOLE
         frame — not just its border — minus any that would cover the route
@@ -1115,6 +1116,60 @@ class _PopupMixin:
         overlap however many cards end up placed, and it is centred in the
         leftover space so the arrangement doesn't bias to one side."""
         margin, gap = self._RECAP_CARD_MARGIN, self._RECAP_CARD_GAP
+        pad = self._RECAP_CARD_OBSTACLE_PAD
+        ox = oy = None
+        if route_obstacles is not None and len(route_obstacles):
+            ox, oy = route_obstacles[:, 0], route_obstacles[:, 1]
+
+        def slot_ok(x: int, y: int) -> bool:
+            if x < margin or y < margin or x + card_w > w - margin or y + card_h > h - margin:
+                return False
+            if any(
+                x < rx2 and x + card_w > rx1 and y < ry2 and y + card_h > ry1
+                for rx1, ry1, rx2, ry2 in (reserved_boxes or ())
+            ):
+                return False
+            if ox is not None and bool(
+                np.any(
+                    (ox >= x - pad) & (ox <= x + card_w + pad)
+                    & (oy >= y - pad) & (oy <= y + card_h + pad)
+                )
+            ):
+                return False
+            return True
+
+        if centers is not None:
+            max_ring_r = math.hypot(w, h)
+            slots: List[Tuple[int, int]] = []
+            
+            golden_angle = math.pi * (3.0 - math.sqrt(5.0))
+            n = 0
+            target_slots = len(centers) * 2
+            
+            while len(slots) < target_slots and n < 8000:
+                r = 5.0 * math.sqrt(n)
+                if r > max_ring_r:
+                    break
+                
+                theta = n * golden_angle
+                n += 1
+                
+                for cx, cy in centers:
+                    sx = int(cx + r * math.cos(theta) - card_w / 2.0)
+                    sy = int(cy + r * math.sin(theta) - card_h / 2.0)
+                    
+                    if not slot_ok(sx, sy):
+                        continue
+                        
+                    overlap = False
+                    for ex, ey in slots:
+                        if not (sx + card_w + gap <= ex or ex + card_w + gap <= sx or sy + card_h + gap <= ey or ey + card_h + gap <= sy):
+                            overlap = True
+                            break
+                    if not overlap:
+                        slots.append((sx, sy))
+                        
+            return slots
 
         def axis(available: int, size: int) -> List[int]:
             pitch = size + gap
@@ -1130,27 +1185,11 @@ class _PopupMixin:
         if not xs or not ys:
             return []
 
-        pad = self._RECAP_CARD_OBSTACLE_PAD
-        ox = oy = None
-        if route_obstacles is not None and len(route_obstacles):
-            ox, oy = route_obstacles[:, 0], route_obstacles[:, 1]
-
-        slots: List[Tuple[int, int]] = []
+        slots = []
         for y in ys:
             for x in xs:
-                if any(
-                    x < rx2 and x + card_w > rx1 and y < ry2 and y + card_h > ry1
-                    for rx1, ry1, rx2, ry2 in (reserved_boxes or ())
-                ):
-                    continue
-                if ox is not None and bool(
-                    np.any(
-                        (ox >= x - pad) & (ox <= x + card_w + pad)
-                        & (oy >= y - pad) & (oy <= y + card_h + pad)
-                    )
-                ):
-                    continue
-                slots.append((int(x), int(y)))
+                if slot_ok(x, y):
+                    slots.append((int(x), int(y)))
         return slots
 
     def _layout_recap_cards(
@@ -1195,11 +1234,15 @@ class _PopupMixin:
         # sprawls across most of the frame would otherwise leave too few
         # free slots to show every stop, and drawing them over the line
         # beats silently dropping some.
+        all_pins = [pin_of(p) for p in popups]
+        cx = sum(p[0] for p in all_pins) / len(all_pins)
+        cy = sum(p[1] for p in all_pins) / len(all_pins)
+
         for obstacles in (route_obstacles, None):
             for scale in self._RECAP_CARD_SCALES:
                 cw, ch = self.graphics.beside_card_footprint(scale)
                 candidate = self._recap_card_slots(
-                    w, h, cw, ch, reserved_boxes, obstacles
+                    w, h, cw, ch, reserved_boxes, obstacles, centers=all_pins
                 )
                 if len(candidate) > len(slots):
                     card_scale, card_w, card_h, slots = scale, cw, ch, candidate
@@ -1211,8 +1254,6 @@ class _PopupMixin:
         # Revealed in angular order around the cluster, so consecutive
         # reveals land next to each other on screen rather than jumping
         # about the frame.
-        xs, ys = zip(*(pin_of(p) for p in popups))
-        cx, cy = sum(xs) / len(xs), sum(ys) / len(ys)
         ordered = sorted(
             popups, key=lambda p: math.atan2(pin_of(p)[1] - cy, pin_of(p)[0] - cx)
         )
@@ -1230,9 +1271,12 @@ class _PopupMixin:
         slot_arr = np.asarray(slots, dtype=float) + np.array(
             [card_w / 2.0, card_h / 2.0]
         )
-        cost = np.hypot(
-            slot_arr[None, :, 0] - pin_arr[:, None, 0],
-            slot_arr[None, :, 1] - pin_arr[:, None, 1],
+        # Use SQUARED Euclidean distance. This mathematically prevents leader
+        # line crossings even in 1D collinear cases where standard Euclidean
+        # distance would result in a tie and arbitrary assignment.
+        cost = (
+            (slot_arr[None, :, 0] - pin_arr[:, None, 0]) ** 2
+            + (slot_arr[None, :, 1] - pin_arr[:, None, 1]) ** 2
         )
         slot_for = list(linear_sum_assignment(cost)[1])
 
@@ -1373,7 +1417,7 @@ class _PopupMixin:
     @classmethod
     def _make_baked_popup(
         cls, popup: Dict, display_seconds: float, fps: int, queue_depth: int = 0,
-        min_hold_seconds: float = 0.0,
+        min_hold_seconds: float = 0.0, min_display_seconds: Optional[float] = None,
     ) -> Dict:
         """A baked_popups entry: `popup` is the waypoint dict itself (later
         copied and handed to render_popup_box); the rest is bookkeeping for
@@ -1410,11 +1454,18 @@ class _PopupMixin:
         # Floored at POPUP_MIN_DISPLAY_SECONDS: this is the single point
         # every popup's display duration passes through on its way to
         # frames, so enforcing the minimum here covers every caller.
+        # `min_display_seconds`: an explicit override for a caller that
+        # deliberately wants a shorter floor than the global default (e.g.
+        # a stop-by batch card, tuning.STOPBY_BATCH_SECONDS - several of
+        # these play back to back, so the usual "long enough to read one
+        # name" floor stacks into a much longer freeze than intended; see
+        # _play_stopby_batch). Falls back to POPUP_MIN_DISPLAY_SECONDS.
         # `min_hold_seconds`: fully shown at least this long between its
         # fades - for a card that stays up while the walker moves on
         # (tuning.OVERVIEW_POPUP_MIN_HOLD_SECONDS). Not for a card played
         # over a frozen map: that would lengthen the freeze itself.
-        display_seconds = max(float(display_seconds), tuning.POPUP_MIN_DISPLAY_SECONDS)
+        floor = tuning.POPUP_MIN_DISPLAY_SECONDS if min_display_seconds is None else min_display_seconds
+        display_seconds = max(float(display_seconds), floor)
         if min_hold_seconds > 0:
             display_seconds = max(display_seconds, min_hold_seconds + 2 * cls._POPUP_FADE_SECONDS)
         total_frames = max(1, int(display_seconds * fps))

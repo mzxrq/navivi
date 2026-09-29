@@ -326,6 +326,20 @@ class TileDownloader:
             (w + e) / 2.0 * (_r * math.pi / 180.0),
             math.log(math.tan(math.pi / 4 + math.radians((s + n) / 2.0) / 2)) * _r,
         )
+        # Tiles come in whole-tile chunks, so the mosaic is routinely much
+        # wider/taller than the padded bbox that was asked for - and by a
+        # different amount per side, depending on where tile edges fall. A
+        # padded edge landing a few metres past a tile edge pulled in a whole
+        # extra tile (~5km) on that side, and _crop_to_aspect_ratio below
+        # only ever trims ONE axis to the target ratio, so that extra tile
+        # stayed in the frame (padding looked like it "extended the left only,
+        # way too much"). Cropping to the requested window first makes the
+        # padding mean what it says, on every side, at any value.
+        _to_x = lambda lon: lon * (_r * math.pi / 180.0)
+        _to_y = lambda lat: math.log(math.tan(math.pi / 4 + math.radians(lat) / 2)) * _r
+        img, extent = self._crop_to_window(
+            img, extent, (_to_x(w), _to_x(e), _to_y(s), _to_y(n))
+        )
         cropped_img, new_extent = self._crop_to_aspect_ratio(
             img, extent, target_ratio, target_center=target_center
         )
@@ -335,6 +349,33 @@ class TileDownloader:
         ).convert("RGB").save(final_path)
 
         return final_path, new_extent, output_size
+
+    @staticmethod
+    def _crop_to_window(
+        img: np.ndarray, ext: Tuple, window: Tuple
+    ) -> Tuple[np.ndarray, Tuple]:
+        """Crops the tile mosaic `img` (extent `ext` = min_x, max_x, min_y,
+        max_y in mercator metres) down to `window` (same convention),
+        clamped to what the mosaic actually covers. Returns the cropped image
+        and its own extent, so pixel <-> map projections stay correct."""
+        h, w = img.shape[:2]
+        min_x, max_x, min_y, max_y = ext
+        wx0, wx1, wy0, wy1 = window
+        mpp_x = (max_x - min_x) / w
+        mpp_y = (max_y - min_y) / h
+        # Row 0 is the NORTH edge (max_y); columns grow eastward.
+        x0 = max(0, int(math.floor((wx0 - min_x) / mpp_x)))
+        x1 = min(w, int(math.ceil((wx1 - min_x) / mpp_x)))
+        y0 = max(0, int(math.floor((max_y - wy1) / mpp_y)))
+        y1 = min(h, int(math.ceil((max_y - wy0) / mpp_y)))
+        if x1 - x0 < 2 or y1 - y0 < 2:  # a degenerate window - leave the mosaic alone
+            return img, ext
+        return img[y0:y1, x0:x1], (
+            min_x + x0 * mpp_x,
+            min_x + x1 * mpp_x,
+            max_y - y1 * mpp_y,
+            max_y - y0 * mpp_y,
+        )
 
     # [Map] Shared bbox/zoom computation for a residential chunk — split out
     # of fetch_residential_chunk so fetch_residential_wide (the leg's wide

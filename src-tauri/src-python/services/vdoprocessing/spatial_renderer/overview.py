@@ -68,6 +68,7 @@ class _OverviewRenderMixin:
         point_modes: Optional[List[str]] = None,
         bounding_box: Optional[Dict[str, float]] = None,
         extent: Optional[Tuple[float, float, float, float]] = None,
+        preview_recap_only: bool = False,
     ) -> str:
         # Checkpoint: if a previous run already produced this exact output
         # file, skip straight to returning it instead of redoing the whole
@@ -471,10 +472,11 @@ class _OverviewRenderMixin:
                 group = ap.get("stopby_group") or []
                 if not (ap["data"].get("freeze_frame", False) or group):
                     return ap.get("cue_wait_frames", 0)  # the wait at a cued stop
+                held = min(len(group), tuning.STOPBY_BATCH_MAX_HELD)
                 return int(fps * (
                     float(self.post_arrival_hold_seconds)
                     + max(float(ap["data"].get("freeze_seconds", 4.0)), tuning.POPUP_MIN_DISPLAY_SECONDS)
-                    + len(group) * tuning.STOPBY_BATCH_SECONDS
+                    + held * tuning.STOPBY_BATCH_SECONDS
                 ))
 
             hosts = [
@@ -486,7 +488,8 @@ class _OverviewRenderMixin:
                 n: sum(h for f, h in hosts if f < frame) for n, frame in natural_frames.items()
             }
             start_batch = (
-                int(fps * len(start_popup.get("stopby_group") or []) * tuning.STOPBY_BATCH_SECONDS)
+                int(fps * min(len(start_popup.get("stopby_group") or []), tuning.STOPBY_BATCH_MAX_HELD)
+                    * tuning.STOPBY_BATCH_SECONDS)
                 if start_popup else 0
             )
             # The walk may be stretched back out to the length the cues need: the
@@ -727,8 +730,9 @@ class _OverviewRenderMixin:
                 intro_freeze_sec * _INTRO_CLEAN_HOLD_FRACTION_OF_FREEZE,
                 float(self.config.get("overview_intro_clean_hold_seconds", 1.5)),
             )
-            for _ in range(int(clean_hold_sec * fps)):
-                video.write(clean_frame)
+            if not preview_recap_only:
+                for _ in range(int(clean_hold_sec * fps)):
+                    video.write(clean_frame)
 
             def _draw_intro_cards(base: np.ndarray, alpha: float) -> np.ndarray:
                 # Line, then pin, then card — in that order (mirrors
@@ -787,8 +791,9 @@ class _OverviewRenderMixin:
             # with no transition. Ends back on the clean pins-only frame
             # so _animate_overview_frames picks up from the same plain
             # base the intro opened on.
-            for i in range(bounce_frames):
-                alpha = max(0.0, 1.0 - (i + 1) / bounce_frames)
+            if not preview_recap_only:
+                for i in range(bounce_frames):
+                    alpha = max(0.0, 1.0 - (i + 1) / bounce_frames)
                 slide = self._popup_slide_offset_y(
                     {"total_frames": bounce_frames, "frames_left": i + 1,
                      "fade_frames": bounce_frames}
@@ -824,11 +829,14 @@ class _OverviewRenderMixin:
                 int(round(depart * fps)) if ap["cue_frame"] is not None and depart is not None
                 and depart > seconds else None
             )
-        pre_popup_frame = self._animate_overview_frames(
-            video, current_bg, cap, is_video, w, h, fps,
-            smooth_path, mode_breakpoints, cum_smooth_dist, total_smooth_dist,
-            active_popups, stop_popup, points, route_avoid_points, route_obstacle_arr,
-        )
+        if preview_recap_only:
+            pre_popup_frame = clean_frame
+        else:
+            pre_popup_frame = self._animate_overview_frames(
+                video, current_bg, cap, is_video, w, h, fps,
+                smooth_path, mode_breakpoints, cum_smooth_dist, total_smooth_dist,
+                active_popups, stop_popup, points, route_avoid_points, route_obstacle_arr,
+            )
 
         # Built once, up front, so its exact footprint can be reserved
         # (see reserved_boxes below) before the recap frame lays out its
@@ -855,6 +863,14 @@ class _OverviewRenderMixin:
             if summary_card is not None
             else []
         )
+
+        if preview_recap_only:
+            # Just render the final recap frame and save it as an image
+            import cv2
+            out_img = str(self.out_dir / "01_overview_recap_preview.png")
+            final_frame = self._render_recap_frame(pre_popup_frame, active_popups, group_popups=None)
+            cv2.imwrite(out_img, final_frame)
+            return out_img
 
         outro_hold_sec = self._render_recap_and_summary(
             video, stop_popup, summary_card, active_popups, w, h, fps,

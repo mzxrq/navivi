@@ -40,6 +40,55 @@ def clean_label(waypoint: dict) -> str:
     return re.sub(r"\s*\((Return|return)\)\s*$", "", label)
 
 
+# How long a stop-by's own short fact snippet (below) may run, folded into
+# the via_batches line alongside its bare name — kept short since several of
+# these can share one clause (see overview_script.py's via_batches insertion).
+_STOPBY_FACT_CHARS = 18
+# A leading "have arrived at X" announcement sentence - attractionNarration
+# routinely opens with one before its real descriptive content (_short_fact
+# below skips it rather than grabbing it as the "fact").
+_ARRIVAL_ANNOUNCEMENT = re.compile(r"到着|たどり着")
+
+
+def _short_fact(waypoint: dict) -> str:
+    """One short clause of what's known about an UNCONNECTED stop-by, from
+    whatever the user already wrote in its attractionNarration - the field
+    meant for the place's OWN descriptive content, same as
+    audio_step._resolve_attraction_narration_script's own rule: "deliberately
+    never arrivingNarration", since that field is a leg-arrival announcement
+    ("have arrived at X"), not a description of X, and reads as broken
+    nonsense spliced into a noun-phrase modifier here ("...に到着しましたの
+    常行寺や..."). "" when nothing written, so the caller falls back to a
+    bare name-only mention, same as before this existed."""
+    text = (waypoint.get("attractionNarration") or "").strip()
+    if not text:
+        return ""
+    text = re.sub(r"\{[^}]*\}", "", text).strip()
+    # attractionNarration itself often opens with its own "arrived at X"
+    # announcement sentence before the real descriptive content (e.g.
+    # "『常行寺』に到着しました。天正年間に再建された歴史ある寺院で…") -
+    # skip that leading sentence rather than grabbing it as the "fact",
+    # which read as broken nonsense spliced into a noun-phrase modifier
+    # ("…に到着しましたの常行寺や…").
+    sentences = [s.strip() for s in re.split(r"[。！？\n]", text) if s.strip()]
+    first = next((s for s in sentences if not _ARRIVAL_ANNOUNCEMENT.search(s)), "")
+    if not first:
+        return ""
+    if len(first) <= _STOPBY_FACT_CHARS:
+        return first
+    # Too long for the shared clause (this is folded alongside other names
+    # in via_batches's one sentence - see overview_script.py). Cut at the
+    # last comma within budget rather than a hard character cut + "…": a
+    # comma is already a natural clause break in Japanese, so "天正年間に
+    # 再建された歴史ある寺院で" reads as a complete noun-phrase modifier on
+    # its own, spoken cleanly - a trailing ellipsis mid-clause (TTS doesn't
+    # pronounce it cleanly, and "…の{name}" sounds like the sentence just
+    # stops and restarts) doesn't.
+    within_budget = first[:_STOPBY_FACT_CHARS]
+    cut_at = within_budget.rfind("、")
+    return within_budget[:cut_at] if cut_at > 0 else within_budget
+
+
 def on_route(waypoint: dict) -> bool:
     """A waypoint the walker actually goes to (an unconnected stop-by is only
     seen from the route)."""
@@ -137,6 +186,7 @@ def stopby_holds(project: dict) -> Tuple[Dict[int, float], float]:
     waypoints = [w for w in project.get("waypoints", []) if isinstance(w, dict)]
     groups: Dict[int, int] = {}
     names: Dict[int, List[str]] = {}
+    facts: Dict[int, List[str]] = {}
     host, first_of_run = None, False
     for w in waypoints:
         if not w.get("isStopBy"):
@@ -151,18 +201,25 @@ def stopby_holds(project: dict) -> Tuple[Dict[int, float], float]:
         if host is not None:
             groups[id(host)] += 1
             names.setdefault(id(host), []).append(clean_label(w))
+            facts.setdefault(id(host), []).append(_short_fact(w))
     stopby_holds.names = names  # the stop-bys each host shows (see build_brief)
+    stopby_holds.facts = facts  # each one's own short fact, "" when none written
     holds: Dict[int, float] = {}
     start = 0.0
     for w in waypoints:
         count = groups.get(id(w), 0)
         if not count:
             continue
+        # Only STOPBY_BATCH_MAX_HELD of them get a held card in the actual
+        # render (overview.py's _hold_frames / overview_animation.py's
+        # _play_stopby_batch) — mirror that cap here so the script's own
+        # time budget matches what the video actually holds for.
+        held = min(count, tuning.STOPBY_BATCH_MAX_HELD)
         if w is waypoints[0]:
-            start = count * tuning.STOPBY_BATCH_SECONDS
+            start = held * tuning.STOPBY_BATCH_SECONDS
             continue
         card = min(float(w.get("freeze_seconds", 2.0)), tuning.POPUP_FREEZE_SECONDS_MAX)
-        holds[id(w)] = post + max(card, tuning.POPUP_MIN_DISPLAY_SECONDS) + count * tuning.STOPBY_BATCH_SECONDS
+        holds[id(w)] = post + max(card, tuning.POPUP_MIN_DISPLAY_SECONDS) + held * tuning.STOPBY_BATCH_SECONDS
     return holds, start
 
 
@@ -223,6 +280,7 @@ def build_brief(project: dict, routing_cache: Optional[dict] = None) -> dict:
             # and the stop-bys whose cards it shows then
             "hold_at_to": round(holds.get(id(b), 0.0), 2),
             "batch": list(stopby_holds.names.get(id(b), [])),
+            "batch_facts": list(stopby_holds.facts.get(id(b), [])),
             "from_at": [a["lat"], a["lng"]],
             "to_at": [b["lat"], b["lng"]],
             "_points": points,
@@ -302,9 +360,14 @@ def journeys(brief: dict, stops: Optional[set] = None) -> List[dict]:
                 + (brief.get("start_hold", 0.0) if not out else 0.0), 2
             ),
             "hold_at_to": last.get("hold_at_to", 0.0),
+            "batch": list(last.get("batch", [])),
             "legs": len(legs),
-            # (host, [stop-bys]) for every batch shown on the way
-            "via_batches": [(l["to"], l["batch"]) for l in legs[:-1] if l.get("batch")],
+            # (host, [stop-bys], [each one's own short fact, "" when none
+            # written]) for every batch shown on the way
+            "via_batches": [
+                (l["to"], l["batch"], l.get("batch_facts") or [""] * len(l["batch"]))
+                for l in legs[:-1] if l.get("batch")
+            ],
             "is_return": last["is_return"],
             "from_at": first["from_at"],
             "to_at": last["to_at"],
@@ -323,9 +386,15 @@ def transition_texts(leg: dict) -> List[str]:
     to = leg["to"]
     arrive = "へ戻ります" if leg["is_return"] else "へ向かいます"
     via = leg.get("via") or []
+    # Every via/passes name, never truncated: this used to cap at the first
+    # 2 (via[:2]/passes[:2]), silently dropping any further waypoint from
+    # ever being named ANYWHERE in the script if this leg's own "through"
+    # variant (below) also didn't fit the character budget and lost out to
+    # this fallback. A waypoint not chosen as its own numbered stop by
+    # plan_budget still deserves to be named once, here.
     passes = (
-        f"{'や'.join(via[:2])}に立ち寄りながら、" if via
-        else f"{'や'.join(leg['passes'][:2])}を眺めながら、" if leg["passes"] else ""
+        f"{'や'.join(via)}に立ち寄りながら、" if via
+        else f"{'や'.join(leg['passes'])}を眺めながら、" if leg["passes"] else ""
     )
     pieces = leg.get("pieces") or [{"mode": leg["mode"], "minutes": leg["minutes"]}]
     time = _minutes_phrase(leg["minutes"])
@@ -358,8 +427,31 @@ def transition_texts(leg: dict) -> List[str]:
 
 def transition_text(leg: dict, limit: Optional[int] = None) -> str:
     """The longest of `transition_texts` that fits in about `limit` characters
-    (the shortest when none does)."""
+    (the shortest when none does) - but never one that drops a via/passes
+    name the longer candidates named: some of transition_texts's own
+    shorter fallbacks (e.g. the walk/boat/walk branch's "船で13分渡り、Xへ"
+    variant) exist for legs with NO via/passes at all, yet still get
+    offered as a fallback even when one exists, silently dropping the only
+    place this leg's own via/passes waypoint would ever be named. Filters
+    to only the candidates that still name everyone first; only falls back
+    to the unfiltered list if somehow none do (shouldn't happen -
+    transition_texts's own longest candidate always includes them)."""
     texts = transition_texts(leg)
+    required = list(leg.get("via") or []) + list(leg.get("passes") or [])
+    if required:
+        named = [t for t in texts if all(name in t for name in required)]
+        texts = named or texts
     if limit is None:
         return texts[0]
-    return next((t for t in texts if len(t) <= limit * 1.15), texts[-1])
+    fit = next((t for t in texts if len(t) <= limit * 1.15), None)
+    if fit is not None:
+        return fit
+    if required:
+        # None of the full-detail named candidates fit even loosely (they
+        # carry mode/time/distance breakdowns on top of every name) -
+        # rather than either falling through to texts[-1] (which drops
+        # every name, defeating the guarantee above) or keeping a
+        # far-over-budget sentence, name everyone in the fewest words:
+        # just the names and the destination.
+        return f"{'、'.join(required)}を経て、{leg['to']}へ。"
+    return texts[-1]

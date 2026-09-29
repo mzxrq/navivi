@@ -674,7 +674,16 @@ class RouteAnimator:
                 "implemented — use the default spatial renderer instead."
             )
 
-        if render_mode != "residential":
+        if render_mode == "recap_frame":
+            overview_path = self.spatial_renderer.render_overview(
+                img_path, points, labels, popups, fps, summary=summary, point_modes=point_modes,
+                bounding_box=kwargs.get("overview_bounding_box"),
+                extent=kwargs.get("overview_extent"),
+                preview_recap_only=True
+            )
+            output_paths.append(overview_path)
+            
+        elif render_mode != "residential":
             tracker.show("Rendering overview video...")
             # [NOTE] [Core] The GeoJsonLayer pydeck overview
             # (_render_overview_pydeck/render_overview_video_pydeck in

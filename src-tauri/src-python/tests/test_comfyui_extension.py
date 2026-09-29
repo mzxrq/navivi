@@ -21,14 +21,28 @@ class TestResolveSegments:
         assert count == 1
         assert length == client_mod._resolve_frame_length(2.0)
 
-    def test_long_narration_gets_enough_full_segments(self):
+    def test_long_narration_gets_enough_full_segments(self, monkeypatch):
+        monkeypatch.setattr(tuning, "COMFYUI_EXTEND_MAX_SEGMENTS", None)
         count, length = client_mod._resolve_segments(SEGMENT_SEC * 1.5)
-        assert count == min(2, tuning.COMFYUI_EXTEND_MAX_SEGMENTS)
+        assert count == 2
         assert length == tuning.COMFYUI_MAX_FRAMES
 
-    def test_segment_count_is_capped(self):
+    def test_uncapped_by_default_chains_the_whole_narration(self, monkeypatch):
+        monkeypatch.setattr(tuning, "COMFYUI_EXTEND_MAX_SEGMENTS", None)
+        count, length = client_mod._resolve_segments(SEGMENT_SEC * 6.2)
+        assert count == 7  # ceil(6.2), no ceiling applied
+        assert length == tuning.COMFYUI_MAX_FRAMES
+
+    def test_a_number_still_caps_it(self, monkeypatch):
+        monkeypatch.setattr(tuning, "COMFYUI_EXTEND_MAX_SEGMENTS", 2)
         count, _ = client_mod._resolve_segments(600.0)
-        assert count == tuning.COMFYUI_EXTEND_MAX_SEGMENTS
+        assert count == 2
+
+    def test_one_turns_extension_off(self, monkeypatch):
+        monkeypatch.setattr(tuning, "COMFYUI_EXTEND_MAX_SEGMENTS", 1)
+        count, length = client_mod._resolve_segments(600.0)
+        assert count == 1
+        assert length == tuning.COMFYUI_MAX_FRAMES
 
 
 class TestBuildGraph:

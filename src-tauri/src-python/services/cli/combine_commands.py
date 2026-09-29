@@ -2,9 +2,10 @@
 transition/storyboard renderer, and the "run every isolated stage" test_all."""
 
 import json
+import re
 import shutil
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from services.logger.progress import tracker as _tracker
 from services.vdoprocessing.videopipeline.helpers import (
@@ -12,10 +13,72 @@ from services.vdoprocessing.videopipeline.helpers import (
     project_subtitle_dir,
     project_video_dir,
 )
+from services.vdoprocessing.videopipeline.timeline_step import _piece_target, _waypoint_ids
 from .gps_commands import test_overview_video, test_residential_video
 from .tts_commands import test_tts_all
 from .attraction_commands import test_attraction_videos
 from .subtitle_commands import test_subtitles
+
+# A leg's continuation parts share its base name with a "_contN" suffix
+# (route2vdo.py's own leg-splitting convention — see gps_commands.test_residential_video's
+# multi-part video_paths). Grouping on this lets _order_like_timeline treat a
+# split leg as the one leg it actually is, not several.
+_CONT_SUFFIX_RE = re.compile(r"_cont\d+$")
+
+
+def _order_like_timeline(
+    project_dir: Path,
+    overview_paths: List[str],
+    attraction_results: List[Dict[str, Any]],
+    residential_paths: List[str],
+) -> List[str]:
+    """Orders test_all's raw stage outputs to match the real pipeline's
+    timeline.json convention (timeline_step.build_timeline's docstring):
+    overview -> for each leg in travel order, that leg's DEPARTURE
+    waypoint's own attraction video (if any) immediately followed by the
+    leg itself -> the final waypoint's own attraction video (nothing
+    plays it otherwise, since no leg departs from it).
+
+    This is a video-only reordering (no audio/subtitle muxing — that's
+    build_timeline's job for the real render_timeline path); it exists so
+    test_all's dev-preview concat isn't grouped into a "sightseeing reel"
+    block followed by a "travel reel" block, which doesn't reflect what
+    the finished video actually looks like.
+    """
+    attraction_by_index = {
+        item["index"]: item["video_path"]
+        for item in attraction_results
+        if not item.get("pending") and item.get("video_path")
+    }
+
+    # Group residential clips by leg (strip the "_contN" suffix), preserving
+    # the renderer's own output order — it already renders leg 0, 1, 2...
+    # in travel order, appending each leg's own continuation parts right
+    # after its main part before moving to the next leg.
+    leg_groups: List[List[str]] = []
+    for path in residential_paths:
+        base = _CONT_SUFFIX_RE.sub("", Path(path).stem)
+        if leg_groups and _CONT_SUFFIX_RE.sub("", Path(leg_groups[-1][0]).stem) == base:
+            leg_groups[-1].append(path)
+        else:
+            leg_groups.append([path])
+
+    waypoint_ids = _waypoint_ids(str(project_dir))
+    ordered = list(overview_paths)
+    departure_index = 0  # the route always starts at waypoint 0
+    for group in leg_groups:
+        if departure_index in attraction_by_index:
+            ordered.append(attraction_by_index[departure_index])
+        ordered.extend(group)
+        target = _piece_target(group[0], waypoint_ids)
+        if target is not None:
+            departure_index = target
+    # The final waypoint's own attraction never gets picked up as a
+    # "departure" above (no leg departs from the route's last stop).
+    if departure_index in attraction_by_index:
+        ordered.append(attraction_by_index[departure_index])
+
+    return ordered
 
 
 def test_video_concat(
@@ -110,7 +173,7 @@ def test_all(
         use_3d_res = bool(
             json.load(config_file).get("settings", {}).get("use_3d_res", False)
         )
-    total_stages = 7 + (1 if use_3d_res else 0)
+    total_stages = 8
 
     if force:
         # [HACK] [IO] Per-waypoint cleanup only deletes files matching current labels/order, so a renamed or removed waypoint would leave stale files behind — brute-force wipe the whole dir instead.
@@ -144,21 +207,22 @@ def test_all(
     _tracker.stage("Rendering overview & residential video...")
     transition_result = test_transition_editor(str(config_path), str(route_dir), force=force)
 
-    # [NOTE] [Animation] 2D mode already renders residential clips inside render_route_video; only 3D mode needs this separate pydeck/Playwright call, to avoid rendering residential twice.
-    if use_3d_res:
-        _tracker.stage("Rendering residential video (3D)...")
-    residential_result = (
-        test_residential_video(str(config_path), str(route_dir), force=force)
-        if use_3d_res
-        else None
-    )
+    # [NOTE] [Animation] test_transition_editor always renders via
+    # render_mode="overview" (see test_overview_video's docstring), which
+    # now skips the residential sequence entirely regardless of 2D/3D —
+    # so residential always needs this separate call, not just 3D. (This
+    # used to be 3D-only, back when render_mode="overview" still bundled
+    # both outputs together for 2D; that's no longer true.)
+    _tracker.stage(f"Rendering residential video{' (3D)' if use_3d_res else ''}...")
+    residential_result = test_residential_video(str(config_path), str(route_dir), force=force)
 
     _tracker.stage("Concatenating final video...")
-    videos_to_concat = [
-        *attraction_result["video_paths"],
-        *transition_result["video_paths"],
-        *(residential_result["video_paths"] if residential_result else []),
-    ]
+    videos_to_concat = _order_like_timeline(
+        project_dir,
+        transition_result["video_paths"],
+        attraction_result["results"],
+        residential_result["video_paths"] if residential_result else [],
+    )
     concat_result = test_video_concat(
         str(config_path), str(video_dir), videos_to_concat
     )

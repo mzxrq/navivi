@@ -1,5 +1,6 @@
 """Cinematic pause overlay and popup/HUD card rendering."""
 
+import math
 import os
 from typing import Any, Dict, List, Tuple
 
@@ -320,8 +321,13 @@ class _PopupBoxMixin:
                 # matching the "no black bar" look most photo cards use.
                 src_h, src_w = pop_img.shape[:2]
                 scale = max(target_img_w / src_w, target_img_h / src_h)
-                fit_w = max(1, int(round(src_w * scale)))
-                fit_h = max(1, int(round(src_h * scale)))
+                # Rounded UP (never to nearest, never floored): rounding a
+                # cover-fit's scaled size DOWN can undershoot the target box
+                # by a pixel, leaving a thin sliver of whatever is behind
+                # the photo (the card's own white background) visible along
+                # its cropped edge instead of photo all the way to the edge.
+                fit_w = max(1, math.ceil(src_w * scale))
+                fit_h = max(1, math.ceil(src_h * scale))
                 resized = cv2.resize(pop_img, (fit_w, fit_h))
 
                 crop_x = max(0, (fit_w - target_img_w) // 2)
@@ -415,7 +421,14 @@ class _PopupBoxMixin:
                 pil_canvas = pil_canvas.filter(ImageFilter.GaussianBlur(radius=11))
                 draw = ImageDraw.Draw(pil_canvas)
 
-                card_box = [box_x, box_y, box_x + total_w, box_y + total_h]
+                # PIL's rectangle coordinates are INCLUSIVE of the second
+                # point, so [box_x, ..., box_x + total_w, ...] actually
+                # fills total_w + 1 columns (and total_h + 1 rows) - one
+                # pixel wider/taller than the photo below, which uses the
+                # same -1 the mask does. That extra column/row of white
+                # card showed as a thin white line along the photo's right
+                # (and bottom) edge, since the photo never reached it.
+                card_box = [box_x, box_y, box_x + total_w - 1, box_y + total_h - 1]
                 draw.rounded_rectangle(
                     card_box,
                     radius=14,

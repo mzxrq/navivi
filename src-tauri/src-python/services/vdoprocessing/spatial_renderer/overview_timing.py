@@ -104,20 +104,30 @@ def stop_targets(
         slowest_allowed = floor + max(
             MIN_STOP_GAP_FRAMES, min_leg_frames, int((natural[n] - previous_natural) / MAX_WALK_SPEEDUP)
         )
-        value = int(round(min(max(targets[n], slowest_allowed), last)))
+        value = max(targets[n], slowest_allowed)
+        if cap_frames:  # a leg never takes longer than the cap - but the cap
+            # must never win against the speed floor above: that would rush
+            # the walker past MAX_WALK_SPEEDUP just to fit the cap, the exact
+            # "rushed" look slowest_allowed exists to prevent. When the two
+            # conflict (a short cap on a leg cues demand be walked slowly),
+            # the speed floor wins and the stop is reached late instead.
+            value = max(slowest_allowed, min(value, floor + cap_frames))
+        value = int(round(min(value, last)))
         value = max(value, floor + 1)
-        if cap_frames:  # a leg never takes longer than the cap
-            value = min(value, floor + cap_frames)
         out[n] = value
         floor = value
         previous_natural = natural[n]
     # Squeezed against the end of the walk: pull earlier stops back so every
-    # one still fits before the last frame.
+    # one still fits before the last frame. Kept at least MIN_STOP_GAP_FRAMES
+    # apart even while squeezing (not just 1 frame) - this pass runs
+    # unconstrained by slowest_allowed above, so without this floor it could
+    # cram several stops on top of each other whenever the walk is too short
+    # for every cue to fit, instead of spreading the squeeze evenly back.
     ceiling = last
     for n in reversed(order):
         if out[n] > ceiling:
             out[n] = ceiling
-        ceiling = out[n] - 1
+        ceiling = max(0, out[n] - MIN_STOP_GAP_FRAMES)
     return out
 
 
