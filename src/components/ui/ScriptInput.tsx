@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Mic, Sparkles, Square, Check, PencilSparkles } from "../ui/icons";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
+import { useWorkspace } from "../../hooks/useWorkspace";
 
 const getThinkingSteps = () => [
   t`Detecting context...`,
@@ -33,6 +34,7 @@ export function ScriptInput({
   const [localPrompt, setLocalPrompt] = useState(value);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const language = "English";
+  const { settings, updateSettings, setIsDirty } = useWorkspace();
 
   // Sync internal state when prop changes externally (e.g. generation finishes)
   useEffect(() => {
@@ -59,8 +61,38 @@ export function ScriptInput({
     onGenerate(localPrompt, "gemma2", language);
   };
 
+  
+  const extractPronunciation = (text: string): string => {
+    const regex = /([\u4E00-\u9FAF\u3400-\u4DBF]+)[(（]([\u3040-\u309F\u30A0-\u30FF]+)[)）]/g;
+    let match;
+    let hasDictUpdate = false;
+    const newDict = [...(settings.pronunciation_dictionary || [])];
+    
+    while ((match = regex.exec(text)) !== null) {
+      const kanji = match[1];
+      const kana = match[2];
+      
+      const exists = newDict.find(entry => entry.word === kanji);
+      if (exists) {
+        exists.reading = kana;
+      } else {
+        newDict.push({ word: kanji, reading: kana });
+      }
+      hasDictUpdate = true;
+    }
+    
+    if (hasDictUpdate) {
+      updateSettings({ pronunciation_dictionary: newDict });
+      setIsDirty(true);
+      return text.replace(/([\u4E00-\u9FAF\u3400-\u4DBF]+)[(（][\u3040-\u309F\u30A0-\u30FF]+[)）]/g, "$1");
+    }
+    return text;
+  };
+
   const handleSaveClick = () => {
-    onChange(localPrompt);
+    const cleaned = extractPronunciation(localPrompt);
+    onChange(cleaned);
+    setLocalPrompt(cleaned);
   };
 
   return (

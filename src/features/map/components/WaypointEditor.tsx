@@ -22,6 +22,7 @@ import {
   ZoomOut,
   Sparkles,
   SwitchCamera,
+  Settings2,
 } from "../../../components/ui/icons";
 import { useWorkspace } from "../../../hooks/useWorkspace";
 import { useUI } from "../../../hooks/useUI";
@@ -62,7 +63,7 @@ export function WaypointEditor({
     metadata,
     settings,
   } = useWorkspace();
-  const { showToast, markedWaypointIds, isRendering } = useUI();
+  const { showToast, markedWaypointIds, isRendering, setShowAppSettings } = useUI();
   const isMarkedForRegen = markedWaypointIds?.includes(wpId);
 
   const wp = waypoints.find((w) => w.id === wpId);
@@ -588,7 +589,16 @@ export function WaypointEditor({
               {/* Tab Content */}
               <div className="flex-1 overflow-y-auto custom-scrollbar p-6 bg-white dark:bg-navidark-800">
                 {activeTab === "scripts" && (
-                  <div className="space-y-6 max-w-3xl">
+                                      <div className="space-y-6 max-w-3xl">
+                      <div className="flex justify-end mb-[-1rem]">
+                        <button
+                          onClick={() => setShowAppSettings(true)}
+                          className="text-[10px] font-semibold text-navi-600 dark:text-navi-400 hover:text-navi-700 dark:hover:text-navi-300 flex items-center gap-1 bg-navi-50/50 dark:bg-navi-900/20 px-2 py-1 rounded-md border border-navi-100 dark:border-navi-800 transition-colors"
+                        >
+                          <Settings2 className="w-3 h-3" />
+                          <Trans>TTS Pronunciation Dictionary</Trans>
+                        </button>
+                      </div>
                     {/* Arriving Script */}
                     <div className="flex flex-col gap-3">
                       <button
