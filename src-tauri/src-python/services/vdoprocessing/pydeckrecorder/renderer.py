@@ -50,10 +50,7 @@ async def render_leg_animation(
     editor = FFmpegEngine()
     ffmpeg_cmd = [
         editor.resolve_binary(),
-        "-hide_banner",
-        "-loglevel",
-        "error",
-        "-y",
+        "-y", *tuning.ffmpeg_log_args(),
         "-f",
         "image2pipe",
         "-vcodec",

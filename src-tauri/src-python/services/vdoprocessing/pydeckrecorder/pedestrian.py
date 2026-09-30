@@ -193,20 +193,11 @@ def _pin_layers(waypoints: List[Dict]) -> List[pdk.Layer]:
     numbered = [wp for wp in waypoints if not wp.get("is_stopby")]
     stopbys = [wp for wp in waypoints if wp.get("is_stopby")]
 
-    dots = [{"lon": wp["lon"], "lat": wp["lat"]} for wp in numbered]
-    labels = [{"lon": wp["lon"], "lat": wp["lat"], "text": str(wp["order"])} for wp in numbered]
     layers = [
         pdk.Layer(
-            "ScatterplotLayer", id="wp-dots", data=dots,
-            get_position="[lon, lat]", get_fill_color=[230, 80, 20, 255],
-            get_radius=8, radius_min_pixels=14,
-            stroked=True, get_line_color=[255, 255, 255, 255], line_width_min_pixels=2,
-        ),
-        pdk.Layer(
-            "TextLayer", id="wp-labels", data=labels,
-            get_position="[lon, lat]", get_text="text", get_size=16,
-            get_color=[255, 255, 255, 255], font_family='`"Noto Sans JP", sans-serif`',
-            font_weight="'bold'", get_alignment_baseline="'center'",
+            "IconLayer", id="wp-pins", data=_overview_pin_icons(numbered),
+            get_icon="icon", get_position="[lon, lat]",
+            get_size=_OVERVIEW_PIN_SIZE_PX, size_units="'pixels'", size_scale=1, pickable=False,
         ),
     ]
     layers.extend(_landmark_layers(stopbys))
@@ -278,6 +269,28 @@ def _teardrop_pin_svg_url(fill_hex: str, glyph: str = "") -> str:
 # _leg_pin_url).
 _START_PIN_URL = _teardrop_pin_svg_url(_bgr_to_hex(tuning.START_PIN_COLOR), "S")
 _DEST_PIN_URL = _teardrop_pin_svg_url(_bgr_to_hex(tuning.END_PIN_COLOR), "E")
+
+
+_OVERVIEW_PIN_SIZE_PX = 48
+_OVERVIEW_PIN_FALLBACK_BGR = (20, 80, 230)
+
+
+def _overview_pin_icons(numbered: List[Dict]) -> List[Dict]:
+    """IconLayer rows for the overview's numbered pins: teardrops with each
+    waypoint's pin_glyph/pin_color (set by RouteAnimator), else its order."""
+    return [
+        {
+            "lon": wp["lon"], "lat": wp["lat"],
+            "icon": {
+                "url": _teardrop_pin_svg_url(
+                    _bgr_to_hex(wp.get("pin_color") or _OVERVIEW_PIN_FALLBACK_BGR),
+                    str(wp.get("pin_glyph") or wp.get("order", "")),
+                ),
+                "width": _TEARDROP_PIN_W, "height": _TEARDROP_PIN_H, "anchorY": _TEARDROP_PIN_H,
+            },
+        }
+        for wp in numbered
+    ]
 
 
 def _leg_pin_url(pin: Optional[Dict], fallback: str) -> str:
@@ -682,7 +695,7 @@ async def _record_overview(
 
     editor = FFmpegEngine()
     ffmpeg_cmd = [
-        editor.resolve_binary(), "-hide_banner", "-loglevel", "error", "-y",
+        editor.resolve_binary(), "-y", *tuning.ffmpeg_log_args(),
         "-f", "image2pipe", "-vcodec", "png", "-framerate", str(fps), "-i", "-",
         "-c:v", "libx264", *tuning.ffmpeg_thread_args(),
         "-r", str(fps), "-pix_fmt", "yuv420p", output_path,
@@ -726,17 +739,15 @@ async def _record_overview(
                     )
 
                 c_progress = json.dumps(progress_color)
+                numbered = [wp for wp in waypoints if not wp.get("is_stopby")]
+                pin_icons = {id(wp): row for wp, row in zip(numbered, _overview_pin_icons(numbered))}
 
                 async def draw_frame(frac: float):
                     drawn = _point_at_fraction(route_lonlat, cum_km, total_km, frac)
                     progress_geojson = json.dumps(_route_linestring_feature(drawn, line_color=progress_color)) \
                         if len(drawn) >= 2 else json.dumps({"type": "FeatureCollection", "features": []})
                     revealed = [wp for wp in waypoints if wp["_reveal_frac"] <= frac]
-                    dots = [{"lon": wp["lon"], "lat": wp["lat"]} for wp in revealed if not wp.get("is_stopby")]
-                    labels = [
-                        {"lon": wp["lon"], "lat": wp["lat"], "text": str(wp["order"])}
-                        for wp in revealed if not wp.get("is_stopby")
-                    ]
+                    pins = [pin_icons[id(wp)] for wp in revealed if not wp.get("is_stopby")]
                     stopby_dots = [{"lon": wp["lon"], "lat": wp["lat"]} for wp in revealed if wp.get("is_stopby")]
                     stopby_labels = [
                         {"lon": wp["lon"], "lat": wp["lat"], "text": str(wp.get("label") or "")}
@@ -750,7 +761,7 @@ async def _record_overview(
                         const currentLayers = window.deckgl.props.layers || [];
                         const staticLayers = currentLayers.filter(l =>
                             !['overview-progress', 'overview-traveler', 'overview-traveler-halo',
-                              'anim-wp-dots', 'anim-wp-labels', 'anim-stopby-dots', 'anim-stopby-labels'].includes(l.id)
+                              'anim-wp-pins', 'anim-stopby-dots', 'anim-stopby-labels'].includes(l.id)
                         );
                         const newProgress = new deck.GeoJsonLayer({{
                             id: 'overview-progress', data: {progress_geojson},
@@ -768,17 +779,10 @@ async def _record_overview(
                             getLineColor: {c_progress}, stroked: true, lineWidthMinPixels: 2,
                             getRadius: 2, radiusMinPixels: 6
                         }});
-                        const wpDots = new deck.ScatterplotLayer({{
-                            id: 'anim-wp-dots', data: {json.dumps(dots)},
-                            getPosition: d => [d.lon, d.lat], getFillColor: [230, 80, 20, 255],
-                            getRadius: 8, radiusMinPixels: 14,
-                            stroked: true, getLineColor: [255, 255, 255, 255], lineWidthMinPixels: 2
-                        }});
-                        const wpLabels = new deck.TextLayer({{
-                            id: 'anim-wp-labels', data: {json.dumps(labels)},
-                            getPosition: d => [d.lon, d.lat], getText: d => d.text, getSize: 16,
-                            getColor: [255, 255, 255, 255], fontFamily: '"Noto Sans JP", sans-serif',
-                            fontWeight: 'bold', getAlignmentBaseline: 'center'
+                        const wpPins = new deck.IconLayer({{
+                            id: 'anim-wp-pins', data: {json.dumps(pins)},
+                            getPosition: d => [d.lon, d.lat], getIcon: d => d.icon,
+                            getSize: {_OVERVIEW_PIN_SIZE_PX}, sizeUnits: 'pixels', sizeScale: 1
                         }});
                         const stopbyDots = new deck.ScatterplotLayer({{
                             id: 'anim-stopby-dots', data: {json.dumps(stopby_dots)},
@@ -795,7 +799,7 @@ async def _record_overview(
                         }});
                         window.deckgl.setProps({{
                             layers: [...staticLayers, newProgress, newHalo, newTraveler,
-                                      wpDots, wpLabels, stopbyDots, stopbyLabels]
+                                      wpPins, stopbyDots, stopbyLabels]
                         }});
                     }}
                     """
@@ -1723,7 +1727,7 @@ async def _record_leg(
         # behind instead of a half-written/corrupted final video.
         temp_path = VideoExporter._make_temp_path(out_path)
         ffmpeg_cmd = [
-            editor.resolve_binary(), "-hide_banner", "-loglevel", "error", "-y",
+            editor.resolve_binary(), "-y", *tuning.ffmpeg_log_args(),
             "-f", "image2pipe", "-vcodec", "mjpeg", "-framerate", str(fps), "-i", "-",
             "-c:v", "libx264", *tuning.ffmpeg_thread_args(),
             "-r", str(fps), "-pix_fmt", "yuv420p", temp_path,

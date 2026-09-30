@@ -285,7 +285,7 @@ def _render_pan(image: Image.Image, output_path: str, duration_sec: float, camer
 
     import subprocess
     subprocess.run(
-        ["ffmpeg", "-y", "-i", raw_path, "-c:v", "libx264", *tuning.ffmpeg_thread_args(), "-crf", "20",
+        ["ffmpeg", "-y", *tuning.ffmpeg_log_args(), "-i", raw_path, "-c:v", "libx264", *tuning.ffmpeg_thread_args(), "-crf", "20",
          "-preset", "medium", "-pix_fmt", "yuv420p", output_path],
         check=True, capture_output=True,
     )

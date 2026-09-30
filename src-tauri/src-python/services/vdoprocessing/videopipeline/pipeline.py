@@ -9,12 +9,18 @@ from typing import Optional
 from services import tuning
 from services.config.job_config import JobConfigManager
 from services.logger.progress import tracker
-from services.vdoprocessing.vdoexporter import VideoExporter
+from services.vdoprocessing.vdoexporter import VideoExporter, sweep_stale_temp_files
 
 from .attraction_step import render_attraction_videos
 from .audio_step import apply_cued_scripts, generate_audio, set_route_only_legs, stop_tts_server
 from .gps_step import process_gps
-from .helpers import logger, project_subtitle_dir, project_video_dir
+from .helpers import (
+    attraction_videos_enabled,
+    logger,
+    project_subtitle_dir,
+    project_video_dir,
+    skip_rich_media,
+)
 from .intro_step import render_intro_clip
 from .leg_pieces import compute_leg_narration_splits
 from .narration_step import add_default_cues, add_overview_cues, record_cue_times
@@ -61,6 +67,7 @@ def run_full_pipeline(
     # subfolders under output_video_dir instead of sharing one flat folder —
     # see helpers.project_route_video_dir/project_attraction_video_dir.
     route_video_dir = str(Path(output_video_dir) / "route")
+    sweep_stale_temp_files(output_video_dir, recursive=True)
 
     waypoints = job_config.get("waypoints", [])
     min_free_ram = job_config.get("settings", {}).get("min_free_ram_gb")
@@ -68,6 +75,10 @@ def run_full_pipeline(
     # [NOTE] [Core] total=8 (the "[n/N]" denominator) is only set on this first stage() call — later stage() calls rely on the tracker remembering it rather than re-declaring it each time.
     tracker.stage("Parsing GPS track...", total=8)
     cleaned_route = process_gps(raw_source_path)
+
+    settings = job_config.get("settings", {})
+    fast_render = skip_rich_media(settings)
+    attractions_on = attraction_videos_enabled(settings)
 
     # --- STEP 2 ---
     tracker.stage("Generating TTS narration...")
@@ -83,48 +94,63 @@ def run_full_pipeline(
     # With attraction videos on, each attraction clip speaks its waypoint's
     # attraction text, so a leg speaks only its route (arriving) text -
     # otherwise the same attraction text played twice, leg then clip.
-    set_route_only_legs(bool(job_config.get("settings", {}).get("enable_attraction_videos", True)))
-    add_default_cues(str(config_file_path))
-    # {n} / {go} for a hand-written overview script, so the overview stops at
-    # each waypoint while it is described (on by default:
-    # tuning.DEFAULT_AUTO_OVERVIEW_CUES; settings.auto_overview_cues=false turns it off).
-    add_overview_cues(str(config_file_path))
-    audio_data = generate_audio(
-        cleaned_route, str(config_file_path), force=force_regenerate
-    )
-    # Where each cue falls in the real audio; render_step sizes each walk from it.
-    if use_cues:
-        record_cue_times(str(config_file_path), audio_data)
+    set_route_only_legs(attractions_on)
+    if fast_render:
+        logger.info("Step 2: settings.skip_rich_media is on — skipping TTS.")
+        audio_data = {
+            "audio_durations": [], "audio_pauses": [], "audio_paths": [],
+            "subtitle_paths": [], "attraction_audio_paths": [],
+            "attraction_audio_durations": [], "overview_audio_path": None,
+            "overview_audio_duration": 0.0, "overview_cue_times": {},
+        }
+    else:
+        add_default_cues(str(config_file_path))
+        # {n} / {go} for a hand-written overview script, so the overview stops at
+        # each waypoint while it is described (on by default:
+        # tuning.DEFAULT_AUTO_OVERVIEW_CUES; settings.auto_overview_cues=false turns it off).
+        add_overview_cues(str(config_file_path))
+        audio_data = generate_audio(
+            cleaned_route, str(config_file_path), force=force_regenerate
+        )
+        # Where each cue falls in the real audio; render_step sizes each walk from it.
+        if use_cues:
+            record_cue_times(str(config_file_path), audio_data)
 
-    # [NOTE] [TTS] Force-stop the TTS server now instead of leaving it to its
-    # idle timeout — otherwise it stays loaded in VRAM while the attraction
-    # step's ComfyUI/Wan pipeline and the renderer below start competing for
-    # the same VRAM right after, which can overcommit a tight GPU budget.
-    tracker.stage("Stopping TTS server...")
-    stop_tts_server()
+        # [NOTE] [TTS] Force-stop the TTS server now instead of leaving it to its
+        # idle timeout — otherwise it stays loaded in VRAM while the attraction
+        # step's ComfyUI/Wan pipeline and the renderer below start competing for
+        # the same VRAM right after, which can overcommit a tight GPU budget.
+        tracker.stage("Stopping TTS server...")
+        stop_tts_server()
 
     # --- STEP 2b ---
-    tracker.stage("Generating subtitles...")
-    subtitle_dir = project_subtitle_dir(project_dir)
     # Subtitles carry the same cue-free text the audio speaks. Done on a copy
     # so nothing added here leaks into job_config's own waypoints.
     waypoints = copy.deepcopy(waypoints)
-    apply_cued_scripts(waypoints, project_dir)
-    subtitle_paths = build_subtitles(
-        waypoints, audio_data.get("audio_paths", []), str(subtitle_dir), force=force_regenerate
-    )
-    overview_subtitle_path = build_overview_subtitle(
-        job_config.data,
-        audio_data.get("overview_audio_path"),
-        str(subtitle_dir),
-        force=force_regenerate,
-    )
-    attraction_subtitle_paths = build_attraction_subtitles(
-        waypoints,
-        audio_data.get("attraction_audio_paths", []),
-        str(subtitle_dir),
-        force=force_regenerate,
-    )
+    if fast_render:
+        logger.info("Step 2b: settings.skip_rich_media is on — skipping subtitles.")
+        subtitle_paths = []
+        overview_subtitle_path = None
+        attraction_subtitle_paths = []
+    else:
+        tracker.stage("Generating subtitles...")
+        subtitle_dir = project_subtitle_dir(project_dir)
+        apply_cued_scripts(waypoints, project_dir)
+        subtitle_paths = build_subtitles(
+            waypoints, audio_data.get("audio_paths", []), str(subtitle_dir), force=force_regenerate
+        )
+        overview_subtitle_path = build_overview_subtitle(
+            job_config.data,
+            audio_data.get("overview_audio_path"),
+            str(subtitle_dir),
+            force=force_regenerate,
+        )
+        attraction_subtitle_paths = build_attraction_subtitles(
+            waypoints,
+            audio_data.get("attraction_audio_paths", []),
+            str(subtitle_dir),
+            force=force_regenerate,
+        )
 
     # --- STEP 3 ---
     # Opt-out per project via job_config.json's settings.enable_attraction_videos
@@ -132,7 +158,7 @@ def run_full_pipeline(
     # Off skips the whole ComfyUI/Wan2.2 (or local pan/zoom fallback) step
     # entirely — the slowest, most GPU-heavy stage in the pipeline — for a
     # project that only wants the route/overview video.
-    if job_config.get("settings", {}).get("enable_attraction_videos", True):
+    if attractions_on:
         tracker.stage("Generating attraction videos...")
         tuning.ensure_free_ram("attraction videos", min_free_ram, relief=stop_tts_server)
         attraction_videos = render_attraction_videos(
@@ -158,7 +184,7 @@ def run_full_pipeline(
     else:
         tracker.stage("Skipping attraction videos (disabled for this project)...")
         logger.info(
-            "Step 3: settings.enable_attraction_videos is off — skipping "
+            "Step 3: attraction videos are off (enable_attraction_videos / skip_rich_media) — skipping "
             "attraction video generation."
         )
         attraction_videos = []
@@ -197,7 +223,7 @@ def run_full_pipeline(
     # Off by default: subtitles are still built (.srt files, listed per clip in
     # timeline.json) but not burned onto the video. settings.burn_subtitles
     # turns the burn back on.
-    if job_config.get("settings", {}).get("burn_subtitles", False):
+    if not fast_render and job_config.get("settings", {}).get("burn_subtitles", False):
         tracker.stage("Burning subtitles...")
         final_videos = burn_subtitles(
             video_paths=all_videos,
@@ -268,8 +294,14 @@ def render_from_timeline(
     with open(timeline_path, "r", encoding="utf-8") as f:
         timeline_data = json.load(f)
 
+    # The editor saves project-relative paths; resolve them against the project, not the cwd.
+    project_dir = timeline_path.resolve().parent
+    for track in timeline_data.get("video_tracks", []):
+        for key in ("file_path", "audio_path"):
+            if track.get(key) and not Path(track[key]).is_absolute():
+                track[key] = str(project_dir / track[key])
+
     if not output_video_path:
-        project_dir = timeline_path.parent
         output_video_path = str(project_video_dir(project_dir) / "01_overview_rerendered.mp4")
 
     print(f"NLE Engine: Re-rendering video from {timeline_path.name}...")

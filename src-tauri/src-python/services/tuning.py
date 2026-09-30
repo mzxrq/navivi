@@ -54,6 +54,11 @@ def ffmpeg_thread_args() -> List[str]:
     into its argument list, right after the ffmpeg binary path."""
     return ["-threads", str(FFMPEG_THREADS)]
 
+
+def ffmpeg_log_args() -> List[str]:
+    """Quiet ffmpeg output: no banner, errors only, plus a progress line."""
+    return ["-hide_banner", "-loglevel", "error", "-stats"]
+
 # --- RAM guard -----------------------------------------------------------------
 # TTS, ComfyUI/Wan, Chromium (the map renderer) and Ollama each hold a lot of
 # RAM, and this pipeline runs them one after another in one long process. Before
@@ -308,7 +313,7 @@ SUMMARY_CARD_VALUE_FONT_SIZE = 34
 # value stacked beside it, then a small clock+duration row underneath — the
 # user's own sketch, refined over two rounds — create_summary_card_columns).
 # Overridable per project via job_config.json's settings.summary_card_style.
-DEFAULT_SUMMARY_CARD_STYLE = "glass"
+DEFAULT_SUMMARY_CARD_STYLE = "columns"  # the user's choice (2026-09-30)
 # Floor on the residential-chunk zoom level computed from a leg's physical
 # span (see TileDownloader.fetch_residential_chunk) — a leg whose path
 # bulges or loops (e.g. a detour around a highway on-ramp) can inflate
@@ -379,8 +384,10 @@ DEFAULT_MERGE_STOPBY_WAYPOINTS = True
 # Whether the overview map animation is rendered with pydeck (a 3D WebGL map in
 # headless Chromium) instead of the flat static-tile renderer. Overridable per
 # project via job_config.json's settings.use_pydeck_overview. Note: pydeck
-# renders on the GPU.
-DEFAULT_USE_PYDECK_OVERVIEW = True
+# renders on the GPU. Off by default (the user's choice): the 2D overview has
+# the photo pop-ups and follows the cues, and still ends on the 3D
+# pydeck zoom (settings.enable_gl_ending_zoom, on by default).
+DEFAULT_USE_PYDECK_OVERVIEW = False
 # Whether a hand-written overview narration gets {n} / {go} cue tags placed
 # automatically (localization/overview_cues.py), so the overview walker stops
 # at each waypoint while the voice describes it, then heads on. Only tags are
@@ -1068,7 +1075,7 @@ TTS_MODEL = "irodori-tts"
 # every other real one - NAVIVI_TTS_DEVICE=cuda opts back into GPU when
 # that tradeoff is wanted (the server reads its device at spawn time only;
 # an already-running server needs restarting to pick up a changed value).
-TTS_DEVICE = "cpu"
+TTS_DEVICE = "cuda"
 # Longest text sent to the TTS server in one request, in characters: about 15
 # seconds of speech at the project's measured ~4.4 characters per second.
 TTS_MAX_CHUNK_CHARS = 60

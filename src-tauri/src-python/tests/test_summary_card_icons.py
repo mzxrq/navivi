@@ -334,7 +334,7 @@ class TestColumnsSummaryCard:
     def test_multi_mode_has_dividers_between_more_columns_than_single_mode(self):
         single = self._multi(mode_breakdown={"walking": 24.0}, mode_duration={"walking": 20340})
         multi = self._multi()  # walking + ferry + total = 3 columns
-        assert multi.shape[1] > single.shape[1] * 1.5  # meaningfully wider
+        assert multi.shape[1] > single.shape[1] * 1.2  # single is mode + total = 2 columns
 
     def test_every_column_shares_the_same_height(self):
         # One tall icon size drives every column's height - a mode with a

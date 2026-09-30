@@ -123,7 +123,7 @@ class FrameSink:
             return None
         cmd = [
             str(self.ffmpeg_path),
-            "-y",
+            "-y", *tuning.ffmpeg_log_args(),
             "-f",
             "rawvideo",
             "-vcodec",
@@ -162,7 +162,7 @@ class FrameSink:
             r = subprocess.run(
                 [
                     str(self.ffmpeg_path),
-                    "-y",
+                    "-y", *tuning.ffmpeg_log_args(),
                     "-i",
                     src,
                     "-vcodec",

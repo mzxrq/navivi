@@ -63,11 +63,33 @@ def _leg_fingerprint(leg_latlon, dest_label, leg_kwargs: Dict[str, Any]) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def _stored_fingerprint(path: Path) -> Optional[str]:
+def _leg_fingerprint_parts(leg_latlon, dest_label, leg_kwargs: Dict[str, Any]) -> Dict[str, str]:
+    """Short hash per fingerprint input, stored beside the fingerprint so a
+    mismatch can name what changed."""
+    import hashlib
+
+    def h(obj) -> str:
+        blob = json.dumps(
+            obj, sort_keys=True, ensure_ascii=False,
+            default=lambda o: o.tolist() if hasattr(o, "tolist") else str(o),
+        )
+        return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:10]
+
+    parts = {"latlon": h(leg_latlon), "dest": h(dest_label)}
+    parts.update({f"kw.{k}": h(v) for k, v in leg_kwargs.items()})
+    return parts
+
+
+def _stored_leg_inputs(path: Path) -> Dict[str, Any]:
     try:
-        return json.loads(path.read_text(encoding="utf-8")).get("fingerprint")
-    except (OSError, ValueError, AttributeError):
-        return None
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _stored_fingerprint(path: Path) -> Optional[str]:
+    return _stored_leg_inputs(path).get("fingerprint")
 
 
 class RouteAnimator:
@@ -204,7 +226,7 @@ class RouteAnimator:
         # file just to duplicate the final frame for hold_seconds.
         cmd = [
             "ffmpeg",
-            "-y",
+            "-y", *tuning.ffmpeg_log_args(),
             "-i",
             video_path,
             "-vf",
@@ -274,6 +296,17 @@ class RouteAnimator:
                 order += 1
                 entry["order"] = order
             waypoints.append(entry)
+
+        # Same glyphs/colors as the 2D overview and the leg clips: S green,
+        # E red, numbered stops in the marker color.
+        numbered = [wp for wp in waypoints if not wp["is_stopby"]]
+        for k, wp in enumerate(numbered):
+            if k == 0:
+                wp["pin_glyph"], wp["pin_color"] = "S", tuning.START_PIN_COLOR
+            elif k == len(numbered) - 1 and k != 1:
+                wp["pin_glyph"], wp["pin_color"] = "E", tuning.END_PIN_COLOR
+            else:
+                wp["pin_glyph"], wp["pin_color"] = str(k), self.graphics.marker_color
 
         # The reference video's wide section-title caption (e.g.
         # "友ヶ島・加太をめぐる道") reads as the trip's own name — reusing
@@ -413,7 +446,8 @@ class RouteAnimator:
                     "connect_to_route": bool(m.get("connect_to_route", False)),
                     "popup_image": m.get("popup_image"),
                     "freeze_seconds": m.get("freeze_seconds"),
-                    "image_display": m.get("image_display", "cover"),
+                    # Residential legs are always fullscreen.
+                    "image_display": "fullscreen",
                     # This stop-by's own real narration length (see
                     # mapfetcher.py's "narration_audio_seconds") -- lets
                     # pedestrian.py hold its fullscreen photo-pause at least
@@ -510,7 +544,7 @@ class RouteAnimator:
             ) or dest_popup.get("popup_image_last") or dest_popup.get("popup_image")
             dest_freeze_seconds = dest_popup.get("freeze_seconds")
             dest_narration_seconds = dest_popup.get("audio_duration")
-            dest_image_display = dest_popup.get("image_display") or "cover"
+            dest_image_display = "fullscreen"  # residential legs are always fullscreen
             if not dest_popup_image:
                 # A trailing synthetic end_point leg's own destination has
                 # no popup of its own (see render_step.py's
@@ -524,7 +558,6 @@ class RouteAnimator:
                 dest_popup_image = end_popup.get("popup_image_last") or end_popup.get("popup_image")
                 dest_freeze_seconds = end_popup.get("freeze_seconds")
                 dest_narration_seconds = end_popup.get("audio_duration")
-                dest_image_display = end_popup.get("image_display") or dest_image_display
 
             # Every leg's own departure waypoint's popup (see render_step.py's
             # "leg_start_popup" comment) -- shown at THIS leg's own opening,
@@ -589,17 +622,26 @@ class RouteAnimator:
                 p for p in self.out_dir.glob(f"{leg_glob_prefix}*.mp4")
                 if _output_is_valid(p)
             ) if self.config.get("checkpoint_enabled", False) else []
-            if existing_leg_files and _stored_fingerprint(fingerprint_path) != leg_fingerprint:
+            leg_parts = _leg_fingerprint_parts(leg_latlon, dest_label, leg_kwargs)
+            stored_inputs = _stored_leg_inputs(fingerprint_path)
+            if existing_leg_files and stored_inputs.get("fingerprint") != leg_fingerprint:
+                old_parts = stored_inputs.get("parts") or {}
+                changed = sorted(
+                    k for k in set(leg_parts) | set(old_parts) if leg_parts.get(k) != old_parts.get(k)
+                ) if old_parts else ["(no per-input record from the earlier render)"]
                 logger.info(
-                    "Residential leg %d inputs changed since it was rendered — re-rendering.",
-                    leg_file_num,
+                    "Residential leg %d inputs changed since it was rendered (%s) — re-rendering.",
+                    leg_file_num, ", ".join(changed),
                 )
-                # Its old pieces (a changed leg can cut into a different
-                # number of _contN files) must not be picked up again.
-                for old in self.out_dir.glob(f"{leg_glob_prefix}*"):
-                    if old.suffix in (".mp4", ".json") and old.name != fingerprint_path.name:
-                        old.unlink(missing_ok=True)
+                # Old pieces are removed only after the re-render succeeds,
+                # so a killed run keeps the previous clip.
+                stale_leg_files = [
+                    old for old in self.out_dir.glob(f"{leg_glob_prefix}*")
+                    if old.suffix in (".mp4", ".json") and old.name != fingerprint_path.name
+                ]
                 existing_leg_files = []
+            else:
+                stale_leg_files = []
             if existing_leg_files:
                 logger.info(
                     "Residential leg %d already rendered (%d file(s)) — skipping.",
@@ -629,8 +671,13 @@ class RouteAnimator:
                 leg_latlon, dest_label, output_path, **leg_kwargs,
             )
             if leg_paths:
+                keep = {Path(p).resolve() for p in leg_paths}
+                keep |= {Path(p).with_suffix(".timing.json").resolve() for p in leg_paths}
+                for old in stale_leg_files:
+                    if old.resolve() not in keep:
+                        old.unlink(missing_ok=True)
                 fingerprint_path.write_text(
-                    json.dumps({"fingerprint": leg_fingerprint}), encoding="utf-8"
+                    json.dumps({"fingerprint": leg_fingerprint, "parts": leg_parts}), encoding="utf-8"
                 )
             _write_piece_plan(leg_paths)
             output_paths.extend(leg_paths)

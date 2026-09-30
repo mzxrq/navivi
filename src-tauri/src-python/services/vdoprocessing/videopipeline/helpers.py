@@ -45,6 +45,15 @@ def clear_console():
     os.system("cls" if os.name == "nt" else "clear")
 
 
+def skip_rich_media(settings: dict) -> bool:
+    """Fast Render Mode: no TTS and no attraction clips."""
+    return bool(settings.get("skip_rich_media", False))
+
+
+def attraction_videos_enabled(settings: dict) -> bool:
+    return bool(settings.get("enable_attraction_videos", True)) and not skip_rich_media(settings)
+
+
 def output_is_valid(path, min_bytes: int = 1024) -> bool:
     """Checkpoint helper: True only if `path` exists and is above
     `min_bytes` — guards against treating a zero-byte/truncated file left

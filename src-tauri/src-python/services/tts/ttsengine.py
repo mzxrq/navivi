@@ -765,9 +765,7 @@ class AudioProcessor:
         ffmpeg_cmd = FFmpegManager.resolve_ffmpeg_bin()
         cmd = [
             str(ffmpeg_cmd),
-            "-hide_banner",
-            "-loglevel", "error",
-            "-y",
+            "-y", *tuning.ffmpeg_log_args(),
             "-f",
             "concat",
             "-safe",
@@ -807,9 +805,7 @@ class AudioProcessor:
 
         cmd = [
             ffmpeg_cmd,
-            "-hide_banner",
-            "-loglevel", "error",
-            "-y",
+            "-y", *tuning.ffmpeg_log_args(),
             "-f",
             "lavfi",
             "-i",
@@ -929,9 +925,7 @@ class VideoProcessor:
         ffmpeg_cmd = FFmpegManager.resolve_ffmpeg_bin()
         cmd = [
             ffmpeg_cmd,
-            "-hide_banner",
-            "-loglevel", "error",
-            "-y",
+            "-y", *tuning.ffmpeg_log_args(),
             "-i",
             video_path,
             "-i",
@@ -986,9 +980,7 @@ class VideoProcessor:
         ffmpeg_cmd = FFmpegManager.resolve_ffmpeg_bin()
         cmd = [
             ffmpeg_cmd,
-            "-hide_banner",
-            "-loglevel", "error",
-            "-y",
+            "-y", *tuning.ffmpeg_log_args(),
             "-f",
             "concat",
             "-safe",
@@ -1027,7 +1019,7 @@ class VideoProcessor:
         out_dir = Path(final_output_path).parent
         out_dir.mkdir(parents=True, exist_ok=True)
         ffmpeg_cmd = FFmpegManager.resolve_ffmpeg_bin()
-        cmd = [ffmpeg_cmd, "-hide_banner", "-loglevel", "warning", "-y", "-i", video_path, "-i", audio_path]
+        cmd = [ffmpeg_cmd, "-y", *tuning.ffmpeg_log_args(), "-i", video_path, "-i", audio_path]
 
         if subtitle_path and os.path.exists(subtitle_path):
             normalized = os.path.abspath(subtitle_path).replace("\\", "/")

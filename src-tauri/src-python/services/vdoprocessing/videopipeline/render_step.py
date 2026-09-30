@@ -30,6 +30,7 @@ from .helpers import (
     _build_point_modes,
     _project_route_to_pixels,
     _resolve_leg_geometry_from_cache,
+    attraction_videos_enabled,
     logger,
     output_is_valid,
     project_route_video_dir,
@@ -207,20 +208,23 @@ def _render_checkpoint_key(
     """
     hasher = hashlib.sha256()
     try:
-        with open(project_config_path, "rb") as f:
-            hasher.update(f.read())
-    except OSError:
+        with open(project_config_path, "r", encoding="utf-8") as f:
+            config_data = json.load(f)
+        # Rewritten by every save, whether or not anything was edited.
+        config_data.pop("updated_at", None)
+        hasher.update(json.dumps(config_data, sort_keys=True, ensure_ascii=False).encode("utf-8"))
+    except (OSError, ValueError):
         pass
     route_df = cleaned_route.get("route")
     if route_df is not None:
-        if "timestamp" in route_df.columns:
-            route_df = route_df.copy()
-            ts = pd.to_datetime(route_df["timestamp"])
-            route_df["timestamp"] = (ts - ts.min()).dt.total_seconds()
-        hasher.update(route_df.to_json(orient="split").encode("utf-8"))
-    hasher.update(
-        json.dumps(cleaned_route.get("summary", {}), sort_keys=True, default=str).encode("utf-8")
-    )
+        # Geometry only: the GPX times are re-stamped on every save and the CSV
+        # keeps whole seconds, so times/durations shift by seconds run to run.
+        hasher.update(route_df[["latitude", "longitude"]].round(7).to_json(orient="split").encode("utf-8"))
+    summary = {
+        k: v for k, v in cleaned_route.get("summary", {}).items()
+        if "duration" not in k and "time" not in k
+    }
+    hasher.update(json.dumps(summary, sort_keys=True, default=str).encode("utf-8"))
     try:
         with open(Path(project_config_path).parent / ".narration_cues.json", "rb") as f:
             hasher.update(f.read())  # cue times decide each walk's length
@@ -1192,7 +1196,7 @@ def render_route_video(
         # Inputs changed since the last render: the existing overview is stale.
         "overview_rerender": overview_stale,
         "min_free_ram_gb": settings.get("min_free_ram_gb"),
-        "enable_attraction_videos": bool(settings.get("enable_attraction_videos", True)),
+        "enable_attraction_videos": attraction_videos_enabled(settings),
         # The at-arrival photo grows to fullscreen and the clip ends right
         # there - no hold. The dissolve into the attraction video that follows
         # runs on extra frames added at export (VideoExporter._crossfade_pair),
@@ -1201,7 +1205,7 @@ def render_route_video(
         # A connected stop-by's fullscreen photo does the same (no hold, no
         # blur-out) when an attraction video follows it.
         "dissolve_into_attraction": (
-            bool(settings.get("enable_attraction_videos", True))
+            attraction_videos_enabled(settings)
             and float(settings.get("attraction_fade_seconds", 0.8)) > 0
         ),
         "use_3d_res": use_3d_res,
