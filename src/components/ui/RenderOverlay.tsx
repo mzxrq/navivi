@@ -175,21 +175,44 @@ export function RenderOverlay() {
     ]);
 
     const applyProgressFromText = (text: string) => {
-      const ratioMatch = text.match(/\[(\d+)\/(\d+)\]/);
-      if (ratioMatch) {
-        const current = parseInt(ratioMatch[1]);
-        const total = parseInt(ratioMatch[2]);
-        setProgress(20 + Math.floor((current / total) * 70));
-      } else if (text.includes(t`renderTerminalStep1`)) {
-        setProgress(10);
-      } else if (text.includes(t`renderTerminalStep4`)) {
-        setProgress(90);
-      } else if (
-        text.includes(t`renderTerminalStep6`) ||
-        text.includes(t`renderTerminalTimeline`)
-      ) {
+      // 1. Look for the main step brackets, e.g., "[2/8]"
+      const mainStepMatch = text.match(/\[(\d+)\/(\d+)\]/);
+      
+      if (mainStepMatch) {
+        const currentMain = parseInt(mainStepMatch[1]);
+        const totalMain = parseInt(mainStepMatch[2]);
+        
+        // Calculate the base percentage (e.g., Step 2 of 8 = 25%)
+        let percentage = Math.floor((currentMain / totalMain) * 100);
+
+        // 2. Look for sub-task progress, e.g., "Generating TTS 2/5:"
+        const subTaskMatch = text.match(/(\d+)\/(\d+):/);
+        if (subTaskMatch) {
+          const currentSub = parseInt(subTaskMatch[1]);
+          const totalSub = parseInt(subTaskMatch[2]);
+          
+          // Calculate how much % one main step is worth (e.g., 100 / 8 = 12.5%)
+          const stepValue = 100 / totalMain;
+          
+          // Roll back to the start of the current main step, then add the fractional sub-progress
+          percentage = (percentage - stepValue) + ((currentSub / totalSub) * stepValue);
+        }
+
+        setProgress(Math.min(100, Math.max(0, Math.floor(percentage))));
+      } else if (text.includes("完了") || text.includes("Finished") || text.includes("Success") || text.includes("complete")) {
         setProgress(100);
       }
+    };
+
+    // Filter to hide the obnoxious FFmpeg build config wall-of-text
+    const isFFmpegNoise = (text: string) => {
+      return (
+        text.includes("ffmpeg version") ||
+        text.includes("built with gcc") ||
+        text.includes("configuration:") ||
+        /^\s*lib[a-z]+\s+\d+\./.test(text) || // Catches "libavutil  61. 1.101"
+        text.includes("Guessed Channel Layout")
+      );
     };
 
     const isTrackerLine = (text: string) => /^\[\d{2}:\d{2}\]/.test(text);
@@ -197,6 +220,8 @@ export function RenderOverlay() {
     const setupListeners = async () => {
       const unlistenLog = await listen<string>("render-log", (event) => {
         const text = event.payload;
+        if (isFFmpegNoise(text)) return; // Skip logging FFmpeg spam
+
         applyProgressFromText(text);
 
         setLogs((prev) => [
@@ -212,6 +237,8 @@ export function RenderOverlay() {
 
       const unlistenError = await listen<string>("render-error", (event) => {
         const text = event.payload;
+        if (isFFmpegNoise(text)) return; // Skip logging FFmpeg spam
+
         const isProgress = isTrackerLine(text);
         if (isProgress) applyProgressFromText(text);
 
@@ -220,7 +247,8 @@ export function RenderOverlay() {
           {
             id: crypto.randomUUID(),
             message: text,
-            type: isProgress ? "info" : "error",
+            // Only flag as error if it doesn't look like a normal pipeline step or standard FFmpeg progress
+            type: (isProgress || text.includes("bitrate=") || text.includes("size=")) ? "info" : "error",
             time: new Date().toLocaleTimeString([], { hour12: false }),
           },
         ]);
@@ -483,7 +511,6 @@ export function RenderOverlay() {
           arrivingNarration: newText,
         });
       }
-
       // Save project configuration so Python reads updated script
       await saveProject();
 
