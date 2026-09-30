@@ -464,9 +464,14 @@ def render_route_video(
             keys = ROUTE_CHECKPOINT_PARTS if "route.waypoints" in cached_parts else ("route.geometry",)
             old_parts = dict(cached_parts)
             # Rendered before the pause toggle was read: every stop paused then.
+            try:
+                with open(project_config_path, "r", encoding="utf-8") as _f:
+                    _wp_count = len(json.load(_f).get("waypoints", []))
+            except (OSError, json.JSONDecodeError):
+                _wp_count = 0
             old_parts.setdefault(
                 "route.overview_flags",
-                overview_flags_hash([{}] * len(project_waypoints_for_flags(project_config_path))),
+                overview_flags_hash([{}] * _wp_count),
             )
             route_changed = [k for k in keys if old_parts.get(k) != checkpoint_parts.get(k)]
         else:
