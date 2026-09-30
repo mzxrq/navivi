@@ -9,7 +9,6 @@ import { listen } from "@tauri-apps/api/event";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import {
   UploadCloud,
-  Navigation,
   ImageIcon,
 } from "../../../components/ui/icons";
 import { AddType, MapToolbar } from "./MapToolbar";
@@ -350,6 +349,20 @@ export function MapArea() {
         },
       }),
     );
+  };
+
+  // Clicking a pin with the select tool selects that stop, which also
+  // highlights (and scrolls to) its row in the sidebar. Releasing a dragged
+  // pin fires a click too; that one shouldn't select.
+  const pinDraggedRef = useRef(false);
+  const handlePinClick = (e: React.MouseEvent, wpId: string) => {
+    e.stopPropagation();
+    if (pinDraggedRef.current) {
+      pinDraggedRef.current = false;
+      return;
+    }
+    if (isDrawMode || isAddMode || isViaMode) return;
+    setActiveWaypointId(wpId);
   };
 
   const handleAddWaypoint = async (lat: number, lng: number) => {
@@ -786,6 +799,16 @@ export function MapArea() {
       ? waypoints[activeIndex + 1]
       : null;
 
+  // Mapbox reports bearing wrapped to [-180, 180]. Rotating the needle to the
+  // raw value makes the CSS transition swing the long way round whenever the
+  // map turns across south (e.g. 170° -> -170° spins back 340°). Keep an
+  // unwrapped angle and always step it by the shortest turn instead.
+  const compassAngleRef = useRef(-viewState.bearing);
+  const compassDelta =
+    ((((-viewState.bearing - compassAngleRef.current) % 360) + 540) % 360) - 180;
+  const compassAngle = compassAngleRef.current + compassDelta;
+  compassAngleRef.current = compassAngle;
+
   return (
     <main className="flex-1 relative bg-zinc-100 dark:bg-[#09090b] overflow-hidden transition-colors">
       {/* --- TOOLS (top centre): tool switcher, then the current mode's bar --- */}
@@ -863,10 +886,16 @@ export function MapArea() {
           aria-label={t`Reset View (North)`}
           className="flex items-center justify-center w-7 h-7 rounded-md text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-white/5 transition-colors"
         >
-          <Navigation
-            className="w-3.5 h-3.5 transition-transform duration-200"
-            style={{ transform: `rotate(${-viewState.bearing}deg)` }}
-          />
+          {/* Compass needle: red half points north. */}
+          <svg
+            viewBox="0 0 16 16"
+            aria-hidden
+            className="w-4 h-4 transition-transform duration-200 ease-out"
+            style={{ transform: `rotate(${compassAngle}deg)` }}
+          >
+            <path d="M8 1.5 10.5 8h-5z" className="fill-red-500" />
+            <path d="M8 14.5 5.5 8h5z" className="fill-zinc-400 dark:fill-zinc-500" />
+          </svg>
         </button>
 
         <RouteStyling />
@@ -932,6 +961,7 @@ export function MapArea() {
             const isStart = index === 0;
             const isEnd =
               index === waypoints.length - 1 && waypoints.length > 1;
+            const isSelected = wp.id === activeWaypointId && !isDrawMode;
 
             let pinType: "start" | "end" | "stopby" | "normal" = "normal";
             let label = "";
@@ -965,12 +995,14 @@ export function MapArea() {
                   longitude={wp.lng}
                   latitude={wp.lat}
                   anchor="bottom"
+                  style={isSelected ? { zIndex: 5 } : undefined}
                 >
                   <div
-                    className="flex flex-col items-center group cursor-grab active:cursor-grabbing hover:-translate-y-1 transition-transform"
+                    className={`flex flex-col items-center group cursor-pointer transition-transform ${isSelected ? "-translate-y-1" : "hover:-translate-y-1"}`}
+                    onClick={(e) => handlePinClick(e, wp.id)}
                     onContextMenu={(e) => handleMarkerContextMenu(e, wp.id)}
                   >
-                    <div className="bg-zinc-900 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-lg border border-white/20 mb-1 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                    <div className={`bg-zinc-900 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-lg border border-white/20 mb-1 transition-opacity whitespace-nowrap ${isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}>
                       {wp.name || t`Waypoint`}
                     </div>
                     {wp.customMarker || settings.routeMarker ? (
@@ -1008,19 +1040,28 @@ export function MapArea() {
                 longitude={wp.lng}
                 latitude={wp.lat}
                 draggable
+                onDragStart={() => {
+                  pinDraggedRef.current = true;
+                }}
                 onDragEnd={(e) => {
                   const { lat, lng } = e.lngLat;
                   setWaypoints((prev) =>
                     prev.map((w) => (w.id === wp.id ? { ...w, lat, lng } : w)),
                   );
+                  // Clear on the next tick in case the release fires no click.
+                  setTimeout(() => {
+                    pinDraggedRef.current = false;
+                  }, 0);
                 }}
                 anchor="bottom"
+                style={isSelected ? { zIndex: 5 } : undefined}
               >
                 <div
-                  className="flex flex-col items-center group cursor-grab active:cursor-grabbing hover:-translate-y-1 transition-transform"
+                  className={`flex flex-col items-center group cursor-grab active:cursor-grabbing transition-transform ${isSelected ? "-translate-y-1" : "hover:-translate-y-1"}`}
+                  onClick={(e) => handlePinClick(e, wp.id)}
                   onContextMenu={(e) => handleMarkerContextMenu(e, wp.id)}
                 >
-                  <div className="bg-zinc-900 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-lg border border-white/20 mb-1 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                  <div className={`bg-zinc-900 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-lg border border-white/20 mb-1 transition-opacity whitespace-nowrap ${isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}>
                     {wp.name || t`Waypoint`}
                   </div>
 
