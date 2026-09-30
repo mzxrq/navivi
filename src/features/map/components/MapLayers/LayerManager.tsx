@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
-import { Layers, X } from "../../../../components/ui/icons";
+import { Check, Layers, X } from "../../../../components/ui/icons";
+import { Switch } from "../../../../components/ui/Switch";
 import { mapStyles } from "../../../../config/constants";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
@@ -12,6 +13,20 @@ interface LayerManagerProps {
   setIs3D: (val: boolean) => void;
 }
 
+function previewUrlFor(styleId: string, mapboxToken: string) {
+  if (styleId === "osm") return "https://a.tile.openstreetmap.org/11/1792/815.png";
+  if (styleId === "gsi-japan") return "https://cyberjapandata.gsi.go.jp/xyz/std/11/1792/815.png";
+  const mbStyle =
+    {
+      satellite: "satellite-streets-v12",
+      dark: "dark-v11",
+      light: "light-v11",
+      standard: "streets-v12",
+    }[styleId] ?? "outdoors-v12";
+  return `https://api.mapbox.com/styles/v1/mapbox/${mbStyle}/static/135.0667,34.2744,11/240x120?access_token=${mapboxToken}`;
+}
+
+/** Base map style + 3D terrain, opened from the map's top-right controls. */
 export function LayerManager({
   selectedStyle,
   setSelectedStyle,
@@ -23,147 +38,95 @@ export function LayerManager({
   const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
-        setIsOpen(false);
-      }
+    if (!isOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (!panelRef.current?.contains(e.target as Node)) setIsOpen(false);
     };
-    if (isOpen) {
-      window.addEventListener("mousedown", handleClickOutside);
-    }
-    return () => window.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
   }, [isOpen]);
 
   return (
-    <div className="relative z-50">
+    <div ref={panelRef} className="relative">
       <button
+        type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className={`flex items-center justify-center gap-2 px-3 h-10 rounded-full transition-all select-none font-bold drop-shadow-xl ${
-          isOpen
-            ? "bg-zinc-400 hover:bg-zinc-600 text-white shadow-zinc-200/25"
-            : "bg-white dark:bg-zinc-800 text-zinc-700 hover:bg-zinc-200 dark:text-zinc-200 dark:hover:bg-zinc-500"
-        }`}
+        aria-expanded={isOpen}
         title={t`Layer Manager`}
+        className={`flex items-center gap-1.5 h-7 px-2 rounded-lg text-[12px] font-medium transition-colors ${
+          isOpen
+            ? "bg-navi text-white shadow-sm"
+            : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-white/5"
+        }`}
       >
-        <Layers className="w-4 h-4" />
-        <span className="text-xs">
-          <Trans>Layers</Trans>
-        </span>
+        <Layers className="w-3.5 h-3.5" />
+        <Trans>Layers</Trans>
       </button>
 
       {isOpen && (
-        <div
-          ref={panelRef}
-          className="absolute top-12 right-0 w-64 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-xl rounded-2xl shadow-2xl p-5 z-40 animate-in fade-in zoom-in-95"
-        >
-          <div className="flex justify-between pb-4">
-            <h3 className="text-sm font-bold text-zinc-800 dark:text-zinc-200 flex items-center gap-2">
-              <Layers className="w-4 h-4 text-zinc-500" />{" "}
-              <Trans>Layer Manager</Trans>
+        <div className="absolute top-full right-0 mt-2 w-72 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 shadow-lg z-40 animate-in fade-in zoom-in-95 duration-100">
+          <div className="flex items-center justify-between px-3.5 pt-3 pb-2">
+            <h3 className="text-[13px] font-semibold text-zinc-900 dark:text-zinc-100">
+              <Trans>Base Map Style</Trans>
             </h3>
             <button
+              type="button"
               onClick={() => setIsOpen(false)}
-              className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors p-1"
               title={t`Close`}
+              aria-label={t`Close`}
+              className="p-1 -mr-1 rounded-md text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 dark:hover:text-zinc-200 dark:hover:bg-white/5 transition-colors"
             >
               <X className="w-3.5 h-3.5" />
             </button>
           </div>
 
-          <div className="flex flex-col">
-            {/* Terrain Toggle (Pill Style) */}
-            <label className="flex items-center justify-between pb-4 border-b border-zinc-200/80 dark:border-zinc-800 cursor-pointer select-none group">
-              <div className="flex flex-col pr-4">
-                <span className="text-xs font-semibold text-zinc-600 dark:text-zinc-400 group-hover:text-zinc-900 dark:group-hover:text-white transition-colors">
-                  <Trans>Enable 3D Terrain</Trans>
-                </span>
-                <span className="text-[10px] text-zinc-500">
-                  <Trans>Show elevation and 3D buildings</Trans>
-                </span>
-              </div>
-
-              {/* Custom Animated Switch */}
-              <div className="relative flex items-center">
-                <input
-                  type="checkbox"
-                  checked={is3D}
-                  onChange={(e) => setIs3D(e.target.checked)}
-                  className="sr-only"
-                />
-                <div
-                  className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-200 ease-in-out ${
-                    is3D ? "bg-navi" : "bg-zinc-300 dark:bg-zinc-700"
-                  }`}
+          <div className="px-3.5 pb-3 grid grid-cols-2 gap-2">
+            {mapStyles.map((style) => {
+              const isSelected = selectedStyle === style.id;
+              return (
+                <button
+                  key={style.id}
+                  type="button"
+                  onClick={() => setSelectedStyle(style.id)}
+                  aria-pressed={isSelected}
+                  className="group text-left"
                 >
                   <span
-                    className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform duration-200 ease-in-out ${
-                      is3D ? "translate-x-4.5" : "translate-x-0.5"
+                    className={`relative block h-14 rounded-md overflow-hidden bg-zinc-200 dark:bg-zinc-800 bg-cover bg-center transition-shadow ${
+                      isSelected
+                        ? "ring-2 ring-navi"
+                        : "ring-1 ring-black/10 dark:ring-white/10 group-hover:ring-zinc-400 dark:group-hover:ring-zinc-500"
                     }`}
-                  />
-                </div>
-              </div>
-            </label>
+                    style={{ backgroundImage: `url('${previewUrlFor(style.id, mapboxToken)}')` }}
+                  >
+                    {isSelected && (
+                      <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-navi text-white flex items-center justify-center">
+                        <Check className="w-2.5 h-2.5" strokeWidth={3} />
+                      </span>
+                    )}
+                  </span>
+                  <span
+                    className={`block mt-1 text-[11px] truncate ${
+                      isSelected ? "text-zinc-900 dark:text-zinc-100 font-medium" : "text-zinc-500"
+                    }`}
+                  >
+                    {style.label.split(" (")[0]}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
 
-            {/* Base Map Styles (Vertical List) */}
-            <div className="flex flex-col gap-3 pt-4">
-              <h4 className="text-xs font-semibold text-zinc-600 dark:text-zinc-400">
-                <Trans>Base Map Style</Trans>
-              </h4>
-
-              <div className="grid grid-cols-1 gap-2 max-h-36 overflow-y-auto custom-scrollbar p-1">
-                {mapStyles.map((style: any) => {
-                  const isSelected = selectedStyle === style.id;
-                  let previewUrl = "";
-                  const previewLon = "135.0667";
-                  const previewLat = "34.2744";
-                  const previewZ = "11";
-
-                  if (style.id === "osm") {
-                    previewUrl = `https://a.tile.openstreetmap.org/11/1792/815.png`;
-                  } else if (style.id === "gsi-japan") {
-                    previewUrl = `https://cyberjapandata.gsi.go.jp/xyz/std/11/1792/815.png`;
-                  } else {
-                    let mbStyle = "outdoors-v12";
-                    if (style.id === "satellite")
-                      mbStyle = "satellite-streets-v12";
-                    if (style.id === "dark") mbStyle = "dark-v11";
-                    if (style.id === "light") mbStyle = "light-v11";
-                    if (style.id === "standard") mbStyle = "streets-v12";
-
-                    previewUrl = `https://api.mapbox.com/styles/v1/mapbox/${mbStyle}/static/${previewLon},${previewLat},${previewZ}/300x100?access_token=${mapboxToken}`;
-                  }
-
-                  return (
-                    <button
-                      key={style.id}
-                      onClick={() => setSelectedStyle(style.id)}
-                      className={`relative w-full h-16 rounded-xl overflow-hidden transition-all duration-200 group text-left bg-zinc-200 dark:bg-zinc-700 ${
-                        isSelected
-                          ? "ring-2 ring-navi-500 shadow-md scale-[0.98]"
-                          : "ring-1 ring-black/10 dark:ring-white/10 hover:ring-navi-400"
-                      }`}
-                    >
-                      <div
-                        className="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-110"
-                        style={{ backgroundImage: `url('${previewUrl}')` }}
-                      />
-                      <div
-                        className={`absolute inset-0 transition-colors ${
-                          isSelected
-                            ? "bg-navi-900/30"
-                            : "bg-linear-to-t from-black/60 via-black/10 to-transparent group-hover:from-black/50"
-                        }`}
-                      />
-                      <div className="absolute inset-0 p-3 flex items-end">
-                        <span className="text-xs font-bold text-white drop-shadow-md truncate">
-                          {style.label.split(" (")[0]}
-                        </span>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
+          <div className="px-3.5 py-3 flex items-center gap-3 border-t border-zinc-100 dark:border-white/5">
+            <div className="flex-1 min-w-0">
+              <p className="text-[12px] text-zinc-700 dark:text-zinc-300">
+                <Trans>Enable 3D Terrain</Trans>
+              </p>
+              <p className="text-[11px] text-zinc-500">
+                <Trans>Show elevation and 3D buildings</Trans>
+              </p>
             </div>
+            <Switch checked={is3D} onChange={setIs3D} label={t`Enable 3D Terrain`} />
           </div>
         </div>
       )}

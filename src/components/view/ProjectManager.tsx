@@ -1,32 +1,35 @@
-import { useState, useEffect, MouseEvent } from "react";
-import { createPortal } from "react-dom";
+import { useState, MouseEvent } from "react";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { readTextFile, readDir } from "@tauri-apps/plugin-fs";
 import { join, dirname } from "@tauri-apps/api/path";
+import { useLingui } from "@lingui/react";
 import { useUI } from "../../hooks/useUI";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import {
-  Plus,
-  FolderOpen,
-  Folder,
-  Map,
-  Clock,
-  LayoutGrid,
-  List,
-  MoreVertical,
-  Trash2,
+  ChevronRight,
   Copy,
   Edit3,
-  AlertTriangle,
   Film,
+  Folder,
+  FolderOpen,
+  LayoutGrid,
+  List,
+  Map,
+  MoreVertical,
+  Plus,
   Settings,
+  Trash2,
 } from "../ui/icons";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 import { ProjectSettingsModal } from "./ProjectSettingsModal";
 import { removeRecent, renameRecent } from "../../services/projectStore";
+import { MenuEntry, openContextMenu, separator } from "../ui/menuItems";
+import { Dialog, dialogButton, dialogInput } from "../ui/Dialog";
 
 type ModalActionType = "rename" | "duplicate" | "remove" | "settings" | null;
+
+const VIEW_MODE_KEY = "navivi_project_view";
 
 export function ProjectManager() {
   const { setCurrentView, showToast } = useUI();
@@ -37,9 +40,21 @@ export function ProjectManager() {
     resetWorkspace,
     isProjectLoading,
   } = useWorkspace();
+  const { i18n } = useLingui();
 
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-  const [activeMenu, setActiveMenu] = useState<string | null>(null);
+  const [viewMode, setViewModeState] = useState<"grid" | "list">(() => {
+    try {
+      return localStorage.getItem(VIEW_MODE_KEY) === "list" ? "list" : "grid";
+    } catch {
+      return "grid";
+    }
+  });
+  const setViewMode = (mode: "grid" | "list") => {
+    setViewModeState(mode);
+    try {
+      localStorage.setItem(VIEW_MODE_KEY, mode);
+    } catch {}
+  };
   const [showTemplates, setShowTemplates] = useState(false);
 
   // Modal States
@@ -48,24 +63,6 @@ export function ProjectManager() {
     project: any;
   }>({ type: null, project: null });
   const [modalInput, setModalInput] = useState("");
-
-  // Close dropdowns when clicking anywhere else
-  useEffect(() => {
-    const handleClickOutside = () => setActiveMenu(null);
-    window.addEventListener("click", handleClickOutside);
-    return () => window.removeEventListener("click", handleClickOutside);
-  }, []);
-
-  // Press ESC to close modals
-  useEffect(() => {
-    const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && modalState.type) {
-        closeModal();
-      }
-    };
-    window.addEventListener("keydown", handleEsc);
-    return () => window.removeEventListener("keydown", handleEsc);
-  }, [modalState.type]);
 
   const handleQuickRender = async (project: any) => {
     try {
@@ -125,23 +122,37 @@ export function ProjectManager() {
     }
   };
 
+  const handleOpenDemo = async () => {
+    try {
+      const demoPath = "/defaults/demo/kyoto_demo.nvv";
+      const res = await fetch(demoPath);
+      const demoText = await res.text();
+
+      const { appLocalDataDir, join } = await import("@tauri-apps/api/path");
+      const { writeTextFile, mkdir } = await import("@tauri-apps/plugin-fs");
+
+      const localDataDir = await appLocalDataDir();
+      const demoFolder = await join(localDataDir, "demo");
+      try {
+        await mkdir(demoFolder, { recursive: true });
+      } catch (e) {}
+
+      const absoluteDemoPath = await join(demoFolder, "kyoto_demo.nvv");
+      await writeTextFile(absoluteDemoPath, demoText);
+
+      await loadProject(absoluteDemoPath);
+    } catch (e) {
+      console.error("Failed to load demo route:", e);
+      showToast(t`Failed to load demo route`, "error");
+    }
+  };
+
   const handleNewProject = () => {
     resetWorkspace();
     setCurrentView("new_project");
   };
 
-  const toggleMenu = (e: MouseEvent, path: string) => {
-    e.stopPropagation();
-    setActiveMenu(activeMenu === path ? null : path);
-  };
-
-  const openModal = async (
-    type: ModalActionType,
-    project: any,
-    e?: MouseEvent,
-  ) => {
-    if (e) e.stopPropagation();
-    setActiveMenu(null);
+  const openModal = (type: ModalActionType, project: any) => {
     setModalState({ type, project });
     setModalInput(
       type === "duplicate" ? `${project.name} (Copy)` : project.name,
@@ -197,567 +208,470 @@ export function ProjectManager() {
     closeModal();
   };
 
-  const handleContextMenu = (e: MouseEvent, project: any) => {
-    e.preventDefault();
+  const projectMenu = (project: any): MenuEntry[] => [
+    {
+      label: t`Open Project`,
+      icon: FolderOpen,
+      onSelect: () => handleOpenProject(project.path),
+    },
+    separator,
+    {
+      label: t`Rename`,
+      icon: Edit3,
+      onSelect: () => openModal("rename", project),
+    },
+    {
+      label: t`Duplicate`,
+      icon: Copy,
+      onSelect: () => openModal("duplicate", project),
+    },
+    {
+      label: t`Advanced Settings`,
+      icon: Settings,
+      onSelect: () => openModal("settings", project),
+    },
+    separator,
+    {
+      label: t`Quick Render`,
+      icon: Film,
+      onSelect: () => handleQuickRender(project),
+    },
+    {
+      label: t`Reveal in File Explorer`,
+      icon: Folder,
+      onSelect: async () => {
+        try {
+          await invoke("open_in_explorer", { path: project.path });
+        } catch {
+          showToast(t`Could not open file location`, "error");
+        }
+      },
+    },
+    separator,
+    {
+      label: t`Remove from List`,
+      icon: Trash2,
+      danger: true,
+      onSelect: () => openModal("remove", project),
+    },
+  ];
+
+  const openMenuFromButton = (
+    e: MouseEvent<HTMLButtonElement>,
+    project: any,
+  ) => {
     e.stopPropagation();
-    setActiveMenu(null);
-    window.dispatchEvent(
-      new CustomEvent("open-context-menu", {
-        detail: {
-          x: e.clientX,
-          y: e.clientY,
-          type: "project-card",
-          data: {
-            project,
-            onOpen: () => handleOpenProject(project.path),
-            onRename: () => openModal("rename", project),
-            onDuplicate: () => openModal("duplicate", project),
-            onSettings: () => openModal("settings", project),
-            onQuickRender: () => handleQuickRender(project),
-            onReveal: async () => {
-              try {
-                await invoke("open_in_explorer", { path: project.path });
-              } catch {
-                showToast(t`Could not open file location`, "error");
-              }
-            },
-            onRemove: () => openModal("remove", project),
-          },
-        },
-      }),
+    const rect = e.currentTarget.getBoundingClientRect();
+    openContextMenu(
+      { clientX: rect.right - 4, clientY: rect.bottom + 4 },
+      projectMenu(project),
     );
   };
 
-  const safeRecentProject = recentProjects || [];
+  const formatOpened = (value: string | number) => {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return { relative: "", full: "" };
+    const full = date.toLocaleString(i18n.locale, {
+      dateStyle: "medium",
+      timeStyle: "short",
+    });
+    const diffSeconds = (date.getTime() - Date.now()) / 1000;
+    const units: [Intl.RelativeTimeFormatUnit, number][] = [
+      ["year", 31536000],
+      ["month", 2592000],
+      ["week", 604800],
+      ["day", 86400],
+      ["hour", 3600],
+      ["minute", 60],
+    ];
+    const rtf = new Intl.RelativeTimeFormat(i18n.locale, { numeric: "auto" });
+    for (const [unit, seconds] of units) {
+      if (Math.abs(diffSeconds) >= seconds) {
+        return {
+          relative: rtf.format(Math.round(diffSeconds / seconds), unit),
+          full,
+        };
+      }
+    }
+    return { relative: rtf.format(0, "minute"), full };
+  };
+
+  const projects = recentProjects || [];
 
   return (
     <>
       {isProjectLoading && (
-        <div className="fixed inset-0 z-9999 bg-white/60 dark:bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center animate-in fade-in duration-300">
-          <div className="w-16 h-16 border-4 border-navi/30 border-t-navi rounded-full animate-spin"></div>
-          <p className="mt-4 text-sm font-bold text-navi animate-pulse tracking-tight">
+        <div className="fixed inset-x-0 top-10 bottom-0 z-9999 bg-white/60 dark:bg-zinc-950/60 backdrop-blur-sm flex flex-col items-center justify-center gap-3 animate-in fade-in duration-200">
+          <div className="w-8 h-8 border-[3px] border-navi/25 border-t-navi rounded-full animate-spin" />
+          <p className="text-[13px] font-medium text-zinc-600 dark:text-zinc-300">
             <Trans>Reading Project File...</Trans>
           </p>
         </div>
       )}
 
-      <div className="flex-1 flex flex-col w-full h-full px-10 pb-10 pt-16 bg-zinc-50 dark:bg-navidark-800 relative z-10 animate-in fade-in duration-500 select-none">
-        {/* Top Header Bar */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-10 gap-6">
-          <div>
-            <h1 className="text-3xl font-extrabold text-zinc-900 dark:text-white tracking-tighter">
-              <Trans>Project Manager</Trans>
-            </h1>
-            <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-2 tracking-tight">
-              <Trans>
-                Select a recent route or create a new workspace to begin
-              </Trans>
-            </p>
-          </div>
+      <div className="flex-1 min-h-0 flex flex-col w-full h-full pt-10 bg-zinc-50 dark:bg-zinc-950 relative z-10 select-none">
+        <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar">
+          <div className="max-w-6xl mx-auto px-8 max-[900px]:px-5 pt-8 pb-12">
+            <header className="flex flex-wrap items-end justify-between gap-4 mb-8">
+              <div>
+                <h1 className="text-[22px] font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
+                  <Trans>Project Manager</Trans>
+                </h1>
+                <p className="mt-1 text-[13px] text-zinc-500 dark:text-zinc-400">
+                  <Trans>
+                    Select a recent route or create a new workspace to begin
+                  </Trans>
+                </p>
+              </div>
 
-          <div className="flex items-center gap-3">
-            <div className="flex bg-zinc-200/50 dark:bg-navidark-900 rounded-lg p-0.5 border border-zinc-300 dark:border-navidark-400 shadow-inner mr-2">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleOpenProject(undefined, false)}
+                  className="flex items-center gap-1.5 h-9 px-3.5 rounded-lg border border-zinc-200 dark:border-white/10 bg-white dark:bg-white/5 text-[13px] font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-white/10 transition-colors whitespace-nowrap"
+                  title={t`Open a single project file (.nvv or .zip archive)`}
+                >
+                  <FolderOpen className="w-4 h-4 text-zinc-400" />{" "}
+                  <Trans>Open File...</Trans>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleNewProject}
+                  className="flex items-center gap-1.5 h-9 px-3.5 rounded-lg bg-navi text-white text-[13px] font-semibold hover:brightness-110 shadow-sm transition whitespace-nowrap"
+                >
+                  <Plus className="w-4 h-4" /> <Trans>New Project</Trans>
+                </button>
+              </div>
+            </header>
+
+            <section className="mb-8">
               <button
-                onClick={() => setViewMode("grid")}
-                className={`p-1.5 rounded-md transition-all ${
-                  viewMode === "grid"
-                    ? "bg-white dark:bg-navidark-500 text-navi shadow-sm"
-                    : "text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
-                }`}
-                title={t`Grid View`}
+                type="button"
+                onClick={() => setShowTemplates(!showTemplates)}
+                aria-expanded={showTemplates}
+                className="flex items-center gap-1 -ml-1 h-7 px-1 rounded-md text-[13px] font-semibold text-zinc-700 dark:text-zinc-200 hover:text-zinc-900 dark:hover:text-white transition-colors"
               >
-                <LayoutGrid className="w-4 h-4" />
+                <ChevronRight
+                  className={`w-4 h-4 text-zinc-400 transition-transform ${showTemplates ? "rotate-90" : ""}`}
+                />
+                <Trans>Templates</Trans>
               </button>
-              <button
-                onClick={() => setViewMode("list")}
-                className={`p-1.5 rounded-md transition-all ${
-                  viewMode === "list"
-                    ? "bg-white dark:bg-navidark-500 text-navi shadow-sm"
-                    : "text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
-                }`}
-                title={t`Table View`}
-              >
-                <List className="w-4 h-4" />
-              </button>
-            </div>
-
-            <button
-              onClick={() => handleOpenProject(undefined, false)}
-              className="flex items-center gap-2 bg-white dark:bg-navidark-700 text-zinc-700 dark:text-zinc-200 border border-zinc-200 dark:border-white/10 px-4 py-2.5 rounded-xl text-sm hover:bg-zinc-100 dark:hover:bg-navidark-600 transition-all shadow-sm text-nowrap"
-              title={t`Open a single project file (.nvv or .zip archive)`}
-            >
-              <FolderOpen className="w-4 h-4" /> <Trans>Open File...</Trans>
-            </button>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={handleNewProject}
-                className="flex items-center gap-2 bg-navi text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-navi/90 shadow-md hover:shadow-lg transition-all text-nowrap"
-              >
-                <Plus className="w-4 h-4" /> <Trans>New Project</Trans>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Templates Section */}
-        <div className="mb-8">
-          <button
-            onClick={() => setShowTemplates(!showTemplates)}
-            className="flex items-center gap-2 text-sm font-bold text-zinc-700 dark:text-zinc-200 hover:text-navi dark:hover:text-navi transition-colors"
-          >
-            <FolderOpen
-              className={`w-4 h-4 transition-transform ${showTemplates ? "rotate-90" : ""}`}
-            />
-            <Trans>Templates</Trans>
-          </button>
-          {showTemplates && (
-            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              <div
-                onClick={async () => {
-                  try {
-                    const demoPath = "/defaults/demo/kyoto_demo.nvv";
-                    const res = await fetch(demoPath);
-                    const demoText = await res.text();
-
-                    const { appLocalDataDir, join } =
-                      await import("@tauri-apps/api/path");
-                    const { writeTextFile, mkdir } =
-                      await import("@tauri-apps/plugin-fs");
-
-                    const localDataDir = await appLocalDataDir();
-                    const demoFolder = await join(localDataDir, "demo");
-                    try {
-                      await mkdir(demoFolder, { recursive: true });
-                    } catch (e) {}
-
-                    const absoluteDemoPath = await join(
-                      demoFolder,
-                      "kyoto_demo.nvv",
-                    );
-                    await writeTextFile(absoluteDemoPath, demoText);
-
-                    await loadProject(absoluteDemoPath);
-                  } catch (e) {
-                    console.error("Failed to load demo route:", e);
-                    showToast("Failed to load demo route", "error");
-                  }
-                }}
-                className="group flex cursor-pointer bg-navi-50 dark:bg-navi-900/20 border border-navi-200 dark:border-navi-500/30 rounded-2xl overflow-visible hover:border-navi-400 dark:hover:border-navi-500 transition-all duration-200 hover:shadow-lg"
-              >
-                <div className="w-1/3 min-w-30 bg-navi-100 dark:bg-navi-900/50 flex items-center justify-center relative overflow-hidden rounded-l-2xl shrink-0">
-                  <Map className="w-8 h-8 text-navi-500 dark:text-navi-400" />
+              {showTemplates && (
+                <div className="mt-3 grid grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-4 animate-in fade-in slide-in-from-top-1 duration-150">
+                  <button
+                    type="button"
+                    onClick={handleOpenDemo}
+                    className="group flex items-center gap-3 p-3 rounded-xl border border-dashed border-zinc-300 dark:border-white/15 bg-white/60 dark:bg-white/2 text-left hover:border-navi/50 hover:bg-navi/5 transition-colors"
+                  >
+                    <span className="w-10 h-10 rounded-lg bg-navi/10 text-navi flex items-center justify-center shrink-0">
+                      <Map className="w-5 h-5" />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-[13px] font-medium text-zinc-900 dark:text-zinc-100">
+                        <Trans>Kyoto Demo Route</Trans>
+                      </span>
+                      <span className="block text-[12px] text-zinc-500 dark:text-zinc-400">
+                        <Trans>Pre-configured sample project</Trans>
+                      </span>
+                    </span>
+                  </button>
                 </div>
-                <div className="p-4 w-full flex flex-col justify-center flex-1 min-w-0 border-l border-navi-100 dark:border-navi-500/20">
-                  <h3 className="font-bold text-sm text-navi-900 dark:text-navi-100">
-                    <Trans>Kyoto Demo Route</Trans>
+              )}
+            </section>
+
+            <section>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-[13px] font-semibold text-zinc-700 dark:text-zinc-200">
+                  <Trans>Recent</Trans>
+                  {projects.length > 0 && (
+                    <span className="ml-1.5 font-normal text-zinc-400 tabular-nums">
+                      {projects.length}
+                    </span>
+                  )}
+                </h2>
+                {projects.length > 0 && (
+                  <div className="flex items-center p-0.5 rounded-lg bg-zinc-200/60 dark:bg-white/5">
+                    {(
+                      [
+                        { id: "grid", icon: LayoutGrid, label: t`Grid View` },
+                        { id: "list", icon: List, label: t`Table View` },
+                      ] as const
+                    ).map(({ id, icon: Icon, label }) => (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => setViewMode(id)}
+                        aria-pressed={viewMode === id}
+                        title={label}
+                        aria-label={label}
+                        className={`flex items-center justify-center w-7 h-6 rounded-md transition-colors ${
+                          viewMode === id
+                            ? "bg-white dark:bg-zinc-800 text-navi shadow-sm"
+                            : "text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200"
+                        }`}
+                      >
+                        <Icon className="w-3.5 h-3.5" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {projects.length === 0 ? (
+                <div className="flex flex-col items-center justify-center text-center py-16 px-6 rounded-2xl border border-dashed border-zinc-300 dark:border-white/10">
+                  <span className="w-11 h-11 rounded-xl bg-zinc-100 dark:bg-white/5 text-zinc-400 flex items-center justify-center mb-3">
+                    <Map className="w-5 h-5" />
+                  </span>
+                  <h3 className="text-[14px] font-semibold text-zinc-900 dark:text-zinc-100">
+                    <Trans>No recent projects</Trans>
                   </h3>
-                  <p className="text-xs text-navi-600 dark:text-navi-400 mt-1">
-                    <Trans>Pre-configured sample project</Trans>
+                  <p className="mt-1 max-w-sm text-[13px] text-zinc-500 dark:text-zinc-400">
+                    <Trans>
+                      You don't have any recent workspaces. Create a new project
+                      or open an existing .nvv file to get started.
+                    </Trans>
                   </p>
                 </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Projects Container */}
-        {safeRecentProject.length === 0 ? (
-          <div className="flex-1 flex flex-col items-center justify-center border-2 border-dashed border-zinc-200 dark:border-white/5 rounded-3xl bg-white/50 dark:bg-navidark-700/30">
-            <div className="w-16 h-16 bg-zinc-100 dark:bg-navidark-600 rounded-full flex items-center justify-center mb-4 shadow-inner">
-              <Map className="w-8 h-8 text-zinc-400 dark:text-zinc-500" />
-            </div>
-            <h3 className="text-xl font-bold text-zinc-900 dark:text-white">
-              <Trans>No recent projects</Trans>
-            </h3>
-            <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-2 max-w-sm text-center">
-              <Trans>
-                You don't have any recent workspaces. Create a new project or
-                open an existing .nvv file to get started.
-              </Trans>
-            </p>
-          </div>
-        ) : viewMode === "grid" ? (
-          /* Grid View */
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-5 overflow-y-auto custom-scrollbar pr-2 pb-12 pt-2 -mt-2 content-start">
-            {safeRecentProject.map((project) => (
-              <div
-                key={project.path}
-                onClick={() => handleOpenProject(project.path)}
-                onContextMenu={(e) => handleContextMenu(e, project)}
-                className="group flex cursor-pointer bg-white dark:bg-navidark-700 border border-zinc-200 dark:border-white/10 rounded-2xl overflow-visible hover:border-navi dark:hover:border-navi transition-all duration-200 hover:shadow-lg"
-              >
-                <div className="w-1/3 min-w-30 bg-linear-to-br from-zinc-100 to-zinc-200 dark:from-navidark-600 dark:to-navidark-800 flex items-center justify-center relative overflow-hidden rounded-l-2xl shrink-0">
-                  {project.thumbnailPath ? (
-                    <img
-                      src={convertFileSrc(project.thumbnailPath)}
-                      alt=""
-                      className="absolute inset-0 w-full h-full object-cover"
-                    />
-                  ) : (
-                    <Map className="w-8 h-8 text-zinc-300 dark:text-white/5 group-hover:text-navi/30 transition-colors duration-300" />
-                  )}
-                  <div className="absolute inset-0 bg-navi/0 group-hover:bg-navi/5 transition-colors duration-300" />
-                </div>
-
-                <div className="p-4 w-full flex flex-col justify-center flex-1 min-w-0 border-l border-zinc-100 dark:border-white/5 relative">
-                  <div className="flex items-start justify-between gap-2 w-full">
-                    <h3
-                      className="font-bold text-sm text-zinc-900 dark:text-zinc-100 truncate text-left group-hover:text-navi dark:group-hover:text-navi transition-colors flex-1 pt-0.5"
-                      title={project.name}
-                    >
-                      {project.name}
-                    </h3>
-
-                    <div className="relative shrink-0">
-                      <button
-                        onClick={(e) => toggleMenu(e, project.path)}
-                        className="p-1 -mt-1 -mr-2 text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 rounded-md hover:bg-zinc-100 dark:hover:bg-navidark-600 transition-colors relative z-20"
+              ) : viewMode === "grid" ? (
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-4">
+                  {projects.map((project) => {
+                    const opened = formatOpened(project.lastOpened);
+                    return (
+                      <div
+                        key={project.path}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => handleOpenProject(project.path)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter")
+                            handleOpenProject(project.path);
+                        }}
+                        onContextMenu={(e) =>
+                          openContextMenu(e, projectMenu(project))
+                        }
+                        className="group rounded-xl overflow-hidden bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 cursor-pointer outline-none hover:border-zinc-300 dark:hover:border-white/20 hover:shadow-md focus-visible:ring-2 focus-visible:ring-navi/40 transition"
                       >
-                        <MoreVertical className="w-4 h-4" />
-                      </button>
-
-                      {activeMenu === project.path && (
-                        <div className="absolute right-0 top-full mt-1 w-48 bg-white dark:bg-navidark-800 border border-zinc-200 dark:border-navidark-400 rounded-xl shadow-xl py-1.5 z-50 animate-in fade-in zoom-in-95">
+                        <div className="relative aspect-video bg-zinc-100 dark:bg-zinc-800/60 border-b border-zinc-100 dark:border-white/5 flex items-center justify-center overflow-hidden">
+                          {project.thumbnailPath ? (
+                            <img
+                              src={convertFileSrc(project.thumbnailPath)}
+                              alt=""
+                              className="absolute inset-0 w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-300"
+                            />
+                          ) : (
+                            <Map className="w-7 h-7 text-zinc-300 dark:text-zinc-700" />
+                          )}
+                        </div>
+                        <div className="flex items-start gap-2 pl-3.5 pr-1.5 py-3">
+                          <div className="flex-1 min-w-0">
+                            <h3
+                              className="text-[13px] font-medium text-zinc-900 dark:text-zinc-100 truncate"
+                              title={project.name}
+                            >
+                              {project.name}
+                            </h3>
+                            <p
+                              className="mt-0.5 text-[12px] text-zinc-500 dark:text-zinc-400 truncate"
+                              title={opened.full}
+                            >
+                              {opened.relative}
+                            </p>
+                          </div>
                           <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleOpenProject(project.path);
-                            }}
-                            className="w-full text-left px-4 py-2 text-xs text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-navidark-600 flex items-center gap-2"
+                            type="button"
+                            onClick={(e) => openMenuFromButton(e, project)}
+                            aria-label={t`More actions`}
+                            title={t`More actions`}
+                            className="flex items-center justify-center w-7 h-7 rounded-lg text-zinc-400 opacity-0 group-hover:opacity-100 focus:opacity-100 hover:text-zinc-800 hover:bg-zinc-100 dark:hover:text-zinc-100 dark:hover:bg-white/5 transition"
                           >
-                            <FolderOpen className="w-3.5 h-3.5" />{" "}
-                            <Trans>Open Project</Trans>
-                          </button>
-                          <div className="h-px bg-zinc-200 dark:bg-navidark-400 my-1 mx-2" />
-                          <button
-                            onClick={(e) => openModal("rename", project, e)}
-                            className="w-full text-left px-4 py-2 text-xs text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-navidark-600 flex items-center gap-2"
-                          >
-                            <Edit3 className="w-3.5 h-3.5" />{" "}
-                            <Trans>Rename</Trans>
-                          </button>
-                          <button
-                            onClick={(e) => openModal("duplicate", project, e)}
-                            className="w-full text-left px-4 py-2 text-xs text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-navidark-600 flex items-center gap-2"
-                          >
-                            <Copy className="w-3.5 h-3.5" />{" "}
-                            <Trans>Duplicate</Trans>
-                          </button>
-                          <button
-                            onClick={(e) => openModal("settings", project, e)}
-                            className="w-full text-left px-4 py-2 text-xs text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-navidark-600 flex items-center gap-2"
-                          >
-                            <Settings className="w-3.5 h-3.5" />{" "}
-                            <Trans>Advanced Settings</Trans>
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleQuickRender(project);
-                              setActiveMenu(null);
-                            }}
-                            className="w-full text-left px-4 py-2 text-xs text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-navidark-600 flex items-center gap-2"
-                          >
-                            <Film className="w-3.5 h-3.5" />{" "}
-                            <Trans>Quick Render</Trans>
-                          </button>
-                          <button
-                            onClick={async (e) => {
-                              e.stopPropagation();
-                              try {
-                                await invoke("open_in_explorer", {
-                                  path: project.path,
-                                });
-                              } catch {
-                                showToast(
-                                  t`Could not open file location`,
-                                  "error",
-                                );
-                              }
-                              setActiveMenu(null);
-                            }}
-                            className="w-full text-left px-4 py-2 text-xs text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-navidark-600 flex items-center gap-2"
-                          >
-                            <Folder className="w-3.5 h-3.5" />{" "}
-                            <Trans>Reveal in Explorer</Trans>
-                          </button>
-                          <div className="h-px bg-zinc-200 dark:bg-navidark-400 my-1 mx-2" />
-                          <button
-                            onClick={(e) => openModal("remove", project, e)}
-                            className="w-full text-left px-4 py-2 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 flex items-center gap-2"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />{" "}
-                            <Trans>Remove from List</Trans>
+                            <MoreVertical className="w-4 h-4" />
                           </button>
                         </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 mt-4 text-[11px] font-medium text-zinc-500 dark:text-zinc-400 bg-zinc-50 dark:bg-navidark-800 w-fit px-2 py-1 rounded-md pointer-events-none">
-                    <Clock className="w-3 h-3" />
-                    <span>
-                      {new Date(project.lastOpened).toLocaleString(undefined, {
-                        month: "short",
-                        day: "numeric",
-                        year: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                        second: "2-digit",
-                      })}
-                    </span>
-                  </div>
+                      </div>
+                    );
+                  })}
                 </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          /* Table/List View */
-          <div className="flex flex-col border border-zinc-200 dark:border-navidark-400 bg-white dark:bg-navidark-700 rounded-xl shadow-sm overflow-hidden mb-12">
-            <div className="grid grid-cols-12 gap-4 px-5 py-3 bg-zinc-50 dark:bg-navidark-800 border-b border-zinc-200 dark:border-navidark-400 text-xs text-zinc-500 uppercase tracking-wider">
-              <div className="col-span-9 sm:col-span-4 pl-8">
-                <Trans>Project Name</Trans>
-              </div>
-              <div className="col-span-5 hidden sm:block">
-                <Trans>File Path</Trans>
-              </div>
-              <div className="col-span-2 hidden sm:block text-right pr-4">
-                <Trans>Last Opened</Trans>
-              </div>
-              <div className="col-span-3 sm:col-span-1 text-right">
-                <Trans>Actions</Trans>
-              </div>
-            </div>
-
-            <div className="flex flex-col overflow-y-auto custom-scrollbar max-h-[60vh]">
-              {safeRecentProject.map((project, index) => (
-                <div
-                  key={project.path}
-                  onClick={() => handleOpenProject(project.path)}
-                  onContextMenu={(e) => handleContextMenu(e, project)}
-                  className={`group cursor-pointer grid grid-cols-12 gap-4 items-center px-5 py-3 hover:bg-zinc-50 dark:hover:bg-navidark-600 transition-colors text-left ${
-                    index !== safeRecentProject.length - 1
-                      ? "border-b border-zinc-100 dark:border-white/5"
-                      : ""
-                  }`}
-                >
-                  <div className="col-span-9 sm:col-span-4 flex items-center gap-3 min-w-0 pointer-events-none text-left">
-                    {project.thumbnailPath ? (
-                      <img
-                        src={convertFileSrc(project.thumbnailPath)}
-                        alt=""
-                        className="w-8 h-8 rounded-md object-cover shrink-0"
-                      />
-                    ) : (
-                      <Map className="w-4 h-4 text-zinc-400 shrink-0 group-hover:text-navi transition-colors" />
-                    )}
-                    <span className="font-bold text-sm text-zinc-900 dark:text-zinc-100 truncate group-hover:text-navi transition-colors">
-                      {project.name}
+              ) : (
+                <div className="rounded-xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-zinc-900 overflow-hidden">
+                  <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)_9rem_2.5rem] max-[800px]:grid-cols-[minmax(0,1fr)_9rem_2.5rem] items-center gap-4 h-9 px-4 border-b border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-white/2 text-[12px] font-medium text-zinc-500">
+                    <span className="pl-11">
+                      <Trans>Project Name</Trans>
                     </span>
-                  </div>
-
-                  <div className="col-span-5 hidden sm:flex items-center min-w-0 pointer-events-none">
-                    <span
-                      className="text-xs text-zinc-500 dark:text-zinc-400 truncate w-full"
-                      title={project.path}
-                    >
-                      {project.path}
+                    <span className="max-[800px]:hidden">
+                      <Trans>File Path</Trans>
                     </span>
+                    <span>
+                      <Trans>Last Opened</Trans>
+                    </span>
+                    <span />
                   </div>
-
-                  <div className="col-span-2 hidden sm:flex items-center justify-end text-xs font-medium text-zinc-500 dark:text-zinc-400 pr-4 pointer-events-none">
-                    {new Date(project.lastOpened).toLocaleString(undefined, {
-                      month: "short",
-                      day: "numeric",
-                      year: "numeric",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                      second: "2-digit",
+                  <div className="divide-y divide-zinc-100 dark:divide-white/5">
+                    {projects.map((project) => {
+                      const opened = formatOpened(project.lastOpened);
+                      return (
+                        <div
+                          key={project.path}
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => handleOpenProject(project.path)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter")
+                              handleOpenProject(project.path);
+                          }}
+                          onContextMenu={(e) =>
+                            openContextMenu(e, projectMenu(project))
+                          }
+                          className="group grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)_9rem_2.5rem] max-[800px]:grid-cols-[minmax(0,1fr)_9rem_2.5rem] items-center gap-4 h-12 px-4 cursor-pointer outline-none hover:bg-zinc-50 dark:hover:bg-white/3 focus-visible:bg-zinc-50 dark:focus-visible:bg-white/3 transition-colors"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <span className="w-8 h-8 rounded-md overflow-hidden bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center shrink-0">
+                              {project.thumbnailPath ? (
+                                <img
+                                  src={convertFileSrc(project.thumbnailPath)}
+                                  alt=""
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <Map className="w-4 h-4 text-zinc-400" />
+                              )}
+                            </span>
+                            <span
+                              className="text-[13px] font-medium text-zinc-900 dark:text-zinc-100 truncate"
+                              title={project.name}
+                            >
+                              {project.name}
+                            </span>
+                          </div>
+                          <span
+                            className="max-[800px]:hidden text-[12px] text-zinc-500 dark:text-zinc-400 truncate tracking-tight"
+                            title={project.path}
+                          >
+                            {project.path}
+                          </span>
+                          <span
+                            className="text-[12px] text-zinc-500 dark:text-zinc-400 truncate"
+                            title={opened.full}
+                          >
+                            {opened.relative}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => openMenuFromButton(e, project)}
+                            aria-label={t`More actions`}
+                            title={t`More actions`}
+                            className="justify-self-end flex items-center justify-center w-7 h-7 rounded-lg text-zinc-400 opacity-0 group-hover:opacity-100 focus:opacity-100 hover:text-zinc-800 hover:bg-zinc-100 dark:hover:text-zinc-100 dark:hover:bg-white/5 transition"
+                          >
+                            <MoreVertical className="w-4 h-4" />
+                          </button>
+                        </div>
+                      );
                     })}
                   </div>
-
-                  <div className="col-span-3 sm:col-span-1 flex items-center justify-end relative">
-                    <button
-                      onClick={(e) => toggleMenu(e, project.path)}
-                      className="p-1.5 text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 rounded-md hover:bg-zinc-200 dark:hover:bg-navidark-500 transition-colors relative z-20"
-                    >
-                      <MoreVertical className="w-4 h-4" />
-                    </button>
-
-                    {activeMenu === project.path && (
-                      <div className="absolute right-6 top-6 w-48 bg-white dark:bg-navidark-800 border border-zinc-200 dark:border-navidark-400 rounded-xl shadow-xl py-1.5 z-50 animate-in fade-in zoom-in-95">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleOpenProject(project.path);
-                          }}
-                          className="w-full text-left px-4 py-2 text-xs text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-navidark-600 flex items-center gap-2"
-                        >
-                          <FolderOpen className="w-3.5 h-3.5" />{" "}
-                          <Trans>Open Project</Trans>
-                        </button>
-                        <div className="my-1 border-t border-zinc-200 dark:border-white/10" />
-                        <button
-                          onClick={(e) => openModal("rename", project, e)}
-                          className="w-full text-left px-4 py-2 text-xs text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-navidark-600 flex items-center gap-2"
-                        >
-                          <Edit3 className="w-3.5 h-3.5" />{" "}
-                          <Trans>Rename</Trans>
-                        </button>
-                        <button
-                          onClick={(e) => openModal("duplicate", project, e)}
-                          className="w-full text-left px-4 py-2 text-xs text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-navidark-600 flex items-center gap-2"
-                        >
-                          <Copy className="w-3.5 h-3.5" />{" "}
-                          <Trans>Duplicate</Trans>
-                        </button>
-                        <button
-                          onClick={(e) => openModal("settings", project, e)}
-                          className="w-full text-left px-4 py-2 text-xs text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-navidark-600 flex items-center gap-2"
-                        >
-                          <Settings className="w-3.5 h-3.5" />{" "}
-                          <Trans>Advanced Settings</Trans>
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleQuickRender(project);
-                            setActiveMenu(null);
-                          }}
-                          className="w-full text-left px-4 py-2 text-xs text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-navidark-600 flex items-center gap-2"
-                        >
-                          <Film className="w-3.5 h-3.5" />{" "}
-                          <Trans>Quick Render</Trans>
-                        </button>
-                        <button
-                          onClick={async (e) => {
-                            e.stopPropagation();
-                            try {
-                              await invoke("open_in_explorer", {
-                                path: project.path,
-                              });
-                            } catch {
-                              showToast(
-                                t`Could not open file location`,
-                                "error",
-                              );
-                            }
-                            setActiveMenu(null);
-                          }}
-                          className="w-full text-left px-4 py-2 text-xs text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-navidark-600 flex items-center gap-2"
-                        >
-                          <Folder className="w-3.5 h-3.5" />{" "}
-                          <Trans>Reveal in Explorer</Trans>
-                        </button>
-
-                        <div className="h-px bg-zinc-200 dark:bg-navidark-400 my-1 mx-2" />
-                        <button
-                          onClick={(e) => openModal("remove", project, e)}
-                          className="w-full text-left px-4 py-2 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 flex items-center gap-2"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />{" "}
-                          <Trans>Remove from List</Trans>
-                        </button>
-                      </div>
-                    )}
-                  </div>
                 </div>
-              ))}
-            </div>
+              )}
+            </section>
           </div>
+        </div>
+
+        {modalState.type === "settings" && modalState.project && (
+          <ProjectSettingsModal
+            project={modalState.project}
+            onClose={closeModal}
+          />
         )}
 
-        {/* SLEEK ACTION MODALS */}
-        {modalState.type === "settings" && modalState.project
-          ? createPortal(
-              <ProjectSettingsModal
-                project={modalState.project}
-                onClose={closeModal}
-              />,
-              document.body,
-            )
-          : modalState.type &&
-            createPortal(
-              <div className="fixed inset-0 z-99999 bg-zinc-950/40 backdrop-blur-[2px] flex items-center justify-center p-4 animate-in fade-in duration-200">
-                <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200">
-                  <div className="p-5">
-                    <h3 className="text-base text-zinc-900 dark:text-white mb-2 flex items-center gap-2">
-                      {modalState.type === "remove" && (
-                        <>
-                          <AlertTriangle className="w-4 h-4 text-red-500" />{" "}
-                          <Trans>Remove Project</Trans>
-                        </>
-                      )}
-                      {modalState.type === "rename" && (
-                        <>
-                          <Edit3 className="w-4 h-4 text-navi-500" />{" "}
-                          <Trans>Rename Project</Trans>
-                        </>
-                      )}
-                      {modalState.type === "duplicate" && (
-                        <>
-                          <Copy className="w-4 h-4 text-navi-500" />{" "}
-                          <Trans>Duplicate Project</Trans>
-                        </>
-                      )}
-                    </h3>
+        {modalState.type === "remove" && modalState.project && (
+          <Dialog
+            title={<Trans>Remove Project</Trans>}
+            onClose={closeModal}
+            footer={
+              <>
+                <button
+                  type="button"
+                  onClick={closeModal}
+                  className={dialogButton.secondary}
+                >
+                  <Trans>Cancel</Trans>
+                </button>
+                <button
+                  type="button"
+                  onClick={executeModalAction}
+                  className={dialogButton.danger}
+                  autoFocus
+                >
+                  <Trans>Remove</Trans>
+                </button>
+              </>
+            }
+          >
+            <p className="text-[13px] leading-relaxed text-zinc-600 dark:text-zinc-300">
+              <Trans>
+                Are you sure you want to remove{" "}
+                <strong className="font-medium text-zinc-900 dark:text-zinc-100">
+                  {modalState.project?.name}
+                </strong>{" "}
+                from your recent list? The original files will remain on your
+                computer.
+              </Trans>
+            </p>
+          </Dialog>
+        )}
 
-                    {modalState.type === "remove" ? (
-                      <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                        <Trans>
-                          Are you sure you want to remove{" "}
-                          <strong className="text-zinc-800 dark:text-zinc-200">
-                            {modalState.project?.name}
-                          </strong>{" "}
-                          from your recent list? The original files will remain
-                          on your computer.
-                        </Trans>
-                      </p>
-                    ) : (
-                      <div className="space-y-3 mt-4">
-                        <label className="text-xs text-zinc-700 dark:text-zinc-300">
-                          {modalState.type === "rename"
-                            ? t`New Project Name`
-                            : t`Duplicate Project Name`}
-                        </label>
-                        <input
-                          type="text"
-                          value={modalInput}
-                          onChange={(e) => setModalInput(e.target.value)}
-                          className="w-full bg-zinc-50 dark:bg-navidark-800 border border-zinc-200 dark:border-navidark-400 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-white outline-none focus:border-navi focus:ring-1 focus:ring-navi transition-all"
-                          autoFocus
-                        />
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="p-4 bg-zinc-50 dark:bg-black/20 border-t border-zinc-100 dark:border-white/5 flex items-center justify-end gap-3">
-                    <button
-                      onClick={closeModal}
-                      className="px-4 py-2 text-xs font-bold text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-lg transition-colors"
-                    >
-                      <Trans>Cancel</Trans>
-                    </button>
-                    <button
-                      onClick={executeModalAction}
-                      disabled={
-                        modalState.type !== "remove" && !modalInput.trim()
-                      }
-                      className={`px-4 py-2 text-white text-xs font-bold rounded-lg shadow-md transition-colors disabled:opacity-50 ${
-                        modalState.type === "remove"
-                          ? "bg-red-500 hover:bg-red-600"
-                          : "bg-navi hover:bg-navi-600"
-                      }`}
-                    >
-                      {modalState.type === "remove" ? t`Remove` : t`Confirm`}
-                    </button>
-                  </div>
-                </div>
-              </div>,
-              document.body,
-            )}
+        {(modalState.type === "rename" || modalState.type === "duplicate") &&
+          modalState.project && (
+            <Dialog
+              title={
+                modalState.type === "rename" ? (
+                  <Trans>Rename Project</Trans>
+                ) : (
+                  <Trans>Duplicate Project</Trans>
+                )
+              }
+              subtitle={modalState.project.name}
+              onClose={closeModal}
+              footer={
+                <>
+                  <button
+                    type="button"
+                    onClick={closeModal}
+                    className={dialogButton.secondary}
+                  >
+                    <Trans>Cancel</Trans>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={executeModalAction}
+                    disabled={!modalInput.trim()}
+                    className={dialogButton.primary}
+                  >
+                    <Trans>Confirm</Trans>
+                  </button>
+                </>
+              }
+            >
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (modalInput.trim()) executeModalAction();
+                }}
+              >
+                <label className="block mb-1.5 text-[12px] font-medium text-zinc-600 dark:text-zinc-300">
+                  {modalState.type === "rename"
+                    ? t`New Project Name`
+                    : t`Duplicate Project Name`}
+                </label>
+                <input
+                  type="text"
+                  value={modalInput}
+                  onChange={(e) => setModalInput(e.target.value)}
+                  onFocus={(e) => e.currentTarget.select()}
+                  className={dialogInput}
+                  autoFocus
+                />
+              </form>
+            </Dialog>
+          )}
       </div>
     </>
   );
 }
-

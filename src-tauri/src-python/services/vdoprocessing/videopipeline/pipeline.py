@@ -35,6 +35,10 @@ from .subtitle_step import (
 from .timeline_step import build_timeline
 
 
+# GPS, TTS, subtitles, attraction videos, route render, subtitle burn, intro/outro.
+PIPELINE_STAGES = 7
+
+
 def _stop_gpu_servers() -> None:
     """Frees the RAM/VRAM the narration and diffusion servers still hold."""
     stop_tts_server()
@@ -71,6 +75,13 @@ def run_full_pipeline(
 
     waypoints = job_config.get("waypoints", [])
     min_free_ram = job_config.get("settings", {}).get("min_free_ram_gb")
+
+    # [NOTE] [Core] total (the "[n/N]" denominator) is only set on this first stage() call — later stage() calls rely on the tracker remembering it rather than re-declaring it each time.
+    # Every path below makes exactly PIPELINE_STAGES stage() calls (a skipped
+    # stage still announces itself), so the frontend's progress bar and stage
+    # list never see "[9/8]". Sub-work inside a stage uses tracker.show().
+    tracker.stage("Parsing GPS track...", total=PIPELINE_STAGES)
+    cleaned_route = process_gps(raw_source_path)
 
     settings = job_config.get("settings", {})
     fast_render = skip_rich_media(settings)
@@ -122,7 +133,7 @@ def run_full_pipeline(
         # idle timeout — otherwise it stays loaded in VRAM while the attraction
         # step's ComfyUI/Wan pipeline and the renderer below start competing for
         # the same VRAM right after, which can overcommit a tight GPU budget.
-        tracker.stage("Stopping TTS server...")
+        tracker.show("Stopping TTS server...")
         stop_tts_server()
 
     # --- STEP 2b ---
@@ -130,6 +141,7 @@ def run_full_pipeline(
     # so nothing added here leaks into job_config's own waypoints.
     waypoints = copy.deepcopy(waypoints)
     if fast_render:
+        tracker.stage("Skipping subtitles (settings.skip_rich_media is on)...")
         logger.info("Step 2b: settings.skip_rich_media is on — skipping subtitles.")
         subtitle_paths = []
         overview_subtitle_path = None
@@ -181,7 +193,7 @@ def run_full_pipeline(
         # a moment to release VRAM/thermal load from the diffusion stage
         # above instead of jumping straight into another sustained GPU
         # workload.
-        tracker.stage("Cooling down GPU before video rendering...")
+        tracker.show("Cooling down GPU before video rendering...")
         time.sleep(tuning.GPU_STAGE_COOLDOWN_SECONDS)
     else:
         tracker.stage("Skipping attraction videos (disabled for this project)...")

@@ -1,5 +1,6 @@
 import { Component, ErrorInfo, ReactNode } from "react";
-import { AlertTriangle, RefreshCw } from "./icons";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { AlertTriangle, Check, Copy, Minus, RefreshCw, X } from "./icons";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 
@@ -11,6 +12,8 @@ interface State {
   hasError: boolean;
   error: Error | null;
   errorInfo: ErrorInfo | null;
+  showDetails: boolean;
+  copied: boolean;
 }
 
 export class ErrorBoundary extends Component<Props, State> {
@@ -18,16 +21,18 @@ export class ErrorBoundary extends Component<Props, State> {
     hasError: false,
     error: null,
     errorInfo: null,
+    showDetails: false,
+    copied: false,
   };
 
-  public static getDerivedStateFromError(error: Error): State {
+  public static getDerivedStateFromError(error: Error): Partial<State> {
     return { hasError: true, error, errorInfo: null };
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
     console.error("Uncaught React Error:", error, errorInfo);
     // Storing errorInfo in state allows us to display the component stack trace
-    this.setState({ errorInfo }); 
+    this.setState({ errorInfo });
   }
 
   private handleReset = () => {
@@ -35,67 +40,104 @@ export class ErrorBoundary extends Component<Props, State> {
     window.location.reload();
   };
 
+  private detailsText = () =>
+    [
+      this.state.error?.message || t`errorboundary_error-message`,
+      this.state.error?.stack,
+      this.state.errorInfo?.componentStack,
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+
+  private handleCopy = () => {
+    void navigator.clipboard.writeText(this.detailsText());
+    this.setState({ copied: true });
+    setTimeout(() => this.setState({ copied: false }), 2000);
+  };
+
   public render() {
-    if (this.state.hasError) {
-      return (
-        // Fixed overlay ensures it covers the screen even if nested deep in the DOM tree
-        <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-zinc-50/80 dark:bg-zinc-950/80 backdrop-blur-md p-6 selection:bg-red-500/30">
-          <div className="bg-white dark:bg-zinc-900 border border-zinc-200/60 dark:border-white/10 shadow-2xl rounded-2xl max-w-lg w-full overflow-hidden flex flex-col">
-            
-            {/* Visual Accent Line */}
-            <div className="h-1.5 w-full bg-gradient-to-r from-red-500 to-rose-400" />
+    if (!this.state.hasError) return this.props.children;
 
-            <div className="p-8">
-              <div className="flex items-start gap-5 mb-6">
-                <div className="shrink-0 w-12 h-12 bg-red-100 dark:bg-red-500/10 text-red-600 dark:text-red-400 rounded-full flex items-center justify-center ring-4 ring-red-50 dark:ring-red-500/5">
-                  <AlertTriangle className="w-6 h-6 stroke-[2.5]" />
-                </div>
-                <div>
-                  <h1 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">
-                    <Trans>something-went-wrong</Trans>
-                  </h1>
-                  <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1.5 leading-relaxed">
-                    <Trans>errorboundary_reason</Trans>
-                  </p>
-                </div>
+    const { showDetails, copied } = this.state;
+
+    return (
+      <div className="fixed inset-0 z-99999 flex flex-col bg-zinc-50 dark:bg-zinc-950">
+        <div data-tauri-drag-region className="h-10 shrink-0 flex items-center justify-end">
+          <button
+            type="button"
+            onClick={() => void getCurrentWindow().minimize().catch(() => {})}
+            aria-label={t`Minimize`}
+            className="h-full w-11 flex items-center justify-center text-zinc-500 hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+          >
+            <Minus className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => void getCurrentWindow().close().catch(() => {})}
+            aria-label={t`Close`}
+            className="h-full w-11 flex items-center justify-center text-zinc-500 hover:bg-red-500 hover:text-white transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="flex-1 min-h-0 overflow-y-auto flex items-center justify-center p-6">
+        <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 shadow-xl overflow-hidden">
+          <div className="p-6">
+            <div className="flex items-start gap-3.5">
+              <span className="w-9 h-9 rounded-xl bg-red-500/10 text-red-500 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-4.5 h-4.5" />
+              </span>
+              <div className="min-w-0">
+                <h1 className="text-[15px] font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
+                  <Trans>something-went-wrong</Trans>
+                </h1>
+                <p className="mt-1 text-[13px] leading-relaxed text-zinc-500 dark:text-zinc-400">
+                  <Trans>errorboundary_reason</Trans>
+                </p>
               </div>
-
-              {/* Terminal-style Error Output */}
-              <div className="bg-zinc-950 dark:bg-black rounded-xl overflow-hidden border border-zinc-800 dark:border-zinc-800/50 shadow-inner mb-8">
-                <div className="flex items-center px-4 py-2.5 bg-zinc-900 border-b border-zinc-800">
-                  <div className="flex gap-1.5 mr-3">
-                    <div className="w-2.5 h-2.5 rounded-full bg-zinc-700" />
-                    <div className="w-2.5 h-2.5 rounded-full bg-zinc-700" />
-                    <div className="w-2.5 h-2.5 rounded-full bg-zinc-700" />
-                  </div>
-                  <span className="text-[10px] font-semibold tracking-wider text-zinc-500 uppercase">
-                    Error Trace
-                  </span>
-                </div>
-                <div className="p-4 overflow-x-auto max-h-48 overflow-y-auto">
-                  <code className="text-xs text-rose-300 font-mono whitespace-pre-wrap leading-relaxed block">
-                    {this.state.error?.message || t`errorboundary_error-message`}
-                    {this.state.errorInfo?.componentStack && (
-                      <span className="block mt-3 text-zinc-500">
-                        {this.state.errorInfo.componentStack}
-                      </span>
-                    )}
-                  </code>
-                </div>
-              </div>
-
-              <button
-                onClick={this.handleReset}
-                className="w-full flex items-center justify-center gap-2 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 px-5 py-3 rounded-xl font-medium hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-all active:scale-[0.98] shadow-md shadow-zinc-900/5"
-              >
-                <RefreshCw className="w-4 h-4" />
-                <Trans>Reload Application</Trans>
-              </button>
             </div>
+
+            <p className="mt-4 px-3 py-2.5 rounded-lg bg-red-500/5 border border-red-500/15 text-[12px] leading-relaxed text-red-700 dark:text-red-300 wrap-break-word select-text">
+              {this.state.error?.message || t`errorboundary_error-message`}
+            </p>
+
+            {showDetails && (
+              <pre className="mt-2 max-h-48 overflow-auto custom-scrollbar px-3 py-2.5 rounded-lg bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/10 text-[11px] leading-relaxed text-zinc-600 dark:text-zinc-400 whitespace-pre-wrap font-sans select-text">
+                {[this.state.error?.stack, this.state.errorInfo?.componentStack]
+                  .filter(Boolean)
+                  .join("\n\n")}
+              </pre>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2 px-6 pb-6">
+            <button
+              type="button"
+              onClick={() => this.setState({ showDetails: !showDetails })}
+              className="h-8 px-3 rounded-lg text-[13px] font-medium text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors"
+            >
+              {showDetails ? t`Hide details` : t`Show details`}
+            </button>
+            <button
+              type="button"
+              onClick={this.handleCopy}
+              className="flex items-center gap-1.5 h-8 px-3 rounded-lg text-[13px] font-medium text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors"
+            >
+              {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+              {copied ? t`Copied` : t`Copy error`}
+            </button>
+            <button
+              type="button"
+              onClick={this.handleReset}
+              className="ml-auto flex items-center gap-1.5 h-8 px-3.5 rounded-lg bg-navi text-white text-[13px] font-semibold hover:brightness-110 transition"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <Trans>Reload Application</Trans>
+            </button>
           </div>
         </div>
-      );
-    }
-    return this.props.children;
+        </div>
+      </div>
+    );
   }
 }

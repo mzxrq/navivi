@@ -1,19 +1,14 @@
 import { useEffect, useState, useRef } from "react";
-import Map, {
-  ViewStateChangeEvent,
-  Marker,
-  MapRef,
-  Source,
-} from "react-map-gl/mapbox";
+import Map, { Marker, MapRef, Source } from "react-map-gl/mapbox";
 import { listen } from "@tauri-apps/api/event";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import {
-  UploadCloud,
-  Navigation,
-  ImageIcon,
-  X
-} from "../../../components/ui/icons";
-import { MapToolbar } from "./MapToolbar";
+import { UploadCloud, ImageIcon } from "../../../components/ui/icons";
+import { AddType, MapToolbar } from "./MapToolbar";
+import { DrawBar } from "./DrawBar";
+import { MapCompass } from "./MapCompass";
+import { openContextMenu, separator } from "../../../components/ui/menuItems";
+import { useStopMenus } from "../hooks/useStopMenus";
+import { Check, Pencil, Plus, Trash2 } from "../../../components/ui/icons";
 import "@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css";
 import { mapStyles, mapDefaults } from "../../../config/constants";
 import { RouteStyling } from "./MapLayers/RouteStyling";
@@ -21,14 +16,12 @@ import { useWorkspace } from "../../../hooks/useWorkspace";
 import { useTheme } from "../../../hooks/useTheme";
 import { useMapRouting } from "../hooks/useMapRouting";
 import { useFileActions } from "../../../hooks/useFileActions";
+import { takePendingImport } from "../../../utils/pendingImport";
 import { useUI } from "../../../hooks/useUI";
 import { loadProjectData } from "../../../services/fileSystem";
 import { WaypointEditor } from "./WaypointEditor";
-import { UnifiedLayersPanel } from "./UnifiedLayersPanel";
-import { Waypoint } from "../../../types";
 import { LayerManager } from "./MapLayers/LayerManager";
 import { RouteLayer } from "./MapLayers/RouteLayer";
-import { RainOverlay } from "./MapLayers/RainOverlay";
 import { NaviPin } from "./MapLayers/NaviPin";
 import { ElevationProfile } from "./ElevationProfile";
 import {
@@ -43,7 +36,7 @@ import { Trans } from "@lingui/react/macro";
 export function MapArea() {
   const { i18n } = useLingui();
   const { theme, mapTheme } = useTheme();
-  const { showToast, isRendering } = useUI();
+  const { showToast } = useUI();
   const {
     waypoints,
     setWaypoints,
@@ -54,10 +47,15 @@ export function MapArea() {
     routeSegments,
     updateWaypoint,
     setActiveWaypointId,
-    setProjectThumbnail,
     registerThumbnailGetter,
   } = useWorkspace();
-  const { handleDroppedFiles, importPhotos } = useFileActions();
+  const { handleDroppedFiles, importPhotos, importRouteFile } = useFileActions();
+
+  useEffect(() => {
+    const pending = takePendingImport();
+    if (pending?.kind === "route") importRouteFile(pending.path);
+    else if (pending?.kind === "photos") handleDroppedFiles(pending.paths);
+  }, []);
 
   const [isHovering, setIsHovering] = useState(false);
   const [isAddMode, setIsAddMode] = useState(false);
@@ -65,11 +63,11 @@ export function MapArea() {
   const [isEraserMode, setIsEraserMode] = useState(false);
   const [isViaMode, setIsViaMode] = useState(false);
   const viaTargetWpIdRef = useRef<string | null>(null);
-  const [addType, setAddType] = useState<"normal" | "start" | "end" | "stopby">(
-    "normal",
-  );
+  const [addType, setAddType] = useState<AddType>("normal");
+  const [selectedAnchor, setSelectedAnchor] = useState<number | null>(null);
 
   const [is3D, setIs3D] = useState(false);
+  const [isMapLoaded, setIsMapLoaded] = useState(false);
   const [isProcessing] = useState(false);
   const [uploadedRouteLine] = useState<[number, number][]>([]);
   const mapRef = useRef<MapRef>(null);
@@ -80,27 +78,27 @@ export function MapArea() {
   const isContextLostRef = useRef(false);
 
   const [eleHoverPoint, setEleHoverPoint] = useState<number[] | null>(null);
-  const [vehicleGeoJson, setVehicleGeoJson] = useState<any>(null);
   const [weatherCondition, setWeatherCondition] =
     useState<WeatherCondition>("clear");
 
-  const [viewState, setViewState] = useState({
+  const initialViewState = useRef({
     longitude: settings.start_coords?.[1] || 135.5023,
     latitude: settings.start_coords?.[0] || 34.6937,
     zoom: 13,
     pitch: 0,
     bearing: 0,
-  });
-
+  }).current;
 
   useMapRouting();
 
+  const thumbnailCanvasRef = useRef<HTMLCanvasElement | null>(null);
+
   useEffect(() => {
     registerThumbnailGetter(() => {
-      if (isContextLostRef.current) return null;
+      const snap = thumbnailCanvasRef.current;
+      if (!snap) return null;
       try {
-        const canvas = mapRef.current?.getMap().getCanvas();
-        return canvas ? canvas.toDataURL("image/png") : null;
+        return snap.toDataURL("image/png");
       } catch (e) {
         return null;
       }
@@ -113,21 +111,33 @@ export function MapArea() {
       clearTimeout(thumbnailCaptureTimeoutRef.current);
     }
     thumbnailCaptureTimeoutRef.current = setTimeout(() => {
-      if (isContextLostRef.current) return;
-      const canvas = mapRef.current?.getMap().getCanvas();
-      if (!canvas) return;
-      try {
-        setProjectThumbnail(canvas.toDataURL("image/png"));
-      } catch (error) {
-        console.warn("Unable to capture map thumbnail:", error);
-      }
-    }, 250);
+      const map = mapRef.current?.getMap();
+      if (!map || isContextLostRef.current) return;
+      map.once("render", () => {
+        const source = map.getCanvas();
+        if (!source.width || !source.height) return;
+        const width = Math.min(640, source.width);
+        const height = Math.round((source.height / source.width) * width);
+        const snap =
+          thumbnailCanvasRef.current ?? document.createElement("canvas");
+        snap.width = width;
+        snap.height = height;
+        try {
+          snap.getContext("2d")?.drawImage(source, 0, 0, width, height);
+          thumbnailCanvasRef.current = snap;
+        } catch (error) {
+          console.warn("Unable to capture map thumbnail:", error);
+        }
+      });
+      map.triggerRepaint();
+    }, 1500);
   };
 
   // Called by <Map onLoad>: canvas now exists, safe to attach WebGL handlers
   const handleMapLoad = () => {
     const map = mapRef.current?.getMap();
     if (!map) return;
+    setIsMapLoaded(true);
 
     const canvas = map.getCanvas();
 
@@ -136,7 +146,6 @@ export function MapArea() {
         map.setLanguage(i18n.locale);
       }
     } catch (e) {}
-
 
     // Prevent the browser from discarding the context silently
     const handleContextLost = (e: Event) => {
@@ -181,8 +190,6 @@ export function MapArea() {
         maxLng = Math.max(maxLng, wp.lng);
         maxLat = Math.max(maxLat, wp.lat);
       });
-
-
 
       if (minLng !== Infinity) {
         if (minLng === maxLng && minLat === maxLat) {
@@ -242,7 +249,6 @@ export function MapArea() {
     }
   }, [i18n.locale, selectedStyle, mapRef.current]);
 
-
   useEffect(() => {
     const timer = setTimeout(() => {
       mapRef.current?.resize();
@@ -258,9 +264,17 @@ export function MapArea() {
             const existing = wp.customRoute || [];
             let newRoute = [...existing];
             const insertIdx = activeAnchorIndexRef.current;
-            if (insertIdx !== null && insertIdx >= 0 && insertIdx < newRoute.length) {
+            if (
+              insertIdx !== null &&
+              insertIdx >= 0 &&
+              insertIdx < newRoute.length
+            ) {
               newRoute.splice(insertIdx + 1, 0, [e.lngLat.lat, e.lngLat.lng]);
-              window.dispatchEvent(new CustomEvent("select-anchor", { detail: { index: insertIdx + 1 } }));
+              window.dispatchEvent(
+                new CustomEvent("select-anchor", {
+                  detail: { index: insertIdx + 1 },
+                }),
+              );
             } else {
               newRoute = [...existing, [e.lngLat.lat, e.lngLat.lng]];
             }
@@ -284,7 +298,13 @@ export function MapArea() {
         prev.map((wp) => {
           if (wp.id === targetId) {
             const existing = wp.viaPoints || [];
-            return { ...wp, viaPoints: [...existing, [e.lngLat.lat, e.lngLat.lng] as [number, number]] };
+            return {
+              ...wp,
+              viaPoints: [
+                ...existing,
+                [e.lngLat.lat, e.lngLat.lng] as [number, number],
+              ],
+            };
           }
           return wp;
         }),
@@ -317,43 +337,63 @@ export function MapArea() {
       if (dx > 5 || dy > 5) return;
     }
 
-    // context menu payload
-    window.dispatchEvent(
-      new CustomEvent("open-context-menu", {
-        detail: {
-          x: e.originalEvent.clientX,
-          y: e.originalEvent.clientY,
-          type: "map-canvas",
-          data: {
-            lat: e.lngLat.lat,
-            lng: e.lngLat.lng,
-            setAsStart: () =>
-              handleAddSpWaypoint(e.lngLat.lat, e.lngLat.lng, "start"),
-            setAsDestination: () =>
-              handleAddSpWaypoint(e.lngLat.lat, e.lngLat.lng, "end"),
-            setAsStopBy: () =>
-              handleAddStopByWaypoint(e.lngLat.lat, e.lngLat.lng),
-            addWaypoint: () => handleAddWaypoint(e.lngLat.lat, e.lngLat.lng),
+    const { lat, lng } = e.lngLat;
+    if (isDrawMode) {
+      openContextMenu(e.originalEvent, [
+        activeWp &&
+          nextWp && {
+            label: t`Add point here`,
+            icon: Plus,
+            onSelect: () => handleMapClick(e),
           },
+        {
+          label: t`Done drawing`,
+          icon: Check,
+          onSelect: () => setIsDrawMode(false),
         },
+      ]);
+      return;
+    }
+    if (isViaMode) {
+      openContextMenu(e.originalEvent, [
+        {
+          label: t`Add via point here`,
+          icon: Plus,
+          onSelect: () => handleMapClick(e),
+        },
+        {
+          label: t`Done adjusting`,
+          icon: Check,
+          onSelect: () =>
+            window.dispatchEvent(new CustomEvent("exit-via-mode")),
+        },
+      ]);
+      return;
+    }
+    openContextMenu(
+      e.originalEvent,
+      mapMenu(lat, lng, {
+        stop: () => handleAddWaypoint(lat, lng),
+        stopBy: () => handleAddStopByWaypoint(lat, lng),
+        start: () => handleAddSpWaypoint(lat, lng, "start"),
+        end: () => handleAddSpWaypoint(lat, lng, "end"),
       }),
     );
   };
 
-  const handleMarkerContextMenu = (e: React.MouseEvent, wpId: string) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const handleMarkerContextMenu = (e: React.MouseEvent, wpId: string) =>
+    openContextMenu(e, stopMenu(wpId));
 
-    window.dispatchEvent(
-      new CustomEvent("open-context-menu", {
-        detail: {
-          x: e.clientX,
-          y: e.clientY,
-          type: "waypoint-marker",
-          targetId: wpId,
-        },
-      }),
-    );
+  const pinDraggedRef = useRef(false);
+  const { stopMenu, viaMenu, mapMenu } = useStopMenus();
+  const handlePinClick = (e: React.MouseEvent, wpId: string) => {
+    e.stopPropagation();
+    if (pinDraggedRef.current) {
+      pinDraggedRef.current = false;
+      return;
+    }
+    if (isDrawMode || isAddMode || isViaMode) return;
+    setActiveWaypointId(wpId);
   };
 
   const handleAddWaypoint = async (lat: number, lng: number) => {
@@ -485,61 +525,126 @@ export function MapArea() {
     }
   };
 
-  // Listen for sidebar "Adjust Route" button
+  const removeAnchor = (idx: number) => {
+    setWaypoints((prev) =>
+      prev.map((wp) =>
+        wp.id === activeWaypointId && wp.customRoute
+          ? { ...wp, customRoute: wp.customRoute.filter((_, i) => i !== idx) }
+          : wp,
+      ),
+    );
+    if (
+      activeAnchorIndexRef.current !== null &&
+      activeAnchorIndexRef.current >= idx
+    ) {
+      const index =
+        activeAnchorIndexRef.current === idx
+          ? null
+          : activeAnchorIndexRef.current - 1;
+      window.dispatchEvent(
+        new CustomEvent("select-anchor", { detail: { index } }),
+      );
+    }
+    setIsDirty(true);
+  };
+
+  useEffect(() => {
+    const handleFocus = ((e: CustomEvent) => {
+      const wp = waypoints.find((w) => w.id === e.detail.wpId);
+      const map = mapRef.current?.getMap();
+      if (!wp || !map) return;
+      map.flyTo({
+        center: [wp.lng, wp.lat],
+        zoom: Math.max(map.getZoom(), 15),
+        duration: 800,
+      });
+    }) as EventListener;
+    window.addEventListener("focus-waypoint", handleFocus);
+    return () => window.removeEventListener("focus-waypoint", handleFocus);
+  }, [waypoints]);
+
+  const fitToLeg = (wpId: string) => {
+    const wpIndex = waypoints.findIndex((w) => w.id === wpId);
+    if (wpIndex === -1 || wpIndex >= waypoints.length - 1) return;
+    const wp = waypoints[wpIndex];
+    const nextWp = waypoints[wpIndex + 1];
+    const map = mapRef.current;
+    if (!map) return;
+
+    const extra = [...(wp.viaPoints || []), ...(wp.customRoute || [])];
+    let lats = [wp.lat, nextWp.lat, ...extra.map((v) => v[0])];
+    let lngs = [wp.lng, nextWp.lng, ...extra.map((v) => v[1])];
+    if (routeSegments[wpIndex]?.positions?.length) {
+      lats = [...lats, ...routeSegments[wpIndex].positions.map((p) => p[0])];
+      lngs = [...lngs, ...routeSegments[wpIndex].positions.map((p) => p[1])];
+    }
+    const minLat = Math.min(...lats);
+    const maxLat = Math.max(...lats);
+    const minLng = Math.min(...lngs);
+    const maxLng = Math.max(...lngs);
+
+    setTimeout(() => {
+      try {
+        if (minLng === maxLng && minLat === maxLat) {
+          map
+            .getMap()
+            .flyTo({ center: [minLng, minLat], zoom: 15, duration: 800 });
+        } else {
+          map.getMap().fitBounds(
+            [
+              [minLng, minLat],
+              [maxLng, maxLat],
+            ],
+            {
+              padding: { top: 170, bottom: 80, left: 80, right: 80 },
+              duration: 800,
+            },
+          );
+        }
+      } catch (e) {
+        console.error("[Navivi] Failed to fitBounds:", e);
+      }
+    }, 150);
+  };
+
   useEffect(() => {
     const handleEnterVia = ((e: CustomEvent) => {
       viaTargetWpIdRef.current = e.detail.wpId;
       setIsViaMode(true);
       setIsAddMode(false);
       setIsDrawMode(false);
-
-      const wpIndex = waypoints.findIndex(w => w.id === e.detail.wpId);
-      if (wpIndex !== -1 && wpIndex < waypoints.length - 1) {
-        const wp = waypoints[wpIndex];
-        const nextWp = waypoints[wpIndex + 1];
-        const map = mapRef.current;
-        if (map) {
-          // Use the actual routed segment positions for accurate bounding box
-          let lats = [wp.lat, nextWp.lat, ...(wp.viaPoints || []).map(v => v[0])];
-          let lngs = [wp.lng, nextWp.lng, ...(wp.viaPoints || []).map(v => v[1])];
-          
-          if (routeSegments[wpIndex] && routeSegments[wpIndex].positions) {
-            lats = routeSegments[wpIndex].positions.map(p => p[0]);
-            lngs = routeSegments[wpIndex].positions.map(p => p[1]);
-          }
-          
-          const minLat = Math.min(...lats);
-          const maxLat = Math.max(...lats);
-          const minLng = Math.min(...lngs);
-          const maxLng = Math.max(...lngs);
-          
-          setTimeout(() => {
-            try {
-              if (minLng === maxLng && minLat === maxLat) {
-                map.getMap().flyTo({ center: [minLng, minLat], zoom: 15, duration: 800 });
-              } else {
-                map.getMap().fitBounds([ [minLng, minLat], [maxLng, maxLat] ], { padding: 80, duration: 800 });
-              }
-            } catch (e) {
-              console.error("[Navivi] Failed to fitBounds:", e);
-            }
-          }, 150);
-        }
-      }
+      fitToLeg(e.detail.wpId);
     }) as EventListener;
-    
+
     const handleExitVia = (() => {
       setIsViaMode(false);
       viaTargetWpIdRef.current = null;
     }) as EventListener;
-    
+
+    const handleEnterDraw = ((e: CustomEvent) => {
+      if (isViaMode) window.dispatchEvent(new CustomEvent("exit-via-mode"));
+      setActiveWaypointId(e.detail.wpId);
+      setIsAddMode(false);
+      setIsDrawMode(true);
+      fitToLeg(e.detail.wpId);
+    }) as EventListener;
+
     window.addEventListener("enter-via-mode", handleEnterVia);
     window.addEventListener("exit-via-mode", handleExitVia);
+    window.addEventListener("enter-draw-mode", handleEnterDraw);
     return () => {
       window.removeEventListener("enter-via-mode", handleEnterVia);
       window.removeEventListener("exit-via-mode", handleExitVia);
+      window.removeEventListener("enter-draw-mode", handleEnterDraw);
     };
-  }, [waypoints, routeSegments]);
+  }, [waypoints, routeSegments, isViaMode]);
+
+  useEffect(() => {
+    if (!isDrawMode) setIsEraserMode(false);
+    window.dispatchEvent(
+      new CustomEvent("select-anchor", { detail: { index: null } }),
+    );
+  }, [isDrawMode, activeWaypointId]);
 
   useEffect(() => {
     const handleHover = ((e: CustomEvent) =>
@@ -552,9 +657,11 @@ export function MapArea() {
   useEffect(() => {
     const handleSelectAnchor = ((e: CustomEvent) => {
       activeAnchorIndexRef.current = e.detail.index;
+      setSelectedAnchor(e.detail.index);
     }) as EventListener;
     window.addEventListener("select-anchor", handleSelectAnchor);
-    return () => window.removeEventListener("select-anchor", handleSelectAnchor);
+    return () =>
+      window.removeEventListener("select-anchor", handleSelectAnchor);
   }, []);
 
   useEffect(() => {
@@ -662,45 +769,6 @@ export function MapArea() {
     };
   }, [settings.weather_sync_enabled, weatherCondition, selectedStyle]);
 
-  useEffect(() => {
-    if (!isRendering || routePoints.length < 2) {
-      setVehicleGeoJson(null);
-      return;
-    }
-    let frameId: number;
-    let startTime = performance.now();
-    const duration = 10000;
-
-    const animate = (time: number) => {
-      let progress = ((time - startTime) % duration) / duration;
-
-      const totalPoints = routePoints.length;
-      const exactIndex = progress * (totalPoints - 1);
-      const index1 = Math.floor(exactIndex);
-      const index2 = Math.min(index1 + 1, totalPoints - 1);
-      const frac = exactIndex - index1;
-
-      const p1 = routePoints[index1];
-      const p2 = routePoints[index2];
-      const lat = p1[0] + (p2[0] - p1[0]) * frac;
-      const lng = p1[1] + (p2[1] - p1[1]) * frac;
-
-      const dy = p2[0] - p1[0];
-      const dx = p2[1] - p1[1];
-      const bearing = (Math.atan2(dx, dy) * 180) / Math.PI || 0;
-
-      setVehicleGeoJson({
-        type: "Feature",
-        properties: { rotation: [0, 0, bearing], model: "car" },
-        geometry: { type: "Point", coordinates: [lng, lat] },
-      });
-
-      frameId = requestAnimationFrame(animate);
-    };
-    frameId = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(frameId);
-  }, [isRendering, routePoints]);
-
   // Drag and Drop Listeners
   useEffect(() => {
     const unlistenHover = listen("tauri://drag-enter", () =>
@@ -765,8 +833,7 @@ export function MapArea() {
 
   return (
     <main className="flex-1 relative bg-zinc-100 dark:bg-[#09090b] overflow-hidden transition-colors">
-      {/* --- GEOJSON.IO STYLE TOP TOOLBAR --- */}
-      <div className="absolute z-200 transition-all duration-300 max-[1159px]:top-16 max-[1159px]:left-4 max-[1159px]:translate-x-0 min-[1160px]:top-16 min-[1160px]:left-1/2 min-[1160px]:-translate-x-1/2">
+      <div className="absolute z-200 top-14 left-1/2 -translate-x-1/2 max-w-[calc(100%-2rem)] flex flex-col items-center gap-2 pointer-events-none *:pointer-events-auto">
         <MapToolbar
           isAddMode={isAddMode}
           setIsAddMode={setIsAddMode}
@@ -774,46 +841,67 @@ export function MapArea() {
           setIsDrawMode={setIsDrawMode}
           isEraserMode={isEraserMode}
           setIsEraserMode={setIsEraserMode}
-          activeWp={activeWp}
-          onSimplifyRoute={() => {}}
-          onBufferRoute={() => {}}
-          onShowInfo={() => {}}
-          onToggleSpline={() => {
-            if (activeWp) {
-              updateWaypoint(activeWp.id, {
-                drawStyle:
-                  activeWp.drawStyle === "spline" ? "linear" : "spline",
-              });
-            }
-          }}
-          onZoomTo={handleZoomToFit}
-          onClearRoute={() => {
-            if (activeWp) {
-              updateWaypoint(activeWp.id, { customRoute: [] });
-            }
-          }}
+          canErase={!!activeWp && !!nextWp}
+          addType={addType}
+          setAddType={setAddType}
         />
+
+        {isDrawMode && (
+          <DrawBar
+            waypoints={waypoints}
+            activeWp={nextWp ? activeWp : null}
+            nextWp={nextWp}
+            isEraserMode={isEraserMode}
+            setIsEraserMode={setIsEraserMode}
+            onPickLeg={(wpId) => {
+              setActiveWaypointId(wpId);
+              fitToLeg(wpId);
+            }}
+            onToggleSpline={() => {
+              if (activeWp) {
+                updateWaypoint(activeWp.id, {
+                  drawStyle:
+                    activeWp.drawStyle === "spline" ? "linear" : "spline",
+                });
+              }
+            }}
+            onFit={handleZoomToFit}
+            onDone={() => setIsDrawMode(false)}
+            updateWaypoint={updateWaypoint}
+            setIsDirty={setIsDirty}
+          />
+        )}
+
+        {isViaMode && (
+          <div className="flex items-center gap-2 h-9 pl-3.5 pr-1 rounded-xl bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border border-zinc-200 dark:border-white/10 shadow-sm animate-in fade-in slide-in-from-top-1 duration-150">
+            <span className="w-1.5 h-1.5 rounded-full bg-violet-500 shrink-0" />
+            <span className="text-[12px] text-zinc-600 dark:text-zinc-300 truncate">
+              <Trans>
+                Click the map to nudge the route. Drag a via point to move it,
+                or right-click it for options.
+              </Trans>
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setIsViaMode(false);
+                viaTargetWpIdRef.current = null;
+                window.dispatchEvent(new CustomEvent("exit-via-mode"));
+              }}
+              className="h-7 px-2.5 rounded-lg text-[12px] font-semibold bg-navi text-white hover:brightness-110 transition shrink-0"
+            >
+              <Trans>Done</Trans>
+            </button>
+          </div>
+        )}
       </div>
 
-      <div className="absolute top-16 right-4 z-200 flex items-center gap-2">
-        <button
-          onClick={() => {
-            setViewState((prev) => ({
-              ...prev,
-              pitch: 0,
-              bearing: 0,
-            }));
-          }}
-          title={t`Reset View (North)`}
-          className="flex items-center justify-center w-10 h-10 rounded-full bg-white dark:bg-zinc-800 text-zinc-700 hover:bg-zinc-200 dark:text-zinc-200 dark:hover:bg-zinc-500 transition-all font-bold drop-shadow-md shadow-md"
-        >
-          <Navigation
-            className="w-4 h-4 transition-transform duration-200"
-            style={{ transform: `rotate(${-viewState.bearing}deg)` }}
-          />
-        </button>
+      <div className="absolute top-14 right-4 z-200 flex items-center gap-0.5 p-1 rounded-xl bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border border-zinc-200 dark:border-white/10 shadow-sm">
+        <MapCompass mapRef={mapRef} ready={isMapLoaded} />
 
         <RouteStyling />
+
+        <div className="w-px h-4 mx-0.5 bg-zinc-200 dark:bg-white/10" />
 
         <LayerManager
           selectedStyle={selectedStyle}
@@ -824,25 +912,13 @@ export function MapArea() {
         />
       </div>
 
-      {/* UNIFIED DRAGGABLE DRAW STATUS & ANCHORS LAYER PANEL */}
-      {isDrawMode && activeWp && nextWp && (
-        <UnifiedLayersPanel
-          activeWp={activeWp}
-          nextWp={nextWp}
-          waypoints={waypoints}
-          updateWaypoint={updateWaypoint}
-          setIsDirty={setIsDirty}
-        />
-      )}
-
       {/* MAPBOX CANVAS */}
       <div className="absolute inset-0 z-0">
         <Map
           reuseMaps={true}
           ref={mapRef}
           cursor={isEraserMode || isViaMode ? "crosshair" : ""}
-          {...viewState}
-          onMove={(evt: ViewStateChangeEvent) => setViewState(evt.viewState)}
+          initialViewState={initialViewState}
           onLoad={handleMapLoad}
           onMoveEnd={captureMapThumbnail}
           onClick={handleMapClick}
@@ -885,6 +961,7 @@ export function MapArea() {
             const isStart = index === 0;
             const isEnd =
               index === waypoints.length - 1 && waypoints.length > 1;
+            const isSelected = wp.id === activeWaypointId && !isDrawMode;
 
             let pinType: "start" | "end" | "stopby" | "normal" = "normal";
             let label = "";
@@ -918,12 +995,16 @@ export function MapArea() {
                   longitude={wp.lng}
                   latitude={wp.lat}
                   anchor="bottom"
+                  style={isSelected ? { zIndex: 5 } : undefined}
                 >
                   <div
-                    className="flex flex-col items-center group cursor-grab active:cursor-grabbing hover:-translate-y-1 transition-transform"
+                    className={`flex flex-col items-center group cursor-pointer transition-transform ${isSelected ? "-translate-y-1" : "hover:-translate-y-1"}`}
+                    onClick={(e) => handlePinClick(e, wp.id)}
                     onContextMenu={(e) => handleMarkerContextMenu(e, wp.id)}
                   >
-                    <div className="bg-zinc-900 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-lg border border-white/20 mb-1 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                    <div
+                      className={`bg-zinc-900 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-lg border border-white/20 mb-1 transition-opacity whitespace-nowrap ${isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
+                    >
                       {wp.name || t`Waypoint`}
                     </div>
                     {wp.customMarker || settings.routeMarker ? (
@@ -961,19 +1042,29 @@ export function MapArea() {
                 longitude={wp.lng}
                 latitude={wp.lat}
                 draggable
+                onDragStart={() => {
+                  pinDraggedRef.current = true;
+                }}
                 onDragEnd={(e) => {
                   const { lat, lng } = e.lngLat;
                   setWaypoints((prev) =>
                     prev.map((w) => (w.id === wp.id ? { ...w, lat, lng } : w)),
                   );
+                  setTimeout(() => {
+                    pinDraggedRef.current = false;
+                  }, 0);
                 }}
                 anchor="bottom"
+                style={isSelected ? { zIndex: 5 } : undefined}
               >
                 <div
-                  className="flex flex-col items-center group cursor-grab active:cursor-grabbing hover:-translate-y-1 transition-transform"
+                  className={`flex flex-col items-center group cursor-grab active:cursor-grabbing transition-transform ${isSelected ? "-translate-y-1" : "hover:-translate-y-1"}`}
+                  onClick={(e) => handlePinClick(e, wp.id)}
                   onContextMenu={(e) => handleMarkerContextMenu(e, wp.id)}
                 >
-                  <div className="bg-zinc-900 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-lg border border-white/20 mb-1 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                  <div
+                    className={`bg-zinc-900 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-lg border border-white/20 mb-1 transition-opacity whitespace-nowrap ${isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
+                  >
                     {wp.name || t`Waypoint`}
                   </div>
 
@@ -1039,31 +1130,16 @@ export function MapArea() {
               >
                 <div
                   className="relative group cursor-grab active:cursor-grabbing"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    // Right-click or Ctrl+Click to remove
-                  }}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setWaypoints((prev) =>
-                      prev.map((w) => {
-                        if (w.id === wp.id && w.viaPoints) {
-                          return { ...w, viaPoints: w.viaPoints.filter((_, i) => i !== idx) };
-                        }
-                        return w;
-                      }),
-                    );
-                    setIsDirty(true);
-                  }}
+                  onClick={(e) => e.stopPropagation()}
+                  onContextMenu={(e) => openContextMenu(e, viaMenu(wp.id, idx))}
                 >
                   <div className="w-4 h-4 bg-violet-500 border-2 border-white dark:border-zinc-900 rounded-full shadow-md group-hover:scale-125 group-hover:bg-violet-400 transition-all" />
                   <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 opacity-0 group-hover:opacity-100 transition-opacity bg-zinc-900 text-white text-[9px] font-bold px-1.5 py-0.5 rounded pointer-events-none whitespace-nowrap">
-                    Via {idx + 1} · Right-click to remove
+                    <Trans>Via {idx + 1} · Right-click for options</Trans>
                   </div>
                 </div>
               </Marker>
-            ))
+            )),
           )}
 
           {/* drawn nodes */}
@@ -1094,24 +1170,54 @@ export function MapArea() {
                   <div
                     className={`relative group ${isEraserMode ? "cursor-crosshair" : "cursor-grab active:cursor-grabbing"}`}
                     onClick={(e) => {
-                      if (isEraserMode) {
-                        e.stopPropagation();
-                        setWaypoints((prev) =>
-                          prev.map((wp) => {
-                            if (wp.id === activeWaypointId && wp.customRoute) {
-                              const newRoute = wp.customRoute.filter(
-                                (_, i) => i !== idx,
-                              );
-                              return { ...wp, customRoute: newRoute };
-                            }
-                            return wp;
+                      e.stopPropagation();
+                      if (!isEraserMode) {
+                        const index =
+                          activeAnchorIndexRef.current === idx ? null : idx;
+                        window.dispatchEvent(
+                          new CustomEvent("select-anchor", {
+                            detail: { index },
                           }),
                         );
-                        setIsDirty(true);
+                        return;
                       }
+                      removeAnchor(idx);
                     }}
+                    onContextMenu={(e) =>
+                      openContextMenu(e, [
+                        { type: "label", label: t`Point ${idx + 1}` },
+                        {
+                          label: t`Add new points after this one`,
+                          icon: Pencil,
+                          checked: selectedAnchor === idx,
+                          onSelect: () =>
+                            window.dispatchEvent(
+                              new CustomEvent("select-anchor", {
+                                detail: {
+                                  index: selectedAnchor === idx ? null : idx,
+                                },
+                              }),
+                            ),
+                        },
+                        separator,
+                        {
+                          label: t`Delete point`,
+                          icon: Trash2,
+                          danger: true,
+                          onSelect: () => removeAnchor(idx),
+                        },
+                      ])
+                    }
                   >
-                    <div className="w-5 h-5 bg-amber-500 border-2 border-white dark:border-zinc-900 rounded-full shadow-md group-hover:scale-110 group-hover:bg-amber-400 transition-all flex items-center justify-center">
+                    <div
+                      className={`w-5 h-5 border-2 border-white dark:border-zinc-900 rounded-full shadow-md group-hover:scale-110 transition-all flex items-center justify-center ${
+                        isEraserMode
+                          ? "bg-amber-500 group-hover:bg-red-500"
+                          : selectedAnchor === idx
+                            ? "bg-navi ring-4 ring-navi/30"
+                            : "bg-amber-500 group-hover:bg-amber-400"
+                      }`}
+                    >
                       <span className="text-[9px] font-black text-white dark:text-zinc-900">
                         {idx + 1}
                       </span>
@@ -1123,11 +1229,6 @@ export function MapArea() {
                 </Marker>
               ))}
         </Map>
-
-        {/* HISTORICAL WEATHER RAIN OVERLAY */}
-        {settings.weather_sync_enabled && weatherCondition === "rain" && (
-          <RainOverlay />
-        )}
       </div>
 
       <ElevationProfile />
@@ -1178,22 +1279,6 @@ export function MapArea() {
           </p>
         </div>
       )}
-      {/* --- VIA MODE BANNER --- */}
-      {isViaMode && (
-        <div className="absolute z-200 pointer-events-none animate-in fade-in zoom-in-95 duration-200 max-[1159px]:top-[120px] max-[1159px]:left-4 max-[1159px]:translate-x-0 min-[1160px]:top-[120px] min-[1160px]:left-1/2 min-[1160px]:-translate-x-1/2">
-          <div className="bg-zinc-900/90 dark:bg-zinc-100/90 backdrop-blur-sm text-white dark:text-zinc-900 text-[10px] font-bold px-3 py-1.5 rounded-full shadow-lg border border-zinc-800 dark:border-zinc-200 flex items-center gap-1.5 pointer-events-auto">
-            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            <span>Via Mode: Click to nudge route, Right-click to remove</span>
-            <button
-              onClick={() => { setIsViaMode(false); viaTargetWpIdRef.current = null; window.dispatchEvent(new CustomEvent("exit-via-mode")); }}
-              className="ml-1 text-zinc-400 dark:text-zinc-500 hover:text-white dark:hover:text-zinc-900 transition-colors"
-            >
-              <X className="w-3 h-3" />
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* --- FLOATING WAYPOINT EDITOR --- */}
       {activeWaypointId && !isDrawMode && !isAddMode && (
         <WaypointEditor

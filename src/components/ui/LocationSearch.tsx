@@ -94,10 +94,10 @@ export function LocationSearch() {
   };
 
   return (
-    <div className="relative mb-2 shrink-0">
+    <div className="relative shrink-0">
       <div className="relative">
-        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-          <Search className="h-3.5 w-3.5 text-zinc-400 dark:text-navidark-150" />
+        <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none">
+          <Search className="h-3.5 w-3.5 text-zinc-400 dark:text-zinc-500" />
         </div>
 
         <input
@@ -105,7 +105,7 @@ export function LocationSearch() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={t`search-location`}
-          className="w-full bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5 focus:ring-1 focus:ring-zinc-400 dark:focus:ring-zinc-600 text-xs rounded-xl pl-9 pr-8 py-2.5 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none transition-all shadow-sm"
+          className="w-full h-8 bg-white dark:bg-white/4 border border-zinc-200 dark:border-white/8 focus:border-navi focus:ring-2 focus:ring-navi/20 text-[13px] rounded-lg pl-8 pr-8 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none transition-colors"
         />
 
         <div className="absolute inset-y-0 right-0 pr-2 flex items-center">

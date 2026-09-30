@@ -129,34 +129,18 @@ def _arrived_marker_color(settings: dict, marker_bgr: tuple) -> tuple:
     return tuple(tuning.DEFAULT_ARRIVED_MARKER_COLOR)
 
 
-# The travel mode a project's own Route Line color applies to: the
-# "ordinary" leg, the one that isn't a distinct kind of travel. "direct"
-# and "draw" are already folded into it upstream (tuning.MODE_ALIASES), so
-# naming walking alone covers every leg that isn't genuinely a crossing or
-# a drive.
-_BASE_LINE_MODE = "walking"
+# Modes drawn with the project's Route Line color, matching the editor.
+# Flights keep their own accent. "direct"/"draw" alias to walking.
+_LINE_COLOR_MODES = ("walking", "driving", "car", "ferry")
 
 
 def _mode_line_color_overrides(settings: dict) -> dict:
-    """Per-mode route-line colors this project overrides, as BGR.
-
-    Two sources, in order. First, the map-appearance panel's Route Line
-    swatch (settings.line_color): it maps onto the ORDINARY leg only, not
-    every mode — leaving ferry/car/airplane on their own accents from
-    tuning.MODE_LINE_COLORS is what keeps a crossing readable as a
-    crossing rather than as more of the same line. Without this the swatch
-    had no visible effect at all on a walking route, since every leg
-    matched a mode in MODE_LINE_COLORS and never reached line_color.
-
-    Second, settings.mode_line_colors — an explicit {"ferry": [r, g, b]}
-    map for a project that wants to recolor a specific mode, which wins
-    over the Route Line swatch for that mode.
-    """
+    """Per-mode route-line colors as BGR: settings.line_color for every
+    ordinary mode, then settings.mode_line_colors per mode on top."""
     overrides = {}
     if settings.get("line_color") is not None:
-        overrides[_BASE_LINE_MODE] = _project_color(
-            settings, "line_color", tuning.MODE_LINE_COLORS[_BASE_LINE_MODE]
-        )
+        for mode in _LINE_COLOR_MODES:
+            overrides[mode] = _project_color(settings, "line_color", tuning.MODE_LINE_COLORS[mode])
     per_mode = settings.get("mode_line_colors") or {}
     if isinstance(per_mode, dict):
         for mode, value in per_mode.items():
