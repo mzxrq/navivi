@@ -45,6 +45,16 @@ def _output_is_valid(path, min_bytes: int = 1024) -> bool:
         return False
 
 
+# Bump when the leg rendering code changes what it draws (v2: stop-by
+# photos always go fullscreen, image_display ignored; v3: legs open on the
+# departure photo, not the destination's).
+LEG_RENDER_VERSION = 3
+# A leg is reused unless its waypoints' route inputs (see route_inputs.py) or
+# the render version changed, or its files are missing. Not "latlon": the app
+# can save a different line for the same waypoints.
+_LEG_CHECKPOINT_PARTS = ("route_inputs", "render_version")
+
+
 def _leg_fingerprint(leg_latlon, dest_label, leg_kwargs: Dict[str, Any]) -> str:
     """Hash of everything a residential leg's clip is rendered from (its
     route piece, destination and every render argument - walk length,
@@ -57,13 +67,16 @@ def _leg_fingerprint(leg_latlon, dest_label, leg_kwargs: Dict[str, Any]) -> str:
         return str(obj)
 
     payload = json.dumps(
-        {"latlon": leg_latlon, "dest": dest_label, "kwargs": leg_kwargs},
+        {"latlon": leg_latlon, "dest": dest_label, "kwargs": leg_kwargs,
+         "render_version": LEG_RENDER_VERSION},
         sort_keys=True, default=plain, ensure_ascii=False,
     )
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def _leg_fingerprint_parts(leg_latlon, dest_label, leg_kwargs: Dict[str, Any]) -> Dict[str, str]:
+def _leg_fingerprint_parts(
+    leg_latlon, dest_label, leg_kwargs: Dict[str, Any], route_inputs: Optional[str] = None,
+) -> Dict[str, str]:
     """Short hash per fingerprint input, stored beside the fingerprint so a
     mismatch can name what changed."""
     import hashlib
@@ -75,7 +88,9 @@ def _leg_fingerprint_parts(leg_latlon, dest_label, leg_kwargs: Dict[str, Any]) -
         )
         return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:10]
 
-    parts = {"latlon": h(leg_latlon), "dest": h(dest_label)}
+    parts = {"latlon": h(leg_latlon), "dest": h(dest_label), "render_version": str(LEG_RENDER_VERSION)}
+    if route_inputs:
+        parts["route_inputs"] = route_inputs
     parts.update({f"kw.{k}": h(v) for k, v in leg_kwargs.items()})
     return parts
 
@@ -208,6 +223,12 @@ class RouteAnimator:
                 raise ValueError(f"Unknown point format: {item}")
 
         return points, labels, popups, settings
+
+    def _commit_overview_checkpoint(self) -> None:
+        commit = getattr(self.spatial_renderer, "pending_overview_checkpoint", None)
+        if commit:
+            commit()
+            self.spatial_renderer.pending_overview_checkpoint = None
 
     def _freeze_video_end(self, video_path: str, hold_seconds: float):
         """Uses FFmpeg tpad filter to seamlessly clone and hold the final frame."""
@@ -622,16 +643,27 @@ class RouteAnimator:
                 p for p in self.out_dir.glob(f"{leg_glob_prefix}*.mp4")
                 if _output_is_valid(p)
             ) if self.config.get("checkpoint_enabled", False) else []
-            leg_parts = _leg_fingerprint_parts(leg_latlon, dest_label, leg_kwargs)
+            leg_parts = _leg_fingerprint_parts(
+                leg_latlon, dest_label, leg_kwargs, route_inputs=res_data.get("route_inputs"),
+            )
             stored_inputs = _stored_leg_inputs(fingerprint_path)
-            if existing_leg_files and stored_inputs.get("fingerprint") != leg_fingerprint:
-                old_parts = stored_inputs.get("parts") or {}
-                changed = sorted(
-                    k for k in set(leg_parts) | set(old_parts) if leg_parts.get(k) != old_parts.get(k)
-                ) if old_parts else ["(no per-input record from the earlier render)"]
+            old_parts = stored_inputs.get("parts") or {}
+            changed = sorted(
+                k for k in set(leg_parts) | set(old_parts) if leg_parts.get(k) != old_parts.get(k)
+            )
+            # Only this leg's own path (or a missing file) re-renders it.
+            if old_parts:
+                # Rendered before route_inputs was recorded: fall back to the line itself.
+                keys = _LEG_CHECKPOINT_PARTS if "route_inputs" in old_parts else ("latlon", "render_version")
+                path_changed = [k for k in keys if k in changed]
+            elif stored_inputs.get("fingerprint") != leg_fingerprint:
+                path_changed = ["no per-input record from the earlier render"]
+            else:
+                path_changed = []
+            if existing_leg_files and path_changed:
                 logger.info(
-                    "Residential leg %d inputs changed since it was rendered (%s) — re-rendering.",
-                    leg_file_num, ", ".join(changed),
+                    "Residential leg %d path changed since it was rendered (%s) — re-rendering.",
+                    leg_file_num, ", ".join(path_changed),
                 )
                 # Old pieces are removed only after the re-render succeeds,
                 # so a killed run keeps the previous clip.
@@ -644,8 +676,9 @@ class RouteAnimator:
                 stale_leg_files = []
             if existing_leg_files:
                 logger.info(
-                    "Residential leg %d already rendered (%d file(s)) — skipping.",
+                    "Residential leg %d already rendered (%d file(s)) — skipping.%s",
                     leg_file_num, len(existing_leg_files),
+                    f" Ignored changes: {', '.join(changed)}" if changed else "",
                 )
                 # Rewritten even on a checkpoint skip -- cheap (no ffmpeg),
                 # and keeps it in sync with job_config's CURRENT
@@ -728,6 +761,7 @@ class RouteAnimator:
                 extent=kwargs.get("overview_extent"),
                 preview_recap_only=True
             )
+            self._commit_overview_checkpoint()
             output_paths.append(overview_path)
             
         elif render_mode != "residential":
@@ -772,8 +806,10 @@ class RouteAnimator:
                     ) if rendered else 0.0
                     if hold_seconds < 0.1:  # a rounding remainder, not worth a re-encode
                         hold_seconds = 0.0
-                if not self.spatial_renderer.last_ending_hard_ended:
+                reused = getattr(self.spatial_renderer, "last_overview_reused", False)
+                if not reused and not self.spatial_renderer.last_ending_hard_ended:
                     self._freeze_video_end(overview_path, hold_seconds=hold_seconds)
+                self._commit_overview_checkpoint()
                 output_paths.append(overview_path)
 
         # [NOTE] [Core] Render each waypoint-to-waypoint leg. The GeoJsonLayer

@@ -502,6 +502,9 @@ ENDING_HIGHLIGHT_PYDECK_ZOOM_BOOST = 9.5
 
 # --- Popup / transition timing ----------------------------------------------
 POPUP_FADE_SECONDS = 1.5
+# The overview's opening start/end cards stay fully shown at least this long
+# (not counting their slide in/out); a later {start} cue keeps them up until it.
+OVERVIEW_INTRO_CARD_MIN_SECONDS = 2.0
 # Minimum wall-clock gap between one waypoint popup triggering and the next
 # one being allowed to — a cluster of waypoints placed close together on
 # the map (a common case: several stops within the same block) would
@@ -634,6 +637,9 @@ STOPBY_BATCH_MAX_HELD = 4
 # next waypoint: POPUP_MIN_DISPLAY_SECONDS counts the fades, which left a card
 # passed on the way readable for barely half a second.
 OVERVIEW_POPUP_MIN_HOLD_SECONDS = 2.0
+# The overview walker stops this long at a "Connect to Route" stop-by (its
+# card showing), like at a real stop. It has no narration cue of its own.
+OVERVIEW_CONNECTED_STOPBY_HOLD_SECONDS = 2.0
 # Overview map padding, scaled to how physically big the route actually is
 # (bounding-box diagonal, in km) - a flat percentage padding looks right at
 # one scale and wrong at another: 10% margin around a route that spans 40km
@@ -968,11 +974,13 @@ INTRO_IMAGE_COUNT = 3
 # of it — total intro length = COUNT*PER_IMAGE - (COUNT-1)*CROSSFADE.
 INTRO_PER_IMAGE_SECONDS = 3.5
 INTRO_CROSSFADE_SECONDS = 0.8
-INTRO_TITLE_FONT_SIZE = 48
-INTRO_TITLE_OUTLINE = 3.0
+# Font/outline are in intro pixels; scaled x1080/704 from the old 1280x704 intro to look the same.
+INTRO_TITLE_FONT_SIZE = 74
+INTRO_TITLE_OUTLINE = 4.6
 INTRO_OUTPUT_FILENAME = "00_intro.mp4"
-INTRO_WIDTH = 1280
-INTRO_HEIGHT = 704
+# Same frame size as every other clip, or the timeline preview draws it smaller.
+INTRO_WIDTH = 1920
+INTRO_HEIGHT = 1080
 INTRO_FPS = 30
 # Ken Burns zoom-in: 1.0 = the widest cover-fit crop (whole frame), smaller
 # = a tighter/more zoomed-in crop — see local_pan_generator.py's identical

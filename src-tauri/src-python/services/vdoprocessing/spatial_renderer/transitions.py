@@ -136,10 +136,8 @@ class _TransitionMixin:
             # than self.last_frame, which can still have a not-yet-finished
             # popup fade-out baked into it — and it already has every
             # numbered pin drawn on it, so the recap doesn't need to
-            # redraw them. The end waypoint's own image_display
-            # ("fullscreen"/"pip") is honored later, by
-            # _render_ending_highlight AFTER the zoom-to-higher-tile
-            # transition — never here.
+            # redraw them. The fullscreen photo comes later, in
+            # _render_ending_highlight after the zoom — never here.
             outro_frame = (
                 pre_popup_frame.copy() if pre_popup_frame is not None
                 else self.last_frame.copy()
@@ -334,6 +332,13 @@ class _TransitionMixin:
                 is_circle=bool(is_stopby)
             )
 
+    def _gl_ending_zoom_enabled(self, bounding_box) -> bool:
+        settings = (self._get_job_config() or {}).get("settings", {}) or {}
+        return bounding_box is not None and (
+            bool(settings.get("enable_gl_ending_zoom", True))  # on by default; false turns the pydeck zoom off
+            or str(settings.get("overview_background", "")).lower() == "pydeck"
+        )
+
     def _render_ending_highlight(
         self,
         video: VideoExporter,
@@ -440,10 +445,7 @@ class _TransitionMixin:
         # this feature is toggled by (also honors overview_background:
         # "pydeck" as an alternate opt-in, since a project already using
         # pydeck for its overview background naturally wants this too).
-        use_dynamic_pydeck = bounding_box is not None and (
-            bool(settings.get("enable_gl_ending_zoom", True))  # on by default; false turns the pydeck zoom off
-            or str(settings.get("overview_background", "")).lower() == "pydeck"
-        )
+        use_dynamic_pydeck = self._gl_ending_zoom_enabled(bounding_box)
         # Diagnostic: pins down WHY this ever silently falls back to the
         # static-tile Ken Burns path (the try/except below only logs on an
         # outright exception — a False use_dynamic_pydeck, or a dynamic
@@ -456,7 +458,8 @@ class _TransitionMixin:
             settings.get("enable_gl_ending_zoom", True),
             settings.get("overview_background"),
         )
-        is_fullscreen = False  # the overview always shows the small pip card, whatever image_display says
+        # Always ends on the fullscreen photo; image_display is ignored.
+        is_fullscreen = True
         # The pip picture is held only briefly (tuning), not the waypoint's
         # own freeze_seconds — unless there's still narration left once the
         # lead-in + wait have played, in which case the hold stretches to
@@ -494,7 +497,9 @@ class _TransitionMixin:
 
                 lead_in_n = max(1, int(self._BIG_MAP_ZOOM_LEAD_SECONDS * fps))
                 wait_n = max(1, int(self._ENDING_HIGHLIGHT_WAIT_SECONDS * fps))
-                hold_n = 0 if is_fullscreen else max(1, int(highlight_hold_sec * fps))
+                # The pip card holds until the narration is done; the fullscreen
+                # transition only starts after that.
+                hold_n = max(1, int(highlight_hold_sec * fps))
                 zoom_n = lead_in_n + wait_n
 
                 # settings.mapbox_style_id lets a project swap in a custom
@@ -767,11 +772,28 @@ class _TransitionMixin:
             )
             self.last_frame = zoomed_end
 
+        if dynamic_final_hold is None:
+            # Continue the same zoom further rather than resetting to a
+            # static hold — one continuous push for the whole highlight
+            # beat instead of a moving bit followed by a frozen bit. Only
+            # reached on the static-tile fallback path — the dynamic
+            # pydeck path already wrote this hold's frames as real
+            # re-renders (see the capture loop above) and already set
+            # self.last_frame to the last one.
+            self.last_frame = self._ken_burns_hold(
+                video, highlight_frame, fps, highlight_hold_sec,
+                featured_popup["x"], featured_popup["y"],
+                zoom_from=1.18, zoom_to=1.35,
+            )
+
         if is_fullscreen:
+            # The narration has ended by now (the pip hold above covered it):
+            # the photo grows to fullscreen, holds briefly and blurs out.
             scale_sec = self.transition_cfg["scale_seconds"]
             hold_sec = self.transition_cfg["min_hold_seconds"]
+            tail_start = video.frames_written
             t_frames = self.graphics.generate_fullscreen_popup_transition(
-                base_frame=zoomed_end,
+                base_frame=self.last_frame,
                 popup_info=highlight_popup,
                 fps=fps,
                 duration_sec=scale_sec,
@@ -792,18 +814,7 @@ class _TransitionMixin:
                 # softening out of focus first reads smoothly even when
                 # the next clip opens on this exact same picture.
                 self.last_frame = self._blur_out(video, t_frames[-1], fps)
+                # Plays after the voice, so not part of the audio/video match.
+                self.ending_tail_seconds = (video.frames_written - tail_start) / fps
                 return True
-        elif dynamic_final_hold is None:
-            # Continue the same zoom further rather than resetting to a
-            # static hold — one continuous push for the whole highlight
-            # beat instead of a moving bit followed by a frozen bit. Only
-            # reached on the static-tile fallback path — the dynamic
-            # pydeck path already wrote this hold's frames as real
-            # re-renders (see the capture loop above) and already set
-            # self.last_frame to the last one.
-            self.last_frame = self._ken_burns_hold(
-                video, highlight_frame, fps, highlight_hold_sec,
-                featured_popup["x"], featured_popup["y"],
-                zoom_from=1.18, zoom_to=1.35,
-            )
         return False
