@@ -27,4 +27,6 @@ tauri-plugin-dialog = "2"
 tauri-plugin-http = "2"
 zip = "8.6.0"
 walkdir = "2.5.0"
+rusqlite = { version = "0.32", features = ["bundled"] }
+thiserror = "2"
 

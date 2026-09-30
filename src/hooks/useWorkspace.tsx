@@ -40,6 +40,8 @@ import {
   loadProjectVersion,
   saveProjectVersion,
 } from "../services/versionHistory";
+import { listRecents, syncProjectOnOpen } from "../services/projectStore";
+import { db } from "../services/db";
 import { ClipData, TimelineTrack } from "../types";
 import { useHistory } from "./useHistory";
 import { useUI } from "./useUI";
@@ -186,24 +188,28 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     thumbnailGetterRef.current = fn;
   }, []);
 
-  const [recentProjects, setRecentProjects] = useState<RecentProjects[]>(() => {
-    const saved = localStorage.getItem("navivi-recents");
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [recentProjects, setRecentProjects] = useState<RecentProjects[]>([]);
 
-  // Auto-discover existing project folders & archives from disk
+  // Recents come from the DB; archives/folders found on disk are appended.
   useEffect(() => {
-    scanProjectsOnDisk().then((discovered) => {
-      if (!discovered || discovered.length === 0) return;
+    (async () => {
+      let recents: RecentProjects[] = [];
+      try {
+        recents = await listRecents();
+      } catch (error) {
+        console.error("Failed to load recent projects:", error);
+      }
+      const discovered = await scanProjectsOnDisk();
+      const known = new Set(recents.map((p) => p.path));
       setRecentProjects((prev) => {
-        const existingPaths = new Set(prev.map((p) => p.path));
-        const newItems = discovered.filter((d) => !existingPaths.has(d.path));
-        if (newItems.length === 0) return prev;
-        const combined = [...prev, ...newItems].slice(0, 50);
-        localStorage.setItem("navivi-recents", JSON.stringify(combined));
-        return combined;
+        const seen = new Set([...known, ...prev.map((p) => p.path)]);
+        return [
+          ...prev,
+          ...recents.filter((r) => !prev.some((p) => p.path === r.path)),
+          ...(discovered || []).filter((d) => !seen.has(d.path)),
+        ].slice(0, 50);
       });
-    });
+    })();
   }, []);
 
   const [isUnsavedModalOpen, setIsUnsavedModalOpen] = useState(false);
@@ -228,15 +234,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   }, [isDirty]);
 
   const addToRecents = useCallback(
-    (name: string, path: string, thumbnailPath?: string) => {
+    (name: string, path: string, thumbnailPath?: string, projectId?: string) => {
       setRecentProjects((prev) => {
         const filtered = prev.filter((p) => p.path !== path);
-        const updated = [
-          { name, path, lastOpened: Date.now(), thumbnailPath },
+        return [
+          { projectId, name, path, lastOpened: Date.now(), thumbnailPath },
           ...filtered,
         ].slice(0, 50);
-        localStorage.setItem("navivi-recents", JSON.stringify(updated));
-        return updated;
       });
     },
     [],
@@ -441,7 +445,12 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
       console.log(`Saved successfully to: ${result.projectDir}`);
       setProjectThumbnail(result.thumbnailPath || null);
-      addToRecents(result.projName, result.nvvPath || result.projectDir, result.thumbnailPath);
+      try {
+        await db.projects.touchOpened(result.projId);
+      } catch (error) {
+        console.error("Failed to update recents:", error);
+      }
+      addToRecents(result.projName, result.nvvPath || result.projectDir, result.thumbnailPath, result.projId);
 
       return result.projectDir;
     } catch (error) {
@@ -459,20 +468,24 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       const result = await loadProjectData(forcePath, isFolder);
       if (!result) return false;
 
-      const { data, selectedPath } = result;
-      if (data.directory_path) {
-        const recoveredCache = await loadRouteCache(data.directory_path);
-        setRoutingCache(recoveredCache);
-        console.log(
-          `Recovered ${Object.keys(recoveredCache).length} routes from cache!`,
-        );
-      } else {
-        setRoutingCache({});
-      }
-
+      const { selectedPath } = result;
+      let data = result.data;
       if (!data.project_id || !data.waypoints) {
         throw new Error("Invalid Navivi project file format.");
       }
+
+      // DB metadata/settings win; if the DB fails, open from the files alone.
+      let recoveredCache: Record<string, [number, number][]> = {};
+      try {
+        const synced = await syncProjectOnOpen(data, selectedPath);
+        data = synced.data;
+        recoveredCache = synced.routingCache;
+      } catch (error) {
+        console.error("Database sync failed; using project files only:", error);
+        if (data.directory_path) recoveredCache = await loadRouteCache(data.directory_path);
+      }
+      setRoutingCache(recoveredCache);
+      console.log(`Recovered ${Object.keys(recoveredCache).length} routes from cache!`);
 
       setMetadata({
         project_id: data.project_id,
@@ -527,6 +540,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         data.project_name || appConfig.defaultProjectName,
         selectedPath,
         data.thumbnail_path,
+        data.project_id,
       );
 
       return true;

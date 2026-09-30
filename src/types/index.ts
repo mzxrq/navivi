@@ -104,6 +104,7 @@ export interface ProjectMetadata {
 // end dev 1 settings
 
 export interface RecentProjects {
+  projectId?: string;
   name: string;
   path: string;
   lastOpened: number;
@@ -380,3 +381,81 @@ export interface WorkspaceState {
   deleteVersion: (versionId: string) => Promise<boolean>;
 }
 
+
+// SQLite rows (src-tauri/src/db). Settings and snapshots are stored as JSON documents.
+export type DbErrorCode = "not_found" | "conflict" | "invalid" | "db";
+
+export interface DbError {
+  code: DbErrorCode;
+  message: string;
+}
+
+export interface DbProject {
+  id: string;
+  userId: string | null;
+  name: string;
+  theme: string | null;
+  status: string;
+  directoryPath: string;
+  archivePath: string | null;
+  thumbnailPath: string | null;
+  videoTitle: string;
+  videoSubtitle: string;
+  enableIntro: boolean;
+  overviewNarration: string;
+  overviewNarrationIsAuto: boolean;
+  overviewNarrationSourceIds: unknown[];
+  createdAt: string;
+  updatedAt: number;
+  lastOpenedAt: number | null;
+  deletedAt: number | null;
+}
+
+export interface DbProjectInput {
+  id: string;
+  name: string;
+  directoryPath: string;
+  userId?: string | null;
+  theme?: string | null;
+  status?: string;
+  archivePath?: string | null;
+  thumbnailPath?: string | null;
+  videoTitle?: string;
+  videoSubtitle?: string;
+  enableIntro?: boolean;
+  overviewNarration?: string;
+  overviewNarrationIsAuto?: boolean;
+  overviewNarrationSourceIds?: unknown[];
+  createdAt?: string;
+}
+
+// Omitted = unchanged; null clears a nullable column.
+export type DbProjectPatch = Partial<Omit<DbProjectInput, "id" | "createdAt">>;
+
+export interface DbProjectQuery {
+  search?: string;
+  includeDeleted?: boolean;
+  onlyDeleted?: boolean;
+  sort?: "recent" | "name" | "updated" | "created";
+  limit?: number;
+  offset?: number;
+}
+
+export interface DbVersion extends ProjectVersion {
+  snapshot: ProjectVersionSnapshot;
+}
+
+export interface DbLegacyImport {
+  project: DbProjectInput;
+  settings?: ProjectSettings | null;
+  versions?: DbVersion[];
+  routeCache?: Record<string, [number, number][]>;
+}
+
+export interface DbImportReport {
+  project: DbProject;
+  created: boolean;
+  settingsImported: boolean;
+  versionsImported: number;
+  routesImported: number;
+}
