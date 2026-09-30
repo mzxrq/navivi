@@ -7,8 +7,6 @@ import { exists, readDir, remove } from "@tauri-apps/plugin-fs";
 import {
   AlertTriangle,
   CheckCircle,
-  ChevronDown,
-  ChevronUp,
   Cpu,
   Film,
   Folder,
@@ -20,7 +18,6 @@ import {
   RotateCcw,
   Settings2,
   Sparkles,
-  SquareTerminal,
   X,
   XCircle,
   Zap,
@@ -34,13 +31,13 @@ import {
   saveTimelineManifest,
 } from "../../services/fileSystem";
 import { detectHardwareSpec } from "../../utils/hardwareDetection";
-
-interface LogItem {
-  id: string;
-  message: string;
-  type: "info" | "error" | "system";
-  time: string;
-}
+import {
+  appendPipelineOutput,
+  appendSystemMessage,
+  emptyPipelineLog,
+  lastPipelineError,
+} from "../../utils/pipelineLog";
+import { PipelineLogPanel } from "./PipelineLogPanel";
 
 interface ScriptReviewItem {
   id: string;
@@ -94,7 +91,9 @@ export function RenderOverlay() {
 
   const [step, setStep] = useState<WizardStep>("generating");
   const [progress, setProgress] = useState(0);
-  const [logs, setLogs] = useState<LogItem[]>([]);
+  const [pipelineLog, setPipelineLog] = useState(emptyPipelineLog);
+  const pushSystemLog = (message: string, kind: "system" | "error" = "system") =>
+    setPipelineLog((prev) => appendSystemMessage(prev, message, kind));
   const [status, setStatus] = useState<
     "processing" | "success" | "error" | "cancelling"
   >("processing");
@@ -116,9 +115,16 @@ export function RenderOverlay() {
   const [, setExportedVideoPath] = useState<string | null>(null);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
   // Only takes effect in the stacked (< lg) layout; side-by-side always shows the log.
   const [isLogOpen, setIsLogOpen] = useState(true);
+
+  // The ring follows the pipeline's own "[n/N]" stage counter (see
+  // utils/pipelineLog.ts); finishing, resetting and exporting set it directly.
+  useEffect(() => {
+    if (pipelineLog.progress > 0) {
+      setProgress((prev) => Math.max(prev, pipelineLog.progress));
+    }
+  }, [pipelineLog.progress]);
 
   // Hardware spec detection
   const hardwareSpec = detectHardwareSpec(settings.hardware_spec_override);
@@ -148,19 +154,12 @@ export function RenderOverlay() {
     }
   }, [isRendering, setIsRenderCollapsed]);
 
-  // Auto-scroll terminal smoothly
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [logs, isLogOpen]);
-
   // Pipeline Execution & Event Listeners
   useEffect(() => {
     if (!isRendering) {
       setStep("generating");
       setProgress(0);
-      setLogs([]);
+      setPipelineLog(emptyPipelineLog());
       setStatus("processing");
       setActiveAudioId(null);
       setVideoItems([]);
@@ -173,96 +172,29 @@ export function RenderOverlay() {
 
     const configPath = `${metadata.directory_path}/job_config.json`;
 
-    setLogs([
-      {
-        id: crypto.randomUUID(),
-        message: t`renderTerminalMessage`,
-        type: "system",
-        time: new Date().toLocaleTimeString([], { hour12: false }),
-      },
-    ]);
+    setPipelineLog(appendSystemMessage(emptyPipelineLog(), t`renderTerminalMessage`));
 
-    const applyProgressFromText = (text: string) => {
-      // 1. Look for the main step brackets, e.g., "[2/8]"
-      const mainStepMatch = text.match(/\[(\d+)\/(\d+)\]/);
-      
-      if (mainStepMatch) {
-        const currentMain = parseInt(mainStepMatch[1]);
-        const totalMain = parseInt(mainStepMatch[2]);
-        
-        // Calculate the base percentage (e.g., Step 2 of 8 = 25%)
-        let percentage = Math.floor((currentMain / totalMain) * 100);
+    // stdout and stderr go through the same parser: the tracker writes to
+    // stderr, main.py's JSON result to stdout, and ffmpeg/Python logging to
+    // either. utils/pipelineLog.ts decides what is progress, warning or error.
+    const onPipelineOutput = (event: { payload: string }) =>
+      setPipelineLog((prev) => appendPipelineOutput(prev, event.payload));
 
-        // 2. Look for sub-task progress, e.g., "Generating TTS 2/5:"
-        const subTaskMatch = text.match(/(\d+)\/(\d+):/);
-        if (subTaskMatch) {
-          const currentSub = parseInt(subTaskMatch[1]);
-          const totalSub = parseInt(subTaskMatch[2]);
-          
-          // Calculate how much % one main step is worth (e.g., 100 / 8 = 12.5%)
-          const stepValue = 100 / totalMain;
-          
-          // Roll back to the start of the current main step, then add the fractional sub-progress
-          percentage = (percentage - stepValue) + ((currentSub / totalSub) * stepValue);
-        }
-
-        setProgress(Math.min(100, Math.max(0, Math.floor(percentage))));
-      } else if (text.includes("完了") || text.includes("Finished") || text.includes("Success") || text.includes("complete")) {
-        setProgress(100);
-      }
+    // listen() resolves asynchronously: if this effect is cleaned up first
+    // (retry, StrictMode re-mount), unregister as soon as it resolves instead
+    // of leaking listeners that would print every line twice.
+    let disposed = false;
+    const unlisteners: Array<() => void> = [];
+    const track = (unlisten: () => void) => {
+      if (disposed) unlisten();
+      else unlisteners.push(unlisten);
     };
-
-    // Filter to hide the obnoxious FFmpeg build config wall-of-text
-    const isFFmpegNoise = (text: string) => {
-      return (
-        text.includes("ffmpeg version") ||
-        text.includes("built with gcc") ||
-        text.includes("configuration:") ||
-        /^\s*lib[a-z]+\s+\d+\./.test(text) || // Catches "libavutil  61. 1.101"
-        text.includes("Guessed Channel Layout")
-      );
-    };
-
-    const isTrackerLine = (text: string) => /^\[\d{2}:\d{2}\]/.test(text);
 
     const setupListeners = async () => {
-      const unlistenLog = await listen<string>("render-log", (event) => {
-        const text = event.payload;
-        if (isFFmpegNoise(text)) return; // Skip logging FFmpeg spam
+      track(await listen<string>("render-log", onPipelineOutput));
+      track(await listen<string>("render-error", onPipelineOutput));
 
-        applyProgressFromText(text);
-
-        setLogs((prev) => [
-          ...prev,
-          {
-            id: crypto.randomUUID(),
-            message: text,
-            type: text.includes("[WARNING]") ? "error" : "info",
-            time: new Date().toLocaleTimeString([], { hour12: false }),
-          },
-        ]);
-      });
-
-      const unlistenError = await listen<string>("render-error", (event) => {
-        const text = event.payload;
-        if (isFFmpegNoise(text)) return; // Skip logging FFmpeg spam
-
-        const isProgress = isTrackerLine(text);
-        if (isProgress) applyProgressFromText(text);
-
-        setLogs((prev) => [
-          ...prev,
-          {
-            id: crypto.randomUUID(),
-            message: text,
-            // Only flag as error if it doesn't look like a normal pipeline step or standard FFmpeg progress
-            type: (isProgress || text.includes("bitrate=") || text.includes("size=")) ? "info" : "error",
-            time: new Date().toLocaleTimeString([], { hour12: false }),
-          },
-        ]);
-      });
-
-      const unlistenFinish = await listen<string>(
+      track(await listen<string>(
         "render-finish",
         async (event) => {
           if (
@@ -270,15 +202,7 @@ export function RenderOverlay() {
             event.payload.includes("complete")
           ) {
             setProgress(100);
-            setLogs((prev) => [
-              ...prev,
-              {
-                id: crypto.randomUUID(),
-                message: t`renderFinishSuccessMessage`,
-                type: "system",
-                time: new Date().toLocaleTimeString([], { hour12: false }),
-              },
-            ]);
+            pushSystemLog(t`renderFinishSuccessMessage`);
 
             if (metadata.directory_path) {
               await autoLoadTimeline(metadata.directory_path);
@@ -292,58 +216,28 @@ export function RenderOverlay() {
               setStep("verifying");
             }
           } else if (event.payload === "Cancelled") {
-            setLogs((prev) => [
-              ...prev,
-              {
-                id: crypto.randomUUID(),
-                message: t`renderFinishCancelMessage`,
-                type: "system",
-                time: new Date().toLocaleTimeString([], { hour12: false }),
-              },
-            ]);
+            pushSystemLog(t`renderFinishCancelMessage`);
             setIsRendering(false);
           } else {
             setStatus("error");
-            setLogs((prev) => [
-              ...prev,
-              {
-                id: crypto.randomUUID(),
-                message: t`renderFinishErrorMessage`,
-                type: "error",
-                time: new Date().toLocaleTimeString([], { hour12: false }),
-              },
-            ]);
+            pushSystemLog(t`renderFinishErrorMessage`, "error");
           }
         },
-      );
+      ));
 
+      // Never start a render from an effect run that has already been torn down.
+      if (disposed) return;
       invoke("start_render", { configPath }).catch((err) => {
         setStatus("error");
-        setLogs((prev) => [
-          ...prev,
-          {
-            id: crypto.randomUUID(),
-            message: t`Failed to invoke Python render: ${err}`,
-            type: "error",
-            time: new Date().toLocaleTimeString([], { hour12: false }),
-          },
-        ]);
+        pushSystemLog(t`Failed to invoke Python render: ${err}`, "error");
       });
-
-      return () => {
-        unlistenLog();
-        unlistenError();
-        unlistenFinish();
-      };
     };
 
-    let cleanupFn: (() => void) | undefined;
-    setupListeners().then((cleanup) => {
-      cleanupFn = cleanup;
-    });
+    setupListeners();
 
     return () => {
-      if (cleanupFn) cleanupFn();
+      disposed = true;
+      unlisteners.splice(0).forEach((unlisten) => unlisten());
     };
   }, [isRendering, renderAttempt]);
 
@@ -786,7 +680,7 @@ export function RenderOverlay() {
     setStep("generating");
     setProgress(0);
     setStatus("processing");
-    setLogs([]);
+    setPipelineLog(emptyPipelineLog());
     setRenderAttempt((prev) => prev + 1);
   };
 
@@ -802,15 +696,7 @@ export function RenderOverlay() {
 
   const handleCancel = async () => {
     setStatus("cancelling");
-    setLogs((prev) => [
-      ...prev,
-      {
-        id: crypto.randomUUID(),
-        message: t`Sending cancellation signal to backend...`,
-        type: "error",
-        time: new Date().toLocaleTimeString([], { hour12: false }),
-      },
-    ]);
+    pushSystemLog(t`Sending cancellation signal to backend...`);
 
     try {
       const result = await invoke<string>("cancel_render");
@@ -1082,38 +968,35 @@ export function RenderOverlay() {
                         <Loader2 className="w-4 h-4 text-navi-500 animate-spin shrink-0" />
                         <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300 truncate text-left">
                           {(() => {
-                            const latestLog =
-                              logs[logs.length - 1]?.message ||
-                              t`Initializing pipeline...`;
+                            // Named after the current "[n/N]" stage, with the
+                            // live item counter (e.g. "3/5") from the tracker's
+                            // latest line — never from ffmpeg or warnings.
+                            const stageTitle =
+                              pipelineLog.stages[pipelineLog.stages.length - 1]
+                                ?.title ?? "";
+                            const current = pipelineLog.current;
+                            if (!current) return t`Initializing pipeline...`;
 
-                            const cleanLog = latestLog.replace(
-                              /^\[\d{2}:\d{2}\]\s*(\[\d+\/\d+\])?\s*/,
-                              "",
-                            );
                             const fractionMatch =
-                              cleanLog.match(/\b(\d+\/\d+)\b/);
+                              current.match(/\b(\d+\/\d+)\b/);
                             const prog = fractionMatch
                               ? ` ${fractionMatch[1]}`
                               : "";
 
-                            if (latestLog.includes("Parsing GPS track"))
+                            if (/parsing gps/i.test(stageTitle))
                               return t`Parsing Maps & GPS Data${prog}...`;
-                            if (latestLog.includes("Generating TTS"))
+                            if (/tts narration/i.test(stageTitle))
                               return t`Synthesizing AI Voiceovers${prog}...`;
-                            if (latestLog.includes("subtitles"))
+                            if (/^generating subtitles/i.test(stageTitle))
                               return t`Generating Subtitles${prog}...`;
-                            if (
-                              latestLog.includes("attraction video") ||
-                              latestLog.includes("images")
-                            )
+                            if (/^generating attraction videos/i.test(stageTitle))
                               return t`Rendering Media & Animations${prog}...`;
-                            if (latestLog.includes("timeline"))
-                              return t`Finalizing Project Timeline${prog}...`;
+                            if (/rendering overview/i.test(stageTitle))
+                              return t`Rendering Route Video${prog}...`;
+                            if (/intro\/outro/i.test(stageTitle))
+                              return t`Finalizing Project Timeline...`;
 
-                            return (
-                              cleanLog.substring(0, 50) +
-                              (cleanLog.length > 50 ? "..." : "")
-                            );
+                            return current;
                           })()}
                         </span>
                       </div>
@@ -1146,18 +1029,8 @@ export function RenderOverlay() {
                         <Trans>Error Details:</Trans>
                       </h4>
                       <p className="text-sm text-red-600 dark:text-red-300 wrap-break-word select-text">
-                        {(() => {
-                          const errLog = [...logs]
-                            .reverse()
-                            .find(
-                              (l) =>
-                                l.type === "error" ||
-                                l.message.includes("[ERROR]"),
-                            );
-                          if (!errLog)
-                            return t`An unknown error occurred during rendering.`;
-                          return errLog.message.replace(/^.*?\[ERROR\]\s*/, "");
-                        })()}
+                        {lastPipelineError(pipelineLog) ??
+                          t`An unknown error occurred during rendering.`}
                       </p>
                     </div>
                   </div>
@@ -1529,7 +1402,7 @@ export function RenderOverlay() {
                   setStatus("processing");
                   setStep("generating");
                   setProgress(0);
-                  setLogs([]);
+                  setPipelineLog(emptyPipelineLog());
                   setRenderAttempt((attempt) => attempt + 1);
                 }}
                 className="px-5 py-2.5 bg-zinc-800 text-zinc-200 text-sm font-semibold rounded-lg hover:bg-zinc-700 transition-colors"
@@ -1540,68 +1413,17 @@ export function RenderOverlay() {
           )}
         </div>
 
-        {/* Terminal Log Output — a fixed-height, collapsible strip when stacked
+        {/* Pipeline log — a fixed-height, collapsible strip when stacked
             (< lg); a full-height side column when side by side. */}
-        <div className="w-full shrink-0 lg:w-80 xl:w-104 min-h-0 bg-zinc-950 rounded-2xl border border-zinc-800 shadow-2xl flex flex-col overflow-hidden pointer-events-auto animate-in slide-in-from-bottom-4 lg:slide-in-from-left-4 duration-300">
-          <button
-            type="button"
-            onClick={() => setIsLogOpen((open) => !open)}
-            aria-expanded={isLogOpen}
-            className="flex items-center gap-2 px-4 py-2.5 border-b border-zinc-800/80 text-zinc-400 hover:text-zinc-200 lg:hover:text-zinc-400 lg:cursor-default transition-colors shrink-0"
-          >
-            <SquareTerminal className="w-3.5 h-3.5" />
-            <span className="text-[11px] font-semibold tracking-wide uppercase">
-              <Trans>Pipeline Log</Trans>
-            </span>
-            {status === "processing" && (
-              <span className="w-1.5 h-1.5 rounded-full bg-navi-500 animate-pulse" />
-            )}
-            <span className="ml-auto text-[10px] font-mono text-zinc-600 tabular-nums">
-              {logs.length}
-            </span>
-            <span className="lg:hidden">
-              {isLogOpen ? (
-                <ChevronDown className="w-3.5 h-3.5" />
-              ) : (
-                <ChevronUp className="w-3.5 h-3.5" />
-              )}
-            </span>
-          </button>
-          <div
-            className={`${isLogOpen ? "flex" : "hidden"} lg:flex h-36 short:h-24 lg:h-auto lg:short:h-auto lg:flex-1 min-h-0 bg-zinc-950 px-3 py-2 flex-col font-mono text-[11px] leading-relaxed relative`}
-          >
-            <div
-              ref={scrollRef}
-              className="space-y-1 overflow-y-auto custom-scrollbar h-full pb-1"
-            >
-              {logs.length === 0 ? (
-                <span className="text-zinc-700">Waiting for pipeline...</span>
-              ) : (
-                logs.map((log) => (
-                  <div
-                    key={log.id}
-                    className="flex gap-3 hover:bg-white/5 px-2 py-0.5 rounded transition-colors"
-                  >
-                    <span className="text-zinc-600 shrink-0 select-none">
-                      [{log.time}]
-                    </span>
-                    <span
-                      className={`wrap-break-word whitespace-pre-wrap ${
-                        log.type === "error"
-                          ? "text-red-400"
-                          : log.type === "system"
-                            ? "text-navi-400 font-semibold"
-                            : "text-zinc-300"
-                      }`}
-                    >
-                      {log.message}
-                    </span>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
+        <PipelineLogPanel
+          log={pipelineLog}
+          isRunning={
+            status === "processing" &&
+            (step === "generating" || step === "exporting")
+          }
+          isOpen={isLogOpen}
+          onToggleOpen={() => setIsLogOpen((open) => !open)}
+        />
       </div>
     </div>,
     document.body,
