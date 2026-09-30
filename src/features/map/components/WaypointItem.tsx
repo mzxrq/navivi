@@ -1,9 +1,10 @@
 import { t } from "@lingui/core/macro";
-import { Trans, Plural } from "@lingui/react/macro";
+import { Trans } from "@lingui/react/macro";
 import { useEffect, useRef, useState } from "react";
 import {
   Car,
-  ChevronRight,
+  Check,
+  ChevronDown,
   Edit2,
   Footprints,
   GripVertical,
@@ -30,6 +31,22 @@ interface WaypointItemProps {
   onDelete: () => void;
 }
 
+type ModeOption = { id: RouteMode; icon: typeof Car; label: string };
+
+function useModeOptions(): ModeOption[] {
+  return [
+    { id: "walking", icon: Footprints, label: t`Walk` },
+    { id: "driving", icon: Car, label: t`Drive` },
+    { id: "ferry", icon: Ship, label: t`Ferry` },
+    { id: "curve", icon: Plane, label: t`Fly` },
+    { id: "direct", icon: Ruler, label: t`Direct` },
+    { id: "draw", icon: Pencil, label: t`Draw` },
+  ];
+}
+
+// Road-snapped modes can be nudged with via points; the others are drawn geometry.
+const VIA_MODES: (RouteMode | undefined)[] = [undefined, "walking", "driving", "ferry"];
+
 export function WaypointItem({
   wp,
   index,
@@ -39,12 +56,14 @@ export function WaypointItem({
   onEdit,
   onDelete,
 }: WaypointItemProps) {
-  const { activeWaypointId, setActiveWaypointId, updateWaypoint, waypoints, routeSegments } = useWorkspace();
+  const { activeWaypointId, setActiveWaypointId, updateWaypoint, waypoints, routeSegments } =
+    useWorkspace();
   const { isRendering } = useUI();
   const itemRef = useRef<HTMLDivElement>(null);
-  const [isExpanded, setIsExpanded] = useState(false);
-  const [isModeExpanded, setIsModeExpanded] = useState(false);
+  const modeMenuRef = useRef<HTMLDivElement>(null);
+  const [isModeMenuOpen, setIsModeMenuOpen] = useState(false);
   const [isViaActive, setIsViaActive] = useState(false);
+  const modeOptions = useModeOptions();
 
   useEffect(() => {
     const handleEnter = (e: any) => setIsViaActive(e.detail.wpId === wp.id);
@@ -56,6 +75,7 @@ export function WaypointItem({
       window.removeEventListener("exit-via-mode", handleExit);
     };
   }, [wp.id]);
+
   const isActive = activeWaypointId === wp.id;
 
   useEffect(() => {
@@ -64,15 +84,52 @@ export function WaypointItem({
     }
   }, [isActive]);
 
+  useEffect(() => {
+    if (!isModeMenuOpen) return;
+    const close = (e: MouseEvent) => {
+      if (!modeMenuRef.current?.contains(e.target as Node)) setIsModeMenuOpen(false);
+    };
+    const closeOnEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        setIsModeMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", close);
+    window.addEventListener("keydown", closeOnEsc, true);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      window.removeEventListener("keydown", closeOnEsc, true);
+    };
+  }, [isModeMenuOpen]);
+
   const handleSelect = () => {
     setActiveWaypointId(wp.id);
     onEdit();
   };
 
-  let displayLabel = "";
+  const selectMode = (mode: RouteMode) => {
+    setIsModeMenuOpen(false);
+    if (mode === wp.routeMode) return;
+    if (mode === "draw") {
+      // Start the drawn line from the currently routed geometry so switching
+      // to Draw doesn't throw away the shape the user already sees.
+      const routedWaypoints = waypoints.filter((w) => !w.isStopBy || w.connectToRoute);
+      const routedIndex = routedWaypoints.findIndex((w) => w.id === wp.id);
+      let newCustomRoute = wp.customRoute || [];
+      const seg = routedIndex !== -1 ? routeSegments?.[routedIndex] : undefined;
+      if (seg?.positions && seg.positions.length > 2) {
+        newCustomRoute = seg.positions.slice(1, -1);
+      }
+      updateWaypoint(wp.id, { routeMode: "draw", customRoute: newCustomRoute });
+    } else {
+      updateWaypoint(wp.id, { routeMode: mode });
+    }
+  };
+
   const isStart = index === 0;
   const isEnd = index === waypoints.length - 1 && waypoints.length > 1;
-
+  let displayLabel = "";
   if (isStart) {
     displayLabel = "S";
   } else if (isEnd) {
@@ -92,272 +149,257 @@ export function WaypointItem({
     displayLabel = normalIndex.toString();
   }
 
-  const hasScript = !!(
-    wp.arrivingNarration ||
-    wp.attractionNarration
-  );
-  const scriptPreview =
-    wp.arrivingNarration || wp.attractionNarration || "";
+  const imageCount = wp.images?.length ?? 0;
+  const script = wp.arrivingNarration || wp.attractionNarration || "";
+  const mode = modeOptions.find((m) => m.id === (wp.routeMode || "driving")) ?? modeOptions[1];
+  const ModeIcon = mode.icon;
+  const viaCount = wp.viaPoints?.length ?? 0;
+  const canAdjust = VIA_MODES.includes(wp.routeMode);
+  const isEndpoint = isStart || isEnd;
 
   return (
     <div
       ref={itemRef}
-      onClick={() => {
-        if (!isListEditMode) {
-          handleSelect();
-        }
-      }}
       onContextMenu={(e) => {
         e.preventDefault();
         e.stopPropagation();
         if (isListEditMode) return;
         window.dispatchEvent(
           new CustomEvent("open-context-menu", {
-            detail: {
-              x: e.clientX,
-              y: e.clientY,
-              type: "waypoint-marker",
-              targetId: wp.id,
-            },
+            detail: { x: e.clientX, y: e.clientY, type: "waypoint-marker", targetId: wp.id },
           }),
         );
       }}
-      className={`relative flex items-stretch group transition-all px-2 py-1.5 rounded-xl border ${
-        isListEditMode ? "cursor-default" : "cursor-pointer"
-      } ${
-        isActive
-          ? "bg-white dark:bg-white/5 border-zinc-200 dark:border-white/10 shadow-sm"
-          : "border-transparent hover:bg-white/50 dark:hover:bg-white/5"
-      }`}
+      className="relative"
     >
-      {/* 1. Delete Action */}
-      {isListEditMode && (
-        <button disabled={isRendering} onClick={(e) => { e.stopPropagation(); onDelete(); }}
-          className="shrink-0 mx-2 flex items-center justify-center text-red-500 dark:text-red-400/70 hover:text-red-800 dark:hover:text-red-400 transition-all animate-in slide-in-from-left-2"
-        >
-          <div className="w-5 h-5 rounded-full bg-red-100 dark:bg-red-500/10 flex items-center justify-center">
-            <X className="w-3.5 h-3.5" />
-          </div>
-        </button>
+      {/* Rail: one continuous line through every stop and leg. */}
+      {!isListEditMode && (
+        <>
+          {!isFirst && (
+            <span className="absolute left-4.75 top-0 h-4 w-px bg-zinc-200 dark:bg-zinc-800" />
+          )}
+          {!isLast && (
+            <span className="absolute left-4.75 top-4 bottom-0 w-px bg-zinc-200 dark:bg-zinc-800" />
+          )}
+        </>
       )}
 
-      {/* 2. Timeline Graphics */}
-      {!isListEditMode && (
-        <div className="relative flex flex-col items-center w-10 shrink-0">
-          {!isFirst && (
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-0.5 h-4.5 bg-navi dark:bg-zinc-800 transition-colors" />
-          )}
-
-          {!isLast && (
-            <div className="absolute top-4.5 bottom-0 left-1/2 -translate-x-1/2 w-0.5 bg-navi dark:bg-zinc-800 transition-colors" />
-          )}
-
-          <div
-            className={`relative z-10 w-5 h-5 mt-1.75 rounded-full border-[2.5px] flex items-center justify-center shadow-sm transition-colors ${
-              wp.isStopBy
-                ? "bg-zinc-800 border-zinc-800 text-white"
-                : isActive
-                  ? "border-navi bg-navi text-white"
-                  : "border-zinc-300 dark:border-zinc-700 bg-white dark:bg-[#09090b] text-zinc-700 dark:text-zinc-300"
-            }`}
-          >
+      {/* --- Stop --- */}
+      <div
+        onClick={() => !isListEditMode && handleSelect()}
+        className={`group relative flex items-start gap-2.5 rounded-lg pl-1.5 pr-1.5 py-1.5 transition-colors ${
+          isListEditMode ? "cursor-default" : "cursor-pointer"
+        } ${
+          isActive
+            ? "bg-navi/8 dark:bg-navi/12"
+            : "hover:bg-zinc-100/80 dark:hover:bg-white/4"
+        }`}
+      >
+        <div className="w-7 h-5 flex items-center justify-center shrink-0">
+          {isListEditMode ? (
+            <button
+              type="button"
+              disabled={isRendering}
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete();
+              }}
+              title={t`Remove stop`}
+              aria-label={t`Remove stop`}
+              className="w-5 h-5 rounded-full bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white flex items-center justify-center transition-colors animate-in zoom-in-75 duration-150"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          ) : (
             <span
-              className={wp.isStopBy ? "text-[8px]" : "text-[9px] font-bold"}
+              className={`relative z-10 flex items-center justify-center rounded-full font-semibold tabular-nums transition-colors ${
+                wp.isStopBy
+                  ? "w-4 h-4 text-[8px] border border-dashed border-zinc-400 dark:border-zinc-600 bg-white dark:bg-zinc-950 text-zinc-500"
+                  : isActive
+                    ? "w-5 h-5 text-[10px] bg-navi text-white ring-3 ring-navi/20"
+                    : isEndpoint
+                      ? "w-5 h-5 text-[10px] bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                      : "w-5 h-5 text-[10px] border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-700 dark:text-zinc-300"
+              }`}
             >
               {displayLabel}
             </span>
+          )}
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 min-h-5">
+            <span
+              className={`text-[13px] leading-5 truncate ${
+                wp.isStopBy
+                  ? "text-zinc-500 dark:text-zinc-400"
+                  : "font-medium text-zinc-900 dark:text-zinc-100"
+              }`}
+              title={wp.name}
+            >
+              {wp.name}
+            </span>
+            {wp.isStopBy && (
+              <span className="text-[10px] px-1 rounded bg-zinc-100 dark:bg-white/5 text-zinc-500 shrink-0">
+                <Trans>Stop-by</Trans>
+              </span>
+            )}
           </div>
-        </div>
-      )}
 
-      {/* 3. Content Card */}
-      <div className="flex-1 flex items-start justify-between min-w-0 py-1.5 pr-2">
-        <div className="flex flex-col min-w-0 flex-1">
-          <span
-            className={`text-sm font-semibold truncate pr-4 transition-colors ${
-              wp.isStopBy
-                ? "text-zinc-500 dark:text-zinc-500"
-                : "text-zinc-900 dark:text-white"
-            }`}
-            title={wp.name}
-          >
-            {wp.name}
-          </span>
-
-          {/* Collapsible Tree for Media/Script */}
-          {(wp.images?.length || hasScript) && (
-            <div className="mt-1.5 flex flex-col">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setIsExpanded(!isExpanded);
-                }}
-                className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider text-zinc-500 hover:text-navi-500 transition-colors"
-              >
-                <span
-                  className={`transition-transform duration-200 inline-block ${isExpanded ? "rotate-90" : ""}`}
-                >
-                  <ChevronRight className="w-3.5 h-3.5" />
+          {(imageCount > 0 || script) && (
+            <div className="flex items-center gap-2 mt-0.5 text-[11px] text-zinc-500 min-w-0">
+              {imageCount > 0 && (
+                <span className="flex items-center gap-1 shrink-0" title={t`${imageCount} photos`}>
+                  <ImageIcon className="w-3 h-3" />
+                  {imageCount}
                 </span>
-                <Trans>Assets & Media</Trans>
-              </button>
-
-              {isExpanded && (
-                <div className="pl-3 mt-1.5 ml-1 border-l border-zinc-200 dark:border-white/10 flex flex-col gap-1.5 text-[10px] text-zinc-600 dark:text-zinc-400">
-                  {wp.images && wp.images.length > 0 && (
-                    <div className="flex items-center gap-1.5">
-                      <ImageIcon className="w-3 h-3 text-emerald-500" />
-                      <Plural value={wp.images.length} one="# Image" other="# Images" />
-                    </div>
-                  )}
-                  {hasScript && (
-                    <div className="flex flex-col gap-0.5">
-                      <div className="flex items-center gap-1.5">
-                        <Mic className="w-3 h-3 text-navi-400" />
-                      </div>
-                      <span className="pl-4.5 italic text-zinc-400 dark:text-zinc-500 truncate max-w-50">
-                        "{scriptPreview.substring(0, 30)}..."
-                      </span>
-                    </div>
-                  )}
-                </div>
               )}
-            </div>
-          )}
-
-          {/* Minimal Inline Route Mode Selector */}
-          {!isLast && (
-            <div className="mt-2 flex items-center gap-2 flex-wrap">
-              <div
-                className="flex items-center bg-zinc-100 dark:bg-black/20 rounded-md p-0.5 border border-zinc-200 dark:border-white/5 cursor-pointer min-h-5.5"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setIsModeExpanded(!isModeExpanded);
-                }}
-                onMouseEnter={() => setIsModeExpanded(true)}
-                onMouseLeave={() => setIsModeExpanded(false)}
-              >
-                {[
-                  { id: "walking", icon: Footprints, title: t`Walk` },
-                  { id: "driving", icon: Car, title: t`Drive` },
-                  { id: "curve", icon: Plane, title: t`Fly` },
-                  { id: "direct", icon: Ruler, title: t`Direct` },
-                  { id: "ferry", icon: Ship, title: t`Ferry` },
-                  { id: "draw", icon: Pencil, title: t`Draw` },
-                ].map((mode) => {
-                  const isModeActive = (wp.routeMode || "driving") === mode.id;
-                  if (!isModeActive && !isModeExpanded) return null;
-                  const Icon = mode.icon;
-                  return (
-                    <button
-                      key={mode.id}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (isModeActive && !isModeExpanded) {
-                          setIsModeExpanded(true);
-                        } else {
-                          if (mode.id === "draw" && wp.routeMode !== "draw") {
-                            const routedWaypoints = waypoints.filter((w) => !w.isStopBy || w.connectToRoute);
-                            const routedIndex = routedWaypoints.findIndex((w) => w.id === wp.id);
-                            let newCustomRoute = wp.customRoute || [];
-                            if (routedIndex !== -1 && routeSegments && routeSegments[routedIndex]) {
-                              const seg = routeSegments[routedIndex];
-                              if (seg && seg.positions && seg.positions.length > 2) {
-                                newCustomRoute = seg.positions.slice(1, -1);
-                              }
-                            }
-                            updateWaypoint(wp.id, {
-                              routeMode: "draw",
-                              customRoute: newCustomRoute,
-                            });
-                          } else {
-                            updateWaypoint(wp.id, {
-                              routeMode: mode.id as RouteMode,
-                            });
-                          }
-                          setIsModeExpanded(false);
-                        }
-                      }}
-                      className={`p-1 rounded transition-colors ${
-                        isModeActive
-                          ? "bg-white dark:bg-white/10 text-navi-600 dark:text-white shadow-sm ring-1 ring-black/5 dark:ring-white/10"
-                          : "text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-black/5 dark:hover:bg-white/5"
-                      }`}
-                      title={mode.title}
-                    >
-                      <Icon className="w-3 h-3" />
-                    </button>
-                  );
-                })}
-              </div>
-
-              {(!wp.routeMode || wp.routeMode === "walking" || wp.routeMode === "driving" || wp.routeMode === "ferry") && (
-                <div className="flex items-center gap-1.5">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (isViaActive) {
-                        window.dispatchEvent(new CustomEvent("exit-via-mode"));
-                      } else {
-                        window.dispatchEvent(
-                          new CustomEvent("enter-via-mode", { detail: { wpId: wp.id } })
-                        );
-                      }
-                    }}
-                    className={`p-1 rounded transition-all ${
-                      isViaActive 
-                        ? "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 shadow-sm ring-1 ring-blue-500/50" 
-                        : "text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 dark:hover:text-zinc-200 dark:hover:bg-zinc-800"
-                    }`}
-                    title={t`Adjust Route (Add via points to nudge)`}
-                  >
-                    <Route className="w-3.5 h-3.5" />
-                  </button>
-                  {wp.viaPoints && wp.viaPoints.length > 0 && (
-                    <div className="flex items-center gap-1">
-                      <span className="text-[9px] bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded-full font-bold">
-                        {wp.viaPoints.length} via
-                      </span>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          updateWaypoint(wp.id, { viaPoints: [] });
-                        }}
-                        className="text-[9px] text-zinc-400 hover:text-red-500 transition-colors"
-                        title={t`Clear all via points`}
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    </div>
-                  )}
-                </div>
+              {script && (
+                <span className="flex items-center gap-1 min-w-0" title={script}>
+                  <Mic className="w-3 h-3 shrink-0" />
+                  <span className="truncate">{script}</span>
+                </span>
               )}
             </div>
           )}
         </div>
 
-        {/* Hover Actions */}
         {!isListEditMode && (
-          <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 transition-opacity shrink-0 mt-0.5">
+          <div className="flex items-center shrink-0 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
             <button
+              type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 handleSelect();
               }}
-              className="p-1.5 hover:bg-navi/60 dark:hover:bg-zinc-800 rounded-md text-zinc-400 hover:text-navi-800 dark:hover:text-navi transition-colors"
               title={t`Edit Stop`}
+              aria-label={t`Edit Stop`}
+              className="p-1 rounded-md text-zinc-400 hover:text-zinc-900 hover:bg-zinc-200/70 dark:hover:text-zinc-100 dark:hover:bg-white/10 transition-colors"
             >
               <Edit2 className="w-3.5 h-3.5" />
             </button>
-            <div
-              onClick={(e) => e.stopPropagation()}
-              className="p-1.5 text-zinc-300 dark:text-zinc-800 hover:text-zinc-500 cursor-grab active:cursor-grabbing transition-colors"
+            <span
+              aria-hidden
+              className="p-1 text-zinc-300 dark:text-zinc-600 cursor-grab active:cursor-grabbing"
             >
-              <GripVertical className="w-4 h-4" />
-            </div>
+              <GripVertical className="w-3.5 h-3.5" />
+            </span>
           </div>
         )}
       </div>
+
+      {/* --- Leg to the next stop --- */}
+      {!isLast && !isListEditMode && (
+        <div className="relative flex items-center gap-2.5 pl-1.5 pr-1.5 py-1">
+          <div className="w-7 flex items-center justify-center shrink-0">
+            <span className="relative z-10 w-5 h-5 rounded-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 flex items-center justify-center text-zinc-500">
+              <ModeIcon className="w-3 h-3" />
+            </span>
+          </div>
+
+          <div className="flex items-center gap-1 min-w-0 flex-wrap">
+            <div ref={modeMenuRef} className="relative">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsModeMenuOpen(!isModeMenuOpen);
+                }}
+                aria-haspopup="menu"
+                aria-expanded={isModeMenuOpen}
+                title={t`Travel mode to the next stop`}
+                className={`flex items-center gap-1 h-6 pl-1.5 pr-1 rounded-md text-[11px] font-medium transition-colors ${
+                  isModeMenuOpen
+                    ? "bg-zinc-200/80 text-zinc-900 dark:bg-white/10 dark:text-zinc-100"
+                    : "text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 dark:hover:text-zinc-100 dark:hover:bg-white/5"
+                }`}
+              >
+                {mode.label}
+                <ChevronDown className="w-3 h-3 opacity-60" />
+              </button>
+
+              {isModeMenuOpen && (
+                <div
+                  role="menu"
+                  className="absolute left-0 top-full mt-1 z-50 w-36 p-1 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 shadow-lg animate-in fade-in zoom-in-95 duration-100"
+                >
+                  {modeOptions.map((option) => {
+                    const Icon = option.icon;
+                    const selected = option.id === mode.id;
+                    return (
+                      <button
+                        key={option.id}
+                        type="button"
+                        role="menuitemradio"
+                        aria-checked={selected}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          selectMode(option.id);
+                        }}
+                        className={`w-full flex items-center gap-2 h-7 px-2 rounded-md text-[12px] transition-colors ${
+                          selected
+                            ? "text-zinc-900 dark:text-zinc-100 font-medium"
+                            : "text-zinc-600 dark:text-zinc-400"
+                        } hover:bg-zinc-100 dark:hover:bg-white/5`}
+                      >
+                        <Icon className="w-3.5 h-3.5" />
+                        <span className="flex-1 text-left">{option.label}</span>
+                        {selected && <Check className="w-3.5 h-3.5 text-navi" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {canAdjust && (
+              <>
+                <span className="text-zinc-300 dark:text-zinc-700 text-[11px]" aria-hidden>
+                  ·
+                </span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    window.dispatchEvent(
+                      isViaActive
+                        ? new CustomEvent("exit-via-mode")
+                        : new CustomEvent("enter-via-mode", { detail: { wpId: wp.id } }),
+                    );
+                  }}
+                  aria-pressed={isViaActive}
+                  title={t`Adjust Route (Add via points to nudge)`}
+                  className={`flex items-center gap-1 h-6 px-1.5 rounded-md text-[11px] font-medium transition-colors ${
+                    isViaActive
+                      ? "bg-navi text-white"
+                      : "text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 dark:hover:text-zinc-100 dark:hover:bg-white/5"
+                  }`}
+                >
+                  <Route className="w-3 h-3" />
+                  {isViaActive ? <Trans>Done adjusting</Trans> : <Trans>Adjust</Trans>}
+                </button>
+                {viaCount > 0 && (
+                  <span className="flex items-center h-5 pl-1.5 pr-0.5 rounded-md bg-zinc-100 dark:bg-white/5 text-[10px] text-zinc-600 dark:text-zinc-400 tabular-nums">
+                    <Trans>{viaCount} via</Trans>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        updateWaypoint(wp.id, { viaPoints: [] });
+                      }}
+                      title={t`Clear all via points`}
+                      aria-label={t`Clear all via points`}
+                      className="ml-0.5 p-0.5 rounded text-zinc-400 hover:text-red-500 transition-colors"
+                    >
+                      <X className="w-2.5 h-2.5" />
+                    </button>
+                  </span>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

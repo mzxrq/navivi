@@ -76,8 +76,8 @@ msgstr "(Empty script)"
 
 #. placeholder {0}: wp.images.length
 #: src/features/map/components/WaypointItem.tsx:210
-msgid "{0, plural, one {# Image} other {# Images}}"
-msgstr "{0, plural, one {# Image} other {# Images}}"
+#~ msgid "{0, plural, one {# Image} other {# Images}}"
+#~ msgstr "{0, plural, one {# Image} other {# Images}}"
 
 #. placeholder {0}: newAssets.length
 #: src/features/timeline/components/MediaPool.tsx:261
@@ -130,13 +130,29 @@ msgstr "{0} tracks"
 msgid "{0}% reduction ({1} dB)"
 msgstr "{0}% reduction ({1} dB)"
 
-#: src/components/ui/PipelineLogPanel.tsx:235
+#: src/features/map/components/WaypointItem.tsx:252
+msgid "{imageCount} photos"
+msgstr "{imageCount} photos"
+
+#: src/features/map/components/Sidebar.tsx:152
+msgid "{stopCount} stops"
+msgstr "{stopCount} stops"
+
+#: src/features/map/components/Sidebar.tsx:148
+msgid "{stopCount} stops · {stopByCount} stop-by"
+msgstr "{stopCount} stops · {stopByCount} stop-by"
+
+#: src/components/ui/PipelineLogPanel.tsx:240
 msgid "{unnamedRemaining} more steps"
 msgstr "{unnamedRemaining} more steps"
 
+#: src/features/map/components/WaypointItem.tsx:383
+msgid "{viaCount} via"
+msgstr "{viaCount} via"
+
 #: src/features/map/components/OverviewPanel.tsx:36
-msgid "+ Add Intro Screen"
-msgstr "+ Add Intro Screen"
+#~ msgid "+ Add Intro Screen"
+#~ msgstr "+ Add Intro Screen"
 
 #: src/features/map/components/WaypointEditor.tsx:818
 msgid "<0>+ Add Image</0>"
@@ -290,7 +306,11 @@ msgstr "Add Waypoint Here"
 msgid "Adds a brief pause in the generated video at this waypoint before continuing the journey"
 msgstr "Adds a brief pause in the generated video at this waypoint before continuing the journey"
 
-#: src/features/map/components/WaypointItem.tsx:312
+#: src/features/map/components/WaypointItem.tsx:379
+msgid "Adjust"
+msgstr "Adjust"
+
+#: src/features/map/components/WaypointItem.tsx:371
 msgid "Adjust Route (Add via points to nudge)"
 msgstr "Adjust Route (Add via points to nudge)"
 
@@ -384,8 +404,8 @@ msgid "Aspect Ratio & Platform Target"
 msgstr "Aspect Ratio & Platform Target"
 
 #: src/features/map/components/WaypointItem.tsx:202
-msgid "Assets & Media"
-msgstr "Assets & Media"
+#~ msgid "Assets & Media"
+#~ msgstr "Assets & Media"
 
 #: src/components/ui/RenderOverlay.tsx:1311
 msgid "Assets accepted and stitched into your final deliverable video"
@@ -506,7 +526,7 @@ msgstr "Auto-stitched Video"
 msgid "Auto-Write"
 msgstr "Auto-Write"
 
-#: src/features/map/components/Sidebar.tsx:368
+#: src/features/map/components/Sidebar.tsx:357
 msgid "Automatically stitch all video segments and export upon completion without pausing for asset review"
 msgstr "Automatically stitch all video segments and export upon completion without pausing for asset review"
 
@@ -569,8 +589,8 @@ msgstr "Cancel"
 #: src/components/view/ProjectManager.tsx:736
 #: src/components/view/ProjectSettingsModal.tsx:170
 #: src/features/export/components/ExportModal.tsx:693
-#: src/features/map/components/Sidebar.tsx:269
-#: src/features/map/components/Sidebar.tsx:379
+#: src/features/map/components/Sidebar.tsx:243
+#: src/features/map/components/Sidebar.tsx:369
 msgid "Cancel"
 msgstr "Cancel"
 
@@ -590,7 +610,7 @@ msgstr "Cannot drop here: overlaps with another clip"
 msgid "Cannot edit settings directly in .nvv archive. Please open project first."
 msgstr "Cannot edit settings directly in .nvv archive. Please open project first."
 
-#: src/features/map/components/Sidebar.tsx:102
+#: src/features/map/components/Sidebar.tsx:92
 msgid "Cannot generate: Please add at least one waypoint."
 msgstr "Cannot generate: Please add at least one waypoint."
 
@@ -630,7 +650,7 @@ msgstr "Cinematic"
 msgid "Clean modern sans-serif"
 msgstr "Clean modern sans-serif"
 
-#: src/features/map/components/Sidebar.tsx:279
+#: src/features/map/components/Sidebar.tsx:253
 msgid "Clear"
 msgstr "Clear"
 
@@ -638,13 +658,18 @@ msgstr "Clear"
 msgid "Clear All Notifications"
 msgstr "Clear All Notifications"
 
-#: src/features/map/components/WaypointItem.tsx:327
+#: src/features/map/components/WaypointItem.tsx:390
+#: src/features/map/components/WaypointItem.tsx:391
 msgid "Clear all via points"
 msgstr "Clear all via points"
 
 #: src/components/ui/RenderOverlay.tsx:1194
 msgid "Clear generated audio and re-enter pronunciation"
 msgstr "Clear generated audio and re-enter pronunciation"
+
+#: src/features/map/components/Sidebar.tsx:265
+msgid "Clear route"
+msgstr "Clear route"
 
 #: src/features/map/components/MapToolbar.tsx:208
 msgid "Clear Route"
@@ -654,7 +679,7 @@ msgstr "Clear Route"
 msgid "Click marker to jump playhead"
 msgstr "Click marker to jump playhead"
 
-#: src/features/map/components/Sidebar.tsx:145
+#: src/features/map/components/Sidebar.tsx:176
 msgid "Click the map or drop a GPS file to start building your route"
 msgstr "Click the map or drop a GPS file to start building your route"
 
@@ -937,7 +962,7 @@ msgstr "Detecting context..."
 msgid "direct"
 msgstr "Direct"
 
-#: src/features/map/components/WaypointItem.tsx:244
+#: src/features/map/components/WaypointItem.tsx:42
 msgid "Direct"
 msgstr "Direct"
 
@@ -979,8 +1004,13 @@ msgstr "Don't Save"
 
 #: src/components/ui/AppSettings.tsx:994
 #: src/components/ui/RenderOverlay.tsx:1353
+#: src/features/map/components/Sidebar.tsx:272
 msgid "Done"
 msgstr "Done"
+
+#: src/features/map/components/WaypointItem.tsx:379
+msgid "Done adjusting"
+msgstr "Done adjusting"
 
 #: src/features/timeline/components/elements/TransitionsPanel.tsx:93
 msgid "Double-sided horizontal perspective warp effect"
@@ -1010,7 +1040,7 @@ msgstr "Drag to cuts on timeline or click to apply"
 msgid "draw"
 msgstr "Draw"
 
-#: src/features/map/components/WaypointItem.tsx:246
+#: src/features/map/components/WaypointItem.tsx:43
 msgid "Draw"
 msgstr "Draw"
 
@@ -1028,7 +1058,7 @@ msgstr "Dreamy"
 msgid "drive"
 msgstr "Drive"
 
-#: src/features/map/components/WaypointItem.tsx:242
+#: src/features/map/components/WaypointItem.tsx:39
 msgid "Drive"
 msgstr "Drive"
 
@@ -1091,11 +1121,16 @@ msgstr "Duration:"
 msgid "E"
 msgstr "E"
 
-#: src/features/map/components/OverviewPanel.tsx:118
+#: src/features/map/components/OverviewPanel.tsx:105
 msgid "E.g. Tomogashima and Kada area..."
 msgstr "E.g. Tomogashima and Kada area..."
 
-#: src/features/map/components/WaypointItem.tsx:348
+#: src/features/map/components/Sidebar.tsx:164
+msgid "Edit"
+msgstr "Edit"
+
+#: src/features/map/components/WaypointItem.tsx:275
+#: src/features/map/components/WaypointItem.tsx:276
 msgid "Edit Stop"
 msgstr "Edit Stop"
 
@@ -1371,7 +1406,7 @@ msgstr "Fastest export with compact file size for quick previews (12 Mbps 4K / 5
 msgid "ferry"
 msgstr "Ferry"
 
-#: src/features/map/components/WaypointItem.tsx:245
+#: src/features/map/components/WaypointItem.tsx:40
 msgid "Ferry"
 msgstr "Ferry"
 
@@ -1395,7 +1430,7 @@ msgstr "Fit timeline to content"
 msgid "fly"
 msgstr "Fly"
 
-#: src/features/map/components/WaypointItem.tsx:243
+#: src/features/map/components/WaypointItem.tsx:41
 msgid "Fly"
 msgstr "Fly"
 
@@ -1429,16 +1464,21 @@ msgstr "Framerate (FPS)"
 msgid "General"
 msgstr "General"
 
-#: src/features/map/components/Sidebar.tsx:313
-#: src/features/map/components/Sidebar.tsx:385
+#: src/features/map/components/Sidebar.tsx:302
+#: src/features/map/components/Sidebar.tsx:375
 msgid "Generate Assets"
 msgstr "Generate Assets"
 
-#: src/features/map/components/OverviewPanel.tsx:64
-msgid "Generate Intro Video"
-msgstr "Generate Intro Video"
+#: src/features/map/components/OverviewPanel.tsx:62
+#: src/features/map/components/OverviewPanel.tsx:63
+msgid "Generate intro video"
+msgstr "Generate intro video"
 
-#: src/features/map/components/Sidebar.tsx:347
+#: src/features/map/components/OverviewPanel.tsx:64
+#~ msgid "Generate Intro Video"
+#~ msgstr "Generate Intro Video"
+
+#: src/features/map/components/Sidebar.tsx:337
 msgid "Generates the map route only. Ignores all pop-up images and AI voice synthesis to save time."
 msgstr "Generates the map route only. Ignores all pop-up images and AI voice synthesis to save time."
 
@@ -1454,7 +1494,7 @@ msgstr "Generating Assets..."
 msgid "Generating Subtitles{prog}..."
 msgstr "Generating Subtitles{prog}..."
 
-#: src/features/map/components/Sidebar.tsx:309
+#: src/features/map/components/Sidebar.tsx:298
 msgid "Generating..."
 msgstr "Generating..."
 
@@ -1621,17 +1661,21 @@ msgstr "Initializing pipeline..."
 msgid "Inspector"
 msgstr "Inspector"
 
+#: src/features/map/components/OverviewPanel.tsx:44
+msgid "Intro"
+msgstr "Intro"
+
 #: src/components/ui/PipelineLogPanel.tsx:58
 msgid "Intro & outro"
 msgstr "Intro & outro"
 
 #: src/features/map/components/OverviewPanel.tsx:48
-msgid "Intro Screen"
-msgstr "Intro Screen"
+#~ msgid "Intro Screen"
+#~ msgstr "Intro Screen"
 
 #: src/features/map/components/OverviewPanel.tsx:36
-msgid "Intro Screen Settings"
-msgstr "Intro Screen Settings"
+#~ msgid "Intro Screen Settings"
+#~ msgstr "Intro Screen Settings"
 
 #: src/components/ui/RenderOverlay.tsx:1210
 msgid "Japanese Pronunciation & Intonation Guidance"
@@ -1670,7 +1714,7 @@ msgstr "Layer Manager"
 msgid "Layers"
 msgstr "Layers"
 
-#: src/features/map/components/OverviewPanel.tsx:103
+#: src/features/map/components/OverviewPanel.tsx:93
 msgid "Leave blank to use the project name."
 msgstr "Leave blank to use the project name."
 
@@ -1706,8 +1750,8 @@ msgid "Listen to ensure Irodori TTS pronunciation is accurate"
 msgstr "Listen to ensure Irodori TTS pronunciation is accurate"
 
 #: src/features/map/components/OverviewPanel.tsx:130
-msgid "Live Preview"
-msgstr "Live Preview"
+#~ msgid "Live Preview"
+#~ msgstr "Live Preview"
 
 #: src/features/map/components/MapArea.tsx:376
 #: src/features/map/components/MapArea.tsx:418
@@ -1961,7 +2005,7 @@ msgstr "No recent projects"
 msgid "No saved versions yet"
 msgstr "No saved versions yet"
 
-#: src/features/map/components/Sidebar.tsx:142
+#: src/features/map/components/Sidebar.tsx:173
 msgid "No stops added yet"
 msgstr "No stops added yet"
 
@@ -1992,6 +2036,7 @@ msgid "None"
 msgstr "None"
 
 #: src/components/ui/AppSettings.tsx:188
+#: src/features/map/components/OverviewPanel.tsx:15
 #: src/features/timeline/components/elements/inspector/InspectorAudioPanel.tsx:187
 #: src/features/timeline/components/elements/inspector/InspectorTextPanel.tsx:279
 #: src/features/timeline/components/elements/inspector/InspectorTextPanel.tsx:398
@@ -2198,7 +2243,7 @@ msgstr "Project Settings"
 msgid "Project settings saved"
 msgstr "Project settings saved"
 
-#: src/features/map/components/OverviewPanel.tsx:143
+#: src/features/map/components/OverviewPanel.tsx:116
 msgid "Project Title"
 msgstr "Project Title"
 
@@ -2230,7 +2275,7 @@ msgstr "Push transition smoothly sliding incoming clip from left"
 msgid "Quick Export"
 msgstr "Quick Export"
 
-#: src/features/map/components/Sidebar.tsx:365
+#: src/features/map/components/Sidebar.tsx:354
 msgid "Quick Export (Auto-stitch & Export)"
 msgstr "Quick Export (Auto-stitch & Export)"
 
@@ -2289,7 +2334,7 @@ msgstr "Ready"
 msgid "Ready to Compile"
 msgstr "Ready to Compile"
 
-#: src/features/map/components/Sidebar.tsx:325
+#: src/features/map/components/Sidebar.tsx:315
 msgid "Ready to Generate?"
 msgstr "Ready to Generate?"
 
@@ -2342,6 +2387,11 @@ msgstr "Reload saved timeline"
 msgid "Remove"
 msgstr "Remove"
 
+#. placeholder {0}: waypoints.length
+#: src/features/map/components/Sidebar.tsx:236
+msgid "Remove all {0} stops?"
+msgstr "Remove all {0} stops?"
+
 #: src/components/view/ProjectManager.tsx:487
 #: src/components/view/ProjectManager.tsx:656
 msgid "Remove from List"
@@ -2358,6 +2408,11 @@ msgstr "Remove Marker"
 #: src/components/view/ProjectManager.tsx:685
 msgid "Remove Project"
 msgstr "Remove Project"
+
+#: src/features/map/components/WaypointItem.tsx:207
+#: src/features/map/components/WaypointItem.tsx:208
+msgid "Remove stop"
+msgstr "Remove stop"
 
 #: src/components/ui/ContextMenu.tsx:829
 msgid "remove-from-list"
@@ -2478,7 +2533,7 @@ msgid "Restore version"
 msgstr "Restore version"
 
 #: src/components/ui/RenderOverlay.tsx:776
-#: src/features/map/components/Sidebar.tsx:304
+#: src/features/map/components/Sidebar.tsx:293
 msgid "Resume Generation"
 msgstr "Resume Generation"
 
@@ -2521,6 +2576,10 @@ msgstr "Ripple Insert Mode"
 #: src/features/timeline/components/elements/inspector/InspectorTransformPanel.tsx:57
 msgid "Rotation"
 msgstr "Rotation"
+
+#: src/features/map/components/Sidebar.tsx:143
+msgid "Route"
+msgstr "Route"
 
 #: src/features/map/components/MapLayers/RouteStyling.tsx:113
 msgid "Route Line"
@@ -2785,11 +2844,11 @@ msgstr "Skip AI voiceover synthesis and pop-up images during generation"
 msgid "Skip in Video Export"
 msgstr "Skip in Video Export"
 
-#: src/features/map/components/Sidebar.tsx:344
+#: src/features/map/components/Sidebar.tsx:334
 msgid "Skip Rich Media (Fast Render)"
 msgstr "Skip Rich Media (Fast Render)"
 
-#: src/components/ui/PipelineLogPanel.tsx:284
+#: src/components/ui/PipelineLogPanel.tsx:289
 msgid "Skipped"
 msgstr "Skipped"
 
@@ -2886,6 +2945,7 @@ msgid "stop-by"
 msgstr "Stop-by"
 
 #: src/features/map/components/WaypointEditor.tsx:480
+#: src/features/map/components/WaypointItem.tsx:244
 msgid "Stop-by"
 msgstr "Stop-by"
 
@@ -2921,21 +2981,22 @@ msgstr "Stub"
 msgid "Style Presets"
 msgstr "Style Presets"
 
+#: src/features/map/components/OverviewPanel.tsx:99
 #: src/features/timeline/components/elements/inspector/InspectorTextPanel.tsx:112
 msgid "Subtitle"
 msgstr "Subtitle"
 
 #: src/features/map/components/OverviewPanel.tsx:109
-msgid "Subtitle / Description"
-msgstr "Subtitle / Description"
+#~ msgid "Subtitle / Description"
+#~ msgstr "Subtitle / Description"
 
 #: src/components/ui/PipelineLogPanel.tsx:57
 msgid "Subtitle burn-in"
 msgstr "Subtitle burn-in"
 
 #: src/features/map/components/OverviewPanel.tsx:147
-msgid "Subtitle description..."
-msgstr "Subtitle description..."
+#~ msgid "Subtitle description..."
+#~ msgstr "Subtitle description..."
 
 #: src/components/ui/AppSettings.tsx:743
 msgid "Subtitle Format"
@@ -3014,13 +3075,17 @@ msgstr "Text added to timeline"
 msgid "Text Color"
 msgstr "Text Color"
 
+#: src/features/map/components/OverviewPanel.tsx:127
+msgid "The video starts directly on the route. Turn the intro on to add a title card."
+msgstr "The video starts directly on the route. Turn the intro on to add a title card."
+
 #: src/features/timeline/components/MediaPool.tsx:382
 msgid "This asset is missing from the project"
 msgstr "This asset is missing from the project"
 
 #: src/features/map/components/OverviewPanel.tsx:66
-msgid "This creates a cinematic title card at the very beginning of your exported video."
-msgstr "This creates a cinematic title card at the very beginning of your exported video."
+#~ msgid "This creates a cinematic title card at the very beginning of your exported video."
+#~ msgstr "This creates a cinematic title card at the very beginning of your exported video."
 
 #: src/components/view/ProjectManager.tsx:92
 msgid "This project is archived. Please open it first to render"
@@ -3034,7 +3099,7 @@ msgstr "This version could not be deleted"
 msgid "This version is no longer available"
 msgstr "This version is no longer available"
 
-#: src/features/map/components/Sidebar.tsx:328
+#: src/features/map/components/Sidebar.tsx:318
 msgid "This will save your project, synthesize AI voiceovers, and render map videos before opening the Timeline."
 msgstr "This will save your project, synthesize AI voiceovers, and render map videos before opening the Timeline."
 
@@ -3060,9 +3125,14 @@ msgstr "Timeline markers"
 msgid "Timeline reloaded"
 msgstr "Timeline reloaded"
 
-#: src/features/map/components/OverviewPanel.tsx:99
+#: src/features/map/components/OverviewPanel.tsx:83
+#: src/features/map/components/OverviewPanel.tsx:89
 msgid "Title"
 msgstr "Title"
+
+#: src/features/map/components/OverviewPanel.tsx:17
+msgid "Title card at the start of the video"
+msgstr "Title card at the start of the video"
 
 #: src/features/map/components/MapToolbar.tsx:161
 msgid "Toggle Smooth Spline"
@@ -3084,7 +3154,7 @@ msgstr "Total tracks in the timeline"
 msgid "Total video duration"
 msgstr "Total video duration"
 
-#: src/components/ui/PipelineLogPanel.tsx:360
+#: src/components/ui/PipelineLogPanel.tsx:365
 msgid "Traceback"
 msgstr "Traceback"
 
@@ -3106,6 +3176,10 @@ msgstr "Transitions"
 #: src/features/timeline/components/TimelineTrack.tsx:90
 msgid "Transitions can only be placed on video tracks"
 msgstr "Transitions can only be placed on video tracks"
+
+#: src/features/map/components/WaypointItem.tsx:310
+msgid "Travel mode to the next stop"
+msgstr "Travel mode to the next stop"
 
 #: src/components/ui/AppSettings.tsx:821
 #: src/features/map/components/WaypointEditor.tsx:602
@@ -3196,7 +3270,7 @@ msgid "Untitled Project"
 msgstr "Untitled Project"
 
 #. placeholder {0}: line.updates
-#: src/components/ui/PipelineLogPanel.tsx:346
+#: src/components/ui/PipelineLogPanel.tsx:351
 msgid "Updated in place {0} times"
 msgstr "Updated in place {0} times"
 
@@ -3241,8 +3315,8 @@ msgid "Video Exported Successfully!"
 msgstr "Video Exported Successfully!"
 
 #: src/features/map/components/OverviewPanel.tsx:90
-msgid "Video Title"
-msgstr "Video Title"
+#~ msgid "Video Title"
+#~ msgstr "Video Title"
 
 #: src/components/ui/RenderOverlay.tsx:319
 msgid "video-clip"
@@ -3260,8 +3334,8 @@ msgstr "Vivid Rose"
 msgid "Volume"
 msgstr "Volume"
 
-#: src/components/ui/PipelineLogPanel.tsx:196
-#: src/components/ui/PipelineLogPanel.tsx:330
+#: src/components/ui/PipelineLogPanel.tsx:201
+#: src/components/ui/PipelineLogPanel.tsx:335
 msgid "Waiting for pipeline..."
 msgstr "Waiting for pipeline..."
 
@@ -3269,7 +3343,7 @@ msgstr "Waiting for pipeline..."
 msgid "walk"
 msgstr "Walk"
 
-#: src/features/map/components/WaypointItem.tsx:241
+#: src/features/map/components/WaypointItem.tsx:38
 msgid "Walk"
 msgstr "Walk"
 
