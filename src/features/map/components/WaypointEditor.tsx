@@ -21,6 +21,8 @@ import { useUI } from "../../../hooks/useUI";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { ScriptInput } from "../../../components/ui/ScriptInput";
 import { Switch } from "../../../components/ui/Switch";
+import { openContextMenu, separator } from "../../../components/ui/menuItems";
+import { Folder, Video } from "../../../components/ui/icons";
 import { open } from "@tauri-apps/plugin-dialog";
 import {
   checkModelExists,
@@ -446,6 +448,42 @@ export function WaypointEditor({
                         return (
                           <div
                             key={`${img}-${idx}`}
+                            onContextMenu={(e) =>
+                              openContextMenu(e, [
+                                { type: "label", label: img.split(/\\|\//).pop() || img },
+                                {
+                                  label: t`Camera Angle`,
+                                  icon: Video,
+                                  submenu: [
+                                    {
+                                      label: t`None`,
+                                      checked: currentPan === "none",
+                                      onSelect: () => updateImagePan(idx, "none"),
+                                    },
+                                    separator,
+                                    ...cameraMotions.map(({ value, label: motionLabel, icon }) => ({
+                                      label: motionLabel,
+                                      icon,
+                                      checked: currentPan === value,
+                                      onSelect: () => updateImagePan(idx, value),
+                                    })),
+                                  ],
+                                },
+                                {
+                                  label: t`Reveal in File Explorer`,
+                                  icon: Folder,
+                                  onSelect: () =>
+                                    void invoke("open_in_explorer", { path: img }).catch(console.error),
+                                },
+                                separator,
+                                {
+                                  label: t`Remove Image`,
+                                  icon: Trash2,
+                                  danger: true,
+                                  onSelect: () => removeImage(idx),
+                                },
+                              ])
+                            }
                             className="group w-48 rounded-lg border border-zinc-200 dark:border-white/10 overflow-hidden bg-white dark:bg-zinc-950"
                           >
                             <div className="relative aspect-4/3 bg-zinc-100 dark:bg-zinc-800">

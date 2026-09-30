@@ -376,7 +376,7 @@ export function DrawBar({
                             <span className="w-5 text-[11px] font-semibold text-amber-600 dark:text-amber-400 tabular-nums">
                               {idx + 1}
                             </span>
-                            <span className="flex-1 text-[11px] font-mono text-zinc-600 dark:text-zinc-400 truncate">
+                            <span className="flex-1 text-[11px] tabular-nums tracking-tight text-zinc-600 dark:text-zinc-400 truncate">
                               {point[0].toFixed(5)}, {point[1].toFixed(5)}
                             </span>
                             <button

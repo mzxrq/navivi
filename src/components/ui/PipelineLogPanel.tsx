@@ -290,7 +290,7 @@ function StageRow({
           </span>
         )}
         {!skipped && duration > 0 && (
-          <span className="ml-auto text-[10px] font-mono tabular-nums text-zinc-500 shrink-0">
+          <span className="ml-auto text-[10px] tabular-nums text-zinc-500 shrink-0">
             {formatDuration(duration)}
           </span>
         )}

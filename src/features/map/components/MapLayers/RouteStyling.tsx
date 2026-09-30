@@ -40,7 +40,7 @@ function ColorRow({
     <div className="space-y-1.5">
       <div className="flex items-center justify-between">
         <span className="text-[12px] text-zinc-700 dark:text-zinc-300">{label}</span>
-        <span className="text-[10px] font-mono text-zinc-400 uppercase">{currentHex}</span>
+        <span className="text-[10px] tabular-nums text-zinc-400">{currentHex.toUpperCase()}</span>
       </div>
       <div className="flex items-center gap-1.5">
         {PRESET_COLORS.map((c) => (

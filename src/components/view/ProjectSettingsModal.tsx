@@ -11,7 +11,8 @@ import { join, dirname } from "@tauri-apps/api/path";
 import { useUI } from "../../hooks/useUI";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
-import { Settings2, X, MapPin } from "../ui/icons";
+import { MapPin } from "../ui/icons";
+import { Dialog, dialogButton } from "../ui/Dialog";
 
 interface ProjectSettingsModalProps {
   project: any;
@@ -89,94 +90,79 @@ export function ProjectSettingsModal({
     }
   };
 
+  const markerSrc = (marker: string) =>
+    marker.match(/^[a-zA-Z]:\\/) || (marker.startsWith("/") && !marker.startsWith("/defaults/"))
+      ? convertFileSrc(marker)
+      : marker;
+
+  const setMarker = (routeMarker: string) =>
+    setConfig((prev: any) => ({
+      ...prev,
+      settings: { ...prev.settings, routeMarker },
+    }));
+
   return (
-    <div className="fixed inset-0 z-999999 bg-zinc-950/40 backdrop-blur-[2px] flex items-center justify-center p-4 animate-in fade-in duration-200">
-      <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200">
-        <div className="p-5 border-b border-zinc-100 dark:border-navidark-400">
-          <h3 className="text-base font-bold text-zinc-900 dark:text-white flex items-center gap-2">
-            <Settings2 className="w-4 h-4 text-navi-500" />
-            <Trans>Project Settings</Trans>
-          </h3>
-          <p className="text-xs text-zinc-500 mt-1 truncate">{project.name}</p>
-        </div>
-
-        <div className="p-5 space-y-4">
-          <div className="space-y-3">
-            <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-widest flex items-center gap-1.5">
-              <MapPin className="w-3.5 h-3.5" />{" "}
-              <Trans>Global Route Marker</Trans>
-            </label>
-            <div className="flex items-center gap-3">
-              {currentMarker ? (
-                <div className="relative w-12 h-12 rounded-lg border border-zinc-200 dark:border-white/10 flex items-center justify-center bg-zinc-50 dark:bg-navidark-700/50 group">
-                  <img
-                    src={
-                      currentMarker.startsWith("/") ||
-                      currentMarker.match(/^[a-zA-Z]:\\/)
-                        ? convertFileSrc(currentMarker)
-                        : currentMarker
-                    }
-                    className="w-8 h-8 object-contain"
-                    alt="Marker"
-                  />
-                  <button
-                    onClick={() => {
-                      setConfig((prev: any) => ({
-                        ...prev,
-                        settings: { ...prev.settings, routeMarker: "" },
-                      }));
-                    }}
-                    className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </div>
-              ) : (
-                <div className="w-12 h-12 rounded-lg border border-dashed border-zinc-300 dark:border-white/20 flex items-center justify-center bg-zinc-50 dark:bg-navidark-700/30">
-                  <MapPin className="w-5 h-5 text-zinc-300 dark:text-zinc-600" />
-                </div>
-              )}
-              <button
-                onClick={async () => {
-                  const selected = await open({
-                    multiple: false,
-                    filters: [
-                      {
-                        name: "Images",
-                        extensions: ["svg", "png", "jpg", "jpeg"],
-                      },
-                    ],
-                  });
-                  if (selected && typeof selected === "string") {
-                    setConfig((prev: any) => ({
-                      ...prev,
-                      settings: { ...prev.settings, routeMarker: selected },
-                    }));
-                  }
-                }}
-                className="flex-1 py-2 text-xs font-semibold rounded-xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-navidark-600 hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors text-zinc-700 dark:text-zinc-300"
-              >
-                {currentMarker ? t`Change Marker` : t`Select Custom Marker`}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div className="p-4 bg-zinc-50 dark:bg-black/20 border-t border-zinc-100 dark:border-white/5 flex items-center justify-end gap-3">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-xs font-bold text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-lg transition-colors"
-          >
+    <Dialog
+      title={<Trans>Project Settings</Trans>}
+      subtitle={project.name}
+      onClose={onClose}
+      footer={
+        <>
+          <button type="button" onClick={onClose} className={dialogButton.secondary}>
             <Trans>Cancel</Trans>
           </button>
-          <button
-            onClick={handleSave}
-            className="px-4 py-2 bg-navi hover:bg-navi-600 text-white text-xs font-bold rounded-lg shadow-md transition-colors"
-          >
+          <button type="button" onClick={handleSave} className={dialogButton.primary}>
             <Trans>Save Settings</Trans>
           </button>
+        </>
+      }
+    >
+      <div className="space-y-2.5">
+        <div>
+          <p className="text-[13px] font-medium text-zinc-900 dark:text-zinc-100">
+            <Trans>Route marker</Trans>
+          </p>
+          <p className="mt-0.5 text-[12px] text-zinc-500 dark:text-zinc-400">
+            <Trans>Default marker for all waypoints. Can be overridden per-stop.</Trans>
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="w-10 h-10 rounded-lg border border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-white/5 flex items-center justify-center shrink-0">
+            {currentMarker ? (
+              <img src={markerSrc(currentMarker)} className="w-6 h-6 object-contain" alt="" />
+            ) : (
+              <MapPin className="w-4.5 h-4.5 text-zinc-400" />
+            )}
+          </span>
+          <button
+            type="button"
+            onClick={async () => {
+              const selected = await open({
+                multiple: false,
+                filters: [
+                  {
+                    name: "Images",
+                    extensions: ["svg", "png", "jpg", "jpeg"],
+                  },
+                ],
+              });
+              if (selected && typeof selected === "string") setMarker(selected);
+            }}
+            className="h-8 px-3 rounded-lg border border-zinc-200 dark:border-white/10 bg-white dark:bg-white/5 text-[12px] font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-white/10 transition-colors"
+          >
+            <Trans>Choose file…</Trans>
+          </button>
+          {currentMarker && (
+            <button
+              type="button"
+              onClick={() => setMarker("")}
+              className="h-8 px-2.5 rounded-lg text-[12px] font-medium text-zinc-500 hover:text-zinc-800 hover:bg-zinc-100 dark:hover:text-zinc-200 dark:hover:bg-white/5 transition-colors"
+            >
+              <Trans>Reset</Trans>
+            </button>
+          )}
         </div>
       </div>
-    </div>
+    </Dialog>
   );
 }

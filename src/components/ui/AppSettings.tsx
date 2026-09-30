@@ -413,7 +413,7 @@ export function AppSettings() {
                     onChange={(e) => updateProject({ mapbox_api_key: e.target.value })}
                     placeholder="pk.eyJ1..."
                     spellCheck={false}
-                    className={`${inputClass} w-full font-mono text-[12px]`}
+                    className={`${inputClass} w-full text-[12px]`}
                   />
                 </Row>
                 <Row
@@ -427,7 +427,7 @@ export function AppSettings() {
                     onChange={(e) => updateProject({ ors_api_key: e.target.value })}
                     placeholder={t`API key`}
                     spellCheck={false}
-                    className={`${inputClass} w-full font-mono text-[12px]`}
+                    className={`${inputClass} w-full text-[12px]`}
                   />
                 </Row>
               </Section>
@@ -507,7 +507,7 @@ export function AppSettings() {
                       value={settings.subtitle_color || "&H00FFFFFF"}
                       onChange={(e) => updateProject({ subtitle_color: e.target.value })}
                       spellCheck={false}
-                      className={`${inputClass} w-36 font-mono text-[12px]`}
+                      className={`${inputClass} w-36 text-[12px] tabular-nums`}
                     />
                   </Row>
                   <Row title={t`Outline colour`} description={t`ASS colour, e.g. &H00000000`}>
@@ -518,7 +518,7 @@ export function AppSettings() {
                         updateProject({ subtitle_outline_color: e.target.value })
                       }
                       spellCheck={false}
-                      className={`${inputClass} w-36 font-mono text-[12px]`}
+                      className={`${inputClass} w-36 text-[12px] tabular-nums`}
                     />
                   </Row>
                 </Section>
@@ -532,7 +532,7 @@ export function AppSettings() {
                   <Trans>
                     Correct words or kanji that are read incorrectly by the AI
                     voice. You can auto-extract entries from scripts by typing{" "}
-                    <code className="font-mono bg-zinc-100 dark:bg-zinc-800 px-1 rounded">
+                    <code className="bg-zinc-100 dark:bg-zinc-800 px-1 rounded">
                       漢字(よみがな)
                     </code>{" "}
                     in any narration script.
@@ -938,7 +938,7 @@ function AiModelsTab() {
                   </span>
                   <span className="text-[11px] text-zinc-400 tabular-nums">{model.size}</span>
                 </div>
-                <div className="text-[11px] font-mono text-zinc-500 dark:text-zinc-400 truncate select-text">
+                <div className="text-[11px] tracking-tight text-zinc-500 dark:text-zinc-400 truncate select-text">
                   {model.id}
                 </div>
               </div>

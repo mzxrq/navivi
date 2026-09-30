@@ -2,24 +2,26 @@ import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 import { useEffect, useRef, useState } from "react";
 import {
-  Car,
   Check,
   ChevronDown,
   Edit2,
-  Footprints,
   GripVertical,
   ImageIcon,
   Mic,
   Pencil,
-  Plane,
   Route,
-  Ruler,
-  Ship,
   X,
 } from "../../../components/ui/icons";
 import { useUI } from "../../../hooks/useUI";
 import { useWorkspace } from "../../../hooks/useWorkspace";
-import { RouteMode, Waypoint } from "../../../types/index";
+import { Waypoint } from "../../../types/index";
+import { openContextMenu } from "../../../components/ui/menuItems";
+import {
+  useLegActions,
+  useModeOptions,
+  useStopMenus,
+  VIA_MODES,
+} from "../hooks/useStopMenus";
 import { stopLabel } from "../../../utils/stopLabel";
 
 interface WaypointItemProps {
@@ -32,22 +34,6 @@ interface WaypointItemProps {
   onDelete: () => void;
 }
 
-type ModeOption = { id: RouteMode; icon: typeof Car; label: string };
-
-function useModeOptions(): ModeOption[] {
-  return [
-    { id: "walking", icon: Footprints, label: t`Walk` },
-    { id: "driving", icon: Car, label: t`Drive` },
-    { id: "ferry", icon: Ship, label: t`Ferry` },
-    { id: "curve", icon: Plane, label: t`Fly` },
-    { id: "direct", icon: Ruler, label: t`Direct` },
-    { id: "draw", icon: Pencil, label: t`Draw` },
-  ];
-}
-
-// Road-snapped modes can be nudged with via points; the others are drawn geometry.
-const VIA_MODES: (RouteMode | undefined)[] = [undefined, "walking", "driving", "ferry"];
-
 export function WaypointItem({
   wp,
   index,
@@ -57,7 +43,7 @@ export function WaypointItem({
   onEdit,
   onDelete,
 }: WaypointItemProps) {
-  const { activeWaypointId, setActiveWaypointId, updateWaypoint, waypoints, routeSegments } =
+  const { activeWaypointId, setActiveWaypointId, updateWaypoint, waypoints } =
     useWorkspace();
   const { isRendering } = useUI();
   const itemRef = useRef<HTMLDivElement>(null);
@@ -65,6 +51,8 @@ export function WaypointItem({
   const [isModeMenuOpen, setIsModeMenuOpen] = useState(false);
   const [isViaActive, setIsViaActive] = useState(false);
   const modeOptions = useModeOptions();
+  const { startDrawing: startDrawingLeg, setLegMode } = useLegActions();
+  const { stopMenu, legMenu } = useStopMenus();
 
   useEffect(() => {
     const handleEnter = (e: any) => setIsViaActive(e.detail.wpId === wp.id);
@@ -88,7 +76,8 @@ export function WaypointItem({
   useEffect(() => {
     if (!isModeMenuOpen) return;
     const close = (e: MouseEvent) => {
-      if (!modeMenuRef.current?.contains(e.target as Node)) setIsModeMenuOpen(false);
+      if (!modeMenuRef.current?.contains(e.target as Node))
+        setIsModeMenuOpen(false);
     };
     const closeOnEsc = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -109,28 +98,11 @@ export function WaypointItem({
     onEdit();
   };
 
-  // MapArea opens the draw bar on this leg and frames it.
-  const startDrawing = () =>
-    window.dispatchEvent(new CustomEvent("enter-draw-mode", { detail: { wpId: wp.id } }));
+  const startDrawing = () => startDrawingLeg(wp.id);
 
-  const selectMode = (mode: RouteMode) => {
+  const selectMode = (mode: Waypoint["routeMode"]) => {
     setIsModeMenuOpen(false);
-    if (mode === wp.routeMode) return;
-    if (mode === "draw") {
-      // Start the drawn line from the currently routed geometry so switching
-      // to Draw doesn't throw away the shape the user already sees.
-      const routedWaypoints = waypoints.filter((w) => !w.isStopBy || w.connectToRoute);
-      const routedIndex = routedWaypoints.findIndex((w) => w.id === wp.id);
-      let newCustomRoute = wp.customRoute || [];
-      const seg = routedIndex !== -1 ? routeSegments?.[routedIndex] : undefined;
-      if (seg?.positions && seg.positions.length > 2) {
-        newCustomRoute = seg.positions.slice(1, -1);
-      }
-      updateWaypoint(wp.id, { routeMode: "draw", customRoute: newCustomRoute });
-      startDrawing();
-    } else {
-      updateWaypoint(wp.id, { routeMode: mode });
-    }
+    if (mode) setLegMode(wp, mode);
   };
 
   const isStart = index === 0;
@@ -139,7 +111,9 @@ export function WaypointItem({
 
   const imageCount = wp.images?.length ?? 0;
   const script = wp.arrivingNarration || wp.attractionNarration || "";
-  const mode = modeOptions.find((m) => m.id === (wp.routeMode || "driving")) ?? modeOptions[1];
+  const mode =
+    modeOptions.find((m) => m.id === (wp.routeMode || "driving")) ??
+    modeOptions[1];
   const ModeIcon = mode.icon;
   const viaCount = wp.viaPoints?.length ?? 0;
   const canAdjust = VIA_MODES.includes(wp.routeMode);
@@ -149,14 +123,11 @@ export function WaypointItem({
     <div
       ref={itemRef}
       onContextMenu={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (isListEditMode) return;
-        window.dispatchEvent(
-          new CustomEvent("open-context-menu", {
-            detail: { x: e.clientX, y: e.clientY, type: "waypoint-marker", targetId: wp.id },
-          }),
-        );
+        if (isListEditMode) {
+          e.preventDefault();
+          return;
+        }
+        openContextMenu(e, stopMenu(wp.id));
       }}
       className="relative"
     >
@@ -237,13 +208,19 @@ export function WaypointItem({
           {(imageCount > 0 || script) && (
             <div className="flex items-center gap-2 mt-0.5 text-[11px] text-zinc-500 min-w-0">
               {imageCount > 0 && (
-                <span className="flex items-center gap-1 shrink-0" title={t`${imageCount} photos`}>
+                <span
+                  className="flex items-center gap-1 shrink-0"
+                  title={t`${imageCount} photos`}
+                >
                   <ImageIcon className="w-3 h-3" />
                   {imageCount}
                 </span>
               )}
               {script && (
-                <span className="flex items-center gap-1 min-w-0" title={script}>
+                <span
+                  className="flex items-center gap-1 min-w-0"
+                  title={script}
+                >
                   <Mic className="w-3 h-3 shrink-0" />
                   <span className="truncate">{script}</span>
                 </span>
@@ -278,7 +255,10 @@ export function WaypointItem({
 
       {/* --- Leg to the next stop --- */}
       {!isLast && !isListEditMode && (
-        <div className="relative flex items-center gap-2.5 pl-1.5 pr-1.5 py-1">
+        <div
+          onContextMenu={(e) => openContextMenu(e, legMenu(wp))}
+          className="relative flex items-center gap-2.5 pl-1.5 pr-1.5 py-1"
+        >
           <div className="w-7 flex items-center justify-center shrink-0">
             <span className="relative z-10 w-5 h-5 rounded-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 flex items-center justify-center text-zinc-500">
               <ModeIcon className="w-3 h-3" />
@@ -332,7 +312,9 @@ export function WaypointItem({
                       >
                         <Icon className="w-3.5 h-3.5" />
                         <span className="flex-1 text-left">{option.label}</span>
-                        {selected && <Check className="w-3.5 h-3.5 text-navi" />}
+                        {selected && (
+                          <Check className="w-3.5 h-3.5 text-navi" />
+                        )}
                       </button>
                     );
                   })}
@@ -342,7 +324,10 @@ export function WaypointItem({
 
             {wp.routeMode === "draw" && (
               <>
-                <span className="text-zinc-300 dark:text-zinc-700 text-[11px]" aria-hidden>
+                <span
+                  className="text-zinc-300 dark:text-zinc-700 text-[11px]"
+                  aria-hidden
+                >
                   ·
                 </span>
                 <button
@@ -357,7 +342,9 @@ export function WaypointItem({
                   <Pencil className="w-3 h-3" />
                   <Trans>Edit path</Trans>
                   {(wp.customRoute?.length ?? 0) > 0 && (
-                    <span className="text-zinc-400 tabular-nums">{wp.customRoute!.length}</span>
+                    <span className="text-zinc-400 tabular-nums">
+                      {wp.customRoute!.length}
+                    </span>
                   )}
                 </button>
               </>
@@ -365,7 +352,10 @@ export function WaypointItem({
 
             {canAdjust && (
               <>
-                <span className="text-zinc-300 dark:text-zinc-700 text-[11px]" aria-hidden>
+                <span
+                  className="text-zinc-300 dark:text-zinc-700 text-[11px]"
+                  aria-hidden
+                >
                   ·
                 </span>
                 <button
@@ -375,7 +365,9 @@ export function WaypointItem({
                     window.dispatchEvent(
                       isViaActive
                         ? new CustomEvent("exit-via-mode")
-                        : new CustomEvent("enter-via-mode", { detail: { wpId: wp.id } }),
+                        : new CustomEvent("enter-via-mode", {
+                            detail: { wpId: wp.id },
+                          }),
                     );
                   }}
                   aria-pressed={isViaActive}
@@ -387,23 +379,18 @@ export function WaypointItem({
                   }`}
                 >
                   <Route className="w-3 h-3" />
-                  {isViaActive ? <Trans>Done adjusting</Trans> : <Trans>Adjust</Trans>}
+                  {isViaActive ? (
+                    <Trans>Done adjusting</Trans>
+                  ) : (
+                    <Trans>Adjust</Trans>
+                  )}
                 </button>
                 {viaCount > 0 && (
-                  <span className="flex items-center h-5 pl-1.5 pr-0.5 rounded-md bg-zinc-100 dark:bg-white/5 text-[10px] text-zinc-600 dark:text-zinc-400 tabular-nums">
+                  <span
+                    title={t`Right-click the leg to clear via points`}
+                    className="flex items-center h-5 px-1.5 rounded-md bg-zinc-100 dark:bg-white/5 text-[10px] text-zinc-600 dark:text-zinc-400 tabular-nums"
+                  >
                     <Trans>{viaCount} via</Trans>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        updateWaypoint(wp.id, { viaPoints: [] });
-                      }}
-                      title={t`Clear all via points`}
-                      aria-label={t`Clear all via points`}
-                      className="ml-0.5 p-0.5 rounded text-zinc-400 hover:text-red-500 transition-colors"
-                    >
-                      <X className="w-2.5 h-2.5" />
-                    </button>
                   </span>
                 )}
               </>

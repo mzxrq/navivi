@@ -1,18 +1,14 @@
 import { useEffect, useState, useRef } from "react";
-import Map, {
-  Marker,
-  MapRef,
-  Source,
-} from "react-map-gl/mapbox";
+import Map, { Marker, MapRef, Source } from "react-map-gl/mapbox";
 import { listen } from "@tauri-apps/api/event";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import {
-  UploadCloud,
-  ImageIcon,
-} from "../../../components/ui/icons";
+import { UploadCloud, ImageIcon } from "../../../components/ui/icons";
 import { AddType, MapToolbar } from "./MapToolbar";
 import { DrawBar } from "./DrawBar";
 import { MapCompass } from "./MapCompass";
+import { openContextMenu, separator } from "../../../components/ui/menuItems";
+import { useStopMenus } from "../hooks/useStopMenus";
+import { Check, Pencil, Plus, Trash2 } from "../../../components/ui/icons";
 import "@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css";
 import { mapStyles, mapDefaults } from "../../../config/constants";
 import { RouteStyling } from "./MapLayers/RouteStyling";
@@ -126,7 +122,8 @@ export function MapArea() {
         if (!source.width || !source.height) return;
         const width = Math.min(640, source.width);
         const height = Math.round((source.height / source.width) * width);
-        const snap = thumbnailCanvasRef.current ?? document.createElement("canvas");
+        const snap =
+          thumbnailCanvasRef.current ?? document.createElement("canvas");
         snap.width = width;
         snap.height = height;
         try {
@@ -153,7 +150,6 @@ export function MapArea() {
         map.setLanguage(i18n.locale);
       }
     } catch (e) {}
-
 
     // Prevent the browser from discarding the context silently
     const handleContextLost = (e: Event) => {
@@ -198,8 +194,6 @@ export function MapArea() {
         maxLng = Math.max(maxLng, wp.lng);
         maxLat = Math.max(maxLat, wp.lat);
       });
-
-
 
       if (minLng !== Infinity) {
         if (minLng === maxLng && minLat === maxLat) {
@@ -259,7 +253,6 @@ export function MapArea() {
     }
   }, [i18n.locale, selectedStyle, mapRef.current]);
 
-
   useEffect(() => {
     const timer = setTimeout(() => {
       mapRef.current?.resize();
@@ -275,9 +268,17 @@ export function MapArea() {
             const existing = wp.customRoute || [];
             let newRoute = [...existing];
             const insertIdx = activeAnchorIndexRef.current;
-            if (insertIdx !== null && insertIdx >= 0 && insertIdx < newRoute.length) {
+            if (
+              insertIdx !== null &&
+              insertIdx >= 0 &&
+              insertIdx < newRoute.length
+            ) {
               newRoute.splice(insertIdx + 1, 0, [e.lngLat.lat, e.lngLat.lng]);
-              window.dispatchEvent(new CustomEvent("select-anchor", { detail: { index: insertIdx + 1 } }));
+              window.dispatchEvent(
+                new CustomEvent("select-anchor", {
+                  detail: { index: insertIdx + 1 },
+                }),
+              );
             } else {
               newRoute = [...existing, [e.lngLat.lat, e.lngLat.lng]];
             }
@@ -301,7 +302,13 @@ export function MapArea() {
         prev.map((wp) => {
           if (wp.id === targetId) {
             const existing = wp.viaPoints || [];
-            return { ...wp, viaPoints: [...existing, [e.lngLat.lat, e.lngLat.lng] as [number, number]] };
+            return {
+              ...wp,
+              viaPoints: [
+                ...existing,
+                [e.lngLat.lat, e.lngLat.lng] as [number, number],
+              ],
+            };
           }
           return wp;
         }),
@@ -334,49 +341,58 @@ export function MapArea() {
       if (dx > 5 || dy > 5) return;
     }
 
-    // context menu payload
-    window.dispatchEvent(
-      new CustomEvent("open-context-menu", {
-        detail: {
-          x: e.originalEvent.clientX,
-          y: e.originalEvent.clientY,
-          type: "map-canvas",
-          data: {
-            lat: e.lngLat.lat,
-            lng: e.lngLat.lng,
-            setAsStart: () =>
-              handleAddSpWaypoint(e.lngLat.lat, e.lngLat.lng, "start"),
-            setAsDestination: () =>
-              handleAddSpWaypoint(e.lngLat.lat, e.lngLat.lng, "end"),
-            setAsStopBy: () =>
-              handleAddStopByWaypoint(e.lngLat.lat, e.lngLat.lng),
-            addWaypoint: () => handleAddWaypoint(e.lngLat.lat, e.lngLat.lng),
+    const { lat, lng } = e.lngLat;
+    if (isDrawMode) {
+      openContextMenu(e.originalEvent, [
+        activeWp &&
+          nextWp && {
+            label: t`Add point here`,
+            icon: Plus,
+            onSelect: () => handleMapClick(e),
           },
+        {
+          label: t`Done drawing`,
+          icon: Check,
+          onSelect: () => setIsDrawMode(false),
         },
+      ]);
+      return;
+    }
+    if (isViaMode) {
+      openContextMenu(e.originalEvent, [
+        {
+          label: t`Add via point here`,
+          icon: Plus,
+          onSelect: () => handleMapClick(e),
+        },
+        {
+          label: t`Done adjusting`,
+          icon: Check,
+          onSelect: () =>
+            window.dispatchEvent(new CustomEvent("exit-via-mode")),
+        },
+      ]);
+      return;
+    }
+    openContextMenu(
+      e.originalEvent,
+      mapMenu(lat, lng, {
+        stop: () => handleAddWaypoint(lat, lng),
+        stopBy: () => handleAddStopByWaypoint(lat, lng),
+        start: () => handleAddSpWaypoint(lat, lng, "start"),
+        end: () => handleAddSpWaypoint(lat, lng, "end"),
       }),
     );
   };
 
-  const handleMarkerContextMenu = (e: React.MouseEvent, wpId: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-
-    window.dispatchEvent(
-      new CustomEvent("open-context-menu", {
-        detail: {
-          x: e.clientX,
-          y: e.clientY,
-          type: "waypoint-marker",
-          targetId: wpId,
-        },
-      }),
-    );
-  };
+  const handleMarkerContextMenu = (e: React.MouseEvent, wpId: string) =>
+    openContextMenu(e, stopMenu(wpId));
 
   // Clicking a pin with the select tool selects that stop, which also
   // highlights (and scrolls to) its row in the sidebar. Releasing a dragged
   // pin fires a click too; that one shouldn't select.
   const pinDraggedRef = useRef(false);
+  const { stopMenu, viaMenu, mapMenu } = useStopMenus();
   const handlePinClick = (e: React.MouseEvent, wpId: string) => {
     e.stopPropagation();
     if (pinDraggedRef.current) {
@@ -516,6 +532,46 @@ export function MapArea() {
     }
   };
 
+  /** Deletes drawn point `idx` of the active leg, keeping the insert point on the same point. */
+  const removeAnchor = (idx: number) => {
+    setWaypoints((prev) =>
+      prev.map((wp) =>
+        wp.id === activeWaypointId && wp.customRoute
+          ? { ...wp, customRoute: wp.customRoute.filter((_, i) => i !== idx) }
+          : wp,
+      ),
+    );
+    if (
+      activeAnchorIndexRef.current !== null &&
+      activeAnchorIndexRef.current >= idx
+    ) {
+      const index =
+        activeAnchorIndexRef.current === idx
+          ? null
+          : activeAnchorIndexRef.current - 1;
+      window.dispatchEvent(
+        new CustomEvent("select-anchor", { detail: { index } }),
+      );
+    }
+    setIsDirty(true);
+  };
+
+  // "Show on map" from a stop's context menu.
+  useEffect(() => {
+    const handleFocus = ((e: CustomEvent) => {
+      const wp = waypoints.find((w) => w.id === e.detail.wpId);
+      const map = mapRef.current?.getMap();
+      if (!wp || !map) return;
+      map.flyTo({
+        center: [wp.lng, wp.lat],
+        zoom: Math.max(map.getZoom(), 15),
+        duration: 800,
+      });
+    }) as EventListener;
+    window.addEventListener("focus-waypoint", handleFocus);
+    return () => window.removeEventListener("focus-waypoint", handleFocus);
+  }, [waypoints]);
+
   /** Frames the leg that starts at `wpId` (its routed segment, drawn points
    * and via points) so the user can see what they're about to edit. */
   const fitToLeg = (wpId: string) => {
@@ -542,7 +598,9 @@ export function MapArea() {
     setTimeout(() => {
       try {
         if (minLng === maxLng && minLat === maxLat) {
-          map.getMap().flyTo({ center: [minLng, minLat], zoom: 15, duration: 800 });
+          map
+            .getMap()
+            .flyTo({ center: [minLng, minLat], zoom: 15, duration: 800 });
         } else {
           // Extra top padding keeps the leg clear of the toolbar and draw bar.
           map.getMap().fitBounds(
@@ -550,7 +608,10 @@ export function MapArea() {
               [minLng, minLat],
               [maxLng, maxLat],
             ],
-            { padding: { top: 170, bottom: 80, left: 80, right: 80 }, duration: 800 },
+            {
+              padding: { top: 170, bottom: 80, left: 80, right: 80 },
+              duration: 800,
+            },
           );
         }
       } catch (e) {
@@ -595,7 +656,9 @@ export function MapArea() {
   // Leaving draw mode (or switching legs) drops the eraser and the insert point.
   useEffect(() => {
     if (!isDrawMode) setIsEraserMode(false);
-    window.dispatchEvent(new CustomEvent("select-anchor", { detail: { index: null } }));
+    window.dispatchEvent(
+      new CustomEvent("select-anchor", { detail: { index: null } }),
+    );
   }, [isDrawMode, activeWaypointId]);
 
   useEffect(() => {
@@ -612,7 +675,8 @@ export function MapArea() {
       setSelectedAnchor(e.detail.index);
     }) as EventListener;
     window.addEventListener("select-anchor", handleSelectAnchor);
-    return () => window.removeEventListener("select-anchor", handleSelectAnchor);
+    return () =>
+      window.removeEventListener("select-anchor", handleSelectAnchor);
   }, []);
 
   useEffect(() => {
@@ -812,7 +876,8 @@ export function MapArea() {
             onToggleSpline={() => {
               if (activeWp) {
                 updateWaypoint(activeWp.id, {
-                  drawStyle: activeWp.drawStyle === "spline" ? "linear" : "spline",
+                  drawStyle:
+                    activeWp.drawStyle === "spline" ? "linear" : "spline",
                 });
               }
             }}
@@ -827,7 +892,10 @@ export function MapArea() {
           <div className="flex items-center gap-2 h-9 pl-3.5 pr-1 rounded-xl bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border border-zinc-200 dark:border-white/10 shadow-sm animate-in fade-in slide-in-from-top-1 duration-150">
             <span className="w-1.5 h-1.5 rounded-full bg-violet-500 shrink-0" />
             <span className="text-[12px] text-zinc-600 dark:text-zinc-300 truncate">
-              <Trans>Click the map to nudge the route. Right-click a via point to remove it.</Trans>
+              <Trans>
+                Click the map to nudge the route. Drag a via point to move it,
+                or right-click it for options.
+              </Trans>
             </span>
             <button
               type="button"
@@ -951,7 +1019,9 @@ export function MapArea() {
                     onClick={(e) => handlePinClick(e, wp.id)}
                     onContextMenu={(e) => handleMarkerContextMenu(e, wp.id)}
                   >
-                    <div className={`bg-zinc-900 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-lg border border-white/20 mb-1 transition-opacity whitespace-nowrap ${isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}>
+                    <div
+                      className={`bg-zinc-900 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-lg border border-white/20 mb-1 transition-opacity whitespace-nowrap ${isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
+                    >
                       {wp.name || t`Waypoint`}
                     </div>
                     {wp.customMarker || settings.routeMarker ? (
@@ -1010,7 +1080,9 @@ export function MapArea() {
                   onClick={(e) => handlePinClick(e, wp.id)}
                   onContextMenu={(e) => handleMarkerContextMenu(e, wp.id)}
                 >
-                  <div className={`bg-zinc-900 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-lg border border-white/20 mb-1 transition-opacity whitespace-nowrap ${isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}>
+                  <div
+                    className={`bg-zinc-900 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-lg border border-white/20 mb-1 transition-opacity whitespace-nowrap ${isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
+                  >
                     {wp.name || t`Waypoint`}
                   </div>
 
@@ -1076,31 +1148,16 @@ export function MapArea() {
               >
                 <div
                   className="relative group cursor-grab active:cursor-grabbing"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    // Right-click or Ctrl+Click to remove
-                  }}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setWaypoints((prev) =>
-                      prev.map((w) => {
-                        if (w.id === wp.id && w.viaPoints) {
-                          return { ...w, viaPoints: w.viaPoints.filter((_, i) => i !== idx) };
-                        }
-                        return w;
-                      }),
-                    );
-                    setIsDirty(true);
-                  }}
+                  onClick={(e) => e.stopPropagation()}
+                  onContextMenu={(e) => openContextMenu(e, viaMenu(wp.id, idx))}
                 >
                   <div className="w-4 h-4 bg-violet-500 border-2 border-white dark:border-zinc-900 rounded-full shadow-md group-hover:scale-125 group-hover:bg-violet-400 transition-all" />
                   <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 opacity-0 group-hover:opacity-100 transition-opacity bg-zinc-900 text-white text-[9px] font-bold px-1.5 py-0.5 rounded pointer-events-none whitespace-nowrap">
-                    <Trans>Via {idx + 1} · Right-click to remove</Trans>
+                    <Trans>Via {idx + 1} · Right-click for options</Trans>
                   </div>
                 </div>
               </Marker>
-            ))
+            )),
           )}
 
           {/* drawn nodes */}
@@ -1134,25 +1191,42 @@ export function MapArea() {
                       e.stopPropagation();
                       if (!isEraserMode) {
                         // Pick this point as the insert position (toggle).
-                        const index = activeAnchorIndexRef.current === idx ? null : idx;
-                        window.dispatchEvent(new CustomEvent("select-anchor", { detail: { index } }));
+                        const index =
+                          activeAnchorIndexRef.current === idx ? null : idx;
+                        window.dispatchEvent(
+                          new CustomEvent("select-anchor", {
+                            detail: { index },
+                          }),
+                        );
                         return;
                       }
-                      setWaypoints((prev) =>
-                        prev.map((wp) => {
-                          if (wp.id === activeWaypointId && wp.customRoute) {
-                            const newRoute = wp.customRoute.filter((_, i) => i !== idx);
-                            return { ...wp, customRoute: newRoute };
-                          }
-                          return wp;
-                        }),
-                      );
-                      if (activeAnchorIndexRef.current !== null && activeAnchorIndexRef.current >= idx) {
-                        const index = activeAnchorIndexRef.current === idx ? null : activeAnchorIndexRef.current - 1;
-                        window.dispatchEvent(new CustomEvent("select-anchor", { detail: { index } }));
-                      }
-                      setIsDirty(true);
+                      removeAnchor(idx);
                     }}
+                    onContextMenu={(e) =>
+                      openContextMenu(e, [
+                        { type: "label", label: t`Point ${idx + 1}` },
+                        {
+                          label: t`Add new points after this one`,
+                          icon: Pencil,
+                          checked: selectedAnchor === idx,
+                          onSelect: () =>
+                            window.dispatchEvent(
+                              new CustomEvent("select-anchor", {
+                                detail: {
+                                  index: selectedAnchor === idx ? null : idx,
+                                },
+                              }),
+                            ),
+                        },
+                        separator,
+                        {
+                          label: t`Delete point`,
+                          icon: Trash2,
+                          danger: true,
+                          onSelect: () => removeAnchor(idx),
+                        },
+                      ])
+                    }
                   >
                     <div
                       className={`w-5 h-5 border-2 border-white dark:border-zinc-900 rounded-full shadow-md group-hover:scale-110 transition-all flex items-center justify-center ${

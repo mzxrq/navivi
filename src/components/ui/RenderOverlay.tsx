@@ -1060,7 +1060,7 @@ export function RenderOverlay() {
                     </div>
                   </div>
                   <span
-                    className="text-[10px] font-mono px-2 py-1 rounded bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 max-w-full truncate"
+                    className="text-[10px] tabular-nums px-2 py-1 rounded bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 max-w-full truncate"
                     title={hardwareSpec.gpuRenderer}
                   >
                     {hardwareSpec.gpuRenderer.substring(0, 30)}
@@ -1106,7 +1106,7 @@ export function RenderOverlay() {
                               >
                                 {vid.label}
                               </p>
-                              <p className="text-[10px] text-zinc-400 font-mono truncate">
+                              <p className="text-[10px] text-zinc-400 tracking-tight truncate">
                                 {vid.name}
                               </p>
                             </div>
