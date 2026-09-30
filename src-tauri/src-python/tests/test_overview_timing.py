@@ -3,6 +3,7 @@ import numpy as np
 from services.vdoprocessing.spatial_renderer.overview_timing import (
     MIN_SECONDS_AFTER_LAST_CUE,
     animation_frames,
+    intro_card_hold_frames,
     intro_frame_count,
     stop_targets,
     warp_controls,
@@ -13,8 +14,21 @@ FPS = 30
 
 
 def test_intro_frame_count_matches_the_writes():
-    # clean 45 + bounce 9 + remaining (90-45-9=36) + bounce 9
-    assert intro_frame_count(3.0, 1.5, 9, FPS) == 45 + 9 + 36 + 9
+    # clean 45 + bounce 9 + hold (freeze leaves 36, floored at 2s = 60) + bounce 9
+    assert intro_frame_count(3.0, 1.5, 9, FPS) == 45 + 9 + 60 + 9
+
+
+def test_intro_cards_shown_at_least_two_seconds():
+    assert intro_card_hold_frames(3.0, 1.5, 45, FPS) == 60
+    # an early {start} cue doesn't shorten it
+    assert intro_card_hold_frames(3.0, 1.5, 45, FPS, start_cue_sec=1.0) == 60
+
+
+def test_intro_cards_stay_until_late_start_cue():
+    # cards finish sliding out exactly on the cue: 45 + 45 + hold + 45 = 10s
+    hold = intro_card_hold_frames(3.0, 1.5, 45, FPS, start_cue_sec=10.0)
+    assert hold == 300 - 45 - 90
+    assert intro_frame_count(3.0, 1.5, 45, FPS, start_cue_sec=10.0) == 300
 
 
 def test_walk_ends_at_end_cue():

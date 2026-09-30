@@ -1380,13 +1380,8 @@ async def _play_stopby_photo_pause(
       canvas never stops running, only the ffmpeg sink changes); that new
       file opens on the same fullscreen photo, holds, and shrinks back
       down to nothing right on the marker before the walk resumes.
-    - Has an attraction video AND `image_display` is "pip": stays a small
-      card the whole time -- no growth -- just holds, then cuts straight
-      to a new file that resumes the walk directly (no fullscreen re-
-      intro; the attraction video itself is meant to fill that beat when
-      it's spliced in during final assembly).
-    - Has an attraction video AND `image_display` is anything else
-      ("fullscreen"/"cover"): grows to fullscreen like the no-attraction
+    - Has an attraction video (`image_display` is ignored - always
+      fullscreen): grows to fullscreen like the no-attraction
       case, but ends with a cinematic blur-out (matching popupsequence.
       py's own arrival blur-out) instead of a flat cut, then cuts to a new
       file that likewise resumes the walk directly.
@@ -1405,7 +1400,6 @@ async def _play_stopby_photo_pause(
         return
 
     has_attraction = bool(stopby.get("attraction_video"))
-    image_display = str(stopby.get("image_display") or "cover").lower()
 
     # A per-call UNIQUE filename (not a fixed "stopby_preview.jpg" reused
     # every time this runs) -- a leg with more than one connected stop-by
@@ -1562,21 +1556,6 @@ async def _play_stopby_photo_pause(
     hold_png = await page.screenshot(**_FRAME_SHOT)
     for _ in range(max(1, int((0.5 if small_hold_seconds is None else small_hold_seconds) * fps))):
         await write_frame(hold_png)
-
-    if has_attraction and image_display == "pip":
-        # Stays a small card -- no growth, no fullscreen -- just cuts
-        # straight to a new file that resumes the walk directly. The
-        # attraction video itself (spliced in during final assembly, not
-        # here) is what fills the "arriving here" beat this would
-        # otherwise need to cover on its own.
-        await page.evaluate(
-            """() => {
-                const svg = document.getElementById('stopby-leader'); if (svg) svg.remove();
-                const img = document.getElementById('stopby-preview'); if (img) img.remove();
-            }"""
-        )
-        await cut_to_new_clip()
-        return
 
     # Grow: card -> fullscreen, leader line fading out as it goes (there's
     # nothing left to "point at" once the photo covers the whole frame).
@@ -2322,19 +2301,20 @@ async def _record_leg(
                     # attraction photo) and the photo shrinking into place.
                     # The voice delay below is counted from the frames
                     # actually written, so it stays in sync either way.
-                    # Play the destination photo as a fullscreen shrink preview at
-                    # the start of the leg. The user specifically requested this back.
+                    # The leg opens on its DEPARTURE photo (fullscreen, shrinking
+                    # onto the start pin); the destination photo only when the
+                    # departure has none.
                     if not dest_popup_image and not start_popup_image:
                         for _ in range(max(1, int(0.3 * fps))):
                             await _write_frame(warm_png)
-                    
-                    if dest_popup_image:
-                        await _play_leg_photo_card(
-                            dest_popup_image, dest_popup_freeze_seconds, "dest_opening"
-                        )
-                    elif start_popup_image:
+
+                    if start_popup_image:
                         await _play_leg_photo_card(
                             start_popup_image, start_popup_freeze_seconds, "start"
+                        )
+                    elif dest_popup_image:
+                        await _play_leg_photo_card(
+                            dest_popup_image, dest_popup_freeze_seconds, "dest_opening"
                         )
 
                     for i in range(intro_frames):
@@ -2832,7 +2812,7 @@ async def _record_leg(
                                 None if arrival_wait_seconds is None
                                 else max(0.0, arrival_wait_seconds - tuning.RESIDENTIAL_ARRIVAL_FREEZE_SECONDS)
                             ),
-                            pip_end=str(dest_image_display or "cover").lower() == "pip",
+                            pip_end=False,  # image_display is ignored: arrivals always go fullscreen
                             hold_seconds=(
                                 arrival_photo_hold_seconds
                                 if arrival_photo_hold_seconds is not None

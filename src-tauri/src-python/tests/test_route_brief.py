@@ -306,8 +306,11 @@ class TestHighlights:
         project = _long_route(10)
         project["waypoints"].insert(2, _wp("小さな碑", 35.0005, 139.0045, isStopBy=True))  # after 場所1
         budget = plan_budget(project, build_brief(project, {}))
+        from services import tuning
+
         assert 1 in budget["stops"]
-        assert budget["describe"][1] == 1.0 + 2.0 + 1.0  # post-arrival + card + one stop-by (STOPBY_BATCH_SECONDS)
+        # post-arrival + card + one stop-by
+        assert budget["describe"][1] == 1.0 + 2.0 + tuning.STOPBY_BATCH_SECONDS
 
     def test_a_stopby_batch_gets_its_own_cue_wherever_it_is(self):
         # {goPreN} must not be special-cased to the very first leg - a batch

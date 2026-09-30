@@ -6,6 +6,18 @@ import { appConfig, fileSystem } from "../config/constants";
 import { buildAssetManifest } from "../utils/manifestBuilder";
 import { TimelineData, TimelineManifest, ManifestClip, RenderSettings, ExportManifestPayload, RecentProjects } from "../types";
 import { t } from "@lingui/core/macro";
+import { i18n } from "@lingui/core";
+import { db } from "./db";
+
+// A slug id already used by a different project folder in the DB.
+async function isProjectIdTaken(id: string, directoryPath: string): Promise<boolean> {
+  try {
+    const row = await db.projects.get(id);
+    return Boolean(row && row.directoryPath !== directoryPath);
+  } catch {
+    return false;
+  }
+}
 
 // Haversine distance calculator
 function calculateDistance(pos1: [number, number], pos2: [number, number]) {
@@ -87,7 +99,7 @@ export const saveProjectData = async (
       let counter = 1;
       const baseProjName = overrideName || metadata.project_name || appConfig.defaultProjectName;
       const baseSafeName = baseProjName.toLowerCase().replace(/[^a-z0-9]+/g, "_");
-      while (await exists(projectDir)) {
+      while ((await exists(projectDir)) || (await isProjectIdTaken(projId, projectDir))) {
         counter++;
         projName = `${baseProjName} (${counter})`;
         projId = `${baseSafeName}_${counter}`;
@@ -239,22 +251,41 @@ export const saveProjectData = async (
   const startWp = processedWaypoints[0];
   const endWp = processedWaypoints[processedWaypoints.length - 1];
 
-  const jobConfig = {
-    project_id: projId,
-    user_id: metadata.user_id,
-    project_name: projName,
-    created_at: metadata.created_at,
-      updated_at: Date.now(),
-    theme: metadata.theme,
+  // SQLite is the source of truth; job_config.json / .nvv are exported from it for Python.
+  const row = await db.projects.upsert({
+    id: projId,
+    name: projName,
+    directoryPath: projectDir,
+    userId: metadata.user_id ?? null,
+    theme: metadata.theme ?? null,
     status: "saved",
+    archivePath: archivePath || null,
+    thumbnailPath: thumbnailPath || null,
+    videoTitle: metadata.video_title || "",
+    videoSubtitle: metadata.video_subtitle || "",
+    enableIntro: metadata.enable_intro ?? true,
+    overviewNarration: metadata.overview_narration || "",
+    createdAt: metadata.created_at || undefined,
+  });
+  const savedSettings = await db.settings.put(row.id, settings);
+
+  const jobConfig = {
+    project_id: row.id,
+    user_id: row.userId ?? metadata.user_id,
+    project_name: row.name,
+    created_at: row.createdAt,
+    updated_at: row.updatedAt,
+    theme: row.theme ?? undefined,
+    status: row.status,
     archive_path: archivePath,
     thumbnail_path: thumbnailPath,
     source_files: { gps_route: "raw_track.gpx" },
-    settings: settings,
+    settings: savedSettings,
+    map_language: i18n.locale || "en",
     overview_narration: "",
-    video_title: metadata.video_title || "",
-    video_subtitle: metadata.video_subtitle || "",
-    enable_intro: metadata.enable_intro ?? true,
+    video_title: row.videoTitle,
+    video_subtitle: row.videoSubtitle,
+    enable_intro: row.enableIntro,
     start_point: startWp ? { lat: startWp.lat, lng: startWp.lng, label: startWp.label } : null,
     end_point: endWp ? { lat: endWp.lat, lng: endWp.lng, label: endWp.label } : null,
     waypoints: processedWaypoints,
@@ -293,6 +324,8 @@ export const saveProjectData = async (
   if (deletedCount > 0) {
     console.log(`Garbage Collector pruned ${deletedCount} ghost routes.`);
   }
+  await db.routeCache.replace(row.id, cleanCache);
+  // Python reads the exported file (narration_step.py).
   const routeCachePath = await join(projectDir, ".routecache.json");
   await writeTextFile(routeCachePath, JSON.stringify(cleanCache));
 

@@ -130,22 +130,25 @@ def render_attraction_videos(
     for idx, wp in enumerate(waypoints):
         place_label = wp.get("label", f"waypoint_{idx}")
 
-        # Check upfront, before ever showing "Generating..." or touching
-        # ComfyUI/the local fallback — a waypoint with no popup image has
-        # nothing to generate a clip from, so skip it outright.
-        if not isinstance(wp, dict) or not wp.get("popup_image"):
-            logger.info(
-                "Step 3: [%d/%d] Skipping '%s' — no popup image configured.",
-                idx + 1, len(waypoints), place_label,
-            )
-            continue
-
         # A stop-by the route only passes near (not connected to it) is never
         # visited, so it gets no attraction video (and timeline_step never
         # uses one).
         if is_unvisited_stopby(wp):
             logger.info(
                 "Step 3: [%d/%d] Skipping '%s' — stop-by not connected to the route.",
+                idx + 1, len(waypoints), place_label,
+            )
+            tracker.note(
+                f"Skipped attraction video {idx + 1}/{len(waypoints)}: {place_label} (stop-by not connected to the route)"
+            )
+            continue
+
+        # Check upfront, before ever showing "Generating..." or touching
+        # ComfyUI/the local fallback — a waypoint with no popup image has
+        # nothing to generate a clip from, so skip it outright.
+        if not isinstance(wp, dict) or not wp.get("popup_image"):
+            logger.info(
+                "Step 3: [%d/%d] Skipping '%s' — no popup image configured.",
                 idx + 1, len(waypoints), place_label,
             )
             continue

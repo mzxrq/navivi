@@ -1,12 +1,8 @@
 import { join } from "@tauri-apps/api/path";
+import { exists, readTextFile } from "@tauri-apps/plugin-fs";
+import { db } from "./db";
 import {
-    exists,
-    mkdir,
-    readTextFile,
-    remove,
-    writeTextFile,
-} from "@tauri-apps/plugin-fs";
-import {
+    DbVersion,
     ProjectVersion,
     ProjectVersionSnapshot,
     RouteSegment,
@@ -18,7 +14,6 @@ import {
 
 const HISTORY_DIRECTORY = ".history";
 const HISTORY_MANIFEST = "manifest.json";
-const MAX_VERSIONS = 30;
 
 interface VersionInput {
     projectId: string;
@@ -103,21 +98,20 @@ function normalizeSnapshot(value: unknown, projectId: string, versionId: string)
     };
 }
 
-export async function listProjectVersions(projectDir: string, projectId: string): Promise<ProjectVersion[]> {
-    if (!projectDir || !projectId) return [];
-    const manifest = await readManifest(projectDir);
-    if (manifest.projectId && manifest.projectId !== projectId) return [];
+// Versions live in SQLite (the DB keeps the newest 30). `projectDir` stays in the
+// signatures for callers; only the legacy `.history/` reader uses it.
 
-    return manifest.versions
-        .filter((version) => version.projectId === projectId)
-        .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+export async function listProjectVersions(_projectDir: string, projectId: string): Promise<ProjectVersion[]> {
+    if (!projectId) return [];
+    try {
+        return await db.versions.list(projectId);
+    } catch (error) {
+        console.error("Failed to load version history:", error);
+        return [];
+    }
 }
 
 export async function saveProjectVersion(input: VersionInput): Promise<ProjectVersion> {
-    const { historyDir, manifestPath } = await getHistoryPaths(input.metadata.directory_path);
-    await mkdir(historyDir, { recursive: true });
-
-    const manifest = await readManifest(input.metadata.directory_path);
     const version: ProjectVersion = {
         id: crypto.randomUUID(),
         projectId: input.projectId,
@@ -139,76 +133,56 @@ export async function saveProjectVersion(input: VersionInput): Promise<ProjectVe
         routingCache: structuredClone(input.routingCache),
         activeWaypointId: input.activeWaypointId,
     };
-
-    await writeTextFile(
-        await join(historyDir, `${version.id}.json`),
-        JSON.stringify(snapshot, null, 2),
-    );
-
-    const versions = [version, ...manifest.versions.filter((item) => item.id !== version.id)]
-        .filter((item) => item.projectId === input.projectId)
-        .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
-    const removedVersions = versions.slice(MAX_VERSIONS);
-    for (const removed of removedVersions) {
-        try {
-            await remove(await join(historyDir, `${removed.id}.json`));
-        } catch {
-            // A missing old snapshot should not prevent new versions from being saved.
-        }
-    }
-
-    await writeTextFile(
-        manifestPath,
-        JSON.stringify({ version: 1, projectId: input.projectId, versions: versions.slice(0, MAX_VERSIONS) }, null, 2),
-    );
-    return version;
+    return db.versions.create({ ...version, snapshot });
 }
 
 export async function loadProjectVersion(
-    projectDir: string,
+    _projectDir: string,
     projectId: string,
     versionId: string,
 ): Promise<ProjectVersionSnapshot | null> {
-    const versions = await listProjectVersions(projectDir, projectId);
-    if (!versions.some((version) => version.id === versionId)) return null;
-
     try {
-        const { historyDir } = await getHistoryPaths(projectDir);
-        const snapshot = JSON.parse(
-            await readTextFile(await join(historyDir, `${versionId}.json`)),
-        ) as ProjectVersionSnapshot;
-        return normalizeSnapshot(snapshot, projectId, versionId);
+        const row = await db.versions.get(projectId, versionId);
+        return row ? normalizeSnapshot(row.snapshot, projectId, versionId) : null;
     } catch (error) {
         console.error("Failed to load project version:", error);
         return null;
     }
 }
 
+export async function renameProjectVersion(
+    projectId: string,
+    versionId: string,
+    label: string,
+): Promise<ProjectVersion> {
+    return db.versions.rename(projectId, versionId, label);
+}
+
 export async function deleteProjectVersion(
-    projectDir: string,
+    _projectDir: string,
     projectId: string,
     versionId: string,
 ): Promise<boolean> {
-    const manifest = await readManifest(projectDir);
-    if (manifest.projectId && manifest.projectId !== projectId) return false;
-    const version = manifest.versions.find(
-        (item) => item.id === versionId && item.projectId === projectId,
-    );
-    if (!version) return false;
+    return db.versions.delete(projectId, versionId);
+}
 
-    const { historyDir, manifestPath } = await getHistoryPaths(projectDir);
-    try {
-        await remove(await join(historyDir, `${versionId}.json`));
-    } catch {
-        // Keep the manifest authoritative if the payload was already removed.
+/** Reads a pre-DB `.history/` folder so it can be imported once. */
+export async function readLegacyHistory(projectDir: string, projectId: string): Promise<DbVersion[]> {
+    if (!projectDir || !projectId) return [];
+    const manifest = await readManifest(projectDir);
+    if (manifest.projectId && manifest.projectId !== projectId) return [];
+
+    const { historyDir } = await getHistoryPaths(projectDir);
+    const out: DbVersion[] = [];
+    for (const meta of manifest.versions.filter((v) => v.projectId === projectId)) {
+        try {
+            const path = await join(historyDir, `${meta.id}.json`);
+            if (!(await exists(path))) continue;
+            const snapshot = normalizeSnapshot(JSON.parse(await readTextFile(path)), projectId, meta.id);
+            if (snapshot) out.push({ ...meta, label: meta.label || "Imported version", snapshot });
+        } catch (error) {
+            console.warn(`Skipping unreadable legacy version ${meta.id}:`, error);
+        }
     }
-    await writeTextFile(
-        manifestPath,
-        JSON.stringify(
-            { version: 1, projectId, versions: manifest.versions.filter((item) => item.id !== versionId) },
-            null,
-            2,
-        ),
-    );
-    return true;
+    return out;
 }

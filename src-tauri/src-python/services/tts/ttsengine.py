@@ -78,6 +78,31 @@ class TTSConfig:
         return payload
 
 
+# [Config] Builds a TTSConfig from job_config.json's settings (settings.tts.voice/speed, hardware_spec_override)
+def tts_config_from_settings(settings: Optional[Dict[str, Any]]) -> TTSConfig:
+    from services.tts import voices
+
+    settings = settings or {}
+    tts = settings.get("tts") or {}
+    voice = str(tts.get("voice") or tuning.TTS_VOICE).strip()
+    if not voices.voice_exists(voice):
+        logger.warning("TTS voice '%s' not found in %s; using '%s'.", voice, voices.voices_dir(), tuning.TTS_VOICE)
+        voice = tuning.TTS_VOICE
+    try:
+        speed = float(tts.get("speed", tuning.TTS_SPEED))
+    except (TypeError, ValueError):
+        speed = tuning.TTS_SPEED
+    if not (tuning.TTS_MIN_SPEED <= speed <= tuning.TTS_MAX_SPEED):
+        logger.warning("TTS speed %s out of range; using %s.", speed, tuning.TTS_SPEED)
+        speed = tuning.TTS_SPEED
+    hardware = settings.get("hardware_spec_override")
+    return TTSConfig(
+        voice=voice,
+        speed=speed,
+        hardware_override=hardware if hardware in ("low", "high") else None,
+    )
+
+
 # [HACK] [Util] Force-kills a process and its children; Windows has no SIGTERM equivalent, so taskkill /T/F is the only reliable way to reap a subprocess tree
 def _kill_process_tree(pid: int) -> None:
     """Same approach as idle_watchdog.py's _kill — /T also takes down the
@@ -382,16 +407,20 @@ class IrodoriTTSClient:
                 # Force CPU fallback for older PCs    
                 if not has_nvidia and device != "cpu":
                     logger.warning("No NVIDIA GPU detected/reported. Forcing TTS device to 'cpu' and precision to 'fp32'.")
-                
+                    device = "cpu"
+
                 # bf16 requires a CUDA GPU, standard CPUs need fp32
                 precision = "bf16" if device == "cuda" else "fp32"
                 
+                from services.tts.voices import voices_dir
+
                 server_env = {
                     **os.environ,
                     "IRODORI_MODEL_DEVICE": device,
                     "IRODORI_CODEC_DEVICE": device,
                     "IRODORI_HF_CHECKPOINT": "Aratako/Irodori-TTS-v4.1-Small",
                     "IRODORI_MODEL_PRECISION": precision,
+                    "IRODORI_VOICES_DIR": str(voices_dir()),
                 }
                 logger.info("Irodori TTS server device: %s (Precision: %s).", device, precision)
                 IrodoriTTSClient._server_process = subprocess.Popen(
@@ -449,6 +478,33 @@ class IrodoriTTSClient:
             logger.info("Stopping Irodori TTS server (%s) to free its resources for the next step.", cls._server_process.pid)
             _kill_process_tree(cls._server_process.pid)
             cls._server_process = None
+            cls._PIDFILE.unlink(missing_ok=True)
+            return
+        # Started by another process (e.g. a voice preview): stop it via the pidfile.
+        try:
+            pid = int(cls._PIDFILE.read_text().strip())
+        except (OSError, ValueError):
+            return
+        if cls._pid_is_server(pid):
+            logger.info("Stopping Irodori TTS server (%s) started by another process.", pid)
+            _kill_process_tree(pid)
+        cls._PIDFILE.unlink(missing_ok=True)
+
+    @staticmethod
+    def _pid_is_server(pid: int) -> bool:
+        """Guards against a stale pidfile whose PID now belongs to something else."""
+        try:
+            if os.name == "nt":
+                out = subprocess.run(
+                    ["powershell", "-NoProfile", "-Command",
+                     f"(Get-CimInstance Win32_Process -Filter 'ProcessId={int(pid)}').CommandLine"],
+                    capture_output=True, text=True, timeout=15,
+                ).stdout
+            else:
+                out = Path(f"/proc/{pid}/cmdline").read_bytes().decode(errors="replace")
+        except Exception:
+            return False
+        return "irodori_openai_tts" in out
 
     def _touch_activity(self) -> None:
         """Marks the server as just-used — read by idle_watchdog.py (as the

@@ -24,6 +24,7 @@ import {
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 import { ProjectSettingsModal } from "./ProjectSettingsModal";
+import { removeRecent, renameRecent } from "../../services/projectStore";
 
 type ModalActionType = "rename" | "duplicate" | "remove" | "settings" | null;
 
@@ -158,6 +159,7 @@ export function ProjectManager() {
 
     try {
       if (type === "remove") {
+        await removeRecent(project);
         if (setRecentProjects) {
           setRecentProjects((prev: any[]) =>
             prev.filter((p) => p.path !== project.path),
@@ -167,6 +169,7 @@ export function ProjectManager() {
       } else if (type === "rename") {
         if (!modalInput.trim() || modalInput === project.name)
           return closeModal();
+        await renameRecent(project, modalInput.trim());
         if (setRecentProjects) {
           setRecentProjects((prev: any[]) =>
             prev.map((p) =>

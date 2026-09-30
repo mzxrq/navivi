@@ -169,6 +169,22 @@ def ensure_overview_narration(project_config_path: str) -> bool:
     if existing and (not was_auto or project.get("overview_narration_source_ids") == current_ids):
         return False  # hand-written, or auto-generated and still fresh
 
+    # The app's save blanks overview_narration, so the generated script is
+    # kept beside the config and restored while the waypoints are the same.
+    saved_path = config_path.parent / ".overview_narration.json"
+    if not existing:
+        try:
+            saved = json.loads(saved_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            saved = {}
+        if saved.get("source_ids") == current_ids and (saved.get("script") or "").strip():
+            project["overview_narration"] = saved["script"]
+            project["overview_narration_is_auto"] = True
+            project["overview_narration_source_ids"] = current_ids
+            config_path.write_text(json.dumps(project, ensure_ascii=False, indent=2), encoding="utf-8")
+            logger.info("Step 2: reused the saved overview_narration (waypoints unchanged).")
+            return False
+
     from services.cli.script_commands import DEFAULT_SCRIPT_MODEL
     from services.localization.overview_script import build_tour_script, ollama_generate
 
@@ -189,6 +205,13 @@ def ensure_overview_narration(project_config_path: str) -> bool:
     project["overview_narration_is_auto"] = True
     project["overview_narration_source_ids"] = current_ids
     config_path.write_text(json.dumps(project, ensure_ascii=False, indent=2), encoding="utf-8")
+    try:
+        saved_path.write_text(
+            json.dumps({"source_ids": current_ids, "script": script}, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+    except OSError as e:
+        logger.warning("Step 2: could not save the overview_narration copy: %s", e)
     logger.info("Step 2: auto-generated overview_narration (%d chars).", len(script))
     return True
 

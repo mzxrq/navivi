@@ -9,6 +9,8 @@ use tauri::{AppHandle, Emitter, Manager, State};
 use std::path::Path;
 use std::fs;
 
+mod db;
+
 struct BlueprintState {
     process: Mutex<Option<Child>>,
     render_process: Mutex<Option<Child>>,
@@ -358,6 +360,13 @@ pub fn run() {
         // The frontend's Ollama calls (src/services/ollamaApi.ts) go through
         // @tauri-apps/plugin-http; without this they fail with "plugin http not found".
         .plugin(tauri_plugin_http::init())
+        .setup(|app| {
+            let dir = app.path().app_data_dir()?;
+            fs::create_dir_all(&dir)?;
+            let conn = db::open(&dir.join("navivi.db"))?;
+            app.manage(db::DbState(Mutex::new(conn)));
+            Ok(())
+        })
         .manage(BlueprintState {
             process: Mutex::new(None),
             render_process: Mutex::new(None),
@@ -375,6 +384,40 @@ pub fn run() {
             zip_project,
             unzip_project,
             convert_gps_to_gpx,
+            db::commands::project_create,
+            db::commands::project_upsert,
+            db::commands::project_get,
+            db::commands::project_get_by_dir,
+            db::commands::project_list,
+            db::commands::project_update,
+            db::commands::project_touch_opened,
+            db::commands::project_forget_opened,
+            db::commands::project_delete,
+            db::commands::project_restore,
+            db::commands::project_purge,
+            db::commands::project_import_legacy,
+            db::commands::settings_get,
+            db::commands::settings_put,
+            db::commands::settings_patch,
+            db::commands::settings_delete,
+            db::commands::version_create,
+            db::commands::version_list,
+            db::commands::version_get,
+            db::commands::version_rename,
+            db::commands::version_delete,
+            db::commands::version_delete_all,
+            db::commands::route_cache_get_all,
+            db::commands::route_cache_get,
+            db::commands::route_cache_put,
+            db::commands::route_cache_put_many,
+            db::commands::route_cache_replace,
+            db::commands::route_cache_delete,
+            db::commands::route_cache_prune,
+            db::commands::route_cache_clear,
+            db::commands::app_setting_get,
+            db::commands::app_setting_set,
+            db::commands::app_setting_delete,
+            db::commands::app_setting_list,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

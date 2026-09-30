@@ -5,7 +5,9 @@ highlight. The mode-breakpoint/path-pacing helpers live in
 overview_pacing.py and the animation loop itself in overview_animation.py —
 both split out of this file to keep it to the setup/wrap-up orchestration."""
 
+import hashlib
 import json
+import re
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -14,6 +16,7 @@ import numpy as np
 
 from services import tuning
 from services.mapfetcher.mapgeometry import RouteGeometryProcessor
+from services.vdoprocessing.route_inputs import route_inputs_hash
 from services.vdoprocessing.vdoexporter import VideoExporter
 
 from .base import logger
@@ -24,6 +27,7 @@ from .overview_timing import (
     animation_frames,
     ending_seconds,
     fit_ending,
+    intro_card_hold_frames,
     intro_frame_count,
     cap_segments,
     stop_targets,
@@ -42,6 +46,67 @@ def _output_is_valid(path, min_bytes: int = 1024) -> bool:
         return p.is_file() and p.stat().st_size >= min_bytes
     except OSError:
         return False
+
+
+# Bump when the overview's rendering code changes what it draws, so
+# checkpointed overviews made by older code are re-rendered.
+OVERVIEW_RENDER_VERSION = 3  # v3: connected stop-bys stop; ending photo goes fullscreen after the voice
+# The overview is reused unless one of these changed (or the file is missing).
+# route_waypoints, not the drawn line: see services/vdoprocessing/route_inputs.py.
+_OVERVIEW_CHECKPOINT_PARTS = ("render_version", "route_waypoints")
+# Config flags about the checkpoint itself, not the picture.
+_FINGERPRINT_SKIP_CONFIG = {"checkpoint_enabled", "overview_rerender"}
+# Waypoint fields only the walking legs/audio use; the overview never reads them.
+_FINGERPRINT_SKIP_WAYPOINT = {"narration", "arrivingNarration", "attractionNarration", "audioUrl"}
+_OBJECT_ADDRESS_RE = re.compile(r" at 0x[0-9a-fA-F]+")
+
+
+def _fingerprint_plain(obj):
+    if isinstance(obj, np.ndarray):
+        return "ndarray:" + hashlib.sha256(np.ascontiguousarray(obj).tobytes()).hexdigest()
+    if hasattr(obj, "tolist"):
+        return obj.tolist()
+    return _OBJECT_ADDRESS_RE.sub("", str(obj))
+
+
+def _fingerprint_hash(obj) -> str:
+    blob = json.dumps(obj, sort_keys=True, ensure_ascii=False, default=_fingerprint_plain)
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
+def _overview_fingerprint_parts(config: Dict, job_config: Optional[Dict], bg_path, render_args: Dict) -> Dict[str, str]:
+    """Short hash per overview input, so a re-render can say what changed."""
+    parts: Dict[str, str] = {"render_version": str(OVERVIEW_RENDER_VERSION)}
+    try:
+        parts["background_image"] = hashlib.sha256(Path(bg_path).read_bytes()).hexdigest()[:16]
+    except OSError:
+        parts["background_image"] = "missing"
+    for key, value in render_args.items():
+        parts[f"arg.{key}"] = _fingerprint_hash(value)[:16]
+    for key, value in (config or {}).items():
+        if key not in _FINGERPRINT_SKIP_CONFIG:
+            parts[f"config.{key}"] = _fingerprint_hash(value)[:16]
+    for key, value in (job_config or {}).items():
+        if key == "updated_at":
+            continue
+        if key == "waypoints" and isinstance(value, list):
+            parts["route_waypoints"] = route_inputs_hash(value)
+            for i, wp in enumerate(value):
+                if isinstance(wp, dict):
+                    wp = {k: v for k, v in wp.items() if k not in _FINGERPRINT_SKIP_WAYPOINT}
+                parts[f"job_config.waypoints[{i}]"] = _fingerprint_hash(wp)[:16]
+        else:
+            parts[f"job_config.{key}"] = _fingerprint_hash(value)[:16]
+    return parts
+
+
+def _read_overview_inputs(path: Path) -> Dict:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
 
 # Overview render tuning constants (magic numbers pulled out of the setup
 # logic below so their purpose has a name; none of these are read from
@@ -90,13 +155,57 @@ class _OverviewRenderMixin:
         # up the call chain, which clears the whole checkpoint before this
         # is ever reached) to be regenerated.
         overview_path = str(self.out_dir / "01_overview.mp4")
-        if (
-            self.config.get("checkpoint_enabled", False)
-            and not self.config.get("overview_rerender", False)
-            and _output_is_valid(overview_path)
-        ):
-            logger.info("Overview video already exists — skipping render: %s", overview_path)
-            return overview_path
+        # Reused only while its own inputs are unchanged, so an edit to one
+        # leg's narration no longer re-renders the whole overview.
+        inputs_path = self.out_dir / "01_overview.inputs.json"
+        render_args = {
+            "points": points, "labels": labels, "popups": popups, "fps": fps,
+            "summary": summary, "point_modes": point_modes, "bounding_box": bounding_box,
+            "extent": extent, "preview_recap_only": preview_recap_only,
+        }
+        fingerprint_parts = _overview_fingerprint_parts(
+            self.config, self._get_job_config(), bg_path, render_args
+        )
+        fingerprint = _fingerprint_hash(fingerprint_parts)
+
+        def save_fingerprint() -> None:
+            try:
+                inputs_path.write_text(
+                    json.dumps({"fingerprint": fingerprint, "parts": fingerprint_parts}, ensure_ascii=False, indent=2),
+                    encoding="utf-8",
+                )
+            except OSError as e:
+                logger.warning("Could not write overview fingerprint: %s", e)
+
+        # A reused file already has its end hold; the caller must not add another.
+        self.last_overview_reused = False
+        self.pending_overview_checkpoint = None
+        if self.config.get("checkpoint_enabled", False) and _output_is_valid(overview_path):
+            stored = _read_overview_inputs(inputs_path)
+            old_parts = stored.get("parts") or {}
+            changed = sorted(
+                k for k in set(old_parts) | set(fingerprint_parts)
+                if old_parts.get(k) != fingerprint_parts.get(k)
+            )
+            # Rendered before route_waypoints was recorded: fall back to the drawn line.
+            keys = (
+                _OVERVIEW_CHECKPOINT_PARTS if "route_waypoints" in old_parts
+                else ("render_version", "arg.points", "arg.point_modes")
+            )
+            route_changed = [k for k in keys if k in changed] if old_parts else [
+                "no per-input record from the earlier render"
+            ]
+            if not route_changed:
+                logger.info(
+                    "Overview route unchanged — reusing %s%s", overview_path,
+                    f" (ignored changes: {', '.join(changed[:25])})" if changed else "",
+                )
+                self.last_overview_reused = True
+                return overview_path
+            logger.info(
+                "Overview route changed since it was rendered (%s) — re-rendering.",
+                ", ".join(route_changed),
+            )
 
         is_video = False
 
@@ -139,9 +248,10 @@ class _OverviewRenderMixin:
                     float(self.config.get("overview_intro_clean_hold_seconds", 1.5)),
                 )
                 walk_start_frames = intro_frame_count(
-                    intro_freeze, clean_hold, max(1, int(tuning.POPUP_FADE_SECONDS * fps)), fps
+                    intro_freeze, clean_hold, max(1, int(tuning.POPUP_FADE_SECONDS * fps)), fps,
+                    start_cue_sec=audio_cues.get("start"),
                 )
-            if audio_cues.get("start") is not None:
+            elif audio_cues.get("start") is not None:
                 cue_frames = int(round(audio_cues["start"] * fps))
                 cap_frames = int(round(_MAX_INTRO_WALK_START_SECONDS * fps))
                 walk_start_frames = max(walk_start_frames, min(cue_frames, cap_frames))
@@ -460,6 +570,16 @@ class _OverviewRenderMixin:
             depart_at = audio_cues.get(f"go{ap.get('order')}")
             if numbered and arrive_at is not None and depart_at is not None and depart_at > arrive_at:
                 ap["cue_wait_frames"] = int(round((depart_at - arrive_at) * fps))
+            # A connected stop-by that isn't part of a batch is a real stop:
+            # the walker pauses there too (counted in the cue retiming below).
+            if (
+                ap["data"].get("is_stopby") and ap["data"].get("connect_to_route")
+                and ap.get("stopby_host") is None and not ap.get("stopby_group")
+            ):
+                ap["cue_wait_frames"] = max(
+                    ap["cue_wait_frames"],
+                    int(round(tuning.OVERVIEW_CONNECTED_STOPBY_HOLD_SECONDS * fps)),
+                )
 
         # No leg between two waypoints (start and end included) animates for
         # longer than this: a longer one is played faster.
@@ -821,8 +941,11 @@ class _OverviewRenderMixin:
                 if box:
                     c["beside_box"] = box
             intro_frame = _draw_intro_cards(intro_frame, 1.0)
-            remaining_frames = int(intro_freeze_sec * fps) - int(clean_hold_sec * fps) - bounce_frames
-            for _ in range(max(0, remaining_frames)):
+            remaining_frames = intro_card_hold_frames(
+                intro_freeze_sec, clean_hold_sec, bounce_frames, fps,
+                start_cue_sec=(self.config.get("overview_cue_seconds") or {}).get("start"),
+            )
+            for _ in range(remaining_frames):
                 video.write(intro_frame)
 
             # Slide-down exit: once the animation is about to actually
@@ -934,6 +1057,8 @@ class _OverviewRenderMixin:
         if audio_seconds and audio_cues:
             highlight_on = bool(stop_popup and self.config.get("enable_ending_highlight", True))
             featured = start_popup or stop_popup
+            # Only the pip hold is timed to the voice: the fullscreen
+            # transition plays after the narration has ended.
             highlight_hold = tuning.ENDING_HIGHLIGHT_PIP_HOLD_SECONDS if featured else 0.0
             remaining = audio_seconds - video.frames_written / fps
             planned = (outro_hold_sec, end_pause_sec)
@@ -986,14 +1111,19 @@ class _OverviewRenderMixin:
                 video.write(self.last_frame)
         self.last_rendered_seconds = video.frames_written / fps
         if audio_seconds and audio_cues:
-            gap = video.frames_written / fps - audio_seconds
+            tail = getattr(self, "ending_tail_seconds", 0.0) if hard_ended else 0.0
+            gap = video.frames_written / fps - tail - audio_seconds
             (logger.warning if abs(gap) > AUDIO_MATCH_TOLERANCE_SECONDS else logger.info)(
-                "Overview video %.1fs, narration %.1fs (%+.1fs; allowed ±%.0fs).",
-                video.frames_written / fps, audio_seconds, gap, AUDIO_MATCH_TOLERANCE_SECONDS,
+                "Overview video %.1fs (+%.1fs fullscreen photo after the voice), narration %.1fs "
+                "(%+.1fs; allowed ±%.0fs).",
+                video.frames_written / fps - tail, tail, audio_seconds, gap, AUDIO_MATCH_TOLERANCE_SECONDS,
             )
 
         self.last_ending_hard_ended = hard_ended
 
         if cap:
             cap.release()
-        return video.release(overview_path)
+        result = video.release(overview_path)
+        # Saved by the caller once the file is final (after its end hold).
+        self.pending_overview_checkpoint = save_fingerprint
+        return result

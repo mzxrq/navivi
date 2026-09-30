@@ -15,6 +15,7 @@ from services.gpsparser.gpscalculator import GPSMath
 from services.logger.progress import tracker
 from services.mapfetcher.mapfetcher import MapFetcher
 from services.vdoprocessing.route2vdo import RouteAnimator
+from services.vdoprocessing.route_inputs import route_inputs_hash
 from services.vdoprocessing.spatial_renderer import SpatialRenderer
 from services.localization.localization import format_waypoint_label
 from services.config.job_config import JobConfigManager
@@ -235,6 +236,76 @@ def _render_checkpoint_key(
     return hasher.hexdigest()
 
 
+def _short_hash(value: Any) -> str:
+    raw = value if isinstance(value, bytes) else json.dumps(value, sort_keys=True, ensure_ascii=False, default=str).encode("utf-8")
+    return hashlib.sha256(raw).hexdigest()[:16]
+
+
+def _checkpoint_parts(
+    project_config_path: str,
+    cleaned_route: dict,
+    audio_durations: Optional[list[float]],
+    audio_pauses: Optional[list[Any]],
+) -> dict:
+    """Per-input hashes behind _render_checkpoint_key, so an invalidation can name what changed."""
+    parts: dict = {}
+    try:
+        with open(project_config_path, "r", encoding="utf-8") as f:
+            config_data = json.load(f)
+    except (OSError, ValueError):
+        config_data = {}
+    for key, value in config_data.items():
+        if key == "updated_at":
+            continue
+        if key == "waypoints" and isinstance(value, list):
+            parts["route.waypoints"] = route_inputs_hash(value)
+            parts["config.waypoints.count"] = _short_hash(len(value))
+            for i, wp in enumerate(value):
+                label = wp.get("label", "") if isinstance(wp, dict) else ""
+                for field, field_value in (wp.items() if isinstance(wp, dict) else [("value", wp)]):
+                    parts[f"config.waypoints[{i}:{label}].{field}"] = _short_hash(field_value)
+        elif key == "settings" and isinstance(value, dict):
+            for field, field_value in value.items():
+                parts[f"config.settings.{field}"] = _short_hash(field_value)
+        else:
+            parts[f"config.{key}"] = _short_hash(value)
+    route_df = cleaned_route.get("route")
+    if route_df is not None:
+        parts["route.geometry"] = _short_hash(
+            route_df[["latitude", "longitude"]].round(7).to_json(orient="split").encode("utf-8")
+        )
+    for key, value in cleaned_route.get("summary", {}).items():
+        if "duration" not in key and "time" not in key:
+            parts[f"route.summary.{key}"] = _short_hash(value)
+    try:
+        cues = json.loads((Path(project_config_path).parent / ".narration_cues.json").read_text(encoding="utf-8"))
+        for key, value in cues.items():
+            parts[f"narration_cues.{key}"] = _short_hash(value)
+    except (OSError, ValueError):
+        pass
+    for i, value in enumerate(audio_durations or []):
+        parts[f"audio_durations[{i}]"] = _short_hash(value)
+    for i, value in enumerate(audio_pauses or []):
+        parts[f"audio_pauses[{i}]"] = _short_hash(value)
+    return parts
+
+
+# The route render is reused unless the waypoints' route inputs changed (or
+# an output is missing). Not route.geometry: the app can save a different
+# GPX line for the same waypoints (see route_inputs.py).
+ROUTE_CHECKPOINT_PARTS = ("route.waypoints",)
+
+
+def _describe_changed_parts(old: dict, new: dict, limit: int = 25) -> str:
+    changed = sorted(k for k in set(old) | set(new) if old.get(k) != new.get(k))
+    labels = [
+        f"{k} ({'added' if k not in old else 'removed' if k not in new else 'changed'})"
+        for k in changed
+    ]
+    more = f", +{len(labels) - limit} more" if len(labels) > limit else ""
+    return ", ".join(labels[:limit]) + more if labels else "nothing per-part (hash format differs)"
+
+
 # Residential-leg clip filename's embedded 1-based departure-waypoint
 # position (see waypoints.py's chunk_filename: "02_waypoint_{N:02d}_...") —
 # used below (and by timeline_step.py's own mirrored match) to look up that
@@ -371,6 +442,9 @@ def render_route_video(
     checkpoint_key = _render_checkpoint_key(
         project_config_path, cleaned_route, audio_durations, audio_pauses
     )
+    checkpoint_parts = _checkpoint_parts(
+        project_config_path, cleaned_route, audio_durations, audio_pauses
+    )
     overview_stale = False
     if is_full_pipeline_render and not force and manifest_path.exists():
         try:
@@ -378,23 +452,32 @@ def render_route_video(
                 manifest = json.load(f)
             cached_paths = manifest.get("output_paths", [])
             cached_key = manifest.get("input_hash")
+            cached_parts = manifest.get("input_parts")
         except (OSError, json.JSONDecodeError):
-            cached_paths, cached_key = [], None
-        if (
-            cached_paths
-            and cached_key == checkpoint_key
-            and all(output_is_valid(p) for p in cached_paths)
-        ):
+            cached_paths, cached_key, cached_parts = [], None, None
+        # Only the route itself (or a missing output) invalidates the render;
+        # other input changes are logged and ignored.
+        if cached_parts:
+            # A manifest from before route.waypoints existed falls back to the line itself.
+            keys = ROUTE_CHECKPOINT_PARTS if "route.waypoints" in cached_parts else ("route.geometry",)
+            route_changed = [k for k in keys if cached_parts.get(k) != checkpoint_parts.get(k)]
+        else:
+            route_changed = [] if cached_key == checkpoint_key else ["(no per-input record)"]
+        outputs_ok = bool(cached_paths) and all(output_is_valid(p) for p in cached_paths)
+        if outputs_ok and not route_changed:
+            ignored = (
+                _describe_changed_parts(cached_parts, checkpoint_parts)
+                if cached_parts and cached_key != checkpoint_key else ""
+            )
             logger.info(
-                "Step 4: All %d route/residential video output(s) already "
-                "exist and inputs are unchanged — skipping render.",
-                len(cached_paths),
+                "Step 4: route unchanged and all %d output(s) exist — skipping render.%s",
+                len(cached_paths), f" Ignored changes: {ignored}" if ignored else "",
             )
             return cached_paths
-        if cached_paths and cached_key != checkpoint_key:
+        if cached_paths and route_changed:
             logger.info(
-                "Step 4: route/config/narration changed since the last "
-                "render — checkpoint invalidated, re-rendering."
+                "Step 4: route changed since the last render (%s) — re-rendering.",
+                ", ".join(route_changed),
             )
             # The overview also skips itself when its file exists; its script,
             # cues and stops may be what changed, so it must be rendered again.
@@ -402,6 +485,12 @@ def render_route_video(
             # only replaces it once it is complete, so an interrupted run
             # never leaves the project without an overview.
             overview_stale = True
+        elif cached_paths:
+            missing = [p for p in cached_paths if not output_is_valid(p)]
+            logger.info(
+                "Step 4: route unchanged but %d output(s) missing/invalid — rendering those: %s",
+                len(missing), ", ".join(Path(p).name for p in missing[:10]),
+            )
 
     route_df = cleaned_route.get("route")
     if route_df is None or route_df.empty:
@@ -1111,6 +1200,8 @@ def render_route_video(
                     # position instead of a blind per-clip counter, which
                     # stop-by merging would otherwise throw out of sync.
                     "start_pos": start_pos,
+                    # The leg's checkpoint key (route2vdo): its waypoints' route inputs.
+                    "route_inputs": route_inputs_hash(waypoints[start_pos:end_pos + 1]),
                     # Which waypoints this leg runs between: route2vdo writes
                     # the destination into the leg's _pieces.json so
                     # leg_pieces.py plays the DESTINATION's narration over the
@@ -1377,7 +1468,7 @@ def render_route_video(
             Path(output_video_dir).mkdir(parents=True, exist_ok=True)
             with open(manifest_path, "w", encoding="utf-8") as f:
                 json.dump(
-                    {"output_paths": output_paths, "input_hash": checkpoint_key},
+                    {"output_paths": output_paths, "input_hash": checkpoint_key, "input_parts": checkpoint_parts},
                     f, ensure_ascii=False, indent=2,
                 )
         except OSError as e:

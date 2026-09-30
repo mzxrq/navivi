@@ -72,13 +72,15 @@ def run_full_pipeline(
     waypoints = job_config.get("waypoints", [])
     min_free_ram = job_config.get("settings", {}).get("min_free_ram_gb")
 
-    # [NOTE] [Core] total=8 (the "[n/N]" denominator) is only set on this first stage() call — later stage() calls rely on the tracker remembering it rather than re-declaring it each time.
-    tracker.stage("Parsing GPS track...", total=8)
-    cleaned_route = process_gps(raw_source_path)
-
     settings = job_config.get("settings", {})
     fast_render = skip_rich_media(settings)
     attractions_on = attraction_videos_enabled(settings)
+
+    # [NOTE] [Core] The "[n/N]" total is only set here. Keep it in step with the stage() calls below:
+    # 6 always + TTS stop & subtitles (not fast_render) + GPU cooldown (attractions on).
+    stage_total = 6 + (0 if fast_render else 2) + (1 if attractions_on else 0)
+    tracker.stage("Parsing GPS track...", total=stage_total)
+    cleaned_route = process_gps(raw_source_path)
 
     # --- STEP 2 ---
     tracker.stage("Generating TTS narration...")

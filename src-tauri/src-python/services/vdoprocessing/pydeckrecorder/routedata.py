@@ -9,6 +9,8 @@ import pandas as pd
 import pydeck as pdk
 from scipy.interpolate import interp1d
 
+from services.mapfetcher.maplanguage import current_map_language, style_localizer_script
+
 from .common import MAPBOX_API_KEY, logger
 
 
@@ -164,6 +166,10 @@ def patch_pydeck_html(html_path: str):
             '<link rel="stylesheet" href="https://api.tiles.mapbox.com/mapbox-gl-js/v1.13.0/mapbox-gl.css" />\n</head>',
             1,
         )
+
+    localizer = style_localizer_script(current_map_language())
+    if localizer:
+        content = content.replace("<head>", "<head>\n" + localizer, 1)
 
     # pydeck's bundled createDeck() JS doesn't expose an attributionControl
     # option to turn off from here, so the "© Mapbox © OpenStreetMap Improve

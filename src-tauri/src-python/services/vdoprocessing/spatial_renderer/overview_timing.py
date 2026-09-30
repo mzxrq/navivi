@@ -12,16 +12,36 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
+from services import tuning
+
 # Two stops are never closer than this on screen, whatever the cues say.
 MIN_STOP_GAP_FRAMES = 6
 
 
-def intro_frame_count(intro_freeze_sec: float, clean_hold_sec: float, bounce_frames: int, fps: int) -> int:
+def intro_card_hold_frames(
+    intro_freeze_sec: float, clean_hold_sec: float, bounce_frames: int, fps: int,
+    start_cue_sec: Optional[float] = None,
+) -> int:
+    """Frames the start/end cards stay fully shown: at least
+    OVERVIEW_INTRO_CARD_MIN_SECONDS, and when the {start} cue comes later, long
+    enough that they finish sliding out on it (the walk sets off on the cue)."""
+    clean = int(clean_hold_sec * fps)
+    hold = max(0, int(intro_freeze_sec * fps) - clean - bounce_frames)
+    hold = max(hold, int(round(tuning.OVERVIEW_INTRO_CARD_MIN_SECONDS * fps)))
+    if start_cue_sec is not None:
+        hold = max(hold, int(round(start_cue_sec * fps)) - clean - 2 * bounce_frames)
+    return hold
+
+
+def intro_frame_count(
+    intro_freeze_sec: float, clean_hold_sec: float, bounce_frames: int, fps: int,
+    start_cue_sec: Optional[float] = None,
+) -> int:
     """Frames the intro (clean beat, cards sliding in, hold, sliding out) takes:
     mirrors the writes at the top of render_overview."""
     clean = int(clean_hold_sec * fps)
-    remaining = max(0, int(intro_freeze_sec * fps) - clean - bounce_frames)
-    return clean + bounce_frames + remaining + bounce_frames
+    hold = intro_card_hold_frames(intro_freeze_sec, clean_hold_sec, bounce_frames, fps, start_cue_sec)
+    return clean + bounce_frames + hold + bounce_frames
 
 
 # The walk runs at least this long after the last cued stop: what is left of
