@@ -371,7 +371,11 @@ class _OverviewRenderMixin:
             # order 1 for itself, pushing every real numbered waypoint one
             # higher than its actual visit order (the first real stop
             # showing "2" instead of "1").
-            if ap["data"].get("is_stopby") or ap["index"] == 0:
+            ap_data = ap["data"]
+            is_effectively_stopby = ap_data.get("is_stopby") and not (
+                ap_data.get("connect_to_route") and ap_data.get("pause_at_waypoint", True)
+            )
+            if is_effectively_stopby or ap["index"] == 0:
                 # Still gets an "order" key (just not incremented) so it's
                 # never missing when something reads ap["order"] generically
                 # — excluded only from the visible count/numbering itself.
@@ -387,7 +391,11 @@ class _OverviewRenderMixin:
         next_numbered_order = None
         for ap in reversed(active_popups):
             ap["next_numbered_order"] = next_numbered_order
-            if not ap["data"].get("is_stopby") and ap["index"] != 0:
+            ap_data = ap["data"]
+            is_effectively_stopby = ap_data.get("is_stopby") and not (
+                ap_data.get("connect_to_route") and ap_data.get("pause_at_waypoint", True)
+            )
+            if not is_effectively_stopby and ap["index"] != 0:
                 next_numbered_order = ap["order"]
 
         # Which stop-bys ride along with which stop. An unconnected
@@ -556,8 +564,11 @@ class _OverviewRenderMixin:
         wait_tags = {str(t) for t in (self.config.get("overview_cue_wait_tags") or [])}
         wait_frames = int(fps * float(self.config.get("overview_cue_wait_seconds", 2.0)))
         for ap in active_popups:
+            is_effectively_stopby = ap["data"].get("is_stopby") and not (
+                ap["data"].get("connect_to_route") and ap["data"].get("pause_at_waypoint", True)
+            )
             numbered = (
-                ap["index"] != 0 and not ap["data"].get("is_stopby")
+                ap["index"] != 0 and not is_effectively_stopby
                 and (not stop_popup or ap["index"] != stop_popup["index"])
             )
             ap["cue_wait_frames"] = (
@@ -988,8 +999,11 @@ class _OverviewRenderMixin:
 
         for ap in active_popups:
             seconds = audio_cues.get(str(ap.get("order")))
+            is_effectively_stopby = ap["data"].get("is_stopby") and not (
+                ap["data"].get("connect_to_route") and ap["data"].get("pause_at_waypoint", True)
+            )
             numbered = (
-                ap["index"] != 0 and not ap["data"].get("is_stopby")
+                ap["index"] != 0 and not is_effectively_stopby
                 and (not stop_popup or ap["index"] != stop_popup["index"])
             )
             ap["cue_frame"] = int(round(seconds * fps)) if numbered and seconds is not None else None

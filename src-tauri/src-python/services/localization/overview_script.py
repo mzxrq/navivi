@@ -79,7 +79,8 @@ def visible_waypoints(project: dict) -> List[dict]:
     return [
         w for i, w in enumerate(waypoints)
         if i != 0 and i != len(waypoints) - 1
-        and not w.get("isStopBy") and not w.get("skipAssetGeneration")
+        and not w.get("skipAssetGeneration")
+        and not (w.get("isStopBy") and not (w.get("connectToRoute") and w.get("pauseAtWaypoint") is not False))
     ]
 
 
