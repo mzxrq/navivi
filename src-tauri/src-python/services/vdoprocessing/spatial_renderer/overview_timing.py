@@ -49,10 +49,11 @@ def animation_frames(cues: Dict[str, float], start_frames: int, fps: int, min_fr
 
 
 # The walk between two stops is never made more than this many times faster
-# than its natural pace to meet a cue: an impossible cue means arriving late,
-# not a walker that jumps along the route. Kept low so the walk never looks
-# rushed; the script gives each way line enough time instead.
-MAX_WALK_SPEEDUP = 1.5
+# than its natural pace to meet a cue. Raised from 1.5 - too low a cap meant
+# a short-real-distance leg with a tight way-line budget landed the walker
+# late relative to its own {n} cue (the voice already naming the stop before
+# it visually arrives) more often than it should.
+MAX_WALK_SPEEDUP = 2.5
 
 
 def stop_targets(

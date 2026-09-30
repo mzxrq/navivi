@@ -607,7 +607,7 @@ POPUP_MIN_DISPLAY_SECONDS = 2.0
 # better than a leisurely one, and it keeps the cue-timing math (this
 # value is also what overview.py's _hold_frames/start_batch reserve) from
 # pushing later cued stops late to compensate for a long batch freeze.
-STOPBY_BATCH_SECONDS = 1.0
+STOPBY_BATCH_SECONDS = 0.5
 # At most this many stop-bys in a group get their own held card (and count
 # toward the extra hold time reserved before the next cued stop — see
 # overview.py's _hold_frames/start_batch and route_brief.py's plan_budget).
@@ -1072,6 +1072,17 @@ TTS_DEVICE = "cpu"
 # Longest text sent to the TTS server in one request, in characters: about 15
 # seconds of speech at the project's measured ~4.4 characters per second.
 TTS_MAX_CHUNK_CHARS = 60
+# Shortest a standalone TTS request should be, in characters. A leftover
+# trailing chunk under this (e.g. just the closing line, "今日の旅は、ここま
+# でです。" at 13 chars, once nothing else is left to pack it with) has too
+# little real content to anchor the model's stopping point, and the Irodori
+# TTS server has been observed to "coast" past the end of such a short
+# request and synthesize a trailing phrase nobody wrote ("ghost sentence"
+# heard right after the narration should have finished). split_text_for_tts
+# merges a too-short trailing chunk into the one before it instead, even
+# past TTS_MAX_CHUNK_CHARS - a slightly long chunk is far safer than an
+# isolated short one that invents its own ending.
+TTS_MIN_CHUNK_CHARS = 20
 # generate_speech now always splits multi-sentence text at sentence
 # boundaries (never packing two sentences into one TTS request, unlike the
 # old chunking that only split when TTS_MAX_CHUNK_CHARS was exceeded) and

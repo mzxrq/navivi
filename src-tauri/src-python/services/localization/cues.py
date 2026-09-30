@@ -9,6 +9,14 @@ A script may carry inline tags that mark moments the video has to land on:
     {go}      overview only: the description of the stop before it ends here -
               the walker waits at that stop until now, then heads on. Recorded
               as "go<n>" (n: the last {n} before it); ignored before any {n}
+    {goPreN}  overview only: a stop-by batch mentioned in passing, on the way
+              to numbered stop N, ends here - the walker (or, before stop 1,
+              the route's start) waits until now, then sets off. A literal
+              tag naming the stop it precedes explicitly, unlike {go}, since
+              a stop-by batch has no {n} of its own for {go} to attach to.
+    {distance} overview only: the closing line's distance summary ("…24km
+              の旅でした") ends here - the ending highlight holds at least
+              until now, so it isn't cut short with that line still playing.
 
 Tags are never spoken. They are stripped before TTS and subtitles, and the
 position each one had in the spoken text is kept so its time can be worked out
@@ -21,7 +29,7 @@ import re
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
-CUE_RE = re.compile(r"\{(start|arrive|end|go|\d+)\}")
+CUE_RE = re.compile(r"\{(start|arrive|end|distance|goPre\d+|go|\d+)\}")
 
 
 @dataclass(frozen=True)
@@ -102,7 +110,18 @@ def cue_times(
         # allocate() walks `speaking` seconds of pure speech across the clip,
         # skipping pauses; the span it returns ENDS where the cue falls.
         _, reached = mapper.allocate([speaking])[0]
-        if cue.tag.startswith("go"):
+        # The char-proportional estimate assumes one constant reading speed
+        # for the WHOLE clip, but real speech doesn't read at a constant
+        # rate sentence to sentence (pauses between sentences vary too) -
+        # so a cue far into a long script can land up to ~1s off. A cue
+        # right after a sentence's 。！？ (a {go}, or any other tag placed
+        # at a sentence boundary - the common case, see tags_at_sentence_
+        # start) sits right where a real pause almost always falls, so it
+        # can be snapped to that pause's actual edge instead of trusting
+        # the estimate - recovering the exact position, not just a closer
+        # guess.
+        at_boundary = char_index == 0 or clean[char_index - 1] in _SENTENCE_END_CHARS
+        if cue.tag.startswith("go") or at_boundary:
             reached = _snap_to_pause_end(reached, pauses or [])
         times.setdefault(cue.tag, reached)
     return times

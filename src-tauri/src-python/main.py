@@ -33,6 +33,7 @@ from services.cli import (
     test_intro_video,
     test_outro_video,
     test_video_concat,
+    test_mux_audio,
     test_transition_editor,
     test_all,
     test_overview_map,
@@ -185,6 +186,14 @@ if __name__ == "__main__":
                 clip_paths_arg = sys.argv[3:] if len(sys.argv) > 3 else None
                 result = test_video_concat(
                     job_config_arg, output_dir_arg, clip_paths_arg
+                )
+            elif mode_arg == "mux":
+                # [NOTE] [Editor] Muxes an existing audio file onto an existing video file: argv[3]=video path, argv[4]=audio path, optional argv[5]=output filename (else "<video-stem>_muxed.mp4", written under assets/video/). Standalone version of the mux the real pipeline runs internally — no re-render, just combines two files already on disk.
+                if len(sys.argv) < 5:
+                    raise ValueError("mux requires a video path (argv[3]) and an audio path (argv[4])")
+                result = test_mux_audio(
+                    job_config_arg, sys.argv[3], sys.argv[4],
+                    output_dir_arg, sys.argv[5] if len(sys.argv) > 5 else None,
                 )
             elif mode_arg == "transition":
                 # [NOTE] [Transition] Renders the overview/storyboard map animation, including configured popup transitions — thin wrapper over test_overview_video.

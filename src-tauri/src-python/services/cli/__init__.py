@@ -23,7 +23,7 @@ from .attraction_commands import (
 )
 from .subtitle_commands import test_subtitle, test_subtitles
 from .intro_outro_commands import test_intro_video, test_outro_video
-from .combine_commands import test_video_concat, test_transition_editor, test_all
+from .combine_commands import test_video_concat, test_mux_audio, test_transition_editor, test_all
 from .script_commands import test_overview_script
 
 __all__ = [
@@ -46,6 +46,7 @@ __all__ = [
     "test_intro_video",
     "test_outro_video",
     "test_video_concat",
+    "test_mux_audio",
     "test_transition_editor",
     "test_all",
     "test_overview_script",

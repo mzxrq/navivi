@@ -128,6 +128,62 @@ def test_video_concat(
     }
 
 
+def test_mux_audio(
+    job_config_path: str,
+    video_path: str,
+    audio_path: str,
+    output_video_dir: str = None,
+    output_filename: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Muxes an existing audio file onto an existing video file, standalone —
+    the same VideoEditor.mux_audio_to_video the real pipeline calls
+    internally (render_step.py for the overview, vdoexporter.py for the
+    final timeline export), exposed on its own so a re-synthesized
+    narration (or any other audio/video pair) can be checked against an
+    already-rendered clip without re-running the whole render.
+
+    No -shortest (see mux_audio_to_video's own note): the video keeps its
+    full length regardless of the audio's — a narration shorter than the
+    clip just leaves it silent after the voice ends, not cut short."""
+    config_path = Path(job_config_path)
+    if not config_path.exists():
+        raise FileNotFoundError(f"job_config.json not found: {config_path}")
+    video_p = Path(video_path)
+    audio_p = Path(audio_path)
+    if not video_p.exists():
+        raise FileNotFoundError(f"Video file not found: {video_p}")
+    if not audio_p.exists():
+        raise FileNotFoundError(f"Audio file not found: {audio_p}")
+
+    from services.config.job_config import JobConfigManager
+    from services.vdoprocessing.vdoeditor import VideoEditor
+
+    output_filename = output_filename or f"{video_p.stem}_muxed{video_p.suffix}"
+    editor = VideoEditor(JobConfigManager(config_path))
+
+    _tracker.show(f"Muxing {audio_p.name} onto {video_p.name}...")
+    output_path = editor.mux_audio_to_video(str(video_p), str(audio_p), output_filename)
+    _tracker.clear()
+
+    # mux_audio_to_video always resolves under <project>/assets/video/
+    # (VideoEditor._resolve_output_path) — move it if the caller asked for
+    # somewhere else.
+    if output_video_dir:
+        target_dir = Path(output_video_dir)
+        target_dir.mkdir(parents=True, exist_ok=True)
+        target_path = target_dir / Path(output_path).name
+        if Path(output_path).resolve() != target_path.resolve():
+            shutil.move(output_path, str(target_path))
+            output_path = str(target_path)
+
+    return {
+        "success": True,
+        "video_path": output_path,
+        "source_video": str(video_p),
+        "source_audio": str(audio_p),
+    }
+
+
 def test_transition_editor(
     job_config_path: str,
     output_video_dir: str = None,

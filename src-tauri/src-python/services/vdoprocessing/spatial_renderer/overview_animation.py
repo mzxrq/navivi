@@ -26,7 +26,7 @@ _DEFAULT_FREEZE_SECONDS = 4.0
 _MAX_CUE_WAIT_SECONDS = 20.0
 # A walk re-timed to meet its cue runs at most this much slower / faster than
 # planned (see _animate_overview_frames' _catch_up).
-_CATCH_UP_RANGE = (0.6, 1.5)  # fallback display duration when a popup sets no freeze_seconds
+_CATCH_UP_RANGE = (0.6, 2.5)  # matches overview_timing.MAX_WALK_SPEEDUP's raised cap
 
 
 class _OverviewAnimationMixin:
@@ -44,28 +44,36 @@ class _OverviewAnimationMixin:
         route_obstacles: Optional[np.ndarray] = None,
         draw_host_card: bool = True,
         carried: Optional[List[Dict]] = None,
+        animate_host: bool = False,
+        total_display_seconds: Optional[float] = None,
     ) -> np.ndarray:
         """Plays every unconnected stop-by attached to `host_popup` over
-        the frame held at that stop, one card at a time in route order,
-        each for tuning.STOPBY_BATCH_SECONDS. Returns the last frame
-        written.
+        the frame held at that stop — ALL of them together (laid out and
+        faded in/out as one simultaneous group), not one card at a time in
+        turn. The group's shared display lasts
+        tuning.STOPBY_BATCH_SECONDS * (number shown), the same total the
+        old one-at-a-time version spent (route_brief.stopby_holds's own
+        hold-time budget assumes that total, so it's kept exactly, only
+        redistributed across the group instead of per-card). Returns the
+        last frame written.
 
         These landmarks are places the route only passes NEAR — the
         traveler visibly never goes to them, so a card popping where each
         one sits read as the map claiming a visit that never happened.
         Shown here instead: the traveler stops at the previous normal
-        waypoint, that stop's own card settles, and then the landmarks
-        behind it appear in turn beside their own pins, with a leader line
-        back to each. See _attach_stopby_groups for which stop-by belongs
-        to which host, and why a CONNECTED one is never in this group.
+        waypoint, that stop's own card settles, and then every landmark
+        behind it appears together beside its own pin, each with a leader
+        line back to it. See _attach_stopby_groups for which stop-by
+        belongs to which host, and why a CONNECTED one is never in this
+        group.
 
         The host's own line, pin and card are composited into the plate
-        once, at full opacity (`draw_host_card=False` for a host that just
-        finished a FULLSCREEN photo transition instead — it never had a
-        small map card of its own to begin with, only the pin), rather
-        than re-rendered per frame: the frame is frozen for the whole
-        batch, so the only thing changing is whichever stop-by card is
-        currently fading in or out on top of it. The host's card REUSES
+        once, at full opacity (`draw_host_card=False` for a host that
+        already showed its card elsewhere — a FULLSCREEN photo transition,
+        or its own settle-first beat just before this call — leaving only
+        its pin drawn here), rather than re-rendered per frame: the frame is
+        frozen for the whole batch, so the only thing changing is the shared
+        fade/slide on the stop-by cards on top of it. The host's card REUSES
         the spot it already settled into during the arrival hold
         (`host_popup["beside_box"]`) rather than being laid out fresh here
         — recomputing independently made the card visibly jump to a new
@@ -75,14 +83,32 @@ class _OverviewAnimationMixin:
         (e.g. this host never got a "beside" box of its own — the
         FULLSCREEN case, though that skips this branch entirely via
         draw_host_card=False). Reserved either way, so a landmark's card
-        can never land on top of the stop it belongs to.
+        can never land on top of the stop it belongs to. (`animate_host`
+        is the third case: the host's card isn't composited here at all —
+        it's laid out and faded in as part of the group below instead, see
+        that param's own note.)
 
         `carried`: cards of the stops just passed, still inside their own
         display time - drawn over the batch until they fade out (the list is
-        updated in place), and kept clear of the landmarks' cards."""
+        updated in place), and kept clear of the landmarks' cards.
+
+        `animate_host`: the host's own card joins the simultaneous group
+        instead of being composited separately (implies `draw_host_card=
+        False` — only its pin is drawn up front, same as that case) — used
+        for a host that is ITSELF a stop-by (see host_is_stopby in the
+        caller): it pops together with the landmarks behind it rather than
+        settling alone first, the way a real waypoint host does.
+        `total_display_seconds`, given, overrides the group's shared hold
+        (normally STOPBY_BATCH_SECONDS * count) — the caller's own
+        already-cue-extended hold, so the host's arrival description and the
+        batch share one timer instead of the batch adding its own on top."""
         if not stopby_group:
             return base_frame
         carried = carried if carried is not None else []
+
+        for stopby in stopby_group:
+            stopby["data"]["arrived"] = True
+            stopby["data"]["triggered"] = True
 
         plate = base_frame
         reserved = []
@@ -91,15 +117,8 @@ class _OverviewAnimationMixin:
         # fading in and out over the batch; the cards are kept off it.
         notice = not getattr(self, "_stopby_notice_shown", False)
         self._stopby_notice_shown = True
-        notice_frames = 0
-        notice_total = 1
         if notice:
             reserved.append(self.graphics.stopby_notice_box(w, h))
-            per_card = self._make_baked_popup(
-                stopby_group[0], tuning.STOPBY_BATCH_SECONDS, fps,
-                min_display_seconds=tuning.STOPBY_BATCH_SECONDS,
-            )["total_frames"]
-            notice_total = max(1, per_card * min(len(stopby_group), tuning.STOPBY_BATCH_MAX_HELD))
             notice_fade = max(1, int(tuning.STOPBY_NOTICE_FADE_SECONDS * fps))
         # Every landmark's own reserved box below (after it's shown) needs
         # this regardless of whether the host itself has a card — computed
@@ -132,89 +151,101 @@ class _OverviewAnimationMixin:
         else:
             self._draw_pin(plate, host_popup, total_points)
 
-        last_frame = plate
-        # Pins of the stop-bys already shown in this batch. They stay on
-        # the map for the rest of it (they've been "arrived" now), and are
-        # redrawn ON TOP of each later card's leader line — same
-        # line-then-pins-then-card ordering every other multi-card frame
-        # in this renderer uses, so a line crossing an earlier landmark's
-        # pin never paints over it.
-        shown: List[Dict] = []
-        for batch_index, stopby in enumerate(stopby_group):
-            stopby["data"]["arrived"] = True
-            stopby["data"]["triggered"] = True
+        # Only the first STOPBY_BATCH_MAX_HELD get their own held card —
+        # the narration never names more than a few of them either way
+        # (overview_script.py's via_batches), so a longer group holding a
+        # card for every one used to sit the video frozen well past when
+        # the voice had already moved on. The rest still get their pin
+        # (they WERE passed) baked straight into the plate below, same as
+        # a "no room for a card" landmark.
+        held = stopby_group[: tuning.STOPBY_BATCH_MAX_HELD]
+        overflow = stopby_group[tuning.STOPBY_BATCH_MAX_HELD:]
+        for stopby in overflow:
+            self._draw_pin(plate, stopby, total_points)
 
-            # Only the first STOPBY_BATCH_MAX_HELD get their own held card —
-            # the narration never names more than a few of them either way
-            # (overview_script.py's via_batches, names[:3]), so a longer
-            # group held every card in turn used to sit the video frozen
-            # well past when the voice had already moved on. The rest still
-            # get their pin (they WERE passed) via the same "no room for a
-            # card" fallback below, just skipped straight there.
-            if batch_index >= tuning.STOPBY_BATCH_MAX_HELD:
-                self._draw_pin(plate, stopby, total_points)
-                shown.append(stopby)
-                continue
-
-            hud = stopby.copy()
+        # animate_host: the host joins the SAME laid-out group as the
+        # landmarks (not sliced by STOPBY_BATCH_MAX_HELD - it's the actual
+        # stop, always shown), so it fades in, is laid out to avoid overlap
+        # with, and holds for exactly as long as the rest of the batch.
+        group = ([host_popup] if animate_host else []) + held
+        huds = [(item, item.copy()) for item in group]
+        for _, hud in huds:
             hud["hud_corner"] = None
             hud["draw_leader_line"] = True
-            self._layout_recap_popups(
-                [{"popup": hud, "frames_left": 1}], w, h,
-                reserved_boxes=reserved, route_obstacles=route_obstacles,
-            )
-            base_box = hud.get("beside_box")
-            if not base_box:
-                # Nowhere free to put this card on this frame. Its pin is
-                # still shown (it HAS been reached, as far as the map is
-                # concerned) — better a landmark with no card than a card
-                # dropped on top of the stop it belongs to.
-                self._draw_pin(plate, stopby, total_points)
-                shown.append(stopby)
-                continue
+        # Laid out TOGETHER in one pass (angular order around the group's
+        # own centroid, each one avoiding every other's box as well as
+        # `reserved`) — this is what makes them all appear at once instead
+        # of each sliding into whatever spot happened to be free after the
+        # last one settled.
+        self._layout_recap_popups(
+            [{"popup": hud, "frames_left": 1} for _, hud in huds], w, h,
+            reserved_boxes=reserved, route_obstacles=route_obstacles,
+        )
 
+        placed = [(stopby, hud) for stopby, hud in huds if hud.get("beside_box")]
+        no_room = [stopby for stopby, hud in huds if not hud.get("beside_box")]
+        for stopby in no_room:
+            # Nowhere free to put this card. Its pin is still shown (it
+            # HAS been reached, as far as the map is concerned) — better a
+            # landmark with no card than a card dropped on top of the stop
+            # it belongs to.
+            self._draw_pin(plate, stopby, total_points)
+
+        last_frame = plate
+        if placed:
+            base_boxes = {id(hud): hud["beside_box"] for _, hud in placed}
+            # One shared timer for the whole group - every card fades in
+            # and back out TOGETHER, on the group's combined duration
+            # (tuning.STOPBY_BATCH_SECONDS per card, summed - the same
+            # total the old sequential version spent, just not sliced
+            # into individual per-card turns) - or, when the caller passed
+            # one (a host_is_stopby's own already-cue-extended hold), that
+            # duration instead, so the host's description and the batch
+            # don't each claim their own separate stretch of time.
+            batch_seconds = (
+                total_display_seconds if total_display_seconds is not None
+                else tuning.STOPBY_BATCH_SECONDS * len(placed)
+            )
             bp = self._make_baked_popup(
-                stopby, tuning.STOPBY_BATCH_SECONDS, fps,
-                min_display_seconds=tuning.STOPBY_BATCH_SECONDS,
+                placed[0][0], batch_seconds, fps,
+                min_display_seconds=batch_seconds,
             )
             total_frames = bp["total_frames"]
             for i in range(total_frames):
                 # Drives _popup_fade_alpha/_popup_slide_offset_y's shared
-                # envelope straight off this loop's own progress, so the
-                # card fades and slides in and back out exactly the way
-                # every other popup in the video does.
+                # envelope straight off this loop's own progress, so every
+                # card fades and slides in and back out together, exactly
+                # the way every other popup in the video does.
                 bp["frames_left"] = total_frames - i - 1
                 alpha = self._popup_fade_alpha(bp)
-                bx, by = base_box
-                hud["beside_box"] = (bx, int(by + self._popup_slide_offset_y(bp)))
+                slide = self._popup_slide_offset_y(bp)
 
-                frame = self.graphics.render_popup_box(
-                    plate, hud, alpha=alpha, line_only=True
-                )
-                for already in shown:
-                    self._draw_pin(frame, already, total_points)
-                self._draw_pin(frame, stopby, total_points)
-                frame = self.graphics.render_popup_box(
-                    frame, hud, alpha=alpha, skip_line=True
-                )
+                frame = plate
+                for _, hud in placed:
+                    bx, by = base_boxes[id(hud)]
+                    hud["beside_box"] = (bx, int(by + slide))
+                    frame = self.graphics.render_popup_box(
+                        frame, hud, alpha=alpha, line_only=True
+                    )
+                for stopby, _ in placed:
+                    self._draw_pin(frame, stopby, total_points)
+                for _, hud in placed:
+                    frame = self.graphics.render_popup_box(
+                        frame, hud, alpha=alpha, skip_line=True
+                    )
                 frame = self._draw_carried(frame, carried, w, h, route_obstacles, total_points, fps)
                 last_frame = frame  # the notice is not carried past the batch
                 if notice:
-                    fade = min(1.0, (notice_frames + 1) / notice_fade,
-                               (notice_total - notice_frames) / notice_fade)
+                    fade = min(1.0, (i + 1) / notice_fade, (total_frames - i) / notice_fade)
                     frame = self.graphics.render_stopby_notice(
                         frame, alpha=max(0.0, fade), marker_color=self._STOPBY_PIN_COLOR
                     )
-                    notice_frames += 1
                 video.write(frame)
 
-            # Bake this landmark's pin into the plate so it stays put for
-            # the rest of the batch without being re-drawn from scratch.
-            self._draw_pin(plate, stopby, total_points)
-            shown.append(stopby)
-            reserved.append(
-                (base_box[0], base_box[1], base_box[0] + card_w, base_box[1] + card_h)
-            )
+            # Bake every landmark's pin into the plate so it stays put
+            # after the batch without being re-drawn from scratch.
+            for stopby, _ in placed:
+                self._draw_pin(plate, stopby, total_points)
 
         return last_frame
 
@@ -364,10 +395,14 @@ class _OverviewAnimationMixin:
         if start_popup and start_popup.get("stopby_group"):
             start_frame = current_bg.copy()
             self._draw_pin(start_frame, start_popup, len(points))
+            # batch_display_seconds (overview.py): when the batch's own
+            # {goPreN} cue exists, hold until it's actually spoken instead
+            # of the fixed per-card estimate.
             self.last_frame = self._play_stopby_batch(
                 video, start_frame, start_popup, start_popup.copy(),
                 start_popup["stopby_group"], w, h, fps, len(points),
                 route_obstacles=route_obstacle_arr, draw_host_card=False,
+                total_display_seconds=start_popup.get("batch_display_seconds"),
             )
 
         # A cued stop can ask the walker to wait there for a moment: the same
@@ -797,6 +832,17 @@ class _OverviewAnimationMixin:
                     or is_fullscreen
                     or bool(stopby_group)
                 )
+                # A CONNECTED stop-by can itself host a batch of loose ones
+                # behind it (it acts like a normal waypoint otherwise - see
+                # _attach_stopby_groups) - it still gets its own arrival
+                # card, but pops it together WITH the batch instead of
+                # settling alone first: a stop-by hosting stop-bys reads as
+                # one cluster of landmarks the traveler is near, not "the
+                # main stop, then, separately, some others nearby". A real
+                # waypoint host keeps the old two-beat order (its own card
+                # settles, THEN the batch appears) since it IS the actual
+                # destination, distinct from what's merely near it.
+                host_is_stopby = bool(stopby_group) and bool(triggered_popup["data"].get("is_stopby"))
 
                 if not freeze_frame_on:
                     # Reached before the voice gets to this stop's cue: the
@@ -1061,6 +1107,20 @@ class _OverviewAnimationMixin:
                     display_seconds = float(
                         triggered_popup["data"].get("freeze_seconds", _DEFAULT_FREEZE_SECONDS)
                     )
+                    # The voice may still be describing this stop when the
+                    # planned hold would otherwise end (e.g. its own
+                    # description ran long, or an earlier stop's cue-wait
+                    # pushed timing back) - same {go}-cue wait the flow-
+                    # through branch above gives every stop, applied here so
+                    # a freezing stop (a stop-by host, or one with an
+                    # explicit freeze_frame) never cuts its own narration off
+                    # mid-sentence either. Only ever extends the hold, and
+                    # only up to _MAX_CUE_WAIT_SECONDS, same cap as the
+                    # flow-through branch.
+                    depart_frame = triggered_popup.get("depart_frame")
+                    if depart_frame is not None:
+                        needed = (int(depart_frame) - video.frames_written) / fps
+                        display_seconds = max(display_seconds, min(needed, _MAX_CUE_WAIT_SECONDS))
                     # Kept as its own baked_popups entry so it lingers as a
                     # HUD overlay (with its own fade in/out) once the
                     # camera resumes moving — see _composite_baked_popups.
@@ -1077,78 +1137,87 @@ class _OverviewAnimationMixin:
                     # no stopby_group never has this problem (its card never
                     # disappears early), so it still gets the graceful
                     # lingering fade-out.
-                    lingering_bp = self._make_baked_popup(
-                        triggered_popup, display_seconds, fps
-                    )
-                    if not stopby_group:
-                        baked_popups.append(lingering_bp)
-                    hud_triggered = triggered_popup.copy()
+                    # A stop-by host does NOT get this separate "settle
+                    # alone first" beat — its own card instead joins the
+                    # batch below and fades in together with the landmarks
+                    # behind it (see host_is_stopby above). Skipping this
+                    # loop entirely for that case, rather than giving it
+                    # zero hold frames, avoids baking a half-configured
+                    # lingering_bp (never appended anyway, per stopby_group
+                    # below) that nothing then uses.
+                    if not host_is_stopby:
+                        lingering_bp = self._make_baked_popup(
+                            triggered_popup, display_seconds, fps
+                        )
+                        if not stopby_group:
+                            baked_popups.append(lingering_bp)
+                        hud_triggered = triggered_popup.copy()
 
-                    # The frame itself is frozen (unchanging) for this
-                    # whole hold, but the card still fades in rather than
-                    # snapping on at full opacity — re-rendered once per
-                    # frame (instead of one frame written repeatedly) so
-                    # its alpha can ramp up. Reuses the same fade_frames as
-                    # the lingering entry above for a consistent ramp.
-                    total_hold_frames = lingering_bp["total_frames"]
-                    fade_in_frames = lingering_bp["fade_frames"]
-                    temp_frame = popup_base_frame
-                    base_beside_box = hud_triggered.get("beside_box")
-                    for i in range(total_hold_frames):
-                        alpha = min(1.0, (i + 1) / fade_in_frames)
-                        # Same slide-up entrance as every other popup
-                        # appearance (see _popup_slide_offset_y) — reuses
-                        # that same helper via a throwaway bp-shaped dict
-                        # matching this loop's own (i, fade_in_frames)
-                        # progress, rather than re-deriving the easing
-                        # curve inline.
-                        if base_beside_box:
-                            bx, by = base_beside_box
-                            slide = self._popup_slide_offset_y(
-                                {
-                                    "total_frames": total_hold_frames,
-                                    "frames_left": total_hold_frames - i,
-                                    "fade_frames": fade_in_frames,
-                                }
+                        # The frame itself is frozen (unchanging) for this
+                        # whole hold, but the card still fades in rather than
+                        # snapping on at full opacity — re-rendered once per
+                        # frame (instead of one frame written repeatedly) so
+                        # its alpha can ramp up. Reuses the same fade_frames as
+                        # the lingering entry above for a consistent ramp.
+                        total_hold_frames = lingering_bp["total_frames"]
+                        fade_in_frames = lingering_bp["fade_frames"]
+                        temp_frame = popup_base_frame
+                        base_beside_box = hud_triggered.get("beside_box")
+                        for i in range(total_hold_frames):
+                            alpha = min(1.0, (i + 1) / fade_in_frames)
+                            # Same slide-up entrance as every other popup
+                            # appearance (see _popup_slide_offset_y) — reuses
+                            # that same helper via a throwaway bp-shaped dict
+                            # matching this loop's own (i, fade_in_frames)
+                            # progress, rather than re-deriving the easing
+                            # curve inline.
+                            if base_beside_box:
+                                bx, by = base_beside_box
+                                slide = self._popup_slide_offset_y(
+                                    {
+                                        "total_frames": total_hold_frames,
+                                        "frames_left": total_hold_frames - i,
+                                        "fade_frames": fade_in_frames,
+                                    }
+                                )
+                                hud_triggered["beside_box"] = (bx, int(by + slide))
+                            # Line, then pin, then card — same reasoning as the
+                            # post-arrival pause above: popup_base_frame's own
+                            # pin(s) are already baked in, so the line must be
+                            # drawn first and the pin redrawn on top of it.
+                            temp_frame = self.graphics.render_popup_box(
+                                popup_base_frame, hud_triggered, alpha=alpha, line_only=True
                             )
-                            hud_triggered["beside_box"] = (bx, int(by + slide))
-                        # Line, then pin, then card — same reasoning as the
-                        # post-arrival pause above: popup_base_frame's own
-                        # pin(s) are already baked in, so the line must be
-                        # drawn first and the pin redrawn on top of it.
-                        temp_frame = self.graphics.render_popup_box(
-                            popup_base_frame, hud_triggered, alpha=alpha, line_only=True
-                        )
-                        self._draw_pin(temp_frame, triggered_popup, len(points))
-                        temp_frame = self.graphics.render_popup_box(
-                            temp_frame, hud_triggered, alpha=alpha, skip_line=True
-                        )
-                        temp_frame = self._draw_carried(
-                            temp_frame, carried, w, h, route_obstacle_arr, len(points), fps
-                        )
-                        video.write(temp_frame)
+                            self._draw_pin(temp_frame, triggered_popup, len(points))
+                            temp_frame = self.graphics.render_popup_box(
+                                temp_frame, hud_triggered, alpha=alpha, skip_line=True
+                            )
+                            temp_frame = self._draw_carried(
+                                temp_frame, carried, w, h, route_obstacle_arr, len(points), fps
+                            )
+                            video.write(temp_frame)
 
-                    self.last_frame = temp_frame
+                        self.last_frame = temp_frame
 
-                    # lingering_bp's OWN fade-in already played out, frame
-                    # by frame, in the hold loop above — but that loop
-                    # writes its frames directly (video.write), never
-                    # through _composite_baked_popups, so lingering_bp's
-                    # own "frames_left" never actually counted down and is
-                    # still sitting at its starting value. Left alone,
-                    # the first time _composite_baked_popups DOES pick it
-                    # up — once the main loop resumes below, or after a
-                    # stop-by batch here finishes playing on top of this
-                    # same held frame — it reads as frame zero of a card
-                    # that's never been shown, and fades/slides itself in
-                    # from scratch a second time: the same card visibly
-                    # re-entering right after it already settled. Jumping
-                    # straight to "just past its own fade-in" here is what
-                    # the hold loop actually just finished showing, so the
-                    # card reappears already settled and only has its
-                    # fade-OUT left to play once it resumes as a lingering
-                    # HUD overlay.
-                    lingering_bp["frames_left"] = lingering_bp["fade_frames"]
+                        # lingering_bp's OWN fade-in already played out, frame
+                        # by frame, in the hold loop above — but that loop
+                        # writes its frames directly (video.write), never
+                        # through _composite_baked_popups, so lingering_bp's
+                        # own "frames_left" never actually counted down and is
+                        # still sitting at its starting value. Left alone,
+                        # the first time _composite_baked_popups DOES pick it
+                        # up — once the main loop resumes below, or after a
+                        # stop-by batch here finishes playing on top of this
+                        # same held frame — it reads as frame zero of a card
+                        # that's never been shown, and fades/slides itself in
+                        # from scratch a second time: the same card visibly
+                        # re-entering right after it already settled. Jumping
+                        # straight to "just past its own fade-in" here is what
+                        # the hold loop actually just finished showing, so the
+                        # card reappears already settled and only has its
+                        # fade-OUT left to play once it resumes as a lingering
+                        # HUD overlay.
+                        lingering_bp["frames_left"] = lingering_bp["fade_frames"]
 
                 # Then the landmarks behind this stop, in route order — see
                 # _play_stopby_batch. Outside the freeze/fullscreen split
@@ -1175,6 +1244,16 @@ class _OverviewAnimationMixin:
                         stopby_group, w, h, fps, len(points),
                         route_obstacles=route_obstacle_arr,
                         draw_host_card=False, carried=carried,
+                        # host_is_stopby: this host never got its own
+                        # settle-first beat above (skipped there) - instead
+                        # its card joins the batch's own simultaneous layout
+                        # (animate_host), held for display_seconds (the
+                        # same hold the settle-first beat would otherwise
+                        # have used, already extended to the {go} cue by
+                        # the depart_frame check above) rather than the
+                        # batch's own default per-card timer.
+                        animate_host=host_is_stopby,
+                        total_display_seconds=display_seconds if host_is_stopby else None,
                     )
                 baked_popups = carried + baked_popups
 

@@ -517,7 +517,7 @@ class IrodoriTTSClient:
         # a whole) - less granular than a pause after every single
         # sentence, but still nowhere near as rushed/robotic as one
         # continuous zero-gap synthesis of the whole text.
-        chunks = split_text_for_tts(text, tuning.TTS_MAX_CHUNK_CHARS)
+        chunks = split_text_for_tts(text, tuning.TTS_MAX_CHUNK_CHARS, tuning.TTS_MIN_CHUNK_CHARS)
         if len(chunks) <= 1:
             audio_content = await self.call_api(text)
             with open(file_path, "wb") as f:
@@ -593,11 +593,18 @@ def _cut_to_chars(piece: str, max_chars: int) -> List[str]:
     return out
 
 
-def split_text_for_tts(text: str, max_chars: int) -> List[str]:
+def split_text_for_tts(text: str, max_chars: int, min_chars: int = 0) -> List[str]:
     """Splits `text` into pieces of at most `max_chars` characters for separate
     TTS requests: whole sentences are grouped together up to the limit, a
     sentence that is too long is cut at its commas, and only as a last resort
-    in the middle of a clause. The pieces joined give back exactly `text`."""
+    in the middle of a clause. The pieces joined give back exactly `text`.
+
+    `min_chars` (tuning.TTS_MIN_CHUNK_CHARS): a trailing chunk left shorter
+    than this - typically just the closing line, once nothing else remains
+    to pack it with - is merged into the chunk before it, even past
+    `max_chars`. See TTS_MIN_CHUNK_CHARS's own comment for why: sent alone,
+    a too-short chunk risks the TTS server hallucinating a "ghost sentence"
+    past the end of the real text."""
     text = text or ""
     if len(text) <= max_chars:
         return [text] if text else []
@@ -611,6 +618,9 @@ def split_text_for_tts(text: str, max_chars: int) -> List[str]:
             cur += piece
     if cur:
         chunks.append(cur)
+    if min_chars and len(chunks) >= 2 and len(chunks[-1]) < min_chars:
+        tail = chunks.pop()  # NOTE: chunks[-2] after pop() is chunks[-1] before it - grab the tail first
+        chunks[-1] += tail
     return chunks
 
 

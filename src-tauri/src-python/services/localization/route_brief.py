@@ -50,6 +50,31 @@ _STOPBY_FACT_CHARS = 18
 _ARRIVAL_ANNOUNCEMENT = re.compile(r"到着|たどり着")
 
 
+def _is_bare_naming(sentence: str, label: str) -> bool:
+    """A sentence that does little more than name the place itself
+    ("こちらは『称念寺』", "『第四砲台跡』です") - not caught by
+    _ARRIVAL_ANNOUNCEMENT (no 到着/たどり着), but just as empty a "fact":
+    folded as "{fact}の{name}" in overview_script.py's via_batches line, it
+    reads as "the X of 'this is X'" - the same place named twice in a row.
+    Skipped in _short_fact the same way, so it picks the next sentence with
+    real content instead."""
+    from services.localization.overview_cues import name_variants
+
+    bare = re.sub(r"[『』「」]", "", sentence).strip()
+    for variant in sorted(name_variants(label), key=len, reverse=True):
+        if variant in bare and len(bare) - len(variant) <= 6:
+            return True
+    return False
+
+
+def _balance_brackets(s: str) -> str:
+    """Drops a trailing unmatched opening 『 - a hard character-cut (below)
+    can land inside a bracketed name, leaving it dangling with no close."""
+    if s.count("『") > s.count("』"):
+        s = s[: s.rfind("『")]
+    return s.rstrip()
+
+
 def _short_fact(waypoint: dict) -> str:
     """One short clause of what's known about an UNCONNECTED stop-by, from
     whatever the user already wrote in its attractionNarration - the field
@@ -65,28 +90,45 @@ def _short_fact(waypoint: dict) -> str:
         return ""
     text = re.sub(r"\{[^}]*\}", "", text).strip()
     # attractionNarration itself often opens with its own "arrived at X"
-    # announcement sentence before the real descriptive content (e.g.
-    # "『常行寺』に到着しました。天正年間に再建された歴史ある寺院で…") -
-    # skip that leading sentence rather than grabbing it as the "fact",
-    # which read as broken nonsense spliced into a noun-phrase modifier
-    # ("…に到着しましたの常行寺や…").
+    # announcement sentence, or a bare "this is X" naming sentence, before
+    # the real descriptive content (e.g. "『常行寺』に到着しました。天正年間に
+    # 再建された歴史ある寺院で…") - skip that leading sentence rather than
+    # grabbing it as the "fact", which read as broken nonsense spliced into a
+    # noun-phrase modifier ("…に到着しましたの常行寺や…") or a duplicated name
+    # ("…こちらは『称念寺』の称念寺や…").
     sentences = [s.strip() for s in re.split(r"[。！？\n]", text) if s.strip()]
-    first = next((s for s in sentences if not _ARRIVAL_ANNOUNCEMENT.search(s)), "")
+    label = clean_label(waypoint)
+    first = next(
+        (s for s in sentences if not _ARRIVAL_ANNOUNCEMENT.search(s) and not _is_bare_naming(s, label)),
+        "",
+    )
     if not first:
         return ""
     if len(first) <= _STOPBY_FACT_CHARS:
-        return first
-    # Too long for the shared clause (this is folded alongside other names
-    # in via_batches's one sentence - see overview_script.py). Cut at the
-    # last comma within budget rather than a hard character cut + "…": a
-    # comma is already a natural clause break in Japanese, so "天正年間に
-    # 再建された歴史ある寺院で" reads as a complete noun-phrase modifier on
-    # its own, spoken cleanly - a trailing ellipsis mid-clause (TTS doesn't
-    # pronounce it cleanly, and "…の{name}" sounds like the sentence just
-    # stops and restarts) doesn't.
-    within_budget = first[:_STOPBY_FACT_CHARS]
-    cut_at = within_budget.rfind("、")
-    return within_budget[:cut_at] if cut_at > 0 else within_budget
+        candidate = first
+    else:
+        # Too long for the shared clause (this is folded alongside other
+        # names in via_batches's one sentence - see overview_script.py). Cut
+        # at the last comma within budget rather than a hard character cut +
+        # "…": a comma is already a natural clause break in Japanese, so
+        # "天正年間に再建された歴史ある寺院で" reads as a complete noun-phrase
+        # modifier on its own, spoken cleanly - a trailing ellipsis
+        # mid-clause (TTS doesn't pronounce it cleanly, and "…の{name}" sounds
+        # like the sentence just stops and restarts) doesn't. Either way,
+        # _balance_brackets guards against the cut landing inside a
+        # 『bracketed name』.
+        within_budget = first[:_STOPBY_FACT_CHARS]
+        cut_at = within_budget.rfind("、")
+        candidate = _balance_brackets(within_budget[:cut_at] if cut_at > 0 else within_budget)
+    # Only usable as the "{fact}の{name}" noun-phrase modifier (see
+    # overview_script.py's via_batches insertion) when it actually ends in a
+    # connector that attaches that way - で/な (the "〜でのX"/"〜なX" pattern,
+    # e.g. "歴史ある寺院での常行寺") or a bare の. A full predicate clause
+    # ("小さなお寺ですが") or a plain verb ("…として知られる") doesn't, and
+    # gluing "の" onto one of those reads as broken Japanese
+    # ("ですがの常行寺", "知られるの加太春日神社"). Safer to fall back to the
+    # bare name for this one than ship broken grammar.
+    return candidate if re.search(r"[でなの]$", candidate) else ""
 
 
 def on_route(waypoint: dict) -> bool:
@@ -421,8 +463,13 @@ def transition_texts(leg: dict) -> List[str]:
     # Past several stops: name them all, so the line lasts while the walker
     # goes by each one (a bare "南西へ33分ほど" is over before the second).
     through = [f"{leg['heading']}へ。{'、'.join(via)}を通って、{time}で{to}へ。"] if len(via) > 1 else []
+    # A winding leg's road phrase can push the longest candidate just over
+    # its budget, dropping straight to the much shorter "heading+time+へ"
+    # one below and leaving most of that budget unused - this middle tier
+    # (same sentence, no road phrase) catches that case.
+    plain = [f"次は{leg['heading']}へ。{passes}{time}歩くと、{to}です。"] if road else []
     return [f"次は{leg['heading']}へ。{passes}{road}{time}歩くと、{to}です。",
-            *through, f"{leg['heading']}へ{time}、{to}へ。", f"{to}へ。"]
+            *plain, *through, f"{leg['heading']}へ{time}、{to}へ。", f"{to}へ。"]
 
 
 def transition_text(leg: dict, limit: Optional[int] = None) -> str:
