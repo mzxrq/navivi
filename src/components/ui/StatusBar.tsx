@@ -105,7 +105,6 @@ export function StatusBar() {
     prevNotifCount.current = currentCount;
   }, [notifications, showNotifications]);
 
-  // Close either popover on an outside click or Escape.
   useEffect(() => {
     const close = () => {
       setShowNotifications(false);
@@ -125,7 +124,6 @@ export function StatusBar() {
     };
   }, []);
 
-  // Reading the log marks it read.
   useEffect(() => {
     if (showNotifications) setHasUnread(false);
   }, [showNotifications]);
@@ -215,7 +213,6 @@ export function StatusBar() {
 
   return (
     <div className="relative z-9999 h-7 flex items-center justify-between gap-4 px-3 select-none bg-zinc-50/85 dark:bg-zinc-950/85 backdrop-blur-xl border-t border-zinc-200/80 dark:border-white/10 text-[11px] text-zinc-500 dark:text-zinc-400">
-      {/* --- LEFT: what's in the project --- */}
       <div className="flex items-center gap-3 min-w-0 overflow-hidden whitespace-nowrap">
         {editorMode === "map" ? (
           <>
@@ -247,7 +244,6 @@ export function StatusBar() {
         )}
       </div>
 
-      {/* --- RIGHT: save state, history, notifications --- */}
       <div ref={actionsRef} className="relative flex items-center gap-1 shrink-0">
         {isDirty ? (
           <span
@@ -292,7 +288,6 @@ export function StatusBar() {
           )}
         </button>
 
-        {/* VERSION HISTORY */}
         {renderHistory && (
           <div
             className={`${popover} w-88 ${exitingHistory ? "animate-out fade-out slide-out-to-bottom-1" : "animate-in fade-in slide-in-from-bottom-1"}`}
@@ -386,7 +381,6 @@ export function StatusBar() {
           </div>
         )}
 
-        {/* NOTIFICATIONS */}
         {renderNotifs && (
           <div
             className={`${popover} w-90 ${exitingNotifs ? "animate-out fade-out slide-out-to-bottom-1" : "animate-in fade-in slide-in-from-bottom-1"}`}

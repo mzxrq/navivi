@@ -37,14 +37,11 @@ export function useModeOptions(): ModeOption[] {
   ];
 }
 
-// Road-snapped modes can be nudged with via points; the others are drawn geometry.
 export const VIA_MODES: (RouteMode | undefined)[] = [undefined, "walking", "driving", "ferry"];
 
-/** Actions on the leg that leaves a stop (its travel mode and path). */
 export function useLegActions() {
   const { waypoints, routeSegments, updateWaypoint } = useWorkspace();
 
-  // MapArea opens the draw bar on this leg and frames it.
   const startDrawing = (wpId: string) =>
     window.dispatchEvent(new CustomEvent("enter-draw-mode", { detail: { wpId } }));
 
@@ -54,8 +51,6 @@ export function useLegActions() {
   const setLegMode = (wp: Waypoint, mode: RouteMode) => {
     if (mode === wp.routeMode) return;
     if (mode === "draw") {
-      // Start the drawn line from the currently routed geometry so switching
-      // to Draw doesn't throw away the shape the user already sees.
       const routedWaypoints = waypoints.filter((w) => !w.isStopBy || w.connectToRoute);
       const routedIndex = routedWaypoints.findIndex((w) => w.id === wp.id);
       let newCustomRoute = wp.customRoute || [];
@@ -73,11 +68,6 @@ export function useLegActions() {
   return { startDrawing, startAdjusting, setLegMode };
 }
 
-/**
- * Context menus for things on the route: a stop (map pin or sidebar row), the
- * leg leaving it, and a via point on that leg. Each returns menu entries for
- * `openContextMenu`.
- */
 export function useStopMenus() {
   const { waypoints, setWaypoints, updateWaypoint, setActiveWaypointId, setIsDirty } =
     useWorkspace();
@@ -112,7 +102,6 @@ export function useStopMenus() {
     setIsDirty(true);
   };
 
-  /** Travel mode + path actions for the leg from `wp` to the next stop. */
   const legMenu = (wp: Waypoint): MenuEntry[] => {
     const index = waypoints.findIndex((w) => w.id === wp.id);
     if (index === -1 || index === waypoints.length - 1) return [];
@@ -246,7 +235,6 @@ export function useStopMenus() {
     ].filter(Boolean) as MenuEntry[];
   };
 
-  /** A via point (the purple dot) nudging the leg from `wpId`. */
   const viaMenu = (wpId: string, viaIndex: number): MenuEntry[] => {
     const wp = waypoints.find((w) => w.id === wpId);
     const count = wp?.viaPoints?.length ?? 0;
@@ -274,7 +262,6 @@ export function useStopMenus() {
     ].filter(Boolean) as MenuEntry[];
   };
 
-  /** Empty map: add a stop at the clicked position. */
   const mapMenu = (
     lat: number,
     lng: number,

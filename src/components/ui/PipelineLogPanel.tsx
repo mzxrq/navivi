@@ -34,9 +34,6 @@ const formatDuration = (seconds: number) => {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 };
 
-// The stages run_full_pipeline announces (videopipeline/pipeline.py,
-// PIPELINE_STAGES), in order. Matched against the tracker's stage title so the
-// simple view can show friendly names and list the stages still to come.
 const STAGE_MATCHERS: RegExp[] = [
   /parsing gps/i,
   /tts narration/i,
@@ -63,7 +60,6 @@ const stageLabelIndex = (title: string) => STAGE_MATCHERS.findIndex((re) => re.t
 
 interface PipelineLogPanelProps {
   log: PipelineLogState;
-  /** True while the pipeline is still producing output. */
   isRunning: boolean;
   isOpen: boolean;
   onToggleOpen: () => void;
@@ -73,15 +69,12 @@ export function PipelineLogPanel({ log, isRunning, isOpen, onToggleOpen }: Pipel
   const [view, setView] = useState<LogView>(readStoredView);
   const [copied, setCopied] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  // Follow new output only while the reader is at the bottom, so scrolling up
-  // to read something isn't undone by the next line.
   const stickToBottom = useRef(true);
 
   useEffect(() => {
     try {
       localStorage.setItem(VIEW_STORAGE_KEY, view);
     } catch {
-      // Storage unavailable: the choice just isn't remembered.
     }
     stickToBottom.current = true;
   }, [view]);
@@ -187,8 +180,6 @@ export function PipelineLogPanel({ log, isRunning, isOpen, onToggleOpen }: Pipel
 function SimpleView({ log, isRunning }: { log: PipelineLogState; isRunning: boolean }) {
   const labels = useStageLabels();
   const { stages, stageTotal } = log;
-  // The app's own errors ("render failed", invoke failures) are only worth a
-  // row when the pipeline didn't already explain what went wrong.
   const pipelineExplained = stages.some((s) => s.notes.some((n) => n.kind === "error"));
   const appErrors = pipelineExplained
     ? []
@@ -204,7 +195,6 @@ function SimpleView({ log, isRunning }: { log: PipelineLogState; isRunning: bool
   }
 
   const last = stages[stages.length - 1];
-  // Only list upcoming stages by name when the run declares the known set.
   const upcoming =
     stageTotal === STAGE_MATCHERS.length
       ? labels.slice(last.index).map((label, i) => ({ index: last.index + 1 + i, label }))

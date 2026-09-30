@@ -27,9 +27,6 @@ import {
 } from "../ui/icons";
 import { MenuEntry, MenuItem, separator, tidy } from "./menuItems";
 
-/** Payload of the `open-context-menu` window event. New code should use
- * `openContextMenu(event, items)`; the typed variants are older callers
- * (timeline, project manager, media pool) whose items are built here. */
 export interface ContextMenuState {
   x: number;
   y: number;
@@ -50,8 +47,6 @@ const PANEL_ATTR = "data-context-menu";
 export function ContextMenu() {
   const [menu, setMenu] = useState<ContextMenuState | null>(null);
   const { timeline, setTimeline } = useWorkspace();
-  // Set while an `open-context-menu` event is being handled, so the window
-  // `contextmenu` listener (which runs after component handlers) leaves it be.
   const openedThisEventRef = useRef(false);
 
   useEffect(() => {
@@ -63,8 +58,6 @@ export function ContextMenu() {
       setMenu({ ...e.detail });
     };
 
-    // Fallback for right-clicks nobody handled: text editing in fields, Copy
-    // for selected text, otherwise nothing (no browser menu in the app).
     const handleNativeContextMenu = (e: MouseEvent) => {
       e.preventDefault();
       if (openedThisEventRef.current) return;
@@ -100,8 +93,6 @@ export function ContextMenu() {
     };
   }, []);
 
-  // Keys pressed while focus is outside the menu (it can lose focus to the
-  // map or the page right after opening) still drive it.
   useEffect(() => {
     if (!menu) return;
     const onKeyDown = (e: KeyboardEvent) => {
@@ -141,7 +132,6 @@ export function ContextMenu() {
   );
 }
 
-// --- Panel -----------------------------------------------------------------
 
 type Anchor = { x: number; y: number } | { rect: DOMRect };
 
@@ -155,7 +145,6 @@ function MenuPanel({
   entries: MenuEntry[];
   anchor: Anchor;
   onClose: () => void;
-  /** Set for submenus: Left arrow / Escape returns to the parent. */
   onBack?: () => void;
   autoFocus?: boolean;
 }) {
@@ -166,7 +155,6 @@ function MenuPanel({
   );
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Place inside the window: flip up/left when there isn't room.
   useLayoutEffect(() => {
     const el = panelRef.current;
     if (!el) return;
@@ -284,14 +272,10 @@ function MenuPanel({
         role="menu"
         tabIndex={-1}
         onKeyDown={onKeyDown}
-        // Keep focus (and the selection) where it was, e.g. in a text field.
         onMouseDown={(e) => e.preventDefault()}
         onContextMenu={(e) => e.preventDefault()}
         style={pos ? { left: pos.left, top: pos.top } : { left: -9999, top: -9999 }}
         className={`fixed z-100000 min-w-52 max-w-80 max-h-[calc(100vh-1rem)] overflow-y-auto p-1 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 shadow-lg outline-none select-none ${
-          // transition-none: `duration-*` also sets transition-duration, and with the
-          // default `transition-property: all` the jump from the off-screen
-          // measuring spot to the cursor would animate (menu slid in from the top-left).
           pos ? "transition-none animate-in fade-in zoom-in-95 duration-100" : "invisible"
         }`}
       >
@@ -382,7 +366,6 @@ function MenuPanel({
   );
 }
 
-// --- Text fields and selections --------------------------------------------
 
 function textMenuFor(target: HTMLElement | null): MenuEntry[] | null {
   const field = target?.closest<HTMLElement>("input, textarea, [contenteditable='true'], [contenteditable='']");
@@ -399,7 +382,6 @@ function textMenuFor(target: HTMLElement | null): MenuEntry[] | null {
         ? input.selectionStart !== input.selectionEnd
         : !window.getSelection()?.isCollapsed;
     } catch {
-      // number inputs have no selection API
     }
     const run = (command: string) => {
       field.focus();
@@ -429,8 +411,6 @@ function textMenuFor(target: HTMLElement | null): MenuEntry[] | null {
           try {
             const text = await navigator.clipboard.readText();
             field.focus();
-            // insertText keeps the field's own undo history and fires `input`,
-            // so React's onChange sees the change.
             document.execCommand("insertText", false, text);
           } catch (err) {
             console.warn("Clipboard read failed:", err);
@@ -465,7 +445,6 @@ function textMenuFor(target: HTMLElement | null): MenuEntry[] | null {
   return null;
 }
 
-// --- Older typed menus (timeline, project manager, media pool) -------------
 
 function legacyItems(
   menu: ContextMenuState,

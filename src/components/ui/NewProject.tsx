@@ -1,13 +1,30 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { open } from "@tauri-apps/plugin-dialog";
 import { useLingui } from "@lingui/react";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { useUI } from "../../hooks/useUI";
-import { Car, ChevronRight, Footprints, Loader2, MapPin, Plane, Search, X } from "../ui/icons";
+import {
+  Car,
+  ChevronRight,
+  Footprints,
+  ImageIcon,
+  Loader2,
+  MapIcon,
+  MapPin,
+  Plane,
+  Route,
+  Search,
+  Ship,
+  X,
+} from "../ui/icons";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 import { Switch } from "./Switch";
 import { dialogButton, dialogInput } from "./Dialog";
+import { setPendingImport } from "../../utils/pendingImport";
+import { mapDefaults } from "../../config/constants";
+import type { RouteMode } from "../../types";
 
 interface SearchResult {
   place_id: number;
@@ -16,7 +33,23 @@ interface SearchResult {
   lon: string;
 }
 
-const DEFAULT_ORIGIN = "Osaka, Japan";
+type Origin = { name: string; coords: [number, number] };
+type StartFrom = "blank" | "route" | "photos";
+
+const LAST_ORIGIN_KEY = "navivi_last_origin";
+
+function initialOrigin(locale: string): Origin {
+  try {
+    const saved = JSON.parse(localStorage.getItem(LAST_ORIGIN_KEY) || "null");
+    if (saved?.name && Array.isArray(saved.coords)) return saved;
+  } catch {}
+  return {
+    name: locale === "ja" ? "大阪府大阪市" : "Osaka, Japan",
+    coords: mapDefaults.startCoords,
+  };
+}
+
+const fileName = (path: string) => path.split(/[\\/]/).pop() || path;
 
 export function NewProject() {
   const { setCurrentView } = useUI();
@@ -24,22 +57,26 @@ export function NewProject() {
   const { i18n } = useLingui();
 
   const [projectName, setProjectName] = useState(t`Untitled Project`);
-  const [travelMode, setTravelMode] = useState<"driving" | "walking" | "curve">("driving");
+  const [startFrom, setStartFrom] = useState<StartFrom>("blank");
+  const [routePath, setRoutePath] = useState<string | null>(null);
+  const [photoPaths, setPhotoPaths] = useState<string[]>([]);
 
-  // Origin Search State (Defaults to Osaka)
-  const [originQuery, setOriginQuery] = useState(DEFAULT_ORIGIN);
-  const [selectedCoords, setSelectedCoords] = useState<[number, number]>([34.6937, 135.5023]);
+  const [origin, setOrigin] = useState<Origin>(() => initialOrigin(i18n.locale));
+  const [originQuery, setOriginQuery] = useState(origin.name);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
-  // Set right after picking a result, so filling the input doesn't search again.
-  const pickedRef = useRef(false);
-
-  const [skipRichMedia, setSkipRichMedia] = useState(false);
-
   const searchRef = useRef<HTMLDivElement>(null);
 
-  // Close dropdown on outside click
+  const [travelMode, setTravelMode] = useState<RouteMode>("driving");
+  const [ratio, setRatio] = useState<"16:9" | "9:16">("16:9");
+  const [introEnabled, setIntroEnabled] = useState(true);
+  const [introTitle, setIntroTitle] = useState("");
+  const [introSubtitle, setIntroSubtitle] = useState("");
+  const [skipRichMedia, setSkipRichMedia] = useState(false);
+
+  const close = () => setCurrentView("title_screen");
+
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
@@ -50,24 +87,18 @@ export function NewProject() {
     return () => window.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Escape closes the results first, then the dialog.
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       if (showDropdown) setShowDropdown(false);
-      else setCurrentView("title_screen");
+      else close();
     };
     window.addEventListener("keydown", handleEsc);
     return () => window.removeEventListener("keydown", handleEsc);
-  }, [setCurrentView, showDropdown]);
+  }, [showDropdown]);
 
-  // Origin Search Effect
   useEffect(() => {
-    if (pickedRef.current) {
-      pickedRef.current = false;
-      return;
-    }
-    if (!originQuery.trim() || originQuery === DEFAULT_ORIGIN) {
+    if (!originQuery.trim() || originQuery === origin.name) {
       setSearchResults([]);
       setShowDropdown(false);
       setIsSearching(false);
@@ -75,7 +106,7 @@ export function NewProject() {
     }
 
     setIsSearching(true);
-    const delayDebounceFn = setTimeout(async () => {
+    const timer = setTimeout(async () => {
       try {
         const res = await fetch(
           `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
@@ -83,8 +114,7 @@ export function NewProject() {
           )}&limit=5&accept-language=${i18n.locale}`,
         );
         if (!res.ok) throw new Error(t`no-internet`);
-        const data = await res.json();
-        setSearchResults(data);
+        setSearchResults(await res.json());
         setShowDropdown(true);
       } catch (error) {
         console.error("Search failed:", error);
@@ -93,47 +123,109 @@ export function NewProject() {
       }
     }, 600);
 
-    return () => clearTimeout(delayDebounceFn);
-  }, [originQuery, i18n.locale]);
+    return () => clearTimeout(timer);
+  }, [originQuery, origin.name, i18n.locale]);
 
   const handleSelectPlace = (place: SearchResult) => {
-    pickedRef.current = true;
-    setSelectedCoords([parseFloat(place.lat), parseFloat(place.lon)]);
-    setOriginQuery(place.display_name.split(",")[0]); // Set input to the clean name
+    const name = place.display_name.split(",")[0];
+    setOrigin({ name, coords: [parseFloat(place.lat), parseFloat(place.lon)] });
+    setOriginQuery(name);
     setShowDropdown(false);
   };
 
-  const handleCreate = () => {
-    resetWorkspace();
+  const pickRoute = async () => {
+    const selected = await open({
+      multiple: false,
+      filters: [{ name: t`GPS/Text Files`, extensions: ["gpx", "fit", "tcx", "kml", "json", "txt", "md"] }],
+    });
+    if (typeof selected === "string") {
+      setRoutePath(selected);
+      setStartFrom("route");
+    }
+  };
 
+  const pickPhotos = async () => {
+    const selected = await open({
+      multiple: true,
+      filters: [{ name: t`Photos & Images`, extensions: ["jpg", "jpeg", "png"] }],
+    });
+    const paths = Array.isArray(selected) ? selected : selected ? [selected] : [];
+    if (paths.length) {
+      setPhotoPaths(paths);
+      setStartFrom("photos");
+    }
+  };
+
+  const missingFile =
+    (startFrom === "route" && !routePath) || (startFrom === "photos" && photoPaths.length === 0);
+
+  const handleCreate = () => {
+    if (missingFile) return;
+    const name = projectName.trim() || t`Untitled Project`;
+
+    resetWorkspace();
     updateMetadata({
-      project_name: projectName || t`Untitled Project`,
+      project_name: name,
       project_id: "",
       status: "initialized",
+      enable_intro: introEnabled,
+      video_title: introTitle.trim(),
+      video_subtitle: introSubtitle.trim(),
     });
-
     updateSettings({
-      start_coords: selectedCoords,
+      start_coords: origin.coords,
       fps: 30,
       skip_rich_media: skipRichMedia,
       default_route_mode: travelMode,
+      default_export_ratio: ratio,
     });
+
+    try {
+      localStorage.setItem(LAST_ORIGIN_KEY, JSON.stringify(origin));
+    } catch {}
+
+    if (startFrom === "route" && routePath) setPendingImport({ kind: "route", path: routePath });
+    else if (startFrom === "photos") setPendingImport({ kind: "photos", paths: photoPaths });
+    else setPendingImport(null);
 
     setCurrentView("editor");
   };
 
-  const modes = [
-    { id: "driving" as const, icon: Car, label: t`Drive` },
-    { id: "walking" as const, icon: Footprints, label: t`Walk` },
-    { id: "curve" as const, icon: Plane, label: t`Fly` },
+  const modes: { id: RouteMode; icon: typeof Car; label: string }[] = [
+    { id: "driving", icon: Car, label: t`Drive` },
+    { id: "walking", icon: Footprints, label: t`Walk` },
+    { id: "ferry", icon: Ship, label: t`Ferry` },
+    { id: "curve", icon: Plane, label: t`Fly` },
   ];
 
-  const label = "block mb-1.5 text-[12px] font-medium text-zinc-600 dark:text-zinc-300";
+  const sources: {
+    id: StartFrom;
+    icon: typeof Car;
+    label: string;
+    detail: string;
+    onPick?: () => void;
+  }[] = [
+    { id: "blank", icon: MapIcon, label: t`Blank map`, detail: t`Add stops yourself` },
+    {
+      id: "route",
+      icon: Route,
+      label: t`GPS track`,
+      detail: routePath ? fileName(routePath) : t`GPX, FIT, TCX or KML`,
+      onPick: pickRoute,
+    },
+    {
+      id: "photos",
+      icon: ImageIcon,
+      label: t`Photos`,
+      detail: photoPaths.length ? t`${photoPaths.length} selected` : t`Uses photo locations`,
+      onPick: pickPhotos,
+    },
+  ];
 
   return createPortal(
     <div
       onMouseDown={(e) => {
-        if (e.target === e.currentTarget) setCurrentView("title_screen");
+        if (e.target === e.currentTarget) close();
       }}
       className="fixed inset-x-0 top-10 bottom-0 z-99999 flex items-center justify-center p-4 bg-zinc-950/30 backdrop-blur-[2px] animate-in fade-in duration-150 select-none"
     >
@@ -144,10 +236,9 @@ export function NewProject() {
           e.preventDefault();
           handleCreate();
         }}
-        className="w-120 max-w-full max-h-full flex flex-col rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150"
+        className="w-136 max-w-full max-h-full flex flex-col rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150"
       >
-        {/* Header */}
-        <div className="flex items-start justify-between gap-4 px-6 pt-6">
+        <div className="flex items-start justify-between gap-4 px-6 pt-6 pb-4 border-b border-zinc-100 dark:border-white/5">
           <div>
             <h2 className="text-[16px] font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
               <Trans>create-new-route</Trans>
@@ -158,7 +249,7 @@ export function NewProject() {
           </div>
           <button
             type="button"
-            onClick={() => setCurrentView("title_screen")}
+            onClick={close}
             aria-label={t`Close`}
             className="flex items-center justify-center w-8 h-8 -mr-2 -mt-1 rounded-lg text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 dark:hover:text-zinc-200 dark:hover:bg-white/5 transition-colors"
           >
@@ -166,12 +257,8 @@ export function NewProject() {
           </button>
         </div>
 
-        <div className="px-6 pt-5 space-y-5 overflow-y-auto">
-          {/* Project name */}
-          <div>
-            <label htmlFor="new-project-name" className={label}>
-              <Trans>Project name</Trans>
-            </label>
+        <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar px-6 py-5 space-y-6">
+          <Field label={t`Project name`} htmlFor="new-project-name">
             <input
               id="new-project-name"
               type="text"
@@ -182,25 +269,53 @@ export function NewProject() {
               placeholder={t`project-name-placeholder`}
               autoFocus
             />
-          </div>
+          </Field>
 
-          {/* Starting location */}
-          <div ref={searchRef}>
-            <label htmlFor="new-project-origin" className={label}>
-              <Trans>Starting point</Trans>
-            </label>
-            <div className="relative">
+          <Field label={t`Start from`}>
+            <div className="grid grid-cols-3 gap-2">
+              {sources.map((source) => {
+                const selected = startFrom === source.id;
+                return (
+                  <button
+                    key={source.id}
+                    type="button"
+                    aria-pressed={selected}
+                    onClick={() => (source.onPick ? source.onPick() : setStartFrom(source.id))}
+                    className={`flex flex-col items-start gap-2 p-3 rounded-xl border text-left transition-colors ${
+                      selected
+                        ? "border-navi bg-navi/5 ring-2 ring-navi/15"
+                        : "border-zinc-200 dark:border-white/10 hover:bg-zinc-50 dark:hover:bg-white/5"
+                    }`}
+                  >
+                    <source.icon className={`w-4.5 h-4.5 ${selected ? "text-navi" : "text-zinc-400"}`} />
+                    <span className="min-w-0 w-full">
+                      <span className="block text-[13px] font-medium text-zinc-900 dark:text-zinc-100">
+                        {source.label}
+                      </span>
+                      <span className="block text-[11px] text-zinc-500 dark:text-zinc-400 truncate" title={source.detail}>
+                        {source.detail}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </Field>
+
+          <Field
+            label={t`Starting point`}
+            htmlFor="new-project-origin"
+            hint={startFrom === "blank" ? undefined : t`Where the map opens before your import is placed`}
+          >
+            <div ref={searchRef} className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400 pointer-events-none" />
               <input
                 id="new-project-origin"
                 type="text"
                 value={originQuery}
                 onChange={(e) => setOriginQuery(e.target.value)}
-                onFocus={() => {
-                  if (searchResults.length > 0) setShowDropdown(true);
-                }}
+                onFocus={() => searchResults.length > 0 && setShowDropdown(true)}
                 onKeyDown={(e) => {
-                  // Enter picks the first result instead of submitting.
                   if (e.key === "Enter" && showDropdown && searchResults[0]) {
                     e.preventDefault();
                     handleSelectPlace(searchResults[0]);
@@ -252,60 +367,76 @@ export function NewProject() {
                 </div>
               )}
             </div>
-          </div>
+          </Field>
 
-          {/* Default travel mode */}
-          <div>
-            <span className={label}>
-              <Trans>Default travel mode</Trans>
-            </span>
-            <div className="flex p-0.5 rounded-lg bg-zinc-100 dark:bg-white/5">
-              {modes.map((mode) => (
-                <button
-                  key={mode.id}
-                  type="button"
-                  aria-pressed={travelMode === mode.id}
-                  onClick={() => setTravelMode(mode.id)}
-                  className={`flex-1 flex items-center justify-center gap-1.5 h-8 rounded-md text-[13px] font-medium transition-colors ${
-                    travelMode === mode.id
-                      ? "bg-white dark:bg-zinc-800 text-navi shadow-sm"
-                      : "text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200"
-                  }`}
-                >
-                  <mode.icon className="w-4 h-4" />
-                  {mode.label}
-                </button>
-              ))}
+          <Field label={t`Default travel mode`} hint={t`default-routing-mode-detail`}>
+            <Segmented
+              value={travelMode}
+              onChange={setTravelMode}
+              options={modes.map((m) => ({ id: m.id, label: m.label, icon: <m.icon className="w-4 h-4" /> }))}
+            />
+          </Field>
+
+          <Field label={t`Video format`} hint={t`Used as the default when exporting`}>
+            <Segmented
+              value={ratio}
+              onChange={setRatio}
+              options={[
+                { id: "16:9", label: t`Landscape 16:9`, icon: <span className="w-4 h-2.5 rounded-xs border-[1.5px] border-current" /> },
+                { id: "9:16", label: t`Vertical 9:16`, icon: <span className="w-2.5 h-4 rounded-xs border-[1.5px] border-current" /> },
+              ]}
+            />
+          </Field>
+
+          <div className="rounded-xl border border-zinc-200 dark:border-white/10 divide-y divide-zinc-100 dark:divide-white/5">
+            <div className="px-4 py-3">
+              <ToggleRow
+                title={t`Title card`}
+                description={t`Shows the title and subtitle at the start of the video`}
+                checked={introEnabled}
+                onChange={setIntroEnabled}
+              />
+              {introEnabled && (
+                <div className="grid grid-cols-2 gap-2 mt-3">
+                  <input
+                    type="text"
+                    value={introTitle}
+                    onChange={(e) => setIntroTitle(e.target.value)}
+                    placeholder={projectName || t`Title`}
+                    aria-label={t`Title`}
+                    className={dialogInput}
+                  />
+                  <input
+                    type="text"
+                    value={introSubtitle}
+                    onChange={(e) => setIntroSubtitle(e.target.value)}
+                    placeholder={t`Subtitle (optional)`}
+                    aria-label={t`Subtitle`}
+                    className={dialogInput}
+                  />
+                </div>
+              )}
             </div>
-            <p className="mt-1.5 text-[12px] text-zinc-500 dark:text-zinc-400">
-              <Trans>default-routing-mode-detail</Trans>
-            </p>
+            <div className="px-4 py-3">
+              <ToggleRow
+                title={t`Fast render mode`}
+                description={t`Skip AI voiceover synthesis and pop-up images during generation`}
+                checked={skipRichMedia}
+                onChange={setSkipRichMedia}
+              />
+            </div>
           </div>
-
-          {/* Fast render */}
-          <label className="flex items-center justify-between gap-6 px-4 py-3 rounded-xl border border-zinc-200 dark:border-white/10 cursor-pointer">
-            <span className="min-w-0">
-              <span className="block text-[13px] font-medium text-zinc-900 dark:text-zinc-100">
-                <Trans>Fast render mode</Trans>
-              </span>
-              <span className="block mt-0.5 text-[12px] leading-relaxed text-zinc-500 dark:text-zinc-400">
-                <Trans>Skip AI voiceover synthesis and pop-up images during generation</Trans>
-              </span>
-            </span>
-            <Switch checked={skipRichMedia} onChange={setSkipRichMedia} label={t`Fast render mode`} />
-          </label>
         </div>
 
-        {/* Footer */}
-        <div className="flex items-center justify-end gap-2 px-6 pt-5 pb-6">
-          <button
-            type="button"
-            onClick={() => setCurrentView("title_screen")}
-            className={dialogButton.secondary}
-          >
+        <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-zinc-100 dark:border-white/5">
+          <button type="button" onClick={close} className={dialogButton.secondary}>
             <Trans>Cancel</Trans>
           </button>
-          <button type="submit" className={`${dialogButton.primary} flex items-center gap-1`}>
+          <button
+            type="submit"
+            disabled={missingFile}
+            className={`${dialogButton.primary} flex items-center gap-1`}
+          >
             <Trans>start-editing</Trans>
             <ChevronRight className="w-4 h-4 -mr-1 opacity-80" />
           </button>
@@ -313,5 +444,82 @@ export function NewProject() {
       </form>
     </div>,
     document.body,
+  );
+}
+
+function Field({
+  label,
+  hint,
+  htmlFor,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  htmlFor?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div>
+      <label htmlFor={htmlFor} className="block mb-1.5 text-[12px] font-medium text-zinc-600 dark:text-zinc-300">
+        {label}
+      </label>
+      {children}
+      {hint && <p className="mt-1.5 text-[12px] text-zinc-500 dark:text-zinc-400">{hint}</p>}
+    </div>
+  );
+}
+
+function Segmented<T extends string>({
+  value,
+  onChange,
+  options,
+}: {
+  value: T;
+  onChange: (value: T) => void;
+  options: { id: T; label: string; icon?: ReactNode }[];
+}) {
+  return (
+    <div className="flex p-0.5 rounded-lg bg-zinc-100 dark:bg-white/5">
+      {options.map((option) => (
+        <button
+          key={option.id}
+          type="button"
+          aria-pressed={value === option.id}
+          onClick={() => onChange(option.id)}
+          className={`flex-1 flex items-center justify-center gap-1.5 h-8 rounded-md text-[13px] font-medium transition-colors ${
+            value === option.id
+              ? "bg-white dark:bg-zinc-800 text-navi shadow-sm"
+              : "text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200"
+          }`}
+        >
+          {option.icon}
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function ToggleRow({
+  title,
+  description,
+  checked,
+  onChange,
+}: {
+  title: string;
+  description: string;
+  checked: boolean;
+  onChange: (value: boolean) => void;
+}) {
+  return (
+    <label className="flex items-center justify-between gap-6 cursor-pointer">
+      <span className="min-w-0">
+        <span className="block text-[13px] font-medium text-zinc-900 dark:text-zinc-100">{title}</span>
+        <span className="block mt-0.5 text-[12px] leading-relaxed text-zinc-500 dark:text-zinc-400">
+          {description}
+        </span>
+      </span>
+      <Switch checked={checked} onChange={onChange} label={title} />
+    </label>
   );
 }

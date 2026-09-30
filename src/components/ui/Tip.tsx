@@ -1,17 +1,9 @@
 interface TipProps {
   label: string;
-  /** Keyboard shortcut shown next to the label, e.g. "Ctrl+Z". */
   kbd?: string;
-  /** Horizontal anchor; use "end" for buttons at the right edge of the window. */
   align?: "center" | "start" | "end";
 }
 
-/**
- * Hover label for icon-only buttons. Put it inside a button that has
- * `group/tool relative`; it shows below the button after a short delay, or
- * straight away on keyboard focus. Give the button an aria-label too — this
- * element is aria-hidden.
- */
 export function Tip({ label, kbd, align = "center" }: TipProps) {
   const position =
     align === "start" ? "left-0" : align === "end" ? "right-0" : "left-1/2 -translate-x-1/2";

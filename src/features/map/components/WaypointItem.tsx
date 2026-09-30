@@ -131,7 +131,6 @@ export function WaypointItem({
       }}
       className="relative"
     >
-      {/* Rail: one continuous line through every stop and leg. */}
       {!isListEditMode && (
         <>
           {!isFirst && (
@@ -143,7 +142,6 @@ export function WaypointItem({
         </>
       )}
 
-      {/* --- Stop --- */}
       <div
         onClick={() => !isListEditMode && handleSelect()}
         className={`group relative flex items-start gap-2.5 rounded-lg pl-1.5 pr-1.5 py-1.5 transition-colors ${
@@ -253,7 +251,6 @@ export function WaypointItem({
         )}
       </div>
 
-      {/* --- Leg to the next stop --- */}
       {!isLast && !isListEditMode && (
         <div
           onContextMenu={(e) => openContextMenu(e, legMenu(wp))}

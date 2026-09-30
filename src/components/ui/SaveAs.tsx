@@ -30,7 +30,6 @@ export function SaveAs({
     if (isOpen) setSaveAsName(defaultName);
   }, [isOpen, defaultName]);
 
-  // Find a free folder name under Documents/Navivi/Projects (debounced).
   useEffect(() => {
     if (!isOpen) return;
 
@@ -137,7 +136,6 @@ export function SaveAs({
         />
       </form>
 
-      {/* Where it will be saved */}
       <div className="mt-3 flex items-center gap-2 min-w-0 text-[12px] text-zinc-500 dark:text-zinc-400">
         <Folder className="w-3.5 h-3.5 shrink-0 text-zinc-400" />
         <span

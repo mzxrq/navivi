@@ -232,7 +232,6 @@ export function WaypointEditor({
       value: wp.arrivingNarration || "",
       onChange: (v: string) => updateWaypoint(wp.id, { arrivingNarration: v }),
     },
-    // An unlinked stop-by has no attraction clip of its own.
     ...(isStopBy && !isLinked
       ? []
       : [
@@ -263,7 +262,6 @@ export function WaypointEditor({
           <div className="absolute inset-0 z-60 cursor-not-allowed bg-zinc-900/5 dark:bg-white/5" />
         )}
 
-        {/* --- Header --- */}
         <div className="flex items-center gap-2 h-12 pl-3 pr-2 border-b border-zinc-100 dark:border-white/5 shrink-0">
           <span
             className={`rounded-full flex items-center justify-center font-semibold tabular-nums shrink-0 ${badgeClass}`}
@@ -368,7 +366,6 @@ export function WaypointEditor({
 
         {!isCollapsed && (
           <div className="flex-1 min-h-0 flex">
-            {/* --- Main: narration / photos --- */}
             <div className="flex-1 min-w-0 flex flex-col">
               <div className="flex items-center gap-4 px-4 h-10 border-b border-zinc-100 dark:border-white/5 shrink-0">
                 {(
@@ -559,7 +556,6 @@ export function WaypointEditor({
               </div>
             </div>
 
-            {/* --- Options --- */}
             <aside className="w-60 max-[1159px]:w-48 shrink-0 border-l border-zinc-100 dark:border-white/5 bg-zinc-50/60 dark:bg-white/1.5 flex flex-col overflow-y-auto custom-scrollbar">
               <div className="p-4 space-y-4 flex-1">
                 {isMarkedForRegen && (

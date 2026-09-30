@@ -203,7 +203,6 @@ export function ProjectManager() {
     closeModal();
   };
 
-  // One menu for a project, shown on right-click and from its "⋯" button.
   const projectMenu = (project: any): MenuEntry[] => [
     { label: t`Open Project`, icon: FolderOpen, onSelect: () => handleOpenProject(project.path) },
     separator,
@@ -279,7 +278,6 @@ export function ProjectManager() {
       <div className="flex-1 min-h-0 flex flex-col w-full h-full pt-10 bg-zinc-50 dark:bg-zinc-950 relative z-10 select-none">
         <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar">
           <div className="max-w-6xl mx-auto px-8 max-[900px]:px-5 pt-8 pb-12">
-            {/* --- Header --- */}
             <header className="flex flex-wrap items-end justify-between gap-4 mb-8">
               <div>
                 <h1 className="text-[22px] font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
@@ -309,7 +307,6 @@ export function ProjectManager() {
               </div>
             </header>
 
-            {/* --- Templates --- */}
             <section className="mb-8">
               <button
                 type="button"
@@ -345,7 +342,6 @@ export function ProjectManager() {
               )}
             </section>
 
-            {/* --- Recent projects --- */}
             <section>
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-[13px] font-semibold text-zinc-700 dark:text-zinc-200">
@@ -523,7 +519,6 @@ export function ProjectManager() {
           </div>
         </div>
 
-        {/* --- Dialogs --- */}
         {modalState.type === "settings" && modalState.project && (
           <ProjectSettingsModal project={modalState.project} onClose={closeModal} />
         )}

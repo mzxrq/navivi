@@ -19,7 +19,6 @@ import { Trans } from "@lingui/react/macro";
 
 interface DrawBarProps {
   waypoints: Waypoint[];
-  /** The stop whose outgoing leg is being drawn (null = none chosen yet). */
   activeWp: Waypoint | null;
   nextWp: Waypoint | null;
   isEraserMode: boolean;
@@ -32,7 +31,6 @@ interface DrawBarProps {
   setIsDirty: (dirty: boolean) => void;
 }
 
-/** Closes a popover on outside click / Escape. */
 function useDismiss(open: boolean, close: () => void) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -67,7 +65,6 @@ const iconButtonClass = (active = false) =>
       : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-white/5"
   }`;
 
-/** Everything for drawing one leg's custom path, in one bar under the toolbar. */
 export function DrawBar({
   waypoints,
   activeWp,
@@ -88,7 +85,6 @@ export function DrawBar({
   const legMenuRef = useDismiss(isLegMenuOpen, () => setIsLegMenuOpen(false));
   const moreRef = useDismiss(isMoreOpen, () => setIsMoreOpen(false));
 
-  // Kept in sync with MapArea, which inserts new clicks after the selected point.
   useEffect(() => {
     const sync = ((e: CustomEvent) => setSelectedAnchorIdx(e.detail.index)) as EventListener;
     window.addEventListener("select-anchor", sync);
@@ -126,7 +122,6 @@ export function DrawBar({
   return (
     <div className="w-[min(40rem,calc(100vw-2rem))] max-w-full rounded-xl bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border border-zinc-200 dark:border-white/10 shadow-sm animate-in fade-in slide-in-from-top-1 duration-150">
       <div className="flex flex-wrap items-center gap-1 p-1">
-        {/* Which leg */}
         <div ref={legMenuRef} className="relative min-w-0 flex-1 basis-44">
           <button
             type="button"

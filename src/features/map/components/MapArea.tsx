@@ -16,6 +16,7 @@ import { useWorkspace } from "../../../hooks/useWorkspace";
 import { useTheme } from "../../../hooks/useTheme";
 import { useMapRouting } from "../hooks/useMapRouting";
 import { useFileActions } from "../../../hooks/useFileActions";
+import { takePendingImport } from "../../../utils/pendingImport";
 import { useUI } from "../../../hooks/useUI";
 import { loadProjectData } from "../../../services/fileSystem";
 import { WaypointEditor } from "./WaypointEditor";
@@ -48,7 +49,13 @@ export function MapArea() {
     setActiveWaypointId,
     registerThumbnailGetter,
   } = useWorkspace();
-  const { handleDroppedFiles, importPhotos } = useFileActions();
+  const { handleDroppedFiles, importPhotos, importRouteFile } = useFileActions();
+
+  useEffect(() => {
+    const pending = takePendingImport();
+    if (pending?.kind === "route") importRouteFile(pending.path);
+    else if (pending?.kind === "photos") handleDroppedFiles(pending.paths);
+  }, []);
 
   const [isHovering, setIsHovering] = useState(false);
   const [isAddMode, setIsAddMode] = useState(false);
@@ -74,11 +81,6 @@ export function MapArea() {
   const [weatherCondition, setWeatherCondition] =
     useState<WeatherCondition>("clear");
 
-  // [NOTE] [Perf] The camera is uncontrolled: Mapbox owns it and React is not
-  // told about every pan/zoom frame. Feeding viewState back through
-  // setState re-rendered this whole component (every pin, anchor and panel)
-  // 60 times a second while the map moved. Read the camera from mapRef
-  // instead; the compass subscribes to `rotate` on its own.
   const initialViewState = useRef({
     longitude: settings.start_coords?.[1] || 135.5023,
     latitude: settings.start_coords?.[0] || 34.6937,
@@ -89,10 +91,6 @@ export function MapArea() {
 
   useMapRouting();
 
-  // [NOTE] [Perf] Thumbnail: a small snapshot kept in a ref and encoded only
-  // when the project is saved. It used to encode a full-size PNG and push it
-  // into workspace state after every pan, which re-rendered the whole editor
-  // (sidebar included) and stalled the map for a moment each time.
   const thumbnailCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
@@ -115,8 +113,6 @@ export function MapArea() {
     thumbnailCaptureTimeoutRef.current = setTimeout(() => {
       const map = mapRef.current?.getMap();
       if (!map || isContextLostRef.current) return;
-      // The WebGL buffer is only readable during the frame that drew it
-      // (no preserveDrawingBuffer), so copy it from inside a render event.
       map.once("render", () => {
         const source = map.getCanvas();
         if (!source.width || !source.height) return;
@@ -388,9 +384,6 @@ export function MapArea() {
   const handleMarkerContextMenu = (e: React.MouseEvent, wpId: string) =>
     openContextMenu(e, stopMenu(wpId));
 
-  // Clicking a pin with the select tool selects that stop, which also
-  // highlights (and scrolls to) its row in the sidebar. Releasing a dragged
-  // pin fires a click too; that one shouldn't select.
   const pinDraggedRef = useRef(false);
   const { stopMenu, viaMenu, mapMenu } = useStopMenus();
   const handlePinClick = (e: React.MouseEvent, wpId: string) => {
@@ -532,7 +525,6 @@ export function MapArea() {
     }
   };
 
-  /** Deletes drawn point `idx` of the active leg, keeping the insert point on the same point. */
   const removeAnchor = (idx: number) => {
     setWaypoints((prev) =>
       prev.map((wp) =>
@@ -556,7 +548,6 @@ export function MapArea() {
     setIsDirty(true);
   };
 
-  // "Show on map" from a stop's context menu.
   useEffect(() => {
     const handleFocus = ((e: CustomEvent) => {
       const wp = waypoints.find((w) => w.id === e.detail.wpId);
@@ -572,8 +563,6 @@ export function MapArea() {
     return () => window.removeEventListener("focus-waypoint", handleFocus);
   }, [waypoints]);
 
-  /** Frames the leg that starts at `wpId` (its routed segment, drawn points
-   * and via points) so the user can see what they're about to edit. */
   const fitToLeg = (wpId: string) => {
     const wpIndex = waypoints.findIndex((w) => w.id === wpId);
     if (wpIndex === -1 || wpIndex >= waypoints.length - 1) return;
@@ -585,7 +574,6 @@ export function MapArea() {
     const extra = [...(wp.viaPoints || []), ...(wp.customRoute || [])];
     let lats = [wp.lat, nextWp.lat, ...extra.map((v) => v[0])];
     let lngs = [wp.lng, nextWp.lng, ...extra.map((v) => v[1])];
-    // Prefer the actual routed segment for an accurate bounding box.
     if (routeSegments[wpIndex]?.positions?.length) {
       lats = [...lats, ...routeSegments[wpIndex].positions.map((p) => p[0])];
       lngs = [...lngs, ...routeSegments[wpIndex].positions.map((p) => p[1])];
@@ -602,7 +590,6 @@ export function MapArea() {
             .getMap()
             .flyTo({ center: [minLng, minLat], zoom: 15, duration: 800 });
         } else {
-          // Extra top padding keeps the leg clear of the toolbar and draw bar.
           map.getMap().fitBounds(
             [
               [minLng, minLat],
@@ -620,7 +607,6 @@ export function MapArea() {
     }, 150);
   };
 
-  // Sidebar "Adjust" (via points) and "Draw" / "Edit path" on a leg.
   useEffect(() => {
     const handleEnterVia = ((e: CustomEvent) => {
       viaTargetWpIdRef.current = e.detail.wpId;
@@ -653,7 +639,6 @@ export function MapArea() {
     };
   }, [waypoints, routeSegments, isViaMode]);
 
-  // Leaving draw mode (or switching legs) drops the eraser and the insert point.
   useEffect(() => {
     if (!isDrawMode) setIsEraserMode(false);
     window.dispatchEvent(
@@ -848,7 +833,6 @@ export function MapArea() {
 
   return (
     <main className="flex-1 relative bg-zinc-100 dark:bg-[#09090b] overflow-hidden transition-colors">
-      {/* --- TOOLS (top centre): tool switcher, then the current mode's bar --- */}
       <div className="absolute z-200 top-14 left-1/2 -translate-x-1/2 max-w-[calc(100%-2rem)] flex flex-col items-center gap-2 pointer-events-none *:pointer-events-auto">
         <MapToolbar
           isAddMode={isAddMode}
@@ -912,7 +896,6 @@ export function MapArea() {
         )}
       </div>
 
-      {/* --- VIEW CONTROLS (top right) --- */}
       <div className="absolute top-14 right-4 z-200 flex items-center gap-0.5 p-1 rounded-xl bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border border-zinc-200 dark:border-white/10 shadow-sm">
         <MapCompass mapRef={mapRef} ready={isMapLoaded} />
 
@@ -1067,7 +1050,6 @@ export function MapArea() {
                   setWaypoints((prev) =>
                     prev.map((w) => (w.id === wp.id ? { ...w, lat, lng } : w)),
                   );
-                  // Clear on the next tick in case the release fires no click.
                   setTimeout(() => {
                     pinDraggedRef.current = false;
                   }, 0);
@@ -1190,7 +1172,6 @@ export function MapArea() {
                     onClick={(e) => {
                       e.stopPropagation();
                       if (!isEraserMode) {
-                        // Pick this point as the insert position (toggle).
                         const index =
                           activeAnchorIndexRef.current === idx ? null : idx;
                         window.dispatchEvent(

@@ -1,7 +1,5 @@
 import { Waypoint } from "../types";
 
-/** Badge text for the stop at `index`: "S" start, "E" end, "+n" for the n-th
- * stop-by in a run of stop-bys, otherwise the stop's number (stop-bys skipped). */
 export function stopLabel(waypoints: Waypoint[], index: number): string {
   if (index === 0) return "S";
   if (index === waypoints.length - 1 && waypoints.length > 1) return "E";

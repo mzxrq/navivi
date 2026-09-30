@@ -61,8 +61,6 @@ export class ErrorBoundary extends Component<Props, State> {
     const { showDetails, copied } = this.state;
 
     return (
-      // The app (and its TitleBar) is gone, so bring a minimal draggable strip
-      // with window controls: the frameless window must stay movable/closable.
       <div className="fixed inset-0 z-99999 flex flex-col bg-zinc-50 dark:bg-zinc-950">
         <div data-tauri-drag-region className="h-10 shrink-0 flex items-center justify-end">
           <button

@@ -5,7 +5,6 @@ interface SwitchProps {
   disabled?: boolean;
 }
 
-/** Small on/off switch. `label` is the accessible name. */
 export function Switch({ checked, onChange, label, disabled }: SwitchProps) {
   return (
     <button

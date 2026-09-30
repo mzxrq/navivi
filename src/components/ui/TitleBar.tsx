@@ -189,7 +189,6 @@ export function TitleBar() {
         data-tauri-drag-region
         className="absolute top-0 inset-x-0 h-10 z-9999 flex items-center justify-between select-none shrink-0 bg-zinc-50/85 dark:bg-zinc-950/85 backdrop-blur-xl border-b border-zinc-200/80 dark:border-white/10 transition-colors"
       >
-        {/* --- LEFT: app menu, undo/redo --- */}
         <div className="flex items-center gap-0.5 h-full shrink-0 pl-2">
           <div className="relative" ref={menuRef}>
             <button
@@ -356,7 +355,6 @@ export function TitleBar() {
           )}
         </div>
 
-        {/* --- CENTER: project name (drag region) --- */}
         <div
           data-tauri-drag-region
           className="absolute inset-y-0 left-1/2 -translate-x-1/2 max-w-[40%] flex items-center justify-center pointer-events-none"
@@ -372,7 +370,6 @@ export function TitleBar() {
           </span>
         </div>
 
-        {/* --- RIGHT: view switch, settings, window controls --- */}
         <div className="flex items-center h-full shrink-0">
           {currentView === "editor" && (
             <div
@@ -507,7 +504,6 @@ export function TitleBar() {
   );
 }
 
-// Icon button in the title bar (menu, undo/redo, settings).
 const barButton =
   "group/tool relative flex items-center justify-center w-8 h-7 rounded-lg text-zinc-500 hover:bg-zinc-200/70 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-zinc-100 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-navi/40 disabled:opacity-35 disabled:pointer-events-none";
 

@@ -3,16 +3,13 @@ import { createPortal } from "react-dom";
 
 interface DialogProps {
   title: ReactNode;
-  /** Optional line under the title (e.g. the project it's about). */
   subtitle?: ReactNode;
   children?: ReactNode;
-  /** Buttons, right-aligned; use `dialogButton` for their classes. */
   footer: ReactNode;
   onClose: () => void;
   width?: string;
 }
 
-/** Small confirmation / form dialog. Escape and a backdrop click close it. */
 export function Dialog({ title, subtitle, children, footer, onClose, width = "w-96" }: DialogProps) {
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -23,7 +20,6 @@ export function Dialog({ title, subtitle, children, footer, onClose, width = "w-
   }, [onClose]);
 
   return createPortal(
-    // Below the title bar (h-10), like the other overlays.
     <div
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();

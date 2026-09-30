@@ -4,25 +4,17 @@ import { t } from "@lingui/core/macro";
 
 interface MapCompassProps {
   mapRef: RefObject<MapRef | null>;
-  /** Flips to true once the map has loaded, so we can subscribe to it. */
   ready: boolean;
 }
 
-/** Compass needle that follows the map's bearing; click to face north and flatten. */
 export function MapCompass({ mapRef, ready }: MapCompassProps) {
   const needleRef = useRef<SVGSVGElement>(null);
-  // Mapbox reports bearing wrapped to [-180, 180]. Rotating the needle to the
-  // raw value makes the CSS transition swing the long way round whenever the
-  // map turns across south (e.g. 170° -> -170° spins back 340°). Keep an
-  // unwrapped angle and always step it by the shortest turn instead.
   const angleRef = useRef(0);
 
   useEffect(() => {
     const map = mapRef.current?.getMap();
     if (!ready || !map) return;
 
-    // Written straight to the DOM: rotating the map fires this every frame,
-    // and nothing else needs to re-render for it.
     const update = () => {
       const target = -map.getBearing();
       const delta = ((((target - angleRef.current) % 360) + 540) % 360) - 180;
@@ -46,7 +38,6 @@ export function MapCompass({ mapRef, ready }: MapCompassProps) {
       aria-label={t`Reset View (North)`}
       className="flex items-center justify-center w-7 h-7 rounded-lg text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-white/5 transition-colors"
     >
-      {/* Compass needle: red half points north. */}
       <svg
         ref={needleRef}
         viewBox="0 0 16 16"

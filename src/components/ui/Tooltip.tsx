@@ -7,10 +7,6 @@ interface TooltipProps {
   className?: string;
 }
 
-/**
- * Hover/focus tooltip that wraps any element, for longer explanations.
- * For icon-only buttons prefer `Tip` (label + shortcut, placed inside the button).
- */
 export function Tooltip({
   children,
   content,

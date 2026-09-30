@@ -4,7 +4,6 @@ import { useWorkspace } from "../../../hooks/useWorkspace";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 
-/** Intro title card settings, shown as the first row of the route list. */
 export function OverviewPanel() {
   const { metadata, updateMetadata, setIsDirty } = useWorkspace();
   const [isOpen, setIsOpen] = useState(false);
@@ -107,7 +106,6 @@ export function OverviewPanel() {
                 />
               </label>
 
-              {/* Rough stand-in for the rendered title card. */}
               <div
                 aria-hidden
                 className="aspect-video w-full rounded-md bg-zinc-900 ring-1 ring-black/5 dark:ring-white/10 flex flex-col items-center justify-center gap-1 px-4 text-center overflow-hidden"

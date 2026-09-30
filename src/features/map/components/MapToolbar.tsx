@@ -12,14 +12,11 @@ interface MapToolbarProps {
   setIsDrawMode: (v: boolean) => void;
   isEraserMode: boolean;
   setIsEraserMode: (v: boolean) => void;
-  /** Whether a leg is being drawn right now (enables the E shortcut). */
   canErase: boolean;
   addType: AddType;
   setAddType: (v: AddType) => void;
 }
 
-/** Map tool switcher: select, add stop, draw path. Mode-specific controls
- * live in the bar underneath (see DrawBar / the add-mode chooser). */
 export function MapToolbar({
   isAddMode,
   setIsAddMode,
@@ -39,10 +36,6 @@ export function MapToolbar({
     if (mode !== "line") setIsEraserMode(false);
   };
 
-  // V (select), P (add), L (draw), E (erase while drawing), Escape.
-  // Registered once and fed through a ref: other Escape handlers (e.g. the
-  // sidebar clearing the selected stop) re-render this component mid-dispatch,
-  // and re-subscribing then would drop this listener for that same keypress.
   const latest = useRef({ activeMode, canErase, isEraserMode, selectTool, setIsEraserMode });
   latest.current = { activeMode, canErase, isEraserMode, selectTool, setIsEraserMode };
 
@@ -54,7 +47,6 @@ export function MapToolbar({
       if (activeTag === "input" || activeTag === "textarea" || activeEl?.isContentEditable) {
         return;
       }
-      // Leave Ctrl+V paste, Ctrl+P print, etc. alone.
       if (e.ctrlKey || e.metaKey || e.altKey) return;
 
       switch (e.key.toLowerCase()) {

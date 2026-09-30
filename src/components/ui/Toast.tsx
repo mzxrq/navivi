@@ -10,7 +10,6 @@ const toneStyles = {
   info: { icon: Info, color: "text-navi" },
 } as const;
 
-// Errors usually need reading (and maybe copying), so they stay up longer.
 const DURATION_MS = { error: 7000, default: 3700 };
 
 function ToastItem({ toast, hideToast }: { toast: any; hideToast: (id: string) => void }) {
@@ -44,7 +43,6 @@ function ToastItem({ toast, hideToast }: { toast: any; hideToast: (id: string) =
   return (
     <div
       role={toast.type === "error" ? "alert" : "status"}
-      // Hovering keeps the toast up so it can be read or copied.
       onMouseEnter={stopTimer}
       onMouseLeave={startTimer}
       className={`flex items-start gap-2.5 w-80 max-w-[calc(100vw-1.5rem)] pl-3 pr-1.5 py-2.5 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 shadow-lg pointer-events-auto ${
@@ -74,7 +72,6 @@ export function Toast() {
   const { activeToasts, hideToast } = useUI();
   if (!activeToasts || activeToasts.length === 0) return null;
 
-  // Sits just above the status bar (h-7), bottom-right.
   return (
     <div className="fixed bottom-9 right-3 z-999 flex flex-col items-end gap-2 pointer-events-none">
       {activeToasts.map((toast) => (

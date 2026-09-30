@@ -137,7 +137,6 @@ export function Sidebar() {
           <OverviewPanel />
         </div>
 
-        {/* --- ROUTE --- */}
         <div className="sticky top-0 z-30 -mx-3 px-4 py-2 bg-zinc-50/90 dark:bg-[#09090b]/90 backdrop-blur-md flex items-center gap-2">
           <h2 className="text-[12px] font-semibold text-zinc-900 dark:text-zinc-100">
             <Trans>Route</Trans>
@@ -153,7 +152,6 @@ export function Sidebar() {
               )}
             </span>
           )}
-          {/* While editing, the footer's Done is the way out. */}
           {waypoints.length > 0 && !isListEditMode && (
             <button
               type="button"
@@ -227,7 +225,6 @@ export function Sidebar() {
         )}
       </div>
 
-      {/* --- FOOTER --- */}
       <div className="shrink-0 px-3 py-3 border-t border-zinc-200 dark:border-white/5 bg-zinc-50 dark:bg-[#09090b]">
         {isListEditMode ? (
           showClearConfirm ? (

@@ -24,7 +24,6 @@ export function UnsavedChanges({
       onClose={onCancel}
       footer={
         <>
-          {/* Destructive choice sits apart from Cancel / Save. */}
           <button
             type="button"
             onClick={onDiscard}

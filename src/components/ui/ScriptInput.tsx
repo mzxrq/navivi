@@ -27,7 +27,6 @@ interface ScriptInputProps {
   onCancel?: () => void;
   aiEnabled?: boolean;
   thoughtProcess?: string;
-  /** Hide the "Script" label when the caller already titles the field. */
   showLabel?: boolean;
 }
 
@@ -209,7 +208,6 @@ export function ScriptInput({
           ref={textareaRef}
           value={localPrompt}
           onChange={(e) => setLocalPrompt(e.target.value)}
-          // Leaving the field keeps the edit (switching stops used to drop it).
           onBlur={commit}
           onKeyDown={(e) => {
             if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
@@ -243,7 +241,6 @@ export function ScriptInput({
             <button
               type="button"
               onClick={handleSaveClick}
-              // Don't blur the textarea first (that would save before the click).
               onMouseDown={(e) => e.preventDefault()}
               disabled={!hasUnsavedChanges}
               title={t`Save (Ctrl+Enter)`}

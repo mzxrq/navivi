@@ -39,7 +39,6 @@ type SettingsTab =
   | "ai"
   | "tts_dictionary";
 
-// Shared form control styles.
 const inputClass =
   "h-8 min-w-0 px-2.5 rounded-lg bg-white dark:bg-zinc-950/40 border border-zinc-200 dark:border-white/10 text-[13px] text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 outline-none focus:border-navi focus:ring-2 focus:ring-navi/20 transition";
 const selectClass = `${inputClass} pr-7 cursor-pointer`;
@@ -79,7 +78,6 @@ export function AppSettings() {
     return () => window.removeEventListener("keydown", handleEsc);
   }, [showAppSettings, setShowAppSettings]);
 
-  // The AI tab disappears when AI features are switched off.
   useEffect(() => {
     if (activeTab === "ai" && !settings.ai_features_enabled) setActiveTab("general");
   }, [activeTab, settings.ai_features_enabled]);
@@ -88,7 +86,6 @@ export function AppSettings() {
 
   const autoSaveInterval = settings.auto_save_interval ?? 3;
 
-  // Project-scoped settings are saved with the project, so mark it dirty.
   const updateProject = (patch: Parameters<typeof updateSettings>[0]) => {
     updateSettings(patch);
     setIsDirty(true);
@@ -118,7 +115,6 @@ export function AppSettings() {
         : marker;
 
   return createPortal(
-    // Below the title bar (h-10), which stays usable while settings are open.
     <div
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) setShowAppSettings(false);
@@ -131,7 +127,6 @@ export function AppSettings() {
         aria-label={t`Settings`}
         className={`flex w-184 max-w-full h-144 max-h-full rounded-2xl overflow-hidden bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 shadow-2xl ${isAnimatingOut ? "animate-out zoom-out-95 duration-150" : "animate-in zoom-in-95 duration-150"}`}
       >
-        {/* --- Navigation --- */}
         <nav className="w-48 max-[700px]:w-40 shrink-0 flex flex-col p-2 bg-zinc-50 dark:bg-black/20 border-r border-zinc-200/80 dark:border-white/5">
           <h2 className="px-2.5 pt-2 pb-3 text-[13px] font-semibold text-zinc-900 dark:text-zinc-100">
             <Trans>Settings</Trans>
@@ -161,7 +156,6 @@ export function AppSettings() {
           <NaviviType className="mt-auto mb-2 mx-2.5 h-3.5 self-start text-zinc-300 dark:text-zinc-700" />
         </nav>
 
-        {/* --- Content --- */}
         <div className="flex-1 min-w-0 flex flex-col">
           <header className="flex items-center justify-between h-12 pl-6 pr-3 shrink-0 border-b border-zinc-100 dark:border-white/5">
             <h3 className="text-[14px] font-semibold text-zinc-900 dark:text-zinc-100">
@@ -182,7 +176,6 @@ export function AppSettings() {
             key={activeTab}
             className="flex-1 overflow-y-auto custom-scrollbar px-6 py-5 space-y-6 animate-in fade-in duration-150"
           >
-            {/* GENERAL */}
             {activeTab === "general" && (
               <>
                 <Section title={t`Application`}>
@@ -267,7 +260,6 @@ export function AppSettings() {
               </>
             )}
 
-            {/* APPEARANCE */}
             {activeTab === "appearance" && (
               <>
                 <Section title={t`Interface`}>
@@ -399,7 +391,6 @@ export function AppSettings() {
               </>
             )}
 
-            {/* API KEYS */}
             {activeTab === "api" && (
               <Section title={t`Services`}>
                 <Row
@@ -433,7 +424,6 @@ export function AppSettings() {
               </Section>
             )}
 
-            {/* VIDEO */}
             {activeTab === "video" && (
               <>
                 <Section title={t`Output`}>
@@ -525,7 +515,6 @@ export function AppSettings() {
               </>
             )}
 
-            {/* PRONUNCIATION */}
             {activeTab === "tts_dictionary" && (
               <>
                 <p className="text-[12px] leading-relaxed text-zinc-500 dark:text-zinc-400 select-text">
@@ -653,7 +642,6 @@ export function AppSettings() {
               </>
             )}
 
-            {/* AI MODELS */}
             {activeTab === "ai" && settings.ai_features_enabled && <AiModelsTab />}
           </div>
         </div>
@@ -663,7 +651,6 @@ export function AppSettings() {
   );
 }
 
-// --- Layout pieces ---------------------------------------------------------
 
 function Section({
   title,
@@ -687,8 +674,6 @@ function Section({
   );
 }
 
-/** One setting: title + description on the left, its control on the right
- * (or underneath when `stacked`, for wide controls like text inputs). */
 function Row({
   title,
   description,
@@ -783,7 +768,6 @@ function MarkerTile({
   );
 }
 
-// --- AI models tab ---------------------------------------------------------
 
 function AiModelsTab() {
   const { settings, updateSettings, setIsDirty } = useWorkspace();
