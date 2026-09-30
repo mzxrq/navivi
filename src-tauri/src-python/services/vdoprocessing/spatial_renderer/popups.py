@@ -240,6 +240,10 @@ class _PopupMixin:
         first_stopby_of_run = False
         for ap in active_popups:
             data = ap.get("data") or {}
+            if data.get("is_skipped"):
+                # Skipped in video export: pops up on its own as the walker
+                # passes (see _is_loose_stopby), never part of a batch.
+                continue
             if not data.get("is_stopby"):
                 host = ap
                 ap["stopby_group"] = []

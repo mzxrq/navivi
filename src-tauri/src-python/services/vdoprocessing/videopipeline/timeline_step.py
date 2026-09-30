@@ -25,16 +25,16 @@ _OVERVIEW_FILENAME = "01_overview.mp4"
 
 
 def _unvisited_stopbys(project_dir: str) -> set:
-    """0-based positions of stop-by waypoints that are not connected to the route."""
+    """0-based positions of waypoints the walker only passes (unconnected
+    stop-bys, and waypoints skipped in video export): no attraction clip."""
+    from .audio_step import is_passed_only
+
     try:
         with open(Path(project_dir) / "job_config.json", "r", encoding="utf-8") as f:
             waypoints = json.load(f).get("waypoints", [])
     except (OSError, json.JSONDecodeError):
         return set()
-    return {
-        pos for pos, wp in enumerate(waypoints)
-        if wp.get("isStopBy") and not wp.get("connectToRoute")
-    }
+    return {pos for pos, wp in enumerate(waypoints) if is_passed_only(wp)}
 
 
 def _waypoint_ids(project_dir: str) -> dict:
@@ -164,7 +164,7 @@ def build_timeline(
         match = _ATTRACTION_RE.search(Path(source).name)
         wp_idx = int(match.group(1)) if match else -1
         if wp_idx in unvisited:
-            continue  # a stop-by not connected to the route has no attraction video
+            continue  # a passed-only waypoint (unconnected stop-by / skipped) has no attraction video
         attractions_by_idx.setdefault(wp_idx, []).append((source, burned))
 
     def _leg_audio(source_name: str) -> tuple[Optional[str], Optional[str]]:

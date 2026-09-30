@@ -231,6 +231,8 @@ def stopby_holds(project: dict) -> Tuple[Dict[int, float], float]:
     facts: Dict[int, List[str]] = {}
     host, first_of_run = None, False
     for w in waypoints:
+        if w.get("skipAssetGeneration") and w is not waypoints[0] and w is not waypoints[-1]:
+            continue  # passed with a pip card, never part of a batch (popups.py)
         if not w.get("isStopBy"):
             host, first_of_run = w, True
             groups[id(w)] = 0

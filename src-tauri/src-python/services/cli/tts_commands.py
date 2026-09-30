@@ -19,7 +19,8 @@ from services.vdoprocessing.videopipeline.audio_step import (
     generate_audio,
     generate_overview_audio,
     generate_waypoint_audio,
-    is_unvisited_stopby,
+    is_passed_only,
+    passed_only_reason,
     stop_tts_server,
 )
 from services.vdoprocessing.videopipeline.helpers import project_audio_dir
@@ -81,9 +82,10 @@ def test_tts(
     )
     _check_index(waypoints, waypoint_index)
     waypoint = waypoints[waypoint_index]
-    if is_unvisited_stopby(waypoint):
-        _tracker.note(f"Skipped TTS: {_label(waypoint, waypoint_index)} (stop-by not connected to the route)")
-        return {"success": True, "skipped": "stop-by not connected to the route", "clip": None}
+    if is_passed_only(waypoint):
+        reason = passed_only_reason(waypoint)
+        _tracker.note(f"Skipped TTS: {_label(waypoint, waypoint_index)} ({reason})")
+        return {"success": True, "skipped": reason, "clip": None}
 
     label = _label(waypoint, waypoint_index)
     _tracker.show(f"Generating TTS: {label}")
@@ -159,8 +161,8 @@ def _attraction_tts_skip_reason(waypoint) -> str:
     """Why a waypoint gets no attraction narration ("" when it does)."""
     if not isinstance(waypoint, dict):
         return "not a waypoint"
-    if is_unvisited_stopby(waypoint):
-        return "stop-by not connected to the route"
+    if is_passed_only(waypoint):
+        return passed_only_reason(waypoint)
     if not _resolve_attraction_narration_script(waypoint):
         return "no attraction narration"
     return ""
@@ -210,8 +212,8 @@ def test_attraction_tts_all(
     )
     todo = [(i, w) for i, w in enumerate(waypoints) if not _attraction_tts_skip_reason(w)]
     for i, w in enumerate(waypoints):
-        if is_unvisited_stopby(w):
-            _tracker.note(f"Skipped attraction TTS {i + 1}/{len(waypoints)}: {_label(w, i)} (stop-by not connected to the route)")
+        if is_passed_only(w):
+            _tracker.note(f"Skipped attraction TTS {i + 1}/{len(waypoints)}: {_label(w, i)} ({passed_only_reason(w)})")
 
     async def generate_all() -> list:
         clips = []

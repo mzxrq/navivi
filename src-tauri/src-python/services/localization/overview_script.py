@@ -72,12 +72,14 @@ Generate = Callable[[str, int], Optional[str]]  # (prompt, max_chars) -> text
 
 def visible_waypoints(project: dict) -> List[dict]:
     """The waypoints that get a numbered pin, in route order: everything but
-    the start pin (index 0), stop-bys, and the final destination pin. Their
-    position + 1 is the {n} an overview cue uses."""
+    the start pin (index 0), stop-bys, waypoints skipped in video export
+    (drawn as a stop-by dot), and the final destination pin. Their position
+    + 1 is the {n} an overview cue uses."""
     waypoints = project.get("waypoints", [])
     return [
         w for i, w in enumerate(waypoints)
-        if i != 0 and i != len(waypoints) - 1 and not w.get("isStopBy")
+        if i != 0 and i != len(waypoints) - 1
+        and not w.get("isStopBy") and not w.get("skipAssetGeneration")
     ]
 
 

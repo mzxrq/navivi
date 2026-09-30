@@ -80,7 +80,7 @@ def generate_waypoint_attraction_video(
     return {"status": "failed", "label": label, "output_filename": output_filename}
 
 
-from .audio_step import is_unvisited_stopby  # noqa: E402,F401  (shared rule: see audio_step)
+from .audio_step import is_passed_only, is_unvisited_stopby, passed_only_reason  # noqa: E402,F401  (shared rule: see audio_step)
 
 
 def render_attraction_videos(
@@ -130,17 +130,15 @@ def render_attraction_videos(
     for idx, wp in enumerate(waypoints):
         place_label = wp.get("label", f"waypoint_{idx}")
 
-        # A stop-by the route only passes near (not connected to it) is never
-        # visited, so it gets no attraction video (and timeline_step never
-        # uses one).
-        if is_unvisited_stopby(wp):
+        # A place the walker only passes (an unconnected stop-by, or a
+        # waypoint skipped in video export) gets no attraction video (and
+        # timeline_step never uses one).
+        if is_passed_only(wp):
+            reason = passed_only_reason(wp)
             logger.info(
-                "Step 3: [%d/%d] Skipping '%s' — stop-by not connected to the route.",
-                idx + 1, len(waypoints), place_label,
+                "Step 3: [%d/%d] Skipping '%s' — %s.", idx + 1, len(waypoints), place_label, reason,
             )
-            tracker.note(
-                f"Skipped attraction video {idx + 1}/{len(waypoints)}: {place_label} (stop-by not connected to the route)"
-            )
+            tracker.note(f"Skipped attraction video {idx + 1}/{len(waypoints)}: {place_label} ({reason})")
             continue
 
         # Check upfront, before ever showing "Generating..." or touching

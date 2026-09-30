@@ -141,14 +141,16 @@ class MapFetcher:
         # first/last waypoint is always kept as a boundary even if
         # (unusually) flagged stop-by, since "pass through" isn't a
         # meaningful concept for the trip's own endpoints.
-        if merge_stopbys:
-            boundary_positions = [
-                i
-                for i, wp in enumerate(waypoints)
-                if i == 0 or i == len(waypoints) - 1 or not wp.get("isStopBy", False)
-            ]
-        else:
-            boundary_positions = list(range(len(waypoints)))
+        # A waypoint skipped in video export is never a boundary either: the
+        # walker passes it (a pip card, see pedestrian.py's pip_only path).
+        def _is_boundary(i: int, wp: Dict) -> bool:
+            if i == 0 or i == len(waypoints) - 1:
+                return True
+            if wp.get("skipAssetGeneration"):
+                return False
+            return not (merge_stopbys and wp.get("isStopBy", False))
+
+        boundary_positions = [i for i, wp in enumerate(waypoints) if _is_boundary(i, wp)]
 
         # Each segment carries its own departure/arrival waypoint dicts
         # directly (rather than relying on positional indexing into the
@@ -181,7 +183,10 @@ class MapFetcher:
                     # pedestrian.py's `landmarks` docstring) -- missing
                     # entirely from this dict before, so that feature could
                     # never actually trigger.
-                    "connect_to_route": bool(waypoints[p].get("connectToRoute", False)),
+                    "connect_to_route": bool(
+                        waypoints[p].get("connectToRoute", False)
+                        and not waypoints[p].get("skipAssetGeneration")
+                    ),
                     # This waypoint's own stable job_config id -- lets
                     # route2vdo.py resolve its RAW position in job_config's
                     # own "waypoints" array (the same 0-based index the

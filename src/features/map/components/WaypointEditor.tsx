@@ -353,11 +353,7 @@ export function WaypointEditor({
                         <input
                           type="checkbox"
                           className="sr-only peer"
-                          checked={
-                            wp.pauseAtWaypoint !== undefined
-                              ? wp.pauseAtWaypoint
-                              : waypoints[wpIndex + 1]?.isStopBy === true
-                          }
+                          checked={wp.pauseAtWaypoint ?? true}
                           onChange={(e) =>
                             updateWaypoint(wp.id, {
                               pauseAtWaypoint: e.target.checked,

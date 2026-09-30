@@ -580,6 +580,11 @@ class _OverviewRenderMixin:
                     ap["cue_wait_frames"],
                     int(round(tuning.OVERVIEW_CONNECTED_STOPBY_HOLD_SECONDS * fps)),
                 )
+            # "Pause at Location" off: the walker doesn't stop here for the
+            # description; it walks on while the voice keeps talking.
+            ap["no_pause"] = not ap["data"].get("pause_at_waypoint", True)
+            if ap["no_pause"]:
+                ap["cue_wait_frames"] = 0
 
         # No leg between two waypoints (start and end included) animates for
         # longer than this: a longer one is played faster.
@@ -1002,6 +1007,8 @@ class _OverviewRenderMixin:
                 go_pre = audio_cues.get(f"goPre{next_n}") if next_n is not None else None
                 if go_pre is not None:
                     ap["depart_frame"] = int(round(go_pre * fps))
+            if ap.get("no_pause") and not ap.get("stopby_group"):
+                ap["depart_frame"] = None  # "Pause at Location" off: no hold until {go}
         if preview_recap_only:
             pre_popup_frame = clean_frame
         else:

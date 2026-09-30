@@ -861,6 +861,9 @@ class _OverviewAnimationMixin:
                         int(triggered_popup.get("cue_wait_frames") or 0),
                         min(max(0, early), int(_MAX_CUE_WAIT_SECONDS * fps)),
                     )
+                    if triggered_popup.get("no_pause"):
+                        early = 0
+                        wait["n"] = 0  # "Pause at Location" off: walk straight on
                     # A stop described until its {go}: wait until the voice
                     # gets there (arriving late shortens the stop, never
                     # makes it run past the {go}).

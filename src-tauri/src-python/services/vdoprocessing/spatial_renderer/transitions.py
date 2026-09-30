@@ -289,7 +289,7 @@ class _TransitionMixin:
         total_points = total_wp + 2
         order = 0
         for pos, jw in enumerate(job_waypoints):
-            is_stopby = bool(jw.get("isStopBy", False))
+            is_stopby = bool(jw.get("isStopBy", False) or jw.get("skipAssetGeneration"))
             if not is_stopby:
                 order += 1
             # A loop route's job_config waypoints list ends with a

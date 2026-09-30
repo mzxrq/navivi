@@ -205,7 +205,7 @@ class _WaypointRenderMixin:
             # by the frontend) — "is_stopby" only exists on the NORMALIZED
             # dicts built downstream (see render_step.py), never on these
             # raw job_waypoints entries.
-            _is_stopby = bool(_jw.get("isStopBy", False))
+            _is_stopby = bool(_jw.get("isStopBy", False) or _jw.get("skipAssetGeneration"))
             if not _is_stopby:
                 _order += 1
             _wp_id = _jw.get("id")
@@ -255,7 +255,7 @@ class _WaypointRenderMixin:
                 return None
             order = 0
             for pos, jw in enumerate(job_waypoints):
-                is_stopby = bool(jw.get("isStopBy", False))
+                is_stopby = bool(jw.get("isStopBy", False) or jw.get("skipAssetGeneration"))
                 if not is_stopby:
                     order += 1
                 jw_lbl = str(jw.get("label", ""))
