@@ -1,23 +1,71 @@
 """Isolated CLI commands for pipeline Step 2 (TTS narration generation) —
 thin wrappers over services/vdoprocessing/videopipeline/audio_step.py, the
-TTS domain's core module."""
+TTS domain's core module. Each one applies the pipeline's own switches
+(route-only legs, default cues, pronunciation dictionary) first, so the
+audio it makes is the audio run_full_pipeline would make and reuse."""
 
 from pathlib import Path
 from typing import Any, Dict
 import asyncio
+import json
 
 from services.logger.logger import setup_logger
 from services.logger.progress import tracker as _tracker
 from services.vdoprocessing.videopipeline.audio_step import (
     _resolve_attraction_narration_script,
+    apply_cued_scripts,
+    existing_audio_data,
     generate_attraction_audio_for_waypoint,
+    generate_audio,
+    generate_overview_audio,
     generate_waypoint_audio,
     is_unvisited_stopby,
+    stop_tts_server,
 )
 from services.vdoprocessing.videopipeline.helpers import project_audio_dir
-from .helpers import _load_tts_waypoints
+from services.vdoprocessing.videopipeline.narration_step import (
+    add_default_cues,
+    add_overview_cues,
+    record_cue_times,
+)
+from .helpers import _apply_pipeline_settings, _load_tts_waypoints
 
 logger = setup_logger("TTSCommands")
+
+
+def _prepare(job_config_path: str, output_audio_dir: str = None):
+    """Pipeline setup shared by every TTS mode: switches, default cues, the
+    cued waypoints and the TTS client/processor pair."""
+    settings = _apply_pipeline_settings(job_config_path)
+    add_default_cues(job_config_path)
+    config_path, waypoints = _load_tts_waypoints(job_config_path)
+    apply_cued_scripts(waypoints, config_path.parent)
+
+    output_dir = Path(output_audio_dir) if output_audio_dir else project_audio_dir(config_path.parent)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    from services.tts.ttsengine import AudioProcessor, IrodoriTTSClient
+
+    return (
+        settings, config_path, waypoints, output_dir,
+        IrodoriTTSClient(output_dir=output_dir), AudioProcessor(output_dir=output_dir),
+        settings.get("pronunciation_dictionary", []),
+    )
+
+
+def _record_cues(config_path: Path, settings: dict) -> None:
+    if settings.get("use_narration_cues", True):
+        record_cue_times(str(config_path), existing_audio_data(str(config_path)))
+
+
+def _check_index(waypoints: list, waypoint_index: int) -> None:
+    if waypoint_index < 0 or waypoint_index >= len(waypoints):
+        raise IndexError(
+            f"waypoint_index must be between 0 and {len(waypoints) - 1}, got {waypoint_index}"
+        )
+
+
+def _label(waypoint, index: int) -> str:
+    return waypoint.get("label", f"Waypoint {index + 1}") if isinstance(waypoint, dict) else f"Waypoint {index + 1}"
 
 
 def test_tts(
@@ -26,54 +74,29 @@ def test_tts(
     waypoint_index: int = 0,
     force: bool = False,
 ) -> Dict[str, Any]:
-    """Generate and inspect TTS audio for one narrated waypoint."""
-    logger.info("test_tts: loading waypoints from %s", job_config_path)
-    config_path, waypoints = _load_tts_waypoints(job_config_path)
-    logger.info("test_tts: loaded %d waypoint(s)", len(waypoints))
-    if waypoint_index < 0 or waypoint_index >= len(waypoints):
-        logger.error(
-            "test_tts: waypoint_index %d out of range (0-%d)",
-            waypoint_index, len(waypoints) - 1,
-        )
-        raise IndexError(
-            f"waypoint_index must be between 0 and {len(waypoints) - 1}, "
-            f"got {waypoint_index}"
-        )
-
-    output_dir = Path(output_audio_dir) if output_audio_dir else project_audio_dir(config_path.parent)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    logger.info("test_tts: audio output dir = %s", output_dir)
-
-    from services.tts.ttsengine import AudioProcessor, IrodoriTTSClient
-
-    client = IrodoriTTSClient(output_dir=output_dir)
-    processor = AudioProcessor(output_dir=output_dir)
-
-    waypoint = waypoints[waypoint_index]
-    label = (
-        waypoint.get("label", f"Waypoint {waypoint_index + 1}")
-        if isinstance(waypoint, dict)
-        else f"Waypoint {waypoint_index + 1}"
+    """Generate and inspect the leg narration audio for one waypoint."""
+    settings, config_path, waypoints, output_dir, client, processor, p_dict = _prepare(
+        job_config_path, output_audio_dir
     )
-    logger.info("test_tts: generating clip for waypoint %d ('%s')", waypoint_index, label)
+    _check_index(waypoints, waypoint_index)
+    waypoint = waypoints[waypoint_index]
+    if is_unvisited_stopby(waypoint):
+        return {"success": True, "skipped": "stop-by not connected to the route", "clip": None}
+
+    label = _label(waypoint, waypoint_index)
     _tracker.show(f"Generating TTS: {label}")
     try:
         clip = asyncio.run(
             generate_waypoint_audio(
-                waypoint, waypoint_index, client, processor, output_dir, force=force
+                waypoint, waypoint_index, client, processor, output_dir,
+                force=force, pronunciation_dict=p_dict,
             )
         )
-    except Exception:
-        logger.exception("test_tts: generation failed for waypoint %d ('%s')", waypoint_index, label)
-        raise
     finally:
         _tracker.clear()
-    logger.info("test_tts: done, clip=%s", clip["audio_path"])
-    return {
-        "success": True,
-        "audio_dir": str(output_dir),
-        "clip": clip,
-    }
+        stop_tts_server()
+    _record_cues(config_path, settings)
+    return {"success": True, "audio_dir": str(output_dir), "clip": clip}
 
 
 def test_tts_all(
@@ -81,54 +104,53 @@ def test_tts_all(
     output_audio_dir: str = None,
     force: bool = False,
 ) -> Dict[str, Any]:
-    """Generate and inspect TTS audio for every narrated waypoint."""
-    logger.info("test_tts_all: loading waypoints from %s", job_config_path)
-    config_path, waypoints = _load_tts_waypoints(job_config_path)
-    logger.info("test_tts_all: loaded %d waypoint(s)", len(waypoints))
-
-    output_dir = Path(output_audio_dir) if output_audio_dir else project_audio_dir(config_path.parent)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    logger.info("test_tts_all: audio output dir = %s", output_dir)
-
-    from services.tts.ttsengine import AudioProcessor, IrodoriTTSClient
-
-    client = IrodoriTTSClient(output_dir=output_dir)
-    processor = AudioProcessor(output_dir=output_dir)
-
-    async def generate_all() -> list:
-        total = len(waypoints)
-        clips = []
-        for index, waypoint in enumerate(waypoints):
-            label = (
-                waypoint.get("label", f"Waypoint {index + 1}")
-                if isinstance(waypoint, dict)
-                else f"Waypoint {index + 1}"
-            )
-            logger.info("test_tts_all: [%d/%d] starting waypoint '%s'", index + 1, total, label)
-            _tracker.show(f"Generating TTS {index + 1}/{total}: {label}")
-            try:
-                clip = await generate_waypoint_audio(
-                    waypoint, index, client, processor, output_dir, force=force
-                )
-            except Exception:
-                logger.exception(
-                    "test_tts_all: [%d/%d] waypoint '%s' failed", index + 1, total, label
-                )
-                raise
-            clips.append(clip)
-            logger.info("test_tts_all: [%d/%d] finished waypoint '%s'", index + 1, total, label)
-        return clips
-
+    """The pipeline's whole Step 2: overview narration, every leg narration
+    and every attraction narration, then the cue times."""
+    settings = _apply_pipeline_settings(job_config_path)
+    config_path = Path(job_config_path)
+    add_default_cues(str(config_path))
+    add_overview_cues(str(config_path))
     try:
-        clips = asyncio.run(generate_all())
+        audio = generate_audio({}, str(config_path), output_audio_dir, force=force)
     finally:
-        _tracker.clear()
-    logger.info("test_tts_all: done, generated %d clip(s)", len(clips))
+        stop_tts_server()
+    if settings.get("use_narration_cues", True):
+        record_cue_times(str(config_path), audio)
+    output_dir = Path(output_audio_dir) if output_audio_dir else project_audio_dir(config_path.parent)
     return {
         "success": True,
         "audio_dir": str(output_dir),
-        "clips": clips,
+        "narrated": sum(1 for p in audio.get("audio_paths", []) if p),
+        "attraction_narrated": sum(1 for p in audio.get("attraction_audio_paths", []) if p),
+        **audio,
     }
+
+
+def test_overview_tts(
+    job_config_path: str,
+    output_audio_dir: str = None,
+    force: bool = False,
+) -> Dict[str, Any]:
+    """Generate only the overview narration audio (00_overview_narration.wav)."""
+    add_overview_cues(job_config_path)
+    settings, config_path, _waypoints, output_dir, client, processor, p_dict = _prepare(
+        job_config_path, output_audio_dir
+    )
+    project_config = json.loads(config_path.read_text(encoding="utf-8"))
+    _tracker.show("Generating overview narration audio")
+    try:
+        clip = asyncio.run(
+            generate_overview_audio(
+                project_config, client, processor, output_dir, force=force,
+                project_dir=config_path.parent, pronunciation_dict=p_dict,
+            )
+        )
+    finally:
+        _tracker.clear()
+        stop_tts_server()
+    if clip is None:
+        return {"success": True, "skipped": "no overview narration", "clip": None}
+    return {"success": True, "audio_dir": str(output_dir), "clip": clip}
 
 
 def _attraction_tts_skip_reason(waypoint) -> str:
@@ -150,33 +172,27 @@ def test_attraction_tts(
 ) -> Dict[str, Any]:
     """Generate the attraction-only narration audio (the clip the attraction
     video plays) for one waypoint."""
-    config_path, waypoints = _load_tts_waypoints(job_config_path)
-    if waypoint_index < 0 or waypoint_index >= len(waypoints):
-        raise IndexError(
-            f"waypoint_index must be between 0 and {len(waypoints) - 1}, got {waypoint_index}"
-        )
+    _settings, _config_path, waypoints, output_dir, client, processor, p_dict = _prepare(
+        job_config_path, output_audio_dir
+    )
+    _check_index(waypoints, waypoint_index)
     waypoint = waypoints[waypoint_index]
     reason = _attraction_tts_skip_reason(waypoint)
     if reason:
         logger.info("test_attraction_tts: waypoint %d skipped (%s).", waypoint_index, reason)
         return {"success": True, "skipped": reason, "clip": None}
 
-    output_dir = Path(output_audio_dir) if output_audio_dir else project_audio_dir(config_path.parent)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    from services.tts.ttsengine import AudioProcessor, IrodoriTTSClient
-
-    client = IrodoriTTSClient(output_dir=output_dir)
-    processor = AudioProcessor(output_dir=output_dir)
-    label = waypoint.get("label", f"Waypoint {waypoint_index + 1}")
-    _tracker.show(f"Generating attraction TTS: {label}")
+    _tracker.show(f"Generating attraction TTS: {_label(waypoint, waypoint_index)}")
     try:
         clip = asyncio.run(
             generate_attraction_audio_for_waypoint(
-                waypoint, waypoint_index, client, processor, output_dir, force=force
+                waypoint, waypoint_index, client, processor, output_dir,
+                force=force, pronunciation_dict=p_dict,
             )
         )
     finally:
         _tracker.clear()
+        stop_tts_server()
     return {"success": True, "audio_dir": str(output_dir), "clip": clip}
 
 
@@ -187,23 +203,19 @@ def test_attraction_tts_all(
 ) -> Dict[str, Any]:
     """Generate the attraction-only narration audio for every waypoint that
     has one (stop-bys not connected to the route are skipped)."""
-    config_path, waypoints = _load_tts_waypoints(job_config_path)
-    output_dir = Path(output_audio_dir) if output_audio_dir else project_audio_dir(config_path.parent)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    from services.tts.ttsengine import AudioProcessor, IrodoriTTSClient
-
-    client = IrodoriTTSClient(output_dir=output_dir)
-    processor = AudioProcessor(output_dir=output_dir)
+    _settings, _config_path, waypoints, output_dir, client, processor, p_dict = _prepare(
+        job_config_path, output_audio_dir
+    )
     todo = [(i, w) for i, w in enumerate(waypoints) if not _attraction_tts_skip_reason(w)]
 
     async def generate_all() -> list:
         clips = []
         for n, (index, waypoint) in enumerate(todo, 1):
-            label = waypoint.get("label", f"Waypoint {index + 1}")
-            _tracker.show(f"Generating attraction TTS {n}/{len(todo)}: {label}")
+            _tracker.show(f"Generating attraction TTS {n}/{len(todo)}: {_label(waypoint, index)}")
             clips.append(
                 await generate_attraction_audio_for_waypoint(
-                    waypoint, index, client, processor, output_dir, force=force
+                    waypoint, index, client, processor, output_dir,
+                    force=force, pronunciation_dict=p_dict,
                 )
             )
         return clips
@@ -212,5 +224,6 @@ def test_attraction_tts_all(
         clips = asyncio.run(generate_all())
     finally:
         _tracker.clear()
+        stop_tts_server()
     logger.info("test_attraction_tts_all: %d clip(s), %d waypoint(s) skipped.", len(clips), len(waypoints) - len(todo))
     return {"success": True, "audio_dir": str(output_dir), "clips": clips, "skipped": len(waypoints) - len(todo)}

@@ -1,7 +1,6 @@
-"""CLI commands that combine other steps: video concatenation, the
-transition/storyboard renderer, and the "run every isolated stage" test_all."""
+"""CLI commands that combine other steps: video concatenation, audio muxing,
+the transition/storyboard renderer, and the "run every isolated stage" test_all."""
 
-import json
 import re
 import shutil
 from pathlib import Path
@@ -18,6 +17,7 @@ from .gps_commands import test_overview_video, test_residential_video
 from .tts_commands import test_tts_all
 from .attraction_commands import test_attraction_videos
 from .subtitle_commands import test_subtitles
+from .intro_outro_commands import test_intro_video, test_outro_video
 
 # A leg's continuation parts share its base name with a "_contN" suffix
 # (route2vdo.py's own leg-splitting convention — see gps_commands.test_residential_video's
@@ -203,13 +203,25 @@ def test_all(
     output_dir: str = None,
     force: bool = False,
 ) -> Dict[str, Any]:
-    """Run all isolated media stages as one project test.
+    """Runs every isolated stage in run_full_pipeline's order and with its
+    settings (skip_rich_media, enable_attraction_videos), then concatenates
+    them in timeline order. No timeline.json and no audio in the concat:
+    use full_pipeline for the real thing.
 
     Checkpointing: by default (`force=False`) nothing is wiped up front —
     each stage below skips any of its own outputs that already exist on
-    disk. Pass `force=True` to reproduce the old behavior of wiping
-    audio/video/subtitles and regenerating everything from scratch.
+    disk. Pass `force=True` to wipe audio/video/subtitles and regenerate
+    everything from scratch.
     """
+    import time
+
+    from services import tuning
+    from services.vdoprocessing.videopipeline.helpers import (
+        attraction_videos_enabled,
+        skip_rich_media,
+    )
+    from .helpers import _apply_pipeline_settings
+
     config_path = Path(job_config_path)
     if not config_path.exists():
         raise FileNotFoundError(f"job_config.json not found: {config_path}")
@@ -218,17 +230,12 @@ def test_all(
     audio_dir = project_audio_dir(project_dir)
     video_dir = Path(output_dir) if output_dir else project_video_dir(project_dir)
     subtitle_dir = project_subtitle_dir(project_dir)
-    # Route (overview/residential) and attraction outputs get their own
-    # subfolders under video_dir instead of sharing one flat folder — see
-    # helpers.project_route_video_dir/project_attraction_video_dir.
     route_dir = video_dir / "route"
     attraction_dir = video_dir / "attraction"
 
-    # [NOTE] [Core] Read use_3d_res up front so the total stage count for _tracker.stage(total=...) is known before the first stage starts.
-    with config_path.open("r", encoding="utf-8") as config_file:
-        use_3d_res = bool(
-            json.load(config_file).get("settings", {}).get("use_3d_res", False)
-        )
+    settings = _apply_pipeline_settings(config_path)
+    rich_media = not skip_rich_media(settings)
+    attractions_on = attraction_videos_enabled(settings)
     total_stages = 8
 
     if force:
@@ -238,57 +245,62 @@ def test_all(
             if stale_dir.exists():
                 shutil.rmtree(stale_dir)
             stale_dir.mkdir(parents=True, exist_ok=True)
-        _tracker.clear()
     else:
         _tracker.stage("Checking existing outputs...", total=total_stages)
         for stale_dir in (audio_dir, video_dir, subtitle_dir):
             stale_dir.mkdir(parents=True, exist_ok=True)
-        _tracker.clear()
-
-    _tracker.stage("Generating TTS narration")
-    tts_result = test_tts_all(str(config_path), str(audio_dir), force=force)
-
-    # [NOTE] [TTS] Force-stop the TTS server now — its idle timeout would otherwise keep it loaded and contending with the attraction step's SDXL pipeline for VRAM (~20s -> ~8min observed).
-    _tracker.stage("Stopping TTS server...")
-    from services.tts.ttsengine import IrodoriTTSClient
-    IrodoriTTSClient.stop_server()
     _tracker.clear()
 
-    _tracker.stage("Generating attraction videos")
-    attraction_result = test_attraction_videos(str(config_path), str(attraction_dir), force=force)
+    tts_result = subtitle_result = None
+    attraction_result = {"results": [], "video_paths": [], "pending_indices": []}
 
-    _tracker.stage("Generating subtitles")
-    subtitle_result = test_subtitles(str(config_path), str(subtitle_dir), force=force)
+    if rich_media:
+        _tracker.stage("Generating TTS narration")
+        tts_result = test_tts_all(str(config_path), str(audio_dir), force=force)
+        _tracker.stage("Generating subtitles")
+        subtitle_result = test_subtitles(str(config_path), str(subtitle_dir), force=force)
+    else:
+        _tracker.stage("Skipping TTS & subtitles (settings.skip_rich_media is on)...")
 
-    _tracker.stage("Rendering overview & residential video...")
-    transition_result = test_transition_editor(str(config_path), str(route_dir), force=force)
+    if attractions_on:
+        _tracker.stage("Generating attraction videos")
+        attraction_result = test_attraction_videos(str(config_path), str(attraction_dir), force=force)
+        _tracker.stage("Cooling down GPU before video rendering...")
+        time.sleep(tuning.GPU_STAGE_COOLDOWN_SECONDS)
+    else:
+        _tracker.stage("Skipping attraction videos (disabled for this project)...")
 
-    # [NOTE] [Animation] test_transition_editor always renders via
-    # render_mode="overview" (see test_overview_video's docstring), which
-    # now skips the residential sequence entirely regardless of 2D/3D —
-    # so residential always needs this separate call, not just 3D. (This
-    # used to be 3D-only, back when render_mode="overview" still bundled
-    # both outputs together for 2D; that's no longer true.)
-    _tracker.stage(f"Rendering residential video{' (3D)' if use_3d_res else ''}...")
+    _tracker.stage("Rendering overview video...")
+    overview_result = test_overview_video(str(config_path), str(route_dir), force=force)
+
+    _tracker.stage("Rendering residential video...")
     residential_result = test_residential_video(str(config_path), str(route_dir), force=force)
+
+    _tracker.stage("Building intro/outro clips...")
+    intro_result = test_intro_video(str(config_path))
+    outro_result = test_outro_video(str(config_path))
 
     _tracker.stage("Concatenating final video...")
     videos_to_concat = _order_like_timeline(
         project_dir,
-        transition_result["video_paths"],
+        overview_result["video_paths"],
         attraction_result["results"],
-        residential_result["video_paths"] if residential_result else [],
+        residential_result["video_paths"],
     )
-    concat_result = test_video_concat(
-        str(config_path), str(video_dir), videos_to_concat
-    )
+    if intro_result.get("video_path"):
+        videos_to_concat = [intro_result["video_path"]] + videos_to_concat
+    if outro_result.get("video_path"):
+        videos_to_concat = videos_to_concat + [outro_result["video_path"]]
+    concat_result = test_video_concat(str(config_path), str(video_dir), videos_to_concat)
 
     return {
         "success": True,
         "tts": tts_result,
-        "attractions": attraction_result,
         "subtitles": subtitle_result,
-        "transition": transition_result,
+        "attractions": attraction_result,
+        "overview": overview_result,
         "residential": residential_result,
+        "intro": intro_result,
+        "outro": outro_result,
         "concat": concat_result,
     }

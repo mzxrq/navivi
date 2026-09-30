@@ -23,6 +23,7 @@ from services.cli import (
     test_residential_video,
     test_tts,
     test_tts_all,
+    test_overview_tts,
     test_attraction_tts,
     test_attraction_tts_all,
     test_attraction_video,
@@ -46,12 +47,12 @@ if __name__ == "__main__":
     if len(sys.argv) < 2:
         print(
             "Usage: python main.py <path/to/job_config.json> "
-            "[gps|map|overview|residential|tts|tts-all|attraction-tts|attraction-tts-all|attraction|attraction-all|"
-            "attraction-finalize|intro|outro|subtitle|subtitle-all|concat|transition|all|overview-script] "
-            "[waypoint_index] [--force] [--no-llm]\n"
+            "[gps|map|overview|residential|tts|tts-all|overview-tts|attraction-tts|attraction-tts-all|"
+            "attraction|attraction-all|attraction-finalize|intro|outro|subtitle|subtitle-all|concat|mux|"
+            "transition|all|overview-script] [index] [--force] [--no-llm]\n"
             "       (output dir is always <job_config's directory_path>/video)\n"
             "       (--force bypasses checkpointing and regenerates everything)\n"
-            "       python main.py full_pipeline <source_path> [output_dir] [--force]\n"
+            "       python main.py full_pipeline <path/to/job_config.json> [output_dir] [--force]\n"
             "       python main.py render_timeline <timeline.json> [output_video]",
             file=sys.stderr,
         )
@@ -142,8 +143,11 @@ if __name__ == "__main__":
                 waypoint_index_arg = int(sys.argv[3]) if len(sys.argv) > 3 else 0
                 result = test_tts(job_config_arg, None, waypoint_index_arg, force=force_arg)
             elif mode_arg == "tts-all":
-                # [NOTE] [TTS] Generates narration audio for every narrated waypoint.
+                # [NOTE] [TTS] The pipeline's whole TTS step: overview, every leg and every attraction narration, plus cue times.
                 result = test_tts_all(job_config_arg, None, force=force_arg)
+            elif mode_arg == "overview-tts":
+                # [NOTE] [TTS] Generates only the overview narration audio.
+                result = test_overview_tts(job_config_arg, None, force=force_arg)
             elif mode_arg == "attraction-tts":
                 # [NOTE] [TTS] Generates the attraction-only narration audio for ONE waypoint (index from argv[3], default 0).
                 waypoint_index_arg = int(sys.argv[3]) if len(sys.argv) > 3 else 0
@@ -179,7 +183,7 @@ if __name__ == "__main__":
                     job_config_arg, output_dir_arg, waypoint_index_arg, force=force_arg
                 )
             elif mode_arg == "subtitle-all":
-                # [NOTE] [Subtitle] Generates .srt files for every waypoint from matching TTS audio.
+                # [NOTE] [Subtitle] Generates every .srt the pipeline makes (legs, overview, attractions) from the audio on disk.
                 result = test_subtitles(job_config_arg, output_dir_arg, force=force_arg)
             elif mode_arg == "concat":
                 # [NOTE] [Editor] Joins explicit clip paths (argv[3:]) — or, with none given, every *.mp4 already in the output dir in filename order — into 03_concat.mp4.
@@ -202,7 +206,7 @@ if __name__ == "__main__":
                 # [NOTE] [LLM] Drafts a tour-guide overview narration from the route (the way between stops, each stop described, {n}/{go} cues) into overview_script_draft.txt — never over overview_narration.
                 result = test_overview_script(job_config_arg, use_llm=not no_llm_arg)
             elif mode_arg == "all":
-                # [NOTE] [Core] Runs every isolated stage above (TTS, attractions, subtitles, overview+residential, concat) as one combined project test — NOT the same as full_pipeline (no subtitle burn-in / timeline.json, see above). test_all splits route/attraction outputs into their own subfolders internally.
+                # [NOTE] [Core] Runs every isolated stage above in the pipeline's order and settings (TTS, subtitles, attractions, overview+residential, intro/outro, concat) — NOT the same as full_pipeline (no timeline.json, no audio in the concat).
                 result = test_all(job_config_arg, output_dir_arg, force=force_arg)
             else:
                 # [NOTE] [Core] Default when no mode (or an unrecognized one) is given — just the overview map animation.
