@@ -61,7 +61,7 @@ const menuClass =
 const menuItemClass =
   "w-full flex items-center gap-2 h-7 px-2 rounded-md text-[12px] text-left text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors";
 const iconButtonClass = (active = false) =>
-  `flex items-center gap-1.5 h-7 px-2 rounded-md text-[12px] font-medium transition-colors ${
+  `flex items-center gap-1.5 h-7 px-2 rounded-lg text-[12px] font-medium transition-colors ${
     active
       ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
       : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-white/5"
@@ -124,7 +124,7 @@ export function DrawBar({
   const legLabel = hasLeg ? `${activeWp!.name} → ${nextWp!.name}` : t`Choose a leg`;
 
   return (
-    <div className="w-[min(40rem,calc(100vw-2rem))] max-w-full rounded-lg bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border border-zinc-200 dark:border-white/10 shadow-sm animate-in fade-in slide-in-from-top-1 duration-150">
+    <div className="w-[min(40rem,calc(100vw-2rem))] max-w-full rounded-xl bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border border-zinc-200 dark:border-white/10 shadow-sm animate-in fade-in slide-in-from-top-1 duration-150">
       <div className="flex flex-wrap items-center gap-1 p-1">
         {/* Which leg */}
         <div ref={legMenuRef} className="relative min-w-0 flex-1 basis-44">
@@ -134,7 +134,7 @@ export function DrawBar({
             aria-haspopup="menu"
             aria-expanded={isLegMenuOpen}
             title={legLabel}
-            className={`w-full flex items-center gap-2 h-7 px-2 rounded-md text-[12px] transition-colors hover:bg-zinc-100 dark:hover:bg-white/5 ${
+            className={`w-full flex items-center gap-2 h-7 px-2 rounded-lg text-[12px] transition-colors hover:bg-zinc-100 dark:hover:bg-white/5 ${
               hasLeg ? "text-zinc-900 dark:text-zinc-100 font-medium" : "text-navi font-medium"
             }`}
           >
@@ -179,13 +179,13 @@ export function DrawBar({
 
         {hasLeg && (
           <>
-            <div className="flex items-center rounded-md bg-zinc-100 dark:bg-white/5 p-0.5">
+            <div className="flex items-center rounded-lg bg-zinc-100 dark:bg-white/5 p-0.5">
               <button
                 type="button"
                 onClick={() => setIsEraserMode(false)}
                 aria-pressed={!isEraserMode}
                 title={t`Add points`}
-                className={`flex items-center gap-1 h-6 px-2 rounded text-[12px] font-medium transition-colors ${
+                className={`flex items-center gap-1 h-6 px-2 rounded-md text-[12px] font-medium transition-colors ${
                   !isEraserMode
                     ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-sm"
                     : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
@@ -201,7 +201,7 @@ export function DrawBar({
                 onClick={() => setIsEraserMode(true)}
                 aria-pressed={isEraserMode}
                 title={t`Erase points (E)`}
-                className={`flex items-center gap-1 h-6 px-2 rounded text-[12px] font-medium transition-colors ${
+                className={`flex items-center gap-1 h-6 px-2 rounded-md text-[12px] font-medium transition-colors ${
                   isEraserMode
                     ? "bg-white dark:bg-zinc-800 text-red-500 shadow-sm"
                     : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
@@ -319,7 +319,7 @@ export function DrawBar({
         <button
           type="button"
           onClick={onDone}
-          className="h-7 px-3 rounded-md text-[12px] font-semibold bg-navi text-white hover:brightness-110 transition"
+          className="h-7 px-3 rounded-lg text-[12px] font-semibold bg-navi text-white hover:brightness-110 transition"
         >
           <Trans>Done</Trans>
         </button>

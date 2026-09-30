@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { MousePointer2, MapPin, Pencil } from "../../../components/ui/icons";
 import { t } from "@lingui/core/macro";
+import { Tip } from "../../../components/ui/Tip";
 
 export type AddType = "normal" | "start" | "end" | "stopby";
 
@@ -103,7 +104,7 @@ export function MapToolbar({
       <div
         role="toolbar"
         aria-label={t`Map tools`}
-        className="flex items-center gap-0.5 p-1 rounded-lg bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border border-zinc-200 dark:border-white/10 shadow-sm"
+        className="flex items-center gap-0.5 p-1 rounded-xl bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border border-zinc-200 dark:border-white/10 shadow-sm"
       >
         {tools.map(({ id, icon: Icon, label, key }) => {
           const active = activeMode === id;
@@ -114,30 +115,21 @@ export function MapToolbar({
               onClick={() => selectTool(id)}
               aria-pressed={active}
               aria-label={`${label} (${key})`}
-              className={`group/tool relative flex items-center justify-center w-8 h-7 rounded-md transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-navi/40 ${
+              className={`group/tool relative flex items-center justify-center w-8 h-7 rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-navi/40 ${
                 active
-                  ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                  ? "bg-navi text-white shadow-sm"
                   : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-white/5"
               }`}
             >
               <Icon className="w-3.5 h-3.5" />
-              {/* Name + shortcut on hover (after a beat) or keyboard focus. */}
-              <span
-                aria-hidden
-                className="pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-2 flex items-center gap-1.5 h-6 px-2 rounded-md bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-[11px] font-medium whitespace-nowrap shadow-md opacity-0 -translate-y-0.5 transition duration-150 group-hover/tool:opacity-100 group-hover/tool:translate-y-0 group-hover/tool:delay-300 group-focus-visible/tool:opacity-100 group-focus-visible/tool:translate-y-0"
-              >
-                {label}
-                <kbd className="font-sans text-[10px] px-1 rounded bg-white/15 dark:bg-black/10">
-                  {key}
-                </kbd>
-              </span>
+              <Tip label={label} kbd={key} />
             </button>
           );
         })}
       </div>
 
       {isAddMode && (
-        <div className="flex items-center gap-2 h-8 pl-3 pr-1 rounded-lg bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border border-zinc-200 dark:border-white/10 shadow-sm animate-in fade-in slide-in-from-top-1 duration-150">
+        <div className="flex items-center gap-2 h-9 pl-3.5 pr-1 rounded-xl bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border border-zinc-200 dark:border-white/10 shadow-sm animate-in fade-in slide-in-from-top-1 duration-150">
           <span className="text-[12px] text-zinc-500 whitespace-nowrap">
             {t`Click the map to add:`}
           </span>
@@ -148,7 +140,7 @@ export function MapToolbar({
                 type="button"
                 onClick={() => setAddType(type.id)}
                 aria-pressed={addType === type.id}
-                className={`h-6 px-2 rounded-md text-[12px] font-medium transition-colors ${
+                className={`h-7 px-2.5 rounded-lg text-[12px] font-medium transition-colors ${
                   addType === type.id
                     ? "bg-navi/10 text-navi"
                     : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-white/5"

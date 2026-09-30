@@ -13,9 +13,8 @@ import {
   Undo2,
   Redo2,
   Film,
-  Navivi,
-  Folder,
 } from "../ui/icons";
+import { Tip } from "./Tip";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
 import { SaveAs } from "./SaveAs";
@@ -67,8 +66,15 @@ export function TitleBar() {
         setIsMenuOpen(false);
       }
     };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsMenuOpen(false);
+    };
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
   }, []);
 
   const clearProjectState = () => {
@@ -181,25 +187,32 @@ export function TitleBar() {
     <>
       <div
         data-tauri-drag-region
-        className="absolute top-0 inset-x-0 h-10 bg-white/60 dark:bg-zinc-950/60 backdrop-blur-xl border-b border-white/40 dark:border-white/10 flex items-center justify-between select-none shrink-0 transition-colors z-9999 shadow-sm"
+        className="absolute top-0 inset-x-0 h-10 z-9999 flex items-center justify-between select-none shrink-0 bg-zinc-50/85 dark:bg-zinc-950/85 backdrop-blur-xl border-b border-zinc-200/80 dark:border-white/10 transition-colors"
       >
-        {/* --- LEFT: MENU & DOCUMENT ACTIONS --- */}
-        <div className="flex items-center h-full shrink-0 px-2">
-          <div className="relative h-full flex items-center" ref={menuRef}>
+        {/* --- LEFT: app menu, undo/redo --- */}
+        <div className="flex items-center gap-0.5 h-full shrink-0 pl-2">
+          <div className="relative" ref={menuRef}>
             <button
+              type="button"
               disabled={isRendering}
               onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className={`h-7 px-3 flex items-center justify-center rounded-lg font-medium transition-all ${isMenuOpen ? "bg-zinc-800 text-white dark:bg-white dark:text-zinc-900 shadow-md" : "text-zinc-600 dark:text-zinc-300 hover:bg-black/5 dark:hover:bg-white/10"}`}
+              aria-haspopup="menu"
+              aria-expanded={isMenuOpen}
+              aria-label={t`Menu`}
+              className={`${barButton} ${isMenuOpen ? "bg-zinc-200/70 text-zinc-900 dark:bg-white/10 dark:text-zinc-100" : ""}`}
             >
               <Menu className="w-4 h-4" />
             </button>
 
-            {/* Dropdown Menu */}
             {isMenuOpen && (
-              <div className="absolute top-10 min-w-56 w-max -left-2 bg-white dark:bg-navidark-600 border border-zinc-200 dark:border-white/10 rounded-br-2xl shadow-2xl py-1 z-800 text-sm text-zinc-700 dark:text-zinc-300 whitespace-nowrap tracking-tighter">
+              <div
+                role="menu"
+                className="absolute top-full left-0 mt-1.5 min-w-60 w-max p-1 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 shadow-lg z-800 animate-in fade-in zoom-in-95 duration-100 origin-top-left"
+              >
                 {currentView === "editor" && (
                   <>
-                    <button
+                    <MenuItem
+                      kbd="Ctrl+S"
                       onClick={() => {
                         setIsMenuOpen(false);
                         if (
@@ -212,39 +225,24 @@ export function TitleBar() {
                           handleSave();
                         }
                       }}
-                      className="w-full flex items-center justify-between px-4 py-1.5 hover:bg-zinc-100 dark:hover:bg-navidark-400 transition-colors"
                     >
-                      <span>
-                        <Trans>Save Project</Trans>
-                      </span>
-                      <span className="text-xs text-zinc-400">Ctrl+S</span>
-                    </button>
-
-                    <button
+                      <Trans>Save Project</Trans>
+                    </MenuItem>
+                    <MenuItem
+                      kbd="Ctrl+Shift+S"
                       onClick={() => {
                         setIsMenuOpen(false);
                         setSaveMode("duplicate");
                         setShowSaveAs(true);
                       }}
-                      className="w-full flex items-center justify-between px-4 py-1.5 hover:bg-zinc-100 dark:hover:bg-navidark-400 transition-colors"
                     >
-                      <span>
-                        <Trans>Save As...</Trans>
-                      </span>
-                      <span className="text-xs text-zinc-400">
-                        Ctrl+Shift+S
-                      </span>
-                    </button>
-                    <div className="h-px bg-zinc-200 dark:bg-white/5 my-1 mx-2" />
-                    <button
-                      onClick={() => handleSafeNavigation("title_screen")}
-                      className="w-full flex items-center justify-between px-4 py-1.5 hover:bg-zinc-100 dark:hover:bg-navidark-400 transition-colors"
-                    >
-                      <span>
-                        <Trans>Project Manager</Trans>
-                      </span>
-                    </button>
-                    <button
+                      <Trans>Save As...</Trans>
+                    </MenuItem>
+                    <MenuSeparator />
+                    <MenuItem onClick={() => handleSafeNavigation("title_screen")}>
+                      <Trans>Project Manager</Trans>
+                    </MenuItem>
+                    <MenuItem
                       onClick={async () => {
                         setIsMenuOpen(false);
                         const targetPath =
@@ -262,26 +260,17 @@ export function TitleBar() {
                           showToast(t`Could not open file location`, "error");
                         }
                       }}
-                      className="w-full flex items-center justify-between px-4 py-1.5 hover:bg-zinc-100 dark:hover:bg-navidark-400 transition-colors"
                     >
-                      <span className="flex items-center gap-2">
-                        <Folder className="w-3.5 h-3.5 text-zinc-400" />
-                        <Trans>Reveal in File Explorer</Trans>
-                      </span>
-                    </button>
-                    <div className="h-px bg-zinc-200 dark:bg-white/5 my-1 mx-2" />
+                      <Trans>Reveal in File Explorer</Trans>
+                    </MenuItem>
+                    <MenuSeparator />
                   </>
                 )}
 
-                <button
-                  onClick={() => handleSafeNavigation("new_project")}
-                  className="w-full flex items-center justify-between px-4 py-1.5 hover:bg-zinc-100 dark:hover:bg-navidark-400 transition-colors"
-                >
-                  <span>
-                    <Trans>New Project</Trans>
-                  </span>
-                </button>
-                <button
+                <MenuItem onClick={() => handleSafeNavigation("new_project")}>
+                  <Trans>New Project</Trans>
+                </MenuItem>
+                <MenuItem
                   onClick={async () => {
                     setIsMenuOpen(false);
                     try {
@@ -294,13 +283,10 @@ export function TitleBar() {
                       showToast(t`Failed to read project file`, "error");
                     }
                   }}
-                  className="w-full flex items-center justify-between px-4 py-1.5 hover:bg-zinc-100 dark:hover:bg-navidark-400 transition-colors"
                 >
-                  <span>
-                    <Trans>Open Project File...</Trans>
-                  </span>
-                </button>
-                <button
+                  <Trans>Open Project File...</Trans>
+                </MenuItem>
+                <MenuItem
                   onClick={async () => {
                     setIsMenuOpen(false);
                     try {
@@ -313,154 +299,147 @@ export function TitleBar() {
                       showToast(t`Failed to read project folder`, "error");
                     }
                   }}
-                  className="w-full flex items-center justify-between px-4 py-1.5 hover:bg-zinc-100 dark:hover:bg-navidark-400 transition-colors"
                 >
-                  <span>
-                    <Trans>Open Project Folder...</Trans>
-                  </span>
-                </button>
+                  <Trans>Open Project Folder...</Trans>
+                </MenuItem>
 
-                <div className="h-px bg-zinc-200 dark:bg-white/5 my-1 mx-2" />
-                <button
+                <MenuSeparator />
+                <MenuItem
                   onClick={async () => {
                     setIsMenuOpen(false);
                     await importPhotos();
                   }}
-                  className="w-full flex items-center justify-between px-4 py-1.5 hover:bg-zinc-100 dark:hover:bg-navidark-400 transition-colors"
                 >
-                  <span>
-                    <Trans>Import Photos...</Trans>
-                  </span>
-                </button>
-                <button
+                  <Trans>Import Photos...</Trans>
+                </MenuItem>
+                <MenuItem
                   onClick={async () => {
                     setIsMenuOpen(false);
                     await importRouteFile();
                   }}
-                  className="w-full flex items-center justify-between px-4 py-1.5 hover:bg-zinc-100 dark:hover:bg-navidark-400 transition-colors"
                 >
-                  <span>
-                    <Trans>Import GPX...</Trans>
-                  </span>
-                </button>
+                  <Trans>Import GPX...</Trans>
+                </MenuItem>
 
-                <div className="h-px bg-zinc-200 dark:bg-white/5 my-1 mx-2" />
-                <button
-                  onClick={() => handleWindow("close")}
-                  className="w-full flex items-center justify-between px-4 py-1.5 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10 dark:hover:text-red-400 transition-colors"
-                >
-                  <span>
-                    <Trans>Exit</Trans>
-                  </span>
-                </button>
+                <MenuSeparator />
+                <MenuItem danger onClick={() => handleWindow("close")}>
+                  <Trans>Exit</Trans>
+                </MenuItem>
               </div>
             )}
           </div>
 
-          <div className="w-px h-5 my-auto bg-zinc-200 dark:bg-white/10 mx-1"></div>
-
           {currentView === "editor" && (
-            <div className="flex items-center h-full text-zinc-600 dark:text-zinc-400 px-1">
+            <>
+              <div className="w-px h-4 mx-1 bg-zinc-200 dark:bg-white/10" />
               <button
+                type="button"
                 onClick={handleUndo}
                 disabled={!canUndo}
-                className="h-full px-3 flex items-center hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors disabled:opacity-30 disabled:hover:bg-transparent"
-                title={t`Undo (Ctrl+Z)`}
+                aria-label={t`Undo`}
+                className={barButton}
               >
                 <Undo2 className="w-3.5 h-3.5" />
+                <Tip label={t`Undo`} kbd="Ctrl+Z" align="start" />
               </button>
               <button
+                type="button"
                 onClick={handleRedo}
                 disabled={!canRedo}
-                className="h-full px-3 flex items-center hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors disabled:opacity-30 disabled:hover:bg-transparent"
-                title={t`Redo (Ctrl+Y)`}
+                aria-label={t`Redo`}
+                className={barButton}
               >
                 <Redo2 className="w-3.5 h-3.5" />
+                <Tip label={t`Redo`} kbd="Ctrl+Y" />
               </button>
-            </div>
+            </>
           )}
         </div>
 
-        {/* --- CENTER: CONTEXT & STATUS --- */}
+        {/* --- CENTER: project name (drag region) --- */}
         <div
           data-tauri-drag-region
-          className="flex-1 flex items-center justify-center h-full px-4"
+          className="absolute inset-y-0 left-1/2 -translate-x-1/2 max-w-[40%] flex items-center justify-center pointer-events-none"
         >
-          <div
-            data-tauri-drag-region
-            className="flex items-center justify-center gap-2 text-xs font-medium text-zinc-500 dark:text-zinc-400"
-          >
-            <span className="text-zinc-800 dark:text-zinc-200 pointer-events-none font-semibold">
-              {currentView === "title_screen" ? (
-                <Trans>Project Manager</Trans>
-              ) : currentView === "new_project" ? (
-                <Trans>Setup</Trans>
-              ) : (
-                metadata.project_name
-              )}
-            </span>
-          </div>
+          <span className="truncate text-[12px] font-medium text-zinc-700 dark:text-zinc-300">
+            {currentView === "title_screen" ? (
+              <Trans>Project Manager</Trans>
+            ) : currentView === "new_project" ? (
+              <Trans>Setup</Trans>
+            ) : (
+              metadata.project_name
+            )}
+          </span>
         </div>
 
-        {/* --- RIGHT: VIEW & WINDOW CONTROLS --- */}
+        {/* --- RIGHT: view switch, settings, window controls --- */}
         <div className="flex items-center h-full shrink-0">
-          {/* Map / Timeline Toggle */}
           {currentView === "editor" && (
-            <div className="flex bg-black/5 dark:bg-white/5 rounded-full p-0.5 border border-black/5 dark:border-white/5 shadow-inner mr-4">
-              <button
-                disabled={isRendering}
-                onClick={() => setEditorMode("map")}
-                className={`flex items-center gap-1.5 px-3 py-1 text-[11px] font-bold rounded-full transition-all ${
-                  editorMode === "map"
-                    ? "bg-white dark:bg-zinc-800 text-navi-600 dark:text-navi-400 shadow-sm"
-                    : "text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
-                }`}
-                title={t`Map`}
-              >
-                <Map className="w-3.5 h-3.5" /> <Trans>Map</Trans>
-              </button>
-
-              <button
-                disabled={isRendering}
-                onClick={() => setEditorMode("timeline")}
-                className={`flex items-center gap-1.5 px-3 py-1 text-[11px] font-bold rounded-full transition-all ${
-                  editorMode === "timeline"
-                    ? "bg-white dark:bg-zinc-800 text-navi-600 dark:text-navi-400 shadow-sm"
-                    : "text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
-                }`}
-                title={t`Timeline`}
-              >
-                <Film className="w-3.5 h-3.5" /> <Trans>Timeline</Trans>
-              </button>
+            <div
+              role="tablist"
+              aria-label={t`Editor view`}
+              className="flex items-center p-0.5 mr-1 rounded-lg bg-zinc-200/60 dark:bg-white/5"
+            >
+              {(
+                [
+                  { id: "map", icon: Map, label: t`Map` },
+                  { id: "timeline", icon: Film, label: t`Timeline` },
+                ] as const
+              ).map(({ id, icon: Icon, label }) => {
+                const active = editorMode === id;
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    role="tab"
+                    aria-selected={active}
+                    disabled={isRendering}
+                    onClick={() => setEditorMode(id)}
+                    className={`flex items-center gap-1.5 h-6 px-2.5 rounded-md text-[12px] font-medium transition-colors disabled:opacity-50 ${
+                      active
+                        ? "bg-white dark:bg-zinc-800 text-navi shadow-sm"
+                        : "text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200"
+                    }`}
+                  >
+                    <Icon className="w-3.5 h-3.5" /> {label}
+                  </button>
+                );
+              })}
             </div>
           )}
 
           <button
+            type="button"
             onClick={() => setShowAppSettings(true)}
-            className="h-full px-4 text-zinc-600 dark:text-zinc-400 hover:bg-black/5 dark:hover:bg-white/10 hover:text-zinc-900 dark:hover:text-white transition-colors"
-            title={t`App Settings`}
+            aria-label={t`App Settings`}
+            className={`${barButton} mr-1`}
           >
             <Settings2 className="w-4 h-4" />
+            <Tip label={t`App Settings`} align="end" />
           </button>
 
-          <div className="w-px h-5 my-auto bg-black/10 dark:bg-white/10 mx-1"></div>
-
-          <div className="flex h-full text-zinc-600 dark:text-zinc-400">
+          <div className="flex h-full text-zinc-500 dark:text-zinc-400">
             <button
+              type="button"
               onClick={() => handleWindow("minimize")}
-              className="h-full px-4 hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+              aria-label={t`Minimize`}
+              className="h-full w-11 flex items-center justify-center hover:bg-black/5 hover:text-zinc-900 dark:hover:bg-white/10 dark:hover:text-white transition-colors"
             >
               <Minus className="w-4 h-4" />
             </button>
             <button
+              type="button"
               onClick={() => handleWindow("maximize")}
-              className="h-full px-4 hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+              aria-label={t`Maximize`}
+              className="h-full w-11 flex items-center justify-center hover:bg-black/5 hover:text-zinc-900 dark:hover:bg-white/10 dark:hover:text-white transition-colors"
             >
-              <Square className="w-3.5 h-3.5" />
+              <Square className="w-3 h-3" />
             </button>
             <button
+              type="button"
               onClick={() => handleWindow("close")}
-              className="h-full px-4 hover:bg-red-500 hover:text-white transition-colors"
+              aria-label={t`Close`}
+              className="h-full w-11 flex items-center justify-center hover:bg-red-500 hover:text-white transition-colors"
             >
               <X className="w-4 h-4" />
             </button>
@@ -526,4 +505,40 @@ export function TitleBar() {
       />
     </>
   );
+}
+
+// Icon button in the title bar (menu, undo/redo, settings).
+const barButton =
+  "group/tool relative flex items-center justify-center w-8 h-7 rounded-lg text-zinc-500 hover:bg-zinc-200/70 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-zinc-100 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-navi/40 disabled:opacity-35 disabled:pointer-events-none";
+
+function MenuItem({
+  onClick,
+  kbd,
+  danger,
+  children,
+}: {
+  onClick: () => void;
+  kbd?: string;
+  danger?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      onClick={onClick}
+      className={`w-full flex items-center justify-between gap-6 h-8 px-2.5 rounded-lg text-[13px] text-left text-zinc-700 dark:text-zinc-300 transition-colors ${
+        danger
+          ? "hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400"
+          : "hover:bg-zinc-100 dark:hover:bg-white/5"
+      }`}
+    >
+      <span>{children}</span>
+      {kbd && <span className="text-[11px] text-zinc-400 dark:text-zinc-500">{kbd}</span>}
+    </button>
+  );
+}
+
+function MenuSeparator() {
+  return <div role="separator" className="h-px my-1 mx-1.5 bg-zinc-100 dark:bg-white/5" />;
 }

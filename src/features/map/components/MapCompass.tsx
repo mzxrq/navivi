@@ -44,7 +44,7 @@ export function MapCompass({ mapRef, ready }: MapCompassProps) {
       onClick={() => mapRef.current?.getMap().easeTo({ bearing: 0, pitch: 0, duration: 400 })}
       title={t`Reset View (North)`}
       aria-label={t`Reset View (North)`}
-      className="flex items-center justify-center w-7 h-7 rounded-md text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-white/5 transition-colors"
+      className="flex items-center justify-center w-7 h-7 rounded-lg text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-white/5 transition-colors"
     >
       {/* Compass needle: red half points north. */}
       <svg

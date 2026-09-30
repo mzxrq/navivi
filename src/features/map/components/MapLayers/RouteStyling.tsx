@@ -129,7 +129,7 @@ export function RouteStyling() {
         aria-expanded={isOpen}
         title={t`Route Lines Config`}
         aria-label={t`Route Lines Config`}
-        className={`flex items-center justify-center w-7 h-7 rounded-md transition-colors ${
+        className={`flex items-center justify-center w-7 h-7 rounded-lg transition-colors ${
           isOpen
             ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
             : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-white/5"

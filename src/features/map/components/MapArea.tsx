@@ -824,7 +824,7 @@ export function MapArea() {
         )}
 
         {isViaMode && (
-          <div className="flex items-center gap-2 h-8 pl-3 pr-1 rounded-lg bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border border-zinc-200 dark:border-white/10 shadow-sm animate-in fade-in slide-in-from-top-1 duration-150">
+          <div className="flex items-center gap-2 h-9 pl-3.5 pr-1 rounded-xl bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border border-zinc-200 dark:border-white/10 shadow-sm animate-in fade-in slide-in-from-top-1 duration-150">
             <span className="w-1.5 h-1.5 rounded-full bg-violet-500 shrink-0" />
             <span className="text-[12px] text-zinc-600 dark:text-zinc-300 truncate">
               <Trans>Click the map to nudge the route. Right-click a via point to remove it.</Trans>
@@ -836,7 +836,7 @@ export function MapArea() {
                 viaTargetWpIdRef.current = null;
                 window.dispatchEvent(new CustomEvent("exit-via-mode"));
               }}
-              className="h-6 px-2.5 rounded-md text-[12px] font-semibold bg-navi text-white hover:brightness-110 transition shrink-0"
+              className="h-7 px-2.5 rounded-lg text-[12px] font-semibold bg-navi text-white hover:brightness-110 transition shrink-0"
             >
               <Trans>Done</Trans>
             </button>
@@ -845,7 +845,7 @@ export function MapArea() {
       </div>
 
       {/* --- VIEW CONTROLS (top right) --- */}
-      <div className="absolute top-14 right-4 z-200 flex items-center gap-0.5 p-1 rounded-lg bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border border-zinc-200 dark:border-white/10 shadow-sm">
+      <div className="absolute top-14 right-4 z-200 flex items-center gap-0.5 p-1 rounded-xl bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border border-zinc-200 dark:border-white/10 shadow-sm">
         <MapCompass mapRef={mapRef} ready={isMapLoaded} />
 
         <RouteStyling />

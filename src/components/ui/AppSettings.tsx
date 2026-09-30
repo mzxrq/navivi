@@ -12,22 +12,24 @@ import { useWorkspace } from "../../hooks/useWorkspace";
 import { getLocalModels, pullModelStream } from "../../services/ollamaApi";
 import { dynamicActivate } from "../../i18n";
 import {
+  Check,
   CheckCircle2,
   Film,
   Key,
   MapPin,
+  Mic,
   Monitor,
   Moon,
   NaviviType,
   Palette,
-  Save,
+  Plus,
   Settings,
   Sparkles,
   Sun,
+  Trash2,
   X,
-  Globe,
-  Mic,
 } from "./icons";
+import { Switch } from "./Switch";
 
 type SettingsTab =
   | "general"
@@ -36,6 +38,13 @@ type SettingsTab =
   | "video"
   | "ai"
   | "tts_dictionary";
+
+// Shared form control styles.
+const inputClass =
+  "h-8 min-w-0 px-2.5 rounded-lg bg-white dark:bg-zinc-950/40 border border-zinc-200 dark:border-white/10 text-[13px] text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 outline-none focus:border-navi focus:ring-2 focus:ring-navi/20 transition";
+const selectClass = `${inputClass} pr-7 cursor-pointer`;
+const secondaryButton =
+  "inline-flex items-center justify-center gap-1.5 h-8 px-3 rounded-lg border border-zinc-200 dark:border-white/10 bg-white dark:bg-white/5 text-[12px] font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-white/10 transition-colors";
 
 export function AppSettings() {
   const { settings, updateSettings, setIsDirty } = useWorkspace();
@@ -70,850 +79,523 @@ export function AppSettings() {
     return () => window.removeEventListener("keydown", handleEsc);
   }, [showAppSettings, setShowAppSettings]);
 
+  // The AI tab disappears when AI features are switched off.
+  useEffect(() => {
+    if (activeTab === "ai" && !settings.ai_features_enabled) setActiveTab("general");
+  }, [activeTab, settings.ai_features_enabled]);
+
   if (!shouldRender) return null;
 
   const autoSaveInterval = settings.auto_save_interval ?? 3;
 
+  // Project-scoped settings are saved with the project, so mark it dirty.
+  const updateProject = (patch: Parameters<typeof updateSettings>[0]) => {
+    updateSettings(patch);
+    setIsDirty(true);
+  };
+
+  const tabs: { id: SettingsTab; icon: any; label: string }[] = [
+    { id: "general", icon: Settings, label: t`General` },
+    { id: "appearance", icon: Palette, label: t`Appearance` },
+    { id: "api", icon: Key, label: t`API keys` },
+    { id: "video", icon: Film, label: t`Video` },
+    { id: "tts_dictionary", icon: Mic, label: t`Pronunciation` },
+    ...(settings.ai_features_enabled
+      ? [{ id: "ai" as const, icon: Sparkles, label: t`AI models` }]
+      : []),
+  ];
+  const activeLabel = tabs.find((tab) => tab.id === activeTab)?.label;
+
+  const dictionary = settings.pronunciation_dictionary || [];
+  const setDictionary = (next: typeof dictionary) =>
+    updateProject({ pronunciation_dictionary: next });
+
+  const markerSrc = (marker: string) =>
+    marker.startsWith("/") && !marker.startsWith("/defaults/")
+      ? convertFileSrc(marker)
+      : marker.match(/^[a-zA-Z]:\\/)
+        ? convertFileSrc(marker)
+        : marker;
+
   return createPortal(
+    // Below the title bar (h-10), which stays usable while settings are open.
     <div
-      className={`fixed inset-0 z-99999 flex items-center justify-center bg-zinc-950/40 backdrop-blur-[2px] select-none ${isAnimatingOut ? "animate-out fade-out duration-200" : "animate-in fade-in duration-200"}`}
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) setShowAppSettings(false);
+      }}
+      className={`fixed inset-x-0 top-10 bottom-0 z-99999 flex items-center justify-center p-4 bg-zinc-950/30 backdrop-blur-[2px] select-none ${isAnimatingOut ? "animate-out fade-out duration-150" : "animate-in fade-in duration-150"}`}
     >
       <div
-        className={`w-162.5 max-w-[95vw] h-137.5 max-h-[95vh] bg-white dark:bg-navidark-900 border border-zinc-200 dark:border-navidark-400 rounded-xl shadow-2xl overflow-hidden flex flex-col ${isAnimatingOut ? "animate-out zoom-out-95 duration-200" : "animate-in zoom-in-95 duration-200"}`}
+        role="dialog"
+        aria-modal="true"
+        aria-label={t`Settings`}
+        className={`flex w-184 max-w-full h-144 max-h-full rounded-2xl overflow-hidden bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 shadow-2xl ${isAnimatingOut ? "animate-out zoom-out-95 duration-150" : "animate-in zoom-in-95 duration-150"}`}
       >
-        {/* Header Section */}
-        <div className="px-5 py-3 border-b border-zinc-100 dark:border-navidark-400 bg-zinc-50/50 dark:bg-navidark-800 flex items-center justify-between shrink-0">
-          <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-            <Settings className="w-4 h-4 text-navi" /> <Trans>Settings</Trans>
-          </h3>
-          <button
-            onClick={() => setShowAppSettings(false)}
-            className="text-zinc-400 hover:text-zinc-700 dark:hover:text-white transition-colors p-1 rounded-md hover:bg-zinc-200 dark:hover:bg-navidark-600"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        <div className="flex flex-1 overflow-hidden">
-          {/* Sidebar Tabs */}
-          <div className="w-40 bg-zinc-50 dark:bg-navidark-800 border-r border-zinc-100 dark:border-navidark-400 p-2 flex flex-col gap-1 shrink-0 overflow-y-auto custom-scrollbar">
-            <TabButton
-              active={activeTab === "general"}
-              onClick={() => setActiveTab("general")}
-              icon={Settings}
-              label={t`General`}
-            />
-            <TabButton
-              active={activeTab === "appearance"}
-              onClick={() => setActiveTab("appearance")}
-              icon={Palette}
-              label={t`Appearance`}
-            />
-            <TabButton
-              active={activeTab === "api"}
-              onClick={() => setActiveTab("api")}
-              icon={Key}
-              label={t`API Keys`}
-            />
-            <TabButton
-              active={activeTab === "video"}
-              onClick={() => setActiveTab("video")}
-              icon={Film}
-              label={t`Video Editor`}
-            />
-            <TabButton
-              active={activeTab === "tts_dictionary"}
-              onClick={() => setActiveTab("tts_dictionary")}
-              icon={Mic}
-              label={t`Pronunciation`}
-            />
-            {settings.ai_features_enabled && (
-              <TabButton
-                active={activeTab === "ai"}
-                onClick={() => setActiveTab("ai")}
-                icon={Sparkles}
-                label={t`AI Models`}
-              />
-            )}
+        {/* --- Navigation --- */}
+        <nav className="w-48 max-[700px]:w-40 shrink-0 flex flex-col p-2 bg-zinc-50 dark:bg-black/20 border-r border-zinc-200/80 dark:border-white/5">
+          <h2 className="px-2.5 pt-2 pb-3 text-[13px] font-semibold text-zinc-900 dark:text-zinc-100">
+            <Trans>Settings</Trans>
+          </h2>
+          <div role="tablist" aria-orientation="vertical" className="flex flex-col gap-0.5">
+            {tabs.map(({ id, icon: Icon, label }) => {
+              const active = activeTab === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => setActiveTab(id)}
+                  className={`flex items-center gap-2.5 h-8 px-2.5 rounded-lg text-[13px] text-left whitespace-nowrap transition-colors ${
+                    active
+                      ? "bg-navi/10 text-navi font-medium"
+                      : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200/60 dark:hover:bg-white/5 hover:text-zinc-900 dark:hover:text-zinc-100"
+                  }`}
+                >
+                  <Icon className="w-4 h-4 shrink-0" />
+                  {label}
+                </button>
+              );
+            })}
           </div>
+          <NaviviType className="mt-auto mb-2 mx-2.5 h-3.5 self-start text-zinc-300 dark:text-zinc-700" />
+        </nav>
 
-          {/* Body Section */}
-          <div className="flex-1 p-5 overflow-y-auto custom-scrollbar bg-white dark:bg-navidark-900">
-            {/* GENERAL TAB */}
+        {/* --- Content --- */}
+        <div className="flex-1 min-w-0 flex flex-col">
+          <header className="flex items-center justify-between h-12 pl-6 pr-3 shrink-0 border-b border-zinc-100 dark:border-white/5">
+            <h3 className="text-[14px] font-semibold text-zinc-900 dark:text-zinc-100">
+              {activeLabel}
+            </h3>
+            <button
+              type="button"
+              onClick={() => setShowAppSettings(false)}
+              aria-label={t`Close`}
+              title={t`Close`}
+              className="flex items-center justify-center w-8 h-8 rounded-lg text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 dark:hover:text-zinc-200 dark:hover:bg-white/5 transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </header>
+
+          <div
+            key={activeTab}
+            className="flex-1 overflow-y-auto custom-scrollbar px-6 py-5 space-y-6 animate-in fade-in duration-150"
+          >
+            {/* GENERAL */}
             {activeTab === "general" && (
-              <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-                <div className="space-y-3">
-                  <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-widest flex items-center gap-1.5">
-                    <Globe className="w-3.5 h-3.5" /> <Trans>Language</Trans>
-                  </label>
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                    <Trans>
-                      Choose your preferred language for the application
-                    </Trans>
-                  </p>
-                  <select
-                    value={i18n.locale}
-                    onChange={(e) => {
-                      const newLocale = e.target.value;
-                      localStorage.setItem("navivi_locale", newLocale);
-                      dynamicActivate(newLocale);
-                    }}
-                    className="w-full bg-zinc-50 dark:bg-navidark-800 border border-zinc-200 dark:border-navidark-400 rounded-lg px-3 py-2.5 text-sm text-zinc-900 dark:text-zinc-100 outline-none focus:border-navi focus:ring-1 focus:ring-navi transition-all"
+              <>
+                <Section title={t`Application`}>
+                  <Row
+                    title={t`Language`}
+                    description={t`Choose your preferred language for the application`}
                   >
-                    <option value="en">English</option>
-                    <option value="ja">日本語</option>
-                  </select>
-                </div>
-
-                <div className="space-y-3">
-                  <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-widest flex items-center gap-1.5">
-                    <Save className="w-3.5 h-3.5" />{" "}
-                    <Trans>Auto-Save Interval</Trans>
-                  </label>
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                    <Trans>
-                      Controls auto save of editors that have unsaved changes
-                    </Trans>
-                  </p>
-                  <select
-                    value={autoSaveInterval}
-                    onChange={(e) =>
-                      updateSettings({
-                        auto_save_interval: parseInt(e.target.value),
-                      })
-                    }
-                    className="w-full bg-zinc-50 dark:bg-navidark-800 border border-zinc-200 dark:border-navidark-400 rounded-lg px-3 py-2.5 text-sm text-zinc-900 dark:text-zinc-100 outline-none focus:border-navi focus:ring-1 focus:ring-navi transition-all"
+                    <select
+                      value={i18n.locale}
+                      onChange={(e) => {
+                        const newLocale = e.target.value;
+                        localStorage.setItem("navivi_locale", newLocale);
+                        dynamicActivate(newLocale);
+                      }}
+                      className={`${selectClass} w-40`}
+                    >
+                      <option value="en">English</option>
+                      <option value="ja">日本語</option>
+                    </select>
+                  </Row>
+                  <Row
+                    title={t`Auto-save`}
+                    description={t`Controls auto save of editors that have unsaved changes`}
                   >
-                    <option value={0}>
-                      <Trans>Off</Trans>
-                    </option>
-                    <option value={3}>
-                      <Trans>3 seconds</Trans>
-                    </option>
-                    <option value={30}>
-                      <Trans>30 seconds</Trans>
-                    </option>
-                    <option value={60}>
-                      <Trans>1 minute</Trans>
-                    </option>
-                    <option value={600}>
-                      <Trans>10 minutes</Trans>
-                    </option>
-                  </select>
-                </div>
+                    <select
+                      value={autoSaveInterval}
+                      onChange={(e) =>
+                        updateSettings({
+                          auto_save_interval: parseInt(e.target.value),
+                        })
+                      }
+                      className={`${selectClass} w-40`}
+                    >
+                      <option value={0}>{t`Off`}</option>
+                      <option value={3}>{t`3 seconds`}</option>
+                      <option value={30}>{t`30 seconds`}</option>
+                      <option value={60}>{t`1 minute`}</option>
+                      <option value={600}>{t`10 minutes`}</option>
+                    </select>
+                  </Row>
+                </Section>
 
-                {/* FAST RENDER MODE */}
                 {currentView === "editor" && (
-                  <div className="space-y-3 pt-4 border-t border-zinc-100 dark:border-navidark-700">
-                    <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-widest flex items-center gap-1.5">
-                      <Trans>Advanced Features</Trans>
-                    </label>
-
-                    {/* ENABLE AI FEATURES TOGGLE */}
-                    <div
-                      onClick={() => {
-                        updateSettings({
-                          ai_features_enabled: !settings.ai_features_enabled,
-                        });
-                        setIsDirty(true);
-                      }}
-                      className={`flex items-center justify-between p-4 rounded-xl border-2 transition-all cursor-pointer select-none group ${
-                        settings.ai_features_enabled
-                          ? "border-navi bg-navi-50/50 dark:border-navi/50 dark:bg-navi/10 shadow-sm"
-                          : "border-zinc-200 dark:border-navidark-400 bg-zinc-50 dark:bg-navidark-800 hover:border-zinc-300 dark:hover:border-navidark-300"
-                      }`}
+                  <Section
+                    title={t`This project`}
+                    hint={t`Saved with the project`}
+                  >
+                    <Row
+                      title={t`AI features`}
+                      badge={<Badge tone="violet">{t`Requires Ollama`}</Badge>}
+                      description={t`Show Auto-Write script buttons and overview narration. Requires Ollama to be installed and running locally.`}
                     >
-                      <div className="flex flex-col gap-1 pr-6">
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={`text-xs font-bold transition-colors ${
-                              settings.ai_features_enabled
-                                ? "text-navi-700 dark:text-navi-400"
-                                : "text-zinc-700 dark:text-zinc-200 group-hover:text-zinc-900 dark:group-hover:text-white"
-                            }`}
-                          >
-                            <Trans>Enable AI Features</Trans>
-                          </span>
-                          <span className="text-[9px] font-semibold tracking-wider uppercase px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-600 dark:bg-violet-400/10 dark:text-violet-400 border border-violet-500/20">
-                            <Trans>Requires Ollama</Trans>
-                          </span>
-                        </div>
-                        <span className="text-[10px] text-zinc-500 dark:text-navidark-150 leading-relaxed">
-                          <Trans>
-                            Show Auto-Write script buttons and overview
-                            narration. Requires Ollama to be installed and
-                            running locally.
-                          </Trans>
-                        </span>
-                      </div>
-
-                      <div
-                        className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-200 ease-in-out ${
-                          settings.ai_features_enabled
-                            ? "bg-navi"
-                            : "bg-zinc-300 dark:bg-zinc-700"
-                        }`}
-                      >
-                        <span
-                          className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform duration-200 ease-in-out ${
-                            settings.ai_features_enabled
-                              ? "translate-x-4.5"
-                              : "translate-x-0.5"
-                          }`}
-                        />
-                      </div>
-                    </div>
-
-                    <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-widest flex items-center gap-1.5">
-                      <Trans>Project Overrides</Trans>
-                    </label>
-                    <div
-                      onClick={() => {
-                        updateSettings({
-                          skip_rich_media: !settings.skip_rich_media,
-                        });
-                        setIsDirty(true);
-                      }}
-                      className={`flex items-center justify-between p-4 rounded-xl border-2 transition-all cursor-pointer select-none group ${
-                        settings.skip_rich_media
-                          ? "border-navi bg-navi-50/50 dark:border-navi/50 dark:bg-navi/10 shadow-sm"
-                          : "border-zinc-200 dark:border-navidark-400 bg-zinc-50 dark:bg-navidark-800 hover:border-zinc-300 dark:hover:border-navidark-300"
-                      }`}
-                    >
-                      <div className="flex flex-col gap-1 pr-6">
-                        <span
-                          className={`text-xs font-bold transition-colors ${
-                            settings.skip_rich_media
-                              ? "text-navi-700 dark:text-navi-400"
-                              : "text-zinc-700 dark:text-zinc-200 group-hover:text-zinc-900 dark:group-hover:text-white"
-                          }`}
-                        >
-                          <Trans>Fast Render Mode</Trans>
-                        </span>
-                        <span className="text-[10px] text-zinc-500 dark:text-navidark-150 leading-relaxed">
-                          <Trans>
-                            Skip AI voiceover synthesis and pop-up images during
-                            generation
-                          </Trans>
-                        </span>
-                      </div>
-
-                      <div
-                        className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-200 ease-in-out ${
-                          settings.skip_rich_media
-                            ? "bg-navi"
-                            : "bg-zinc-300 dark:bg-zinc-700"
-                        }`}
-                      >
-                        <span
-                          className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform duration-200 ease-in-out ${
-                            settings.skip_rich_media
-                              ? "translate-x-4.5"
-                              : "translate-x-0.5"
-                          }`}
-                        />
-                      </div>
-                    </div>
-
-                    {/* HISTORICAL WEATHER SYNC */}
-                    <div
-                      onClick={() => {
-                        updateSettings({
-                          weather_sync_enabled: !settings.weather_sync_enabled,
-                        });
-                        setIsDirty(true);
-                      }}
-                      className={`flex items-center justify-between p-4 rounded-xl border-2 transition-all cursor-pointer select-none group ${
-                        settings.weather_sync_enabled
-                          ? "border-navi bg-navi-50/50 dark:border-navi/50 dark:bg-navi/10 shadow-sm"
-                          : "border-zinc-200 dark:border-navidark-400 bg-zinc-50 dark:bg-navidark-800 hover:border-zinc-300 dark:hover:border-navidark-300"
-                      }`}
-                    >
-                      <div className="flex flex-col gap-1 pr-6">
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={`text-xs font-bold transition-colors ${
-                              settings.weather_sync_enabled
-                                ? "text-navi-700 dark:text-navi-400"
-                                : "text-zinc-700 dark:text-zinc-200 group-hover:text-zinc-900 dark:group-hover:text-white"
-                            }`}
-                          >
-                            <Trans>Historical Weather Sync</Trans>
-                          </span>
-                          <span className="text-[9px] font-semibold tracking-wider uppercase px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:bg-amber-400/10 dark:text-amber-400 border border-amber-500/20">
-                            <Trans>Experimental</Trans>
-                          </span>
-                        </div>
-                        <span className="text-[10px] text-zinc-500 dark:text-navidark-150 leading-relaxed">
-                          <Trans>
-                            Synchronize historical weather conditions from photo
-                            EXIF dates using Open-Meteo to dynamically apply
-                            atmospheric fog and rain effects
-                          </Trans>
-                        </span>
-                      </div>
-
-                      <div
-                        className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-200 ease-in-out ${
-                          settings.weather_sync_enabled
-                            ? "bg-navi"
-                            : "bg-zinc-300 dark:bg-zinc-700"
-                        }`}
-                      >
-                        <span
-                          className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform duration-200 ease-in-out ${
-                            settings.weather_sync_enabled
-                              ? "translate-x-4.5"
-                              : "translate-x-0.5"
-                          }`}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                )}
-                <div className="mt-8 flex justify-center opacity-50">
-                  <NaviviType className="h-6 text-zinc-500" />
-                </div>
-              </div>
-            )}
-
-            {/* APPEARANCE TAB */}
-            {activeTab === "appearance" && (
-              <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-                <div className="space-y-3">
-                  <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-widest flex items-center gap-1.5">
-                    <Monitor className="w-3.5 h-3.5" /> <Trans>UI Theme</Trans>
-                  </label>
-                  <div className="flex p-1 bg-zinc-100 dark:bg-navidark-800 rounded-lg border border-zinc-200 dark:border-navidark-400">
-                    {[
-                      { id: "light", icon: Sun, label: i18n._("Light") },
-                      { id: "dark", icon: Moon, label: i18n._("Dark") },
-                      { id: "system", icon: Monitor, label: i18n._("System") },
-                    ].map((t) => (
-                      <button
-                        key={t.id}
-                        onClick={() => setTheme(t.id as any)}
-                        className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-md transition-all duration-200 ${
-                          theme === t.id
-                            ? "bg-white dark:bg-navidark-600 text-navi shadow-sm"
-                            : "text-zinc-500 dark:text-navidark-150 hover:text-zinc-700 dark:hover:text-zinc-200"
-                        }`}
-                      >
-                        <t.icon className="w-3.5 h-3.5" /> {t.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="space-y-3 pt-4 border-t border-zinc-100 dark:border-navidark-700">
-                  <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-widest flex items-center gap-1.5">
-                    <Palette className="w-3.5 h-3.5" />{" "}
-                    <Trans>Accent Color</Trans>
-                  </label>
-                  <div className="flex gap-2">
-                    {[
-                      {
-                        id: "navi",
-                        color: "bg-[#4287f5]",
-                        label: i18n._("Navi Blue"),
-                      },
-                      {
-                        id: "emerald",
-                        color: "bg-[#10b981]",
-                        label: i18n._("Emerald"),
-                      },
-                      {
-                        id: "violet",
-                        color: "bg-[#8b5cf6]",
-                        label: i18n._("Violet"),
-                      },
-                      {
-                        id: "amber",
-                        color: "bg-[#f59e0b]",
-                        label: i18n._("Amber"),
-                      },
-                      {
-                        id: "rose",
-                        color: "bg-[#f43f5e]",
-                        label: i18n._("Rose"),
-                      },
-                    ].map((t) => (
-                      <button
-                        key={t.id}
-                        onClick={() => setAccentTheme(t.id as any)}
-                        title={t.label}
-                        className={`w-8 h-8 rounded-full ${t.color} flex items-center justify-center transition-transform hover:scale-110 ${
-                          accentTheme === t.id
-                            ? "ring-2 ring-offset-2 ring-offset-white dark:ring-offset-navidark-900 ring-zinc-400 dark:ring-zinc-500 scale-110 shadow-sm"
-                            : "opacity-80 hover:opacity-100"
-                        }`}
-                      >
-                        {accentTheme === t.id && (
-                          <div className="w-2 h-2 rounded-full bg-white opacity-80" />
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="space-y-3 pt-4 border-t border-zinc-100 dark:border-navidark-700">
-                  <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-widest flex items-center gap-1.5">
-                    <MapPin className="w-3.5 h-3.5" />{" "}
-                    <Trans>Global Route Marker</Trans>
-                  </label>
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                    <Trans>
-                      Default marker for all waypoints. Can be overridden
-                      per-stop.
-                    </Trans>
-                  </p>
-                  <div className="flex items-center gap-3">
-                    {settings.routeMarker ? (
-                      <div className="relative w-12 h-12 rounded-lg border border-zinc-200 dark:border-white/10 flex items-center justify-center bg-zinc-50 dark:bg-navidark-700/50 group">
-                        <img
-                          src={
-                            settings.routeMarker.startsWith("/") ||
-                            settings.routeMarker.match(/^[a-zA-Z]:\\/)
-                              ? convertFileSrc(settings.routeMarker)
-                              : settings.routeMarker
-                          }
-                          alt={t`Route Marker`}
-                          className="w-8 h-8 object-contain"
-                        />
-                        <button
-                          onClick={() => {
-                            updateSettings({ routeMarker: "" });
-                            setIsDirty(true);
-                          }}
-                          className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md"
-                          title={t`Remove Marker`}
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="w-12 h-12 rounded-lg border border-dashed border-zinc-300 dark:border-white/20 flex items-center justify-center bg-zinc-50 dark:bg-navidark-700/30">
-                        <MapPin className="w-5 h-5 text-zinc-300 dark:text-zinc-600" />
-                      </div>
-                    )}
-                    <button
-                      onClick={async () => {
-                        const selected = await open({
-                          multiple: false,
-                          filters: [
-                            {
-                              name: "Images",
-                              extensions: ["svg", "png", "jpg", "jpeg"],
-                            },
-                          ],
-                        });
-                        if (selected && typeof selected === "string") {
-                          updateSettings({ routeMarker: selected });
-                          setIsDirty(true);
-                        }
-                      }}
-                      className="flex-1 py-2 text-xs font-semibold rounded-xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-navidark-600 hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors text-zinc-700 dark:text-zinc-300 shadow-sm"
-                    >
-                      {settings.routeMarker
-                        ? i18n._("Change Marker")
-                        : i18n._("Select Custom Marker")}
-                    </button>
-                  </div>
-                  <div className="flex gap-2 mt-2">
-                    {[
-                      "/defaults/markers/map_pin.svg",
-                      "/defaults/markers/walking.svg",
-                      "/defaults/markers/car.svg",
-                    ].map((preset) => (
-                      <button
-                        key={preset}
-                        onClick={() => {
-                          updateSettings({ routeMarker: preset });
-                          setIsDirty(true);
-                        }}
-                        className={`w-10 h-10 rounded-lg border flex items-center justify-center transition-colors ${
-                          settings.routeMarker === preset
-                            ? "border-navi bg-navi-50 dark:bg-navi-900/20"
-                            : "border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-navidark-700/50 hover:bg-zinc-100 dark:hover:bg-navidark-600"
-                        }`}
-                      >
-                        <img src={preset} className="w-6 h-6 object-contain" />
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="space-y-3 pt-4 border-t border-zinc-100 dark:border-navidark-700">
-                  <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-widest flex items-center gap-1.5">
-                    <MapPin className="w-3.5 h-3.5" />{" "}
-                    <Trans>Map Features</Trans>
-                  </label>
-                  <label className="flex items-center gap-3 cursor-pointer group">
-                    <div className="relative flex items-center">
-                      <input
-                        type="checkbox"
-                        className="peer sr-only"
-                        checked={settings.show_route_heatmap || false}
-                        onChange={(e) => {
-                          updateSettings({
-                            show_route_heatmap: e.target.checked,
-                          });
-                          setIsDirty(true);
-                        }}
+                      <Switch
+                        checked={!!settings.ai_features_enabled}
+                        onChange={(v) => updateProject({ ai_features_enabled: v })}
+                        label={t`AI features`}
                       />
-                      <div className="w-8 h-4.5 bg-zinc-300 dark:bg-zinc-700 rounded-full peer-checked:bg-navi transition-colors duration-200" />
-                      <div className="absolute left-0.5 top-0.5 w-3.5 h-3.5 bg-white rounded-full shadow-sm peer-checked:translate-x-3.5 transition-transform duration-200" />
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 group-hover:text-navi transition-colors">
-                        <Trans>Show Route Elevation Heatmap</Trans>
-                      </span>
-                      <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                        <Trans>
-                          Color GPX routes dynamically based on steepness
-                        </Trans>
-                      </span>
-                    </div>
-                  </label>
-                </div>
-              </div>
+                    </Row>
+                    <Row
+                      title={t`Fast render mode`}
+                      description={t`Skip AI voiceover synthesis and pop-up images during generation`}
+                    >
+                      <Switch
+                        checked={!!settings.skip_rich_media}
+                        onChange={(v) => updateProject({ skip_rich_media: v })}
+                        label={t`Fast render mode`}
+                      />
+                    </Row>
+                    <Row
+                      title={t`Historical weather`}
+                      badge={<Badge tone="amber">{t`Experimental`}</Badge>}
+                      description={t`Synchronize historical weather conditions from photo EXIF dates using Open-Meteo to dynamically apply atmospheric fog and rain effects`}
+                    >
+                      <Switch
+                        checked={!!settings.weather_sync_enabled}
+                        onChange={(v) => updateProject({ weather_sync_enabled: v })}
+                        label={t`Historical weather`}
+                      />
+                    </Row>
+                  </Section>
+                )}
+              </>
             )}
 
-            {/* API TAB */}
+            {/* APPEARANCE */}
+            {activeTab === "appearance" && (
+              <>
+                <Section title={t`Interface`}>
+                  <Row title={t`Theme`}>
+                    <div className="flex items-center p-0.5 rounded-lg bg-zinc-100 dark:bg-white/5">
+                      {[
+                        { id: "light", icon: Sun, label: i18n._("Light") },
+                        { id: "dark", icon: Moon, label: i18n._("Dark") },
+                        { id: "system", icon: Monitor, label: i18n._("System") },
+                      ].map((option) => (
+                        <button
+                          key={option.id}
+                          type="button"
+                          aria-pressed={theme === option.id}
+                          onClick={() => setTheme(option.id as any)}
+                          className={`flex items-center gap-1.5 h-7 px-2.5 rounded-md text-[12px] font-medium transition-colors ${
+                            theme === option.id
+                              ? "bg-white dark:bg-zinc-800 text-navi shadow-sm"
+                              : "text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200"
+                          }`}
+                        >
+                          <option.icon className="w-3.5 h-3.5" /> {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </Row>
+                  <Row title={t`Accent colour`}>
+                    <div className="flex items-center gap-2">
+                      {[
+                        { id: "navi", color: "#4287f5", label: i18n._("Navi Blue") },
+                        { id: "emerald", color: "#10b981", label: i18n._("Emerald") },
+                        { id: "violet", color: "#8b5cf6", label: i18n._("Violet") },
+                        { id: "amber", color: "#f59e0b", label: i18n._("Amber") },
+                        { id: "rose", color: "#f43f5e", label: i18n._("Rose") },
+                      ].map((swatch) => {
+                        const selected = accentTheme === swatch.id;
+                        return (
+                          <button
+                            key={swatch.id}
+                            type="button"
+                            onClick={() => setAccentTheme(swatch.id as any)}
+                            title={swatch.label}
+                            aria-label={swatch.label}
+                            aria-pressed={selected}
+                            style={{ backgroundColor: swatch.color }}
+                            className={`w-6 h-6 rounded-full flex items-center justify-center transition ring-offset-2 ring-offset-white dark:ring-offset-zinc-900 ${
+                              selected ? "ring-2 ring-zinc-900/25 dark:ring-white/40" : "hover:scale-110"
+                            }`}
+                          >
+                            {selected && <Check className="w-3.5 h-3.5 text-white" strokeWidth={3} />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </Row>
+                </Section>
+
+                <Section title={t`Map`}>
+                  <Row
+                    title={t`Route marker`}
+                    description={t`Default marker for all waypoints. Can be overridden per-stop.`}
+                    stacked
+                  >
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <MarkerTile
+                        selected={!settings.routeMarker}
+                        onClick={() => updateProject({ routeMarker: "" })}
+                        label={t`Default pin`}
+                      >
+                        <MapPin className="w-4.5 h-4.5 text-zinc-400" />
+                      </MarkerTile>
+                      {[
+                        "/defaults/markers/map_pin.svg",
+                        "/defaults/markers/walking.svg",
+                        "/defaults/markers/car.svg",
+                      ].map((preset) => (
+                        <MarkerTile
+                          key={preset}
+                          selected={settings.routeMarker === preset}
+                          onClick={() => updateProject({ routeMarker: preset })}
+                          label={preset.split("/").pop()!.replace(".svg", "")}
+                        >
+                          <img src={preset} alt="" className="w-6 h-6 object-contain" />
+                        </MarkerTile>
+                      ))}
+                      {settings.routeMarker &&
+                        !settings.routeMarker.startsWith("/defaults/") && (
+                          <MarkerTile selected onClick={() => {}} label={t`Custom Marker`}>
+                            <img
+                              src={markerSrc(settings.routeMarker)}
+                              alt=""
+                              className="w-6 h-6 object-contain"
+                            />
+                          </MarkerTile>
+                        )}
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const selected = await open({
+                            multiple: false,
+                            filters: [
+                              {
+                                name: "Images",
+                                extensions: ["svg", "png", "jpg", "jpeg"],
+                              },
+                            ],
+                          });
+                          if (selected && typeof selected === "string") {
+                            updateProject({ routeMarker: selected });
+                          }
+                        }}
+                        className={`${secondaryButton} ml-1`}
+                      >
+                        <Trans>Choose file…</Trans>
+                      </button>
+                    </div>
+                  </Row>
+                  <Row
+                    title={t`Elevation heatmap`}
+                    description={t`Color GPX routes dynamically based on steepness`}
+                  >
+                    <Switch
+                      checked={!!settings.show_route_heatmap}
+                      onChange={(v) => updateProject({ show_route_heatmap: v })}
+                      label={t`Elevation heatmap`}
+                    />
+                  </Row>
+                </Section>
+              </>
+            )}
+
+            {/* API KEYS */}
             {activeTab === "api" && (
-              <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-                <div className="space-y-3">
-                  <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-widest flex items-center gap-1.5">
-                    <Key className="w-3.5 h-3.5" />{" "}
-                    <Trans>Mapbox API Key</Trans>
-                  </label>
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                    <Trans>Required for map rendering and 3D terrain</Trans>
-                  </p>
+              <Section title={t`Services`}>
+                <Row
+                  title={t`Mapbox`}
+                  description={t`Required for map rendering and 3D terrain`}
+                  stacked
+                >
                   <input
                     type="text"
                     value={settings.mapbox_api_key || ""}
-                    onChange={(e) => {
-                      updateSettings({ mapbox_api_key: e.target.value });
-                      setIsDirty(true);
-                    }}
+                    onChange={(e) => updateProject({ mapbox_api_key: e.target.value })}
                     placeholder="pk.eyJ1..."
-                    className="w-full bg-zinc-50 dark:bg-navidark-800 border border-zinc-200 dark:border-navidark-400 rounded-lg px-3 py-2.5 text-sm text-zinc-900 dark:text-zinc-100 outline-none focus:border-navi focus:ring-1 focus:ring-navi transition-all"
+                    spellCheck={false}
+                    className={`${inputClass} w-full font-mono text-[12px]`}
                   />
-                </div>
-                <div className="space-y-3 pt-4 border-t border-zinc-100 dark:border-navidark-700">
-                  <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-widest flex items-center gap-1.5">
-                    <Key className="w-3.5 h-3.5" />{" "}
-                    <Trans>OpenRouteService API Key</Trans>
-                  </label>
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                    <Trans>Required for driving and some hiking routes</Trans>
-                  </p>
+                </Row>
+                <Row
+                  title={t`OpenRouteService`}
+                  description={t`Required for driving and some hiking routes`}
+                  stacked
+                >
                   <input
                     type="text"
                     value={settings.ors_api_key || ""}
-                    onChange={(e) => {
-                      updateSettings({ ors_api_key: e.target.value });
-                      setIsDirty(true);
-                    }}
-                    placeholder="API Key"
-                    className="w-full bg-zinc-50 dark:bg-navidark-800 border border-zinc-200 dark:border-navidark-400 rounded-lg px-3 py-2.5 text-sm text-zinc-900 dark:text-zinc-100 outline-none focus:border-navi focus:ring-1 focus:ring-navi transition-all"
+                    onChange={(e) => updateProject({ ors_api_key: e.target.value })}
+                    placeholder={t`API key`}
+                    spellCheck={false}
+                    className={`${inputClass} w-full font-mono text-[12px]`}
                   />
-                </div>
-              </div>
+                </Row>
+              </Section>
             )}
-            {/* VIDEO EDITOR TAB */}
+
+            {/* VIDEO */}
             {activeTab === "video" && (
-              <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-                <div className="space-y-3">
-                  <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-widest flex items-center gap-1.5">
-                    <Film className="w-3.5 h-3.5" />{" "}
-                    <Trans>Video Editor Settings</Trans>
-                  </label>
+              <>
+                <Section title={t`Output`}>
+                  <Row title={t`Target FPS`}>
+                    <NumberInput
+                      value={settings.fps || 60}
+                      onChange={(v) => updateProject({ fps: v })}
+                    />
+                  </Row>
+                  <Row title={t`Duration`} description={t`Seconds`}>
+                    <NumberInput
+                      value={settings.duration_seconds || 15}
+                      onChange={(v) => updateProject({ duration_seconds: v })}
+                    />
+                  </Row>
+                  <Row title={t`Residential duration`} description={t`Seconds`}>
+                    <NumberInput
+                      value={settings.res_duration || 5}
+                      onChange={(v) => updateProject({ res_duration: v })}
+                    />
+                  </Row>
+                </Section>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                        <Trans>Target FPS</Trans>
-                      </label>
-                      <input
-                        type="number"
-                        value={settings.fps || 60}
-                        onChange={(e) => {
-                          updateSettings({ fps: Number(e.target.value) });
-                          setIsDirty(true);
-                        }}
-                        className="w-full bg-zinc-50 dark:bg-navidark-800 border border-zinc-200 dark:border-navidark-400 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 outline-none focus:border-navi focus:ring-1 focus:ring-navi transition-all"
-                      />
-                    </div>
+                <Section title={t`Generation`}>
+                  <Row
+                    title={t`Quick export`}
+                    description={t`Skips asset review and automatically stitches & exports finished video`}
+                  >
+                    <Switch
+                      checked={!!settings.quick_export}
+                      onChange={(v) => updateProject({ quick_export: v })}
+                      label={t`Quick export`}
+                    />
+                  </Row>
+                  <Row
+                    title={t`Hardware mode`}
+                    description={t`Which pipeline to use when regenerating assets`}
+                  >
+                    <select
+                      value={settings.hardware_spec_override || "auto"}
+                      onChange={(e) =>
+                        updateProject({ hardware_spec_override: e.target.value as any })
+                      }
+                      className={`${selectClass} w-56`}
+                    >
+                      <option value="auto">{t`Auto-Detect (Recommended)`}</option>
+                      <option value="low">{t`Low-spec Mode`}</option>
+                      <option value="high">{t`High-spec Mode`}</option>
+                    </select>
+                  </Row>
+                </Section>
 
-                    <div className="space-y-2">
-                      <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                        <Trans>Duration (seconds)</Trans>
-                      </label>
-                      <input
-                        type="number"
-                        value={settings.duration_seconds || 15}
-                        onChange={(e) => {
-                          updateSettings({
-                            duration_seconds: Number(e.target.value),
-                          });
-                          setIsDirty(true);
-                        }}
-                        className="w-full bg-zinc-50 dark:bg-navidark-800 border border-zinc-200 dark:border-navidark-400 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 outline-none focus:border-navi focus:ring-1 focus:ring-navi transition-all"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                        <Trans>Residential Duration</Trans>
-                      </label>
-                      <input
-                        type="number"
-                        value={settings.res_duration || 5}
-                        onChange={(e) => {
-                          updateSettings({
-                            res_duration: Number(e.target.value),
-                          });
-                          setIsDirty(true);
-                        }}
-                        className="w-full bg-zinc-50 dark:bg-navidark-800 border border-zinc-200 dark:border-navidark-400 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 outline-none focus:border-navi focus:ring-1 focus:ring-navi transition-all"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-3 pt-4 border-t border-zinc-100 dark:border-navidark-700">
-                    <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-widest flex items-center gap-1.5">
-                      <Trans>Generation Workflow & Hardware Routing</Trans>
-                    </label>
-                    <label className="flex items-start gap-2.5 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={settings.quick_export || false}
-                        onChange={(e) => {
-                          updateSettings({ quick_export: e.target.checked });
-                          setIsDirty(true);
-                        }}
-                        className="mt-0.5 w-4 h-4 rounded border-zinc-300 text-navi focus:ring-navi"
-                      />
-                      <div className="flex flex-col">
-                        <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">
-                          <Trans>
-                            Quick Export (Auto-stitch on generation)
-                          </Trans>
-                        </span>
-                        <span className="text-[10px] text-zinc-500">
-                          <Trans>
-                            Skips asset review and automatically stitches &
-                            exports finished video
-                          </Trans>
-                        </span>
-                      </div>
-                    </label>
-
-                    <div className="pt-2">
-                      <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                        <Trans>Hardware Spec Mode (Regeneration Routing)</Trans>
-                      </label>
-                      <select
-                        value={settings.hardware_spec_override || "auto"}
-                        onChange={(e) => {
-                          updateSettings({
-                            hardware_spec_override: e.target.value as any,
-                          });
-                          setIsDirty(true);
-                        }}
-                        className="w-full mt-1 bg-zinc-50 dark:bg-navidark-800 border border-zinc-200 dark:border-navidark-400 rounded-lg px-3 py-2 text-xs text-zinc-900 dark:text-zinc-100 outline-none focus:border-navi"
-                      >
-                        <option value="auto">
-                          <Trans>Auto-Detect (Recommended)</Trans>
-                        </option>
-                        <option value="low">
-                          <Trans>Low-spec Mode</Trans>
-                        </option>
-                        <option value="high">
-                          <Trans>High-spec Mode</Trans>
-                        </option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2 pt-4 border-t border-zinc-100 dark:border-navidark-700">
-                    <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-widest flex items-center gap-1.5">
-                      <Trans>Subtitle Format</Trans>
-                    </label>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                          <Trans>Font</Trans>
-                        </label>
-                        <input
-                          type="text"
-                          value={settings.subtitle_font || "Calibri"}
-                          onChange={(e) => {
-                            updateSettings({ subtitle_font: e.target.value });
-                            setIsDirty(true);
-                          }}
-                          className="w-full bg-zinc-50 dark:bg-navidark-800 border border-zinc-200 dark:border-navidark-400 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 outline-none focus:border-navi focus:ring-1 focus:ring-navi transition-all"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                          <Trans>Font Size</Trans>
-                        </label>
-                        <input
-                          type="number"
-                          value={settings.subtitle_font_size || 30}
-                          onChange={(e) => {
-                            updateSettings({
-                              subtitle_font_size: Number(e.target.value),
-                            });
-                            setIsDirty(true);
-                          }}
-                          className="w-full bg-zinc-50 dark:bg-navidark-800 border border-zinc-200 dark:border-navidark-400 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 outline-none focus:border-navi focus:ring-1 focus:ring-navi transition-all"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                          <Trans>Primary Color (ASS)</Trans>
-                        </label>
-                        <input
-                          type="text"
-                          value={settings.subtitle_color || "&H00FFFFFF"}
-                          onChange={(e) => {
-                            updateSettings({ subtitle_color: e.target.value });
-                            setIsDirty(true);
-                          }}
-                          className="w-full bg-zinc-50 dark:bg-navidark-800 border border-zinc-200 dark:border-navidark-400 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 outline-none focus:border-navi focus:ring-1 focus:ring-navi transition-all"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                          <Trans>Outline Color (ASS)</Trans>
-                        </label>
-                        <input
-                          type="text"
-                          value={
-                            settings.subtitle_outline_color || "&H00000000"
-                          }
-                          onChange={(e) => {
-                            updateSettings({
-                              subtitle_outline_color: e.target.value,
-                            });
-                            setIsDirty(true);
-                          }}
-                          className="w-full bg-zinc-50 dark:bg-navidark-800 border border-zinc-200 dark:border-navidark-400 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 outline-none focus:border-navi focus:ring-1 focus:ring-navi transition-all"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
+                <Section title={t`Subtitles`}>
+                  <Row title={t`Font`}>
+                    <input
+                      type="text"
+                      value={settings.subtitle_font || "Calibri"}
+                      onChange={(e) => updateProject({ subtitle_font: e.target.value })}
+                      className={`${inputClass} w-48`}
+                    />
+                  </Row>
+                  <Row title={t`Font size`}>
+                    <NumberInput
+                      value={settings.subtitle_font_size || 30}
+                      onChange={(v) => updateProject({ subtitle_font_size: v })}
+                    />
+                  </Row>
+                  <Row title={t`Text colour`} description={t`ASS colour, e.g. &H00FFFFFF`}>
+                    <input
+                      type="text"
+                      value={settings.subtitle_color || "&H00FFFFFF"}
+                      onChange={(e) => updateProject({ subtitle_color: e.target.value })}
+                      spellCheck={false}
+                      className={`${inputClass} w-36 font-mono text-[12px]`}
+                    />
+                  </Row>
+                  <Row title={t`Outline colour`} description={t`ASS colour, e.g. &H00000000`}>
+                    <input
+                      type="text"
+                      value={settings.subtitle_outline_color || "&H00000000"}
+                      onChange={(e) =>
+                        updateProject({ subtitle_outline_color: e.target.value })
+                      }
+                      spellCheck={false}
+                      className={`${inputClass} w-36 font-mono text-[12px]`}
+                    />
+                  </Row>
+                </Section>
+              </>
             )}
 
-            {/* TTS DICTIONARY TAB */}
+            {/* PRONUNCIATION */}
             {activeTab === "tts_dictionary" && (
-              <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-                <div className="space-y-3">
-                  <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-widest flex items-center gap-1.5">
-                    <Mic className="w-3.5 h-3.5" />{" "}
-                    <Trans>TTS Pronunciation Dictionary</Trans>
-                  </label>
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                    <Trans>
-                      Correct words or kanji that are read incorrectly by the AI
-                      voice. You can auto-extract entries from scripts by typing{" "}
-                      <code className="font-mono bg-zinc-100 dark:bg-zinc-800 px-1 rounded">
-                        漢字(よみがな)
-                      </code>{" "}
-                      in any narration script.
-                    </Trans>
-                  </p>
-                </div>
+              <>
+                <p className="text-[12px] leading-relaxed text-zinc-500 dark:text-zinc-400 select-text">
+                  <Trans>
+                    Correct words or kanji that are read incorrectly by the AI
+                    voice. You can auto-extract entries from scripts by typing{" "}
+                    <code className="font-mono bg-zinc-100 dark:bg-zinc-800 px-1 rounded">
+                      漢字(よみがな)
+                    </code>{" "}
+                    in any narration script.
+                  </Trans>
+                </p>
 
-                <div className="flex flex-col gap-2 max-w-xl">
-                  {/* Header row */}
-                  {(settings.pronunciation_dictionary || []).length > 0 && (
-                    <div className="flex items-center gap-2 pb-1 border-b border-zinc-100 dark:border-navidark-500">
-                      <span className="w-1/2 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
-                        <Trans>Word / Kanji</Trans>
-                      </span>
-                      <span className="w-1/2 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
-                        <Trans>Reading (Furigana)</Trans>
-                      </span>
-                      <span className="w-7" />
-                    </div>
-                  )}
-
-                  {(settings.pronunciation_dictionary || []).map(
-                    (entry, idx) => (
-                      <div key={idx} className="flex items-center gap-2">
-                        <input
-                          type="text"
-                          placeholder={t`Word (e.g. 加太)`}
-                          value={entry.word}
-                          onChange={(e) => {
-                            const newDict = [
-                              ...(settings.pronunciation_dictionary || []),
-                            ];
-                            newDict[idx] = {
-                              ...newDict[idx],
-                              word: e.target.value,
-                            };
-                            updateSettings({
-                              pronunciation_dictionary: newDict,
-                            });
-                            setIsDirty(true);
-                          }}
-                          className="w-1/2 bg-zinc-50 dark:bg-navidark-800 border border-zinc-200 dark:border-navidark-400 rounded-md px-2 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 outline-none focus:border-navi"
-                        />
-                        <input
-                          type="text"
-                          placeholder={t`Reading (e.g. かだ)`}
-                          value={entry.reading}
-                          onChange={(e) => {
-                            const newDict = [
-                              ...(settings.pronunciation_dictionary || []),
-                            ];
-                            newDict[idx] = {
-                              ...newDict[idx],
-                              reading: e.target.value,
-                            };
-                            updateSettings({
-                              pronunciation_dictionary: newDict,
-                            });
-                            setIsDirty(true);
-                          }}
-                          className="w-1/2 bg-zinc-50 dark:bg-navidark-800 border border-zinc-200 dark:border-navidark-400 rounded-md px-2 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 outline-none focus:border-navi"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const newDict = [
-                              ...(settings.pronunciation_dictionary || []),
-                            ];
-                            newDict.splice(idx, 1);
-                            updateSettings({
-                              pronunciation_dictionary: newDict,
-                            });
-                            setIsDirty(true);
-                          }}
-                          className="p-1.5 text-zinc-400 hover:text-red-500 transition-colors"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
+                <div className="rounded-xl border border-zinc-200 dark:border-white/10 overflow-hidden">
+                  {dictionary.length > 0 ? (
+                    <>
+                      <div className="flex items-center gap-2 h-8 px-3 bg-zinc-50 dark:bg-white/3 border-b border-zinc-200 dark:border-white/10 text-[11px] font-medium text-zinc-500">
+                        <span className="flex-1">
+                          <Trans>Word / Kanji</Trans>
+                        </span>
+                        <span className="flex-1">
+                          <Trans>Reading (Furigana)</Trans>
+                        </span>
+                        <span className="w-7" />
                       </div>
-                    ),
-                  )}
-
-                  {(settings.pronunciation_dictionary || []).length === 0 && (
-                    <div className="text-center py-8 text-zinc-400 dark:text-zinc-600">
-                      <Mic className="w-8 h-8 mx-auto mb-2 opacity-40" />
-                      <p className="text-xs">
+                      <div className="divide-y divide-zinc-100 dark:divide-white/5">
+                        {dictionary.map((entry, idx) => (
+                          <div key={idx} className="group flex items-center gap-2 px-2 py-1.5">
+                            <input
+                              type="text"
+                              placeholder={t`Word (e.g. 加太)`}
+                              value={entry.word}
+                              onChange={(e) => {
+                                const next = [...dictionary];
+                                next[idx] = { ...next[idx], word: e.target.value };
+                                setDictionary(next);
+                              }}
+                              className={`${inputClass} flex-1 border-transparent dark:border-transparent bg-transparent dark:bg-transparent hover:border-zinc-200 dark:hover:border-white/10`}
+                            />
+                            <input
+                              type="text"
+                              placeholder={t`Reading (e.g. かだ)`}
+                              value={entry.reading}
+                              onChange={(e) => {
+                                const next = [...dictionary];
+                                next[idx] = { ...next[idx], reading: e.target.value };
+                                setDictionary(next);
+                              }}
+                              className={`${inputClass} flex-1 border-transparent dark:border-transparent bg-transparent dark:bg-transparent hover:border-zinc-200 dark:hover:border-white/10`}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setDictionary(dictionary.filter((_, i) => i !== idx))}
+                              aria-label={t`Remove`}
+                              title={t`Remove`}
+                              className="flex items-center justify-center w-7 h-7 rounded-lg text-zinc-400 opacity-0 group-hover:opacity-100 focus:opacity-100 hover:text-red-500 hover:bg-red-500/10 transition"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="py-10 text-center">
+                      <Mic className="w-6 h-6 mx-auto mb-2 text-zinc-300 dark:text-zinc-600" />
+                      <p className="text-[13px] text-zinc-600 dark:text-zinc-300">
                         <Trans>No entries yet.</Trans>
                       </p>
-                      <p className="text-[10px] mt-1">
+                      <p className="text-[12px] text-zinc-400 mt-0.5">
                         <Trans>
                           Add words below or extract them from narration
                           scripts.
@@ -921,78 +603,59 @@ export function AppSettings() {
                       </p>
                     </div>
                   )}
+                </div>
 
-                  <div className="flex items-center gap-3 mt-2 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setDictionary([...dictionary, { word: "", reading: "" }])}
+                    className={secondaryButton}
+                  >
+                    <Plus className="w-3.5 h-3.5" /> <Trans>Add word</Trans>
+                  </button>
+
+                  {dictionary.some((e) => !e.reading && e.word) && (
                     <button
                       type="button"
-                      onClick={() => {
-                        const newDict = [
-                          ...(settings.pronunciation_dictionary || []),
-                        ];
-                        newDict.push({ word: "", reading: "" });
-                        updateSettings({ pronunciation_dictionary: newDict });
-                        setIsDirty(true);
-                      }}
-                      className="text-[10px] font-semibold text-navi-600 dark:text-navi-400 hover:text-navi-700 dark:hover:text-navi-300 flex items-center gap-1 py-1"
-                    >
-                      + <Trans>Add word</Trans>
-                    </button>
+                      onClick={async () => {
+                        const emptyWords = dictionary
+                          .filter((e) => e.word && !e.reading)
+                          .map((e) => e.word);
+                        if (emptyWords.length === 0) return;
 
-                    {(settings.pronunciation_dictionary || []).some(e => !e.reading && e.word) && (
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          const dict = settings.pronunciation_dictionary || [];
-                          const emptyWords = dict
-                            .filter(e => e.word && !e.reading)
-                            .map(e => e.word);
-                          if (emptyWords.length === 0) return;
-
-                          try {
-                            const res = await invoke<string>("run_python_blueprint", {
-                              action: "get_furigana",
-                              payload: JSON.stringify(emptyWords),
-                            });
-                            const parsed = JSON.parse(res);
-                            if (parsed.success && parsed.readings) {
-                              const newDict = dict.map(e => ({
+                        try {
+                          const res = await invoke<string>("run_python_blueprint", {
+                            action: "get_furigana",
+                            payload: JSON.stringify(emptyWords),
+                          });
+                          const parsed = JSON.parse(res);
+                          if (parsed.success && parsed.readings) {
+                            setDictionary(
+                              dictionary.map((e) => ({
                                 ...e,
-                                reading: (!e.reading && parsed.readings[e.word])
-                                  ? parsed.readings[e.word]
-                                  : e.reading,
-                              }));
-                              updateSettings({ pronunciation_dictionary: newDict });
-                              setIsDirty(true);
-                            }
-                          } catch (err) {
-                            console.error("get_furigana failed:", err);
+                                reading:
+                                  !e.reading && parsed.readings[e.word]
+                                    ? parsed.readings[e.word]
+                                    : e.reading,
+                              })),
+                            );
                           }
-                        }}
-                        className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 flex items-center gap-1 py-1 border border-amber-200 dark:border-amber-700 rounded-md px-2 bg-amber-50 dark:bg-amber-900/20"
-                      >
-                        ✨ <Trans>Auto-fill readings</Trans>
-                      </button>
-                    )}
-                  </div>
+                        } catch (err) {
+                          console.error("get_furigana failed:", err);
+                        }
+                      }}
+                      className={secondaryButton}
+                    >
+                      <Trans>Auto-fill readings</Trans>
+                    </button>
+                  )}
                 </div>
-              </div>
+              </>
             )}
 
-            {/* AI MODELS TAB */}
-            {activeTab === "ai" && settings.ai_features_enabled && (
-              <AiModelsTab />
-            )}
+            {/* AI MODELS */}
+            {activeTab === "ai" && settings.ai_features_enabled && <AiModelsTab />}
           </div>
-        </div>
-
-        {/* Footer Section */}
-        <div className="px-5 py-3 border-t border-zinc-100 dark:border-navidark-400 bg-zinc-50/50 dark:bg-navidark-800 flex justify-end shrink-0">
-          <button
-            onClick={() => setShowAppSettings(false)}
-            className="px-5 py-2 bg-navi hover:bg-navi-600 text-white text-xs font-bold rounded-lg transition-colors shadow-sm"
-          >
-            <Trans>Done</Trans>
-          </button>
         </div>
       </div>
     </div>,
@@ -1000,31 +663,127 @@ export function AppSettings() {
   );
 }
 
-function TabButton({
-  active,
-  onClick,
-  icon: Icon,
-  label,
+// --- Layout pieces ---------------------------------------------------------
+
+function Section({
+  title,
+  hint,
+  children,
 }: {
-  active: boolean;
+  title: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section>
+      <div className="flex items-baseline justify-between mb-2 px-0.5">
+        <h4 className="text-[12px] font-semibold text-zinc-500 dark:text-zinc-400">{title}</h4>
+        {hint && <span className="text-[11px] text-zinc-400 dark:text-zinc-500">{hint}</span>}
+      </div>
+      <div className="rounded-xl border border-zinc-200 dark:border-white/10 divide-y divide-zinc-100 dark:divide-white/5">
+        {children}
+      </div>
+    </section>
+  );
+}
+
+/** One setting: title + description on the left, its control on the right
+ * (or underneath when `stacked`, for wide controls like text inputs). */
+function Row({
+  title,
+  description,
+  badge,
+  stacked,
+  children,
+}: {
+  title: string;
+  description?: string;
+  badge?: React.ReactNode;
+  stacked?: boolean;
+  children: React.ReactNode;
+}) {
+  const text = (
+    <div className="min-w-0">
+      <div className="flex items-center gap-2">
+        <span className="text-[13px] font-medium text-zinc-900 dark:text-zinc-100">{title}</span>
+        {badge}
+      </div>
+      {description && (
+        <p className="mt-0.5 text-[12px] leading-relaxed text-zinc-500 dark:text-zinc-400">
+          {description}
+        </p>
+      )}
+    </div>
+  );
+  if (stacked) {
+    return (
+      <div className="px-4 py-3 space-y-2.5">
+        {text}
+        {children}
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-center justify-between gap-6 px-4 py-3">
+      {text}
+      <div className="shrink-0">{children}</div>
+    </div>
+  );
+}
+
+function Badge({ tone, children }: { tone: "violet" | "amber"; children: React.ReactNode }) {
+  const tones = {
+    violet: "bg-violet-500/10 text-violet-600 dark:text-violet-400",
+    amber: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
+  };
+  return (
+    <span className={`h-4.5 px-1.5 inline-flex items-center rounded-md text-[10px] font-medium whitespace-nowrap ${tones[tone]}`}>
+      {children}
+    </span>
+  );
+}
+
+function NumberInput({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  return (
+    <input
+      type="number"
+      value={value}
+      onChange={(e) => onChange(Number(e.target.value))}
+      className={`${inputClass} w-24 text-right tabular-nums`}
+    />
+  );
+}
+
+function MarkerTile({
+  selected,
+  onClick,
+  label,
+  children,
+}: {
+  selected: boolean;
   onClick: () => void;
-  icon: any;
   label: string;
+  children: React.ReactNode;
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
-      className={`w-full flex items-center gap-2 px-3 py-2 text-xs font-bold rounded-md transition-colors text-nowrap ${
-        active
-          ? "bg-white dark:bg-navidark-600 text-navi shadow-sm border border-zinc-200 dark:border-transparent"
-          : "text-zinc-500 dark:text-navidark-150 hover:bg-zinc-200/50 dark:hover:bg-navidark-700 hover:text-zinc-800 dark:hover:text-zinc-200 border border-transparent"
+      title={label}
+      aria-label={label}
+      aria-pressed={selected}
+      className={`w-10 h-10 rounded-lg border flex items-center justify-center transition-colors ${
+        selected
+          ? "border-navi bg-navi/10 ring-2 ring-navi/20"
+          : "border-zinc-200 dark:border-white/10 hover:bg-zinc-50 dark:hover:bg-white/5"
       }`}
     >
-      <Icon className="w-4 h-4" />
-      {label}
+      {children}
     </button>
   );
 }
+
+// --- AI models tab ---------------------------------------------------------
 
 function AiModelsTab() {
   const { settings, updateSettings, setIsDirty } = useWorkspace();
@@ -1035,6 +794,7 @@ function AiModelsTab() {
       status: string;
       progress: number;
       controller?: AbortController;
+      failed?: boolean;
     };
   }>({});
 
@@ -1111,6 +871,7 @@ function AiModelsTab() {
               ...prev[modelId],
               status: `Failed: ${errMsg}`,
               progress: 0,
+              failed: true,
             },
           };
         });
@@ -1119,138 +880,114 @@ function AiModelsTab() {
   };
 
   const handleCancel = (modelId: string) => {
-    downloading[modelId]?.controller?.abort();
+    const entry = downloading[modelId];
+    if (entry?.failed) {
+      setDownloading((prev) => {
+        const next = { ...prev };
+        delete next[modelId];
+        return next;
+      });
+      return;
+    }
+    entry?.controller?.abort();
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-      <div className="space-y-3 pt-4 border-t border-zinc-100 dark:border-navidark-700">
-        <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-tighter flex items-center gap-1.5">
-          <Sparkles className="w-3.5 h-3.5" /> <Trans>Active Model</Trans>
-        </label>
-        <p className="text-xs text-zinc-500 dark:text-zinc-400">
-          <Trans>
-            Select which model to use for narration synthesis, only downloaded
-            models are shown
-          </Trans>
-        </p>
-        <select
-          value={settings.ai_model || "schroneko/gemma-2-2b-jpn-it"}
-          onChange={(e) => {
-            updateSettings({ ai_model: e.target.value });
-            setIsDirty(true);
-          }}
-          className="w-full bg-zinc-50 dark:bg-navidark-800 border border-zinc-200 dark:border-navidark-400 rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-900 dark:text-zinc-100 outline-none focus:border-navi focus:ring-1 focus:ring-navi transition-all"
+    <>
+      <Section title={t`Narration`}>
+        <Row
+          title={t`Active model`}
+          description={t`Select which model to use for narration synthesis, only downloaded models are shown`}
         >
-          {localModels.length === 0 ? (
-            <option value="" disabled>
-              <Trans>No models installed</Trans>
-            </option>
-          ) : (
-            localModels.map((modelId) => (
-              <option key={modelId} value={modelId}>
-                {modelId}
+          <select
+            value={settings.ai_model || "schroneko/gemma-2-2b-jpn-it"}
+            onChange={(e) => {
+              updateSettings({ ai_model: e.target.value });
+              setIsDirty(true);
+            }}
+            className={`${selectClass} w-52`}
+          >
+            {localModels.length === 0 ? (
+              <option value="" disabled>
+                {t`No models installed`}
               </option>
-            ))
-          )}
-        </select>
-      </div>
+            ) : (
+              localModels.map((modelId) => (
+                <option key={modelId} value={modelId}>
+                  {modelId}
+                </option>
+              ))
+            )}
+          </select>
+        </Row>
+      </Section>
 
-      <div className="space-y-3">
-        <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-125 uppercase tracking-widest flex items-center gap-1.5">
-          <Sparkles className="w-3.5 h-3.5" />{" "}
-          <Trans>Recommended AI Models</Trans>
-        </label>
+      <Section title={t`Recommended models`}>
+        {recommendedModels.map((model) => {
+          const isLocal = localModels.some(
+            (local) => local === model.id || local.startsWith(model.id + ":"),
+          );
+          const dlStatus = downloading[model.id];
 
-        <div className="border border-zinc-200 dark:border-navidark-400 rounded-lg overflow-hidden bg-white dark:bg-navidark-800">
-          <table className="w-full text-left text-sm text-zinc-700 dark:text-zinc-300">
-            <thead className="bg-zinc-50 dark:bg-navidark-800 border-b border-zinc-200 dark:border-navidark-400">
-              <tr>
-                <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wider text-zinc-500">
-                  <Trans>Model</Trans>
-                </th>
-                <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wider text-zinc-500">
-                  <Trans>Size</Trans>
-                </th>
-                <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wider text-zinc-500 w-48">
-                  <Trans>Action</Trans>
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-100 dark:divide-navidark-400">
-              {recommendedModels.map((model) => {
-                const isLocal = localModels.some(
-                  (local) =>
-                    local === model.id || local.startsWith(model.id + ":"),
-                );
-                const dlStatus = downloading[model.id];
-                const isDownloading = !!dlStatus;
+          return (
+            <div key={model.id} className="flex items-center gap-4 px-4 py-3">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-baseline gap-2">
+                  <span className="text-[13px] font-medium text-zinc-900 dark:text-zinc-100">
+                    {model.name}
+                  </span>
+                  <span className="text-[11px] text-zinc-400 tabular-nums">{model.size}</span>
+                </div>
+                <div className="text-[11px] font-mono text-zinc-500 dark:text-zinc-400 truncate select-text">
+                  {model.id}
+                </div>
+              </div>
 
-                return (
-                  <tr
-                    key={model.id}
-                    className="hover:bg-zinc-50/50 dark:hover:bg-white/5 transition-colors"
+              <div className="w-40 shrink-0 flex justify-end">
+                {dlStatus ? (
+                  <div className="flex items-center gap-2 w-full">
+                    <div className="flex-1 min-w-0 space-y-1">
+                      <span
+                        title={dlStatus.status}
+                        className={`block text-[11px] truncate ${dlStatus.failed ? "text-red-500" : "text-zinc-500"}`}
+                      >
+                        {dlStatus.status}
+                      </span>
+                      <div className="h-1 rounded-full overflow-hidden bg-zinc-200 dark:bg-white/10">
+                        <div
+                          className={`h-full transition-all duration-300 ease-out ${dlStatus.failed ? "bg-red-500" : "bg-navi"}`}
+                          style={{ width: `${dlStatus.progress}%` }}
+                        />
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleCancel(model.id)}
+                      className="flex items-center justify-center w-7 h-7 rounded-lg text-zinc-400 hover:text-red-500 hover:bg-red-500/10 transition-colors shrink-0"
+                      title={dlStatus.failed ? t`Clear` : t`Cancel download`}
+                      aria-label={dlStatus.failed ? t`Clear` : t`Cancel download`}
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ) : isLocal ? (
+                  <span className="inline-flex items-center gap-1 text-[12px] font-medium text-emerald-600 dark:text-emerald-400">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> <Trans>Ready</Trans>
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleDownload(model.id)}
+                    className={secondaryButton}
                   >
-                    <td className="px-4 py-3">
-                      <div className="font-bold text-zinc-900 dark:text-zinc-100">
-                        {model.name}
-                      </div>
-                      <div className="text-[11px] font-mono text-zinc-500 dark:text-zinc-400 mt-0.5">
-                        {model.id}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-xs text-zinc-500">
-                      {model.size}
-                    </td>
-                    <td className="px-4 py-3">
-                      {isDownloading ? (
-                        <div className="flex items-center gap-2">
-                          <div className="flex flex-col gap-1.5 w-full min-w-24">
-                            <span
-                              className={`text-[10px] truncate font-medium ${dlStatus.status === "Failed" ? "text-red-500" : "text-navi"}`}
-                            >
-                              {dlStatus.status}
-                            </span>
-                            <div className="w-full bg-zinc-200 dark:bg-navidark-600 h-1.5 rounded-full overflow-hidden">
-                              <div
-                                className={`h-full transition-all duration-300 ease-out ${dlStatus.status === "Failed" ? "bg-red-500" : "bg-navi"}`}
-                                style={{ width: `${dlStatus.progress}%` }}
-                              />
-                            </div>
-                          </div>
-                          <button
-                            onClick={() => handleCancel(model.id)}
-                            className="p-1 rounded-md text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors shrink-0"
-                            title={
-                              dlStatus.status === "Failed"
-                                ? "Clear"
-                                : "Cancel download"
-                            }
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
-                        </div>
-                      ) : isLocal ? (
-                        <div className="flex items-center gap-1.5 px-2 py-1 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded text-xs font-bold w-max">
-                          <CheckCircle2 className="w-3.5 h-3.5" />{" "}
-                          <Trans>Ready</Trans>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => handleDownload(model.id)}
-                          className="px-3 py-1.5 bg-zinc-100 hover:bg-zinc-200 dark:bg-navidark-700 dark:hover:bg-navidark-600 text-zinc-700 dark:text-zinc-200 text-[11px] font-bold rounded-md transition-colors w-full border border-zinc-200/50 dark:border-white/5"
-                        >
-                          <Trans>Download</Trans>
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
+                    <Trans>Download</Trans>
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </Section>
+    </>
   );
 }
