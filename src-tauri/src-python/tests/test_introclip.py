@@ -84,7 +84,7 @@ class TestFormatAssTimestamp:
 
 class TestWriteTitleAss:
     def test_writes_file_with_expected_structure(self, tmp_path):
-        ass_path = introclip._write_title_ass("My Trip", 5.0, tmp_path)
+        ass_path = introclip._write_title_ass("My Trip", "", 5.0, tmp_path)
         assert ass_path.exists()
         content = ass_path.read_text(encoding="utf-8")
         assert "My Trip" in content
@@ -95,7 +95,7 @@ class TestWriteTitleAss:
         assert r"\fscx" in content
 
     def test_curly_braces_in_title_are_stripped(self, tmp_path):
-        ass_path = introclip._write_title_ass("{evil}Trip", 5.0, tmp_path)
+        ass_path = introclip._write_title_ass("{evil}Trip", "", 5.0, tmp_path)
         content = ass_path.read_text(encoding="utf-8")
         # Only the override-tag braces should remain; the stripped title text
         # itself must not reintroduce a stray brace pair.
@@ -103,9 +103,14 @@ class TestWriteTitleAss:
         assert "evilTrip" in dialogue_line
 
     def test_end_timestamp_matches_duration(self, tmp_path):
-        ass_path = introclip._write_title_ass("Trip", 12.34, tmp_path)
+        ass_path = introclip._write_title_ass("Trip", "", 12.34, tmp_path)
         content = ass_path.read_text(encoding="utf-8")
         assert introclip._format_ass_timestamp(12.34) in content
+
+    def test_subtitle_goes_on_a_smaller_second_line(self, tmp_path):
+        ass_path = introclip._write_title_ass("Trip", "{x}Day 1", 5.0, tmp_path)
+        dialogue_line = [l for l in ass_path.read_text(encoding="utf-8").splitlines() if l.startswith("Dialogue:")][0]
+        assert dialogue_line.endswith(r"Trip\N{\fs" + str(int(introclip.tuning.INTRO_TITLE_FONT_SIZE * 0.6)) + "}xDay 1")
 
 
 class TestPickRandomImages:
