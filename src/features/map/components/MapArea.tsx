@@ -1,6 +1,5 @@
 import { useEffect, useState, useRef } from "react";
 import Map, {
-  ViewStateChangeEvent,
   Marker,
   MapRef,
   Source,
@@ -13,6 +12,7 @@ import {
 } from "../../../components/ui/icons";
 import { AddType, MapToolbar } from "./MapToolbar";
 import { DrawBar } from "./DrawBar";
+import { MapCompass } from "./MapCompass";
 import "@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css";
 import { mapStyles, mapDefaults } from "../../../config/constants";
 import { RouteStyling } from "./MapLayers/RouteStyling";
@@ -39,7 +39,7 @@ import { Trans } from "@lingui/react/macro";
 export function MapArea() {
   const { i18n } = useLingui();
   const { theme, mapTheme } = useTheme();
-  const { showToast, isRendering } = useUI();
+  const { showToast } = useUI();
   const {
     waypoints,
     setWaypoints,
@@ -50,7 +50,6 @@ export function MapArea() {
     routeSegments,
     updateWaypoint,
     setActiveWaypointId,
-    setProjectThumbnail,
     registerThumbnailGetter,
   } = useWorkspace();
   const { handleDroppedFiles, importPhotos } = useFileActions();
@@ -65,6 +64,7 @@ export function MapArea() {
   const [selectedAnchor, setSelectedAnchor] = useState<number | null>(null);
 
   const [is3D, setIs3D] = useState(false);
+  const [isMapLoaded, setIsMapLoaded] = useState(false);
   const [isProcessing] = useState(false);
   const [uploadedRouteLine] = useState<[number, number][]>([]);
   const mapRef = useRef<MapRef>(null);
@@ -75,27 +75,36 @@ export function MapArea() {
   const isContextLostRef = useRef(false);
 
   const [eleHoverPoint, setEleHoverPoint] = useState<number[] | null>(null);
-  const [vehicleGeoJson, setVehicleGeoJson] = useState<any>(null);
   const [weatherCondition, setWeatherCondition] =
     useState<WeatherCondition>("clear");
 
-  const [viewState, setViewState] = useState({
+  // [NOTE] [Perf] The camera is uncontrolled: Mapbox owns it and React is not
+  // told about every pan/zoom frame. Feeding viewState back through
+  // setState re-rendered this whole component (every pin, anchor and panel)
+  // 60 times a second while the map moved. Read the camera from mapRef
+  // instead; the compass subscribes to `rotate` on its own.
+  const initialViewState = useRef({
     longitude: settings.start_coords?.[1] || 135.5023,
     latitude: settings.start_coords?.[0] || 34.6937,
     zoom: 13,
     pitch: 0,
     bearing: 0,
-  });
-
+  }).current;
 
   useMapRouting();
 
+  // [NOTE] [Perf] Thumbnail: a small snapshot kept in a ref and encoded only
+  // when the project is saved. It used to encode a full-size PNG and push it
+  // into workspace state after every pan, which re-rendered the whole editor
+  // (sidebar included) and stalled the map for a moment each time.
+  const thumbnailCanvasRef = useRef<HTMLCanvasElement | null>(null);
+
   useEffect(() => {
     registerThumbnailGetter(() => {
-      if (isContextLostRef.current) return null;
+      const snap = thumbnailCanvasRef.current;
+      if (!snap) return null;
       try {
-        const canvas = mapRef.current?.getMap().getCanvas();
-        return canvas ? canvas.toDataURL("image/png") : null;
+        return snap.toDataURL("image/png");
       } catch (e) {
         return null;
       }
@@ -108,21 +117,34 @@ export function MapArea() {
       clearTimeout(thumbnailCaptureTimeoutRef.current);
     }
     thumbnailCaptureTimeoutRef.current = setTimeout(() => {
-      if (isContextLostRef.current) return;
-      const canvas = mapRef.current?.getMap().getCanvas();
-      if (!canvas) return;
-      try {
-        setProjectThumbnail(canvas.toDataURL("image/png"));
-      } catch (error) {
-        console.warn("Unable to capture map thumbnail:", error);
-      }
-    }, 250);
+      const map = mapRef.current?.getMap();
+      if (!map || isContextLostRef.current) return;
+      // The WebGL buffer is only readable during the frame that drew it
+      // (no preserveDrawingBuffer), so copy it from inside a render event.
+      map.once("render", () => {
+        const source = map.getCanvas();
+        if (!source.width || !source.height) return;
+        const width = Math.min(640, source.width);
+        const height = Math.round((source.height / source.width) * width);
+        const snap = thumbnailCanvasRef.current ?? document.createElement("canvas");
+        snap.width = width;
+        snap.height = height;
+        try {
+          snap.getContext("2d")?.drawImage(source, 0, 0, width, height);
+          thumbnailCanvasRef.current = snap;
+        } catch (error) {
+          console.warn("Unable to capture map thumbnail:", error);
+        }
+      });
+      map.triggerRepaint();
+    }, 1500);
   };
 
   // Called by <Map onLoad>: canvas now exists, safe to attach WebGL handlers
   const handleMapLoad = () => {
     const map = mapRef.current?.getMap();
     if (!map) return;
+    setIsMapLoaded(true);
 
     const canvas = map.getCanvas();
 
@@ -698,45 +720,6 @@ export function MapArea() {
     };
   }, [settings.weather_sync_enabled, weatherCondition, selectedStyle]);
 
-  useEffect(() => {
-    if (!isRendering || routePoints.length < 2) {
-      setVehicleGeoJson(null);
-      return;
-    }
-    let frameId: number;
-    let startTime = performance.now();
-    const duration = 10000;
-
-    const animate = (time: number) => {
-      let progress = ((time - startTime) % duration) / duration;
-
-      const totalPoints = routePoints.length;
-      const exactIndex = progress * (totalPoints - 1);
-      const index1 = Math.floor(exactIndex);
-      const index2 = Math.min(index1 + 1, totalPoints - 1);
-      const frac = exactIndex - index1;
-
-      const p1 = routePoints[index1];
-      const p2 = routePoints[index2];
-      const lat = p1[0] + (p2[0] - p1[0]) * frac;
-      const lng = p1[1] + (p2[1] - p1[1]) * frac;
-
-      const dy = p2[0] - p1[0];
-      const dx = p2[1] - p1[1];
-      const bearing = (Math.atan2(dx, dy) * 180) / Math.PI || 0;
-
-      setVehicleGeoJson({
-        type: "Feature",
-        properties: { rotation: [0, 0, bearing], model: "car" },
-        geometry: { type: "Point", coordinates: [lng, lat] },
-      });
-
-      frameId = requestAnimationFrame(animate);
-    };
-    frameId = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(frameId);
-  }, [isRendering, routePoints]);
-
   // Drag and Drop Listeners
   useEffect(() => {
     const unlistenHover = listen("tauri://drag-enter", () =>
@@ -798,16 +781,6 @@ export function MapArea() {
     activeIndex !== -1 && activeIndex < waypoints.length - 1
       ? waypoints[activeIndex + 1]
       : null;
-
-  // Mapbox reports bearing wrapped to [-180, 180]. Rotating the needle to the
-  // raw value makes the CSS transition swing the long way round whenever the
-  // map turns across south (e.g. 170° -> -170° spins back 340°). Keep an
-  // unwrapped angle and always step it by the shortest turn instead.
-  const compassAngleRef = useRef(-viewState.bearing);
-  const compassDelta =
-    ((((-viewState.bearing - compassAngleRef.current) % 360) + 540) % 360) - 180;
-  const compassAngle = compassAngleRef.current + compassDelta;
-  compassAngleRef.current = compassAngle;
 
   return (
     <main className="flex-1 relative bg-zinc-100 dark:bg-[#09090b] overflow-hidden transition-colors">
@@ -873,30 +846,7 @@ export function MapArea() {
 
       {/* --- VIEW CONTROLS (top right) --- */}
       <div className="absolute top-14 right-4 z-200 flex items-center gap-0.5 p-1 rounded-lg bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border border-zinc-200 dark:border-white/10 shadow-sm">
-        <button
-          type="button"
-          onClick={() => {
-            setViewState((prev) => ({
-              ...prev,
-              pitch: 0,
-              bearing: 0,
-            }));
-          }}
-          title={t`Reset View (North)`}
-          aria-label={t`Reset View (North)`}
-          className="flex items-center justify-center w-7 h-7 rounded-md text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-white/5 transition-colors"
-        >
-          {/* Compass needle: red half points north. */}
-          <svg
-            viewBox="0 0 16 16"
-            aria-hidden
-            className="w-4 h-4 transition-transform duration-200 ease-out"
-            style={{ transform: `rotate(${compassAngle}deg)` }}
-          >
-            <path d="M8 1.5 10.5 8h-5z" className="fill-red-500" />
-            <path d="M8 14.5 5.5 8h5z" className="fill-zinc-400 dark:fill-zinc-500" />
-          </svg>
-        </button>
+        <MapCompass mapRef={mapRef} ready={isMapLoaded} />
 
         <RouteStyling />
 
@@ -917,8 +867,7 @@ export function MapArea() {
           reuseMaps={true}
           ref={mapRef}
           cursor={isEraserMode || isViaMode ? "crosshair" : ""}
-          {...viewState}
-          onMove={(evt: ViewStateChangeEvent) => setViewState(evt.viewState)}
+          initialViewState={initialViewState}
           onLoad={handleMapLoad}
           onMoveEnd={captureMapThumbnail}
           onClick={handleMapClick}
