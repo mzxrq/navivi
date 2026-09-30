@@ -1100,7 +1100,7 @@ TTS_MIN_CHUNK_CHARS = 20
 # have a metronome-regular click between every sentence.
 TTS_SENTENCE_GAP_MIN_SECONDS = 0.25
 TTS_SENTENCE_GAP_MAX_SECONDS = 0.5
-TTS_VOICE = "test1"  # Irodori's only bundled voice preset as of writing
+TTS_VOICE = "jvs004"  # Irodori's only bundled voice preset as of writing
 # [Config] Playback speed multiplier sent to the Irodori TTS server; 1.0 = the
 # model's natural pace. The server itself clamps to [0.25, 4.0], but TTSConfig
 # validates this too so a bad value fails fast with a readable message
