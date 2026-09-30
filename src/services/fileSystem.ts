@@ -6,6 +6,7 @@ import { appConfig, fileSystem } from "../config/constants";
 import { buildAssetManifest } from "../utils/manifestBuilder";
 import { TimelineData, TimelineManifest, ManifestClip, RenderSettings, ExportManifestPayload, RecentProjects } from "../types";
 import { t } from "@lingui/core/macro";
+import { i18n } from "@lingui/core";
 import { db } from "./db";
 
 // A slug id already used by a different project folder in the DB.
@@ -280,6 +281,7 @@ export const saveProjectData = async (
     thumbnail_path: thumbnailPath,
     source_files: { gps_route: "raw_track.gpx" },
     settings: savedSettings,
+    map_language: i18n.locale || "en",
     overview_narration: "",
     video_title: row.videoTitle,
     video_subtitle: row.videoSubtitle,

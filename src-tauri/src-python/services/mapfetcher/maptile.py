@@ -20,6 +20,7 @@ import numpy as np
 # [I/O] Import service dependencies for Integration
 from services.logger.logger import setup_logger
 from services import tuning
+from services.mapfetcher.maplanguage import raster_style_id, streets_lang
 
 # [Utility] Log setup for debugging and monitoring
 logger = setup_logger("MapTile")
@@ -140,7 +141,8 @@ class TileDownloader:
 
         provider = cx.providers.MapBox.copy()  # type: ignore
         provider["accessToken"] = token
-        provider["id"] = settings.get("mapbox_style_id", self.MAPBOX_DEFAULT_STYLE)
+        lang = streets_lang(self.job_config.get("map_language") if self.job_config else None)
+        provider["id"] = raster_style_id(settings, lang, self.MAPBOX_DEFAULT_STYLE)
         # @2x pulls double-density (retina) tiles — same geographic coverage
         # per tile, roughly 4x the pixels — for a visibly sharper map at the
         # same zoom level. Off by default only if explicitly disabled.
