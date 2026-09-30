@@ -11,15 +11,10 @@ use std::fs;
 
 struct BlueprintState {
     process: Mutex<Option<Child>>,
-    // start_render's spawned child wasn't tracked anywhere before  Eonly
-    // run_python_blueprint's was  Eso a force-killed app left it (and
-    // whatever Python server it had itself started, e.g. the bundled TTS/
-    // ComfyUI servers) running with no supervising process at all.
     render_process: Mutex<Option<Child>>,
     render_cancelled: AtomicBool,
 }
 
-/// Kills whatever child process is currently tracked in `state`, best-effort.
 fn kill_tracked_children(state: &BlueprintState) {
     if let Ok(mut lock) = state.process.lock() {
         if let Some(mut child) = lock.take() {
@@ -38,7 +33,7 @@ fn kill_tracked_children(state: &BlueprintState) {
 async fn run_python_blueprint(
     action: String, 
     payload: String,
-    state: State<'_, BlueprintState> // Inject our state here
+    state: State<'_, BlueprintState>
 ) -> Result<String, String> {
     
     // Spawn instead of output()
@@ -257,10 +252,8 @@ fn wake_up_ollama() -> Result<String, String> {
 async fn export_video(app: tauri::AppHandle, project_dir: String) -> Result<(), String> {
     println!("Starting video export for: {}", project_dir);
 
-    // Build the path to timeline.json that React just saved
     let timeline_path = format!("{}/timeline.json", project_dir);
 
-    // Call Dev 1's specific command registry handler
     let output = std::process::Command::new("python")
         .env("PYTHONIOENCODING", "utf-8")
         .arg("src-python/main.py")
@@ -270,7 +263,6 @@ async fn export_video(app: tauri::AppHandle, project_dir: String) -> Result<(), 
         .map_err(|e| e.to_string())?;
 
     if output.status.success() {
-        // TAURI V2 SYNTAX: Broadcast on our custom channel so React knows it is done!
         app.emit("render-complete", ()).map_err(|e| e.to_string())?;
         Ok(())
     } else {
@@ -283,18 +275,14 @@ async fn export_video(app: tauri::AppHandle, project_dir: String) -> Result<(), 
 async fn copy_asset_file(source_path: String, target_dir: String) -> Result<String, String> {
     let source = Path::new(&source_path);
     
-    // Extract the filename from the source path
     let file_name = source.file_name().ok_or("Invalid file name")?;
     
-    // Build the final destination path
     let target = Path::new(&target_dir).join(file_name);
     
-    // Ensure the target directory exists
     if let Err(e) = fs::create_dir_all(&target_dir) {
         return Err(format!("Failed to create directory: {}", e));
     }
 
-    // Copy the file
     match fs::copy(&source, &target) {
         Ok(_) => Ok(target.to_string_lossy().to_string()),
         Err(e) => Err(format!("Failed to copy file: {}", e)),

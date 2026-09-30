@@ -53,6 +53,7 @@ class TTSConfig:
     voice: str = tuning.TTS_VOICE
     speed: float = tuning.TTS_SPEED
     response_format: Optional[str] = tuning.TTS_RESPONSE_FORMAT
+    hardware_override: Optional[str] = None
     extra_options: Dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -365,15 +366,34 @@ class IrodoriTTSClient:
                     popen_kwargs["start_new_session"] = True
                 log_path = self._SERVER_DIR / "server.log"
                 log_file = open(log_path, "ab")
+                # Base device from env or tuning.py
                 device = os.environ.get("NAVIVI_TTS_DEVICE") or tuning.TTS_DEVICE
+                    
+                # [Hardware Detection] Check frontend flag first, fallback to nvidia-smi
+                if self.config.hardware_override == "low":
+                    has_nvidia = False
+                    logger.info("Hardware override set to 'low'. Forcing TTS to CPU mode.")
+                elif self.config.hardware_override == "high":
+                    has_nvidia = True
+                    logger.info("Hardware override set to 'high'. Trusting GPU presence.")
+                else:
+                    has_nvidia = shutil.which("nvidia-smi") is not None
+                
+                # Force CPU fallback for older PCs    
+                if not has_nvidia and device != "cpu":
+                    logger.warning("No NVIDIA GPU detected/reported. Forcing TTS device to 'cpu' and precision to 'fp32'.")
+                
+                # bf16 requires a CUDA GPU, standard CPUs need fp32
+                precision = "bf16" if device == "cuda" else "fp32"
+                
                 server_env = {
                     **os.environ,
                     "IRODORI_MODEL_DEVICE": device,
                     "IRODORI_CODEC_DEVICE": device,
-                    "IRODORI_HF_CHECKPOINT": "Aratako/Irodori-TTS-v4.1-Small-Quantized/int8-weight-only",
-                    "IRODORI_MODEL_PRECISION": "bf16",
+                    "IRODORI_HF_CHECKPOINT": "Aratako/Irodori-TTS-v4.1-Small",
+                    "IRODORI_MODEL_PRECISION": precision,
                 }
-                logger.info("Irodori TTS server device: %s.", device)
+                logger.info("Irodori TTS server device: %s (Precision: %s).", device, precision)
                 IrodoriTTSClient._server_process = subprocess.Popen(
                     [
                         str(self._SERVER_VENV_PYTHON), "-m", "irodori_openai_tts",
@@ -381,7 +401,7 @@ class IrodoriTTSClient:
                     ],
                     cwd=str(self._SERVER_DIR),
                     env=server_env,
-                    stdout=log_file,
+                    stdout=log_file,    
                     stderr=subprocess.STDOUT,
                     **popen_kwargs,
                 )
