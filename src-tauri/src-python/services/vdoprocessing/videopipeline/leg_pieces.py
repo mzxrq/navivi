@@ -40,6 +40,7 @@ import subprocess
 from pathlib import Path
 from typing import Optional
 
+from services import tuning
 from services.vdoprocessing.cliptiming import read_audio_offset
 
 from .helpers import logger
@@ -65,7 +66,7 @@ def _pad_video_tail(ffmpeg_cmd: str, video_path: str, pad_seconds: float) -> Opt
     src = Path(video_path)
     padded = src.with_name(f"{src.stem}_padded{src.suffix}")
     cmd = [
-        ffmpeg_cmd, "-y", "-i", str(src),
+        ffmpeg_cmd, "-y", *tuning.ffmpeg_log_args(), "-i", str(src),
         "-vf", f"tpad=stop_mode=clone:stop_duration={pad_seconds:.3f}",
         "-an", "-c:v", "libx264", "-pix_fmt", "yuv420p",
         str(padded),

@@ -39,10 +39,14 @@ class _OverviewPacingMixin:
             )
         total = cum[-1] or 1.0
 
-        breakpoints = [(0.0, point_modes[0])]
-        for i in range(1, len(points)):
+        # point_modes[i] is the mode of the segment ENDING at point i (see
+        # _build_point_modes), so a change takes effect from point i-1.
+        # Starting it at point i coloured the next segment instead - a
+        # 2-point straight ferry leg came out entirely in the walking colour.
+        breakpoints = [(0.0, point_modes[1] if len(point_modes) > 1 else point_modes[0])]
+        for i in range(2, len(points)):
             if point_modes[i] != breakpoints[-1][1]:
-                breakpoints.append((cum[i] / total, point_modes[i]))
+                breakpoints.append((cum[i - 1] / total, point_modes[i]))
         return breakpoints
 
     @staticmethod

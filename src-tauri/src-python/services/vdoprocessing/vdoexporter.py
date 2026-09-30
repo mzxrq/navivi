@@ -73,6 +73,26 @@ _REPLACE_RETRY_ATTEMPTS = 5
 _REPLACE_RETRY_DELAY_SECONDS = 0.5
 
 
+def sweep_stale_temp_files(directory, recursive: bool = False, min_age_seconds: float = 600) -> int:
+    """Deletes ".<name>.<uuid>.tmp.<ext>" files left by killed renders. Files
+    touched within `min_age_seconds` are kept, since a live render may own them."""
+    d = Path(directory)
+    if not d.is_dir():
+        return 0
+    cutoff = time.time() - min_age_seconds
+    removed = 0
+    for p in (d.rglob(".*.tmp.*") if recursive else d.glob(".*.tmp.*")):
+        try:
+            if p.is_file() and p.stat().st_mtime < cutoff:
+                p.unlink()
+                removed += 1
+        except OSError:
+            pass
+    if removed:
+        logger.info("Removed %d leftover temp file(s) from %s", removed, d)
+    return removed
+
+
 def _replace_with_retry(src: str, dst: str) -> None:
     for attempt in range(_REPLACE_RETRY_ATTEMPTS):
         try:
@@ -142,6 +162,7 @@ class VideoExporter:
         directory (or a leftover temp file from a killed previous run)
         can never collide on the same path."""
         out_path = Path(output_path)
+        sweep_stale_temp_files(out_path.parent)
         return str(
             out_path.with_name(f".{out_path.stem}.{uuid.uuid4().hex[:8]}.tmp{out_path.suffix}")
         )
@@ -159,7 +180,7 @@ class VideoExporter:
 
         cmd = [
             ffmpeg_cmd,
-            "-y",
+            "-y", *tuning.ffmpeg_log_args(),
             "-f",
             "rawvideo",
             "-vcodec",
@@ -316,7 +337,7 @@ class VideoExporter:
             r = subprocess.run(
                 [
                     ffmpeg_cmd,
-                    "-y",
+                    "-y", *tuning.ffmpeg_log_args(),
                     "-i",
                     src,
                     "-vcodec",
@@ -366,7 +387,7 @@ class VideoExporter:
             result = subprocess.run(
                 [
                     ffmpeg_cmd,
-                    "-y",
+                    "-y", *tuning.ffmpeg_log_args(),
                     "-f",
                     "concat",
                     "-safe",
@@ -471,7 +492,7 @@ class VideoExporter:
             logger.info("Track %d: holding its last frame %.2fs so the video lasts as long as its audio.", index, hold_extra)
             filters.append(f"tpad=stop_mode=clone:stop_duration={hold_extra:.3f}")
 
-        cmd = [ffmpeg_cmd, "-y", "-i", str(video_path)]
+        cmd = [ffmpeg_cmd, "-y", *tuning.ffmpeg_log_args(), "-i", str(video_path)]
         if has_audio:
             cmd += ["-i", str(Path(audio_path).resolve())]
         else:
@@ -583,7 +604,7 @@ class VideoExporter:
         )
         out = tmp_dir / f"seg_{index:04d}_fade.mp4"
         cmd = [
-            ffmpeg_cmd, "-y", "-i", str(first), "-i", str(second),
+            ffmpeg_cmd, "-y", *tuning.ffmpeg_log_args(), "-i", str(first), "-i", str(second),
             "-filter_complex", graph, "-map", "[v]", "-map", "[a]",
             "-c:v", "libx264", "-crf", "18", "-preset", "veryfast", "-pix_fmt", "yuv420p",
             *tuning.ffmpeg_thread_args(),
@@ -680,7 +701,7 @@ class VideoExporter:
             result = subprocess.run(
                 [
                     ffmpeg_cmd,
-                    "-y",
+                    "-y", *tuning.ffmpeg_log_args(),
                     "-f",
                     "concat",
                     "-safe",
@@ -747,7 +768,7 @@ class VideoExporter:
         result = subprocess.run(
             [
                 ffmpeg_cmd,
-                "-y",
+                "-y", *tuning.ffmpeg_log_args(),
                 "-i",
                 str(video_path),
                 "-vf",
@@ -799,7 +820,7 @@ class VideoExporter:
         result = subprocess.run(
             [
                 ffmpeg_cmd,
-                "-y",
+                "-y", *tuning.ffmpeg_log_args(),
                 "-i",
                 str(video_path),
                 "-vf",
@@ -870,7 +891,7 @@ class VideoExporter:
         try:
             result = subprocess.run(
                 [
-                    ffmpeg_cmd, "-y",
+                    ffmpeg_cmd, "-y", *tuning.ffmpeg_log_args(),
                     "-i", str(video_path),
                     "-vf",
                     f"subtitles=filename='{escaped_srt}':force_style='{style.to_force_style()}'",
@@ -997,7 +1018,7 @@ class VideoExporter:
                 f"subtitles=filename='{escaped_srt}':force_style='{style.to_force_style()}'"
             )
 
-        cmd = [ffmpeg_cmd, "-y", "-i", str(video_path)]
+        cmd = [ffmpeg_cmd, "-y", *tuning.ffmpeg_log_args(), "-i", str(video_path)]
         if vf_parts:
             cmd += ["-vf", ",".join(vf_parts)]
         if trim_to is not None:

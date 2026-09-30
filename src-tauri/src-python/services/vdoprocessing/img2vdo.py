@@ -170,7 +170,7 @@ class AttractionVideoGenerator:
 
         OUT_W, OUT_H = tuning.COMFYUI_WIDTH, tuning.COMFYUI_HEIGHT
         cmd = [
-            FFmpegManager.resolve_ffmpeg_bin(), "-y", "-loglevel", "error",
+            FFmpegManager.resolve_ffmpeg_bin(), "-y", *tuning.ffmpeg_log_args(),
             "-loop", "1", "-i", image_path, "-t", f"{max(1.0, duration_sec):.3f}",
             "-vf", (
                 f"scale={OUT_W}:{OUT_H}:force_original_aspect_ratio=increase,"
@@ -617,7 +617,7 @@ class AttractionVideoGenerator:
         graph = ";".join(chains) + ";" + "".join(f"[v{i}]" for i in range(len(paths)))
         graph += f"concat=n={len(paths)}:v=1:a=0[out]"
         result = subprocess.run(
-            [FFmpegManager.resolve_ffmpeg_bin(), "-y", "-loglevel", "error", *inputs,
+            [FFmpegManager.resolve_ffmpeg_bin(), "-y", *tuning.ffmpeg_log_args(), *inputs,
              "-filter_complex", graph, "-map", "[out]",
              "-c:v", "libx264", *tuning.ffmpeg_thread_args(), "-crf", "18", "-preset", "fast",
              "-pix_fmt", "yuv420p", output_path],

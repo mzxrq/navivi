@@ -210,7 +210,9 @@ class GPSParser:
                 route_df = dataframe.copy()
 
             if "timestamp" in route_df.columns:
-                route_df = route_df.sort_values(by="timestamp").reset_index(drop=True)
+                # Stable: the CSV's whole-second times tie for nearby points, and an
+                # unstable sort reordered them differently for each sub-second start time.
+                route_df = route_df.sort_values(by="timestamp", kind="stable").reset_index(drop=True)
 
             # [HACK] [GPS] Timestamps & Time-by-Distance Fallbacks: when a GPS log has no usable timestamps,
             # a synthetic timeline is derived from point-to-point distance and a fixed walking speed.

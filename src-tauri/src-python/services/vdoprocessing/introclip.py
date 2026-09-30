@@ -147,7 +147,7 @@ def _crossfade_chain(
         cumulative += per_clip_sec - crossfade_sec
 
     cmd = [
-        ffmpeg_cmd, "-y",
+        ffmpeg_cmd, "-y", *tuning.ffmpeg_log_args(),
         *inputs,
         "-filter_complex", ";".join(filter_parts),
         "-map", f"[{prev_label}]",
@@ -313,7 +313,7 @@ def generate_intro_clip(
 
         ffmpeg_cmd = FFmpegManager.resolve_ffmpeg_bin()
         cmd = [
-            ffmpeg_cmd, "-y",
+            ffmpeg_cmd, "-y", *tuning.ffmpeg_log_args(),
             "-i", str(combined_path),
             "-vf", vf_filter,
             "-an",

@@ -171,7 +171,7 @@ class VideoEditor:
             # 2. Build the command: -f concat -safe 0 -i manifest.txt -c copy output.mp4
             cmd = [
                 ffmpeg_cmd,
-                "-y",  # Overwrite output
+                "-y", *tuning.ffmpeg_log_args(),  # Overwrite output
                 "-f",
                 "concat",  # Use the concat demuxer
                 "-safe",
@@ -263,7 +263,7 @@ class VideoEditor:
 
         cmd = [
             ffmpeg_cmd,
-            "-y",
+            "-y", *tuning.ffmpeg_log_args(),
             "-i",
             str(vid_p),
             "-i",
@@ -328,7 +328,7 @@ class VideoEditor:
         ffmpeg_cmd = self.engine.resolve_binary()
         cmd = [
             ffmpeg_cmd,
-            "-y",
+            "-y", *tuning.ffmpeg_log_args(),
             "-i",
             str(vid_p),
             "-t",
@@ -391,7 +391,7 @@ class VideoEditor:
         ffmpeg_cmd = self.engine.resolve_binary()
         cmd = [
             ffmpeg_cmd,
-            "-y",
+            "-y", *tuning.ffmpeg_log_args(),
             "-i",
             str(vid_p),
             "-vf",
@@ -443,7 +443,7 @@ class VideoEditor:
 
         cmd = [
             ffmpeg_cmd,
-            "-y",
+            "-y", *tuning.ffmpeg_log_args(),
             "-framerate",
             str(fps),
             "-i",

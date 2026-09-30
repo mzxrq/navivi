@@ -266,9 +266,7 @@ def record_headless_video(
                     int(max(float(raw_freeze_seconds), tuning.POPUP_MIN_DISPLAY_SECONDS) * render_fps)
                     if raw_freeze_seconds is not None else 0
                 )
-                image_display = wp.get(
-                    "image_display", wp.get("image display", "pip")
-                ).lower()
+                image_display = "fullscreen"  # residential legs are always fullscreen
                 coin_target = {
                     "lon": float(wp.get("lng", wp.get("lon"))),
                     "lat": float(wp["lat"]),

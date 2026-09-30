@@ -711,11 +711,18 @@ class _CardMixin:
                 _TOTAL_ACCENT_COLOR,
             ))
         elif mode_breakdown and len(mode_breakdown) == 1:
+            # The total is shown even when it repeats the one mode (user's choice).
             (single_mode,) = mode_breakdown.keys()
-            columns = [(
-                self._mode_name_ja(single_mode), single_mode, distance_km, duration_seconds,
-                _CARD_TEXT_COLOR,
-            )]
+            columns = [
+                (
+                    self._mode_name_ja(single_mode), single_mode, distance_km, duration_seconds,
+                    self._mode_accent(single_mode),
+                ),
+                (
+                    self.summary_card_labels["total_label"], "total", distance_km, duration_seconds,
+                    _TOTAL_ACCENT_COLOR,
+                ),
+            ]
         else:
             columns = [(
                 self.summary_card_labels["distance_label"], "walking", distance_km, duration_seconds,

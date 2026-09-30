@@ -746,8 +746,11 @@ class _OverviewAnimationMixin:
             # (see overview.py) now already finishes before the NEXT one's
             # "まもなく" banner even appears, which is well before seq_ptr
             # can read "done" here.
+            # The last waypoint's own card is kept: clearing it too wiped it
+            # the frame after it triggered, so the final stop never showed one.
             if triggered_popup is None and seq_ptr >= len(sequential_popups):
-                baked_popups = []
+                last_stop = sequential_popups[-1] if sequential_popups else None
+                baked_popups = [b for b in baked_popups if b["popup"] is last_stop]
             frame, baked_popups = self._composite_baked_popups(
                 frame, baked_popups, w, h, route_obstacle_arr,
                 active_popups=active_popups, total_points=len(points), fps=fps,

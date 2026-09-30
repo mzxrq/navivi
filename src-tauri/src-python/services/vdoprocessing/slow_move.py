@@ -121,7 +121,7 @@ def _extend_with_zoom_out(video_path: str, gap: float, output_path: str) -> Opti
     h, w = first.shape[:2]
     proc = subprocess.Popen(
         [
-            FFmpegManager.resolve_ffmpeg_bin(), "-y", "-loglevel", "error",
+            FFmpegManager.resolve_ffmpeg_bin(), "-y", *tuning.ffmpeg_log_args(),
             "-f", "rawvideo", "-pix_fmt", "bgr24", "-s", f"{w}x{h}", "-r", f"{fps:.3f}", "-i", "-",
             "-c:v", "libx264", *tuning.ffmpeg_thread_args(), "-crf", "18", "-preset", "fast",
             "-pix_fmt", "yuv420p", output_path,
@@ -187,7 +187,7 @@ def extend_with_slow_move(
         ffmpeg = FFmpegManager.resolve_ffmpeg_bin()
         proc = subprocess.Popen(
             [
-                ffmpeg, "-y", "-loglevel", "error",
+                ffmpeg, "-y", *tuning.ffmpeg_log_args(),
                 "-f", "rawvideo", "-pix_fmt", "bgr24", "-s", f"{w}x{h}", "-r", f"{fps:.3f}", "-i", "-",
                 "-c:v", "libx264", *tuning.ffmpeg_thread_args(), "-crf", "18", "-preset", "fast",
                 "-pix_fmt", "yuv420p", tail_path,
@@ -219,7 +219,7 @@ def extend_with_slow_move(
 
         concat = subprocess.run(
             [
-                ffmpeg, "-y", "-loglevel", "error", "-i", video_path, "-i", tail_path,
+                ffmpeg, "-y", *tuning.ffmpeg_log_args(), "-i", video_path, "-i", tail_path,
                 "-filter_complex", "[0:v][1:v]concat=n=2:v=1:a=0[v]", "-map", "[v]",
                 "-c:v", "libx264", *tuning.ffmpeg_thread_args(), "-crf", "18", "-preset", "fast",
                 "-pix_fmt", "yuv420p", output_path,

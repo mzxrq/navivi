@@ -275,7 +275,7 @@ def _join_segments(segment_paths: list, output_path: str) -> str:
         labels.append(f"[v{i}]")
     graph = ";".join(parts) + ";" + "".join(labels) + f"concat=n={len(segment_paths)}:v=1:a=0[out]"
 
-    command = [FFmpegManager.resolve_ffmpeg_bin(), "-y", "-loglevel", "error"]
+    command = [FFmpegManager.resolve_ffmpeg_bin(), "-y", *tuning.ffmpeg_log_args()]
     for path in segment_paths:
         command += ["-i", path]
     command += [
