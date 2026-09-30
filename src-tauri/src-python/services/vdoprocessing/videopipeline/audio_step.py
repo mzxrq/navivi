@@ -565,6 +565,7 @@ def generate_audio(
                 await _maybe_restart_tts_server()
 
                 label = wp.get("label", f"Waypoint {idx + 1}")
+                tracker.show(f"Generating attraction TTS {idx + 1}/{len(waypoints)}: {label}")
                 try:
                     clip = await generate_attraction_audio_for_waypoint(
                         wp, idx, client, processor, output_dir, force=force, pronunciation_dict=p_dict

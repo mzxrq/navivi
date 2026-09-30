@@ -11,6 +11,7 @@ from services.logger.progress import tracker as _tracker
 from services.vdoprocessing.videopipeline.attraction_step import (
     generate_waypoint_attraction_video,
 )
+from services.vdoprocessing.videopipeline.audio_step import is_unvisited_stopby
 from services.vdoprocessing.videopipeline.helpers import (
     attraction_audio_filename,
     attraction_output_filename,
@@ -49,6 +50,24 @@ def test_attraction_video(
     force: bool = False,
 ) -> Dict[str, Any]:
     """Generate one attraction video from one waypoint's popup image."""
+    from services.vdoprocessing.comfyui_i2v_client import ComfyUII2VClient
+
+    # See attraction_step.render_attraction_videos's identical call for why:
+    # a killed/restarted invocation otherwise leaves its job running
+    # server-side, queuing every retry further behind instead of starting fresh.
+    ComfyUII2VClient().clear_queue()
+    try:
+        return _generate_attraction_video(job_config_path, output_video_dir, waypoint_index, force)
+    finally:
+        ComfyUII2VClient.stop_server()
+
+
+def _generate_attraction_video(
+    job_config_path: str,
+    output_video_dir: str,
+    waypoint_index: int,
+    force: bool,
+) -> Dict[str, Any]:
     config_path, waypoints = _load_tts_waypoints(job_config_path)
     if waypoint_index < 0 or waypoint_index >= len(waypoints):
         raise IndexError(
@@ -61,7 +80,10 @@ def test_attraction_video(
         raise ValueError(f"Waypoint {waypoint_index} must be an object")
     if not waypoint.get("popup_image"):
         raise ValueError(f"Waypoint {waypoint_index} has no popup_image")
+    if is_unvisited_stopby(waypoint):
+        raise ValueError(f"Waypoint {waypoint_index} is a stop-by not connected to the route (no attraction clip)")
 
+    from services import tuning
     from services.config.job_config import JobConfigManager
     from services.vdoprocessing.comfyui_i2v_client import ComfyUII2VClient
     from services.vdoprocessing.img2vdo import AttractionVideoGenerator
@@ -70,11 +92,7 @@ def test_attraction_video(
     output_dir.mkdir(parents=True, exist_ok=True)
     label = waypoint.get("label", f"Waypoint {waypoint_index + 1}")
     audio_info = _resolve_attraction_audio(config_path, waypoint_index, label)
-
-    # See attraction_step.render_attraction_videos's identical call for why:
-    # a killed/restarted invocation otherwise leaves its job running
-    # server-side, queuing every retry further behind instead of starting fresh.
-    ComfyUII2VClient().clear_queue()
+    tuning.ensure_free_ram(f"attraction video {waypoint_index + 1}", relief=ComfyUII2VClient.stop_server)
 
     generator = AttractionVideoGenerator(JobConfigManager(config_path))
     generator.output_dir = output_dir
@@ -114,21 +132,25 @@ def test_attraction_videos(
     force: bool = False,
 ) -> Dict[str, Any]:
     """Generate attraction videos for every waypoint with a popup image."""
+    from services.vdoprocessing.comfyui_i2v_client import ComfyUII2VClient
+
     config_path, waypoints = _load_tts_waypoints(job_config_path)
     candidates = [
         (index, waypoint)
         for index, waypoint in enumerate(waypoints)
-        if isinstance(waypoint, dict) and waypoint.get("popup_image")
+        if isinstance(waypoint, dict) and waypoint.get("popup_image") and not is_unvisited_stopby(waypoint)
     ]
     results = []
-    for progress_index, (index, waypoint) in enumerate(candidates):
-        label = waypoint.get("label", f"Waypoint {index + 1}")
-        _tracker.show(f"Generating attraction video {progress_index + 1}/{len(candidates)}: {label}")
-        result = test_attraction_video(
-            str(config_path), output_video_dir, waypoint_index=index, force=force
-        )
-        results.append({"index": index, **result})
-    _tracker.clear()
+    ComfyUII2VClient().clear_queue()
+    try:
+        for progress_index, (index, waypoint) in enumerate(candidates):
+            label = waypoint.get("label", f"Waypoint {index + 1}")
+            _tracker.show(f"Generating attraction video {progress_index + 1}/{len(candidates)}: {label}")
+            result = _generate_attraction_video(str(config_path), output_video_dir, index, force)
+            results.append({"index": index, **result})
+    finally:
+        _tracker.clear()
+        ComfyUII2VClient.stop_server()
     return {
         "success": True,
         "video_paths": [

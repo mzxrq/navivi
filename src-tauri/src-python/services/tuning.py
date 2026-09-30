@@ -1113,7 +1113,7 @@ TTS_RESPONSE_FORMAT = None  # None = let the server use its own default (wav)
 # --- Attraction clip place-name label (top-left, burned for the whole clip) -
 # See services/vdoprocessing/img2vdo.py's AttractionVideoGenerator._fit_and_finalize.
 ATTRACTION_LABEL_FONT_SIZE = 26
-ATTRACTION_LABEL_OUTLINE = 2.5
+ATTRACTION_LABEL_OUTLINE = 1.2
 ATTRACTION_LABEL_MARGIN = 20
 # [Config] Attraction clips render below the map/waypoint clips' resolution to fit
 # VRAM (see VideoExporter.finalize_clip), then get lanczos-upscaled to match — a

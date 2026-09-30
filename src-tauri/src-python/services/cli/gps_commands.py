@@ -6,6 +6,7 @@ from typing import Any, Dict, Optional
 
 from services.logger.progress import tracker as _tracker
 from services.vdoprocessing.videopipeline.helpers import project_route_video_dir
+from .helpers import _apply_pipeline_settings
 
 
 def test_gps(job_config_path: str) -> Dict[str, Any]:
@@ -40,6 +41,7 @@ def _existing_narration(config_path: str) -> dict:
     from services.vdoprocessing.videopipeline.audio_step import existing_audio_data
     from services.vdoprocessing.videopipeline.narration_step import add_overview_cues, record_cue_times
 
+    _apply_pipeline_settings(config_path)
     add_overview_cues(config_path)  # tags only: the audio on disk stays valid
     audio = existing_audio_data(config_path)
     with open(config_path, "r", encoding="utf-8") as f:
@@ -173,39 +175,15 @@ def test_residential_video(
     )
     _tracker.clear()
 
-    return {
-        "success": bool(video_paths),
-        "video_paths": video_paths,
-    }
+    # Same stop-by piece padding the pipeline applies after its render.
+    import json
 
-def test_recap_frame(
-    job_config_path: str,
-    output_video_dir: str = None,
-) -> Dict[str, Any]:
-    """Generates just a single static PNG preview of the final overview recap frame."""
-    config_path = Path(job_config_path)
-    if not config_path.exists():
-        raise FileNotFoundError(f"job_config.json not found: {config_path}")
+    from services.vdoprocessing.videopipeline.leg_pieces import compute_leg_narration_splits
 
-    from services.helpers import project_route_video_dir
-    output_video_dir = Path(output_video_dir) if output_video_dir else project_route_video_dir(config_path.parent)
-    output_video_dir.mkdir(parents=True, exist_ok=True)
-
-    from services.vdoprocessing.videopipeline import process_gps, render_route_video
-
-    _tracker.show("Parsing GPS track...")
-    cleaned_route = process_gps(str(config_path))
-    _tracker.clear()
-
-    _tracker.show("Generating recap preview...")
-    video_paths = render_route_video(
-        cleaned_route=cleaned_route,
-        project_config_path=str(config_path),
-        output_video_dir=str(output_video_dir),
-        force=True,
-        render_mode="recap_frame",
+    waypoints = json.loads(config_path.read_text(encoding="utf-8")).get("waypoints", [])
+    video_paths, _splits = compute_leg_narration_splits(
+        video_paths, audio.get("audio_paths"), None, waypoints, str(config_path.parent)
     )
-    _tracker.clear()
 
     return {
         "success": bool(video_paths),

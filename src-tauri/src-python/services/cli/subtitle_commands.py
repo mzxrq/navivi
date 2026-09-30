@@ -12,8 +12,14 @@ from services.vdoprocessing.videopipeline.helpers import (
     project_subtitle_dir,
     waypoint_audio_filename,
 )
-from services.vdoprocessing.videopipeline.subtitle_step import build_waypoint_subtitle
-from .helpers import _load_tts_waypoints
+from services.vdoprocessing.videopipeline.audio_step import apply_cued_scripts, existing_audio_data
+from services.vdoprocessing.videopipeline.subtitle_step import (
+    build_attraction_subtitles,
+    build_overview_subtitle,
+    build_subtitles,
+    build_waypoint_subtitle,
+)
+from .helpers import _apply_pipeline_settings, _load_tts_waypoints
 
 
 def _subtitle_audio_path(config_path: Path, waypoint_index: int, label: Any) -> Path:
@@ -27,7 +33,9 @@ def test_subtitle(
     force: bool = False,
 ) -> Dict[str, Any]:
     """Generate subtitles for one waypoint from its matching TTS audio."""
+    _apply_pipeline_settings(job_config_path)
     config_path, waypoints = _load_tts_waypoints(job_config_path)
+    apply_cued_scripts(waypoints, config_path.parent)
     if waypoint_index < 0 or waypoint_index >= len(waypoints):
         raise IndexError(
             f"waypoint_index must be between 0 and {len(waypoints) - 1}, "
@@ -49,26 +57,29 @@ def test_subtitles(
     output_subtitle_dir: str = None,
     force: bool = False,
 ) -> Dict[str, Any]:
-    """Generate subtitles for every waypoint from matching TTS audio."""
+    """The pipeline's Step 2b: leg, overview and attraction subtitles from
+    the narration audio already on disk."""
+    import json
+
+    _apply_pipeline_settings(job_config_path)
     config_path, waypoints = _load_tts_waypoints(job_config_path)
+    apply_cued_scripts(waypoints, config_path.parent)
     output_dir = Path(output_subtitle_dir) if output_subtitle_dir else project_subtitle_dir(config_path.parent)
-    total = len(waypoints)
-    results = []
-    for index, waypoint in enumerate(waypoints):
-        label = (
-            waypoint.get("label", f"Waypoint {index + 1}")
-            if isinstance(waypoint, dict)
-            else f"Waypoint {index + 1}"
-        )
-        _tracker.show(f"Generating subtitle {index + 1}/{total}: {label}")
-        audio_path = _subtitle_audio_path(config_path, index, label)
-        results.append(
-            build_waypoint_subtitle(waypoint, index, str(audio_path), output_dir, force=force)
-        )
+    audio = existing_audio_data(str(config_path))
+
+    subtitle_paths = build_subtitles(waypoints, audio["audio_paths"], str(output_dir), force=force)
+    overview_path = build_overview_subtitle(
+        json.loads(config_path.read_text(encoding="utf-8")),
+        audio.get("overview_audio_path"), str(output_dir), force=force,
+    )
+    attraction_paths = build_attraction_subtitles(
+        waypoints, audio["attraction_audio_paths"], str(output_dir), force=force
+    )
     _tracker.clear()
     return {
         "success": True,
         "subtitle_dir": str(output_dir),
-        "subtitle_paths": [result["subtitle_path"] for result in results],
-        "results": results,
+        "subtitle_paths": subtitle_paths,
+        "overview_subtitle_path": overview_path,
+        "attraction_subtitle_paths": attraction_paths,
     }

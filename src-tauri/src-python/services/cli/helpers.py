@@ -26,6 +26,22 @@ def _output_dir_from_config(job_config_path: str) -> str:
     return str(project_video_dir(base_dir))
 
 
+def _load_settings(job_config_path) -> dict:
+    with Path(job_config_path).open("r", encoding="utf-8") as config_file:
+        return json.load(config_file).get("settings", {}) or {}
+
+
+def _apply_pipeline_settings(job_config_path) -> dict:
+    """Sets the same per-project switches run_full_pipeline sets before its
+    stages, so a single CLI mode speaks, cues and renders like the app."""
+    from services.vdoprocessing.videopipeline.audio_step import set_route_only_legs
+    from services.vdoprocessing.videopipeline.helpers import attraction_videos_enabled
+
+    settings = _load_settings(job_config_path)
+    set_route_only_legs(attraction_videos_enabled(settings))
+    return settings
+
+
 def _load_tts_waypoints(job_config_path: str) -> tuple[Path, list]:
     config_path = Path(job_config_path)
     if not config_path.exists():
