@@ -140,6 +140,10 @@ def test_attraction_videos(
         for index, waypoint in enumerate(waypoints)
         if isinstance(waypoint, dict) and waypoint.get("popup_image") and not is_unvisited_stopby(waypoint)
     ]
+    for index, waypoint in enumerate(waypoints):
+        if is_unvisited_stopby(waypoint):
+            label = waypoint.get("label", f"Waypoint {index + 1}")
+            _tracker.note(f"Skipped attraction video {index + 1}/{len(waypoints)}: {label} (stop-by not connected to the route)")
     results = []
     ComfyUII2VClient().clear_queue()
     try:

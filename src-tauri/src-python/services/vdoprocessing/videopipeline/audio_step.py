@@ -557,6 +557,8 @@ def generate_audio(
                         "stop-by not connected to the route" if is_unvisited_stopby(wp)
                         else "no narration script configured",
                     )
+                    if is_unvisited_stopby(wp):
+                        tracker.note(f"Skipped TTS {idx + 1}/{len(waypoints)}: {label} (stop-by not connected to the route)")
                     audio_durations.append(0.0)
                     audio_pauses.append([])
                     audio_paths.append(None)

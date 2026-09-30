@@ -95,6 +95,12 @@ class StepTracker:
             sys.stderr.write(f"{line}\n")
         sys.stderr.flush()
 
+    def note(self, text: str) -> None:
+        """A persistent line (e.g. a skipped item) printed above the live status line."""
+        self.clear()
+        sys.stderr.write(f"[{self.elapsed()}] {text}\n")
+        sys.stderr.flush()
+
     def clear(self) -> None:
         if self._live and self._open:
             sys.stderr.write("\r\x1b[2K")

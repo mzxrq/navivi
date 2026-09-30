@@ -82,6 +82,7 @@ def test_tts(
     _check_index(waypoints, waypoint_index)
     waypoint = waypoints[waypoint_index]
     if is_unvisited_stopby(waypoint):
+        _tracker.note(f"Skipped TTS: {_label(waypoint, waypoint_index)} (stop-by not connected to the route)")
         return {"success": True, "skipped": "stop-by not connected to the route", "clip": None}
 
     label = _label(waypoint, waypoint_index)
@@ -208,6 +209,9 @@ def test_attraction_tts_all(
         job_config_path, output_audio_dir
     )
     todo = [(i, w) for i, w in enumerate(waypoints) if not _attraction_tts_skip_reason(w)]
+    for i, w in enumerate(waypoints):
+        if is_unvisited_stopby(w):
+            _tracker.note(f"Skipped attraction TTS {i + 1}/{len(waypoints)}: {_label(w, i)} (stop-by not connected to the route)")
 
     async def generate_all() -> list:
         clips = []
