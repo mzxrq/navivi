@@ -54,6 +54,17 @@ _EXPECTED_FRAME_SEARCH_MARGIN_MIN_FRAMES = 20  # floor on the expected-frame sea
 _EXPECTED_FRAME_SEARCH_FRACTION = 0.05  # window size as a fraction of the path's frame count
 _DEFAULT_INTRO_FREEZE_SECONDS = 3.0  # used when the start popup sets no freeze_seconds
 _INTRO_CLEAN_HOLD_FRACTION_OF_FREEZE = 0.5  # clean-beat hold, as a fraction of intro_freeze_sec
+# The walk never waits past this for the narration's {start} cue - a long
+# opening line (e.g. a multi-sentence welcome before {start}) used to hold
+# the walker on the clean map the whole time it takes to say, well past the
+# intro card's own freeze; capped so the walker sets off on schedule and the
+# voice simply finishes its opening line over the moving map instead.
+_MAX_INTRO_WALK_START_SECONDS = 3.0
+
+# Longest a stop-by batch's cards hold for their own {goPreN} cue (matches
+# overview_animation.py's _MAX_CUE_WAIT_SECONDS) — unlike the intro cap
+# above, this one is allowed to run long: real content is still being named.
+_MAX_STOPBY_BATCH_WAIT_SECONDS = 20.0
 
 
 class _OverviewRenderMixin:
@@ -68,6 +79,7 @@ class _OverviewRenderMixin:
         point_modes: Optional[List[str]] = None,
         bounding_box: Optional[Dict[str, float]] = None,
         extent: Optional[Tuple[float, float, float, float]] = None,
+        preview_recap_only: bool = False,
     ) -> str:
         # Checkpoint: if a previous run already produced this exact output
         # file, skip straight to returning it instead of redoing the whole
@@ -130,7 +142,9 @@ class _OverviewRenderMixin:
                     intro_freeze, clean_hold, max(1, int(tuning.POPUP_FADE_SECONDS * fps)), fps
                 )
             if audio_cues.get("start") is not None:
-                walk_start_frames = max(walk_start_frames, int(round(audio_cues["start"] * fps)))
+                cue_frames = int(round(audio_cues["start"] * fps))
+                cap_frames = int(round(_MAX_INTRO_WALK_START_SECONDS * fps))
+                walk_start_frames = max(walk_start_frames, min(cue_frames, cap_frames))
             # Long enough to reach the last cued stop (and the {end} cue).
             num_frames = max(num_frames, animation_frames(audio_cues, walk_start_frames, fps))
             logger.info(
@@ -255,6 +269,16 @@ class _OverviewRenderMixin:
                 continue
             order += 1
             ap["order"] = order
+
+        # The order of the next numbered stop after each popup - a stop-by
+        # batch has no {n}/{go} cue of its own (see cues.py's {goPreN}), so
+        # this says which numbered stop's "goPre" cue governs when ITS
+        # narration mention ends.
+        next_numbered_order = None
+        for ap in reversed(active_popups):
+            ap["next_numbered_order"] = next_numbered_order
+            if not ap["data"].get("is_stopby") and ap["index"] != 0:
+                next_numbered_order = ap["order"]
 
         # Which stop-bys ride along with which stop. An unconnected
         # stop-by is a place the traveler never actually goes, so it's
@@ -471,10 +495,11 @@ class _OverviewRenderMixin:
                 group = ap.get("stopby_group") or []
                 if not (ap["data"].get("freeze_frame", False) or group):
                     return ap.get("cue_wait_frames", 0)  # the wait at a cued stop
+                held = min(len(group), tuning.STOPBY_BATCH_MAX_HELD)
                 return int(fps * (
                     float(self.post_arrival_hold_seconds)
                     + max(float(ap["data"].get("freeze_seconds", 4.0)), tuning.POPUP_MIN_DISPLAY_SECONDS)
-                    + len(group) * tuning.STOPBY_BATCH_SECONDS
+                    + held * tuning.STOPBY_BATCH_SECONDS
                 ))
 
             hosts = [
@@ -485,10 +510,29 @@ class _OverviewRenderMixin:
             hold_before = {
                 n: sum(h for f, h in hosts if f < frame) for n, frame in natural_frames.items()
             }
-            start_batch = (
-                int(fps * len(start_popup.get("stopby_group") or []) * tuning.STOPBY_BATCH_SECONDS)
+            static_start_batch = (
+                int(fps * min(len(start_popup.get("stopby_group") or []), tuning.STOPBY_BATCH_MAX_HELD)
+                    * tuning.STOPBY_BATCH_SECONDS)
                 if start_popup else 0
             )
+            # When the batch's own {goPreN} cue exists, hold on its cards
+            # until that line is actually spoken (capped at
+            # _MAX_STOPBY_BATCH_WAIT_SECONDS), rather than the fixed
+            # per-card estimate above — see overview_script.py's {goPreN}
+            # insertion. Stashed on the popup itself so _play_stopby_batch
+            # (overview_animation.py) draws for the same duration this
+            # retiming assumes.
+            start_batch = static_start_batch
+            if start_popup and start_popup.get("stopby_group"):
+                next_n = start_popup.get("next_numbered_order")
+                go_pre = audio_cues.get(f"goPre{next_n}") if next_n is not None else None
+                if go_pre is not None:
+                    needed_frames = int(round(go_pre * fps)) - walk_start_frames
+                    min_frames = int(tuning.POPUP_MIN_DISPLAY_SECONDS * fps)
+                    start_batch = max(min_frames, min(
+                        needed_frames, int(_MAX_STOPBY_BATCH_WAIT_SECONDS * fps)
+                    ))
+                    start_popup["batch_display_seconds"] = start_batch / fps
             # The walk may be stretched back out to the length the cues need: the
             # leg cap shortened the natural path, but each cued stop still has its
             # own time (and is itself no more than one cap after the last).
@@ -727,8 +771,9 @@ class _OverviewRenderMixin:
                 intro_freeze_sec * _INTRO_CLEAN_HOLD_FRACTION_OF_FREEZE,
                 float(self.config.get("overview_intro_clean_hold_seconds", 1.5)),
             )
-            for _ in range(int(clean_hold_sec * fps)):
-                video.write(clean_frame)
+            if not preview_recap_only:
+                for _ in range(int(clean_hold_sec * fps)):
+                    video.write(clean_frame)
 
             def _draw_intro_cards(base: np.ndarray, alpha: float) -> np.ndarray:
                 # Line, then pin, then card — in that order (mirrors
@@ -787,8 +832,9 @@ class _OverviewRenderMixin:
             # with no transition. Ends back on the clean pins-only frame
             # so _animate_overview_frames picks up from the same plain
             # base the intro opened on.
-            for i in range(bounce_frames):
-                alpha = max(0.0, 1.0 - (i + 1) / bounce_frames)
+            if not preview_recap_only:
+                for i in range(bounce_frames):
+                    alpha = max(0.0, 1.0 - (i + 1) / bounce_frames)
                 slide = self._popup_slide_offset_y(
                     {"total_frames": bounce_frames, "frames_left": i + 1,
                      "fade_frames": bounce_frames}
@@ -824,11 +870,23 @@ class _OverviewRenderMixin:
                 int(round(depart * fps)) if ap["cue_frame"] is not None and depart is not None
                 and depart > seconds else None
             )
-        pre_popup_frame = self._animate_overview_frames(
-            video, current_bg, cap, is_video, w, h, fps,
-            smooth_path, mode_breakpoints, cum_smooth_dist, total_smooth_dist,
-            active_popups, stop_popup, points, route_avoid_points, route_obstacle_arr,
-        )
+            # A stop-by batch host has no {n}/{go} of its own — use its
+            # {goPreN} instead (the next numbered stop's cue; see
+            # overview_script.py), so the freeze holds until the batch's
+            # own narration mention actually finishes.
+            if ap["depart_frame"] is None and ap is not active_popups[0] and ap.get("stopby_group"):
+                next_n = ap.get("next_numbered_order")
+                go_pre = audio_cues.get(f"goPre{next_n}") if next_n is not None else None
+                if go_pre is not None:
+                    ap["depart_frame"] = int(round(go_pre * fps))
+        if preview_recap_only:
+            pre_popup_frame = clean_frame
+        else:
+            pre_popup_frame = self._animate_overview_frames(
+                video, current_bg, cap, is_video, w, h, fps,
+                smooth_path, mode_breakpoints, cum_smooth_dist, total_smooth_dist,
+                active_popups, stop_popup, points, route_avoid_points, route_obstacle_arr,
+            )
 
         # Built once, up front, so its exact footprint can be reserved
         # (see reserved_boxes below) before the recap frame lays out its
@@ -855,6 +913,14 @@ class _OverviewRenderMixin:
             if summary_card is not None
             else []
         )
+
+        if preview_recap_only:
+            # Just render the final recap frame and save it as an image
+            import cv2
+            out_img = str(self.out_dir / "01_overview_recap_preview.png")
+            final_frame = self._render_recap_frame(pre_popup_frame, active_popups, group_popups=None)
+            cv2.imwrite(out_img, final_frame)
+            return out_img
 
         outro_hold_sec = self._render_recap_and_summary(
             video, stop_popup, summary_card, active_popups, w, h, fps,
@@ -885,10 +951,27 @@ class _OverviewRenderMixin:
 
         hard_ended = False
         if stop_popup and self.config.get("enable_ending_highlight", True):
+            # However fit_ending above actually split the remaining voice
+            # (it may have favored the summary hold over this), what's
+            # STILL left once that hold has actually been written is what
+            # the highlight itself now needs to stay up for.
+            remaining_for_highlight = (
+                audio_seconds - video.frames_written / fps if audio_seconds and audio_cues else None
+            )
+            # The {distance} cue (closing line's "...キロの旅でした") is a
+            # direct audio measurement, not derived from accumulated frame
+            # counts over the whole render - use it as a floor so the
+            # highlight can never let go before that line is actually
+            # spoken, even if the whole-duration estimate above drifted.
+            distance_cue = audio_cues.get("distance") if audio_cues else None
+            if distance_cue is not None:
+                distance_remaining = distance_cue - video.frames_written / fps
+                remaining_for_highlight = max(remaining_for_highlight or 0.0, distance_remaining)
             hard_ended = self._render_ending_highlight(
                 video, w, h, fps, stop_popup, start_popup,
                 clean_map_frame=pre_popup_frame,
                 bounding_box=bounding_box,
+                remaining_audio_seconds=remaining_for_highlight,
             )
 
         for p in popups:

@@ -14,7 +14,7 @@ each pipeline step's test_* command lives next to its own concerns:
 """
 
 from .helpers import _output_dir_from_config, _video_safe_label, _load_tts_waypoints
-from .gps_commands import test_gps, test_overview_video, test_residential_video
+from .gps_commands import test_gps, test_overview_map, test_overview_video, test_residential_video
 from .tts_commands import test_tts, test_tts_all, test_attraction_tts, test_attraction_tts_all
 from .attraction_commands import (
     test_attraction_video,
@@ -23,7 +23,7 @@ from .attraction_commands import (
 )
 from .subtitle_commands import test_subtitle, test_subtitles
 from .intro_outro_commands import test_intro_video, test_outro_video
-from .combine_commands import test_video_concat, test_transition_editor, test_all
+from .combine_commands import test_video_concat, test_mux_audio, test_transition_editor, test_all
 from .script_commands import test_overview_script
 
 __all__ = [
@@ -31,6 +31,7 @@ __all__ = [
     "_video_safe_label",
     "_load_tts_waypoints",
     "test_gps",
+    "test_overview_map",
     "test_overview_video",
     "test_residential_video",
     "test_tts",
@@ -45,6 +46,7 @@ __all__ = [
     "test_intro_video",
     "test_outro_video",
     "test_video_concat",
+    "test_mux_audio",
     "test_transition_editor",
     "test_all",
     "test_overview_script",

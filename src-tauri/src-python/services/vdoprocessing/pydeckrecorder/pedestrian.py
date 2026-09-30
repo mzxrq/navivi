@@ -2318,18 +2318,17 @@ async def _record_leg(
                     # attraction photo) and the photo shrinking into place.
                     # The voice delay below is counted from the frames
                     # actually written, so it stays in sync either way.
-                    if not start_popup_image:
+                    # Play the destination photo as a fullscreen shrink preview at
+                    # the start of the leg. The user specifically requested this back.
+                    if not dest_popup_image and not start_popup_image:
                         for _ in range(max(1, int(0.3 * fps))):
                             await _write_frame(warm_png)
-
-                    if start_popup_image:
-                        # Departure photo preview: only ever set on the
-                        # trip's very first leg (see `start_popup_image`
-                        # docstring). Every leg's own DESTINATION photo now
-                        # plays at actual arrival instead (see the `grow=True`
-                        # call further down, right as the walker reaches it)
-                        # -- not here at the opening -- so this departure
-                        # beat is the only thing shown at any leg's opening.
+                    
+                    if dest_popup_image:
+                        await _play_leg_photo_card(
+                            dest_popup_image, dest_popup_freeze_seconds, "dest_opening"
+                        )
+                    elif start_popup_image:
                         await _play_leg_photo_card(
                             start_popup_image, start_popup_freeze_seconds, "start"
                         )
@@ -2795,13 +2794,11 @@ async def _record_leg(
                     # from "still walking" to "photo popping in" the instant
                     # the walker stops, with no beat to register arrival.
                     if dest_popup_image:
-                        # Arrived early (arrival_wait_seconds): no plain map freeze -
-                        # the small photo card pops up right away and waits for
-                        # the voice (see small_hold_seconds below).
-                        pre_popup_hold_frames = int(
-                            (0.0 if arrival_wait_seconds is not None
-                             else tuning.RESIDENTIAL_ARRIVAL_FREEZE_SECONDS) * fps
-                        )
+                        # The arrived map holds for the freeze, then the small
+                        # photo card pops up and waits for the rest of the voice
+                        # (small_hold_seconds below, shortened by the freeze so
+                        # the clip's length doesn't change).
+                        pre_popup_hold_frames = int(tuning.RESIDENTIAL_ARRIVAL_FREEZE_SECONDS * fps)
                         for _ in range(pre_popup_hold_frames):
                             await _write_frame(last_png_bytes)
 
@@ -2827,7 +2824,10 @@ async def _record_leg(
                             dest_popup_image, dest_popup_freeze_seconds,
                             "dest_arrival", marker_px=arrival_marker_px, grow=True,
                             cut_after=True, quick=True,
-                            small_hold_seconds=arrival_wait_seconds,
+                            small_hold_seconds=(
+                                None if arrival_wait_seconds is None
+                                else max(0.0, arrival_wait_seconds - tuning.RESIDENTIAL_ARRIVAL_FREEZE_SECONDS)
+                            ),
                             pip_end=str(dest_image_display or "cover").lower() == "pip",
                             hold_seconds=(
                                 arrival_photo_hold_seconds

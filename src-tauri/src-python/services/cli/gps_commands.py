@@ -93,6 +93,34 @@ def test_overview_video(
     }
 
 
+def test_overview_map(job_config_path: str, output_path: Optional[str] = None) -> Dict[str, Any]:
+    """Fetches just the overview's background map image - the same bounding
+    box, padding (tuning.OVERVIEW_PADDING_BY_SPAN_KM) and crop the real
+    render uses - and saves it, without rendering any video. Takes seconds,
+    so it's the quick way to check how a padding change frames the route.
+    Defaults to <project>/assets/image/map/overview_map_preview.png (never the
+    pipeline's own map_background.png, so a preview can't clobber it)."""
+    from services.config.job_config import JobConfigManager
+    from services.mapfetcher.mapfetcher import MapFetcher
+    from services.vdoprocessing.videopipeline import process_gps
+    from services.vdoprocessing.videopipeline.render_step import _adaptive_overview_padding
+
+    config_path = Path(job_config_path)
+    if not config_path.exists():
+        raise FileNotFoundError(f"job_config.json not found: {config_path}")
+
+    route_df = process_gps(str(config_path))["route"]
+    fetcher = MapFetcher(job_config=JobConfigManager(str(config_path)))
+    padding = _adaptive_overview_padding(route_df)
+    bbox = fetcher.get_bounding_box(route_df, padding_factor=padding)
+    target = output_path or str(
+        config_path.parent / "assets" / "image" / "map" / "overview_map_preview.png"
+    )
+    Path(target).parent.mkdir(parents=True, exist_ok=True)
+    saved, extent, size = fetcher.fetch_image(bounding_box=bbox, output_filename=target)
+    return {"success": True, "map_path": saved, "padding_factor": padding, "extent": list(extent), "size": list(size)}
+
+
 def test_residential_video(
     job_config_path: str,
     output_video_dir: str = None,
@@ -142,6 +170,40 @@ def test_residential_video(
         force=force,
         render_mode="residential",
         leg_index=leg_index,
+    )
+    _tracker.clear()
+
+    return {
+        "success": bool(video_paths),
+        "video_paths": video_paths,
+    }
+
+def test_recap_frame(
+    job_config_path: str,
+    output_video_dir: str = None,
+) -> Dict[str, Any]:
+    """Generates just a single static PNG preview of the final overview recap frame."""
+    config_path = Path(job_config_path)
+    if not config_path.exists():
+        raise FileNotFoundError(f"job_config.json not found: {config_path}")
+
+    from services.helpers import project_route_video_dir
+    output_video_dir = Path(output_video_dir) if output_video_dir else project_route_video_dir(config_path.parent)
+    output_video_dir.mkdir(parents=True, exist_ok=True)
+
+    from services.vdoprocessing.videopipeline import process_gps, render_route_video
+
+    _tracker.show("Parsing GPS track...")
+    cleaned_route = process_gps(str(config_path))
+    _tracker.clear()
+
+    _tracker.show("Generating recap preview...")
+    video_paths = render_route_video(
+        cleaned_route=cleaned_route,
+        project_config_path=str(config_path),
+        output_video_dir=str(output_video_dir),
+        force=True,
+        render_mode="recap_frame",
     )
     _tracker.clear()
 

@@ -172,13 +172,17 @@ def _resolve_frame_length(duration_sec: float) -> int:
 def _resolve_segments(duration_sec: float) -> Tuple[int, int]:
     """(segment count, frames per segment) for a clip of duration_sec. One
     segment sized to the duration when it fits in COMFYUI_MAX_FRAMES;
-    otherwise full-length segments, as many as the duration needs, capped
-    at tuning.COMFYUI_EXTEND_MAX_SEGMENTS."""
+    otherwise full-length segments, as many as the duration needs - capped at
+    tuning.COMFYUI_EXTEND_MAX_SEGMENTS, or uncapped (chains the whole
+    narration) when that's None."""
     one = _resolve_frame_length(duration_sec)
     segment_sec = tuning.COMFYUI_MAX_FRAMES / tuning.COMFYUI_FPS
-    if duration_sec <= segment_sec or tuning.COMFYUI_EXTEND_MAX_SEGMENTS <= 1:
+    cap = tuning.COMFYUI_EXTEND_MAX_SEGMENTS
+    if duration_sec <= segment_sec or cap == 1:
         return 1, one
-    count = min(tuning.COMFYUI_EXTEND_MAX_SEGMENTS, math.ceil(duration_sec / segment_sec))
+    count = math.ceil(duration_sec / segment_sec)
+    if cap is not None:
+        count = min(cap, count)
     return count, tuning.COMFYUI_MAX_FRAMES
 
 
@@ -201,6 +205,88 @@ def _resolve_motion_prompt(camera_pan_hint: Any) -> str:
     if key:
         return f"{camera_pan_hint}, {tuning.COMFYUI_DEFAULT_MOTION_PROMPT}"
     return tuning.COMFYUI_DEFAULT_MOTION_PROMPT
+
+
+def _read_image(path: str):
+    """cv2.imread that also opens a non-ASCII Windows path."""
+    import cv2
+    import numpy as np
+
+    image = cv2.imread(path, cv2.IMREAD_COLOR)
+    if image is None:
+        image = cv2.imdecode(np.fromfile(path, dtype=np.uint8), cv2.IMREAD_COLOR)
+    return image
+
+
+def _write_last_frame(video_path: str, photo_path: str, output_png: str) -> str:
+    """Writes the LAST frame of video_path to output_png, its colours pulled
+    back to photo_path first (tuning.COMFYUI_CHAIN_COLOR_MATCH) so the next
+    segment starts from the photo own grade instead of inheriting the grading
+    Wan added - which is what makes the drift compound."""
+    import cv2
+    import numpy as np
+
+    from services.vdoprocessing import color_match
+
+    cap = cv2.VideoCapture(video_path)
+    frame = None
+    try:
+        while True:
+            ok, this = cap.read()
+            if not ok:
+                break
+            frame = this
+    finally:
+        cap.release()
+    if frame is None:
+        raise RuntimeError(f"No frames in {video_path} to chain the next segment from.")
+
+    if tuning.COMFYUI_CHAIN_COLOR_MATCH:
+        photo = _read_image(photo_path)
+        if photo is not None:
+            h, w = frame.shape[:2]
+            target = color_match._lab_stats(color_match._crop_to_aspect(photo, w, h))
+            frame = color_match.correct_frame(frame, color_match._lab_stats(frame), target)
+        else:
+            logger.warning("Chain colour match skipped: can't read %s", photo_path)
+
+    ok, buffer = cv2.imencode(".png", frame)
+    if not ok:
+        raise RuntimeError(f"Could not encode the last frame of {video_path}.")
+    np.asarray(buffer).tofile(output_png)  # handles a non-ASCII path
+    return output_png
+
+
+def _join_segments(segment_paths: list, output_path: str) -> str:
+    """Joins the chained segments into output_path. Every segment after the
+    first opens on a re-render of the frame it started from - the segment
+    before it already ended on that frame - so its first frame is dropped."""
+    from services.tts.ttsengine import FFmpegManager
+
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    if len(segment_paths) == 1:
+        Path(segment_paths[0]).replace(output_path)
+        return output_path
+
+    parts, labels = [], []
+    for i, _ in enumerate(segment_paths):
+        first = 0 if i == 0 else 1
+        parts.append(f"[{i}:v]trim=start_frame={first},setpts=PTS-STARTPTS[v{i}]")
+        labels.append(f"[v{i}]")
+    graph = ";".join(parts) + ";" + "".join(labels) + f"concat=n={len(segment_paths)}:v=1:a=0[out]"
+
+    command = [FFmpegManager.resolve_ffmpeg_bin(), "-y", "-loglevel", "error"]
+    for path in segment_paths:
+        command += ["-i", path]
+    command += [
+        "-filter_complex", graph, "-map", "[out]",
+        "-c:v", "libx264", *tuning.ffmpeg_thread_args(), "-crf", "18", "-preset", "fast",
+        "-pix_fmt", "yuv420p", "-r", str(tuning.COMFYUI_FPS), output_path,
+    ]
+    result = subprocess.run(command, capture_output=True, encoding="utf-8", errors="replace")
+    if result.returncode != 0:
+        raise RuntimeError(f"Joining the chained segments failed: {result.stderr.strip()}")
+    return output_path
 
 
 class ComfyUII2VClient:
@@ -563,32 +649,84 @@ class ComfyUII2VClient:
 
         segments, length = _resolve_segments(duration_sec)
         prompt_text = _resolve_motion_prompt(camera_pan_hint)
-        filename_prefix = f"attraction/{uuid.uuid4().hex[:8]}"
 
         with httpx.Client() as client:
-            uploaded_name = self._upload_image(client, image_path)
-            graph = self._build_graph(uploaded_name, prompt_text, length, filename_prefix, segments)
-            prompt_id = self._submit(client, graph)
-            logger.info(
-                "Submitted ComfyUI I2V job %s (%d segment(s) x %d frames, prompt=%r)",
-                prompt_id, segments, length, prompt_text,
-            )
-            video_outputs = self._wait_for_result(client, prompt_id)
-            self._touch_activity()
-
-            # SaveVideo reports its output under "videos" on some ComfyUI
-            # versions and "images" (with animated=[true]) on others — check
-            # all the shapes actually seen rather than assuming one.
-            videos = (
-                video_outputs.get("videos")
-                or video_outputs.get("gifs")
-                or video_outputs.get("images")
-            )
-            if not videos:
-                raise RuntimeError(
-                    f"ComfyUI job {prompt_id} completed but produced no video output."
+            if segments > 1 and tuning.COMFYUI_CHAIN_LAST_FRAME:
+                self._generate_chained(
+                    client, image_path, output_path, segments, length, prompt_text
                 )
-            self._download_video(client, videos[0], output_path)
+            else:
+                graph = self._build_graph(
+                    self._upload_image(client, image_path), prompt_text, length,
+                    f"attraction/{uuid.uuid4().hex[:8]}", segments,
+                )
+                logger.info(
+                    "ComfyUI I2V: one graph, %d segment(s) x %d frames, prompt=%r",
+                    segments, length, prompt_text,
+                )
+                self._run_segment(client, graph, output_path)
 
         logger.info("ComfyUI I2V clip saved to %s", output_path)
         return output_path
+
+    def _run_segment(self, client: httpx.Client, graph: Dict[str, Any], output_path: str) -> str:
+        """Submits one graph, waits for it, and downloads the video it made."""
+        prompt_id = self._submit(client, graph)
+        video_outputs = self._wait_for_result(client, prompt_id)
+        self._touch_activity()
+
+        # SaveVideo reports its output under "videos" on some ComfyUI
+        # versions and "images" (with animated=[true]) on others — check
+        # all the shapes actually seen rather than assuming one.
+        videos = (
+            video_outputs.get("videos")
+            or video_outputs.get("gifs")
+            or video_outputs.get("images")
+        )
+        if not videos:
+            raise RuntimeError(
+                f"ComfyUI job {prompt_id} completed but produced no video output."
+            )
+        self._download_video(client, videos[0], output_path)
+        return output_path
+
+    def _generate_chained(
+        self,
+        client: httpx.Client,
+        image_path: str,
+        output_path: str,
+        segments: int,
+        length: int,
+        prompt_text: str,
+    ) -> str:
+        """Last-frame chaining: one ComfyUI job per segment, each started from
+        a PNG of the previous segment last frame (colour-matched back to the
+        photo first), the segments then joined with ffmpeg. See
+        tuning.COMFYUI_CHAIN_LAST_FRAME for why this is the default over
+        unrolling every segment into one graph."""
+        work = Path(output_path).parent / f".chain_{uuid.uuid4().hex[:8]}"
+        work.mkdir(parents=True, exist_ok=True)
+        try:
+            paths = []
+            start_image = image_path
+            for k in range(segments):
+                graph = self._build_graph(
+                    self._upload_image(client, start_image), prompt_text, length,
+                    f"attraction/{uuid.uuid4().hex[:8]}", 1,
+                )
+                segment_path = str(work / f"seg{k}.mp4")
+                logger.info(
+                    "ComfyUI I2V: chained segment %d/%d (%d frames) from %s",
+                    k + 1, segments, length, Path(start_image).name,
+                )
+                self._run_segment(client, graph, segment_path)
+                paths.append(segment_path)
+                if k + 1 < segments:
+                    start_image = _write_last_frame(
+                        segment_path, image_path, str(work / f"frame{k}.png")
+                    )
+            return _join_segments(paths, output_path)
+        finally:
+            for leftover in work.glob("*"):
+                leftover.unlink(missing_ok=True)
+            work.rmdir()
