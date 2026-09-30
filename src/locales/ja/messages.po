@@ -119,6 +119,11 @@ msgstr "{0} (復路)"
 msgid "{0} already has a marker at this time."
 msgstr "この位置には、すでに{0}のマーカーがあります"
 
+#. placeholder {0}: localPrompt.length
+#: src/components/ui/ScriptInput.tsx:227
+msgid "{0} characters"
+msgstr "{0} 文字"
+
 #. placeholder {0}: selectedClipIds.length
 #: src/features/timeline/components/Inspector.tsx:43
 msgid "{0} Clips Selected"
@@ -640,7 +645,7 @@ msgstr "自動スキップ (クイックエクスポート)"
 msgid "Auto-stitched Video"
 msgstr "自動結合された動画"
 
-#: src/components/ui/ScriptInput.tsx:195
+#: src/components/ui/ScriptInput.tsx:200
 msgid "Auto-Write"
 msgstr "自動作成"
 
@@ -695,16 +700,16 @@ msgstr "バーン"
 msgid "Camera Angle"
 msgstr "カメラアングル"
 
-#: src/components/ui/NewProject.tsx:308
-#: src/components/ui/SaveAs.tsx:181
-#: src/components/ui/ScriptInput.tsx:185
-#: src/components/ui/UnsavedChanges.tsx:50
+#: src/components/ui/ScriptInput.tsx:190
 msgid "cancel"
 msgstr "キャンセル"
 
 #: src/components/ui/AutoDirectorModal.tsx:169
+#: src/components/ui/NewProject.tsx:306
 #: src/components/ui/RenderOverlay.tsx:827
 #: src/components/ui/RenderOverlay.tsx:1244
+#: src/components/ui/SaveAs.tsx:106
+#: src/components/ui/UnsavedChanges.tsx:36
 #: src/components/view/ProjectManager.tsx:538
 #: src/components/view/ProjectManager.tsx:567
 #: src/components/view/ProjectSettingsModal.tsx:112
@@ -761,8 +766,8 @@ msgid "Check Audio & Video"
 msgstr "オーディオとビデオを確認"
 
 #: src/components/ui/SaveAs.tsx:150
-msgid "Checking..."
-msgstr "確認中..."
+#~ msgid "Checking..."
+#~ msgstr "確認中..."
 
 #: src/features/map/components/DrawBar.tsx:124
 msgid "Choose a leg"
@@ -791,6 +796,7 @@ msgstr "クリーンでモダンなサンセリフ"
 
 #: src/components/ui/AppSettings.tsx:967
 #: src/components/ui/AppSettings.tsx:968
+#: src/components/ui/NewProject.tsx:223
 #: src/components/ui/StatusBar.tsx:406
 #: src/features/map/components/Sidebar.tsx:253
 msgid "Clear"
@@ -881,6 +887,8 @@ msgstr "クリップのリンクを解除しました"
 
 #: src/components/ui/AppSettings.tsx:173
 #: src/components/ui/AppSettings.tsx:174
+#: src/components/ui/ErrorBoundary.tsx:79
+#: src/components/ui/NewProject.tsx:162
 #: src/components/ui/StatusBar.tsx:458
 #: src/components/ui/TitleBar.tsx:441
 #: src/features/export/components/ExportModal.tsx:419
@@ -955,6 +963,10 @@ msgstr "未保存の変更があるエディタの自動保存を制御します
 msgid "Converting GPS file format..."
 msgstr "GPSファイル形式を変換しています..."
 
+#: src/components/ui/ErrorBoundary.tsx:129
+msgid "Copied"
+msgstr "コピーしました"
+
 #: src/components/ui/ContextMenu.tsx:414
 #: src/components/ui/ContextMenu.tsx:455
 msgid "Copy"
@@ -967,6 +979,10 @@ msgstr "コピー"
 #: src/features/map/hooks/useStopMenus.ts:295
 msgid "Copy coordinates"
 msgstr "座標をコピー"
+
+#: src/components/ui/ErrorBoundary.tsx:129
+msgid "Copy error"
+msgstr "エラーをコピー"
 
 #: src/components/ui/PipelineLogPanel.tsx:153
 #: src/components/ui/PipelineLogPanel.tsx:154
@@ -1029,15 +1045,15 @@ msgstr "このバージョンを保存できませんでした"
 msgid "Couldn't look up a place name for this location."
 msgstr "この場所の地名を取得できませんでした。"
 
-#: src/components/ui/SaveAs.tsx:115
+#: src/components/ui/SaveAs.tsx:100
 msgid "Create a copy of this workspace"
 msgstr "このワークスペースのコピーを作成"
 
-#: src/components/ui/NewProject.tsx:137
+#: src/components/ui/NewProject.tsx:153
 msgid "create-new-route"
 msgstr "新しいルートを作成"
 
-#: src/components/ui/NewProject.tsx:140
+#: src/components/ui/NewProject.tsx:156
 msgid "create-new-route-detail"
 msgstr "開始座標とルーティング動作を設定"
 
@@ -1095,7 +1111,15 @@ msgstr "すべてのポイントのデフォルトマーカーです。ポイン
 msgid "Default pin"
 msgstr "標準のピン"
 
-#: src/components/ui/NewProject.tsx:233
+#: src/components/ui/NewProject.tsx:260
+msgid "Default travel mode"
+msgstr "デフォルトの移動手段"
+
+#: src/components/ui/NewProject.tsx:260
+#~ msgid "default-routing-mode"
+#~ msgstr "デフォルトの移動手段"
+
+#: src/components/ui/NewProject.tsx:281
 msgid "default-routing-mode-detail"
 msgstr "ポイントを配置する際のデフォルトの経路検索"
 
@@ -1180,8 +1204,8 @@ msgid "Detecting context..."
 msgstr "コンテキストを検出中..."
 
 #: src/components/ui/NewProject.tsx:241
-msgid "direct"
-msgstr "直線"
+#~ msgid "direct"
+#~ msgstr "直線"
 
 #: src/features/map/hooks/useStopMenus.ts:35
 msgid "Direct"
@@ -1220,11 +1244,11 @@ msgstr "ディゾルブ"
 msgid "Dithering noise pixel dissolve between scenes"
 msgstr "シーン間のディザリングノイズによるディゾルブ"
 
-#: src/components/ui/UnsavedChanges.tsx:38
+#: src/components/ui/UnsavedChanges.tsx:45
 msgid "Do you want to save the changes you made to "
 msgstr "次のプロジェクトへの変更を保存しますか: "
 
-#: src/components/ui/UnsavedChanges.tsx:58
+#: src/components/ui/UnsavedChanges.tsx:33
 msgid "Don't Save"
 msgstr "保存しない"
 
@@ -1298,13 +1322,14 @@ msgstr "ドリーミー"
 #~ msgid "drive"
 #~ msgstr "ドライブ"
 
+#: src/components/ui/NewProject.tsx:126
 #: src/features/map/hooks/useStopMenus.ts:32
 msgid "Drive"
 msgstr "車"
 
 #: src/components/ui/NewProject.tsx:239
-msgid "DriveLabel"
-msgstr "ドライブ"
+#~ msgid "DriveLabel"
+#~ msgstr "ドライブ"
 
 #: src/features/map/components/MapArea.tsx:1263
 msgid "Drop photos here to auto-plot your route"
@@ -1466,11 +1491,12 @@ msgstr "点を消去 (E)"
 msgid "Error Details:"
 msgstr "エラー詳細:"
 
-#: src/components/ui/ErrorBoundary.tsx:77
+#: src/components/ui/ErrorBoundary.tsx:45
+#: src/components/ui/ErrorBoundary.tsx:103
 msgid "errorboundary_error-message"
 msgstr "不明なエラーが発生しました"
 
-#: src/components/ui/ErrorBoundary.tsx:58
+#: src/components/ui/ErrorBoundary.tsx:97
 msgid "errorboundary_reason"
 msgstr "アプリケーションで予期しないレンダリングエラーが発生しました。保存済みのファイルは安全です"
 
@@ -1676,12 +1702,14 @@ msgstr "高速"
 
 #: src/components/ui/AppSettings.tsx:245
 #: src/components/ui/AppSettings.tsx:251
+#: src/components/ui/NewProject.tsx:289
+#: src/components/ui/NewProject.tsx:295
 msgid "Fast render mode"
 msgstr "高速レンダリングモード"
 
 #: src/components/ui/NewProject.tsx:276
-msgid "Fast Render Mode"
-msgstr "高速レンダリングモード"
+#~ msgid "Fast Render Mode"
+#~ msgstr "高速レンダリングモード"
 
 #: src/features/export/components/ExportModal.tsx:116
 msgid "Fastest export with compact file size for quick previews (12 Mbps 4K / 5 Mbps 1080p)"
@@ -1715,6 +1743,7 @@ msgstr "タイムラインをコンテンツに合わせる"
 #~ msgid "fly"
 #~ msgstr "飛行"
 
+#: src/components/ui/NewProject.tsx:128
 #: src/features/map/hooks/useStopMenus.ts:34
 msgid "Fly"
 msgstr "飛行"
@@ -1851,6 +1880,10 @@ msgstr "ハードウェアモード"
 #: src/features/timeline/components/elements/inspector/InspectorTextPanel.tsx:55
 msgid "Heavy yellow headline with thick outline"
 msgstr "太い枠線付きの太い黄色い味だし"
+
+#: src/components/ui/ErrorBoundary.tsx:121
+msgid "Hide details"
+msgstr "詳細を隠す"
 
 #: src/components/ui/PipelineLogPanel.tsx:165
 msgid "Hide log"
@@ -2194,6 +2227,7 @@ msgstr "メニュー"
 msgid "Minimalist"
 msgstr "ミニマリスト"
 
+#: src/components/ui/ErrorBoundary.tsx:71
 #: src/components/ui/TitleBar.tsx:425
 msgid "Minimize"
 msgstr "最小化"
@@ -2248,7 +2282,7 @@ msgstr "トラックをミュート"
 msgid "Muted"
 msgstr "ミュート中"
 
-#: src/components/ui/SaveAs.tsx:114
+#: src/components/ui/SaveAs.tsx:100
 msgid "Name your project to continue"
 msgstr "続行するにはプロジェクト名を入力してください"
 
@@ -2377,7 +2411,7 @@ msgstr "今回の生成ではナレーションのスクリプトが見つかり
 #~ msgstr "描画された軌跡が見つかりません"
 
 #: src/components/ui/LocationSearch.tsx:56
-#: src/components/ui/NewProject.tsx:88
+#: src/components/ui/NewProject.tsx:85
 msgid "no-internet"
 msgstr "インターネット接続がありません"
 
@@ -2612,7 +2646,11 @@ msgstr "プロジェクトが正常に読み込まれました"
 msgid "Project Manager"
 msgstr "プロジェクトマネージャー"
 
-#: src/components/ui/SaveAs.tsx:123
+#: src/components/ui/NewProject.tsx:173
+msgid "Project name"
+msgstr "プロジェクト名"
+
+#: src/components/ui/SaveAs.tsx:126
 #: src/components/view/ProjectManager.tsx:457
 msgid "Project Name"
 msgstr "プロジェクト名"
@@ -2649,11 +2687,11 @@ msgstr "プロジェクト設定を保存しました"
 msgid "Project Title"
 msgstr "プロジェクトタイトル"
 
-#: src/components/ui/NewProject.tsx:149
-msgid "project-name"
-msgstr "無題のプロジェクト"
+#: src/components/ui/NewProject.tsx:173
+#~ msgid "project-name"
+#~ msgstr "無題のプロジェクト"
 
-#: src/components/ui/NewProject.tsx:156
+#: src/components/ui/NewProject.tsx:182
 msgid "project-name-placeholder"
 msgstr "京都観光"
 
@@ -2794,7 +2832,7 @@ msgstr "ビデオ区間を再生成すると、手動でカスタマイズでき
 msgid "Regenerating audio for {0}..."
 msgstr "{0} の音声を再生成しています..."
 
-#: src/components/ui/ErrorBoundary.tsx:92
+#: src/components/ui/ErrorBoundary.tsx:137
 msgid "Reload Application"
 msgstr "アプリを再読み込み"
 
@@ -3081,12 +3119,16 @@ msgstr "始"
 msgid "Saturation"
 msgstr "彩度"
 
-#: src/components/ui/SaveAs.tsx:189
-#: src/components/ui/ScriptInput.tsx:234
+#: src/components/ui/SaveAs.tsx:114
+#: src/components/ui/ScriptInput.tsx:257
 #: src/components/ui/StatusBar.tsx:326
-#: src/components/ui/UnsavedChanges.tsx:65
+#: src/components/ui/UnsavedChanges.tsx:39
 msgid "Save"
 msgstr "保存"
+
+#: src/components/ui/ScriptInput.tsx:249
+msgid "Save (Ctrl+Enter)"
+msgstr "保存 (Ctrl+Enter)"
 
 #: src/components/ui/StatusBar.tsx:344
 msgid "Save a version to create a restore point"
@@ -3101,10 +3143,10 @@ msgid "Save current version"
 msgstr "現在のばーしょんを保存"
 
 #: src/components/ui/SaveAs.tsx:146
-msgid "Save Location"
-msgstr "保存場所"
+#~ msgid "Save Location"
+#~ msgstr "保存場所"
 
-#: src/components/ui/SaveAs.tsx:110
+#: src/components/ui/SaveAs.tsx:98
 msgid "Save New Project"
 msgstr "新規プロジェクトを保存"
 
@@ -3112,7 +3154,7 @@ msgstr "新規プロジェクトを保存"
 msgid "Save Project"
 msgstr "プロジェクトを保存"
 
-#: src/components/ui/SaveAs.tsx:110
+#: src/components/ui/SaveAs.tsx:98
 msgid "Save Project As"
 msgstr "プロジェクトを名前を付けて保存"
 
@@ -3132,7 +3174,7 @@ msgstr "メディアをインポートする前にプロジェクトを保存し
 msgid "Save the project to enable version history"
 msgstr "バージョン履歴を有効にするにはプロジェクトを保存してください"
 
-#: src/components/ui/ScriptInput.tsx:234
+#: src/components/ui/ScriptInput.tsx:257
 #: src/components/ui/StatusBar.tsx:266
 msgid "Saved"
 msgstr "保存済み"
@@ -3149,12 +3191,12 @@ msgstr "プロジェクト"
 msgid "Scale"
 msgstr "スケール"
 
-#: src/components/ui/ScriptInput.tsx:218
-#: src/components/ui/ScriptInput.tsx:219
+#: src/components/ui/ScriptInput.tsx:238
+#: src/components/ui/ScriptInput.tsx:239
 msgid "Scan script for all Kanji and add to Dictionary"
 msgstr "スクリプト内にあるすべての漢字をスキャンし辞書に追加する"
 
-#: src/components/ui/ScriptInput.tsx:153
+#: src/components/ui/ScriptInput.tsx:158
 msgid "Script"
 msgstr "スクリプト"
 
@@ -3294,6 +3336,10 @@ msgstr "Shorts、Reels、TikTok"
 msgid "Show Auto-Write script buttons and overview narration. Requires Ollama to be installed and running locally."
 msgstr "AI機能を有効にする。開催されてインストールされているOllamaが必要です。"
 
+#: src/components/ui/ErrorBoundary.tsx:121
+msgid "Show details"
+msgstr "詳細を表示"
+
 #: src/features/map/components/MapLayers/LayerManager.tsx:126
 msgid "Show elevation and 3D buildings"
 msgstr "標高と3D建物を表示する"
@@ -3331,7 +3377,7 @@ msgstr "シンプル"
 #~ msgstr "サイズ"
 
 #: src/components/ui/AppSettings.tsx:246
-#: src/components/ui/NewProject.tsx:279
+#: src/components/ui/NewProject.tsx:292
 msgid "Skip AI voiceover synthesis and pop-up images during generation"
 msgstr "生成時にAI音声合成とポップアップ画像をスキップする"
 
@@ -3382,7 +3428,7 @@ msgstr "前後のクリップをブレンドするスムーズなリニアディ
 msgid "Smooth the path through the points"
 msgstr "点を通る経路をなめらかにする"
 
-#: src/components/ui/ErrorBoundary.tsx:55
+#: src/components/ui/ErrorBoundary.tsx:94
 msgid "something-went-wrong"
 msgstr "問題が発生しました"
 
@@ -3420,17 +3466,21 @@ msgstr "標準ワイドスクリーン (1920x1080)"
 msgid "Start"
 msgstr "出発地"
 
-#: src/components/ui/NewProject.tsx:313
+#: src/components/ui/NewProject.tsx:309
 msgid "start-editing"
 msgstr "編集を開始"
 
-#: src/components/ui/NewProject.tsx:178
+#: src/components/ui/NewProject.tsx:209
 msgid "start-search-detail"
 msgstr "都市、ランドマーク、または住所"
 
-#: src/components/ui/NewProject.tsx:164
-msgid "start-search-location"
-msgstr "出発地"
+#: src/components/ui/NewProject.tsx:190
+#~ msgid "start-search-location"
+#~ msgstr "出発地"
+
+#: src/components/ui/NewProject.tsx:190
+msgid "Starting point"
+msgstr "出発地点"
 
 #: src/components/ui/RenderOverlay.tsx:1286
 msgid "Stitching Videos & Finalizing Export..."
@@ -3727,7 +3777,7 @@ msgstr "次の地点までの移動手段"
 msgid "TTS Pronunciation Dictionary"
 msgstr "TTS 発音辞書"
 
-#: src/components/ui/ScriptInput.tsx:208
+#: src/components/ui/ScriptInput.tsx:221
 msgid "Type a prompt or write your own script..."
 msgstr "プロンプトを入力するか、独自のスクリプトを作成してください"
 
@@ -3798,7 +3848,7 @@ msgstr "トラックのミュートを解除"
 msgid "Unsaved"
 msgstr "未保存"
 
-#: src/components/ui/UnsavedChanges.tsx:35
+#: src/components/ui/UnsavedChanges.tsx:23
 msgid "Unsaved Changes"
 msgstr "未保存の変更"
 
@@ -3806,8 +3856,8 @@ msgstr "未保存の変更"
 msgid "Unsaved Changes - Press Ctrl+S to save"
 msgstr "未保存の変更 - 保存するにはCtrl+Sを押してください"
 
-#: src/components/ui/NewProject.tsx:32
-#: src/components/ui/NewProject.tsx:112
+#: src/components/ui/NewProject.tsx:26
+#: src/components/ui/NewProject.tsx:110
 #: src/components/ui/TitleBar.tsx:86
 #: src/components/ui/TitleBar.tsx:220
 #: src/components/ui/TitleBar.tsx:481
@@ -3907,13 +3957,14 @@ msgstr "パイプラインを待機中..."
 #~ msgid "walk"
 #~ msgstr "徒歩"
 
+#: src/components/ui/NewProject.tsx:127
 #: src/features/map/hooks/useStopMenus.ts:31
 msgid "Walk"
 msgstr "徒歩"
 
 #: src/components/ui/NewProject.tsx:240
-msgid "WalkLabel"
-msgstr "徒歩"
+#~ msgid "WalkLabel"
+#~ msgstr "徒歩"
 
 #: src/components/ui/ContextMenu.tsx:676
 #~ msgid "waypoint"
@@ -4001,7 +4052,7 @@ msgstr "これらのクリップをタイムライン上で一緒にドラッグ
 msgid "You don't have any recent workspaces. Create a new project or open an existing .nvv file to get started."
 msgstr "最近のワークスペースはありませんね。新しいプロジェクトを作成するか、既存の.nvvファイルを開いて開始してください"
 
-#: src/components/ui/SaveAs.tsx:136
+#: src/components/ui/SaveAs.tsx:135
 msgid "Your Project Name Here"
 msgstr "ここにプロジェクト名を入力"
 

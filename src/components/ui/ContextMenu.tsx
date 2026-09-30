@@ -289,7 +289,10 @@ function MenuPanel({
         onContextMenu={(e) => e.preventDefault()}
         style={pos ? { left: pos.left, top: pos.top } : { left: -9999, top: -9999 }}
         className={`fixed z-100000 min-w-52 max-w-80 max-h-[calc(100vh-1rem)] overflow-y-auto p-1 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 shadow-lg outline-none select-none ${
-          pos ? "animate-in fade-in zoom-in-95 duration-100" : "invisible"
+          // transition-none: `duration-*` also sets transition-duration, and with the
+          // default `transition-property: all` the jump from the off-screen
+          // measuring spot to the cursor would animate (menu slid in from the top-left).
+          pos ? "transition-none animate-in fade-in zoom-in-95 duration-100" : "invisible"
         }`}
       >
         {entries.map((entry, index) => {

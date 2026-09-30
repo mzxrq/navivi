@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
-import { createPortal } from "react-dom";
 import { exists } from "@tauri-apps/plugin-fs";
 import { documentDir, join } from "@tauri-apps/api/path";
-import { Folder, Map, Loader2 } from "./icons";
+import { Folder, Loader2 } from "./icons";
 import { fileSystem } from "../../config/constants";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
+import { Dialog, dialogButton, dialogInput } from "./Dialog";
 
 interface SaveAsProps {
   isOpen: boolean;
@@ -30,14 +30,7 @@ export function SaveAs({
     if (isOpen) setSaveAsName(defaultName);
   }, [isOpen, defaultName]);
 
-  useEffect(() => {
-    const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && isOpen) onClose();
-    };
-    window.addEventListener("keydown", handleEsc);
-    return () => window.removeEventListener("keydown", handleEsc);
-  }, [isOpen, onClose]);
-
+  // Find a free folder name under Documents/Navivi/Projects (debounced).
   useEffect(() => {
     if (!isOpen) return;
 
@@ -96,101 +89,66 @@ export function SaveAs({
   if (!isOpen) return null;
 
   const isValid = saveAsName.trim().length > 0 && !isChecking;
+  const submit = () => {
+    if (isValid) onSubmit(saveAsName, folderPreview);
+  };
 
-  return createPortal(
-    <div className="fixed inset-0 z-99999 flex items-center justify-center bg-zinc-950/40 backdrop-blur-[2px] animate-in fade-in duration-200">
-      <div className="w-96 bg-white dark:bg-navidark-900 border border-zinc-200 dark:border-navidark-400 rounded-xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-        {/* Header Section */}
-        <div className="px-5 py-4 border-b border-zinc-100 dark:border-navidark-400 bg-zinc-50/50 dark:bg-navidark-800 flex items-center gap-3">
-          <div className="p-2 bg-navi-50 dark:bg-navi/10 text-navi-600 dark:text-navi-400 rounded-lg">
-            <Map className="w-5 h-5" />
-          </div>
-          <div>
-            <h3 className="text-sm font-bold text-zinc-900 dark:text-white">
-              {mode === "initial" ? t`Save New Project` : t`Save Project As`}
-            </h3>
-            <p className="text-[10px] text-zinc-500 dark:text-navidark-125 mt-0.5">
-              {mode === "initial"
-                ? t`Name your project to continue`
-                : t`Create a copy of this workspace`}
-            </p>
-          </div>
-        </div>
-
-        {/* Body Section */}
-        <div className="p-5">
-          <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5">
-            <Trans>Project Name</Trans>
-          </label>
-          <input
-            type="text"
-            value={saveAsName}
-            onChange={(e) => setSaveAsName(e.target.value)}
-            onKeyDown={(e) =>
-              e.key === "Enter" &&
-              isValid &&
-              onSubmit(saveAsName, folderPreview)
-            }
-            className="w-full bg-zinc-50 dark:bg-navidark-800 border border-zinc-200 dark:border-navidark-400 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-white mb-5 outline-none focus:border-navi focus:ring-1 focus:ring-navi transition-all shadow-sm"
-            autoFocus
-            placeholder={t`Your Project Name Here`}
-            spellCheck={false}
-          />
-
-          {/* Contextual Path Preview */}
-          <div className="flex items-start gap-3 p-3 bg-zinc-50 dark:bg-navidark-800 rounded-lg border border-zinc-100 dark:border-navidark-400 shadow-inner">
-            <Folder className="w-4 h-4 text-zinc-400 dark:text-navidark-150 mt-0.5 shrink-0" />
-            <div className="overflow-hidden w-full">
-              <div className="flex items-center justify-between mb-0.5">
-                <div className="text-[10px] font-semibold text-zinc-700 dark:text-zinc-300">
-                  <Trans>Save Location</Trans>
-                </div>
-                {isChecking && (
-                  <div className="flex items-center gap-1 text-[9px] text-zinc-400 dark:text-navidark-150 font-medium">
-                    <Loader2 className="w-2.5 h-2.5 animate-spin" /> <Trans>Checking...</Trans>
-                  </div>
-                )}
-              </div>
-              <div
-                className="text-[10px] text-zinc-500 dark:text-navidark-125 truncate flex items-center"
-                title={`Documents/Navivi/Projects/${folderPreview}`}
-              >
-                <span className="truncate shrink">
-                  Documents/Navivi/Projects/
-                </span>
-                <span
-                  className={`font-medium shrink-0 ml-0.5 ${
-                    folderPreview.includes("_")
-                      ? "text-zinc-600 dark:text-navidark-100"
-                      : "text-zinc-700 dark:text-zinc-300"
-                  }`}
-                >
-                  {folderPreview}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Footer Section */}
-        <div className="px-5 py-4 border-t border-zinc-100 dark:border-navidark-400 bg-zinc-50/50 dark:bg-navidark-800 flex justify-end gap-2">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-xs font-semibold text-zinc-600 dark:text-navidark-150 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-navidark-700 rounded-lg transition-colors"
-          >
-            <Trans>cancel</Trans>
+  return (
+    <Dialog
+      title={mode === "initial" ? t`Save New Project` : t`Save Project As`}
+      subtitle={
+        mode === "initial" ? t`Name your project to continue` : t`Create a copy of this workspace`
+      }
+      onClose={onClose}
+      footer={
+        <>
+          <button type="button" onClick={onClose} className={dialogButton.secondary}>
+            <Trans>Cancel</Trans>
           </button>
-
           <button
-            onClick={() => onSubmit(saveAsName, folderPreview)}
+            type="button"
+            onClick={submit}
             disabled={!isValid}
-            className="flex items-center justify-center min-w-17.5 px-4 py-2 bg-navi disabled:bg-navi/50 disabled:cursor-not-allowed text-white text-xs font-bold rounded-lg hover:bg-navi-600 transition-colors shadow-sm"
+            className={`${dialogButton.primary} min-w-16 flex items-center justify-center`}
           >
             {isChecking ? <Loader2 className="w-4 h-4 animate-spin" /> : t`Save`}
           </button>
-        </div>
+        </>
+      }
+    >
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          submit();
+        }}
+      >
+        <label className="block mb-1.5 text-[12px] font-medium text-zinc-600 dark:text-zinc-300">
+          <Trans>Project Name</Trans>
+        </label>
+        <input
+          type="text"
+          value={saveAsName}
+          onChange={(e) => setSaveAsName(e.target.value)}
+          onFocus={(e) => e.currentTarget.select()}
+          className={dialogInput}
+          autoFocus
+          placeholder={t`Your Project Name Here`}
+          spellCheck={false}
+        />
+      </form>
+
+      {/* Where it will be saved */}
+      <div className="mt-3 flex items-center gap-2 min-w-0 text-[12px] text-zinc-500 dark:text-zinc-400">
+        <Folder className="w-3.5 h-3.5 shrink-0 text-zinc-400" />
+        <span
+          className="truncate tracking-tight"
+          title={`Documents/Navivi/Projects/${folderPreview}`}
+        >
+          Documents/Navivi/Projects/
+          <span className="font-medium text-zinc-800 dark:text-zinc-200">{folderPreview}</span>
+        </span>
+        {isChecking && <Loader2 className="w-3 h-3 shrink-0 animate-spin text-zinc-400" />}
       </div>
-    </div>,
-    document.body,
+    </Dialog>
   );
 }

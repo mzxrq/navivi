@@ -137,11 +137,16 @@ export function ScriptInput({
     textareaRef.current?.focus();
   };
 
-  const handleSaveClick = (e: React.MouseEvent) => {
-    e.preventDefault();
+  const commit = () => {
+    if (isGenerating || localPrompt === value) return;
     const cleaned = extractPronunciation(localPrompt);
     onChange(cleaned);
     setLocalPrompt(cleaned);
+  };
+
+  const handleSaveClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    commit();
   };
 
   return (
@@ -199,20 +204,35 @@ export function ScriptInput({
       </div>
       )}
 
-      <div className="relative w-full h-28 rounded-md overflow-hidden border border-zinc-200 dark:border-white/10 bg-white dark:bg-zinc-950 group focus-within:border-navi focus-within:ring-2 focus-within:ring-navi/20 transition-colors">
+      <div className="relative w-full h-28 rounded-lg overflow-hidden border border-zinc-200 dark:border-white/10 bg-white dark:bg-zinc-950 group focus-within:border-navi focus-within:ring-2 focus-within:ring-navi/20 transition-colors">
         <textarea
           ref={textareaRef}
           value={localPrompt}
           onChange={(e) => setLocalPrompt(e.target.value)}
+          // Leaving the field keeps the edit (switching stops used to drop it).
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+              e.preventDefault();
+              commit();
+            }
+          }}
           readOnly={isGenerating}
           placeholder={t`Type a prompt or write your own script...`}
           className="w-full h-full resize-none p-2.5 pb-10 text-[13px] leading-relaxed custom-scrollbar bg-transparent text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:outline-none read-only:opacity-80"
         />
 
+        {localPrompt.length > 0 && (
+          <span className="absolute bottom-2.5 left-2.5 text-[11px] text-zinc-400 dark:text-zinc-500 tabular-nums pointer-events-none">
+            {t`${localPrompt.length} characters`}
+          </span>
+        )}
+
         {!isGenerating && (
           <div className="absolute bottom-1.5 right-1.5 flex items-center gap-1">
             <button
               type="button"
+              onMouseDown={(e) => e.preventDefault()}
               onClick={handleScanKanji}
               className="w-6 h-6 rounded-md text-zinc-500 hover:text-zinc-800 hover:bg-zinc-100 dark:hover:text-zinc-200 dark:hover:bg-white/5 flex items-center justify-center transition-all opacity-0 group-focus-within:opacity-100"
               title={t`Scan script for all Kanji and add to Dictionary`}
@@ -223,7 +243,10 @@ export function ScriptInput({
             <button
               type="button"
               onClick={handleSaveClick}
+              // Don't blur the textarea first (that would save before the click).
+              onMouseDown={(e) => e.preventDefault()}
               disabled={!hasUnsavedChanges}
+              title={t`Save (Ctrl+Enter)`}
               className={`flex items-center gap-1 h-6 px-2 rounded-md text-[11px] font-medium transition-colors ${
                 hasUnsavedChanges
                   ? "bg-navi hover:brightness-110 text-white"

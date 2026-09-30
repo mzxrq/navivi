@@ -119,6 +119,11 @@ msgstr "{0} (Return)"
 msgid "{0} already has a marker at this time."
 msgstr "{0} already has a marker at this time."
 
+#. placeholder {0}: localPrompt.length
+#: src/components/ui/ScriptInput.tsx:227
+msgid "{0} characters"
+msgstr "{0} characters"
+
 #. placeholder {0}: selectedClipIds.length
 #: src/features/timeline/components/Inspector.tsx:43
 msgid "{0} Clips Selected"
@@ -640,7 +645,7 @@ msgstr "Auto-skipped (Quick Export)"
 msgid "Auto-stitched Video"
 msgstr "Auto-stitched Video"
 
-#: src/components/ui/ScriptInput.tsx:195
+#: src/components/ui/ScriptInput.tsx:200
 msgid "Auto-Write"
 msgstr "Auto-Write"
 
@@ -695,16 +700,16 @@ msgstr "Burn"
 msgid "Camera Angle"
 msgstr "Camera Angle"
 
-#: src/components/ui/NewProject.tsx:308
-#: src/components/ui/SaveAs.tsx:181
-#: src/components/ui/ScriptInput.tsx:185
-#: src/components/ui/UnsavedChanges.tsx:50
+#: src/components/ui/ScriptInput.tsx:190
 msgid "cancel"
 msgstr "Cancel"
 
 #: src/components/ui/AutoDirectorModal.tsx:169
+#: src/components/ui/NewProject.tsx:306
 #: src/components/ui/RenderOverlay.tsx:827
 #: src/components/ui/RenderOverlay.tsx:1244
+#: src/components/ui/SaveAs.tsx:106
+#: src/components/ui/UnsavedChanges.tsx:36
 #: src/components/view/ProjectManager.tsx:538
 #: src/components/view/ProjectManager.tsx:567
 #: src/components/view/ProjectSettingsModal.tsx:112
@@ -761,8 +766,8 @@ msgid "Check Audio & Video"
 msgstr "Check Audio & Video"
 
 #: src/components/ui/SaveAs.tsx:150
-msgid "Checking..."
-msgstr "Checking..."
+#~ msgid "Checking..."
+#~ msgstr "Checking..."
 
 #: src/features/map/components/DrawBar.tsx:124
 msgid "Choose a leg"
@@ -791,6 +796,7 @@ msgstr "Clean modern sans-serif"
 
 #: src/components/ui/AppSettings.tsx:967
 #: src/components/ui/AppSettings.tsx:968
+#: src/components/ui/NewProject.tsx:223
 #: src/components/ui/StatusBar.tsx:406
 #: src/features/map/components/Sidebar.tsx:253
 msgid "Clear"
@@ -881,6 +887,8 @@ msgstr "Clips unlinked"
 
 #: src/components/ui/AppSettings.tsx:173
 #: src/components/ui/AppSettings.tsx:174
+#: src/components/ui/ErrorBoundary.tsx:79
+#: src/components/ui/NewProject.tsx:162
 #: src/components/ui/StatusBar.tsx:458
 #: src/components/ui/TitleBar.tsx:441
 #: src/features/export/components/ExportModal.tsx:419
@@ -955,6 +963,10 @@ msgstr "Controls auto save of editors that have unsaved changes"
 msgid "Converting GPS file format..."
 msgstr "Converting GPS file format..."
 
+#: src/components/ui/ErrorBoundary.tsx:129
+msgid "Copied"
+msgstr "Copied"
+
 #: src/components/ui/ContextMenu.tsx:414
 #: src/components/ui/ContextMenu.tsx:455
 msgid "Copy"
@@ -967,6 +979,10 @@ msgstr "Copy"
 #: src/features/map/hooks/useStopMenus.ts:295
 msgid "Copy coordinates"
 msgstr "Copy coordinates"
+
+#: src/components/ui/ErrorBoundary.tsx:129
+msgid "Copy error"
+msgstr "Copy error"
 
 #: src/components/ui/PipelineLogPanel.tsx:153
 #: src/components/ui/PipelineLogPanel.tsx:154
@@ -1029,15 +1045,15 @@ msgstr "Could not save this version"
 msgid "Couldn't look up a place name for this location."
 msgstr "Couldn't look up a place name for this location."
 
-#: src/components/ui/SaveAs.tsx:115
+#: src/components/ui/SaveAs.tsx:100
 msgid "Create a copy of this workspace"
 msgstr "Create a copy of this workspace"
 
-#: src/components/ui/NewProject.tsx:137
+#: src/components/ui/NewProject.tsx:153
 msgid "create-new-route"
 msgstr "Create New Route"
 
-#: src/components/ui/NewProject.tsx:140
+#: src/components/ui/NewProject.tsx:156
 msgid "create-new-route-detail"
 msgstr "Set your starting coordinates and routing behavior"
 
@@ -1095,7 +1111,15 @@ msgstr "Default marker for all waypoints. Can be overridden per-stop."
 msgid "Default pin"
 msgstr "Default pin"
 
-#: src/components/ui/NewProject.tsx:233
+#: src/components/ui/NewProject.tsx:260
+msgid "Default travel mode"
+msgstr "Default travel mode"
+
+#: src/components/ui/NewProject.tsx:260
+#~ msgid "default-routing-mode"
+#~ msgstr "default-routing-mode"
+
+#: src/components/ui/NewProject.tsx:281
 msgid "default-routing-mode-detail"
 msgstr "Sets the default pathfinding engine when placing waypoints"
 
@@ -1180,8 +1204,8 @@ msgid "Detecting context..."
 msgstr "Detecting context..."
 
 #: src/components/ui/NewProject.tsx:241
-msgid "direct"
-msgstr "Direct"
+#~ msgid "direct"
+#~ msgstr "Direct"
 
 #: src/features/map/hooks/useStopMenus.ts:35
 msgid "Direct"
@@ -1220,11 +1244,11 @@ msgstr "Dissolve"
 msgid "Dithering noise pixel dissolve between scenes"
 msgstr "Dithering noise pixel dissolve between scenes"
 
-#: src/components/ui/UnsavedChanges.tsx:38
+#: src/components/ui/UnsavedChanges.tsx:45
 msgid "Do you want to save the changes you made to "
 msgstr "Do you want to save the changes you made to "
 
-#: src/components/ui/UnsavedChanges.tsx:58
+#: src/components/ui/UnsavedChanges.tsx:33
 msgid "Don't Save"
 msgstr "Don't Save"
 
@@ -1298,13 +1322,14 @@ msgstr "Dreamy"
 #~ msgid "drive"
 #~ msgstr "Drive"
 
+#: src/components/ui/NewProject.tsx:126
 #: src/features/map/hooks/useStopMenus.ts:32
 msgid "Drive"
 msgstr "Drive"
 
 #: src/components/ui/NewProject.tsx:239
-msgid "DriveLabel"
-msgstr "Drive"
+#~ msgid "DriveLabel"
+#~ msgstr "Drive"
 
 #: src/features/map/components/MapArea.tsx:1263
 msgid "Drop photos here to auto-plot your route"
@@ -1466,11 +1491,12 @@ msgstr "Erase points (E)"
 msgid "Error Details:"
 msgstr "Error Details:"
 
-#: src/components/ui/ErrorBoundary.tsx:77
+#: src/components/ui/ErrorBoundary.tsx:45
+#: src/components/ui/ErrorBoundary.tsx:103
 msgid "errorboundary_error-message"
 msgstr "Unknown error has occurred"
 
-#: src/components/ui/ErrorBoundary.tsx:58
+#: src/components/ui/ErrorBoundary.tsx:97
 msgid "errorboundary_reason"
 msgstr "The application encountered an unexpected rendering error. Your saved files are safe"
 
@@ -1676,12 +1702,14 @@ msgstr "Fast"
 
 #: src/components/ui/AppSettings.tsx:245
 #: src/components/ui/AppSettings.tsx:251
+#: src/components/ui/NewProject.tsx:289
+#: src/components/ui/NewProject.tsx:295
 msgid "Fast render mode"
 msgstr "Fast render mode"
 
 #: src/components/ui/NewProject.tsx:276
-msgid "Fast Render Mode"
-msgstr "Fast Render Mode"
+#~ msgid "Fast Render Mode"
+#~ msgstr "Fast Render Mode"
 
 #: src/features/export/components/ExportModal.tsx:116
 msgid "Fastest export with compact file size for quick previews (12 Mbps 4K / 5 Mbps 1080p)"
@@ -1715,6 +1743,7 @@ msgstr "Fit timeline to content"
 #~ msgid "fly"
 #~ msgstr "Fly"
 
+#: src/components/ui/NewProject.tsx:128
 #: src/features/map/hooks/useStopMenus.ts:34
 msgid "Fly"
 msgstr "Fly"
@@ -1851,6 +1880,10 @@ msgstr "Hardware mode"
 #: src/features/timeline/components/elements/inspector/InspectorTextPanel.tsx:55
 msgid "Heavy yellow headline with thick outline"
 msgstr "Heavy yellow headline with thick outline"
+
+#: src/components/ui/ErrorBoundary.tsx:121
+msgid "Hide details"
+msgstr "Hide details"
 
 #: src/components/ui/PipelineLogPanel.tsx:165
 msgid "Hide log"
@@ -2194,6 +2227,7 @@ msgstr "Menu"
 msgid "Minimalist"
 msgstr "Minimalist"
 
+#: src/components/ui/ErrorBoundary.tsx:71
 #: src/components/ui/TitleBar.tsx:425
 msgid "Minimize"
 msgstr "Minimize"
@@ -2248,7 +2282,7 @@ msgstr "Mute Track"
 msgid "Muted"
 msgstr "Muted"
 
-#: src/components/ui/SaveAs.tsx:114
+#: src/components/ui/SaveAs.tsx:100
 msgid "Name your project to continue"
 msgstr "Name your project to continue"
 
@@ -2377,7 +2411,7 @@ msgstr "No voiceover scripts were found in this generation."
 #~ msgstr "No drawn trails found"
 
 #: src/components/ui/LocationSearch.tsx:56
-#: src/components/ui/NewProject.tsx:88
+#: src/components/ui/NewProject.tsx:85
 msgid "no-internet"
 msgstr "No Internet Connection"
 
@@ -2612,7 +2646,11 @@ msgstr "Project loaded successfully"
 msgid "Project Manager"
 msgstr "Project Manager"
 
-#: src/components/ui/SaveAs.tsx:123
+#: src/components/ui/NewProject.tsx:173
+msgid "Project name"
+msgstr "Project name"
+
+#: src/components/ui/SaveAs.tsx:126
 #: src/components/view/ProjectManager.tsx:457
 msgid "Project Name"
 msgstr "Project Name"
@@ -2649,11 +2687,11 @@ msgstr "Project settings saved"
 msgid "Project Title"
 msgstr "Project Title"
 
-#: src/components/ui/NewProject.tsx:149
-msgid "project-name"
-msgstr "Untitled Project"
+#: src/components/ui/NewProject.tsx:173
+#~ msgid "project-name"
+#~ msgstr "Untitled Project"
 
-#: src/components/ui/NewProject.tsx:156
+#: src/components/ui/NewProject.tsx:182
 msgid "project-name-placeholder"
 msgstr "Kyoto Sightseeing"
 
@@ -2794,7 +2832,7 @@ msgstr "Regenerating a video leg will switch to the Timeline Editor for manual c
 msgid "Regenerating audio for {0}..."
 msgstr "Regenerating audio for {0}..."
 
-#: src/components/ui/ErrorBoundary.tsx:92
+#: src/components/ui/ErrorBoundary.tsx:137
 msgid "Reload Application"
 msgstr "Reload Application"
 
@@ -3081,12 +3119,16 @@ msgstr "S"
 msgid "Saturation"
 msgstr "Saturation"
 
-#: src/components/ui/SaveAs.tsx:189
-#: src/components/ui/ScriptInput.tsx:234
+#: src/components/ui/SaveAs.tsx:114
+#: src/components/ui/ScriptInput.tsx:257
 #: src/components/ui/StatusBar.tsx:326
-#: src/components/ui/UnsavedChanges.tsx:65
+#: src/components/ui/UnsavedChanges.tsx:39
 msgid "Save"
 msgstr "Save"
+
+#: src/components/ui/ScriptInput.tsx:249
+msgid "Save (Ctrl+Enter)"
+msgstr "Save (Ctrl+Enter)"
 
 #: src/components/ui/StatusBar.tsx:344
 msgid "Save a version to create a restore point"
@@ -3101,10 +3143,10 @@ msgid "Save current version"
 msgstr "Save current version"
 
 #: src/components/ui/SaveAs.tsx:146
-msgid "Save Location"
-msgstr "Save Location"
+#~ msgid "Save Location"
+#~ msgstr "Save Location"
 
-#: src/components/ui/SaveAs.tsx:110
+#: src/components/ui/SaveAs.tsx:98
 msgid "Save New Project"
 msgstr "Save New Project"
 
@@ -3112,7 +3154,7 @@ msgstr "Save New Project"
 msgid "Save Project"
 msgstr "Save Project"
 
-#: src/components/ui/SaveAs.tsx:110
+#: src/components/ui/SaveAs.tsx:98
 msgid "Save Project As"
 msgstr "Save Project As"
 
@@ -3132,7 +3174,7 @@ msgstr "Save the project before importing media"
 msgid "Save the project to enable version history"
 msgstr "Save the project to enable version history"
 
-#: src/components/ui/ScriptInput.tsx:234
+#: src/components/ui/ScriptInput.tsx:257
 #: src/components/ui/StatusBar.tsx:266
 msgid "Saved"
 msgstr "Saved"
@@ -3149,12 +3191,12 @@ msgstr "Project"
 msgid "Scale"
 msgstr "Scale"
 
-#: src/components/ui/ScriptInput.tsx:218
-#: src/components/ui/ScriptInput.tsx:219
+#: src/components/ui/ScriptInput.tsx:238
+#: src/components/ui/ScriptInput.tsx:239
 msgid "Scan script for all Kanji and add to Dictionary"
 msgstr "Scan script for all Kanji and add to Dictionary"
 
-#: src/components/ui/ScriptInput.tsx:153
+#: src/components/ui/ScriptInput.tsx:158
 msgid "Script"
 msgstr "Script"
 
@@ -3294,6 +3336,10 @@ msgstr "Shorts, Reels & TikTok"
 msgid "Show Auto-Write script buttons and overview narration. Requires Ollama to be installed and running locally."
 msgstr "Show Auto-Write script buttons and overview narration. Requires Ollama to be installed and running locally."
 
+#: src/components/ui/ErrorBoundary.tsx:121
+msgid "Show details"
+msgstr "Show details"
+
 #: src/features/map/components/MapLayers/LayerManager.tsx:126
 msgid "Show elevation and 3D buildings"
 msgstr "Show elevation and 3D buildings"
@@ -3331,7 +3377,7 @@ msgstr "Simple"
 #~ msgstr "Size"
 
 #: src/components/ui/AppSettings.tsx:246
-#: src/components/ui/NewProject.tsx:279
+#: src/components/ui/NewProject.tsx:292
 msgid "Skip AI voiceover synthesis and pop-up images during generation"
 msgstr "Skip AI voiceover synthesis and pop-up images during generation"
 
@@ -3382,7 +3428,7 @@ msgstr "Smooth linear dissolve blending outgoing and incoming clips"
 msgid "Smooth the path through the points"
 msgstr "Smooth the path through the points"
 
-#: src/components/ui/ErrorBoundary.tsx:55
+#: src/components/ui/ErrorBoundary.tsx:94
 msgid "something-went-wrong"
 msgstr "Something went wrong"
 
@@ -3420,17 +3466,21 @@ msgstr "Standard widescreen (1920x1080)"
 msgid "Start"
 msgstr "Start"
 
-#: src/components/ui/NewProject.tsx:313
+#: src/components/ui/NewProject.tsx:309
 msgid "start-editing"
 msgstr "Start Editing"
 
-#: src/components/ui/NewProject.tsx:178
+#: src/components/ui/NewProject.tsx:209
 msgid "start-search-detail"
 msgstr "Search for a city, landmark, or address..."
 
-#: src/components/ui/NewProject.tsx:164
-msgid "start-search-location"
-msgstr "Starting Origin"
+#: src/components/ui/NewProject.tsx:190
+#~ msgid "start-search-location"
+#~ msgstr "Starting Origin"
+
+#: src/components/ui/NewProject.tsx:190
+msgid "Starting point"
+msgstr "Starting point"
 
 #: src/components/ui/RenderOverlay.tsx:1286
 msgid "Stitching Videos & Finalizing Export..."
@@ -3727,7 +3777,7 @@ msgstr "Travel mode to the next stop"
 msgid "TTS Pronunciation Dictionary"
 msgstr "TTS Pronunciation Dictionary"
 
-#: src/components/ui/ScriptInput.tsx:208
+#: src/components/ui/ScriptInput.tsx:221
 msgid "Type a prompt or write your own script..."
 msgstr "Type a prompt or write your own script..."
 
@@ -3798,7 +3848,7 @@ msgstr "Unmute track"
 msgid "Unsaved"
 msgstr "Unsaved"
 
-#: src/components/ui/UnsavedChanges.tsx:35
+#: src/components/ui/UnsavedChanges.tsx:23
 msgid "Unsaved Changes"
 msgstr "Unsaved Changes"
 
@@ -3806,8 +3856,8 @@ msgstr "Unsaved Changes"
 msgid "Unsaved Changes - Press Ctrl+S to save"
 msgstr "Unsaved Changes - Press Ctrl+S to save"
 
-#: src/components/ui/NewProject.tsx:32
-#: src/components/ui/NewProject.tsx:112
+#: src/components/ui/NewProject.tsx:26
+#: src/components/ui/NewProject.tsx:110
 #: src/components/ui/TitleBar.tsx:86
 #: src/components/ui/TitleBar.tsx:220
 #: src/components/ui/TitleBar.tsx:481
@@ -3907,13 +3957,14 @@ msgstr "Waiting for pipeline..."
 #~ msgid "walk"
 #~ msgstr "Walk"
 
+#: src/components/ui/NewProject.tsx:127
 #: src/features/map/hooks/useStopMenus.ts:31
 msgid "Walk"
 msgstr "Walk"
 
 #: src/components/ui/NewProject.tsx:240
-msgid "WalkLabel"
-msgstr "Walk"
+#~ msgid "WalkLabel"
+#~ msgstr "Walk"
 
 #: src/components/ui/ContextMenu.tsx:676
 #~ msgid "waypoint"
@@ -4001,7 +4052,7 @@ msgstr "You can drag these clips together on the timeline, copy/paste them, or p
 msgid "You don't have any recent workspaces. Create a new project or open an existing .nvv file to get started."
 msgstr "You don't have any recent workspaces. Create a new project or open an existing .nvv file to get started."
 
-#: src/components/ui/SaveAs.tsx:136
+#: src/components/ui/SaveAs.tsx:135
 msgid "Your Project Name Here"
 msgstr "Your Project Name Here"
 

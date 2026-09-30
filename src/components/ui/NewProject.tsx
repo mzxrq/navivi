@@ -1,22 +1,13 @@
 import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
+import { useLingui } from "@lingui/react";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { useUI } from "../../hooks/useUI";
-import {
-  FolderPlus,
-  ChevronRight,
-  Navigation,
-  Car,
-  Footprints,
-  Plane,
-  Search,
-  Loader2,
-  MapPin,
-  X,
-  Info,
-} from "../ui/icons";
+import { Car, ChevronRight, Footprints, Loader2, MapPin, Plane, Search, X } from "../ui/icons";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
+import { Switch } from "./Switch";
+import { dialogButton, dialogInput } from "./Dialog";
 
 interface SearchResult {
   place_id: number;
@@ -25,23 +16,24 @@ interface SearchResult {
   lon: string;
 }
 
+const DEFAULT_ORIGIN = "Osaka, Japan";
+
 export function NewProject() {
   const { setCurrentView } = useUI();
   const { updateMetadata, updateSettings, resetWorkspace } = useWorkspace();
+  const { i18n } = useLingui();
 
   const [projectName, setProjectName] = useState(t`Untitled Project`);
-  const [travelMode, setTravelMode] = useState<"driving" | "walking" | "curve">(
-    "driving",
-  );
+  const [travelMode, setTravelMode] = useState<"driving" | "walking" | "curve">("driving");
 
   // Origin Search State (Defaults to Osaka)
-  const [originQuery, setOriginQuery] = useState("Osaka, Japan");
-  const [selectedCoords, setSelectedCoords] = useState<[number, number]>([
-    34.6937, 135.5023,
-  ]);
+  const [originQuery, setOriginQuery] = useState(DEFAULT_ORIGIN);
+  const [selectedCoords, setSelectedCoords] = useState<[number, number]>([34.6937, 135.5023]);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
+  // Set right after picking a result, so filling the input doesn't search again.
+  const pickedRef = useRef(false);
 
   const [skipRichMedia, setSkipRichMedia] = useState(false);
 
@@ -58,19 +50,24 @@ export function NewProject() {
     return () => window.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Press ESC to close modal
+  // Escape closes the results first, then the dialog.
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setCurrentView("title_screen");
+      if (e.key !== "Escape") return;
+      if (showDropdown) setShowDropdown(false);
+      else setCurrentView("title_screen");
     };
     window.addEventListener("keydown", handleEsc);
     return () => window.removeEventListener("keydown", handleEsc);
-  }, [setCurrentView]);
+  }, [setCurrentView, showDropdown]);
 
   // Origin Search Effect
   useEffect(() => {
-    // Only search if the user is typing (not if they just clicked a result)
-    if (!originQuery.trim() || originQuery === "Osaka, Japan") {
+    if (pickedRef.current) {
+      pickedRef.current = false;
+      return;
+    }
+    if (!originQuery.trim() || originQuery === DEFAULT_ORIGIN) {
       setSearchResults([]);
       setShowDropdown(false);
       setIsSearching(false);
@@ -83,7 +80,7 @@ export function NewProject() {
         const res = await fetch(
           `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
             originQuery,
-          )}&limit=5&accept-language=en`,
+          )}&limit=5&accept-language=${i18n.locale}`,
         );
         if (!res.ok) throw new Error(t`no-internet`);
         const data = await res.json();
@@ -97,9 +94,10 @@ export function NewProject() {
     }, 600);
 
     return () => clearTimeout(delayDebounceFn);
-  }, [originQuery]);
+  }, [originQuery, i18n.locale]);
 
   const handleSelectPlace = (place: SearchResult) => {
+    pickedRef.current = true;
     setSelectedCoords([parseFloat(place.lat), parseFloat(place.lon)]);
     setOriginQuery(place.display_name.split(",")[0]); // Set input to the clean name
     setShowDropdown(false);
@@ -124,97 +122,131 @@ export function NewProject() {
     setCurrentView("editor");
   };
 
+  const modes = [
+    { id: "driving" as const, icon: Car, label: t`Drive` },
+    { id: "walking" as const, icon: Footprints, label: t`Walk` },
+    { id: "curve" as const, icon: Plane, label: t`Fly` },
+  ];
+
+  const label = "block mb-1.5 text-[12px] font-medium text-zinc-600 dark:text-zinc-300";
+
   return createPortal(
-    <div className="fixed inset-0 z-99999 flex items-center justify-center bg-zinc-950/40 backdrop-blur-[2px] animate-in fade-in duration-200 select-none">
-      <div className="w-full max-w-130 bg-white dark:bg-navidark-900 border border-zinc-200 dark:border-navidark-400 rounded-2xl shadow-2xl p-8 animate-in zoom-in-95 duration-200">
+    <div
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) setCurrentView("title_screen");
+      }}
+      className="fixed inset-x-0 top-10 bottom-0 z-99999 flex items-center justify-center p-4 bg-zinc-950/30 backdrop-blur-[2px] animate-in fade-in duration-150 select-none"
+    >
+      <form
+        role="dialog"
+        aria-modal="true"
+        onSubmit={(e) => {
+          e.preventDefault();
+          handleCreate();
+        }}
+        className="w-120 max-w-full max-h-full flex flex-col rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150"
+      >
         {/* Header */}
-        <div className="flex items-center gap-4 mb-8">
-          <div className="w-12 h-12 rounded-xl bg-navi-50 dark:bg-navi/10 flex items-center justify-center border border-navi-200 dark:border-navi/20 shrink-0">
-            <FolderPlus className="w-6 h-6 text-navi-600 dark:text-navi-500" />
-          </div>
+        <div className="flex items-start justify-between gap-4 px-6 pt-6">
           <div>
-            <h2 className="text-xl font-bold text-zinc-900 dark:text-white tracking-tight">
-              <Trans>create-new-route</Trans>{" "}
+            <h2 className="text-[16px] font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
+              <Trans>create-new-route</Trans>
             </h2>
-            <p className="text-sm text-zinc-500 dark:text-navidark-125 mt-0.5">
-              <Trans>create-new-route-detail</Trans>{" "}
+            <p className="mt-0.5 text-[13px] text-zinc-500 dark:text-zinc-400">
+              <Trans>create-new-route-detail</Trans>
             </p>
           </div>
+          <button
+            type="button"
+            onClick={() => setCurrentView("title_screen")}
+            aria-label={t`Close`}
+            className="flex items-center justify-center w-8 h-8 -mr-2 -mt-1 rounded-lg text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 dark:hover:text-zinc-200 dark:hover:bg-white/5 transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
 
-        <div className="space-y-6">
-          {/* Project Name (Fused Input) */}
-          <div className="space-y-2">
-            <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-150 uppercase tracking-widest flex items-center gap-1.5">
-              <Trans>project-name</Trans>{" "}
+        <div className="px-6 pt-5 space-y-5 overflow-y-auto">
+          {/* Project name */}
+          <div>
+            <label htmlFor="new-project-name" className={label}>
+              <Trans>Project name</Trans>
             </label>
             <input
+              id="new-project-name"
               type="text"
               value={projectName}
               onChange={(e) => setProjectName(e.target.value)}
-              className="w-full bg-zinc-100 dark:bg-navidark-800 border-none rounded-lg px-4 py-3 text-sm font-semibold text-zinc-900 dark:text-white outline-none focus:ring-2 focus:ring-navi/50 transition-all shadow-inner placeholder-zinc-400 dark:placeholder-navidark-200"
+              onFocus={(e) => e.currentTarget.select()}
+              className={dialogInput}
               placeholder={t`project-name-placeholder`}
               autoFocus
             />
           </div>
 
-          {/* Searchable Starting Location (Fused Input) */}
-          <div className="space-y-2" ref={searchRef}>
-            <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-150 uppercase tracking-widest flex items-center gap-1.5">
-              <Trans>start-search-location</Trans>{" "}
+          {/* Starting location */}
+          <div ref={searchRef}>
+            <label htmlFor="new-project-origin" className={label}>
+              <Trans>Starting point</Trans>
             </label>
             <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                <Search className="h-4 w-4 text-zinc-400 dark:text-navidark-150" />
-              </div>
-
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400 pointer-events-none" />
               <input
+                id="new-project-origin"
                 type="text"
                 value={originQuery}
                 onChange={(e) => setOriginQuery(e.target.value)}
                 onFocus={() => {
                   if (searchResults.length > 0) setShowDropdown(true);
                 }}
+                onKeyDown={(e) => {
+                  // Enter picks the first result instead of submitting.
+                  if (e.key === "Enter" && showDropdown && searchResults[0]) {
+                    e.preventDefault();
+                    handleSelectPlace(searchResults[0]);
+                  }
+                }}
                 placeholder={t`start-search-detail`}
-                className="w-full bg-zinc-100 dark:bg-navidark-800 border-none rounded-lg pl-10 pr-10 py-3 text-sm font-semibold text-zinc-900 dark:text-white outline-none focus:ring-2 focus:ring-navi/50 transition-all shadow-inner placeholder-zinc-400 dark:placeholder-navidark-200"
+                className={`${dialogInput} pl-9 pr-9`}
               />
-
-              <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
+              <span className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center">
                 {isSearching ? (
-                  <Loader2 className="h-4 w-4 text-navi animate-spin" />
+                  <Loader2 className="w-4 h-4 mr-1 text-navi animate-spin" />
                 ) : (
                   originQuery && (
                     <button
+                      type="button"
                       onClick={() => {
                         setOriginQuery("");
                         setSearchResults([]);
                       }}
-                      className="p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
+                      aria-label={t`Clear`}
+                      className="flex items-center justify-center w-6 h-6 rounded-md text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 dark:hover:text-zinc-200 dark:hover:bg-white/5 transition-colors"
                     >
-                      <X className="h-4 w-4" />
+                      <X className="w-3.5 h-3.5" />
                     </button>
                   )
                 )}
-              </div>
+              </span>
 
-              {/* Search Results Dropdown */}
               {showDropdown && searchResults.length > 0 && (
-                <div className="absolute top-full left-0 right-0 mt-1.5 bg-white dark:bg-navidark-800 border border-zinc-200 dark:border-navidark-400 rounded-lg shadow-xl z-50 max-h-48 overflow-y-auto custom-scrollbar animate-in fade-in zoom-in-95">
+                <div className="absolute top-full inset-x-0 mt-1.5 z-50 max-h-56 overflow-y-auto custom-scrollbar p-1 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 shadow-lg animate-in fade-in zoom-in-95 duration-100">
                   {searchResults.map((place) => (
                     <button
                       key={place.place_id}
+                      type="button"
                       onClick={() => handleSelectPlace(place)}
-                      className="w-full text-left px-3 py-2.5 hover:bg-zinc-50 dark:hover:bg-navidark-700 transition-colors flex items-start gap-2 border-b border-zinc-100 dark:border-navidark-600 last:border-0"
+                      className="w-full flex items-start gap-2.5 px-2.5 py-2 rounded-lg text-left hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors"
                     >
-                      <MapPin className="w-4 h-4 text-zinc-400 dark:text-navidark-150 shrink-0 mt-0.5" />
-                      <div className="flex flex-col min-w-0">
-                        <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate">
+                      <MapPin className="w-4 h-4 mt-0.5 shrink-0 text-zinc-400" />
+                      <span className="min-w-0">
+                        <span className="block text-[13px] font-medium text-zinc-900 dark:text-zinc-100 truncate">
                           {place.display_name.split(",")[0]}
                         </span>
-                        <span className="text-[10px] text-zinc-500 dark:text-navidark-125 truncate mt-0.5">
-                          {place.display_name.split(",").slice(1).join(",")}
+                        <span className="block text-[11px] text-zinc-500 dark:text-zinc-400 truncate">
+                          {place.display_name.split(",").slice(1).join(",").trim()}
                         </span>
-                      </div>
+                      </span>
                     </button>
                   ))}
                 </div>
@@ -222,98 +254,63 @@ export function NewProject() {
             </div>
           </div>
 
-          {/* Default Travel Mode */}
-          <div className="space-y-2 pt-2">
-            <div className="flex flex-col gap-1">
-              <label className="text-[11px] font-bold text-zinc-500 dark:text-navidark-150 uppercase tracking-widest flex items-center gap-1.5">
-                <Navigation className="w-3.5 h-3.5" /> t`default-routing-mode`
-              </label>
-              <p className="text-[10px] text-zinc-500 dark:text-navidark-150 flex items-center gap-1">
-                <Info className="w-3 h-3" />{" "}
-                <Trans>default-routing-mode-detail</Trans>{" "}
-              </p>
-            </div>
-
-            <div className="grid grid-cols-3 gap-2">
-              {[
-                { id: "driving", icon: Car, label: t`DriveLabel` },
-                { id: "walking", icon: Footprints, label: t`WalkLabel` },
-                { id: "curve", icon: Plane, label: t`direct` },
-              ].map((mode) => (
+          {/* Default travel mode */}
+          <div>
+            <span className={label}>
+              <Trans>Default travel mode</Trans>
+            </span>
+            <div className="flex p-0.5 rounded-lg bg-zinc-100 dark:bg-white/5">
+              {modes.map((mode) => (
                 <button
                   key={mode.id}
-                  onClick={() => setTravelMode(mode.id as any)}
-                  className={`flex items-center justify-center gap-2 py-3 rounded-xl border transition-all ${
+                  type="button"
+                  aria-pressed={travelMode === mode.id}
+                  onClick={() => setTravelMode(mode.id)}
+                  className={`flex-1 flex items-center justify-center gap-1.5 h-8 rounded-md text-[13px] font-medium transition-colors ${
                     travelMode === mode.id
-                      ? "border-navi bg-navi-50 dark:bg-navi/10 text-navi-800 dark:text-navi-400 shadow-sm"
-                      : "border-zinc-200 dark:border-navidark-400 bg-zinc-50 dark:bg-navidark-800 text-zinc-600 dark:text-navidark-125 hover:border-zinc-300 dark:hover:border-navidark-200"
+                      ? "bg-white dark:bg-zinc-800 text-navi shadow-sm"
+                      : "text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200"
                   }`}
                 >
-                  <mode.icon className="w-4 h-4 shrink-0" />
-                  <span className="text-xs font-bold">{mode.label}</span>
+                  <mode.icon className="w-4 h-4" />
+                  {mode.label}
                 </button>
               ))}
             </div>
+            <p className="mt-1.5 text-[12px] text-zinc-500 dark:text-zinc-400">
+              <Trans>default-routing-mode-detail</Trans>
+            </p>
           </div>
 
-          <div className="pt-2">
-            <div
-              onClick={() => setSkipRichMedia(!skipRichMedia)}
-              className={`flex items-center justify-between p-4 rounded-xl border-2 transition-all cursor-pointer select-none group ${
-                skipRichMedia
-                  ? "border-navi bg-navi-50/50 dark:border-navi/50 dark:bg-navi/10 shadow-sm"
-                  : "border-zinc-200 dark:border-navidark-400 bg-zinc-50 dark:bg-navidark-800 hover:border-zinc-300 dark:hover:border-navidark-300"
-              }`}
-            >
-              <div className="flex flex-col gap-1 pr-6">
-                <span
-                  className={`text-xs font-bold transition-colors ${
-                    skipRichMedia
-                      ? "text-navi-700 dark:text-navi-400"
-                      : "text-zinc-700 dark:text-zinc-200 group-hover:text-zinc-900 dark:group-hover:text-white"
-                  }`}
-                >
-                  <Trans>Fast Render Mode</Trans>{" "}
-                </span>
-                <span className="text-[10px] text-zinc-500 dark:text-navidark-150 leading-relaxed">
-                  <Trans>
-                    Skip AI voiceover synthesis and pop-up images during
-                    generation
-                  </Trans>{" "}
-                </span>
-              </div>
-
-              {/* Custom Animated Switch */}
-              <div
-                className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-200 ease-in-out ${
-                  skipRichMedia ? "bg-navi" : "bg-zinc-300 dark:bg-zinc-700"
-                }`}
-              >
-                <span
-                  className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform duration-200 ease-in-out ${
-                    skipRichMedia ? "translate-x-4.5" : "translate-x-0.5"
-                  }`}
-                />
-              </div>
-            </div>
-          </div>
+          {/* Fast render */}
+          <label className="flex items-center justify-between gap-6 px-4 py-3 rounded-xl border border-zinc-200 dark:border-white/10 cursor-pointer">
+            <span className="min-w-0">
+              <span className="block text-[13px] font-medium text-zinc-900 dark:text-zinc-100">
+                <Trans>Fast render mode</Trans>
+              </span>
+              <span className="block mt-0.5 text-[12px] leading-relaxed text-zinc-500 dark:text-zinc-400">
+                <Trans>Skip AI voiceover synthesis and pop-up images during generation</Trans>
+              </span>
+            </span>
+            <Switch checked={skipRichMedia} onChange={setSkipRichMedia} label={t`Fast render mode`} />
+          </label>
         </div>
 
-        {/* Footer Actions */}
-        <div className="mt-8 pt-6 border-t border-zinc-200 dark:border-navidark-400 flex justify-end gap-3">
+        {/* Footer */}
+        <div className="flex items-center justify-end gap-2 px-6 pt-5 pb-6">
           <button
+            type="button"
             onClick={() => setCurrentView("title_screen")}
-            className="px-5 py-2.5 text-xs font-bold text-zinc-500 dark:text-navidark-125 hover:bg-zinc-100 dark:hover:bg-navidark-800 hover:text-zinc-800 dark:hover:text-white rounded-xl transition-colors"
+            className={dialogButton.secondary}
           >
-            <Trans>cancel</Trans> </button>
-          <button
-            onClick={handleCreate}
-            className="px-6 py-2.5 rounded-xl bg-navi hover:bg-navi-600 text-white text-xs font-bold transition-all flex items-center gap-2 shadow-md hover:shadow-lg"
-          >
-            <Trans>start-editing</Trans> <ChevronRight className="w-4 h-4 opacity-70" />
+            <Trans>Cancel</Trans>
+          </button>
+          <button type="submit" className={`${dialogButton.primary} flex items-center gap-1`}>
+            <Trans>start-editing</Trans>
+            <ChevronRight className="w-4 h-4 -mr-1 opacity-80" />
           </button>
         </div>
-      </div>
+      </form>
     </div>,
     document.body,
   );
