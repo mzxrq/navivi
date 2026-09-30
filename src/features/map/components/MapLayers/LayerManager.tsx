@@ -55,7 +55,7 @@ export function LayerManager({
         title={t`Layer Manager`}
         className={`flex items-center gap-1.5 h-7 px-2 rounded-lg text-[12px] font-medium transition-colors ${
           isOpen
-            ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+            ? "bg-navi text-white shadow-sm"
             : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-white/5"
         }`}
       >
