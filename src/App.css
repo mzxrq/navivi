@@ -4,6 +4,7 @@
 @plugin "tailwindcss-animate";
 
 @custom-variant dark (&:where(.dark, .dark *));
+@custom-variant short (@media (max-height: 760px));
 
 :root {
   /* Default Blue (navi) */

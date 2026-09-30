@@ -7,6 +7,8 @@ import { exists, readDir, remove } from "@tauri-apps/plugin-fs";
 import {
   AlertTriangle,
   CheckCircle,
+  ChevronDown,
+  ChevronUp,
   Cpu,
   Film,
   Folder,
@@ -18,6 +20,7 @@ import {
   RotateCcw,
   Settings2,
   Sparkles,
+  SquareTerminal,
   X,
   XCircle,
   Zap,
@@ -71,7 +74,10 @@ export function RenderOverlay() {
     setMarkedWaypointIds,
     generationSessionInfo,
     setGenerationSessionInfo,
+    currentView,
   } = useUI();
+  // StatusBar (h-7) is only mounted in the editor view (see App.tsx).
+  const bottomInset = currentView === "editor" ? "bottom-7" : "bottom-0";
 
   const {
     metadata,
@@ -111,6 +117,8 @@ export function RenderOverlay() {
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Only takes effect in the stacked (< lg) layout; side-by-side always shows the log.
+  const [isLogOpen, setIsLogOpen] = useState(true);
 
   // Hardware spec detection
   const hardwareSpec = detectHardwareSpec(settings.hardware_spec_override);
@@ -145,7 +153,7 @@ export function RenderOverlay() {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [logs]);
+  }, [logs, isLogOpen]);
 
   // Pipeline Execution & Event Listeners
   useEffect(() => {
@@ -822,8 +830,8 @@ export function RenderOverlay() {
   // --- COLLAPSED SESSION PILL (Renders when low-spec user is returned to map editor) ---
   if (isRenderCollapsed) {
     return createPortal(
-      <div className="fixed bottom-6 right-6 z-99999 animate-in slide-in-from-bottom-5 duration-300">
-        <div className="bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl border border-amber-500/40 rounded-2xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.5)] p-4 flex flex-col gap-3 max-w-sm">
+      <div className="fixed bottom-10 right-4 z-99999 animate-in slide-in-from-bottom-5 duration-300">
+        <div className="bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl border border-amber-500/40 rounded-2xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.5)] p-4 flex flex-col gap-3 max-w-[min(24rem,calc(100vw-2rem))]">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-500">
@@ -889,45 +897,52 @@ export function RenderOverlay() {
   }
 
   // --- FULL MODAL WIZARD ---
+  // The overlay is pinned between the custom TitleBar (h-10) and StatusBar (h-7),
+  // both z-9999, so no part of the modal can slide underneath them. The modal
+  // never exceeds that area: the wizard body and the log scroll internally.
   return createPortal(
     <div
       style={{ zIndex: 9998 }}
-      className="fixed inset-0 pointer-events-auto flex items-center justify-center p-4 sm:p-4 animate-in fade-in duration-300"
+      className={`fixed inset-x-0 top-10 ${bottomInset} pointer-events-auto flex overflow-hidden p-3 sm:p-5 short:p-2 animate-in fade-in duration-300`}
     >
-      <div className="flex flex-col xl:flex-row items-center xl:items-stretch justify-center gap-4 max-h-[92vh] w-full max-w-[90vw] xl:max-w-7xl pointer-events-none">
-        <div className="w-full max-w-3xl shrink-0 flex-1 bg-white dark:bg-zinc-950 rounded-2xl shadow-[0_0_80px_-15px_rgba(0,0,0,0.5)] border border-zinc-200 dark:border-zinc-800/80 flex flex-col overflow-hidden animate-in zoom-in-95 duration-400 pointer-events-auto select-none">
+      <div className="m-auto flex flex-col lg:flex-row gap-3 w-full max-w-7xl h-full max-h-215 min-h-0 pointer-events-none">
+        <div className="flex-1 min-h-0 min-w-0 bg-white dark:bg-zinc-950 rounded-2xl shadow-[0_0_80px_-15px_rgba(0,0,0,0.5)] border border-zinc-200 dark:border-zinc-800/80 flex flex-col overflow-hidden animate-in zoom-in-95 duration-400 pointer-events-auto select-none">
           {/* Header */}
-          <div className="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-900/20 shrink-0">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">
-                      {metadata.project_name}
-                    </h2>
-                    {settings.quick_export && (
-                      <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 text-[10px] font-bold">
-                        <Zap className="w-3 h-3 fill-amber-500" />
-                        <Trans>Quick Export</Trans>
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs text-zinc-500 font-medium flex items-center gap-1.5 mt-0.5">
-                    <Cpu className="w-6 h-6" />
-                    {hardwareSpec.details}
-                  </p>
+          <div className="px-5 sm:px-6 py-4 short:py-2.5 border-b border-zinc-100 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-900/20 shrink-0">
+            <div className="flex items-center justify-between gap-4 mb-5 short:mb-2.5">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 min-w-0">
+                  <h2
+                    className="text-lg short:text-base font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight truncate"
+                    title={metadata.project_name}
+                  >
+                    {metadata.project_name}
+                  </h2>
+                  {settings.quick_export && (
+                    <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 text-[10px] font-bold shrink-0 text-nowrap">
+                      <Zap className="w-3 h-3 fill-amber-500" />
+                      <Trans>Quick Export</Trans>
+                    </span>
+                  )}
                 </div>
+                <p
+                  className="text-xs text-zinc-500 font-medium flex items-center gap-1.5 mt-0.5 min-w-0"
+                  title={hardwareSpec.details}
+                >
+                  <Cpu className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">{hardwareSpec.details}</span>
+                </p>
               </div>
               {status === "processing" && step === "generating" && (
                 <button
                   onClick={handleCancel}
-                  className="flex items-center gap-2 px-4 py-2 bg-zinc-100 hover:bg-red-50 text-zinc-600 hover:text-red-600 dark:bg-zinc-800/50 dark:hover:bg-red-500/10 dark:text-zinc-400 dark:hover:text-red-400 text-sm font-medium rounded-lg transition-all text-nowrap"
+                  className="flex items-center gap-2 px-4 py-2 short:py-1.5 shrink-0 bg-zinc-100 hover:bg-red-50 text-zinc-600 hover:text-red-600 dark:bg-zinc-800/50 dark:hover:bg-red-500/10 dark:text-zinc-400 dark:hover:text-red-400 text-sm font-medium rounded-lg transition-all text-nowrap"
                 >
                   <X className="w-4 h-4" /> <Trans>Cancel</Trans>
                 </button>
               )}
               {status === "error" && (
-                <div className="flex items-center gap-2 text-red-500 bg-red-50 dark:bg-red-500/10 px-4 py-2 rounded-lg">
+                <div className="flex items-center gap-2 shrink-0 text-red-500 bg-red-50 dark:bg-red-500/10 px-4 py-2 short:py-1.5 rounded-lg">
                   <XCircle className="w-4 h-4" />
                   <span className="text-sm font-medium text-nowrap">
                     <Trans>Failed</Trans>
@@ -937,22 +952,11 @@ export function RenderOverlay() {
             </div>
 
             {/* Stepper */}
-            <div className="flex items-center justify-between relative px-2">
-              <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-0.5 bg-zinc-200 dark:bg-zinc-800 z-0 rounded-full" />
-              <div
-                className="absolute left-0 top-1/2 -translate-y-1/2 h-0.5 bg-navi-500 z-0 rounded-full transition-all duration-700 ease-in-out"
-                style={{
-                  width:
-                    step === "generating"
-                      ? "25%"
-                      : step === "verifying"
-                        ? "60%"
-                        : step === "exporting"
-                          ? "85%"
-                          : "100%",
-                }}
-              />
-
+            {/* Equal-width columns keep every circle centred in its column, so
+                each connector can span from its own circle's edge to the next
+                circle's edge (left: 50% + r, right: -50% + r) at the circles'
+                vertical centre, never touching the labels below. */}
+            <div className="flex items-start">
               {[
                 {
                   id: "generating",
@@ -971,37 +975,58 @@ export function RenderOverlay() {
                   label: t`Export`,
                   desc: t`Auto-stitched Video`,
                 },
-              ].map((s, i) => {
+              ].map((s, i, steps) => {
+                const stepIndex = [
+                  "generating",
+                  "verifying",
+                  "exporting",
+                  "finished",
+                ].indexOf(step);
                 const isActive =
                   step === s.id ||
                   (s.id === "finished" && step === "exporting");
-                const isPast =
-                  ["generating", "verifying", "exporting", "finished"].indexOf(
-                    step,
-                  ) > i;
+                const isPast = stepIndex > i;
+                // The connector to the next step fills once that step is reached.
+                const isConnectorDone = stepIndex >= i + 1;
                 return (
                   <div
                     key={s.id}
-                    className="relative z-10 flex flex-col items-center gap-3 bg-zinc-50/50 dark:bg-zinc-950 px-2 group"
+                    className="relative flex-1 min-w-0 flex flex-col items-center gap-2 short:gap-1 px-1"
                   >
+                    {i < steps.length - 1 && (
+                      <div
+                        aria-hidden
+                        className="absolute top-5 short:top-3.5 left-[calc(50%+1.75rem)] right-[calc(-50%+1.75rem)] short:left-[calc(50%+1.375rem)] short:right-[calc(-50%+1.375rem)] h-0.5 -translate-y-1/2 rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden"
+                      >
+                        <div
+                          className={`h-full bg-navi-500 rounded-full origin-left transition-transform duration-700 ease-in-out ${
+                            isConnectorDone ? "scale-x-100" : "scale-x-0"
+                          }`}
+                        />
+                      </div>
+                    )}
                     <div
-                      className={`w-10 h-10 rounded-full flex items-center justify-center border-2 text-sm font-medium transition-all duration-300 ${
+                      className={`relative w-10 h-10 short:w-7 short:h-7 shrink-0 rounded-full flex items-center justify-center border-2 text-sm short:text-xs font-medium transition-all duration-300 ${
                         isActive
-                          ? "border-navi-500 bg-navi-500 text-white shadow-[0_0_20px_-3px_rgba(var(--navi-500-rgb),0.4)]"
+                          ? "border-navi-500 bg-navi-500 text-white ring-4 short:ring-2 ring-navi-500/20"
                           : isPast
                             ? "border-navi-500 bg-navi-500 text-white"
                             : "border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-400"
                       }`}
                     >
-                      {isPast ? <CheckCircle className="w-5 h-5" /> : i + 1}
+                      {isPast ? (
+                        <CheckCircle className="w-5 h-5 short:w-4 short:h-4" />
+                      ) : (
+                        i + 1
+                      )}
                     </div>
-                    <div className="text-center">
+                    <div className="text-center min-w-0 max-w-full">
                       <div
-                        className={`text-xs font-semibold tracking-wide ${isActive ? "text-navi-500" : isPast ? "text-zinc-800 dark:text-zinc-200" : "text-zinc-400"}`}
+                        className={`text-xs font-semibold tracking-wide truncate ${isActive ? "text-navi-500" : isPast ? "text-zinc-800 dark:text-zinc-200" : "text-zinc-400"}`}
                       >
                         {s.label}
                       </div>
-                      <div className="text-[10px] text-zinc-500 mt-0.5 hidden sm:block">
+                      <div className="text-[10px] text-zinc-500 mt-0.5 truncate hidden sm:block short:hidden">
                         {s.desc}
                       </div>
                     </div>
@@ -1012,13 +1037,13 @@ export function RenderOverlay() {
           </div>
 
           {/* Dynamic Wizard Body */}
-          <div className="flex-1 bg-white dark:bg-zinc-950 min-h-100 max-h-[62vh] overflow-y-auto custom-scrollbar flex flex-col">
+          <div className="flex-1 min-h-0 bg-white dark:bg-zinc-950 overflow-y-auto custom-scrollbar flex flex-col">
             {/* STEP 1: GENERATING */}
             {step === "generating" && (
-              <div className="flex-1 flex flex-col items-center justify-center text-center animate-in fade-in duration-500 py-12 px-6">
+              <div className="flex-1 flex flex-col items-center justify-center text-center animate-in fade-in duration-500 py-10 short:py-5 px-5 sm:px-6">
                 {status === "processing" ? (
                   <div className="w-full max-w-2xl mx-auto flex flex-col items-center">
-                    <div className="relative w-24 h-24 mx-auto mb-6">
+                    <div className="relative w-24 h-24 short:w-18 short:h-18 mx-auto mb-6 short:mb-3">
                       <div className="absolute inset-0 border-4 border-zinc-100 dark:border-zinc-800 rounded-full"></div>
                       <svg
                         className="absolute inset-0 w-full h-full -rotate-90"
@@ -1046,16 +1071,16 @@ export function RenderOverlay() {
                       </div>
                     </div>
 
-                    <h3 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 mb-2">
+                    <h3 className="text-2xl short:text-xl font-bold text-zinc-900 dark:text-zinc-100 mb-2">
                       {settings.quick_export
                         ? t`Generating Assets (Quick Export Mode)...`
                         : t`Generating Assets...`}
                     </h3>
 
-                    <div className="mt-4 px-6 py-3 bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 rounded-xl flex items-center justify-between w-full max-w-sm">
-                      <div className="flex items-center gap-3">
-                        <Loader2 className="w-4 h-4 text-navi-500 animate-spin" />
-                        <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    <div className="mt-4 short:mt-2 px-5 py-3 bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 rounded-xl flex items-center justify-between gap-4 w-full max-w-md">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <Loader2 className="w-4 h-4 text-navi-500 animate-spin shrink-0" />
+                        <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300 truncate text-left">
                           {(() => {
                             const latestLog =
                               logs[logs.length - 1]?.message ||
@@ -1092,7 +1117,7 @@ export function RenderOverlay() {
                           })()}
                         </span>
                       </div>
-                      <div className="text-xs font-semibold text-zinc-400 tabular-nums ml-4 tracking-wider">
+                      <div className="text-xs font-semibold text-zinc-400 tabular-nums tracking-wider shrink-0">
                         {Math.floor(elapsedSeconds / 60)}:
                         {(elapsedSeconds % 60).toString().padStart(2, "0")}
                       </div>
@@ -1109,8 +1134,8 @@ export function RenderOverlay() {
                     </p>
                   </div>
                 ) : status === "error" ? (
-                  <div className="flex flex-col items-center justify-center max-w-lg mx-auto text-center">
-                    <div className="w-20 h-20 bg-red-50 dark:bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <div className="flex flex-col items-center justify-center w-full max-w-lg mx-auto text-center">
+                    <div className="w-20 h-20 short:w-14 short:h-14 bg-red-50 dark:bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-6 short:mb-3">
                       <AlertTriangle className="w-10 h-10 text-red-500" />
                     </div>
                     <h3 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 mb-2">
@@ -1120,7 +1145,7 @@ export function RenderOverlay() {
                       <h4 className="text-sm font-bold text-red-800 dark:text-red-400 mb-1">
                         <Trans>Error Details:</Trans>
                       </h4>
-                      <p className="text-sm text-red-600 dark:text-red-300">
+                      <p className="text-sm text-red-600 dark:text-red-300 wrap-break-word select-text">
                         {(() => {
                           const errLog = [...logs]
                             .reverse()
@@ -1142,10 +1167,10 @@ export function RenderOverlay() {
 
             {/* STEP 2: VERIFYING / ASSET REVIEW */}
             {step === "verifying" && (
-              <div className="flex-1 flex flex-col gap-8 animate-in slide-in-from-right-8 duration-500 p-8 overflow-y-auto custom-scrollbar">
+              <div className="flex-1 flex flex-col gap-6 short:gap-4 animate-in slide-in-from-right-8 duration-500 p-5 sm:p-6 short:p-4">
                 {/* Hardware Guidance Banner */}
-                <div className="bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 rounded-xl p-4 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
+                <div className="bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 rounded-xl p-4 short:p-3 flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0 flex-1 basis-64">
                     <Cpu className="w-5 h-5 text-navi-500 shrink-0" />
                     <div>
                       <h4 className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
@@ -1161,7 +1186,10 @@ export function RenderOverlay() {
                       </p>
                     </div>
                   </div>
-                  <span className="text-[10px] font-mono px-2 py-1 rounded bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 shrink-0">
+                  <span
+                    className="text-[10px] font-mono px-2 py-1 rounded bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 max-w-full truncate"
+                    title={hardwareSpec.gpuRenderer}
+                  >
                     {hardwareSpec.gpuRenderer.substring(0, 30)}
                   </span>
                 </div>
@@ -1169,9 +1197,9 @@ export function RenderOverlay() {
                 {/* Video Review Section */}
                 {videoItems.length > 0 && (
                   <div className="space-y-4">
-                    <div className="flex items-center justify-between text-zinc-900 dark:text-zinc-100">
+                    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-zinc-900 dark:text-zinc-100">
                       <div className="flex items-center gap-2">
-                        <Film className="w-5 h-5 text-navi-500" />
+                        <Film className="w-5 h-5 text-navi-500 shrink-0" />
                         <h3 className="text-sm font-semibold tracking-wide uppercase">
                           <Trans>Rendered Videos ({videoItems.length})</Trans>
                         </h3>
@@ -1183,7 +1211,7 @@ export function RenderOverlay() {
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,17rem),1fr))] gap-4">
                       {videoItems.map((vid, idx) => (
                         <div
                           key={idx}
@@ -1228,9 +1256,9 @@ export function RenderOverlay() {
 
                 {/* Audio & Script Review Section */}
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between text-zinc-900 dark:text-zinc-100">
+                  <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-zinc-900 dark:text-zinc-100">
                     <div className="flex items-center gap-2">
-                      <Mic className="w-5 h-5 text-navi-500" />
+                      <Mic className="w-5 h-5 text-navi-500 shrink-0" />
                       <h3 className="text-sm font-semibold tracking-wide uppercase">
                         <Trans>
                           Audio Narration & Pronunciation Review (
@@ -1263,11 +1291,11 @@ export function RenderOverlay() {
                             key={item.id}
                             className="bg-white dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800/80 rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow"
                           >
-                            <div className="flex items-center justify-between mb-3">
-                              <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                              <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 min-w-0 truncate">
                                 {item.label}
                               </span>
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 shrink-0">
                                 <button
                                   onClick={() => handleTogglePlay(item)}
                                   className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
@@ -1364,7 +1392,7 @@ export function RenderOverlay() {
                                 </div>
                               </div>
                             ) : (
-                              <p className="text-xs text-zinc-600 dark:text-zinc-400 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg p-3 leading-relaxed">
+                              <p className="text-xs text-zinc-600 dark:text-zinc-400 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg p-3 leading-relaxed wrap-break-word">
                                 {item.text || t`(Empty script)`}
                               </p>
                             )}
@@ -1379,8 +1407,8 @@ export function RenderOverlay() {
 
             {/* STEP 3: EXPORTING (AUTO-STITCHING) */}
             {step === "exporting" && (
-              <div className="flex-1 flex flex-col items-center justify-center text-center animate-in fade-in duration-500 py-12 px-6">
-                <Loader2 className="w-14 h-14 text-navi-500 animate-spin mb-6 mx-auto" />
+              <div className="flex-1 flex flex-col items-center justify-center text-center animate-in fade-in duration-500 py-10 short:py-5 px-5 sm:px-6">
+                <Loader2 className="w-14 h-14 short:w-10 short:h-10 text-navi-500 animate-spin mb-6 short:mb-3 mx-auto" />
                 <h3 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 mb-2">
                   <Trans>Stitching Videos & Finalizing Export...</Trans>
                 </h3>
@@ -1395,8 +1423,8 @@ export function RenderOverlay() {
 
             {/* STEP 4: FINISHED / EXPORT COMPLETE */}
             {step === "finished" && (
-              <div className="flex-1 flex flex-col items-center justify-center text-center animate-in zoom-in-95 duration-500 py-12 px-6">
-                <div className="w-20 h-20 bg-emerald-50 dark:bg-emerald-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
+              <div className="flex-1 flex flex-col items-center justify-center text-center animate-in zoom-in-95 duration-500 py-10 short:py-5 px-5 sm:px-6">
+                <div className="w-20 h-20 short:w-14 short:h-14 bg-emerald-50 dark:bg-emerald-500/10 rounded-full flex items-center justify-center mx-auto mb-6 short:mb-3">
                   <CheckCircle className="w-10 h-10 text-emerald-500" />
                 </div>
                 <h3 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 mb-2">
@@ -1422,7 +1450,7 @@ export function RenderOverlay() {
                   </div>
                 )}
 
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center justify-center gap-3">
                   <button
                     onClick={handleOpenExplorer}
                     className="px-5 py-2.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 dark:bg-zinc-800 dark:hover:bg-zinc-700 dark:text-zinc-200 text-xs font-semibold rounded-xl transition-all flex items-center gap-2"
@@ -1458,12 +1486,12 @@ export function RenderOverlay() {
 
           {/* Action Footer for Verifying Step */}
           {step === "verifying" && (
-            <div className="p-6 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 flex items-center justify-between shrink-0">
-              <span className="text-xs text-zinc-500 flex items-center gap-1.5">
-                <Settings2 className="w-4 h-4" />
+            <div className="px-5 sm:px-6 py-4 short:py-3 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 flex flex-wrap items-center justify-between gap-3 shrink-0">
+              <span className="text-xs text-zinc-500 flex items-center gap-1.5 min-w-0">
+                <Settings2 className="w-4 h-4 shrink-0" />
                 <Trans>Accept assets to automatically stitch and export</Trans>
               </span>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3 ml-auto">
                 <button
                   onClick={async () => {
                     if (metadata.directory_path) {
@@ -1490,7 +1518,7 @@ export function RenderOverlay() {
 
           {/* Error Fallback */}
           {status === "error" && (
-            <div className="p-4 bg-zinc-900 border-t border-zinc-800 flex justify-end shrink-0 gap-3">
+            <div className="px-5 sm:px-6 py-3 bg-zinc-50 dark:bg-zinc-950 border-t border-zinc-100 dark:border-zinc-800 flex justify-end shrink-0 gap-3">
               <button
                 onClick={async () => {
                   try {
@@ -1512,13 +1540,39 @@ export function RenderOverlay() {
           )}
         </div>
 
-        {/* Terminal Log Output */}
-        <div className="w-full max-w-3xl xl:w-112.5 xl:max-w-none shrink-0 bg-zinc-950 rounded-2xl border border-zinc-800 shadow-2xl flex flex-col overflow-hidden pointer-events-auto animate-in slide-in-from-top-4 xl:slide-in-from-left-4 duration-300">
-          <div className="flex-1 min-h-64 xl:min-h-0 bg-zinc-950 p-6 flex flex-col font-mono text-[11px] leading-relaxed relative">
-            <div className="absolute top-0 left-0 right-0 h-4 bg-linear-to-b from-zinc-950 to-transparent z-10 pointer-events-none"></div>
+        {/* Terminal Log Output — a fixed-height, collapsible strip when stacked
+            (< lg); a full-height side column when side by side. */}
+        <div className="w-full shrink-0 lg:w-80 xl:w-104 min-h-0 bg-zinc-950 rounded-2xl border border-zinc-800 shadow-2xl flex flex-col overflow-hidden pointer-events-auto animate-in slide-in-from-bottom-4 lg:slide-in-from-left-4 duration-300">
+          <button
+            type="button"
+            onClick={() => setIsLogOpen((open) => !open)}
+            aria-expanded={isLogOpen}
+            className="flex items-center gap-2 px-4 py-2.5 border-b border-zinc-800/80 text-zinc-400 hover:text-zinc-200 lg:hover:text-zinc-400 lg:cursor-default transition-colors shrink-0"
+          >
+            <SquareTerminal className="w-3.5 h-3.5" />
+            <span className="text-[11px] font-semibold tracking-wide uppercase">
+              <Trans>Pipeline Log</Trans>
+            </span>
+            {status === "processing" && (
+              <span className="w-1.5 h-1.5 rounded-full bg-navi-500 animate-pulse" />
+            )}
+            <span className="ml-auto text-[10px] font-mono text-zinc-600 tabular-nums">
+              {logs.length}
+            </span>
+            <span className="lg:hidden">
+              {isLogOpen ? (
+                <ChevronDown className="w-3.5 h-3.5" />
+              ) : (
+                <ChevronUp className="w-3.5 h-3.5" />
+              )}
+            </span>
+          </button>
+          <div
+            className={`${isLogOpen ? "flex" : "hidden"} lg:flex h-36 short:h-24 lg:h-auto lg:short:h-auto lg:flex-1 min-h-0 bg-zinc-950 px-3 py-2 flex-col font-mono text-[11px] leading-relaxed relative`}
+          >
             <div
               ref={scrollRef}
-              className="space-y-1.5 overflow-y-auto custom-scrollbar h-full pb-2"
+              className="space-y-1 overflow-y-auto custom-scrollbar h-full pb-1"
             >
               {logs.length === 0 ? (
                 <span className="text-zinc-700">Waiting for pipeline...</span>

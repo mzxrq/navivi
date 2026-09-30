@@ -70,7 +70,7 @@ msgstr " · waypoint"
 msgid "\"No file chosen\""
 msgstr "No file chosen"
 
-#: src/components/ui/RenderOverlay.tsx:1340
+#: src/components/ui/RenderOverlay.tsx:1390
 msgid "(Empty script)"
 msgstr "(Empty script)"
 
@@ -146,7 +146,7 @@ msgstr "<0>Mute</0>"
 msgid "<0>Muted</0>"
 msgstr "<0>Muted</0>"
 
-#: src/components/ui/RenderOverlay.tsx:1388
+#: src/components/ui/RenderOverlay.tsx:1438
 msgid "💡 <0>Quick Export Notice:</0> To customize individual video clips or fix TTS pronunciation, uncheck \"Quick Export\" in generation settings and re-run."
 msgstr "💡 <0>Quick Export Notice:</0> To customize individual video clips or fix TTS pronunciation, uncheck \"Quick Export\" in generation settings and re-run."
 
@@ -182,11 +182,11 @@ msgstr "Accent Color"
 msgid "Accept & Apply to Project"
 msgstr "Accept & Apply to Project"
 
-#: src/components/ui/RenderOverlay.tsx:1457
+#: src/components/ui/RenderOverlay.tsx:1507
 msgid "Accept Assets & Export Video"
 msgstr "Accept Assets & Export Video"
 
-#: src/components/ui/RenderOverlay.tsx:1436
+#: src/components/ui/RenderOverlay.tsx:1486
 msgid "Accept assets to automatically stitch and export"
 msgstr "Accept assets to automatically stitch and export"
 
@@ -311,7 +311,7 @@ msgstr "all"
 msgid "All changes safely stored to disk"
 msgstr "All changes safely stored to disk"
 
-#: src/components/ui/RenderOverlay.tsx:1381
+#: src/components/ui/RenderOverlay.tsx:1431
 msgid "All media was automatically generated, stitched, and exported to your project folder without stopping for manual review"
 msgstr "All media was automatically generated, stitched, and exported to your project folder without stopping for manual review"
 
@@ -319,7 +319,7 @@ msgstr "All media was automatically generated, stitched, and exported to your pr
 msgid "Amber"
 msgstr "Amber"
 
-#: src/components/ui/RenderOverlay.tsx:1105
+#: src/components/ui/RenderOverlay.tsx:1152
 msgid "An unknown error occurred during rendering."
 msgstr "An unknown error occurred during rendering."
 
@@ -383,7 +383,7 @@ msgstr "Aspect Ratio & Platform Target"
 msgid "Assets & Media"
 msgstr "Assets & Media"
 
-#: src/components/ui/RenderOverlay.tsx:1382
+#: src/components/ui/RenderOverlay.tsx:1432
 msgid "Assets accepted and stitched into your final deliverable video"
 msgstr "Assets accepted and stitched into your final deliverable video"
 
@@ -396,7 +396,7 @@ msgid "Attraction Script"
 msgstr "Attraction Script"
 
 #. placeholder {0}: wp ? wp.name : t`Stop ` + (attrIdx + 1)
-#: src/components/ui/RenderOverlay.tsx:417
+#: src/components/ui/RenderOverlay.tsx:453
 msgid "Attraction Video: {0}"
 msgstr "Attraction Video: {0}"
 
@@ -421,16 +421,16 @@ msgid "Audio Mix"
 msgstr "Audio Mix"
 
 #. placeholder {0}: reviewItems.length
-#: src/components/ui/RenderOverlay.tsx:1207
+#: src/components/ui/RenderOverlay.tsx:1257
 msgid "Audio Narration & Pronunciation Review ({0})"
 msgstr "Audio Narration & Pronunciation Review ({0})"
 
 #. placeholder {0}: item.label
-#: src/components/ui/RenderOverlay.tsx:518
+#: src/components/ui/RenderOverlay.tsx:554
 msgid "Audio regenerated successfully for {0}! Click Listen to verify pronunciation."
 msgstr "Audio regenerated successfully for {0}! Click Listen to verify pronunciation."
 
-#: src/components/ui/RenderOverlay.tsx:523
+#: src/components/ui/RenderOverlay.tsx:559
 msgid "Audio regeneration failed: {err}"
 msgstr "Audio regeneration failed: {err}"
 
@@ -486,11 +486,11 @@ msgstr "Auto-save failed"
 msgid "Auto-Save Interval"
 msgstr "Auto-Save Interval"
 
-#: src/components/ui/RenderOverlay.tsx:938
+#: src/components/ui/RenderOverlay.tsx:981
 msgid "Auto-skipped (Quick Export)"
 msgstr "Auto-skipped (Quick Export)"
 
-#: src/components/ui/RenderOverlay.tsx:944
+#: src/components/ui/RenderOverlay.tsx:987
 msgid "Auto-stitched Video"
 msgstr "Auto-stitched Video"
 
@@ -534,7 +534,7 @@ msgstr "Brightness"
 msgid "Buffer Route"
 msgstr "Buffer Route"
 
-#: src/components/ui/RenderOverlay.tsx:931
+#: src/components/ui/RenderOverlay.tsx:974
 msgid "Build Assets"
 msgstr "Build Assets"
 
@@ -556,8 +556,8 @@ msgid "cancel"
 msgstr "Cancel"
 
 #: src/components/ui/AutoDirectorModal.tsx:169
-#: src/components/ui/RenderOverlay.tsx:898
-#: src/components/ui/RenderOverlay.tsx:1315
+#: src/components/ui/RenderOverlay.tsx:941
+#: src/components/ui/RenderOverlay.tsx:1365
 #: src/components/view/ProjectManager.tsx:736
 #: src/components/view/ProjectSettingsModal.tsx:170
 #: src/features/export/components/ExportModal.tsx:693
@@ -566,7 +566,7 @@ msgstr "Cancel"
 msgid "Cancel"
 msgstr "Cancel"
 
-#: src/components/ui/RenderOverlay.tsx:1077
+#: src/components/ui/RenderOverlay.tsx:1124
 msgid "Cancelling process..."
 msgstr "Cancelling process..."
 
@@ -602,7 +602,7 @@ msgstr "Change Marker"
 msgid "Change Waypoint Type"
 msgstr "Change Waypoint Type"
 
-#: src/components/ui/RenderOverlay.tsx:939
+#: src/components/ui/RenderOverlay.tsx:982
 msgid "Check Audio & Video"
 msgstr "Check Audio & Video"
 
@@ -634,7 +634,7 @@ msgstr "Clear All Notifications"
 msgid "Clear all via points"
 msgstr "Clear all via points"
 
-#: src/components/ui/RenderOverlay.tsx:1265
+#: src/components/ui/RenderOverlay.tsx:1315
 msgid "Clear generated audio and re-enter pronunciation"
 msgstr "Clear generated audio and re-enter pronunciation"
 
@@ -699,7 +699,7 @@ msgstr "Color GPX routes dynamically based on steepness"
 msgid "Color route lines by slope gradient"
 msgstr "Color route lines by slope gradient"
 
-#: src/components/ui/RenderOverlay.tsx:1360
+#: src/components/ui/RenderOverlay.tsx:1410
 msgid "Combining all route segments, narration voiceovers, and transitions into your completed master navigation video."
 msgstr "Combining all route segments, narration voiceovers, and transitions into your completed master navigation video."
 
@@ -773,7 +773,7 @@ msgid "Could not delete this version"
 msgstr "Could not delete this version"
 
 #. placeholder {0}: item.label
-#: src/components/ui/RenderOverlay.tsx:453
+#: src/components/ui/RenderOverlay.tsx:489
 msgid "Could not load audio for {0}"
 msgstr "Could not load audio for {0}"
 
@@ -847,7 +847,7 @@ msgstr "Custom Marker"
 msgid "Custom Text"
 msgstr "Custom Text"
 
-#: src/components/ui/RenderOverlay.tsx:1450
+#: src/components/ui/RenderOverlay.tsx:1500
 msgid "Customize in Timeline"
 msgstr "Customize in Timeline"
 
@@ -930,7 +930,7 @@ msgstr "Direct"
 msgid "Directional Warp"
 msgstr "Directional Warp"
 
-#: src/components/ui/RenderOverlay.tsx:841
+#: src/components/ui/RenderOverlay.tsx:877
 msgid "Discard"
 msgstr "Discard"
 
@@ -961,7 +961,7 @@ msgid "Don't Save"
 msgstr "Don't Save"
 
 #: src/components/ui/AppSettings.tsx:994
-#: src/components/ui/RenderOverlay.tsx:1424
+#: src/components/ui/RenderOverlay.tsx:1474
 msgid "Done"
 msgstr "Done"
 
@@ -1082,7 +1082,7 @@ msgstr "E.g. Tomogashima and Kada area..."
 msgid "Edit Stop"
 msgstr "Edit Stop"
 
-#: src/components/ui/RenderOverlay.tsx:827
+#: src/components/ui/RenderOverlay.tsx:863
 msgid "Edit the image, script, or route mode in the Waypoint Editor. Click Resume when ready to re-render"
 msgstr "Edit the image, script, or route mode in the Waypoint Editor. Click Resume when ready to re-render"
 
@@ -1094,7 +1094,7 @@ msgstr "Edit Waypoint"
 msgid "Editing Waypoint"
 msgstr "Editing Waypoint"
 
-#: src/components/ui/RenderOverlay.tsx:813
+#: src/components/ui/RenderOverlay.tsx:849
 msgid "Editing Waypoint on Map"
 msgstr "Editing Waypoint on Map"
 
@@ -1118,7 +1118,7 @@ msgstr "Enable Auto-Ducking"
 msgid "End"
 msgstr "End"
 
-#: src/components/ui/RenderOverlay.tsx:1306
+#: src/components/ui/RenderOverlay.tsx:1356
 msgid "Enter pronunciation reading in Hiragana/Katakana..."
 msgstr "Enter pronunciation reading in Hiragana/Katakana..."
 
@@ -1134,7 +1134,7 @@ msgstr "Enter text here..."
 msgid "Eraser"
 msgstr "Eraser"
 
-#: src/components/ui/RenderOverlay.tsx:1093
+#: src/components/ui/RenderOverlay.tsx:1140
 msgid "Error Details:"
 msgstr "Error Details:"
 
@@ -1174,7 +1174,7 @@ msgstr "Exit"
 msgid "Expand"
 msgstr "Expand"
 
-#: src/components/ui/RenderOverlay.tsx:820
+#: src/components/ui/RenderOverlay.tsx:856
 msgid "Expand Review"
 msgstr "Expand Review"
 
@@ -1182,7 +1182,7 @@ msgstr "Expand Review"
 msgid "Experimental"
 msgstr "Experimental"
 
-#: src/components/ui/RenderOverlay.tsx:943
+#: src/components/ui/RenderOverlay.tsx:986
 #: src/features/timeline/components/elements/TimelineToolbar.tsx:352
 msgid "Export"
 msgstr "Export"
@@ -1193,7 +1193,7 @@ msgid "Export & Render Video"
 msgstr "Export & Render Video"
 
 #. placeholder {0}: err?.message || err
-#: src/components/ui/RenderOverlay.tsx:703
+#: src/components/ui/RenderOverlay.tsx:739
 #: src/features/export/components/ExportModal.tsx:339
 msgid "Export failed: {0}"
 msgstr "Export failed: {0}"
@@ -1223,7 +1223,7 @@ msgstr "Export Video"
 msgid "Exporting..."
 msgstr "Exporting..."
 
-#: src/components/ui/RenderOverlay.tsx:699
+#: src/components/ui/RenderOverlay.tsx:735
 msgid "exportSuccessToastMsg"
 msgstr "Export process completed successfully!"
 
@@ -1252,7 +1252,7 @@ msgstr "Fade to Black"
 msgid "Fade Transitions"
 msgstr "Fade Transitions"
 
-#: src/components/ui/RenderOverlay.tsx:905
+#: src/components/ui/RenderOverlay.tsx:948
 msgid "Failed"
 msgstr "Failed"
 
@@ -1277,7 +1277,7 @@ msgstr "Failed to geocode any locations."
 msgid "Failed to import media into the project"
 msgstr "Failed to import media into the project"
 
-#: src/components/ui/RenderOverlay.tsx:290
+#: src/components/ui/RenderOverlay.tsx:326
 msgid "Failed to invoke Python render: {err}"
 msgstr "Failed to invoke Python render: {err}"
 
@@ -1362,7 +1362,7 @@ msgstr "Ferry"
 msgid "File Path"
 msgstr "File Path"
 
-#: src/components/ui/RenderOverlay.tsx:1058
+#: src/components/ui/RenderOverlay.tsx:1105
 msgid "Finalizing Project Timeline{prog}..."
 msgstr "Finalizing Project Timeline{prog}..."
 
@@ -1421,15 +1421,15 @@ msgstr "Generate Intro Video"
 msgid "Generates the map route only. Ignores all pop-up images and AI voice synthesis to save time."
 msgstr "Generates the map route only. Ignores all pop-up images and AI voice synthesis to save time."
 
-#: src/components/ui/RenderOverlay.tsx:1023
+#: src/components/ui/RenderOverlay.tsx:1070
 msgid "Generating Assets (Quick Export Mode)..."
 msgstr "Generating Assets (Quick Export Mode)..."
 
-#: src/components/ui/RenderOverlay.tsx:1024
+#: src/components/ui/RenderOverlay.tsx:1071
 msgid "Generating Assets..."
 msgstr "Generating Assets..."
 
-#: src/components/ui/RenderOverlay.tsx:1051
+#: src/components/ui/RenderOverlay.tsx:1098
 msgid "Generating Subtitles{prog}..."
 msgstr "Generating Subtitles{prog}..."
 
@@ -1437,11 +1437,11 @@ msgstr "Generating Subtitles{prog}..."
 msgid "Generating..."
 msgstr "Generating..."
 
-#: src/components/ui/RenderOverlay.tsx:1089
+#: src/components/ui/RenderOverlay.tsx:1136
 msgid "Generation Failed"
 msgstr "Generation Failed"
 
-#: src/components/ui/RenderOverlay.tsx:806
+#: src/components/ui/RenderOverlay.tsx:842
 msgid "Generation On Hold"
 msgstr "Generation On Hold"
 
@@ -1508,7 +1508,7 @@ msgstr "High Quality"
 msgid "High-exposure film burn and fiery glow reveal"
 msgstr "High-exposure film burn and fiery glow reveal"
 
-#: src/components/ui/RenderOverlay.tsx:1126
+#: src/components/ui/RenderOverlay.tsx:1173
 msgid "High-Spec (Discrete GPU)"
 msgstr "High-Spec (Discrete GPU)"
 
@@ -1517,7 +1517,7 @@ msgid "High-spec Mode"
 msgstr "High-spec Mode"
 
 #. placeholder {0}: spec.gpuRenderer
-#: src/components/ui/RenderOverlay.tsx:538
+#: src/components/ui/RenderOverlay.tsx:574
 msgid "High-spec system detected ({0}). Opening Timeline Editor for custom video trimming and transition adjustments. (Quick export disabled)."
 msgstr "High-spec system detected ({0}). Opening Timeline Editor for custom video trimming and transition adjustments. (Quick export disabled)."
 
@@ -1541,7 +1541,7 @@ msgstr "History"
 msgid "Home"
 msgstr "Home"
 
-#: src/components/ui/RenderOverlay.tsx:1287
+#: src/components/ui/RenderOverlay.tsx:1337
 msgid "If Irodori TTS mispronounces words or lacks intonation, input the script reading in <0>Hiragana</0> or <1>Katakana</1> (e.g. ひらがな / カタカチE instead of Kanji. Kanji characters lack explicit pitch-accent information."
 msgstr "If Irodori TTS mispronounces words or lacks intonation, input the script reading in <0>Hiragana</0> or <1>Katakana</1> (e.g. ひらがな / カタカチE instead of Kanji. Kanji characters lack explicit pitch-accent information."
 
@@ -1584,7 +1584,7 @@ msgstr "Imported {0} waypoints. Route > 50km."
 msgid "In-Transition"
 msgstr "In-Transition"
 
-#: src/components/ui/RenderOverlay.tsx:1034
+#: src/components/ui/RenderOverlay.tsx:1081
 msgid "Initializing pipeline..."
 msgstr "Initializing pipeline..."
 
@@ -1600,7 +1600,7 @@ msgstr "Intro Screen"
 msgid "Intro Screen Settings"
 msgstr "Intro Screen Settings"
 
-#: src/components/ui/RenderOverlay.tsx:1281
+#: src/components/ui/RenderOverlay.tsx:1331
 msgid "Japanese Pronunciation & Intonation Guidance"
 msgstr "Japanese Pronunciation & Intonation Guidance"
 
@@ -1644,7 +1644,7 @@ msgstr "Leave blank to use the project name."
 #. placeholder {0}: departureIdx + 1
 #. placeholder {1}: wp ? wp.name : t`Stop ` + (departureIdx + 1)
 #. placeholder {2}: nextWp ? nextWp.name : t`Next Stop`
-#: src/components/ui/RenderOverlay.tsx:408
+#: src/components/ui/RenderOverlay.tsx:444
 msgid "Leg {0}: {1} → {2}"
 msgstr "Leg {0}: {1} → {2}"
 
@@ -1664,11 +1664,11 @@ msgstr "Link Clips"
 msgid "Linked"
 msgstr "Linked"
 
-#: src/components/ui/RenderOverlay.tsx:1256
+#: src/components/ui/RenderOverlay.tsx:1306
 msgid "Listen"
 msgstr "Listen"
 
-#: src/components/ui/RenderOverlay.tsx:1214
+#: src/components/ui/RenderOverlay.tsx:1264
 msgid "Listen to ensure Irodori TTS pronunciation is accurate"
 msgstr "Listen to ensure Irodori TTS pronunciation is accurate"
 
@@ -1705,7 +1705,7 @@ msgstr "Lock Track"
 msgid "Lorem ipsum"
 msgstr "Lorem ipsum"
 
-#: src/components/ui/RenderOverlay.tsx:1127
+#: src/components/ui/RenderOverlay.tsx:1174
 msgid "Low-Spec (Integrated Graphics)"
 msgstr "Low-Spec (Integrated Graphics)"
 
@@ -1713,7 +1713,7 @@ msgstr "Low-Spec (Integrated Graphics)"
 msgid "Low-spec Mode"
 msgstr "Low-spec Mode"
 
-#: src/components/ui/RenderOverlay.tsx:808
+#: src/components/ui/RenderOverlay.tsx:844
 msgid "Low-Spec Mode"
 msgstr "Low-Spec Mode"
 
@@ -1722,11 +1722,11 @@ msgid "Low-spec system detected: {gpuRenderer} (Integrated graphics / no discret
 msgstr "Low-spec system detected: {gpuRenderer} (Integrated graphics / no discrete GPU, {logicalCores} CPU threads)"
 
 #. placeholder {0}: vid.label
-#: src/components/ui/RenderOverlay.tsx:618
+#: src/components/ui/RenderOverlay.tsx:654
 msgid "Low-spec system: Opened Waypoint Editor for {0}. Adjust image, script, or route mode, then click Resume Generation."
 msgstr "Low-spec system: Opened Waypoint Editor for {0}. Adjust image, script, or route mode, then click Resume Generation."
 
-#: src/components/ui/RenderOverlay.tsx:614
+#: src/components/ui/RenderOverlay.tsx:650
 msgid "lowSpecGenSessionMessage"
 msgstr "System in low-spec mode. Opened Waypoint Editor on map to adjust images, script, or route mode before re-running generation"
 
@@ -1856,7 +1856,7 @@ msgstr "New Project"
 msgid "New Project Name"
 msgstr "New Project Name"
 
-#: src/components/ui/RenderOverlay.tsx:408
+#: src/components/ui/RenderOverlay.tsx:444
 msgid "Next Stop"
 msgstr "Next Stop"
 
@@ -1932,7 +1932,7 @@ msgstr "No timeline markers yet"
 msgid "No transitions found for \"{searchQuery}\""
 msgstr "No transitions found for \"{searchQuery}\""
 
-#: src/components/ui/RenderOverlay.tsx:1223
+#: src/components/ui/RenderOverlay.tsx:1273
 msgid "No voiceover scripts were found in this generation."
 msgstr "No voiceover scripts were found in this generation."
 
@@ -1988,7 +1988,7 @@ msgstr "Open Project"
 msgid "Open Project File..."
 msgstr "Open Project File..."
 
-#: src/components/ui/RenderOverlay.tsx:1403
+#: src/components/ui/RenderOverlay.tsx:1453
 msgid "Open Project Folder"
 msgstr "Open Project Folder"
 
@@ -2024,7 +2024,7 @@ msgstr "Outline Color (ASS)"
 msgid "Output File:"
 msgstr "Output File:"
 
-#: src/components/ui/RenderOverlay.tsx:1047
+#: src/components/ui/RenderOverlay.tsx:1094
 msgid "Parsing Maps & GPS Data{prog}..."
 msgstr "Parsing Maps & GPS Data{prog}..."
 
@@ -2040,6 +2040,10 @@ msgstr "Pause at Location"
 msgid "Photos & Images"
 msgstr "Photos & Images"
 
+#: src/components/ui/RenderOverlay.tsx:1548
+msgid "Pipeline Log"
+msgstr "Pipeline Log"
+
 #: src/features/timeline/components/elements/inspector/InspectorTransitionsPanel.tsx:116
 #: src/features/timeline/components/elements/inspector/InspectorTransitionsPanel.tsx:210
 #: src/features/timeline/components/elements/TransitionsPanel.tsx:75
@@ -2050,7 +2054,7 @@ msgstr "Pixelize"
 msgid "Play/Pause (Space)"
 msgstr "Play/Pause (Space)"
 
-#: src/components/ui/RenderOverlay.tsx:1255
+#: src/components/ui/RenderOverlay.tsx:1305
 msgid "Playing..."
 msgstr "Playing..."
 
@@ -2181,7 +2185,7 @@ msgstr "Punchy Impact"
 msgid "Push transition smoothly sliding incoming clip from left"
 msgstr "Push transition smoothly sliding incoming clip from left"
 
-#: src/components/ui/RenderOverlay.tsx:883
+#: src/components/ui/RenderOverlay.tsx:924
 msgid "Quick Export"
 msgstr "Quick Export"
 
@@ -2193,7 +2197,7 @@ msgstr "Quick Export (Auto-stitch & Export)"
 msgid "Quick Export (Auto-stitch on generation)"
 msgstr "Quick Export (Auto-stitch on generation)"
 
-#: src/components/ui/RenderOverlay.tsx:1376
+#: src/components/ui/RenderOverlay.tsx:1426
 msgid "Quick Export Complete!"
 msgstr "Quick Export Complete!"
 
@@ -2212,11 +2216,11 @@ msgstr "Quick Render complete for "
 msgid "Quick Render started for "
 msgstr "Quick Render started for "
 
-#: src/components/ui/RenderOverlay.tsx:632
+#: src/components/ui/RenderOverlay.tsx:668
 msgid "quickExportToastMsg1"
 msgstr "Quick Export: Stitching and exporting video automatically..."
 
-#: src/components/ui/RenderOverlay.tsx:632
+#: src/components/ui/RenderOverlay.tsx:668
 msgid "quickExportToastMsg2"
 msgstr "Stitching videos together and exporting..."
 
@@ -2260,28 +2264,28 @@ msgstr "Redo (Ctrl+Y)"
 msgid "Refresh asset library"
 msgstr "Refresh asset library"
 
-#: src/components/ui/RenderOverlay.tsx:1191
+#: src/components/ui/RenderOverlay.tsx:1241
 msgid "Regenerate"
 msgstr "Regenerate"
 
-#: src/components/ui/RenderOverlay.tsx:1268
+#: src/components/ui/RenderOverlay.tsx:1318
 msgid "Regenerate Audio"
 msgstr "Regenerate Audio"
 
-#: src/components/ui/RenderOverlay.tsx:1188
+#: src/components/ui/RenderOverlay.tsx:1238
 msgid "Regenerate this specific residential leg"
 msgstr "Regenerate this specific residential leg"
 
-#: src/components/ui/RenderOverlay.tsx:1132
+#: src/components/ui/RenderOverlay.tsx:1179
 msgid "Regenerating a video leg will return to the Map Editor with the active layer opened to adjust images, script, or route mode"
 msgstr "Regenerating a video leg will return to the Map Editor with the active layer opened to adjust images, script, or route mode"
 
-#: src/components/ui/RenderOverlay.tsx:1131
+#: src/components/ui/RenderOverlay.tsx:1178
 msgid "Regenerating a video leg will switch to the Timeline Editor for manual customization"
 msgstr "Regenerating a video leg will switch to the Timeline Editor for manual customization"
 
 #. placeholder {0}: item.label
-#: src/components/ui/RenderOverlay.tsx:505
+#: src/components/ui/RenderOverlay.tsx:541
 msgid "Regenerating audio for {0}..."
 msgstr "Regenerating audio for {0}..."
 
@@ -2344,53 +2348,53 @@ msgid "Render Settings"
 msgstr "Render Settings"
 
 #. placeholder {0}: videoItems.length
-#: src/components/ui/RenderOverlay.tsx:1148
+#: src/components/ui/RenderOverlay.tsx:1198
 msgid "Rendered Videos ({0})"
 msgstr "Rendered Videos ({0})"
 
-#: src/components/ui/RenderOverlay.tsx:263
+#: src/components/ui/RenderOverlay.tsx:299
 msgid "renderFinishCancelMessage"
 msgstr "Rendering cancelled"
 
-#: src/components/ui/RenderOverlay.tsx:275
+#: src/components/ui/RenderOverlay.tsx:311
 msgid "renderFinishErrorMessage"
 msgstr "Rendering error"
 
-#: src/components/ui/RenderOverlay.tsx:241
+#: src/components/ui/RenderOverlay.tsx:277
 msgid "renderFinishSuccessMessage"
 msgstr "Asset generation finished successfully"
 
-#: src/components/ui/RenderOverlay.tsx:932
+#: src/components/ui/RenderOverlay.tsx:975
 msgid "Rendering & Synthesis"
 msgstr "Rendering & Synthesis"
 
-#: src/components/ui/RenderOverlay.tsx:1056
+#: src/components/ui/RenderOverlay.tsx:1103
 msgid "Rendering Media & Animations{prog}..."
 msgstr "Rendering Media & Animations{prog}..."
 
-#: src/components/ui/RenderOverlay.tsx:346
+#: src/components/ui/RenderOverlay.tsx:382
 msgid "renderRouteOvvNarr"
 msgstr "Route Overview Narration"
 
-#: src/components/ui/RenderOverlay.tsx:171
+#: src/components/ui/RenderOverlay.tsx:179
 msgid "renderTerminalMessage"
 msgstr "Starting Python generation pipeline..."
 
 #: src/components/ui/RenderOverlay.tsx:183
-msgid "renderTerminalStep1"
-msgstr "Step 1 complete"
+#~ msgid "renderTerminalStep1"
+#~ msgstr "Step 1 complete"
 
 #: src/components/ui/RenderOverlay.tsx:185
-msgid "renderTerminalStep4"
-msgstr "Step 4:"
+#~ msgid "renderTerminalStep4"
+#~ msgstr "Step 4:"
 
 #: src/components/ui/RenderOverlay.tsx:188
-msgid "renderTerminalStep6"
-msgstr "Step 6 complete"
+#~ msgid "renderTerminalStep6"
+#~ msgstr "Step 6 complete"
 
 #: src/components/ui/RenderOverlay.tsx:189
-msgid "renderTerminalTimeline"
-msgstr "timeline written"
+#~ msgid "renderTerminalTimeline"
+#~ msgstr "timeline written"
 
 #: src/components/ui/AppSettings.tsx:610
 msgid "Required for driving and some hiking routes"
@@ -2428,7 +2432,7 @@ msgstr "Resolution & Quality Profile"
 msgid "Restore version"
 msgstr "Restore version"
 
-#: src/components/ui/RenderOverlay.tsx:854
+#: src/components/ui/RenderOverlay.tsx:890
 #: src/features/map/components/Sidebar.tsx:304
 msgid "Resume Generation"
 msgstr "Resume Generation"
@@ -2437,7 +2441,7 @@ msgstr "Resume Generation"
 msgid "retrace-previous-trail"
 msgstr "Retrace Previous Trail"
 
-#: src/components/ui/RenderOverlay.tsx:1481
+#: src/components/ui/RenderOverlay.tsx:1531
 msgid "Retry"
 msgstr "Retry"
 
@@ -2452,8 +2456,8 @@ msgstr "Reveal in Explorer"
 msgid "Reveal in File Explorer"
 msgstr "Reveal in File Explorer"
 
-#: src/components/ui/RenderOverlay.tsx:847
-#: src/components/ui/RenderOverlay.tsx:936
+#: src/components/ui/RenderOverlay.tsx:883
+#: src/components/ui/RenderOverlay.tsx:979
 msgid "Review Assets"
 msgstr "Review Assets"
 
@@ -2485,7 +2489,7 @@ msgstr "Route Lines Config"
 msgid "Route Marker"
 msgstr "Route Marker"
 
-#: src/components/ui/RenderOverlay.tsx:398
+#: src/components/ui/RenderOverlay.tsx:434
 msgid "routeOvvAnim"
 msgstr "Route Overview Narration"
 
@@ -2557,7 +2561,7 @@ msgstr "Save the project to enable version history"
 msgid "Saved"
 msgstr "Saved"
 
-#: src/components/ui/RenderOverlay.tsx:645
+#: src/components/ui/RenderOverlay.tsx:681
 msgid "saveTimelineProjectNameDefault"
 msgstr "Project"
 
@@ -2649,11 +2653,11 @@ msgstr "Select layer to copy"
 msgid "Selection Tool (V)"
 msgstr "Selection Tool (V)"
 
-#: src/components/ui/RenderOverlay.tsx:773
+#: src/components/ui/RenderOverlay.tsx:809
 msgid "Sending cancellation signal to backend..."
 msgstr "Sending cancellation signal to backend..."
 
-#: src/components/ui/RenderOverlay.tsx:1080
+#: src/components/ui/RenderOverlay.tsx:1127
 msgid "Sending interrupt signal to renderer."
 msgstr "Sending interrupt signal to renderer."
 
@@ -2794,12 +2798,12 @@ msgstr "Search for a city, landmark, or address..."
 msgid "start-search-location"
 msgstr "Starting Origin"
 
-#: src/components/ui/RenderOverlay.tsx:1357
+#: src/components/ui/RenderOverlay.tsx:1407
 msgid "Stitching Videos & Finalizing Export..."
 msgstr "Stitching Videos & Finalizing Export..."
 
-#: src/components/ui/RenderOverlay.tsx:408
-#: src/components/ui/RenderOverlay.tsx:417
+#: src/components/ui/RenderOverlay.tsx:444
+#: src/components/ui/RenderOverlay.tsx:453
 msgid "Stop "
 msgstr "Stop "
 
@@ -2808,7 +2812,7 @@ msgstr "Stop "
 msgid "Stop {0}"
 msgstr "Stop {0}"
 
-#: src/components/ui/RenderOverlay.tsx:376
+#: src/components/ui/RenderOverlay.tsx:412
 msgid "Stop {stopNum}: {stopName}"
 msgstr "Stop {stopNum}: {stopName}"
 
@@ -2888,19 +2892,19 @@ msgstr "Successfully processed the document. Here is the proposed route and scri
 msgid "Synchronize historical weather conditions from photo EXIF dates using Open-Meteo to dynamically apply atmospheric fog and rain effects"
 msgstr "Synchronize historical weather conditions from photo EXIF dates using Open-Meteo to dynamically apply atmospheric fog and rain effects"
 
-#: src/components/ui/RenderOverlay.tsx:1332
+#: src/components/ui/RenderOverlay.tsx:1382
 msgid "Synthesize Audio Now"
 msgstr "Synthesize Audio Now"
 
-#: src/components/ui/RenderOverlay.tsx:1049
+#: src/components/ui/RenderOverlay.tsx:1096
 msgid "Synthesizing AI Voiceovers{prog}..."
 msgstr "Synthesizing AI Voiceovers{prog}..."
 
-#: src/components/ui/RenderOverlay.tsx:1327
+#: src/components/ui/RenderOverlay.tsx:1377
 msgid "Synthesizing..."
 msgstr "Synthesizing..."
 
-#: src/components/ui/RenderOverlay.tsx:1124
+#: src/components/ui/RenderOverlay.tsx:1171
 msgid "System Capability Check:"
 msgstr "System Capability Check:"
 
@@ -3121,7 +3125,7 @@ msgstr "Unsaved Changes - Press Ctrl+S to save"
 msgid "Untitled Project"
 msgstr "Untitled Project"
 
-#: src/components/ui/RenderOverlay.tsx:1152
+#: src/components/ui/RenderOverlay.tsx:1202
 msgid "Verify that video visuals are factually correct"
 msgstr "Verify that video visuals are factually correct"
 
@@ -3157,7 +3161,7 @@ msgstr "Video Editor"
 msgid "Video Editor Settings"
 msgstr "Video Editor Settings"
 
-#: src/components/ui/RenderOverlay.tsx:1377
+#: src/components/ui/RenderOverlay.tsx:1427
 msgid "Video Exported Successfully!"
 msgstr "Video Exported Successfully!"
 
@@ -3165,11 +3169,11 @@ msgstr "Video Exported Successfully!"
 msgid "Video Title"
 msgstr "Video Title"
 
-#: src/components/ui/RenderOverlay.tsx:389
+#: src/components/ui/RenderOverlay.tsx:425
 msgid "video-clip"
 msgstr "video-clip"
 
-#: src/components/ui/RenderOverlay.tsx:1417
+#: src/components/ui/RenderOverlay.tsx:1467
 msgid "View in Timeline"
 msgstr "View in Timeline"
 
