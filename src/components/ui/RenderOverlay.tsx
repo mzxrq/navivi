@@ -770,7 +770,7 @@ export function RenderOverlay() {
             </button>
             <button
               onClick={handleResumeGeneration}
-              className="ml-auto px-4 py-1.5 bg-navi-500 hover:bg-navi-600 text-white rounded-lg text-xs font-bold shadow-md shadow-navi-500/20 transition-all flex items-center gap-1.5"
+              className="ml-auto px-4 py-1.5 bg-navi hover:brightness-110 text-white rounded-lg text-xs font-bold shadow-md shadow-navi/20 transition-all flex items-center gap-1.5"
             >
               <RotateCcw className="w-3.5 h-3.5" />
               <Trans>Resume Generation</Trans>
@@ -885,7 +885,7 @@ export function RenderOverlay() {
                         className="absolute top-5 short:top-3.5 left-[calc(50%+1.75rem)] right-[calc(-50%+1.75rem)] short:left-[calc(50%+1.375rem)] short:right-[calc(-50%+1.375rem)] h-0.5 -translate-y-1/2 rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden"
                       >
                         <div
-                          className={`h-full bg-navi-500 rounded-full origin-left transition-transform duration-700 ease-in-out ${
+                          className={`h-full bg-navi rounded-full origin-left transition-transform duration-700 ease-in-out ${
                             isConnectorDone ? "scale-x-100" : "scale-x-0"
                           }`}
                         />
@@ -894,9 +894,9 @@ export function RenderOverlay() {
                     <div
                       className={`relative w-10 h-10 short:w-7 short:h-7 shrink-0 rounded-full flex items-center justify-center border-2 text-sm short:text-xs font-medium transition-all duration-300 ${
                         isActive
-                          ? "border-navi-500 bg-navi-500 text-white ring-4 short:ring-2 ring-navi-500/20"
+                          ? "border-navi bg-navi text-white ring-4 short:ring-2 ring-navi/20"
                           : isPast
-                            ? "border-navi-500 bg-navi-500 text-white"
+                            ? "border-navi bg-navi text-white"
                             : "border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-400"
                       }`}
                     >
@@ -908,7 +908,7 @@ export function RenderOverlay() {
                     </div>
                     <div className="text-center min-w-0 max-w-full">
                       <div
-                        className={`text-xs font-semibold tracking-wide truncate ${isActive ? "text-navi-500" : isPast ? "text-zinc-800 dark:text-zinc-200" : "text-zinc-400"}`}
+                        className={`text-xs font-semibold tracking-wide truncate ${isActive ? "text-navi" : isPast ? "text-zinc-800 dark:text-zinc-200" : "text-zinc-400"}`}
                       >
                         {s.label}
                       </div>
@@ -936,7 +936,7 @@ export function RenderOverlay() {
                         viewBox="0 0 100 100"
                       >
                         <circle
-                          className="text-navi-500 transition-all duration-300 ease-out"
+                          className="text-navi transition-all duration-300 ease-out"
                           strokeWidth="8"
                           stroke="currentColor"
                           fill="transparent"
@@ -965,7 +965,7 @@ export function RenderOverlay() {
 
                     <div className="mt-4 short:mt-2 px-5 py-3 bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 rounded-xl flex items-center justify-between gap-4 w-full max-w-md">
                       <div className="flex items-center gap-3 min-w-0">
-                        <Loader2 className="w-4 h-4 text-navi-500 animate-spin shrink-0" />
+                        <Loader2 className="w-4 h-4 text-navi animate-spin shrink-0" />
                         <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300 truncate text-left">
                           {(() => {
                             // Named after the current "[n/N]" stage, with the
@@ -1044,7 +1044,7 @@ export function RenderOverlay() {
                 {/* Hardware Guidance Banner */}
                 <div className="bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 rounded-xl p-4 short:p-3 flex flex-wrap items-center justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0 flex-1 basis-64">
-                    <Cpu className="w-5 h-5 text-navi-500 shrink-0" />
+                    <Cpu className="w-5 h-5 text-navi shrink-0" />
                     <div>
                       <h4 className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
                         <Trans>System Capability Check:</Trans>
@@ -1072,7 +1072,7 @@ export function RenderOverlay() {
                   <div className="space-y-4">
                     <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-zinc-900 dark:text-zinc-100">
                       <div className="flex items-center gap-2">
-                        <Film className="w-5 h-5 text-navi-500 shrink-0" />
+                        <Film className="w-5 h-5 text-navi shrink-0" />
                         <h3 className="text-sm font-semibold tracking-wide uppercase">
                           <Trans>Rendered Videos ({videoItems.length})</Trans>
                         </h3>
@@ -1131,7 +1131,7 @@ export function RenderOverlay() {
                 <div className="space-y-4">
                   <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-zinc-900 dark:text-zinc-100">
                     <div className="flex items-center gap-2">
-                      <Mic className="w-5 h-5 text-navi-500 shrink-0" />
+                      <Mic className="w-5 h-5 text-navi shrink-0" />
                       <h3 className="text-sm font-semibold tracking-wide uppercase">
                         <Trans>
                           Audio Narration & Pronunciation Review (
@@ -1173,7 +1173,7 @@ export function RenderOverlay() {
                                   onClick={() => handleTogglePlay(item)}
                                   className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
                                     activeAudioId === item.id
-                                      ? "bg-navi-100 text-navi-700 dark:bg-navi-500/20 dark:text-navi-400"
+                                      ? "bg-navi/10 text-navi dark:bg-navi/20 dark:text-navi-400"
                                       : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
                                   }`}
                                 >
@@ -1281,7 +1281,7 @@ export function RenderOverlay() {
             {/* STEP 3: EXPORTING (AUTO-STITCHING) */}
             {step === "exporting" && (
               <div className="flex-1 flex flex-col items-center justify-center text-center animate-in fade-in duration-500 py-10 short:py-5 px-5 sm:px-6">
-                <Loader2 className="w-14 h-14 short:w-10 short:h-10 text-navi-500 animate-spin mb-6 short:mb-3 mx-auto" />
+                <Loader2 className="w-14 h-14 short:w-10 short:h-10 text-navi animate-spin mb-6 short:mb-3 mx-auto" />
                 <h3 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 mb-2">
                   <Trans>Stitching Videos & Finalizing Export...</Trans>
                 </h3>
@@ -1348,7 +1348,7 @@ export function RenderOverlay() {
                   )}
                   <button
                     onClick={() => setIsRendering(false)}
-                    className="px-6 py-2.5 bg-navi-500 hover:bg-navi-600 text-white text-xs font-bold rounded-xl shadow-lg shadow-navi-500/20 transition-all flex items-center gap-2"
+                    className="px-6 py-2.5 bg-navi hover:brightness-110 text-white text-xs font-bold rounded-xl shadow-lg shadow-navi/20 transition-all flex items-center gap-2"
                   >
                     <CheckCircle className="w-4 h-4" /> <Trans>Done</Trans>
                   </button>
@@ -1380,7 +1380,7 @@ export function RenderOverlay() {
                 </button>
                 <button
                   onClick={() => handleStitchAndExport(false)}
-                  className="px-6 py-2.5 bg-navi-500 hover:bg-navi-600 text-white text-sm font-semibold rounded-xl shadow-lg shadow-navi-500/20 transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center gap-2"
+                  className="px-6 py-2.5 bg-navi hover:brightness-110 text-white text-sm font-semibold rounded-xl shadow-lg shadow-navi/20 transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center gap-2"
                 >
                   <CheckCircle className="w-4 h-4" />
                   <Trans>Accept Assets & Export Video</Trans>

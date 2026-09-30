@@ -1,19 +1,8 @@
-import { useEffect } from "react";
-import {
-  Scissors,
-  Box,
-  MousePointer2,
-  MapPin,
-  Pencil,
-  SplinePointer,
-  Eraser,
-  ZoomIn,
-  Info,
-  Ruler,
-  Trash2,
-} from "../../../components/ui/icons";
+import { useEffect, useRef } from "react";
+import { MousePointer2, MapPin, Pencil } from "../../../components/ui/icons";
 import { t } from "@lingui/core/macro";
-import { Trans } from "@lingui/react/macro";
+
+export type AddType = "normal" | "start" | "end" | "stopby";
 
 interface MapToolbarProps {
   isAddMode: boolean;
@@ -22,15 +11,14 @@ interface MapToolbarProps {
   setIsDrawMode: (v: boolean) => void;
   isEraserMode: boolean;
   setIsEraserMode: (v: boolean) => void;
-  activeWp: any;
-  onToggleSpline: () => void;
-  onZoomTo: () => void;
-  onClearRoute: () => void;
-  onSimplifyRoute: () => void;
-  onBufferRoute: () => void;
-  onShowInfo: () => void;
+  /** Whether a leg is being drawn right now (enables the E shortcut). */
+  canErase: boolean;
+  addType: AddType;
+  setAddType: (v: AddType) => void;
 }
 
+/** Map tool switcher: select, add stop, draw path. Mode-specific controls
+ * live in the bar underneath (see DrawBar / the add-mode chooser). */
 export function MapToolbar({
   isAddMode,
   setIsAddMode,
@@ -38,180 +26,140 @@ export function MapToolbar({
   setIsDrawMode,
   isEraserMode,
   setIsEraserMode,
-  activeWp,
-  onToggleSpline,
-  onZoomTo,
-  onClearRoute,
-  onSimplifyRoute,
-  onBufferRoute,
-  onShowInfo,
+  canErase,
+  addType,
+  setAddType,
 }: MapToolbarProps) {
   const activeMode = isDrawMode ? "line" : isAddMode ? "point" : "select";
-  const isContextOpen = activeMode === "line" && !!activeWp;
 
-  // Listen to keyboard shortcut keybinds: V (Select), P (Point/Waypoint), L (Line/Draw), E (Eraser), Escape
+  const selectTool = (mode: "select" | "point" | "line") => {
+    setIsAddMode(mode === "point");
+    setIsDrawMode(mode === "line");
+    if (mode !== "line") setIsEraserMode(false);
+  };
+
+  // V (select), P (add), L (draw), E (erase while drawing), Escape.
+  // Registered once and fed through a ref: other Escape handlers (e.g. the
+  // sidebar clearing the selected stop) re-render this component mid-dispatch,
+  // and re-subscribing then would drop this listener for that same keypress.
+  const latest = useRef({ activeMode, canErase, isEraserMode, selectTool, setIsEraserMode });
+  latest.current = { activeMode, canErase, isEraserMode, selectTool, setIsEraserMode };
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Do not trigger shortcuts if user is typing in an input, textarea, or contentEditable element
+      const { activeMode, canErase, isEraserMode, selectTool, setIsEraserMode } = latest.current;
       const activeEl = document.activeElement as HTMLElement | null;
       const activeTag = activeEl?.tagName.toLowerCase();
-      if (
-        activeTag === "input" ||
-        activeTag === "textarea" ||
-        activeEl?.isContentEditable
-      ) {
+      if (activeTag === "input" || activeTag === "textarea" || activeEl?.isContentEditable) {
         return;
       }
-
-      // Do not intercept browser/system modifiers (Ctrl+V paste, Ctrl+P print, Ctrl+L, etc.)
+      // Leave Ctrl+V paste, Ctrl+P print, etc. alone.
       if (e.ctrlKey || e.metaKey || e.altKey) return;
 
       switch (e.key.toLowerCase()) {
         case "v":
           e.preventDefault();
-          setIsDrawMode(false);
-          setIsAddMode(false);
+          selectTool("select");
           break;
         case "p":
           e.preventDefault();
-          setIsAddMode(true);
-          setIsDrawMode(false);
+          selectTool("point");
           break;
         case "l":
           e.preventDefault();
-          setIsDrawMode(true);
-          setIsAddMode(false);
+          selectTool("line");
           break;
         case "e":
-          if (activeMode === "line" && activeWp) {
+          if (activeMode === "line" && canErase) {
             e.preventDefault();
             setIsEraserMode(!isEraserMode);
           }
           break;
         case "escape":
-          setIsDrawMode(false);
-          setIsAddMode(false);
-          setIsEraserMode(false);
+          selectTool("select");
           break;
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [
-    activeMode,
-    activeWp,
-    isEraserMode,
-    setIsAddMode,
-    setIsDrawMode,
-    setIsEraserMode,
-  ]);
+  }, []);
+
+  const tools = [
+    { id: "select" as const, icon: MousePointer2, label: t`Select`, key: "V" },
+    { id: "point" as const, icon: MapPin, label: t`Add stop`, key: "P" },
+    { id: "line" as const, icon: Pencil, label: t`Draw path`, key: "L" },
+  ];
+
+  const addTypes: { id: AddType; label: string }[] = [
+    { id: "normal", label: t`Stop` },
+    { id: "stopby", label: t`Stop-by` },
+    { id: "start", label: t`Start` },
+    { id: "end", label: t`End` },
+  ];
 
   return (
-    <div className="flex max-[1159px]:flex-col min-[1160px]:flex-row gap-2 transition-all">
-      {/* PRIMARY TOOLS */}
-      <div className="flex max-[1159px]:flex-col min-[1160px]:flex-row items-center bg-white dark:bg-zinc-900 rounded-full max-[1159px]:rounded-3xl shadow-md p-1 transition-all">
-        <button
-          onClick={() => {
-            setIsDrawMode(false);
-            setIsAddMode(false);
-          }}
-          title={t`Select (V)`}
-          className={`p-2 rounded-4xl transition-colors ${activeMode === "select" ? "bg-navi/10 text-navi" : "text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"}`}
-        >
-          <MousePointer2 className="w-4 h-4" />
-        </button>
-        <button
-          onClick={() => {
-            setIsAddMode(true);
-            setIsDrawMode(false);
-          }}
-          title={t`Add Waypoint (P)`}
-          className={`p-2 rounded-4xl transition-colors ${activeMode === "point" ? "bg-navi/10 text-navi" : "text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"}`}
-        >
-          <MapPin className="w-4 h-4" />
-        </button>
-        <button
-          onClick={() => {
-            setIsDrawMode(true);
-            setIsAddMode(false);
-          }}
-          title={t`Draw Custom Route (L)`}
-          className={`p-2 rounded-4xl transition-colors ${activeMode === "line" ? "bg-navi/10 text-navi" : "text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"}`}
-        >
-          <Pencil className="w-4 h-4" />
-        </button>
-      </div>
-
-      {/* CONTEXTUAL TOOLS */}
+    <div className="flex flex-col items-center gap-2">
       <div
-        className={`flex max-[1159px]:flex-col min-[1160px]:flex-row items-center bg-white dark:bg-zinc-900 rounded-full max-[1159px]:rounded-3xl shadow-md dark:border-zinc-800 p-1 transition-all duration-300 overflow-hidden ${isContextOpen ? "max-[1159px]:max-h-125 min-[1160px]:max-w-125 opacity-100 translate-x-0 translate-y-0" : "max-[1159px]:max-h-0 min-[1160px]:max-w-0 opacity-0 max-[1159px]:-translate-y-4 min-[1160px]:-translate-x-4 border-none shadow-none p-0!"}`}
+        role="toolbar"
+        aria-label={t`Map tools`}
+        className="flex items-center gap-0.5 p-1 rounded-lg bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border border-zinc-200 dark:border-white/10 shadow-sm"
       >
-        <button
-          onClick={() => setIsEraserMode(!isEraserMode)}
-          title={t`Eraser`}
-          tabIndex={isContextOpen ? 0 : -1}
-          className={`p-2 rounded-4xl transition-colors ${isEraserMode ? "text-red-500 bg-red-50 dark:bg-red-500/10" : "text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"}`}
-        >
-          <Eraser className="w-4 h-4" />
-        </button>
-
-        <button
-          onClick={onToggleSpline}
-          title={t`Toggle Smooth Spline`}
-          tabIndex={isContextOpen ? 0 : -1}
-          className={`p-2 rounded-4xl transition-colors ${activeWp?.drawStyle === "spline" ? "text-amber-500 bg-amber-50 dark:bg-amber-500/10" : "text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"}`}
-        >
-          <SplinePointer className="w-4 h-4" />
-        </button>
-
-        <button
-          onClick={onZoomTo}
-          title={t`Zoom to Fit`}
-          tabIndex={isContextOpen ? 0 : -1}
-          className="p-2 rounded-4xl transition-colors text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-        >
-          <ZoomIn className="w-4 h-4" />
-        </button>
-
-        <div className="w-px h-5 bg-zinc-200 dark:bg-zinc-800 mx-1" />
-
-        <button
-          onClick={onSimplifyRoute}
-          title={t`Simplify Route`}
-          tabIndex={isContextOpen ? 0 : -1}
-          className="p-2 rounded-4xl transition-colors text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-        >
-          <Scissors className="w-4 h-4" />
-        </button>
-        <button
-          onClick={onBufferRoute}
-          title={t`Buffer Route`}
-          tabIndex={isContextOpen ? 0 : -1}
-          className="p-2 rounded-4xl transition-colors text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-        >
-          <Box className="w-4 h-4" />
-        </button>
-        <button
-          onClick={onShowInfo}
-          title={t`Geometry Information`}
-          tabIndex={isContextOpen ? 0 : -1}
-          className="p-2 rounded-4xl transition-colors text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-        >
-          <Info className="w-4 h-4" />
-        </button>
-
-        <div className="w-px h-5 bg-zinc-200 dark:bg-zinc-800 mx-1" />
-
-        <button
-          onClick={onClearRoute}
-          title={t`Clear Route`}
-          tabIndex={isContextOpen ? 0 : -1}
-          className="p-2 rounded-4xl transition-colors text-zinc-500 hover:text-red-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-        >
-          <Trash2 className="w-4 h-4" />
-        </button>
+        {tools.map(({ id, icon: Icon, label, key }) => {
+          const active = activeMode === id;
+          return (
+            <button
+              key={id}
+              type="button"
+              onClick={() => selectTool(id)}
+              aria-pressed={active}
+              aria-label={`${label} (${key})`}
+              className={`group/tool relative flex items-center justify-center w-8 h-7 rounded-md transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-navi/40 ${
+                active
+                  ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                  : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-white/5"
+              }`}
+            >
+              <Icon className="w-3.5 h-3.5" />
+              {/* Name + shortcut on hover (after a beat) or keyboard focus. */}
+              <span
+                aria-hidden
+                className="pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-2 flex items-center gap-1.5 h-6 px-2 rounded-md bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-[11px] font-medium whitespace-nowrap shadow-md opacity-0 -translate-y-0.5 transition duration-150 group-hover/tool:opacity-100 group-hover/tool:translate-y-0 group-hover/tool:delay-300 group-focus-visible/tool:opacity-100 group-focus-visible/tool:translate-y-0"
+              >
+                {label}
+                <kbd className="font-sans text-[10px] px-1 rounded bg-white/15 dark:bg-black/10">
+                  {key}
+                </kbd>
+              </span>
+            </button>
+          );
+        })}
       </div>
+
+      {isAddMode && (
+        <div className="flex items-center gap-2 h-8 pl-3 pr-1 rounded-lg bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border border-zinc-200 dark:border-white/10 shadow-sm animate-in fade-in slide-in-from-top-1 duration-150">
+          <span className="text-[12px] text-zinc-500 whitespace-nowrap">
+            {t`Click the map to add:`}
+          </span>
+          <div className="flex items-center gap-0.5">
+            {addTypes.map((type) => (
+              <button
+                key={type.id}
+                type="button"
+                onClick={() => setAddType(type.id)}
+                aria-pressed={addType === type.id}
+                className={`h-6 px-2 rounded-md text-[12px] font-medium transition-colors ${
+                  addType === type.id
+                    ? "bg-navi/10 text-navi"
+                    : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-white/5"
+                }`}
+              >
+                {type.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

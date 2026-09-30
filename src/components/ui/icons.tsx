@@ -128,6 +128,7 @@ export {
   MoveUpLeft,
   MoveDownRight,
   MoveDownLeft,
+  LocateFixed, // WaypointEditor
 } from "lucide-react";
 
 export const Navivi = ({

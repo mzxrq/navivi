@@ -20,6 +20,7 @@ import {
 import { useUI } from "../../../hooks/useUI";
 import { useWorkspace } from "../../../hooks/useWorkspace";
 import { RouteMode, Waypoint } from "../../../types/index";
+import { stopLabel } from "../../../utils/stopLabel";
 
 interface WaypointItemProps {
   wp: Waypoint;
@@ -108,6 +109,10 @@ export function WaypointItem({
     onEdit();
   };
 
+  // MapArea opens the draw bar on this leg and frames it.
+  const startDrawing = () =>
+    window.dispatchEvent(new CustomEvent("enter-draw-mode", { detail: { wpId: wp.id } }));
+
   const selectMode = (mode: RouteMode) => {
     setIsModeMenuOpen(false);
     if (mode === wp.routeMode) return;
@@ -122,6 +127,7 @@ export function WaypointItem({
         newCustomRoute = seg.positions.slice(1, -1);
       }
       updateWaypoint(wp.id, { routeMode: "draw", customRoute: newCustomRoute });
+      startDrawing();
     } else {
       updateWaypoint(wp.id, { routeMode: mode });
     }
@@ -129,25 +135,7 @@ export function WaypointItem({
 
   const isStart = index === 0;
   const isEnd = index === waypoints.length - 1 && waypoints.length > 1;
-  let displayLabel = "";
-  if (isStart) {
-    displayLabel = "S";
-  } else if (isEnd) {
-    displayLabel = "E";
-  } else if (wp.isStopBy) {
-    let stopByIndex = 0;
-    for (let i = index; i >= 0; i--) {
-      if (waypoints[i].isStopBy) stopByIndex++;
-      else break;
-    }
-    displayLabel = `+${stopByIndex}`;
-  } else {
-    let normalIndex = 1;
-    for (let i = 1; i < index; i++) {
-      if (!waypoints[i].isStopBy) normalIndex++;
-    }
-    displayLabel = normalIndex.toString();
-  }
+  const displayLabel = stopLabel(waypoints, index);
 
   const imageCount = wp.images?.length ?? 0;
   const script = wp.arrivingNarration || wp.attractionNarration || "";
@@ -351,6 +339,29 @@ export function WaypointItem({
                 </div>
               )}
             </div>
+
+            {wp.routeMode === "draw" && (
+              <>
+                <span className="text-zinc-300 dark:text-zinc-700 text-[11px]" aria-hidden>
+                  ·
+                </span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    startDrawing();
+                  }}
+                  title={t`Edit the drawn path on the map`}
+                  className="flex items-center gap-1 h-6 px-1.5 rounded-md text-[11px] font-medium text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 dark:hover:text-zinc-100 dark:hover:bg-white/5 transition-colors"
+                >
+                  <Pencil className="w-3 h-3" />
+                  <Trans>Edit path</Trans>
+                  {(wp.customRoute?.length ?? 0) > 0 && (
+                    <span className="text-zinc-400 tabular-nums">{wp.customRoute!.length}</span>
+                  )}
+                </button>
+              </>
+            )}
 
             {canAdjust && (
               <>

@@ -27,6 +27,8 @@ interface ScriptInputProps {
   onCancel?: () => void;
   aiEnabled?: boolean;
   thoughtProcess?: string;
+  /** Hide the "Script" label when the caller already titles the field. */
+  showLabel?: boolean;
 }
 
 export function ScriptInput({
@@ -37,6 +39,7 @@ export function ScriptInput({
   onCancel,
   aiEnabled = false,
   thoughtProcess = "",
+  showLabel = true,
 }: ScriptInputProps) {
   const [localPrompt, setLocalPrompt] = useState(value);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
@@ -142,18 +145,23 @@ export function ScriptInput({
   };
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
-          <Mic className="w-3.5 h-3.5 text-zinc-400" /> <Trans>Script</Trans>
-        </label>
+    <div className="space-y-1.5">
+      {(showLabel || aiEnabled) && (
+      <div className="flex items-center justify-between min-h-6">
+        {showLabel ? (
+          <label className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
+            <Mic className="w-3.5 h-3.5 text-zinc-400" /> <Trans>Script</Trans>
+          </label>
+        ) : (
+          <span />
+        )}
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 min-w-0">
           {aiEnabled && isGenerating && (
-            <div className="flex items-center gap-1.5 px-2 text-navi-500 dark:text-navi-400 animate-fade-in overflow-hidden whitespace-nowrap max-w-[200px]">
+            <div className="flex items-center gap-1.5 px-1 text-navi dark:text-navi-400 overflow-hidden whitespace-nowrap max-w-50">
               <Sparkles className="w-3.5 h-3.5 animate-pulse shrink-0" />
               <span
-                className="text-[10px] font-bold uppercase tracking-wider animate-pulse truncate"
+                className="text-[11px] animate-pulse truncate"
                 title={thoughtProcess}
               >
                 {thoughtProcess
@@ -171,7 +179,7 @@ export function ScriptInput({
               <button
                 type="button"
                 onClick={onCancel}
-                className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-bold transition-all bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20 border border-red-200 dark:border-red-500/20 shadow-sm"
+                className="shrink-0 flex items-center gap-1.5 h-6 px-2 rounded-md text-[11px] font-medium transition-colors text-red-600 dark:text-red-400 hover:bg-red-500/10"
               >
                 <Square className="w-3 h-3 fill-current" />
                 <Trans>cancel</Trans>
@@ -181,7 +189,7 @@ export function ScriptInput({
                 type="button"
                 onClick={handleGenerateClick}
                 disabled={!localPrompt.trim()}
-                className="shrink-0 flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed bg-navi-50 dark:bg-navi-500/10 text-navi-700 dark:text-navi-300 hover:bg-navi-100 dark:hover:bg-navi-500/20 border border-navi-200 dark:border-navi-500/20 shadow-sm"
+                className="shrink-0 flex items-center gap-1.5 h-6 px-2 rounded-md text-[11px] font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed text-navi hover:bg-navi/10"
               >
                 <PencilSparkles className="w-3 h-3" />
                 <Trans>Auto-Write</Trans>
@@ -189,35 +197,37 @@ export function ScriptInput({
             ))}
         </div>
       </div>
+      )}
 
-      <div className="relative w-full h-28 rounded-lg overflow-hidden shadow-inner border border-zinc-200 dark:border-navidark-300 group focus-within:border-navi-400 dark:focus-within:border-navi-500/50 transition-colors">
+      <div className="relative w-full h-28 rounded-md overflow-hidden border border-zinc-200 dark:border-white/10 bg-white dark:bg-zinc-950 group focus-within:border-navi focus-within:ring-2 focus-within:ring-navi/20 transition-colors">
         <textarea
           ref={textareaRef}
           value={localPrompt}
           onChange={(e) => setLocalPrompt(e.target.value)}
           readOnly={isGenerating}
           placeholder={t`Type a prompt or write your own script...`}
-          className="w-full h-full resize-none p-3 text-xs custom-scrollbar bg-white dark:bg-navidark-800 text-zinc-900 dark:text-zinc-100 focus:outline-none readOnly:opacity-80 pb-10"
+          className="w-full h-full resize-none p-2.5 pb-10 text-[13px] leading-relaxed custom-scrollbar bg-transparent text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:outline-none read-only:opacity-80"
         />
 
         {!isGenerating && (
-          <div className="absolute bottom-2 right-2 flex items-center">
+          <div className="absolute bottom-1.5 right-1.5 flex items-center gap-1">
             <button
               type="button"
               onClick={handleScanKanji}
-              className="w-8 h-8 mr-2 rounded-full bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-300 flex items-center justify-center transition-all opacity-0 group-focus-within:opacity-100"
+              className="w-6 h-6 rounded-md text-zinc-500 hover:text-zinc-800 hover:bg-zinc-100 dark:hover:text-zinc-200 dark:hover:bg-white/5 flex items-center justify-center transition-all opacity-0 group-focus-within:opacity-100"
               title={t`Scan script for all Kanji and add to Dictionary`}
+              aria-label={t`Scan script for all Kanji and add to Dictionary`}
             >
-              <BookOpen className="w-4 h-4" />
+              <BookOpen className="w-3.5 h-3.5" />
             </button>
             <button
               type="button"
               onClick={handleSaveClick}
               disabled={!hasUnsavedChanges}
-              className={`flex items-center gap-1 px-3 py-1 rounded-md text-[10px] font-bold transition-all shadow-sm ${
+              className={`flex items-center gap-1 h-6 px-2 rounded-md text-[11px] font-medium transition-colors ${
                 hasUnsavedChanges
-                  ? "bg-navi hover:bg-navi-600 text-white"
-                  : "bg-zinc-100 dark:bg-navidark-500 text-zinc-400 dark:text-zinc-500 cursor-default"
+                  ? "bg-navi hover:brightness-110 text-white"
+                  : "text-zinc-400 dark:text-zinc-500 cursor-default"
               }`}
             >
               <Check className="w-3 h-3" />
