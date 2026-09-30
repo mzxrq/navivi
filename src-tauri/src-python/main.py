@@ -87,6 +87,14 @@ if __name__ == "__main__":
             print(json.dumps({"success": True, "readings": readings}, ensure_ascii=False))
             sys.exit(0)
 
+        # Voice library (list/add/delete/preview): argv[2] is a JSON payload,
+        # stdout is one JSON object. See services/cli/voice_commands.py.
+        from services.cli.voice_commands import VOICE_ACTIONS, run_voice_action
+        if command_arg in VOICE_ACTIONS:
+            payload = json.loads(sys.argv[2]) if len(sys.argv) > 2 and sys.argv[2].strip() else {}
+            print(json.dumps(run_voice_action(command_arg, payload), ensure_ascii=False))
+            sys.exit(0)
+
         if command_arg == "full_pipeline":
             if len(sys.argv) < 3:
                 raise ValueError("full_pipeline requires a source path")

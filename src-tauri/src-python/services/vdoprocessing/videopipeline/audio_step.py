@@ -140,6 +140,50 @@ def _resolve_attraction_narration_script(waypoint: dict) -> Optional[str]:
     return text or None
 
 
+def _voice_note_path(audio_path) -> Path:
+    """Beside each narration clip: the voice + speed it was spoken with."""
+    return Path(str(audio_path) + ".voice.json")
+
+
+def _client_fingerprint(client: Any) -> Optional[dict]:
+    config = getattr(client, "config", None)
+    if config is None or not hasattr(config, "voice"):
+        return None
+    fp = getattr(client, "_voice_fingerprint", None)
+    if fp is None:
+        from services.tts.voices import voice_fingerprint
+        fp = voice_fingerprint(config.voice, config.speed)
+        try:
+            client._voice_fingerprint = fp
+        except AttributeError:
+            pass
+    return fp
+
+
+def _voice_matches(audio_path, client: Any) -> bool:
+    """False when the clip was made with another voice/speed than the project's now."""
+    from services.tts.voices import LEGACY_FINGERPRINT, fingerprints_match
+
+    current = _client_fingerprint(client)
+    if current is None:
+        return True
+    try:
+        stored = json.loads(_voice_note_path(audio_path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        stored = LEGACY_FINGERPRINT
+    return fingerprints_match(stored, current)
+
+
+def _write_voice_note(audio_path, client: Any) -> None:
+    fp = _client_fingerprint(client)
+    if fp is None:
+        return
+    try:
+        _voice_note_path(audio_path).write_text(json.dumps(fp), encoding="utf-8")
+    except OSError:
+        pass
+
+
 def apply_pronunciation_dictionary(text: str, dictionary: list) -> str:
     if not text or not dictionary:
         return text
@@ -177,7 +221,7 @@ async def generate_attraction_audio_for_waypoint(
     audio_filename = attraction_audio_filename(idx, label)
     existing_path = Path(output_dir) / audio_filename
 
-    if not force and output_is_valid(existing_path):
+    if not force and output_is_valid(existing_path) and _voice_matches(existing_path, client):
         logger.info(
             "Step 2: [%d] '%s' attraction narration already exists — skipping TTS.",
             idx + 1, label,
@@ -186,6 +230,7 @@ async def generate_attraction_audio_for_waypoint(
     else:
         logger.info("Step 2: [%d] Generating attraction narration for: '%s'", idx + 1, label)
         audio_path = await client.generate_speech(tts_script, output_filename=audio_filename)
+        _write_voice_note(audio_path, client)
 
     analysis = processor.analyze_pauses(audio_path)
     return {
@@ -221,12 +266,13 @@ async def generate_overview_audio(
     audio_filename = "00_overview_narration.wav"
     existing_path = Path(output_dir) / audio_filename
 
-    if not force and output_is_valid(existing_path):
+    if not force and output_is_valid(existing_path) and _voice_matches(existing_path, client):
         logger.info("Step 2: Overview narration audio already exists — skipping TTS.")
         audio_path = str(existing_path)
     else:
         logger.info("Step 2: Generating overview narration audio.")
         audio_path = await client.generate_speech(tts_script, output_filename=audio_filename)
+        _write_voice_note(audio_path, client)
 
     analysis = processor.analyze_pauses(audio_path)
     # Where each cue ({start}, {1}, {2}, {end}) falls in the real audio: the
@@ -301,7 +347,12 @@ async def generate_waypoint_audio(
     audio_filename = waypoint_audio_filename(idx, label)
     existing_path = Path(output_dir) / audio_filename
 
-    if not force and output_is_valid(existing_path) and _spoken_text_matches(existing_path, script, waypoint):
+    if (
+        not force
+        and output_is_valid(existing_path)
+        and _spoken_text_matches(existing_path, script, waypoint)
+        and _voice_matches(existing_path, client)
+    ):
         logger.info(
             "Step 2: [%d] '%s' already exists — skipping TTS.", idx + 1, label
         )
@@ -313,6 +364,7 @@ async def generate_waypoint_audio(
             _spoken_text_path(audio_path).write_text(script, encoding="utf-8")
         except OSError:
             pass
+        _write_voice_note(audio_path, client)
 
     analysis = processor.analyze_pauses(audio_path)
     return {
@@ -437,11 +489,14 @@ def generate_audio(
         waypoints = project_config.get("waypoints", [])
         apply_cued_scripts(waypoints, config_path.parent)
 
-        from services.tts.ttsengine import AudioProcessor, IrodoriTTSClient
+        from services.tts.ttsengine import AudioProcessor, IrodoriTTSClient, tts_config_from_settings
 
         output_dir = Path(output_audio_dir) if output_audio_dir else project_audio_dir(config_path.parent)
         output_dir.mkdir(parents=True, exist_ok=True)
-        client = IrodoriTTSClient(output_dir=output_dir)
+        client = IrodoriTTSClient(
+            output_dir=output_dir,
+            config=tts_config_from_settings(project_config.get("settings", {})),
+        )
         processor = AudioProcessor(output_dir=output_dir)
 
         # [NOTE] [TTS] Awaits each waypoint in order inside this loop, so despite being async the TTS calls run fully sequentially, not concurrently.
