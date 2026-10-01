@@ -27,9 +27,11 @@ import {
   Sparkles,
   Sun,
   Trash2,
+  Volume2,
   X,
 } from "./icons";
 import { Switch } from "./Switch";
+import { VoiceTab } from "./VoiceSettings";
 
 type SettingsTab =
   | "general"
@@ -37,6 +39,7 @@ type SettingsTab =
   | "api"
   | "video"
   | "ai"
+  | "voice"
   | "tts_dictionary";
 
 const inputClass =
@@ -96,6 +99,7 @@ export function AppSettings() {
     { id: "appearance", icon: Palette, label: t`Appearance` },
     { id: "api", icon: Key, label: t`API keys` },
     { id: "video", icon: Film, label: t`Video` },
+    { id: "voice", icon: Volume2, label: t`Voice` },
     { id: "tts_dictionary", icon: Mic, label: t`Pronunciation` },
     ...(settings.ai_features_enabled
       ? [{ id: "ai" as const, icon: Sparkles, label: t`AI models` }]
@@ -514,6 +518,8 @@ export function AppSettings() {
                 </Section>
               </>
             )}
+
+            {activeTab === "voice" && <VoiceTab />}
 
             {activeTab === "tts_dictionary" && (
               <>

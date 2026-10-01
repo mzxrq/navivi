@@ -85,6 +85,7 @@ export interface ProjectSettings {
   marked_regeneration_waypoints?: string[];
   ai_features_enabled?: boolean;
   pronunciation_dictionary?: Array<{ word: string; reading: string }>;
+  tts?: { voice?: string; speed?: number };
 }
 
 export interface ProjectMetadata {
