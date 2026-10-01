@@ -60,13 +60,9 @@ def test_three_photos_are_combined_to_the_narration_length(generator, tmp_path):
     # Nothing left parked for an approval step, and no temp pieces left over;
     # each photo's raw clip is kept for reuse.
     leftovers = {p.name for p in generator.output_dir.iterdir() if p.is_file()}
-<<<<<<< Updated upstream
-    assert leftovers == {"04_attraction_05_test.mp4", "04_attraction_05_test.inputs.json"}
-=======
     assert "04_attraction_05_test.mp4" in leftovers
     others = leftovers - {"04_attraction_05_test.mp4"}
     assert len(others) == 3 and all(n.startswith("raw_04_attraction_05_test_") for n in others)
->>>>>>> Stashed changes
 
 
 def test_single_moving_photo_keeps_moving_to_the_narration_end(generator, tmp_path):
@@ -81,8 +77,6 @@ def test_single_moving_photo_keeps_moving_to_the_narration_end(generator, tmp_pa
     assert out and FFmpegManager.get_media_duration(out) == pytest.approx(15.0, abs=0.3)
 
 
-<<<<<<< Updated upstream
-=======
 def test_changed_camera_preset_regenerates_the_clip(generator, tmp_path, monkeypatch):
     photos = _photos(tmp_path, 1)
     kwargs = dict(popup_image_entry=photos, target_audio_duration=4.0,
@@ -205,7 +199,6 @@ def test_small_gap_is_held_not_zoomed(generator, tmp_path, slow_moves):
     assert out and FFmpegManager.get_media_duration(out) == pytest.approx(2.6, abs=0.3)
 
 
->>>>>>> Stashed changes
 def test_still_photo_is_held_for_the_whole_narration(generator, tmp_path):
     out = generator.process_attraction_video(
         popup_image_entry=_photos(tmp_path, 1),

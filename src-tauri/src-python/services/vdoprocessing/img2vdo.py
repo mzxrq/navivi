@@ -107,8 +107,6 @@ class AttractionVideoGenerator:
         pending_dir.mkdir(parents=True, exist_ok=True)
         return pending_dir / f"{Path(output_filename).stem}.json"
 
-<<<<<<< Updated upstream
-=======
     # Which photo clips (by _clip_key) a deliverable was built from, so an
     # added/changed photo or preset rebuilds it. Older records hold "pans".
     _INPUTS_SUBDIR: Final[str] = "_inputs"
@@ -147,7 +145,6 @@ class AttractionVideoGenerator:
         digest.update(b"|" + pan.encode("utf-8"))
         return digest.hexdigest()[:12]
 
->>>>>>> Stashed changes
     # [NOTE] [IO] Called at the start of a fresh generate for a waypoint (the
     # user re-running it). Removes anything a previous run left behind for
     # the same output_filename — the finalized deliverable itself, and any
@@ -779,22 +776,6 @@ class AttractionVideoGenerator:
         if not image_list:
             return None
 
-<<<<<<< Updated upstream
-        # <stem>.inputs.json records the photos a clip was made from; a
-        # different list (e.g. upscaled copies) remakes it. Clips from before
-        # this sidecar existed are kept as they are.
-        inputs_path = self.output_dir / f"{Path(output_filename).stem}.inputs.json"
-        try:
-            previous_inputs = json.loads(inputs_path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            previous_inputs = None
-        if previous_inputs is not None and previous_inputs != image_list:
-            logger.info("Attraction photos changed since %s was made — remaking it.", output_filename)
-            force = True
-
-        final_path = self.output_dir / output_filename
-        if not force and output_is_valid(final_path):
-=======
         if isinstance(prompt_text, str):
             prompt_list = [prompt_text]
         elif isinstance(prompt_text, list):
@@ -826,7 +807,6 @@ class AttractionVideoGenerator:
         if not force and not inputs_changed and output_is_valid(final_path):
             if "keys" not in recorded:
                 self._write_inputs(output_filename, keys, pans)
->>>>>>> Stashed changes
             logger.info(
                 "Waypoint deliverable already exists — skipping generation: %s",
                 final_path,
@@ -843,22 +823,8 @@ class AttractionVideoGenerator:
                     stale_raw.unlink()
                 except OSError:
                     pass
-<<<<<<< Updated upstream
-
-        self.output_dir.mkdir(parents=True, exist_ok=True)
-        inputs_path.write_text(json.dumps(image_list, ensure_ascii=False), encoding="utf-8")
-
-        # --- Check list vs string for prompts ---
-        if isinstance(prompt_text, str):
-            prompt_list = [prompt_text]
-        elif isinstance(prompt_text, list):
-            prompt_list = prompt_text
-        else:
-            prompt_list = [""]
-=======
         else:
             self._migrate_index_named_raws(stem, keys, pans, recorded.get("pans"))
->>>>>>> Stashed changes
 
         logger.info(f"Processing waypoint with {len(image_list)} image(s)...")
 
