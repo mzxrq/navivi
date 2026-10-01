@@ -327,31 +327,3 @@ def render_from_timeline(
     print(f"Fast re-render complete  {final_path}")
     logger.info("NLE Engine: Fast re-render complete  %s", final_path)
     return final_path
-
-
-def estimate_step_durations(project_config: dict, cleaned_route: dict) -> dict:
-    """Estimates the duration (in seconds) for each pipeline step."""
-    waypoints = project_config.get("waypoints", [])
-    num_waypoints = len(waypoints)
-
-    # [NOTE] [Core] These are rough, hand-picked heuristics (not measured from real runs) for a progress-bar ETA — not meant to be an accurate benchmark.
-    # Heuristics based on standard local rendering speeds
-    est_gps = 1.0  # GPS parsing is very fast
-    est_tts = max(2.0, num_waypoints * 1.5)  # ~1.5s per TTS narration
-
-    # 3D video rendering depends on total frames (assume 30fps, 8s per leg/waypoint)
-    est_video = max(5.0, num_waypoints * 8.0 * 0.4)
-
-    est_ai = (
-        num_waypoints * 10.0 if any(wp.get("popup_image") for wp in waypoints) else 2.0
-    )
-    est_subtitles = 1.0
-
-    return {
-        "gps": est_gps,
-        "tts": est_tts,
-        "video": est_video,
-        "ai": est_ai,
-        "subtitles": est_subtitles,
-        "total": est_gps + est_tts + est_video + est_ai + est_subtitles,
-    }

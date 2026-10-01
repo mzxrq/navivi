@@ -1,5 +1,5 @@
 import { ReactNode, useEffect, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { fetchRenderEstimate, formatDuration, RenderEstimate } from "../../../services/renderEstimate";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 import { Dialog, dialogButton } from "../../../components/ui/Dialog";
@@ -7,27 +7,11 @@ import { Switch } from "../../../components/ui/Switch";
 import { AlertTriangle, Check, Clock, Film, ImageIcon, MapPin, Mic, Route } from "../../../components/ui/icons";
 import { useWorkspace } from "../../../hooks/useWorkspace";
 
-interface Estimate {
-  total_seconds: number;
-  stages: Record<string, number>;
-  measured_stages: number;
-  active_stages: number;
-  hardware: { gpu: string | null; cpu_cores: number };
-}
-
-export const formatDuration = (seconds: number) => {
-  const m = Math.max(1, Math.round(seconds / 60));
-  if (m < 60) return t`${m} min`;
-  const h = Math.floor(m / 60);
-  const rest = m % 60;
-  return rest ? t`${h} h ${rest} min` : t`${h} h`;
-};
-
 const hasText = (s?: string) => !!s && s.trim().length > 0;
 
 export function GenerateDialog({ onClose, onConfirm }: { onClose: () => void; onConfirm: () => void }) {
   const { waypoints, settings, metadata, updateSettings, setIsDirty, saveProject } = useWorkspace();
-  const [estimate, setEstimate] = useState<Estimate | null>(null);
+  const [estimate, setEstimate] = useState<RenderEstimate | null>(null);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
@@ -35,18 +19,11 @@ export function GenerateDialog({ onClose, onConfirm }: { onClose: () => void; on
     setEstimate(null);
     setFailed(false);
     const timer = setTimeout(async () => {
-      try {
-        await saveProject();
-        const raw = await invoke<string>("run_python_blueprint", {
-          action: "estimate",
-          payload: `${metadata.directory_path}/job_config.json`,
-        });
-        const data = JSON.parse(raw.trim().split(String.fromCharCode(10)).pop() ?? "");
-        if (!cancelled && data.success) setEstimate(data);
-        else if (!cancelled) setFailed(true);
-      } catch {
-        if (!cancelled) setFailed(true);
-      }
+      await saveProject();
+      const result = await fetchRenderEstimate(metadata.directory_path);
+      if (cancelled) return;
+      if (result) setEstimate(result);
+      else setFailed(true);
     }, 150);
     return () => {
       cancelled = true;

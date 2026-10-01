@@ -9,8 +9,7 @@
 - outro_step.py: post-Step-4 — end-of-video "places visited" outro, scrolling cards or grid (render_outro_clip)
 - subtitle_step.py: Step 5 — burn subtitles (burn_subtitles)
 - timeline_step.py: Step 6 — assemble timeline.json (build_timeline)
-- pipeline.py: orchestration entry points (run_full_pipeline, render_from_timeline,
-  estimate_step_durations)
+- pipeline.py: orchestration entry points (run_full_pipeline, render_from_timeline)
 """
 
 from .attraction_step import render_attraction_videos
@@ -18,7 +17,7 @@ from .audio_step import generate_audio
 from .gps_step import process_gps
 from .intro_step import render_intro_clip
 from .outro_step import render_outro_clip
-from .pipeline import estimate_step_durations, render_from_timeline, run_full_pipeline
+from .pipeline import render_from_timeline, run_full_pipeline
 from .render_step import render_route_video
 from .subtitle_step import burn_subtitles
 from .timeline_step import build_timeline
@@ -34,5 +33,4 @@ __all__ = [
     "build_timeline",
     "run_full_pipeline",
     "render_from_timeline",
-    "estimate_step_durations",
 ]

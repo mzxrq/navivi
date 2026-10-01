@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { useUI } from "../../hooks/useUI";
+import { useRenderEstimate } from "../../hooks/useRenderEstimate";
+import { formatDuration } from "../../services/renderEstimate";
 import { useAnimatedUnmount } from "../../hooks/useAnimatedUnmount";
 import {
   History,
@@ -77,7 +79,12 @@ export function StatusBar() {
     restoreVersion,
     deleteVersion,
   } = useWorkspace();
-  const { editorMode, notifications, clearNotifications } = useUI();
+  const { editorMode, notifications, clearNotifications, isRendering } = useUI();
+  const estimate = useRenderEstimate(
+    metadata.directory_path,
+    editorMode === "map" && !isDirty && !isRendering,
+    waypoints.length,
+  );
 
   // Popup States
   const [showNotifications, setShowNotifications] = useState(false);
@@ -143,9 +150,6 @@ export function StatusBar() {
       wp.arrivingNarration ||
       wp.attractionNarration,
   ).length;
-
-  // Estimate: Base 2 mins for setup/routing + ~1.5 mins per waypoint for AI voice/GLSL/FFmpeg
-  const estRenderMinutes = Math.max(1, Math.ceil(waypoints.length * 1.5 + 2));
 
   const toggleNotifications = () => {
     setShowNotifications(!showNotifications);
@@ -226,7 +230,7 @@ export function StatusBar() {
               icon={Clock}
               title={t`Estimated time for the Python backend to synthesize AI voiceovers and encode the video`}
             >
-              {t`~${estRenderMinutes} min to render`}
+              {estimate ? t`~${formatDuration(estimate.total_seconds)} to render` : t`Estimating render time…`}
             </Stat>
           </>
         ) : (

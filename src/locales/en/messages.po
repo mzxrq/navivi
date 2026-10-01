@@ -112,7 +112,7 @@ msgstr "{0} Clips Selected"
 
 #. placeholder {0}: voiced.length
 #. placeholder {1}: active.length
-#: src/features/map/components/GenerateDialog.tsx:83
+#: src/features/map/components/GenerateDialog.tsx:60
 msgid "{0} of {1} stops"
 msgstr "{0} of {1} stops"
 
@@ -122,24 +122,24 @@ msgid "{0} selected"
 msgstr "{0} selected"
 
 #. placeholder {0}: waypoints.length
-#: src/components/ui/StatusBar.tsx:220
-#: src/features/map/components/GenerateDialog.tsx:122
+#: src/components/ui/StatusBar.tsx:224
+#: src/features/map/components/GenerateDialog.tsx:99
 msgid "{0} stops"
 msgstr "{0} stops"
 
 #. placeholder {0}: silent.length
-#: src/features/map/components/GenerateDialog.tsx:156
+#: src/features/map/components/GenerateDialog.tsx:133
 msgid "{0} stops have no narration and will be silent"
 msgstr "{0} stops have no narration and will be silent"
 
 #. placeholder {0}: withPhotos.length
-#: src/features/map/components/GenerateDialog.tsx:90
+#: src/features/map/components/GenerateDialog.tsx:67
 msgid "{0} stops with photos"
 msgstr "{0} stops with photos"
 
 #. placeholder {0}: timeline.tracks.length
 #. placeholder {0}: track.type
-#: src/components/ui/StatusBar.tsx:238
+#: src/components/ui/StatusBar.tsx:242
 #: src/features/timeline/components/elements/TimelineTrackHeaders.tsx:74
 msgid "{0} tracks"
 msgstr "{0} tracks"
@@ -150,11 +150,11 @@ msgstr "{0} tracks"
 msgid "{0}% reduction ({1} dB)"
 msgstr "{0}% reduction ({1} dB)"
 
-#: src/features/map/components/GenerateDialog.tsx:23
+#: src/services/renderEstimate.ts:30
 msgid "{h} h"
 msgstr "{h} h"
 
-#: src/features/map/components/GenerateDialog.tsx:23
+#: src/services/renderEstimate.ts:30
 msgid "{h} h {rest} min"
 msgstr "{h} h {rest} min"
 
@@ -162,15 +162,15 @@ msgstr "{h} h {rest} min"
 msgid "{imageCount} photos"
 msgstr "{imageCount} photos"
 
-#: src/features/map/components/GenerateDialog.tsx:77
+#: src/features/map/components/GenerateDialog.tsx:54
 msgid "{legs} legs"
 msgstr "{legs} legs"
 
-#: src/features/map/components/GenerateDialog.tsx:20
+#: src/services/renderEstimate.ts:27
 msgid "{m} min"
 msgstr "{m} min"
 
-#: src/components/ui/StatusBar.tsx:223
+#: src/components/ui/StatusBar.tsx:227
 msgid "{populatedStops} with media"
 msgstr "{populatedStops} with media"
 
@@ -182,7 +182,7 @@ msgstr "{stopCount} stops"
 msgid "{stopCount} stops · {stopByCount} stop-by"
 msgstr "{stopCount} stops · {stopByCount} stop-by"
 
-#: src/components/ui/StatusBar.tsx:241
+#: src/components/ui/StatusBar.tsx:245
 msgid "{totalClips} clips"
 msgstr "{totalClips} clips"
 
@@ -202,15 +202,20 @@ msgstr "<0>Mute</0>"
 msgid "<0>Muted</0>"
 msgstr "<0>Muted</0>"
 
+#. placeholder {0}: formatDuration(estimate.total_seconds)
+#: src/components/ui/StatusBar.tsx:233
+msgid "~{0} to render"
+msgstr "~{0} to render"
+
 #: src/components/ui/StatusBar.tsx:229
-msgid "~{estRenderMinutes} min to render"
-msgstr "~{estRenderMinutes} min to render"
+#~ msgid "~{estRenderMinutes} min to render"
+#~ msgstr "~{estRenderMinutes} min to render"
 
 #: src/components/ui/RenderOverlay.tsx:1317
 msgid "💡 <0>Quick Export Notice:</0> To customize individual video clips or fix TTS pronunciation, uncheck \"Quick Export\" in generation settings and re-run."
 msgstr "💡 <0>Quick Export Notice:</0> To customize individual video clips or fix TTS pronunciation, uncheck \"Quick Export\" in generation settings and re-run."
 
-#: src/features/map/components/GenerateDialog.tsx:77
+#: src/features/map/components/GenerateDialog.tsx:54
 msgid "1 leg"
 msgstr "1 leg"
 
@@ -218,11 +223,11 @@ msgstr "1 leg"
 msgid "1 minute"
 msgstr "1 minute"
 
-#: src/features/map/components/GenerateDialog.tsx:122
+#: src/features/map/components/GenerateDialog.tsx:99
 msgid "1 stop"
 msgstr "1 stop"
 
-#: src/features/map/components/GenerateDialog.tsx:155
+#: src/features/map/components/GenerateDialog.tsx:132
 msgid "1 stop has no narration and will be silent"
 msgstr "1 stop has no narration and will be silent"
 
@@ -247,7 +252,7 @@ msgid "9:16 Vertical"
 msgstr "9:16 Vertical"
 
 #. placeholder {0}: formatDuration(estimate.total_seconds)
-#: src/features/map/components/GenerateDialog.tsx:126
+#: src/features/map/components/GenerateDialog.tsx:103
 msgid "About {0}"
 msgstr "About {0}"
 
@@ -421,7 +426,7 @@ msgstr "AI features"
 msgid "AI models"
 msgstr "AI models"
 
-#: src/features/map/components/GenerateDialog.tsx:82
+#: src/features/map/components/GenerateDialog.tsx:59
 msgid "AI voiceover"
 msgstr "AI voiceover"
 
@@ -429,7 +434,7 @@ msgstr "AI voiceover"
 msgid "all"
 msgstr "all"
 
-#: src/components/ui/StatusBar.tsx:259
+#: src/components/ui/StatusBar.tsx:263
 msgid "All changes safely stored to disk"
 msgstr "All changes safely stored to disk"
 
@@ -653,7 +658,7 @@ msgstr "Balanced / Standard"
 msgid "Base Map Style"
 msgstr "Base Map Style"
 
-#: src/features/map/components/GenerateDialog.tsx:183
+#: src/features/map/components/GenerateDialog.tsx:160
 msgid "Based on your earlier renders on this PC. Unchanged clips are reused, so it may finish sooner."
 msgstr "Based on your earlier renders on this PC. Unchanged clips are reused, so it may finish sooner."
 
@@ -714,7 +719,7 @@ msgstr "Cancel"
 #: src/components/view/ProjectManager.tsx:639
 #: src/components/view/ProjectSettingsModal.tsx:112
 #: src/features/export/components/ExportModal.tsx:693
-#: src/features/map/components/GenerateDialog.tsx:111
+#: src/features/map/components/GenerateDialog.tsx:88
 #: src/features/map/components/Sidebar.tsx:238
 #: src/features/map/components/WaypointEditor.tsx:662
 msgid "Cancel"
@@ -785,12 +790,12 @@ msgstr "Clean modern sans-serif"
 #: src/components/ui/AppSettings.tsx:951
 #: src/components/ui/AppSettings.tsx:952
 #: src/components/ui/NewProject.tsx:338
-#: src/components/ui/StatusBar.tsx:400
+#: src/components/ui/StatusBar.tsx:404
 #: src/features/map/components/Sidebar.tsx:248
 msgid "Clear"
 msgstr "Clear"
 
-#: src/components/ui/StatusBar.tsx:398
+#: src/components/ui/StatusBar.tsx:402
 msgid "Clear All Notifications"
 msgstr "Clear All Notifications"
 
@@ -842,7 +847,7 @@ msgstr "Click to jump playhead"
 msgid "Clip Label"
 msgstr "Clip Label"
 
-#: src/components/ui/StatusBar.tsx:355
+#: src/components/ui/StatusBar.tsx:359
 msgid "clips"
 msgstr "clips"
 
@@ -860,7 +865,7 @@ msgstr "Clips unlinked"
 #: src/components/ui/AppSettings.tsx:168
 #: src/components/ui/ErrorBoundary.tsx:77
 #: src/components/ui/NewProject.tsx:253
-#: src/components/ui/StatusBar.tsx:452
+#: src/components/ui/StatusBar.tsx:456
 #: src/components/ui/TitleBar.tsx:438
 #: src/features/export/components/ExportModal.tsx:419
 #: src/features/map/components/MapLayers/LayerManager.tsx:75
@@ -952,8 +957,8 @@ msgstr "Copy error"
 msgid "Copy log"
 msgstr "Copy log"
 
-#: src/components/ui/StatusBar.tsx:55
-#: src/components/ui/StatusBar.tsx:56
+#: src/components/ui/StatusBar.tsx:57
+#: src/components/ui/StatusBar.tsx:58
 msgid "Copy Message"
 msgstr "Copy Message"
 
@@ -966,7 +971,7 @@ msgstr "Copy path from"
 msgid "Correct words or kanji that are read incorrectly by the AI voice. You can auto-extract entries from scripts by typing <0>漢字(よみがな)</0> in any narration script."
 msgstr "Correct words or kanji that are read incorrectly by the AI voice. You can auto-extract entries from scripts by typing <0>漢字(よみがな)</0> in any narration script."
 
-#: src/components/ui/StatusBar.tsx:204
+#: src/components/ui/StatusBar.tsx:208
 msgid "Could not delete this version"
 msgstr "Could not delete this version"
 
@@ -988,11 +993,11 @@ msgstr "Could not read project config."
 msgid "Could not render project directly: "
 msgstr "Could not render project directly: "
 
-#: src/components/ui/StatusBar.tsx:189
+#: src/components/ui/StatusBar.tsx:193
 msgid "Could not restore this version"
 msgstr "Could not restore this version"
 
-#: src/components/ui/StatusBar.tsx:175
+#: src/components/ui/StatusBar.tsx:179
 msgid "Could not save this version"
 msgstr "Could not save this version"
 
@@ -1104,7 +1109,7 @@ msgstr "Delete Selected"
 msgid "Delete stop"
 msgstr "Delete stop"
 
-#: src/components/ui/StatusBar.tsx:196
+#: src/components/ui/StatusBar.tsx:200
 msgid "Delete this saved version?"
 msgstr "Delete this saved version?"
 
@@ -1112,8 +1117,8 @@ msgstr "Delete this saved version?"
 msgid "Delete this stop?"
 msgstr "Delete this stop?"
 
-#: src/components/ui/StatusBar.tsx:372
-#: src/components/ui/StatusBar.tsx:373
+#: src/components/ui/StatusBar.tsx:376
+#: src/components/ui/StatusBar.tsx:377
 msgid "Delete version"
 msgstr "Delete version"
 
@@ -1391,11 +1396,15 @@ msgstr "The application encountered an unexpected rendering error. Your saved fi
 msgid "Est. File Size"
 msgstr "Est. File Size"
 
-#: src/components/ui/StatusBar.tsx:227
+#: src/components/ui/StatusBar.tsx:231
 msgid "Estimated time for the Python backend to synthesize AI voiceovers and encode the video"
 msgstr "Estimated time for the Python backend to synthesize AI voiceovers and encode the video"
 
-#: src/features/map/components/GenerateDialog.tsx:126
+#: src/components/ui/StatusBar.tsx:233
+msgid "Estimating render time…"
+msgstr "Estimating render time…"
+
+#: src/features/map/components/GenerateDialog.tsx:103
 msgid "Estimating…"
 msgstr "Estimating…"
 
@@ -1434,7 +1443,7 @@ msgstr "Export"
 msgid "Export & Render Video"
 msgstr "Export & Render Video"
 
-#: src/features/map/components/GenerateDialog.tsx:172
+#: src/features/map/components/GenerateDialog.tsx:149
 msgid "Export automatically"
 msgstr "Export automatically"
 
@@ -1591,7 +1600,7 @@ msgstr "Failed to write timeline.json manifest"
 msgid "Fast"
 msgstr "Fast"
 
-#: src/features/map/components/GenerateDialog.tsx:166
+#: src/features/map/components/GenerateDialog.tsx:143
 msgid "Fast render"
 msgstr "Fast render"
 
@@ -1660,8 +1669,8 @@ msgstr "Framerate (FPS)"
 msgid "General"
 msgstr "General"
 
-#: src/features/map/components/GenerateDialog.tsx:106
-#: src/features/map/components/GenerateDialog.tsx:114
+#: src/features/map/components/GenerateDialog.tsx:83
+#: src/features/map/components/GenerateDialog.tsx:91
 msgid "Generate assets"
 msgstr "Generate assets"
 
@@ -1801,7 +1810,7 @@ msgstr "Highlight Color"
 msgid "Historical weather"
 msgstr "Historical weather"
 
-#: src/components/ui/StatusBar.tsx:274
+#: src/components/ui/StatusBar.tsx:278
 msgid "History"
 msgstr "History"
 
@@ -1848,7 +1857,7 @@ msgstr "Imported {0} waypoints. Route > 50km."
 msgid "In-Transition"
 msgstr "In-Transition"
 
-#: src/features/map/components/GenerateDialog.tsx:97
+#: src/features/map/components/GenerateDialog.tsx:74
 msgid "Included"
 msgstr "Included"
 
@@ -2214,7 +2223,7 @@ msgstr "No points yet"
 msgid "No project directory found. Save your project first."
 msgstr "No project directory found. Save your project first."
 
-#: src/components/ui/StatusBar.tsx:411
+#: src/components/ui/StatusBar.tsx:415
 msgid "No recent activity"
 msgstr "No recent activity"
 
@@ -2222,7 +2231,7 @@ msgstr "No recent activity"
 msgid "No recent projects"
 msgstr "No recent projects"
 
-#: src/components/ui/StatusBar.tsx:335
+#: src/components/ui/StatusBar.tsx:339
 msgid "No saved versions yet"
 msgstr "No saved versions yet"
 
@@ -2254,7 +2263,7 @@ msgid "None"
 msgstr "None"
 
 #: src/components/ui/AppSettings.tsx:212
-#: src/features/map/components/GenerateDialog.tsx:97
+#: src/features/map/components/GenerateDialog.tsx:74
 #: src/features/map/components/OverviewPanel.tsx:14
 #: src/features/timeline/components/elements/inspector/InspectorAudioPanel.tsx:187
 #: src/features/timeline/components/elements/inspector/InspectorTextPanel.tsx:279
@@ -2374,7 +2383,7 @@ msgstr "Paste"
 msgid "Pause at Location"
 msgstr "Pause at Location"
 
-#: src/features/map/components/GenerateDialog.tsx:89
+#: src/features/map/components/GenerateDialog.tsx:66
 msgid "Photo clips"
 msgstr "Photo clips"
 
@@ -2803,11 +2812,11 @@ msgstr "Residential duration"
 msgid "Resolution & Quality Profile"
 msgstr "Resolution & Quality Profile"
 
-#: src/components/ui/StatusBar.tsx:365
+#: src/components/ui/StatusBar.tsx:369
 msgid "Restore"
 msgstr "Restore"
 
-#: src/components/ui/StatusBar.tsx:363
+#: src/components/ui/StatusBar.tsx:367
 msgid "Restore version"
 msgstr "Restore version"
 
@@ -2853,7 +2862,7 @@ msgstr "Ripple Insert Mode"
 msgid "Rotation"
 msgstr "Rotation"
 
-#: src/features/map/components/GenerateDialog.tsx:185
+#: src/features/map/components/GenerateDialog.tsx:162
 msgid "Rough estimate from this PC's hardware. It becomes accurate after your first render."
 msgstr "Rough estimate from this PC's hardware. It becomes accurate after your first render."
 
@@ -2879,7 +2888,7 @@ msgstr "Route Lines Config"
 msgid "Route marker"
 msgstr "Route marker"
 
-#: src/features/map/components/GenerateDialog.tsx:167
+#: src/features/map/components/GenerateDialog.tsx:144
 msgid "Route only. Skips voiceover and photo clips."
 msgstr "Route only. Skips voiceover and photo clips."
 
@@ -2891,7 +2900,7 @@ msgstr "Route to next stop"
 msgid "Route video"
 msgstr "Route video"
 
-#: src/features/map/components/GenerateDialog.tsx:76
+#: src/features/map/components/GenerateDialog.tsx:53
 msgid "Route videos"
 msgstr "Route videos"
 
@@ -2914,7 +2923,7 @@ msgstr "Saturation"
 
 #: src/components/ui/SaveAs.tsx:113
 #: src/components/ui/ScriptInput.tsx:254
-#: src/components/ui/StatusBar.tsx:321
+#: src/components/ui/StatusBar.tsx:325
 #: src/components/ui/UnsavedChanges.tsx:38
 msgid "Save"
 msgstr "Save"
@@ -2923,7 +2932,7 @@ msgstr "Save"
 msgid "Save (Ctrl+Enter)"
 msgstr "Save (Ctrl+Enter)"
 
-#: src/components/ui/StatusBar.tsx:339
+#: src/components/ui/StatusBar.tsx:343
 msgid "Save a version to create a restore point"
 msgstr "Save a version to create a restore point"
 
@@ -2931,7 +2940,7 @@ msgstr "Save a version to create a restore point"
 msgid "Save As..."
 msgstr "Save As..."
 
-#: src/components/ui/StatusBar.tsx:319
+#: src/components/ui/StatusBar.tsx:323
 msgid "Save current version"
 msgstr "Save current version"
 
@@ -2951,7 +2960,7 @@ msgstr "Save Project As"
 msgid "Save Settings"
 msgstr "Save Settings"
 
-#: src/components/ui/StatusBar.tsx:165
+#: src/components/ui/StatusBar.tsx:169
 msgid "Save the project before creating a version"
 msgstr "Save the project before creating a version"
 
@@ -2959,12 +2968,12 @@ msgstr "Save the project before creating a version"
 msgid "Save the project before importing media"
 msgstr "Save the project before importing media"
 
-#: src/components/ui/StatusBar.tsx:336
+#: src/components/ui/StatusBar.tsx:340
 msgid "Save the project to enable version history"
 msgstr "Save the project to enable version history"
 
 #: src/components/ui/ScriptInput.tsx:254
-#: src/components/ui/StatusBar.tsx:262
+#: src/components/ui/StatusBar.tsx:266
 msgid "Saved"
 msgstr "Saved"
 
@@ -3146,8 +3155,8 @@ msgstr "Skip in Video Export"
 #~ msgstr "Skip Rich Media (Fast Render)"
 
 #: src/components/ui/PipelineLogPanel.tsx:279
-#: src/features/map/components/GenerateDialog.tsx:83
-#: src/features/map/components/GenerateDialog.tsx:90
+#: src/features/map/components/GenerateDialog.tsx:60
+#: src/features/map/components/GenerateDialog.tsx:67
 msgid "Skipped"
 msgstr "Skipped"
 
@@ -3239,7 +3248,7 @@ msgstr "Search for a city, landmark, or address..."
 msgid "Starting point"
 msgstr "Starting point"
 
-#: src/features/map/components/GenerateDialog.tsx:173
+#: src/features/map/components/GenerateDialog.tsx:150
 msgid "Stitch the clips and export when done, without pausing to review."
 msgstr "Stitch the clips and export when done, without pausing to review."
 
@@ -3282,11 +3291,11 @@ msgstr "Stop type"
 msgid "Stop-by"
 msgstr "Stop-by"
 
-#: src/components/ui/StatusBar.tsx:354
+#: src/components/ui/StatusBar.tsx:358
 msgid "stops"
 msgstr "stops"
 
-#: src/components/ui/StatusBar.tsx:222
+#: src/components/ui/StatusBar.tsx:226
 msgid "Stops containing custom images or AI scripts"
 msgstr "Stops containing custom images or AI scripts"
 
@@ -3350,12 +3359,12 @@ msgstr "Synthesizing..."
 msgid "System Capability Check:"
 msgstr "System Capability Check:"
 
-#: src/components/ui/StatusBar.tsx:390
+#: src/components/ui/StatusBar.tsx:394
 msgid "System Log"
 msgstr "System Log"
 
-#: src/components/ui/StatusBar.tsx:282
-#: src/components/ui/StatusBar.tsx:283
+#: src/components/ui/StatusBar.tsx:286
+#: src/components/ui/StatusBar.tsx:287
 msgid "System Logs & Notifications"
 msgstr "System Logs & Notifications"
 
@@ -3423,11 +3432,11 @@ msgstr "This project"
 msgid "This project is archived. Please open it first to render"
 msgstr "This project is archived. Please open it first to render"
 
-#: src/components/ui/StatusBar.tsx:201
+#: src/components/ui/StatusBar.tsx:205
 msgid "This version could not be deleted"
 msgstr "This version could not be deleted"
 
-#: src/components/ui/StatusBar.tsx:186
+#: src/components/ui/StatusBar.tsx:190
 msgid "This version is no longer available"
 msgstr "This version is no longer available"
 
@@ -3435,7 +3444,7 @@ msgstr "This version is no longer available"
 #~ msgid "This will save your project, synthesize AI voiceovers, and render map videos before opening the Timeline."
 #~ msgstr "This will save your project, synthesize AI voiceovers, and render map videos before opening the Timeline."
 
-#: src/features/map/components/GenerateDialog.tsx:126
+#: src/features/map/components/GenerateDialog.tsx:103
 msgid "Time unavailable"
 msgstr "Time unavailable"
 
@@ -3468,7 +3477,7 @@ msgid "Title"
 msgstr "Title"
 
 #: src/components/ui/NewProject.tsx:394
-#: src/features/map/components/GenerateDialog.tsx:96
+#: src/features/map/components/GenerateDialog.tsx:73
 msgid "Title card"
 msgstr "Title card"
 
@@ -3476,19 +3485,19 @@ msgstr "Title card"
 msgid "Title card at the start of the video"
 msgstr "Title card at the start of the video"
 
-#: src/components/ui/StatusBar.tsx:240
+#: src/components/ui/StatusBar.tsx:244
 msgid "Total individual clips"
 msgstr "Total individual clips"
 
-#: src/components/ui/StatusBar.tsx:219
+#: src/components/ui/StatusBar.tsx:223
 msgid "Total stops on the map"
 msgstr "Total stops on the map"
 
-#: src/components/ui/StatusBar.tsx:237
+#: src/components/ui/StatusBar.tsx:241
 msgid "Total tracks in the timeline"
 msgstr "Total tracks in the timeline"
 
-#: src/components/ui/StatusBar.tsx:234
+#: src/components/ui/StatusBar.tsx:238
 msgid "Total video duration"
 msgstr "Total video duration"
 
@@ -3577,7 +3586,7 @@ msgstr "Unmute Track"
 msgid "unmute-track"
 msgstr "Unmute track"
 
-#: src/components/ui/StatusBar.tsx:254
+#: src/components/ui/StatusBar.tsx:258
 msgid "Unsaved"
 msgstr "Unsaved"
 
@@ -3585,11 +3594,11 @@ msgstr "Unsaved"
 msgid "Unsaved Changes"
 msgstr "Unsaved Changes"
 
-#: src/components/ui/StatusBar.tsx:251
+#: src/components/ui/StatusBar.tsx:255
 msgid "Unsaved Changes - Press Ctrl+S to save"
 msgstr "Unsaved Changes - Press Ctrl+S to save"
 
-#: src/features/map/components/GenerateDialog.tsx:158
+#: src/features/map/components/GenerateDialog.tsx:135
 msgid "Untitled"
 msgstr "Untitled"
 
@@ -3622,11 +3631,11 @@ msgstr "Uses photo locations"
 msgid "Verify that video visuals are factually correct"
 msgstr "Verify that video visuals are factually correct"
 
-#: src/components/ui/StatusBar.tsx:297
+#: src/components/ui/StatusBar.tsx:301
 msgid "Version History"
 msgstr "Version History"
 
-#: src/components/ui/StatusBar.tsx:310
+#: src/components/ui/StatusBar.tsx:314
 msgid "Version label"
 msgstr "Version label"
 

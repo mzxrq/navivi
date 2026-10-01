@@ -112,7 +112,7 @@ msgstr "{0}個のクリップを選択中"
 
 #. placeholder {0}: voiced.length
 #. placeholder {1}: active.length
-#: src/features/map/components/GenerateDialog.tsx:83
+#: src/features/map/components/GenerateDialog.tsx:60
 msgid "{0} of {1} stops"
 msgstr "{1}か所中{0}か所"
 
@@ -122,24 +122,24 @@ msgid "{0} selected"
 msgstr "{0} 枚を選択"
 
 #. placeholder {0}: waypoints.length
-#: src/components/ui/StatusBar.tsx:220
-#: src/features/map/components/GenerateDialog.tsx:122
+#: src/components/ui/StatusBar.tsx:224
+#: src/features/map/components/GenerateDialog.tsx:99
 msgid "{0} stops"
 msgstr "{0} 地点"
 
 #. placeholder {0}: silent.length
-#: src/features/map/components/GenerateDialog.tsx:156
+#: src/features/map/components/GenerateDialog.tsx:133
 msgid "{0} stops have no narration and will be silent"
 msgstr "{0}か所にナレーションがなく、無音になります"
 
 #. placeholder {0}: withPhotos.length
-#: src/features/map/components/GenerateDialog.tsx:90
+#: src/features/map/components/GenerateDialog.tsx:67
 msgid "{0} stops with photos"
 msgstr "写真ありの地点 {0}か所"
 
 #. placeholder {0}: timeline.tracks.length
 #. placeholder {0}: track.type
-#: src/components/ui/StatusBar.tsx:238
+#: src/components/ui/StatusBar.tsx:242
 #: src/features/timeline/components/elements/TimelineTrackHeaders.tsx:74
 msgid "{0} tracks"
 msgstr "{0} トラック"
@@ -150,11 +150,11 @@ msgstr "{0} トラック"
 msgid "{0}% reduction ({1} dB)"
 msgstr "{0}% 削減率 ({1} dB)"
 
-#: src/features/map/components/GenerateDialog.tsx:23
+#: src/services/renderEstimate.ts:30
 msgid "{h} h"
 msgstr "{h}時間"
 
-#: src/features/map/components/GenerateDialog.tsx:23
+#: src/services/renderEstimate.ts:30
 msgid "{h} h {rest} min"
 msgstr "{h}時間{rest}分"
 
@@ -162,15 +162,15 @@ msgstr "{h}時間{rest}分"
 msgid "{imageCount} photos"
 msgstr "写真{imageCount}枚"
 
-#: src/features/map/components/GenerateDialog.tsx:77
+#: src/features/map/components/GenerateDialog.tsx:54
 msgid "{legs} legs"
 msgstr "{legs}区間"
 
-#: src/features/map/components/GenerateDialog.tsx:20
+#: src/services/renderEstimate.ts:27
 msgid "{m} min"
 msgstr "{m}分"
 
-#: src/components/ui/StatusBar.tsx:223
+#: src/components/ui/StatusBar.tsx:227
 msgid "{populatedStops} with media"
 msgstr "メディアあり {populatedStops}"
 
@@ -182,7 +182,7 @@ msgstr "{stopCount}地点"
 msgid "{stopCount} stops · {stopByCount} stop-by"
 msgstr "{stopCount}地点 · 経由地{stopByCount}"
 
-#: src/components/ui/StatusBar.tsx:241
+#: src/components/ui/StatusBar.tsx:245
 msgid "{totalClips} clips"
 msgstr "{totalClips} クリップ"
 
@@ -202,15 +202,20 @@ msgstr "<0>ミュート</0>"
 msgid "<0>Muted</0>"
 msgstr "<0>ミュート中</0>"
 
+#. placeholder {0}: formatDuration(estimate.total_seconds)
+#: src/components/ui/StatusBar.tsx:233
+msgid "~{0} to render"
+msgstr "レンダリング約{0}"
+
 #: src/components/ui/StatusBar.tsx:229
-msgid "~{estRenderMinutes} min to render"
-msgstr "レンダリング 約{estRenderMinutes}分"
+#~ msgid "~{estRenderMinutes} min to render"
+#~ msgstr "レンダリング 約{estRenderMinutes}分"
 
 #: src/components/ui/RenderOverlay.tsx:1317
 msgid "💡 <0>Quick Export Notice:</0> To customize individual video clips or fix TTS pronunciation, uncheck \"Quick Export\" in generation settings and re-run."
 msgstr "💡 <0>クイックエクスポートに関する注意:</0> 個別の動画クリップのカスタマイズや、音声の発音修正を行いたい場合は、生成設定の「クイックエクスポート」のチェックを外して再実行してください。"
 
-#: src/features/map/components/GenerateDialog.tsx:77
+#: src/features/map/components/GenerateDialog.tsx:54
 msgid "1 leg"
 msgstr "1区間"
 
@@ -218,11 +223,11 @@ msgstr "1区間"
 msgid "1 minute"
 msgstr "1分"
 
-#: src/features/map/components/GenerateDialog.tsx:122
+#: src/features/map/components/GenerateDialog.tsx:99
 msgid "1 stop"
 msgstr "1か所"
 
-#: src/features/map/components/GenerateDialog.tsx:155
+#: src/features/map/components/GenerateDialog.tsx:132
 msgid "1 stop has no narration and will be silent"
 msgstr "1か所にナレーションがなく、無音になります"
 
@@ -247,7 +252,7 @@ msgid "9:16 Vertical"
 msgstr "9:16 垂直"
 
 #. placeholder {0}: formatDuration(estimate.total_seconds)
-#: src/features/map/components/GenerateDialog.tsx:126
+#: src/features/map/components/GenerateDialog.tsx:103
 msgid "About {0}"
 msgstr "約{0}"
 
@@ -421,7 +426,7 @@ msgstr "AI 機能"
 msgid "AI models"
 msgstr "AI モデル"
 
-#: src/features/map/components/GenerateDialog.tsx:82
+#: src/features/map/components/GenerateDialog.tsx:59
 msgid "AI voiceover"
 msgstr "AIナレーション"
 
@@ -429,7 +434,7 @@ msgstr "AIナレーション"
 msgid "all"
 msgstr "全部"
 
-#: src/components/ui/StatusBar.tsx:259
+#: src/components/ui/StatusBar.tsx:263
 msgid "All changes safely stored to disk"
 msgstr "すべての変更が保存されました"
 
@@ -653,7 +658,7 @@ msgstr "バランス / 標準"
 msgid "Base Map Style"
 msgstr "ベースマップのスタイル"
 
-#: src/features/map/components/GenerateDialog.tsx:183
+#: src/features/map/components/GenerateDialog.tsx:160
 msgid "Based on your earlier renders on this PC. Unchanged clips are reused, so it may finish sooner."
 msgstr "このPCでの過去のレンダリングに基づく目安です。変更のないクリップは再利用されるため、早く終わる場合があります。"
 
@@ -714,7 +719,7 @@ msgstr "キャンセル"
 #: src/components/view/ProjectManager.tsx:639
 #: src/components/view/ProjectSettingsModal.tsx:112
 #: src/features/export/components/ExportModal.tsx:693
-#: src/features/map/components/GenerateDialog.tsx:111
+#: src/features/map/components/GenerateDialog.tsx:88
 #: src/features/map/components/Sidebar.tsx:238
 #: src/features/map/components/WaypointEditor.tsx:662
 msgid "Cancel"
@@ -785,12 +790,12 @@ msgstr "クリーンでモダンなサンセリフ"
 #: src/components/ui/AppSettings.tsx:951
 #: src/components/ui/AppSettings.tsx:952
 #: src/components/ui/NewProject.tsx:338
-#: src/components/ui/StatusBar.tsx:400
+#: src/components/ui/StatusBar.tsx:404
 #: src/features/map/components/Sidebar.tsx:248
 msgid "Clear"
 msgstr "クリア"
 
-#: src/components/ui/StatusBar.tsx:398
+#: src/components/ui/StatusBar.tsx:402
 msgid "Clear All Notifications"
 msgstr "すべての通知を消去"
 
@@ -842,7 +847,7 @@ msgstr "クリックしてプレイヘッドを移動"
 msgid "Clip Label"
 msgstr "クリップラベル"
 
-#: src/components/ui/StatusBar.tsx:355
+#: src/components/ui/StatusBar.tsx:359
 msgid "clips"
 msgstr "クリップ"
 
@@ -860,7 +865,7 @@ msgstr "クリップのリンクを解除しました"
 #: src/components/ui/AppSettings.tsx:168
 #: src/components/ui/ErrorBoundary.tsx:77
 #: src/components/ui/NewProject.tsx:253
-#: src/components/ui/StatusBar.tsx:452
+#: src/components/ui/StatusBar.tsx:456
 #: src/components/ui/TitleBar.tsx:438
 #: src/features/export/components/ExportModal.tsx:419
 #: src/features/map/components/MapLayers/LayerManager.tsx:75
@@ -952,8 +957,8 @@ msgstr "エラーをコピー"
 msgid "Copy log"
 msgstr "ログをコピー"
 
-#: src/components/ui/StatusBar.tsx:55
-#: src/components/ui/StatusBar.tsx:56
+#: src/components/ui/StatusBar.tsx:57
+#: src/components/ui/StatusBar.tsx:58
 msgid "Copy Message"
 msgstr "メッセージをコピー"
 
@@ -966,7 +971,7 @@ msgstr "経路をコピー"
 msgid "Correct words or kanji that are read incorrectly by the AI voice. You can auto-extract entries from scripts by typing <0>漢字(よみがな)</0> in any narration script."
 msgstr "以下に音声が誤って読み上げる単語や漢字を修正してください。"
 
-#: src/components/ui/StatusBar.tsx:204
+#: src/components/ui/StatusBar.tsx:208
 msgid "Could not delete this version"
 msgstr "このバージョンを削除できませんでした。"
 
@@ -988,11 +993,11 @@ msgstr "プロジェクトの設定を読み込めませんでした"
 msgid "Could not render project directly: "
 msgstr "プロジェクトを直接レンダリングできませんでした: "
 
-#: src/components/ui/StatusBar.tsx:189
+#: src/components/ui/StatusBar.tsx:193
 msgid "Could not restore this version"
 msgstr "このバージョンを復元できませんでした"
 
-#: src/components/ui/StatusBar.tsx:175
+#: src/components/ui/StatusBar.tsx:179
 msgid "Could not save this version"
 msgstr "このバージョンを保存できませんでした"
 
@@ -1104,7 +1109,7 @@ msgstr "選択項目を削除"
 msgid "Delete stop"
 msgstr "地点を削除"
 
-#: src/components/ui/StatusBar.tsx:196
+#: src/components/ui/StatusBar.tsx:200
 msgid "Delete this saved version?"
 msgstr "この保存済みバージョンを削除しますか？"
 
@@ -1112,8 +1117,8 @@ msgstr "この保存済みバージョンを削除しますか？"
 msgid "Delete this stop?"
 msgstr "この地点を削除しますか？"
 
-#: src/components/ui/StatusBar.tsx:372
-#: src/components/ui/StatusBar.tsx:373
+#: src/components/ui/StatusBar.tsx:376
+#: src/components/ui/StatusBar.tsx:377
 msgid "Delete version"
 msgstr "バージョンを削除"
 
@@ -1391,11 +1396,15 @@ msgstr "アプリケーションで予期しないレンダリングエラーが
 msgid "Est. File Size"
 msgstr "予想ファイルサイズ"
 
-#: src/components/ui/StatusBar.tsx:227
+#: src/components/ui/StatusBar.tsx:231
 msgid "Estimated time for the Python backend to synthesize AI voiceovers and encode the video"
 msgstr "PythonバックエンドがAI音声を合成し、動画をエンコードするまでの予想時間"
 
-#: src/features/map/components/GenerateDialog.tsx:126
+#: src/components/ui/StatusBar.tsx:233
+msgid "Estimating render time…"
+msgstr "レンダリング時間を見積もり中…"
+
+#: src/features/map/components/GenerateDialog.tsx:103
 msgid "Estimating…"
 msgstr "見積もり中…"
 
@@ -1434,7 +1443,7 @@ msgstr "エクスポート"
 msgid "Export & Render Video"
 msgstr "動画のエクスポートとレンダリング"
 
-#: src/features/map/components/GenerateDialog.tsx:172
+#: src/features/map/components/GenerateDialog.tsx:149
 msgid "Export automatically"
 msgstr "自動で書き出す"
 
@@ -1591,7 +1600,7 @@ msgstr "timeline.jsonマニフェストの書き込みに失敗しました"
 msgid "Fast"
 msgstr "高速"
 
-#: src/features/map/components/GenerateDialog.tsx:166
+#: src/features/map/components/GenerateDialog.tsx:143
 msgid "Fast render"
 msgstr "高速レンダリング"
 
@@ -1660,8 +1669,8 @@ msgstr "フレームレート"
 msgid "General"
 msgstr "一般"
 
-#: src/features/map/components/GenerateDialog.tsx:106
-#: src/features/map/components/GenerateDialog.tsx:114
+#: src/features/map/components/GenerateDialog.tsx:83
+#: src/features/map/components/GenerateDialog.tsx:91
 msgid "Generate assets"
 msgstr "アセットを生成"
 
@@ -1801,7 +1810,7 @@ msgstr "ハイライトの色"
 msgid "Historical weather"
 msgstr "過去の天気"
 
-#: src/components/ui/StatusBar.tsx:274
+#: src/components/ui/StatusBar.tsx:278
 msgid "History"
 msgstr "履歴"
 
@@ -1848,7 +1857,7 @@ msgstr "{0}個のポイントをインポートしました。ルート長さが
 msgid "In-Transition"
 msgstr "イントランジション"
 
-#: src/features/map/components/GenerateDialog.tsx:97
+#: src/features/map/components/GenerateDialog.tsx:74
 msgid "Included"
 msgstr "含む"
 
@@ -2214,7 +2223,7 @@ msgstr "まだ点がありません"
 msgid "No project directory found. Save your project first."
 msgstr "プロジェクトディレクトリが見つかりません。先にプロジェクトを保存してください"
 
-#: src/components/ui/StatusBar.tsx:411
+#: src/components/ui/StatusBar.tsx:415
 msgid "No recent activity"
 msgstr "最近のアクティビティはありません"
 
@@ -2222,7 +2231,7 @@ msgstr "最近のアクティビティはありません"
 msgid "No recent projects"
 msgstr "最近のプロジェクトはありません"
 
-#: src/components/ui/StatusBar.tsx:335
+#: src/components/ui/StatusBar.tsx:339
 msgid "No saved versions yet"
 msgstr "保存されたバージョンはまだありません"
 
@@ -2254,7 +2263,7 @@ msgid "None"
 msgstr "なし"
 
 #: src/components/ui/AppSettings.tsx:212
-#: src/features/map/components/GenerateDialog.tsx:97
+#: src/features/map/components/GenerateDialog.tsx:74
 #: src/features/map/components/OverviewPanel.tsx:14
 #: src/features/timeline/components/elements/inspector/InspectorAudioPanel.tsx:187
 #: src/features/timeline/components/elements/inspector/InspectorTextPanel.tsx:279
@@ -2374,7 +2383,7 @@ msgstr "貼り付け"
 msgid "Pause at Location"
 msgstr "この場所で一時停止"
 
-#: src/features/map/components/GenerateDialog.tsx:89
+#: src/features/map/components/GenerateDialog.tsx:66
 msgid "Photo clips"
 msgstr "写真クリップ"
 
@@ -2803,11 +2812,11 @@ msgstr "住宅地区間の長さ"
 msgid "Resolution & Quality Profile"
 msgstr "解像度と品質プロファイル"
 
-#: src/components/ui/StatusBar.tsx:365
+#: src/components/ui/StatusBar.tsx:369
 msgid "Restore"
 msgstr "復元"
 
-#: src/components/ui/StatusBar.tsx:363
+#: src/components/ui/StatusBar.tsx:367
 msgid "Restore version"
 msgstr "バージョンを復元"
 
@@ -2853,7 +2862,7 @@ msgstr "リップル挿入モード"
 msgid "Rotation"
 msgstr "回転"
 
-#: src/features/map/components/GenerateDialog.tsx:185
+#: src/features/map/components/GenerateDialog.tsx:162
 msgid "Rough estimate from this PC's hardware. It becomes accurate after your first render."
 msgstr "このPCのハードウェアからの概算です。最初のレンダリング後に精度が上がります。"
 
@@ -2879,7 +2888,7 @@ msgstr "ルート線の設定"
 msgid "Route marker"
 msgstr "ルートマーカー"
 
-#: src/features/map/components/GenerateDialog.tsx:167
+#: src/features/map/components/GenerateDialog.tsx:144
 msgid "Route only. Skips voiceover and photo clips."
 msgstr "ルートのみ。ナレーションと写真クリップを省略します。"
 
@@ -2891,7 +2900,7 @@ msgstr "次の地点までの移動"
 msgid "Route video"
 msgstr "ルート動画"
 
-#: src/features/map/components/GenerateDialog.tsx:76
+#: src/features/map/components/GenerateDialog.tsx:53
 msgid "Route videos"
 msgstr "ルート動画"
 
@@ -2914,7 +2923,7 @@ msgstr "彩度"
 
 #: src/components/ui/SaveAs.tsx:113
 #: src/components/ui/ScriptInput.tsx:254
-#: src/components/ui/StatusBar.tsx:321
+#: src/components/ui/StatusBar.tsx:325
 #: src/components/ui/UnsavedChanges.tsx:38
 msgid "Save"
 msgstr "保存"
@@ -2923,7 +2932,7 @@ msgstr "保存"
 msgid "Save (Ctrl+Enter)"
 msgstr "保存 (Ctrl+Enter)"
 
-#: src/components/ui/StatusBar.tsx:339
+#: src/components/ui/StatusBar.tsx:343
 msgid "Save a version to create a restore point"
 msgstr "バージョンを保存して復元ポイントを作成"
 
@@ -2931,7 +2940,7 @@ msgstr "バージョンを保存して復元ポイントを作成"
 msgid "Save As..."
 msgstr "名前を付けて保存..."
 
-#: src/components/ui/StatusBar.tsx:319
+#: src/components/ui/StatusBar.tsx:323
 msgid "Save current version"
 msgstr "現在のばーしょんを保存"
 
@@ -2951,7 +2960,7 @@ msgstr "プロジェクトを名前を付けて保存"
 msgid "Save Settings"
 msgstr "設定を保存"
 
-#: src/components/ui/StatusBar.tsx:165
+#: src/components/ui/StatusBar.tsx:169
 msgid "Save the project before creating a version"
 msgstr "バージョンを作成する前にプロジェクトを保存してください"
 
@@ -2959,12 +2968,12 @@ msgstr "バージョンを作成する前にプロジェクトを保存してく
 msgid "Save the project before importing media"
 msgstr "メディアをインポートする前にプロジェクトを保存してください"
 
-#: src/components/ui/StatusBar.tsx:336
+#: src/components/ui/StatusBar.tsx:340
 msgid "Save the project to enable version history"
 msgstr "バージョン履歴を有効にするにはプロジェクトを保存してください"
 
 #: src/components/ui/ScriptInput.tsx:254
-#: src/components/ui/StatusBar.tsx:262
+#: src/components/ui/StatusBar.tsx:266
 msgid "Saved"
 msgstr "保存済み"
 
@@ -3146,8 +3155,8 @@ msgstr "動画のエクスポート時にスキップ"
 #~ msgstr "リッチメディアをスキップ (高速レンダリング)"
 
 #: src/components/ui/PipelineLogPanel.tsx:279
-#: src/features/map/components/GenerateDialog.tsx:83
-#: src/features/map/components/GenerateDialog.tsx:90
+#: src/features/map/components/GenerateDialog.tsx:60
+#: src/features/map/components/GenerateDialog.tsx:67
 msgid "Skipped"
 msgstr "スキップ"
 
@@ -3239,7 +3248,7 @@ msgstr "都市、ランドマーク、または住所"
 msgid "Starting point"
 msgstr "出発地点"
 
-#: src/features/map/components/GenerateDialog.tsx:173
+#: src/features/map/components/GenerateDialog.tsx:150
 msgid "Stitch the clips and export when done, without pausing to review."
 msgstr "完了後、確認で止まらずにクリップを結合して書き出します。"
 
@@ -3282,11 +3291,11 @@ msgstr "地点の種類"
 msgid "Stop-by"
 msgstr "経由地"
 
-#: src/components/ui/StatusBar.tsx:354
+#: src/components/ui/StatusBar.tsx:358
 msgid "stops"
 msgstr "地点"
 
-#: src/components/ui/StatusBar.tsx:222
+#: src/components/ui/StatusBar.tsx:226
 msgid "Stops containing custom images or AI scripts"
 msgstr "カスタム画像またはスクリプトを含む地点"
 
@@ -3350,12 +3359,12 @@ msgstr "合成中..."
 msgid "System Capability Check:"
 msgstr "システム性能チェック:"
 
-#: src/components/ui/StatusBar.tsx:390
+#: src/components/ui/StatusBar.tsx:394
 msgid "System Log"
 msgstr "システムログ"
 
-#: src/components/ui/StatusBar.tsx:282
-#: src/components/ui/StatusBar.tsx:283
+#: src/components/ui/StatusBar.tsx:286
+#: src/components/ui/StatusBar.tsx:287
 msgid "System Logs & Notifications"
 msgstr "システムログと通知"
 
@@ -3423,11 +3432,11 @@ msgstr "このプロジェクト"
 msgid "This project is archived. Please open it first to render"
 msgstr "このプロジェクトはアーカイブされています。レンダリングするにはまずプロジェクトを開いてください"
 
-#: src/components/ui/StatusBar.tsx:201
+#: src/components/ui/StatusBar.tsx:205
 msgid "This version could not be deleted"
 msgstr "このバージョンは削除できません"
 
-#: src/components/ui/StatusBar.tsx:186
+#: src/components/ui/StatusBar.tsx:190
 msgid "This version is no longer available"
 msgstr "このバージョンはもう利用できません"
 
@@ -3435,7 +3444,7 @@ msgstr "このバージョンはもう利用できません"
 #~ msgid "This will save your project, synthesize AI voiceovers, and render map videos before opening the Timeline."
 #~ msgstr "これにより、プロジェクトが保存され、AI音声が合成され、マップ動画がレンダリングされてからタイムラインが開きます"
 
-#: src/features/map/components/GenerateDialog.tsx:126
+#: src/features/map/components/GenerateDialog.tsx:103
 msgid "Time unavailable"
 msgstr "時間を取得できません"
 
@@ -3468,7 +3477,7 @@ msgid "Title"
 msgstr "タイトル"
 
 #: src/components/ui/NewProject.tsx:394
-#: src/features/map/components/GenerateDialog.tsx:96
+#: src/features/map/components/GenerateDialog.tsx:73
 msgid "Title card"
 msgstr "タイトルカード"
 
@@ -3476,19 +3485,19 @@ msgstr "タイトルカード"
 msgid "Title card at the start of the video"
 msgstr "動画の冒頭に表示するタイトルカード"
 
-#: src/components/ui/StatusBar.tsx:240
+#: src/components/ui/StatusBar.tsx:244
 msgid "Total individual clips"
 msgstr "個々のクリップの合計"
 
-#: src/components/ui/StatusBar.tsx:219
+#: src/components/ui/StatusBar.tsx:223
 msgid "Total stops on the map"
 msgstr "マップ上のポイントの合計"
 
-#: src/components/ui/StatusBar.tsx:237
+#: src/components/ui/StatusBar.tsx:241
 msgid "Total tracks in the timeline"
 msgstr "タイムラインのトラックの合計"
 
-#: src/components/ui/StatusBar.tsx:234
+#: src/components/ui/StatusBar.tsx:238
 msgid "Total video duration"
 msgstr "動画の合計再生時間"
 
@@ -3577,7 +3586,7 @@ msgstr "トラックのミュートを解除"
 msgid "unmute-track"
 msgstr "トラックのミュートを解除"
 
-#: src/components/ui/StatusBar.tsx:254
+#: src/components/ui/StatusBar.tsx:258
 msgid "Unsaved"
 msgstr "未保存"
 
@@ -3585,11 +3594,11 @@ msgstr "未保存"
 msgid "Unsaved Changes"
 msgstr "未保存の変更"
 
-#: src/components/ui/StatusBar.tsx:251
+#: src/components/ui/StatusBar.tsx:255
 msgid "Unsaved Changes - Press Ctrl+S to save"
 msgstr "未保存の変更 - 保存するにはCtrl+Sを押してください"
 
-#: src/features/map/components/GenerateDialog.tsx:158
+#: src/features/map/components/GenerateDialog.tsx:135
 msgid "Untitled"
 msgstr "無題"
 
@@ -3622,11 +3631,11 @@ msgstr "写真の撮影場所から地点を使用する"
 msgid "Verify that video visuals are factually correct"
 msgstr "ビデオの映像が事実と一致していることを確認します"
 
-#: src/components/ui/StatusBar.tsx:297
+#: src/components/ui/StatusBar.tsx:301
 msgid "Version History"
 msgstr "バージョン履歴"
 
-#: src/components/ui/StatusBar.tsx:310
+#: src/components/ui/StatusBar.tsx:314
 msgid "Version label"
 msgstr "バージョンラベル"
 
