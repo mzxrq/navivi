@@ -701,6 +701,9 @@ STOPBY_NOTICE_BODY = (
 )
 STOPBY_NOTICE_RIBBON_COLOR: Tuple[int, int, int] = (40, 110, 220)  # BGR, warm orange ribbon
 STOPBY_NOTICE_FADE_SECONDS = 0.6
+# How long the notice stays up when the first stop-by reached isn't a batch
+# (a connected / skipped one); a batch keeps it for the batch's own length.
+STOPBY_NOTICE_SECONDS = 5.0
 # Hard ceiling on a waypoint's own "freeze_seconds" (job_config's per-stop
 # override for how long its popup photo is held/displayed) — applied
 # wherever that raw job_config value is first read, so every downstream
@@ -1108,15 +1111,18 @@ TTS_MIN_CHUNK_CHARS = 20
 # have a metronome-regular click between every sentence.
 TTS_SENTENCE_GAP_MIN_SECONDS = 0.25
 TTS_SENTENCE_GAP_MAX_SECONDS = 0.5
-TTS_VOICE = "test1"  # Irodori's only bundled voice preset as of writing
+TTS_VOICE = "jvs004"  # Irodori's only bundled voice preset as of writing
 # [Config] Playback speed multiplier sent to the Irodori TTS server; 1.0 = the
 # model's natural pace. The server itself clamps to [0.25, 4.0], but TTSConfig
 # validates this too so a bad value fails fast with a readable message
 # instead of a 422 from the API after a network round-trip.
-TTS_SPEED = 1.25
+TTS_SPEED = 1
 TTS_MIN_SPEED = 0.25
 TTS_MAX_SPEED = 4.0
 TTS_RESPONSE_FORMAT = None  # None = let the server use its own default (wav)
+# Speaking-style caption sent as the request's "caption"; None/"" = omit.
+# Per-project override: settings.tts.caption.
+TTS_CAPTION = "明るく元気で、楽しそうな話し方。"
 
 # --- Attraction clip place-name label (top-left, burned for the whole clip) -
 # See services/vdoprocessing/img2vdo.py's AttractionVideoGenerator._fit_and_finalize.

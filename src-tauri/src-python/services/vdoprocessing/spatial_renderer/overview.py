@@ -227,8 +227,9 @@ class _OverviewRenderMixin:
 
         duration = self.config.get("duration", 30.0)
         num_frames = max(_MIN_OVERVIEW_FRAMES, int(duration * fps))
-        # the stop-by notice plays with the first stop-by batch of each video
+        # the stop-by notice plays at the first stop-by of each video
         self._stopby_notice_shown = False
+        self._stopby_notice = None
 
         # Cues only: the narration's {start} / {n} / {end} tags (already turned
         # into seconds of the real audio) say when the route sets off and when
@@ -1092,6 +1093,18 @@ class _OverviewRenderMixin:
                 "summary hold %.1fs -> %.1fs, last pause %.1fs -> %.1fs.",
                 remaining, planned[0], outro_hold_sec, planned[1], end_pause_sec,
             )
+        # Hold the summary until "…キロの旅でした" ({distance}) is spoken, then
+        # zoom; the highlight's own hold absorbs any voice left after that.
+        distance_cue = audio_cues.get("distance") if audio_cues else None
+        if summary_card is not None and distance_cue is not None:
+            until_distance = distance_cue - video.frames_written / fps
+            zoom_follows = bool(stop_popup and self.config.get("enable_ending_highlight", True))
+            if until_distance > (0 if zoom_follows else outro_hold_sec):
+                logger.info(
+                    "Summary hold %.1fs -> %.1fs to reach the {distance} cue at %.1fs.",
+                    outro_hold_sec, until_distance, distance_cue,
+                )
+                outro_hold_sec = until_distance
         for _ in range(int(outro_hold_sec * fps)):
             video.write(self.last_frame)
 

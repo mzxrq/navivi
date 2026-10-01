@@ -129,6 +129,26 @@ def add_default_cues(project_config_path: str) -> int:
     return added
 
 
+def _overview_source_ids(project: dict) -> str:
+    """The waypoint ids the overview script was made from. A middle waypoint
+    that isn't a numbered stop is marked "-", a stop-by that is one "+", so
+    toggling either renumbers the script's {n} cues instead of reusing stale ones."""
+    from services.localization.overview_script import visible_waypoints
+
+    waypoints = [wp for wp in project.get("waypoints", []) if isinstance(wp, dict)]
+    numbered = {id(wp) for wp in visible_waypoints(project)}
+    last = len(waypoints) - 1
+
+    def mark(i, wp):
+        if i in (0, last):
+            return ""
+        if id(wp) not in numbered:
+            return "-"
+        return "+" if wp.get("isStopBy") else ""
+
+    return ",".join(str(wp.get("id", "")) + mark(i, wp) for i, wp in enumerate(waypoints))
+
+
 def ensure_overview_narration(project_config_path: str) -> bool:
     """Auto-generates job_config.json's top-level "overview_narration" from
     the route itself (services/localization/overview_script.build_tour_script
@@ -161,9 +181,7 @@ def ensure_overview_narration(project_config_path: str) -> bool:
     waypoints = project.get("waypoints", [])
     if not waypoints:
         return False
-    current_ids = ",".join(
-        str(wp.get("id", "")) for wp in waypoints if isinstance(wp, dict)
-    )
+    current_ids = _overview_source_ids(project)
     existing = (project.get("overview_narration") or "").strip()
     was_auto = project.get("overview_narration_is_auto") is True
     if existing and (not was_auto or project.get("overview_narration_source_ids") == current_ids):

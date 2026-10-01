@@ -133,7 +133,9 @@ async def _capture_static(
         server.server_close()
 
 
-def _landmark_layers(landmarks: List[Dict], id_prefix: str = "stopby") -> List[pdk.Layer]:
+def _landmark_layers(
+    landmarks: List[Dict], id_prefix: str = "stopby", white_dot: bool = False
+) -> List[pdk.Layer]:
     """landmarks: [{"lat", "lon", ("label")}, ...] -- small unnumbered brown
     dots with a plain label beside them, matching the reference video's
     landmark markers (e.g. a named junction/torii passed along the way):
@@ -143,7 +145,14 @@ def _landmark_layers(landmarks: List[Dict], id_prefix: str = "stopby") -> List[p
     if not landmarks:
         return []
     dots = [{"lon": lm["lon"], "lat": lm["lat"]} for lm in landmarks]
-    layers = [
+    # white_dot: residential's white-with-dark-ring marker (was the callout's dot).
+    dot_layer = pdk.Layer(
+        "ScatterplotLayer", id=f"{id_prefix}-dots", data=dots,
+        get_position="[lon, lat]", get_fill_color=[255, 255, 255, 255],
+        radius_units="'pixels'", get_radius=7,
+        stroked=True, get_line_color=[51, 51, 51, 255], line_width_min_pixels=2,
+    ) if white_dot else None
+    layers = [dot_layer] if dot_layer else [
         pdk.Layer(
             "ScatterplotLayer", id=f"{id_prefix}-dots", data=dots,
             get_position="[lon, lat]", get_fill_color=[120, 80, 50, 255],
@@ -166,21 +175,6 @@ def _landmark_layers(landmarks: List[Dict], id_prefix: str = "stopby") -> List[p
         )
     )
     return layers
-
-
-def _leg_has_stopby_cut(landmarks: Optional[List[Dict]]) -> bool:
-    """True when a connect-to-route stop-by with its own popup photo will
-    cut this leg into multiple output files right at its fullscreen beat
-    (see render_residential_leg_pydeck's docstring). On such a leg the
-    destination pin/label must stay hidden until arrival, same as before --
-    revealing the leg's real final destination from the very first output
-    file would spoil the stop-by's own mid-leg reveal, which is the segment
-    that file actually ends on."""
-    return any(
-        lm.get("connect_to_route") and lm.get("popup_image")
-        and lm.get("lat") is not None and lm.get("lon") is not None
-        for lm in (landmarks or [])
-    )
 
 
 def _pin_layers(waypoints: List[Dict]) -> List[pdk.Layer]:
@@ -1222,7 +1216,7 @@ def render_residential_leg_pydeck(
             line_width_scale=1, line_width_min_pixels=line_thickness,
         ),
     ]
-    base_layers.extend(_landmark_layers(landmarks or [], id_prefix="leg-landmark"))
+    base_layers.extend(_landmark_layers(landmarks or [], id_prefix="leg-landmark", white_dot=True))
     # The start pin is static (this leg's starting point never moves) so it
     # goes straight into base_layers and is visible for the whole clip, same
     # as the destination pin below.
@@ -1254,38 +1248,31 @@ def render_residential_leg_pydeck(
             pixel_offset_y=8,
         )
     )
-    # Destination pin + name pill. Shown for the WHOLE leg (including the
-    # top-down establishing shot) rather than only once the walker gets
-    # close, so the viewer can see where they're headed from the start --
-    # UNLESS a connect-to-route stop-by is going to cut this leg into
-    # multiple output files first (see `_leg_has_stopby_cut`), in which
-    # case it stays hidden until arrival exactly like before, built
-    # dynamically in `_record_leg` instead, so the mid-leg stop-by segment
-    # doesn't leak the leg's real final destination early.
+    # Destination pin + name pill, shown for the whole leg (stop-by-cut
+    # pieces included) so the viewer sees where the route is headed.
     dest_lat, dest_lon = df_raw.iloc[-1]["lat"], df_raw.iloc[-1]["lon"]
-    if not _leg_has_stopby_cut(landmarks):
-        base_layers.append(
-            pdk.Layer(
-                "IconLayer", id="leg-dest-pin",
-                data=[{
-                    "lon": dest_lon, "lat": dest_lat,
-                    "icon": {
-                        "url": _leg_pin_url(dest_pin, _DEST_PIN_URL), "width": _TEARDROP_PIN_W,
-                        "height": _TEARDROP_PIN_H, "anchorY": _TEARDROP_PIN_H,
-                    },
-                }],
-                get_icon="icon", get_position="[lon, lat]",
-                get_size=60, size_units="'pixels'", size_scale=1, pickable=False,
-            )
+    base_layers.append(
+        pdk.Layer(
+            "IconLayer", id="leg-dest-pin",
+            data=[{
+                "lon": dest_lon, "lat": dest_lat,
+                "icon": {
+                    "url": _leg_pin_url(dest_pin, _DEST_PIN_URL), "width": _TEARDROP_PIN_W,
+                    "height": _TEARDROP_PIN_H, "anchorY": _TEARDROP_PIN_H,
+                },
+            }],
+            get_icon="icon", get_position="[lon, lat]",
+            get_size=60, size_units="'pixels'", size_scale=1, pickable=False,
         )
-        base_layers.extend(
-            _label_pill_layer(
-                [{"lon": dest_lon, "lat": dest_lat, "text": dest_label or ""}],
-                "leg-dest-label",
-                size_px=34,
-                pixel_offset_y=8,
-            )
+    )
+    base_layers.extend(
+        _label_pill_layer(
+            [{"lon": dest_lon, "lat": dest_lat, "text": dest_label or ""}],
+            "leg-dest-label",
+            size_px=34,
+            pixel_offset_y=8,
         )
+    )
 
     # The whole-leg "locked" camera: fits the leg's entire path in frame
     # (not a close street-level follow) and, once the intro's zoom-in
@@ -1475,11 +1462,8 @@ async def _play_stopby_photo_pause(
             line.setAttribute('x2', mx); line.setAttribute('y2', my);
             line.setAttribute('stroke', 'white'); line.setAttribute('stroke-width', '3');
             line.setAttribute('opacity', '0');
-            const dot = document.createElementNS(svg.namespaceURI, 'circle');
-            dot.setAttribute('cx', mx); dot.setAttribute('cy', my); dot.setAttribute('r', '7');
-            dot.setAttribute('fill', 'white'); dot.setAttribute('stroke', '#333'); dot.setAttribute('stroke-width', '2');
+            // No dot of its own: the landmark layer already marks the stop-by.
             svg.appendChild(line);
-            svg.appendChild(dot);
             document.body.appendChild(svg);
 
             if (img.decode) { img.decode().then(resolve).catch(resolve); }
@@ -2363,50 +2347,6 @@ async def _record_leg(
                         png_bytes = await page.screenshot(**_FRAME_SHOT)
                         await _write_frame(png_bytes)
 
-                # On a leg with a connect-to-route stop-by cut (see
-                # `_leg_has_stopby_cut`), the destination pin/label were NOT
-                # put in base_layers (render_residential_leg_pydeck skips
-                # them for exactly this leg) -- built here instead and only
-                # spliced into the per-frame layers once the walker crosses
-                # arrive_threshold_m, same as before this pin started being
-                # shown from the start on ordinary legs, so the mid-leg
-                # stop-by segment's own file doesn't leak the real final
-                # destination early.
-                dest_revealed_from_start = not _leg_has_stopby_cut(landmarks)
-                dest_pin_ctor_js = dest_label_ctor_js = dest_label_layer_js = ""
-                if not dest_revealed_from_start:
-                    dest_pin_data_json = json.dumps([{
-                        "lon": dest_lon, "lat": dest_lat,
-                        "icon": {
-                            "url": dest_pin_url, "width": _TEARDROP_PIN_W,
-                            "height": _TEARDROP_PIN_H, "anchorY": _TEARDROP_PIN_H,
-                        },
-                    }]) if dest_lat is not None and dest_lon is not None else None
-                    _dest_label_url, _dest_label_w = _label_pill_svg_url(str(dest_label or ""))
-                    dest_label_data_json = json.dumps([{
-                        "lon": dest_lon, "lat": dest_lat,
-                        "icon": {
-                            "url": _dest_label_url, "width": _dest_label_w,
-                            "height": _LABEL_H, "anchorY": 0,
-                        },
-                    }]) if dest_pin_data_json and dest_label else None
-                    dest_label_ctor_js = f"""
-                        const newDestLabel = new deck.IconLayer({{
-                            id: 'leg-dest-label', data: {dest_label_data_json},
-                            getIcon: d => d.icon, getPosition: d => [d.lon, d.lat],
-                            getSize: 34, sizeUnits: 'pixels', sizeScale: 1, pickable: false,
-                            getPixelOffset: [0, 8]
-                        }});
-                    """ if dest_label_data_json else ""
-                    dest_pin_ctor_js = (f"""
-                        const newDestPin = new deck.IconLayer({{
-                            id: 'leg-dest-pin', data: {dest_pin_data_json},
-                            getIcon: d => d.icon, getPosition: d => [d.lon, d.lat],
-                            getSize: 60, sizeUnits: 'pixels', sizeScale: 1, pickable: false
-                        }});
-                    """ + dest_label_ctor_js) if dest_pin_data_json else ""
-                    dest_label_layer_js = ", newDestLabel" if dest_label_data_json else ""
-
                 # Connected stop-by photo pauses (see render_residential_leg_
                 # pydeck's `landmarks` docstring): a merged-in stop-by with
                 # "connectToRoute" true AND its own photo gets a full
@@ -2438,14 +2378,6 @@ async def _record_leg(
                         if idx not in stopby_triggers:
                             stopby_triggers[idx] = lm
                             break
-
-                # Index of the last connect-to-route stop-by on this leg (-1
-                # if there isn't one). Every frame after it belongs to the
-                # FINAL continuation segment -- the one that walks straight
-                # to the leg's real destination with no more stop-bys ahead,
-                # so there's nothing left to spoil by showing the dest pin
-                # from that segment's own start, same as an uncut leg does.
-                last_stopby_index = max(stopby_triggers.keys()) if stopby_triggers else -1
 
                 # Unconnected landmarks with their own photo (the route only
                 # passes NEAR these -- see `landmarks` docstring): a small
@@ -2546,19 +2478,10 @@ async def _record_leg(
                     banner_text, dist_text = _hud_text(
                         dest_label, rem_m, rem_min, arrive_threshold_m, mode=mode_hud["mode"]
                     )
-                    # Only relevant on a stop-by-cut leg (see above) -- an
-                    # ordinary leg already has its destination pin/label
-                    # sitting in base_layers from the start, so there's
-                    # nothing to inject here.
-                    show_dest_pin = (not dest_revealed_from_start) and dest_pin_ctor_js and (
-                        index > last_stopby_index or rem_m < arrive_threshold_m
-                    )
-                    dest_filter = ", 'leg-dest-pin', 'leg-dest-label'" if not dest_revealed_from_start else ""
-
                     js = f"""
                     if (window.deckgl) {{
                         const currentLayers = window.deckgl.props.layers || [];
-                        const afterRemoval = currentLayers.filter(l => !['walker-trail', 'walker-dot', 'walker-halo'{dest_filter}].includes(l.id));
+                        const afterRemoval = currentLayers.filter(l => !['walker-trail', 'walker-dot', 'walker-halo'].includes(l.id));
                         // Pins/dots redrawn above the route line, and name
                         // pills above THOSE -- otherwise whichever line/dot
                         // layer happens to be re-appended after them each
@@ -2582,13 +2505,12 @@ async def _record_leg(
                             getLineColor: {c_trail}, stroked: true, lineWidthMinPixels: 4,
                             getRadius: 2, radiusMinPixels: 12
                         }});
-                        {dest_pin_ctor_js if show_dest_pin else ""}
                         // Camera is locked for the whole leg (see the intro's
                         // zoom-in above) -- no viewState here, so deck.gl just
                         // keeps whatever view the intro left it at instead of
                         // re-centering on the walker every frame.
                         window.deckgl.setProps({{
-                            layers: [...staticLayers, newTrail, newHalo, newDot, ...pinLayers{", newDestPin" if show_dest_pin else ""}, ...labelLayers{dest_label_layer_js if show_dest_pin else ""}]
+                            layers: [...staticLayers, newTrail, newHalo, newDot, ...pinLayers, ...labelLayers]
                         }});
                         document.getElementById('hud-banner-text').textContent = {json.dumps(banner_text)};
                         document.getElementById('hud-time').textContent = {json.dumps(f"{rem_min} 分")};

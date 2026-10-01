@@ -168,7 +168,7 @@ def _client_fingerprint(client: Any) -> Optional[dict]:
     fp = getattr(client, "_voice_fingerprint", None)
     if fp is None:
         from services.tts.voices import voice_fingerprint
-        fp = voice_fingerprint(config.voice, config.speed)
+        fp = voice_fingerprint(config.voice, config.speed, getattr(config, "caption", None))
         try:
             client._voice_fingerprint = fp
         except AttributeError:
@@ -282,12 +282,21 @@ async def generate_overview_audio(
     audio_filename = "00_overview_narration.wav"
     existing_path = Path(output_dir) / audio_filename
 
-    if not force and output_is_valid(existing_path) and _voice_matches(existing_path, client):
+    try:
+        # no note: made before it existed, possibly from an older script
+        same_text = _spoken_text_path(existing_path).read_text(encoding="utf-8") == script
+    except OSError:
+        same_text = False
+    if not force and output_is_valid(existing_path) and same_text and _voice_matches(existing_path, client):
         logger.info("Step 2: Overview narration audio already exists — skipping TTS.")
         audio_path = str(existing_path)
     else:
         logger.info("Step 2: Generating overview narration audio.")
         audio_path = await client.generate_speech(tts_script, output_filename=audio_filename)
+        try:
+            _spoken_text_path(audio_path).write_text(script, encoding="utf-8")
+        except OSError:
+            pass
         _write_voice_note(audio_path, client)
 
     analysis = processor.analyze_pauses(audio_path)
@@ -435,6 +444,15 @@ def existing_audio_data(project_config_path: str) -> dict:
     overview_path = audio_dir / "00_overview_narration.wav"
     overview = analyse(overview_path) if clean_text(tagged).strip() else None
     if overview:
+        try:
+            spoken = _spoken_text_path(overview_path).read_text(encoding="utf-8")
+        except OSError:
+            spoken = None
+        if spoken != clean_text(tagged).strip():
+            logger.warning(
+                "Overview narration audio may not match the current script; "
+                "its cues can land on the wrong stops. Re-run TTS for the overview."
+            )
         clean, cues = strip_cues(tagged)
         data["overview_audio_path"] = str(overview_path)
         data["overview_audio_duration"] = overview["duration_seconds"]

@@ -333,6 +333,8 @@ _ROUTE_CLAIM = re.compile(r"[0-9０-９]+\s*(分|時間|km|キロ|メートル|�
 # A description talks about the place the walker is standing at, not about
 # heading there ("さあ、次は…へ", "今回の目的地は…").
 _MOVING_ON = re.compile(r"次は|次に|今回の目的地|へと?向か|を目指|へと?進|に向けて")
+# Attraction narrations often open with their own greeting; the overview greets once.
+_GREETING_SENTENCE = re.compile(r"こんにちは|こんばんは|おはよう|ようこそ|はじめまして")
 _DIRECTION_WORD = re.compile(r"(北東|北西|南東|南西|北|南|東|西)(?=へ|の方|に向|に進)")
 _NUMBER = re.compile(r"[0-9０-９]+(?:\.[0-9]+)?")
 
@@ -802,6 +804,7 @@ def build_tour_script(
         about = "".join(
             sentence for sentence in _SENTENCE_END.split(facts)
             if not _ROUTE_CLAIM.search(sentence) and not _MOVING_ON.search(sentence)
+            and not _GREETING_SENTENCE.search(sentence)
         ).strip()
         if already_named:
             about = _drop_named_opening(about, label)
@@ -813,7 +816,7 @@ def build_tour_script(
             lambda t, label=label, already_named=already_named: (
                 _looks_ok(t, describe_chars, over=1.2) and (already_named or _names_in(t, label))
                 and not _ROUTE_CLAIM.search(t) and not _MOVING_ON.search(t)
-                and not _ARRIVED_PHRASE.search(t)
+                and not _ARRIVED_PHRASE.search(t) and not _GREETING_SENTENCE.search(t)
             ),
             fallback,
         )

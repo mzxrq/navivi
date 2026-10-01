@@ -220,6 +220,18 @@ class TestTourScript:
         _, report = build_tour_script(*_tour_project(), generate=fake)
         assert {r["kind"]: r["used"] for r in report}["stop1"] == "template"
 
+    def test_a_stops_own_greeting_is_never_repeated(self):
+        project, cache = _tour_project()
+        project["waypoints"][1]["attractionNarration"] = "皆さん、こんにちは！古い寺は四百年の歴史があります。"
+
+        def fake(prompt, limit):
+            return "みなさん、こんにちは！古い寺は歴史ある寺です。" if "■ 場所: 古い寺" in prompt else None
+
+        for gen in (None, fake):
+            script, report = build_tour_script(project, cache, generate=gen)
+            assert "こんにちは" not in script
+            assert "古い寺は四百年の歴史があります。" in script
+
     def test_two_lines_in_a_row_never_open_the_same_way(self):
         def fake(prompt, limit):
             if "道順を案内" in prompt:
