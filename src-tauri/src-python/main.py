@@ -95,6 +95,13 @@ if __name__ == "__main__":
             print(json.dumps(run_voice_action(command_arg, payload), ensure_ascii=False))
             sys.exit(0)
 
+        if command_arg == "estimate":
+            from services.render_estimate import estimate
+
+            config = json.loads(Path(sys.argv[2]).read_text(encoding="utf-8"))
+            print(json.dumps(estimate(config)))
+            sys.exit(0)
+
         if command_arg == "full_pipeline":
             if len(sys.argv) < 3:
                 raise ValueError("full_pipeline requires a source path")

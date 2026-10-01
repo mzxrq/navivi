@@ -6,6 +6,7 @@ export type ClipKind = "video" | "audio" | "image" | "text" | "subtitle";
 
 export interface Waypoint {
   id: string;
+  lineColor?: [number, number, number];
   lat: number;
   lng: number;
   name: string;

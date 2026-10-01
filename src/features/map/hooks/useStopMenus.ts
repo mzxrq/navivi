@@ -1,4 +1,11 @@
+import { createElement } from "react";
 import { t } from "@lingui/core/macro";
+import {
+  PRESET_COLORS,
+  hexToRgb,
+  presetColorNames,
+  rgbToHex,
+} from "../../../components/ui/ColorSwatches";
 import {
   Car,
   Copy,
@@ -38,6 +45,8 @@ export function useModeOptions(): ModeOption[] {
 }
 
 export const VIA_MODES: (RouteMode | undefined)[] = [undefined, "walking", "driving", "ferry"];
+
+export const legColorable = (wp: Waypoint) => wp.routeMode !== "direct" && wp.routeMode !== "curve";
 
 export function useLegActions() {
   const { waypoints, routeSegments, updateWaypoint } = useWorkspace();
@@ -97,6 +106,13 @@ export function useStopMenus() {
     setIsDirty(true);
   };
 
+  const colorNames = presetColorNames();
+
+  const setLegColor = (wpId: string, lineColor: [number, number, number] | undefined) => {
+    updateWaypoint(wpId, { lineColor });
+    setIsDirty(true);
+  };
+
   const setPath = (wpId: string, customRoute: [number, number][]) => {
     updateWaypoint(wpId, { customRoute, routeMode: "draw" });
     setIsDirty(true);
@@ -147,6 +163,25 @@ export function useStopMenus() {
         label: t`Adjust route`,
         icon: Route,
         onSelect: () => startAdjusting(wp.id),
+      },
+      separator,
+      legColorable(wp) && {
+        label: t`Line colour`,
+        icon: colorDot(wp.lineColor ? rgbToHex(wp.lineColor) : null),
+        submenu: [
+          {
+            label: t`Route colour`,
+            checked: !wp.lineColor,
+            onSelect: () => setLegColor(wp.id, undefined),
+          },
+          separator,
+          ...PRESET_COLORS.map((hex, i) => ({
+            label: colorNames[i],
+            icon: colorDot(hex),
+            checked: !!wp.lineColor && rgbToHex(wp.lineColor) === hex,
+            onSelect: () => setLegColor(wp.id, hexToRgb(hex)),
+          })),
+        ],
       },
       viaCount > 0 && {
         label: t`Clear via points (${viaCount})`,
@@ -286,4 +321,14 @@ export function useStopMenus() {
     ];
 
   return { stopMenu, legMenu, viaMenu, mapMenu };
+}
+
+function colorDot(hex: string | null) {
+  return ({ className }: { className?: string }) =>
+    createElement("span", {
+      className: `${className ?? ""} inline-block rounded-full ring-1 ring-inset ring-black/15 dark:ring-white/20 ${
+        hex ? "" : "bg-[conic-gradient(#ef4444,#f59e0b,#10b981,#3b82f6,#8b5cf6,#ef4444)]"
+      }`,
+      style: hex ? { backgroundColor: hex } : undefined,
+    });
 }

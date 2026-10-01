@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { Source, Layer } from "react-map-gl/mapbox";
 import { useWorkspace } from "../../../../hooks/useWorkspace";
+import { rgbToHex } from "../../../../components/ui/ColorSwatches";
 
 interface RouteLayerProps {
   uploadedRouteLine: number[][];
@@ -73,7 +74,7 @@ export function RouteLayer({
   uploadedRouteLine,
   routePoints,
 }: RouteLayerProps) {
-  const { routeSegments, settings } = useWorkspace();
+  const { routeSegments, settings, waypoints } = useWorkspace();
 
   const hexLineColor =
     "#" +
@@ -152,20 +153,29 @@ export function RouteLayer({
     return { type: "FeatureCollection", features };
   }, [routePoints, uploadedRouteLine, routeSegments, hexLineColor]);
 
+  const legColors = waypoints
+    .filter((wp) => !wp.isStopBy || wp.connectToRoute)
+    .map((wp) => (wp.lineColor ? rgbToHex(wp.lineColor) : ""))
+    .join(",");
+
   const dynamicRouteGeoJSON = useMemo(() => {
-    const features = routeSegments.map((segment) => ({
-      type: "Feature",
-      properties: {
-        mode: segment.mode || "driving",
-      },
-      geometry: {
-        type: "LineString",
-        coordinates: segment.positions.map((pos) => [pos[1], pos[0]]),
-      },
-    }));
+    const colors = legColors.split(",");
+    const features = routeSegments.map((segment, i) => {
+      return {
+        type: "Feature",
+        properties: {
+          mode: segment.mode || "driving",
+          color: colors[i] || null,
+        },
+        geometry: {
+          type: "LineString",
+          coordinates: segment.positions.map((pos) => [pos[1], pos[0]]),
+        },
+      };
+    });
 
     return { type: "FeatureCollection", features };
-  }, [routeSegments]);
+  }, [routeSegments, legColors]);
 
   const rawRouteGeoJSON = useMemo(() => {
     const features = [];
@@ -302,7 +312,10 @@ export function RouteLayer({
               type="line"
               filter={["!in", "mode", "direct", "curve"]}
               layout={{ "line-join": "round", "line-cap": "round" }}
-              paint={{ "line-color": hexLineColor, "line-width": lineWidth }}
+              paint={{
+                "line-color": ["coalesce", ["get", "color"], hexLineColor],
+                "line-width": lineWidth,
+              }}
             />
             <Layer
               id="route-direct"

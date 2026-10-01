@@ -222,6 +222,7 @@ export const saveProjectData = async (
         routeMode: wp.routeMode || "driving",
         customRoute: wp.customRoute || [],
         drawStyle: wp.drawStyle || "linear",
+        lineColor: wp.lineColor || undefined,
 
         isStopBy: wp.isStopBy || false,
         connectToRoute: wp.connectToRoute || false,

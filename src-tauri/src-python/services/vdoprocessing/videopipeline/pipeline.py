@@ -9,6 +9,7 @@ from typing import Optional
 from services import tuning
 from services.config.job_config import JobConfigManager
 from services.logger.progress import tracker
+from services.render_estimate import StageRecorder
 from services.vdoprocessing.vdoexporter import VideoExporter, sweep_stale_temp_files
 
 from .attraction_step import render_attraction_videos
@@ -80,18 +81,14 @@ def run_full_pipeline(
     # Every path below makes exactly PIPELINE_STAGES stage() calls (a skipped
     # stage still announces itself), so the frontend's progress bar and stage
     # list never see "[9/8]". Sub-work inside a stage uses tracker.show().
+    recorder = StageRecorder(job_config.to_dict())
+    tracker.on_stage = recorder.on_stage
     tracker.stage("Parsing GPS track...", total=PIPELINE_STAGES)
     cleaned_route = process_gps(raw_source_path)
 
     settings = job_config.get("settings", {})
     fast_render = skip_rich_media(settings)
     attractions_on = attraction_videos_enabled(settings)
-
-    # [NOTE] [Core] The "[n/N]" total is only set here. Keep it in step with the stage() calls below:
-    # 6 always + TTS stop & subtitles (not fast_render) + GPU cooldown (attractions on).
-    stage_total = 6 + (0 if fast_render else 2) + (1 if attractions_on else 0)
-    tracker.stage("Parsing GPS track...", total=stage_total)
-    cleaned_route = process_gps(raw_source_path)
 
     # --- STEP 2 ---
     tracker.stage("Generating TTS narration...")
@@ -288,6 +285,8 @@ def run_full_pipeline(
             job_config.get("settings", {}).get("attraction_fade_seconds", 0.8)
         ),
     )
+    recorder.finish()
+    tracker.on_stage = None
     tracker.clear()
 
     return {

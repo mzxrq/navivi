@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from "react";
-import { createPortal } from "react-dom";
 import { Route, Film, Trash2 } from "../../../components/ui/icons";
 import {
   DragDropContext,
@@ -12,6 +11,7 @@ import { useUI } from "../../../hooks/useUI";
 import { WaypointItem } from "./WaypointItem";
 import { LocationSearch } from "../../../components/ui/LocationSearch";
 import { OverviewPanel } from "./OverviewPanel";
+import { GenerateDialog } from "./GenerateDialog";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 
@@ -31,8 +31,6 @@ export function Sidebar() {
     activeWaypointId,
     setActiveWaypointId,
     setIsDirty,
-    settings,
-    updateSettings,
   } = useWorkspace();
 
   const [isListEditMode, setIsListEditMode] = useState(false);
@@ -303,79 +301,9 @@ export function Sidebar() {
         )}
       </div>
 
-      {showGenerateConfirm &&
-        createPortal(
-          <div className="fixed inset-0 z-99999 bg-zinc-950/40 backdrop-blur-[2px] flex items-center justify-center p-4 animate-in fade-in duration-200">
-            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200">
-              <div className="p-5">
-                <h3 className="text-[15px] font-semibold text-zinc-900 dark:text-white mb-1.5">
-                  <Trans>Ready to Generate?</Trans>
-                </h3>
-                <p className="text-[12px] text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                  <Trans>This will save your project, synthesize AI voiceovers, and render map videos before opening the Timeline.</Trans>
-                </p>
-
-                <div className="mt-4 space-y-1">
-                  <label className="flex items-start gap-2.5 p-2 -mx-2 rounded-lg cursor-pointer hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors">
-                    <input
-                      type="checkbox"
-                      className="mt-0.5 w-4 h-4 rounded border-zinc-300 accent-navi cursor-pointer"
-                      checked={settings.skip_rich_media || false}
-                      onChange={(e) => {
-                        updateSettings({ skip_rich_media: e.target.checked });
-                        if (setIsDirty) setIsDirty(true);
-                      }}
-                    />
-                    <span className="flex flex-col gap-0.5">
-                      <span className="text-[13px] font-medium text-zinc-800 dark:text-zinc-200">
-                        <Trans>Skip Rich Media (Fast Render)</Trans>
-                      </span>
-                      <span className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-snug">
-                        <Trans>Generates the map route only. Ignores all pop-up images and AI voice synthesis to save time.</Trans>
-                      </span>
-                    </span>
-                  </label>
-
-                  <label className="flex items-start gap-2.5 p-2 -mx-2 rounded-lg cursor-pointer hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors">
-                    <input
-                      type="checkbox"
-                      className="mt-0.5 w-4 h-4 rounded border-zinc-300 accent-navi cursor-pointer"
-                      checked={settings.quick_export || false}
-                      onChange={(e) => {
-                        updateSettings({ quick_export: e.target.checked });
-                        if (setIsDirty) setIsDirty(true);
-                      }}
-                    />
-                    <span className="flex flex-col gap-0.5">
-                      <span className="text-[13px] font-medium text-zinc-800 dark:text-zinc-200">
-                        <Trans>Quick Export (Auto-stitch & Export)</Trans>
-                      </span>
-                      <span className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-snug">
-                        <Trans>Automatically stitch all video segments and export upon completion without pausing for asset review</Trans>
-                      </span>
-                    </span>
-                  </label>
-                </div>
-              </div>
-
-              <div className="px-5 py-3 bg-zinc-50 dark:bg-black/20 border-t border-zinc-100 dark:border-white/5 flex items-center justify-end gap-2">
-                <button
-                  onClick={() => setShowGenerateConfirm(false)}
-                  className="h-8 px-3 text-[12px] font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200/70 dark:hover:bg-white/5 rounded-md transition-colors"
-                >
-                  <Trans>Cancel</Trans>
-                </button>
-                <button
-                  onClick={executeGenerate}
-                  className="h-8 px-4 bg-navi hover:brightness-110 text-white text-[12px] font-semibold rounded-md transition-colors"
-                >
-                  <Trans>Generate Assets</Trans>
-                </button>
-              </div>
-            </div>
-          </div>,
-          document.body,
-        )}
+      {showGenerateConfirm && (
+        <GenerateDialog onClose={() => setShowGenerateConfirm(false)} onConfirm={executeGenerate} />
+      )}
     </aside>
   );
 }

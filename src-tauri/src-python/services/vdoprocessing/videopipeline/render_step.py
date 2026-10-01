@@ -28,7 +28,9 @@ from .helpers import (
     DEFAULT_FRONTEND_CONFIG,
     DEFAULT_MAP_BACKGROUND,
     PIPELINE_LABELS,
+    _build_point_colors,
     _build_point_modes,
+    leg_line_color_rgb,
     _project_route_to_pixels,
     _resolve_leg_geometry_from_cache,
     attraction_videos_enabled,
@@ -127,6 +129,14 @@ def _arrived_marker_color(settings: dict, marker_bgr: tuple) -> tuple:
     if settings.get("marker_color") is not None:
         return tuple(max(0, min(255, int(c * _ARRIVED_COLOR_DARKEN))) for c in marker_bgr)
     return tuple(tuning.DEFAULT_ARRIVED_MARKER_COLOR)
+
+
+def _project_rgb(settings: dict, key: str) -> Optional[list]:
+    """A project colour setting as an RGB list (pydeck's order), or None."""
+    value = settings.get(key)
+    if isinstance(value, (list, tuple)) and len(value) >= 3:
+        return [int(c) for c in value[:3]]
+    return None
 
 
 # Modes drawn with the project's Route Line color, matching the editor.
@@ -583,6 +593,7 @@ def render_route_video(
             logger.warning("Step 4: Failed to read %s: %s", routecache_path, e)
 
     point_modes = _build_point_modes(len(route_points), wp_indices, waypoints, routing_cache)
+    point_colors = _build_point_colors(len(route_points), wp_indices, waypoints)
 
     # Real-world REPORTED speed per travel mode — what the summary card's
     # per-mode duration breakdown is estimated from. Kept separate from
@@ -1150,6 +1161,12 @@ def render_route_video(
                         route_popups[end_idx] if end_pos == len(waypoints) - 1 else None
                     ),
                     "mode": leg_mode,
+                    "line_color": (
+                        leg_line_color_rgb(waypoints[start_pos])
+                        if start_pos < len(waypoints)
+                        else None
+                    )
+                    or _project_rgb(settings, "line_color"),
                     "travel_duration": total_time,
                     "segment_duration": total_time,
                     "start_cue_seconds": start_cue_seconds,
@@ -1412,6 +1429,7 @@ def render_route_video(
         summary=summary,
         wp_indices=wp_indices,
         point_modes=point_modes,
+        point_colors=point_colors,
         render_mode=render_mode,
         # Same bbox the overview background (map_output_path) was just
         # fetched with — needed by the dynamic pydeck zoom-in intro (see

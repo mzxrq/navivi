@@ -145,6 +145,7 @@ class _OverviewRenderMixin:
         bounding_box: Optional[Dict[str, float]] = None,
         extent: Optional[Tuple[float, float, float, float]] = None,
         preview_recap_only: bool = False,
+        point_colors: Optional[List] = None,
     ) -> str:
         # Checkpoint: if a previous run already produced this exact output
         # file, skip straight to returning it instead of redoing the whole
@@ -160,7 +161,8 @@ class _OverviewRenderMixin:
         inputs_path = self.out_dir / "01_overview.inputs.json"
         render_args = {
             "points": points, "labels": labels, "popups": popups, "fps": fps,
-            "summary": summary, "point_modes": point_modes, "bounding_box": bounding_box,
+            "summary": summary, "point_modes": point_modes, "point_colors": point_colors,
+            "bounding_box": bounding_box,
             "extent": extent, "preview_recap_only": preview_recap_only,
         }
         fingerprint_parts = _overview_fingerprint_parts(
@@ -299,6 +301,11 @@ class _OverviewRenderMixin:
 
         smooth_path, mode_breakpoints, cum_smooth_dist, total_smooth_dist = (
             self._build_overview_path(points, point_modes, num_frames)
+        )
+        self._color_breakpoints = (
+            self._build_mode_breakpoints(points, point_colors)
+            if point_colors and any(point_colors)
+            else []
         )
 
         # Stashed so _render_ending_highlight can redraw the route line on

@@ -234,6 +234,37 @@ def _resolve_leg_geometry_from_cache(
     return geometry
 
 
+def leg_line_color_rgb(waypoint: dict) -> Optional[list[int]]:
+    """A waypoint's own colour for the leg leaving it (`lineColor`, RGB), if set."""
+    value = waypoint.get("lineColor") if isinstance(waypoint, dict) else None
+    if isinstance(value, (list, tuple)) and len(value) >= 3:
+        try:
+            return [max(0, min(255, int(c))) for c in value[:3]]
+        except (TypeError, ValueError):
+            return None
+    return None
+
+
+def _build_point_colors(
+    num_points: int, wp_indices: list[int], waypoints: list[dict]
+) -> list[Optional[tuple[int, int, int]]]:
+    """Per-point BGR leg colour (None = use the mode colour), aligned with
+    _build_point_modes: point i belongs to the leg departing waypoint
+    leg_idx - 1, and the last leg's colour carries to the end."""
+    colors: list[Optional[tuple[int, int, int]]] = [None] * num_points
+    boundaries = list(wp_indices) + [num_points - 1]
+    prev_end = 0
+    current = None
+    for leg_idx, end_idx in enumerate(boundaries):
+        if 0 < leg_idx < len(waypoints):
+            rgb = leg_line_color_rgb(waypoints[leg_idx - 1])
+            current = tuple(reversed(rgb)) if rgb else None
+        for i in range(prev_end, min(end_idx + 1, num_points)):
+            colors[i] = current
+        prev_end = end_idx + 1
+    return colors
+
+
 def _build_point_modes(
     num_points: int,
     wp_indices: list[int],

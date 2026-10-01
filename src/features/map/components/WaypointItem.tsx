@@ -17,11 +17,13 @@ import { useWorkspace } from "../../../hooks/useWorkspace";
 import { Waypoint } from "../../../types/index";
 import { openContextMenu } from "../../../components/ui/menuItems";
 import {
+  legColorable,
   useLegActions,
   useModeOptions,
   useStopMenus,
   VIA_MODES,
 } from "../hooks/useStopMenus";
+import { LegColorButton } from "./LegColorButton";
 import { stopLabel } from "../../../utils/stopLabel";
 
 interface WaypointItemProps {
@@ -318,6 +320,8 @@ export function WaypointItem({
                 </div>
               )}
             </div>
+
+            {legColorable(wp) && <LegColorButton wp={wp} />}
 
             {wp.routeMode === "draw" && (
               <>
