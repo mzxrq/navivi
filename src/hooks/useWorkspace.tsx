@@ -516,6 +516,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
           isStopBy: wp.isStopBy || false,
           connectToRoute: wp.connectToRoute || false,
+          skipAssetGeneration: wp.skipAssetGeneration ?? undefined,
+          pauseAtWaypoint: wp.pauseAtWaypoint ?? undefined,
           images: wp.popup_image || wp.images || [],
           imagePans: wp.imagePans || [],
           imageTransitions: wp.imageTransitions || [],

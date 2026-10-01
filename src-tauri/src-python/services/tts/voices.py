@@ -144,10 +144,13 @@ def _sha256(path: Path) -> str:
     return h.hexdigest()
 
 
-def voice_fingerprint(voice: str, speed: float) -> Dict[str, Any]:
+def voice_fingerprint(voice: str, speed: float, caption: Optional[str] = None) -> Dict[str, Any]:
     """What a narration clip was spoken with; a mismatch means it's remade."""
     path = voice_file(voice)
-    return {"voice": voice, "sha256": _sha256(path) if path else None, "speed": float(speed)}
+    return {
+        "voice": voice, "sha256": _sha256(path) if path else None,
+        "speed": float(speed), "caption": caption or None,
+    }
 
 
 # Clips made before fingerprints existed used the old fixed defaults.
@@ -158,6 +161,8 @@ def fingerprints_match(stored: Dict[str, Any], current: Dict[str, Any]) -> bool:
     if stored.get("voice") != current.get("voice"):
         return False
     if abs(float(stored.get("speed", 0)) - float(current.get("speed", 0))) > 1e-6:
+        return False
+    if (stored.get("caption") or None) != (current.get("caption") or None):
         return False
     a, b = stored.get("sha256"), current.get("sha256")
     return a is None or b is None or a == b

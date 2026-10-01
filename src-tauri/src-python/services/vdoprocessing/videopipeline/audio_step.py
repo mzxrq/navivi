@@ -30,6 +30,22 @@ def is_unvisited_stopby(waypoint: dict) -> bool:
     return isinstance(waypoint, dict) and bool(waypoint.get("isStopBy")) and not waypoint.get("connectToRoute")
 
 
+def is_skipped(waypoint: dict) -> bool:
+    """The editor's "Skip in Video Export": only a pip card as the walker
+    passes - no narration audio, no attraction video, no stop."""
+    return isinstance(waypoint, dict) and bool(waypoint.get("skipAssetGeneration"))
+
+
+def is_passed_only(waypoint: dict) -> bool:
+    """The walker never stops here (an unconnected stop-by, or a waypoint
+    skipped in video export): no narration audio and no attraction video."""
+    return is_unvisited_stopby(waypoint) or is_skipped(waypoint)
+
+
+def passed_only_reason(waypoint: dict) -> str:
+    return "skipped in video export" if is_skipped(waypoint) else "stop-by not connected to the route"
+
+
 # Whether a leg speaks only its route (arriving) narration. On when the
 # project makes attraction videos (the pipeline sets it, see
 # set_route_only_legs): each waypoint's attraction clip plays its
@@ -50,7 +66,7 @@ def has_own_attraction_clip(waypoint: dict) -> bool:
     popup_image), and the walker actually goes there."""
     return (
         isinstance(waypoint, dict)
-        and not is_unvisited_stopby(waypoint)
+        and not is_passed_only(waypoint)
         and bool((waypoint.get("attractionNarration") or waypoint.get("narration") or "").strip())
         and bool(waypoint.get("popup_image"))
     )
@@ -152,7 +168,7 @@ def _client_fingerprint(client: Any) -> Optional[dict]:
     fp = getattr(client, "_voice_fingerprint", None)
     if fp is None:
         from services.tts.voices import voice_fingerprint
-        fp = voice_fingerprint(config.voice, config.speed)
+        fp = voice_fingerprint(config.voice, config.speed, getattr(config, "caption", None))
         try:
             client._voice_fingerprint = fp
         except AttributeError:
@@ -266,12 +282,21 @@ async def generate_overview_audio(
     audio_filename = "00_overview_narration.wav"
     existing_path = Path(output_dir) / audio_filename
 
-    if not force and output_is_valid(existing_path) and _voice_matches(existing_path, client):
+    try:
+        # no note: made before it existed, possibly from an older script
+        same_text = _spoken_text_path(existing_path).read_text(encoding="utf-8") == script
+    except OSError:
+        same_text = False
+    if not force and output_is_valid(existing_path) and same_text and _voice_matches(existing_path, client):
         logger.info("Step 2: Overview narration audio already exists — skipping TTS.")
         audio_path = str(existing_path)
     else:
         logger.info("Step 2: Generating overview narration audio.")
         audio_path = await client.generate_speech(tts_script, output_filename=audio_filename)
+        try:
+            _spoken_text_path(audio_path).write_text(script, encoding="utf-8")
+        except OSError:
+            pass
         _write_voice_note(audio_path, client)
 
     analysis = processor.analyze_pauses(audio_path)
@@ -403,7 +428,7 @@ def existing_audio_data(project_config_path: str) -> dict:
 
     for idx, wp in enumerate(waypoints):
         label = wp.get("label", f"Waypoint {idx + 1}") if isinstance(wp, dict) else ""
-        skip = not isinstance(wp, dict) or is_unvisited_stopby(wp)
+        skip = not isinstance(wp, dict) or is_passed_only(wp)
         main_path = audio_dir / waypoint_audio_filename(idx, label)
         main = None if skip or not _resolve_narration_script(wp) else analyse(main_path)
         data["audio_durations"].append(main["duration_seconds"] if main else 0.0)
@@ -419,6 +444,15 @@ def existing_audio_data(project_config_path: str) -> dict:
     overview_path = audio_dir / "00_overview_narration.wav"
     overview = analyse(overview_path) if clean_text(tagged).strip() else None
     if overview:
+        try:
+            spoken = _spoken_text_path(overview_path).read_text(encoding="utf-8")
+        except OSError:
+            spoken = None
+        if spoken != clean_text(tagged).strip():
+            logger.warning(
+                "Overview narration audio may not match the current script; "
+                "its cues can land on the wrong stops. Re-run TTS for the overview."
+            )
         clean, cues = strip_cues(tagged)
         data["overview_audio_path"] = str(overview_path)
         data["overview_audio_duration"] = overview["duration_seconds"]
@@ -550,15 +584,15 @@ def generate_audio(
                 # touching the TTS server — a waypoint with no narration
                 # text has nothing to generate, so skip it outright instead
                 # of attempting (and silently failing) the call.
-                if not isinstance(wp, dict) or is_unvisited_stopby(wp) or not _resolve_narration_script(wp):
+                if not isinstance(wp, dict) or is_passed_only(wp) or not _resolve_narration_script(wp):
+                    passed = isinstance(wp, dict) and is_passed_only(wp)
                     logger.info(
                         "Step 2: [%d] Skipping '%s' — %s.",
                         idx + 1, label,
-                        "stop-by not connected to the route" if is_unvisited_stopby(wp)
-                        else "no narration script configured",
+                        passed_only_reason(wp) if passed else "no narration script configured",
                     )
-                    if is_unvisited_stopby(wp):
-                        tracker.note(f"Skipped TTS {idx + 1}/{len(waypoints)}: {label} (stop-by not connected to the route)")
+                    if passed:
+                        tracker.note(f"Skipped TTS {idx + 1}/{len(waypoints)}: {label} ({passed_only_reason(wp)})")
                     audio_durations.append(0.0)
                     audio_pauses.append([])
                     audio_paths.append(None)
@@ -614,7 +648,7 @@ def generate_audio(
             # append None) regardless of whether that loop's `continue`
             # branches fired for this same waypoint.
             for idx, wp in enumerate(waypoints):
-                if not isinstance(wp, dict) or is_unvisited_stopby(wp) or not _resolve_attraction_narration_script(wp):
+                if not isinstance(wp, dict) or is_passed_only(wp) or not _resolve_attraction_narration_script(wp):
                     attraction_audio_paths.append(None)
                     attraction_audio_durations.append(0.0)
                     continue

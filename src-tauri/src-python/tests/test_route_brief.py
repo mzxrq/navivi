@@ -156,7 +156,7 @@ def _tour_project():
 class TestJourneys:
     def test_trips_run_between_numbered_stops(self):
         project, cache = _project()
-        project["waypoints"].insert(1, _wp("小さな祠", 35.0, 139.005, isStopBy=True, connectToRoute=True))
+        project["waypoints"].insert(1, _wp("小さな祠", 35.0, 139.005, isStopBy=True, connectToRoute=True, pauseAtWaypoint=False))
         cache[_key(project["waypoints"][0], project["waypoints"][1], "walking")] = _line(35.0, 139.0, 35.0, 139.005, 20)
         cache[_key(project["waypoints"][1], project["waypoints"][2], "walking")] = _line(35.0, 139.005, 35.0, 139.01, 20)
         trips = journeys(build_brief(project, cache))
@@ -219,6 +219,18 @@ class TestTourScript:
 
         _, report = build_tour_script(*_tour_project(), generate=fake)
         assert {r["kind"]: r["used"] for r in report}["stop1"] == "template"
+
+    def test_a_stops_own_greeting_is_never_repeated(self):
+        project, cache = _tour_project()
+        project["waypoints"][1]["attractionNarration"] = "皆さん、こんにちは！古い寺は四百年の歴史があります。"
+
+        def fake(prompt, limit):
+            return "みなさん、こんにちは！古い寺は歴史ある寺です。" if "■ 場所: 古い寺" in prompt else None
+
+        for gen in (None, fake):
+            script, report = build_tour_script(project, cache, generate=gen)
+            assert "こんにちは" not in script
+            assert "古い寺は四百年の歴史があります。" in script
 
     def test_two_lines_in_a_row_never_open_the_same_way(self):
         def fake(prompt, limit):
@@ -320,7 +332,7 @@ class TestHighlights:
         # A connected host between stop 3 and stop 4, with one unconnected
         # stop-by riding behind it - mid-route, nowhere near the start.
         project["waypoints"].insert(4, _wp("中間の碑", 35.0, 139.0 + 0.004 * 3 + 0.002,
-                                            isStopBy=True, connectToRoute=True))
+                                            isStopBy=True, connectToRoute=True, pauseAtWaypoint=False))
         project["waypoints"].insert(5, _wp("隠れ観音", 35.0, 139.0 + 0.004 * 3 + 0.0022,
                                             isStopBy=True, connectToRoute=False))
         script, _ = build_tour_script(project, {}, generate=None)

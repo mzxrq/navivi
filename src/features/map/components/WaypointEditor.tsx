@@ -298,18 +298,161 @@ export function WaypointEditor({
                 <LocateFixed className="w-3.5 h-3.5" />
               </button>
 
-              <div className="w-px h-5 bg-zinc-200 dark:bg-white/10 mx-1" />
+                {isMarkedForRegen && (
+                  <div className="mt-2.5 p-2 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-start gap-2">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
+                    <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-400 leading-snug">
+                      <Trans>
+                        Marked for Regeneration: Edit image, narration, or route
+                        mode, then click Resume Generation
+                      </Trans>
+                    </span>
+                  </div>
+                )}
 
-              {isEndpoint ? (
-                <span className="h-6 px-2 flex items-center rounded-md bg-zinc-100 dark:bg-white/5 text-[11px] font-medium text-zinc-600 dark:text-zinc-400 shrink-0">
-                  {isStart ? <Trans>Start</Trans> : <Trans>Destination</Trans>}
-                </span>
-              ) : (
-                <div className="flex items-center rounded-md bg-zinc-100 dark:bg-white/5 p-0.5 shrink-0">
-                  {[
-                    { stopBy: false, label: t`Stop` },
-                    { stopBy: true, label: t`Stop-by` },
-                  ].map((option) => (
+                <div className="mt-5 flex flex-col gap-4 pl-1">
+                  {/* Skip Asset Generation Toggle */}
+                  <div className="flex items-center gap-3">
+                    <label
+                      className={`flex items-center gap-3 group ${isStart || isDest ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}
+                    >
+                      <div className="relative inline-flex items-center">
+                        <input
+                          type="checkbox"
+                          className="sr-only peer"
+                          checked={wp.skipAssetGeneration || false}
+                          disabled={isStart || isDest}
+                          onChange={(e) =>
+                            updateWaypoint(wp.id, {
+                              skipAssetGeneration: e.target.checked,
+                            })
+                          }
+                        />
+                        <div className="w-9 h-5 bg-zinc-200 peer-focus:outline-none rounded-full peer dark:bg-navidark-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-0.5after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-navi-500 border border-zinc-300 dark:border-white/20 peer-disabled:cursor-not-allowed"></div>
+                      </div>
+                      <span className="text-[11px] font-bold text-zinc-700 dark:text-zinc-200">
+                        <Trans>Skip in Video Export</Trans>
+                      </span>
+                    </label>
+                    <Tooltip
+                      content={t`Skips this location during video generation`}
+                      position="top"
+                    >
+                      <Info className="w-3.5 h-3.5 text-zinc-400 hover:text-navi transition-colors cursor-help" />
+                    </Tooltip>
+                  </div>
+
+                  {/* Pause At Waypoint Toggle */}
+                  <div className="flex items-center gap-3">
+                    <label className="flex items-center gap-3 cursor-pointer group">
+                      <div className="relative inline-flex items-center">
+                        <input
+                          type="checkbox"
+                          className="sr-only peer"
+                          checked={wp.pauseAtWaypoint ?? true}
+                          onChange={(e) =>
+                            updateWaypoint(wp.id, {
+                              pauseAtWaypoint: e.target.checked,
+                            })
+                          }
+                        />
+                        <div className="w-9 h-5 bg-zinc-200 peer-focus:outline-none rounded-full peer dark:bg-navidark-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-0.5after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-navi-500 border border-zinc-300 dark:border-white/20"></div>
+                      </div>
+                      <span className="text-[11px] font-bold text-zinc-700 dark:text-zinc-200">
+                        <Trans>Pause at Location</Trans>
+                      </span>
+                    </label>
+                    <Tooltip
+                      content={t`Adds a brief pause in the generated video at this waypoint before continuing the journey`}
+                      position="top"
+                    >
+                      <Info className="w-3.5 h-3.5 text-zinc-400 hover:text-navi transition-colors cursor-help" />
+                    </Tooltip>
+                  </div>
+                </div>
+              </div>
+
+              {/* DIVIDER */}
+              <div className="border-t border-zinc-200/50 dark:border-white/10 mx-5" />
+
+              {/* BOTTOM: Action */}
+              <div className="p-5 pt-4 flex flex-col gap-4 flex-1">
+                <h3 className="text-xs font-bold  wider text-zinc-800 dark:text-zinc-200">
+                  <Trans>Action</Trans>
+                </h3>
+
+                {/* Custom Marker */}
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 border border-dashed border-zinc-300 dark:border-white/20 rounded-lg flex items-center justify-center shrink-0 bg-white dark:bg-navidark-700/50 relative overflow-hidden group shadow-sm">
+                    {wp.customMarker ? (
+                      <>
+                        <img
+                          src={convertFileSrc(wp.customMarker)}
+                          alt="Marker"
+                          className="w-8 h-8 object-contain"
+                        />
+                        <button
+                          onClick={() =>
+                            updateWaypoint(wp.id, { customMarker: undefined })
+                          }
+                          className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <Trash2 className="w-4 h-4 text-white" />
+                        </button>
+                      </>
+                    ) : (
+                      <MapPin className="w-5 h-5 text-zinc-300 dark:text-zinc-600" />
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <span className="text-[11px] font-bold text-zinc-700 dark:text-zinc-300">
+                      <Trans>Custom Marker</Trans>
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={async () => {
+                          const selected = await open({
+                            multiple: false,
+                            filters: [
+                              {
+                                name: "Images",
+                                extensions: ["svg", "png", "jpg", "jpeg"],
+                              },
+                            ],
+                          });
+                          if (selected && typeof selected === "string") {
+                            updateWaypoint(wp.id, { customMarker: selected });
+                          }
+                        }}
+                        className="bg-navi-500 hover:bg-navi-600 text-white px-2.5 py-1 rounded-md text-[10px] font-bold shadow-sm transition-colors"
+                      >
+                        <Trans>Select</Trans>
+                      </button>
+                      <span
+                        className="text-[10px] font-medium text-zinc-500 truncate max-w-25"
+                        title={wp.customMarker || ""}
+                      >
+                        {wp.customMarker
+                          ? wp.customMarker.split(/[\\/]/).pop()
+                          : t`"No file chosen"`}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Waypoint Settings (Grid of buttons with icons) */}
+                <div className="flex flex-col gap-2.5 mt-2">
+                  <h3
+                    className="text-[11px] font-bold flex items-center gap-1.5 text-zinc-700 dark:text-zinc-300"
+                    title={t`Change Waypoint Type`}
+                  >
+                    <Trans>Waypoint Settings</Trans>
+                    <Info className="w-3.5 h-3.5 text-zinc-400" />
+                  </h3>
+
+                  <div
+                    className={`grid gap-2 ${isStopBy && !isStart && !isDest ? "grid-cols-6" : "grid-cols-5"}`}
+                  >
                     <button
                       key={option.label}
                       type="button"

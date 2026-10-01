@@ -92,15 +92,24 @@ def test_config_falls_back_when_voice_missing_or_speed_bad(lib):
 
 
 class _Client:
-    def __init__(self, voice, speed):
-        self.config = TTSConfig(voice=voice, speed=speed)
+    def __init__(self, voice, speed, caption=None):
+        self.config = TTSConfig(voice=voice, speed=speed, caption=caption)
 
 
 def test_legacy_clip_counts_as_old_default(lib, tmp_path):
     clip = _wav(tmp_path / "clip.wav")
     voices.add_voice(str(_wav(tmp_path / "t.wav")), tuning.TTS_VOICE)
     assert audio_step._voice_matches(clip, _Client(tuning.TTS_VOICE, tuning.TTS_SPEED))
-    assert not audio_step._voice_matches(clip, _Client(tuning.TTS_VOICE, 1.0))
+    assert not audio_step._voice_matches(clip, _Client(tuning.TTS_VOICE, tuning.TTS_SPEED + 0.5))
+    assert not audio_step._voice_matches(clip, _Client(tuning.TTS_VOICE, tuning.TTS_SPEED, "明るく"))
+
+
+def test_caption_in_payload_and_settings_override():
+    assert TTSConfig(caption="明るく").to_payload("x")["caption"] == "明るく"
+    assert "caption" not in TTSConfig(caption=None).to_payload("x")
+    assert tts_config_from_settings({"tts": {"caption": "静かに"}}).caption == "静かに"
+    assert tts_config_from_settings({"tts": {"caption": ""}}).caption is None
+    assert tts_config_from_settings({}).caption == (tuning.TTS_CAPTION or None)
 
 
 def test_voice_change_or_new_reference_invalidates(lib, tmp_path):

@@ -29,7 +29,50 @@ _MAX_CUE_WAIT_SECONDS = 20.0
 _CATCH_UP_RANGE = (0.6, 2.5)  # matches overview_timing.MAX_WALK_SPEEDUP's raised cap
 
 
+class _NoticeWriter:
+    """Passes frames to `video`, drawing the stop-by notice over them while
+    it is active, so every write path (walk, holds, batches) shows it."""
+
+    def __init__(self, video: VideoExporter, renderer):
+        self._video = video
+        self._renderer = renderer
+
+    def __getattr__(self, name):
+        return getattr(self._video, name)
+
+    def write(self, frame: np.ndarray) -> None:
+        self._video.write(self._renderer._apply_stopby_notice(frame))
+
+
 class _OverviewAnimationMixin:
+    def _start_stopby_notice(self, fps: int, seconds: float) -> None:
+        """Shows the stop-by notice once per video, from the next frame."""
+        if getattr(self, "_stopby_notice_shown", False):
+            return
+        self._stopby_notice_shown = True
+        self._stopby_notice = {
+            "i": 0,
+            "total": max(1, int(seconds * fps)),
+            "fade": max(1, int(tuning.STOPBY_NOTICE_FADE_SECONDS * fps)),
+        }
+
+    def _stopby_notice_reserved(self, w: int, h: int) -> List[Tuple[int, int, int, int]]:
+        notice = getattr(self, "_stopby_notice", None)
+        return [self.graphics.stopby_notice_box(w, h)] if notice else []
+
+    def _apply_stopby_notice(self, frame: np.ndarray) -> np.ndarray:
+        notice = getattr(self, "_stopby_notice", None)
+        if not notice:
+            return frame
+        i, total, fade = notice["i"], notice["total"], notice["fade"]
+        alpha = max(0.0, min(1.0, (i + 1) / fade, (total - i) / fade))
+        notice["i"] += 1
+        if notice["i"] >= total:
+            self._stopby_notice = None
+        return self.graphics.render_stopby_notice(
+            frame, alpha=alpha, marker_color=self._STOPBY_PIN_COLOR
+        )
+
     def _play_stopby_batch(
         self,
         video: VideoExporter,
@@ -112,14 +155,14 @@ class _OverviewAnimationMixin:
 
         plate = base_frame
         reserved = []
-        # The first batch of the video also explains what these round
-        # markers are (bottom-left ribbon + card, see render_stopby_notice),
-        # fading in and out over the batch; the cards are kept off it.
+        # The first stop-by of the video also explains what these round
+        # markers are (bottom-left ribbon + card, see _start_stopby_notice);
+        # the cards are kept off it.
         notice = not getattr(self, "_stopby_notice_shown", False)
-        self._stopby_notice_shown = True
         if notice:
             reserved.append(self.graphics.stopby_notice_box(w, h))
-            notice_fade = max(1, int(tuning.STOPBY_NOTICE_FADE_SECONDS * fps))
+        else:
+            reserved.extend(self._stopby_notice_reserved(w, h))
         # Every landmark's own reserved box below (after it's shown) needs
         # this regardless of whether the host itself has a card — computed
         # unconditionally so draw_host_card=False (the start pin, or a
@@ -192,6 +235,8 @@ class _OverviewAnimationMixin:
             self._draw_pin(plate, stopby, total_points)
 
         last_frame = plate
+        if not placed:
+            self._start_stopby_notice(fps, tuning.STOPBY_NOTICE_SECONDS)
         if placed:
             base_boxes = {id(hud): hud["beside_box"] for _, hud in placed}
             # One shared timer for the whole group - every card fades in
@@ -211,6 +256,7 @@ class _OverviewAnimationMixin:
                 min_display_seconds=batch_seconds,
             )
             total_frames = bp["total_frames"]
+            self._start_stopby_notice(fps, total_frames / fps)
             for i in range(total_frames):
                 # Drives _popup_fade_alpha/_popup_slide_offset_y's shared
                 # envelope straight off this loop's own progress, so every
@@ -234,12 +280,7 @@ class _OverviewAnimationMixin:
                         frame, hud, alpha=alpha, skip_line=True
                     )
                 frame = self._draw_carried(frame, carried, w, h, route_obstacles, total_points, fps)
-                last_frame = frame  # the notice is not carried past the batch
-                if notice:
-                    fade = min(1.0, (i + 1) / notice_fade, (total_frames - i) / notice_fade)
-                    frame = self.graphics.render_stopby_notice(
-                        frame, alpha=max(0.0, fade), marker_color=self._STOPBY_PIN_COLOR
-                    )
+                last_frame = frame
                 video.write(frame)
 
             # Bake every landmark's pin into the plate so it stays put
@@ -292,6 +333,7 @@ class _OverviewAnimationMixin:
         frame if there's a stop_popup to arrive at, used afterward by the
         recap and the ending highlight's own lead-in zoom. None if there's
         no stop_popup."""
+        video = _NoticeWriter(video, self)
         baked_popups: List[Dict] = []
         path_history = []
         mode_history = []
@@ -658,6 +700,8 @@ class _OverviewAnimationMixin:
                 triggered_popup["data"]["triggered"] = True
                 last_trigger_frame = current_frame
                 route["catch_up"] = True
+                if triggered_popup["data"].get("is_stopby") and not triggered_popup.get("stopby_group"):
+                    self._start_stopby_notice(fps, tuning.STOPBY_NOTICE_SECONDS)
                 if triggered_popup.get("cue_frame") is not None:
                     logger.info(
                         "Overview stop #%s reached at %.1fs (its cue: %.1fs).",
@@ -792,7 +836,7 @@ class _OverviewAnimationMixin:
                     route_obstacles=route_obstacle_arr,
                     reserved_boxes=self._active_card_boxes(
                         baked_popups, exclude=triggered_popup
-                    ),
+                    ) + self._stopby_notice_reserved(w, h),
                 )
                 triggered_popup["hud_corner"] = None
                 triggered_popup["draw_leader_line"] = True
@@ -861,6 +905,9 @@ class _OverviewAnimationMixin:
                         int(triggered_popup.get("cue_wait_frames") or 0),
                         min(max(0, early), int(_MAX_CUE_WAIT_SECONDS * fps)),
                     )
+                    if triggered_popup.get("no_pause"):
+                        early = 0
+                        wait["n"] = 0  # "Pause at Location" off: walk straight on
                     # A stop described until its {go}: wait until the voice
                     # gets there (arriving late shortens the stop, never
                     # makes it run past the {go}).
@@ -1016,7 +1063,7 @@ class _OverviewAnimationMixin:
                             [new_bp], w, h, route_obstacles=route_obstacle_arr,
                             reserved_boxes=self._active_card_boxes(
                                 baked_popups, exclude=triggered_popup
-                            ),
+                            ) + self._stopby_notice_reserved(w, h),
                         )
                         hud_new = triggered_popup.copy()
                         hud_new["hud_corner"] = None

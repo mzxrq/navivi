@@ -11,7 +11,7 @@ from services.logger.progress import tracker as _tracker
 from services.vdoprocessing.videopipeline.attraction_step import (
     generate_waypoint_attraction_video,
 )
-from services.vdoprocessing.videopipeline.audio_step import is_unvisited_stopby
+from services.vdoprocessing.videopipeline.audio_step import is_passed_only, passed_only_reason
 from services.vdoprocessing.videopipeline.helpers import (
     attraction_audio_filename,
     attraction_output_filename,
@@ -80,8 +80,8 @@ def _generate_attraction_video(
         raise ValueError(f"Waypoint {waypoint_index} must be an object")
     if not waypoint.get("popup_image"):
         raise ValueError(f"Waypoint {waypoint_index} has no popup_image")
-    if is_unvisited_stopby(waypoint):
-        raise ValueError(f"Waypoint {waypoint_index} is a stop-by not connected to the route (no attraction clip)")
+    if is_passed_only(waypoint):
+        raise ValueError(f"Waypoint {waypoint_index}: {passed_only_reason(waypoint)} (no attraction clip)")
 
     from services import tuning
     from services.config.job_config import JobConfigManager
@@ -138,12 +138,12 @@ def test_attraction_videos(
     candidates = [
         (index, waypoint)
         for index, waypoint in enumerate(waypoints)
-        if isinstance(waypoint, dict) and waypoint.get("popup_image") and not is_unvisited_stopby(waypoint)
+        if isinstance(waypoint, dict) and waypoint.get("popup_image") and not is_passed_only(waypoint)
     ]
     for index, waypoint in enumerate(waypoints):
-        if is_unvisited_stopby(waypoint):
+        if is_passed_only(waypoint):
             label = waypoint.get("label", f"Waypoint {index + 1}")
-            _tracker.note(f"Skipped attraction video {index + 1}/{len(waypoints)}: {label} (stop-by not connected to the route)")
+            _tracker.note(f"Skipped attraction video {index + 1}/{len(waypoints)}: {label} ({passed_only_reason(waypoint)})")
     results = []
     ComfyUII2VClient().clear_queue()
     try:

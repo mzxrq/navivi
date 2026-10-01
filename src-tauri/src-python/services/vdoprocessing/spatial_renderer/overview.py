@@ -227,8 +227,9 @@ class _OverviewRenderMixin:
 
         duration = self.config.get("duration", 30.0)
         num_frames = max(_MIN_OVERVIEW_FRAMES, int(duration * fps))
-        # the stop-by notice plays with the first stop-by batch of each video
+        # the stop-by notice plays at the first stop-by of each video
         self._stopby_notice_shown = False
+        self._stopby_notice = None
 
         # Cues only: the narration's {start} / {n} / {end} tags (already turned
         # into seconds of the real audio) say when the route sets off and when
@@ -371,7 +372,11 @@ class _OverviewRenderMixin:
             # order 1 for itself, pushing every real numbered waypoint one
             # higher than its actual visit order (the first real stop
             # showing "2" instead of "1").
-            if ap["data"].get("is_stopby") or ap["index"] == 0:
+            ap_data = ap["data"]
+            is_effectively_stopby = ap_data.get("is_stopby") and not (
+                ap_data.get("connect_to_route") and ap_data.get("pause_at_waypoint", True)
+            )
+            if is_effectively_stopby or ap["index"] == 0:
                 # Still gets an "order" key (just not incremented) so it's
                 # never missing when something reads ap["order"] generically
                 # — excluded only from the visible count/numbering itself.
@@ -387,7 +392,11 @@ class _OverviewRenderMixin:
         next_numbered_order = None
         for ap in reversed(active_popups):
             ap["next_numbered_order"] = next_numbered_order
-            if not ap["data"].get("is_stopby") and ap["index"] != 0:
+            ap_data = ap["data"]
+            is_effectively_stopby = ap_data.get("is_stopby") and not (
+                ap_data.get("connect_to_route") and ap_data.get("pause_at_waypoint", True)
+            )
+            if not is_effectively_stopby and ap["index"] != 0:
                 next_numbered_order = ap["order"]
 
         # Which stop-bys ride along with which stop. An unconnected
@@ -556,8 +565,11 @@ class _OverviewRenderMixin:
         wait_tags = {str(t) for t in (self.config.get("overview_cue_wait_tags") or [])}
         wait_frames = int(fps * float(self.config.get("overview_cue_wait_seconds", 2.0)))
         for ap in active_popups:
+            is_effectively_stopby = ap["data"].get("is_stopby") and not (
+                ap["data"].get("connect_to_route") and ap["data"].get("pause_at_waypoint", True)
+            )
             numbered = (
-                ap["index"] != 0 and not ap["data"].get("is_stopby")
+                ap["index"] != 0 and not is_effectively_stopby
                 and (not stop_popup or ap["index"] != stop_popup["index"])
             )
             ap["cue_wait_frames"] = (
@@ -580,6 +592,11 @@ class _OverviewRenderMixin:
                     ap["cue_wait_frames"],
                     int(round(tuning.OVERVIEW_CONNECTED_STOPBY_HOLD_SECONDS * fps)),
                 )
+            # "Pause at Location" off: the walker doesn't stop here for the
+            # description; it walks on while the voice keeps talking.
+            ap["no_pause"] = not ap["data"].get("pause_at_waypoint", True)
+            if ap["no_pause"]:
+                ap["cue_wait_frames"] = 0
 
         # No leg between two waypoints (start and end included) animates for
         # longer than this: a longer one is played faster.
@@ -983,8 +1000,11 @@ class _OverviewRenderMixin:
 
         for ap in active_popups:
             seconds = audio_cues.get(str(ap.get("order")))
+            is_effectively_stopby = ap["data"].get("is_stopby") and not (
+                ap["data"].get("connect_to_route") and ap["data"].get("pause_at_waypoint", True)
+            )
             numbered = (
-                ap["index"] != 0 and not ap["data"].get("is_stopby")
+                ap["index"] != 0 and not is_effectively_stopby
                 and (not stop_popup or ap["index"] != stop_popup["index"])
             )
             ap["cue_frame"] = int(round(seconds * fps)) if numbered and seconds is not None else None
@@ -1002,6 +1022,8 @@ class _OverviewRenderMixin:
                 go_pre = audio_cues.get(f"goPre{next_n}") if next_n is not None else None
                 if go_pre is not None:
                     ap["depart_frame"] = int(round(go_pre * fps))
+            if ap.get("no_pause") and not ap.get("stopby_group"):
+                ap["depart_frame"] = None  # "Pause at Location" off: no hold until {go}
         if preview_recap_only:
             pre_popup_frame = clean_frame
         else:
@@ -1071,6 +1093,18 @@ class _OverviewRenderMixin:
                 "summary hold %.1fs -> %.1fs, last pause %.1fs -> %.1fs.",
                 remaining, planned[0], outro_hold_sec, planned[1], end_pause_sec,
             )
+        # Hold the summary until "…キロの旅でした" ({distance}) is spoken, then
+        # zoom; the highlight's own hold absorbs any voice left after that.
+        distance_cue = audio_cues.get("distance") if audio_cues else None
+        if summary_card is not None and distance_cue is not None:
+            until_distance = distance_cue - video.frames_written / fps
+            zoom_follows = bool(stop_popup and self.config.get("enable_ending_highlight", True))
+            if until_distance > (0 if zoom_follows else outro_hold_sec):
+                logger.info(
+                    "Summary hold %.1fs -> %.1fs to reach the {distance} cue at %.1fs.",
+                    outro_hold_sec, until_distance, distance_cue,
+                )
+                outro_hold_sec = until_distance
         for _ in range(int(outro_hold_sec * fps)):
             video.write(self.last_frame)
 

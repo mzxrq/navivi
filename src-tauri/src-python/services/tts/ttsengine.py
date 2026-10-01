@@ -53,6 +53,7 @@ class TTSConfig:
     voice: str = tuning.TTS_VOICE
     speed: float = tuning.TTS_SPEED
     response_format: Optional[str] = tuning.TTS_RESPONSE_FORMAT
+    caption: Optional[str] = tuning.TTS_CAPTION
     hardware_override: Optional[str] = None
     extra_options: Dict[str, Any] = field(default_factory=dict)
 
@@ -73,6 +74,8 @@ class TTSConfig:
         }
         if self.response_format:
             payload["response_format"] = self.response_format
+        if self.caption:
+            payload["caption"] = self.caption
         if self.extra_options:
             payload["irodori"] = self.extra_options
         return payload
@@ -95,10 +98,13 @@ def tts_config_from_settings(settings: Optional[Dict[str, Any]]) -> TTSConfig:
     if not (tuning.TTS_MIN_SPEED <= speed <= tuning.TTS_MAX_SPEED):
         logger.warning("TTS speed %s out of range; using %s.", speed, tuning.TTS_SPEED)
         speed = tuning.TTS_SPEED
+    caption = tts.get("caption", tuning.TTS_CAPTION)
+    caption = str(caption).strip() if caption else None
     hardware = settings.get("hardware_spec_override")
     return TTSConfig(
         voice=voice,
         speed=speed,
+        caption=caption,
         hardware_override=hardware if hardware in ("low", "high") else None,
     )
 

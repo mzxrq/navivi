@@ -15,7 +15,7 @@ from services.gpsparser.gpscalculator import GPSMath
 from services.logger.progress import tracker
 from services.mapfetcher.mapfetcher import MapFetcher
 from services.vdoprocessing.route2vdo import RouteAnimator
-from services.vdoprocessing.route_inputs import route_inputs_hash
+from services.vdoprocessing.route_inputs import overview_flags_hash, route_inputs_hash
 from services.vdoprocessing.spatial_renderer import SpatialRenderer
 from services.localization.localization import format_waypoint_label
 from services.config.job_config import JobConfigManager
@@ -87,7 +87,8 @@ def overview_pin_glyphs(waypoints: list) -> dict:
     order = 0
     last = len(waypoints) - 1
     for pos, wp in enumerate(waypoints):
-        if wp.get("isStopBy"):
+        # A waypoint skipped in video export is drawn like a stop-by too.
+        if wp.get("isStopBy") or (wp.get("skipAssetGeneration") and 0 < pos < last):
             glyphs[pos] = "・"
             continue
         if pos == 0:
@@ -243,6 +244,7 @@ def _checkpoint_parts(
             continue
         if key == "waypoints" and isinstance(value, list):
             parts["route.waypoints"] = route_inputs_hash(value)
+            parts["route.overview_flags"] = overview_flags_hash(value)
             parts["config.waypoints.count"] = _short_hash(len(value))
             for i, wp in enumerate(value):
                 label = wp.get("label", "") if isinstance(wp, dict) else ""
@@ -277,7 +279,7 @@ def _checkpoint_parts(
 # The route render is reused unless the waypoints' route inputs changed (or
 # an output is missing). Not route.geometry: the app can save a different
 # GPX line for the same waypoints (see route_inputs.py).
-ROUTE_CHECKPOINT_PARTS = ("route.waypoints",)
+ROUTE_CHECKPOINT_PARTS = ("route.waypoints", "route.overview_flags")
 
 
 def _describe_changed_parts(old: dict, new: dict, limit: int = 25) -> str:
@@ -444,7 +446,18 @@ def render_route_video(
         if cached_parts:
             # A manifest from before route.waypoints existed falls back to the line itself.
             keys = ROUTE_CHECKPOINT_PARTS if "route.waypoints" in cached_parts else ("route.geometry",)
-            route_changed = [k for k in keys if cached_parts.get(k) != checkpoint_parts.get(k)]
+            old_parts = dict(cached_parts)
+            # Rendered before the pause toggle was read: every stop paused then.
+            try:
+                with open(project_config_path, "r", encoding="utf-8") as _f:
+                    _wp_count = len(json.load(_f).get("waypoints", []))
+            except (OSError, json.JSONDecodeError):
+                _wp_count = 0
+            old_parts.setdefault(
+                "route.overview_flags",
+                overview_flags_hash([{}] * _wp_count),
+            )
+            route_changed = [k for k in keys if old_parts.get(k) != checkpoint_parts.get(k)]
         else:
             route_changed = [] if cached_key == checkpoint_key else ["(no per-input record)"]
         outputs_ok = bool(cached_paths) and all(output_is_valid(p) for p in cached_paths)
@@ -715,6 +728,7 @@ def render_route_video(
             )
 
             popup_img = wp.get("popup_image")
+            wp_skipped = bool(wp.get("skipAssetGeneration")) and 0 < idx < len(waypoints) - 1
             # This waypoint's own real narration TTS length (audio_step.py's
             # audio_durations, 1:1 aligned with THIS SAME
             # `enumerate(waypoints)`). Stashed on the waypoint dict ITSELF
@@ -770,7 +784,14 @@ def render_route_video(
                 # "・" dot instead of a number) and is skipped entirely by
                 # the OTHER waypoints' sequential numbering — see
                 # spatial_renderer/pins.py's _draw_pin/_pin_color.
-                "is_stopby": bool(wp.get("isStopBy", False)),
+                # A waypoint skipped in video export is drawn and numbered like
+                # a stop-by, but only pops up as the walker passes (is_skipped:
+                # never batched, never stopped at - see popups.py).
+                "is_stopby": bool(wp.get("isStopBy", False) or wp_skipped),
+                "is_skipped": wp_skipped,
+                # The editor's "Pause at Location" (default on): off, the
+                # overview walker doesn't stop here for the description.
+                "pause_at_waypoint": wp.get("pauseAtWaypoint") is not False,
                 # The map editor's stop-by-only "Connect to Route" toggle
                 # (see src/components/ui/ContextMenu.tsx). A CONNECTED
                 # stop-by is one the route actually runs through — the
@@ -783,7 +804,7 @@ def render_route_video(
                 # traveler never actually goes to, and is shown as part
                 # of the previous normal waypoint's stop instead — see
                 # overview.py's _attach_stopby_groups.
-                "connect_to_route": bool(wp.get("connectToRoute", False)),
+                "connect_to_route": bool(wp.get("connectToRoute", False) and not wp_skipped),
                 # This waypoint's own true GPS coordinates — separate from
                 # route_points[c_idx] (the nearest point on the RECORDED
                 # TRACK, used for x/y). A stop-by that's only observed from
@@ -1036,7 +1057,7 @@ def render_route_video(
             stop_positions = [
                 p for p in range(start_pos + 1, min(end_pos, len(waypoints)))
                 if waypoints[p].get("connectToRoute") and waypoints[p].get("isStopBy")
-                and waypoints[p].get("popup_image")
+                and waypoints[p].get("popup_image") and not waypoints[p].get("skipAssetGeneration")
             ]
             piece_targets = stop_positions + [end_pos]
             piece_plans: dict = {}

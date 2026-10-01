@@ -243,12 +243,14 @@ class _CardMixin:
         icon_d = int(26 * s)
         ix = body[0] + int(22 * s)
         iy = body[1] + int(18 * s) + int(body_font.size * 1.45 - icon_d) // 2 + int(4 * s)
-        ring = int(3 * s) + 1
-        d.ellipse([ix - ring, iy - ring, ix + icon_d + ring, iy + icon_d + ring],
-                  fill=(200, 200, 200, 255))
-        d.ellipse([ix - ring + 1, iy - ring + 1, ix + icon_d + ring - 1, iy + icon_d + ring - 1],
-                  fill=(255, 255, 255, 255))
-        d.ellipse([ix, iy, ix + icon_d, iy + icon_d], fill=tuple(reversed(marker_color)) + (255,))
+        # Same look as draw_marker's stop-by circle: ring, white hole, center dot.
+        mc = tuple(reversed(marker_color)) + (255,)
+        cx, cy, r = ix + icon_d / 2, iy + icon_d / 2, icon_d / 2
+        hole = r * 0.65
+        dot = max(1.0, r * 0.12)
+        d.ellipse([ix, iy, ix + icon_d, iy + icon_d], fill=mc)
+        d.ellipse([cx - hole, cy - hole, cx + hole, cy + hole], fill=(255, 255, 255, 255))
+        d.ellipse([cx - dot, cy - dot, cx + dot, cy + dot], fill=mc)
         tx = ix + icon_d + int(14 * s)
         ty = body[1] + int(18 * s) + int(4 * s)
         for line in lines:
