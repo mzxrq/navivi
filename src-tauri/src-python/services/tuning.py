@@ -798,19 +798,17 @@ COMFYUI_MAX_FRAMES = 89  # ~3.7s @ 24fps (was 121 ~5s, then 65 ~2.7s — middle 
 # segment, the attraction clip is built from more segments, each one started
 # from the previous segment's last frame (so the motion carries on instead of
 # the last frame freezing) - see COMFYUI_CHAIN_LAST_FRAME below for how they
-# are actually chained. None (the user's choice): no cap - chain as many
-# segments as it takes to cover the WHOLE narration, so the clip is real Wan
-# motion end to end and slow_move.py's push-in/zoom-out tail
-# (ATTRACTION_CHAIN_TO_FULL_LENGTH below) is never needed. A number caps it
-# at that many segments instead (the remainder falls back to slow_move.py);
-# 1 turns extension off entirely (one Wan segment, then the plain tail).
+# are actually chained. 5 (the user's choice): at most 5 segments per photo
+# (~18.5s of Wan, ~13 min GPU); a longer narration share is filled by
+# slow_move.py's zoom-out after that. None chains to the whole narration
+# (6 segments took ~17 min for one 22s narration); 1 turns extension off.
 # Before last-frame chaining this drifted badly past 2 segments (segments
 # only saw the previous last frame, not the photo, so changes compounded - 4
 # segments turned a painted wall into a van driving in); last-frame chaining
 # colour-matches the handed-on frame back to the photo every time
 # (COMFYUI_CHAIN_COLOR_MATCH), which is what makes chaining to full length
 # safe to leave uncapped.
-COMFYUI_EXTEND_MAX_SEGMENTS: Optional[int] = None
+COMFYUI_EXTEND_MAX_SEGMENTS: Optional[int] = 5
 # HOW the segments are chained.
 # True ("last frame" chaining): each segment is its own ComfyUI job, started
 # from a real PNG of the previous segment's last frame - so that frame can be
@@ -827,12 +825,11 @@ COMFYUI_CHAIN_LAST_FRAME = True
 # Colour-match a chained frame to the photo before the next segment starts
 # from it (see color_match.py, the same pass the finished clip gets).
 COMFYUI_CHAIN_COLOR_MATCH = True
-# When segments now chain to the full narration length (COMFYUI_EXTEND_MAX_SEGMENTS
-# = None), the generated clip already reaches the narration's end on its own,
-# so img2vdo.py skips slow_move.py's push-in/zoom-out tail entirely (the user's
-# choice: chain, don't zoom out) - a moving preset falls through to the plain
-# last-frame freeze if there's still a small gap. False restores the old
-# behaviour (slow_move fills whatever a capped/single segment doesn't reach).
+# With an uncapped chain (COMFYUI_EXTEND_MAX_SEGMENTS = None) the clip reaches
+# the narration's end on its own, so slow_move.py's tail is skipped and a
+# small gap gets the plain last-frame freeze. With a cap, a gap over 1s left
+# by the cap is still filled by slow_move. False: slow_move fills any gap
+# over 1s regardless.
 ATTRACTION_CHAIN_TO_FULL_LENGTH = True
 # After the Wan motion runs out, a moving preset's clip continues as a slow
 # push-in/drift over its last frame (vdoprocessing/slow_move.py) instead of
