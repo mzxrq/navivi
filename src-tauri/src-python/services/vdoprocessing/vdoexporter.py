@@ -956,7 +956,8 @@ class VideoExporter:
             alignment=5,  # old-SSA top-left — see SubtitleStyle.alignment's note
             outline=tuning.ATTRACTION_LABEL_OUTLINE,
             shadow=1.0,
-            margin_v=tuning.ATTRACTION_LABEL_MARGIN,
+            margin_v=tuning.ATTRACTION_LABEL_MARGIN_TOP,
+            margin_l=tuning.ATTRACTION_LABEL_MARGIN_LEFT,
         )
 
         srt_path = out_path.parent / f".label_{uuid.uuid4().hex[:8]}.srt"
@@ -1085,7 +1086,8 @@ class VideoExporter:
                 alignment=5,  # old-SSA top-left — see SubtitleStyle.alignment's note
                 outline=tuning.ATTRACTION_LABEL_OUTLINE,
                 shadow=1.0,
-                margin_v=tuning.ATTRACTION_LABEL_MARGIN,
+                margin_v=tuning.ATTRACTION_LABEL_MARGIN_TOP,
+                margin_l=tuning.ATTRACTION_LABEL_MARGIN_LEFT,
             )
             srt_path = out_path.parent / f".label_{uuid.uuid4().hex[:8]}.srt"
             end_ts = VideoExporter._format_srt_timestamp(output_duration)

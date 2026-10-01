@@ -210,3 +210,11 @@ class TestMasterSubtitleAssembler:
 
     def test_assemble_empty_input_returns_empty(self):
         assert MasterSubtitleAssembler.assemble([], []) == []
+
+
+def test_bracket_tags_are_left_out_of_subtitles():
+    from services.localization.subtitle import SubtitleBuilder
+
+    cues = SubtitleBuilder.build("[明るく] 皆さん、[whispers]こんにちは！【笑】「三輪神社」です。", 6.0, [])
+    text = "".join(c.text for c in cues)
+    assert text == "皆さん、こんにちは！「三輪神社」です。"

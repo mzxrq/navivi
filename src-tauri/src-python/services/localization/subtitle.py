@@ -12,7 +12,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from services.logger.logger import setup_logger
 
@@ -54,16 +54,18 @@ class SubtitleStyle:
     # centered title needed 10, not 5, to actually land center-screen.
     alignment: int = 2  # bottom-center
     margin_v: int = 10  # vertical margin from frame edge, px
+    margin_l: Optional[int] = None  # left margin; None keeps libass's default
 
     def to_force_style(self) -> str:
         """Serializes to the comma-separated key=value string libass expects."""
         bold_flag = -1 if self.bold else 0  # ASS uses -1 for True, 0 for False
+        margin_l = f",MarginL={self.margin_l}" if self.margin_l is not None else ""
         return (
             f"FontName={self.font_name},FontSize={self.font_size},"
             f"PrimaryColour={self.primary_color},OutlineColour={self.outline_color},"
             f"BackColour={self.back_color},Bold={bold_flag},BorderStyle={self.border_style},"
             f"Outline={self.outline},Shadow={self.shadow},Alignment={self.alignment},"
-            f"MarginV={self.margin_v}"
+            f"MarginV={self.margin_v}{margin_l}"
         )
 
 
@@ -242,6 +244,14 @@ class SpeakingTimelineMapper:
         return results
 
 
+# Bracketed TTS performance tags ("[whispers]", "【笑】") are spoken as style, not text.
+_BRACKET_TAG = re.compile(r"\s*[\[［【][^\]］】]*[\]］】]\s*")
+
+
+def strip_bracket_tags(text: str) -> str:
+    return _BRACKET_TAG.sub("", text or "")
+
+
 # [Subtitle] SubtitleBuilder: builds timed SubtitleCue list from raw text + pause analysis
 class SubtitleBuilder:
     """Facade: raw narration text + audio analysis -> timed SubtitleCue list."""
@@ -255,7 +265,7 @@ class SubtitleBuilder:
         max_chars_per_line: int = 20,
         max_lines: int = 2,
     ) -> List[SubtitleCue]:
-        clauses = TextSegmenter.split_clauses(text)
+        clauses = TextSegmenter.split_clauses(strip_bracket_tags(text))
         if not clauses:
             return []
 
