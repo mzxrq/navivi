@@ -79,6 +79,54 @@ def _resolve(path: Optional[str]) -> Optional[str]:
     return str(Path(path).resolve()) if path else None
 
 
+_SRT_TIME_RE = re.compile(r"(\d+):(\d+):(\d+)[,.](\d+)\s*-->\s*(\d+):(\d+):(\d+)[,.](\d+)")
+# Matches the editor's MIN_SEGMENT (src/features/editor/model.ts).
+_MIN_SEGMENT = 0.5
+
+
+def _read_srt(path: Optional[str]) -> list[dict]:
+    """[{start, end, text}] from an .srt file; [] if missing or unreadable."""
+    if not path:
+        return []
+    try:
+        raw = Path(path).read_text(encoding="utf-8-sig")
+    except OSError:
+        return []
+    cues = []
+    for block in re.split(r"\n\s*\n", raw.replace("\r", "").strip()):
+        lines = block.split("\n")
+        for i, line in enumerate(lines):
+            m = _SRT_TIME_RE.search(line)
+            if not m:
+                continue
+            g = [int(x) for x in m.groups()]
+            start = g[0] * 3600 + g[1] * 60 + g[2] + g[3] / 1000
+            end = g[4] * 3600 + g[5] * 60 + g[6] + g[7] / 1000
+            text = "\n".join(lines[i + 1:]).strip()
+            if text:
+                cues.append({"start": round(start, 3), "end": round(end, 3), "text": text})
+            break
+    return cues
+
+
+def _duration(path: Optional[str]) -> float:
+    if not path:
+        return 0.0
+    from services.tts.ttsengine import FFmpegManager
+
+    try:
+        return float(FFmpegManager.get_media_duration(path))
+    except Exception as exc:
+        logger.warning("Could not probe %s for subtitle timing: %s", path, exc)
+        return 0.0
+
+
+def _clip_length(video: Optional[str], audio: Optional[str], audio_offset: float) -> float:
+    """Clip length as the editor and exporter lay it out: video, held for the narration."""
+    narration = audio_offset + _duration(audio) if audio else 0.0
+    return max(_MIN_SEGMENT, _duration(video), narration)
+
+
 def build_timeline(
     video_paths: list[str],
     attraction_videos: list[str],
@@ -267,6 +315,8 @@ def build_timeline(
         ordered.append(("route", name, path))
 
     tracks = []
+    all_cues = []
+    clip_start = 0.0
     for order, (kind, source_or_name, burned) in enumerate(ordered):
         source_name = Path(source_or_name).name
         if kind == "route":
@@ -288,6 +338,23 @@ def build_timeline(
             sidecar = original_sound_path(str(source_or_name))
             extra_audio = _resolve(str(sidecar)) if sidecar.exists() else None
 
+        # Seconds the narration starts into the clip (a leg's opening
+        # before the walker moves) - applied at export; 0 otherwise.
+        audio_offset = read_audio_offset(source_or_name) if audio_path and kind == "route" else 0.0
+        length = _clip_length(burned, audio_path, audio_offset)
+        # Cues relative to the clip (narration offset applied), not burned in.
+        clip_cues = []
+        for cue in _read_srt(subtitle_path):
+            start = min(cue["start"] + audio_offset, length)
+            end = min(cue["end"] + audio_offset, length)
+            if end - start >= 0.05:
+                clip_cues.append({"start": round(start, 3), "end": round(end, 3), "text": cue["text"]})
+        all_cues.extend(
+            {"start": round(clip_start + c["start"], 3), "end": round(clip_start + c["end"], 3), "text": c["text"]}
+            for c in clip_cues
+        )
+        clip_start += length
+
         tracks.append(
             {
                 "order": order,
@@ -296,10 +363,9 @@ def build_timeline(
                 "clip_name": Path(burned).stem,
                 "file_path": _resolve(burned),
                 "audio_path": _resolve(audio_path),
-                # Seconds the narration starts into the clip (a leg's opening
-                # before the walker moves) - applied at export; 0 otherwise.
-                "audio_offset": read_audio_offset(source_or_name) if audio_path and kind == "route" else 0.0,
+                "audio_offset": audio_offset,
                 "subtitle_path": _resolve(subtitle_path),
+                "subtitles": clip_cues,
             }
         )
 
@@ -317,7 +383,14 @@ def build_timeline(
             ):
                 tracks[k]["fade_into_next_seconds"] = attraction_fade_seconds
 
-    timeline_data = {"video_tracks": tracks}
+    # Whole-video cues for the editor/exporter. Never burned from here: clips are
+    # already burned when settings.burn_subtitles is on, so this stays off.
+    timeline_data = {
+        "total_duration_seconds": round(clip_start, 3),
+        "video_tracks": tracks,
+        "subtitles": all_cues,
+        "burn_subtitles": False,
+    }
 
     output_path = Path(timeline_path) if timeline_path else Path(project_dir) / "timeline.json"
     output_path.parent.mkdir(parents=True, exist_ok=True)

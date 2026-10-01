@@ -766,7 +766,9 @@ COMFYUI_UNET_NAME = "Wan2_2-TI2V-5B-Turbo-Q4_K_M.gguf"
 COMFYUI_VAE_TILE_SIZE = 512
 COMFYUI_VAE_TILE_OVERLAP = 64
 COMFYUI_VAE_TEMPORAL_SIZE = 32
-COMFYUI_VAE_TEMPORAL_OVERLAP = 8
+# 16, not 8: at 8 each new frame chunk decoded brighter (steps at frames
+# 24/48/72); 16 blends them away for ~+0.5 GB VRAM (peak still 7.2 GB).
+COMFYUI_VAE_TEMPORAL_OVERLAP = 16
 COMFYUI_CLIP_NAME = "umt5_xxl_fp8_e4m3fn_scaled.safetensors"
 COMFYUI_VAE_NAME = "wan2.2_vae.safetensors"
 # 1280x704 fits comfortably in an 8GB VRAM budget at this quant (see
@@ -861,7 +863,9 @@ ATTRACTION_SLOW_MOVE_MAX_ZOOM_OUT = 0.12
 # with the correction averaged over this many seconds so it can't flicker.
 ATTRACTION_COLOR_MATCH = True
 ATTRACTION_COLOR_MATCH_STRENGTH = 1.0
-ATTRACTION_COLOR_MATCH_SMOOTH_SECONDS = 1.0
+# 0.25, not 1.0: a 1 s window couldn't follow Wan's ~0.5 s exposure ramp or the
+# VAE decode's chunk steps (every 24 frames), leaving a visible brightness wave.
+ATTRACTION_COLOR_MATCH_SMOOTH_SECONDS = 0.25
 # Wan2.2's standard (Chinese) negative prompt, then additions:
 # - no duplicated props: duplicated/repeated objects, copy-pasted or mirrored
 #   elements, the same object appearing twice, cloned people, objects
@@ -901,6 +905,7 @@ COMFYUI_NEGATIVE_PROMPT = (
     # 3. Lighting and Image Quality Control
     "曝光过度, 欠曝, 死白, 死黑, 频闪, 忽明忽暗, 曝光不稳定, 闪烁的光线, 光源跳动, "
     "刺目的对比, 违背物理的光线, 异常反光, 调色, 滤镜, 饱和度过高, 色偏, 整体发灰, "
+    "自动曝光, 曝光渐变, 画面逐渐变亮, 画面逐渐变暗, 天空过曝, HDR效果, "
     
     # 4. Fundamental Flaws and Style
     "文字扭曲, 乱码文字, 标志变形, 路标扭曲, 细节模糊不清, JPEG压缩残留, 最差质量, 低质量, "
@@ -912,7 +917,8 @@ COMFYUI_NEGATIVE_PROMPT = (
 # no "legible text" - that invites Wan to draw new text.
 _COMFYUI_SCENE_LOCK = (
     "deserted empty scenery, no people, no vehicles, nothing in the foreground, "
-    "same scene throughout, colors and lighting identical to the photo, "
+    "same scene throughout, locked manual exposure and white balance, "
+    "brightness constant from first frame to last, colors and lighting identical to the photo, "
     "existing signs and buildings unchanged, realistic cinematic footage"
 )
 # Maps attraction_step.py's camera_pans vocabulary (also used by

@@ -347,6 +347,7 @@ export async function timelineFromPipeline(
   const startOf = new Map(legacy.map((c) => [c.id, c.startTime ?? 0]));
 
   const segments: Segment[] = [];
+  const subtitles: SubtitleCue[] = [];
   for (const t of tracks) {
     if (!t.file_path || t.type === "static_popup") continue;
     let audio: string | undefined = t.audio_path || undefined;
@@ -374,6 +375,14 @@ export async function timelineFromPipeline(
       muted: !!t.muted,
       fadeIntoNext: Number(t.fade_into_next_seconds) || 0,
     });
+    // The pipeline's cues, already relative to the clip.
+    const seg = segments[segments.length - 1];
+    const limit = segmentLength(seg);
+    for (const c of Array.isArray(t.subtitles) ? t.subtitles : []) {
+      const start = Math.min(Number(c.start) || 0, Math.max(0, limit - MIN_CUE));
+      const end = Math.min(limit, Number(c.end) || 0);
+      if (c.text && end - start >= 0.05) subtitles.push({ id: newId(), segmentId: seg.id, start, end, text: String(c.text) });
+    }
   }
-  return { ...emptyTimeline(), segments };
+  return { ...emptyTimeline(), segments, subtitles, burnSubtitles: raw?.burn_subtitles ?? emptyTimeline().burnSubtitles };
 }

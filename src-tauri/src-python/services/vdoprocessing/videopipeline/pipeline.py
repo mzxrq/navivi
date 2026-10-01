@@ -152,8 +152,9 @@ def run_full_pipeline(
         subtitle_paths = build_subtitles(
             waypoints, audio_data.get("audio_paths", []), str(subtitle_dir), force=force_regenerate
         )
+        # Re-read: TTS restores overview_narration on disk after job_config was loaded.
         overview_subtitle_path = build_overview_subtitle(
-            job_config.data,
+            JobConfigManager(config_file_path).data,
             audio_data.get("overview_audio_path"),
             str(subtitle_dir),
             force=force_regenerate,
