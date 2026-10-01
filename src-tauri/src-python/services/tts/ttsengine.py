@@ -28,6 +28,7 @@ import logging
 from typing import Final, Optional, Tuple, List, Dict, Any
 
 from services import tuning
+from services.tts.artifacts import remove_stray_bursts
 from services.localization.subtitle import SubtitleStyle
 from services.logger.logger import setup_logger
 
@@ -598,6 +599,7 @@ class IrodoriTTSClient:
             audio_content = await self.call_api(text)
             with open(file_path, "wb") as f:
                 f.write(audio_content)
+            remove_stray_bursts(str(file_path))
             return str(file_path)
 
         logger.info("TTS text of %d characters split into %d chunk(s).", len(text), len(chunks))
@@ -634,6 +636,7 @@ class IrodoriTTSClient:
                     interleaved.append(gap_path)
 
             processor.concatenate_files(interleaved, str(file_path))
+            remove_stray_bursts(str(file_path))
         finally:
             for p in parts + gaps:
                 Path(p).unlink(missing_ok=True)
