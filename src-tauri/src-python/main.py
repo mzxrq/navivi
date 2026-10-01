@@ -77,14 +77,18 @@ if __name__ == "__main__":
         # its pykakasi-derived hiragana reading.  Used by the frontend
         # Pronunciation Dictionary to auto-fill readings for detected kanji.
         if command_arg == "get_furigana":
-            import pykakasi
+            from services.localization.japanese_words import reading_of
             words = json.loads(sys.argv[2]) if len(sys.argv) > 2 else []
-            kks = pykakasi.kakasi()
-            readings = {}
-            for word in words:
-                items = kks.convert(word)
-                readings[word] = "".join(item["hira"] for item in items)
+            readings = {word: reading_of(word) or "" for word in words}
             print(json.dumps({"success": True, "readings": readings}, ensure_ascii=False))
+            sys.exit(0)
+
+        # Words with kanji in a script (whole words, not single kanji), each with its reading.
+        # argv[2] is the script text itself.
+        if command_arg == "extract_words":
+            from services.localization.japanese_words import analyze_words
+            text = sys.argv[2] if len(sys.argv) > 2 else ""
+            print(json.dumps({"success": True, "words": analyze_words(text)}, ensure_ascii=False))
             sys.exit(0)
 
         # Voice library (list/add/delete/preview): argv[2] is a JSON payload,
@@ -93,6 +97,13 @@ if __name__ == "__main__":
         if command_arg in VOICE_ACTIONS:
             payload = json.loads(sys.argv[2]) if len(sys.argv) > 2 and sys.argv[2].strip() else {}
             print(json.dumps(run_voice_action(command_arg, payload), ensure_ascii=False))
+            sys.exit(0)
+
+        if command_arg == "estimate":
+            from services.render_estimate import estimate
+
+            config = json.loads(Path(sys.argv[2]).read_text(encoding="utf-8"))
+            print(json.dumps(estimate(config)))
             sys.exit(0)
 
         if command_arg == "full_pipeline":

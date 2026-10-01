@@ -17,12 +17,13 @@ export const fileSystem = {
     },
 };
 
+// App-wide pronunciation words (app settings database); saved into every project as settings.global_pronunciation_dictionary.
+export const GLOBAL_DICTIONARY_KEY = "pronunciation_dictionary";
+
 export const mapDefaults = {
     startCoords: [34.6937, 135.5023] as [number, number],
     zoomLevel: 10,
     maxImagesPerWaypoint: 3,
-    maxWaypoints: 30,
-    maxRouteDistanceKm: 50,
 };
 
 export const apiEndpoints = {

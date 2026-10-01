@@ -12,10 +12,17 @@ const toneStyles = {
 
 const DURATION_MS = { error: 7000, default: 3700 };
 
-function ToastItem({ toast, hideToast }: { toast: any; hideToast: (id: string) => void }) {
+function ToastItem({
+  toast,
+  hideToast,
+}: {
+  toast: any;
+  hideToast: (id: string) => void;
+}) {
   const [isExiting, setIsExiting] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const tone = toneStyles[toast.type as keyof typeof toneStyles] ?? toneStyles.info;
+  const tone =
+    toneStyles[toast.type as keyof typeof toneStyles] ?? toneStyles.info;
   const Icon = tone.icon;
 
   const triggerExit = () => {
@@ -45,7 +52,7 @@ function ToastItem({ toast, hideToast }: { toast: any; hideToast: (id: string) =
       role={toast.type === "error" ? "alert" : "status"}
       onMouseEnter={stopTimer}
       onMouseLeave={startTimer}
-      className={`flex items-start gap-2.5 w-80 max-w-[calc(100vw-1.5rem)] pl-3 pr-1.5 py-2.5 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 shadow-lg pointer-events-auto ${
+      className={`flex items-start gap-2.5 w-80 max-w-[calc(100vw-1.5rem)] pl-3 pr-1.5 py-2.5 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 shadow-lg pointer-events-auto select-none ${
         isExiting
           ? "animate-out fade-out slide-out-to-right-4 duration-200"
           : "animate-in fade-in slide-in-from-bottom-2 duration-200"

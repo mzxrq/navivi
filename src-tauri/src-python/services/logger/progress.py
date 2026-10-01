@@ -11,7 +11,7 @@ progress mechanism per module.
 
 import sys
 import time
-from typing import Optional
+from typing import Callable, Optional
 
 
 class StepTracker:
@@ -37,6 +37,7 @@ class StepTracker:
         self._stage_total = 0
         self._substep_total = 0
         self._substep_start = 0.0
+        self.on_stage: Optional[Callable[[int], None]] = None
 
     def elapsed(self) -> str:
         secs = int(time.monotonic() - self._start)
@@ -53,6 +54,8 @@ class StepTracker:
         if total is not None:
             self._stage_total = total
         self._stage_num += 1
+        if self.on_stage:
+            self.on_stage(self._stage_num)
         self.show(name)
 
     def begin_substeps(self, total: int) -> None:

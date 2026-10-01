@@ -77,7 +77,7 @@ class JobConfigManager:
     # Keys whose values are file paths, resolved on load so everything
     # downstream can keep treating them as plain absolute paths.
     _PATH_KEYS_TOP: Final = ("thumbnail_path",)
-    _PATH_KEYS_WAYPOINT: Final = ("images", "popup_image", "popup_video", "customMarker")
+    _PATH_KEYS_WAYPOINT: Final = ("images", "popup_image", "popup_video", "videos", "customMarker")
 
     def _resolve_relative_paths(self) -> None:
         """Rewrites every relative path in the loaded config to an absolute

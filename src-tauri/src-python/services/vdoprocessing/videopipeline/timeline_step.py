@@ -280,9 +280,19 @@ def build_timeline(
         else:
             audio_path, subtitle_path = _attraction_audio(source_name)
 
+        # The user's own footage keeps its sound beside the clip when they asked for it.
+        extra_audio = None
+        if kind == "attraction":
+            from services.vdoprocessing.user_videos import original_sound_path
+
+            sidecar = original_sound_path(str(source_or_name))
+            extra_audio = _resolve(str(sidecar)) if sidecar.exists() else None
+
         tracks.append(
             {
                 "order": order,
+                "extra_audio_path": extra_audio,
+                "extra_audio_volume": 0.5 if extra_audio else None,
                 "clip_name": Path(burned).stem,
                 "file_path": _resolve(burned),
                 "audio_path": _resolve(audio_path),

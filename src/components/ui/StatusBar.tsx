@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef } from "react";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { useUI } from "../../hooks/useUI";
+import { layout } from "../../features/editor/model";
+import { useRenderEstimate } from "../../hooks/useRenderEstimate";
+import { formatDuration } from "../../services/renderEstimate";
 import { useAnimatedUnmount } from "../../hooks/useAnimatedUnmount";
 import {
   History,
@@ -77,7 +80,12 @@ export function StatusBar() {
     restoreVersion,
     deleteVersion,
   } = useWorkspace();
-  const { editorMode, notifications, clearNotifications } = useUI();
+  const { editorMode, notifications, clearNotifications, isRendering } = useUI();
+  const estimate = useRenderEstimate(
+    metadata.directory_path,
+    editorMode === "map" && !isDirty && !isRendering,
+    waypoints.length,
+  );
 
   // Popup States
   const [showNotifications, setShowNotifications] = useState(false);
@@ -129,11 +137,8 @@ export function StatusBar() {
   }, [showNotifications]);
 
   // ✨ TIMELINE STATS
-  const totalDuration = timeline.clips.reduce((max, clip) => {
-    const end = clip.startTime + clip.duration;
-    return end > max ? end : max;
-  }, 0);
-  const totalClips = timeline.clips.length;
+  const totalDuration = layout(timeline).total;
+  const totalClips = timeline.segments.length;
 
   // ✨ MAP STATS & REALISTIC ESTIMATION
   // Count how many waypoints actually have user-added images or scripts
@@ -143,9 +148,6 @@ export function StatusBar() {
       wp.arrivingNarration ||
       wp.attractionNarration,
   ).length;
-
-  // Estimate: Base 2 mins for setup/routing + ~1.5 mins per waypoint for AI voice/GLSL/FFmpeg
-  const estRenderMinutes = Math.max(1, Math.ceil(waypoints.length * 1.5 + 2));
 
   const toggleNotifications = () => {
     setShowNotifications(!showNotifications);
@@ -226,7 +228,7 @@ export function StatusBar() {
               icon={Clock}
               title={t`Estimated time for the Python backend to synthesize AI voiceovers and encode the video`}
             >
-              {t`~${estRenderMinutes} min to render`}
+              {estimate ? t`~${formatDuration(estimate.total_seconds)} to render` : t`Estimating render time…`}
             </Stat>
           </>
         ) : (
@@ -234,8 +236,8 @@ export function StatusBar() {
             <Stat icon={Clock} title={t`Total video duration`}>
               <span className="tabular-nums">{totalDuration.toFixed(1)}s</span>
             </Stat>
-            <Stat icon={Layers} title={t`Total tracks in the timeline`}>
-              {t`${timeline.tracks.length} tracks`}
+            <Stat icon={Layers} title={t`Subtitle lines in the timeline`}>
+              {t`${timeline.subtitles.length} subtitles`}
             </Stat>
             <Stat icon={Film} title={t`Total individual clips`}>
               {t`${totalClips} clips`}

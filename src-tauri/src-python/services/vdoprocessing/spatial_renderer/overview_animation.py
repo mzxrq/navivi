@@ -526,12 +526,16 @@ class _OverviewAnimationMixin:
 
             path_history.append((int(path_point[0]), int(path_point[1])))
 
+            leg_color = None
             if cum_smooth_dist is not None:
                 frac = cum_smooth_dist[current_frame] / total_smooth_dist
                 current_mode = self._mode_at_fraction(mode_breakpoints, frac)
+                color_breakpoints = getattr(self, "_color_breakpoints", None)
+                if color_breakpoints:
+                    leg_color = self._mode_at_fraction(color_breakpoints, frac)
             else:
                 current_mode = "walking"
-            mode_history.append(current_mode)
+            mode_history.append((current_mode, leg_color) if leg_color else current_mode)
 
             if not is_video:
                 self.graphics.draw_path(frame, path_history, mode_history)

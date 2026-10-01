@@ -1,4 +1,5 @@
 import type { Dispatch, SetStateAction, } from "react";
+import type { TimelineData } from "../features/editor/model";
 
 export type RouteMode = "driving" | "walking" | "direct" | "curve" | "ferry" | "calculating" | "draw";
 export type TrackKind = "video" | "overlay" | "subtitle" | "audio";
@@ -6,6 +7,7 @@ export type ClipKind = "video" | "audio" | "image" | "text" | "subtitle";
 
 export interface Waypoint {
   id: string;
+  lineColor?: [number, number, number];
   lat: number;
   lng: number;
   name: string;
@@ -13,6 +15,8 @@ export interface Waypoint {
   images?: string[];
   imageDisplay?: "pip" | "fullscreen";
   imagePans?: string[];
+  videos?: string[];
+  videoSound?: boolean[];
   imageTransitions?: string[];
   arrivingNarration?: string;
   attractionNarration?: string;
@@ -28,7 +32,6 @@ export interface Waypoint {
   isStub?: boolean;
   pauseAtWaypoint?: boolean;
   generatingScriptType?: "arriving" | "attraction" | null;
-  markers?: WaypointTimelineMarker[];
   isStopBy?: boolean;
   drawStyle?: "linear" | "spline";
   viaPoints?: [number, number][]; // intermediate routing nudge points for the outgoing leg
@@ -84,6 +87,12 @@ export interface ProjectSettings {
   marked_regeneration_waypoints?: string[];
   ai_features_enabled?: boolean;
   pronunciation_dictionary?: Array<{ word: string; reading: string }>;
+  tts?: { voice?: string; speed?: number };
+  global_pronunciation_dictionary?: Array<{ word: string; reading: string }>;
+  enable_attraction_videos?: boolean;
+  burn_subtitles?: boolean;
+  use_narration_cues?: boolean;
+  attraction_fade_seconds?: number;
 }
 
 export interface ProjectMetadata {
@@ -111,142 +120,7 @@ export interface RecentProjects {
   thumbnailPath?: string;
 }
 
-export interface TimelineTrack {
-  id: string;
-  name: string;
-  type: TrackKind;
-  orderIndex: number;
-  isHidden?: boolean;
-  isMuted?: boolean;
-  isLocked?: boolean;
-  volume?: number;
-  audioRole?: "voice" | "music" | "sfx";
-  duckingEnabled?: boolean;
-  duckingAmount?: number;
-}
-
-export interface ClipData {
-  id: string;
-  trackId: string;
-  label: string;
-  startTime: number;
-  duration: number;
-  sourceDuration?: number;
-  source?: string;
-  sourceOffset?: number;
-
-  type?: ClipKind;
-  groupId?: string;
-
-  x?: number;
-  y?: number;
-  scaleX?: number;
-  scaleY?: number;
-  rotation?: number;
-
-  text?: string;
-  fontSize?: number;
-  color?: string;
-  fontFamily?: string;
-  stroke?: string;
-  strokeWidth?: number;
-  shadowColor?: string;
-  shadowBlur?: number;
-  shadowOffsetX?: number;
-  shadowOffsetY?: number;
-  karaoke?: boolean;
-  karaokeHighlightColor?: string;
-
-  volume?: number;
-  isMuted?: boolean;
-  audioRole?: "voice" | "music" | "sfx";
-  ducking?: boolean;
-  duckingAmount?: number;
-
-  fadeIn?: number;
-  fadeOut?: number;
-  transitionIn?: any;
-  transitionOut?: any;
-  prevClip?: ClipData;
-  effects?: {
-    brightness?: number;
-    contrast?: number;
-    saturation?: number;
-  };
-  style?: {
-    fontFamily?: string;
-    fontSize?: number;
-    color?: string;
-    stroke?: string;
-    strokeWidth?: number;
-    shadowColor?: string;
-    shadowBlur?: number;
-    shadowOffsetX?: number;
-    shadowOffsetY?: number;
-    karaoke?: boolean;
-    karaokeHighlightColor?: string;
-    [key: string]: any;
-  };
-}
-
-export interface AudioWaveformProps {
-  src: string;
-  width: number;
-  height: number;
-  duration?: number;
-  sourceOffset?: number;
-  volume?: number;
-  color?: string;
-}
-
-export interface TimelineTransition {
-  id: string;
-  trackId: string;
-  fromClipId: string;
-  toClipId: string;
-  type: string;
-  startTime: number;
-  duration: number;
-}
-
-export interface TimelineData {
-  tracks: TimelineTrack[];
-  clips: ClipData[];
-  transitions: TimelineTransition[];
-  zoomMultiplier: number;
-  markers?: WaypointTimelineMarker[];
-}
-
-export interface WaypointTimelineMarker {
-  id: string;
-  name: string;
-  time: number;
-  index: number;
-  waypointId?: string;
-  color?: string;
-}
-
-export interface ManifestClip {
-  file_path: string;
-
-  // Written by the frontend's OWN pre-render manifest (compileTimelineManifest
-  // in services/fileSystem.ts)  Ea snapshot of the in-editor timeline state.
-  clip_id?: string;
-  duration?: number;
-  type?: string;
-
-  // Written by the PYTHON pipeline's timeline_step.build_timeline, which
-  // overwrites this same timeline.json after a full render completes.
-  // Video and audio are kept as separate files/tracks (never muxed) all
-  // the way through the pipeline specifically so this editor can display
-  // and edit them independently  Efile_path is always a SILENT video
-  // clip; audio_path is its own separate narration track, muxed onto the
-  // video only at final export (VideoExporter.concat_from_timeline).
-  order?: number;
-  clip_name?: string;
-  audio_path?: string | null;
-  subtitle_path?: string | null;
-}
+export type { TimelineData, Segment, SubtitleCue, MusicBed } from "../features/editor/model";
 
 export type AspectRatioType = "16:9" | "9:16";
 
@@ -266,40 +140,6 @@ export interface RenderSettings {
   bitrateKbps: number;
   qualityId: string;
   skipRichMedia?: boolean;
-}
-
-export interface ExportManifestPayload {
-  projectName: string;
-  aspectRatio: AspectRatioType;
-  resolution: { width: number; height: number };
-  fps: number;
-  bitrateKbps: number;
-  totalDuration: number;
-  tracks: TimelineTrack[];
-  clips: ClipData[];
-  transitions: any[];
-  markers: WaypointTimelineMarker[];
-  exportedAt: string;
-  renderSettings?: RenderSettings;
-}
-
-export interface TimelineManifest {
-  project_name: string;
-  total_duration_seconds: number;
-  video_tracks: ManifestClip[];
-  audio_track?: string;
-  ui_state?: TimelineData;
-  render_settings?: RenderSettings;
-  aspect_ratio?: AspectRatioType;
-  resolution?: { width: number; height: number };
-  fps?: number;
-  bitrate_kbps?: number;
-  skip_rich_media?: boolean;
-  tracks?: TimelineTrack[];
-  clips?: ClipData[];
-  transitions?: any[];
-  markers?: WaypointTimelineMarker[];
-  exported_at?: string;
 }
 
 export interface ProjectVersion {
@@ -337,9 +177,8 @@ export interface WorkspaceState {
   canRedoMap: boolean;
   // Timeline History (2026-08-26 15:52:49)
   timeline: TimelineData;
-  setTimeline: (data: TimelineData) => void;
+  setTimeline: (action: SetStateAction<TimelineData>) => void;
   autoLoadTimeline: (projectDir: string) => Promise<void>;
-  updateClip: (id: string, startTime: number, duration: number) => void;
   undoTimeline: () => void;
   redoTimeline: () => void;
   canUndoTimeline: boolean;

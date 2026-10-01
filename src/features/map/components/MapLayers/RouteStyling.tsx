@@ -2,28 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { useWorkspace } from "../../../../hooks/useWorkspace";
 import { Palette, X } from "../../../../components/ui/icons";
 import { Switch } from "../../../../components/ui/Switch";
+import { ColorSwatches, RGB, rgbToHex } from "../../../../components/ui/ColorSwatches";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
-
-const PRESET_COLORS = [
-  "#3b82f6", // Blue
-  "#ef4444", // Red
-  "#10b981", // Green
-  "#f59e0b", // Orange
-  "#8b5cf6", // Purple
-  "#ec4899", // Pink
-  "#ffffff", // White
-  "#000000", // Black
-];
-
-const rgbToHex = (rgb: [number, number, number]) =>
-  "#" + rgb.map((x) => Math.round(x).toString(16).padStart(2, "0")).join("");
-
-const hexToRgb = (hex: string): [number, number, number] => [
-  parseInt(hex.slice(1, 3), 16),
-  parseInt(hex.slice(3, 5), 16),
-  parseInt(hex.slice(5, 7), 16),
-];
 
 function ColorRow({
   label,
@@ -31,46 +12,16 @@ function ColorRow({
   onChange,
 }: {
   label: string;
-  color: [number, number, number];
-  onChange: (c: [number, number, number]) => void;
+  color: RGB;
+  onChange: (c: RGB) => void;
 }) {
-  const currentHex = rgbToHex(color);
-  const isCustom = !PRESET_COLORS.includes(currentHex);
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between">
         <span className="text-[12px] text-zinc-700 dark:text-zinc-300">{label}</span>
-        <span className="text-[10px] tabular-nums text-zinc-400">{currentHex.toUpperCase()}</span>
+        <span className="text-[10px] tabular-nums text-zinc-400">{rgbToHex(color).toUpperCase()}</span>
       </div>
-      <div className="flex items-center gap-1.5">
-        {PRESET_COLORS.map((c) => (
-          <button
-            key={c}
-            type="button"
-            onClick={() => onChange(hexToRgb(c))}
-            aria-label={c}
-            aria-pressed={currentHex === c}
-            title={c}
-            className={`w-5 h-5 rounded-full ring-1 ring-inset ring-black/10 dark:ring-white/15 transition-transform hover:scale-110 ${
-              currentHex === c ? "outline-2 outline-offset-2 outline-navi" : ""
-            }`}
-            style={{ backgroundColor: c }}
-          />
-        ))}
-        <label
-          title={t`Custom Color`}
-          className={`relative w-5 h-5 rounded-full cursor-pointer overflow-hidden ring-1 ring-inset ring-black/10 dark:ring-white/15 bg-[conic-gradient(#ef4444,#f59e0b,#10b981,#3b82f6,#8b5cf6,#ef4444)] transition-transform hover:scale-110 ${
-            isCustom ? "outline-2 outline-offset-2 outline-navi" : ""
-          }`}
-        >
-          <input
-            type="color"
-            value={currentHex}
-            onChange={(e) => onChange(hexToRgb(e.target.value))}
-            className="absolute inset-0 opacity-0 cursor-pointer"
-          />
-        </label>
-      </div>
+      <ColorSwatches color={color} onChange={onChange} />
     </div>
   );
 }

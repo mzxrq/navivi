@@ -30,7 +30,7 @@ import {
   saveProjectData,
   loadProjectData,
   scanProjectsOnDisk,
-  loadTimelineManifest,
+  loadTimelineData,
   loadRouteCache,
   saveTimelineManifest,
 } from "../services/fileSystem";
@@ -42,7 +42,7 @@ import {
 } from "../services/versionHistory";
 import { listRecents, syncProjectOnOpen } from "../services/projectStore";
 import { db } from "../services/db";
-import { ClipData, TimelineTrack } from "../types";
+import { emptyTimeline } from "../features/editor/model";
 import { useHistory } from "./useHistory";
 import { useUI } from "./useUI";
 import { UnsavedChanges } from "../components/ui/UnsavedChanges";
@@ -65,43 +65,7 @@ const DefaultMetadata: ProjectMetadata = {
   thumbnail_path: "",
 };
 
-const getDefaultTimeline = (): TimelineData => ({
-  tracks: [
-    {
-      id: "track-subtitles",
-      name: t`Subtitles`,
-      type: "subtitle",
-      orderIndex: 0,
-    },
-    {
-      id: "track-video-2",
-      name: t`Video 2`,
-      type: "video",
-      orderIndex: 100,
-    },
-    {
-      id: "track-video-1",
-      name: t`Video 1`,
-      type: "video",
-      orderIndex: 101,
-    },
-    {
-      id: "track-audio-1",
-      name: t`Audio 1`,
-      type: "audio",
-      orderIndex: 200,
-    },
-    {
-      id: "track-audio-2",
-      name: t`Audio 2`,
-      type: "audio",
-      orderIndex: 201,
-    },
-  ],
-  clips: [],
-  transitions: [],
-  zoomMultiplier: 1.0,
-});
+const getDefaultTimeline = (): TimelineData => emptyTimeline();
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const { editorMode, isRendering } = useUI();
@@ -350,18 +314,6 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     [setWaypoints],
   );
 
-  const updateClip = useCallback(
-    (id: string, startTime: number, duration: number) => {
-      setTimeline({
-        ...timeline,
-        clips: timeline.clips.map((clip) =>
-          clip.id === id ? { ...clip, startTime, duration } : clip,
-        ),
-      });
-    },
-    [timeline, setTimeline],
-  );
-
   const updateMetadata = useCallback((data: Partial<ProjectMetadata>) => {
     setMetadata((prev) => ({ ...prev, ...data }));
     setIsDirty(true);
@@ -601,190 +553,12 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   }, [editorMode, undoMap, redoMap, undoTimeline, redoTimeline, isRendering]);
 
   const autoLoadTimeline = async (projectDir: string) => {
-    const manifest = await loadTimelineManifest(projectDir);
-    if (!manifest) {
+    try {
+      resetTimelineHistory(await loadTimelineData(projectDir));
+    } catch (error) {
+      console.error("Failed to load timeline:", error);
       resetTimelineHistory(getDefaultTimeline());
-      return;
     }
-
-    if (manifest.ui_state) {
-      resetTimelineHistory({
-        ...getDefaultTimeline(),
-        ...manifest.ui_state,
-        transitions: manifest.ui_state.transitions || [],
-        markers: manifest.ui_state.markers || manifest.markers || [],
-      });
-      return;
-    }
-
-    const defaultTracks: TimelineTrack[] = [
-      {
-        id: "track-subtitles",
-        name: "T1: Subtitles",
-        type: "subtitle",
-        orderIndex: 0,
-      },
-      {
-        id: "track-video-2",
-        name: "V2: Pop-ups",
-        type: "video",
-        orderIndex: 100,
-      },
-      {
-        id: "track-video-1",
-        name: "V1: Main Video",
-        type: "video",
-        orderIndex: 101,
-      },
-      {
-        id: "track-audio-1",
-        name: "A1: Voiceovers",
-        type: "audio",
-        orderIndex: 200,
-      },
-      {
-        id: "track-audio-2",
-        name: "A2: Music",
-        type: "audio",
-        orderIndex: 201,
-      },
-    ];
-
-    const parseDuration = (val: any): number => {
-      if (typeof val === "number") return val;
-      if (typeof val === "string") {
-        if (val.includes(":")) {
-          const parts = val.split(":");
-          return parseInt(parts[0]) * 60 + parseFloat(parts[1]);
-        }
-        return parseFloat(val) || 5.0;
-      }
-      return 5.0;
-    };
-
-    const trackRunningTime: Record<string, number> = {
-      "track-video-1": 0,
-      "track-video-2": 0,
-    };
-    const newClips: ClipData[] = [];
-
-    const videoTracks = manifest.video_tracks || [];
-    for (const item of videoTracks) {
-      const targetTrackId =
-        item.type === "static_popup" ? "track-video-2" : "track-video-1";
-      let safeDuration = parseDuration(item.duration);
-
-      if (!item.duration || safeDuration <= 5.0) {
-        const realDuration = await new Promise<number>((resolve) => {
-          const media = document.createElement("video");
-          media.onloadedmetadata = () => resolve(media.duration);
-          media.onerror = () => resolve(safeDuration);
-          media.src = convertFileSrc(item.file_path);
-        });
-        if (realDuration && realDuration > 0 && isFinite(realDuration)) {
-          safeDuration = realDuration;
-        }
-      }
-
-      const clipStart = trackRunningTime[targetTrackId];
-
-      newClips.push({
-        id: item.clip_id || crypto.randomUUID(),
-        trackId: targetTrackId,
-        label: item.clip_name || item.file_path.split(/[/\\]/).pop() || "Video Clip",
-        startTime: clipStart,
-        duration: safeDuration,
-        sourceDuration: safeDuration,
-        source: item.file_path,
-        type: "video",
-      });
-
-      // The pipeline keeps every clip's own narration as a SEPARATE file
-      // (see timeline_step.build_timeline's audio_path/subtitle_path)  E
-      // never muxed into the video  Especifically so it shows up here as
-      // its own editable clip instead of being silently stuck inside the
-      // video. Given the SAME start/duration as its video sibling so the
-      // two stay visually aligned on their own tracks; the audio file
-      // itself may be shorter (silence for the remainder, same as final
-      // export's own behavior) but is never longer, per render_step.py's
-      // own duration-fitting.
-      if (item.audio_path) {
-        newClips.push({
-          id: crypto.randomUUID(),
-          trackId: "track-audio-1",
-          label:
-            (item.clip_name ? `${item.clip_name} (narration)` : null) ||
-            item.audio_path.split(/[/\\]/).pop() ||
-            "Narration",
-          startTime: clipStart,
-          duration: safeDuration,
-          sourceDuration: safeDuration,
-          source: item.audio_path,
-          type: "audio",
-          audioRole: "voice",
-        });
-      }
-
-      trackRunningTime[targetTrackId] += safeDuration;
-    }
-
-    if (manifest.audio_track) {
-      const audioDuration = parseDuration(manifest.total_duration_seconds);
-
-      newClips.push({
-        id: crypto.randomUUID(),
-        trackId: "track-audio-1",
-        label: manifest.audio_track.split(/[/\\]/).pop() || "Master Audio",
-        startTime: 0,
-        duration: audioDuration,
-        source: manifest.audio_track,
-        type: "audio",
-      });
-
-      try {
-        const srtPath = manifest.audio_track.replace(/\.[^/.]+$/, ".srt");
-
-        if (await exists(srtPath)) {
-          const srtContent = await readTextFile(srtPath);
-          const parsedSubtitles = parseSRT(srtContent);
-
-          parsedSubtitles.forEach((sub) => {
-            newClips.push({
-              id: crypto.randomUUID(),
-              trackId: "track-subtitles",
-              label: `Sub: ${sub.text.substring(0, 15)}...`,
-              type: "text",
-              text: sub.text,
-              startTime: sub.startTime,
-              duration: sub.endTime - sub.startTime,
-              x: 960,
-              y: 900,
-              fontFamily: "Inter, sans-serif",
-              fontSize: 48,
-              color: "#ffffff",
-              stroke: "#000000",
-              strokeWidth: 3,
-              shadowColor: "rgba(0, 0, 0, 0.75)",
-              shadowBlur: 4,
-              shadowOffsetX: 2,
-              shadowOffsetY: 2,
-              karaoke: false,
-              karaokeHighlightColor: "#f59e0b",
-            });
-          });
-        }
-      } catch (err) {
-        console.error("Failed to load or parse subtitles:", err);
-      }
-    }
-
-    setTimeline({
-      tracks: defaultTracks,
-      clips: newClips,
-      zoomMultiplier: 1,
-      transitions: [],
-      markers: manifest.markers || [],
-    });
   };
 
   const forceReroute = () => {
@@ -803,7 +577,6 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         timeline,
         setTimeline,
         autoLoadTimeline,
-        updateClip,
         undoTimeline,
         redoTimeline,
         canUndoTimeline,

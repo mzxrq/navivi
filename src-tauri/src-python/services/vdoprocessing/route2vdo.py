@@ -613,6 +613,7 @@ class RouteAnimator:
             leg_glob_prefix = f"02_waypoint_{leg_file_num:02d}_"
             leg_kwargs = dict(
                 mode=leg_mode,
+                walker_color=res_data.get("line_color"),
                 target_duration_seconds=target_duration,
                 landmarks=landmarks, route_chain=leg_labels or None,
                 # Straight-down bird's-eye chase cam (still follows/rotates
@@ -728,6 +729,7 @@ class RouteAnimator:
         summary: Optional[Dict] = None,
         wp_indices: Optional[List[int]] = None,
         point_modes: Optional[List[str]] = None,
+        point_colors: Optional[List] = None,
         render_mode: str = "both",
         **kwargs,
     ) -> List[str]:
@@ -757,6 +759,7 @@ class RouteAnimator:
         if render_mode == "recap_frame":
             overview_path = self.spatial_renderer.render_overview(
                 img_path, points, labels, popups, fps, summary=summary, point_modes=point_modes,
+                point_colors=point_colors,
                 bounding_box=kwargs.get("overview_bounding_box"),
                 extent=kwargs.get("overview_extent"),
                 preview_recap_only=True
@@ -784,6 +787,7 @@ class RouteAnimator:
             else:
                 overview_path = self.spatial_renderer.render_overview(
                     img_path, points, labels, popups, fps, summary=summary, point_modes=point_modes,
+                    point_colors=point_colors,
                     bounding_box=kwargs.get("overview_bounding_box"),
                     extent=kwargs.get("overview_extent"),
                 )

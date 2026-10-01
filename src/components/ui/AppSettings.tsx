@@ -3,7 +3,7 @@ import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useAnimatedUnmount } from "../../hooks/useAnimatedUnmount";
 import { useTheme } from "../../hooks/useTheme";
@@ -11,6 +11,8 @@ import { useUI } from "../../hooks/useUI";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { getLocalModels, pullModelStream } from "../../services/ollamaApi";
 import { dynamicActivate } from "../../i18n";
+import { db } from "../../services/db";
+import { GLOBAL_DICTIONARY_KEY } from "../../config/constants";
 import {
   Check,
   CheckCircle2,
@@ -27,9 +29,11 @@ import {
   Sparkles,
   Sun,
   Trash2,
+  Volume2,
   X,
 } from "./icons";
 import { Switch } from "./Switch";
+import { VoiceTab } from "./VoiceSettings";
 
 type SettingsTab =
   | "general"
@@ -37,6 +41,7 @@ type SettingsTab =
   | "api"
   | "video"
   | "ai"
+  | "voice"
   | "tts_dictionary";
 
 const inputClass =
@@ -78,9 +83,34 @@ export function AppSettings() {
     return () => window.removeEventListener("keydown", handleEsc);
   }, [showAppSettings, setShowAppSettings]);
 
+  // Voice and video settings belong to a project; outside the editor only app-wide tabs are shown.
+  const inEditor = currentView === "editor";
   useEffect(() => {
     if (activeTab === "ai" && !settings.ai_features_enabled) setActiveTab("general");
-  }, [activeTab, settings.ai_features_enabled]);
+    if (!inEditor && (activeTab === "video" || activeTab === "voice")) setActiveTab("general");
+  }, [activeTab, settings.ai_features_enabled, inEditor]);
+
+  const [dictScope, setDictScope] = useState<"project" | "global">("project");
+  const [globalDictionary, setGlobalDictionary] = useState<DictionaryEntry[]>([]);
+  const globalSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!showAppSettings) return;
+    db.appSettings
+      .get<DictionaryEntry[]>(GLOBAL_DICTIONARY_KEY)
+      .then((saved) => setGlobalDictionary(Array.isArray(saved) ? saved : []))
+      .catch((err) => console.error("Could not load the shared pronunciation dictionary:", err));
+  }, [showAppSettings]);
+
+  const saveGlobalDictionary = (next: DictionaryEntry[]) => {
+    setGlobalDictionary(next);
+    if (globalSaveTimer.current) clearTimeout(globalSaveTimer.current);
+    globalSaveTimer.current = setTimeout(
+      () => db.appSettings.set(GLOBAL_DICTIONARY_KEY, next).catch((err) => console.error("Could not save the shared dictionary:", err)),
+      400,
+    );
+    if (inEditor) setIsDirty(true); // the open project keeps a copy, written on its next save
+  };
 
   if (!shouldRender) return null;
 
@@ -95,7 +125,12 @@ export function AppSettings() {
     { id: "general", icon: Settings, label: t`General` },
     { id: "appearance", icon: Palette, label: t`Appearance` },
     { id: "api", icon: Key, label: t`API keys` },
-    { id: "video", icon: Film, label: t`Video` },
+    ...(inEditor
+      ? [
+          { id: "video" as const, icon: Film, label: t`Video` },
+          { id: "voice" as const, icon: Volume2, label: t`Voice` },
+        ]
+      : []),
     { id: "tts_dictionary", icon: Mic, label: t`Pronunciation` },
     ...(settings.ai_features_enabled
       ? [{ id: "ai" as const, icon: Sparkles, label: t`AI models` }]
@@ -515,6 +550,8 @@ export function AppSettings() {
               </>
             )}
 
+            {activeTab === "voice" && <VoiceTab />}
+
             {activeTab === "tts_dictionary" && (
               <>
                 <p className="text-[12px] leading-relaxed text-zinc-500 dark:text-zinc-400 select-text">
@@ -528,117 +565,42 @@ export function AppSettings() {
                   </Trans>
                 </p>
 
-                <div className="rounded-xl border border-zinc-200 dark:border-white/10 overflow-hidden">
-                  {dictionary.length > 0 ? (
-                    <>
-                      <div className="flex items-center gap-2 h-8 px-3 bg-zinc-50 dark:bg-white/3 border-b border-zinc-200 dark:border-white/10 text-[11px] font-medium text-zinc-500">
-                        <span className="flex-1">
-                          <Trans>Word / Kanji</Trans>
-                        </span>
-                        <span className="flex-1">
-                          <Trans>Reading (Furigana)</Trans>
-                        </span>
-                        <span className="w-7" />
-                      </div>
-                      <div className="divide-y divide-zinc-100 dark:divide-white/5">
-                        {dictionary.map((entry, idx) => (
-                          <div key={idx} className="group flex items-center gap-2 px-2 py-1.5">
-                            <input
-                              type="text"
-                              placeholder={t`Word (e.g. 加太)`}
-                              value={entry.word}
-                              onChange={(e) => {
-                                const next = [...dictionary];
-                                next[idx] = { ...next[idx], word: e.target.value };
-                                setDictionary(next);
-                              }}
-                              className={`${inputClass} flex-1 border-transparent dark:border-transparent bg-transparent dark:bg-transparent hover:border-zinc-200 dark:hover:border-white/10`}
-                            />
-                            <input
-                              type="text"
-                              placeholder={t`Reading (e.g. かだ)`}
-                              value={entry.reading}
-                              onChange={(e) => {
-                                const next = [...dictionary];
-                                next[idx] = { ...next[idx], reading: e.target.value };
-                                setDictionary(next);
-                              }}
-                              className={`${inputClass} flex-1 border-transparent dark:border-transparent bg-transparent dark:bg-transparent hover:border-zinc-200 dark:hover:border-white/10`}
-                            />
-                            <button
-                              type="button"
-                              onClick={() => setDictionary(dictionary.filter((_, i) => i !== idx))}
-                              aria-label={t`Remove`}
-                              title={t`Remove`}
-                              className="flex items-center justify-center w-7 h-7 rounded-lg text-zinc-400 opacity-0 group-hover:opacity-100 focus:opacity-100 hover:text-red-500 hover:bg-red-500/10 transition"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    </>
-                  ) : (
-                    <div className="py-10 text-center">
-                      <Mic className="w-6 h-6 mx-auto mb-2 text-zinc-300 dark:text-zinc-600" />
-                      <p className="text-[13px] text-zinc-600 dark:text-zinc-300">
-                        <Trans>No entries yet.</Trans>
-                      </p>
-                      <p className="text-[12px] text-zinc-400 mt-0.5">
-                        <Trans>
-                          Add words below or extract them from narration
-                          scripts.
-                        </Trans>
-                      </p>
-                    </div>
-                  )}
-                </div>
+                {inEditor && (
+                  <div role="tablist" className="inline-flex p-0.5 rounded-lg bg-zinc-100 dark:bg-white/5">
+                    {(
+                      [
+                        ["project", t`This project`],
+                        ["global", t`All projects`],
+                      ] as const
+                    ).map(([id, label]) => (
+                      <button
+                        key={id}
+                        type="button"
+                        role="tab"
+                        aria-selected={dictScope === id}
+                        onClick={() => setDictScope(id)}
+                        className={`h-7 px-3 rounded-md text-[12px] font-medium transition-colors ${
+                          dictScope === id
+                            ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm"
+                            : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {(!inEditor || dictScope === "global") && (
+                  <p className="text-[11px] text-zinc-400 -mt-1">
+                    <Trans>Words here apply to every project. A project's own entry for the same word wins.</Trans>
+                  </p>
+                )}
 
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setDictionary([...dictionary, { word: "", reading: "" }])}
-                    className={secondaryButton}
-                  >
-                    <Plus className="w-3.5 h-3.5" /> <Trans>Add word</Trans>
-                  </button>
-
-                  {dictionary.some((e) => !e.reading && e.word) && (
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        const emptyWords = dictionary
-                          .filter((e) => e.word && !e.reading)
-                          .map((e) => e.word);
-                        if (emptyWords.length === 0) return;
-
-                        try {
-                          const res = await invoke<string>("run_python_blueprint", {
-                            action: "get_furigana",
-                            payload: JSON.stringify(emptyWords),
-                          });
-                          const parsed = JSON.parse(res);
-                          if (parsed.success && parsed.readings) {
-                            setDictionary(
-                              dictionary.map((e) => ({
-                                ...e,
-                                reading:
-                                  !e.reading && parsed.readings[e.word]
-                                    ? parsed.readings[e.word]
-                                    : e.reading,
-                              })),
-                            );
-                          }
-                        } catch (err) {
-                          console.error("get_furigana failed:", err);
-                        }
-                      }}
-                      className={secondaryButton}
-                    >
-                      <Trans>Auto-fill readings</Trans>
-                    </button>
-                  )}
-                </div>
+                {inEditor && dictScope === "project" ? (
+                  <PronunciationEditor entries={dictionary} onChange={setDictionary} />
+                ) : (
+                  <PronunciationEditor entries={globalDictionary} onChange={saveGlobalDictionary} />
+                )}
               </>
             )}
 
@@ -651,6 +613,135 @@ export function AppSettings() {
   );
 }
 
+
+interface DictionaryEntry {
+  word: string;
+  reading: string;
+}
+
+function PronunciationEditor({
+  entries,
+  onChange,
+}: {
+  entries: DictionaryEntry[];
+  onChange: (next: DictionaryEntry[]) => void;
+}) {
+  return (
+    <>
+        <div className="rounded-xl border border-zinc-200 dark:border-white/10 overflow-hidden">
+          {entries.length > 0 ? (
+            <>
+              <div className="flex items-center gap-2 h-8 px-3 bg-zinc-50 dark:bg-white/3 border-b border-zinc-200 dark:border-white/10 text-[11px] font-medium text-zinc-500">
+                <span className="flex-1">
+                  <Trans>Word / Kanji</Trans>
+                </span>
+                <span className="flex-1">
+                  <Trans>Reading (Furigana)</Trans>
+                </span>
+                <span className="w-7" />
+              </div>
+              <div className="divide-y divide-zinc-100 dark:divide-white/5">
+                {entries.map((entry, idx) => (
+                  <div key={idx} className="group flex items-center gap-2 px-2 py-1.5">
+                    <input
+                      type="text"
+                      placeholder={t`Word (e.g. 加太)`}
+                      value={entry.word}
+                      onChange={(e) => {
+                        const next = [...entries];
+                        next[idx] = { ...next[idx], word: e.target.value };
+                        onChange(next);
+                      }}
+                      className={`${inputClass} flex-1 border-transparent dark:border-transparent bg-transparent dark:bg-transparent hover:border-zinc-200 dark:hover:border-white/10`}
+                    />
+                    <input
+                      type="text"
+                      placeholder={t`Reading (e.g. かだ)`}
+                      value={entry.reading}
+                      onChange={(e) => {
+                        const next = [...entries];
+                        next[idx] = { ...next[idx], reading: e.target.value };
+                        onChange(next);
+                      }}
+                      className={`${inputClass} flex-1 border-transparent dark:border-transparent bg-transparent dark:bg-transparent hover:border-zinc-200 dark:hover:border-white/10`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => onChange(entries.filter((_, i) => i !== idx))}
+                      aria-label={t`Remove`}
+                      title={t`Remove`}
+                      className="flex items-center justify-center w-7 h-7 rounded-lg text-zinc-400 opacity-0 group-hover:opacity-100 focus:opacity-100 hover:text-red-500 hover:bg-red-500/10 transition"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="py-10 text-center">
+              <Mic className="w-6 h-6 mx-auto mb-2 text-zinc-300 dark:text-zinc-600" />
+              <p className="text-[13px] text-zinc-600 dark:text-zinc-300">
+                <Trans>No entries yet.</Trans>
+              </p>
+              <p className="text-[12px] text-zinc-400 mt-0.5">
+                <Trans>
+                  Add words below or extract them from narration
+                  scripts.
+                </Trans>
+              </p>
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => onChange([...entries, { word: "", reading: "" }])}
+            className={secondaryButton}
+          >
+            <Plus className="w-3.5 h-3.5" /> <Trans>Add word</Trans>
+          </button>
+
+          {entries.some((e) => !e.reading && e.word) && (
+            <button
+              type="button"
+              onClick={async () => {
+                const emptyWords = entries
+                  .filter((e) => e.word && !e.reading)
+                  .map((e) => e.word);
+                if (emptyWords.length === 0) return;
+
+                try {
+                  const res = await invoke<string>("run_python_blueprint", {
+                    action: "get_furigana",
+                    payload: JSON.stringify(emptyWords),
+                  });
+                  const parsed = JSON.parse(res);
+                  if (parsed.success && parsed.readings) {
+                    onChange(
+                      entries.map((e) => ({
+                        ...e,
+                        reading:
+                          !e.reading && parsed.readings[e.word]
+                            ? parsed.readings[e.word]
+                            : e.reading,
+                      })),
+                    );
+                  }
+                } catch (err) {
+                  console.error("get_furigana failed:", err);
+                }
+              }}
+              className={secondaryButton}
+            >
+              <Trans>Auto-fill readings</Trans>
+            </button>
+          )}
+        </div>
+    </>
+  );
+}
 
 function Section({
   title,

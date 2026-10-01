@@ -425,6 +425,9 @@ class VideoExporter:
         ffmpeg_cmd: str, video_path: Path, audio_path: Optional[str], tmp_dir: Path, index: int,
         audio_offset: float = 0.0, target_size: Optional[Tuple[int, int]] = None,
         target_fps: Optional[float] = None,
+        trim_in: float = 0.0, trim_out: Optional[float] = None,
+        volume: float = 1.0, muted: bool = False,
+        extra_audio: Optional[str] = None, extra_volume: float = 0.5,
     ) -> Path:
         """Combines one timeline track's silent video with its own separate
         audio track (see timeline_step.build_timeline — video and audio are
@@ -461,7 +464,10 @@ class VideoExporter:
                     + FFmpegManager.get_media_duration(str(audio_path))
                     + tuning.AUDIO_END_HOLD_SECONDS
                 )
-                hold_extra = needed - FFmpegManager.get_media_duration(str(video_path))
+                video_len = FFmpegManager.get_media_duration(str(video_path))
+                if trim_out is not None or trim_in > 0:
+                    video_len = min(video_len, trim_out if trim_out is not None else video_len) - trim_in
+                hold_extra = needed - video_len
             except (RuntimeError, OSError) as exc:
                 logger.warning("concat_from_timeline: could not probe track %d for its audio end: %s", index, exc)
             if hold_extra < 0.05:
@@ -492,15 +498,27 @@ class VideoExporter:
             logger.info("Track %d: holding its last frame %.2fs so the video lasts as long as its audio.", index, hold_extra)
             filters.append(f"tpad=stop_mode=clone:stop_duration={hold_extra:.3f}")
 
-        cmd = [ffmpeg_cmd, "-y", *tuning.ffmpeg_log_args(), "-i", str(video_path)]
+        trimmed = trim_in > 0.01 or trim_out is not None
+        cmd = [ffmpeg_cmd, "-y", *tuning.ffmpeg_log_args()]
+        if trim_in > 0.01:
+            cmd += ["-ss", f"{trim_in:.3f}"]
+        if trim_out is not None:
+            cmd += ["-t", f"{max(0.1, trim_out - trim_in):.3f}"]
+        cmd += ["-i", str(video_path)]
         if has_audio:
             cmd += ["-i", str(Path(audio_path).resolve())]
         else:
             cmd += ["-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100"]
-        cmd += ["-map", "0:v:0", "-map", "1:a:0"]
-        if filters:
+        extra = bool(extra_audio and Path(extra_audio).exists() and extra_volume > 0.001)
+        if extra:
+            cmd += ["-i", str(Path(extra_audio).resolve())]
+            cmd += ["-map", "0:v:0"]
+        else:
+            cmd += ["-map", "0:v:0", "-map", "1:a:0"]
+        if filters or trimmed:
+            if filters:
+                cmd += ["-vf", ",".join(filters)]
             cmd += [
-                "-vf", ",".join(filters),
                 "-c:v", "libx264", "-crf", "18", "-preset", "fast", "-pix_fmt", "yuv420p",
             ]
         else:
@@ -516,9 +534,20 @@ class VideoExporter:
         if has_audio and audio_offset > 0.01:
             delay_ms = int(round(audio_offset * 1000))
             audio_filters.append(f"adelay={delay_ms}|{delay_ms}")
+        if has_audio and (muted or abs(volume - 1.0) > 0.01):
+            audio_filters.append(f"volume={0.0 if muted else max(0.0, volume):.3f}")
         if has_audio:
             audio_filters.append("apad")
-        if audio_filters:
+        if extra:
+            # Narration (or silence) plus the footage's own sound, mixed under it.
+            voice_chain = ",".join(audio_filters) if audio_filters else "anull"
+            cmd += [
+                "-filter_complex",
+                f"[1:a]{voice_chain}[v];[2:a]volume={max(0.0, extra_volume):.3f}[e];"
+                f"[v][e]amix=inputs=2:duration=longest:normalize=0,apad[a]",
+                "-map", "[a]",
+            ]
+        elif audio_filters:
             cmd += ["-af", ",".join(audio_filters)]
         cmd += ["-shortest", "-video_track_timescale", str(_TIMESCALE)]
         cmd.append(str(tmp_out))
@@ -666,6 +695,11 @@ class VideoExporter:
                     ffmpeg_cmd, Path(track["file_path"]).resolve(), track.get("audio_path"), tmp_dir, i,
                     audio_offset=float(track.get("audio_offset") or 0.0), target_size=target_size,
                     target_fps=target_fps,
+                    trim_in=float(track.get("trim_in") or 0.0),
+                    trim_out=float(track["trim_out"]) if track.get("trim_out") else None,
+                    volume=float(track.get("volume", 1.0)), muted=bool(track.get("muted")),
+                    extra_audio=track.get("extra_audio_path"),
+                    extra_volume=float(track.get("extra_audio_volume") if track.get("extra_audio_volume") is not None else 0.5),
                 )
                 for i, track in enumerate(tracks)
             ]
@@ -731,9 +765,54 @@ class VideoExporter:
                     f"FFmpeg reported success, but the output file is missing or 0 bytes! STDERR: {result.stderr}"
                 )
 
+            VideoExporter._finish_timeline_output(ffmpeg_cmd, timeline_data, output_path, tmp_dir)
             return output_path
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    @staticmethod
+    def _finish_timeline_output(ffmpeg_cmd: str, timeline_data: dict, output_path: str, tmp_dir: Path) -> None:
+        """Music bed and burned subtitles, applied to the joined video in place."""
+        music = timeline_data.get("music") or {}
+        music_path = music.get("path")
+        if music_path and Path(music_path).exists():
+            mixed = tmp_dir / "with_music.mp4"
+            volume = max(0.0, float(music.get("volume", 0.25)))
+            result = subprocess.run(
+                [
+                    ffmpeg_cmd, "-y", *tuning.ffmpeg_log_args(), "-i", str(output_path),
+                    "-stream_loop", "-1", "-i", str(music_path),
+                    "-filter_complex",
+                    f"[1:a]volume={volume:.3f}[m];[0:a][m]amix=inputs=2:duration=first:normalize=0[a]",
+                    "-map", "0:v", "-map", "[a]", "-c:v", "copy", "-c:a", "aac", "-ar", "44100", "-ac", "2",
+                    "-shortest", str(mixed),
+                ],
+                capture_output=True, encoding="utf-8", errors="replace",
+            )
+            if result.returncode == 0 and mixed.exists():
+                _replace_with_retry(str(mixed), str(output_path))
+            else:
+                logger.warning("music bed skipped: %s", result.stderr[-400:])
+
+        cues = [c for c in timeline_data.get("subtitles") or [] if str(c.get("text", "")).strip()]
+        if cues and timeline_data.get("burn_subtitles"):
+            srt = tmp_dir / "subtitles.srt"
+            srt.write_text(VideoExporter.cues_to_srt(cues), encoding="utf-8")
+            burned = tmp_dir / "with_subtitles.mp4"
+            try:
+                VideoExporter.burn_subtitles(str(output_path), str(srt), str(burned))
+                _replace_with_retry(str(burned), str(output_path))
+            except Exception as exc:  # the stitched video is still good without them
+                logger.warning("subtitle burn skipped: %s", exc)
+
+    @staticmethod
+    def cues_to_srt(cues: list) -> str:
+        blocks = []
+        for i, cue in enumerate(sorted(cues, key=lambda c: float(c["start"])), 1):
+            start = VideoExporter._format_srt_timestamp(float(cue["start"]))
+            end = VideoExporter._format_srt_timestamp(float(cue["end"]))
+            blocks.append(f"{i}\n{start} --> {end}\n{str(cue['text']).strip()}\n")
+        return "\n".join(blocks)
 
     @staticmethod
     def burn_subtitles(

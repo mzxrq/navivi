@@ -9,6 +9,7 @@ from typing import Optional
 from services import tuning
 from services.config.job_config import JobConfigManager
 from services.logger.progress import tracker
+from services.render_estimate import StageRecorder
 from services.vdoprocessing.vdoexporter import VideoExporter, sweep_stale_temp_files
 
 from .attraction_step import render_attraction_videos
@@ -80,18 +81,14 @@ def run_full_pipeline(
     # Every path below makes exactly PIPELINE_STAGES stage() calls (a skipped
     # stage still announces itself), so the frontend's progress bar and stage
     # list never see "[9/8]". Sub-work inside a stage uses tracker.show().
+    recorder = StageRecorder(job_config.to_dict())
+    tracker.on_stage = recorder.on_stage
     tracker.stage("Parsing GPS track...", total=PIPELINE_STAGES)
     cleaned_route = process_gps(raw_source_path)
 
     settings = job_config.get("settings", {})
     fast_render = skip_rich_media(settings)
     attractions_on = attraction_videos_enabled(settings)
-
-    # [NOTE] [Core] The "[n/N]" total is only set here. Keep it in step with the stage() calls below:
-    # 6 always + TTS stop & subtitles (not fast_render) + GPU cooldown (attractions on).
-    stage_total = 6 + (0 if fast_render else 2) + (1 if attractions_on else 0)
-    tracker.stage("Parsing GPS track...", total=stage_total)
-    cleaned_route = process_gps(raw_source_path)
 
     # --- STEP 2 ---
     tracker.stage("Generating TTS narration...")
@@ -288,6 +285,8 @@ def run_full_pipeline(
             job_config.get("settings", {}).get("attraction_fade_seconds", 0.8)
         ),
     )
+    recorder.finish()
+    tracker.on_stage = None
     tracker.clear()
 
     return {
@@ -295,6 +294,37 @@ def run_full_pipeline(
         "summary": cleaned_route.get("summary", {}),
         "timeline_path": timeline_path,
     }
+
+
+def recover_narration_paths(timeline_data: dict) -> int:
+    """Re-links narration to its clip for a timeline.json the editor saved without per-clip audio_path.
+
+    The editor keeps each narration as its own audio clip that starts with its video clip (ui_state.clips);
+    the exporter only reads video_tracks[].audio_path. Returns how many clips were re-linked.
+    """
+    tracks = timeline_data.get("video_tracks", [])
+    if any(t.get("audio_path") for t in tracks):
+        return 0
+    clips = (timeline_data.get("ui_state") or {}).get("clips") or []
+    audio_track_ids = {
+        t.get("id") for t in (timeline_data.get("ui_state") or {}).get("tracks", []) if t.get("type") == "audio"
+    }
+    voices = [
+        c for c in clips
+        if c.get("source") and c.get("type") == "audio"
+        and (c.get("trackId") in audio_track_ids or c.get("audioRole") == "voice")
+    ]
+    start_of = {c.get("id"): c.get("startTime", 0.0) for c in clips}
+    fixed = 0
+    for track in tracks:
+        start = start_of.get(track.get("clip_id"))
+        if start is None:
+            continue
+        voice = next((v for v in voices if abs(v.get("startTime", 0.0) - start) < 0.05), None)
+        if voice:
+            track["audio_path"] = voice["source"]
+            fixed += 1
+    return fixed
 
 
 def render_from_timeline(
@@ -310,10 +340,16 @@ def render_from_timeline(
 
     # The editor saves project-relative paths; resolve them against the project, not the cwd.
     project_dir = timeline_path.resolve().parent
+    relinked = recover_narration_paths(timeline_data)
+    if relinked:
+        logger.info("NLE Engine: re-linked narration for %d clips from the editor state", relinked)
     for track in timeline_data.get("video_tracks", []):
-        for key in ("file_path", "audio_path"):
+        for key in ("file_path", "audio_path", "extra_audio_path"):
             if track.get(key) and not Path(track[key]).is_absolute():
                 track[key] = str(project_dir / track[key])
+    music = timeline_data.get("music") or {}
+    if music.get("path") and not Path(music["path"]).is_absolute():
+        music["path"] = str(project_dir / music["path"])
 
     if not output_video_path:
         output_video_path = str(project_video_dir(project_dir) / "01_overview_rerendered.mp4")
@@ -328,31 +364,3 @@ def render_from_timeline(
     print(f"Fast re-render complete  {final_path}")
     logger.info("NLE Engine: Fast re-render complete  %s", final_path)
     return final_path
-
-
-def estimate_step_durations(project_config: dict, cleaned_route: dict) -> dict:
-    """Estimates the duration (in seconds) for each pipeline step."""
-    waypoints = project_config.get("waypoints", [])
-    num_waypoints = len(waypoints)
-
-    # [NOTE] [Core] These are rough, hand-picked heuristics (not measured from real runs) for a progress-bar ETA — not meant to be an accurate benchmark.
-    # Heuristics based on standard local rendering speeds
-    est_gps = 1.0  # GPS parsing is very fast
-    est_tts = max(2.0, num_waypoints * 1.5)  # ~1.5s per TTS narration
-
-    # 3D video rendering depends on total frames (assume 30fps, 8s per leg/waypoint)
-    est_video = max(5.0, num_waypoints * 8.0 * 0.4)
-
-    est_ai = (
-        num_waypoints * 10.0 if any(wp.get("popup_image") for wp in waypoints) else 2.0
-    )
-    est_subtitles = 1.0
-
-    return {
-        "gps": est_gps,
-        "tts": est_tts,
-        "video": est_video,
-        "ai": est_ai,
-        "subtitles": est_subtitles,
-        "total": est_gps + est_tts + est_video + est_ai + est_subtitles,
-    }

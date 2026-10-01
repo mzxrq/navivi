@@ -57,7 +57,7 @@ class _DrawingMixin:
             )
 
     def _mode_segments(
-        self, path_history: List[Tuple[int, int]], mode_history: Optional[List[str]]
+        self, path_history: List[Tuple[int, int]], mode_history: Optional[List]
     ) -> List[Tuple[Tuple[int, int, int], List[Tuple[int, int]]]]:
         # Group consecutive points into same-mode runs so each leg (e.g. a
         # ferry crossing) can be drawn in its own color, matching the
@@ -76,10 +76,15 @@ class _DrawingMixin:
                     raw_segments.append((mode, seg_points))
         else:
             raw_segments = [("walking", list(path_history))]
-        return [
-            (self.MODE_COLORS.get(mode, self.line_color), seg_points)
-            for mode, seg_points in raw_segments
-        ]
+        return [(self._segment_color(mode), seg_points) for mode, seg_points in raw_segments]
+
+    def _segment_color(self, mode) -> Tuple[int, int, int]:
+        # A (mode, bgr) entry is a leg with its own colour (waypoint lineColor).
+        if isinstance(mode, tuple):
+            mode, color = mode
+            if color:
+                return tuple(color)
+        return self.MODE_COLORS.get(mode, self.line_color)
 
     def draw_path(
         self,

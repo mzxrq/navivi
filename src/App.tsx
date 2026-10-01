@@ -1,6 +1,6 @@
 import { Sidebar } from "./features/map/components/Sidebar";
 import { MapArea } from "./features/map/components/MapArea";
-import { TimelineView } from "./features/timeline/components/TimelineView";
+import { EditorView } from "./features/editor/EditorView";
 import { TitleBar } from "./components/ui/TitleBar";
 import { RenderOverlay } from "./components/ui/RenderOverlay";
 import { ProjectManager } from "./components/view/ProjectManager";
@@ -46,7 +46,7 @@ export default function App() {
               </div>
             </>
           ) : (
-            <TimelineView />
+            <EditorView />
           )}
         </div>
       )}

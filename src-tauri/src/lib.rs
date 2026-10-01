@@ -231,27 +231,43 @@ fn is_ollama_running() -> bool {
     ).is_ok()
 }
 
+// PATH first, then the build bundled under src-python/bin, then the per-user installer's folder.
+fn ollama_candidates() -> Vec<std::path::PathBuf> {
+    let mut found = vec![std::path::PathBuf::from("ollama")];
+    found.push(Path::new("src-python/bin/ollama-windows-amd64/ollama.exe").to_path_buf());
+    if let Ok(local) = std::env::var("LOCALAPPDATA") {
+        found.push(Path::new(&local).join("Programs").join("Ollama").join("ollama.exe"));
+    }
+    found
+}
+
 #[tauri::command]
 fn wake_up_ollama() -> Result<String, String> {
     if is_ollama_running() {
         return Ok("Ollama OK".to_string());
     }
 
-    let result = Command::new("ollama")
-        .env("OLLAMA_ORIGINS", "*")
-        .arg("serve")
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn();
-
-    match result {
-        Ok(_) => Ok("Ollama server started.".to_string()),
-        Err(e) => Err(format!("Failed to start Ollama, is it installed? Error: {}", e)),
+    let mut last_error = String::new();
+    for exe in ollama_candidates() {
+        if exe.components().count() > 1 && !exe.exists() {
+            continue;
+        }
+        let spawned = Command::new(&exe)
+            .env("OLLAMA_ORIGINS", "*")
+            .arg("serve")
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn();
+        match spawned {
+            Ok(_) => return Ok("Ollama server started.".to_string()),
+            Err(e) => last_error = e.to_string(),
+        }
     }
+    Err(format!("Ollama is not installed or could not be started ({})", last_error))
 }
 
 #[tauri::command]
-async fn export_video(app: tauri::AppHandle, project_dir: String) -> Result<(), String> {
+async fn export_video(app: tauri::AppHandle, project_dir: String) -> Result<String, String> {
     println!("Starting video export for: {}", project_dir);
 
     let timeline_path = format!("{}/timeline.json", project_dir);
@@ -259,17 +275,22 @@ async fn export_video(app: tauri::AppHandle, project_dir: String) -> Result<(), 
     let output = std::process::Command::new("python")
         .env("PYTHONIOENCODING", "utf-8")
         .arg("src-python/main.py")
-        .arg("render_timeline") 
-        .arg(&timeline_path)    
+        .arg("render_timeline")
+        .arg(&timeline_path)
         .output()
         .map_err(|e| e.to_string())?;
 
+    let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
     if output.status.success() {
         app.emit("render-complete", ()).map_err(|e| e.to_string())?;
-        Ok(())
+        // main.py's last stdout line is the JSON-encoded path of the exported video.
+        let last = stdout.lines().rev().find(|l| !l.trim().is_empty()).unwrap_or("");
+        Ok(last.trim().trim_matches('"').replace("\\\\", "\\"))
     } else {
-        let err = String::from_utf8_lossy(&output.stderr).into_owned();
-        Err(err)
+        // main.py prints its failure as JSON on stdout; stderr only carries progress text.
+        let err = String::from_utf8_lossy(&output.stderr);
+        Err(format!("{}
+{}", stdout.trim(), err.trim()).trim().to_string())
     }
 }
 

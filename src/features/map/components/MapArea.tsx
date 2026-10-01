@@ -10,7 +10,7 @@ import { openContextMenu, separator } from "../../../components/ui/menuItems";
 import { useStopMenus } from "../hooks/useStopMenus";
 import { Check, Pencil, Plus, Trash2 } from "../../../components/ui/icons";
 import "@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css";
-import { mapStyles, mapDefaults } from "../../../config/constants";
+import { mapStyles } from "../../../config/constants";
 import { RouteStyling } from "./MapLayers/RouteStyling";
 import { useWorkspace } from "../../../hooks/useWorkspace";
 import { useTheme } from "../../../hooks/useTheme";
@@ -54,7 +54,6 @@ export function MapArea() {
   useEffect(() => {
     const pending = takePendingImport();
     if (pending?.kind === "route") importRouteFile(pending.path);
-    else if (pending?.kind === "photos") handleDroppedFiles(pending.paths);
   }, []);
 
   const [isHovering, setIsHovering] = useState(false);
@@ -134,9 +133,11 @@ export function MapArea() {
   };
 
   // Called by <Map onLoad>: canvas now exists, safe to attach WebGL handlers
-  const handleMapLoad = () => {
-    const map = mapRef.current?.getMap();
+  // A reused map fires "load" while the component mounts, before mapRef is attached: use the event's own map.
+  const handleMapLoad = (e?: { target?: mapboxgl.Map }) => {
+    const map = e?.target ?? mapRef.current?.getMap();
     if (!map) return;
+    map.resize();
     setIsMapLoaded(true);
 
     const canvas = map.getCanvas();
@@ -249,11 +250,21 @@ export function MapArea() {
     }
   }, [i18n.locale, selectedStyle, mapRef.current]);
 
+  // The canvas is sized once when created (and a reused map keeps its old size); follow the container instead.
+  const mapBoxRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const timer = setTimeout(() => {
-      mapRef.current?.resize();
-    }, 150);
-    return () => clearTimeout(timer);
+    const el = mapBoxRef.current;
+    if (!el) return;
+    let frame = 0;
+    const observer = new ResizeObserver(() => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => mapRef.current?.resize());
+    });
+    observer.observe(el);
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
   }, []);
 
   const handleMapClick = (e: any) => {
@@ -397,14 +408,6 @@ export function MapArea() {
   };
 
   const handleAddWaypoint = async (lat: number, lng: number) => {
-    if (waypoints.length >= mapDefaults.maxWaypoints) {
-      showToast(
-        t`Routes are limited to ${mapDefaults.maxWaypoints} waypoints in this preview build.`,
-        "warning",
-      );
-      return;
-    }
-
     const newId = Math.random().toString(36).substring(7);
 
     setWaypoints((prev) => [
@@ -913,13 +916,13 @@ export function MapArea() {
       </div>
 
       {/* MAPBOX CANVAS */}
-      <div className="absolute inset-0 z-0">
+      <div ref={mapBoxRef} className="absolute inset-0 z-0">
         <Map
           reuseMaps={true}
           ref={mapRef}
           cursor={isEraserMode || isViaMode ? "crosshair" : ""}
           initialViewState={initialViewState}
-          onLoad={handleMapLoad}
+          onLoad={(e) => handleMapLoad(e)}
           onMoveEnd={captureMapThumbnail}
           onClick={handleMapClick}
           onContextMenu={handleMapContextMenu}
@@ -995,15 +998,16 @@ export function MapArea() {
                   longitude={wp.lng}
                   latitude={wp.lat}
                   anchor="bottom"
+                  className="hover:z-20"
                   style={isSelected ? { zIndex: 5 } : undefined}
                 >
                   <div
-                    className={`flex flex-col items-center group cursor-pointer transition-transform ${isSelected ? "-translate-y-1" : "hover:-translate-y-1"}`}
+                    className={`relative flex flex-col items-center group cursor-pointer transition-transform ${isSelected ? "-translate-y-1" : "hover:-translate-y-1"}`}
                     onClick={(e) => handlePinClick(e, wp.id)}
                     onContextMenu={(e) => handleMarkerContextMenu(e, wp.id)}
                   >
                     <div
-                      className={`bg-zinc-900 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-lg border border-white/20 mb-1 transition-opacity whitespace-nowrap ${isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
+                      className={`pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 z-10 bg-zinc-900 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-lg border border-white/20 mb-1 transition-opacity whitespace-nowrap ${isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
                     >
                       {wp.name || t`Waypoint`}
                     </div>
@@ -1055,15 +1059,16 @@ export function MapArea() {
                   }, 0);
                 }}
                 anchor="bottom"
+                className="hover:z-20"
                 style={isSelected ? { zIndex: 5 } : undefined}
               >
                 <div
-                  className={`flex flex-col items-center group cursor-grab active:cursor-grabbing transition-transform ${isSelected ? "-translate-y-1" : "hover:-translate-y-1"}`}
+                  className={`relative flex flex-col items-center group cursor-grab active:cursor-grabbing transition-transform ${isSelected ? "-translate-y-1" : "hover:-translate-y-1"}`}
                   onClick={(e) => handlePinClick(e, wp.id)}
                   onContextMenu={(e) => handleMarkerContextMenu(e, wp.id)}
                 >
                   <div
-                    className={`bg-zinc-900 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-lg border border-white/20 mb-1 transition-opacity whitespace-nowrap ${isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
+                    className={`pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 z-10 bg-zinc-900 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-lg border border-white/20 mb-1 transition-opacity whitespace-nowrap ${isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
                   >
                     {wp.name || t`Waypoint`}
                   </div>

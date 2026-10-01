@@ -54,6 +54,11 @@ def attraction_videos_enabled(settings: dict) -> bool:
     return bool(settings.get("enable_attraction_videos", True)) and not skip_rich_media(settings)
 
 
+def has_attraction_media(waypoint) -> bool:
+    """A photo to animate, or the user's own videos, for the stop's attraction clip."""
+    return isinstance(waypoint, dict) and bool(waypoint.get("popup_image") or waypoint.get("videos"))
+
+
 def output_is_valid(path, min_bytes: int = 1024) -> bool:
     """Checkpoint helper: True only if `path` exists and is above
     `min_bytes` — guards against treating a zero-byte/truncated file left
@@ -232,6 +237,37 @@ def _resolve_leg_geometry_from_cache(
     if not isinstance(geometry, list) or len(geometry) < 2:
         return None
     return geometry
+
+
+def leg_line_color_rgb(waypoint: dict) -> Optional[list[int]]:
+    """A waypoint's own colour for the leg leaving it (`lineColor`, RGB), if set."""
+    value = waypoint.get("lineColor") if isinstance(waypoint, dict) else None
+    if isinstance(value, (list, tuple)) and len(value) >= 3:
+        try:
+            return [max(0, min(255, int(c))) for c in value[:3]]
+        except (TypeError, ValueError):
+            return None
+    return None
+
+
+def _build_point_colors(
+    num_points: int, wp_indices: list[int], waypoints: list[dict]
+) -> list[Optional[tuple[int, int, int]]]:
+    """Per-point BGR leg colour (None = use the mode colour), aligned with
+    _build_point_modes: point i belongs to the leg departing waypoint
+    leg_idx - 1, and the last leg's colour carries to the end."""
+    colors: list[Optional[tuple[int, int, int]]] = [None] * num_points
+    boundaries = list(wp_indices) + [num_points - 1]
+    prev_end = 0
+    current = None
+    for leg_idx, end_idx in enumerate(boundaries):
+        if 0 < leg_idx < len(waypoints):
+            rgb = leg_line_color_rgb(waypoints[leg_idx - 1])
+            current = tuple(reversed(rgb)) if rgb else None
+        for i in range(prev_end, min(end_idx + 1, num_points)):
+            colors[i] = current
+        prev_end = end_idx + 1
+    return colors
 
 
 def _build_point_modes(

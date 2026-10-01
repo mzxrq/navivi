@@ -8,7 +8,6 @@ import {
   Car,
   ChevronRight,
   Footprints,
-  ImageIcon,
   Loader2,
   MapIcon,
   MapPin,
@@ -34,7 +33,7 @@ interface SearchResult {
 }
 
 type Origin = { name: string; coords: [number, number] };
-type StartFrom = "blank" | "route" | "photos";
+type StartFrom = "blank" | "route";
 
 const LAST_ORIGIN_KEY = "navivi_last_origin";
 
@@ -59,7 +58,6 @@ export function NewProject() {
   const [projectName, setProjectName] = useState(t`Untitled Project`);
   const [startFrom, setStartFrom] = useState<StartFrom>("blank");
   const [routePath, setRoutePath] = useState<string | null>(null);
-  const [photoPaths, setPhotoPaths] = useState<string[]>([]);
 
   const [origin, setOrigin] = useState<Origin>(() => initialOrigin(i18n.locale));
   const [originQuery, setOriginQuery] = useState(origin.name);
@@ -144,20 +142,7 @@ export function NewProject() {
     }
   };
 
-  const pickPhotos = async () => {
-    const selected = await open({
-      multiple: true,
-      filters: [{ name: t`Photos & Images`, extensions: ["jpg", "jpeg", "png"] }],
-    });
-    const paths = Array.isArray(selected) ? selected : selected ? [selected] : [];
-    if (paths.length) {
-      setPhotoPaths(paths);
-      setStartFrom("photos");
-    }
-  };
-
-  const missingFile =
-    (startFrom === "route" && !routePath) || (startFrom === "photos" && photoPaths.length === 0);
+  const missingFile = startFrom === "route" && !routePath;
 
   const handleCreate = () => {
     if (missingFile) return;
@@ -185,7 +170,6 @@ export function NewProject() {
     } catch {}
 
     if (startFrom === "route" && routePath) setPendingImport({ kind: "route", path: routePath });
-    else if (startFrom === "photos") setPendingImport({ kind: "photos", paths: photoPaths });
     else setPendingImport(null);
 
     setCurrentView("editor");
@@ -212,13 +196,6 @@ export function NewProject() {
       label: t`GPS track`,
       detail: routePath ? fileName(routePath) : t`GPX, FIT, TCX or KML`,
       onPick: pickRoute,
-    },
-    {
-      id: "photos",
-      icon: ImageIcon,
-      label: t`Photos`,
-      detail: photoPaths.length ? t`${photoPaths.length} selected` : t`Uses photo locations`,
-      onPick: pickPhotos,
     },
   ];
 

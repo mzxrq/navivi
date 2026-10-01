@@ -21,6 +21,8 @@ from services.vdoprocessing.videopipeline.audio_step import (
     generate_waypoint_audio,
     is_passed_only,
     passed_only_reason,
+    is_unvisited_stopby,
+    merge_pronunciation,
     stop_tts_server,
 )
 from services.vdoprocessing.videopipeline.helpers import project_audio_dir
@@ -50,7 +52,7 @@ def _prepare(job_config_path: str, output_audio_dir: str = None):
         settings, config_path, waypoints, output_dir,
         IrodoriTTSClient(output_dir=output_dir, config=tts_config_from_settings(settings)),
         AudioProcessor(output_dir=output_dir),
-        settings.get("pronunciation_dictionary", []),
+        merge_pronunciation(settings.get("global_pronunciation_dictionary"), settings.get("pronunciation_dictionary")),
     )
 
 

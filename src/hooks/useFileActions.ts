@@ -1,3 +1,4 @@
+import { LatLon, legAlongTrack, stopsAlongTrack, tidyPlaceName, TrackStop } from "../utils/gpxTrack";
 import { invoke } from "@tauri-apps/api/core";
 import { useWorkspace } from "./useWorkspace";
 import { useUI } from "./useUI";
@@ -62,7 +63,7 @@ export function useFileActions() {
       }
 
       if (imageCount > 0 && photoPoints.length === 0) {
-        showToast(t`No GPS location data found in selected photos`, "warning");
+        showToast(t`None of these photos has a location. Photos saved from websites or chat apps usually don't.`, "warning");
         return;
       }
 
@@ -96,6 +97,8 @@ export function useFileActions() {
         setWaypoints(newWaypoints);
         setIsDirty(true);
         showToast(t`Imported ${photoPoints.length} photos and generated route.`, "success");
+        const skipped = imageCount - photoPoints.length;
+        if (skipped > 0) showToast(t`${skipped} photos without a location were skipped.`, "info");
       }
 
     } catch (e) {
@@ -138,7 +141,8 @@ export function useFileActions() {
 
       const parser = new DOMParser();
       const xmlDoc = parser.parseFromString(fileContent, "text/xml");
-      const trackPoints = xmlDoc.getElementsByTagName("trkpt");
+      let trackPoints = xmlDoc.getElementsByTagName("trkpt");
+      if (trackPoints.length === 0) trackPoints = xmlDoc.getElementsByTagName("rtept");
       const points: number[][] = [];
 
       for (let i = 0; i < trackPoints.length; i++) {
@@ -166,21 +170,6 @@ export function useFileActions() {
         }
       }
 
-      // Distance calculation
-      let totalDistKm = 0;
-      const R = 6371; // km
-      for (let i = 1; i < points.length; i++) {
-        const [lat1, lon1] = points[i - 1];
-        const [lat2, lon2] = points[i];
-        const dLat = (lat2 - lat1) * (Math.PI / 180);
-        const dLon = (lon2 - lon1) * (Math.PI / 180);
-        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-          Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
-          Math.sin(dLon / 2) * Math.sin(dLon / 2);
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        totalDistKm += R * c;
-      }
-
       setRoutePoints(points); // Draw the solid route on the map
 
       // --- WAYPOINT EXTRACTION ---
@@ -200,60 +189,59 @@ export function useFileActions() {
         }
       }
 
-      let newNaviviWaypoints: any[] = [];
+      const track = points.map((p): LatLon => [p[0], p[1]]);
+      const sampled = (): { lat: number; lon: number; name: string }[] =>
+        [0, 0.25, 0.5, 0.75, 1].map((f) => {
+          const [lat, lon] = track[Math.round(f * (track.length - 1))];
+          return { lat, lon, name: "" };
+        });
 
-      if (parsedWpts.length > 0) {
-        // Use explicit GPX waypoints
-        for (let i = 0; i < parsedWpts.length; i++) {
-          let placeName = parsedWpts[i].name;
-          if (!placeName) {
-            try {
-              if (i > 0) await new Promise(res => setTimeout(res, 1100)); // Rate limit OSM
-              const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${parsedWpts[i].lat}&lon=${parsedWpts[i].lon}`);
-              const data = await res.json();
-              placeName = data.name || data.address?.road || data.address?.city || t`Waypoint ${i + 1}`;
-            } catch { }
-          }
-          newNaviviWaypoints.push({
-            id: crypto.randomUUID(),
-            lat: parsedWpts[i].lat,
-            lng: parsedWpts[i].lon,
-            name: placeName,
-            images: [],
-            imagePans: [],
-            imageTransitions: [],
-            arrivingNarration: "",
-            routeMode: "driving"
-          });
+      // Stops sit along the recorded track (named GPX waypoints, plus its start and end), and each leg between
+      // two stops follows the recorded points instead of being routed again.
+      const stops: TrackStop[] =
+        track.length > 1
+          ? stopsAlongTrack(track, parsedWpts.length > 0 ? parsedWpts : sampled())
+          : parsedWpts.map((w) => ({ lat: w.lat, lng: w.lon, name: w.name, index: -1 }));
+
+      let lookedUp = 0;
+      for (let i = 0; i < stops.length; i++) {
+        if (stops[i].name) {
+          stops[i].name = tidyPlaceName(stops[i].name);
+          continue;
         }
-      } else if (points.length > 0) {
-        // No waypoints? Auto-sample 5 stops from the track points!
-        const rawForEnrich = points.map(p => ({ lat: p[0], lon: p[1] }));
-        const enriched = await parseAndEnrichGPX(rawForEnrich);
-        newNaviviWaypoints = enriched.map(e => ({
-          id: e.id,
-          lat: e.lat,
-          lng: e.lng,
-          name: e.name,
+        const fallback = i === 0 ? t`Start` : i === stops.length - 1 ? t`End` : t`Stop ${i + 1}`;
+        try {
+          if (lookedUp++ > 0) await new Promise((res) => setTimeout(res, 1100)); // Rate limit OSM
+          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${stops[i].lat}&lon=${stops[i].lng}`);
+          const data = await res.json();
+          stops[i].name = data.name || data.address?.road || data.address?.city || fallback;
+        } catch {
+          stops[i].name = fallback;
+        }
+      }
+
+      const newNaviviWaypoints: any[] = stops.map((stop, i) => {
+        const inner = stops[i + 1] ? legAlongTrack(track, stop, stops[i + 1]) : null;
+        return {
+          id: crypto.randomUUID(),
+          lat: stop.lat,
+          lng: stop.lng,
+          name: stop.name,
           images: [],
           imagePans: [],
           imageTransitions: [],
           arrivingNarration: "",
-          routeMode: e.routeMode,
-          customRoute: e.customRoute
-        }));
-      }
+          routeMode: inner ? "draw" : "driving",
+          customRoute: inner ?? undefined,
+        };
+      });
 
       if (newNaviviWaypoints.length > 0) {
         setWaypoints([...waypoints, ...newNaviviWaypoints]);
         setIsDirty(true);
       }
 
-      if (totalDistKm > 50) {
-        showToast(t`Imported ${newNaviviWaypoints.length} waypoints. Route > 50km.`, "warning");
-      } else {
-        showToast(t`Imported ${newNaviviWaypoints.length} waypoints successfully`, "success");
-      }
+      showToast(t`Imported ${newNaviviWaypoints.length} waypoints successfully`, "success");
     } catch (error) {
       console.error("Failed to import route:", error);
       showToast(t`Failed to parse file`, "error");
@@ -281,50 +269,3 @@ export function useFileActions() {
 
   return { importRouteFile, handleDroppedFiles, importPhotos };
 }
-
-export const parseAndEnrichGPX = async (rawGpxPoints: { lat: number, lon: number }[]) => {
-  // 1. DOWNSAMPLE: Keep max 5 stops to prevent API bans
-  const maxStops = 5;
-  let majorStops = [];
-
-  if (rawGpxPoints.length <= maxStops) {
-    majorStops = rawGpxPoints;
-  } else {
-    majorStops.push(rawGpxPoints[0]); // Start
-    const step = rawGpxPoints.length / (maxStops - 1);
-    for (let i = 1; i < maxStops - 1; i++) {
-      majorStops.push(rawGpxPoints[Math.floor(i * step)]);
-    }
-    majorStops.push(rawGpxPoints[rawGpxPoints.length - 1]); // End
-  }
-
-  // 2. ENRICH: Fetch real names with a strict 1.1 second delay
-  const enrichedWaypoints = [];
-  for (let i = 0; i < majorStops.length; i++) {
-    const point = majorStops[i];
-
-    // Crucial: Wait 1.1s between requests to respect OSM limits
-    if (i > 0) await new Promise(res => setTimeout(res, 1100));
-
-    let placeName = t`Stop ${i + 1}`;
-    try {
-      const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${point.lat}&lon=${point.lon}`);
-      const data = await res.json();
-      placeName = data.name || data.address?.road || data.address?.city || placeName;
-    } catch (e) {
-      console.warn("Geocoding failed for", point);
-    }
-
-    enrichedWaypoints.push({
-      id: crypto.randomUUID(),
-      lat: point.lat,
-      lng: point.lon,
-      name: placeName,
-      routeMode: "driving",
-      // Store the dense 1-second pings here so the route draws perfectly
-      customRoute: i === 0 ? rawGpxPoints.map(p => [p.lat, p.lon]) : []
-    });
-  }
-
-  return enrichedWaypoints;
-};
