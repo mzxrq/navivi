@@ -9,6 +9,7 @@ import {
 } from "../ui/icons";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
+import { invoke } from "@tauri-apps/api/core";
 import { useWorkspace } from "../../hooks/useWorkspace";
 
 const getThinkingSteps = () => [
@@ -113,26 +114,39 @@ export function ScriptInput({
     }
   }, [isGenerating]);
 
-  const handleScanKanji = () => {
-    const kanjiRegex = /([\u4E00-\u9FAF\u3400-\u4DBF]+)/g;
-    let match;
-    let hasDictUpdate = false;
-    const newDict = [...(settings.pronunciation_dictionary || [])];
+  // Whole words with their readings from the Python analyser; plain kanji runs if it can't be reached.
+  const findWords = async (text: string): Promise<{ word: string; reading: string }[]> => {
+    try {
+      const res = await invoke<string>("run_python_blueprint", { action: "extract_words", payload: text });
+      const parsed = JSON.parse(res.trim().split(String.fromCharCode(10)).pop() ?? "");
+      if (parsed.success && Array.isArray(parsed.words)) return parsed.words;
+    } catch (err) {
+      console.warn("extract_words failed, scanning kanji runs instead:", err);
+    }
+    const runs = text.match(/[一-龯㐀-䶿]+/g) ?? [];
+    return [...new Set(runs)].map((word) => ({ word, reading: "" }));
+  };
 
-    while ((match = kanjiRegex.exec(localPrompt)) !== null) {
-      const kanji = match[1];
-      const exists = newDict.find((entry) => entry.word === kanji);
-      if (!exists) {
-        newDict.push({ word: kanji, reading: "" });
-        hasDictUpdate = true;
+  const handleScanKanji = async () => {
+    const found = await findWords(localPrompt);
+    const dictionary = [...(settings.pronunciation_dictionary || [])];
+    let changed = false;
+
+    for (const { word, reading } of found) {
+      const existing = dictionary.find((entry) => entry.word === word);
+      if (!existing) {
+        dictionary.push({ word, reading });
+        changed = true;
+      } else if (!existing.reading && reading) {
+        existing.reading = reading;
+        changed = true;
       }
     }
 
-    if (hasDictUpdate) {
-      updateSettings({ pronunciation_dictionary: newDict });
+    if (changed) {
+      updateSettings({ pronunciation_dictionary: dictionary });
       setIsDirty(true);
     }
-    // Return focus to textarea
     textareaRef.current?.focus();
   };
 

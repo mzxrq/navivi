@@ -26,3 +26,5 @@ diffusers
 transformers
 accelerate
 psutil
+fugashi
+unidic-lite
