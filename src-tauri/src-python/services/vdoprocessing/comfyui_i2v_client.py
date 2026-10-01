@@ -569,8 +569,16 @@ class ComfyUII2VClient:
             raise RuntimeError(f"ComfyUI workflow validation failed: {data['error']}")
         return data["prompt_id"]
 
-    def _wait_for_result(self, client: httpx.Client, prompt_id: str) -> Dict[str, Any]:
-        deadline = time.monotonic() + tuning.COMFYUI_GENERATION_TIMEOUT_SECONDS
+    def _wait_for_result(
+        self,
+        client: httpx.Client,
+        prompt_id: str,
+        output_node: str = None,
+        timeout: float = None,
+    ) -> Dict[str, Any]:
+        output_node = output_node or _SAVE_VIDEO_NODE_ID
+        timeout = timeout or tuning.COMFYUI_GENERATION_TIMEOUT_SECONDS
+        deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             try:
                 response = client.get(f"{self.base_url}/history/{prompt_id}", timeout=30.0)
@@ -610,14 +618,51 @@ class ComfyUII2VClient:
                         f"{status.get('messages')}"
                     )
                 outputs = entry.get("outputs", {})
-                if _SAVE_VIDEO_NODE_ID in outputs:
-                    return outputs[_SAVE_VIDEO_NODE_ID]
+                if output_node in outputs:
+                    return outputs[output_node]
             time.sleep(self._POLL_INTERVAL_SECONDS)
 
         raise RuntimeError(
             f"ComfyUI generation for prompt {prompt_id} did not finish within "
-            f"{tuning.COMFYUI_GENERATION_TIMEOUT_SECONDS:.0f}s."
+            f"{timeout:.0f}s."
         )
+
+    def run_image_graph(
+        self,
+        build_graph,
+        image_path: str,
+        output_node: str,
+        output_path: str,
+        timeout: float = None,
+    ) -> str:
+        """Uploads image_path, runs build_graph(uploaded_name) and saves the
+        first image output_node produced to output_path. Raises on failure."""
+        self._ensure_server_running()
+        with httpx.Client() as client:
+            graph = build_graph(self._upload_image(client, image_path))
+            prompt_id = self._submit(client, graph)
+            outputs = self._wait_for_result(client, prompt_id, output_node, timeout)
+            self._touch_activity()
+            images = outputs.get("images")
+            if not images:
+                raise RuntimeError(f"ComfyUI job {prompt_id} produced no image output.")
+            self._download_video(client, images[0], output_path)
+        return output_path
+
+    def free_memory(self) -> None:
+        """Unloads every model ComfyUI holds, so the next job starts with
+        an empty GPU. Best-effort."""
+        if not self._is_server_up():
+            return
+        try:
+            with httpx.Client() as client:
+                client.post(
+                    f"{self.base_url}/free",
+                    json={"unload_models": True, "free_memory": True},
+                    timeout=30.0,
+                )
+        except httpx.HTTPError as exc:
+            logger.warning("Could not free ComfyUI memory (%s).", exc)
 
     def _download_video(
         self, client: httpx.Client, video_info: Dict[str, Any], output_path: str

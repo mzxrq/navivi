@@ -8,6 +8,7 @@ from typing import Optional
 
 from services import tuning
 from services.config.job_config import JobConfigManager
+from services.config.upscaled_images import upscale_enabled
 from services.logger.progress import tracker
 from services.render_estimate import StageRecorder
 from services.vdoprocessing.vdoexporter import VideoExporter, sweep_stale_temp_files
@@ -34,10 +35,11 @@ from .subtitle_step import (
     burn_subtitles,
 )
 from .timeline_step import build_timeline
+from .upscale_step import upscale_waypoint_images
 
 
-# GPS, TTS, subtitles, attraction videos, route render, subtitle burn, intro/outro.
-PIPELINE_STAGES = 7
+# GPS, TTS, subtitles, photo upscale, attraction videos, route render, subtitle burn, intro/outro.
+PIPELINE_STAGES = 8
 
 
 def _stop_gpu_servers() -> None:
@@ -162,6 +164,23 @@ def run_full_pipeline(
             str(subtitle_dir),
             force=force_regenerate,
         )
+
+    # --- STEP 2c ---
+    # Small waypoint photos get an upscaled copy; JobConfigManager then hands
+    # every later step those paths (job_config.json keeps the originals).
+    # Off with settings.upscale_popup_images=false, and always under
+    # skip_rich_media.
+    if upscale_enabled(settings):
+        tracker.stage("Upscaling waypoint photos...")
+        tuning.ensure_free_ram("photo upscale", min_free_ram, relief=stop_tts_server)
+        upscale_waypoint_images(str(config_file_path), force=force_regenerate)
+        job_config = JobConfigManager(config_file_path)
+        if not attractions_on:
+            from services.vdoprocessing.comfyui_i2v_client import ComfyUII2VClient
+            ComfyUII2VClient.stop_server()
+    else:
+        tracker.stage("Skipping photo upscale...")
+        logger.info("Step 2c: photo upscale is off (upscale_popup_images / skip_rich_media).")
 
     # --- STEP 3 ---
     # Opt-out per project via job_config.json's settings.enable_attraction_videos

@@ -733,6 +733,18 @@ class AttractionVideoGenerator:
         if not image_list:
             return None
 
+        # <stem>.inputs.json records the photos a clip was made from; a
+        # different list (e.g. upscaled copies) remakes it. Clips from before
+        # this sidecar existed are kept as they are.
+        inputs_path = self.output_dir / f"{Path(output_filename).stem}.inputs.json"
+        try:
+            previous_inputs = json.loads(inputs_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            previous_inputs = None
+        if previous_inputs is not None and previous_inputs != image_list:
+            logger.info("Attraction photos changed since %s was made — remaking it.", output_filename)
+            force = True
+
         final_path = self.output_dir / output_filename
         if not force and output_is_valid(final_path):
             logger.info(
@@ -755,6 +767,9 @@ class AttractionVideoGenerator:
                     stale_raw.unlink()
                 except OSError:
                     pass
+
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        inputs_path.write_text(json.dumps(image_list, ensure_ascii=False), encoding="utf-8")
 
         # --- Check list vs string for prompts ---
         if isinstance(prompt_text, str):

@@ -15,10 +15,11 @@ from services.gpsparser.gpscalculator import GPSMath
 from services.logger.progress import tracker
 from services.mapfetcher.mapfetcher import MapFetcher
 from services.vdoprocessing.route2vdo import RouteAnimator
-from services.vdoprocessing.route_inputs import overview_flags_hash, route_inputs_hash
+from services.vdoprocessing.route_inputs import overview_flags_hash, photo_inputs_hash, route_inputs_hash
 from services.vdoprocessing.spatial_renderer import SpatialRenderer
 from services.localization.localization import format_waypoint_label
 from services.config.job_config import JobConfigManager
+from services.config.upscaled_images import IMAGE_KEYS, apply_upscaled_images
 from services import tuning
 
 from .audio_step import overview_tagged_script
@@ -249,6 +250,12 @@ def _checkpoint_parts(
             config_data = json.load(f)
     except (OSError, ValueError):
         config_data = {}
+    # The photos the render will show (upscaled copies where they exist).
+    shown = json.loads(json.dumps(config_data))
+    apply_upscaled_images(shown, Path(project_config_path).parent)
+    parts["route.photos"] = photo_inputs_hash(
+        [[wp.get(k) for k in IMAGE_KEYS] for wp in shown.get("waypoints") or [] if isinstance(wp, dict)]
+    )
     for key, value in config_data.items():
         if key == "updated_at":
             continue
@@ -289,7 +296,8 @@ def _checkpoint_parts(
 # The route render is reused unless the waypoints' route inputs changed (or
 # an output is missing). Not route.geometry: the app can save a different
 # GPX line for the same waypoints (see route_inputs.py).
-ROUTE_CHECKPOINT_PARTS = ("route.waypoints", "route.overview_flags")
+# route.photos: a new or upscaled pop-up photo has to reach the overview and legs.
+ROUTE_CHECKPOINT_PARTS = ("route.waypoints", "route.overview_flags", "route.photos")
 
 
 def _describe_changed_parts(old: dict, new: dict, limit: int = 25) -> str:

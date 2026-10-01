@@ -15,6 +15,7 @@ from typing import Union, Any, Dict, Final, List, Optional
 
 # [Utility] Import the logging setup for consistent logging across services
 from services.logger.logger import setup_logger
+from services.config.upscaled_images import apply_upscaled_images, restore_original_images
 
 logger = setup_logger("JobConfigManager")
 
@@ -73,6 +74,8 @@ class JobConfigManager:
             raise
 
         self._resolve_relative_paths()
+        # Upscaled photo copies, in memory only; save() writes the originals.
+        self._upscaled_originals = apply_upscaled_images(self.data, self.config_path.parent)
 
     # Keys whose values are file paths, resolved on load so everything
     # downstream can keep treating them as plain absolute paths.
@@ -164,7 +167,10 @@ class JobConfigManager:
 
         try:
             with open(save_path, "w", encoding="utf-8") as f:
-                json.dump(self.data, f, indent=2, ensure_ascii=False)
+                json.dump(
+                    restore_original_images(self.data, getattr(self, "_upscaled_originals", {})),
+                    f, indent=2, ensure_ascii=False,
+                )
             logger.info(f"Successfully saved configuration to {save_path}")
 
             # Keep self.config_path updated to the new active path
