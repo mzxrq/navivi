@@ -994,7 +994,7 @@ export function MapArea() {
                     onContextMenu={(e) => handleMarkerContextMenu(e, wp.id)}
                   >
                     <div
-                      className={`bg-zinc-900 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-lg border border-white/20 mb-1 transition-opacity whitespace-nowrap ${isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
+                      className={`pointer-events-none bg-zinc-900 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-lg border border-white/20 mb-1 transition-opacity whitespace-nowrap ${isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
                     >
                       {wp.name || t`Waypoint`}
                     </div>
@@ -1054,7 +1054,7 @@ export function MapArea() {
                   onContextMenu={(e) => handleMarkerContextMenu(e, wp.id)}
                 >
                   <div
-                    className={`bg-zinc-900 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-lg border border-white/20 mb-1 transition-opacity whitespace-nowrap ${isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
+                    className={`pointer-events-none bg-zinc-900 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-lg border border-white/20 mb-1 transition-opacity whitespace-nowrap ${isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
                   >
                     {wp.name || t`Waypoint`}
                   </div>
