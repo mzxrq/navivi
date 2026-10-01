@@ -151,6 +151,33 @@ def test_waypoint_audio_regenerates_on_voice_change(lib, tmp_path):
     assert len(calls) == 2
 
 
+def test_all_narration_speaks_the_pronunciation_dictionary(lib, tmp_path):
+    out = tmp_path / "audio"
+    out.mkdir()
+    spoken = []
+
+    class FakeClient(_Client):
+        async def generate_speech(self, text, output_filename):
+            spoken.append(text)
+            return str(_wav(out / output_filename, 0.5, level=1000))
+
+    class FakeProcessor:
+        def analyze_pauses(self, path):
+            return {"duration_seconds": 0.5, "pauses": []}
+
+    wp = {"label": "A", "arrivingNarration": "孝子駅へ。", "attractionNarration": "孝子駅です。"}
+    d = [{"word": "孝子", "reading": "きょうし"}]
+    c = FakeClient("none", 1.25)
+    leg = lambda p: asyncio.run(audio_step.generate_waypoint_audio(wp, 0, c, FakeProcessor(), out, pronunciation_dict=p))
+    att = lambda p: asyncio.run(audio_step.generate_attraction_audio_for_waypoint(wp, 0, c, FakeProcessor(), out, pronunciation_dict=p))
+    leg([]), att([])
+    leg(d), att(d)
+    assert all("孝子" not in s and "きょうし" in s for s in spoken[-2:])
+    leg(d), att(d)
+    assert len(spoken) == 4  # unchanged dictionary reuses the audio
+    assert "孝子" in leg(d)["text"]  # subtitles keep the kanji
+
+
 def test_cli_actions_return_json_errors(lib, tmp_path):
     assert run_voice_action("tts_voices_list", {})["voices"][0]["id"] == "none"
     res = run_voice_action("tts_voice_add", {"path": str(tmp_path / "missing.wav"), "id": "x"})

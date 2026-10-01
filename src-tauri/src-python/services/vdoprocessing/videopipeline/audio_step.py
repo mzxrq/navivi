@@ -237,7 +237,12 @@ async def generate_attraction_audio_for_waypoint(
     audio_filename = attraction_audio_filename(idx, label)
     existing_path = Path(output_dir) / audio_filename
 
-    if not force and output_is_valid(existing_path) and _voice_matches(existing_path, client):
+    try:
+        same_text = _spoken_text_path(existing_path).read_text(encoding="utf-8") == tts_script
+    except OSError:
+        # no note: made before it existed, so only trust it when the dictionary changes nothing
+        same_text = tts_script == script
+    if not force and output_is_valid(existing_path) and same_text and _voice_matches(existing_path, client):
         logger.info(
             "Step 2: [%d] '%s' attraction narration already exists — skipping TTS.",
             idx + 1, label,
@@ -246,6 +251,10 @@ async def generate_attraction_audio_for_waypoint(
     else:
         logger.info("Step 2: [%d] Generating attraction narration for: '%s'", idx + 1, label)
         audio_path = await client.generate_speech(tts_script, output_filename=audio_filename)
+        try:
+            _spoken_text_path(audio_path).write_text(tts_script, encoding="utf-8")
+        except OSError:
+            pass
         _write_voice_note(audio_path, client)
 
     analysis = processor.analyze_pauses(audio_path)
@@ -284,7 +293,7 @@ async def generate_overview_audio(
 
     try:
         # no note: made before it existed, possibly from an older script
-        same_text = _spoken_text_path(existing_path).read_text(encoding="utf-8") == script
+        same_text = _spoken_text_path(existing_path).read_text(encoding="utf-8") == tts_script
     except OSError:
         same_text = False
     if not force and output_is_valid(existing_path) and same_text and _voice_matches(existing_path, client):
@@ -294,7 +303,7 @@ async def generate_overview_audio(
         logger.info("Step 2: Generating overview narration audio.")
         audio_path = await client.generate_speech(tts_script, output_filename=audio_filename)
         try:
-            _spoken_text_path(audio_path).write_text(script, encoding="utf-8")
+            _spoken_text_path(audio_path).write_text(tts_script, encoding="utf-8")
         except OSError:
             pass
         _write_voice_note(audio_path, client)
@@ -332,14 +341,18 @@ def _spoken_text_path(audio_path) -> Path:
     return Path(str(audio_path) + ".txt")
 
 
-def _spoken_text_matches(audio_path, script: str, waypoint: dict) -> bool:
-    """Whether the audio already on disk speaks `script`. Audio made before
-    this note existed spoke the full arriving + attraction text, so without a
+def _spoken_text_matches(audio_path, script: str, waypoint: dict, tts_script: Optional[str] = None) -> bool:
+    """Whether the audio already on disk speaks `script` (as `tts_script`, after
+    the pronunciation dictionary). Audio made before this note existed spoke
+    the full arriving + attraction text without the dictionary, so without a
     note that is what it is taken to say."""
+    tts_script = script if tts_script is None else tts_script
     note = _spoken_text_path(audio_path)
     try:
-        return note.read_text(encoding="utf-8") == script
+        return note.read_text(encoding="utf-8") == tts_script
     except OSError:
+        if tts_script != script:
+            return False
         legacy = clean_text(base_narration_script(waypoint, route_only=False) or "")
         # Spacing aside: a cued script joins its parts without the space.
         return "".join(legacy.split()) == "".join(script.split())
@@ -375,7 +388,7 @@ async def generate_waypoint_audio(
     if (
         not force
         and output_is_valid(existing_path)
-        and _spoken_text_matches(existing_path, script, waypoint)
+        and _spoken_text_matches(existing_path, script, waypoint, tts_script)
         and _voice_matches(existing_path, client)
     ):
         logger.info(
@@ -384,9 +397,9 @@ async def generate_waypoint_audio(
         audio_path = str(existing_path)
     else:
         logger.info("Step 2: [%d] Generating audio for: '%s'", idx + 1, label)
-        audio_path = await client.generate_speech(script, output_filename=audio_filename)
+        audio_path = await client.generate_speech(tts_script, output_filename=audio_filename)
         try:
-            _spoken_text_path(audio_path).write_text(script, encoding="utf-8")
+            _spoken_text_path(audio_path).write_text(tts_script, encoding="utf-8")
         except OSError:
             pass
         _write_voice_note(audio_path, client)
@@ -448,7 +461,8 @@ def existing_audio_data(project_config_path: str) -> dict:
             spoken = _spoken_text_path(overview_path).read_text(encoding="utf-8")
         except OSError:
             spoken = None
-        if spoken != clean_text(tagged).strip():
+        p_dict = project_config.get("settings", {}).get("pronunciation_dictionary", [])
+        if spoken not in (clean_text(tagged).strip(), apply_pronunciation_dictionary(clean_text(tagged).strip(), p_dict)):
             logger.warning(
                 "Overview narration audio may not match the current script; "
                 "its cues can land on the wrong stops. Re-run TTS for the overview."
@@ -567,7 +581,7 @@ def generate_audio(
             try:
                 overview_clip = await generate_overview_audio(
                     project_config, client, processor, output_dir, force=force,
-                    project_dir=config_path.parent,
+                    project_dir=config_path.parent, pronunciation_dict=p_dict,
                 )
             except Exception as exc:
                 logger.warning("Overview narration TTS failed (%s). Leaving overview clip silent.", exc)
@@ -624,7 +638,7 @@ def generate_audio(
                     await asyncio.sleep(2.0)
                     try:
                         clip = await generate_waypoint_audio(
-                            wp, idx, client, processor, output_dir, force=force
+                            wp, idx, client, processor, output_dir, force=force, pronunciation_dict=p_dict
                         )
                     except Exception as retry_exc:
                         logger.error("TTS retry failed for %s (%s). Skipping audio.", label, retry_exc)
