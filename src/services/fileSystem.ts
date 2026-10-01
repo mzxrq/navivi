@@ -2,7 +2,7 @@ import { documentDir, join, basename, dirname } from "@tauri-apps/api/path";
 import { writeTextFile, writeFile, mkdir, exists, copyFile, readTextFile, readDir, BaseDirectory, open as fsOpen } from "@tauri-apps/plugin-fs";
 import { open as dialogOpen, save as dialogSave } from "@tauri-apps/plugin-dialog";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
-import { appConfig, fileSystem } from "../config/constants";
+import { appConfig, fileSystem, GLOBAL_DICTIONARY_KEY } from "../config/constants";
 import { buildAssetManifest } from "../utils/manifestBuilder";
 import { TimelineData, RenderSettings, RecentProjects } from "../types";
 import { emptyTimeline, timelineFromEditorState, timelineFromPipeline, toManifest } from "../features/editor/model";
@@ -295,7 +295,7 @@ export const saveProjectData = async (
     archive_path: archivePath,
     thumbnail_path: thumbnailPath,
     source_files: { gps_route: "raw_track.gpx" },
-    settings: savedSettings,
+    settings: { ...savedSettings, global_pronunciation_dictionary: (await db.appSettings.get(GLOBAL_DICTIONARY_KEY)) ?? [] },
     map_language: i18n.locale || "en",
     overview_narration: "",
     video_title: row.videoTitle,

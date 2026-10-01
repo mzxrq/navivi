@@ -186,10 +186,20 @@ def _write_voice_note(audio_path, client: Any) -> None:
         pass
 
 
+def merge_pronunciation(shared: Optional[list], project: Optional[list]) -> list:
+    """The words every project shares plus this project's own; the project's reading wins for the same word."""
+    merged = {}
+    for entry in list(shared or []) + list(project or []):
+        if isinstance(entry, dict) and entry.get("word") and entry.get("reading"):
+            merged[entry["word"]] = entry["reading"]
+    return [{"word": word, "reading": reading} for word, reading in merged.items()]
+
+
 def apply_pronunciation_dictionary(text: str, dictionary: list) -> str:
     if not text or not dictionary:
         return text
-    for entry in dictionary:
+    # Longest words first, so 三段壁 is replaced before a shorter entry such as 三段 can cut into it.
+    for entry in sorted(dictionary, key=lambda e: len(e.get("word") or ""), reverse=True):
         word = entry.get("word")
         reading = entry.get("reading")
         if word and reading:

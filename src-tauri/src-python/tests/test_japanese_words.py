@@ -43,3 +43,21 @@ def test_reading_of_a_phrase():
 
 def test_to_hiragana_keeps_everything_else():
     assert jw.to_hiragana("スキトオル、ABC") == "すきとおる、ABC"
+
+
+def test_dictionaries_merge_with_the_project_winning():
+    from services.vdoprocessing.videopipeline.audio_step import apply_pronunciation_dictionary, merge_pronunciation
+
+    merged = merge_pronunciation(
+        [{"word": "三段壁", "reading": "さんだんへき"}, {"word": "白良浜", "reading": "しららはま"}],
+        [{"word": "三段壁", "reading": "さんだんべき"}, {"word": "", "reading": "x"}],
+    )
+    assert {e["word"]: e["reading"] for e in merged} == {"三段壁": "さんだんべき", "白良浜": "しららはま"}
+    assert merge_pronunciation(None, None) == []
+
+
+def test_longer_words_are_replaced_first():
+    from services.vdoprocessing.videopipeline.audio_step import apply_pronunciation_dictionary
+
+    entries = [{"word": "三段", "reading": "さんだん"}, {"word": "三段壁", "reading": "さんだんべき"}]
+    assert apply_pronunciation_dictionary("三段壁と三段", entries) == "さんだんべきとさんだん"

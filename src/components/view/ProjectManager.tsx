@@ -226,7 +226,7 @@ export function ProjectManager() {
       onSelect: () => openModal("duplicate", project),
     },
     {
-      label: t`Advanced Settings`,
+      label: t`Project settings`,
       icon: Settings,
       onSelect: () => openModal("settings", project),
     },

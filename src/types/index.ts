@@ -88,6 +88,11 @@ export interface ProjectSettings {
   ai_features_enabled?: boolean;
   pronunciation_dictionary?: Array<{ word: string; reading: string }>;
   tts?: { voice?: string; speed?: number };
+  global_pronunciation_dictionary?: Array<{ word: string; reading: string }>;
+  enable_attraction_videos?: boolean;
+  burn_subtitles?: boolean;
+  use_narration_cues?: boolean;
+  attraction_fade_seconds?: number;
 }
 
 export interface ProjectMetadata {
