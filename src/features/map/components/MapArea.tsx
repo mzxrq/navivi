@@ -133,8 +133,9 @@ export function MapArea() {
   };
 
   // Called by <Map onLoad>: canvas now exists, safe to attach WebGL handlers
-  const handleMapLoad = () => {
-    const map = mapRef.current?.getMap();
+  // A reused map fires "load" while the component mounts, before mapRef is attached: use the event's own map.
+  const handleMapLoad = (e?: { target?: mapboxgl.Map }) => {
+    const map = e?.target ?? mapRef.current?.getMap();
     if (!map) return;
     map.resize();
     setIsMapLoaded(true);
@@ -921,7 +922,7 @@ export function MapArea() {
           ref={mapRef}
           cursor={isEraserMode || isViaMode ? "crosshair" : ""}
           initialViewState={initialViewState}
-          onLoad={handleMapLoad}
+          onLoad={(e) => handleMapLoad(e)}
           onMoveEnd={captureMapThumbnail}
           onClick={handleMapClick}
           onContextMenu={handleMapContextMenu}
