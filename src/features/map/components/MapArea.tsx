@@ -997,6 +997,7 @@ export function MapArea() {
                   longitude={wp.lng}
                   latitude={wp.lat}
                   anchor="bottom"
+                  className="hover:z-20"
                   style={isSelected ? { zIndex: 5 } : undefined}
                 >
                   <div
@@ -1057,6 +1058,7 @@ export function MapArea() {
                   }, 0);
                 }}
                 anchor="bottom"
+                className="hover:z-20"
                 style={isSelected ? { zIndex: 5 } : undefined}
               >
                 <div
