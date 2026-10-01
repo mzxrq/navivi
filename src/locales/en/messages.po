@@ -95,7 +95,7 @@ msgid "{0} (copy)"
 msgstr "{0} (copy)"
 
 #. placeholder {0}: wpToClone.name
-#: src/hooks/useWaypointActions.ts:87
+#: src/hooks/useWaypointActions.ts:79
 msgid "{0} (Return)"
 msgstr "{0} (Return)"
 
@@ -217,7 +217,7 @@ msgstr "{narrated} clips"
 msgid "{populatedStops} with media"
 msgstr "{populatedStops} with media"
 
-#: src/hooks/useFileActions.ts:100
+#: src/hooks/useFileActions.ts:101
 msgid "{skipped} photos without a location were skipped."
 msgstr "{skipped} photos without a location were skipped."
 
@@ -389,7 +389,7 @@ msgstr "Add at least two stops to draw a path between them."
 msgid "Add music"
 msgstr "Add music"
 
-#: src/features/map/components/MapArea.tsx:1189
+#: src/features/map/components/MapArea.tsx:1181
 msgid "Add new points after this one"
 msgstr "Add new points after this one"
 
@@ -539,7 +539,7 @@ msgid "An unknown error occurred during rendering."
 msgstr "An unknown error occurred during rendering."
 
 #. placeholder {0}: idx + 1
-#: src/features/map/components/MapArea.tsx:1225
+#: src/features/map/components/MapArea.tsx:1217
 msgid "Anchor {0}"
 msgstr "Anchor {0}"
 
@@ -967,7 +967,7 @@ msgstr "Click the map to add points. Drag a point to move it; click one to inser
 msgid "Click the map to add:"
 msgstr "Click the map to add:"
 
-#: src/features/map/components/MapArea.tsx:878
+#: src/features/map/components/MapArea.tsx:870
 msgid "Click the map to nudge the route. Drag a via point to move it, or right-click it for options."
 msgstr "Click the map to nudge the route. Drag a via point to move it, or right-click it for options."
 
@@ -1074,7 +1074,7 @@ msgstr "Context from document: {0}"
 msgid "Controls auto save of editors that have unsaved changes"
 msgstr "Controls auto save of editors that have unsaved changes"
 
-#: src/hooks/useFileActions.ts:129
+#: src/hooks/useFileActions.ts:130
 msgid "Converting GPS file format..."
 msgstr "Converting GPS file format..."
 
@@ -1210,8 +1210,8 @@ msgid "Custom Color"
 msgstr "Custom Color"
 
 #: src/components/ui/AppSettings.tsx:354
-#: src/features/map/components/MapArea.tsx:1023
-#: src/features/map/components/MapArea.tsx:1084
+#: src/features/map/components/MapArea.tsx:1015
+#: src/features/map/components/MapArea.tsx:1076
 #: src/features/map/components/WaypointEditor.tsx:610
 msgid "Custom Marker"
 msgstr "Custom Marker"
@@ -1276,7 +1276,7 @@ msgstr "Delete Anchor"
 #~ msgid "Delete marker"
 #~ msgstr "Delete marker"
 
-#: src/features/map/components/MapArea.tsx:1203
+#: src/features/map/components/MapArea.tsx:1195
 msgid "Delete point"
 msgstr "Delete point"
 
@@ -1375,7 +1375,7 @@ msgstr "Don't Save"
 #: src/components/ui/RenderOverlay.tsx:1336
 #: src/features/editor/ExportDialog.tsx:60
 #: src/features/map/components/DrawBar.tsx:319
-#: src/features/map/components/MapArea.tsx:892
+#: src/features/map/components/MapArea.tsx:884
 #: src/features/map/components/Sidebar.tsx:267
 msgid "Done"
 msgstr "Done"
@@ -1444,11 +1444,11 @@ msgstr "drawn"
 msgid "Drive"
 msgstr "Drive"
 
-#: src/features/map/components/MapArea.tsx:1243
+#: src/features/map/components/MapArea.tsx:1235
 msgid "Drop photos here to auto-plot your route"
 msgstr "Drop photos here to auto-plot your route"
 
-#: src/features/map/components/MapArea.tsx:1268
+#: src/features/map/components/MapArea.tsx:1260
 msgid "Drop photos or GPS files to plot route"
 msgstr "Drop photos or GPS files to plot route"
 
@@ -1493,7 +1493,7 @@ msgstr "Duplicate Project Name"
 msgid "Duration"
 msgstr "Duration"
 
-#: src/features/map/components/MapArea.tsx:973
+#: src/features/map/components/MapArea.tsx:965
 msgid "E"
 msgstr "E"
 
@@ -1556,6 +1556,7 @@ msgstr "Enable 3D Terrain"
 #: src/features/editor/Inspector.tsx:128
 #: src/features/editor/Inspector.tsx:190
 #: src/features/map/components/MapToolbar.tsx:91
+#: src/hooks/useFileActions.ts:212
 msgid "End"
 msgstr "End"
 
@@ -1612,7 +1613,7 @@ msgstr "Estimating…"
 #~ msgid "Ethereal sinusoidal wave distortion and color blend"
 #~ msgstr "Ethereal sinusoidal wave distortion and color blend"
 
-#: src/features/map/components/MapArea.tsx:1246
+#: src/features/map/components/MapArea.tsx:1238
 msgid "EXIF GPS tags from your travel photos will automatically generate sequenced stops on the map."
 msgstr "EXIF GPS tags from your travel photos will automatically generate sequenced stops on the map."
 
@@ -1690,7 +1691,7 @@ msgstr "Export process completed successfully!"
 msgid "Extracting locations using AI..."
 msgstr "Extracting locations using AI..."
 
-#: src/hooks/useFileActions.ts:189
+#: src/hooks/useFileActions.ts:176
 msgid "Extracting waypoints from GPS data..."
 msgstr "Extracting waypoints from GPS data..."
 
@@ -1760,7 +1761,7 @@ msgstr "Failed to load demo route"
 msgid "Failed to load project: "
 msgstr "Failed to load project: "
 
-#: src/hooks/useFileActions.ts:280
+#: src/hooks/useFileActions.ts:266
 msgid "Failed to open file dialog"
 msgstr "Failed to open file dialog"
 
@@ -1768,7 +1769,7 @@ msgstr "Failed to open file dialog"
 msgid "Failed to open file explorer:"
 msgstr "Failed to open file explorer:"
 
-#: src/hooks/useFileActions.ts:261
+#: src/hooks/useFileActions.ts:247
 msgid "Failed to parse file"
 msgstr "Failed to parse file"
 
@@ -1776,7 +1777,7 @@ msgstr "Failed to parse file"
 msgid "Failed to process document"
 msgstr "Failed to process document"
 
-#: src/hooks/useFileActions.ts:105
+#: src/hooks/useFileActions.ts:106
 msgid "Failed to process dropped files"
 msgstr "Failed to process dropped files"
 
@@ -1969,7 +1970,7 @@ msgid "GPS track"
 msgstr "GPS track"
 
 #: src/components/ui/NewProject.tsx:137
-#: src/hooks/useFileActions.ts:113
+#: src/hooks/useFileActions.ts:114
 msgid "GPS/Text Files"
 msgstr "GPS/Text Files"
 
@@ -2078,19 +2079,19 @@ msgid "Import Photos..."
 msgstr "Import Photos..."
 
 #. placeholder {0}: photoPoints.length
-#: src/hooks/useFileActions.ts:98
+#: src/hooks/useFileActions.ts:99
 msgid "Imported {0} photos and generated route."
 msgstr "Imported {0} photos and generated route."
 
 #. placeholder {0}: newNaviviWaypoints.length
-#: src/hooks/useFileActions.ts:257
+#: src/hooks/useFileActions.ts:244
 msgid "Imported {0} waypoints successfully"
 msgstr "Imported {0} waypoints successfully"
 
 #. placeholder {0}: newNaviviWaypoints.length
 #: src/hooks/useFileActions.ts:255
-msgid "Imported {0} waypoints. Route > 50km."
-msgstr "Imported {0} waypoints. Route > 50km."
+#~ msgid "Imported {0} waypoints. Route > 50km."
+#~ msgstr "Imported {0} waypoints. Route > 50km."
 
 #: src/features/timeline/components/elements/inspector/InspectorTransitionsPanel.tsx:25
 #~ msgid "In-Transition"
@@ -2222,11 +2223,11 @@ msgstr "Loading voices…"
 msgid "Loading…"
 msgstr "Loading…"
 
-#: src/features/map/components/MapArea.tsx:415
-#: src/features/map/components/MapArea.tsx:457
-#: src/features/map/components/MapArea.tsx:498
-#: src/hooks/useWaypointActions.ts:24
-#: src/hooks/useWaypointActions.ts:62
+#: src/features/map/components/MapArea.tsx:407
+#: src/features/map/components/MapArea.tsx:449
+#: src/features/map/components/MapArea.tsx:490
+#: src/hooks/useWaypointActions.ts:16
+#: src/hooks/useWaypointActions.ts:54
 msgid "Locating..."
 msgstr "Locating..."
 
@@ -2569,7 +2570,7 @@ msgstr "No Internet Connection"
 msgid "None"
 msgstr "None"
 
-#: src/hooks/useFileActions.ts:65
+#: src/hooks/useFileActions.ts:66
 msgid "None of these photos has a location. Photos saved from websites or chat apps usually don't."
 msgstr "None of these photos has a location. Photos saved from websites or chat apps usually don't."
 
@@ -2689,7 +2690,7 @@ msgstr "Pan Up"
 msgid "Parsing Maps & GPS Data{prog}..."
 msgstr "Parsing Maps & GPS Data{prog}..."
 
-#: src/features/map/components/MapArea.tsx:1277
+#: src/features/map/components/MapArea.tsx:1269
 msgid "Parsing Route Data..."
 msgstr "Parsing Route Data..."
 
@@ -2716,7 +2717,7 @@ msgstr "Photo clips"
 msgid "Photos"
 msgstr "Photos"
 
-#: src/hooks/useFileActions.ts:269
+#: src/hooks/useFileActions.ts:255
 msgid "Photos & Images"
 msgstr "Photos & Images"
 
@@ -2757,7 +2758,7 @@ msgstr "Playing..."
 #~ msgstr "Please drop transitions directly on the cut between two clips"
 
 #. placeholder {0}: idx + 1
-#: src/features/map/components/MapArea.tsx:1187
+#: src/features/map/components/MapArea.tsx:1179
 msgid "Point {0}"
 msgstr "Point {0}"
 
@@ -3268,10 +3269,10 @@ msgstr "Route Overview Narration"
 
 #. placeholder {0}: mapDefaults.maxWaypoints
 #: src/features/map/components/MapArea.tsx:401
-msgid "Routes are limited to {0} waypoints in this preview build."
-msgstr "Routes are limited to {0} waypoints in this preview build."
+#~ msgid "Routes are limited to {0} waypoints in this preview build."
+#~ msgstr "Routes are limited to {0} waypoints in this preview build."
 
-#: src/features/map/components/MapArea.tsx:970
+#: src/features/map/components/MapArea.tsx:962
 msgid "S"
 msgstr "S"
 
@@ -3417,7 +3418,7 @@ msgstr "Select all"
 #~ msgid "Select clip or drag to cut"
 #~ msgstr "Select clip or drag to cut"
 
-#: src/features/map/components/MapArea.tsx:1256
+#: src/features/map/components/MapArea.tsx:1248
 msgid "Select Photos..."
 msgstr "Select Photos..."
 
@@ -3605,6 +3606,7 @@ msgstr "Spoken while the route travels to this stop."
 #: src/features/map/components/MapToolbar.tsx:90
 #: src/features/map/components/WaypointEditor.tsx:306
 #: src/features/map/hooks/useStopMenus.ts:220
+#: src/hooks/useFileActions.ts:212
 msgid "Start"
 msgstr "Start"
 
@@ -3652,7 +3654,7 @@ msgid "Stop "
 msgstr "Stop "
 
 #. placeholder {0}: i + 1
-#: src/hooks/useFileActions.ts:311
+#: src/hooks/useFileActions.ts:212
 msgid "Stop {0}"
 msgstr "Stop {0}"
 
@@ -3660,7 +3662,7 @@ msgstr "Stop {0}"
 msgid "Stop {stopNum}: {stopName}"
 msgstr "Stop {stopNum}: {stopName}"
 
-#: src/features/map/components/MapArea.tsx:514
+#: src/features/map/components/MapArea.tsx:506
 msgid "Stop By"
 msgstr "Stop By"
 
@@ -3967,13 +3969,13 @@ msgstr "Undo"
 #~ msgid "Unhide Track"
 #~ msgstr "Unhide Track"
 
-#: src/features/map/components/MapArea.tsx:441
-#: src/features/map/components/MapArea.tsx:483
-#: src/features/map/components/MapArea.tsx:521
+#: src/features/map/components/MapArea.tsx:433
+#: src/features/map/components/MapArea.tsx:475
+#: src/features/map/components/MapArea.tsx:513
 #: src/features/map/components/WaypointEditor.tsx:129
-#: src/hooks/useWaypointActions.ts:55
-#: src/hooks/useWaypointActions.ts:72
-#: src/hooks/useWaypointActions.ts:76
+#: src/hooks/useWaypointActions.ts:47
+#: src/hooks/useWaypointActions.ts:64
+#: src/hooks/useWaypointActions.ts:68
 msgid "Unknown Location"
 msgstr "Unknown Location"
 
@@ -4087,7 +4089,7 @@ msgstr "Vertical 9:16"
 #~ msgstr "Vertical portrait format (1080x1920)"
 
 #. placeholder {0}: idx + 1
-#: src/features/map/components/MapArea.tsx:1137
+#: src/features/map/components/MapArea.tsx:1129
 msgid "Via {0} · Right-click for options"
 msgstr "Via {0} · Right-click for options"
 
@@ -4173,18 +4175,16 @@ msgid "Walk"
 msgstr "Walk"
 
 #: src/features/map/components/DrawBar.tsx:285
-#: src/features/map/components/MapArea.tsx:476
-#: src/features/map/components/MapArea.tsx:1007
-#: src/features/map/components/MapArea.tsx:1067
+#: src/features/map/components/MapArea.tsx:468
+#: src/features/map/components/MapArea.tsx:999
+#: src/features/map/components/MapArea.tsx:1059
 #: src/features/map/hooks/useStopMenus.ts:151
 #: src/features/map/hooks/useStopMenus.ts:207
 msgid "Waypoint"
 msgstr "Waypoint"
 
-#. placeholder {0}: i + 1
 #. placeholder {0}: newId.substring(0, 4).toUpperCase()
-#: src/hooks/useFileActions.ts:216
-#: src/hooks/useWaypointActions.ts:47
+#: src/hooks/useWaypointActions.ts:39
 msgid "Waypoint {0}"
 msgstr "Waypoint {0}"
 

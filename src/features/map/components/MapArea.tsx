@@ -10,7 +10,7 @@ import { openContextMenu, separator } from "../../../components/ui/menuItems";
 import { useStopMenus } from "../hooks/useStopMenus";
 import { Check, Pencil, Plus, Trash2 } from "../../../components/ui/icons";
 import "@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css";
-import { mapStyles, mapDefaults } from "../../../config/constants";
+import { mapStyles } from "../../../config/constants";
 import { RouteStyling } from "./MapLayers/RouteStyling";
 import { useWorkspace } from "../../../hooks/useWorkspace";
 import { useTheme } from "../../../hooks/useTheme";
@@ -396,14 +396,6 @@ export function MapArea() {
   };
 
   const handleAddWaypoint = async (lat: number, lng: number) => {
-    if (waypoints.length >= mapDefaults.maxWaypoints) {
-      showToast(
-        t`Routes are limited to ${mapDefaults.maxWaypoints} waypoints in this preview build.`,
-        "warning",
-      );
-      return;
-    }
-
     const newId = Math.random().toString(36).substring(7);
 
     setWaypoints((prev) => [

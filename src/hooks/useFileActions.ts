@@ -170,21 +170,6 @@ export function useFileActions() {
         }
       }
 
-      // Distance calculation
-      let totalDistKm = 0;
-      const R = 6371; // km
-      for (let i = 1; i < points.length; i++) {
-        const [lat1, lon1] = points[i - 1];
-        const [lat2, lon2] = points[i];
-        const dLat = (lat2 - lat1) * (Math.PI / 180);
-        const dLon = (lon2 - lon1) * (Math.PI / 180);
-        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-          Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
-          Math.sin(dLon / 2) * Math.sin(dLon / 2);
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        totalDistKm += R * c;
-      }
-
       setRoutePoints(points); // Draw the solid route on the map
 
       // --- WAYPOINT EXTRACTION ---
@@ -256,11 +241,7 @@ export function useFileActions() {
         setIsDirty(true);
       }
 
-      if (totalDistKm > 50) {
-        showToast(t`Imported ${newNaviviWaypoints.length} waypoints. Route > 50km.`, "warning");
-      } else {
-        showToast(t`Imported ${newNaviviWaypoints.length} waypoints successfully`, "success");
-      }
+      showToast(t`Imported ${newNaviviWaypoints.length} waypoints successfully`, "success");
     } catch (error) {
       console.error("Failed to import route:", error);
       showToast(t`Failed to parse file`, "error");
