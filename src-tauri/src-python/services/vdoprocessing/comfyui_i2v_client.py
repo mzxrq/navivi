@@ -18,20 +18,108 @@ from __future__ import annotations
 import copy
 import math
 import os
+import re
 import subprocess
 import sys
 import time
 import uuid
 from pathlib import Path
-from typing import Any, Dict, Final, Optional, Tuple
+from typing import Any, Dict, Final, List, Optional, Tuple
 from urllib.parse import urlsplit
 
 import httpx
 
 from services.logger.logger import setup_logger
+from services.logger.progress import tracker
 from services import tuning
 
 logger = setup_logger("ComfyUII2VClient")
+
+
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+_TQDM_RE = re.compile(r"(\d+)%\|.*?\|\s*(\d+)/(\d+)\s*\[([\d:]+)<([\d:?]+)")
+_PHASES = (
+    ("Requested to load WAN22", "loading model"),
+    ("Requested to load WanTEModel", "loading text encoder"),
+    ("Model Initializing", "initializing model"),
+    ("Requested to load WanVAE", "VAE decode"),
+)
+_PROBLEM_RE = re.compile(r"\[(WARNING|ERROR|CRITICAL)\]|Traceback|Error|Exception")
+
+
+class _ServerLogTail:
+    """New complete lines appended to ComfyUI's server log since creation."""
+
+    def __init__(self, path: Path):
+        self.path = Path(path)
+        try:
+            self.offset = self.path.stat().st_size
+        except OSError:
+            self.offset = 0
+        self._partial = b""
+
+    def poll(self) -> List[str]:
+        try:
+            with open(self.path, "rb") as f:
+                f.seek(self.offset)
+                data = f.read()
+        except OSError:
+            return []
+        if not data:
+            return []
+        self.offset += len(data)
+        data = self._partial + data
+        cut = max(data.rfind(b"\n"), data.rfind(b"\r"))
+        self._partial = data[cut + 1:]
+        text = _ANSI_RE.sub("", data[:cut + 1].decode("utf-8", errors="replace"))
+        return [line.rstrip() for line in re.split(r"[\r\n]+", text) if line.strip()]
+
+
+class _ServerLogReporter:
+    """Turns ComfyUI log lines into the CLI status line (progress/phase) and
+    persistent notes (warnings, errors, tracebacks)."""
+
+    def __init__(self, label: str):
+        self.label = label
+        self._last_shown: Optional[str] = None
+        self._in_traceback = False
+
+    def show(self, text: str) -> None:
+        text = f"{self.label} · {text}"
+        if text != self._last_shown:
+            self._last_shown = text
+            tracker.show(text)
+
+    def _note(self, line: str) -> None:
+        tracker.note(f"[ComfyUI] {line}")
+        logger.warning("[ComfyUI] %s", line.strip())
+        self._last_shown = None
+
+    def report(self, lines: List[str]) -> None:
+        for line in lines:
+            m = _TQDM_RE.search(line)
+            if m:
+                self._in_traceback = False
+                done, total, eta = m.group(2), m.group(3), m.group(5)
+                suffix = f" · ETA {eta}" if eta != "?" and done != total else ""
+                self.show(f"step {done}/{total}{suffix}")
+                continue
+            if line.startswith("Traceback"):
+                self._in_traceback = True
+            elif self._in_traceback and not line[0].isspace() and not line.startswith("During handling"):
+                # The unindented "XxxError: ..." line closes the traceback.
+                self._in_traceback = False
+                self._note(line)
+                continue
+            if self._in_traceback or _PROBLEM_RE.search(line):
+                self._note(line)
+                continue
+            for needle, phase in _PHASES:
+                if needle in line:
+                    self.show(phase)
+                    break
+
+
 
 
 def _kill_process_tree(pid: int) -> None:
@@ -411,6 +499,7 @@ class ComfyUII2VClient:
                 self._touch_activity()
                 self._start_idle_watchdog(ComfyUII2VClient._server_process.pid)
 
+        _ServerLogReporter("ComfyUI").show("starting server")
         deadline = time.monotonic() + tuning.COMFYUI_SERVER_START_TIMEOUT_SECONDS
         while time.monotonic() < deadline:
             if self._is_server_up():
@@ -420,6 +509,8 @@ class ComfyUII2VClient:
                 ComfyUII2VClient._server_process is not None
                 and ComfyUII2VClient._server_process.poll() is not None
             ):
+                for line in self._log_lines_tail(15):
+                    tracker.note(f"[ComfyUI] {line}")
                 raise RuntimeError(
                     "Bundled ComfyUI subprocess exited while starting up — "
                     f"see {self._SERVER_DIR / 'comfyui_server.log'} for details."
@@ -430,6 +521,11 @@ class ComfyUII2VClient:
             f"Bundled ComfyUI did not become healthy within "
             f"{tuning.COMFYUI_SERVER_START_TIMEOUT_SECONDS:.0f}s of starting."
         )
+
+    def _log_lines_tail(self, count: int) -> List[str]:
+        tail = _ServerLogTail(self._SERVER_DIR / "comfyui_server.log")
+        tail.offset = max(0, tail.offset - 8192)
+        return tail.poll()[-count:]
 
     @classmethod
     def stop_server(cls) -> None:
@@ -575,11 +671,17 @@ class ComfyUII2VClient:
         prompt_id: str,
         output_node: str = None,
         timeout: float = None,
+        log_tail: Optional[_ServerLogTail] = None,
+        label: str = "Wan",
     ) -> Dict[str, Any]:
         output_node = output_node or _SAVE_VIDEO_NODE_ID
         timeout = timeout or tuning.COMFYUI_GENERATION_TIMEOUT_SECONDS
+        log_tail = log_tail or _ServerLogTail(self._SERVER_DIR / "comfyui_server.log")
+        reporter = _ServerLogReporter(label)
+        reporter.show("queued")
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
+            reporter.report(log_tail.poll())
             try:
                 response = client.get(f"{self.base_url}/history/{prompt_id}", timeout=30.0)
                 response.raise_for_status()
@@ -613,6 +715,7 @@ class ComfyUII2VClient:
                 if status.get("status_str") == "error" or any(
                     m[0] == "execution_error" for m in status.get("messages", [])
                 ):
+                    reporter.report(log_tail.poll())
                     raise RuntimeError(
                         f"ComfyUI execution failed for prompt {prompt_id}: "
                         f"{status.get('messages')}"
@@ -640,8 +743,11 @@ class ComfyUII2VClient:
         self._ensure_server_running()
         with httpx.Client() as client:
             graph = build_graph(self._upload_image(client, image_path))
+            log_tail = _ServerLogTail(self._SERVER_DIR / "comfyui_server.log")
             prompt_id = self._submit(client, graph)
-            outputs = self._wait_for_result(client, prompt_id, output_node, timeout)
+            outputs = self._wait_for_result(
+                client, prompt_id, output_node, timeout, log_tail, f"Upscale {Path(image_path).name}"
+            )
             self._touch_activity()
             images = outputs.get("images")
             if not images:
@@ -714,10 +820,13 @@ class ComfyUII2VClient:
         logger.info("ComfyUI I2V clip saved to %s", output_path)
         return output_path
 
-    def _run_segment(self, client: httpx.Client, graph: Dict[str, Any], output_path: str) -> str:
+    def _run_segment(
+        self, client: httpx.Client, graph: Dict[str, Any], output_path: str, label: str = "Wan",
+    ) -> str:
         """Submits one graph, waits for it, and downloads the video it made."""
+        log_tail = _ServerLogTail(self._SERVER_DIR / "comfyui_server.log")
         prompt_id = self._submit(client, graph)
-        video_outputs = self._wait_for_result(client, prompt_id)
+        video_outputs = self._wait_for_result(client, prompt_id, log_tail=log_tail, label=label)
         self._touch_activity()
 
         # SaveVideo reports its output under "videos" on some ComfyUI
@@ -764,7 +873,7 @@ class ComfyUII2VClient:
                     "ComfyUI I2V: chained segment %d/%d (%d frames) from %s",
                     k + 1, segments, length, Path(start_image).name,
                 )
-                self._run_segment(client, graph, segment_path)
+                self._run_segment(client, graph, segment_path, f"Wan segment {k + 1}/{segments}")
                 paths.append(segment_path)
                 if k + 1 < segments:
                     start_image = _write_last_frame(

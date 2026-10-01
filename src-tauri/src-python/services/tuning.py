@@ -59,6 +59,12 @@ def ffmpeg_log_args() -> List[str]:
     """Quiet ffmpeg output: no banner, errors only, plus a progress line."""
     return ["-hide_banner", "-loglevel", "error", "-stats"]
 
+
+def ffmpeg_pipe_log_args() -> List[str]:
+    """For ffmpeg fed frames over stdin with stderr piped: no -stats, whose
+    progress fills the unread pipe and deadlocks the frame writes."""
+    return ["-hide_banner", "-loglevel", "error"]
+
 # --- RAM guard -----------------------------------------------------------------
 # TTS, ComfyUI/Wan, Chromium (the map renderer) and Ollama each hold a lot of
 # RAM, and this pipeline runs them one after another in one long process. Before

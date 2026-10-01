@@ -357,7 +357,7 @@ def _write_scroll_clip(
 
     ffmpeg_cmd = FFmpegManager.resolve_ffmpeg_bin()
     cmd = [
-        ffmpeg_cmd, "-y", *tuning.ffmpeg_log_args(),
+        ffmpeg_cmd, "-y", *tuning.ffmpeg_pipe_log_args(),
         "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{width}x{height}",
         "-r", str(fps), "-i", "-",
         "-c:v", "libx264", *tuning.ffmpeg_thread_args(), "-crf", "18", "-preset", "fast",
