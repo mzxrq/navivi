@@ -119,7 +119,7 @@ export function ExportProjectDialog() {
             </div>
             <Switch checked={withRendered} onChange={setWithRendered} label={t`Include rendered video clips`} disabled={phase === "working"} />
           </div>
-          {phase === "error" && <p className="mt-3 text-[12px] text-red-500 break-words">{error}</p>}
+          {phase === "error" && <p className="mt-3 text-[12px] text-red-500 wrap-break-word">{error}</p>}
         </>
       )}
     </Dialog>

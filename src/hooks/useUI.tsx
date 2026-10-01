@@ -41,6 +41,12 @@ interface UIState {
   // render collapse & session state
   isRenderCollapsed: boolean;
   setIsRenderCollapsed: (collapsed: boolean) => void;
+  // The pipeline keeps running behind a small pill while the user works in the timeline editor.
+  isBackgroundRender: boolean;
+  setIsBackgroundRender: (background: boolean) => void;
+  // True only while that background run is still working (not once it has finished or failed).
+  isBackgroundBusy: boolean;
+  setIsBackgroundBusy: (busy: boolean) => void;
   markedWaypointIds: string[];
   setMarkedWaypointIds: React.Dispatch<React.SetStateAction<string[]>>;
   generationSessionInfo: { activeLeg?: string; waypointId?: string; message?: string } | null;
@@ -66,6 +72,8 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({
   const [renderLogs, setRenderLogs] = useState("");
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isRenderCollapsed, setIsRenderCollapsed] = useState(false);
+  const [isBackgroundRender, setIsBackgroundRender] = useState(false);
+  const [isBackgroundBusy, setIsBackgroundBusy] = useState(false);
   const [markedWaypointIds, setMarkedWaypointIds] = useState<string[]>([]);
   const [generationSessionInfo, setGenerationSessionInfo] = useState<{
     activeLeg?: string;
@@ -119,6 +127,10 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({
         clearNotifications,
         isRenderCollapsed,
         setIsRenderCollapsed,
+        isBackgroundRender,
+        setIsBackgroundRender,
+        isBackgroundBusy,
+        setIsBackgroundBusy,
         markedWaypointIds,
         setMarkedWaypointIds,
         generationSessionInfo,

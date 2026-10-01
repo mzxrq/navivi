@@ -12,6 +12,7 @@ import { WaypointItem } from "./WaypointItem";
 import { LocationSearch } from "../../../components/ui/LocationSearch";
 import { OverviewPanel } from "./OverviewPanel";
 import { GenerateDialog } from "./GenerateDialog";
+import { AssetGroup, clearAssets } from "../../../services/assetCleanup";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 
@@ -31,6 +32,7 @@ export function Sidebar() {
     activeWaypointId,
     setActiveWaypointId,
     setIsDirty,
+    metadata,
   } = useWorkspace();
 
   const [isListEditMode, setIsListEditMode] = useState(false);
@@ -93,8 +95,12 @@ export function Sidebar() {
     setShowGenerateConfirm(true);
   };
 
-  const executeGenerate = async () => {
+  const executeGenerate = async (clear: AssetGroup[]) => {
     setShowGenerateConfirm(false);
+    if (clear.length > 0 && metadata.directory_path) {
+      const removed = await clearAssets(metadata.directory_path, clear);
+      showToast(removed === 1 ? t`Deleted 1 old file. It will be made again.` : t`Deleted ${removed} old files. They will be made again.`, "info");
+    }
     await saveProject();
     setIsRendering(true);
   };

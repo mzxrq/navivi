@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import Map, { Marker, MapRef, Source } from "react-map-gl/mapbox";
 import { listen } from "@tauri-apps/api/event";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { UploadCloud, ImageIcon } from "../../../components/ui/icons";
+import { UploadCloud } from "../../../components/ui/icons";
 import { AddType, MapToolbar } from "./MapToolbar";
 import { DrawBar } from "./DrawBar";
 import { MapCompass } from "./MapCompass";
@@ -24,11 +24,6 @@ import { LayerManager } from "./MapLayers/LayerManager";
 import { RouteLayer } from "./MapLayers/RouteLayer";
 import { NaviPin } from "./MapLayers/NaviPin";
 import { ElevationProfile } from "./ElevationProfile";
-import {
-  getHistoricalWeather,
-  generateMapboxAtmosphereParams,
-  WeatherCondition,
-} from "../../../services/weatherService";
 import { t } from "@lingui/core/macro";
 import { useLingui } from "@lingui/react";
 import { Trans } from "@lingui/react/macro";
@@ -49,7 +44,7 @@ export function MapArea() {
     setActiveWaypointId,
     registerThumbnailGetter,
   } = useWorkspace();
-  const { handleDroppedFiles, importPhotos, importRouteFile } = useFileActions();
+  const { handleDroppedFiles, importRouteFile } = useFileActions();
 
   useEffect(() => {
     const pending = takePendingImport();
@@ -77,8 +72,6 @@ export function MapArea() {
   const isContextLostRef = useRef(false);
 
   const [eleHoverPoint, setEleHoverPoint] = useState<number[] | null>(null);
-  const [weatherCondition, setWeatherCondition] =
-    useState<WeatherCondition>("clear");
 
   const initialViewState = useRef({
     longitude: settings.start_coords?.[1] || 135.5023,
@@ -702,58 +695,14 @@ export function MapArea() {
     }
   }, [isViaMode]);
 
-  // Historical Weather Sync
-  useEffect(() => {
-    if (!settings.weather_sync_enabled) {
-      setWeatherCondition("clear");
-      return;
-    }
-
-    let isSubscribed = true;
-    const targetWp =
-      (activeWaypointId
-        ? waypoints.find((w) => w.id === activeWaypointId && w.timestamp)
-        : null) || waypoints.find((w) => !!w.timestamp);
-
-    if (!targetWp || !targetWp.timestamp) {
-      setWeatherCondition("clear");
-      return;
-    }
-
-    getHistoricalWeather(targetWp.lat, targetWp.lng, targetWp.timestamp)
-      .then((condition) => {
-        if (isSubscribed) {
-          setWeatherCondition(condition);
-        }
-      })
-      .catch(() => {
-        if (isSubscribed) {
-          setWeatherCondition("clear");
-        }
-      });
-
-    return () => {
-      isSubscribed = false;
-    };
-  }, [settings.weather_sync_enabled, waypoints, activeWaypointId]);
-
-  // Mapbox Atmosphere & Fog Effect
+  // Mapbox styles ship with fog; the route views look better without it.
   useEffect(() => {
     const map = mapRef.current?.getMap();
     if (!map) return;
 
     const applyAtmosphere = () => {
       try {
-        if (settings.weather_sync_enabled) {
-          const atmosphere = generateMapboxAtmosphereParams(weatherCondition);
-          if (atmosphere.fog) {
-            map.setFog(atmosphere.fog as any);
-          } else {
-            map.setFog(null as any);
-          }
-        } else {
-          map.setFog(null as any);
-        }
+        map.setFog(null as any);
       } catch (err) {
         console.warn("Failed to apply Mapbox atmosphere:", err);
       }
@@ -770,7 +719,7 @@ export function MapArea() {
         map.setFog(null as any);
       } catch {}
     };
-  }, [settings.weather_sync_enabled, weatherCondition, selectedStyle]);
+  }, [selectedStyle]);
 
   // Drag and Drop Listeners
   useEffect(() => {
@@ -1239,32 +1188,6 @@ export function MapArea() {
       <ElevationProfile />
 
       {/* OVERLAYS */}
-      {waypoints.length === 0 && settings.weather_sync_enabled && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none p-6">
-          <div className="pointer-events-auto bg-white/90 dark:bg-navidark-800/90 backdrop-blur-md border-2 border-dashed border-zinc-300 dark:border-white/15 rounded-2xl p-8 max-w-md w-full text-center shadow-xl flex flex-col items-center gap-3 transition-all animate-in fade-in zoom-in-95">
-            <div className="w-12 h-12 rounded-xl bg-navi/10 text-navi flex items-center justify-center">
-              <ImageIcon className="w-6 h-6" />
-            </div>
-            <h3 className="text-sm font-bold text-zinc-900 dark:text-white">
-              <Trans>Drop photos here to auto-plot your route</Trans>
-            </h3>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400 max-w-xs leading-relaxed">
-              <Trans>
-                EXIF GPS tags from your travel photos will automatically
-                generate sequenced stops on the map.
-              </Trans>
-            </p>
-            <button
-              onClick={importPhotos}
-              className="mt-1 px-3.5 py-1.5 bg-navi hover:bg-navi-600 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors flex items-center gap-1.5"
-            >
-              <ImageIcon className="w-3.5 h-3.5" />
-              <Trans>Select Photos...</Trans>
-            </button>
-          </div>
-        </div>
-      )}
-
       {isHovering && (
         <div className="absolute inset-0 z-600 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-sm border-2 border-dashed border-zinc-400 dark:border-zinc-500 m-4 rounded-2xl flex flex-col items-center justify-center transition-all animate-in fade-in">
           <div className="w-16 h-16 rounded-2xl bg-zinc-900 dark:bg-zinc-200 text-zinc-100 dark:text-zinc-900 flex items-center justify-center mb-4 shadow-lg scale-110">

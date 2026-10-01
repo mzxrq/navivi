@@ -14,6 +14,7 @@ import {
   Loader2,
   Maximize2,
   Mic,
+  Minimize2,
   PlayCircle,
   RotateCcw,
   Settings2,
@@ -38,6 +39,7 @@ import {
   lastPipelineError,
 } from "../../utils/pipelineLog";
 import { PipelineLogPanel } from "./PipelineLogPanel";
+import { Switch } from "./Switch";
 import { PronunciationFix, ReviewEdits, ReviewRow, ReviewSelection, ReviewStep } from "./ReviewStep";
 import { db } from "../../services/db";
 import { GLOBAL_DICTIONARY_KEY } from "../../config/constants";
@@ -57,6 +59,9 @@ export function RenderOverlay() {
     generationSessionInfo,
     setGenerationSessionInfo,
     currentView,
+    isBackgroundRender,
+    setIsBackgroundRender,
+    setIsBackgroundBusy,
   } = useUI();
   // StatusBar (h-7) is only mounted in the editor view (see App.tsx).
   const bottomInset = currentView === "editor" ? "bottom-7" : "bottom-0";
@@ -72,6 +77,7 @@ export function RenderOverlay() {
     saveProject,
     setActiveWaypointId,
     timeline,
+    canUndoTimeline,
   } = useWorkspace();
 
   const [step, setStep] = useState<WizardStep>("generating");
@@ -91,6 +97,11 @@ export function RenderOverlay() {
   const [isRedoing, setIsRedoing] = useState(false);
   const [saveRequest, setSaveRequest] = useState<{ done: () => void; fail: (error: unknown) => void } | null>(null);
   const [activeAudioId, setActiveAudioId] = useState<string | null>(null);
+  const [redoInBackground, setRedoInBackground] = useState(true);
+  const [backgroundLabel, setBackgroundLabel] = useState("");
+  // The finish handler lives in an effect closure, so it reads what the editor looks like now through this.
+  const live = useRef({ timeline, canUndoTimeline, background: isBackgroundRender, collapsed: isRenderCollapsed });
+  live.current = { timeline, canUndoTimeline, background: isBackgroundRender, collapsed: isRenderCollapsed };
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
   // Audio Regeneration State
@@ -116,6 +127,10 @@ export function RenderOverlay() {
   const pickedClips = reviewRows.filter((r) => selection[r.id]?.video).length;
   const pickedVoices = reviewRows.filter((r) => selection[r.id]?.voice && r.voice).length;
 
+  useEffect(() => {
+    setIsBackgroundBusy(isRendering && isBackgroundRender && step === "generating" && status !== "error");
+  }, [isRendering, isBackgroundRender, step, status, setIsBackgroundBusy]);
+
   // Track elapsed time during generation or export
   useEffect(() => {
     let interval: number | undefined;
@@ -137,8 +152,10 @@ export function RenderOverlay() {
       setElapsedSeconds(0);
       setIsRenderCollapsed(false);
       setIsRedoing(false);
+      setIsBackgroundRender(false);
+      setBackgroundLabel("");
     }
-  }, [isRendering, setIsRenderCollapsed]);
+  }, [isRendering, setIsRenderCollapsed, setIsBackgroundRender]);
 
   // Pipeline Execution & Event Listeners
   useEffect(() => {
@@ -191,6 +208,11 @@ export function RenderOverlay() {
             setProgress(100);
             pushSystemLog(t`renderFinishSuccessMessage`);
 
+            if (live.current.background) {
+              await finishBackgroundRun();
+              return;
+            }
+
             if (metadata.directory_path) {
               await autoLoadTimeline(metadata.directory_path);
             }
@@ -242,6 +264,38 @@ export function RenderOverlay() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [saveRequest]);
+
+  const stageText = () => {
+    // Named after the current "[n/N]" stage, with the
+    // live item counter (e.g. "3/5") from the tracker's
+    // latest line — never from ffmpeg or warnings.
+    const stageTitle =
+      pipelineLog.stages[pipelineLog.stages.length - 1]
+        ?.title ?? "";
+    const current = pipelineLog.current;
+    if (!current) return t`Initializing pipeline...`;
+
+    const fractionMatch =
+      current.match(/\b(\d+\/\d+)\b/);
+    const prog = fractionMatch
+      ? ` ${fractionMatch[1]}`
+      : "";
+
+    if (/parsing gps/i.test(stageTitle))
+      return t`Parsing Maps & GPS Data${prog}...`;
+    if (/tts narration/i.test(stageTitle))
+      return t`Synthesizing AI Voiceovers${prog}...`;
+    if (/^generating subtitles/i.test(stageTitle))
+      return t`Generating Subtitles${prog}...`;
+    if (/^generating attraction videos/i.test(stageTitle))
+      return t`Rendering Media & Animations${prog}...`;
+    if (/rendering overview/i.test(stageTitle))
+      return t`Rendering Route Video${prog}...`;
+    if (/intro\/outro/i.test(stageTitle))
+      return t`Finalizing Project Timeline...`;
+
+    return current;
+  };
 
   // ── Review step ────────────────────────────────────────────────────────────
   const pad2 = (n: number) => String(n).padStart(2, "0");
@@ -376,7 +430,7 @@ export function RenderOverlay() {
   };
 
   // Voices: apply the edits, remove the old audio, and let the pipeline's own narration step make just the missing ones.
-  const redoVoices = async (rows: ReviewRow[]) => {
+  const prepareVoices = async (rows: ReviewRow[]) => {
     const dir = metadata.directory_path;
     if (!dir) return;
     await applyPronunciationFixes(rows.flatMap((r) => edits[r.id]?.fixes ?? []));
@@ -394,6 +448,12 @@ export function RenderOverlay() {
         console.warn("Could not remove the old audio:", e);
       }
     }
+  };
+
+  const redoVoices = async (rows: ReviewRow[]) => {
+    const dir = metadata.directory_path;
+    if (!dir) return;
+    await prepareVoices(rows);
     const configPath = `${dir}/job_config.json`;
     await invoke("run_python_blueprint", { action: configPath, payload: "tts-all" });
     try {
@@ -404,21 +464,8 @@ export function RenderOverlay() {
     await autoLoadTimeline(dir);
   };
 
-  // Video clips: remove them so the next run makes them again, then go where the clip can be changed.
-  const redoVideos = async (rows: ReviewRow[]) => {
-    audioRef.current?.pause();
+  const removeClipFiles = async (rows: ReviewRow[]) => {
     const dir = metadata.directory_path;
-
-    if (hardwareSpec.isHighSpec) {
-      showToast(t`Opening the timeline editor so you can change the clip by hand.`, "info");
-      updateSettings({ quick_export: false });
-      await saveProject();
-      if (dir) await autoLoadTimeline(dir);
-      setIsRendering(false);
-      setEditorMode("timeline");
-      return;
-    }
-
     for (const row of rows) {
       const stale = [row.filePath, row.filePath.replace("_subtitled", ""), row.filePath.replace(/\.mp4$/i, ".src.json"), row.filePath.replace(/\.mp4$/i, ".orig.wav")];
       for (const path of stale) {
@@ -442,6 +489,24 @@ export function RenderOverlay() {
         }
       }
     }
+  };
+
+  // Video clips: remove them so the next run makes them again, then go where the clip can be changed.
+  const redoVideos = async (rows: ReviewRow[]) => {
+    audioRef.current?.pause();
+    const dir = metadata.directory_path;
+
+    if (hardwareSpec.isHighSpec) {
+      showToast(t`Opening the timeline editor so you can change the clip by hand.`, "info");
+      updateSettings({ quick_export: false });
+      await saveProject();
+      if (dir) await autoLoadTimeline(dir);
+      setIsRendering(false);
+      setEditorMode("timeline");
+      return;
+    }
+
+    await removeClipFiles(rows);
 
     const ids = rows.map((r) => r.wpId).filter((id): id is string => !!id);
     const first = ids[0] ?? waypoints[0]?.id ?? null;
@@ -458,12 +523,61 @@ export function RenderOverlay() {
     showToast(t`${count} clips are ready to be redone. Change their photo, script or route, then choose Resume Generation.`, "warning");
   };
 
+  // Voices and clips redone while the user keeps working: the old files go, then the pipeline's own checkpoints make just the missing ones.
+  const startBackgroundRun = (label: string) => {
+    setBackgroundLabel(label);
+    setIsBackgroundRender(true);
+    setIsRenderCollapsed(true);
+    setStep("generating");
+    setProgress(0);
+    setStatus("processing");
+    setElapsedSeconds(0);
+    setPipelineLog(emptyPipelineLog());
+    setRenderAttempt((prev) => prev + 1);
+  };
+
+  const finishBackgroundRun = async () => {
+    const dir = metadata.directory_path;
+    const now = live.current;
+    let kept = false;
+    if (dir) {
+      // The pipeline rewrote timeline.json. Edits made meanwhile live only in the editor, so they are written back.
+      if (now.canUndoTimeline && now.timeline.segments.length > 0) {
+        kept = await saveTimelineManifest(dir, metadata.project_name, now.timeline);
+      }
+      if (!kept) await autoLoadTimeline(dir);
+    }
+    await buildReviewRows();
+    setStep("verifying");
+    setStatus("success");
+    if (!now.collapsed) setIsBackgroundRender(false);
+    showToast(kept ? t`The redone clips are ready. Your timeline edits were kept.` : t`The redone clips are ready to check.`, "success");
+  };
+
+  const redoInTheBackground = async (voiceRows: ReviewRow[], videoRows: ReviewRow[]) => {
+    audioRef.current?.pause();
+    if (voiceRows.length) await prepareVoices(voiceRows);
+    if (videoRows.length) await removeClipFiles(videoRows);
+    const voices = voiceRows.length;
+    const clips = videoRows.length;
+    const parts = [voices ? (voices === 1 ? t`1 voice` : t`${voices} voices`) : "", clips ? (clips === 1 ? t`1 clip` : t`${clips} clips`) : ""];
+    setSelection({});
+    setEdits({});
+    setEditorMode("timeline");
+    startBackgroundRun(parts.filter(Boolean).join(", "));
+    showToast(t`Redoing in the background. You can keep working in the timeline editor.`, "info");
+  };
+
   const handleRedo = async () => {
     const voiceRows = reviewRows.filter((r) => selection[r.id]?.voice && r.voice);
     const videoRows = reviewRows.filter((r) => selection[r.id]?.video);
     if (!voiceRows.length && !videoRows.length) return;
     setIsRedoing(true);
     try {
+      if (redoInBackground) {
+        await redoInTheBackground(voiceRows, videoRows);
+        return;
+      }
       if (voiceRows.length) {
         showToast(t`Making the new voice. The first one can take a while.`, "info");
         await redoVoices(voiceRows);
@@ -621,6 +735,99 @@ export function RenderOverlay() {
 
   if (!isRendering) return null;
 
+  // --- BACKGROUND PILL (a redo is running while the user works in the timeline editor) ---
+  if (isRenderCollapsed && isBackgroundRender) {
+    const running = status === "processing" && step === "generating";
+    const failed = status === "error";
+    const ready = step === "verifying";
+    const tone = failed ? "red" : ready ? "emerald" : "navi";
+    return createPortal(
+      <div className="fixed bottom-10 right-4 z-99999 animate-in slide-in-from-bottom-5 duration-300">
+        <div className="w-[min(22rem,calc(100vw-2rem))] rounded-xl border border-zinc-200 dark:border-white/10 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.5)] p-3.5 flex flex-col gap-2.5">
+          <div className="flex items-start gap-2.5">
+            <div
+              className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
+                tone === "red" ? "bg-red-500/10 text-red-500" : tone === "emerald" ? "bg-emerald-500/10 text-emerald-500" : "bg-navi/10 text-navi"
+              }`}
+            >
+              {failed ? <XCircle className="w-4 h-4" /> : ready ? <CheckCircle className="w-4 h-4" /> : <Loader2 className="w-4 h-4 animate-spin" />}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[13px] font-medium text-zinc-900 dark:text-zinc-100">
+                {failed ? t`The redo failed` : ready ? t`Redo finished` : status === "cancelling" ? t`Cancelling...` : t`Redoing in the background`}
+              </p>
+              <p className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate" title={failed ? (lastPipelineError(pipelineLog) ?? "") : undefined}>
+                {failed
+                  ? (lastPipelineError(pipelineLog) ?? t`An unknown error occurred during rendering.`)
+                  : ready
+                    ? t`${backgroundLabel} ready to check`
+                    : `${backgroundLabel} · ${stageText()}`}
+              </p>
+            </div>
+            {running && (
+              <span className="text-[11px] tabular-nums text-zinc-400 shrink-0">
+                {Math.floor(elapsedSeconds / 60)}:{(elapsedSeconds % 60).toString().padStart(2, "0")}
+              </span>
+            )}
+          </div>
+
+          {running && (
+            <div className="h-1 rounded-full bg-zinc-100 dark:bg-white/10 overflow-hidden">
+              <div className="h-full bg-navi rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
+            </div>
+          )}
+
+          <p className="text-[11px] leading-snug text-zinc-400">
+            {ready
+              ? t`Review them, or carry on in the timeline editor.`
+              : failed
+                ? t`The files that were removed will be made again the next time you generate.`
+                : t`Keep working in the timeline editor. Export is available when it finishes.`}
+          </p>
+
+          <div className="flex items-center gap-1.5 -mb-0.5">
+            {running && (
+              <button onClick={handleCancel} className="h-7 px-2.5 rounded-md text-[12px] text-zinc-500 hover:text-red-500 hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors">
+                <Trans>Cancel</Trans>
+              </button>
+            )}
+            {(ready || failed) && (
+              <button onClick={() => setIsRendering(false)} className="h-7 px-2.5 rounded-md text-[12px] text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors">
+                <Trans>Dismiss</Trans>
+              </button>
+            )}
+            {failed && (
+              <button
+                onClick={() => {
+                  setStatus("processing");
+                  setStep("generating");
+                  setProgress(0);
+                  setPipelineLog(emptyPipelineLog());
+                  setRenderAttempt((attempt) => attempt + 1);
+                }}
+                className="h-7 px-2.5 rounded-md text-[12px] text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors"
+              >
+                <Trans>Retry</Trans>
+              </button>
+            )}
+            <button
+              onClick={() => {
+                if (ready) setIsBackgroundRender(false);
+                setIsRenderCollapsed(false);
+              }}
+              className={`ml-auto h-7 px-3 rounded-md text-[12px] font-medium transition ${
+                ready ? "bg-navi text-white hover:brightness-110" : "text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-white/5"
+              }`}
+            >
+              {ready ? <Trans>Review</Trans> : <Trans>Details</Trans>}
+            </button>
+          </div>
+        </div>
+      </div>,
+      document.body,
+    );
+  }
+
   // --- COLLAPSED SESSION PILL (Renders when low-spec user is returned to map editor) ---
   if (isRenderCollapsed) {
     return createPortal(
@@ -727,6 +934,14 @@ export function RenderOverlay() {
                   <span className="truncate">{hardwareSpec.details}</span>
                 </p>
               </div>
+              {isBackgroundRender && status === "processing" && step === "generating" && (
+                <button
+                  onClick={() => setIsRenderCollapsed(true)}
+                  className="flex items-center gap-2 px-4 py-2 short:py-1.5 shrink-0 text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-white/5 text-sm font-medium rounded-lg transition-all text-nowrap"
+                >
+                  <Minimize2 className="w-4 h-4" /> <Trans>Keep working</Trans>
+                </button>
+              )}
               {status === "processing" && step === "generating" && (
                 <button
                   onClick={handleCancel}
@@ -875,37 +1090,7 @@ export function RenderOverlay() {
                       <div className="flex items-center gap-3 min-w-0">
                         <Loader2 className="w-4 h-4 text-navi animate-spin shrink-0" />
                         <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300 truncate text-left">
-                          {(() => {
-                            // Named after the current "[n/N]" stage, with the
-                            // live item counter (e.g. "3/5") from the tracker's
-                            // latest line — never from ffmpeg or warnings.
-                            const stageTitle =
-                              pipelineLog.stages[pipelineLog.stages.length - 1]
-                                ?.title ?? "";
-                            const current = pipelineLog.current;
-                            if (!current) return t`Initializing pipeline...`;
-
-                            const fractionMatch =
-                              current.match(/\b(\d+\/\d+)\b/);
-                            const prog = fractionMatch
-                              ? ` ${fractionMatch[1]}`
-                              : "";
-
-                            if (/parsing gps/i.test(stageTitle))
-                              return t`Parsing Maps & GPS Data${prog}...`;
-                            if (/tts narration/i.test(stageTitle))
-                              return t`Synthesizing AI Voiceovers${prog}...`;
-                            if (/^generating subtitles/i.test(stageTitle))
-                              return t`Generating Subtitles${prog}...`;
-                            if (/^generating attraction videos/i.test(stageTitle))
-                              return t`Rendering Media & Animations${prog}...`;
-                            if (/rendering overview/i.test(stageTitle))
-                              return t`Rendering Route Video${prog}...`;
-                            if (/intro\/outro/i.test(stageTitle))
-                              return t`Finalizing Project Timeline...`;
-
-                            return current;
-                          })()}
+                          {stageText()}
                         </span>
                       </div>
                       <div className="text-xs font-semibold text-zinc-400 tabular-nums tracking-wider shrink-0">
@@ -956,7 +1141,7 @@ export function RenderOverlay() {
                 onEdits={setEdits}
                 playingId={activeAudioId}
                 onPlay={handlePlay}
-                videoRedoGoesTo={hardwareSpec.isHighSpec ? "timeline" : "map"}
+                videoRedoGoesTo={redoInBackground ? "background" : hardwareSpec.isHighSpec ? "timeline" : "map"}
                 busy={isRedoing}
               />
             )}
@@ -1051,11 +1236,19 @@ export function RenderOverlay() {
           {/* Action footer for the review step */}
           {step === "verifying" && (
             <div className="px-5 sm:px-6 py-3 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 flex flex-wrap items-center justify-between gap-3 shrink-0">
-              <span className="text-[12px] text-zinc-500 min-w-0">
-                {pickedClips + pickedVoices === 0
-                  ? t`Nothing selected. Accept to export, or mark what to redo.`
-                  : t`Selected to redo: clips ${pickedClips}, voices ${pickedVoices}`}
-              </span>
+              <div className="min-w-0 flex flex-wrap items-center gap-x-4 gap-y-1.5">
+                <span className="text-[12px] text-zinc-500 min-w-0">
+                  {pickedClips + pickedVoices === 0
+                    ? t`Nothing selected. Accept to export, or mark what to redo.`
+                    : t`Selected to redo: clips ${pickedClips}, voices ${pickedVoices}`}
+                </span>
+                {pickedClips + pickedVoices > 0 && (
+                  <label className="flex items-center gap-2 text-[12px] text-zinc-600 dark:text-zinc-300 cursor-pointer">
+                    <Switch checked={redoInBackground} onChange={setRedoInBackground} label={t`Redo in the background`} disabled={isRedoing} />
+                    <Trans>Redo in the background</Trans>
+                  </label>
+                )}
+              </div>
               <div className="flex flex-wrap items-center gap-2 ml-auto">
                 <button
                   disabled={isRedoing}
@@ -1098,6 +1291,12 @@ export function RenderOverlay() {
           {/* Error Fallback */}
           {status === "error" && (
             <div className="px-5 sm:px-6 py-3 bg-zinc-50 dark:bg-zinc-950 border-t border-zinc-100 dark:border-zinc-800 flex justify-end shrink-0 gap-3">
+              <button
+                onClick={() => setIsRendering(false)}
+                className="px-5 py-2.5 text-zinc-600 dark:text-zinc-300 text-sm font-medium rounded-lg hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors"
+              >
+                <Trans>Close</Trans>
+              </button>
               <button
                 onClick={async () => {
                   try {

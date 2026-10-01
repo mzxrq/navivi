@@ -133,6 +133,7 @@ export {
   Flag, // ContextMenu
   SquareTerminal, // PipelineLogPanel
   Maximize2, // RenderOverlay
+  Minimize2,
   RotateCcw,
   Zap,
 } from "lucide-react";

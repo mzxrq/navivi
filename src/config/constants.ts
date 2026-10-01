@@ -51,7 +51,6 @@ export const defaultProjectSettings = {
     mapbox_api_key: "",
     auto_save_interval: 3,
     show_route_heatmap: false,
-    weather_sync_enabled: false,
     quick_export: false,
     hardware_spec_override: "auto" as "auto" | "high" | "low",
     ai_features_enabled: false,

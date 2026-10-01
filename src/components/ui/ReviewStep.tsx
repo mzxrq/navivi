@@ -34,7 +34,7 @@ interface ReviewStepProps {
   onEdits: (next: ReviewEdits) => void;
   playingId: string | null;
   onPlay: (row: ReviewRow) => void;
-  videoRedoGoesTo: "timeline" | "map";
+  videoRedoGoesTo: "timeline" | "map" | "background";
   busy: boolean;
 }
 
@@ -150,9 +150,11 @@ export function ReviewStep({ rows, selection, onSelection, edits, onEdits, playi
           </Trans>
         </p>
         <p className="mt-1 text-[11px] text-zinc-400">
-          {videoRedoGoesTo === "timeline"
-            ? t`Redoing a video clip opens the timeline editor on this computer.`
-            : t`Redoing a video clip opens the map editor with that stop selected, so you can change its photo, script or route first.`}
+          {videoRedoGoesTo === "background"
+            ? t`Anything you redo is made in the background while you work in the timeline editor. Turn that off below to change a clip's photo, script or route first.`
+            : videoRedoGoesTo === "timeline"
+              ? t`Redoing a video clip opens the timeline editor on this computer.`
+              : t`Redoing a video clip opens the map editor with that stop selected, so you can change its photo, script or route first.`}
         </p>
       </div>
 

@@ -65,7 +65,7 @@ const DefaultMetadata: ProjectMetadata = {
 const getDefaultTimeline = (): TimelineData => emptyTimeline();
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
-  const { editorMode, isRendering } = useUI();
+  const { editorMode, isRendering, isBackgroundRender } = useUI();
   const [isDirty, setIsDirtyState] = useState(false);
   const [isProjectLoading, setIsProjectLoading] = useState(false);
   const dirtyRevisionRef = useRef(0);
@@ -528,7 +528,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-        if (isRendering) return;
+        if (isRendering && !(isBackgroundRender && editorMode === "timeline")) return;
       const activeEl = document.activeElement;
       const isTyping =
         activeEl?.tagName === "INPUT" ||
@@ -554,7 +554,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [editorMode, undoMap, redoMap, undoTimeline, redoTimeline, isRendering]);
+  }, [editorMode, undoMap, redoMap, undoTimeline, redoTimeline, isRendering, isBackgroundRender]);
 
   const autoLoadTimeline = async (projectDir: string) => {
     try {

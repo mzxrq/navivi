@@ -5,14 +5,21 @@ import { Trans } from "@lingui/react/macro";
 import { Dialog, dialogButton } from "../../../components/ui/Dialog";
 import { Switch } from "../../../components/ui/Switch";
 import { AlertTriangle, Check, Clock, Film, ImageIcon, MapPin, Mic, Route } from "../../../components/ui/icons";
+import { ASSET_GROUPS, AssetCounts, AssetGroup, scanAssets, withDependents } from "../../../services/assetCleanup";
 import { useWorkspace } from "../../../hooks/useWorkspace";
 
 const hasText = (s?: string) => !!s && s.trim().length > 0;
 
-export function GenerateDialog({ onClose, onConfirm }: { onClose: () => void; onConfirm: () => void }) {
+export function GenerateDialog({ onClose, onConfirm }: { onClose: () => void; onConfirm: (clear: AssetGroup[]) => void }) {
   const { waypoints, settings, metadata, updateSettings, setIsDirty, saveProject } = useWorkspace();
   const [estimate, setEstimate] = useState<RenderEstimate | null>(null);
   const [failed, setFailed] = useState(false);
+  const [existing, setExisting] = useState<AssetCounts | null>(null);
+  const [clear, setClear] = useState<AssetGroup[]>([]);
+
+  useEffect(() => {
+    if (metadata.directory_path) scanAssets(metadata.directory_path).then(setExisting, () => setExisting(null));
+  }, [metadata.directory_path]);
 
   useEffect(() => {
     let cancelled = false;
@@ -40,6 +47,18 @@ export function GenerateDialog({ onClose, onConfirm }: { onClose: () => void; on
   const voiced = active.filter((w) => hasText(w.arrivingNarration) || hasText(w.attractionNarration));
   const silent = active.filter((w) => !hasText(w.arrivingNarration) && !hasText(w.attractionNarration));
   const withPhotos = active.filter((w) => (w.images?.length ?? 0) > 0);
+
+  const groupLabel: Record<AssetGroup, string> = {
+    voice: t`Voiceover`,
+    subtitles: t`Subtitles`,
+    route: t`Route videos`,
+    photo: t`Photo clips`,
+    cards: t`Title and ending cards`,
+  };
+  const present = existing ? ASSET_GROUPS.filter((g) => existing[g] > 0) : [];
+  const effectiveClear = withDependents(clear).filter((g) => present.includes(g));
+  const toggleGroup = (group: AssetGroup) =>
+    setClear((prev) => (prev.includes(group) ? prev.filter((g) => g !== group) : [...prev, group]));
 
   const setOption = (patch: { skip_rich_media?: boolean; quick_export?: boolean }) => {
     updateSettings(patch);
@@ -87,8 +106,8 @@ export function GenerateDialog({ onClose, onConfirm }: { onClose: () => void; on
           <button onClick={onClose} className={dialogButton.secondary}>
             <Trans>Cancel</Trans>
           </button>
-          <button onClick={onConfirm} className={dialogButton.primary}>
-            <Trans>Generate assets</Trans>
+          <button onClick={() => onConfirm(effectiveClear)} className={dialogButton.primary}>
+            {effectiveClear.length > 0 ? <Trans>Delete and generate</Trans> : <Trans>Generate assets</Trans>}
           </button>
         </>
       }
@@ -135,6 +154,61 @@ export function GenerateDialog({ onClose, onConfirm }: { onClose: () => void; on
             {silent.slice(0, 3).map((w) => w.name || t`Untitled`).join(", ")}
             {silent.length > 3 ? "…" : ""}
           </span>
+        </div>
+      )}
+
+      {present.length > 0 && existing && (
+        <div className="mt-3 rounded-xl border border-zinc-200 dark:border-white/10 p-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[13px] font-medium text-zinc-800 dark:text-zinc-200">
+                <Trans>This project already has assets</Trans>
+              </p>
+              <p className="mt-0.5 text-[11px] leading-snug text-zinc-500 dark:text-zinc-400">
+                <Trans>
+                  Generate only makes what is missing and reuses the rest, so running it again will not change what you already have. To make something
+                  again, tick it here and it is deleted first.
+                </Trans>
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setClear(clear.length ? [] : present)}
+              className="shrink-0 h-6 px-2 rounded-md text-[11px] text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors"
+            >
+              {clear.length ? <Trans>Keep all</Trans> : <Trans>Select all</Trans>}
+            </button>
+          </div>
+          <ul className="mt-2 space-y-0.5">
+            {present.map((group) => {
+              const dependent = group === "subtitles" && clear.includes("voice");
+              const count = existing[group];
+              return (
+                <li key={group}>
+                  <label
+                    className={`flex items-center gap-2.5 -mx-1 px-1 h-8 rounded-md text-[13px] text-zinc-800 dark:text-zinc-200 ${
+                      dependent ? "opacity-60" : "cursor-pointer hover:bg-zinc-50 dark:hover:bg-white/5"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      className="accent-navi"
+                      checked={effectiveClear.includes(group)}
+                      disabled={dependent}
+                      onChange={() => toggleGroup(group)}
+                    />
+                    <span className="flex-1">{groupLabel[group]}</span>
+                    {dependent && (
+                      <span className="text-[11px] text-zinc-400">
+                        <Trans>Goes with the voice</Trans>
+                      </span>
+                    )}
+                    <span className="text-[12px] tabular-nums text-zinc-500">{count === 1 ? t`1 file` : t`${count} files`}</span>
+                  </label>
+                </li>
+              );
+            })}
+          </ul>
         </div>
       )}
 

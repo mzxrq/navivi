@@ -30,6 +30,7 @@ export function TitleBar() {
     showToast,
     setShowAppSettings,
     isRendering,
+    isBackgroundRender,
   } = useUI();
 
   const {
@@ -398,7 +399,7 @@ export function TitleBar() {
                     type="button"
                     role="tab"
                     aria-selected={active}
-                    disabled={isRendering}
+                    disabled={isRendering && !(isBackgroundRender && id === "timeline")}
                     onClick={() => setEditorMode(id)}
                     className={`flex items-center gap-1.5 h-6 px-2.5 rounded-md text-[12px] font-medium transition-colors disabled:opacity-50 ${
                       active

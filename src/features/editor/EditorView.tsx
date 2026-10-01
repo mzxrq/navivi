@@ -43,7 +43,7 @@ const toolButton =
 
 export function EditorView() {
   const { timeline, setTimeline, metadata, autoLoadTimeline } = useWorkspace();
-  const { showToast } = useUI();
+  const { showToast, isBackgroundBusy } = useUI();
   const dir = metadata.directory_path;
 
   const [draft, setDraft] = useState<TimelineData | null>(null);
@@ -341,7 +341,7 @@ export function EditorView() {
         </button>
         <button
           type="button"
-          disabled={empty}
+          disabled={empty || isBackgroundBusy}
           onClick={() => setExportOpen(true)}
           className="ml-2 flex items-center gap-1.5 h-8 px-3.5 rounded-lg bg-navi text-white text-[13px] font-semibold hover:brightness-110 disabled:opacity-40 disabled:pointer-events-none transition"
         >

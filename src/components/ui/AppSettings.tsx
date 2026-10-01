@@ -279,17 +279,6 @@ export function AppSettings() {
                         label={t`Fast render mode`}
                       />
                     </Row>
-                    <Row
-                      title={t`Historical weather`}
-                      badge={<Badge tone="amber">{t`Experimental`}</Badge>}
-                      description={t`Synchronize historical weather conditions from photo EXIF dates using Open-Meteo to dynamically apply atmospheric fog and rain effects`}
-                    >
-                      <Switch
-                        checked={!!settings.weather_sync_enabled}
-                        onChange={(v) => updateProject({ weather_sync_enabled: v })}
-                        label={t`Historical weather`}
-                      />
-                    </Row>
                   </Section>
                 )}
               </>
