@@ -1,5 +1,6 @@
 import { fetch } from '@tauri-apps/plugin-http';
 import { readFile } from '@tauri-apps/plugin-fs';
+import { invoke } from '@tauri-apps/api/core';
 
 const OLLAMA_URL = "http://127.0.0.1:11434";
 function uint8ArrayToBase64(bytes: Uint8Array): string {
@@ -49,11 +50,37 @@ export async function getLocalModels(): Promise<string[]> {
     }
 }
 
+async function ollamaAnswers(): Promise<boolean> {
+    try {
+        return (await fetch(`${OLLAMA_URL}/api/tags`)).ok;
+    } catch {
+        return false;
+    }
+}
+
+// Starts the local Ollama server if nothing answers yet and waits for it; throws a readable error if it can't.
+export async function ensureOllamaRunning(timeoutMs = 20000): Promise<void> {
+    if (await ollamaAnswers()) return;
+    try {
+        await invoke("wake_up_ollama");
+    } catch (e) {
+        throw new Error(String(e));
+    }
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+        if (await ollamaAnswers()) return;
+        await new Promise((r) => setTimeout(r, 500));
+    }
+    throw new Error("Ollama did not start in time");
+}
+
 export async function pullModelStream(
     model: string,
     onProgress: (status: string, completed?: number, total?: number) => void,
     signal?: AbortSignal
 ): Promise<void> {
+    onProgress("Starting Ollama...");
+    await ensureOllamaRunning();
     const res = await fetch(`${OLLAMA_URL}/api/pull`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

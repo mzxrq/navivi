@@ -231,23 +231,39 @@ fn is_ollama_running() -> bool {
     ).is_ok()
 }
 
+// PATH first, then the build bundled under src-python/bin, then the per-user installer's folder.
+fn ollama_candidates() -> Vec<std::path::PathBuf> {
+    let mut found = vec![std::path::PathBuf::from("ollama")];
+    found.push(Path::new("src-python/bin/ollama-windows-amd64/ollama.exe").to_path_buf());
+    if let Ok(local) = std::env::var("LOCALAPPDATA") {
+        found.push(Path::new(&local).join("Programs").join("Ollama").join("ollama.exe"));
+    }
+    found
+}
+
 #[tauri::command]
 fn wake_up_ollama() -> Result<String, String> {
     if is_ollama_running() {
         return Ok("Ollama OK".to_string());
     }
 
-    let result = Command::new("ollama")
-        .env("OLLAMA_ORIGINS", "*")
-        .arg("serve")
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn();
-
-    match result {
-        Ok(_) => Ok("Ollama server started.".to_string()),
-        Err(e) => Err(format!("Failed to start Ollama, is it installed? Error: {}", e)),
+    let mut last_error = String::new();
+    for exe in ollama_candidates() {
+        if exe.components().count() > 1 && !exe.exists() {
+            continue;
+        }
+        let spawned = Command::new(&exe)
+            .env("OLLAMA_ORIGINS", "*")
+            .arg("serve")
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn();
+        match spawned {
+            Ok(_) => return Ok("Ollama server started.".to_string()),
+            Err(e) => last_error = e.to_string(),
+        }
     }
+    Err(format!("Ollama is not installed or could not be started ({})", last_error))
 }
 
 #[tauri::command]
