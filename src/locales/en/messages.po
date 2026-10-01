@@ -53,8 +53,8 @@ msgid "Starting..."
 msgstr "Starting..."
 
 #: src/features/timeline/components/elements/MarkersPanel.tsx:95
-msgid " · waypoint"
-msgstr " · waypoint"
+#~ msgid " · waypoint"
+#~ msgstr " · waypoint"
 
 #: src/components/ui/RenderOverlay.tsx:1244
 msgid "(Empty script)"
@@ -62,28 +62,28 @@ msgstr "(Empty script)"
 
 #. placeholder {0}: newAssets.length
 #: src/features/timeline/components/MediaPool.tsx:261
-msgid "{0, plural, one {1 media asset copied into the project.} other {# media assets copied into the project.}}"
-msgstr "{0, plural, one {1 media asset copied into the project.} other {# media assets copied into the project.}}"
+#~ msgid "{0, plural, one {1 media asset copied into the project.} other {# media assets copied into the project.}}"
+#~ msgstr "{0, plural, one {1 media asset copied into the project.} other {# media assets copied into the project.}}"
 
 #. placeholder {0}: toCopy.length
 #: src/features/timeline/components/TimelineView.tsx:326
-msgid "{0, plural, one {Copied 1 clip} other {Copied # clips}}"
-msgstr "{0, plural, one {Copied 1 clip} other {Copied # clips}}"
+#~ msgid "{0, plural, one {Copied 1 clip} other {Copied # clips}}"
+#~ msgstr "{0, plural, one {Copied 1 clip} other {Copied # clips}}"
 
 #. placeholder {0}: toCopy.length
 #: src/features/timeline/components/TimelineView.tsx:361
-msgid "{0, plural, one {Cut 1 clip} other {Cut # clips}}"
-msgstr "{0, plural, one {Cut 1 clip} other {Cut # clips}}"
+#~ msgid "{0, plural, one {Cut 1 clip} other {Cut # clips}}"
+#~ msgstr "{0, plural, one {Cut 1 clip} other {Cut # clips}}"
 
 #. placeholder {0}: pastedClipIds.length
 #: src/features/timeline/components/TimelineView.tsx:306
-msgid "{0, plural, one {Pasted 1 clip} other {Pasted # clips}}"
-msgstr "{0, plural, one {Pasted 1 clip} other {Pasted # clips}}"
+#~ msgid "{0, plural, one {Pasted 1 clip} other {Pasted # clips}}"
+#~ msgstr "{0, plural, one {Pasted 1 clip} other {Pasted # clips}}"
 
 #. placeholder {0}: asset.name
 #: src/features/timeline/components/TimelineTrack.tsx:238
-msgid "{0} (Audio)"
-msgstr "{0} (Audio)"
+#~ msgid "{0} (Audio)"
+#~ msgstr "{0} (Audio)"
 
 #. placeholder {0}: wp.name
 #: src/features/map/hooks/useStopMenus.ts:245
@@ -97,8 +97,8 @@ msgstr "{0} (Return)"
 
 #. placeholder {0}: linkedWaypoint.name
 #: src/features/timeline/components/TimelineView.tsx:806
-msgid "{0} already has a marker at this time."
-msgstr "{0} already has a marker at this time."
+#~ msgid "{0} already has a marker at this time."
+#~ msgstr "{0} already has a marker at this time."
 
 #. placeholder {0}: localPrompt.length
 #: src/components/ui/ScriptInput.tsx:225
@@ -107,8 +107,23 @@ msgstr "{0} characters"
 
 #. placeholder {0}: selectedClipIds.length
 #: src/features/timeline/components/Inspector.tsx:43
-msgid "{0} Clips Selected"
-msgstr "{0} Clips Selected"
+#~ msgid "{0} Clips Selected"
+#~ msgstr "{0} Clips Selected"
+
+#. placeholder {0}: blocks.length
+#: src/features/editor/EditorView.tsx:152
+msgid "{0} lines timed automatically. Drag them to adjust."
+msgstr "{0} lines timed automatically. Drag them to adjust."
+
+#. placeholder {0}: timeline.subtitles.length
+#: src/features/editor/ExportDialog.tsx:43
+msgid "{0} lines, burned in"
+msgstr "{0} lines, burned in"
+
+#. placeholder {0}: timeline.subtitles.length
+#: src/features/editor/ExportDialog.tsx:43
+msgid "{0} lines, not shown"
+msgstr "{0} lines, not shown"
 
 #. placeholder {0}: voiced.length
 #. placeholder {1}: active.length
@@ -116,13 +131,18 @@ msgstr "{0} Clips Selected"
 msgid "{0} of {1} stops"
 msgstr "{0} of {1} stops"
 
+#. placeholder {0}: seg.fadeIntoNext.toFixed(1)
+#: src/features/editor/Inspector.tsx:155
+msgid "{0} s dissolve"
+msgstr "{0} s dissolve"
+
 #. placeholder {0}: photoPaths.length
 #: src/components/ui/NewProject.tsx:220
 msgid "{0} selected"
 msgstr "{0} selected"
 
 #. placeholder {0}: waypoints.length
-#: src/components/ui/StatusBar.tsx:224
+#: src/components/ui/StatusBar.tsx:222
 #: src/features/map/components/GenerateDialog.tsx:99
 msgid "{0} stops"
 msgstr "{0} stops"
@@ -137,18 +157,33 @@ msgstr "{0} stops have no narration and will be silent"
 msgid "{0} stops with photos"
 msgstr "{0} stops with photos"
 
+#. placeholder {0}: timeline.subtitles.length
+#: src/components/ui/StatusBar.tsx:240
+msgid "{0} subtitles"
+msgstr "{0} subtitles"
+
+#. placeholder {0}: cues.length
+#: src/features/editor/EditorView.tsx:162
+msgid "{0} subtitles added from the narration"
+msgstr "{0} subtitles added from the narration"
+
+#. placeholder {0}: timed.length
+#: src/features/editor/EditorView.tsx:149
+msgid "{0} subtitles imported"
+msgstr "{0} subtitles imported"
+
 #. placeholder {0}: timeline.tracks.length
 #. placeholder {0}: track.type
 #: src/components/ui/StatusBar.tsx:242
 #: src/features/timeline/components/elements/TimelineTrackHeaders.tsx:74
-msgid "{0} tracks"
-msgstr "{0} tracks"
+#~ msgid "{0} tracks"
+#~ msgstr "{0} tracks"
 
 #. placeholder {0}: Math.round((1 - duckingAmount) * 100)
 #. placeholder {1}: (20 * Math.log10(duckingAmount)).toFixed(1)
 #: src/features/timeline/components/elements/inspector/InspectorAudioPanel.tsx:198
-msgid "{0}% reduction ({1} dB)"
-msgstr "{0}% reduction ({1} dB)"
+#~ msgid "{0}% reduction ({1} dB)"
+#~ msgstr "{0}% reduction ({1} dB)"
 
 #: src/services/renderEstimate.ts:30
 msgid "{h} h"
@@ -170,7 +205,11 @@ msgstr "{legs} legs"
 msgid "{m} min"
 msgstr "{m} min"
 
-#: src/components/ui/StatusBar.tsx:227
+#: src/features/editor/ExportDialog.tsx:42
+msgid "{narrated} clips"
+msgstr "{narrated} clips"
+
+#: src/components/ui/StatusBar.tsx:225
 msgid "{populatedStops} with media"
 msgstr "{populatedStops} with media"
 
@@ -182,7 +221,7 @@ msgstr "{stopCount} stops"
 msgid "{stopCount} stops · {stopByCount} stop-by"
 msgstr "{stopCount} stops · {stopByCount} stop-by"
 
-#: src/components/ui/StatusBar.tsx:245
+#: src/components/ui/StatusBar.tsx:243
 msgid "{totalClips} clips"
 msgstr "{totalClips} clips"
 
@@ -195,15 +234,15 @@ msgid "{viaCount} via"
 msgstr "{viaCount} via"
 
 #: src/features/timeline/components/elements/inspector/InspectorAudioPanel.tsx:54
-msgid "<0>Mute</0>"
-msgstr "<0>Mute</0>"
+#~ msgid "<0>Mute</0>"
+#~ msgstr "<0>Mute</0>"
 
 #: src/features/timeline/components/elements/inspector/InspectorAudioPanel.tsx:47
-msgid "<0>Muted</0>"
-msgstr "<0>Muted</0>"
+#~ msgid "<0>Muted</0>"
+#~ msgstr "<0>Muted</0>"
 
 #. placeholder {0}: formatDuration(estimate.total_seconds)
-#: src/components/ui/StatusBar.tsx:233
+#: src/components/ui/StatusBar.tsx:231
 msgid "~{0} to render"
 msgstr "~{0} to render"
 
@@ -236,8 +275,8 @@ msgid "10 minutes"
 msgstr "10 minutes"
 
 #: src/features/export/components/ExportModal.tsx:438
-msgid "16:9 Landscape"
-msgstr "16:9 Landscape"
+#~ msgid "16:9 Landscape"
+#~ msgstr "16:9 Landscape"
 
 #: src/components/ui/AppSettings.tsx:213
 msgid "3 seconds"
@@ -248,8 +287,8 @@ msgid "30 seconds"
 msgstr "30 seconds"
 
 #: src/features/export/components/ExportModal.tsx:438
-msgid "9:16 Vertical"
-msgstr "9:16 Vertical"
+#~ msgid "9:16 Vertical"
+#~ msgstr "9:16 Vertical"
 
 #. placeholder {0}: formatDuration(estimate.total_seconds)
 #: src/features/map/components/GenerateDialog.tsx:103
@@ -280,8 +319,8 @@ msgstr "Accept assets to automatically stitch and export"
 #: src/features/timeline/components/elements/inspector/InspectorTextPanel.tsx:278
 #: src/features/timeline/components/elements/inspector/InspectorTextPanel.tsx:397
 #: src/features/timeline/components/elements/inspector/InspectorTextPanel.tsx:552
-msgid "Active"
-msgstr "Active"
+#~ msgid "Active"
+#~ msgstr "Active"
 
 #: src/components/ui/AppSettings.tsx:883
 msgid "Active model"
@@ -290,6 +329,14 @@ msgstr "Active model"
 #: src/features/map/components/DrawBar.tsx:191
 msgid "Add"
 msgstr "Add"
+
+#: src/features/editor/EditorView.tsx:142
+msgid "Add a video first, then import subtitles"
+msgstr "Add a video first, then import subtitles"
+
+#: src/features/editor/Preview.tsx:170
+msgid "Add a video to start"
+msgstr "Add a video to start"
 
 #: src/features/map/hooks/useStopMenus.ts:314
 msgid "Add as destination"
@@ -304,33 +351,39 @@ msgid "Add at least two stops to draw a path between them."
 msgstr "Add at least two stops to draw a path between them."
 
 #: src/features/timeline/components/elements/TimelineToolbar.tsx:208
-msgid "Add Background Music"
-msgstr "Add Background Music"
+#~ msgid "Add Background Music"
+#~ msgstr "Add Background Music"
 
 #: src/features/timeline/components/elements/TimelineToolbar.tsx:164
-msgid "Add Custom Text"
-msgstr "Add Custom Text"
+#~ msgid "Add Custom Text"
+#~ msgstr "Add Custom Text"
 
 #. placeholder {0}: formatMarkerTime(currentTime)
 #: src/features/timeline/components/elements/MarkersPanel.tsx:42
-msgid "Add marker at {0}"
-msgstr "Add marker at {0}"
+#~ msgid "Add marker at {0}"
+#~ msgstr "Add marker at {0}"
 
 #: src/features/timeline/components/elements/TimelineToolbar.tsx:224
-msgid "Add marker at playhead"
-msgstr "Add marker at playhead"
+#~ msgid "Add marker at playhead"
+#~ msgstr "Add marker at playhead"
+
+#: src/features/editor/EditorView.tsx:258
+#: src/features/editor/EditorView.tsx:295
+#: src/features/editor/EditorView.tsx:297
+msgid "Add music"
+msgstr "Add music"
 
 #: src/features/map/components/MapArea.tsx:1190
 msgid "Add new points after this one"
 msgstr "Add new points after this one"
 
 #: src/features/timeline/components/TimelineView.tsx:928
-msgid "Add Object"
-msgstr "Add Object"
+#~ msgid "Add Object"
+#~ msgstr "Add Object"
 
 #: src/features/timeline/components/elements/MarkersPanel.tsx:55
-msgid "Add one at the current playhead position"
-msgstr "Add one at the current playhead position"
+#~ msgid "Add one at the current playhead position"
+#~ msgstr "Add one at the current playhead position"
 
 #: src/features/map/components/WaypointEditor.tsx:549
 msgid "Add photo"
@@ -364,9 +417,13 @@ msgstr "Add stop-by here"
 msgid "Add stops yourself"
 msgstr "Add stops yourself"
 
+#: src/features/editor/EditorView.tsx:262
+msgid "Add subtitle here"
+msgstr "Add subtitle here"
+
 #: src/features/timeline/components/TimelineView.tsx:995
-msgid "Add Text Layer"
-msgstr "Add Text Layer"
+#~ msgid "Add Text Layer"
+#~ msgstr "Add Text Layer"
 
 #: src/features/map/components/WaypointEditor.tsx:440
 msgid "Add up to 3 images that will pop up during the narration at this stop"
@@ -375,6 +432,12 @@ msgstr "Add up to 3 images that will pop up during the narration at this stop"
 #: src/features/map/components/MapArea.tsx:360
 msgid "Add via point here"
 msgstr "Add via point here"
+
+#: src/features/editor/EditorView.tsx:257
+#: src/features/editor/EditorView.tsx:291
+#: src/features/editor/EditorView.tsx:293
+msgid "Add video"
+msgstr "Add video"
 
 #: src/components/ui/AppSettings.tsx:603
 msgid "Add word"
@@ -385,16 +448,16 @@ msgid "Add words below or extract them from narration scripts."
 msgstr "Add words below or extract them from narration scripts."
 
 #: src/components/ui/ContextMenu.tsx:504
-msgid "add-audio-track"
-msgstr "Add Audio Track"
+#~ msgid "add-audio-track"
+#~ msgstr "Add Audio Track"
 
 #: src/components/ui/ContextMenu.tsx:502
-msgid "add-subtitle-track"
-msgstr "Add Subtitle Track"
+#~ msgid "add-subtitle-track"
+#~ msgstr "Add Subtitle Track"
 
 #: src/components/ui/ContextMenu.tsx:503
-msgid "add-visual-track"
-msgstr "Add Visual Track"
+#~ msgid "add-visual-track"
+#~ msgstr "Add Visual Track"
 
 #: src/features/map/components/WaypointEditor.tsx:591
 msgid "Adds a brief pause in the generated video at this waypoint before continuing the journey"
@@ -431,10 +494,10 @@ msgid "AI voiceover"
 msgstr "AI voiceover"
 
 #: src/features/timeline/components/MediaPool.tsx:354
-msgid "all"
-msgstr "all"
+#~ msgid "all"
+#~ msgstr "all"
 
-#: src/components/ui/StatusBar.tsx:263
+#: src/components/ui/StatusBar.tsx:261
 msgid "All changes safely stored to disk"
 msgstr "All changes safely stored to disk"
 
@@ -443,8 +506,8 @@ msgid "All media was automatically generated, stitched, and exported to your pro
 msgstr "All media was automatically generated, stitched, and exported to your project folder without stopping for manual review"
 
 #: src/features/timeline/components/elements/inspector/InspectorTextPanel.tsx:603
-msgid "Amber"
-msgstr "Amber"
+#~ msgid "Amber"
+#~ msgstr "Amber"
 
 #: src/components/ui/RenderOverlay.tsx:1008
 msgid "An unknown error occurred during rendering."
@@ -456,8 +519,8 @@ msgid "Anchor {0}"
 msgstr "Anchor {0}"
 
 #: src/features/timeline/components/elements/TransitionsPanel.tsx:69
-msgid "Angular diagonal stretch and perspective displacement"
-msgstr "Angular diagonal stretch and perspective displacement"
+#~ msgid "Angular diagonal stretch and perspective displacement"
+#~ msgstr "Angular diagonal stretch and perspective displacement"
 
 #: src/components/ui/AppSettings.tsx:419
 msgid "API key"
@@ -481,26 +544,26 @@ msgid "Application"
 msgstr "Application"
 
 #: src/features/timeline/components/elements/TransitionsPanel.tsx:379
-msgid "Applied"
-msgstr "Applied"
+#~ msgid "Applied"
+#~ msgstr "Applied"
 
 #. placeholder {0}: asset.name || "transition"
 #: src/features/timeline/components/TimelineTrack.tsx:174
-msgid "Applied {0} between clips"
-msgstr "Applied {0} between clips"
+#~ msgid "Applied {0} between clips"
+#~ msgstr "Applied {0} between clips"
 
 #. placeholder {0}: item.name
 #: src/features/timeline/components/elements/TransitionsPanel.tsx:221
-msgid "Applied {0} transition to selected clip"
-msgstr "Applied {0} transition to selected clip"
+#~ msgid "Applied {0} transition to selected clip"
+#~ msgstr "Applied {0} transition to selected clip"
 
 #: src/features/timeline/components/elements/TransitionsPanel.tsx:383
-msgid "Apply"
-msgstr "Apply"
+#~ msgid "Apply"
+#~ msgstr "Apply"
 
 #: src/features/timeline/components/elements/TransitionsPanel.tsx:373
-msgid "Apply to selected clip"
-msgstr "Apply to selected clip"
+#~ msgid "Apply to selected clip"
+#~ msgstr "Apply to selected clip"
 
 #. placeholder {0}: modalState.project?.name
 #: src/components/view/ProjectManager.tsx:608
@@ -512,8 +575,8 @@ msgid "Arriving Script"
 msgstr "Arriving Script"
 
 #: src/features/export/components/ExportModal.tsx:433
-msgid "Aspect Ratio & Platform Target"
-msgstr "Aspect Ratio & Platform Target"
+#~ msgid "Aspect Ratio & Platform Target"
+#~ msgstr "Aspect Ratio & Platform Target"
 
 #: src/components/ui/AppSettings.tsx:503
 msgid "ASS colour, e.g. &H00000000"
@@ -528,8 +591,8 @@ msgid "Assets accepted and stitched into your final deliverable video"
 msgstr "Assets accepted and stitched into your final deliverable video"
 
 #: src/features/timeline/components/elements/inspector/InspectorAudioPanel.tsx:195
-msgid "Attenuation"
-msgstr "Attenuation"
+#~ msgid "Attenuation"
+#~ msgstr "Attenuation"
 
 #: src/features/map/components/WaypointEditor.tsx:240
 msgid "Attraction Script"
@@ -545,24 +608,28 @@ msgid "Attraction videos"
 msgstr "Attraction videos"
 
 #: src/features/timeline/components/MediaPool.tsx:358
-msgid "audio"
-msgstr "audio"
+#~ msgid "audio"
+#~ msgstr "audio"
+
+#: src/features/editor/EditorView.tsx:72
+msgid "Audio"
+msgstr "Audio"
 
 #: src/features/timeline/components/elements/inspector/InspectorAudioPanel.tsx:32
-msgid "Audio & Mixing"
-msgstr "Audio & Mixing"
+#~ msgid "Audio & Mixing"
+#~ msgstr "Audio & Mixing"
 
 #: src/hooks/useWorkspace.tsx:90
-msgid "Audio 1"
-msgstr "Audio 1"
+#~ msgid "Audio 1"
+#~ msgstr "Audio 1"
 
 #: src/hooks/useWorkspace.tsx:96
-msgid "Audio 2"
-msgstr "Audio 2"
+#~ msgid "Audio 2"
+#~ msgstr "Audio 2"
 
 #: src/features/export/components/ExportModal.tsx:639
-msgid "Audio Mix"
-msgstr "Audio Mix"
+#~ msgid "Audio Mix"
+#~ msgstr "Audio Mix"
 
 #. placeholder {0}: reviewItems.length
 #: src/components/ui/RenderOverlay.tsx:1111
@@ -579,16 +646,24 @@ msgid "Audio regeneration failed: {err}"
 msgstr "Audio regeneration failed: {err}"
 
 #: src/features/timeline/components/elements/inspector/InspectorAudioPanel.tsx:101
-msgid "Audio Role"
-msgstr "Audio Role"
+#~ msgid "Audio Role"
+#~ msgstr "Audio Role"
 
 #: src/features/timeline/components/TimelineTrack.tsx:185
-msgid "Audio tracks only accept Audio files"
-msgstr "Audio tracks only accept Audio files"
+#~ msgid "Audio tracks only accept Audio files"
+#~ msgstr "Audio tracks only accept Audio files"
 
 #: src/features/timeline/components/elements/inspector/InspectorAudioPanel.tsx:113
-msgid "Auto"
-msgstr "Auto"
+#~ msgid "Auto"
+#~ msgstr "Auto"
+
+#: src/features/editor/EditorView.tsx:304
+msgid "Auto edit"
+msgstr "Auto edit"
+
+#: src/features/editor/EditorView.tsx:306
+msgid "Auto edit: order clips, add fades and subtitles"
+msgstr "Auto edit: order clips, add fades and subtitles"
 
 #: src/components/ui/AppSettings.tsx:472
 msgid "Auto-Detect (Recommended)"
@@ -603,20 +678,20 @@ msgid "Auto-Director Proposal"
 msgstr "Auto-Director Proposal"
 
 #: src/features/timeline/components/elements/inspector/InspectorAudioPanel.tsx:183
-msgid "Auto-Duck during voice"
-msgstr "Auto-Duck during voice"
+#~ msgid "Auto-Duck during voice"
+#~ msgstr "Auto-Duck during voice"
 
 #: src/features/export/components/ExportModal.tsx:266
-msgid "Auto-Ducking Active"
-msgstr "Auto-Ducking Active"
+#~ msgid "Auto-Ducking Active"
+#~ msgstr "Auto-Ducking Active"
 
 #: src/features/timeline/components/elements/TimelineTrackHeaders.tsx:195
-msgid "Auto-Ducking Actively Attenuating"
-msgstr "Auto-Ducking Actively Attenuating"
+#~ msgid "Auto-Ducking Actively Attenuating"
+#~ msgstr "Auto-Ducking Actively Attenuating"
 
 #: src/features/timeline/components/elements/TimelineTrackHeaders.tsx:196
-msgid "Auto-Ducking Armed (Click to disable)"
-msgstr "Auto-Ducking Armed (Click to disable)"
+#~ msgid "Auto-Ducking Armed (Click to disable)"
+#~ msgstr "Auto-Ducking Armed (Click to disable)"
 
 #: src/components/ui/AppSettings.tsx:638
 msgid "Auto-fill readings"
@@ -646,13 +721,18 @@ msgstr "Auto-Write"
 #~ msgid "Automatically stitch all video segments and export upon completion without pausing for asset review"
 #~ msgstr "Automatically stitch all video segments and export upon completion without pausing for asset review"
 
+#: src/features/editor/Preview.tsx:177
+#: src/features/editor/Preview.tsx:179
+msgid "Back to start"
+msgstr "Back to start"
+
 #: src/features/timeline/components/elements/TimelineToolbar.tsx:204
-msgid "Background music added to A2: Music track"
-msgstr "Background music added to A2: Music track"
+#~ msgid "Background music added to A2: Music track"
+#~ msgstr "Background music added to A2: Music track"
 
 #: src/features/export/components/ExportModal.tsx:105
-msgid "Balanced / Standard"
-msgstr "Balanced / Standard"
+#~ msgid "Balanced / Standard"
+#~ msgstr "Balanced / Standard"
 
 #: src/features/map/components/MapLayers/LayerManager.tsx:70
 msgid "Base Map Style"
@@ -663,8 +743,8 @@ msgid "Based on your earlier renders on this PC. Unchanged clips are reused, so 
 msgstr "Based on your earlier renders on this PC. Unchanged clips are reused, so it may finish sooner."
 
 #: src/features/export/components/ExportModal.tsx:567
-msgid "Bitrate Preset"
-msgstr "Bitrate Preset"
+#~ msgid "Bitrate Preset"
+#~ msgstr "Bitrate Preset"
 
 #: src/components/ui/ColorSwatches.tsx:17
 msgid "Black"
@@ -687,8 +767,8 @@ msgid "Border Width"
 msgstr "Border Width"
 
 #: src/features/timeline/components/elements/inspector/InspectorColorPanel.tsx:43
-msgid "Brightness"
-msgstr "Brightness"
+#~ msgid "Brightness"
+#~ msgstr "Brightness"
 
 #: src/components/ui/RenderOverlay.tsx:824
 msgid "Build Assets"
@@ -697,8 +777,16 @@ msgstr "Build Assets"
 #: src/features/timeline/components/elements/inspector/InspectorTransitionsPanel.tsx:119
 #: src/features/timeline/components/elements/inspector/InspectorTransitionsPanel.tsx:213
 #: src/features/timeline/components/elements/TransitionsPanel.tsx:99
-msgid "Burn"
-msgstr "Burn"
+#~ msgid "Burn"
+#~ msgstr "Burn"
+
+#: src/features/editor/Inspector.tsx:203
+msgid "Burn into video"
+msgstr "Burn into video"
+
+#: src/features/editor/Inspector.tsx:204
+msgid "Burn subtitles into the video"
+msgstr "Burn subtitles into the video"
 
 #: src/features/map/components/WaypointEditor.tsx:452
 #: src/features/map/components/WaypointEditor.tsx:508
@@ -718,7 +806,7 @@ msgstr "Cancel"
 #: src/components/view/ProjectManager.tsx:594
 #: src/components/view/ProjectManager.tsx:639
 #: src/components/view/ProjectSettingsModal.tsx:112
-#: src/features/export/components/ExportModal.tsx:693
+#: src/features/editor/ExportDialog.tsx:66
 #: src/features/map/components/GenerateDialog.tsx:88
 #: src/features/map/components/Sidebar.tsx:238
 #: src/features/map/components/WaypointEditor.tsx:662
@@ -739,8 +827,8 @@ msgid "Cannot close window. Check Tauri capabilities"
 msgstr "Cannot close window. Check Tauri capabilities"
 
 #: src/features/timeline/components/TimelineTrack.tsx:252
-msgid "Cannot drop here: overlaps with another clip"
-msgstr "Cannot drop here: overlaps with another clip"
+#~ msgid "Cannot drop here: overlaps with another clip"
+#~ msgstr "Cannot drop here: overlaps with another clip"
 
 #: src/components/view/ProjectSettingsModal.tsx:56
 msgid "Cannot edit settings directly in .nvv archive. Please open project first."
@@ -751,12 +839,12 @@ msgid "Cannot generate: Please add at least one waypoint."
 msgstr "Cannot generate: Please add at least one waypoint."
 
 #: src/features/timeline/components/TimelineClip.tsx:234
-msgid "Cannot move clip here: overlaps with existing clips"
-msgstr "Cannot move clip here: overlaps with existing clips"
+#~ msgid "Cannot move clip here: overlaps with existing clips"
+#~ msgstr "Cannot move clip here: overlaps with existing clips"
 
 #: src/features/timeline/components/TimelineTrack.tsx:181
-msgid "Cannot place Audio on a Video track"
-msgstr "Cannot place Audio on a Video track"
+#~ msgid "Cannot place Audio on a Video track"
+#~ msgstr "Cannot place Audio on a Video track"
 
 #: src/components/ui/RenderOverlay.tsx:832
 msgid "Check Audio & Video"
@@ -780,22 +868,26 @@ msgid "Choose…"
 msgstr "Choose…"
 
 #: src/features/export/components/ExportModal.tsx:134
-msgid "Cinematic"
-msgstr "Cinematic"
+#~ msgid "Cinematic"
+#~ msgstr "Cinematic"
 
 #: src/features/timeline/components/elements/inspector/InspectorTextPanel.tsx:73
-msgid "Clean modern sans-serif"
-msgstr "Clean modern sans-serif"
+#~ msgid "Clean modern sans-serif"
+#~ msgstr "Clean modern sans-serif"
 
 #: src/components/ui/AppSettings.tsx:951
 #: src/components/ui/AppSettings.tsx:952
 #: src/components/ui/NewProject.tsx:338
-#: src/components/ui/StatusBar.tsx:404
+#: src/components/ui/StatusBar.tsx:402
 #: src/features/map/components/Sidebar.tsx:248
 msgid "Clear"
 msgstr "Clear"
 
-#: src/components/ui/StatusBar.tsx:402
+#: src/features/editor/Inspector.tsx:212
+msgid "Clear all"
+msgstr "Clear all"
+
+#: src/components/ui/StatusBar.tsx:400
 msgid "Clear All Notifications"
 msgstr "Clear All Notifications"
 
@@ -820,8 +912,8 @@ msgid "Click a point to remove it."
 msgstr "Click a point to remove it."
 
 #: src/features/timeline/components/TimelineView.tsx:1209
-msgid "Click marker to jump playhead"
-msgstr "Click marker to jump playhead"
+#~ msgid "Click marker to jump playhead"
+#~ msgstr "Click marker to jump playhead"
 
 #: src/features/map/components/Sidebar.tsx:172
 msgid "Click the map or drop a GPS file to start building your route"
@@ -840,34 +932,45 @@ msgid "Click the map to nudge the route. Drag a via point to move it, or right-c
 msgstr "Click the map to nudge the route. Drag a via point to move it, or right-click it for options."
 
 #: src/features/timeline/components/elements/WaypointMarker.tsx:91
-msgid "Click to jump playhead"
-msgstr "Click to jump playhead"
+#~ msgid "Click to jump playhead"
+#~ msgstr "Click to jump playhead"
+
+#: src/features/editor/Inspector.tsx:116
+msgid "Clip"
+msgstr "Clip"
 
 #: src/features/timeline/components/Inspector.tsx:131
-msgid "Clip Label"
-msgstr "Clip Label"
+#~ msgid "Clip Label"
+#~ msgstr "Clip Label"
 
-#: src/components/ui/StatusBar.tsx:359
+#: src/components/ui/StatusBar.tsx:357
 msgid "clips"
 msgstr "clips"
 
+#: src/features/editor/ExportDialog.tsx:41
+msgid "Clips"
+msgstr "Clips"
+
 #: src/features/timeline/components/TimelineView.tsx:405
 #: src/features/timeline/components/TimelineView.tsx:672
-msgid "Clips linked"
-msgstr "Clips linked"
+#~ msgid "Clips linked"
+#~ msgstr "Clips linked"
+
+#: src/features/editor/EditorView.tsx:170
+msgid "Clips ordered, fades added and subtitles filled in"
+msgstr "Clips ordered, fades added and subtitles filled in"
 
 #: src/features/timeline/components/TimelineView.tsx:390
 #: src/features/timeline/components/TimelineView.tsx:660
-msgid "Clips unlinked"
-msgstr "Clips unlinked"
+#~ msgid "Clips unlinked"
+#~ msgstr "Clips unlinked"
 
 #: src/components/ui/AppSettings.tsx:167
 #: src/components/ui/AppSettings.tsx:168
 #: src/components/ui/ErrorBoundary.tsx:77
 #: src/components/ui/NewProject.tsx:253
-#: src/components/ui/StatusBar.tsx:456
+#: src/components/ui/StatusBar.tsx:454
 #: src/components/ui/TitleBar.tsx:438
-#: src/features/export/components/ExportModal.tsx:419
 #: src/features/map/components/MapLayers/LayerManager.tsx:75
 #: src/features/map/components/MapLayers/LayerManager.tsx:76
 #: src/features/map/components/MapLayers/RouteStyling.tsx:101
@@ -883,8 +986,8 @@ msgid "Collapse"
 msgstr "Collapse"
 
 #: src/features/timeline/components/elements/inspector/InspectorColorPanel.tsx:19
-msgid "Color Adjustments"
-msgstr "Color Adjustments"
+#~ msgid "Color Adjustments"
+#~ msgstr "Color Adjustments"
 
 #: src/components/ui/AppSettings.tsx:382
 msgid "Color GPX routes dynamically based on steepness"
@@ -899,12 +1002,12 @@ msgid "Combining all route segments, narration voiceovers, and transitions into 
 msgstr "Combining all route segments, narration voiceovers, and transitions into your completed master navigation video."
 
 #: src/features/export/components/ExportModal.tsx:315
-msgid "Compiling timeline manifest..."
-msgstr "Compiling timeline manifest..."
+#~ msgid "Compiling timeline manifest..."
+#~ msgstr "Compiling timeline manifest..."
 
 #: src/features/export/components/ExportModal.tsx:408
-msgid "Configure aspect ratio, quality profiles, and compile timeline manifest"
-msgstr "Configure aspect ratio, quality profiles, and compile timeline manifest"
+#~ msgid "Configure aspect ratio, quality profiles, and compile timeline manifest"
+#~ msgstr "Configure aspect ratio, quality profiles, and compile timeline manifest"
 
 #: src/components/view/ProjectManager.tsx:647
 msgid "Confirm"
@@ -915,8 +1018,8 @@ msgid "Connected to route"
 msgstr "Connected to route"
 
 #: src/features/timeline/components/elements/inspector/InspectorTextPanel.tsx:144
-msgid "Content"
-msgstr "Content"
+#~ msgid "Content"
+#~ msgstr "Content"
 
 #. placeholder {0}: text.substring(0, 500)
 #: src/components/ui/AutoDirectorModal.tsx:92
@@ -924,8 +1027,8 @@ msgid "Context from document: {0}"
 msgstr "Context from document: {0}"
 
 #: src/features/timeline/components/elements/inspector/InspectorColorPanel.tsx:73
-msgid "Contrast"
-msgstr "Contrast"
+#~ msgid "Contrast"
+#~ msgstr "Contrast"
 
 #: src/components/ui/AppSettings.tsx:201
 msgid "Controls auto save of editors that have unsaved changes"
@@ -939,8 +1042,8 @@ msgstr "Converting GPS file format..."
 msgid "Copied"
 msgstr "Copied"
 
-#: src/components/ui/ContextMenu.tsx:399
-#: src/components/ui/ContextMenu.tsx:438
+#: src/components/ui/ContextMenu.tsx:390
+#: src/components/ui/ContextMenu.tsx:429
 msgid "Copy"
 msgstr "Copy"
 
@@ -957,8 +1060,8 @@ msgstr "Copy error"
 msgid "Copy log"
 msgstr "Copy log"
 
-#: src/components/ui/StatusBar.tsx:57
 #: src/components/ui/StatusBar.tsx:58
+#: src/components/ui/StatusBar.tsx:59
 msgid "Copy Message"
 msgstr "Copy Message"
 
@@ -971,7 +1074,17 @@ msgstr "Copy path from"
 msgid "Correct words or kanji that are read incorrectly by the AI voice. You can auto-extract entries from scripts by typing <0>漢字(よみがな)</0> in any narration script."
 msgstr "Correct words or kanji that are read incorrectly by the AI voice. You can auto-extract entries from scripts by typing <0>漢字(よみがな)</0> in any narration script."
 
-#: src/components/ui/StatusBar.tsx:208
+#. placeholder {0}: e?.message ?? e
+#: src/features/editor/EditorView.tsx:118
+msgid "Could not add the music: {0}"
+msgstr "Could not add the music: {0}"
+
+#. placeholder {0}: e?.message ?? e
+#: src/features/editor/EditorView.tsx:109
+msgid "Could not add the video: {0}"
+msgstr "Could not add the video: {0}"
+
+#: src/components/ui/StatusBar.tsx:206
 msgid "Could not delete this version"
 msgstr "Could not delete this version"
 
@@ -989,15 +1102,24 @@ msgstr "Could not open file location"
 msgid "Could not read project config."
 msgstr "Could not read project config."
 
+#. placeholder {0}: e?.message ?? e
+#: src/features/editor/EditorView.tsx:155
+msgid "Could not read the file: {0}"
+msgstr "Could not read the file: {0}"
+
 #: src/components/view/ProjectManager.tsx:107
 msgid "Could not render project directly: "
 msgstr "Could not render project directly: "
 
-#: src/components/ui/StatusBar.tsx:193
+#: src/components/ui/StatusBar.tsx:191
 msgid "Could not restore this version"
 msgstr "Could not restore this version"
 
-#: src/components/ui/StatusBar.tsx:179
+#: src/features/editor/ExportDialog.tsx:28
+msgid "Could not save the timeline"
+msgstr "Could not save the timeline"
+
+#: src/components/ui/StatusBar.tsx:177
 msgid "Could not save this version"
 msgstr "Could not save this version"
 
@@ -1018,14 +1140,14 @@ msgid "create-new-route-detail"
 msgstr "Set your starting coordinates and routing behavior"
 
 #: src/features/timeline/components/elements/inspector/InspectorTextPanel.tsx:19
-msgid "Crisp white text with black stroke"
-msgstr "Crisp white text with black stroke"
+#~ msgid "Crisp white text with black stroke"
+#~ msgstr "Crisp white text with black stroke"
 
 #: src/features/timeline/components/elements/inspector/InspectorTransitionsPanel.tsx:118
 #: src/features/timeline/components/elements/inspector/InspectorTransitionsPanel.tsx:212
 #: src/features/timeline/components/elements/TransitionsPanel.tsx:91
-msgid "Cross Warp"
-msgstr "Cross Warp"
+#~ msgid "Cross Warp"
+#~ msgstr "Cross Warp"
 
 #: src/components/ui/ScriptInput.tsx:17
 msgid "Cross-checking building data..."
@@ -1034,8 +1156,8 @@ msgstr "Cross-checking building data..."
 #: src/features/timeline/components/elements/inspector/InspectorTransitionsPanel.tsx:108
 #: src/features/timeline/components/elements/inspector/InspectorTransitionsPanel.tsx:202
 #: src/features/timeline/components/elements/TransitionsPanel.tsx:27
-msgid "Crossfade"
-msgstr "Crossfade"
+#~ msgid "Crossfade"
+#~ msgstr "Crossfade"
 
 #: src/components/ui/ColorSwatches.tsx:56
 msgid "Custom Color"
@@ -1050,16 +1172,20 @@ msgstr "Custom Marker"
 
 #: src/features/timeline/components/elements/TimelineToolbar.tsx:149
 #: src/features/timeline/components/TimelineView.tsx:978
-msgid "Custom Text"
-msgstr "Custom Text"
+#~ msgid "Custom Text"
+#~ msgstr "Custom Text"
 
 #: src/components/ui/RenderOverlay.tsx:1362
 msgid "Customize in Timeline"
 msgstr "Customize in Timeline"
 
-#: src/components/ui/ContextMenu.tsx:392
+#: src/components/ui/ContextMenu.tsx:383
 msgid "Cut"
 msgstr "Cut"
+
+#: src/features/editor/EditorView.tsx:248
+msgid "Cut to next clip"
+msgstr "Cut to next clip"
 
 #: src/components/ui/AppSettings.tsx:323
 #: src/components/view/ProjectSettingsModal.tsx:126
@@ -1079,6 +1205,7 @@ msgstr "Default travel mode"
 msgid "default-routing-mode-detail"
 msgstr "Sets the default pathfinding engine when placing waypoints"
 
+#: src/features/editor/Inspector.tsx:193
 #: src/features/map/components/WaypointEditor.tsx:669
 msgid "Delete"
 msgstr "Delete"
@@ -1089,27 +1216,31 @@ msgid "Delete Anchor"
 msgstr "Delete Anchor"
 
 #: src/features/timeline/components/Inspector.tsx:121
-msgid "Delete Clip"
-msgstr "Delete Clip"
+#~ msgid "Delete Clip"
+#~ msgstr "Delete Clip"
 
 #: src/features/timeline/components/elements/MarkersPanel.tsx:123
-msgid "Delete marker"
-msgstr "Delete marker"
+#~ msgid "Delete marker"
+#~ msgstr "Delete marker"
 
 #: src/features/map/components/MapArea.tsx:1204
 msgid "Delete point"
 msgstr "Delete point"
 
 #: src/features/timeline/components/Inspector.tsx:63
-msgid "Delete Selected"
-msgstr "Delete Selected"
+#~ msgid "Delete Selected"
+#~ msgstr "Delete Selected"
 
 #: src/features/map/components/WaypointEditor.tsx:679
 #: src/features/map/hooks/useStopMenus.ts:261
 msgid "Delete stop"
 msgstr "Delete stop"
 
-#: src/components/ui/StatusBar.tsx:200
+#: src/features/editor/EditorView.tsx:254
+msgid "Delete subtitle"
+msgstr "Delete subtitle"
+
+#: src/components/ui/StatusBar.tsx:198
 msgid "Delete this saved version?"
 msgstr "Delete this saved version?"
 
@@ -1117,26 +1248,26 @@ msgstr "Delete this saved version?"
 msgid "Delete this stop?"
 msgstr "Delete this stop?"
 
-#: src/components/ui/StatusBar.tsx:376
-#: src/components/ui/StatusBar.tsx:377
+#: src/components/ui/StatusBar.tsx:374
+#: src/components/ui/StatusBar.tsx:375
 msgid "Delete version"
 msgstr "Delete version"
 
 #: src/components/ui/ContextMenu.tsx:575
-msgid "delete-clip"
-msgstr "Delete Clip"
+#~ msgid "delete-clip"
+#~ msgstr "Delete Clip"
 
 #: src/components/ui/ContextMenu.tsx:592
-msgid "delete-empty-track"
-msgstr "Delete Empty Track"
+#~ msgid "delete-empty-track"
+#~ msgstr "Delete Empty Track"
 
 #: src/components/ui/ContextMenu.tsx:538
-msgid "delete-track"
-msgstr "Delete Track"
+#~ msgid "delete-track"
+#~ msgstr "Delete Track"
 
 #: src/features/export/components/ExportModal.tsx:462
-msgid "Desktop & YouTube"
-msgstr "Desktop & YouTube"
+#~ msgid "Desktop & YouTube"
+#~ msgstr "Desktop & YouTube"
 
 #: src/features/map/components/WaypointEditor.tsx:305
 #: src/features/map/hooks/useStopMenus.ts:223
@@ -1158,8 +1289,8 @@ msgstr "Direct"
 #: src/features/timeline/components/elements/inspector/InspectorTransitionsPanel.tsx:114
 #: src/features/timeline/components/elements/inspector/InspectorTransitionsPanel.tsx:208
 #: src/features/timeline/components/elements/TransitionsPanel.tsx:67
-msgid "Directional Warp"
-msgstr "Directional Warp"
+#~ msgid "Directional Warp"
+#~ msgstr "Directional Warp"
 
 #: src/components/ui/RenderOverlay.tsx:738
 msgid "Discard"
@@ -1173,12 +1304,12 @@ msgstr "Dismiss"
 #: src/features/timeline/components/elements/inspector/InspectorTransitionsPanel.tsx:111
 #: src/features/timeline/components/elements/inspector/InspectorTransitionsPanel.tsx:205
 #: src/features/timeline/components/elements/TransitionsPanel.tsx:51
-msgid "Dissolve"
-msgstr "Dissolve"
+#~ msgid "Dissolve"
+#~ msgstr "Dissolve"
 
 #: src/features/timeline/components/elements/TransitionsPanel.tsx:53
-msgid "Dithering noise pixel dissolve between scenes"
-msgstr "Dithering noise pixel dissolve between scenes"
+#~ msgid "Dithering noise pixel dissolve between scenes"
+#~ msgstr "Dithering noise pixel dissolve between scenes"
 
 #: src/components/ui/UnsavedChanges.tsx:44
 msgid "Do you want to save the changes you made to "
@@ -1189,6 +1320,7 @@ msgid "Don't Save"
 msgstr "Don't Save"
 
 #: src/components/ui/RenderOverlay.tsx:1336
+#: src/features/editor/ExportDialog.tsx:60
 #: src/features/map/components/DrawBar.tsx:319
 #: src/features/map/components/MapArea.tsx:893
 #: src/features/map/components/Sidebar.tsx:267
@@ -1204,9 +1336,13 @@ msgstr "Done adjusting"
 msgid "Done drawing"
 msgstr "Done drawing"
 
+#: src/features/editor/TimelinePane.tsx:371
+msgid "Double-click to add a subtitle"
+msgstr "Double-click to add a subtitle"
+
 #: src/features/timeline/components/elements/TransitionsPanel.tsx:93
-msgid "Double-sided horizontal perspective warp effect"
-msgstr "Double-sided horizontal perspective warp effect"
+#~ msgid "Double-sided horizontal perspective warp effect"
+#~ msgstr "Double-sided horizontal perspective warp effect"
 
 #: src/components/ui/AppSettings.tsx:967
 msgid "Download"
@@ -1217,16 +1353,20 @@ msgid "Drafting narration..."
 msgstr "Drafting narration..."
 
 #: src/features/timeline/components/TimelineView.tsx:966
-msgid "Drag and drop texts or shapes"
-msgstr "Drag and drop texts or shapes"
+#~ msgid "Drag and drop texts or shapes"
+#~ msgstr "Drag and drop texts or shapes"
 
 #: src/features/timeline/components/elements/TransitionsPanel.tsx:399
-msgid "Drag card between 2 clips on timeline"
-msgstr "Drag card between 2 clips on timeline"
+#~ msgid "Drag card between 2 clips on timeline"
+#~ msgstr "Drag card between 2 clips on timeline"
 
 #: src/features/timeline/components/elements/TransitionsPanel.tsx:238
-msgid "Drag to cuts on timeline or click to apply"
-msgstr "Drag to cuts on timeline or click to apply"
+#~ msgid "Drag to cuts on timeline or click to apply"
+#~ msgstr "Drag to cuts on timeline or click to apply"
+
+#: src/features/editor/TimelinePane.tsx:326
+msgid "Drag to shift the narration"
+msgstr "Drag to shift the narration"
 
 #: src/features/map/hooks/useStopMenus.ts:43
 msgid "Draw"
@@ -1243,8 +1383,8 @@ msgstr "drawn"
 #: src/features/timeline/components/elements/inspector/InspectorTransitionsPanel.tsx:112
 #: src/features/timeline/components/elements/inspector/InspectorTransitionsPanel.tsx:206
 #: src/features/timeline/components/elements/TransitionsPanel.tsx:59
-msgid "Dreamy"
-msgstr "Dreamy"
+#~ msgid "Dreamy"
+#~ msgstr "Dreamy"
 
 #: src/components/ui/NewProject.tsx:195
 #: src/features/map/hooks/useStopMenus.ts:39
@@ -1260,20 +1400,26 @@ msgid "Drop photos or GPS files to plot route"
 msgstr "Drop photos or GPS files to plot route"
 
 #: src/features/timeline/components/elements/inspector/InspectorTextPanel.tsx:391
-msgid "Drop Shadow"
-msgstr "Drop Shadow"
+#~ msgid "Drop Shadow"
+#~ msgstr "Drop Shadow"
+
+#: src/features/editor/TimelinePane.tsx:311
+#~ msgid "Drop videos here, or use Add video"
+#~ msgstr "Drop videos here, or use Add video"
 
 #: src/features/timeline/components/elements/TimelineTrackHeaders.tsx:200
 #: src/features/timeline/components/TimelineClip.tsx:435
-msgid "Duck"
-msgstr "Duck"
+#~ msgid "Duck"
+#~ msgstr "Duck"
 
 #: src/components/ui/ContextMenu.tsx:605
 #: src/components/ui/ContextMenu.tsx:614
-msgid "duplicate"
-msgstr "Duplicate"
+#~ msgid "duplicate"
+#~ msgstr "Duplicate"
 
 #: src/components/view/ProjectManager.tsx:224
+#: src/features/editor/EditorView.tsx:237
+#: src/features/editor/Inspector.tsx:159
 #: src/features/map/hooks/useStopMenus.ts:239
 msgid "Duplicate"
 msgstr "Duplicate"
@@ -1287,8 +1433,8 @@ msgid "Duplicate Project Name"
 msgstr "Duplicate Project Name"
 
 #: src/components/ui/ContextMenu.tsx:544
-msgid "duplicate-clip"
-msgstr "Duplicate Clip"
+#~ msgid "duplicate-clip"
+#~ msgstr "Duplicate Clip"
 
 #: src/components/ui/AppSettings.tsx:436
 msgid "Duration"
@@ -1342,8 +1488,8 @@ msgid "Elevation heatmap"
 msgstr "Elevation heatmap"
 
 #: src/features/timeline/components/elements/inspector/InspectorTextPanel.tsx:606
-msgid "Emerald"
-msgstr "Emerald"
+#~ msgid "Emerald"
+#~ msgstr "Emerald"
 
 #: src/features/map/components/MapLayers/LayerManager.tsx:123
 #: src/features/map/components/MapLayers/LayerManager.tsx:129
@@ -1351,11 +1497,12 @@ msgid "Enable 3D Terrain"
 msgstr "Enable 3D Terrain"
 
 #: src/features/timeline/components/elements/TimelineTrackHeaders.tsx:197
-msgid "Enable Auto-Ducking"
-msgstr "Enable Auto-Ducking"
+#~ msgid "Enable Auto-Ducking"
+#~ msgstr "Enable Auto-Ducking"
 
+#: src/features/editor/Inspector.tsx:128
+#: src/features/editor/Inspector.tsx:180
 #: src/features/map/components/MapToolbar.tsx:91
-#: src/features/timeline/components/elements/TimelineToolbar.tsx:284
 msgid "End"
 msgstr "End"
 
@@ -1364,12 +1511,12 @@ msgid "Enter pronunciation reading in Hiragana/Katakana..."
 msgstr "Enter pronunciation reading in Hiragana/Katakana..."
 
 #: src/features/timeline/components/elements/inspector/InspectorTextPanel.tsx:150
-msgid "Enter subtitle or display text..."
-msgstr "Enter subtitle or display text..."
+#~ msgid "Enter subtitle or display text..."
+#~ msgstr "Enter subtitle or display text..."
 
 #: src/features/timeline/components/TimelineView.tsx:979
-msgid "Enter text here..."
-msgstr "Enter text here..."
+#~ msgid "Enter text here..."
+#~ msgstr "Enter text here..."
 
 #: src/features/map/components/DrawBar.tsx:207
 msgid "Erase"
@@ -1393,14 +1540,14 @@ msgid "errorboundary_reason"
 msgstr "The application encountered an unexpected rendering error. Your saved files are safe"
 
 #: src/features/export/components/ExportModal.tsx:652
-msgid "Est. File Size"
-msgstr "Est. File Size"
+#~ msgid "Est. File Size"
+#~ msgstr "Est. File Size"
 
-#: src/components/ui/StatusBar.tsx:231
+#: src/components/ui/StatusBar.tsx:229
 msgid "Estimated time for the Python backend to synthesize AI voiceovers and encode the video"
 msgstr "Estimated time for the Python backend to synthesize AI voiceovers and encode the video"
 
-#: src/components/ui/StatusBar.tsx:233
+#: src/components/ui/StatusBar.tsx:231
 msgid "Estimating render time…"
 msgstr "Estimating render time…"
 
@@ -1409,8 +1556,8 @@ msgid "Estimating…"
 msgstr "Estimating…"
 
 #: src/features/timeline/components/elements/TransitionsPanel.tsx:61
-msgid "Ethereal sinusoidal wave distortion and color blend"
-msgstr "Ethereal sinusoidal wave distortion and color blend"
+#~ msgid "Ethereal sinusoidal wave distortion and color blend"
+#~ msgstr "Ethereal sinusoidal wave distortion and color blend"
 
 #: src/features/map/components/MapArea.tsx:1247
 msgid "EXIF GPS tags from your travel photos will automatically generate sequenced stops on the map."
@@ -1434,14 +1581,15 @@ msgid "Experimental"
 msgstr "Experimental"
 
 #: src/components/ui/RenderOverlay.tsx:836
-#: src/features/timeline/components/elements/TimelineToolbar.tsx:352
+#: src/features/editor/EditorView.tsx:327
+#: src/features/editor/ExportDialog.tsx:69
 msgid "Export"
 msgstr "Export"
 
 #: src/features/export/components/ExportModal.tsx:405
 #: src/features/timeline/components/elements/TimelineToolbar.tsx:349
-msgid "Export & Render Video"
-msgstr "Export & Render Video"
+#~ msgid "Export & Render Video"
+#~ msgstr "Export & Render Video"
 
 #: src/features/map/components/GenerateDialog.tsx:149
 msgid "Export automatically"
@@ -1449,34 +1597,37 @@ msgstr "Export automatically"
 
 #. placeholder {0}: err?.message || err
 #: src/components/ui/RenderOverlay.tsx:607
-#: src/features/export/components/ExportModal.tsx:339
 msgid "Export failed: {0}"
 msgstr "Export failed: {0}"
 
 #: src/features/export/components/ExportModal.tsx:682
-msgid "Export JSON Manifest Only"
-msgstr "Export JSON Manifest Only"
+#~ msgid "Export JSON Manifest Only"
+#~ msgstr "Export JSON Manifest Only"
 
 #: src/features/export/components/ExportModal.tsx:334
-msgid "Export process initiated successfully!"
-msgstr "Export process initiated successfully!"
+#~ msgid "Export process initiated successfully!"
+#~ msgstr "Export process initiated successfully!"
 
 #: src/features/timeline/components/TimelineView.tsx:1227
-msgid "Export process started"
-msgstr "Export process started"
+#~ msgid "Export process started"
+#~ msgstr "Export process started"
 
 #: src/features/export/components/ExportModal.tsx:604
-msgid "Export Summary"
-msgstr "Export Summary"
+#~ msgid "Export Summary"
+#~ msgstr "Export Summary"
+
+#: src/features/editor/ExportDialog.tsx:50
+msgid "Export video"
+msgstr "Export video"
 
 #: src/features/export/components/ExportModal.tsx:711
 #: src/features/export/components/ExportPanel.tsx:44
-msgid "Export Video"
-msgstr "Export Video"
+#~ msgid "Export Video"
+#~ msgstr "Export Video"
 
 #: src/features/export/components/ExportModal.tsx:705
-msgid "Exporting..."
-msgstr "Exporting..."
+#~ msgid "Exporting..."
+#~ msgstr "Exporting..."
 
 #: src/components/ui/RenderOverlay.tsx:603
 msgid "exportSuccessToastMsg"
@@ -1491,21 +1642,33 @@ msgid "Extracting waypoints from GPS data..."
 msgstr "Extracting waypoints from GPS data..."
 
 #: src/features/timeline/components/elements/inspector/InspectorAudioPanel.tsx:135
-msgid "Fade In (s)"
-msgstr "Fade In (s)"
+#~ msgid "Fade In (s)"
+#~ msgstr "Fade In (s)"
+
+#: src/features/editor/Inspector.tsx:152
+msgid "Fade into next"
+msgstr "Fade into next"
+
+#: src/features/editor/EditorView.tsx:248
+msgid "Fade into next clip"
+msgstr "Fade into next clip"
 
 #: src/features/timeline/components/elements/inspector/InspectorAudioPanel.tsx:153
-msgid "Fade Out (s)"
-msgstr "Fade Out (s)"
+#~ msgid "Fade Out (s)"
+#~ msgstr "Fade Out (s)"
 
 #: src/features/timeline/components/elements/inspector/InspectorTransitionsPanel.tsx:121
 #: src/features/timeline/components/elements/inspector/InspectorTransitionsPanel.tsx:215
-msgid "Fade to Black"
-msgstr "Fade to Black"
+#~ msgid "Fade to Black"
+#~ msgstr "Fade to Black"
 
 #: src/features/timeline/components/elements/inspector/InspectorAudioPanel.tsx:130
-msgid "Fade Transitions"
-msgstr "Fade Transitions"
+#~ msgid "Fade Transitions"
+#~ msgstr "Fade Transitions"
+
+#: src/features/editor/TimelinePane.tsx:303
+msgid "Fades into the next clip"
+msgstr "Fades into the next clip"
 
 #: src/components/ui/RenderOverlay.tsx:809
 msgid "Failed"
@@ -1517,8 +1680,8 @@ msgstr "Failed to duplicate project"
 
 #. placeholder {0}: err?.message || err
 #: src/features/export/components/ExportModal.tsx:381
-msgid "Failed to export JSON: {0}"
-msgstr "Failed to export JSON: {0}"
+#~ msgid "Failed to export JSON: {0}"
+#~ msgstr "Failed to export JSON: {0}"
 
 #: src/features/map/components/WaypointEditor.tsx:213
 msgid "Failed to generate script"
@@ -1529,8 +1692,8 @@ msgid "Failed to geocode any locations."
 msgstr "Failed to geocode any locations."
 
 #: src/features/timeline/components/MediaPool.tsx:269
-msgid "Failed to import media into the project"
-msgstr "Failed to import media into the project"
+#~ msgid "Failed to import media into the project"
+#~ msgstr "Failed to import media into the project"
 
 #: src/components/ui/RenderOverlay.tsx:232
 msgid "Failed to invoke Python render: {err}"
@@ -1593,12 +1756,12 @@ msgid "Failed to update project"
 msgstr "Failed to update project"
 
 #: src/features/export/components/ExportModal.tsx:327
-msgid "Failed to write timeline.json manifest"
-msgstr "Failed to write timeline.json manifest"
+#~ msgid "Failed to write timeline.json manifest"
+#~ msgstr "Failed to write timeline.json manifest"
 
 #: src/features/export/components/ExportModal.tsx:115
-msgid "Fast"
-msgstr "Fast"
+#~ msgid "Fast"
+#~ msgstr "Fast"
 
 #: src/features/map/components/GenerateDialog.tsx:143
 msgid "Fast render"
@@ -1611,8 +1774,8 @@ msgid "Fast render mode"
 msgstr "Fast render mode"
 
 #: src/features/export/components/ExportModal.tsx:116
-msgid "Fastest export with compact file size for quick previews (12 Mbps 4K / 5 Mbps 1080p)"
-msgstr "Fastest export with compact file size for quick previews (12 Mbps 4K / 5 Mbps 1080p)"
+#~ msgid "Fastest export with compact file size for quick previews (12 Mbps 4K / 5 Mbps 1080p)"
+#~ msgstr "Fastest export with compact file size for quick previews (12 Mbps 4K / 5 Mbps 1080p)"
 
 #: src/components/ui/NewProject.tsx:197
 #: src/features/map/hooks/useStopMenus.ts:40
@@ -1628,8 +1791,13 @@ msgid "Finalizing Project Timeline..."
 msgstr "Finalizing Project Timeline..."
 
 #: src/features/timeline/components/elements/TimelineToolbar.tsx:330
-msgid "Fit timeline to content"
-msgstr "Fit timeline to content"
+#~ msgid "Fit timeline to content"
+#~ msgstr "Fit timeline to content"
+
+#: src/features/editor/EditorView.tsx:313
+#: src/features/editor/EditorView.tsx:315
+msgid "Fit to window"
+msgstr "Fit to window"
 
 #: src/components/ui/NewProject.tsx:198
 #: src/features/map/hooks/useStopMenus.ts:41
@@ -1641,16 +1809,16 @@ msgid "Font"
 msgstr "Font"
 
 #: src/features/timeline/components/elements/inspector/InspectorTextPanel.tsx:157
-msgid "Font Family"
-msgstr "Font Family"
+#~ msgid "Font Family"
+#~ msgstr "Font Family"
 
 #: src/components/ui/AppSettings.tsx:488
 msgid "Font size"
 msgstr "Font size"
 
 #: src/features/timeline/components/elements/inspector/InspectorTextPanel.tsx:180
-msgid "Font Size"
-msgstr "Font Size"
+#~ msgid "Font Size"
+#~ msgstr "Font Size"
 
 #. placeholder {0}: locations.length
 #: src/components/ui/AutoDirectorModal.tsx:36
@@ -1658,12 +1826,22 @@ msgid "Found {0} locations. Geocoding..."
 msgstr "Found {0} locations. Geocoding..."
 
 #: src/features/export/components/ExportPanel.tsx:25
-msgid "Framerate"
-msgstr "Framerate"
+#~ msgid "Framerate"
+#~ msgstr "Framerate"
 
 #: src/features/export/components/ExportModal.tsx:538
-msgid "Framerate (FPS)"
-msgstr "Framerate (FPS)"
+#~ msgid "Framerate (FPS)"
+#~ msgstr "Framerate (FPS)"
+
+#: src/features/editor/EditorView.tsx:273
+#: src/features/editor/EditorView.tsx:282
+msgid "From a file…"
+msgstr "From a file…"
+
+#: src/features/editor/EditorView.tsx:272
+#: src/features/editor/EditorView.tsx:281
+msgid "From narration"
+msgstr "From narration"
 
 #: src/components/ui/AppSettings.tsx:95
 msgid "General"
@@ -1721,12 +1899,12 @@ msgid "Get name from coordinate"
 msgstr "Get name from coordinate"
 
 #: src/features/timeline/components/elements/inspector/InspectorTextPanel.tsx:602
-msgid "Gold"
-msgstr "Gold"
+#~ msgid "Gold"
+#~ msgstr "Gold"
 
 #: src/features/timeline/components/elements/inspector/InspectorTextPanel.tsx:37
-msgid "Golden dynamic highlight and glow"
-msgstr "Golden dynamic highlight and glow"
+#~ msgid "Golden dynamic highlight and glow"
+#~ msgstr "Golden dynamic highlight and glow"
 
 #: src/components/ui/NewProject.tsx:212
 #: src/components/ui/PipelineLogPanel.tsx:49
@@ -1755,13 +1933,17 @@ msgstr "Green"
 msgid "Grid View"
 msgstr "Grid View"
 
+#: src/features/editor/Inspector.tsx:155
+msgid "Hard cut"
+msgstr "Hard cut"
+
 #: src/components/ui/AppSettings.tsx:462
 msgid "Hardware mode"
 msgstr "Hardware mode"
 
 #: src/features/timeline/components/elements/inspector/InspectorTextPanel.tsx:55
-msgid "Heavy yellow headline with thick outline"
-msgstr "Heavy yellow headline with thick outline"
+#~ msgid "Heavy yellow headline with thick outline"
+#~ msgstr "Heavy yellow headline with thick outline"
 
 #: src/components/ui/ErrorBoundary.tsx:119
 msgid "Hide details"
@@ -1773,16 +1955,16 @@ msgstr "Hide log"
 
 #: src/components/ui/ContextMenu.tsx:526
 #: src/features/timeline/components/elements/TimelineTrackHeaders.tsx:214
-msgid "Hide Track"
-msgstr "Hide Track"
+#~ msgid "Hide Track"
+#~ msgstr "Hide Track"
 
 #: src/features/export/components/ExportModal.tsx:95
-msgid "High Quality"
-msgstr "High Quality"
+#~ msgid "High Quality"
+#~ msgstr "High Quality"
 
 #: src/features/timeline/components/elements/TransitionsPanel.tsx:101
-msgid "High-exposure film burn and fiery glow reveal"
-msgstr "High-exposure film burn and fiery glow reveal"
+#~ msgid "High-exposure film burn and fiery glow reveal"
+#~ msgstr "High-exposure film burn and fiery glow reveal"
 
 #: src/components/ui/RenderOverlay.tsx:1027
 msgid "High-Spec (Discrete GPU)"
@@ -1802,33 +1984,33 @@ msgid "High-spec system detected: {gpuRenderer} ({logicalCores} CPU threads)"
 msgstr "High-spec system detected: {gpuRenderer} ({logicalCores} CPU threads)"
 
 #: src/features/timeline/components/elements/inspector/InspectorTextPanel.tsx:567
-msgid "Highlight Color"
-msgstr "Highlight Color"
+#~ msgid "Highlight Color"
+#~ msgstr "Highlight Color"
 
 #: src/components/ui/AppSettings.tsx:248
 #: src/components/ui/AppSettings.tsx:255
 msgid "Historical weather"
 msgstr "Historical weather"
 
-#: src/components/ui/StatusBar.tsx:278
+#: src/components/ui/StatusBar.tsx:276
 msgid "History"
 msgstr "History"
 
 #: src/features/timeline/components/elements/TimelineToolbar.tsx:259
-msgid "Home"
-msgstr "Home"
+#~ msgid "Home"
+#~ msgstr "Home"
 
 #: src/components/ui/RenderOverlay.tsx:1191
 msgid "If Irodori TTS mispronounces words or lacks intonation, input the script reading in <0>Hiragana</0> or <1>Katakana</1> (e.g. ひらがな / カタカチE instead of Kanji. Kanji characters lack explicit pitch-accent information."
 msgstr "If Irodori TTS mispronounces words or lacks intonation, input the script reading in <0>Hiragana</0> or <1>Katakana</1> (e.g. ひらがな / カタカチE instead of Kanji. Kanji characters lack explicit pitch-accent information."
 
 #: src/features/timeline/components/MediaPool.tsx:360
-msgid "image"
-msgstr "image"
+#~ msgid "image"
+#~ msgstr "image"
 
 #: src/features/timeline/components/MediaPool.tsx:315
-msgid "Import External Media"
-msgstr "Import External Media"
+#~ msgid "Import External Media"
+#~ msgstr "Import External Media"
 
 #: src/components/ui/TitleBar.tsx:320
 msgid "Import GPX..."
@@ -1854,8 +2036,8 @@ msgid "Imported {0} waypoints. Route > 50km."
 msgstr "Imported {0} waypoints. Route > 50km."
 
 #: src/features/timeline/components/elements/inspector/InspectorTransitionsPanel.tsx:25
-msgid "In-Transition"
-msgstr "In-Transition"
+#~ msgid "In-Transition"
+#~ msgstr "In-Transition"
 
 #: src/features/map/components/GenerateDialog.tsx:74
 msgid "Included"
@@ -1866,8 +2048,8 @@ msgid "Initializing pipeline..."
 msgstr "Initializing pipeline..."
 
 #: src/features/timeline/components/TimelineView.tsx:951
-msgid "Inspector"
-msgstr "Inspector"
+#~ msgid "Inspector"
+#~ msgstr "Inspector"
 
 #: src/components/ui/AppSettings.tsx:265
 msgid "Interface"
@@ -1886,12 +2068,12 @@ msgid "Japanese Pronunciation & Intonation Guidance"
 msgstr "Japanese Pronunciation & Intonation Guidance"
 
 #: src/features/timeline/components/elements/inspector/InspectorTextPanel.tsx:36
-msgid "Karaoke Glow"
-msgstr "Karaoke Glow"
+#~ msgid "Karaoke Glow"
+#~ msgstr "Karaoke Glow"
 
 #: src/features/timeline/components/elements/inspector/InspectorTextPanel.tsx:547
-msgid "Karaoke Timing Mode"
-msgstr "Karaoke Timing Mode"
+#~ msgid "Karaoke Timing Mode"
+#~ msgstr "Karaoke Timing Mode"
 
 #: src/components/view/ProjectManager.tsx:371
 msgid "Kyoto Demo Route"
@@ -1910,8 +2092,8 @@ msgid "Last Opened"
 msgstr "Last Opened"
 
 #: src/features/export/components/ExportModal.tsx:330
-msgid "Launching video rendering engine..."
-msgstr "Launching video rendering engine..."
+#~ msgid "Launching video rendering engine..."
+#~ msgstr "Launching video rendering engine..."
 
 #: src/features/map/components/MapLayers/LayerManager.tsx:55
 msgid "Layer Manager"
@@ -1932,6 +2114,10 @@ msgstr "Leave blank to use the project name."
 msgid "Leg {0}: {1} → {2}"
 msgstr "Leg {0}: {1} → {2}"
 
+#: src/features/editor/ExportDialog.tsx:40
+msgid "Length"
+msgstr "Length"
+
 #: src/features/map/components/LegColorButton.tsx:49
 #: src/features/map/components/LegColorButton.tsx:50
 #: src/features/map/components/LegColorButton.tsx:71
@@ -1948,12 +2134,12 @@ msgid "Line Thickness"
 msgstr "Line Thickness"
 
 #: src/features/timeline/components/elements/TransitionsPanel.tsx:37
-msgid "Linear directional wipe from left to right"
-msgstr "Linear directional wipe from left to right"
+#~ msgid "Linear directional wipe from left to right"
+#~ msgstr "Linear directional wipe from left to right"
 
 #: src/components/ui/ContextMenu.tsx:564
-msgid "link-clips"
-msgstr "Link Clips"
+#~ msgid "link-clips"
+#~ msgstr "Link Clips"
 
 #: src/components/ui/RenderOverlay.tsx:1160
 msgid "Listen"
@@ -1981,20 +2167,20 @@ msgid "Locations & Scripts"
 msgstr "Locations & Scripts"
 
 #: src/features/timeline/components/elements/TimelineTrackHeaders.tsx:245
-msgid "Lock Track"
-msgstr "Lock Track"
+#~ msgid "Lock Track"
+#~ msgstr "Lock Track"
 
 #: src/components/ui/ContextMenu.tsx:531
-msgid "lock-track"
-msgstr "Lock Track"
+#~ msgid "lock-track"
+#~ msgstr "Lock Track"
 
 #: src/components/ui/PipelineLogPanel.tsx:115
 msgid "Log view"
 msgstr "Log view"
 
 #: src/features/timeline/components/elements/TimelineToolbar.tsx:150
-msgid "Lorem ipsum"
-msgstr "Lorem ipsum"
+#~ msgid "Lorem ipsum"
+#~ msgstr "Lorem ipsum"
 
 #: src/components/ui/RenderOverlay.tsx:1028
 msgid "Low-Spec (Integrated Graphics)"
@@ -2022,16 +2208,15 @@ msgid "lowSpecGenSessionMessage"
 msgstr "System in low-spec mode. Opened Waypoint Editor on map to adjust images, script, or route mode before re-running generation"
 
 #: src/features/timeline/components/elements/TransitionsPanel.tsx:85
-msgid "Luminance photographic multiply overlay"
-msgstr "Luminance photographic multiply overlay"
+#~ msgid "Luminance photographic multiply overlay"
+#~ msgstr "Luminance photographic multiply overlay"
 
 #: src/features/timeline/components/elements/TimelineToolbar.tsx:231
-msgid "Manage timeline markers"
-msgstr "Manage timeline markers"
+#~ msgid "Manage timeline markers"
+#~ msgstr "Manage timeline markers"
 
 #: src/components/ui/AppSettings.tsx:320
 #: src/components/ui/TitleBar.tsx:382
-#: src/components/view/EditorLayout.tsx:27
 msgid "Map"
 msgstr "Map"
 
@@ -2057,40 +2242,40 @@ msgstr "Marker"
 
 #. placeholder {0}: existingMarkers.length + 1
 #: src/features/timeline/components/TimelineView.tsx:816
-msgid "Marker {0}"
-msgstr "Marker {0}"
+#~ msgid "Marker {0}"
+#~ msgstr "Marker {0}"
 
 #: src/features/timeline/components/elements/MarkersPanel.tsx:109
-msgid "Marker time in seconds"
-msgstr "Marker time in seconds"
+#~ msgid "Marker time in seconds"
+#~ msgstr "Marker time in seconds"
 
 #: src/components/ui/TitleBar.tsx:430
 msgid "Maximize"
 msgstr "Maximize"
 
 #: src/features/export/components/ExportModal.tsx:96
-msgid "Maximum quality for archival and master presentation (50 Mbps 4K / 20 Mbps 1080p)"
-msgstr "Maximum quality for archival and master presentation (50 Mbps 4K / 20 Mbps 1080p)"
+#~ msgid "Maximum quality for archival and master presentation (50 Mbps 4K / 20 Mbps 1080p)"
+#~ msgstr "Maximum quality for archival and master presentation (50 Mbps 4K / 20 Mbps 1080p)"
 
 #: src/features/timeline/components/MediaPool.tsx:177
-msgid "Media"
-msgstr "Media"
+#~ msgid "Media"
+#~ msgstr "Media"
 
 #: src/features/timeline/components/TimelineView.tsx:917
-msgid "Media Pool"
-msgstr "Media Pool"
+#~ msgid "Media Pool"
+#~ msgstr "Media Pool"
 
 #: src/features/timeline/components/MediaPool.tsx:306
-msgid "Media Pool "
-msgstr "Media Pool "
+#~ msgid "Media Pool "
+#~ msgstr "Media Pool "
 
 #: src/components/ui/TitleBar.tsx:200
 msgid "Menu"
 msgstr "Menu"
 
 #: src/features/timeline/components/elements/inspector/InspectorTextPanel.tsx:72
-msgid "Minimalist"
-msgstr "Minimalist"
+#~ msgid "Minimalist"
+#~ msgstr "Minimalist"
 
 #: src/components/ui/ErrorBoundary.tsx:69
 #: src/components/ui/TitleBar.tsx:422
@@ -2098,8 +2283,8 @@ msgid "Minimize"
 msgstr "Minimize"
 
 #: src/features/timeline/components/MediaPool.tsx:445
-msgid "Missing file"
-msgstr "Missing file"
+#~ msgid "Missing file"
+#~ msgstr "Missing file"
 
 #: src/features/map/components/WaypointEditor.tsx:179
 msgid "Model \"{engine}\" not found. Please install it from the App Settings"
@@ -2120,36 +2305,47 @@ msgstr "More actions"
 #: src/features/timeline/components/elements/inspector/InspectorTransitionsPanel.tsx:117
 #: src/features/timeline/components/elements/inspector/InspectorTransitionsPanel.tsx:211
 #: src/features/timeline/components/elements/TransitionsPanel.tsx:83
-msgid "Multiply Blend"
-msgstr "Multiply Blend"
+#~ msgid "Multiply Blend"
+#~ msgstr "Multiply Blend"
 
-#: src/features/timeline/components/elements/inspector/InspectorAudioPanel.tsx:119
+#: src/features/editor/ExportDialog.tsx:44
+#: src/features/editor/Inspector.tsx:235
 msgid "Music"
 msgstr "Music"
 
+#: src/features/editor/Inspector.tsx:143
+msgid "Mute"
+msgstr "Mute"
+
 #: src/features/timeline/components/elements/inspector/InspectorAudioPanel.tsx:42
-msgid "Mute Clip"
-msgstr "Mute Clip"
+#~ msgid "Mute Clip"
+#~ msgstr "Mute Clip"
+
+#: src/features/editor/EditorView.tsx:239
+#: src/features/editor/Inspector.tsx:144
+msgid "Mute narration"
+msgstr "Mute narration"
 
 #: src/features/timeline/components/elements/TimelineTrackHeaders.tsx:230
-msgid "Mute Track"
-msgstr "Mute Track"
+#~ msgid "Mute Track"
+#~ msgstr "Mute Track"
 
 #: src/components/ui/ContextMenu.tsx:521
-msgid "mute-track"
-msgstr "Mute Track"
+#~ msgid "mute-track"
+#~ msgstr "Mute Track"
 
 #: src/features/timeline/components/TimelineClip.tsx:430
-msgid "Muted"
-msgstr "Muted"
+#~ msgid "Muted"
+#~ msgstr "Muted"
 
 #: src/components/ui/SaveAs.tsx:99
 msgid "Name your project to continue"
 msgstr "Name your project to continue"
 
 #: src/components/ui/AppSettings.tsx:881
+#: src/features/editor/ExportDialog.tsx:42
+#: src/features/editor/Inspector.tsx:136
 #: src/features/map/components/WaypointEditor.tsx:373
-#: src/features/timeline/components/elements/inspector/InspectorAudioPanel.tsx:116
 msgid "Narration"
 msgstr "Narration"
 
@@ -2158,8 +2354,8 @@ msgid "Narration audio"
 msgstr "Narration audio"
 
 #: src/features/export/components/ExportModal.tsx:272
-msgid "Navivi_Project"
-msgstr "Navivi_Project"
+#~ msgid "Navivi_Project"
+#~ msgstr "Navivi_Project"
 
 #. placeholder {0}: selectedAnchorIdx + 1
 #: src/features/map/components/DrawBar.tsx:329
@@ -2175,6 +2371,11 @@ msgstr "New Project"
 msgid "New Project Name"
 msgstr "New Project Name"
 
+#: src/features/editor/EditorView.tsx:267
+#: src/features/editor/TimelinePane.tsx:216
+msgid "New subtitle"
+msgstr "New subtitle"
+
 #: src/components/ui/RenderOverlay.tsx:338
 msgid "Next Stop"
 msgstr "Next Stop"
@@ -2184,16 +2385,20 @@ msgid "No active project folder found"
 msgstr "No active project folder found"
 
 #: src/features/timeline/components/MediaPool.tsx:370
-msgid "No assets found in directory"
-msgstr "No assets found in directory"
+#~ msgid "No assets found in directory"
+#~ msgstr "No assets found in directory"
 
 #: src/features/timeline/components/TimelineTrack.tsx:241
-msgid "No Audio track available to spawn video audio"
-msgstr "No Audio track available to spawn video audio"
+#~ msgid "No Audio track available to spawn video audio"
+#~ msgstr "No Audio track available to spawn video audio"
 
 #: src/features/timeline/components/elements/TimelineToolbar.tsx:184
-msgid "No audio track found"
-msgstr "No audio track found"
+#~ msgid "No audio track found"
+#~ msgstr "No audio track found"
+
+#: src/features/editor/TimelinePane.tsx:311
+msgid "No clips yet"
+msgstr "No clips yet"
 
 #: src/components/ui/AppSettings.tsx:585
 msgid "No entries yet."
@@ -2211,6 +2416,14 @@ msgstr "No locations found in document"
 msgid "No models installed"
 msgstr "No models installed"
 
+#: src/features/editor/Inspector.tsx:250
+msgid "No music. Use Music in the toolbar."
+msgstr "No music. Use Music in the toolbar."
+
+#: src/features/editor/EditorView.tsx:161
+msgid "No narration subtitles found for these clips"
+msgstr "No narration subtitles found for these clips"
+
 #: src/features/map/components/DrawBar.tsx:266
 msgid "No other drawn paths yet"
 msgstr "No other drawn paths yet"
@@ -2220,10 +2433,10 @@ msgid "No points yet"
 msgstr "No points yet"
 
 #: src/features/export/components/ExportModal.tsx:308
-msgid "No project directory found. Save your project first."
-msgstr "No project directory found. Save your project first."
+#~ msgid "No project directory found. Save your project first."
+#~ msgstr "No project directory found. Save your project first."
 
-#: src/components/ui/StatusBar.tsx:415
+#: src/components/ui/StatusBar.tsx:413
 msgid "No recent activity"
 msgstr "No recent activity"
 
@@ -2231,7 +2444,7 @@ msgstr "No recent activity"
 msgid "No recent projects"
 msgstr "No recent projects"
 
-#: src/components/ui/StatusBar.tsx:339
+#: src/components/ui/StatusBar.tsx:337
 msgid "No saved versions yet"
 msgstr "No saved versions yet"
 
@@ -2239,13 +2452,17 @@ msgstr "No saved versions yet"
 msgid "No stops added yet"
 msgstr "No stops added yet"
 
+#: src/features/editor/Inspector.tsx:232
+msgid "No subtitles yet. Use Subtitles in the toolbar."
+msgstr "No subtitles yet. Use Subtitles in the toolbar."
+
 #: src/features/timeline/components/elements/MarkersPanel.tsx:52
-msgid "No timeline markers yet"
-msgstr "No timeline markers yet"
+#~ msgid "No timeline markers yet"
+#~ msgstr "No timeline markers yet"
 
 #: src/features/timeline/components/elements/TransitionsPanel.tsx:293
-msgid "No transitions found for \"{searchQuery}\""
-msgstr "No transitions found for \"{searchQuery}\""
+#~ msgid "No transitions found for \"{searchQuery}\""
+#~ msgstr "No transitions found for \"{searchQuery}\""
 
 #: src/components/ui/RenderOverlay.tsx:1127
 msgid "No voiceover scripts were found in this generation."
@@ -2256,29 +2473,26 @@ msgstr "No voiceover scripts were found in this generation."
 msgid "no-internet"
 msgstr "No Internet Connection"
 
+#: src/features/editor/ExportDialog.tsx:42
+#: src/features/editor/ExportDialog.tsx:43
+#: src/features/editor/ExportDialog.tsx:44
 #: src/features/map/components/WaypointEditor.tsx:456
-#: src/features/timeline/components/elements/inspector/InspectorTransitionsPanel.tsx:107
-#: src/features/timeline/components/elements/inspector/InspectorTransitionsPanel.tsx:201
 msgid "None"
 msgstr "None"
 
 #: src/components/ui/AppSettings.tsx:212
 #: src/features/map/components/GenerateDialog.tsx:74
 #: src/features/map/components/OverviewPanel.tsx:14
-#: src/features/timeline/components/elements/inspector/InspectorAudioPanel.tsx:187
-#: src/features/timeline/components/elements/inspector/InspectorTextPanel.tsx:279
-#: src/features/timeline/components/elements/inspector/InspectorTextPanel.tsx:398
-#: src/features/timeline/components/elements/inspector/InspectorTextPanel.tsx:553
 msgid "Off"
 msgstr "Off"
 
 #: src/features/timeline/components/elements/inspector/InspectorTextPanel.tsx:464
-msgid "Offset X"
-msgstr "Offset X"
+#~ msgid "Offset X"
+#~ msgstr "Offset X"
 
 #: src/features/timeline/components/elements/inspector/InspectorTextPanel.tsx:494
-msgid "Offset Y"
-msgstr "Offset Y"
+#~ msgid "Offset Y"
+#~ msgstr "Offset Y"
 
 #: src/features/map/components/WaypointEditor.tsx:338
 #: src/features/map/hooks/useStopMenus.ts:227
@@ -2287,8 +2501,8 @@ msgstr "On route"
 
 #: src/features/timeline/components/elements/inspector/InspectorTransitionsPanel.tsx:120
 #: src/features/timeline/components/elements/inspector/InspectorTransitionsPanel.tsx:214
-msgid "Opacity Fade"
-msgstr "Opacity Fade"
+#~ msgid "Opacity Fade"
+#~ msgstr "Opacity Fade"
 
 #: src/components/view/ProjectManager.tsx:332
 msgid "Open a single project file (.nvv or .zip archive)"
@@ -2297,6 +2511,10 @@ msgstr "Open a single project file (.nvv or .zip archive)"
 #: src/components/view/ProjectManager.tsx:335
 msgid "Open File..."
 msgstr "Open File..."
+
+#: src/features/editor/ExportDialog.tsx:80
+msgid "Open folder"
+msgstr "Open folder"
 
 #: src/components/view/ProjectManager.tsx:213
 msgid "Open Project"
@@ -2315,28 +2533,28 @@ msgid "Open Project Folder..."
 msgstr "Open Project Folder..."
 
 #: src/components/ui/ContextMenu.tsx:602
-msgid "open-project"
-msgstr "Open Project"
+#~ msgid "open-project"
+#~ msgstr "Open Project"
 
 #: src/components/ui/AppSettings.tsx:411
 msgid "OpenRouteService"
 msgstr "OpenRouteService"
 
 #: src/features/export/components/ExportModal.tsx:106
-msgid "Optimal balance between quality and file size for web & YouTube (25 Mbps 4K / 10 Mbps 1080p)"
-msgstr "Optimal balance between quality and file size for web & YouTube (25 Mbps 4K / 10 Mbps 1080p)"
+#~ msgid "Optimal balance between quality and file size for web & YouTube (25 Mbps 4K / 10 Mbps 1080p)"
+#~ msgstr "Optimal balance between quality and file size for web & YouTube (25 Mbps 4K / 10 Mbps 1080p)"
 
 #: src/components/ui/ColorSwatches.tsx:17
 msgid "Orange"
 msgstr "Orange"
 
 #: src/features/timeline/components/elements/inspector/InspectorTransitionsPanel.tsx:126
-msgid "Out-Transition"
-msgstr "Out-Transition"
+#~ msgid "Out-Transition"
+#~ msgstr "Out-Transition"
 
 #: src/features/timeline/components/elements/inspector/InspectorTextPanel.tsx:288
-msgid "Outline Color"
-msgstr "Outline Color"
+#~ msgid "Outline Color"
+#~ msgstr "Outline Color"
 
 #: src/components/ui/AppSettings.tsx:503
 msgid "Outline colour"
@@ -2347,8 +2565,8 @@ msgid "Output"
 msgstr "Output"
 
 #: src/features/export/components/ExportModal.tsx:663
-msgid "Output File:"
-msgstr "Output File:"
+#~ msgid "Output File:"
+#~ msgstr "Output File:"
 
 #: src/features/map/components/WaypointEditor.tsx:42
 msgid "Pan Down"
@@ -2374,9 +2592,14 @@ msgstr "Parsing Maps & GPS Data{prog}..."
 msgid "Parsing Route Data..."
 msgstr "Parsing Route Data..."
 
-#: src/components/ui/ContextMenu.tsx:406
+#: src/components/ui/ContextMenu.tsx:397
 msgid "Paste"
 msgstr "Paste"
+
+#: src/features/editor/Preview.tsx:183
+#: src/features/editor/Preview.tsx:188
+msgid "Pause"
+msgstr "Pause"
 
 #: src/features/map/components/WaypointEditor.tsx:590
 #: src/features/map/components/WaypointEditor.tsx:600
@@ -2412,20 +2635,25 @@ msgstr "Pipeline Log"
 #: src/features/timeline/components/elements/inspector/InspectorTransitionsPanel.tsx:116
 #: src/features/timeline/components/elements/inspector/InspectorTransitionsPanel.tsx:210
 #: src/features/timeline/components/elements/TransitionsPanel.tsx:75
-msgid "Pixelize"
-msgstr "Pixelize"
+#~ msgid "Pixelize"
+#~ msgstr "Pixelize"
+
+#: src/features/editor/Preview.tsx:183
+#: src/features/editor/Preview.tsx:188
+msgid "Play"
+msgstr "Play"
 
 #: src/features/timeline/components/elements/TimelineToolbar.tsx:266
-msgid "Play/Pause (Space)"
-msgstr "Play/Pause (Space)"
+#~ msgid "Play/Pause (Space)"
+#~ msgstr "Play/Pause (Space)"
 
 #: src/components/ui/RenderOverlay.tsx:1159
 msgid "Playing..."
 msgstr "Playing..."
 
 #: src/features/timeline/components/TimelineTrack.tsx:119
-msgid "Please drop transitions directly on the cut between two clips"
-msgstr "Please drop transitions directly on the cut between two clips"
+#~ msgid "Please drop transitions directly on the cut between two clips"
+#~ msgstr "Please drop transitions directly on the cut between two clips"
 
 #. placeholder {0}: idx + 1
 #: src/features/map/components/MapArea.tsx:1188
@@ -2441,29 +2669,29 @@ msgid "Pre-configured sample project"
 msgstr "Pre-configured sample project"
 
 #: src/features/timeline/components/elements/TransitionsPanel.tsx:400
-msgid "presets"
-msgstr "presets"
+#~ msgid "presets"
+#~ msgstr "presets"
 
 #: src/features/timeline/components/elements/inspector/InspectorTextPanel.tsx:599
-msgid "Presets"
-msgstr "Presets"
+#~ msgid "Presets"
+#~ msgstr "Presets"
 
 #: src/features/timeline/components/elements/TransitionsPanel.tsx:333
-msgid "Preview"
-msgstr "Preview"
+#~ msgid "Preview"
+#~ msgstr "Preview"
 
 #: src/features/timeline/components/elements/TransitionsPanel.tsx:77
-msgid "Progressive mosaic pixel grid reveal"
-msgstr "Progressive mosaic pixel grid reveal"
+#~ msgid "Progressive mosaic pixel grid reveal"
+#~ msgstr "Progressive mosaic pixel grid reveal"
 
 #: src/features/timeline/components/elements/inspector/InspectorTextPanel.tsx:557
-msgid "Progressively illuminates text in sync with clip duration during playback"
-msgstr "Progressively illuminates text in sync with clip duration during playback"
+#~ msgid "Progressively illuminates text in sync with clip duration during playback"
+#~ msgstr "Progressively illuminates text in sync with clip duration during playback"
 
 #: src/features/export/components/ExportModal.tsx:320
 #: src/features/export/components/ExportModal.tsx:349
-msgid "Project"
-msgstr "Project"
+#~ msgid "Project"
+#~ msgstr "Project"
 
 #: src/components/ui/TitleBar.tsx:156
 msgid "Project duplicated successfully"
@@ -2531,20 +2759,20 @@ msgid "Pronunciation"
 msgstr "Pronunciation"
 
 #: src/components/ui/ContextMenu.tsx:617
-msgid "properties"
-msgstr "Properties"
+#~ msgid "properties"
+#~ msgstr "Properties"
 
 #: src/features/timeline/components/elements/inspector/InspectorTextPanel.tsx:54
-msgid "Punchy Impact"
-msgstr "Punchy Impact"
+#~ msgid "Punchy Impact"
+#~ msgstr "Punchy Impact"
 
 #: src/components/ui/ColorSwatches.tsx:17
 msgid "Purple"
 msgstr "Purple"
 
 #: src/features/timeline/components/elements/TransitionsPanel.tsx:45
-msgid "Push transition smoothly sliding incoming clip from left"
-msgstr "Push transition smoothly sliding incoming clip from left"
+#~ msgid "Push transition smoothly sliding incoming clip from left"
+#~ msgstr "Push transition smoothly sliding incoming clip from left"
 
 #: src/components/ui/AppSettings.tsx:452
 #: src/components/ui/AppSettings.tsx:458
@@ -2563,8 +2791,6 @@ msgstr "Quick Export"
 msgid "Quick Export Complete!"
 msgstr "Quick Export Complete!"
 
-#: src/components/ui/ContextMenu.tsx:606
-#: src/components/ui/ContextMenu.tsx:615
 #: src/components/view/ProjectManager.tsx:235
 msgid "Quick Render"
 msgstr "Quick Render"
@@ -2586,8 +2812,8 @@ msgid "quickExportToastMsg2"
 msgstr "Stitching videos together and exporting..."
 
 #: src/features/timeline/components/elements/TimelineToolbar.tsx:133
-msgid "Razor Tool (C)"
-msgstr "Razor Tool (C)"
+#~ msgid "Razor Tool (C)"
+#~ msgstr "Razor Tool (C)"
 
 #: src/components/ui/AppSettings.tsx:559
 msgid "Reading (e.g. かだ)"
@@ -2606,8 +2832,8 @@ msgid "Ready"
 msgstr "Ready"
 
 #: src/features/export/components/ExportModal.tsx:610
-msgid "Ready to Compile"
-msgstr "Ready to Compile"
+#~ msgid "Ready to Compile"
+#~ msgstr "Ready to Compile"
 
 #: src/features/map/components/Sidebar.tsx:312
 #~ msgid "Ready to Generate?"
@@ -2631,8 +2857,8 @@ msgid "Redo"
 msgstr "Redo"
 
 #: src/features/timeline/components/MediaPool.tsx:322
-msgid "Refresh asset library"
-msgstr "Refresh asset library"
+#~ msgid "Refresh asset library"
+#~ msgstr "Refresh asset library"
 
 #: src/components/ui/RenderOverlay.tsx:1095
 msgid "Regenerate"
@@ -2664,12 +2890,14 @@ msgid "Reload Application"
 msgstr "Reload Application"
 
 #: src/features/timeline/components/elements/TimelineToolbar.tsx:341
-msgid "Reload saved timeline"
-msgstr "Reload saved timeline"
+#~ msgid "Reload saved timeline"
+#~ msgstr "Reload saved timeline"
 
 #: src/components/ui/AppSettings.tsx:571
 #: src/components/ui/AppSettings.tsx:572
 #: src/components/view/ProjectManager.tsx:602
+#: src/features/editor/EditorView.tsx:250
+#: src/features/editor/Inspector.tsx:162
 msgid "Remove"
 msgstr "Remove"
 
@@ -2692,6 +2920,15 @@ msgstr "Remove from List"
 msgid "Remove Image"
 msgstr "Remove Image"
 
+#: src/features/editor/EditorView.tsx:258
+#: src/features/editor/Inspector.tsx:241
+msgid "Remove music"
+msgstr "Remove music"
+
+#: src/features/editor/Inspector.tsx:147
+msgid "Remove narration"
+msgstr "Remove narration"
+
 #: src/components/view/ProjectManager.tsx:585
 msgid "Remove Project"
 msgstr "Remove Project"
@@ -2706,36 +2943,36 @@ msgid "Remove via point"
 msgstr "Remove via point"
 
 #: src/components/ui/ContextMenu.tsx:609
-msgid "remove-from-list"
-msgstr "Remove from List"
+#~ msgid "remove-from-list"
+#~ msgstr "Remove from List"
 
 #: src/components/ui/ContextMenu.tsx:620
-msgid "remove-from-media-pool"
-msgstr "Remove from Media Pool"
+#~ msgid "remove-from-media-pool"
+#~ msgstr "Remove from Media Pool"
 
 #: src/components/ui/ContextMenu.tsx:604
-msgid "rename"
-msgstr "Rename"
+#~ msgid "rename"
+#~ msgstr "Rename"
 
 #: src/components/view/ProjectManager.tsx:219
 msgid "Rename"
 msgstr "Rename"
 
 #: src/features/timeline/components/elements/MarkersPanel.tsx:115
-msgid "Rename marker"
-msgstr "Rename marker"
+#~ msgid "Rename marker"
+#~ msgstr "Rename marker"
 
 #: src/components/view/ProjectManager.tsx:625
 msgid "Rename Project"
 msgstr "Rename Project"
 
 #: src/components/ui/ContextMenu.tsx:511
-msgid "Rename track"
-msgstr "Rename track"
+#~ msgid "Rename track"
+#~ msgstr "Rename track"
 
 #: src/features/export/components/ExportPanel.tsx:18
-msgid "Render Settings"
-msgstr "Render Settings"
+#~ msgid "Render Settings"
+#~ msgstr "Render Settings"
 
 #. placeholder {0}: videoItems.length
 #: src/components/ui/RenderOverlay.tsx:1052
@@ -2792,12 +3029,17 @@ msgid "Reset"
 msgstr "Reset"
 
 #: src/features/timeline/components/elements/inspector/InspectorColorPanel.tsx:33
-msgid "Reset all color adjustments to 0"
-msgstr "Reset all color adjustments to 0"
+#~ msgid "Reset all color adjustments to 0"
+#~ msgstr "Reset all color adjustments to 0"
 
 #: src/features/timeline/components/elements/inspector/InspectorAudioPanel.tsx:91
-msgid "Reset to 100% (0 dB)"
-msgstr "Reset to 100% (0 dB)"
+#~ msgid "Reset to 100% (0 dB)"
+#~ msgstr "Reset to 100% (0 dB)"
+
+#: src/features/editor/EditorView.tsx:245
+#: src/features/editor/Inspector.tsx:132
+msgid "Reset trim"
+msgstr "Reset trim"
 
 #: src/features/map/components/MapCompass.tsx:37
 #: src/features/map/components/MapCompass.tsx:38
@@ -2809,14 +3051,14 @@ msgid "Residential duration"
 msgstr "Residential duration"
 
 #: src/features/export/components/ExportModal.tsx:500
-msgid "Resolution & Quality Profile"
-msgstr "Resolution & Quality Profile"
+#~ msgid "Resolution & Quality Profile"
+#~ msgstr "Resolution & Quality Profile"
 
-#: src/components/ui/StatusBar.tsx:369
+#: src/components/ui/StatusBar.tsx:367
 msgid "Restore"
 msgstr "Restore"
 
-#: src/components/ui/StatusBar.tsx:367
+#: src/components/ui/StatusBar.tsx:365
 msgid "Restore version"
 msgstr "Restore version"
 
@@ -2833,8 +3075,6 @@ msgstr "Retrace previous path"
 msgid "Retry"
 msgstr "Retry"
 
-#: src/components/ui/ContextMenu.tsx:607
-#: src/components/ui/ContextMenu.tsx:616
 #: src/components/ui/TitleBar.tsx:263
 #: src/components/view/ProjectManager.tsx:240
 #: src/features/map/components/WaypointEditor.tsx:470
@@ -2847,20 +3087,20 @@ msgid "Review Assets"
 msgstr "Review Assets"
 
 #: src/features/timeline/components/elements/inspector/InspectorTextPanel.tsx:112
-msgid "Rich Text"
-msgstr "Rich Text"
+#~ msgid "Rich Text"
+#~ msgstr "Rich Text"
 
 #: src/features/map/components/WaypointItem.tsx:391
 msgid "Right-click the leg to clear via points"
 msgstr "Right-click the leg to clear via points"
 
 #: src/features/timeline/components/elements/TimelineToolbar.tsx:217
-msgid "Ripple Insert Mode"
-msgstr "Ripple Insert Mode"
+#~ msgid "Ripple Insert Mode"
+#~ msgstr "Ripple Insert Mode"
 
 #: src/features/timeline/components/elements/inspector/InspectorTransformPanel.tsx:57
-msgid "Rotation"
-msgstr "Rotation"
+#~ msgid "Rotation"
+#~ msgstr "Rotation"
 
 #: src/features/map/components/GenerateDialog.tsx:162
 msgid "Rough estimate from this PC's hardware. It becomes accurate after your first render."
@@ -2918,21 +3158,25 @@ msgid "S"
 msgstr "S"
 
 #: src/features/timeline/components/elements/inspector/InspectorColorPanel.tsx:103
-msgid "Saturation"
-msgstr "Saturation"
+#~ msgid "Saturation"
+#~ msgstr "Saturation"
 
 #: src/components/ui/SaveAs.tsx:113
 #: src/components/ui/ScriptInput.tsx:254
-#: src/components/ui/StatusBar.tsx:325
+#: src/components/ui/StatusBar.tsx:323
 #: src/components/ui/UnsavedChanges.tsx:38
 msgid "Save"
 msgstr "Save"
+
+#: src/features/editor/Inspector.tsx:209
+msgid "Save .srt"
+msgstr "Save .srt"
 
 #: src/components/ui/ScriptInput.tsx:246
 msgid "Save (Ctrl+Enter)"
 msgstr "Save (Ctrl+Enter)"
 
-#: src/components/ui/StatusBar.tsx:343
+#: src/components/ui/StatusBar.tsx:341
 msgid "Save a version to create a restore point"
 msgstr "Save a version to create a restore point"
 
@@ -2940,7 +3184,7 @@ msgstr "Save a version to create a restore point"
 msgid "Save As..."
 msgstr "Save As..."
 
-#: src/components/ui/StatusBar.tsx:323
+#: src/components/ui/StatusBar.tsx:321
 msgid "Save current version"
 msgstr "Save current version"
 
@@ -2960,20 +3204,20 @@ msgstr "Save Project As"
 msgid "Save Settings"
 msgstr "Save Settings"
 
-#: src/components/ui/StatusBar.tsx:169
+#: src/components/ui/StatusBar.tsx:167
 msgid "Save the project before creating a version"
 msgstr "Save the project before creating a version"
 
 #: src/features/timeline/components/MediaPool.tsx:199
-msgid "Save the project before importing media"
-msgstr "Save the project before importing media"
+#~ msgid "Save the project before importing media"
+#~ msgstr "Save the project before importing media"
 
-#: src/components/ui/StatusBar.tsx:340
+#: src/components/ui/StatusBar.tsx:338
 msgid "Save the project to enable version history"
 msgstr "Save the project to enable version history"
 
 #: src/components/ui/ScriptInput.tsx:254
-#: src/components/ui/StatusBar.tsx:266
+#: src/components/ui/StatusBar.tsx:264
 msgid "Saved"
 msgstr "Saved"
 
@@ -2986,8 +3230,8 @@ msgstr "Saved with the project"
 #~ msgstr "Project"
 
 #: src/features/timeline/components/elements/inspector/InspectorTransformPanel.tsx:40
-msgid "Scale"
-msgstr "Scale"
+#~ msgid "Scale"
+#~ msgstr "Scale"
 
 #: src/components/ui/ScriptInput.tsx:236
 #: src/components/ui/ScriptInput.tsx:237
@@ -2999,12 +3243,12 @@ msgid "Script"
 msgstr "Script"
 
 #: src/features/timeline/components/MediaPool.tsx:333
-msgid "Search assets"
-msgstr "Search assets"
+#~ msgid "Search assets"
+#~ msgstr "Search assets"
 
 #: src/features/timeline/components/elements/TransitionsPanel.tsx:263
-msgid "Search transitions..."
-msgstr "Search transitions..."
+#~ msgid "Search transitions..."
+#~ msgstr "Search transitions..."
 
 #: src/components/ui/LocationSearch.tsx:107
 msgid "search-location"
@@ -3020,40 +3264,40 @@ msgid "Seconds"
 msgstr "Seconds"
 
 #: src/features/timeline/components/elements/MarkersPanel.tsx:71
-msgid "Seek to marker"
-msgstr "Seek to marker"
+#~ msgid "Seek to marker"
+#~ msgstr "Seek to marker"
 
 #: src/features/map/components/MapToolbar.tsx:82
 msgid "Select"
 msgstr "Select"
 
 #: src/features/timeline/components/elements/TransitionsPanel.tsx:134
-msgid "Select a clip on the timeline or drag this transition onto a cut"
-msgstr "Select a clip on the timeline or drag this transition onto a cut"
+#~ msgid "Select a clip on the timeline or drag this transition onto a cut"
+#~ msgstr "Select a clip on the timeline or drag this transition onto a cut"
 
 #: src/features/timeline/components/Inspector.tsx:32
-msgid "Select a clip on the timeline to edit its properties"
-msgstr "Select a clip on the timeline to edit its properties"
+#~ msgid "Select a clip on the timeline to edit its properties"
+#~ msgstr "Select a clip on the timeline to edit its properties"
 
 #: src/components/view/ProjectManager.tsx:321
 msgid "Select a recent route or create a new workspace to begin"
 msgstr "Select a recent route or create a new workspace to begin"
 
-#: src/components/ui/ContextMenu.tsx:422
+#: src/components/ui/ContextMenu.tsx:413
 msgid "Select all"
 msgstr "Select all"
 
 #: src/features/timeline/components/elements/TimelineToolbar.tsx:240
-msgid "Select all clips"
-msgstr "Select all clips"
+#~ msgid "Select all clips"
+#~ msgstr "Select all clips"
 
 #: src/features/timeline/components/TimelineView.tsx:393
-msgid "Select at least 2 clips to link"
-msgstr "Select at least 2 clips to link"
+#~ msgid "Select at least 2 clips to link"
+#~ msgstr "Select at least 2 clips to link"
 
 #: src/features/timeline/components/elements/TransitionsPanel.tsx:374
-msgid "Select clip or drag to cut"
-msgstr "Select clip or drag to cut"
+#~ msgid "Select clip or drag to cut"
+#~ msgstr "Select clip or drag to cut"
 
 #: src/features/map/components/MapArea.tsx:1257
 msgid "Select Photos..."
@@ -3064,8 +3308,8 @@ msgid "Select which model to use for narration synthesis, only downloaded models
 msgstr "Select which model to use for narration synthesis, only downloaded models are shown"
 
 #: src/features/timeline/components/elements/TimelineToolbar.tsx:126
-msgid "Selection Tool (V)"
-msgstr "Selection Tool (V)"
+#~ msgid "Selection Tool (V)"
+#~ msgstr "Selection Tool (V)"
 
 #: src/components/ui/RenderOverlay.tsx:674
 msgid "Sending cancellation signal to backend..."
@@ -3093,16 +3337,16 @@ msgid "Setup"
 msgstr "Setup"
 
 #: src/features/timeline/components/elements/inspector/InspectorTextPanel.tsx:436
-msgid "Shadow Blur"
-msgstr "Shadow Blur"
+#~ msgid "Shadow Blur"
+#~ msgstr "Shadow Blur"
 
 #: src/features/timeline/components/elements/inspector/InspectorTextPanel.tsx:409
-msgid "Shadow Color"
-msgstr "Shadow Color"
+#~ msgid "Shadow Color"
+#~ msgstr "Shadow Color"
 
 #: src/features/export/components/ExportModal.tsx:488
-msgid "Shorts, Reels & TikTok"
-msgstr "Shorts, Reels & TikTok"
+#~ msgid "Shorts, Reels & TikTok"
+#~ msgstr "Shorts, Reels & TikTok"
 
 #: src/components/ui/AppSettings.tsx:229
 msgid "Show Auto-Write script buttons and overview narration. Requires Ollama to be installed and running locally."
@@ -3129,8 +3373,12 @@ msgid "Show the list of points"
 msgstr "Show the list of points"
 
 #: src/components/ui/ContextMenu.tsx:526
-msgid "Show Track"
-msgstr "Show Track"
+#~ msgid "Show Track"
+#~ msgstr "Show Track"
+
+#: src/features/editor/ExportDialog.tsx:57
+msgid "Show video"
+msgstr "Show video"
 
 #: src/components/ui/RenderOverlay.tsx:1307
 msgid "Show Video"
@@ -3173,26 +3421,26 @@ msgid "Skips this location during video generation"
 msgstr "Skips this location during video generation"
 
 #: src/features/timeline/components/elements/inspector/InspectorTextPanel.tsx:604
-msgid "Sky Blue"
-msgstr "Sky Blue"
+#~ msgid "Sky Blue"
+#~ msgstr "Sky Blue"
 
 #: src/features/timeline/components/elements/inspector/InspectorTransitionsPanel.tsx:110
 #: src/features/timeline/components/elements/inspector/InspectorTransitionsPanel.tsx:204
 #: src/features/timeline/components/elements/TransitionsPanel.tsx:43
-msgid "Slide"
-msgstr "Slide"
+#~ msgid "Slide"
+#~ msgstr "Slide"
 
 #: src/features/map/components/DrawBar.tsx:221
 msgid "Smooth"
 msgstr "Smooth"
 
 #: src/features/export/components/ExportModal.tsx:132
-msgid "Smooth / Action"
-msgstr "Smooth / Action"
+#~ msgid "Smooth / Action"
+#~ msgstr "Smooth / Action"
 
 #: src/features/timeline/components/elements/TransitionsPanel.tsx:29
-msgid "Smooth linear dissolve blending outgoing and incoming clips"
-msgstr "Smooth linear dissolve blending outgoing and incoming clips"
+#~ msgid "Smooth linear dissolve blending outgoing and incoming clips"
+#~ msgstr "Smooth linear dissolve blending outgoing and incoming clips"
 
 #: src/features/map/components/DrawBar.tsx:216
 msgid "Smooth the path through the points"
@@ -3203,8 +3451,8 @@ msgid "something-went-wrong"
 msgstr "Something went wrong"
 
 #: src/features/timeline/components/elements/inspector/InspectorAudioPanel.tsx:122
-msgid "Sound Effects"
-msgstr "Sound Effects"
+#~ msgid "Sound Effects"
+#~ msgstr "Sound Effects"
 
 #: src/features/map/components/WaypointEditor.tsx:241
 msgid "Spoken over this stop's photos once you arrive."
@@ -3215,21 +3463,23 @@ msgid "Spoken while the route travels to this stop."
 msgstr "Spoken while the route travels to this stop."
 
 #: src/features/export/components/ExportModal.tsx:267
-msgid "Standard Multi-Track Mix"
-msgstr "Standard Multi-Track Mix"
+#~ msgid "Standard Multi-Track Mix"
+#~ msgstr "Standard Multi-Track Mix"
 
 #: src/features/timeline/components/elements/inspector/InspectorTextPanel.tsx:18
-msgid "Standard Subtitle"
-msgstr "Standard Subtitle"
+#~ msgid "Standard Subtitle"
+#~ msgstr "Standard Subtitle"
 
 #: src/features/export/components/ExportModal.tsx:133
-msgid "Standard Web Video"
-msgstr "Standard Web Video"
+#~ msgid "Standard Web Video"
+#~ msgstr "Standard Web Video"
 
 #: src/features/export/components/ExportModal.tsx:465
-msgid "Standard widescreen (1920x1080)"
-msgstr "Standard widescreen (1920x1080)"
+#~ msgid "Standard widescreen (1920x1080)"
+#~ msgstr "Standard widescreen (1920x1080)"
 
+#: src/features/editor/Inspector.tsx:125
+#: src/features/editor/Inspector.tsx:177
 #: src/features/map/components/MapToolbar.tsx:90
 #: src/features/map/components/WaypointEditor.tsx:305
 #: src/features/map/hooks/useStopMenus.ts:220
@@ -3252,9 +3502,17 @@ msgstr "Search for a city, landmark, or address..."
 msgid "Starting point"
 msgstr "Starting point"
 
+#: src/features/editor/Inspector.tsx:137
+msgid "Starts after"
+msgstr "Starts after"
+
 #: src/features/map/components/GenerateDialog.tsx:150
 msgid "Stitch the clips and export when done, without pausing to review."
 msgstr "Stitch the clips and export when done, without pausing to review."
+
+#: src/features/editor/ExportDialog.tsx:95
+msgid "Stitching clips, narration and subtitles. This can take a few minutes."
+msgstr "Stitching clips, narration and subtitles. This can take a few minutes."
 
 #: src/components/ui/RenderOverlay.tsx:1261
 msgid "Stitching Videos & Finalizing Export..."
@@ -3295,29 +3553,29 @@ msgstr "Stop type"
 msgid "Stop-by"
 msgstr "Stop-by"
 
-#: src/components/ui/StatusBar.tsx:358
+#: src/components/ui/StatusBar.tsx:356
 msgid "stops"
 msgstr "stops"
 
-#: src/components/ui/StatusBar.tsx:226
+#: src/components/ui/StatusBar.tsx:224
 msgid "Stops containing custom images or AI scripts"
 msgstr "Stops containing custom images or AI scripts"
 
 #: src/features/timeline/components/elements/inspector/InspectorTextPanel.tsx:271
-msgid "Stroke"
-msgstr "Stroke"
+#~ msgid "Stroke"
+#~ msgstr "Stroke"
 
 #: src/features/timeline/components/elements/inspector/InspectorTextPanel.tsx:318
-msgid "Stroke Width"
-msgstr "Stroke Width"
+#~ msgid "Stroke Width"
+#~ msgstr "Stroke Width"
 
 #: src/features/timeline/components/elements/inspector/InspectorTextPanel.tsx:119
-msgid "Style Presets"
-msgstr "Style Presets"
+#~ msgid "Style Presets"
+#~ msgstr "Style Presets"
 
 #: src/components/ui/NewProject.tsx:414
+#: src/features/editor/Inspector.tsx:173
 #: src/features/map/components/OverviewPanel.tsx:98
-#: src/features/timeline/components/elements/inspector/InspectorTextPanel.tsx:112
 msgid "Subtitle"
 msgstr "Subtitle"
 
@@ -3329,15 +3587,23 @@ msgstr "Subtitle (optional)"
 msgid "Subtitle burn-in"
 msgstr "Subtitle burn-in"
 
+#: src/components/ui/StatusBar.tsx:239
+msgid "Subtitle lines in the timeline"
+msgstr "Subtitle lines in the timeline"
+
 #: src/components/ui/AppSettings.tsx:479
 #: src/components/ui/PipelineLogPanel.tsx:51
-#: src/hooks/useWorkspace.tsx:72
+#: src/features/editor/EditorView.tsx:143
+#: src/features/editor/EditorView.tsx:299
+#: src/features/editor/EditorView.tsx:301
+#: src/features/editor/ExportDialog.tsx:43
+#: src/features/editor/Inspector.tsx:202
 msgid "Subtitles"
 msgstr "Subtitles"
 
 #: src/features/timeline/components/TimelineTrack.tsx:190
-msgid "Subtitles are managed automatically or via text clips."
-msgstr "Subtitles are managed automatically or via text clips."
+#~ msgid "Subtitles are managed automatically or via text clips."
+#~ msgstr "Subtitles are managed automatically or via text clips."
 
 #: src/components/ui/AutoDirectorModal.tsx:143
 msgid "Successfully processed the document. Here is the proposed route and script:"
@@ -3363,12 +3629,12 @@ msgstr "Synthesizing..."
 msgid "System Capability Check:"
 msgstr "System Capability Check:"
 
-#: src/components/ui/StatusBar.tsx:394
+#: src/components/ui/StatusBar.tsx:392
 msgid "System Log"
 msgstr "System Log"
 
-#: src/components/ui/StatusBar.tsx:286
-#: src/components/ui/StatusBar.tsx:287
+#: src/components/ui/StatusBar.tsx:284
+#: src/components/ui/StatusBar.tsx:285
 msgid "System Logs & Notifications"
 msgstr "System Logs & Notifications"
 
@@ -3377,8 +3643,8 @@ msgid "Table View"
 msgstr "Table View"
 
 #: src/features/export/components/ExportModal.tsx:629
-msgid "Target Canvas"
-msgstr "Target Canvas"
+#~ msgid "Target Canvas"
+#~ msgstr "Target Canvas"
 
 #: src/components/ui/AppSettings.tsx:430
 msgid "Target FPS"
@@ -3393,16 +3659,16 @@ msgid "Templates"
 msgstr "Templates"
 
 #: src/features/timeline/components/MediaPool.tsx:361
-msgid "text"
-msgstr "text"
+#~ msgid "text"
+#~ msgstr "text"
 
 #: src/features/timeline/components/TimelineView.tsx:991
-msgid "Text added to timeline"
-msgstr "Text added to timeline"
+#~ msgid "Text added to timeline"
+#~ msgstr "Text added to timeline"
 
 #: src/features/timeline/components/elements/inspector/InspectorTextPanel.tsx:214
-msgid "Text Color"
-msgstr "Text Color"
+#~ msgid "Text Color"
+#~ msgstr "Text Color"
 
 #: src/components/ui/AppSettings.tsx:494
 msgid "Text colour"
@@ -3425,8 +3691,8 @@ msgid "Theme"
 msgstr "Theme"
 
 #: src/features/timeline/components/MediaPool.tsx:382
-msgid "This asset is missing from the project"
-msgstr "This asset is missing from the project"
+#~ msgid "This asset is missing from the project"
+#~ msgstr "This asset is missing from the project"
 
 #: src/components/ui/AppSettings.tsx:223
 msgid "This project"
@@ -3436,11 +3702,11 @@ msgstr "This project"
 msgid "This project is archived. Please open it first to render"
 msgstr "This project is archived. Please open it first to render"
 
-#: src/components/ui/StatusBar.tsx:205
+#: src/components/ui/StatusBar.tsx:203
 msgid "This version could not be deleted"
 msgstr "This version could not be deleted"
 
-#: src/components/ui/StatusBar.tsx:190
+#: src/components/ui/StatusBar.tsx:188
 msgid "This version is no longer available"
 msgstr "This version is no longer available"
 
@@ -3453,25 +3719,28 @@ msgid "Time unavailable"
 msgstr "Time unavailable"
 
 #: src/components/ui/TitleBar.tsx:383
-#: src/components/view/EditorLayout.tsx:38
 msgid "Timeline"
 msgstr "Timeline"
 
 #: src/features/export/components/ExportModal.tsx:619
-msgid "Timeline Duration"
-msgstr "Timeline Duration"
+#~ msgid "Timeline Duration"
+#~ msgstr "Timeline Duration"
 
 #: src/features/export/components/ExportModal.tsx:378
-msgid "Timeline JSON manifest exported successfully!"
-msgstr "Timeline JSON manifest exported successfully!"
+#~ msgid "Timeline JSON manifest exported successfully!"
+#~ msgstr "Timeline JSON manifest exported successfully!"
 
 #: src/features/timeline/components/elements/MarkersPanel.tsx:32
-msgid "Timeline markers"
-msgstr "Timeline markers"
+#~ msgid "Timeline markers"
+#~ msgstr "Timeline markers"
 
 #: src/features/timeline/components/elements/TimelineToolbar.tsx:338
-msgid "Timeline reloaded"
-msgstr "Timeline reloaded"
+#~ msgid "Timeline reloaded"
+#~ msgstr "Timeline reloaded"
+
+#: src/features/editor/Inspector.tsx:176
+msgid "Timing"
+msgstr "Timing"
 
 #: src/components/ui/NewProject.tsx:405
 #: src/components/ui/NewProject.tsx:406
@@ -3489,19 +3758,19 @@ msgstr "Title card"
 msgid "Title card at the start of the video"
 msgstr "Title card at the start of the video"
 
-#: src/components/ui/StatusBar.tsx:244
+#: src/components/ui/StatusBar.tsx:242
 msgid "Total individual clips"
 msgstr "Total individual clips"
 
-#: src/components/ui/StatusBar.tsx:223
+#: src/components/ui/StatusBar.tsx:221
 msgid "Total stops on the map"
 msgstr "Total stops on the map"
 
 #: src/components/ui/StatusBar.tsx:241
-msgid "Total tracks in the timeline"
-msgstr "Total tracks in the timeline"
+#~ msgid "Total tracks in the timeline"
+#~ msgstr "Total tracks in the timeline"
 
-#: src/components/ui/StatusBar.tsx:238
+#: src/components/ui/StatusBar.tsx:236
 msgid "Total video duration"
 msgstr "Total video duration"
 
@@ -3510,26 +3779,38 @@ msgid "Traceback"
 msgstr "Traceback"
 
 #: src/features/timeline/components/elements/TimelineTrackHeaders.tsx:39
-msgid "Tracks"
-msgstr "Tracks"
+#~ msgid "Tracks"
+#~ msgstr "Tracks"
 
 #: src/features/timeline/components/elements/inspector/InspectorTransformPanel.tsx:17
-msgid "Transform"
-msgstr "Transform"
+#~ msgid "Transform"
+#~ msgstr "Transform"
+
+#: src/features/editor/Inspector.tsx:151
+msgid "Transition"
+msgstr "Transition"
 
 #: src/features/timeline/components/elements/inspector/InspectorTransitionsPanel.tsx:20
 #: src/features/timeline/components/elements/TransitionsPanel.tsx:235
 #: src/features/timeline/components/TimelineView.tsx:939
-msgid "Transitions"
-msgstr "Transitions"
+#~ msgid "Transitions"
+#~ msgstr "Transitions"
 
 #: src/features/timeline/components/TimelineTrack.tsx:90
-msgid "Transitions can only be placed on video tracks"
-msgstr "Transitions can only be placed on video tracks"
+#~ msgid "Transitions can only be placed on video tracks"
+#~ msgstr "Transitions can only be placed on video tracks"
 
 #: src/features/map/components/WaypointItem.tsx:277
 msgid "Travel mode to the next stop"
 msgstr "Travel mode to the next stop"
+
+#: src/features/editor/Inspector.tsx:124
+msgid "Trim"
+msgstr "Trim"
+
+#: src/features/editor/ExportDialog.tsx:69
+msgid "Try again"
+msgstr "Try again"
 
 #: src/features/map/components/WaypointEditor.tsx:410
 msgid "TTS Pronunciation Dictionary"
@@ -3540,8 +3821,8 @@ msgid "Type a prompt or write your own script..."
 msgstr "Type a prompt or write your own script..."
 
 #: src/features/timeline/components/elements/inspector/InspectorTextPanel.tsx:109
-msgid "Typography & Subtitles"
-msgstr "Typography & Subtitles"
+#~ msgid "Typography & Subtitles"
+#~ msgstr "Typography & Subtitles"
 
 #: src/components/ui/TitleBar.tsx:338
 #: src/components/ui/TitleBar.tsx:342
@@ -3549,8 +3830,8 @@ msgid "Undo"
 msgstr "Undo"
 
 #: src/features/timeline/components/elements/TimelineTrackHeaders.tsx:214
-msgid "Unhide Track"
-msgstr "Unhide Track"
+#~ msgid "Unhide Track"
+#~ msgstr "Unhide Track"
 
 #: src/features/map/components/MapArea.tsx:442
 #: src/features/map/components/MapArea.tsx:484
@@ -3563,34 +3844,38 @@ msgid "Unknown Location"
 msgstr "Unknown Location"
 
 #: src/features/timeline/components/elements/TimelineToolbar.tsx:248
-msgid "Unlink selected clips"
-msgstr "Unlink selected clips"
+#~ msgid "Unlink selected clips"
+#~ msgstr "Unlink selected clips"
 
 #: src/components/ui/ContextMenu.tsx:569
-msgid "unlink-clips"
-msgstr "Unlink clips"
+#~ msgid "unlink-clips"
+#~ msgstr "Unlink clips"
 
 #: src/features/timeline/components/elements/TimelineTrackHeaders.tsx:245
-msgid "Unlock Track"
-msgstr "Unlock Track"
+#~ msgid "Unlock Track"
+#~ msgstr "Unlock Track"
 
 #: src/components/ui/ContextMenu.tsx:531
-msgid "unlock-track"
-msgstr "Unlock track"
+#~ msgid "unlock-track"
+#~ msgstr "Unlock track"
 
 #: src/features/timeline/components/elements/inspector/InspectorAudioPanel.tsx:42
-msgid "Unmute Clip"
-msgstr "Unmute Clip"
+#~ msgid "Unmute Clip"
+#~ msgstr "Unmute Clip"
+
+#: src/features/editor/EditorView.tsx:239
+msgid "Unmute narration"
+msgstr "Unmute narration"
 
 #: src/features/timeline/components/elements/TimelineTrackHeaders.tsx:230
-msgid "Unmute Track"
-msgstr "Unmute Track"
+#~ msgid "Unmute Track"
+#~ msgstr "Unmute Track"
 
 #: src/components/ui/ContextMenu.tsx:521
-msgid "unmute-track"
-msgstr "Unmute track"
+#~ msgid "unmute-track"
+#~ msgstr "Unmute track"
 
-#: src/components/ui/StatusBar.tsx:258
+#: src/components/ui/StatusBar.tsx:256
 msgid "Unsaved"
 msgstr "Unsaved"
 
@@ -3598,7 +3883,7 @@ msgstr "Unsaved"
 msgid "Unsaved Changes"
 msgstr "Unsaved Changes"
 
-#: src/components/ui/StatusBar.tsx:255
+#: src/components/ui/StatusBar.tsx:253
 msgid "Unsaved Changes - Press Ctrl+S to save"
 msgstr "Unsaved Changes - Press Ctrl+S to save"
 
@@ -3635,11 +3920,11 @@ msgstr "Uses photo locations"
 msgid "Verify that video visuals are factually correct"
 msgstr "Verify that video visuals are factually correct"
 
-#: src/components/ui/StatusBar.tsx:301
+#: src/components/ui/StatusBar.tsx:299
 msgid "Version History"
 msgstr "Version History"
 
-#: src/components/ui/StatusBar.tsx:314
+#: src/components/ui/StatusBar.tsx:312
 msgid "Version label"
 msgstr "Version label"
 
@@ -3648,8 +3933,8 @@ msgid "Vertical 9:16"
 msgstr "Vertical 9:16"
 
 #: src/features/export/components/ExportModal.tsx:491
-msgid "Vertical portrait format (1080x1920)"
-msgstr "Vertical portrait format (1080x1920)"
+#~ msgid "Vertical portrait format (1080x1920)"
+#~ msgstr "Vertical portrait format (1080x1920)"
 
 #. placeholder {0}: idx + 1
 #: src/features/map/components/MapArea.tsx:1138
@@ -3662,20 +3947,25 @@ msgid "Via point {0} of {count}"
 msgstr "Via point {0} of {count}"
 
 #: src/features/timeline/components/MediaPool.tsx:356
-msgid "video"
-msgstr "video"
+#~ msgid "video"
+#~ msgstr "video"
 
 #: src/components/ui/AppSettings.tsx:98
+#: src/features/editor/EditorView.tsx:72
 msgid "Video"
 msgstr "Video"
 
 #: src/hooks/useWorkspace.tsx:84
-msgid "Video 1"
-msgstr "Video 1"
+#~ msgid "Video 1"
+#~ msgstr "Video 1"
 
 #: src/hooks/useWorkspace.tsx:78
-msgid "Video 2"
-msgstr "Video 2"
+#~ msgid "Video 2"
+#~ msgstr "Video 2"
+
+#: src/features/editor/ExportDialog.tsx:50
+msgid "Video exported"
+msgstr "Video exported"
 
 #: src/components/ui/RenderOverlay.tsx:1281
 msgid "Video Exported Successfully!"
@@ -3694,10 +3984,11 @@ msgid "View in Timeline"
 msgstr "View in Timeline"
 
 #: src/features/timeline/components/elements/inspector/InspectorTextPanel.tsx:605
-msgid "Vivid Rose"
-msgstr "Vivid Rose"
+#~ msgid "Vivid Rose"
+#~ msgstr "Vivid Rose"
 
-#: src/features/timeline/components/elements/inspector/InspectorAudioPanel.tsx:66
+#: src/features/editor/Inspector.tsx:140
+#: src/features/editor/Inspector.tsx:245
 msgid "Volume"
 msgstr "Volume"
 
@@ -3721,9 +4012,7 @@ msgid "Waypoint"
 msgstr "Waypoint"
 
 #. placeholder {0}: i + 1
-#. placeholder {0}: idx + 1
 #. placeholder {0}: newId.substring(0, 4).toUpperCase()
-#: src/features/export/components/ExportModal.tsx:245
 #: src/hooks/useFileActions.ts:214
 #: src/hooks/useWaypointActions.ts:47
 msgid "Waypoint {0}"
@@ -3732,8 +4021,8 @@ msgstr "Waypoint {0}"
 #. placeholder {0}: marker.index
 #. placeholder {1}: marker.name
 #: src/features/timeline/components/elements/WaypointMarker.tsx:62
-msgid "Waypoint {0}: {1} at {formattedTime}"
-msgstr "Waypoint {0}: {1} at {formattedTime}"
+#~ msgid "Waypoint {0}: {1} at {formattedTime}"
+#~ msgstr "Waypoint {0}: {1} at {formattedTime}"
 
 #: src/features/map/components/WaypointEditor.tsx:489
 msgid "Waypoint {idx}"
@@ -3742,18 +4031,18 @@ msgstr "Waypoint {idx}"
 #. placeholder {0}: marker.index
 #. placeholder {1}: marker.name
 #: src/features/timeline/components/elements/WaypointMarker.tsx:115
-msgid "Waypoint #{0}: {1}"
-msgstr "Waypoint #{0}: {1}"
+#~ msgid "Waypoint #{0}: {1}"
+#~ msgstr "Waypoint #{0}: {1}"
 
 #. placeholder {0}: marker.index
 #. placeholder {1}: marker.name
 #: src/features/timeline/components/elements/WaypointMarker.tsx:59
-msgid "Waypoint #{0}: {1} ({formattedTime}) - Click to jump playhead"
-msgstr "Waypoint #{0}: {1} ({formattedTime}) - Click to jump playhead"
+#~ msgid "Waypoint #{0}: {1} ({formattedTime}) - Click to jump playhead"
+#~ msgstr "Waypoint #{0}: {1} ({formattedTime}) - Click to jump playhead"
 
 #: src/features/timeline/components/elements/MarkersPanel.tsx:35
-msgid "Waypoint-linked and custom markers"
-msgstr "Waypoint-linked and custom markers"
+#~ msgid "Waypoint-linked and custom markers"
+#~ msgstr "Waypoint-linked and custom markers"
 
 #: src/components/ui/NewProject.tsx:308
 msgid "Where the map opens before your import is placed"
@@ -3770,8 +4059,8 @@ msgstr "White"
 #: src/features/timeline/components/elements/inspector/InspectorTransitionsPanel.tsx:109
 #: src/features/timeline/components/elements/inspector/InspectorTransitionsPanel.tsx:203
 #: src/features/timeline/components/elements/TransitionsPanel.tsx:35
-msgid "Wipe"
-msgstr "Wipe"
+#~ msgid "Wipe"
+#~ msgstr "Wipe"
 
 #: src/components/ui/AppSettings.tsx:548
 msgid "Word (e.g. 加太)"
@@ -3786,8 +4075,8 @@ msgid "Writing scripts with AI..."
 msgstr "Writing scripts with AI..."
 
 #: src/features/timeline/components/Inspector.tsx:46
-msgid "You can drag these clips together on the timeline, copy/paste them, or press Delete to remove them"
-msgstr "You can drag these clips together on the timeline, copy/paste them, or press Delete to remove them"
+#~ msgid "You can drag these clips together on the timeline, copy/paste them, or press Delete to remove them"
+#~ msgstr "You can drag these clips together on the timeline, copy/paste them, or press Delete to remove them"
 
 #: src/components/view/ProjectManager.tsx:429
 msgid "You don't have any recent workspaces. Create a new project or open an existing .nvv file to get started."
@@ -3797,13 +4086,21 @@ msgstr "You don't have any recent workspaces. Create a new project or open an ex
 msgid "Your Project Name Here"
 msgstr "Your Project Name Here"
 
+#: src/features/editor/EditorView.tsx:317
+#: src/features/editor/EditorView.tsx:319
+msgid "Zoom in"
+msgstr "Zoom in"
+
 #: src/features/map/components/WaypointEditor.tsx:43
-#: src/features/timeline/components/elements/TimelineToolbar.tsx:319
 msgid "Zoom In"
 msgstr "Zoom In"
 
+#: src/features/editor/EditorView.tsx:309
+#: src/features/editor/EditorView.tsx:311
+msgid "Zoom out"
+msgstr "Zoom out"
+
 #: src/features/map/components/WaypointEditor.tsx:44
-#: src/features/timeline/components/elements/TimelineToolbar.tsx:303
 msgid "Zoom Out"
 msgstr "Zoom Out"
 

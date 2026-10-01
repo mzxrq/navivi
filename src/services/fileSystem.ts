@@ -1,10 +1,11 @@
 import { documentDir, join, basename, dirname } from "@tauri-apps/api/path";
 import { writeTextFile, writeFile, mkdir, exists, copyFile, readTextFile, readDir, BaseDirectory, open as fsOpen } from "@tauri-apps/plugin-fs";
 import { open as dialogOpen, save as dialogSave } from "@tauri-apps/plugin-dialog";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { appConfig, fileSystem } from "../config/constants";
 import { buildAssetManifest } from "../utils/manifestBuilder";
-import { TimelineData, TimelineManifest, ManifestClip, RenderSettings, ExportManifestPayload, RecentProjects } from "../types";
+import { TimelineData, RenderSettings, RecentProjects } from "../types";
+import { emptyTimeline, timelineFromEditorState, timelineFromPipeline, toManifest } from "../features/editor/model";
 import { t } from "@lingui/core/macro";
 import { i18n } from "@lingui/core";
 import { db } from "./db";
@@ -619,141 +620,16 @@ export async function toAbsoluteProjectPath(filePath: string | undefined, projec
   return filePath;
 }
 
-export function compileTimelineManifest(
-  projectName: string,
-  timeline: TimelineData,
-  renderSettings?: RenderSettings,
-  markers?: TimelineManifest["markers"],
-  projectDir?: string,
-): TimelineManifest & ExportManifestPayload {
-  const toRel = (p: string | undefined): string => {
-    if (!p) return "";
-    return projectDir ? toRelativeProjectPath(p, projectDir) : p;
-  };
-
-  // find master audio track
-  const audioTrack = timeline.tracks.find((t) => t.type === "audio");
-  const audioClip = audioTrack
-    ? timeline.clips.find((c) => c.trackId === audioTrack.id)
-    : null;
-  // map visual clips
-  const videoTracks: ManifestClip[] = [];
-  // Sort clips by start time so python receives them in order
-  const visualClips = timeline.clips
-    .filter((c) => c.trackId !== audioTrack?.id)
-    .sort((a, b) => a.startTime - b.startTime);
-
-  const voiceClips = timeline.clips.filter(
-    (c) => c.type === "audio" && (c.trackId === audioTrack?.id || c.audioRole === "voice"),
-  );
-
-  for (const clip of visualClips) {
-    const track = timeline.tracks.find((t) => t.id === clip.trackId);
-    // The pipeline keeps narration as its own clip starting with its video; the exporter reads it from audio_path.
-    const voice = voiceClips.find(
-      (c) => c.source && Math.abs(c.startTime - clip.startTime) < 0.05,
-    );
-    videoTracks.push({
-      clip_id: clip.id,
-      file_path: toRel(clip.source),
-      duration: clip.duration,
-      type: track?.name.toLowerCase().includes("popup")
-        ? "static_popup"
-        : "video",
-      audio_path: voice?.source ? toRel(voice.source) : undefined,
-    });
-  }
-  // calculate total duration (end of last clip)
-  const totalDuration = timeline.clips.reduce(
-    (max, clip) => Math.max(max, clip.startTime + clip.duration),
-    0,
-  );
-
-  const aspectRatio = renderSettings?.aspectRatio || "16:9";
-  const resolution = renderSettings?.resolution || {
-    width: 1920,
-    height: 1080,
-  };
-  const fps = renderSettings?.fps || 30;
-  const bitrateKbps = renderSettings?.bitrateKbps || 10000;
-  const nowIso = new Date().toISOString();
-
-  // Convert clips inside ui_state and manifest to relative paths
-  const relativeClips = timeline.clips.map((c) => ({
-    ...c,
-    source: c.source ? toRel(c.source) : c.source,
-  }));
-
-  // build final json manifest payload
-  const manifest: TimelineManifest & ExportManifestPayload = {
-    project_name: projectName,
-    total_duration_seconds: totalDuration,
-    video_tracks: videoTracks,
-    audio_track: audioClip?.source ? toRel(audioClip.source) : undefined,
-    ui_state: {
-      ...timeline,
-      clips: relativeClips,
-    },
-    render_settings: renderSettings,
-    aspect_ratio: aspectRatio,
-    resolution: resolution,
-    fps: fps,
-    bitrate_kbps: bitrateKbps,
-    skip_rich_media: renderSettings?.skipRichMedia ?? false,
-    tracks: timeline.tracks,
-    clips: relativeClips,
-    transitions: timeline.transitions || [],
-    markers: markers || timeline.markers || [],
-    exported_at: nowIso,
-
-    // ExportManifestPayload compliance
-    projectName: projectName,
-    aspectRatio: aspectRatio,
-    bitrateKbps: bitrateKbps,
-    totalDuration: totalDuration,
-    exportedAt: nowIso,
-    renderSettings: renderSettings,
-  };
-
-  return manifest;
-}
-
 export async function saveTimelineManifest(
   projectDir: string,
   projectName: string,
   timeline: TimelineData,
-  renderSettings?: RenderSettings,
-  markers?: TimelineManifest["markers"],
 ): Promise<boolean> {
-  /**
-   * convert react timeline state into timeline.json manifest
-   * and saves it with relative paths for portability
-   */
   try {
     const manifestPath = await join(projectDir, "timeline.json");
-    if ((!timeline?.clips || timeline.clips.length === 0) && (await exists(manifestPath))) {
-      try {
-        const existingRaw = await readTextFile(manifestPath);
-        const existingData = JSON.parse(existingRaw);
-        if (existingData?.video_tracks && existingData.video_tracks.length > 0) {
-          console.log("Preserving existing timeline.json because in-memory timeline clips are empty.");
-          return true;
-        }
-      } catch (e) {
-        // Fall through
-      }
-    }
-    const manifest = compileTimelineManifest(
-      projectName,
-      timeline,
-      renderSettings,
-      markers,
-      projectDir,
-    );
-
-    // write to disk formatted cleanly
-    await writeTextFile(manifestPath, JSON.stringify(manifest, null, 2));
-    console.log("✁Etimeline.json successfully saved.");
+    // An empty timeline (editor never opened) must not wipe what the pipeline wrote.
+    if (timeline.segments.length === 0 && (await exists(manifestPath))) return true;
+    await writeTextFile(manifestPath, JSON.stringify(toManifest(projectName, timeline), null, 2));
     return true;
   } catch (error) {
     console.error("Failed to save timeline.json:", error);
@@ -761,8 +637,56 @@ export async function saveTimelineManifest(
   }
 }
 
+export function probeDuration(url: string, kind: "video" | "audio", fallback: number): Promise<number> {
+  return new Promise((resolve) => {
+    const media = document.createElement(kind);
+    const done = (value: number) => {
+      media.removeAttribute("src");
+      media.load();
+      resolve(Number.isFinite(value) && value > 0 ? value : fallback);
+    };
+    const timer = setTimeout(() => done(fallback), 8000);
+    media.preload = "metadata";
+    media.onloadedmetadata = () => {
+      clearTimeout(timer);
+      done(media.duration);
+    };
+    media.onerror = () => {
+      clearTimeout(timer);
+      done(fallback);
+    };
+    media.src = url;
+  });
+}
 
-export async function loadTimelineManifest(projectDir: string): Promise<TimelineManifest | null> {
+// The editor's own state if timeline.json has one, otherwise built from what the pipeline wrote.
+export async function loadTimelineData(projectDir: string): Promise<TimelineData> {
+  const manifestPath = await join(projectDir, "timeline.json");
+  if (!(await exists(manifestPath))) return emptyTimeline();
+  const raw = JSON.parse(await readTextFile(manifestPath));
+  const saved = timelineFromEditorState(raw);
+  if (saved) return saved;
+
+  const rel = (p: string) => toRelativeProjectPath(p, projectDir);
+  for (const track of raw.video_tracks ?? []) {
+    if (track.file_path) track.file_path = rel(track.file_path);
+    if (track.audio_path) track.audio_path = rel(track.audio_path);
+    if (track.subtitle_path) track.subtitle_path = rel(track.subtitle_path);
+  }
+  for (const clip of raw.ui_state?.clips ?? []) if (clip.source) clip.source = rel(clip.source);
+
+  const durations = new Map<string, number>();
+  return timelineFromPipeline(raw, async (relPath, kind) => {
+    const key = `${kind}:${relPath}`;
+    if (!durations.has(key)) {
+      const abs = await toAbsoluteProjectPath(relPath, projectDir);
+      durations.set(key, await probeDuration(convertFileSrc(abs), kind, kind === "video" ? 5 : 0));
+    }
+    return durations.get(key) ?? 0;
+  });
+}
+
+export async function loadTimelineManifest(projectDir: string): Promise<any | null> {
   try {
     // construct absolute path to manifest file
     const manifestPath = await join(projectDir, "timeline.json");
@@ -774,7 +698,7 @@ export async function loadTimelineManifest(projectDir: string): Promise<Timeline
     }
     // read and parse json
     const fileContents = await readTextFile(manifestPath);
-    const manifest: TimelineManifest = JSON.parse(fileContents);
+    const manifest = JSON.parse(fileContents);
 
     if (manifest.video_tracks) {
       for (const track of manifest.video_tracks) {

@@ -30,15 +30,7 @@ import { MenuEntry, MenuItem, separator, tidy } from "./menuItems";
 export interface ContextMenuState {
   x: number;
   y: number;
-  type:
-    | "items"
-    | "track-header"
-    | "timeline-clip"
-    | "empty-track"
-    | "project-card"
-    | "mediapool-item";
-  targetId?: string;
-  data?: any;
+  type: "items";
   items?: MenuEntry[];
 }
 
@@ -46,7 +38,6 @@ const PANEL_ATTR = "data-context-menu";
 
 export function ContextMenu() {
   const [menu, setMenu] = useState<ContextMenuState | null>(null);
-  const { timeline, setTimeline } = useWorkspace();
   const openedThisEventRef = useRef(false);
 
   useEffect(() => {
@@ -118,7 +109,7 @@ export function ContextMenu() {
   if (!menu) return null;
 
   const close = () => setMenu(null);
-  const items = tidy(menu.items ?? legacyItems(menu, timeline, setTimeline));
+  const items = tidy(menu.items ?? []);
   if (items.length === 0) return null;
 
   return (
@@ -443,188 +434,4 @@ function textMenuFor(target: HTMLElement | null): MenuEntry[] | null {
     ];
   }
   return null;
-}
-
-
-function legacyItems(
-  menu: ContextMenuState,
-  timeline: ReturnType<typeof useWorkspace>["timeline"],
-  setTimeline: ReturnType<typeof useWorkspace>["setTimeline"],
-): MenuEntry[] {
-  const data = menu.data ?? {};
-  const call = (fn?: () => void) => () => fn?.();
-
-  const addTrack = (type: "video" | "audio" | "subtitle") => {
-    const existingTracksOfType = timeline.tracks.filter((track) => track.type === type);
-    const trackCount = existingTracksOfType.length + 1;
-    const newOrderIndex =
-      existingTracksOfType.length > 0
-        ? Math.max(...existingTracksOfType.map((track) => track.orderIndex)) + 1
-        : type === "subtitle"
-          ? 0
-          : type === "video"
-            ? 100
-            : 200;
-    const trackPrefix = type === "video" ? "VISUAL" : type.toUpperCase();
-
-    setTimeline({
-      ...timeline,
-      tracks: [
-        ...timeline.tracks,
-        {
-          id: crypto.randomUUID(),
-          name: `${trackPrefix} ${trackCount}`,
-          type,
-          orderIndex: newOrderIndex,
-          isHidden: false,
-          isMuted: false,
-          isLocked: false,
-        },
-      ],
-    });
-  };
-
-  const deleteTrack = (trackId?: string) => {
-    if (!trackId) return;
-    const trackToDelete = timeline.tracks.find((track) => track.id === trackId);
-    if (trackToDelete?.type === "video") {
-      const visualTracks = timeline.tracks.filter((track) => track.type === "video");
-      if (visualTracks.length <= 1) return;
-    }
-    setTimeline({
-      ...timeline,
-      tracks: timeline.tracks.filter((track) => track.id !== trackId),
-      clips: timeline.clips.filter((clip) => clip.trackId !== trackId),
-    });
-  };
-
-  const addTrackItems: MenuEntry[] = [
-    { label: t`add-subtitle-track`, icon: Plus, onSelect: () => addTrack("subtitle") },
-    { label: t`add-visual-track`, icon: Plus, onSelect: () => addTrack("video") },
-    { label: t`add-audio-track`, icon: Plus, onSelect: () => addTrack("audio") },
-  ];
-
-  switch (menu.type) {
-    case "track-header":
-      return [
-        {
-          label: t`Rename track`,
-          icon: Edit3,
-          onSelect: () =>
-            window.dispatchEvent(
-              new CustomEvent("start-rename-track", { detail: { trackId: menu.targetId } }),
-            ),
-        },
-        separator,
-        data.isAudioTrack
-          ? {
-              label: data.isMuted ? t`unmute-track` : t`mute-track`,
-              icon: data.isMuted ? Volume2 : VolumeX,
-              onSelect: call(data.onToggleMute),
-            }
-          : {
-              label: data.isHidden ? t`Show Track` : t`Hide Track`,
-              icon: data.isHidden ? Eye : EyeOff,
-              onSelect: call(data.onToggleHide),
-            },
-        {
-          label: data.isLocked ? t`unlock-track` : t`lock-track`,
-          icon: data.isLocked ? Unlock : Lock,
-          onSelect: call(data.onToggleLock),
-        },
-        separator,
-        ...addTrackItems,
-        separator,
-        { label: t`delete-track`, icon: Trash2, danger: true, onSelect: () => deleteTrack(menu.targetId) },
-      ];
-
-    case "timeline-clip":
-      return [
-        {
-          label: t`duplicate-clip`,
-          icon: CopyPlus,
-          onSelect: () => {
-            const targetClip = timeline.clips.find((clip) => clip.id === menu.targetId);
-            if (!targetClip) return;
-            setTimeline({
-              ...timeline,
-              clips: [
-                ...timeline.clips,
-                {
-                  ...targetClip,
-                  id: crypto.randomUUID(),
-                  startTime: targetClip.startTime + targetClip.duration,
-                },
-              ],
-            });
-          },
-        },
-        separator,
-        {
-          label: t`link-clips`,
-          icon: LinkIcon,
-          onSelect: () => window.dispatchEvent(new CustomEvent("trigger-link-clips")),
-        },
-        {
-          label: t`unlink-clips`,
-          icon: UnlinkIcon,
-          onSelect: () => window.dispatchEvent(new CustomEvent("trigger-unlink-clips")),
-        },
-        separator,
-        {
-          label: t`delete-clip`,
-          icon: Trash2,
-          danger: true,
-          onSelect: () =>
-            setTimeline({
-              ...timeline,
-              clips: timeline.clips.filter((clip) => clip.id !== menu.targetId),
-            }),
-        },
-      ];
-
-    case "empty-track":
-      return [
-        ...addTrackItems,
-        separator,
-        menu.targetId
-          ? {
-              label: t`delete-empty-track`,
-              icon: Trash2,
-              danger: true,
-              onSelect: () => deleteTrack(menu.targetId),
-            }
-          : separator,
-      ];
-
-    case "project-card":
-      return [
-        { label: t`open-project`, icon: FolderOpen, onSelect: call(data.onOpen) },
-        separator,
-        { label: t`rename`, icon: Edit3, onSelect: call(data.onRename) },
-        { label: t`duplicate`, icon: Copy, onSelect: call(data.onDuplicate) },
-        { label: t`Quick Render`, icon: Film, onSelect: call(data.onQuickRender) },
-        { label: t`Reveal in File Explorer`, icon: Folder, onSelect: call(data.onReveal) },
-        separator,
-        { label: t`remove-from-list`, icon: Trash2, danger: true, onSelect: call(data.onRemove) },
-      ];
-
-    case "mediapool-item":
-      return [
-        { label: t`duplicate`, icon: Copy, onSelect: call(data.onDuplicate) },
-        { label: t`Quick Render`, icon: Film, onSelect: call(data.onQuickRender) },
-        { label: t`Reveal in File Explorer`, icon: Folder, onSelect: call(data.onReveal) },
-        { label: t`properties`, icon: Settings2, onSelect: call(data.onProperties) },
-        separator,
-        {
-          label: t`remove-from-media-pool`,
-          icon: Trash2,
-          danger: true,
-          onSelect: call(data.onRemove),
-        },
-      ];
-
-    default:
-      return [];
-  }
 }

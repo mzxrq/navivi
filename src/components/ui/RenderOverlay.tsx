@@ -315,7 +315,7 @@ export function RenderOverlay() {
     try {
       const manifest = await loadTimelineManifest(metadata.directory_path);
       if (manifest && manifest.video_tracks) {
-        const vids: VideoReviewItem[] = manifest.video_tracks.map((v) => {
+        const vids: VideoReviewItem[] = manifest.video_tracks.map((v: any) => {
           const fileName = v.file_path.split(/[/\\]/).pop() || t`video-clip`;
           let label = fileName;
           let type: "overview" | "residential" | "attraction" | "other" =

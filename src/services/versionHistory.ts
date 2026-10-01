@@ -1,6 +1,7 @@
 import { join } from "@tauri-apps/api/path";
 import { exists, readTextFile } from "@tauri-apps/plugin-fs";
 import { db } from "./db";
+import { emptyTimeline } from "../features/editor/model";
 import {
     DbVersion,
     ProjectVersion,
@@ -74,11 +75,16 @@ async function readManifest(projectDir: string): Promise<HistoryManifest> {
     }
 }
 
-function isTimeline(value: unknown): value is TimelineData {
-    if (!value || typeof value !== "object") return false;
-    const timeline = value as TimelineData;
-    return Array.isArray(timeline.tracks) && Array.isArray(timeline.clips) &&
-        Array.isArray(timeline.transitions) && typeof timeline.zoomMultiplier === "number";
+function readTimeline(value: unknown): TimelineData {
+    const timeline = value as Partial<TimelineData> | null;
+    // Snapshots from the old multi-track editor have no segments; they restore as an empty timeline.
+    if (!timeline || !Array.isArray(timeline.segments)) return emptyTimeline();
+    return {
+        ...emptyTimeline(),
+        ...timeline,
+        segments: timeline.segments,
+        subtitles: Array.isArray(timeline.subtitles) ? timeline.subtitles : [],
+    };
 }
 
 function normalizeSnapshot(value: unknown, projectId: string, versionId: string): ProjectVersionSnapshot | null {
@@ -87,10 +93,10 @@ function normalizeSnapshot(value: unknown, projectId: string, versionId: string)
     if (snapshot.id !== versionId || snapshot.projectId !== projectId ||
         !Array.isArray(snapshot.waypoints) || !Array.isArray(snapshot.routeSegments) ||
         !snapshot.metadata || typeof snapshot.metadata !== "object" ||
-        !snapshot.settings || typeof snapshot.settings !== "object" ||
-        !isTimeline(snapshot.timeline)) return null;
+        !snapshot.settings || typeof snapshot.settings !== "object") return null;
     return {
         ...snapshot,
+        timeline: readTimeline(snapshot.timeline),
         routePoints: Array.isArray(snapshot.routePoints) ? snapshot.routePoints : [],
         drawnRoute: Array.isArray(snapshot.drawnRoute) ? snapshot.drawnRoute : [],
         routingCache: snapshot.routingCache && typeof snapshot.routingCache === "object" ? snapshot.routingCache : {},
@@ -119,7 +125,7 @@ export async function saveProjectVersion(input: VersionInput): Promise<ProjectVe
         label: input.label.trim() || `Snapshot ${new Date().toLocaleString()}`,
         createdAt: new Date().toISOString(),
         waypointCount: input.waypoints.length,
-        clipCount: input.timeline.clips.length,
+        clipCount: input.timeline.segments.length,
     };
     const snapshot: ProjectVersionSnapshot = {
         ...version,

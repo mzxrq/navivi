@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { useUI } from "../../hooks/useUI";
+import { layout } from "../../features/editor/model";
 import { useRenderEstimate } from "../../hooks/useRenderEstimate";
 import { formatDuration } from "../../services/renderEstimate";
 import { useAnimatedUnmount } from "../../hooks/useAnimatedUnmount";
@@ -136,11 +137,8 @@ export function StatusBar() {
   }, [showNotifications]);
 
   // ✨ TIMELINE STATS
-  const totalDuration = timeline.clips.reduce((max, clip) => {
-    const end = clip.startTime + clip.duration;
-    return end > max ? end : max;
-  }, 0);
-  const totalClips = timeline.clips.length;
+  const totalDuration = layout(timeline).total;
+  const totalClips = timeline.segments.length;
 
   // ✨ MAP STATS & REALISTIC ESTIMATION
   // Count how many waypoints actually have user-added images or scripts
@@ -238,8 +236,8 @@ export function StatusBar() {
             <Stat icon={Clock} title={t`Total video duration`}>
               <span className="tabular-nums">{totalDuration.toFixed(1)}s</span>
             </Stat>
-            <Stat icon={Layers} title={t`Total tracks in the timeline`}>
-              {t`${timeline.tracks.length} tracks`}
+            <Stat icon={Layers} title={t`Subtitle lines in the timeline`}>
+              {t`${timeline.subtitles.length} subtitles`}
             </Stat>
             <Stat icon={Film} title={t`Total individual clips`}>
               {t`${totalClips} clips`}
