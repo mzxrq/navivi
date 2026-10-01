@@ -1127,8 +1127,11 @@ TTS_CAPTION = "明るく元気で、楽しそうな話し方。"
 # --- Attraction clip place-name label (top-left, burned for the whole clip) -
 # See services/vdoprocessing/img2vdo.py's AttractionVideoGenerator._fit_and_finalize.
 ATTRACTION_LABEL_FONT_SIZE = 26
-ATTRACTION_LABEL_OUTLINE = 1.2
-ATTRACTION_LABEL_MARGIN = 20
+ATTRACTION_LABEL_OUTLINE = 0.8
+# Distance from the top / left edge (libass units, scaled with the video like
+# the font size).
+ATTRACTION_LABEL_MARGIN_TOP = 4
+ATTRACTION_LABEL_MARGIN_LEFT = 4
 # [Config] Attraction clips render below the map/waypoint clips' resolution to fit
 # VRAM (see VideoExporter.finalize_clip), then get lanczos-upscaled to match — a
 # mild unsharp pass right after that upscale claws back some of the softness the
