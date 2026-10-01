@@ -60,6 +60,13 @@ EDITOR_SUBTITLE_STYLE = SubtitleStyle(
 )
 
 
+def _subtitle_display_text(text: str) -> str:
+    """Drops each line's closing 。/、: the mark sits left in its full-width cell, leaving
+    the caption box wider on the right. Same rule as subtitleDisplayText in Preview.tsx."""
+    lines = [line.strip().rstrip("。、").rstrip() or line.strip() for line in text.strip().splitlines()]
+    return "\n".join(lines)
+
+
 def _run_with_progress(
     cmd: List[str], input_path: str, on_progress: Callable[[float], None]
 ) -> subprocess.CompletedProcess:
@@ -867,7 +874,8 @@ class VideoExporter:
         cues = VideoExporter._burn_cues(timeline_data)
         if cues:
             srt = tmp_dir / "subtitles.srt"
-            srt.write_text(VideoExporter.cues_to_srt(cues), encoding="utf-8")
+            shown = [{**c, "text": _subtitle_display_text(str(c["text"]))} for c in cues]
+            srt.write_text(VideoExporter.cues_to_srt(shown), encoding="utf-8")
             burned = tmp_dir / "with_subtitles.mp4"
             try:
                 VideoExporter.burn_subtitles(

@@ -13,6 +13,14 @@ interface PreviewProps {
 // Same font the export burns in (EDITOR_SUBTITLE_STYLE in vdoexporter.py).
 const SUBTITLE_FONT = 'Meiryo, "Yu Gothic UI", sans-serif';
 
+// Drops each line's closing 。/、 so the caption box is even on both sides (same as the export).
+const subtitleDisplayText = (text: string) =>
+  text
+    .trim()
+    .split(/\r?\n/)
+    .map((line) => line.trim().replace(/[。、]+$/, "").trimEnd() || line.trim())
+    .join("\n");
+
 function SubtitleOverlay({ cues, show }: { cues: ReturnType<typeof placedCues>; show: boolean }) {
   const time = usePlayerTime();
   const cue = show ? cues.find((c) => time >= c.globalStart && time < c.globalEnd) : null;
@@ -20,7 +28,7 @@ function SubtitleOverlay({ cues, show }: { cues: ReturnType<typeof placedCues>; 
   return (
     <div className="absolute inset-x-0 bottom-[7%] flex justify-center px-6 pointer-events-none">
       <span style={{ fontFamily: SUBTITLE_FONT }} className="max-w-[85%] px-2.5 py-1 rounded-md bg-black/60 text-white text-[clamp(11px,1.6vw,20px)] leading-snug text-center whitespace-pre-line">
-        {cue.text}
+        {subtitleDisplayText(cue.text)}
       </span>
     </div>
   );
