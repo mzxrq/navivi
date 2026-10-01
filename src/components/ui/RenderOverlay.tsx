@@ -3,7 +3,7 @@ import { Trans } from "@lingui/react/macro";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { join } from "@tauri-apps/api/path";
-import { exists, readDir, remove } from "@tauri-apps/plugin-fs";
+import { exists, readDir, readTextFile, remove } from "@tauri-apps/plugin-fs";
 import {
   AlertTriangle,
   CheckCircle,
@@ -38,24 +38,9 @@ import {
   lastPipelineError,
 } from "../../utils/pipelineLog";
 import { PipelineLogPanel } from "./PipelineLogPanel";
-
-interface ScriptReviewItem {
-  id: string;
-  wpIndex: number;
-  label: string;
-  text: string;
-  audioPath: string;
-}
-
-interface VideoReviewItem {
-  name: string;
-  url: string;
-  filePath: string;
-  wpId?: string;
-  wpIndex?: number;
-  type: "overview" | "residential" | "attraction" | "other";
-  label: string;
-}
+import { PronunciationFix, ReviewEdits, ReviewRow, ReviewSelection, ReviewStep } from "./ReviewStep";
+import { db } from "../../services/db";
+import { GLOBAL_DICTIONARY_KEY } from "../../config/constants";
 
 type WizardStep = "generating" | "verifying" | "exporting" | "finished";
 
@@ -100,15 +85,15 @@ export function RenderOverlay() {
   const [renderAttempt, setRenderAttempt] = useState(0);
 
   // Review State
-  const [reviewItems, setReviewItems] = useState<ScriptReviewItem[]>([]);
-  const [videoItems, setVideoItems] = useState<VideoReviewItem[]>([]);
+  const [reviewRows, setReviewRows] = useState<ReviewRow[]>([]);
+  const [selection, setSelection] = useState<ReviewSelection>({});
+  const [edits, setEdits] = useState<ReviewEdits>({});
+  const [isRedoing, setIsRedoing] = useState(false);
+  const [saveRequest, setSaveRequest] = useState<{ done: () => void; fail: (error: unknown) => void } | null>(null);
   const [activeAudioId, setActiveAudioId] = useState<string | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
   // Audio Regeneration State
-  const [editingAudioId, setEditingAudioId] = useState<string | null>(null);
-  const [editingAudioText, setEditingAudioText] = useState<string>("");
-  const [isRegeneratingAudio, setIsRegeneratingAudio] = useState(false);
 
   // Quick Export & Exporting State
   const [isQuickExportDone, setIsQuickExportDone] = useState(false);
@@ -128,6 +113,8 @@ export function RenderOverlay() {
 
   // Hardware spec detection
   const hardwareSpec = detectHardwareSpec(settings.hardware_spec_override);
+  const pickedClips = reviewRows.filter((r) => selection[r.id]?.video).length;
+  const pickedVoices = reviewRows.filter((r) => selection[r.id]?.voice && r.voice).length;
 
   // Track elapsed time during generation or export
   useEffect(() => {
@@ -149,8 +136,7 @@ export function RenderOverlay() {
     if (!isRendering) {
       setElapsedSeconds(0);
       setIsRenderCollapsed(false);
-      setEditingAudioId(null);
-      setIsRegeneratingAudio(false);
+      setIsRedoing(false);
     }
   }, [isRendering, setIsRenderCollapsed]);
 
@@ -162,8 +148,9 @@ export function RenderOverlay() {
       setPipelineLog(emptyPipelineLog());
       setStatus("processing");
       setActiveAudioId(null);
-      setVideoItems([]);
-      setReviewItems([]);
+      setReviewRows([]);
+      setSelection({});
+      setEdits({});
       setIsQuickExportDone(false);
       setExportedVideoPath(null);
       if (audioRef.current) audioRef.current.pause();
@@ -212,7 +199,7 @@ export function RenderOverlay() {
             if (settings.quick_export) {
               await handleStitchAndExport(true);
             } else {
-              await buildReviewItems();
+              await buildReviewRows();
               setStep("verifying");
             }
           } else if (event.payload === "Cancelled") {
@@ -242,312 +229,258 @@ export function RenderOverlay() {
   }, [isRendering, renderAttempt]);
 
   // Construct Review Items for Generated Assets
-  const buildReviewItems = async () => {
-    if (!metadata?.directory_path) return;
-    let audioDir = await join(metadata.directory_path, "assets", "audio");
+  const savingRef = useRef(false);
+  useEffect(() => {
+    if (!saveRequest || savingRef.current) return;
+    savingRef.current = true;
+    saveProject().then(
+      () => saveRequest.done(),
+      (error) => saveRequest.fail(error),
+    ).finally(() => {
+      savingRef.current = false;
+      setSaveRequest(null);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saveRequest]);
+
+  // ── Review step ────────────────────────────────────────────────────────────
+  const pad2 = (n: number) => String(n).padStart(2, "0");
+
+  const buildReviewRows = async () => {
+    const dir = metadata?.directory_path;
+    if (!dir) return;
+    let audioDir = await join(dir, "assets", "audio");
     if (!(await exists(audioDir))) {
-      const legacyAudio = await join(metadata.directory_path, "audio");
-      if (await exists(legacyAudio)) {
-        audioDir = legacyAudio;
-      }
+      const legacy = await join(dir, "audio");
+      if (await exists(legacy)) audioDir = legacy;
     }
 
     let audioFiles: string[] = [];
     try {
       if (await exists(audioDir)) {
-        const entries = await readDir(audioDir);
-        audioFiles = entries.map((e) => e.name).filter(Boolean);
+        audioFiles = (await readDir(audioDir)).map((e) => e.name).filter((n): n is string => !!n);
       }
     } catch (e) {
       console.warn("Could not inspect audio directory:", e);
     }
 
-    const items: ScriptReviewItem[] = [];
+    // The narration of a clip: its audio file, and the script it was made from (the note beside the audio if the project has none).
+    const voiceFor = async (prefix: string, script: string) => {
+      const file = audioFiles.find((f) => f.startsWith(prefix) && f.endsWith(".wav"));
+      if (!file) return undefined;
+      const audioPath = await join(audioDir, file);
+      let text = script;
+      if (!text.trim()) {
+        try {
+          if (await exists(`${audioPath}.txt`)) text = (await readTextFile(`${audioPath}.txt`)).trim();
+        } catch {
+          // no note: the text stays empty
+        }
+      }
+      return { text, audioPath };
+    };
 
-    // 1. Overview Narration
-    if (metadata.overview_narration) {
-      const overviewFile =
-        audioFiles.find(
-          (f) => f.toLowerCase().includes("overview") && f.endsWith(".wav"),
-        ) || "overview_voice.wav";
-      items.push({
-        id: "overview",
-        wpIndex: -1,
-        label: t`renderRouteOvvNarr`,
-        text: metadata.overview_narration,
-        audioPath: await join(audioDir, overviewFile),
-      });
-    }
+    const manifest = await loadTimelineManifest(dir);
+    const rows: ReviewRow[] = [];
+    for (const track of manifest?.video_tracks ?? []) {
+      const filePath: string = track.file_path;
+      const fileName = filePath.split(/[/\\]/).pop() || "clip";
+      const base = { fileName, filePath, videoUrl: convertFileSrc(filePath) };
+      const lower = fileName.toLowerCase();
+      const leg = fileName.match(/^02_waypoint_(\d+)_/);
+      const attraction = fileName.match(/^04_attraction_(\d+)_/);
 
-    // 2. Waypoint Narrations
-    for (let i = 0; i < waypoints.length; i++) {
-      const wp = waypoints[i];
-      if (wp.skipAssetGeneration || wp.isStub) continue;
-
-      const text = wp.attractionNarration || wp.arrivingNarration || "";
-
-      if (text.trim()) {
-        const prefix = `02_waypoint_${String(i + 1).padStart(2, "0")}_`;
-        const matchedFile = audioFiles.find(
-          (f) => f.startsWith(prefix) && f.endsWith(".wav"),
-        );
-        const fallbackLabel =
-          wp.name
-            .replace(/[^\p{L}\p{N}_\- ]/gu, "")
-            .trim()
-            .replace(/\s+/g, "_") || `leg${i + 1}`;
-        const finalFileName = matchedFile || `${prefix}${fallbackLabel}.wav`;
-
-        const stopNum = i + 1;
-        const stopName = wp.name;
-        items.push({
-          id: wp.id,
-          wpIndex: i,
-          label: t`Stop ${stopNum}: ${stopName}`,
-          text: text,
-          audioPath: await join(audioDir, finalFileName),
+      if (lower.includes("overview")) {
+        rows.push({
+          ...base,
+          id: "overview",
+          kind: "overview",
+          title: t`Route overview`,
+          voice: await voiceFor("00_overview", metadata.overview_narration || ""),
         });
+      } else if (leg) {
+        const n = parseInt(leg[1]);
+        const from = waypoints[n - 1];
+        const fromName = from ? from.name : t`Start`;
+        const toName = waypoints[n] ? waypoints[n].name : t`End`;
+        rows.push({
+          ...base,
+          id: `leg-${n}`,
+          kind: "leg",
+          title: t`Leg ${n}: ${fromName} → ${toName}`,
+          wpId: from?.id,
+          wpIndex: n - 1,
+          voice: await voiceFor(`02_waypoint_${pad2(n)}_`, from?.arrivingNarration || ""),
+        });
+      } else if (attraction) {
+        const idx = parseInt(attraction[1]);
+        const wp = waypoints[idx];
+        const stopName = wp ? wp.name : t`Stop`;
+        rows.push({
+          ...base,
+          id: `attraction-${idx}`,
+          kind: "attraction",
+          title: t`At ${stopName}`,
+          wpId: wp?.id,
+          wpIndex: idx,
+          voice: await voiceFor(`04_attraction_${pad2(idx)}_`, wp?.attractionNarration || ""),
+        });
+      } else {
+        const title = lower.includes("intro") ? t`Title card` : lower.includes("outro") ? t`Ending card` : fileName;
+        rows.push({ ...base, id: `other-${fileName}`, kind: "other", title });
       }
     }
-    setReviewItems(items);
-
-    // 3. Video Previews
-    try {
-      const manifest = await loadTimelineManifest(metadata.directory_path);
-      if (manifest && manifest.video_tracks) {
-        const vids: VideoReviewItem[] = manifest.video_tracks.map((v: any) => {
-          const fileName = v.file_path.split(/[/\\]/).pop() || t`video-clip`;
-          let label = fileName;
-          let type: "overview" | "residential" | "attraction" | "other" =
-            "other";
-          let wpId: string | undefined;
-          let wpIndex: number | undefined;
-
-          if (fileName.includes("overview")) {
-            type = "overview";
-            label = t`routeOvvAnim`;
-          } else {
-            const resMatch = fileName.match(/02_waypoint_(\d+)_/);
-            if (resMatch) {
-              type = "residential";
-              const departureIdx = parseInt(resMatch[1]) - 1;
-              const wp = waypoints[departureIdx];
-              const nextWp = waypoints[departureIdx + 1];
-              wpIndex = departureIdx;
-              wpId = wp?.id;
-              label = t`Leg ${departureIdx + 1}: ${wp ? wp.name : t`Stop ` + (departureIdx + 1)} → ${nextWp ? nextWp.name : t`Next Stop`}`;
-            } else {
-              const attrMatch = fileName.match(/04_attraction_(\d+)_/);
-              if (attrMatch) {
-                type = "attraction";
-                const attrIdx = parseInt(attrMatch[1]);
-                const wp = waypoints[attrIdx];
-                wpIndex = attrIdx;
-                wpId = wp?.id;
-                label = t`Attraction Video: ${wp ? wp.name : t`Stop ` + (attrIdx + 1)}`;
-              }
-            }
-          }
-
-          return {
-            name: fileName,
-            url: convertFileSrc(v.file_path),
-            filePath: v.file_path,
-            wpId,
-            wpIndex,
-            type,
-            label,
-          };
-        });
-        setVideoItems(vids);
-      }
-    } catch (e) {
-      console.warn("Could not load video previews for verification:", e);
-    }
+    setReviewRows(rows);
   };
 
-  // Play / Pause Audio
-  const handleTogglePlay = (item: ScriptReviewItem) => {
-    if (activeAudioId === item.id) {
+  // Play / pause a clip's narration
+  const handlePlay = (row: ReviewRow) => {
+    if (!row.voice) return;
+    if (activeAudioId === row.id) {
       audioRef.current?.pause();
       setActiveAudioId(null);
       return;
     }
-    if (audioRef.current) audioRef.current.pause();
-
-    const safeUrl = convertFileSrc(item.audioPath);
-    const newAudio = new Audio(safeUrl);
-
-    newAudio.onended = () => setActiveAudioId(null);
-    newAudio.onerror = () => {
-      showToast(t`Could not load audio for ${item.label}`, "error");
+    audioRef.current?.pause();
+    const audio = new Audio(`${convertFileSrc(row.voice.audioPath)}?t=${Date.now()}`);
+    audio.onended = () => setActiveAudioId(null);
+    audio.onerror = () => {
+      showToast(t`Could not load audio for ${row.title}`, "error");
       setActiveAudioId(null);
     };
-
-    audioRef.current = newAudio;
-    newAudio.play();
-    setActiveAudioId(item.id);
+    audioRef.current = audio;
+    audio.play();
+    setActiveAudioId(row.id);
   };
 
-  // Audio Regeneration: Open script edit with Hiragana/Katakana guidance
-  const handleInitiateAudioRegen = async (item: ScriptReviewItem) => {
-    if (audioRef.current) audioRef.current.pause();
-    setActiveAudioId(null);
-    setEditingAudioId(item.id);
-    setEditingAudioText(item.text);
-  };
+  // saveProject reads the state of the render it belongs to, so changes made a moment ago need one render before saving.
+  const saveAfterRender = () => new Promise<void>((resolve, reject) => setSaveRequest({ done: resolve, fail: reject }));
 
-  // Execute single waypoint Audio Regeneration
-  const handleExecuteAudioRegen = async (item: ScriptReviewItem) => {
-    if (!metadata.directory_path) return;
-    setIsRegeneratingAudio(true);
-
-    try {
-      const newText = editingAudioText.trim();
-      // Update workspace state
-      if (item.id === "overview") {
-        updateMetadata({ overview_narration: newText });
-      } else {
-        updateWaypoint(item.id, {
-          attractionNarration: newText,
-          arrivingNarration: newText,
-        });
+  const applyPronunciationFixes = async (fixes: PronunciationFix[]) => {
+    const merge = (list: { word: string; reading: string }[], items: PronunciationFix[]) => {
+      const next = list.map((entry) => ({ ...entry }));
+      for (const fix of items) {
+        const found = next.find((entry) => entry.word === fix.word);
+        if (found) found.reading = fix.reading;
+        else next.push({ word: fix.word, reading: fix.reading });
       }
-      // Save project configuration so Python reads updated script
-      await saveProject();
-
-      // Remove generated audio file to force re-synthesis
-      try {
-        if (await exists(item.audioPath)) {
-          await remove(item.audioPath);
-        }
-      } catch (e) {
-        console.warn("Could not remove stale audio file:", e);
-      }
-
-      // Trigger TTS CLI for this specific waypoint or overview
-      const configPath = `${metadata.directory_path}/job_config.json`;
-      const ttsPayload =
-        item.id === "overview" || item.wpIndex < 0
-          ? "tts overview"
-          : `tts ${item.wpIndex}`;
-
-      showToast(t`Regenerating audio for ${item.label}...`, "info");
-      await invoke("run_python_blueprint", {
-        action: configPath,
-        payload: ttsPayload,
-      });
-
-      // Update local review items
-      setReviewItems((prev) =>
-        prev.map((i) => (i.id === item.id ? { ...i, text: newText } : i)),
-      );
-      setEditingAudioId(null);
-      await buildReviewItems();
-      showToast(
-        t`Audio regenerated successfully for ${item.label}! Click Listen to verify pronunciation.`,
-        "success",
-      );
-    } catch (err: any) {
-      console.error("Audio regeneration failed:", err);
-      showToast(t`Audio regeneration failed: ${err}`, "error");
-    } finally {
-      setIsRegeneratingAudio(false);
+      return next;
+    };
+    const project = fixes.filter((f) => f.scope === "project");
+    const shared = fixes.filter((f) => f.scope === "global");
+    if (project.length) updateSettings({ pronunciation_dictionary: merge(settings.pronunciation_dictionary || [], project) });
+    if (shared.length) {
+      const saved = (await db.appSettings.get<{ word: string; reading: string }[]>(GLOBAL_DICTIONARY_KEY)) ?? [];
+      await db.appSettings.set(GLOBAL_DICTIONARY_KEY, merge(saved, shared));
     }
   };
 
-  // Video Regeneration Flow: Hardware branching
-  const handleRegenerateVideo = async (vid: VideoReviewItem) => {
-    if (audioRef.current) audioRef.current.pause();
+  // Voices: apply the edits, remove the old audio, and let the pipeline's own narration step make just the missing ones.
+  const redoVoices = async (rows: ReviewRow[]) => {
+    const dir = metadata.directory_path;
+    if (!dir) return;
+    await applyPronunciationFixes(rows.flatMap((r) => edits[r.id]?.fixes ?? []));
+    for (const row of rows) {
+      const text = (edits[row.id]?.text ?? row.voice?.text ?? "").trim();
+      if (row.kind === "leg" && row.wpId) updateWaypoint(row.wpId, { arrivingNarration: text });
+      else if (row.kind === "attraction" && row.wpId) updateWaypoint(row.wpId, { attractionNarration: text });
+    }
+    await saveAfterRender();
 
-    const spec = detectHardwareSpec(settings.hardware_spec_override);
+    for (const row of rows) {
+      try {
+        if (row.voice && (await exists(row.voice.audioPath))) await remove(row.voice.audioPath);
+      } catch (e) {
+        console.warn("Could not remove the old audio:", e);
+      }
+    }
+    const configPath = `${dir}/job_config.json`;
+    await invoke("run_python_blueprint", { action: configPath, payload: "tts-all" });
+    try {
+      await invoke("run_python_blueprint", { action: configPath, payload: "subtitle-all" });
+    } catch (e) {
+      console.warn("Subtitles were not rebuilt:", e);
+    }
+    await autoLoadTimeline(dir);
+  };
 
-    if (spec.isHighSpec) {
-      // High-spec hardware: Switch to timeline editor view for custom adjustments
-      showToast(
-        t`High-spec system detected (${spec.gpuRenderer}). Opening Timeline Editor for custom video trimming and transition adjustments. (Quick export disabled).`,
-        "info",
-      );
+  // Video clips: remove them so the next run makes them again, then go where the clip can be changed.
+  const redoVideos = async (rows: ReviewRow[]) => {
+    audioRef.current?.pause();
+    const dir = metadata.directory_path;
+
+    if (hardwareSpec.isHighSpec) {
+      showToast(t`Opening the timeline editor so you can change the clip by hand.`, "info");
       updateSettings({ quick_export: false });
       await saveProject();
-      if (metadata.directory_path) {
-        await autoLoadTimeline(metadata.directory_path);
-      }
+      if (dir) await autoLoadTimeline(dir);
       setIsRendering(false);
       setEditorMode("timeline");
-    } else {
-      // Low-spec hardware (e.g. Ryzen 5 5600GE with Radeon Graphics):
-      // Invalidate existing clip on disk so resumption re-renders this leg
-      if (vid.filePath) {
+      return;
+    }
+
+    for (const row of rows) {
+      const stale = [row.filePath, row.filePath.replace("_subtitled", ""), row.filePath.replace(/\.mp4$/i, ".src.json"), row.filePath.replace(/\.mp4$/i, ".orig.wav")];
+      for (const path of stale) {
         try {
-          if (await exists(vid.filePath)) {
-            await remove(vid.filePath);
-          }
-          if (vid.filePath.includes("_subtitled")) {
-            const rawPath = vid.filePath.replace("_subtitled", "");
-            if (await exists(rawPath)) {
-              await remove(rawPath);
-            }
-          }
+          if (await exists(path)) await remove(path);
         } catch (e) {
-          console.warn("Could not remove stale video file:", e);
+          console.warn("Could not remove a stale file:", e);
         }
       }
-
-      // Remove .render_manifest.json so render_step doesn't skip
-      if (metadata.directory_path) {
+    }
+    if (dir) {
+      for (const manifest of [
+        await join(dir, "assets", "video", "route", ".render_manifest.json"),
+        await join(dir, "assets", "video", ".render_manifest.json"),
+        await join(dir, "video", ".render_manifest.json"),
+      ]) {
         try {
-          const manifests = [
-            await join(
-              metadata.directory_path,
-              "assets",
-              "video",
-              "route",
-              ".render_manifest.json",
-            ),
-            await join(
-              metadata.directory_path,
-              "assets",
-              "video",
-              ".render_manifest.json",
-            ),
-            await join(
-              metadata.directory_path,
-              "video",
-              ".render_manifest.json",
-            ),
-          ];
-          for (const m of manifests) {
-            if (await exists(m)) {
-              await remove(m);
-            }
-          }
+          if (await exists(manifest)) await remove(manifest);
         } catch (e) {
-          console.warn("Could not remove render manifest:", e);
+          console.warn("Could not remove the render manifest:", e);
         }
       }
+    }
 
-      // Return to Map Editor and pre-select that waypoint layer in WaypointEditor
-      const targetWpId = vid.wpId || (waypoints[0] ? waypoints[0].id : null);
-      if (targetWpId) {
-        setActiveWaypointId(targetWpId);
-        setMarkedWaypointIds((prev) =>
-          Array.from(new Set([...prev, targetWpId])),
-        );
+    const ids = rows.map((r) => r.wpId).filter((id): id is string => !!id);
+    const first = ids[0] ?? waypoints[0]?.id ?? null;
+    if (first) setActiveWaypointId(first);
+    setMarkedWaypointIds((prev) => Array.from(new Set([...prev, ...ids])));
+    setEditorMode("map");
+    setIsRenderCollapsed(true);
+    setGenerationSessionInfo({
+      waypointId: first || undefined,
+      activeLeg: rows.map((r) => r.title).join(", "),
+      message: t`lowSpecGenSessionMessage`,
+    });
+    const count = rows.length;
+    showToast(t`${count} clips are ready to be redone. Change their photo, script or route, then choose Resume Generation.`, "warning");
+  };
+
+  const handleRedo = async () => {
+    const voiceRows = reviewRows.filter((r) => selection[r.id]?.voice && r.voice);
+    const videoRows = reviewRows.filter((r) => selection[r.id]?.video);
+    if (!voiceRows.length && !videoRows.length) return;
+    setIsRedoing(true);
+    try {
+      if (voiceRows.length) {
+        showToast(t`Making the new voice. The first one can take a while.`, "info");
+        await redoVoices(voiceRows);
+        showToast(t`The voice is ready. Listen to check it.`, "success");
       }
-
-      setEditorMode("map");
-      setIsRenderCollapsed(true);
-      setGenerationSessionInfo({
-        waypointId: targetWpId || undefined,
-        activeLeg: vid.label,
-        message: t`lowSpecGenSessionMessage`,
-      });
-
-      showToast(
-        t`Low-spec system: Opened Waypoint Editor for ${vid.label}. Adjust image, script, or route mode, then click Resume Generation.`,
-        "warning",
-      );
+      if (videoRows.length) {
+        await redoVideos(videoRows);
+      } else {
+        await buildReviewRows();
+      }
+      setSelection({});
+      setEdits({});
+    } catch (err: any) {
+      console.error("Redo failed:", err);
+      showToast(t`Could not redo that: ${err?.message ?? err}`, "error");
+    } finally {
+      setIsRedoing(false);
     }
   };
 
@@ -1015,242 +948,17 @@ export function RenderOverlay() {
 
             {/* STEP 2: VERIFYING / ASSET REVIEW */}
             {step === "verifying" && (
-              <div className="flex-1 flex flex-col gap-6 short:gap-4 animate-in slide-in-from-right-8 duration-500 p-5 sm:p-6 short:p-4">
-                {/* Hardware Guidance Banner */}
-                <div className="bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 rounded-xl p-4 short:p-3 flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex items-center gap-3 min-w-0 flex-1 basis-64">
-                    <Cpu className="w-5 h-5 text-navi shrink-0" />
-                    <div>
-                      <h4 className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
-                        <Trans>System Capability Check:</Trans>
-                        {hardwareSpec.isHighSpec
-                          ? t`High-Spec (Discrete GPU)`
-                          : t`Low-Spec (Integrated Graphics)`}
-                      </h4>
-                      <p className="text-[11px] text-zinc-500 mt-0.5">
-                        {hardwareSpec.isHighSpec
-                          ? t`Regenerating a video leg will switch to the Timeline Editor for manual customization`
-                          : t`Regenerating a video leg will return to the Map Editor with the active layer opened to adjust images, script, or route mode`}
-                      </p>
-                    </div>
-                  </div>
-                  <span
-                    className="text-[10px] tabular-nums px-2 py-1 rounded bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 max-w-full truncate"
-                    title={hardwareSpec.gpuRenderer}
-                  >
-                    {hardwareSpec.gpuRenderer.substring(0, 30)}
-                  </span>
-                </div>
-
-                {/* Video Review Section */}
-                {videoItems.length > 0 && (
-                  <div className="space-y-4">
-                    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-zinc-900 dark:text-zinc-100">
-                      <div className="flex items-center gap-2">
-                        <Film className="w-5 h-5 text-navi shrink-0" />
-                        <h3 className="text-sm font-semibold tracking-wide uppercase">
-                          <Trans>Rendered Videos ({videoItems.length})</Trans>
-                        </h3>
-                      </div>
-                      <span className="text-xs text-zinc-500">
-                        <Trans>
-                          Verify that video visuals are factually correct
-                        </Trans>
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,17rem),1fr))] gap-4">
-                      {videoItems.map((vid, idx) => (
-                        <div
-                          key={idx}
-                          className="group bg-zinc-100 dark:bg-zinc-900 rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-800 transition-all flex flex-col"
-                        >
-                          <div className="relative aspect-video bg-black flex items-center justify-center">
-                            <video
-                              src={vid.url}
-                              controls
-                              preload="metadata"
-                              className="w-full h-full object-cover"
-                            />
-                          </div>
-                          <div className="p-3 bg-white dark:bg-zinc-900/90 border-t border-zinc-200 dark:border-zinc-800 flex items-center justify-between gap-2">
-                            <div className="min-w-0">
-                              <p
-                                className="text-xs font-bold text-zinc-800 dark:text-zinc-200 truncate"
-                                title={vid.label}
-                              >
-                                {vid.label}
-                              </p>
-                              <p className="text-[10px] text-zinc-400 tracking-tight truncate">
-                                {vid.name}
-                              </p>
-                            </div>
-                            {vid.type === "residential" && (
-                              <button
-                                onClick={() => handleRegenerateVideo(vid)}
-                                className="px-3 py-1.5 rounded-lg bg-zinc-100 hover:bg-amber-500/10 text-zinc-700 hover:text-amber-600 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:text-amber-400 text-xs font-semibold shrink-0 transition-colors flex items-center gap-1.5"
-                                title={t`Regenerate this specific residential leg`}
-                              >
-                                <RotateCcw className="w-3.5 h-3.5" />
-                                <Trans>Regenerate</Trans>
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Audio & Script Review Section */}
-                <div className="space-y-4">
-                  <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-zinc-900 dark:text-zinc-100">
-                    <div className="flex items-center gap-2">
-                      <Mic className="w-5 h-5 text-navi shrink-0" />
-                      <h3 className="text-sm font-semibold tracking-wide uppercase">
-                        <Trans>
-                          Audio Narration & Pronunciation Review (
-                          {reviewItems.length})
-                        </Trans>
-                      </h3>
-                    </div>
-                    <span className="text-xs text-zinc-500">
-                      <Trans>
-                        Listen to ensure Irodori TTS pronunciation is accurate
-                      </Trans>
-                    </span>
-                  </div>
-
-                  {reviewItems.length === 0 ? (
-                    <div className="px-4 py-8 text-center bg-zinc-50 dark:bg-zinc-900/50 rounded-xl border border-dashed border-zinc-200 dark:border-zinc-800">
-                      <p className="text-sm text-zinc-500 italic">
-                        <Trans>
-                          No voiceover scripts were found in this generation.
-                        </Trans>
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="grid gap-4">
-                      {reviewItems.map((item) => {
-                        const isEditing = editingAudioId === item.id;
-
-                        return (
-                          <div
-                            key={item.id}
-                            className="bg-white dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800/80 rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow"
-                          >
-                            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-                              <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 min-w-0 truncate">
-                                {item.label}
-                              </span>
-                              <div className="flex items-center gap-2 shrink-0">
-                                <button
-                                  onClick={() => handleTogglePlay(item)}
-                                  className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                                    activeAudioId === item.id
-                                      ? "bg-navi/10 text-navi dark:bg-navi/20 dark:text-navi-400"
-                                      : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
-                                  }`}
-                                >
-                                  <PlayCircle
-                                    className={`w-4 h-4 ${activeAudioId === item.id ? "animate-pulse" : ""}`}
-                                  />
-                                  {activeAudioId === item.id
-                                    ? t`Playing...`
-                                    : t`Listen`}
-                                </button>
-
-                                {!isEditing && (
-                                  <button
-                                    onClick={() =>
-                                      handleInitiateAudioRegen(item)
-                                    }
-                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-amber-50 hover:bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 dark:hover:bg-amber-900/50 transition-colors"
-                                    title={t`Clear generated audio and re-enter pronunciation`}
-                                  >
-                                    <RotateCcw className="w-3.5 h-3.5" />
-                                    <Trans>Regenerate Audio</Trans>
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-
-                            {/* Editing Mode: Japanese Hiragana / Katakana Guidance */}
-                            {isEditing ? (
-                              <div className="space-y-3 p-4 bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/50 rounded-xl animate-in fade-in duration-300">
-                                <div className="flex items-start gap-2.5">
-                                  <Info className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-                                  <div>
-                                    <h4 className="text-xs font-bold text-amber-900 dark:text-amber-300">
-                                      <Trans>
-                                        Japanese Pronunciation & Intonation
-                                        Guidance
-                                      </Trans>
-                                    </h4>
-                                    <p className="text-[11px] text-amber-800 dark:text-amber-400 leading-relaxed mt-0.5">
-                                      <Trans>
-                                        If Irodori TTS mispronounces words or
-                                        lacks intonation, input the script
-                                        reading in <strong>Hiragana</strong> or{" "}
-                                        <strong>Katakana</strong> (e.g. ひらがな
-                                        / カタカチE instead of Kanji. Kanji
-                                        characters lack explicit pitch-accent
-                                        information.
-                                      </Trans>
-                                    </p>
-                                  </div>
-                                </div>
-
-                                <textarea
-                                  value={editingAudioText}
-                                  onChange={(e) =>
-                                    setEditingAudioText(e.target.value)
-                                  }
-                                  className="w-full bg-white dark:bg-zinc-950 border border-amber-300 dark:border-amber-800 rounded-lg p-3 text-sm text-zinc-800 dark:text-zinc-200 focus:outline-none focus:ring-2 focus:ring-amber-500/50 resize-y min-h-24 custom-scrollbar"
-                                  placeholder={t`Enter pronunciation reading in Hiragana/Katakana...`}
-                                />
-
-                                <div className="flex items-center justify-end gap-2">
-                                  <button
-                                    onClick={() => setEditingAudioId(null)}
-                                    disabled={isRegeneratingAudio}
-                                    className="px-3 py-1.5 text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-lg transition-colors"
-                                  >
-                                    <Trans>Cancel</Trans>
-                                  </button>
-                                  <button
-                                    onClick={() =>
-                                      handleExecuteAudioRegen(item)
-                                    }
-                                    disabled={isRegeneratingAudio}
-                                    className="px-4 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold shadow transition-colors flex items-center gap-1.5"
-                                  >
-                                    {isRegeneratingAudio ? (
-                                      <>
-                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                        <Trans>Synthesizing...</Trans>
-                                      </>
-                                    ) : (
-                                      <>
-                                        <Mic className="w-3.5 h-3.5" />
-                                        <Trans>Synthesize Audio Now</Trans>
-                                      </>
-                                    )}
-                                  </button>
-                                </div>
-                              </div>
-                            ) : (
-                              <p className="text-xs text-zinc-600 dark:text-zinc-400 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg p-3 leading-relaxed wrap-break-word">
-                                {item.text || t`(Empty script)`}
-                              </p>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              </div>
+              <ReviewStep
+                rows={reviewRows}
+                selection={selection}
+                onSelection={setSelection}
+                edits={edits}
+                onEdits={setEdits}
+                playingId={activeAudioId}
+                onPlay={handlePlay}
+                videoRedoGoesTo={hardwareSpec.isHighSpec ? "timeline" : "map"}
+                busy={isRedoing}
+              />
             )}
 
             {/* STEP 3: EXPORTING (AUTO-STITCHING) */}
@@ -1340,15 +1048,17 @@ export function RenderOverlay() {
             )}
           </div>
 
-          {/* Action Footer for Verifying Step */}
+          {/* Action footer for the review step */}
           {step === "verifying" && (
-            <div className="px-5 sm:px-6 py-4 short:py-3 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 flex flex-wrap items-center justify-between gap-3 shrink-0">
-              <span className="text-xs text-zinc-500 flex items-center gap-1.5 min-w-0">
-                <Settings2 className="w-4 h-4 shrink-0" />
-                <Trans>Accept assets to automatically stitch and export</Trans>
+            <div className="px-5 sm:px-6 py-3 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 flex flex-wrap items-center justify-between gap-3 shrink-0">
+              <span className="text-[12px] text-zinc-500 min-w-0">
+                {pickedClips + pickedVoices === 0
+                  ? t`Nothing selected. Accept to export, or mark what to redo.`
+                  : t`Selected to redo: clips ${pickedClips}, voices ${pickedVoices}`}
               </span>
-              <div className="flex flex-wrap items-center gap-3 ml-auto">
+              <div className="flex flex-wrap items-center gap-2 ml-auto">
                 <button
+                  disabled={isRedoing}
                   onClick={async () => {
                     if (metadata.directory_path) {
                       await autoLoadTimeline(metadata.directory_path);
@@ -1356,17 +1066,30 @@ export function RenderOverlay() {
                     setIsRendering(false);
                     setEditorMode("timeline");
                   }}
-                  className="px-4 py-2.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700 text-xs font-semibold rounded-xl transition-all flex items-center gap-2"
+                  className="h-9 px-3.5 rounded-lg text-[13px] font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-white/5 disabled:opacity-40 transition-colors flex items-center gap-2"
                 >
                   <Film className="w-4 h-4" />
                   <Trans>Customize in Timeline</Trans>
                 </button>
                 <button
+                  disabled={isRedoing || pickedClips + pickedVoices === 0}
+                  onClick={handleRedo}
+                  className="h-9 px-3.5 rounded-lg text-[13px] font-semibold bg-amber-500 text-white hover:brightness-110 disabled:opacity-40 disabled:pointer-events-none transition flex items-center gap-2"
+                >
+                  {isRedoing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
+                  <Trans>Redo selected</Trans>
+                </button>
+                <button
+                  disabled={isRedoing}
                   onClick={() => handleStitchAndExport(false)}
-                  className="px-6 py-2.5 bg-navi hover:brightness-110 text-white text-sm font-semibold rounded-xl shadow-lg shadow-navi/20 transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center gap-2"
+                  className={`h-9 px-4 rounded-lg text-[13px] font-semibold transition flex items-center gap-2 disabled:opacity-40 disabled:pointer-events-none ${
+                    pickedClips + pickedVoices === 0
+                      ? "bg-navi text-white hover:brightness-110"
+                      : "text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-white/5"
+                  }`}
                 >
                   <CheckCircle className="w-4 h-4" />
-                  <Trans>Accept Assets & Export Video</Trans>
+                  <Trans>Accept and export</Trans>
                 </button>
               </div>
             </div>

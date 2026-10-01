@@ -58,6 +58,17 @@ if __name__ == "__main__":
         )
         sys.exit(1)
 
+    # run_python_blueprint hands over ONE payload argument, so the app sends "tts 3 --force" as a single
+    # string: split it back into arguments. Payloads that are text or JSON for their command stay whole.
+    _WHOLE_PAYLOAD = {"get_furigana", "extract_words", "estimate", "full_pipeline", "render_timeline"}
+    if (
+        len(sys.argv) == 3
+        and sys.argv[1] not in _WHOLE_PAYLOAD
+        and " " in sys.argv[2].strip()
+        and not sys.argv[2].lstrip().startswith(("{", "["))
+    ):
+        sys.argv[2:3] = sys.argv[2].split()
+
     # [NOTE] [Core] --force can appear anywhere on the command line (it's a
     # flag, not a positional arg) — strip it out before any positional
     # parsing below so waypoint_index/output_dir parsing is unaffected.
