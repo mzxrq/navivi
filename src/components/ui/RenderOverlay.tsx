@@ -112,7 +112,7 @@ export function RenderOverlay() {
 
   // Quick Export & Exporting State
   const [isQuickExportDone, setIsQuickExportDone] = useState(false);
-  const [, setExportedVideoPath] = useState<string | null>(null);
+  const [exportedVideoPath, setExportedVideoPath] = useState<string | null>(null);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   // Only takes effect in the stacked (< lg) layout; side-by-side always shows the log.
@@ -563,36 +563,10 @@ export function RenderOverlay() {
         "info",
       );
 
-      // 1. Ensure timeline manifest is saved if clips exist
-      if (
-        metadata.directory_path &&
-        timeline &&
-        timeline.clips &&
-        timeline.clips.length > 0
-      ) {
-        await saveTimelineManifest(
-          metadata.directory_path,
-          metadata.project_name || t`saveTimelineProjectNameDefault`,
-          timeline,
-        );
-      }
-
-      // 2. Invoke video export stitching command
-      try {
-        await invoke("export_video", {
-          projectDir: metadata.directory_path,
-        });
-      } catch (exportErr) {
-        // Fallback to concat if render_timeline isn't supported
-        console.warn(
-          "export_video invoke failed, falling back to concat:",
-          exportErr,
-        );
-        await invoke("run_python_blueprint", {
-          action: `${metadata.directory_path}/job_config.json`,
-          payload: "concat",
-        });
-      }
+      // timeline.json is the one the pipeline just wrote (video + narration per clip); re-saving it from editor state would drop the audio.
+      const exported = await invoke<string>("export_video", {
+        projectDir: metadata.directory_path,
+      });
 
       // Play success chime
       try {
@@ -623,7 +597,7 @@ export function RenderOverlay() {
       }
 
       setIsQuickExportDone(isQuickExport);
-      setExportedVideoPath(`${metadata.directory_path}/video`);
+      setExportedVideoPath(exported || null);
       setStep("finished");
       setStatus("success");
       showToast(t`exportSuccessToastMsg`, "success");
@@ -685,10 +659,11 @@ export function RenderOverlay() {
   };
 
   // Open output folder in OS file explorer
-  const handleOpenExplorer = async () => {
-    if (!metadata.directory_path) return;
+  const handleOpenExplorer = async (target?: string | null) => {
+    const path = target || metadata.directory_path;
+    if (!path) return;
     try {
-      await invoke("open_in_explorer", { path: metadata.directory_path });
+      await invoke("open_in_explorer", { path });
     } catch (e) {
       console.warn("open_in_explorer failed:", e);
     }
@@ -1324,8 +1299,16 @@ export function RenderOverlay() {
                 )}
 
                 <div className="flex flex-wrap items-center justify-center gap-3">
+                  {exportedVideoPath && (
+                    <button
+                      onClick={() => handleOpenExplorer(exportedVideoPath)}
+                      className="px-5 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-semibold rounded-xl transition-all flex items-center gap-2"
+                    >
+                      <Film className="w-4 h-4" /> <Trans>Show Video</Trans>
+                    </button>
+                  )}
                   <button
-                    onClick={handleOpenExplorer}
+                    onClick={() => handleOpenExplorer()}
                     className="px-5 py-2.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 dark:bg-zinc-800 dark:hover:bg-zinc-700 dark:text-zinc-200 text-xs font-semibold rounded-xl transition-all flex items-center gap-2"
                   >
                     <Folder className="w-4 h-4" />{" "}

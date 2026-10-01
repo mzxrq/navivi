@@ -296,6 +296,37 @@ def run_full_pipeline(
     }
 
 
+def recover_narration_paths(timeline_data: dict) -> int:
+    """Re-links narration to its clip for a timeline.json the editor saved without per-clip audio_path.
+
+    The editor keeps each narration as its own audio clip that starts with its video clip (ui_state.clips);
+    the exporter only reads video_tracks[].audio_path. Returns how many clips were re-linked.
+    """
+    tracks = timeline_data.get("video_tracks", [])
+    if any(t.get("audio_path") for t in tracks):
+        return 0
+    clips = (timeline_data.get("ui_state") or {}).get("clips") or []
+    audio_track_ids = {
+        t.get("id") for t in (timeline_data.get("ui_state") or {}).get("tracks", []) if t.get("type") == "audio"
+    }
+    voices = [
+        c for c in clips
+        if c.get("source") and c.get("type") == "audio"
+        and (c.get("trackId") in audio_track_ids or c.get("audioRole") == "voice")
+    ]
+    start_of = {c.get("id"): c.get("startTime", 0.0) for c in clips}
+    fixed = 0
+    for track in tracks:
+        start = start_of.get(track.get("clip_id"))
+        if start is None:
+            continue
+        voice = next((v for v in voices if abs(v.get("startTime", 0.0) - start) < 0.05), None)
+        if voice:
+            track["audio_path"] = voice["source"]
+            fixed += 1
+    return fixed
+
+
 def render_from_timeline(
     timeline_json_path: str, output_video_path: Optional[str] = None
 ) -> str:
@@ -309,6 +340,9 @@ def render_from_timeline(
 
     # The editor saves project-relative paths; resolve them against the project, not the cwd.
     project_dir = timeline_path.resolve().parent
+    relinked = recover_narration_paths(timeline_data)
+    if relinked:
+        logger.info("NLE Engine: re-linked narration for %d clips from the editor state", relinked)
     for track in timeline_data.get("video_tracks", []):
         for key in ("file_path", "audio_path"):
             if track.get(key) and not Path(track[key]).is_absolute():

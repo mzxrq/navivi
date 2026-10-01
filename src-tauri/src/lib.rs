@@ -251,7 +251,7 @@ fn wake_up_ollama() -> Result<String, String> {
 }
 
 #[tauri::command]
-async fn export_video(app: tauri::AppHandle, project_dir: String) -> Result<(), String> {
+async fn export_video(app: tauri::AppHandle, project_dir: String) -> Result<String, String> {
     println!("Starting video export for: {}", project_dir);
 
     let timeline_path = format!("{}/timeline.json", project_dir);
@@ -259,17 +259,22 @@ async fn export_video(app: tauri::AppHandle, project_dir: String) -> Result<(), 
     let output = std::process::Command::new("python")
         .env("PYTHONIOENCODING", "utf-8")
         .arg("src-python/main.py")
-        .arg("render_timeline") 
-        .arg(&timeline_path)    
+        .arg("render_timeline")
+        .arg(&timeline_path)
         .output()
         .map_err(|e| e.to_string())?;
 
+    let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
     if output.status.success() {
         app.emit("render-complete", ()).map_err(|e| e.to_string())?;
-        Ok(())
+        // main.py's last stdout line is the JSON-encoded path of the exported video.
+        let last = stdout.lines().rev().find(|l| !l.trim().is_empty()).unwrap_or("");
+        Ok(last.trim().trim_matches('"').replace("\\\\", "\\"))
     } else {
-        let err = String::from_utf8_lossy(&output.stderr).into_owned();
-        Err(err)
+        // main.py prints its failure as JSON on stdout; stderr only carries progress text.
+        let err = String::from_utf8_lossy(&output.stderr);
+        Err(format!("{}
+{}", stdout.trim(), err.trim()).trim().to_string())
     }
 }
 

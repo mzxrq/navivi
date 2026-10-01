@@ -246,6 +246,7 @@ export interface ManifestClip {
   order?: number;
   clip_name?: string;
   audio_path?: string | null;
+  audio_offset?: number;
   subtitle_path?: string | null;
 }
 

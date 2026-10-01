@@ -56,7 +56,7 @@ msgstr "ダウンロード開始中..."
 msgid " · waypoint"
 msgstr " · ポイント"
 
-#: src/components/ui/RenderOverlay.tsx:1269
+#: src/components/ui/RenderOverlay.tsx:1244
 msgid "(Empty script)"
 msgstr "(未入力)"
 
@@ -211,7 +211,7 @@ msgstr "レンダリング約{0}"
 #~ msgid "~{estRenderMinutes} min to render"
 #~ msgstr "レンダリング 約{estRenderMinutes}分"
 
-#: src/components/ui/RenderOverlay.tsx:1317
+#: src/components/ui/RenderOverlay.tsx:1292
 msgid "💡 <0>Quick Export Notice:</0> To customize individual video clips or fix TTS pronunciation, uncheck \"Quick Export\" in generation settings and re-run."
 msgstr "💡 <0>クイックエクスポートに関する注意:</0> 個別の動画クリップのカスタマイズや、音声の発音修正を行いたい場合は、生成設定の「クイックエクスポート」のチェックを外して再実行してください。"
 
@@ -268,11 +268,11 @@ msgstr "アクセントカラー"
 msgid "Accept & Apply to Project"
 msgstr "プロジェクトに承認して適用"
 
-#: src/components/ui/RenderOverlay.tsx:1386
+#: src/components/ui/RenderOverlay.tsx:1369
 msgid "Accept Assets & Export Video"
 msgstr "アセットを承認して動画をエクスポート"
 
-#: src/components/ui/RenderOverlay.tsx:1365
+#: src/components/ui/RenderOverlay.tsx:1348
 msgid "Accept assets to automatically stitch and export"
 msgstr "アセットを承認すると、自動的に結合してエクスポートされます"
 
@@ -438,7 +438,7 @@ msgstr "全部"
 msgid "All changes safely stored to disk"
 msgstr "すべての変更が保存されました"
 
-#: src/components/ui/RenderOverlay.tsx:1310
+#: src/components/ui/RenderOverlay.tsx:1285
 msgid "All media was automatically generated, stitched, and exported to your project folder without stopping for manual review"
 msgstr "手動での確認を挟むことなく、すべてのメディアが自動的に生成・結合され、プロジェクトフォルダにエクスポートされました"
 
@@ -446,7 +446,7 @@ msgstr "手動での確認を挟むことなく、すべてのメディアが自
 msgid "Amber"
 msgstr "アンバー色"
 
-#: src/components/ui/RenderOverlay.tsx:1033
+#: src/components/ui/RenderOverlay.tsx:1008
 msgid "An unknown error occurred during rendering."
 msgstr "レンダリング中に予期せぬエラーが発生しました"
 
@@ -523,7 +523,7 @@ msgstr "ASS 形式の色（例: &H00000000）"
 msgid "ASS colour, e.g. &H00FFFFFF"
 msgstr "ASS 形式の色（例: &H00FFFFFF）"
 
-#: src/components/ui/RenderOverlay.tsx:1311
+#: src/components/ui/RenderOverlay.tsx:1286
 msgid "Assets accepted and stitched into your final deliverable video"
 msgstr "アセットが承認され、最終的な動画として結合されました。"
 
@@ -565,7 +565,7 @@ msgid "Audio Mix"
 msgstr "オーディオミックス"
 
 #. placeholder {0}: reviewItems.length
-#: src/components/ui/RenderOverlay.tsx:1136
+#: src/components/ui/RenderOverlay.tsx:1111
 msgid "Audio Narration & Pronunciation Review ({0})"
 msgstr "音声ナレーションと発音の確認 ({0})"
 
@@ -630,11 +630,11 @@ msgstr "自動保存"
 msgid "Auto-save failed"
 msgstr "自動保存に失敗しました"
 
-#: src/components/ui/RenderOverlay.tsx:856
+#: src/components/ui/RenderOverlay.tsx:831
 msgid "Auto-skipped (Quick Export)"
 msgstr "自動スキップ (クイックエクスポート)"
 
-#: src/components/ui/RenderOverlay.tsx:862
+#: src/components/ui/RenderOverlay.tsx:837
 msgid "Auto-stitched Video"
 msgstr "自動結合された動画"
 
@@ -690,7 +690,7 @@ msgstr "境界線の幅"
 msgid "Brightness"
 msgstr "明るさ"
 
-#: src/components/ui/RenderOverlay.tsx:849
+#: src/components/ui/RenderOverlay.tsx:824
 msgid "Build Assets"
 msgstr "アセットを構築"
 
@@ -711,8 +711,8 @@ msgstr "キャンセル"
 
 #: src/components/ui/AutoDirectorModal.tsx:169
 #: src/components/ui/NewProject.tsx:433
-#: src/components/ui/RenderOverlay.tsx:827
-#: src/components/ui/RenderOverlay.tsx:1244
+#: src/components/ui/RenderOverlay.tsx:802
+#: src/components/ui/RenderOverlay.tsx:1219
 #: src/components/ui/SaveAs.tsx:105
 #: src/components/ui/UnsavedChanges.tsx:35
 #: src/components/view/ProjectManager.tsx:594
@@ -730,7 +730,7 @@ msgstr "キャンセル"
 msgid "Cancel download"
 msgstr "ダウンロードをキャンセル"
 
-#: src/components/ui/RenderOverlay.tsx:1013
+#: src/components/ui/RenderOverlay.tsx:988
 msgid "Cancelling process..."
 msgstr "処理をキャンセルしています..."
 
@@ -758,7 +758,7 @@ msgstr "ここにクリップを移動できません: 既存のクリップと�
 msgid "Cannot place Audio on a Video track"
 msgstr "ビデオトラックにオーディオを配置することはできません"
 
-#: src/components/ui/RenderOverlay.tsx:857
+#: src/components/ui/RenderOverlay.tsx:832
 msgid "Check Audio & Video"
 msgstr "オーディオとビデオを確認"
 
@@ -799,7 +799,7 @@ msgstr "クリア"
 msgid "Clear All Notifications"
 msgstr "すべての通知を消去"
 
-#: src/components/ui/RenderOverlay.tsx:1194
+#: src/components/ui/RenderOverlay.tsx:1169
 msgid "Clear generated audio and re-enter pronunciation"
 msgstr "生成された音声を消去し、発音を再入力する"
 
@@ -894,7 +894,7 @@ msgstr "勾配に応じてGPSルートを動的に色付けする"
 msgid "Color route lines by slope gradient"
 msgstr "勾配グラデーションでルート線を色付けする"
 
-#: src/components/ui/RenderOverlay.tsx:1289
+#: src/components/ui/RenderOverlay.tsx:1264
 msgid "Combining all route segments, narration voiceovers, and transitions into your completed master navigation video."
 msgstr "すべてのルートセグメント、ナレーション音声、トランジションを結合し、最終的なマスターナビ動画を生成しています"
 
@@ -1053,7 +1053,7 @@ msgstr "カスタムマーカー"
 msgid "Custom Text"
 msgstr "カスタムテキスト"
 
-#: src/components/ui/RenderOverlay.tsx:1379
+#: src/components/ui/RenderOverlay.tsx:1362
 msgid "Customize in Timeline"
 msgstr "タイムラインでカスタマイズ"
 
@@ -1161,7 +1161,7 @@ msgstr "直線"
 msgid "Directional Warp"
 msgstr "ディレクショナルワープ"
 
-#: src/components/ui/RenderOverlay.tsx:763
+#: src/components/ui/RenderOverlay.tsx:738
 msgid "Discard"
 msgstr "破棄"
 
@@ -1188,7 +1188,7 @@ msgstr "次のプロジェクトへの変更を保存しますか: "
 msgid "Don't Save"
 msgstr "保存しない"
 
-#: src/components/ui/RenderOverlay.tsx:1353
+#: src/components/ui/RenderOverlay.tsx:1336
 #: src/features/map/components/DrawBar.tsx:319
 #: src/features/map/components/MapArea.tsx:893
 #: src/features/map/components/Sidebar.tsx:267
@@ -1324,11 +1324,11 @@ msgstr "立ち寄り地点を編集"
 msgid "Edit the drawn path on the map"
 msgstr "地図上で描いた経路を編集"
 
-#: src/components/ui/RenderOverlay.tsx:749
+#: src/components/ui/RenderOverlay.tsx:724
 msgid "Edit the image, script, or route mode in the Waypoint Editor. Click Resume when ready to re-render"
 msgstr "ポイントエディタで画像、スクリプト、ルートモードを編集します。準備ができたら「再開」ボタンをクリックして再レンダリングしてください"
 
-#: src/components/ui/RenderOverlay.tsx:735
+#: src/components/ui/RenderOverlay.tsx:710
 msgid "Editing Waypoint on Map"
 msgstr "マップ上のポイントを編集しています"
 
@@ -1359,7 +1359,7 @@ msgstr "自動ダッキングを有効にする"
 msgid "End"
 msgstr "終了"
 
-#: src/components/ui/RenderOverlay.tsx:1235
+#: src/components/ui/RenderOverlay.tsx:1210
 msgid "Enter pronunciation reading in Hiragana/Katakana..."
 msgstr "ひらがな・カタカナで発音を入力..."
 
@@ -1379,7 +1379,7 @@ msgstr "消去"
 msgid "Erase points (E)"
 msgstr "点を消去 (E)"
 
-#: src/components/ui/RenderOverlay.tsx:1029
+#: src/components/ui/RenderOverlay.tsx:1004
 msgid "Error Details:"
 msgstr "エラー詳細:"
 
@@ -1425,7 +1425,7 @@ msgstr "終了"
 msgid "Expand"
 msgstr "展開"
 
-#: src/components/ui/RenderOverlay.tsx:742
+#: src/components/ui/RenderOverlay.tsx:717
 msgid "Expand Review"
 msgstr "レビューを展開"
 
@@ -1433,7 +1433,7 @@ msgstr "レビューを展開"
 msgid "Experimental"
 msgstr "実験的機能"
 
-#: src/components/ui/RenderOverlay.tsx:861
+#: src/components/ui/RenderOverlay.tsx:836
 #: src/features/timeline/components/elements/TimelineToolbar.tsx:352
 msgid "Export"
 msgstr "エクスポート"
@@ -1448,7 +1448,7 @@ msgid "Export automatically"
 msgstr "自動で書き出す"
 
 #. placeholder {0}: err?.message || err
-#: src/components/ui/RenderOverlay.tsx:633
+#: src/components/ui/RenderOverlay.tsx:607
 #: src/features/export/components/ExportModal.tsx:339
 msgid "Export failed: {0}"
 msgstr "エクスポートに失敗しました: {0}"
@@ -1478,7 +1478,7 @@ msgstr "動画をエクスポート"
 msgid "Exporting..."
 msgstr "エクスポート中..."
 
-#: src/components/ui/RenderOverlay.tsx:629
+#: src/components/ui/RenderOverlay.tsx:603
 msgid "exportSuccessToastMsg"
 msgstr "エクスポート処理が正常に完了しました！"
 
@@ -1507,7 +1507,7 @@ msgstr "黒へフェード"
 msgid "Fade Transitions"
 msgstr "フェードトランジション"
 
-#: src/components/ui/RenderOverlay.tsx:834
+#: src/components/ui/RenderOverlay.tsx:809
 msgid "Failed"
 msgstr "失敗"
 
@@ -1623,7 +1623,7 @@ msgstr "フェリー"
 msgid "File Path"
 msgstr "ファイルパス"
 
-#: src/components/ui/RenderOverlay.tsx:997
+#: src/components/ui/RenderOverlay.tsx:972
 msgid "Finalizing Project Timeline..."
 msgstr "プロジェクトのタイムラインを確定しています..."
 
@@ -1687,15 +1687,15 @@ msgstr "イントロ動画を生成"
 #~ msgid "Generates the map route only. Ignores all pop-up images and AI voice synthesis to save time."
 #~ msgstr "マップのルートのみを生成します。ポップアップ画像やAI音声合成は無視され、時間を節約できます"
 
-#: src/components/ui/RenderOverlay.tsx:962
+#: src/components/ui/RenderOverlay.tsx:937
 msgid "Generating Assets (Quick Export Mode)..."
 msgstr "アセットを生成中..."
 
-#: src/components/ui/RenderOverlay.tsx:963
+#: src/components/ui/RenderOverlay.tsx:938
 msgid "Generating Assets..."
 msgstr "アセットを生成中..."
 
-#: src/components/ui/RenderOverlay.tsx:991
+#: src/components/ui/RenderOverlay.tsx:966
 msgid "Generating Subtitles{prog}..."
 msgstr "字幕を生成中{prog}..."
 
@@ -1707,11 +1707,11 @@ msgstr "生成中..."
 msgid "Generation"
 msgstr "生成"
 
-#: src/components/ui/RenderOverlay.tsx:1025
+#: src/components/ui/RenderOverlay.tsx:1000
 msgid "Generation Failed"
 msgstr "生成に失敗しました"
 
-#: src/components/ui/RenderOverlay.tsx:728
+#: src/components/ui/RenderOverlay.tsx:703
 msgid "Generation On Hold"
 msgstr "生成を保留中"
 
@@ -1784,7 +1784,7 @@ msgstr "高品質"
 msgid "High-exposure film burn and fiery glow reveal"
 msgstr "高露出のフィルムバーンと炎のような発光による切り替え"
 
-#: src/components/ui/RenderOverlay.tsx:1052
+#: src/components/ui/RenderOverlay.tsx:1027
 msgid "High-Spec (Discrete GPU)"
 msgstr "ハイスペック (ディスクリートGPU)"
 
@@ -1818,7 +1818,7 @@ msgstr "履歴"
 msgid "Home"
 msgstr "ホーム"
 
-#: src/components/ui/RenderOverlay.tsx:1216
+#: src/components/ui/RenderOverlay.tsx:1191
 msgid "If Irodori TTS mispronounces words or lacks intonation, input the script reading in <0>Hiragana</0> or <1>Katakana</1> (e.g. ひらがな / カタカチE instead of Kanji. Kanji characters lack explicit pitch-accent information."
 msgstr "いろどりTTSが単語を誤発音したり、イントネーションが不自然な場合は、漢字の代わりに<0>ひらがな</0>や<1>カタカナ</1>でスクリプトの読み方を入力してください (例: ひらがな / カタカナ)。漢字には明確なアクセント情報がありません"
 
@@ -1861,7 +1861,7 @@ msgstr "イントランジション"
 msgid "Included"
 msgstr "含む"
 
-#: src/components/ui/RenderOverlay.tsx:978
+#: src/components/ui/RenderOverlay.tsx:953
 msgid "Initializing pipeline..."
 msgstr "パイプラインを初期化しています..."
 
@@ -1881,7 +1881,7 @@ msgstr "イントロ"
 msgid "Intro & outro"
 msgstr "イントロとアウトロ"
 
-#: src/components/ui/RenderOverlay.tsx:1210
+#: src/components/ui/RenderOverlay.tsx:1185
 msgid "Japanese Pronunciation & Intonation Guidance"
 msgstr "日本語の発音とイントネーションのガイダンス"
 
@@ -1955,11 +1955,11 @@ msgstr "左から右への直線的なディレクショナルワイプ"
 msgid "link-clips"
 msgstr "クリップをリンク"
 
-#: src/components/ui/RenderOverlay.tsx:1185
+#: src/components/ui/RenderOverlay.tsx:1160
 msgid "Listen"
 msgstr "再生"
 
-#: src/components/ui/RenderOverlay.tsx:1143
+#: src/components/ui/RenderOverlay.tsx:1118
 msgid "Listen to ensure Irodori TTS pronunciation is accurate"
 msgstr "Irodori TTSの発音が正確か再生して確認します"
 
@@ -1996,7 +1996,7 @@ msgstr "ログ表示"
 msgid "Lorem ipsum"
 msgstr "サンプルテキスト"
 
-#: src/components/ui/RenderOverlay.tsx:1053
+#: src/components/ui/RenderOverlay.tsx:1028
 msgid "Low-Spec (Integrated Graphics)"
 msgstr "ロースペック (統合グラフィックス)"
 
@@ -2004,7 +2004,7 @@ msgstr "ロースペック (統合グラフィックス)"
 msgid "Low-spec Mode"
 msgstr "ロースペックモード"
 
-#: src/components/ui/RenderOverlay.tsx:730
+#: src/components/ui/RenderOverlay.tsx:705
 msgid "Low-Spec Mode"
 msgstr "ロースペックモード"
 
@@ -2247,7 +2247,7 @@ msgstr "まだタイムラインマーカーがありません"
 msgid "No transitions found for \"{searchQuery}\""
 msgstr "\"{searchQuery}\"に一致するトランジションが見つかりません"
 
-#: src/components/ui/RenderOverlay.tsx:1152
+#: src/components/ui/RenderOverlay.tsx:1127
 msgid "No voiceover scripts were found in this generation."
 msgstr "今回の生成ではナレーションのスクリプトが見つかりませんでした"
 
@@ -2306,7 +2306,7 @@ msgstr "プロジェクトを開く"
 msgid "Open Project File..."
 msgstr "ファイルを開く..."
 
-#: src/components/ui/RenderOverlay.tsx:1332
+#: src/components/ui/RenderOverlay.tsx:1315
 msgid "Open Project Folder"
 msgstr "プロジェクトフォルダを開く"
 
@@ -2366,7 +2366,7 @@ msgstr "右へパン"
 msgid "Pan Up"
 msgstr "上へパン"
 
-#: src/components/ui/RenderOverlay.tsx:987
+#: src/components/ui/RenderOverlay.tsx:962
 msgid "Parsing Maps & GPS Data{prog}..."
 msgstr "マップとGPSデータを解析中{prog}..."
 
@@ -2419,7 +2419,7 @@ msgstr "ピクセル化"
 msgid "Play/Pause (Space)"
 msgstr "再生・一時停止 (Space)"
 
-#: src/components/ui/RenderOverlay.tsx:1184
+#: src/components/ui/RenderOverlay.tsx:1159
 msgid "Playing..."
 msgstr "再生中..."
 
@@ -2551,7 +2551,7 @@ msgstr "次のクリップを左からスムーズにスライドさせるプッ
 msgid "Quick export"
 msgstr "クイック書き出し"
 
-#: src/components/ui/RenderOverlay.tsx:810
+#: src/components/ui/RenderOverlay.tsx:785
 msgid "Quick Export"
 msgstr "クイックエクスポート"
 
@@ -2559,7 +2559,7 @@ msgstr "クイックエクスポート"
 #~ msgid "Quick Export (Auto-stitch & Export)"
 #~ msgstr "クイックエクスポート (自動結合して出力)"
 
-#: src/components/ui/RenderOverlay.tsx:1305
+#: src/components/ui/RenderOverlay.tsx:1280
 msgid "Quick Export Complete!"
 msgstr "クイックエクスポート完了しました"
 
@@ -2634,23 +2634,23 @@ msgstr "やり直す"
 msgid "Refresh asset library"
 msgstr "アセットライブラリを更新"
 
-#: src/components/ui/RenderOverlay.tsx:1120
+#: src/components/ui/RenderOverlay.tsx:1095
 msgid "Regenerate"
 msgstr "再生成"
 
-#: src/components/ui/RenderOverlay.tsx:1197
+#: src/components/ui/RenderOverlay.tsx:1172
 msgid "Regenerate Audio"
 msgstr "音声を再生成"
 
-#: src/components/ui/RenderOverlay.tsx:1117
+#: src/components/ui/RenderOverlay.tsx:1092
 msgid "Regenerate this specific residential leg"
 msgstr "この特定の区間を再生成"
 
-#: src/components/ui/RenderOverlay.tsx:1058
+#: src/components/ui/RenderOverlay.tsx:1033
 msgid "Regenerating a video leg will return to the Map Editor with the active layer opened to adjust images, script, or route mode"
 msgstr "ビデオ区間を再生成すると、マップエディタに戻り、アクティブなレイヤーが開かれた状態で画像、スクリプト、またはルートモードを調整できます"
 
-#: src/components/ui/RenderOverlay.tsx:1057
+#: src/components/ui/RenderOverlay.tsx:1032
 msgid "Regenerating a video leg will switch to the Timeline Editor for manual customization"
 msgstr "ビデオ区間を再生成すると、手動でカスタマイズできるようにタイムラインエディタに切り替わります"
 
@@ -2738,7 +2738,7 @@ msgid "Render Settings"
 msgstr "レンダリング設定"
 
 #. placeholder {0}: videoItems.length
-#: src/components/ui/RenderOverlay.tsx:1077
+#: src/components/ui/RenderOverlay.tsx:1052
 msgid "Rendered Videos ({0})"
 msgstr "レンダリングされた動画 ({0})"
 
@@ -2754,15 +2754,15 @@ msgstr "レンダリング中にエラーが発生しました"
 msgid "renderFinishSuccessMessage"
 msgstr "アセットの生成が正常に完了しました"
 
-#: src/components/ui/RenderOverlay.tsx:850
+#: src/components/ui/RenderOverlay.tsx:825
 msgid "Rendering & Synthesis"
 msgstr "レンダリングと音声合成"
 
-#: src/components/ui/RenderOverlay.tsx:993
+#: src/components/ui/RenderOverlay.tsx:968
 msgid "Rendering Media & Animations{prog}..."
 msgstr "メディアとアニメーションをレンダリング中..."
 
-#: src/components/ui/RenderOverlay.tsx:995
+#: src/components/ui/RenderOverlay.tsx:970
 msgid "Rendering Route Video{prog}..."
 msgstr "ルート動画をレンダリング中{prog}..."
 
@@ -2820,7 +2820,7 @@ msgstr "復元"
 msgid "Restore version"
 msgstr "バージョンを復元"
 
-#: src/components/ui/RenderOverlay.tsx:776
+#: src/components/ui/RenderOverlay.tsx:751
 #: src/features/map/components/Sidebar.tsx:288
 msgid "Resume Generation"
 msgstr "生成を再開"
@@ -2829,7 +2829,7 @@ msgstr "生成を再開"
 msgid "Retrace previous path"
 msgstr "前の経路を逆にたどる"
 
-#: src/components/ui/RenderOverlay.tsx:1410
+#: src/components/ui/RenderOverlay.tsx:1393
 msgid "Retry"
 msgstr "再試行"
 
@@ -2841,8 +2841,8 @@ msgstr "再試行"
 msgid "Reveal in File Explorer"
 msgstr "エクスプローラーで表示"
 
-#: src/components/ui/RenderOverlay.tsx:769
-#: src/components/ui/RenderOverlay.tsx:854
+#: src/components/ui/RenderOverlay.tsx:744
+#: src/components/ui/RenderOverlay.tsx:829
 msgid "Review Assets"
 msgstr "アセットを確認"
 
@@ -2982,8 +2982,8 @@ msgid "Saved with the project"
 msgstr "プロジェクトに保存されます"
 
 #: src/components/ui/RenderOverlay.tsx:575
-msgid "saveTimelineProjectNameDefault"
-msgstr "プロジェクト"
+#~ msgid "saveTimelineProjectNameDefault"
+#~ msgstr "プロジェクト"
 
 #: src/features/timeline/components/elements/inspector/InspectorTransformPanel.tsx:40
 msgid "Scale"
@@ -3067,11 +3067,11 @@ msgstr "ナレーション合成に使用するモデルを選択します。ダ
 msgid "Selection Tool (V)"
 msgstr "選択ツール (V)"
 
-#: src/components/ui/RenderOverlay.tsx:699
+#: src/components/ui/RenderOverlay.tsx:674
 msgid "Sending cancellation signal to backend..."
 msgstr "バックエンドにキャンセル信号を送信しています..."
 
-#: src/components/ui/RenderOverlay.tsx:1016
+#: src/components/ui/RenderOverlay.tsx:991
 msgid "Sending interrupt signal to renderer."
 msgstr "レンダラーに中断信号を送信しています"
 
@@ -3131,6 +3131,10 @@ msgstr "点の一覧を表示"
 #: src/components/ui/ContextMenu.tsx:526
 msgid "Show Track"
 msgstr "トラックを表示"
+
+#: src/components/ui/RenderOverlay.tsx:1307
+msgid "Show Video"
+msgstr "動画を表示"
 
 #: src/components/ui/NewProject.tsx:395
 msgid "Shows the title and subtitle at the start of the video"
@@ -3252,7 +3256,7 @@ msgstr "出発地点"
 msgid "Stitch the clips and export when done, without pausing to review."
 msgstr "完了後、確認で止まらずにクリップを結合して書き出します。"
 
-#: src/components/ui/RenderOverlay.tsx:1286
+#: src/components/ui/RenderOverlay.tsx:1261
 msgid "Stitching Videos & Finalizing Export..."
 msgstr "動画を結合し、エクスポートを確定しています．．．"
 
@@ -3343,19 +3347,19 @@ msgstr "ドキュメントの処理に成功しました。以下が提案され
 msgid "Synchronize historical weather conditions from photo EXIF dates using Open-Meteo to dynamically apply atmospheric fog and rain effects"
 msgstr "写真のEXIFの日付から過去の気象条件をOpen-Meteoを使って同期し、大気の霧や雨の効果を動的に適用します"
 
-#: src/components/ui/RenderOverlay.tsx:1261
+#: src/components/ui/RenderOverlay.tsx:1236
 msgid "Synthesize Audio Now"
 msgstr "今すぐ音声を合成"
 
-#: src/components/ui/RenderOverlay.tsx:989
+#: src/components/ui/RenderOverlay.tsx:964
 msgid "Synthesizing AI Voiceovers{prog}..."
 msgstr "AI音声を合成しています{prog}..."
 
-#: src/components/ui/RenderOverlay.tsx:1256
+#: src/components/ui/RenderOverlay.tsx:1231
 msgid "Synthesizing..."
 msgstr "合成中..."
 
-#: src/components/ui/RenderOverlay.tsx:1050
+#: src/components/ui/RenderOverlay.tsx:1025
 msgid "System Capability Check:"
 msgstr "システム性能チェック:"
 
@@ -3627,7 +3631,7 @@ msgstr "書き出し時の初期設定になります"
 msgid "Uses photo locations"
 msgstr "写真の撮影場所から地点を使用する"
 
-#: src/components/ui/RenderOverlay.tsx:1081
+#: src/components/ui/RenderOverlay.tsx:1056
 msgid "Verify that video visuals are factually correct"
 msgstr "ビデオの映像が事実と一致していることを確認します"
 
@@ -3673,7 +3677,7 @@ msgstr "ビデオ1"
 msgid "Video 2"
 msgstr "ビデオ2"
 
-#: src/components/ui/RenderOverlay.tsx:1306
+#: src/components/ui/RenderOverlay.tsx:1281
 msgid "Video Exported Successfully!"
 msgstr "動画のエクスポートに成功しました"
 
@@ -3685,7 +3689,7 @@ msgstr "動画の形式"
 msgid "video-clip"
 msgstr "ビデオクリップ"
 
-#: src/components/ui/RenderOverlay.tsx:1346
+#: src/components/ui/RenderOverlay.tsx:1329
 msgid "View in Timeline"
 msgstr "タイムラインで表示"
 

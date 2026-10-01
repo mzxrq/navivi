@@ -643,8 +643,16 @@ export function compileTimelineManifest(
     .filter((c) => c.trackId !== audioTrack?.id)
     .sort((a, b) => a.startTime - b.startTime);
 
+  const voiceClips = timeline.clips.filter(
+    (c) => c.type === "audio" && (c.trackId === audioTrack?.id || c.audioRole === "voice"),
+  );
+
   for (const clip of visualClips) {
     const track = timeline.tracks.find((t) => t.id === clip.trackId);
+    // The pipeline keeps narration as its own clip starting with its video; the exporter reads it from audio_path.
+    const voice = voiceClips.find(
+      (c) => c.source && Math.abs(c.startTime - clip.startTime) < 0.05,
+    );
     videoTracks.push({
       clip_id: clip.id,
       file_path: toRel(clip.source),
@@ -652,6 +660,7 @@ export function compileTimelineManifest(
       type: track?.name.toLowerCase().includes("popup")
         ? "static_popup"
         : "video",
+      audio_path: voice?.source ? toRel(voice.source) : undefined,
     });
   }
   // calculate total duration (end of last clip)
