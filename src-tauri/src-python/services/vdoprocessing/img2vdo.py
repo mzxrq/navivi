@@ -7,6 +7,7 @@ via VideoEditor, and audio synchronization.
 ----------------------------------------------------------------------------
 """
 
+import hashlib
 import math
 import os
 import json
@@ -105,6 +106,44 @@ class AttractionVideoGenerator:
         pending_dir = self.output_dir / self._PENDING_SUBDIR
         pending_dir.mkdir(parents=True, exist_ok=True)
         return pending_dir / f"{Path(output_filename).stem}.json"
+
+    # Which photo clips (by _clip_key) a deliverable was built from, so an
+    # added/changed photo or preset rebuilds it. Older records hold "pans".
+    _INPUTS_SUBDIR: Final[str] = "_inputs"
+
+    def _inputs_path(self, output_filename: str) -> Path:
+        return self.output_dir / self._INPUTS_SUBDIR / f"{Path(output_filename).stem}.json"
+
+    def _read_inputs(self, output_filename: str) -> dict:
+        try:
+            with open(self._inputs_path(output_filename), "r", encoding="utf-8") as f:
+                data = json.load(f)
+            return data if isinstance(data, dict) else {}
+        except (OSError, json.JSONDecodeError):
+            return {}
+
+    def _write_inputs(
+        self, output_filename: str, keys: List[str], pans: List[str],
+        requested: Optional[dict] = None,
+    ) -> None:
+        """`requested`: seconds each photo clip (by key) was generated for."""
+        path = self._inputs_path(output_filename)
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump({"keys": keys, "pans": pans, "requested": requested or {}}, f)
+        except OSError as exc:
+            logger.warning("Could not record clip inputs for %s: %s", output_filename, exc)
+
+    @staticmethod
+    def _clip_key(image_path: str, pan: str) -> str:
+        """Identifies one photo's raw clip by the photo's content and preset."""
+        digest = hashlib.sha1()
+        with open(image_path, "rb") as f:
+            for chunk in iter(lambda: f.read(1 << 20), b""):
+                digest.update(chunk)
+        digest.update(b"|" + pan.encode("utf-8"))
+        return digest.hexdigest()[:12]
 
     # [NOTE] [IO] Called at the start of a fresh generate for a waypoint (the
     # user re-running it). Removes anything a previous run left behind for
@@ -362,20 +401,17 @@ class AttractionVideoGenerator:
         trim_to, hold_to = self._resolve_duration_fit(
             video_path, target_audio_duration, overshoot_tolerance, generation_cap
         )
-        # A moving preset used to keep moving via slow_move.py's push-in/
-        # drift over the clip's last frame instead of freezing - now unused
-        # by default (tuning.ATTRACTION_CHAIN_TO_FULL_LENGTH): with
-        # COMFYUI_EXTEND_MAX_SEGMENTS uncapped, generate_clip already chains
-        # Wan segments all the way to target_audio_duration, so there's
-        # normally no gap left to fill here at all. Any small gap left (or
-        # the switch turned off) falls through to the plain last-frame hold
-        # in _resolve_duration_fit above.
+        # A moving preset whose Wan clip falls short (the segment cap) keeps
+        # moving via slow_move.py instead of freezing; see _fill_with_slow_move.
+        from services.tts.ttsengine import FFmpegManager
         from services.vdoprocessing.slow_move import extend_with_slow_move, is_moving_preset
 
         moved_path = self.output_dir / f"moved_{Path(output_filename).stem}.mp4"
         if (
-            trim_to is None and target_audio_duration > 0 and is_moving_preset(camera_pan)
-            and not tuning.ATTRACTION_CHAIN_TO_FULL_LENGTH
+            hold_to is not None and target_audio_duration > 0 and is_moving_preset(camera_pan)
+            and self._fill_with_slow_move(
+                target_audio_duration - FFmpegManager.get_media_duration(video_path)
+            )
         ):
             moved = extend_with_slow_move(
                 video_path, target_audio_duration, camera_pan, str(moved_path),
@@ -576,6 +612,17 @@ class AttractionVideoGenerator:
         logger.info(f"Waypoint video deliverable complete (finalized): {final_output}")
         return final_output
 
+    @staticmethod
+    def _fill_with_slow_move(gap: float) -> bool:
+        """Whether a moving clip `gap` seconds short of its narration gets
+        slow_move's tail rather than a last-frame hold: only a real shortfall
+        (over 1s), and only when the Wan chain may stop short (capped, or
+        chain-to-full-length off)."""
+        return gap > 1.0 and (
+            not tuning.ATTRACTION_CHAIN_TO_FULL_LENGTH
+            or tuning.COMFYUI_EXTEND_MAX_SEGMENTS is not None
+        )
+
     def _fit_clip_to_share(
         self, clip_path: str, share: float, camera_pan, out_path: Path,
     ) -> str:
@@ -591,7 +638,7 @@ class AttractionVideoGenerator:
             return clip_path
         if duration > share:
             return self.editor.trim_video_duration(clip_path, share, str(out_path))
-        if is_moving_preset(camera_pan) and not tuning.ATTRACTION_CHAIN_TO_FULL_LENGTH:
+        if is_moving_preset(camera_pan) and self._fill_with_slow_move(share - duration):
             moved = extend_with_slow_move(clip_path, share, camera_pan, str(out_path))
             if moved:
                 return moved
@@ -671,12 +718,7 @@ class AttractionVideoGenerator:
             for path in temps:
                 Path(path).unlink(missing_ok=True)
 
-        for clip in clips:
-            if os.path.exists(clip) and clip != final_output:
-                try:
-                    os.remove(clip)
-                except OSError:
-                    pass
+        # Raw photo clips are kept: a later run reuses unchanged photos.
         self._pending_manifest_path(output_filename).unlink(missing_ok=True)
         logger.info(f"Waypoint video deliverable complete: {final_output}")
         return final_output
@@ -710,10 +752,11 @@ class AttractionVideoGenerator:
         - If a pending manifest already exists and every clip it lists is
           still present, leaves it alone (still awaiting finalize) instead
           of regenerating.
-        - Otherwise, each per-image raw clip is generated to a deterministic
-          filename (raw_<output stem>_<index>.mp4) and reused if it already
-          exists — so a run interrupted partway through a multi-image
-          waypoint only regenerates the images it hadn't finished yet.
+        - The deliverable is rebuilt when its photos or presets change.
+        - Each photo's raw clip is kept as raw_<output stem>_<_clip_key>.mp4
+          (photo content + preset) and reused while it's long enough for its
+          share — adding a photo only generates the new one; the others are
+          trimmed to their new share.
         """
         if not popup_image_entry:
             logger.warning("No popup image provided for waypoint.")
@@ -733,36 +776,55 @@ class AttractionVideoGenerator:
         if not image_list:
             return None
 
-        final_path = self.output_dir / output_filename
-        if not force and output_is_valid(final_path):
-            logger.info(
-                "Waypoint deliverable already exists — skipping generation: %s",
-                final_path,
-            )
-            return str(final_path)
-
-        # Regenerating this waypoint — clear out whatever a previous run
-        # left behind (old deliverable, old pending manifest + its clips)
-        # before doing any fresh work. Deterministic per-image raw clips
-        # (raw_<stem>_<idx>.mp4) are deliberately left alone here so the
-        # per-image loop below can still reuse ones from an interrupted
-        # run — force=True sweeps them up separately.
-        self._clear_stale_outputs(output_filename)
-        if force:
-            stem = Path(output_filename).stem
-            for stale_raw in self.output_dir.glob(f"raw_{stem}_*.mp4"):
-                try:
-                    stale_raw.unlink()
-                except OSError:
-                    pass
-
-        # --- Check list vs string for prompts ---
         if isinstance(prompt_text, str):
             prompt_list = [prompt_text]
         elif isinstance(prompt_text, list):
             prompt_list = prompt_text
         else:
             prompt_list = [""]
+
+        from services.vdoprocessing.camera_pan import normalize_camera_pan
+
+        pans = [
+            normalize_camera_pan(prompt_list[min(i, len(prompt_list) - 1)] if prompt_list else "")
+            for i in range(len(image_list))
+        ]
+        keys = [self._clip_key(img, pan) for img, pan in zip(image_list, pans)]
+        recorded = self._read_inputs(output_filename)
+        if "keys" in recorded:
+            inputs_changed = recorded["keys"] != keys
+        elif "pans" in recorded:
+            inputs_changed = recorded["pans"] != pans
+        else:
+            inputs_changed = False  # made before this check: keep it, adopt current inputs
+        if inputs_changed:
+            logger.info(
+                "Photos or camera presets changed for %s — rebuilding it "
+                "(unchanged photos reuse their clips).", output_filename,
+            )
+
+        final_path = self.output_dir / output_filename
+        if not force and not inputs_changed and output_is_valid(final_path):
+            if "keys" not in recorded:
+                self._write_inputs(output_filename, keys, pans)
+            logger.info(
+                "Waypoint deliverable already exists — skipping generation: %s",
+                final_path,
+            )
+            return str(final_path)
+
+        # Rebuilding: drop the old deliverable/pending manifest. Raw photo
+        # clips stay for reuse, unless force=True.
+        self._clear_stale_outputs(output_filename)
+        stem = Path(output_filename).stem
+        if force:
+            for stale_raw in self.output_dir.glob(f"raw_{stem}_*.mp4"):
+                try:
+                    stale_raw.unlink()
+                except OSError:
+                    pass
+        else:
+            self._migrate_index_named_raws(stem, keys, pans, recorded.get("pans"))
 
         logger.info(f"Processing waypoint with {len(image_list)} image(s)...")
 
@@ -781,9 +843,10 @@ class AttractionVideoGenerator:
         )
         per_clip_duration = min(per_clip_duration, self._MAX_EXTENDED_CLIP_SECONDS)
 
-        stem = Path(output_filename).stem
         generated_clips = []
         clip_presets = []
+        built_keys = []
+        requested_by_key = dict(recorded.get("requested") or {})
         for idx, img_path in enumerate(image_list):
             # Match image index to prompt index (fallback to the last prompt if we run out)
             current_prompt = (
@@ -792,16 +855,20 @@ class AttractionVideoGenerator:
                 else (prompt_list[-1] if prompt_list else "")
             )
 
-            raw_clip_path = self.output_dir / f"raw_{stem}_{idx:02d}.mp4"
-            if not force and output_is_valid(raw_clip_path):
+            raw_clip_path = self.output_dir / f"raw_{stem}_{keys[idx]}.mp4"
+            if not force and self._raw_clip_covers(
+                raw_clip_path, requested_by_key.get(keys[idx]), per_clip_duration
+            ):
                 logger.info(
                     "   -> Image %d/%d already rendered — reusing %s",
                     idx + 1, len(image_list), raw_clip_path,
                 )
                 generated_clips.append(str(raw_clip_path))
                 clip_presets.append(current_prompt)
+                built_keys.append(keys[idx])
                 continue
 
+            raw_clip_path.unlink(missing_ok=True)
             logger.info(
                 f"   -> Rendering image {idx + 1}/{len(image_list)}: {img_path} with prompt: '{current_prompt}'"
             )
@@ -811,6 +878,8 @@ class AttractionVideoGenerator:
             if clip:
                 generated_clips.append(clip)
                 clip_presets.append(current_prompt)
+                built_keys.append(keys[idx])
+                requested_by_key[keys[idx]] = per_clip_duration
 
         if not generated_clips:
             logger.error("Failed to generate any video clips.")
@@ -822,27 +891,74 @@ class AttractionVideoGenerator:
         # in the app ever triggers, so these waypoints had no attraction
         # video at all.)
         if len(generated_clips) > 1:
-            return self._combine_clips(
+            final_output = self._combine_clips(
                 generated_clips, clip_presets, target_audio_duration, output_filename, place_label,
             )
+        else:
+            # 3. Single image: fit duration, place at output_filename, upscale.
+            # Narration audio is NOT muxed in here — see docstring.
+            final_output = self._fit_and_finalize(
+                generated_clips[0],
+                target_audio_duration,
+                output_filename,
+                overshoot_tolerance=self._AUDIO_DURATION_TOLERANCE_SECONDS,
+                place_label=place_label,
+                camera_pan=clip_presets[0],
+            )
+            logger.info(f"Waypoint video deliverable complete: {final_output}")
 
-        # 3. Single image: fit duration, place at output_filename, upscale.
-        # Narration audio is NOT muxed in here — see docstring.
-        final_output = self._fit_and_finalize(
-            generated_clips[0],
-            target_audio_duration,
-            output_filename,
-            overshoot_tolerance=self._AUDIO_DURATION_TOLERANCE_SECONDS,
-            place_label=place_label,
-            camera_pan=prompt_list[0] if prompt_list else None,
-        )
-
-        # Cleanup intermediate raw clip
-        if os.path.exists(generated_clips[0]) and generated_clips[0] != final_output:
-            try:
-                os.remove(generated_clips[0])
-            except OSError:
-                pass
-
-        logger.info(f"Waypoint video deliverable complete: {final_output}")
+        if final_output:
+            # Only the photos that made it in: a failed photo is retried next run.
+            self._write_inputs(
+                output_filename, built_keys, pans,
+                {k: requested_by_key[k] for k in built_keys if k in requested_by_key},
+            )
+            self._remove_orphan_raws(stem, keys)
         return final_output
+
+    @staticmethod
+    def _raw_clip_covers(raw_path: Path, requested: Optional[float], needed: float) -> bool:
+        """A kept photo clip is reusable if it was generated for at least its
+        current share (made for a shorter one, Wan would stop moving early).
+        Unknown request length (older clips): reuse."""
+        if not output_is_valid(raw_path):
+            return False
+        if requested is not None and requested < needed - 0.1:
+            logger.info(
+                "   -> %s was made for %.1fs, its share is now %.1fs — regenerating.",
+                raw_path.name, requested, needed,
+            )
+            return False
+        return True
+
+    def _migrate_index_named_raws(
+        self, stem: str, keys: List[str], pans: List[str], recorded_pans: Optional[List[str]],
+    ) -> None:
+        """Renames raw_<stem>_<idx>.mp4 clips from before content keys, when
+        the recorded presets show they were made for the same photos."""
+        if not recorded_pans or len(recorded_pans) != len(pans):
+            return
+        for idx, key in enumerate(keys):
+            old = self.output_dir / f"raw_{stem}_{idx:02d}.mp4"
+            new = self.output_dir / f"raw_{stem}_{key}.mp4"
+            if not old.exists() or new.exists() or recorded_pans[idx] != pans[idx]:
+                continue
+            try:
+                old.replace(new)
+                leftover = old.with_suffix(".colormatch.mp4")
+                if leftover.exists():
+                    leftover.replace(new.with_suffix(".colormatch.mp4"))
+                logger.info("Kept earlier clip %s as %s.", old.name, new.name)
+            except OSError as exc:
+                logger.warning("Could not rename %s: %s", old.name, exc)
+
+    def _remove_orphan_raws(self, stem: str, keys: List[str]) -> None:
+        """Deletes kept photo clips no current photo/preset uses."""
+        import re
+
+        wanted = set(keys)
+        pattern = re.compile(re.escape(f"raw_{stem}_") + r"([0-9a-f]{12}|\d{2})(\.colormatch)?")
+        for raw in self.output_dir.glob("raw_*.mp4"):
+            m = pattern.fullmatch(raw.stem)
+            if m and m.group(1) not in wanted:
+                raw.unlink(missing_ok=True)

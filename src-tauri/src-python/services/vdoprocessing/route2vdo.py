@@ -21,6 +21,7 @@ from services.logger.progress import tracker
 from services import tuning
 from services.vdoprocessing.spatial_renderer import SpatialRenderer
 from services.vdoprocessing.pydeckrecorder import record_headless_video
+from services.vdoprocessing.route_inputs import photo_inputs_hash
 
 # Logging configuration
 logger = setup_logger("RouteAnimator")
@@ -52,7 +53,7 @@ LEG_RENDER_VERSION = 3
 # A leg is reused unless its waypoints' route inputs (see route_inputs.py) or
 # the render version changed, or its files are missing. Not "latlon": the app
 # can save a different line for the same waypoints.
-_LEG_CHECKPOINT_PARTS = ("route_inputs", "render_version")
+_LEG_CHECKPOINT_PARTS = ("route_inputs", "render_version", "photos")
 
 
 def _leg_fingerprint(leg_latlon, dest_label, leg_kwargs: Dict[str, Any]) -> str:
@@ -92,6 +93,7 @@ def _leg_fingerprint_parts(
     if route_inputs:
         parts["route_inputs"] = route_inputs
     parts.update({f"kw.{k}": h(v) for k, v in leg_kwargs.items()})
+    parts["photos"] = photo_inputs_hash(leg_kwargs)
     return parts
 
 

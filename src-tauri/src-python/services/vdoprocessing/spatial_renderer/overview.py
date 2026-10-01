@@ -16,7 +16,7 @@ import numpy as np
 
 from services import tuning
 from services.mapfetcher.mapgeometry import RouteGeometryProcessor
-from services.vdoprocessing.route_inputs import route_inputs_hash
+from services.vdoprocessing.route_inputs import photo_inputs_hash, route_inputs_hash
 from services.vdoprocessing.vdoexporter import VideoExporter
 
 from .base import logger
@@ -53,7 +53,7 @@ def _output_is_valid(path, min_bytes: int = 1024) -> bool:
 OVERVIEW_RENDER_VERSION = 3  # v3: connected stop-bys stop; ending photo goes fullscreen after the voice
 # The overview is reused unless one of these changed (or the file is missing).
 # route_waypoints, not the drawn line: see services/vdoprocessing/route_inputs.py.
-_OVERVIEW_CHECKPOINT_PARTS = ("render_version", "route_waypoints")
+_OVERVIEW_CHECKPOINT_PARTS = ("render_version", "route_waypoints", "photos")
 # Config flags about the checkpoint itself, not the picture.
 _FINGERPRINT_SKIP_CONFIG = {"checkpoint_enabled", "overview_rerender"}
 # Waypoint fields only the walking legs/audio use; the overview never reads them.
@@ -83,6 +83,7 @@ def _overview_fingerprint_parts(config: Dict, job_config: Optional[Dict], bg_pat
         parts["background_image"] = "missing"
     for key, value in render_args.items():
         parts[f"arg.{key}"] = _fingerprint_hash(value)[:16]
+    parts["photos"] = photo_inputs_hash(render_args.get("popups"))
     for key, value in (config or {}).items():
         if key not in _FINGERPRINT_SKIP_CONFIG:
             parts[f"config.{key}"] = _fingerprint_hash(value)[:16]

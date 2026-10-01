@@ -27,7 +27,12 @@ class TestResolveSegments:
         assert count == 2
         assert length == tuning.COMFYUI_MAX_FRAMES
 
-    def test_uncapped_by_default_chains_the_whole_narration(self, monkeypatch):
+    def test_default_caps_a_photo_at_five_segments(self):
+        count, length = client_mod._resolve_segments(30.0)
+        assert count == 5
+        assert length == tuning.COMFYUI_MAX_FRAMES
+
+    def test_uncapped_chains_the_whole_narration(self, monkeypatch):
         monkeypatch.setattr(tuning, "COMFYUI_EXTEND_MAX_SEGMENTS", None)
         count, length = client_mod._resolve_segments(SEGMENT_SEC * 6.2)
         assert count == 7  # ceil(6.2), no ceiling applied

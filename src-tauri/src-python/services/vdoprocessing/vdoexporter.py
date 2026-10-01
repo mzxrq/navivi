@@ -180,7 +180,7 @@ class VideoExporter:
 
         cmd = [
             ffmpeg_cmd,
-            "-y", *tuning.ffmpeg_log_args(),
+            "-y", *tuning.ffmpeg_pipe_log_args(),
             "-f",
             "rawvideo",
             "-vcodec",

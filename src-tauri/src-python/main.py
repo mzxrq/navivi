@@ -49,7 +49,7 @@ if __name__ == "__main__":
             "Usage: python main.py <path/to/job_config.json> "
             "[gps|map|overview|residential|tts|tts-all|overview-tts|attraction-tts|attraction-tts-all|"
             "attraction|attraction-all|attraction-finalize|intro|outro|subtitle|subtitle-all|concat|mux|"
-            "transition|all|overview-script] [index] [--force] [--no-llm]\n"
+            "transition|all|overview-script|upscale-images] [index] [--force] [--no-llm]\n"
             "       (output dir is always <job_config's directory_path>/video)\n"
             "       (--force bypasses checkpointing and regenerates everything)\n"
             "       python main.py full_pipeline <path/to/job_config.json> [output_dir] [--force]\n"
@@ -144,6 +144,16 @@ if __name__ == "__main__":
             if mode_arg == "gps":
                 # [NOTE] [GPS] Step 1 only: parses raw_track.gpx into a cleaned route + summary, no media generated.
                 result = test_gps(job_config_arg)
+            elif mode_arg == "upscale-images":
+                # Only the photo-upscale stage (ESRGAN in ComfyUI, GPU).
+                from services.vdoprocessing.videopipeline.upscale_step import upscale_waypoint_images
+                from services.vdoprocessing.comfyui_i2v_client import ComfyUII2VClient
+
+                try:
+                    result = upscale_waypoint_images(job_config_arg, force=force_arg)
+                finally:
+                    ComfyUII2VClient.stop_server()
+                _tracker.clear()
             elif mode_arg == "map":
                 # [NOTE] [Map] Fetches only the overview's background map image (same bbox/padding/crop as the real render, no video) - a seconds-long way to check framing. Optional argv[3] is the output png path.
                 result = test_overview_map(job_config_arg, sys.argv[3] if len(sys.argv) > 3 else None)

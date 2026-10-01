@@ -9,6 +9,7 @@ import pandas as pd
 import pydeck as pdk
 from scipy.interpolate import interp1d
 
+from services.config.upscaled_images import apply_upscaled_images
 from services.mapfetcher.maplanguage import current_map_language, style_localizer_script
 
 from .common import MAPBOX_API_KEY, logger
@@ -17,6 +18,7 @@ from .common import MAPBOX_API_KEY, logger
 def load_route_from_config(config_path: str):
     with open(config_path, "r", encoding="utf-8") as f:
         data = json.load(f)
+    apply_upscaled_images(data, Path(config_path).parent)
 
     from services.projectfiles import ROUTE_CACHE, meta_file
 

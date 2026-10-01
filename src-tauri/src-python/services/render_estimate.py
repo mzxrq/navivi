@@ -16,7 +16,8 @@ import time
 from pathlib import Path
 from typing import Callable, Optional
 
-STAGES = ("gps", "tts", "subtitles", "attraction", "route", "burn", "intro")
+# Same order as pipeline.py's tracker.stage() calls: StageRecorder maps by position.
+STAGES = ("gps", "tts", "subtitles", "upscale", "attraction", "route", "burn", "intro")
 HISTORY_KEEP = 6
 HISTORY_MIN_SAMPLES = 2
 
@@ -25,6 +26,7 @@ _DEFAULT_COST = {
     "gps": 2.0,
     "tts": 0.12,
     "subtitles": 0.01,
+    "upscale": 6.0,
     "attraction": 90.0,
     "route": 1.6,
     "burn": 0.5,
@@ -32,6 +34,34 @@ _DEFAULT_COST = {
 }
 _PAN_ATTRACTION_COST = 6.0
 _FIXED_UNITS = ("gps", "intro")
+
+
+def _small_photos(config: dict) -> int:
+    """Waypoint photos the upscale stage would process."""
+    from PIL import Image
+
+    from services import tuning
+    from services.config.upscaled_images import IMAGE_KEYS, upscale_enabled
+
+    if not upscale_enabled(config.get("settings", {}) or {}):
+        return 0
+    anchor = Path(config.get("directory_path") or ".")
+    seen, count = set(), 0
+    for wp in config.get("waypoints", []) or []:
+        for key in IMAGE_KEYS:
+            value = wp.get(key) if isinstance(wp, dict) else None
+            for p in value if isinstance(value, list) else [value]:
+                if not isinstance(p, str) or not p or p in seen or p.lower().endswith(".svg"):
+                    continue
+                seen.add(p)
+                path = Path(p) if Path(p).is_absolute() else anchor / p
+                try:
+                    with Image.open(path) as im:
+                        w, h = im.size
+                except (OSError, ValueError):
+                    continue
+                count += w < tuning.IMAGE_UPSCALE_MIN_W or h < tuning.IMAGE_UPSCALE_MIN_H
+    return count
 
 
 def history_path() -> Path:
@@ -103,6 +133,7 @@ def workload(config: dict) -> dict:
         "gps": 1,
         "tts": chars,
         "subtitles": 0 if fast else chars,
+        "upscale": _small_photos(config),
         "attraction": clips,
         "route": round(leg_seconds, 1),
         "burn": round(leg_seconds, 1) if (not fast and settings.get("burn_subtitles", False)) else 0,

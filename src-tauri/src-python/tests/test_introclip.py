@@ -110,7 +110,8 @@ class TestWriteTitleAss:
     def test_subtitle_goes_on_a_smaller_second_line(self, tmp_path):
         ass_path = introclip._write_title_ass("Trip", "{x}Day 1", 5.0, tmp_path)
         dialogue_line = [l for l in ass_path.read_text(encoding="utf-8").splitlines() if l.startswith("Dialogue:")][0]
-        assert dialogue_line.endswith(r"Trip\N{\fs" + str(int(introclip.tuning.INTRO_TITLE_FONT_SIZE * 0.6)) + "}xDay 1")
+        assert r"Trip\N{\fs" + str(introclip.tuning.INTRO_SUBTITLE_FONT_SIZE) + "\\" in dialogue_line
+        assert dialogue_line.endswith("}xDay 1")
 
 
 class TestPickRandomImages:
