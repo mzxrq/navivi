@@ -136,6 +136,7 @@ export function MapArea() {
   const handleMapLoad = () => {
     const map = mapRef.current?.getMap();
     if (!map) return;
+    map.resize();
     setIsMapLoaded(true);
 
     const canvas = map.getCanvas();
@@ -248,11 +249,21 @@ export function MapArea() {
     }
   }, [i18n.locale, selectedStyle, mapRef.current]);
 
+  // The canvas is sized once when created (and a reused map keeps its old size); follow the container instead.
+  const mapBoxRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const timer = setTimeout(() => {
-      mapRef.current?.resize();
-    }, 150);
-    return () => clearTimeout(timer);
+    const el = mapBoxRef.current;
+    if (!el) return;
+    let frame = 0;
+    const observer = new ResizeObserver(() => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => mapRef.current?.resize());
+    });
+    observer.observe(el);
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
   }, []);
 
   const handleMapClick = (e: any) => {
@@ -904,7 +915,7 @@ export function MapArea() {
       </div>
 
       {/* MAPBOX CANVAS */}
-      <div className="absolute inset-0 z-0">
+      <div ref={mapBoxRef} className="absolute inset-0 z-0">
         <Map
           reuseMaps={true}
           ref={mapRef}
@@ -989,12 +1000,12 @@ export function MapArea() {
                   style={isSelected ? { zIndex: 5 } : undefined}
                 >
                   <div
-                    className={`flex flex-col items-center group cursor-pointer transition-transform ${isSelected ? "-translate-y-1" : "hover:-translate-y-1"}`}
+                    className={`relative flex flex-col items-center group cursor-pointer transition-transform ${isSelected ? "-translate-y-1" : "hover:-translate-y-1"}`}
                     onClick={(e) => handlePinClick(e, wp.id)}
                     onContextMenu={(e) => handleMarkerContextMenu(e, wp.id)}
                   >
                     <div
-                      className={`pointer-events-none bg-zinc-900 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-lg border border-white/20 mb-1 transition-opacity whitespace-nowrap ${isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
+                      className={`pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 z-10 bg-zinc-900 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-lg border border-white/20 mb-1 transition-opacity whitespace-nowrap ${isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
                     >
                       {wp.name || t`Waypoint`}
                     </div>
@@ -1049,12 +1060,12 @@ export function MapArea() {
                 style={isSelected ? { zIndex: 5 } : undefined}
               >
                 <div
-                  className={`flex flex-col items-center group cursor-grab active:cursor-grabbing transition-transform ${isSelected ? "-translate-y-1" : "hover:-translate-y-1"}`}
+                  className={`relative flex flex-col items-center group cursor-grab active:cursor-grabbing transition-transform ${isSelected ? "-translate-y-1" : "hover:-translate-y-1"}`}
                   onClick={(e) => handlePinClick(e, wp.id)}
                   onContextMenu={(e) => handleMarkerContextMenu(e, wp.id)}
                 >
                   <div
-                    className={`pointer-events-none bg-zinc-900 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-lg border border-white/20 mb-1 transition-opacity whitespace-nowrap ${isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
+                    className={`pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 z-10 bg-zinc-900 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-lg border border-white/20 mb-1 transition-opacity whitespace-nowrap ${isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
                   >
                     {wp.name || t`Waypoint`}
                   </div>
