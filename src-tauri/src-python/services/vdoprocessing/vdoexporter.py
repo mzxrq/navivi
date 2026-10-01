@@ -36,7 +36,7 @@ import subprocess
 import tempfile
 import time
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Callable, List, Optional, Tuple
 import uuid
 
 import cv2
@@ -45,6 +45,42 @@ import numpy as np
 from services import tuning
 from services.localization.subtitle import SubtitleStyle
 from services.logger.logger import setup_logger
+
+# The editor preview's caption: white text on a 60% black box, low in the frame
+# (libass draws the BorderStyle=3 box in OutlineColour; sizes are in 288-line units).
+EDITOR_SUBTITLE_STYLE = SubtitleStyle(
+    font_name="Meiryo",
+    font_size=19,
+    outline_color="&H66000000",
+    back_color="&H66000000",
+    border_style=3,
+    outline=2.5,
+    shadow=0.0,
+    margin_v=20,
+)
+
+
+def _run_with_progress(
+    cmd: List[str], input_path: str, on_progress: Callable[[float], None]
+) -> subprocess.CompletedProcess:
+    """Runs an ffmpeg command, calling on_progress(0..1) from ffmpeg's -progress output."""
+    from services.tts.ttsengine import FFmpegManager
+
+    try:
+        total = FFmpegManager.get_media_duration(input_path)
+    except (RuntimeError, OSError):
+        total = 0.0
+    # -progress goes before the output path; stderr goes to a file so an unread pipe can't stall ffmpeg.
+    cmd = [c for c in cmd[:-1] if c != "-stats"] + ["-progress", "pipe:1", "-nostats", cmd[-1]]
+    with tempfile.TemporaryFile(mode="w+", encoding="utf-8", errors="replace") as err:
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=err, encoding="utf-8", errors="replace")
+        for line in proc.stdout:
+            key, _, value = line.strip().partition("=")
+            if key == "out_time_us" and total > 0 and value.isdigit():
+                on_progress(min(1.0, int(value) / 1e6 / total))
+        proc.wait()
+        err.seek(0)
+        return subprocess.CompletedProcess(cmd, proc.returncode, "", err.read())
 
 FFMPEG_BIN = (
     Path(__file__).resolve().parent.parent / "bin" / "FFmpeg" / "bin" / "ffmpeg.exe"
@@ -428,6 +464,7 @@ class VideoExporter:
         trim_in: float = 0.0, trim_out: Optional[float] = None,
         volume: float = 1.0, muted: bool = False,
         extra_audio: Optional[str] = None, extra_volume: float = 0.5,
+        duration: Optional[float] = None,
     ) -> Path:
         """Combines one timeline track's silent video with its own separate
         audio track (see timeline_step.build_timeline — video and audio are
@@ -454,16 +491,20 @@ class VideoExporter:
         # picture would end while the voice is still speaking, and every clip
         # after it would drift against its sound. Hold the last frame until the
         # voice is done, and a little beyond (tuning.AUDIO_END_HOLD_SECONDS).
+        # An editor timeline states each clip's length (as its preview plays it), used as is.
         hold_extra = 0.0
-        if has_audio:
+        if has_audio or duration:
             try:
                 from services.tts.ttsengine import FFmpegManager
 
-                needed = (
-                    max(0.0, audio_offset)
-                    + FFmpegManager.get_media_duration(str(audio_path))
-                    + tuning.AUDIO_END_HOLD_SECONDS
-                )
+                if duration:
+                    needed = duration
+                else:
+                    needed = (
+                        max(0.0, audio_offset)
+                        + FFmpegManager.get_media_duration(str(audio_path))
+                        + tuning.AUDIO_END_HOLD_SECONDS
+                    )
                 video_len = FFmpegManager.get_media_duration(str(video_path))
                 if trim_out is not None or trim_in > 0:
                     video_len = min(video_len, trim_out if trim_out is not None else video_len) - trim_in
@@ -549,6 +590,8 @@ class VideoExporter:
             ]
         elif audio_filters:
             cmd += ["-af", ",".join(audio_filters)]
+        if duration:
+            cmd += ["-t", f"{duration:.3f}"]
         cmd += ["-shortest", "-video_track_timescale", str(_TIMESCALE)]
         cmd.append(str(tmp_out))
 
@@ -648,7 +691,8 @@ class VideoExporter:
 
     @staticmethod
     def concat_from_timeline(
-        timeline_data: dict, output_path: str, save_json_path: Optional[str] = None
+        timeline_data: dict, output_path: str, save_json_path: Optional[str] = None,
+        on_progress: Optional[Callable[[float], None]] = None,
     ) -> str:
         """NLE Engine: Stitches atomic clips using strict absolute paths and pre-flight file checks.
 
@@ -689,9 +733,18 @@ class VideoExporter:
         tmp_dir = Path(tempfile.mkdtemp(prefix="navivi_concat_"))
         target_size = VideoExporter._timeline_size(timeline_data, tracks)
         target_fps = float(timeline_data.get("fps") or 30)
+
+        # Percent of the export each step takes, from a timed real export (clips ~25%,
+        # crossfades ~22%, music ~1%, subtitle burn ~50%), so the bar moves at an even pace.
+        report = on_progress or (lambda _pct: None)
+        burning = bool(VideoExporter._burn_cues(timeline_data))
+        mux_end, join_end, music_end = (26.0, 49.0, 50.0) if burning else (53.0, 97.0, 99.0)
+        weights = [float(t.get("duration") or 0.0) or 1.0 for t in tracks]
+        report(0.0)
         try:
-            muxed_paths = [
-                VideoExporter._mux_track_for_concat(
+            muxed_paths: List[Path] = []
+            for i, track in enumerate(tracks):
+                muxed_paths.append(VideoExporter._mux_track_for_concat(
                     ffmpeg_cmd, Path(track["file_path"]).resolve(), track.get("audio_path"), tmp_dir, i,
                     audio_offset=float(track.get("audio_offset") or 0.0), target_size=target_size,
                     target_fps=target_fps,
@@ -700,14 +753,15 @@ class VideoExporter:
                     volume=float(track.get("volume", 1.0)), muted=bool(track.get("muted")),
                     extra_audio=track.get("extra_audio_path"),
                     extra_volume=float(track.get("extra_audio_volume") if track.get("extra_audio_volume") is not None else 0.5),
-                )
-                for i, track in enumerate(tracks)
-            ]
+                    duration=float(track["duration"]) if track.get("duration") else None,
+                ))
+                report(mux_end * sum(weights[: i + 1]) / sum(weights))
 
             # A track marked fade_into_next_seconds dissolves into the track
             # after it (see timeline_step): the pair becomes one segment.
             joined_paths: List[Path] = []
             skip_next = False
+            fades = [i for i, t in enumerate(tracks[:-1]) if float(t.get("fade_into_next_seconds") or 0.0) > 0]
             for i, muxed in enumerate(muxed_paths):
                 if skip_next:
                     skip_next = False
@@ -717,6 +771,8 @@ class VideoExporter:
                     merged = VideoExporter._crossfade_pair(
                         ffmpeg_cmd, muxed, muxed_paths[i + 1], fade, tmp_dir, i, target_fps=target_fps
                     )
+                    done = sum(1 for k in fades if k <= i)
+                    report(mux_end + (join_end - mux_end) * done / max(1, len(fades)))
                     if merged is not None:
                         joined_paths.append(merged)
                         skip_next = True
@@ -765,13 +821,27 @@ class VideoExporter:
                     f"FFmpeg reported success, but the output file is missing or 0 bytes! STDERR: {result.stderr}"
                 )
 
-            VideoExporter._finish_timeline_output(ffmpeg_cmd, timeline_data, output_path, tmp_dir)
+            report(join_end)
+            VideoExporter._finish_timeline_output(
+                ffmpeg_cmd, timeline_data, output_path, tmp_dir,
+                on_progress=lambda f: report(music_end + (100.0 - music_end) * f),
+            )
+            report(100.0)
             return output_path
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)
 
     @staticmethod
-    def _finish_timeline_output(ffmpeg_cmd: str, timeline_data: dict, output_path: str, tmp_dir: Path) -> None:
+    def _burn_cues(timeline_data: dict) -> list:
+        if not timeline_data.get("burn_subtitles", True):
+            return []
+        return [c for c in timeline_data.get("subtitles") or [] if str(c.get("text", "")).strip()]
+
+    @staticmethod
+    def _finish_timeline_output(
+        ffmpeg_cmd: str, timeline_data: dict, output_path: str, tmp_dir: Path,
+        on_progress: Optional[Callable[[float], None]] = None,
+    ) -> None:
         """Music bed and burned subtitles, applied to the joined video in place."""
         music = timeline_data.get("music") or {}
         music_path = music.get("path")
@@ -794,13 +864,15 @@ class VideoExporter:
             else:
                 logger.warning("music bed skipped: %s", result.stderr[-400:])
 
-        cues = [c for c in timeline_data.get("subtitles") or [] if str(c.get("text", "")).strip()]
-        if cues and timeline_data.get("burn_subtitles"):
+        cues = VideoExporter._burn_cues(timeline_data)
+        if cues:
             srt = tmp_dir / "subtitles.srt"
             srt.write_text(VideoExporter.cues_to_srt(cues), encoding="utf-8")
             burned = tmp_dir / "with_subtitles.mp4"
             try:
-                VideoExporter.burn_subtitles(str(output_path), str(srt), str(burned))
+                VideoExporter.burn_subtitles(
+                    str(output_path), str(srt), str(burned), style=EDITOR_SUBTITLE_STYLE, on_progress=on_progress
+                )
                 _replace_with_retry(str(burned), str(output_path))
             except Exception as exc:  # the stitched video is still good without them
                 logger.warning("subtitle burn skipped: %s", exc)
@@ -816,7 +888,9 @@ class VideoExporter:
 
     @staticmethod
     def burn_subtitles(
-        input_video_path: str, subtitle_file_path: str, output_video_path: str
+        input_video_path: str, subtitle_file_path: str, output_video_path: str,
+        style: Optional[SubtitleStyle] = None,
+        on_progress: Optional[Callable[[float], None]] = None,
     ) -> str:
         """NLE Engine: Burns an .srt or .ass subtitle file permanently into a video track (Cross-Platform Safe)."""
         video_path = Path(input_video_path)
@@ -843,24 +917,26 @@ class VideoExporter:
         # We must format the path with forward slashes and escape the colon for the filter.
         # e.g., 'C\:/Users/...' -> safely parsed by the FFmpeg filter graph.
         safe_sub_path = sub_path.as_posix().replace(":", "\\:")
+        sub_filter = f"subtitles='{safe_sub_path}'"
+        if style:
+            sub_filter = f"subtitles=filename='{safe_sub_path}':force_style='{style.to_force_style()}'"
 
-        result = subprocess.run(
-            [
-                ffmpeg_cmd,
-                "-y", *tuning.ffmpeg_log_args(),
-                "-i",
-                str(video_path),
-                "-vf",
-                f"subtitles='{safe_sub_path}'",
-                *tuning.ffmpeg_thread_args(),
-                "-c:a",
-                "copy",  # Copy the audio without re-encoding it
-                str(out_path),
-            ],
-            capture_output=True,
-            encoding="utf-8",
-            errors="replace",
-        )
+        cmd = [
+            ffmpeg_cmd,
+            "-y", *tuning.ffmpeg_log_args(),
+            "-i",
+            str(video_path),
+            "-vf",
+            sub_filter,
+            *tuning.ffmpeg_thread_args(),
+            "-c:a",
+            "copy",  # Copy the audio without re-encoding it
+            str(out_path),
+        ]
+        if on_progress:
+            result = _run_with_progress(cmd, str(video_path), on_progress)
+        else:
+            result = subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace")
 
         if result.returncode != 0:
             logger.error("burn_subtitles failed: %s", result.stderr)

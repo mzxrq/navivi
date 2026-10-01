@@ -210,9 +210,6 @@ export function Inspector(p: InspectorProps) {
   return (
     <div className="flex flex-col min-h-0 overflow-y-auto custom-scrollbar">
       <Section title={t`Subtitles`}>
-        <Row label={t`Burn into video`}>
-          <Switch checked={timeline.burnSubtitles} onChange={(v) => commit({ ...timeline, burnSubtitles: v })} label={t`Burn subtitles into the video`} />
-        </Row>
         {cues.length > 0 && (
           <div className="flex items-center gap-1 -mx-1">
             <button type="button" className={iconButton} onClick={p.onSaveSrt}>

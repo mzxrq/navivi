@@ -39,7 +39,6 @@ export interface TimelineData {
   segments: Segment[];
   subtitles: SubtitleCue[];
   music: MusicBed | null;
-  burnSubtitles: boolean;
 }
 
 export const EDITOR_VERSION = 1;
@@ -52,7 +51,6 @@ export const emptyTimeline = (): TimelineData => ({
   segments: [],
   subtitles: [],
   music: null,
-  burnSubtitles: true,
 });
 
 export const newId = () => crypto.randomUUID();
@@ -314,12 +312,14 @@ export function toManifest(projectName: string, timeline: TimelineData) {
       extra_audio_volume: s.extraAudio ? (s.extraVolume ?? DEFAULT_EXTRA_VOLUME) : null,
       trim_in: s.trimIn,
       trim_out: s.trimOut < s.videoDuration - 0.01 ? s.trimOut : null,
+      // The export makes each clip exactly as long as the preview plays it.
+      duration: segmentLength(s),
       volume: s.volume,
       muted: s.muted,
       fade_into_next_seconds: s.fadeIntoNext,
     })),
     subtitles: cues,
-    burn_subtitles: timeline.burnSubtitles,
+    burn_subtitles: true,
     music: timeline.music ? { path: timeline.music.path, volume: timeline.music.volume } : null,
     editor: { version: EDITOR_VERSION, ...timeline },
   };
@@ -332,7 +332,6 @@ export function timelineFromEditorState(raw: any): TimelineData | null {
     segments: e.segments,
     subtitles: Array.isArray(e.subtitles) ? e.subtitles : [],
     music: e.music ?? null,
-    burnSubtitles: e.burnSubtitles ?? true,
   };
 }
 
@@ -384,5 +383,5 @@ export async function timelineFromPipeline(
       if (c.text && end - start >= 0.05) subtitles.push({ id: newId(), segmentId: seg.id, start, end, text: String(c.text) });
     }
   }
-  return { ...emptyTimeline(), segments, subtitles, burnSubtitles: raw?.burn_subtitles ?? emptyTimeline().burnSubtitles };
+  return { ...emptyTimeline(), segments, subtitles };
 }

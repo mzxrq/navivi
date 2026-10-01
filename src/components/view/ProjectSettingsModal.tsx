@@ -90,7 +90,6 @@ export function ProjectSettingsModal({
           await db.settings.patch(project.projectId, {
             routeMarker: s.routeMarker ?? null,
             enable_attraction_videos: s.enable_attraction_videos,
-            burn_subtitles: s.burn_subtitles,
             use_narration_cues: s.use_narration_cues,
             attraction_fade_seconds: s.attraction_fade_seconds,
           });
@@ -194,16 +193,6 @@ export function ProjectSettingsModal({
             checked={options.enable_attraction_videos ?? true}
             onChange={(v) => setOption({ enable_attraction_videos: v })}
             label={t`Animate photos at stops`}
-          />
-        </OptionRow>
-        <OptionRow
-          title={t`Burn subtitles into clips`}
-          description={t`Draws subtitles onto each clip while rendering. The editor can also burn them at export.`}
-        >
-          <Switch
-            checked={options.burn_subtitles ?? false}
-            onChange={(v) => setOption({ burn_subtitles: v })}
-            label={t`Burn subtitles into clips`}
           />
         </OptionRow>
         <OptionRow

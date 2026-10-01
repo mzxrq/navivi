@@ -383,13 +383,12 @@ def build_timeline(
             ):
                 tracks[k]["fade_into_next_seconds"] = attraction_fade_seconds
 
-    # Whole-video cues for the editor/exporter. Never burned from here: clips are
-    # already burned when settings.burn_subtitles is on, so this stays off.
+    # Whole-video cues for the editor/exporter, burned at export (render_timeline).
     timeline_data = {
         "total_duration_seconds": round(clip_start, 3),
         "video_tracks": tracks,
         "subtitles": all_cues,
-        "burn_subtitles": False,
+        "burn_subtitles": True,
     }
 
     output_path = Path(timeline_path) if timeline_path else Path(project_dir) / "timeline.json"
