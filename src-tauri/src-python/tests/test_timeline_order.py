@@ -93,3 +93,34 @@ def test_attraction_of_an_unconnected_stopby_is_not_used(tmp_path):
     names = [n for n, _ in _order(path)]
     assert "04_attraction_01_x.mp4" not in names  # b: stop-by not connected to the route
     assert "04_attraction_02_x.mp4" in names  # c: connected, still used
+
+
+def test_subtitles_are_written_into_the_timeline_not_burned(tmp_path, monkeypatch):
+    from services.vdoprocessing.videopipeline import timeline_step
+
+    lengths = {"02_waypoint_01_b.mp4": 10.0, "leg1.wav": 4.0, "04_attraction_01_x.mp4": 6.0}
+    monkeypatch.setattr(timeline_step, "_duration", lambda p: lengths.get(Path(p).name, 0.0) if p else 0.0)
+    monkeypatch.setattr(timeline_step, "read_audio_offset", lambda p: 2.0)
+    (tmp_path / "job_config.json").write_text(json.dumps({"waypoints": [{"id": "a"}, {"id": "b"}]}), encoding="utf-8")
+    route = tmp_path / "assets/video/route"
+    leg = _touch(route / "02_waypoint_01_b.mp4")
+    (route / "02_waypoint_01_pieces.json").write_text(
+        json.dumps({"pieces": [{"file": "02_waypoint_01_b.mp4", "target_waypoint_id": "b"}]}), encoding="utf-8")
+    attraction = _touch(tmp_path / "assets/video/attraction/04_attraction_01_x.mp4")
+    srt = tmp_path / "leg1.srt"
+    srt.write_text("1\n00:00:00,500 --> 00:00:01,500\nhello\n\n2\n00:00:02,000 --> 00:00:03,250\nthere\n", encoding="utf-8")
+    attr_srt = tmp_path / "attr.srt"
+    attr_srt.write_text("1\n00:00:01,000 --> 00:00:02,000\nlook\n", encoding="utf-8")
+
+    path = build_timeline(
+        video_paths=[leg], attraction_videos=[attraction], final_videos=[leg, attraction],
+        audio_paths=[_touch(tmp_path / "leg1.wav")], subtitle_paths=[str(srt)], project_dir=str(tmp_path),
+        attraction_audio_paths=[None, _touch(tmp_path / "attr.wav")], attraction_subtitle_paths=[None, str(attr_srt)],
+    )
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    assert data["burn_subtitles"] is False
+    assert data["video_tracks"][0]["subtitles"] == [
+        {"start": 2.5, "end": 3.5, "text": "hello"}, {"start": 4.0, "end": 5.25, "text": "there"}]
+    # attraction starts after the 10s leg; attraction narration has no offset
+    assert data["subtitles"][-1] == {"start": 11.0, "end": 12.0, "text": "look"}
+    assert data["total_duration_seconds"] == 16.0

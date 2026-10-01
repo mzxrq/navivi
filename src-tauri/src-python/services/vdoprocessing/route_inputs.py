@@ -5,6 +5,7 @@ on load and can save a different line (or straight-line placeholders) without
 any edit."""
 
 import hashlib
+import os
 import json
 from typing import Iterable
 
@@ -38,3 +39,31 @@ def overview_flags_hash(waypoints: Iterable) -> str:
         for wp in waypoints or []
     ]
     return hashlib.sha256(json.dumps(rows).encode("utf-8")).hexdigest()[:16]
+
+
+_PHOTO_EXTS = (".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".svg")
+
+
+def photo_inputs_hash(obj) -> str:
+    """The photos a render shows: every image path found anywhere in `obj`,
+    with its size and mtime, so a different (e.g. upscaled) or replaced
+    photo re-renders while every other edit still doesn't."""
+    found = []
+
+    def walk(value):
+        if isinstance(value, dict):
+            for v in value.values():
+                walk(v)
+        elif isinstance(value, (list, tuple)):
+            for v in value:
+                walk(v)
+        elif isinstance(value, str) and value.lower().endswith(_PHOTO_EXTS):
+            try:
+                st = os.stat(value)
+                found.append((value, st.st_size, int(st.st_mtime)))
+            except OSError:
+                found.append((value, None, None))
+
+    walk(obj)
+    blob = json.dumps(found, ensure_ascii=False)
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:16]

@@ -113,7 +113,7 @@ def match_clip_to_photo(video_path: str, photo_path: str) -> bool:
         out_path = str(Path(video_path).with_suffix(".colormatch.mp4"))
         proc = subprocess.Popen(
             [
-                FFmpegManager.resolve_ffmpeg_bin(), "-y", *tuning.ffmpeg_log_args(),
+                FFmpegManager.resolve_ffmpeg_bin(), "-y", *tuning.ffmpeg_pipe_log_args(),
                 "-f", "rawvideo", "-pix_fmt", "bgr24", "-s", f"{w}x{h}", "-r", f"{fps:.3f}", "-i", "-",
                 "-c:v", "libx264", *tuning.ffmpeg_thread_args(), "-crf", "16", "-preset", "fast",
                 "-pix_fmt", "yuv420p", out_path,

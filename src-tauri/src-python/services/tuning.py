@@ -59,6 +59,12 @@ def ffmpeg_log_args() -> List[str]:
     """Quiet ffmpeg output: no banner, errors only, plus a progress line."""
     return ["-hide_banner", "-loglevel", "error", "-stats"]
 
+
+def ffmpeg_pipe_log_args() -> List[str]:
+    """For ffmpeg fed frames over stdin with stderr piped: no -stats, whose
+    progress fills the unread pipe and deadlocks the frame writes."""
+    return ["-hide_banner", "-loglevel", "error"]
+
 # --- RAM guard -----------------------------------------------------------------
 # TTS, ComfyUI/Wan, Chromium (the map renderer) and Ollama each hold a lot of
 # RAM, and this pipeline runs them one after another in one long process. Before
@@ -760,7 +766,9 @@ COMFYUI_UNET_NAME = "Wan2_2-TI2V-5B-Turbo-Q4_K_M.gguf"
 COMFYUI_VAE_TILE_SIZE = 512
 COMFYUI_VAE_TILE_OVERLAP = 64
 COMFYUI_VAE_TEMPORAL_SIZE = 32
-COMFYUI_VAE_TEMPORAL_OVERLAP = 8
+# 16, not 8: at 8 each new frame chunk decoded brighter (steps at frames
+# 24/48/72); 16 blends them away for ~+0.5 GB VRAM (peak still 7.2 GB).
+COMFYUI_VAE_TEMPORAL_OVERLAP = 16
 COMFYUI_CLIP_NAME = "umt5_xxl_fp8_e4m3fn_scaled.safetensors"
 COMFYUI_VAE_NAME = "wan2.2_vae.safetensors"
 # 1280x704 fits comfortably in an 8GB VRAM budget at this quant (see
@@ -798,19 +806,17 @@ COMFYUI_MAX_FRAMES = 89  # ~3.7s @ 24fps (was 121 ~5s, then 65 ~2.7s — middle 
 # segment, the attraction clip is built from more segments, each one started
 # from the previous segment's last frame (so the motion carries on instead of
 # the last frame freezing) - see COMFYUI_CHAIN_LAST_FRAME below for how they
-# are actually chained. None (the user's choice): no cap - chain as many
-# segments as it takes to cover the WHOLE narration, so the clip is real Wan
-# motion end to end and slow_move.py's push-in/zoom-out tail
-# (ATTRACTION_CHAIN_TO_FULL_LENGTH below) is never needed. A number caps it
-# at that many segments instead (the remainder falls back to slow_move.py);
-# 1 turns extension off entirely (one Wan segment, then the plain tail).
+# are actually chained. 5 (the user's choice): at most 5 segments per photo
+# (~18.5s of Wan, ~13 min GPU); a longer narration share is filled by
+# slow_move.py's zoom-out after that. None chains to the whole narration
+# (6 segments took ~17 min for one 22s narration); 1 turns extension off.
 # Before last-frame chaining this drifted badly past 2 segments (segments
 # only saw the previous last frame, not the photo, so changes compounded - 4
 # segments turned a painted wall into a van driving in); last-frame chaining
 # colour-matches the handed-on frame back to the photo every time
 # (COMFYUI_CHAIN_COLOR_MATCH), which is what makes chaining to full length
 # safe to leave uncapped.
-COMFYUI_EXTEND_MAX_SEGMENTS: Optional[int] = None
+COMFYUI_EXTEND_MAX_SEGMENTS: Optional[int] = 5
 # HOW the segments are chained.
 # True ("last frame" chaining): each segment is its own ComfyUI job, started
 # from a real PNG of the previous segment's last frame - so that frame can be
@@ -827,12 +833,11 @@ COMFYUI_CHAIN_LAST_FRAME = True
 # Colour-match a chained frame to the photo before the next segment starts
 # from it (see color_match.py, the same pass the finished clip gets).
 COMFYUI_CHAIN_COLOR_MATCH = True
-# When segments now chain to the full narration length (COMFYUI_EXTEND_MAX_SEGMENTS
-# = None), the generated clip already reaches the narration's end on its own,
-# so img2vdo.py skips slow_move.py's push-in/zoom-out tail entirely (the user's
-# choice: chain, don't zoom out) - a moving preset falls through to the plain
-# last-frame freeze if there's still a small gap. False restores the old
-# behaviour (slow_move fills whatever a capped/single segment doesn't reach).
+# With an uncapped chain (COMFYUI_EXTEND_MAX_SEGMENTS = None) the clip reaches
+# the narration's end on its own, so slow_move.py's tail is skipped and a
+# small gap gets the plain last-frame freeze. With a cap, a gap over 1s left
+# by the cap is still filled by slow_move. False: slow_move fills any gap
+# over 1s regardless.
 ATTRACTION_CHAIN_TO_FULL_LENGTH = True
 # After the Wan motion runs out, a moving preset's clip continues as a slow
 # push-in/drift over its last frame (vdoprocessing/slow_move.py) instead of
@@ -858,7 +863,9 @@ ATTRACTION_SLOW_MOVE_MAX_ZOOM_OUT = 0.12
 # with the correction averaged over this many seconds so it can't flicker.
 ATTRACTION_COLOR_MATCH = True
 ATTRACTION_COLOR_MATCH_STRENGTH = 1.0
-ATTRACTION_COLOR_MATCH_SMOOTH_SECONDS = 1.0
+# 0.25, not 1.0: a 1 s window couldn't follow Wan's ~0.5 s exposure ramp or the
+# VAE decode's chunk steps (every 24 frames), leaving a visible brightness wave.
+ATTRACTION_COLOR_MATCH_SMOOTH_SECONDS = 0.25
 # Wan2.2's standard (Chinese) negative prompt, then additions:
 # - no duplicated props: duplicated/repeated objects, copy-pasted or mirrored
 #   elements, the same object appearing twice, cloned people, objects
@@ -898,6 +905,7 @@ COMFYUI_NEGATIVE_PROMPT = (
     # 3. Lighting and Image Quality Control
     "曝光过度, 欠曝, 死白, 死黑, 频闪, 忽明忽暗, 曝光不稳定, 闪烁的光线, 光源跳动, "
     "刺目的对比, 违背物理的光线, 异常反光, 调色, 滤镜, 饱和度过高, 色偏, 整体发灰, "
+    "自动曝光, 曝光渐变, 画面逐渐变亮, 画面逐渐变暗, 天空过曝, HDR效果, "
     
     # 4. Fundamental Flaws and Style
     "文字扭曲, 乱码文字, 标志变形, 路标扭曲, 细节模糊不清, JPEG压缩残留, 最差质量, 低质量, "
@@ -905,13 +913,13 @@ COMFYUI_NEGATIVE_PROMPT = (
 )
 # What every motion prompt adds after its camera move: the scene, its colours
 # and its shapes stay exactly as in the photo (see COMFYUI_NEGATIVE_PROMPT for
-# what each part is guarding against).
+# what each part is guarding against). Kept short so it doesn't drown the move;
+# no "legible text" - that invites Wan to draw new text.
 _COMFYUI_SCENE_LOCK = (
-    "perfectly stable scene composition, continuous unbroken landscape, pure empty scenery, "
-    "completely deserted environment, realistic cinematic footage, smooth horizontal panning shot, "
-    "seamless camera movement, strictly locked exposure, perfectly matched original colors, "
-    "consistent natural lighting, clear unobstructed view, absolute visual consistency from edge to edge, "
-    "perfectly preserved architectural details, sharp and legible text, deep depth of field"
+    "deserted empty scenery, no people, no vehicles, nothing in the foreground, "
+    "same scene throughout, locked manual exposure and white balance, "
+    "brightness constant from first frame to last, colors and lighting identical to the photo, "
+    "existing signs and buildings unchanged, realistic cinematic footage"
 )
 # Maps attraction_step.py's camera_pans vocabulary (also used by
 # local_pan_generator.py's _CAMERA_PAN_PRESETS) to an English motion prompt
@@ -924,36 +932,32 @@ _COMFYUI_SCENE_LOCK = (
 # "none" never reaches Wan - that preset holds the photo still instead (see
 # img2vdo._generate_single_clip); its prompt here is the default for a
 # waypoint with no preset at all.
+# Moves never ease to a stop: segments are chained, so a settle at each end
+# would stutter at every seam.
 COMFYUI_CAMERA_PAN_PROMPTS: Dict[str, str] = {
     "panright": (
-        "Camera: pan right. Movement: rotate the view horizontally from left to right from one fixed point. "
-        "Speed: smooth constant rotation. Framing: keep the horizon level while new space enters from the right "
-        "side of the frame. End: settle on a clear final composition."
+        "very slow pan right from a fixed tripod position, constant gentle speed, horizon level, "
+        "only the continuation of the same scenery comes into view on the right, " + _COMFYUI_SCENE_LOCK
     ),
     "panleft": (
-        "Camera: pan left. Movement: rotate the view horizontally from right to left from one fixed point. "
-        "Speed: smooth constant rotation. Framing: keep the horizon level while new space enters from the left "
-        "side of the frame. End: settle on a clear final composition."
+        "very slow pan left from a fixed tripod position, constant gentle speed, horizon level, "
+        "only the continuation of the same scenery comes into view on the left, " + _COMFYUI_SCENE_LOCK
     ),
     "panup": (
-        "Camera: tilt up. Movement: rotate the view upward from one fixed point. "
-        "Speed: smooth constant tilt. Framing: keep the vertical subject or architecture centered as the frame "
-        "travels upward. End: land on the upper target."
+        "very slow tilt up from a fixed tripod position, constant gentle speed, vertical lines stay straight, "
+        "only the continuation of the same scenery comes into view at the top, " + _COMFYUI_SCENE_LOCK
     ),
     "pandown": (
-        "Camera: tilt down. Movement: rotate the view downward from one fixed point. "
-        "Speed: smooth constant tilt. Framing: keep the vertical subject or architecture centered as the frame "
-        "travels downward. End: land on the lower target."
+        "very slow tilt down from a fixed tripod position, constant gentle speed, vertical lines stay straight, "
+        "only the continuation of the same scenery comes into view at the bottom, " + _COMFYUI_SCENE_LOCK
     ),
     "zoomin": (
-        "Camera: slow zoom in. Movement: slowly increase lens focal length toward a tighter frame. "
-        "Speed: gradual and even. Framing: keep the main visual target readable as it becomes larger in frame. "
-        "End: finish on a stable tighter composition."
+        "very slow smooth zoom in toward the center of the frame, constant gentle speed, "
+        "the main subject grows larger with its details unchanged, " + _COMFYUI_SCENE_LOCK
     ),
     "zoomout": (
-        "Camera: slow zoom out. Movement: slowly decrease lens focal length toward a wider frame. "
-        "Speed: gradual and even. Framing: keep the main visual target readable as more surrounding space appears. "
-        "End: finish on a stable wider composition."
+        "very slow smooth zoom out from the center of the frame, constant gentle speed, "
+        "only the continuation of the same scenery appears around the edges, " + _COMFYUI_SCENE_LOCK
     ),
     "none": "very slow steady camera movement, subtle natural ambient motion, " + _COMFYUI_SCENE_LOCK,
 }
@@ -968,6 +972,44 @@ COMFYUI_IDLE_TIMEOUT_SECONDS = 600.0
 COMFYUI_SERVER_START_TIMEOUT_SECONDS = 180.0
 COMFYUI_GENERATION_TIMEOUT_SECONDS = 1200.0
 
+# --- Waypoint photo upscale (pipeline stage before attraction videos) -------
+# Photos smaller than MIN_W x MIN_H get an ESRGAN pass in the bundled ComfyUI
+# so fullscreen pop-ups and Wan's input aren't soft. Off per project with
+# settings.upscale_popup_images=false; never runs under skip_rich_media.
+DEFAULT_UPSCALE_POPUP_IMAGES = True
+# The model in use: a key of IMAGE_UPSCALE_MODELS, saved under that exact
+# filename in bin/ComfyUI/models/upscale_models. Downloaded on first use if
+# missing (sha256-checked); without it the stage resizes on the CPU.
+# UltraMix Balanced: the UltraSharp author's milder blend; chosen over
+# UltraSharp after comparing on a real 515 px web photo.
+IMAGE_UPSCALE_MODEL = "4x-UltraMix_Balanced.pth"
+IMAGE_UPSCALE_MODELS = {
+    "4x-UltraSharp.pth": {
+        "url": "https://huggingface.co/Kim2091/UltraSharp/resolve/920fe218c211f831b43cb30327f203e2b59f5dab/4x-UltraSharp.pth",
+        "sha256": "a5812231fc936b42af08a5edba784195495d303d5b3248c24489ef0c4021fe01",
+        "scale": 4,
+    },
+    "4x-UltraMix_Balanced.pth": {
+        "url": "https://huggingface.co/Kim2091/UltraSharp/resolve/920fe218c211f831b43cb30327f203e2b59f5dab/Interpolations/4x-UltraMix_Balanced.pth",
+        "sha256": "e23ca000107aae95ec9b8d7d1bf150f7884f1361cd9d669bdf824d72529f0e26",
+        "scale": 4,
+    },
+}
+# The model's output is shrunk to this many times the input before the final
+# fit to the frame (Lanczos does the rest). 2 keeps the model's sharpening
+# but tones down the detail a 4x model invents. None keeps its full scale.
+IMAGE_UPSCALE_KEEP_SCALE = 2
+IMAGE_UPSCALE_DOWNLOAD_TIMEOUT_SECONDS = 600.0
+IMAGE_UPSCALE_MIN_W = 1920
+IMAGE_UPSCALE_MIN_H = 1080
+# Input is shrunk to MAX_SIDE / scale first: bounds tiles, time and CPU RAM.
+IMAGE_UPSCALE_MAX_SIDE = 3840
+# ComfyUI reserves ~4.8 GB for a 4x model (512 px tiles); below this much
+# free VRAM the photo is resized on the CPU instead, so an 8 GB card never
+# spills into shared memory.
+IMAGE_UPSCALE_MIN_FREE_VRAM_MB = 5500
+IMAGE_UPSCALE_TIMEOUT_SECONDS = 300.0
+
 # --- Intro clip (multi-image slideshow + centered project title) -----------
 # A slideshow of INTRO_IMAGE_COUNT random waypoint images (a fresh pick
 # every call), each with its own slow zoom-in, crossfaded into the next —
@@ -979,7 +1021,14 @@ INTRO_PER_IMAGE_SECONDS = 3.5
 INTRO_CROSSFADE_SECONDS = 0.8
 # Font/outline are in intro pixels; scaled x1080/704 from the old 1280x704 intro to look the same.
 INTRO_TITLE_FONT_SIZE = 74
-INTRO_TITLE_OUTLINE = 4.6
+INTRO_TITLE_OUTLINE = 2
+INTRO_TITLE_BOLD = True
+INTRO_TITLE_COLOR: Tuple[int, int, int] = (255, 255, 255)
+# Second line under the title (only drawn when a subtitle is set).
+INTRO_SUBTITLE_FONT_SIZE = 36
+INTRO_SUBTITLE_OUTLINE = 0
+INTRO_SUBTITLE_BOLD = True
+INTRO_SUBTITLE_COLOR: Tuple[int, int, int] = (255, 255, 255)
 INTRO_OUTPUT_FILENAME = "00_intro.mp4"
 # Same frame size as every other clip, or the timeline preview draws it smaller.
 INTRO_WIDTH = 1920

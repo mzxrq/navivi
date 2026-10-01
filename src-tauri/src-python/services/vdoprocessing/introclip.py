@@ -35,9 +35,15 @@ logger = setup_logger("IntroClip")
 # Centered, bold, larger than a normal subtitle line — this is a title card,
 # not a caption. Keeps the same outline/shadow approach as SubtitleStyle's
 # default so it stays readable over any busy background photo.
+def _ass_bgr(rgb) -> str:
+    r, g, b = rgb
+    return f"{b:02X}{g:02X}{r:02X}"
+
+
 _TITLE_STYLE = SubtitleStyle(
     font_size=tuning.INTRO_TITLE_FONT_SIZE,
-    bold=True,
+    primary_color=f"&H00{_ass_bgr(tuning.INTRO_TITLE_COLOR)}",
+    bold=tuning.INTRO_TITLE_BOLD,
     alignment=10,  # old-SSA numbering (see SubtitleStyle.alignment) = middle-center
     outline=tuning.INTRO_TITLE_OUTLINE,
     shadow=1.0,
@@ -197,8 +203,13 @@ def _write_title_ass(title: str, subtitle: str, duration_sec: float, tmp_dir: Pa
     safe_title = (title or "").replace("{", "").replace("}", "")
     safe_subtitle = (subtitle or "").replace("{", "").replace("}", "")
     if safe_subtitle:
-        subtitle_fs = int(tuning.INTRO_TITLE_FONT_SIZE * 0.6)
-        safe_text = f"{safe_title}\\N{{\\fs{subtitle_fs}}}{safe_subtitle}"
+        sub_tags = (
+            f"\\fs{tuning.INTRO_SUBTITLE_FONT_SIZE}"
+            f"\\bord{tuning.INTRO_SUBTITLE_OUTLINE}"
+            f"\\b{1 if tuning.INTRO_SUBTITLE_BOLD else 0}"
+            f"\\c&H{_ass_bgr(tuning.INTRO_SUBTITLE_COLOR)}&"
+        )
+        safe_text = f"{safe_title}\\N{{{sub_tags}}}{safe_subtitle}"
     else:
         safe_text = safe_title
     end_ts = _format_ass_timestamp(duration_sec)

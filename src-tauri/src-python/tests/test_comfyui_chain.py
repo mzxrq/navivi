@@ -43,7 +43,7 @@ class _Recorder:
         self.client._upload_image = lambda _c, path: self.uploaded.append(path) or f"up{len(self.uploaded)}.png"
         self.client._run_segment = self._run_segment
 
-    def _run_segment(self, _client, graph, output_path):
+    def _run_segment(self, _client, graph, output_path, _label="Wan"):
         self.graphs.append(graph)
         _write_video(output_path, 40 + 60 * len(self.graphs))
         return output_path
