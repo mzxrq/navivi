@@ -85,7 +85,7 @@ export function AutoDirectorModal() {
       }
 
       setStatus(t`Writing scripts with AI...`);
-      for (const wp of waypoints) {
+      for (const [i, wp] of waypoints.entries()) {
          let fullScript = "";
          await generateWaypointScriptStream(
              wp.name, 
@@ -96,7 +96,13 @@ export function AutoDirectorModal() {
                  fullScript = chunk;
              }, 
              wp.lat, 
-             wp.lng
+             wp.lng,
+             [],
+             undefined,
+             "attraction",
+             i === 0,
+             undefined,
+             { previous: waypoints[i - 1]?.name, next: waypoints[i + 1]?.name, index: i, total: waypoints.length }
          );
          wp.narration = fullScript;
       }

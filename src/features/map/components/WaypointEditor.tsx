@@ -207,6 +207,12 @@ export function WaypointEditor({
         type,
         isStart,
         abortControllerRef.current.signal,
+        {
+          previous: waypoints[wpIndex - 1]?.name,
+          next: waypoints[wpIndex + 1]?.name,
+          index: wpIndex,
+          total: waypoints.length,
+        },
       );
     } catch (err: any) {
       if (err.name !== "AbortError") {

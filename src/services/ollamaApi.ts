@@ -1,6 +1,8 @@
 import { fetch } from '@tauri-apps/plugin-http';
 import { readFile } from '@tauri-apps/plugin-fs';
 import { invoke } from '@tauri-apps/api/core';
+import { tidyPlaceName } from '../utils/gpxTrack';
+import { buildWaypointPrompt, cleanNarration, RouteContext } from './narrationPrompt';
 
 const OLLAMA_URL = "http://127.0.0.1:11434";
 function uint8ArrayToBase64(bytes: Uint8Array): string {
@@ -158,8 +160,9 @@ async function fetchKeylessWebContext(searchTerms: string): Promise<string> {
 }
 
 // ✨ NEW: Unified Streaming Engine
-async function streamLLM(prompt: string, engine: string, onChunk: (text: string) => void, signal?: AbortSignal, images?: string[], onThought?: (text: string) => void) {
+async function streamLLM(prompt: string, engine: string, onChunk: (text: string) => void, signal?: AbortSignal, images?: string[], onThought?: (text: string) => void, options?: Record<string, number>) {
     const payload: any = { model: engine, prompt, stream: true };
+    if (options) payload.options = options;
     if (engine.toLowerCase().includes("gemma-4") || engine.toLowerCase().includes("gemma4")) {
         // Force raw mode for gemma-4 to ensure exact token sequences for Thinking Mode
         payload.raw = true;
@@ -274,39 +277,19 @@ export async function generateWaypointScriptStream(
     onThought?: (text: string) => void,
     scriptType: "arriving" | "attraction" = "attraction",
     isFirstWaypoint: boolean = false,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    route: RouteContext = {}
 ): Promise<void> {
-    let contextStr = "";
+    const place = tidyPlaceName(locationName) || locationName;
+    let facts = "";
 
     if (lat !== 0 && lng !== 0) {
         const { geo, searchTerms } = await fetchLocationContext(lat, lng);
         const webContext = await fetchKeylessWebContext(searchTerms);
-        contextStr = `地理情報: ${geo}\n参考情報: ${webContext}`;
+        facts = [geo && `地理情報: ${geo}`, webContext && `参考情報: ${webContext}`].filter(Boolean).join("\n");
     }
 
-    const themeContext = theme ? `この旅のテーマは「${theme}」です。` : "";
-
-    let roleContext = "";
-    if (scriptType === "arriving") {
-        if (isFirstWaypoint) {
-            roleContext = `ここから旅がスタートします。「${locationName}」からの出発を盛り上げるような、ワクワクする導入のナレーション（出発ナレーション）を作成してください。`;
-        } else {
-            roleContext = `前の場所から移動し、目的地である「${locationName}」に近づき、到着するまでの道中や、見えてきた時の期待感を煽るような「到着ナレーション」を作成してください。具体的な歴史や深い見どころの解説は次のナレーションに譲り、ここでは「移動から到着までの風景や高揚感」にフォーカスしてください。`;
-        }
-    } else {
-        roleContext = `現在地「${locationName}」に到着した後の、具体的な見どころや歴史、魅力を深く紹介する「見どころ解説ナレーション」を作成してください。`;
-    }
-
-    const prompt = `あなたは旅行番組のプロのナレーターです。${themeContext}
-${roleContext}
-コンテキストや要望: ${userPrompt}
-${contextStr}
-
-ルール:
-1. 日本語の「です・ます調」で、親しみやすい言葉遣いにすること。
-2. 音声合成で読み上げるため、括弧書き（感情（例：[笑顔で]など））は絶対に書かないこと。
-3. 簡潔に、1つの短い段落（3〜4文程度）にまとめること。
-4. 提供された画像がある場合は、その写真に写っている風景や特徴も自然に描写に組み込んでください。`;
+    const prompt = buildWaypointPrompt({ place, theme, userPrompt, facts, scriptType, isFirstWaypoint, route });
 
     const base64Images: string[] = [];
     for (const p of imagePaths) {
@@ -318,7 +301,16 @@ ${contextStr}
         }
     }
 
-    await streamLLM(prompt, engine, onChunk, signal, base64Images, onThought);
+    // Lower temperature keeps a small model close to the facts it was given.
+    await streamLLM(
+        prompt,
+        engine,
+        (text) => onChunk(cleanNarration(text)),
+        signal,
+        base64Images,
+        onThought,
+        { temperature: 0.4, top_p: 0.9, repeat_penalty: 1.1 },
+    );
 }
 
 export async function extractLocationsFromDocument(
