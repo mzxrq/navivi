@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { t } from "@lingui/core/macro";
 import { Pause, Play, SkipBack } from "../../components/ui/icons";
 import { Tip } from "../../components/ui/Tip";
-import { layout, placedCues, segmentAt, trimmedLength, TimelineData } from "./model";
+import { DEFAULT_EXTRA_VOLUME, layout, placedCues, segmentAt, trimmedLength, TimelineData } from "./model";
 import { formatTime, mediaUrl, player, usePlayerTime, usePlaying } from "./player";
 
 interface PreviewProps {
@@ -36,7 +36,8 @@ export function Preview({ timeline, projectDir }: PreviewProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const voiceRef = useRef<HTMLAudioElement>(null);
   const musicRef = useRef<HTMLAudioElement>(null);
-  const loaded = useRef({ video: "", voice: "", music: "" });
+  const extraRef = useRef<HTMLAudioElement>(null);
+  const loaded = useRef({ video: "", voice: "", music: "", extra: "" });
   const playing = usePlaying();
 
   const { placed, total } = useMemo(() => layout(timeline), [timeline]);
@@ -50,13 +51,15 @@ export function Preview({ timeline, projectDir }: PreviewProps) {
     const video = videoRef.current;
     const voice = voiceRef.current;
     const music = musicRef.current;
-    if (!video || !voice || !music) return;
+    const extra = extraRef.current;
+    if (!video || !voice || !music || !extra) return;
 
     const p = segmentAt(placed, time);
     if (!p) {
       video.pause();
       voice.pause();
       music.pause();
+      extra.pause();
       return;
     }
     const seg = p.seg;
@@ -87,6 +90,21 @@ export function Preview({ timeline, projectDir }: PreviewProps) {
       else voice.pause();
     } else {
       voice.pause();
+    }
+
+    // The footage's own sound (set up by the pipeline when "keep its sound" was on) plays with the clip.
+    const extraSrc = mediaUrl(projectDir, seg.extraAudio);
+    if (extraSrc) {
+      if (loaded.current.extra !== extraSrc) {
+        extra.src = extraSrc;
+        loaded.current.extra = extraSrc;
+      }
+      extra.volume = Math.min(1, Math.max(0, seg.extraVolume ?? DEFAULT_EXTRA_VOLUME));
+      if (Math.abs(extra.currentTime - local) > (isPlaying ? 0.35 : 0.03)) extra.currentTime = local;
+      if (isPlaying) extra.play().catch(() => undefined);
+      else extra.pause();
+    } else {
+      extra.pause();
     }
 
     const bed = timeline.music;
@@ -165,6 +183,7 @@ export function Preview({ timeline, projectDir }: PreviewProps) {
           <video ref={videoRef} muted playsInline preload="auto" className="absolute inset-0 w-full h-full object-contain" />
           <audio ref={voiceRef} preload="auto" />
           <audio ref={musicRef} preload="auto" />
+          <audio ref={extraRef} preload="auto" />
           {!placed.length && (
             <div className="absolute inset-0 flex items-center justify-center text-[13px] text-zinc-500">
               {t`Add a video to start`}

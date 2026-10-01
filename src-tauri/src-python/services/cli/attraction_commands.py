@@ -15,6 +15,7 @@ from services.vdoprocessing.videopipeline.audio_step import is_unvisited_stopby
 from services.vdoprocessing.videopipeline.helpers import (
     attraction_audio_filename,
     attraction_output_filename,
+    has_attraction_media,
     output_is_valid,
     project_attraction_video_dir,
     project_audio_dir,
@@ -78,8 +79,8 @@ def _generate_attraction_video(
     waypoint = waypoints[waypoint_index]
     if not isinstance(waypoint, dict):
         raise ValueError(f"Waypoint {waypoint_index} must be an object")
-    if not waypoint.get("popup_image"):
-        raise ValueError(f"Waypoint {waypoint_index} has no popup_image")
+    if not has_attraction_media(waypoint):
+        raise ValueError(f"Waypoint {waypoint_index} has no popup_image or video")
     if is_unvisited_stopby(waypoint):
         raise ValueError(f"Waypoint {waypoint_index} is a stop-by not connected to the route (no attraction clip)")
 
@@ -138,7 +139,7 @@ def test_attraction_videos(
     candidates = [
         (index, waypoint)
         for index, waypoint in enumerate(waypoints)
-        if isinstance(waypoint, dict) and waypoint.get("popup_image") and not is_unvisited_stopby(waypoint)
+        if has_attraction_media(waypoint) and not is_unvisited_stopby(waypoint)
     ]
     for index, waypoint in enumerate(waypoints):
         if is_unvisited_stopby(waypoint):

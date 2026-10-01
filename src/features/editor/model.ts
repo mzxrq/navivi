@@ -12,6 +12,8 @@ export interface Segment {
   audioDuration?: number;
   audioOffset: number;
   subtitleFile?: string;
+  extraAudio?: string;
+  extraVolume?: number;
   volume: number;
   muted: boolean;
   fadeIntoNext: number;
@@ -30,6 +32,7 @@ export interface MusicBed {
   label: string;
   duration?: number;
   volume: number;
+  credit?: string;
 }
 
 export interface TimelineData {
@@ -43,6 +46,7 @@ export const EDITOR_VERSION = 1;
 export const MIN_SEGMENT = 0.5;
 export const MIN_CUE = 0.3;
 export const AUTO_FADE_SECONDS = 0.8;
+export const DEFAULT_EXTRA_VOLUME = 0.5;
 
 export const emptyTimeline = (): TimelineData => ({
   segments: [],
@@ -306,6 +310,8 @@ export function toManifest(projectName: string, timeline: TimelineData) {
       audio_path: s.audio ?? null,
       audio_offset: s.audioOffset,
       subtitle_path: s.subtitleFile ?? null,
+      extra_audio_path: s.extraAudio ?? null,
+      extra_audio_volume: s.extraAudio ? (s.extraVolume ?? DEFAULT_EXTRA_VOLUME) : null,
       trim_in: s.trimIn,
       trim_out: s.trimOut < s.videoDuration - 0.01 ? s.trimOut : null,
       volume: s.volume,
@@ -362,6 +368,8 @@ export async function timelineFromPipeline(
       audioDuration,
       audioOffset: Number(t.audio_offset) || 0,
       subtitleFile: t.subtitle_path || undefined,
+      extraAudio: t.extra_audio_path || undefined,
+      extraVolume: typeof t.extra_audio_volume === "number" ? t.extra_audio_volume : undefined,
       volume: typeof t.volume === "number" ? t.volume : 1,
       muted: !!t.muted,
       fadeIntoNext: Number(t.fade_into_next_seconds) || 0,

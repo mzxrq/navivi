@@ -27,6 +27,7 @@ import {
   TimelineData,
 } from "./model";
 import { ExportDialog } from "./ExportDialog";
+import { LibraryTrack, MusicPicker } from "./MusicPicker";
 import { Inspector } from "./Inspector";
 import { player } from "./player";
 import { Preview } from "./Preview";
@@ -49,6 +50,7 @@ export function EditorView() {
   const [selection, setSelection] = useState<Selection>(null);
   const [pps, setPps] = useState(0);
   const [exportOpen, setExportOpen] = useState(false);
+  const [musicOpen, setMusicOpen] = useState(false);
   const view = draft ?? timeline;
   const { placed, total } = useMemo(() => layout(view), [view]);
 
@@ -110,14 +112,33 @@ export function EditorView() {
     }
   };
 
-  const addMusic = async () => {
+  const placeMusic = async (source: string, label: string, credit?: string) => {
+    const copied = await invoke<string>("copy_asset_file", { sourcePath: source, targetDir: `${dir}/assets/audio/music` });
+    const rel = toRel(copied);
+    const duration = await probeDuration(convertFileSrc((await toAbsoluteProjectPath(rel, dir)).split(String.fromCharCode(92)).join("/")), "audio", 0);
+    commit({ ...timeline, music: { path: rel, label, duration, volume: timeline.music?.volume ?? 0.25, credit } });
+  };
+
+  const useLibraryTrack = async (track: LibraryTrack) => {
+    setMusicOpen(false);
     try {
-      const [file] = await importMedia("audio", "audio/music");
-      if (file) commit({ ...timeline, music: { path: file.rel, label: file.name, duration: file.duration, volume: 0.25 } });
+      await placeMusic(track.abs, track.title, track.credit);
     } catch (e: any) {
       showToast(t`Could not add the music: ${e?.message ?? e}`, "error");
     }
   };
+
+  const addMusicFile = async () => {
+    setMusicOpen(false);
+    try {
+      const [file] = await importMedia("audio", "audio/music");
+      if (file) commit({ ...timeline, music: { path: file.rel, label: file.name, duration: file.duration, volume: timeline.music?.volume ?? 0.25 } });
+    } catch (e: any) {
+      showToast(t`Could not add the music: ${e?.message ?? e}`, "error");
+    }
+  };
+
+  const addMusic = () => setMusicOpen(true);
 
   const withSubtitles = (subtitles: SubtitleCue[], message: string) => {
     commit({ ...timeline, subtitles });
@@ -361,6 +382,7 @@ export function EditorView() {
         />
       </div>
 
+      {musicOpen && <MusicPicker onPick={useLibraryTrack} onChooseFile={addMusicFile} onClose={() => setMusicOpen(false)} />}
       {exportOpen && <ExportDialog timeline={timeline} projectDir={dir} projectName={metadata.project_name} onClose={() => setExportOpen(false)} />}
     </div>
   );

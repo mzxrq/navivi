@@ -10,7 +10,7 @@ from typing import Any, Dict, Optional
 
 from services.logger.progress import tracker
 
-from .helpers import attraction_output_filename, logger
+from .helpers import attraction_output_filename, has_attraction_media, logger
 
 
 def _resolve_attraction_prompt(waypoint: dict) -> list:
@@ -37,6 +37,21 @@ def generate_waypoint_attraction_video(
     path/clip data is relevant to that status."""
     popup_image_entry = waypoint.get("popup_image")
     label = waypoint.get("label", f"waypoint_{idx}")
+
+    if waypoint.get("videos"):
+        from services.vdoprocessing.user_videos import process_user_videos
+
+        output_filename = attraction_output_filename(idx, label)
+        result_path = process_user_videos(
+            generator, waypoint["videos"], waypoint.get("videoSound") or [], target_audio_duration,
+            output_filename, place_label=label, force=force,
+        )
+        if result_path:
+            return {
+                "status": "generated", "label": label, "video_path": result_path,
+                "audio_path": audio_path, "output_filename": output_filename,
+            }
+        return {"status": "failed", "label": label, "output_filename": output_filename}
 
     if not popup_image_entry:
         return {"status": "skipped_no_image", "label": label}
@@ -146,7 +161,7 @@ def render_attraction_videos(
         # Check upfront, before ever showing "Generating..." or touching
         # ComfyUI/the local fallback — a waypoint with no popup image has
         # nothing to generate a clip from, so skip it outright.
-        if not isinstance(wp, dict) or not wp.get("popup_image"):
+        if not has_attraction_media(wp):
             logger.info(
                 "Step 3: [%d/%d] Skipping '%s' — no popup image configured.",
                 idx + 1, len(waypoints), place_label,

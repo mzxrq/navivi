@@ -118,6 +118,8 @@ export const saveProjectData = async (
   if (!(await exists(projectDir))) await mkdir(projectDir, { recursive: true });
   if (!(await exists(assetsDir))) await mkdir(assetsDir, { recursive: true });
   if (!(await exists(imageAssetsDir))) await mkdir(imageAssetsDir, { recursive: true });
+  const userVideoDir = await join(assetsDir, "video", "user");
+  if (!(await exists(userVideoDir))) await mkdir(userVideoDir, { recursive: true });
 
   // Initialize GPX String with GPSBabel expected headers
   const gpxLines: string[] = [];
@@ -186,6 +188,15 @@ export const saveProjectData = async (
           relativeImagePaths.push("assets/image/" + fileName);
         }
       }
+      const relativeVideoPaths: string[] = [];
+      for (const videoPath of wp.videos ?? []) {
+        const fileName = await basename(videoPath);
+        const absoluteDest = await join(userVideoDir, fileName);
+        if (videoPath !== absoluteDest && !(await exists(absoluteDest))) {
+          await copyFile(videoPath, absoluteDest);
+        }
+        relativeVideoPaths.push("assets/video/user/" + fileName);
+      }
       let finalCustomMarker = "";
       if (wp.customMarker) {
         const markerName = await basename(wp.customMarker);
@@ -211,6 +222,8 @@ export const saveProjectData = async (
         image_display: wp.imageDisplay || "pip",
 
         images: relativeImagePaths,
+        videos: relativeVideoPaths,
+        videoSound: relativeVideoPaths.map((_, i) => wp.videoSound?.[i] ?? false),
         imagePans: wp.imagePans || [],
         imageTransitions: wp.imageTransitions || [],
         narration: wp.narration || "",
@@ -460,6 +473,13 @@ export const loadProjectData = async (forcePath?: string, isFolder = false) => {
           }
         }
       }
+      if (wp.videos) {
+        for (let i = 0; i < wp.videos.length; i++) {
+          if (wp.videos[i] && !wp.videos[i].match(/^[a-zA-Z]:\\/) && !wp.videos[i].startsWith('/')) {
+            wp.videos[i] = await join(projectDir, wp.videos[i]);
+          }
+        }
+      }
       if (wp.popup_image) {
         for (let i = 0; i < wp.popup_image.length; i++) {
           if (wp.popup_image[i] && !wp.popup_image[i].match(/^[a-zA-Z]:\\/) && !wp.popup_image[i].startsWith('/')) {
@@ -672,6 +692,7 @@ export async function loadTimelineData(projectDir: string): Promise<TimelineData
     if (track.file_path) track.file_path = rel(track.file_path);
     if (track.audio_path) track.audio_path = rel(track.audio_path);
     if (track.subtitle_path) track.subtitle_path = rel(track.subtitle_path);
+    if (track.extra_audio_path) track.extra_audio_path = rel(track.extra_audio_path);
   }
   for (const clip of raw.ui_state?.clips ?? []) if (clip.source) clip.source = rel(clip.source);
 

@@ -344,7 +344,7 @@ def render_from_timeline(
     if relinked:
         logger.info("NLE Engine: re-linked narration for %d clips from the editor state", relinked)
     for track in timeline_data.get("video_tracks", []):
-        for key in ("file_path", "audio_path"):
+        for key in ("file_path", "audio_path", "extra_audio_path"):
             if track.get(key) and not Path(track[key]).is_absolute():
                 track[key] = str(project_dir / track[key])
     music = timeline_data.get("music") or {}

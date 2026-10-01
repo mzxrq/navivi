@@ -17,6 +17,7 @@ from services.logger.progress import tracker
 
 from .helpers import (
     attraction_audio_filename,
+    has_attraction_media,
     logger,
     output_is_valid,
     project_audio_dir,
@@ -52,7 +53,7 @@ def has_own_attraction_clip(waypoint: dict) -> bool:
         isinstance(waypoint, dict)
         and not is_unvisited_stopby(waypoint)
         and bool((waypoint.get("attractionNarration") or waypoint.get("narration") or "").strip())
-        and bool(waypoint.get("popup_image"))
+        and has_attraction_media(waypoint)
     )
 
 

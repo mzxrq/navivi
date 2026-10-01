@@ -15,6 +15,8 @@ export interface Waypoint {
   images?: string[];
   imageDisplay?: "pip" | "fullscreen";
   imagePans?: string[];
+  videos?: string[];
+  videoSound?: boolean[];
   imageTransitions?: string[];
   arrivingNarration?: string;
   attractionNarration?: string;

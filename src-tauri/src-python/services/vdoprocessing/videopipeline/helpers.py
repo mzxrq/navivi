@@ -54,6 +54,11 @@ def attraction_videos_enabled(settings: dict) -> bool:
     return bool(settings.get("enable_attraction_videos", True)) and not skip_rich_media(settings)
 
 
+def has_attraction_media(waypoint) -> bool:
+    """A photo to animate, or the user's own videos, for the stop's attraction clip."""
+    return isinstance(waypoint, dict) and bool(waypoint.get("popup_image") or waypoint.get("videos"))
+
+
 def output_is_valid(path, min_bytes: int = 1024) -> bool:
     """Checkpoint helper: True only if `path` exists and is above
     `min_bytes` — guards against treating a zero-byte/truncated file left

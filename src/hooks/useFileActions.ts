@@ -62,7 +62,7 @@ export function useFileActions() {
       }
 
       if (imageCount > 0 && photoPoints.length === 0) {
-        showToast(t`No GPS location data found in selected photos`, "warning");
+        showToast(t`None of these photos has a location. Photos saved from websites or chat apps usually don't.`, "warning");
         return;
       }
 
@@ -96,6 +96,8 @@ export function useFileActions() {
         setWaypoints(newWaypoints);
         setIsDirty(true);
         showToast(t`Imported ${photoPoints.length} photos and generated route.`, "success");
+        const skipped = imageCount - photoPoints.length;
+        if (skipped > 0) showToast(t`${skipped} photos without a location were skipped.`, "info");
       }
 
     } catch (e) {

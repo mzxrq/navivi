@@ -54,7 +54,6 @@ export function MapArea() {
   useEffect(() => {
     const pending = takePendingImport();
     if (pending?.kind === "route") importRouteFile(pending.path);
-    else if (pending?.kind === "photos") handleDroppedFiles(pending.paths);
   }, []);
 
   const [isHovering, setIsHovering] = useState(false);

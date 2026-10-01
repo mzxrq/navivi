@@ -97,7 +97,7 @@ def workload(config: dict) -> dict:
         *[wp.get("arrivingNarration") or wp.get("narration") for wp in waypoints],
         *[wp.get("attractionNarration") for wp in waypoints],
     )
-    clips = sum(1 for wp in waypoints if wp.get("images") or wp.get("popup_image")) if attractions_on else 0
+    clips = sum(1 for wp in waypoints if (wp.get("images") or wp.get("popup_image")) and not wp.get("videos")) if attractions_on else 0
     leg_seconds = float(settings.get("res_duration", 12)) * legs + float(settings.get("duration_seconds", 8))
     return {
         "gps": 1,

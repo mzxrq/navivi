@@ -427,6 +427,7 @@ class VideoExporter:
         target_fps: Optional[float] = None,
         trim_in: float = 0.0, trim_out: Optional[float] = None,
         volume: float = 1.0, muted: bool = False,
+        extra_audio: Optional[str] = None, extra_volume: float = 0.5,
     ) -> Path:
         """Combines one timeline track's silent video with its own separate
         audio track (see timeline_step.build_timeline — video and audio are
@@ -508,7 +509,12 @@ class VideoExporter:
             cmd += ["-i", str(Path(audio_path).resolve())]
         else:
             cmd += ["-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100"]
-        cmd += ["-map", "0:v:0", "-map", "1:a:0"]
+        extra = bool(extra_audio and Path(extra_audio).exists() and extra_volume > 0.001)
+        if extra:
+            cmd += ["-i", str(Path(extra_audio).resolve())]
+            cmd += ["-map", "0:v:0"]
+        else:
+            cmd += ["-map", "0:v:0", "-map", "1:a:0"]
         if filters or trimmed:
             if filters:
                 cmd += ["-vf", ",".join(filters)]
@@ -532,7 +538,16 @@ class VideoExporter:
             audio_filters.append(f"volume={0.0 if muted else max(0.0, volume):.3f}")
         if has_audio:
             audio_filters.append("apad")
-        if audio_filters:
+        if extra:
+            # Narration (or silence) plus the footage's own sound, mixed under it.
+            voice_chain = ",".join(audio_filters) if audio_filters else "anull"
+            cmd += [
+                "-filter_complex",
+                f"[1:a]{voice_chain}[v];[2:a]volume={max(0.0, extra_volume):.3f}[e];"
+                f"[v][e]amix=inputs=2:duration=longest:normalize=0,apad[a]",
+                "-map", "[a]",
+            ]
+        elif audio_filters:
             cmd += ["-af", ",".join(audio_filters)]
         cmd += ["-shortest", "-video_track_timescale", str(_TIMESCALE)]
         cmd.append(str(tmp_out))
@@ -683,6 +698,8 @@ class VideoExporter:
                     trim_in=float(track.get("trim_in") or 0.0),
                     trim_out=float(track["trim_out"]) if track.get("trim_out") else None,
                     volume=float(track.get("volume", 1.0)), muted=bool(track.get("muted")),
+                    extra_audio=track.get("extra_audio_path"),
+                    extra_volume=float(track.get("extra_audio_volume") if track.get("extra_audio_volume") is not None else 0.5),
                 )
                 for i, track in enumerate(tracks)
             ]

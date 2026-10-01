@@ -3,7 +3,7 @@ import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 import { Copy, Download, Music, Trash2 } from "../../components/ui/icons";
 import { Switch } from "../../components/ui/Switch";
-import { anchorCue, layout, MIN_CUE, MIN_SEGMENT, placedCues, Segment, SubtitleCue, TimelineData } from "./model";
+import { anchorCue, DEFAULT_EXTRA_VOLUME, layout, MIN_CUE, MIN_SEGMENT, placedCues, Segment, SubtitleCue, TimelineData } from "./model";
 import { formatTime, player } from "./player";
 import type { Selection } from "./TimelinePane";
 
@@ -146,6 +146,16 @@ export function Inspector(p: InspectorProps) {
             <button type="button" className={iconButton} onClick={() => patchSegment({ audio: undefined, audioDuration: undefined, audioOffset: 0 })}>
               <Trans>Remove narration</Trans>
             </button>
+          </Section>
+        )}
+        {seg.extraAudio && (
+          <Section title={t`Original sound`}>
+            <Row label={t`Volume`}>
+              <Slider value={seg.extraVolume ?? DEFAULT_EXTRA_VOLUME} min={0} max={1} step={0.05} onCommit={(v) => patchSegment({ extraVolume: v })} />
+            </Row>
+            <p className="text-[11px] text-zinc-400">
+              <Trans>The sound of your own video, mixed under the narration.</Trans>
+            </p>
           </Section>
         )}
         <Section title={t`Transition`}>

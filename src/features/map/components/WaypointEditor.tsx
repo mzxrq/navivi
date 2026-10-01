@@ -21,6 +21,7 @@ import { useUI } from "../../../hooks/useUI";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { ScriptInput } from "../../../components/ui/ScriptInput";
 import { Switch } from "../../../components/ui/Switch";
+import { MAX_VIDEOS, WaypointVideos } from "./WaypointVideos";
 import { openContextMenu, separator } from "../../../components/ui/menuItems";
 import { Folder, Video } from "../../../components/ui/icons";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -88,7 +89,7 @@ export function WaypointEditor({
   const wp = waypoints.find((w) => w.id === wpId);
   const wpIndex = waypoints.findIndex((w) => w.id === wpId);
 
-  const [activeTab, setActiveTab] = useState<"scripts" | "images">("scripts");
+  const [activeTab, setActiveTab] = useState<"scripts" | "images" | "videos">("scripts");
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -372,6 +373,7 @@ export function WaypointEditor({
                   [
                     ["scripts", t`Narration`, null],
                     ["images", t`Photos`, `${wpImages.length}/${MAX_IMAGES}`],
+                    ["videos", t`Videos`, `${(wp.videos ?? []).length}/${MAX_VIDEOS}`],
                   ] as const
                 ).map(([id, tabLabel, count]) => (
                   <button
@@ -434,6 +436,8 @@ export function WaypointEditor({
                       </section>
                     ))}
                   </div>
+                ) : activeTab === "videos" ? (
+                  <WaypointVideos wp={wp} />
                 ) : (
                   <div>
                     <p className="text-[11px] text-zinc-500 mb-3">

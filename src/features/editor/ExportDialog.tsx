@@ -90,6 +90,11 @@ export function ExportDialog({ timeline, projectDir, projectName, onClose }: Exp
               </div>
             ))}
           </dl>
+          {timeline.music?.credit && (
+            <p className="mt-3 text-[11px] leading-snug text-zinc-400 select-text">
+              <Trans>Music credit, to include where you publish the video:</Trans> {timeline.music.credit}
+            </p>
+          )}
           {phase === "working" && (
             <p className="mt-3 flex items-center gap-2 text-[12px] text-zinc-500">
               <Loader2 className="w-3.5 h-3.5 animate-spin" /> <Trans>Stitching clips, narration and subtitles. This can take a few minutes.</Trans>
