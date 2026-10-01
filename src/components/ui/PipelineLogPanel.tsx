@@ -9,7 +9,7 @@ import {
   Loader2,
   SquareTerminal,
   XCircle,
-} from "lucide-react";
+} from "./icons";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   PipelineLine,

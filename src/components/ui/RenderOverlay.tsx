@@ -21,7 +21,7 @@ import {
   X,
   XCircle,
   Zap,
-} from "lucide-react";
+} from "./icons";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useUI } from "../../hooks/useUI";

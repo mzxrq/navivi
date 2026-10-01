@@ -131,6 +131,10 @@ export {
   LocateFixed, // WaypointEditor
   ClipboardPaste,
   Flag, // ContextMenu
+  SquareTerminal, // PipelineLogPanel
+  Maximize2, // RenderOverlay
+  RotateCcw,
+  Zap,
 } from "lucide-react";
 
 export const Navivi = ({
