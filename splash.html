@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Navivi</title>
+    <style>
+      /* The startup window (label "splash" in tauri.conf.json). The main window stays hidden until the app has rendered. */
+      html, body { margin: 0; height: 100%; overflow: hidden; background: #ffffff; }
+      @media (prefers-color-scheme: dark) { html, body { background: #09090b; } }
+      .navivi-splash {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background-color: #ffffff;
+        color: #18181b;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        user-select: none;
+      }
+
+      .navivi-logo-anim {
+        width: 128px;
+        height: 128px;
+        margin-bottom: 24px;
+        overflow: visible;
+        filter: drop-shadow(0 10px 15px rgba(0, 0, 0, 0.1));
+        animation: nv-cycle 3.2s ease-in-out infinite;
+      }
+
+      /* One loop: the start dot pops in, the route is drawn up to the waypoint, the waypoint drops on, then it all fades and starts again. */
+      .nv-start {
+        transform-box: fill-box;
+        transform-origin: center;
+        animation: nv-start 3.2s ease-out infinite;
+      }
+      .nv-route {
+        stroke-dasharray: 1 1;
+        stroke-dashoffset: 1;
+        animation: nv-draw 3.2s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+      }
+      .nv-pin {
+        transform-box: fill-box;
+        transform-origin: 50% 100%;
+        animation: nv-pin 3.2s ease-out infinite;
+      }
+
+      @keyframes nv-cycle {
+        0% { opacity: 0; }
+        4%, 86% { opacity: 1; }
+        96%, 100% { opacity: 0; }
+      }
+      @keyframes nv-start {
+        0% { transform: scale(0); }
+        8% { transform: scale(1.18); }
+        13%, 100% { transform: scale(1); }
+      }
+      @keyframes nv-draw {
+        0%, 11% { stroke-dashoffset: 1; opacity: 0; }
+        12% { opacity: 1; }
+        64%, 100% { stroke-dashoffset: 0; opacity: 1; }
+      }
+      @keyframes nv-pin {
+        0%, 60% { transform: translateY(-18px) scale(0); opacity: 0; }
+        72% { transform: translateY(0) scale(1.14); opacity: 1; }
+        80%, 100% { transform: translateY(0) scale(1); opacity: 1; }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .navivi-logo-anim, .nv-start, .nv-route, .nv-pin { animation: none; }
+        .nv-route { stroke-dashoffset: 0; }
+      }
+
+      .navivi-splash-text {
+        font-weight: 800;
+        font-size: 12px;
+        letter-spacing: 0.05px;
+        text-transform: uppercase;
+        color: #71717a;
+        display: flex;
+        align-items: center;
+      }
+
+      .dots::after {
+        content: '';
+        display: inline-block;
+        width: 1em;
+        text-align: left;
+        animation: dots 1.5s steps(4, end) infinite;
+      }
+      @keyframes dots {
+        0% { content: ''; }
+        25% { content: '.'; }
+        50% { content: '..'; }
+        75% { content: '...'; }
+        100% { content: ''; }
+      }
+
+      @media (prefers-color-scheme: dark) {
+        .navivi-splash { background-color: #09090b; }
+        .navivi-logo-anim { filter: drop-shadow(0 10px 15px rgba(0, 0, 0, 0.5)); }
+        .navivi-splash-text { color: #a1a1aa; }
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="splash" class="navivi-splash" data-tauri-drag-region>
+      <svg class="navivi-logo-anim" xmlns="http://www.w3.org/2000/svg" viewBox="26 12 160 160" data-tauri-drag-region>
+        <defs>
+          <linearGradient id="splashGradient" x1="30" y1="125" x2="160" y2="40" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color="#3b82f6" />
+            <stop offset="45%" stop-color="#8b5cf6" />
+            <stop offset="100%" stop-color="#ff7e5f" />
+          </linearGradient>
+        </defs>
+        <path
+          class="nv-route"
+          pathLength="1"
+          d="M 60 150 L 72 65 Q 75 40 88 65 L 122 127.5 Q 135 150 137.5 136.75 L 144 97"
+          fill="none" stroke="url(#splashGradient)" stroke-width="22"
+          stroke-linecap="round" stroke-linejoin="round" />
+        <g class="nv-start">
+          <circle cx="60" cy="150" r="18" fill="url(#splashGradient)" />
+          <circle cx="60" cy="150" r="9" fill="#fff" />
+        </g>
+        <g class="nv-pin">
+          <path fill="url(#splashGradient)" stroke="url(#splashGradient)"
+            stroke-width="19" stroke-linejoin="round"
+            transform="translate(140, 25) scale(0.42)"
+            d="m21.65 118.46c-10.06-2.7-20.47-45.45-21-53.76-0.54-8.58-0.03-21.19 2.59-30.99 5-18.64 26.18-29.12 47.4-23.43 21.21 5.68 34.32 25.35 29.33 43.99-2.44 9.1-9.3 20.05-14.44 27.82-7.16 10.83-33.02 39.28-43.88 36.37z" />
+          <path fill="#fff" stroke="#fff" stroke-width="8" stroke-linejoin="round" d="m153 41 9 8-10 5z" />
+        </g>
+      </svg>
+
+      <div class="navivi-splash-text" data-tauri-drag-region>
+        <span>Starting</span><span class="dots"></span>
+      </div>
+    </div>
+  </body>
+</html>

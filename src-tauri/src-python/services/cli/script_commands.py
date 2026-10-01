@@ -21,11 +21,12 @@ def test_overview_script(job_config_path: str, use_llm: bool = True) -> Dict[str
         build_tour_script, in_overview_range, ollama_generate, plan_budget,
     )
     from services.localization.route_brief import build_brief
+    from services.projectfiles import ROUTE_CACHE, meta_file
 
     config_path = Path(job_config_path)
     project = json.loads(config_path.read_text(encoding="utf-8"))
     try:
-        cache = json.loads((config_path.parent / ".routecache.json").read_text(encoding="utf-8"))
+        cache = json.loads(meta_file(config_path.parent, ROUTE_CACHE).read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         cache = {}
     model = project.get("settings", {}).get("overview_script_model", DEFAULT_SCRIPT_MODEL)

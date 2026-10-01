@@ -1,7 +1,4 @@
-import { readTextFile, exists } from "@tauri-apps/plugin-fs";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { convertFileSrc } from "@tauri-apps/api/core";
-import { parseSRT } from "../utils/srtParser";
 import {
   createContext,
   useContext,
@@ -32,6 +29,7 @@ import {
   scanProjectsOnDisk,
   loadTimelineData,
   loadRouteCache,
+  tidyProjectFolder,
   saveTimelineManifest,
 } from "../services/fileSystem";
 import {
@@ -46,7 +44,6 @@ import { emptyTimeline } from "../features/editor/model";
 import { useHistory } from "./useHistory";
 import { useUI } from "./useUI";
 import { UnsavedChanges } from "../components/ui/UnsavedChanges";
-import { t } from "@lingui/core/macro";
 
 const WorkspaceContext = createContext<WorkspaceState | undefined>(undefined);
 
@@ -432,6 +429,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         const synced = await syncProjectOnOpen(data, selectedPath);
         data = synced.data;
         recoveredCache = synced.routingCache;
+        await tidyProjectFolder(data.directory_path);
       } catch (error) {
         console.error("Database sync failed; using project files only:", error);
         if (data.directory_path) recoveredCache = await loadRouteCache(data.directory_path);
@@ -464,6 +462,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           routeMode: wp.routeMode || "walking",
           customRoute: wp.customRoute || [],
           drawStyle: wp.drawStyle || "linear",
+          lineColor: wp.lineColor || undefined,
+          viaPoints: wp.viaPoints?.length ? wp.viaPoints : undefined,
+          curveOffset: wp.curveOffset ?? undefined,
+          timestamp: wp.timestamp || undefined,
           customMarker: wp.customMarker,
 
           isStopBy: wp.isStopBy || false,
@@ -471,6 +473,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           skipAssetGeneration: wp.skipAssetGeneration ?? undefined,
           pauseAtWaypoint: wp.pauseAtWaypoint ?? undefined,
           images: wp.popup_image || wp.images || [],
+          videos: wp.videos || [],
+          videoSound: wp.videoSound || [],
           imagePans: wp.imagePans || [],
           imageTransitions: wp.imageTransitions || [],
           imageDisplay: wp.image_display || "pip",

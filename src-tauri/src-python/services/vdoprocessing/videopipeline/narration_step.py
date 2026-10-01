@@ -22,7 +22,7 @@ from . import audio_step
 from .audio_step import OVERVIEW_CUE_KEY, base_narration_script, raw_narration_script, waypoint_cue_key
 from .helpers import logger
 
-_STORE_NAME = ".narration_cues.json"
+from services.projectfiles import NARRATION_CUES, OVERVIEW_NARRATION, ROUTE_CACHE, meta_file, meta_path
 _SENTENCE_END = re.compile(r"(?<=[。！？!?\n])")
 
 # How much of the narration is left to speak after the walker arrives. 0: the
@@ -46,13 +46,13 @@ def _hash(text: str) -> str:
 
 
 class CueStore:
-    """<project>/.narration_cues.json: per waypoint, the cued script (made from
+    """<project>/.navivi/narration_cues.json: per waypoint, the cued script (made from
     a given base script) and the cue times measured from its audio."""
 
     def __init__(self, project_dir):
-        self.path = Path(project_dir) / _STORE_NAME
+        self.path = meta_path(project_dir, NARRATION_CUES)
         try:
-            self._data = json.loads(self.path.read_text(encoding="utf-8"))
+            self._data = json.loads(meta_file(project_dir, NARRATION_CUES).read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             self._data = {}
 
@@ -189,10 +189,11 @@ def ensure_overview_narration(project_config_path: str) -> bool:
 
     # The app's save blanks overview_narration, so the generated script is
     # kept beside the config and restored while the waypoints are the same.
-    saved_path = config_path.parent / ".overview_narration.json"
+    saved_path = meta_path(config_path.parent, OVERVIEW_NARRATION)
+    saved_source = meta_file(config_path.parent, OVERVIEW_NARRATION)
     if not existing:
         try:
-            saved = json.loads(saved_path.read_text(encoding="utf-8"))
+            saved = json.loads(saved_source.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             saved = {}
         if saved.get("source_ids") == current_ids and (saved.get("script") or "").strip():
@@ -207,7 +208,7 @@ def ensure_overview_narration(project_config_path: str) -> bool:
     from services.localization.overview_script import build_tour_script, ollama_generate
 
     try:
-        cache = json.loads((config_path.parent / ".routecache.json").read_text(encoding="utf-8"))
+        cache = json.loads(meta_file(config_path.parent, ROUTE_CACHE).read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         cache = {}
     model = project.get("settings", {}).get("overview_script_model", DEFAULT_SCRIPT_MODEL)

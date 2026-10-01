@@ -79,7 +79,9 @@ def record_headless_video(
     html_dir = os.path.join(config_dir, "frames")
     os.makedirs(html_dir, exist_ok=True)
 
-    cache_path = os.path.join(config_dir, ".routecache.json")
+    from services.projectfiles import ROUTE_CACHE, meta_file
+
+    cache_path = str(meta_file(config_dir, ROUTE_CACHE))
 
     if os.path.exists(cache_path):
         with open(cache_path, "r", encoding="utf-8") as f:

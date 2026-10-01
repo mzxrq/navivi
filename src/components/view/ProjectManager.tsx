@@ -19,6 +19,7 @@ import {
   Plus,
   Settings,
   Trash2,
+  UploadCloud,
 } from "../ui/icons";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
@@ -229,6 +230,18 @@ export function ProjectManager() {
       label: t`Project settings`,
       icon: Settings,
       onSelect: () => openModal("settings", project),
+    },
+    {
+      label: t`Export for sharing...`,
+      icon: UploadCloud,
+      onSelect: () => {
+        // An entry that still points at an old .nvv archive is already one file to share.
+        if (project.path.toLowerCase().endsWith(".nvv")) {
+          showToast(t`This project is still an archive file. Open it once, then export.`, "info");
+          return;
+        }
+        window.dispatchEvent(new CustomEvent("export-project", { detail: { dir: project.path, name: project.name } }));
+      },
     },
     separator,
     {

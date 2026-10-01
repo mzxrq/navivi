@@ -18,7 +18,9 @@ def load_route_from_config(config_path: str):
     with open(config_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    cache_file = Path(config_path).parent / ".routecache.json"
+    from services.projectfiles import ROUTE_CACHE, meta_file
+
+    cache_file = meta_file(Path(config_path).parent, ROUTE_CACHE)
     if cache_file.exists():
         try:
             with open(cache_file, "r", encoding="utf-8") as cf:

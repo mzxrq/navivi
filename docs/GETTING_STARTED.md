@@ -7,7 +7,7 @@ To build and run Navivi locally, you will need the following installed on your s
 - [Node.js](https://nodejs.org/) (v18+)
 - [Rust](https://www.rust-lang.org/tools/install)
 - [Python 3.12+](https://www.python.org/)
-- **FFmpeg** (Must be installed and added to your system PATH)
+- **FFmpeg** (on your system PATH, or placed in `src-tauri/src-python/bin/FFmpeg`)
 - _(Optional)_ **Ollama** and **ComfyUI** running locally for AI script and video generation.
 
 ## Setup Instructions
@@ -30,7 +30,7 @@ npm install
 ```
 
 **3. Configure Environment Variables**
-Copy the example environment file and add your API keys (Mapbox, OpenRouteService, etc.):
+Copy the example environment file and add your API keys (`VITE_MAPBOX_KEY` and `VITE_ORS_API_KEY`):
 
 ```bash
 cp .env.example .env
@@ -42,3 +42,15 @@ Start the application. This will automatically boot the Vite development server 
 ```bash
 npm run tauri dev
 ```
+
+## Running the tests
+
+```bash
+cd src-tauri && cargo test
+cd src-tauri/src-python && python -m pytest -q
+npx tsc --noEmit
+```
+
+## Where projects are saved
+
+Projects are folders in `Documents/Navivi/Workspaces`. Use **Export for sharing** (editor menu, or the project's menu in the Project Manager) to make one `.nvv` file to send to someone. See the [README](../README.md) for the folder layout.

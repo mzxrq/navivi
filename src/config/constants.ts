@@ -11,6 +11,9 @@ export const fileSystem = {
     workspacesFolder: "Workspaces",
     assetsFolder: "assets",
     configFile: "job_config.json",
+    // Everything generated for bookkeeping (route cache, narration cues, asset manifest, gps data).
+    metaFolder: ".navivi",
+    cacheFolder: "Cache",
     gpxFile: "raw_track.gpx",
     extensions: {
         project: "nvv",

@@ -1,11 +1,63 @@
 [<img width="300" alt="Navivi logo" src="public/navivi.svg">](#)
 
-**Navivi** is an AI-powered desktop application for creating, editing, and rendering cinematic map route animations and travel vlog timelines. By combining 3D terrain mapping with local AI generation, it turns raw GPX data or manual waypoints into fully produced travel videos.
+**Navivi** is a desktop app that turns a route into a narrated, cinematic travel video. Plot stops on a map or import a GPS track, write (or generate) a short script for each place, and Navivi renders the animated route, voices the narration, adds your photos and videos, and stitches everything into one video you can finish in a built-in editor.
 
-Navivi is built with performance and local-first execution in mind, featuring a highly fluid React/Tauri frontend and a robust Python sidecar backend. It provides the building blocks to add rich storytelling features like generative location scripts, custom narrations, and dynamic weather effects into any travel experience you create.
+It runs locally: the interface is React inside Tauri, and a Python sidecar does the heavy work (map rendering, text-to-speech, video encoding). Nothing has to be uploaded to a cloud service.
 
-In addition to interactive 3D map routing, this repository contains the non-linear timeline editor, a universal asset manifest pipeline, and AI generation logic powered by ComfyUI, Irodori TTS, and Ollama.
+## What you can do
 
-- [Getting started with Navivi](./docs/GETTING_STARTED.md)
-- [Project Features](./docs/FEATURES.md)
-- [Contributor documentation](./CONTRIBUTING.md)
+- **Plan a route on a 3D map.** Drive, walk, ferry, draw a path by hand, or fly in a straight curve between stops. Every leg can have its own line colour.
+- **Import what you already have.** GPX, FIT, TCX and KML tracks (stops are placed along the real recorded track), or drop photos with location data onto the map.
+- **Write narration your way.** Per-stop scripts, optionally drafted by a local Ollama model that sticks to the facts it is given, with a pronunciation dictionary (per project and shared by all projects) for names the voice gets wrong.
+- **Choose a voice.** Pick a narration voice, clone a new one from a short recording, set the speed and preview it.
+- **Use your own footage.** Add photos or your own videos to a stop. Photos can be animated; videos play in place, fitted to the narration, with their sound off unless you turn it on.
+- **Finish in the timeline editor.** Reorder and trim clips, shift narration, add subtitles (from the narration, or from an SRT file, even one without timestamps), add background music, then export one video. An "Auto edit" button orders the clips and fills in fades and subtitles.
+- **Share a project.** Export a lean `.nvv` file (a zip) that a friend can open on their own machine.
+
+## How it fits together
+
+| Layer          | Where                   | Role                                                                                                                                                                        |
+| -------------- | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Frontend       | `src/`                  | React 19, TypeScript, Vite, Tailwind v4. Map editor (Mapbox GL), timeline editor, render and settings UI. Translations: English and Japanese (Lingui).                      |
+| Shell          | `src-tauri/src/`        | Thin Rust layer: starts the Python sidecar and streams its logs, project archive and tidy commands, the local database (SQLite) for projects, settings and version history. |
+| Media pipeline | `src-tauri/src-python/` | GPS parsing, text-to-speech, subtitles, attraction clips, route rendering (pydeck + headless Chromium), timeline and export with FFmpeg.                                    |
+
+Optional local services, started on demand: **Ollama** (scripts), **Irodori TTS** (voices) and **ComfyUI** with Wan 2.2 (animating photos; without it Navivi falls back to a simple pan and zoom).
+
+## Getting started
+
+You need Node.js 18+, Rust, Python 3.12+ and FFmpeg (on your PATH or in `src-tauri/src-python/bin`). Ollama and ComfyUI are optional.
+
+```bash
+# 1. Python dependencies for the sidecar
+cd src-tauri/src-python
+pip install -r requirements.txt
+cd ../..
+
+# 2. Frontend dependencies
+npm install
+
+# 3. API keys: copy the example and fill in VITE_MAPBOX_KEY and VITE_ORS_API_KEY
+cp .env.example .env
+
+# 4. Run the app (starts Vite and builds the Rust shell)
+npm run tauri dev
+```
+
+More detail: [Getting started](./docs/GETTING_STARTED.md) and [Features](./docs/FEATURES.md).
+
+## Where your projects live
+
+Projects are folders under `Documents/Navivi/Workspaces/<project>/`:
+
+```text
+<project>/
+  job_config.json    the project (route, scripts, settings), also what the Python pipeline reads
+  timeline.json      your edit
+  thumbnail.png
+  raw_track.gpx
+  assets/            image, audio, subtitles, video (route, attraction, user)
+  .navivi/           generated bookkeeping (route cache, narration cues, gps data)
+```
+
+Map tiles are cached once for all projects in `Documents/Navivi/Cache/tiles`. To send a project to someone, use **Export for sharing**: the file leaves out caches and rebuildable clips (add them with one switch). Folders made by older versions are tidied automatically the first time they are opened.

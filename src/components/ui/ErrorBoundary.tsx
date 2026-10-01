@@ -3,6 +3,8 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { AlertTriangle, Check, Copy, Minus, RefreshCw, X } from "./icons";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
+import { I18nProvider } from "@lingui/react";
+import { i18n } from "@lingui/core";
 
 interface Props {
   children?: ReactNode;
@@ -57,6 +59,12 @@ export class ErrorBoundary extends Component<Props, State> {
 
   public render() {
     if (!this.state.hasError) return this.props.children;
+    // This boundary sits outside the app's I18nProvider (so it also catches errors in the providers),
+    // so the fallback brings its own.
+    return <I18nProvider i18n={i18n}>{this.renderFallback()}</I18nProvider>;
+  }
+
+  private renderFallback() {
 
     const { showDetails, copied } = this.state;
 

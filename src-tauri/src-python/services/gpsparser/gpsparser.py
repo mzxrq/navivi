@@ -17,6 +17,7 @@ from datetime import datetime
 # [I/O] Import service dependencies for Integration
 from services.logger.logger import setup_logger
 from services.config.job_config import JobConfigManager
+from services.projectfiles import gps_data_dir
 from services.gpsparser.gpscalculator import GPSMath
 
 # [Utility] Log setup for debugging and monitoring
@@ -137,9 +138,9 @@ class GPSParser:
             if self.config and hasattr(self.config, "data") else None
         )
         if raw_dir:
-            output_file_directory = self.resolve_config_path(raw_dir) / "gpsdata"
+            output_file_directory = gps_data_dir(self.resolve_config_path(raw_dir))
         else:
-            output_file_directory = self._config_anchors()[0] / "gpsdata"
+            output_file_directory = gps_data_dir(self._config_anchors()[0])
         output_file_directory.mkdir(parents=True, exist_ok=True)
 
         output_algorithm = "iblue747" 

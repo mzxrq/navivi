@@ -13,6 +13,7 @@ import { StatusBar } from "./components/ui/StatusBar";
 import { ContextMenu } from "./components/ui/ContextMenu";
 import { useAutoSave } from "./hooks/useAutoSave";
 import { AutoDirectorModal } from "./components/ui/AutoDirectorModal";
+import { ExportProjectDialog } from "./components/ui/ExportProjectDialog";
 
 export default function App() {
   const { currentView, editorMode } = useUI();
@@ -55,6 +56,7 @@ export default function App() {
       <Toast />
       {currentView === "editor" && <StatusBar />}
       <AutoDirectorModal />
+      <ExportProjectDialog />
     </div>
   );
 }

@@ -1,12 +1,12 @@
 import { documentDir, join, basename, dirname } from "@tauri-apps/api/path";
 import { writeTextFile, writeFile, mkdir, exists, copyFile, readTextFile, readDir, BaseDirectory, open as fsOpen } from "@tauri-apps/plugin-fs";
-import { open as dialogOpen, save as dialogSave } from "@tauri-apps/plugin-dialog";
+import { open as dialogOpen } from "@tauri-apps/plugin-dialog";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { appConfig, fileSystem, GLOBAL_DICTIONARY_KEY } from "../config/constants";
 import { buildAssetManifest } from "../utils/manifestBuilder";
-import { TimelineData, RenderSettings, RecentProjects } from "../types";
+import { TimelineData, RecentProjects } from "../types";
+import { routeCacheKey } from "../utils/routeCacheKey";
 import { emptyTimeline, timelineFromEditorState, timelineFromPipeline, toManifest } from "../features/editor/model";
-import { t } from "@lingui/core/macro";
 import { i18n } from "@lingui/core";
 import { db } from "./db";
 
@@ -47,35 +47,6 @@ export const saveProjectData = async (
 
   let projName = overrideName || metadata.project_name || appConfig.defaultProjectName;
 
-  // Ask for archive destination if this is a new project or "Save As" (asDuplicate)
-  let archivePath = metadata.archive_path;
-
-  // If it's a legacy project being upgraded, archivePath is INSIDE directory_path!
-  // We must force a new archivePath OUTSIDE the legacy folder so it doesn't zip itself.
-  if (archivePath && metadata.directory_path && archivePath.startsWith(metadata.directory_path)) {
-    const defaultSaveDir = await join(docsPath, fileSystem.rootFolder, fileSystem.projectsFolder);
-    archivePath = await join(defaultSaveDir, `${projName}.${fileSystem.extensions.project}`);
-  }
-
-  if (asDuplicate) {
-    const defaultSaveDir = await join(docsPath, fileSystem.rootFolder, fileSystem.projectsFolder);
-    if (!(await exists(defaultSaveDir))) {
-      await mkdir(defaultSaveDir, { recursive: true });
-    }
-    const res = await dialogSave({
-      defaultPath: await join(defaultSaveDir, `${projName}.${fileSystem.extensions.project}`),
-      filters: [{ name: `${appConfig.name} Project`, extensions: [fileSystem.extensions.project] }],
-    });
-    if (!res) throw new Error("Save cancelled by user");
-    archivePath = res;
-    // Update name based on file name chosen
-    projName = await basename(archivePath, `.${fileSystem.extensions.project}`);
-  } else if (!archivePath && !metadata.directory_path) {
-    // If it's a completely new project and they just hit Save, let's auto-generate a workspace
-    // without forcing a .nvv prompt, OR auto-save the .nvv silently.
-    // The safest is to just leave archivePath empty and let it be a workspace-only project!
-  }
-
   // Workspaces directory (where the files are actually extracted and worked on)
   const workspaceRoot = await join(docsPath, fileSystem.rootFolder, fileSystem.workspacesFolder);
   if (!(await exists(workspaceRoot))) {
@@ -112,7 +83,6 @@ export const saveProjectData = async (
   const assetsDir = await join(projectDir, "assets");
   const imageAssetsDir = await join(assetsDir, "image");
   const gpxPath = await join(projectDir, "raw_track.gpx");
-  const nvvPath = await join(projectDir, `${projName}.${fileSystem.extensions.project}`);
   const jsonPath = await join(projectDir, "job_config.json");
 
   if (!(await exists(projectDir))) await mkdir(projectDir, { recursive: true });
@@ -237,6 +207,9 @@ export const saveProjectData = async (
         customRoute: wp.customRoute || [],
         drawStyle: wp.drawStyle || "linear",
         lineColor: wp.lineColor || undefined,
+        viaPoints: wp.viaPoints?.length ? wp.viaPoints : undefined,
+        curveOffset: wp.curveOffset ?? undefined,
+        timestamp: wp.timestamp || undefined,
 
         isStopBy: wp.isStopBy || false,
         connectToRoute: wp.connectToRoute || false,
@@ -276,7 +249,7 @@ export const saveProjectData = async (
     userId: metadata.user_id ?? null,
     theme: metadata.theme ?? null,
     status: "saved",
-    archivePath: archivePath || null,
+    archivePath: null, // projects open from their folder; a .nvv is only made by "Export for sharing"
     thumbnailPath: thumbnailPath || null,
     videoTitle: metadata.video_title || "",
     videoSubtitle: metadata.video_subtitle || "",
@@ -294,7 +267,6 @@ export const saveProjectData = async (
     updated_at: row.updatedAt,
     theme: row.theme ?? undefined,
     status: row.status,
-    archive_path: archivePath,
     thumbnail_path: thumbnailPath,
     source_files: { gps_route: "raw_track.gpx" },
     settings: { ...savedSettings, global_pronunciation_dictionary: (await db.appSettings.get(GLOBAL_DICTIONARY_KEY)) ?? [] },
@@ -309,11 +281,12 @@ export const saveProjectData = async (
   };
 
   const payload = JSON.stringify(jobConfig, null, 2);
-  await writeTextFile(nvvPath, payload);
   await writeTextFile(jsonPath, payload);
 
   const manifest = buildAssetManifest(projId, processedWaypoints as any, settings);
-  const manifestPath = await join(projectDir, "asset_manifest.json");
+  const metaDir = await join(projectDir, fileSystem.metaFolder);
+  if (!(await exists(metaDir))) await mkdir(metaDir, { recursive: true });
+  const manifestPath = await join(metaDir, "asset_manifest.json");
   await writeTextFile(manifestPath, JSON.stringify(manifest, null, 2));
 
   const activeKeys = new Set<string>();
@@ -323,9 +296,7 @@ export const saveProjectData = async (
   for (let i = 0; i < routedWaypoints.length - 1; i++) {
     const wp1 = routedWaypoints[i];
     const wp2 = routedWaypoints[i + 1];
-    const mode = wp1.routeMode || "driving";
-    const customHash = mode === "draw" ? JSON.stringify(wp1.customRoute || []) : "";
-    activeKeys.add(`${wp1.lat.toFixed(5)},${wp1.lng.toFixed(5)}|${wp2.lat.toFixed(5)},${wp2.lng.toFixed(5)}|${mode}|${customHash}`);
+    activeKeys.add(routeCacheKey(wp1, wp2));
   }
 
   const cleanCache: Record<string, [number, number][]> = {};
@@ -343,16 +314,46 @@ export const saveProjectData = async (
   }
   await db.routeCache.replace(row.id, cleanCache);
   // Python reads the exported file (narration_step.py).
-  const routeCachePath = await join(projectDir, ".routecache.json");
+  const routeCachePath = await join(metaDir, "routecache.json");
   await writeTextFile(routeCachePath, JSON.stringify(cleanCache));
 
-  // Zip the workspace into the single .nvv archive file
-  if (archivePath) {
-    await invoke("zip_project", { sourceDir: projectDir, destFile: archivePath });
-  }
-
-  return { projectDir, projId, projName, nvvPath: archivePath, thumbnailPath };
+  return { projectDir, projId, projName, nvvPath: null as string | null, thumbnailPath };
 };
+
+// One-time cleanup of a folder made by an older version (duplicate project file, generated files into .navivi,
+// map tiles to the shared cache). Run after the project is in the database, since it removes `.history/`.
+export async function tidyProjectFolder(projectDir: string): Promise<void> {
+  try {
+    const sharedTileCache = await join(await documentDir(), fileSystem.rootFolder, fileSystem.cacheFolder, "tiles");
+    const report = await invoke<{ moved: string[]; removed: string[]; kept: string[] }>("tidy_project_folder", {
+      projectDir,
+      sharedTileCache,
+      removeHistory: true,
+    });
+    if (report.moved.length || report.removed.length || report.kept.length) console.log("Tidied project folder:", report);
+  } catch (error) {
+    console.warn("Could not tidy the project folder:", error);
+  }
+}
+
+// job_config.json is the project file. Folders from older versions may only have `<name>.nvv`, a JSON copy of it.
+async function readProjectFile(dir: string, names: string[]): Promise<string> {
+  if (names.includes(fileSystem.configFile)) return readTextFile(await join(dir, fileSystem.configFile));
+  for (const name of names.filter((n) => n.endsWith(`.${fileSystem.extensions.project}`))) {
+    const text = await readTextFile(await join(dir, name)).catch(() => "");
+    if (text.trimStart().startsWith("{")) return text;
+  }
+  throw new Error("No Navivi project file or job_config.json found in the selected folder.");
+}
+
+// A shared archive is unpacked into its own folder, named after the project and never over an existing one.
+async function freeWorkspaceDir(docsPath: string, projectName: string): Promise<string> {
+  const root = await join(docsPath, fileSystem.rootFolder, fileSystem.workspacesFolder);
+  const slug = projectName.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "project";
+  let candidate = await join(root, slug);
+  for (let n = 2; await exists(candidate); n++) candidate = await join(root, `${slug}_${n}`);
+  return candidate;
+}
 
 export const loadProjectData = async (forcePath?: string, isFolder = false) => {
   let selectedPath = forcePath;
@@ -386,20 +387,7 @@ export const loadProjectData = async (forcePath?: string, isFolder = false) => {
     isDirectory = true;
     projectDir = selectedPath;
 
-    // Search for a .nvv file inside the folder
-    const nvvEntry = entries.find(e => e.name?.endsWith(`.${fileSystem.extensions.project}`));
-    if (nvvEntry && nvvEntry.name) {
-      const nvvPath = await join(selectedPath, nvvEntry.name);
-      fileContent = await readTextFile(nvvPath);
-    } else {
-      // Fallback to job_config.json
-      const configPath = await join(selectedPath, "job_config.json");
-      if (await exists(configPath)) {
-        fileContent = await readTextFile(configPath);
-      } else {
-        throw new Error("No Navivi project file or job_config.json found in the selected folder.");
-      }
-    }
+    fileContent = await readProjectFile(selectedPath, entries.map((e) => e.name ?? ""));
   } catch (err: any) {
     if (isDirectory) throw err;
     // Not a directory, so proceed to handle as a file
@@ -409,35 +397,14 @@ export const loadProjectData = async (forcePath?: string, isFolder = false) => {
   if (!isDirectory) {
     try {
       // Attempt to unzip it into a Workspace folder (in case it is a single-file ZIP archive)
-      const workspaceId = Date.now().toString();
-      const workspaceDir = await join(docsPath, fileSystem.rootFolder, fileSystem.workspacesFolder, workspaceId);
+      const workspaceDir = await freeWorkspaceDir(docsPath, await basename(selectedPath, `.${fileSystem.extensions.project}`));
 
       await invoke("unzip_project", { sourceFile: selectedPath, destDir: workspaceDir });
 
       // If we reach here, it was a valid ZIP project file!
       projectDir = workspaceDir;
 
-      // Find the .nvv file inside the unzipped workspace
-      const projectName = await basename(selectedPath, `.${fileSystem.extensions.project}`);
-      const nvvPath = await join(workspaceDir, `${projectName}.${fileSystem.extensions.project}`);
-
-      if (await exists(nvvPath)) {
-        fileContent = await readTextFile(nvvPath);
-      } else {
-        // Find ANY .nvv file if the name changed
-        const entries = await readDir(workspaceDir);
-        const nvvEntry = entries.find(e => e.name?.endsWith(`.${fileSystem.extensions.project}`));
-        if (nvvEntry && nvvEntry.name) {
-          fileContent = await readTextFile(await join(workspaceDir, nvvEntry.name));
-        } else {
-          const configPath = await join(workspaceDir, "job_config.json");
-          if (await exists(configPath)) {
-            fileContent = await readTextFile(configPath);
-          } else {
-            throw new Error("No .nvv file or job_config.json found in archive");
-          }
-        }
-      }
+      fileContent = await readProjectFile(workspaceDir, (await readDir(workspaceDir)).map((e) => e.name ?? ""));
     } catch (err) {
       // Unzip failed, so it must be a legacy uncompressed JSON file
       projectDir = await dirname(selectedPath);
@@ -447,7 +414,7 @@ export const loadProjectData = async (forcePath?: string, isFolder = false) => {
 
   const data = JSON.parse(fileContent);
   data.directory_path = projectDir;
-  data.archive_path = selectedPath; // Save the path to the .nvv archive or folder
+  data.archive_path = null;
 
   if (data.thumbnail_path && !data.thumbnail_path.match(/^[a-zA-Z]:\\/) && !data.thumbnail_path.startsWith('/')) {
     data.thumbnail_path = await join(projectDir, data.thumbnail_path);
@@ -526,7 +493,7 @@ export const scanProjectsOnDisk = async (): Promise<RecentProjects[]> => {
 
           let fileTime = Date.now();
           try {
-            const configPath = await join(fullPath, nvvFile?.name || "job_config.json");
+            const configPath = await join(fullPath, hasJobConfig ? "job_config.json" : (nvvFile?.name ?? "job_config.json"));
             const content = await readTextFile(configPath);
             const parsed = JSON.parse(content);
             if (parsed.project_name) projName = parsed.project_name;
@@ -541,7 +508,7 @@ export const scanProjectsOnDisk = async (): Promise<RecentProjects[]> => {
             }
           } catch { }
 
-          const projectTarget = nvvFile ? await join(fullPath, nvvFile.name) : fullPath;
+          const projectTarget = fullPath;
           discovered.push({
             name: projName,
             path: projectTarget,
@@ -766,10 +733,12 @@ export async function loadTimelineManifest(projectDir: string): Promise<any | nu
 
 export async function loadRouteCache(projectDir: string): Promise<Record<string, [number, number][]>> {
   try {
-    const cachePath = await join(projectDir, ".routecache.json");
-    if (await exists(cachePath)) {
-      const contents = await readTextFile(cachePath);
-      return JSON.parse(contents);
+    // .navivi/routecache.json, or the root file an older version wrote
+    for (const path of [
+      await join(projectDir, fileSystem.metaFolder, "routecache.json"),
+      await join(projectDir, ".routecache.json"),
+    ]) {
+      if (await exists(path)) return JSON.parse(await readTextFile(path));
     }
   } catch (error) {
     console.error("Failed to load route cache:", error);
@@ -779,8 +748,9 @@ export async function loadRouteCache(projectDir: string): Promise<Record<string,
 
 export async function saveRouteCache(projectDir: string, cacheData: Record<string, [number, number][]>): Promise<boolean> {
   try {
-    const cachePath = await join(projectDir, ".routecache.json");
-    await writeTextFile(cachePath, JSON.stringify(cacheData));
+    const metaDir = await join(projectDir, fileSystem.metaFolder);
+    if (!(await exists(metaDir))) await mkdir(metaDir, { recursive: true });
+    await writeTextFile(await join(metaDir, "routecache.json"), JSON.stringify(cacheData));
     return true;
   } catch (error) {
     console.error("Failed to save route cache:", error);

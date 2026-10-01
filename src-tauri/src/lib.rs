@@ -1,3 +1,4 @@
+mod project_files;
 use std::net::TcpStream;
 use std::process::{Child, Command, Stdio};
 use std::io::{BufRead, BufReader};
@@ -10,6 +11,31 @@ use std::path::Path;
 use std::fs;
 
 mod db;
+
+// Startup: a small "splash" window plays the logo while the (hidden) main window loads; app_ready swaps them.
+struct StartedAt(std::time::Instant);
+const SPLASH_MIN: Duration = Duration::from_millis(3600);
+const SPLASH_GIVE_UP: Duration = Duration::from_secs(25);
+
+fn reveal_main(app: &AppHandle) {
+    if let Some(splash) = app.get_webview_window("splash") {
+        if let Some(main) = app.get_webview_window("main") {
+            let _ = main.show();
+            let _ = main.set_focus();
+        }
+        let _ = splash.close();
+    }
+}
+
+#[tauri::command]
+async fn app_ready(app: AppHandle, started: State<'_, StartedAt>) -> Result<(), String> {
+    let wait = SPLASH_MIN.saturating_sub(started.0.elapsed());
+    if !wait.is_zero() {
+        tauri::async_runtime::spawn_blocking(move || thread::sleep(wait)).await.map_err(|e| e.to_string())?;
+    }
+    reveal_main(&app);
+    Ok(())
+}
 
 struct BlueprintState {
     process: Mutex<Option<Child>>,
@@ -386,6 +412,13 @@ pub fn run() {
             fs::create_dir_all(&dir)?;
             let conn = db::open(&dir.join("navivi.db"))?;
             app.manage(db::DbState(Mutex::new(conn)));
+            app.manage(StartedAt(std::time::Instant::now()));
+            // If the page never reports in (a crash while loading), don't leave the user on the splash.
+            let handle = app.handle().clone();
+            thread::spawn(move || {
+                thread::sleep(SPLASH_GIVE_UP);
+                reveal_main(&handle);
+            });
             Ok(())
         })
         .manage(BlueprintState {
@@ -400,9 +433,11 @@ pub fn run() {
             start_render,
             wake_up_ollama,
             export_video,
+            app_ready,
             copy_asset_file,
             open_in_explorer,
-            zip_project,
+            project_files::export_project_archive,
+            project_files::tidy_project_folder,
             unzip_project,
             convert_gps_to_gpx,
             db::commands::project_create,
@@ -455,46 +490,8 @@ pub fn run() {
         });
 }
 
-use zip::ZipWriter;
-use std::io::{Read, Write};
-use walkdir::WalkDir;
+use std::io::Read;
 use zip::ZipArchive;
-
-#[tauri::command]
-async fn zip_project(source_dir: String, dest_file: String) -> Result<(), String> {
-    let path = Path::new(&dest_file);
-    let file = fs::File::create(path).map_err(|e| e.to_string())?;
-    let mut zip = ZipWriter::new(file);
-    let options = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
-
-    let walkdir = WalkDir::new(&source_dir);
-    let it = walkdir.into_iter();
-
-    for entry in it.filter_map(|e| e.ok()) {
-        let path = entry.path();
-        let name = path.strip_prefix(Path::new(&source_dir))
-            .unwrap()
-            .to_string_lossy()
-            .into_owned()
-            .replace("\\", "/");
-
-        if name.is_empty() {
-            continue;
-        }
-
-        if path.is_file() {
-            zip.start_file(&name, options).map_err(|e| e.to_string())?;
-            let mut f = fs::File::open(path).map_err(|e| e.to_string())?;
-            let mut buffer = Vec::new();
-            f.read_to_end(&mut buffer).map_err(|e| e.to_string())?;
-            zip.write_all(&buffer).map_err(|e| e.to_string())?;
-        } else if !name.is_empty() {
-            zip.add_directory(&name, options).map_err(|e| e.to_string())?;
-        }
-    }
-    zip.finish().map_err(|e| e.to_string())?;
-    Ok(())
-}
 
 #[tauri::command]
 async fn unzip_project(source_file: String, dest_dir: String) -> Result<(), String> {

@@ -13,6 +13,7 @@ import pandas as pd
 
 from services.gpsparser.gpscalculator import GPSMath
 from services.logger.progress import tracker
+from services.projectfiles import NARRATION_CUES, ROUTE_CACHE, meta_file
 from services.mapfetcher.mapfetcher import MapFetcher
 from services.vdoprocessing.route2vdo import RouteAnimator
 from services.vdoprocessing.route_inputs import overview_flags_hash, route_inputs_hash
@@ -222,7 +223,7 @@ def _render_checkpoint_key(
     }
     hasher.update(json.dumps(summary, sort_keys=True, default=str).encode("utf-8"))
     try:
-        with open(Path(project_config_path).parent / ".narration_cues.json", "rb") as f:
+        with open(meta_file(Path(project_config_path).parent, NARRATION_CUES), "rb") as f:
             hasher.update(f.read())  # cue times decide each walk's length
     except OSError:
         pass
@@ -274,7 +275,7 @@ def _checkpoint_parts(
         if "duration" not in key and "time" not in key:
             parts[f"route.summary.{key}"] = _short_hash(value)
     try:
-        cues = json.loads((Path(project_config_path).parent / ".narration_cues.json").read_text(encoding="utf-8"))
+        cues = json.loads(meta_file(Path(project_config_path).parent, NARRATION_CUES).read_text(encoding="utf-8"))
         for key, value in cues.items():
             parts[f"narration_cues.{key}"] = _short_hash(value)
     except (OSError, ValueError):
@@ -597,7 +598,7 @@ def render_route_video(
     wp_indices = MapFetcher.build_waypoint_index(route_df, waypoints)
 
     routing_cache = {}
-    routecache_path = config_path.parent / ".routecache.json"
+    routecache_path = meta_file(config_path.parent, ROUTE_CACHE)
     if routecache_path.exists():
         try:
             with open(routecache_path, "r", encoding="utf-8") as f:

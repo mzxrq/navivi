@@ -11,6 +11,7 @@ import time
 from pathlib import Path
 import contextily as cx  # type: ignore
 from dotenv import load_dotenv
+from services.projectfiles import tile_cache_dir
 from PIL import Image
 import math
 from typing import Dict, Optional, Tuple
@@ -105,7 +106,7 @@ class TileDownloader:
         # settings.tile_cache_dir lets a project point the cache somewhere
         # else (e.g. a cache shared across projects); relative paths are
         # resolved against directory_path so they still land inside the
-        # project folder by default. Otherwise: <directory_path>/cache.
+        # project folder. Otherwise the cache every project shares (Documents/Navivi/Cache).
         cache_override = settings.get("tile_cache_dir")
         if cache_override:
             override_path = Path(cache_override)
@@ -113,7 +114,7 @@ class TileDownloader:
                 override_path if override_path.is_absolute() else base_path / override_path
             ).resolve()
         else:
-            self.cache_dir = (base_path / "cache").resolve()
+            self.cache_dir = tile_cache_dir().resolve()
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         # Tiles are cached to disk here keyed by (provider, z, x, y) — every
         # subsequent fetch of an already-seen tile (any provider, Mapbox

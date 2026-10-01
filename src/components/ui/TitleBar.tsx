@@ -237,6 +237,14 @@ export function TitleBar() {
                     >
                       <Trans>Save As...</Trans>
                     </MenuItem>
+                    <MenuItem
+                      onClick={() => {
+                        setIsMenuOpen(false);
+                        window.dispatchEvent(new CustomEvent("export-project", { detail: {} }));
+                      }}
+                    >
+                      <Trans>Export for sharing...</Trans>
+                    </MenuItem>
                     <MenuSeparator />
                     <MenuItem onClick={() => handleSafeNavigation("title_screen")}>
                       <Trans>Project Manager</Trans>

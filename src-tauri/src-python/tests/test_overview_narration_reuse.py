@@ -34,7 +34,7 @@ def test_saved_script_for_other_waypoints_is_not_restored(tmp_path, monkeypatch)
     monkeypatch.setattr(overview_script, "ollama_generate", lambda model: None)
     assert ensure_overview_narration(str(cfg)) is True
     assert json.loads(cfg.read_text(encoding="utf-8"))["overview_narration"] == "{start}new"
-    saved = json.loads((tmp_path / ".overview_narration.json").read_text(encoding="utf-8"))
+    saved = json.loads((tmp_path / ".navivi" / "overview_narration.json").read_text(encoding="utf-8"))
     assert saved == {"source_ids": "a,b", "script": "{start}new"}
 
 
@@ -55,5 +55,5 @@ def test_stopby_toggle_renumbers_the_saved_script(tmp_path, monkeypatch):
     monkeypatch.setattr(overview_script, "build_tour_script", lambda *a, **k: ("{start}new", {}))
     monkeypatch.setattr(overview_script, "ollama_generate", lambda model: None)
     assert ensure_overview_narration(str(cfg)) is True
-    saved = json.loads((tmp_path / ".overview_narration.json").read_text(encoding="utf-8"))
+    saved = json.loads((tmp_path / ".navivi" / "overview_narration.json").read_text(encoding="utf-8"))
     assert saved["source_ids"] == "a,b,s+,c,z"

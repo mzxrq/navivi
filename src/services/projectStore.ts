@@ -76,7 +76,7 @@ export async function syncProjectOnOpen(
   } else {
     row = await db.projects.update(row.id, {
       directoryPath: dir,
-      ...(input.archivePath ? { archivePath: input.archivePath } : {}),
+      archivePath: "", // projects open from their folder now; an old archive path would reopen stale files
       overviewNarration: input.overviewNarration,
       overviewNarrationIsAuto: input.overviewNarrationIsAuto,
       overviewNarrationSourceIds: input.overviewNarrationSourceIds,

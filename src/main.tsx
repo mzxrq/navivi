@@ -9,23 +9,27 @@ import { ErrorBoundary } from "./components/ui/ErrorBoundary";
 import { i18n } from "@lingui/core";
 import { I18nProvider } from "@lingui/react";
 import { dynamicActivate } from "./i18n";
+import { revealApp } from "./utils/splash";
 
 const savedLocale = localStorage.getItem("navivi_locale") || "en";
 
-dynamicActivate(savedLocale).then(() => {
-  ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
-    <React.StrictMode>
-      <ErrorBoundary>
-        <ThemeProvider defaultTheme="system">
-          <I18nProvider i18n={i18n}>
-            <UIProvider>
-              <WorkspaceProvider>
-                <App />
-              </WorkspaceProvider>
-            </UIProvider>
-          </I18nProvider>
-        </ThemeProvider>
-      </ErrorBoundary>
-    </React.StrictMode>,
-  );
-});
+dynamicActivate(savedLocale)
+  .then(() => {
+    ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
+      <React.StrictMode>
+        <ErrorBoundary>
+          <ThemeProvider defaultTheme="system">
+            <I18nProvider i18n={i18n}>
+              <UIProvider>
+                <WorkspaceProvider>
+                  <App />
+                </WorkspaceProvider>
+              </UIProvider>
+            </I18nProvider>
+          </ThemeProvider>
+        </ErrorBoundary>
+      </React.StrictMode>,
+    );
+  })
+  .catch((error) => console.error("Startup failed:", error))
+  .finally(() => void revealApp());

@@ -3,6 +3,7 @@ import { useWorkspace } from "../../../hooks/useWorkspace";
 import { getCurve, fillRouteCoordinates } from "../../../utils/mapUtils";
 import bezierSpline from "@turf/bezier-spline";
 import { lineString } from "@turf/helpers";
+import { routeCacheKey } from "../../../utils/routeCacheKey";
 
 // kill switch fetcher
 const fetchWithTimeout = async (
@@ -154,11 +155,7 @@ export function useMapRouting() {
       const wp1 = routedWaypoints[i];
       const wp2 = routedWaypoints[i + 1];
       const mode = wp1.routeMode || "driving";
-      const customHash =
-        mode === "draw" ? JSON.stringify(wp1.customRoute || []) : "";
-      const viaHash = wp1.viaPoints ? JSON.stringify(wp1.viaPoints) : "";
-
-      const cacheKey = `${wp1.lat.toFixed(5)},${wp1.lng.toFixed(5)}|${wp2.lat.toFixed(5)},${wp2.lng.toFixed(5)}|${mode}|${customHash}|${viaHash}`;
+      const cacheKey = routeCacheKey(wp1, wp2);
 
       // straight line but mode is neither Direct or Draw, ignore cache
       const cachedData = routingCache[cacheKey];

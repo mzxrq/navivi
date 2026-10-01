@@ -348,11 +348,13 @@ def build_brief(project: dict, routing_cache: Optional[dict] = None) -> dict:
 
 
 def load_brief(project_config_path: str) -> dict:
-    """build_brief for a project on disk (its .routecache.json beside it)."""
+    """build_brief for a project on disk (its route cache in .navivi)."""
+    from services.projectfiles import ROUTE_CACHE, meta_file
+
     config_path = Path(project_config_path)
     project = json.loads(config_path.read_text(encoding="utf-8"))
     try:
-        cache = json.loads((config_path.parent / ".routecache.json").read_text(encoding="utf-8"))
+        cache = json.loads(meta_file(config_path.parent, ROUTE_CACHE).read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         cache = {}
     return build_brief(project, cache)
