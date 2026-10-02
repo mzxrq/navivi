@@ -97,3 +97,19 @@ def test_footage_sound_follows_the_trim(tmp_path):
     # The held last frame is silent, like the preview.
     assert _mean_db(exported, 2.3, 0.6) < -60
 
+
+def test_unlinked_narration_is_mixed_at_its_time(tmp_path):
+    video, voice = tmp_path / "v.mp4", tmp_path / "voice.wav"
+    _run("-f", "lavfi", "-i", "testsrc=s=320x180:r=25:d=4", "-c:v", "libx264", "-pix_fmt", "yuv420p", str(video))
+    _run("-f", "lavfi", "-i", "sine=frequency=440:duration=1", str(voice))
+    exported = tmp_path / "out.mp4"
+    VideoExporter.concat_from_timeline(
+        {
+            "video_tracks": [{"file_path": str(video), "duration": 4.0}],
+            "unlinked_audio": [{"path": str(voice), "start": 2.0, "volume": 1.0}],
+        },
+        str(exported),
+    )
+    assert _mean_db(exported, 0.2, 1.5) < -60
+    assert _mean_db(exported, 2.2, 0.6) > -30
+    assert 3.8 < FFmpegManager.get_media_duration(str(exported)) < 4.3

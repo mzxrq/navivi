@@ -18,7 +18,9 @@ import {
 import {
   anchorCue,
   DEFAULT_EXTRA_VOLUME,
+  isUnlinked,
   layout,
+  linkAudio,
   MIN_CUE,
   MIN_SEGMENT,
   PlacedCue,
@@ -30,6 +32,7 @@ import {
   TextClip,
   TextLine,
   TimelineData,
+  unlinkAudio,
 } from "./model";
 import { formatTime, player, usePlayerTime } from "./player";
 import type { Selection } from "./TimelinePane";
@@ -189,30 +192,6 @@ const styleRow: CaptionRow = (key, label, control, hint) => (
     {hint && <p className="mt-0.5 text-[11px] text-zinc-400">{hint}</p>}
   </div>
 );
-
-/** The shared look (project caption_style, also in Settings) every subtitle starts from. */
-function DefaultSubtitleStyleSection() {
-  const { settings, updateSettings, setIsDirty } = useWorkspace();
-  const save = (caption_style: TextStyle | undefined) => {
-    updateSettings({ caption_style });
-    setIsDirty(true);
-  };
-  return (
-    <Section title={t`Default subtitle style`}>
-      <p className="text-[11px] text-zinc-400">{t`Subtitles you have styled one by one keep their own style.`}</p>
-      <CaptionStyleFields
-        style={resolveCaptionStyle(settings)}
-        onChange={(patch) => save({ ...(settings.caption_style ?? {}), ...patch })}
-        row={styleRow}
-      />
-      {settings.caption_style && (
-        <button type="button" className={iconButton} onClick={() => save(undefined)}>
-          <Trans>Reset to default</Trans>
-        </button>
-      )}
-    </Section>
-  );
-}
 
 /** One subtitle's own style: overrides on top of the default, or pushed to every subtitle. */
 function CueStyleSection({ cue, timeline, commit }: { cue: SubtitleCue; timeline: TimelineData; commit: (t: TimelineData) => void }) {
@@ -429,16 +408,29 @@ export function Inspector(p: InspectorProps) {
         </Section>
         {seg.audio && (
           <Section title={t`Narration`}>
-            <Row label={t`Starts after`}>
-              <NumberField value={seg.audioOffset} min={0} max={60} onCommit={(v) => patchSegment({ audioOffset: v })} />
+            <Row label={t`Linked to clip`}>
+              <Switch
+                checked={!isUnlinked(seg)}
+                onChange={(on) => commit(on ? linkAudio(timeline, seg.id) : unlinkAudio(timeline, seg.id))}
+                label={t`Linked to clip`}
+              />
             </Row>
+            {isUnlinked(seg) ? (
+              <Row label={t`Starts at`}>
+                <NumberField value={seg.audioStart!} min={0} onCommit={(v) => patchSegment({ audioStart: v })} />
+              </Row>
+            ) : (
+              <Row label={t`Starts after`}>
+                <NumberField value={seg.audioOffset} min={0} max={60} onCommit={(v) => patchSegment({ audioOffset: v })} />
+              </Row>
+            )}
             <Row label={t`Volume`}>
               <Slider value={seg.volume} min={0} max={1.5} step={0.05} onCommit={(v) => patchSegment({ volume: v })} />
             </Row>
             <Row label={t`Mute`}>
               <Switch checked={seg.muted} onChange={(v) => patchSegment({ muted: v })} label={t`Mute narration`} />
             </Row>
-            <button type="button" className={iconButton} onClick={() => patchSegment({ audio: undefined, audioDuration: undefined, audioOffset: 0 })}>
+            <button type="button" className={iconButton} onClick={() => patchSegment({ audio: undefined, audioDuration: undefined, audioOffset: 0, audioStart: undefined })}>
               <Trans>Remove narration</Trans>
             </button>
           </Section>
@@ -565,7 +557,6 @@ export function Inspector(p: InspectorProps) {
         )}
         <CueList cues={cues} onPick={(id) => p.onSelect({ type: "cue", id })} />
       </Section>
-      <DefaultSubtitleStyleSection />
       <Section title={t`Music`}>
         {timeline.music ? (
           <>

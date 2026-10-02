@@ -6,7 +6,7 @@ import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { useUI } from "../../hooks/useUI";
-import { Copy, FileText, Film, Maximize, Music, Plus, Sparkles, Subtitles, Trash2, Type, Video, VolumeX, ZoomIn, ZoomOut } from "../../components/ui/icons";
+import { Copy, FileText, Film, LinkIcon, Maximize, Music, Plus, Sparkles, Subtitles, Trash2, Type, UnlinkIcon, Video, VolumeX, ZoomIn, ZoomOut } from "../../components/ui/icons";
 import { Tip } from "../../components/ui/Tip";
 import { openContextMenu, separator } from "../../components/ui/menuItems";
 import { probeDuration, toAbsoluteProjectPath, toRelativeProjectPath } from "../../services/fileSystem";
@@ -18,7 +18,9 @@ import {
   cuesFromSegmentFile,
   cuesFromTimed,
   cuesToSrt,
+  isUnlinked,
   layout,
+  linkAudio,
   newId,
   parsePlainBlocks,
   parseTimedSrt,
@@ -27,6 +29,7 @@ import {
   SubtitleCue,
   TextClip,
   TimelineData,
+  unlinkAudio,
 } from "./model";
 import { ExportDialog } from "./ExportDialog";
 import { LibraryTrack, MusicPicker } from "./MusicPicker";
@@ -288,6 +291,11 @@ export function EditorView() {
         icon: VolumeX,
         kbd: "M",
         onSelect: () => patchSegment(seg.id, { muted: !seg.muted }),
+      },
+      !!seg.audio && {
+        label: isUnlinked(seg) ? t`Link narration to clip` : t`Unlink narration`,
+        icon: isUnlinked(seg) ? LinkIcon : UnlinkIcon,
+        onSelect: () => commit(isUnlinked(seg) ? linkAudio(timeline, seg.id) : unlinkAudio(timeline, seg.id)),
       },
       (seg.trimIn > 0 || seg.trimOut < seg.videoDuration) && {
         label: t`Reset trim`,

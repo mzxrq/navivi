@@ -13,6 +13,10 @@ export interface Segment {
   audio?: string;
   audioDuration?: number;
   audioOffset: number;
+  // Set when the narration is unlinked: it plays at this timeline time, whatever the clips do.
+  audioStart?: number;
+  // The clip's length when its narration was unlinked, so unlinking doesn't shorten it.
+  heldLength?: number;
   subtitleFile?: string;
   extraAudio?: string;
   extraVolume?: number;
@@ -97,8 +101,10 @@ export const newId = () => crypto.randomUUID();
 
 export const trimmedLength = (s: Segment) => Math.max(MIN_SEGMENT, s.trimOut - s.trimIn);
 
+export const isUnlinked = (s: Segment) => !!s.audio && s.audioStart !== undefined;
+
 export const segmentLength = (s: Segment) =>
-  Math.max(trimmedLength(s), s.audio ? s.audioOffset + (s.audioDuration ?? 0) : 0);
+  Math.max(trimmedLength(s), s.audio && !isUnlinked(s) ? s.audioOffset + (s.audioDuration ?? 0) : 0, s.heldLength ?? 0);
 
 export interface PlacedSegment {
   seg: Segment;
@@ -128,6 +134,26 @@ export function fadeIns(placed: PlacedSegment[]): number[] {
     if (d >= 0.1) fades[i] = d;
   }
   return fades;
+}
+
+/** Where a clip's narration plays on the timeline. */
+export const narrationStart = (p: PlacedSegment) => (isUnlinked(p.seg) ? p.seg.audioStart! : p.start + p.seg.audioOffset);
+
+/** Frees a clip's narration where it is now; the clip keeps its length. */
+export function unlinkAudio(timeline: TimelineData, id: string): TimelineData {
+  const p = layout(timeline).placed.find((x) => x.seg.id === id);
+  if (!p?.seg.audio || isUnlinked(p.seg)) return timeline;
+  const patch = { audioStart: narrationStart(p), heldLength: p.length };
+  return { ...timeline, segments: timeline.segments.map((s) => (s.id === id ? { ...s, ...patch } : s)) };
+}
+
+/** Ties a free narration back to its clip, at the same offset into the clip (never before it). */
+export function linkAudio(timeline: TimelineData, id: string): TimelineData {
+  const p = layout(timeline).placed.find((x) => x.seg.id === id);
+  if (!p || !isUnlinked(p.seg)) return timeline;
+  const { audioStart, heldLength: _held, ...rest } = p.seg;
+  const linked = { ...rest, audioOffset: Math.max(0, +(audioStart! - p.start).toFixed(2)) };
+  return { ...timeline, segments: timeline.segments.map((s) => (s.id === id ? linked : s)) };
 }
 
 export interface PlacedCue extends SubtitleCue {
@@ -313,7 +339,7 @@ export function autoTimeBlocks(timeline: TimelineData, blocks: string[]): Subtit
 
   const speaking = placed.filter((p) => p.seg.audio && !p.seg.muted);
   const spans = (speaking.length ? speaking : placed).map((p) => {
-    const from = speaking.length ? p.start + p.seg.audioOffset : p.start;
+    const from = speaking.length ? narrationStart(p) : p.start;
     const to = speaking.length ? from + (p.seg.audioDuration ?? p.length) : p.start + p.length;
     return { p, from, to };
   });
@@ -380,8 +406,9 @@ export function toManifest(projectName: string, timeline: TimelineData, captionS
       order: i,
       clip_name: s.label,
       file_path: s.video,
-      audio_path: s.audio ?? null,
-      audio_offset: s.audioOffset,
+      // A free narration goes in unlinked_audio instead, at its own time.
+      audio_path: isUnlinked(s) ? null : (s.audio ?? null),
+      audio_offset: isUnlinked(s) ? 0 : s.audioOffset,
       subtitle_path: s.subtitleFile ?? null,
       extra_audio_path: s.extraAudio ?? null,
       extra_audio_volume: s.extraAudio ? (s.extraVolume ?? DEFAULT_EXTRA_VOLUME) : null,
@@ -393,6 +420,9 @@ export function toManifest(projectName: string, timeline: TimelineData, captionS
       muted: s.muted,
       fade_into_next_seconds: s.fadeIntoNext,
     })),
+    unlinked_audio: placed
+      .filter((p) => isUnlinked(p.seg) && !p.seg.muted)
+      .map((p) => ({ path: p.seg.audio!, start: p.seg.audioStart!, volume: p.seg.volume })),
     subtitles: cues,
     texts: placedTexts(timeline, placed).map((x) => ({
       start: x.globalStart,

@@ -1,8 +1,10 @@
-import { ReactNode, useEffect, useId, useState } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import { t } from "@lingui/core/macro";
-import { useInstalledFonts } from "../../hooks/useInstalledFonts";
+import { BUILT_IN_FONTS, FONT_LANGUAGES, FontLanguage, useInstalledFonts } from "../../hooks/useInstalledFonts";
 import type { TextStyle } from "../../types";
 import { DEFAULT_CAPTION_STYLE } from "../../utils/textStyle";
+import { ComboBox } from "./ComboBox";
+import { FontDownloadDialog } from "./FontDownloadDialog";
 import { StepButtons } from "./StepButtons";
 import { Switch } from "./Switch";
 
@@ -68,11 +70,16 @@ export function CaptionStyleFields({
   fallbackFont?: string;
 }) {
   const caption = kind === "caption";
-  const listId = useId();
   const fonts = useInstalledFonts();
-  const [font, setFont] = useState(style.font_family);
-  useEffect(() => setFont(style.font_family), [style.font_family]);
-  const missing = fonts.length > 0 && !fonts.some((f) => f.toLowerCase() === style.font_family.toLowerCase());
+  const missing = fonts.all.length > 0 && !fonts.all.some((f) => f.toLowerCase() === style.font_family.toLowerCase());
+  const groupLabel: Record<FontLanguage, string> = { ja: t`Japanese`, en: t`English` };
+  const [download, setDownload] = useState<FontLanguage | null>(null);
+  // Only fonts the user downloaded, the app's defaults and the one in use; Japanese first, then English.
+  // A font in neither group (or not installed) is listed on top when it is the one in use.
+  const current = fonts.all.find((f) => f.toLowerCase() === style.font_family.toLowerCase());
+  const offered = new Set([...fonts.downloaded, ...BUILT_IN_FONTS, fallbackFont, ...(current ? [current] : [])]);
+  const pickable = FONT_LANGUAGES.flatMap((lang) => fonts.all.filter((f) => fonts.language[f] === lang && offered.has(f)));
+  const fontOptions = missing || (current && !fonts.language[current]) ? [current ?? style.font_family, ...pickable] : pickable;
 
   return (
     <>
@@ -80,20 +87,26 @@ export function CaptionStyleFields({
         "font",
         t`Font`,
         <>
-          <input
-            type="text"
-            list={listId}
-            value={font}
-            onChange={(e) => setFont(e.target.value)}
-            onBlur={() => font.trim() && font !== style.font_family && onChange({ font_family: font.trim() })}
-            onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
-            className={field}
-          />
-          <datalist id={listId}>
-            {fonts.map((f) => (
-              <option key={f} value={f} />
-            ))}
-          </datalist>
+        <ComboBox
+          label={t`Font`}
+          value={style.font_family}
+          onChange={(v) => v !== style.font_family && onChange({ font_family: v })}
+          options={fontOptions}
+          groupOf={(f) => (fonts.language[f] ? groupLabel[fonts.language[f]] : undefined)}
+          groups={FONT_LANGUAGES.map((l) => groupLabel[l])}
+          groupAction={(group) => {
+            const lang = FONT_LANGUAGES.find((l) => groupLabel[l] === group);
+            return lang ? (
+              <button type="button" onClick={() => setDownload(lang)} className="text-navi hover:underline">
+                {t`Get more fonts`}
+              </button>
+            ) : null;
+          }}
+          allowCustom
+          previewFont
+          className="w-full"
+        />
+          {download && <FontDownloadDialog language={download} onClose={() => setDownload(null)} />}
         </>,
         missing ? t`Not installed on this PC, so the export uses ${fallbackFont}` : undefined,
       )}
@@ -101,7 +114,7 @@ export function CaptionStyleFields({
       {row(
         "weight",
         t`Style`,
-        <div className="flex gap-1">
+        <div className="flex w-full gap-1">
           <button type="button" className={`${toggle(style.bold)} font-bold`} aria-pressed={style.bold} onClick={() => onChange({ bold: !style.bold })}>
             B
           </button>

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { t } from "@lingui/core/macro";
 import { Pause, Play, SkipBack } from "../../components/ui/icons";
 import { Tip } from "../../components/ui/Tip";
-import { DEFAULT_EXTRA_VOLUME, fadeIns, layout, placedCues, placedTexts, PlacedText, segmentAt, trimmedLength, TimelineData } from "./model";
+import { DEFAULT_EXTRA_VOLUME, fadeIns, isUnlinked, layout, placedCues, placedTexts, PlacedText, segmentAt, trimmedLength, TimelineData } from "./model";
 import { formatTime, mediaUrl, player, usePlayerTime, usePlaying } from "./player";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import {
@@ -161,6 +161,36 @@ export function Preview({ timeline, projectDir }: PreviewProps) {
       if (audioCtx.current?.state === "suspended") audioCtx.current.resume().catch(() => undefined);
     } else el.volume = Math.min(1, level);
   };
+  // Unlinked narration plays at its own timeline time, one element per clip, alongside the rest.
+  const freeVoices = useRef(new Map<string, HTMLAudioElement>());
+  const syncFree = (time: number, isPlaying: boolean) => {
+    const { placed, projectDir } = stateRef.current;
+    const active = new Set<string>();
+    for (const p of placed) {
+      const seg = p.seg;
+      if (!isUnlinked(seg)) continue;
+      const want = time - seg.audioStart!;
+      if (want < 0 || want >= (seg.audioDuration ?? 0)) continue;
+      active.add(seg.id);
+      let el = freeVoices.current.get(seg.id);
+      if (!el) {
+        el = new Audio();
+        el.crossOrigin = "anonymous";
+        el.preload = "auto";
+        freeVoices.current.set(seg.id, el);
+      }
+      const src = mediaUrl(projectDir, seg.audio);
+      if (el.dataset.src !== src) {
+        el.src = src;
+        el.dataset.src = src;
+      }
+      setLevel(el, seg.muted ? 0 : Math.max(0, seg.volume));
+      if (Math.abs(el.currentTime - want) > (isPlaying ? 0.35 : 0.03)) el.currentTime = want;
+      if (isPlaying) el.play().catch(() => undefined);
+      else el.pause();
+    }
+    for (const [id, el] of freeVoices.current) if (!active.has(id)) el.pause();
+  };
   const playing = usePlaying();
 
   const { placed, total } = useMemo(() => layout(timeline), [timeline]);
@@ -180,6 +210,7 @@ export function Preview({ timeline, projectDir }: PreviewProps) {
     const extra = extraRef.current;
     if (!video || !voice || !music || !extra) return;
 
+    syncFree(time, isPlaying);
     const p = segmentAt(placed, time);
     if (!p) {
       if (fadeVideo) fadeVideo.style.opacity = "0";
@@ -226,7 +257,7 @@ export function Preview({ timeline, projectDir }: PreviewProps) {
 
     const audioSrc = mediaUrl(projectDir, seg.audio);
     const wantVoice = local - seg.audioOffset;
-    const voiceActive = !!seg.audio && wantVoice >= 0 && wantVoice < (seg.audioDuration ?? 0);
+    const voiceActive = !!seg.audio && !isUnlinked(seg) && wantVoice >= 0 && wantVoice < (seg.audioDuration ?? 0);
     if (audioSrc && loaded.current.voice !== audioSrc) {
       voice.src = audioSrc;
       loaded.current.voice = audioSrc;
@@ -312,6 +343,18 @@ export function Preview({ timeline, projectDir }: PreviewProps) {
   useEffect(() => {
     if (player.time > total) player.set({ time: total });
   }, [total]);
+
+  useEffect(() => {
+    const voices = freeVoices.current;
+    return () => {
+      for (const el of voices.values()) {
+        el.pause();
+        el.removeAttribute("src");
+      }
+      voices.clear();
+      audioCtx.current?.close().catch(() => undefined);
+    };
+  }, []);
 
   const toggle = () => {
     if (!placed.length) return;

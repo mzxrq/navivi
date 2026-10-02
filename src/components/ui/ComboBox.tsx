@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { ReactNode, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Check, ChevronDown } from "./icons";
 
@@ -13,6 +13,12 @@ interface ComboBoxProps {
   inputMode?: "numeric" | "text";
   previewFont?: boolean;
   className?: string;
+  // Heading of an option's group; options must come sorted by group. A heading is shown where it changes.
+  groupOf?: (option: string) => string | undefined;
+  // Something shown at the right of a group's heading (a link); clicking it closes the list.
+  groupAction?: (group: string) => ReactNode;
+  // Group headings always listed, in this order, even with no options under them.
+  groups?: string[];
 }
 
 const field =
@@ -27,7 +33,7 @@ function listPlacement(rect: DOMRect): React.CSSProperties {
 }
 
 // A text field with a list under it: type to filter, pick with the mouse or Up/Down and Enter.
-export function ComboBox({ value, onChange, options, label, allowCustom, validate, inputMode = "text", previewFont, className = "w-48" }: ComboBoxProps) {
+export function ComboBox({ value, onChange, options, label, allowCustom, validate, inputMode = "text", previewFont, className = "w-48", groupOf, groupAction, groups }: ComboBoxProps) {
   const id = useId();
   const wrapRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -174,10 +180,18 @@ export function ComboBox({ value, onChange, options, label, allowCustom, validat
             style={{ position: "fixed", left: rect.left, width: rect.width, zIndex: 100000, ...listPlacement(rect) }}
             className="overflow-y-auto custom-scrollbar rounded-xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-zinc-900 shadow-xl p-1"
           >
-            {shown.length === 0 ? (
-              <li className="px-2.5 h-8 flex items-center text-[12px] text-zinc-400">{allowCustom ? "" : "—"}</li>
-            ) : (
-              shown.map((option, i) => (
+            {(() => {
+              const heading = (group: string) => (
+                <li key={`group-${group}`} role="presentation" className="px-2.5 pt-2 pb-1 flex items-center gap-2 text-[11px] font-medium text-zinc-400 first:pt-1">
+                  <span className="flex-1 truncate">{group}</span>
+                  {groupAction && (
+                    <span onMouseDown={(e) => e.preventDefault()} onClick={() => finish(draft)}>
+                      {groupAction(group)}
+                    </span>
+                  )}
+                </li>
+              );
+              const row = (option: string, i: number) => (
                 <li
                   key={option}
                   id={`${id}-${i}`}
@@ -194,8 +208,20 @@ export function ComboBox({ value, onChange, options, label, allowCustom, validat
                   <span className="flex-1 truncate">{option}</span>
                   {option === value && <Check className="w-3.5 h-3.5 text-navi shrink-0" />}
                 </li>
-              ))
-            )}
+              );
+              const indexed = shown.map((option, i) => ({ option, i, group: groupOf?.(option) }));
+              // Headings of `groups` stay even when empty (their action is still there), unless filtering.
+              const order = [...(filtering ? [] : (groups ?? [])), ...indexed.map((x) => x.group)].filter(
+                (g, k, all): g is string => !!g && all.indexOf(g) === k,
+              );
+              const ungrouped = indexed.filter((x) => !x.group);
+              if (!shown.length && !order.length)
+                return <li className="px-2.5 h-8 flex items-center text-[12px] text-zinc-400">{allowCustom ? "" : "—"}</li>;
+              return [
+                ...ungrouped.map((x) => row(x.option, x.i)),
+                ...order.flatMap((g) => [heading(g), ...indexed.filter((x) => x.group === g).map((x) => row(x.option, x.i))]),
+              ];
+            })()}
           </ul>,
           document.body,
         )}

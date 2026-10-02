@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { t } from "@lingui/core/macro";
-import { Music, Subtitles, Type, Video, Volume2, VolumeX } from "../../components/ui/icons";
+import { Music, Subtitles, Type, UnlinkIcon, Video, Volume2, VolumeX } from "../../components/ui/icons";
 import {
   anchorCue,
+  isUnlinked,
   layout,
   MIN_CUE,
   MIN_SEGMENT,
+  narrationStart,
   newId,
   placedCues,
   PlacedCue,
@@ -116,6 +118,13 @@ export function TimelinePane(props: PaneProps) {
     window.addEventListener("pointerup", up);
   };
 
+  // Selects an item; returns whether it already was, so a click without a drag can clear it.
+  const pick = (type: "segment" | "cue" | "text", id: string) => {
+    const was = selection?.type === type && selection.id === id;
+    onSelect({ type, id });
+    return was;
+  };
+
   const patchSegment = (base: TimelineData, id: string, patch: Partial<Segment>): TimelineData => ({
     ...base,
     segments: base.segments.map((s) => (s.id === id ? { ...s, ...patch } : s)),
@@ -137,7 +146,7 @@ export function TimelinePane(props: PaneProps) {
     const base = timeline;
     const basePlaced = layout(base).placed;
     const me = basePlaced[index];
-    onSelect({ type: "segment", id: me.seg.id });
+    const was = pick("segment", me.seg.id);
     let drop = index;
     startDrag(
       e,
@@ -150,6 +159,7 @@ export function TimelinePane(props: PaneProps) {
       },
       (moved) => {
         setDrag(null);
+        if (!moved && was) onSelect(null);
         if (!moved || drop === index) return;
         const segs = base.segments.filter((_, i) => i !== index);
         segs.splice(drop, 0, me.seg);
@@ -182,7 +192,16 @@ export function TimelinePane(props: PaneProps) {
     onSelect({ type: "segment", id: seg.id });
     startDrag(
       e,
-      (dt) => setDraft(patchSegment(base, seg.id, { audioOffset: Math.max(0, +(seg.audioOffset + dt).toFixed(2)) })),
+      (dt) =>
+        setDraft(
+          patchSegment(
+            base,
+            seg.id,
+            isUnlinked(seg)
+              ? { audioStart: clamp(+(seg.audioStart! + dt).toFixed(2), 0, Math.max(0, total - (seg.audioDuration ?? 0))) }
+              : { audioOffset: Math.max(0, +(seg.audioOffset + dt).toFixed(2)) },
+          ),
+        ),
       (moved) => {
         if (moved) commit(latest.current);
         setDraft(null);
@@ -192,7 +211,7 @@ export function TimelinePane(props: PaneProps) {
 
   const onCueDown = (e: React.PointerEvent, cue: PlacedCue, mode: "move" | "start" | "end") => {
     const base = timeline;
-    onSelect({ type: "cue", id: cue.id });
+    const was = pick("cue", cue.id);
     const apply = (g0: number, g1: number) => {
       const next = anchorCue(base, cue, g0, g1, mode !== "move");
       setDraft({ ...base, subtitles: base.subtitles.map((c) => (c.id === cue.id ? next : c)) });
@@ -212,6 +231,7 @@ export function TimelinePane(props: PaneProps) {
       },
       (moved) => {
         if (moved) commit(latest.current);
+        else if (was && mode === "move") onSelect(null);
         setDraft(null);
       },
     );
@@ -219,7 +239,7 @@ export function TimelinePane(props: PaneProps) {
 
   const onTextDown = (e: React.PointerEvent, item: PlacedText, mode: "move" | "start" | "end") => {
     const base = timeline;
-    onSelect({ type: "text", id: item.id });
+    const was = pick("text", item.id);
     const apply = (g0: number, g1: number) => {
       const next: TextClip = anchorCue(base, item, g0, g1, mode !== "move");
       setDraft({ ...base, texts: base.texts.map((x) => (x.id === item.id ? { ...x, segmentId: next.segmentId, start: next.start, end: next.end } : x)) });
@@ -239,6 +259,7 @@ export function TimelinePane(props: PaneProps) {
       },
       (moved) => {
         if (moved) commit(latest.current);
+        else if (was && mode === "move") onSelect(null);
         setDraft(null);
       },
     );
@@ -275,6 +296,11 @@ export function TimelinePane(props: PaneProps) {
     <div
       ref={scroller}
       className="relative flex-1 min-h-0 overflow-auto custom-scrollbar bg-zinc-50 dark:bg-[#09090b] select-none"
+      // A press on empty space (no clip, cue or title under it) clears the selection.
+      onPointerDown={(e) => {
+        const el = e.target as HTMLElement;
+        if (el === e.currentTarget || el === lanesRef.current || el.dataset.lane || el.dataset.row) onSelect(null);
+      }}
       onWheel={(e) => {
         if (!e.ctrlKey) return;
         e.preventDefault();
@@ -298,9 +324,7 @@ export function TimelinePane(props: PaneProps) {
         <div
           className="relative flex border-b border-zinc-200/70 dark:border-white/5"
           style={{ height: LANE.video }}
-          onPointerDown={(e) => {
-            if (e.target === e.currentTarget || (e.target as HTMLElement).dataset.lane) onSelect(null);
-          }}
+          data-row
           onContextMenu={(e) => props.onLaneMenu(e, timeAt(e.clientX), "video")}
         >
           <div className={laneLabel} style={{ width: LABEL_W }}>
@@ -344,27 +368,32 @@ export function TimelinePane(props: PaneProps) {
               );
             })}
             {dropX !== null && <div className="absolute top-0 bottom-0 w-0.5 bg-navi z-40 pointer-events-none" style={{ left: dropX }} />}
-            {!placed.length && <div className="absolute inset-0 flex items-center px-3 text-[12px] text-zinc-400">{t`No clips yet`}</div>}
+            {!placed.length && <div className="absolute inset-0 flex items-center px-3 text-[12px] text-zinc-400 pointer-events-none">{t`No clips yet`}</div>}
           </div>
         </div>
 
-        <div className="relative flex border-b border-zinc-200/70 dark:border-white/5" style={{ height: LANE.voice }}>
+        <div className="relative flex border-b border-zinc-200/70 dark:border-white/5" style={{ height: LANE.voice }} data-row>
           <div className={laneLabel} style={{ width: LABEL_W }}>
             <Volume2 className="w-3.5 h-3.5" />
           </div>
-          <div className="relative flex-1">
+          <div className="relative flex-1" data-lane="voice">
             {placed
               .filter((p) => p.seg.audio)
               .map((p) => (
                 <div
                   key={p.seg.id}
                   onPointerDown={(e) => onVoiceDown(e, p.seg)}
-                  title={t`Drag to shift the narration`}
+                  title={isUnlinked(p.seg) ? t`Unlinked: drag it anywhere` : t`Drag to shift the narration`}
                   className={`absolute top-1 bottom-1 rounded-md cursor-ew-resize text-[10px] leading-[18px] px-1.5 truncate ${
-                    p.seg.muted ? "bg-zinc-300/60 dark:bg-zinc-700/60 text-zinc-500" : "bg-emerald-500/25 text-emerald-800 dark:text-emerald-300 ring-1 ring-emerald-500/40"
+                    p.seg.muted
+                      ? "bg-zinc-300/60 dark:bg-zinc-700/60 text-zinc-500"
+                      : isUnlinked(p.seg)
+                        ? "bg-amber-500/25 text-amber-800 dark:text-amber-300 ring-1 ring-amber-500/50 z-10"
+                        : "bg-emerald-500/25 text-emerald-800 dark:text-emerald-300 ring-1 ring-emerald-500/40"
                   }`}
-                  style={{ left: (p.start + p.seg.audioOffset) * pps, width: Math.max(6, (p.seg.audioDuration ?? 0) * pps - 2) }}
+                  style={{ left: narrationStart(p) * pps, width: Math.max(6, (p.seg.audioDuration ?? 0) * pps - 2) }}
                 >
+                  {isUnlinked(p.seg) && <UnlinkIcon className="inline w-2.5 h-2.5 mr-1 -mt-px" />}
                   {p.seg.label}
                 </div>
               ))}
@@ -374,6 +403,7 @@ export function TimelinePane(props: PaneProps) {
         <div
           className="relative flex border-b border-zinc-200/70 dark:border-white/5"
           style={{ height: LANE.text }}
+          data-row
           onDoubleClick={(e) => {
             if (e.target === e.currentTarget || (e.target as HTMLElement).dataset.lane) props.onAddText(timeAt(e.clientX));
           }}
@@ -412,6 +442,7 @@ export function TimelinePane(props: PaneProps) {
         <div
           className="relative flex border-b border-zinc-200/70 dark:border-white/5"
           style={{ height: LANE.subtitle }}
+          data-row
           onDoubleClick={(e) => {
             if (e.target === e.currentTarget || (e.target as HTMLElement).dataset.lane) addCueAt(timeAt(e.clientX));
           }}
@@ -447,11 +478,11 @@ export function TimelinePane(props: PaneProps) {
           </div>
         </div>
 
-        <div className="relative flex" style={{ height: LANE.music }} onContextMenu={(e) => props.onLaneMenu(e, timeAt(e.clientX), "music")}>
+        <div className="relative flex" style={{ height: LANE.music }} data-row onContextMenu={(e) => props.onLaneMenu(e, timeAt(e.clientX), "music")}>
           <div className={laneLabel} style={{ width: LABEL_W }}>
             <Music className="w-3.5 h-3.5" />
           </div>
-          <div className="relative flex-1">
+          <div className="relative flex-1" data-lane="music">
             {timeline.music && (
               <div className="absolute top-1 bottom-1 left-0 rounded-md bg-violet-500/20 ring-1 ring-violet-500/40 text-[10px] leading-[18px] px-1.5 truncate text-violet-800 dark:text-violet-300" style={{ width: Math.max(20, total * pps) }}>
                 {timeline.music.label}

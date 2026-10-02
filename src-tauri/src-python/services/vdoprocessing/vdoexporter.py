@@ -964,11 +964,40 @@ class VideoExporter:
         return [c for c in timeline_data.get("subtitles") or [] if str(c.get("text", "")).strip()]
 
     @staticmethod
+    def _mix_unlinked_audio(ffmpeg_cmd: str, timeline_data: dict, output_path: str, tmp_dir: Path) -> None:
+        """Narration the editor unlinked from its clip, each mixed in at its own timeline time."""
+        items = [
+            x for x in timeline_data.get("unlinked_audio") or []
+            if x.get("path") and Path(x["path"]).exists() and float(x.get("volume", 1.0)) > 0.001
+        ]
+        if not items:
+            return
+        cmd = [ffmpeg_cmd, "-y", *tuning.ffmpeg_log_args(), "-i", str(output_path)]
+        chains = []
+        for i, item in enumerate(items, start=1):
+            cmd += ["-i", str(Path(item["path"]).resolve())]
+            delay = int(round(max(0.0, float(item.get("start") or 0.0)) * 1000))
+            chains.append(f"[{i}:a]adelay={delay}|{delay},volume={max(0.0, float(item.get('volume', 1.0))):.3f}[n{i}]")
+        labels = "".join(f"[n{i}]" for i in range(1, len(items) + 1))
+        graph = ";".join(chains) + f";[0:a]{labels}amix=inputs={len(items) + 1}:duration=first:normalize=0[a]"
+        mixed = tmp_dir / "with_unlinked_audio.mp4"
+        cmd += [
+            "-filter_complex", graph, "-map", "0:v", "-map", "[a]",
+            "-c:v", "copy", "-c:a", "aac", "-ar", "44100", "-ac", "2", str(mixed),
+        ]
+        result = subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace")
+        if result.returncode == 0 and mixed.exists():
+            _replace_with_retry(str(mixed), str(output_path))
+        else:
+            logger.warning("unlinked narration skipped: %s", result.stderr[-400:])
+
+    @staticmethod
     def _finish_timeline_output(
         ffmpeg_cmd: str, timeline_data: dict, output_path: str, tmp_dir: Path,
         on_progress: Optional[Callable[[float], None]] = None,
     ) -> None:
-        """Music bed and burned subtitles, applied to the joined video in place."""
+        """Unlinked narration, music bed and burned subtitles, applied to the joined video in place."""
+        VideoExporter._mix_unlinked_audio(ffmpeg_cmd, timeline_data, output_path, tmp_dir)
         music = timeline_data.get("music") or {}
         music_path = music.get("path")
         if music_path and Path(music_path).exists():

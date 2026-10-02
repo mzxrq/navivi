@@ -102,10 +102,30 @@ if __name__ == "__main__":
             print(json.dumps({"success": True, "words": analyze_words(text)}, ensure_ascii=False))
             sys.exit(0)
 
+        # Google Fonts for one picker language (argv[2]: "ja"/"en"), and installing one (argv[2]: family).
+        if command_arg in ("google_fonts_catalog", "install_google_font"):
+            from services.localization import google_fonts
+            arg = sys.argv[2] if len(sys.argv) > 2 else ""
+            try:
+                if command_arg == "google_fonts_catalog":
+                    reply = {"success": True, "fonts": google_fonts.catalog(arg)}
+                else:
+                    reply = {"success": True, "files": google_fonts.install(arg)}
+            except Exception as exc:
+                reply = {"success": False, "error": str(exc)}
+            print(json.dumps(reply, ensure_ascii=False))
+            sys.exit(0)
+
         # Installed font families for the font editor's picker.
         if command_arg == "list_fonts":
-            from services.localization.fonts import installed_font_families
-            print(json.dumps({"success": True, "fonts": installed_font_families()}, ensure_ascii=False))
+            from services.localization.fonts import downloaded_font_families, font_languages, installed_font_families
+            print(json.dumps(
+                {
+                    "success": True, "fonts": installed_font_families(), "languages": font_languages(),
+                    "downloaded": downloaded_font_families(),
+                },
+                ensure_ascii=False,
+            ))
             sys.exit(0)
 
         # Voice library (list/add/delete/preview): argv[2] is a JSON payload,
