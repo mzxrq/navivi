@@ -207,6 +207,7 @@ export interface WorkspaceState {
   recentProjects: RecentProjects[];
   setRecentProjects: Dispatch<SetStateAction<RecentProjects[]>>;
   isDirty: boolean;
+  dirtyRevision: number;
   setIsDirty: (val: boolean) => void;
   resetWorkspace: () => void;
   routingCache: Record<string, [number, number][]>;

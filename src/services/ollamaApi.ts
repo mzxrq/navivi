@@ -5,6 +5,10 @@ import { tidyPlaceName } from '../utils/gpxTrack';
 import { buildWaypointPrompt, cleanNarration, RouteContext } from './narrationPrompt';
 
 const OLLAMA_URL = "http://127.0.0.1:11434";
+
+// Models that answered 400 to a request with photos; they are not sent any again this session.
+const textOnlyModels = new Set<string>();
+
 function uint8ArrayToBase64(bytes: Uint8Array): string {
     const chunk = 0x8000;
     const c = [];
@@ -49,6 +53,23 @@ export async function getLocalModels(): Promise<string[]> {
         return data.models.map((m: any) => m.name);
     } catch (error) {
         return [];
+    }
+}
+
+// Whether the model can read photos, from the capabilities Ollama reports; null when it can't tell (older Ollama, not running).
+export async function modelSeesPhotos(model: string): Promise<boolean | null> {
+    if (textOnlyModels.has(model)) return false;
+    try {
+        const res = await fetch(`${OLLAMA_URL}/api/show`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ model }),
+        });
+        if (!res.ok) return null;
+        const data = await res.json();
+        return Array.isArray(data.capabilities) ? data.capabilities.includes("vision") : null;
+    } catch {
+        return null;
     }
 }
 
@@ -159,28 +180,50 @@ async function fetchKeylessWebContext(searchTerms: string): Promise<string> {
     }
 }
 
+// Ollama's own explanation of a failed request ("" when it sent none).
+async function errorText(res: Response): Promise<string> {
+    try {
+        const text = await res.text();
+        try {
+            return JSON.parse(text)?.error ?? text;
+        } catch {
+            return text;
+        }
+    } catch {
+        return "";
+    }
+}
+
 // ✨ NEW: Unified Streaming Engine
 async function streamLLM(prompt: string, engine: string, onChunk: (text: string) => void, signal?: AbortSignal, images?: string[], onThought?: (text: string) => void, options?: Record<string, number>) {
-    const payload: any = { model: engine, prompt, stream: true };
+    // Narration is short and fact-bound; a thinking model otherwise spends minutes on a CPU recounting characters before the first word.
+    const payload: any = { model: engine, prompt, stream: true, think: false };
     if (options) payload.options = options;
-    if (engine.toLowerCase().includes("gemma-4") || engine.toLowerCase().includes("gemma4")) {
-        // Force raw mode for gemma-4 to ensure exact token sequences for Thinking Mode
-        payload.raw = true;
-        payload.prompt = `<bos><|turn>system\n<|think|><turn|>\n<|turn>user\n${prompt}<turn|>\n<|turn>model\n`;
-        delete payload.system;
-    }
-    if (images && images.length > 0) {
+    if (images && images.length > 0 && !textOnlyModels.has(engine)) {
         payload.images = images;
     }
 
-    const res = await fetch(`${OLLAMA_URL}/api/generate`, {
+    const send = () => fetch(`${OLLAMA_URL}/api/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
         signal,
     });
 
-    if (!res.ok || !res.body) throw new Error(`HTTP Error: ${res.status}`);
+    let res = await send();
+    // A model without vision rejects photos; the script is still worth writing from the text alone.
+    if (res.status === 400 && payload.images) {
+        const reason = await errorText(res);
+        console.warn(`${engine} rejected the photos (${reason || "no reason given"}); retrying without them.`);
+        if (/image|vision|multimodal/i.test(reason)) textOnlyModels.add(engine);
+        delete payload.images;
+        res = await send();
+    }
+
+    if (!res.ok || !res.body) {
+        const detail = await errorText(res);
+        throw new Error(`HTTP Error: ${res.status}${detail ? `: ${detail}` : ""}`);
+    }
 
     const reader = res.body.getReader();
     const decoder = new TextDecoder("utf-8");

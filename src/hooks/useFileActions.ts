@@ -3,7 +3,9 @@ import { invoke } from "@tauri-apps/api/core";
 import { useWorkspace } from "./useWorkspace";
 import { useUI } from "./useUI";
 import { open } from "@tauri-apps/plugin-dialog";
-import { readTextFile, readFile, readDir } from "@tauri-apps/plugin-fs";
+import { documentDir, join } from "@tauri-apps/api/path";
+import { readTextFile, readFile, readDir, mkdir, writeFile } from "@tauri-apps/plugin-fs";
+import { fileSystem } from "../config/constants";
 import * as exifr from "exifr";
 import { t } from "@lingui/core/macro";
 
@@ -101,6 +103,30 @@ export function useFileActions() {
         if (skipped > 0) showToast(t`${skipped} photos without a location were skipped.`, "info");
       }
 
+    } catch (e) {
+      console.error(e);
+      showToast(t`Failed to process dropped files`, "error");
+    }
+  };
+
+  // The window keeps HTML5 drag and drop for the map markers, so dropped files arrive as File objects without a path.
+  // They are written under Documents/Navivi/Imports first and then go through the same import as a chosen file.
+  const handleDroppedBrowserFiles = async (files: File[]) => {
+    const supported = /\.(jpe?g|png|gpx|txt|md)$/i;
+    const usable = files.filter((f) => supported.test(f.name));
+    const skipped = files.length - usable.length;
+    if (skipped > 0) showToast(skipped === 1 ? t`1 file was skipped: only photos, GPX files and text files can be dropped here.` : t`${skipped} files were skipped: only photos, GPX files and text files can be dropped here.`, "warning");
+    if (usable.length === 0) return;
+    try {
+      const dir = await join(await documentDir(), fileSystem.rootFolder, "Imports", String(Date.now()));
+      await mkdir(dir, { recursive: true });
+      const paths: string[] = [];
+      for (const file of usable) {
+        const dest = await join(dir, file.name.replace(/[<>:"|?*]/g, "_"));
+        await writeFile(dest, new Uint8Array(await file.arrayBuffer()));
+        paths.push(dest);
+      }
+      await handleDroppedFiles(paths);
     } catch (e) {
       console.error(e);
       showToast(t`Failed to process dropped files`, "error");
@@ -267,5 +293,5 @@ export function useFileActions() {
     }
   };
 
-  return { importRouteFile, handleDroppedFiles, importPhotos };
+  return { importRouteFile, handleDroppedFiles, handleDroppedBrowserFiles, importPhotos };
 }

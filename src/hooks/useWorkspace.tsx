@@ -69,8 +69,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [isDirty, setIsDirtyState] = useState(false);
   const [isProjectLoading, setIsProjectLoading] = useState(false);
   const dirtyRevisionRef = useRef(0);
+  // Every edit bumps this, so autosave can tell "still the same unsaved edit" from "edited again".
+  const [dirtyRevision, setDirtyRevision] = useState(0);
   const setIsDirty = useCallback((dirty: boolean) => {
-    if (dirty) dirtyRevisionRef.current += 1;
+    if (dirty) {
+      dirtyRevisionRef.current += 1;
+      setDirtyRevision(dirtyRevisionRef.current);
+    }
     setIsDirtyState(dirty);
   }, []);
 
@@ -601,6 +606,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         saveProject,
         loadProject,
         isDirty,
+        dirtyRevision,
         setIsDirty,
         recentProjects,
         setRecentProjects,

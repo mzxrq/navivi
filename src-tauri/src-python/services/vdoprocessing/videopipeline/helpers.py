@@ -70,6 +70,15 @@ def output_is_valid(path, min_bytes: int = 1024) -> bool:
         return False
 
 
+def is_newer_than(path, source) -> bool:
+    """True if `path` was written no earlier than `source`. A subtitle older than its narration audio was built
+    from a previous take of it (the audio is re-synthesised under the same filename), so it must be rebuilt."""
+    try:
+        return Path(path).stat().st_mtime_ns >= Path(source).stat().st_mtime_ns
+    except OSError:
+        return False
+
+
 def safe_label(label, fallback: str) -> str:
     """The one canonical filename-safe label sanitizer, shared by every
     domain (TTS, attraction, subtitles) — strips to alnum/space/underscore/

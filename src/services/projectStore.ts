@@ -2,7 +2,7 @@ import { join } from "@tauri-apps/api/path";
 import { appConfig, fileSystem } from "../config/constants";
 import { DbProject, DbProjectInput, RecentProjects } from "../types";
 import { db } from "./db";
-import { loadRouteCache } from "./fileSystem";
+import { duplicateProjectFolder, loadProjectData, loadRouteCache } from "./fileSystem";
 import { readLegacyHistory } from "./versionHistory";
 
 type RouteCache = Record<string, [number, number][]>;
@@ -143,6 +143,18 @@ export async function listRecents(limit = 50): Promise<RecentProjects[]> {
   const known = new Set(recents.map((r) => r.path));
   const legacy = (await migrateLegacyRecents()).filter((r) => !known.has(r.path));
   return [...recents, ...legacy].slice(0, limit);
+}
+
+/** Copies a project into a new workspace folder, registers it in the database and returns the new folder. */
+export async function duplicateProject(entry: RecentProjects, name: string): Promise<string> {
+  if (entry.path.toLowerCase().endsWith(`.${fileSystem.extensions.project}`)) {
+    throw new Error("This project is still an archive file. Open it once, then duplicate it.");
+  }
+  const destDir = await duplicateProjectFolder(entry.path, name);
+  const loaded = await loadProjectData(destDir);
+  if (!loaded) throw new Error("The copy could not be opened.");
+  await syncProjectOnOpen(loaded.data, loaded.selectedPath);
+  return destDir;
 }
 
 export async function removeRecent(entry: RecentProjects): Promise<void> {

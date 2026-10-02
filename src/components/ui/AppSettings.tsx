@@ -9,11 +9,12 @@ import { useAnimatedUnmount } from "../../hooks/useAnimatedUnmount";
 import { useTheme } from "../../hooks/useTheme";
 import { useUI } from "../../hooks/useUI";
 import { useWorkspace } from "../../hooks/useWorkspace";
-import { getLocalModels, pullModelStream } from "../../services/ollamaApi";
+import { getLocalModels, modelSeesPhotos, pullModelStream } from "../../services/ollamaApi";
 import { dynamicActivate } from "../../i18n";
 import { db } from "../../services/db";
 import { GLOBAL_DICTIONARY_KEY } from "../../config/constants";
 import {
+  AlertTriangle,
   Check,
   CheckCircle2,
   Film,
@@ -866,6 +867,17 @@ function AiModelsTab() {
     getLocalModels().then(setLocalModels);
   }, []);
 
+  const activeModel = settings.ai_model || "schroneko/gemma-2-2b-jpn-it";
+  const [seesPhotos, setSeesPhotos] = useState<boolean | null>(null);
+  useEffect(() => {
+    let current = true;
+    setSeesPhotos(null);
+    modelSeesPhotos(activeModel).then((result) => current && setSeesPhotos(result));
+    return () => {
+      current = false;
+    };
+  }, [activeModel, localModels]);
+
   const recommendedModels = [
     {
       id: "schroneko/gemma-2-2b-jpn-it",
@@ -964,7 +976,7 @@ function AiModelsTab() {
           description={t`Select which model to use for narration synthesis, only downloaded models are shown`}
         >
           <select
-            value={settings.ai_model || "schroneko/gemma-2-2b-jpn-it"}
+            value={activeModel}
             onChange={(e) => {
               updateSettings({ ai_model: e.target.value });
               setIsDirty(true);
@@ -984,6 +996,16 @@ function AiModelsTab() {
             )}
           </select>
         </Row>
+        {seesPhotos === false && (
+          <div className="px-4 py-3">
+            <div className="flex items-start gap-2 rounded-lg bg-amber-500/10 px-3 py-2 text-[12px] leading-snug text-amber-700 dark:text-amber-400">
+              <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+              <span>
+                <Trans>This model cannot read photos. Scripts for stops with photos are written from the place name and location facts only. A vision model such as Gemma 4 can use the photos.</Trans>
+              </span>
+            </div>
+          </div>
+        )}
       </Section>
 
       <Section title={t`Recommended models`}>
