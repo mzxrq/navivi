@@ -10,6 +10,7 @@ from services import tuning
 from services.config.job_config import JobConfigManager
 from services.config.upscaled_images import upscale_enabled
 from services.localization.subtitle import caption_style
+from services.ollama_memory import unload_ollama_models
 from services.logger.progress import tracker
 from services.render_estimate import StageRecorder
 from services.vdoprocessing.vdoexporter import VideoExporter, sweep_stale_temp_files
@@ -44,7 +45,8 @@ PIPELINE_STAGES = 8
 
 
 def _stop_gpu_servers() -> None:
-    """Frees the RAM/VRAM the narration and diffusion servers still hold."""
+    """Frees the RAM/VRAM the narration and diffusion servers still hold (and the script model Ollama keeps loaded)."""
+    unload_ollama_models()
     stop_tts_server()
     from services.vdoprocessing.comfyui_i2v_client import ComfyUII2VClient
 
@@ -95,7 +97,7 @@ def run_full_pipeline(
 
     # --- STEP 2 ---
     tracker.stage("Generating TTS narration...")
-    tuning.ensure_free_ram("TTS narration", min_free_ram)
+    tuning.ensure_free_ram("TTS narration", min_free_ram, relief=unload_ollama_models)
     # The script's own timing cues ({start}/{arrive}/{end}) tell the video where
     # the voice is: the walker has to have arrived by {arrive}. They are never
     # spoken. settings.use_narration_cues=false ignores them; a script without
