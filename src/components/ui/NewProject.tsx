@@ -67,7 +67,6 @@ export function NewProject() {
   const searchRef = useRef<HTMLDivElement>(null);
 
   const [travelMode, setTravelMode] = useState<RouteMode>("driving");
-  const [ratio, setRatio] = useState<"16:9" | "9:16">("16:9");
   const [introEnabled, setIntroEnabled] = useState(true);
   const [introTitle, setIntroTitle] = useState("");
   const [introSubtitle, setIntroSubtitle] = useState("");
@@ -162,7 +161,6 @@ export function NewProject() {
       fps: 30,
       skip_rich_media: skipRichMedia,
       default_route_mode: travelMode,
-      default_export_ratio: ratio,
     });
 
     try {
@@ -351,17 +349,6 @@ export function NewProject() {
               value={travelMode}
               onChange={setTravelMode}
               options={modes.map((m) => ({ id: m.id, label: m.label, icon: <m.icon className="w-4 h-4" /> }))}
-            />
-          </Field>
-
-          <Field label={t`Video format`} hint={t`Used as the default when exporting`}>
-            <Segmented
-              value={ratio}
-              onChange={setRatio}
-              options={[
-                { id: "16:9", label: t`Landscape 16:9`, icon: <span className="w-4 h-2.5 rounded-xs border-[1.5px] border-current" /> },
-                { id: "9:16", label: t`Vertical 9:16`, icon: <span className="w-2.5 h-4 rounded-xs border-[1.5px] border-current" /> },
-              ]}
             />
           </Field>
 

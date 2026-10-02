@@ -67,7 +67,6 @@ export interface ProjectSettings {
   skip_rich_media?: boolean;
   default_route_mode?: RouteMode;
   default_export_resolution?: "4k" | "1080p" | "720p";
-  default_export_ratio?: "16:9" | "9:16";
   default_ducking_level?: number;
   subtitle_font?: string; // either uses Calibri or some nice looking font as default
   subtitle_font_size?: number; // could be at least size 30
@@ -119,8 +118,6 @@ export interface RecentProjects {
 
 export type { TimelineData, Segment, SubtitleCue, MusicBed } from "../features/editor/model";
 
-export type AspectRatioType = "16:9" | "9:16";
-
 export interface QualityProfile {
   id: string;
   label: string;
@@ -128,15 +125,6 @@ export interface QualityProfile {
   height: number;
   bitrateKbps: number;
   fps: number;
-}
-
-export interface RenderSettings {
-  aspectRatio: AspectRatioType;
-  resolution: { width: number; height: number };
-  fps: number;
-  bitrateKbps: number;
-  qualityId: string;
-  skipRichMedia?: boolean;
 }
 
 export interface ProjectVersion {

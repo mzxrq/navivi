@@ -442,7 +442,7 @@ msgstr "Add at least two stops to draw a path between them."
 msgid "Add music"
 msgstr "Add music"
 
-#: src/features/map/components/MapArea.tsx:1131
+#: src/features/map/components/MapArea.tsx:1130
 msgid "Add new points after this one"
 msgstr "Add new points after this one"
 
@@ -458,7 +458,7 @@ msgstr "Add new points after this one"
 msgid "Add photo"
 msgstr "Add photo"
 
-#: src/features/map/components/MapArea.tsx:347
+#: src/features/map/components/MapArea.tsx:349
 msgid "Add point here"
 msgstr "Add point here"
 
@@ -482,7 +482,7 @@ msgstr "Add stop here"
 msgid "Add stop-by here"
 msgstr "Add stop-by here"
 
-#: src/components/ui/NewProject.tsx:192
+#: src/components/ui/NewProject.tsx:190
 msgid "Add stops yourself"
 msgstr "Add stops yourself"
 
@@ -498,7 +498,7 @@ msgstr "Add subtitle here"
 msgid "Add up to 3 images that will pop up during the narration at this stop"
 msgstr "Add up to 3 images that will pop up during the narration at this stop"
 
-#: src/features/map/components/MapArea.tsx:362
+#: src/features/map/components/MapArea.tsx:364
 msgid "Add via point here"
 msgstr "Add via point here"
 
@@ -610,7 +610,7 @@ msgid "An unknown error occurred during rendering."
 msgstr "An unknown error occurred during rendering."
 
 #. placeholder {0}: idx + 1
-#: src/features/map/components/MapArea.tsx:1167
+#: src/features/map/components/MapArea.tsx:1166
 msgid "Anchor {0}"
 msgstr "Anchor {0}"
 
@@ -864,7 +864,7 @@ msgstr "Based on your earlier renders on this PC. Unchanged clips are reused, so
 msgid "Black"
 msgstr "Black"
 
-#: src/components/ui/NewProject.tsx:192
+#: src/components/ui/NewProject.tsx:190
 msgid "Blank map"
 msgstr "Blank map"
 
@@ -918,7 +918,7 @@ msgstr "Cancel"
 
 #: src/components/ui/AutoDirectorModal.tsx:175
 #: src/components/ui/ExportProjectDialog.tsx:88
-#: src/components/ui/NewProject.tsx:410
+#: src/components/ui/NewProject.tsx:397
 #: src/components/ui/RenderOverlay.tsx:792
 #: src/components/ui/RenderOverlay.tsx:951
 #: src/components/ui/SaveAs.tsx:105
@@ -1015,7 +1015,7 @@ msgstr "Choose…"
 
 #: src/components/ui/AppSettings.tsx:1213
 #: src/components/ui/AppSettings.tsx:1215
-#: src/components/ui/NewProject.tsx:315
+#: src/components/ui/NewProject.tsx:313
 #: src/components/ui/ReviewStep.tsx:174
 #: src/components/ui/StatusBar.tsx:402
 #: src/features/map/components/Sidebar.tsx:254
@@ -1066,7 +1066,7 @@ msgstr "Click the map to add points. Drag a point to move it; click one to inser
 msgid "Click the map to add:"
 msgstr "Click the map to add:"
 
-#: src/features/map/components/MapArea.tsx:818
+#: src/features/map/components/MapArea.tsx:820
 msgid "Click the map to nudge the route. Drag a via point to move it, or right-click it for options."
 msgstr "Click the map to nudge the route. Drag a via point to move it, or right-click it for options."
 
@@ -1107,7 +1107,7 @@ msgstr "Clips ordered, fades added and subtitles filled in"
 #: src/components/ui/AppSettings.tsx:265
 #: src/components/ui/AppSettings.tsx:266
 #: src/components/ui/ErrorBoundary.tsx:85
-#: src/components/ui/NewProject.tsx:230
+#: src/components/ui/NewProject.tsx:228
 #: src/components/ui/RenderOverlay.tsx:1299
 #: src/components/ui/StatusBar.tsx:454
 #: src/components/ui/TitleBar.tsx:447
@@ -1294,11 +1294,11 @@ msgstr "Couldn't look up a place name for this location."
 msgid "Create a copy of this workspace"
 msgstr "Create a copy of this workspace"
 
-#: src/components/ui/NewProject.tsx:221
+#: src/components/ui/NewProject.tsx:219
 msgid "create-new-route"
 msgstr "Create New Route"
 
-#: src/components/ui/NewProject.tsx:224
+#: src/components/ui/NewProject.tsx:222
 msgid "create-new-route-detail"
 msgstr "Set your starting coordinates and routing behavior"
 
@@ -1336,8 +1336,8 @@ msgid "Custom Color"
 msgstr "Custom Color"
 
 #: src/components/ui/AppSettings.tsx:473
-#: src/features/map/components/MapArea.tsx:964
-#: src/features/map/components/MapArea.tsx:1026
+#: src/features/map/components/MapArea.tsx:963
+#: src/features/map/components/MapArea.tsx:1025
 #: src/features/map/components/WaypointEditor.tsx:629
 msgid "Custom Marker"
 msgstr "Custom Marker"
@@ -1369,11 +1369,11 @@ msgstr "Default marker for all waypoints. Can be overridden per-stop."
 msgid "Default pin"
 msgstr "Default pin"
 
-#: src/components/ui/NewProject.tsx:349
+#: src/components/ui/NewProject.tsx:347
 msgid "Default travel mode"
 msgstr "Default travel mode"
 
-#: src/components/ui/NewProject.tsx:349
+#: src/components/ui/NewProject.tsx:347
 msgid "default-routing-mode-detail"
 msgstr "Sets the default pathfinding engine when placing waypoints"
 
@@ -1406,7 +1406,7 @@ msgstr "Delete and generate"
 #~ msgid "Delete marker"
 #~ msgstr "Delete marker"
 
-#: src/features/map/components/MapArea.tsx:1145
+#: src/features/map/components/MapArea.tsx:1144
 msgid "Delete point"
 msgstr "Delete point"
 
@@ -1520,17 +1520,17 @@ msgstr "Don't Save"
 #: src/components/ui/RenderOverlay.tsx:1230
 #: src/features/editor/ExportDialog.tsx:60
 #: src/features/map/components/DrawBar.tsx:319
-#: src/features/map/components/MapArea.tsx:832
+#: src/features/map/components/MapArea.tsx:834
 #: src/features/map/components/Sidebar.tsx:273
 msgid "Done"
 msgstr "Done"
 
-#: src/features/map/components/MapArea.tsx:367
+#: src/features/map/components/MapArea.tsx:369
 #: src/features/map/components/WaypointItem.tsx:384
 msgid "Done adjusting"
 msgstr "Done adjusting"
 
-#: src/features/map/components/MapArea.tsx:352
+#: src/features/map/components/MapArea.tsx:354
 msgid "Done drawing"
 msgstr "Done drawing"
 
@@ -1588,7 +1588,7 @@ msgstr "Draws subtitles onto each clip while rendering. The editor can also burn
 #~ msgid "Dreamy"
 #~ msgstr "Dreamy"
 
-#: src/components/ui/NewProject.tsx:179
+#: src/components/ui/NewProject.tsx:177
 #: src/features/map/hooks/useStopMenus.ts:39
 msgid "Drive"
 msgstr "Drive"
@@ -1597,7 +1597,7 @@ msgstr "Drive"
 #~ msgid "Drop photos here to auto-plot your route"
 #~ msgstr "Drop photos here to auto-plot your route"
 
-#: src/features/map/components/MapArea.tsx:1184
+#: src/features/map/components/MapArea.tsx:1183
 msgid "Drop photos or GPS files to plot route"
 msgstr "Drop photos or GPS files to plot route"
 
@@ -1642,7 +1642,7 @@ msgstr "Duplicate Project Name"
 #~ msgid "Duration"
 #~ msgstr "Duration"
 
-#: src/features/map/components/MapArea.tsx:913
+#: src/features/map/components/MapArea.tsx:912
 msgid "E"
 msgstr "E"
 
@@ -1999,7 +1999,7 @@ msgstr "Fast render"
 
 #: src/components/ui/AppSettings.tsx:338
 #: src/components/ui/AppSettings.tsx:344
-#: src/components/ui/NewProject.tsx:399
+#: src/components/ui/NewProject.tsx:386
 msgid "Fast render mode"
 msgstr "Fast render mode"
 
@@ -2007,7 +2007,7 @@ msgstr "Fast render mode"
 #~ msgid "Fastest export with compact file size for quick previews (12 Mbps 4K / 5 Mbps 1080p)"
 #~ msgstr "Fastest export with compact file size for quick previews (12 Mbps 4K / 5 Mbps 1080p)"
 
-#: src/components/ui/NewProject.tsx:181
+#: src/components/ui/NewProject.tsx:179
 #: src/features/map/hooks/useStopMenus.ts:40
 msgid "Ferry"
 msgstr "Ferry"
@@ -2029,7 +2029,7 @@ msgstr "Finalizing Project Timeline..."
 msgid "Fit to window"
 msgstr "Fit to window"
 
-#: src/components/ui/NewProject.tsx:182
+#: src/components/ui/NewProject.tsx:180
 #: src/features/map/hooks/useStopMenus.ts:41
 msgid "Fly"
 msgstr "Fly"
@@ -2155,17 +2155,17 @@ msgstr "Goes with the voice"
 #~ msgid "Golden dynamic highlight and glow"
 #~ msgstr "Golden dynamic highlight and glow"
 
-#: src/components/ui/NewProject.tsx:196
+#: src/components/ui/NewProject.tsx:194
 #: src/components/ui/PipelineLogPanel.tsx:49
 msgid "GPS track"
 msgstr "GPS track"
 
-#: src/components/ui/NewProject.tsx:137
+#: src/components/ui/NewProject.tsx:136
 #: src/hooks/useFileActions.ts:157
 msgid "GPS/Text Files"
 msgstr "GPS/Text Files"
 
-#: src/components/ui/NewProject.tsx:197
+#: src/components/ui/NewProject.tsx:195
 msgid "GPX, FIT, TCX or KML"
 msgstr "GPX, FIT, TCX or KML"
 
@@ -2354,8 +2354,8 @@ msgid "Kyoto Demo Route"
 msgstr "Kyoto Demo Route"
 
 #: src/components/ui/NewProject.tsx:362
-msgid "Landscape 16:9"
-msgstr "Landscape 16:9"
+#~ msgid "Landscape 16:9"
+#~ msgstr "Landscape 16:9"
 
 #: src/components/ui/AppSettings.tsx:281
 msgid "Language"
@@ -2439,9 +2439,9 @@ msgstr "Loading voices…"
 msgid "Loading…"
 msgstr "Loading…"
 
-#: src/features/map/components/MapArea.tsx:410
-#: src/features/map/components/MapArea.tsx:452
-#: src/features/map/components/MapArea.tsx:493
+#: src/features/map/components/MapArea.tsx:412
+#: src/features/map/components/MapArea.tsx:454
+#: src/features/map/components/MapArea.tsx:495
 #: src/hooks/useWaypointActions.ts:16
 #: src/hooks/useWaypointActions.ts:54
 msgid "Locating..."
@@ -2791,7 +2791,7 @@ msgstr "No tracks yet. Put music files in the folder (use Open music folder), or
 #~ msgstr "No voiceover scripts were found in this generation."
 
 #: src/components/ui/LocationSearch.tsx:56
-#: src/components/ui/NewProject.tsx:114
+#: src/components/ui/NewProject.tsx:113
 msgid "no-internet"
 msgstr "No Internet Connection"
 
@@ -2942,7 +2942,7 @@ msgstr "Pan Up"
 msgid "Parsing Maps & GPS Data{prog}..."
 msgstr "Parsing Maps & GPS Data{prog}..."
 
-#: src/features/map/components/MapArea.tsx:1193
+#: src/features/map/components/MapArea.tsx:1192
 msgid "Parsing Route Data..."
 msgstr "Parsing Route Data..."
 
@@ -3015,7 +3015,7 @@ msgstr "Playing..."
 #~ msgstr "Please drop transitions directly on the cut between two clips"
 
 #. placeholder {0}: idx + 1
-#: src/features/map/components/MapArea.tsx:1129
+#: src/features/map/components/MapArea.tsx:1128
 msgid "Point {0}"
 msgstr "Point {0}"
 
@@ -3085,7 +3085,7 @@ msgstr "Project loaded successfully"
 msgid "Project Manager"
 msgstr "Project Manager"
 
-#: src/components/ui/NewProject.tsx:238
+#: src/components/ui/NewProject.tsx:236
 msgid "Project name"
 msgstr "Project name"
 
@@ -3126,7 +3126,7 @@ msgstr "Project settings saved"
 msgid "Project Title"
 msgstr "Project Title"
 
-#: src/components/ui/NewProject.tsx:246
+#: src/components/ui/NewProject.tsx:244
 msgid "project-name-placeholder"
 msgstr "Kyoto Sightseeing"
 
@@ -3609,7 +3609,7 @@ msgstr "Route videos"
 #~ msgid "Routes are limited to {0} waypoints in this preview build."
 #~ msgstr "Routes are limited to {0} waypoints in this preview build."
 
-#: src/features/map/components/MapArea.tsx:910
+#: src/features/map/components/MapArea.tsx:909
 msgid "S"
 msgstr "S"
 
@@ -3861,7 +3861,7 @@ msgstr "Show video"
 msgid "Show Video"
 msgstr "Show Video"
 
-#: src/components/ui/NewProject.tsx:372
+#: src/components/ui/NewProject.tsx:359
 msgid "Shows the title and subtitle at the start of the video"
 msgstr "Shows the title and subtitle at the start of the video"
 
@@ -3870,7 +3870,7 @@ msgid "Simple"
 msgstr "Simple"
 
 #: src/components/ui/AppSettings.tsx:339
-#: src/components/ui/NewProject.tsx:400
+#: src/components/ui/NewProject.tsx:387
 msgid "Skip AI voiceover synthesis and pop-up images during generation"
 msgstr "Skip AI voiceover synthesis and pop-up images during generation"
 
@@ -3973,19 +3973,19 @@ msgstr "Spoken while the route travels to this stop."
 msgid "Start"
 msgstr "Start"
 
-#: src/components/ui/NewProject.tsx:251
+#: src/components/ui/NewProject.tsx:249
 msgid "Start from"
 msgstr "Start from"
 
-#: src/components/ui/NewProject.tsx:417
+#: src/components/ui/NewProject.tsx:404
 msgid "start-editing"
 msgstr "Start Editing"
 
-#: src/components/ui/NewProject.tsx:301
+#: src/components/ui/NewProject.tsx:299
 msgid "start-search-detail"
 msgstr "Search for a city, landmark, or address..."
 
-#: src/components/ui/NewProject.tsx:283
+#: src/components/ui/NewProject.tsx:281
 msgid "Starting point"
 msgstr "Starting point"
 
@@ -4026,7 +4026,7 @@ msgstr "Stop {0}"
 #~ msgid "Stop {stopNum}: {stopName}"
 #~ msgstr "Stop {stopNum}: {stopName}"
 
-#: src/features/map/components/MapArea.tsx:509
+#: src/features/map/components/MapArea.tsx:511
 msgid "Stop By"
 msgstr "Stop By"
 
@@ -4061,13 +4061,13 @@ msgstr "Stops containing custom images or AI scripts"
 #~ msgid "Style Presets"
 #~ msgstr "Style Presets"
 
-#: src/components/ui/NewProject.tsx:391
+#: src/components/ui/NewProject.tsx:378
 #: src/features/editor/Inspector.tsx:183
 #: src/features/map/components/OverviewPanel.tsx:98
 msgid "Subtitle"
 msgstr "Subtitle"
 
-#: src/components/ui/NewProject.tsx:390
+#: src/components/ui/NewProject.tsx:377
 msgid "Subtitle (optional)"
 msgstr "Subtitle (optional)"
 
@@ -4289,8 +4289,8 @@ msgstr "Timing"
 msgid "Timing cues written in a narration decide when the walker reaches the stop."
 msgstr "Timing cues written in a narration decide when the walker reaches the stop."
 
-#: src/components/ui/NewProject.tsx:382
-#: src/components/ui/NewProject.tsx:383
+#: src/components/ui/NewProject.tsx:369
+#: src/components/ui/NewProject.tsx:370
 #: src/features/map/components/OverviewPanel.tsx:82
 #: src/features/map/components/OverviewPanel.tsx:88
 msgid "Title"
@@ -4300,7 +4300,7 @@ msgstr "Title"
 msgid "Title and ending cards"
 msgstr "Title and ending cards"
 
-#: src/components/ui/NewProject.tsx:371
+#: src/components/ui/NewProject.tsx:358
 #: src/components/ui/RenderOverlay.tsx:384
 #: src/features/map/components/GenerateDialog.tsx:93
 msgid "Title card"
@@ -4393,9 +4393,9 @@ msgstr "Undo"
 #~ msgid "Unhide Track"
 #~ msgstr "Unhide Track"
 
-#: src/features/map/components/MapArea.tsx:436
-#: src/features/map/components/MapArea.tsx:478
-#: src/features/map/components/MapArea.tsx:516
+#: src/features/map/components/MapArea.tsx:438
+#: src/features/map/components/MapArea.tsx:480
+#: src/features/map/components/MapArea.tsx:518
 #: src/features/map/components/WaypointEditor.tsx:130
 #: src/hooks/useWaypointActions.ts:47
 #: src/hooks/useWaypointActions.ts:64
@@ -4452,7 +4452,7 @@ msgid "Untitled"
 msgstr "Untitled"
 
 #: src/components/ui/NewProject.tsx:58
-#: src/components/ui/NewProject.tsx:149
+#: src/components/ui/NewProject.tsx:148
 #: src/components/ui/TitleBar.tsx:87
 #: src/components/ui/TitleBar.tsx:220
 #: src/components/ui/TitleBar.tsx:487
@@ -4481,8 +4481,8 @@ msgid "Use your own footage for this stop. It plays in place of the animated pho
 msgstr "Use your own footage for this stop. It plays in place of the animated photo clip and is fitted to the narration. Its sound is off unless you turn it on."
 
 #: src/components/ui/NewProject.tsx:357
-msgid "Used as the default when exporting"
-msgstr "Used as the default when exporting"
+#~ msgid "Used as the default when exporting"
+#~ msgstr "Used as the default when exporting"
 
 #: src/components/ui/VoiceSettings.tsx:181
 msgid "Used by all projects."
@@ -4505,15 +4505,15 @@ msgid "Version label"
 msgstr "Version label"
 
 #: src/components/ui/NewProject.tsx:363
-msgid "Vertical 9:16"
-msgstr "Vertical 9:16"
+#~ msgid "Vertical 9:16"
+#~ msgstr "Vertical 9:16"
 
 #: src/features/export/components/ExportModal.tsx:491
 #~ msgid "Vertical portrait format (1080x1920)"
 #~ msgstr "Vertical portrait format (1080x1920)"
 
 #. placeholder {0}: idx + 1
-#: src/features/map/components/MapArea.tsx:1079
+#: src/features/map/components/MapArea.tsx:1078
 msgid "Via {0} · Right-click for options"
 msgstr "Via {0} · Right-click for options"
 
@@ -4548,8 +4548,8 @@ msgid "Video Exported Successfully!"
 msgstr "Video Exported Successfully!"
 
 #: src/components/ui/NewProject.tsx:357
-msgid "Video format"
-msgstr "Video format"
+#~ msgid "Video format"
+#~ msgstr "Video format"
 
 #: src/components/ui/RenderOverlay.tsx:319
 #~ msgid "video-clip"
@@ -4597,15 +4597,15 @@ msgstr "Volume"
 msgid "Waiting for pipeline..."
 msgstr "Waiting for pipeline..."
 
-#: src/components/ui/NewProject.tsx:180
+#: src/components/ui/NewProject.tsx:178
 #: src/features/map/hooks/useStopMenus.ts:38
 msgid "Walk"
 msgstr "Walk"
 
 #: src/features/map/components/DrawBar.tsx:285
-#: src/features/map/components/MapArea.tsx:471
-#: src/features/map/components/MapArea.tsx:948
-#: src/features/map/components/MapArea.tsx:1009
+#: src/features/map/components/MapArea.tsx:473
+#: src/features/map/components/MapArea.tsx:947
+#: src/features/map/components/MapArea.tsx:1008
 #: src/features/map/hooks/useStopMenus.ts:151
 #: src/features/map/hooks/useStopMenus.ts:207
 msgid "Waypoint"
@@ -4642,7 +4642,7 @@ msgstr "Waypoint {idx}"
 #~ msgid "Waypoint-linked and custom markers"
 #~ msgstr "Waypoint-linked and custom markers"
 
-#: src/components/ui/NewProject.tsx:285
+#: src/components/ui/NewProject.tsx:283
 msgid "Where the map opens before your import is placed"
 msgstr "Where the map opens before your import is placed"
 
