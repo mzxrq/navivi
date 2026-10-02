@@ -166,11 +166,11 @@ export function useStopMenus() {
       },
       separator,
       legColorable(wp) && {
-        label: t`Line colour`,
+        label: t`Line color`,
         icon: colorDot(wp.lineColor ? rgbToHex(wp.lineColor) : null),
         submenu: [
           {
-            label: t`Route colour`,
+            label: t`Route color`,
             checked: !wp.lineColor,
             onSelect: () => setLegColor(wp.id, undefined),
           },

@@ -379,7 +379,7 @@ export function AppSettings() {
                       ))}
                     </div>
                   </Row>
-                  <Row title={t`Accent colour`}>
+                  <Row title={t`Accent color`}>
                     <div className="flex items-center gap-2">
                       {[
                         {
@@ -624,8 +624,8 @@ export function AppSettings() {
                     />
                   </Row>
                   <Row
-                    title={t`Text colour`}
-                    description={t`ASS colour, e.g. &H00FFFFFF`}
+                    title={t`Text color`}
+                    description={t`ASS color, e.g. &H00FFFFFF`}
                   >
                     <input
                       type="text"
@@ -638,8 +638,8 @@ export function AppSettings() {
                     />
                   </Row>
                   <Row
-                    title={t`Outline colour`}
-                    description={t`ASS colour, e.g. &H00000000`}
+                    title={t`Outline color`}
+                    description={t`ASS color, e.g. &H00000000`}
                   >
                     <input
                       type="text"

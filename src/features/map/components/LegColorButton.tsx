@@ -46,8 +46,8 @@ export function LegColorButton({ wp }: { wp: Waypoint }) {
         }}
         aria-haspopup="dialog"
         aria-expanded={open}
-        title={wp.lineColor ? t`Line colour` : t`Line colour: route colour`}
-        aria-label={t`Line colour`}
+        title={wp.lineColor ? t`Line color` : t`Line color: route color`}
+        aria-label={t`Line color`}
         className={`flex items-center justify-center w-6 h-6 rounded-md transition-colors ${
           open ? "bg-zinc-200/80 dark:bg-white/10" : "hover:bg-zinc-100 dark:hover:bg-white/5"
         }`}
@@ -68,7 +68,7 @@ export function LegColorButton({ wp }: { wp: Waypoint }) {
         >
           <div className="flex items-center justify-between gap-4 mb-2.5">
             <span className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300 whitespace-nowrap">
-              <Trans>Line colour</Trans>
+              <Trans>Line color</Trans>
             </span>
             {wp.lineColor && (
               <button
@@ -76,7 +76,7 @@ export function LegColorButton({ wp }: { wp: Waypoint }) {
                 onClick={() => setColor(undefined)}
                 className="text-[11px] text-zinc-500 hover:text-navi whitespace-nowrap transition-colors"
               >
-                <Trans>Use route colour</Trans>
+                <Trans>Use route color</Trans>
               </button>
             )}
           </div>
