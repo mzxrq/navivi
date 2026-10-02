@@ -137,14 +137,24 @@ def cpu_narration_seconds(requests: int, chars: int, steps: int, latent_saved: b
     return requests * per_request + chars * (c["char_sampling"] * scale + c["char_decode"])
 
 
-def _irodori_cpu_estimate(config: dict, units: dict, hw: dict) -> Optional[float]:
-    """The CPU narration estimate when this machine will synthesize on its CPU, else None (the generic cost applies)."""
+def kokoro_narration_seconds(requests: int, chars: int) -> float:
+    """Narration time of the fast voice: loading the model once, then a little per request and per character."""
+    from services import tuning
+
+    c = tuning.KOKORO_COST
+    return c["startup"] + requests * c["request"] + chars * c["char"] if requests else 0.0
+
+
+def _narration_estimate(config: dict, units: dict, hw: dict) -> Optional[float]:
+    """The first narration estimate for the project's voice engine; None means the generic cost applies (Irodori on a GPU)."""
     from services import tuning
     from services.tts import voices
 
+    tts = (config.get("settings", {}) or {}).get("tts") or {}
+    if tts.get("engine") == "kokoro":
+        return kokoro_narration_seconds(units.get("tts_requests", 0), units["tts"])
     if hw.get("gpu"):
         return None
-    tts = (config.get("settings", {}) or {}).get("tts") or {}
     quality = tts.get("quality") if tts.get("quality") in tuning.TTS_QUALITY_PRESETS else tuning.TTS_QUALITY_DEFAULT
     steps = int(tuning.TTS_QUALITY_PRESETS[quality].get("num_steps", tuning.TTS_BASE_STEPS))
     voice = str(tts.get("voice") or tuning.TTS_VOICE)
@@ -217,7 +227,7 @@ def estimate(config: dict) -> dict:
         measured += learned
         stages[stage] = round(cost * (1 if stage in _FIXED_UNITS else n), 1)
         if stage == "tts" and not learned:
-            cpu = _irodori_cpu_estimate(config, units, hw)
+            cpu = _narration_estimate(config, units, hw)
             if cpu is not None:
                 stages[stage] = round(cpu, 1)
     active = [s for s in STAGES if units[s]]

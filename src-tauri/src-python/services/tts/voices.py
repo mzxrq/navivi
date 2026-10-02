@@ -144,8 +144,10 @@ def _sha256(path: Path) -> str:
     return h.hexdigest()
 
 
-def voice_fingerprint(voice: str, speed: float, caption: Optional[str] = None) -> Dict[str, Any]:
+def voice_fingerprint(voice: str, speed: float, caption: Optional[str] = None, engine: str = "irodori") -> Dict[str, Any]:
     """What a narration clip was spoken with; a mismatch means it's remade."""
+    if engine != "irodori":  # the engine's own voice, not a file of ours; the style caption is Irodori's
+        return {"voice": voice, "sha256": None, "speed": float(speed), "caption": None, "engine": engine}
     path = voice_file(voice)
     return {
         "voice": voice, "sha256": _sha256(path) if path else None,
@@ -158,6 +160,8 @@ LEGACY_FINGERPRINT = {"voice": tuning.TTS_VOICE, "sha256": None, "speed": tuning
 
 
 def fingerprints_match(stored: Dict[str, Any], current: Dict[str, Any]) -> bool:
+    if stored.get("engine", "irodori") != current.get("engine", "irodori"):
+        return False
     if stored.get("voice") != current.get("voice"):
         return False
     if abs(float(stored.get("speed", 0)) - float(current.get("speed", 0))) > 1e-6:

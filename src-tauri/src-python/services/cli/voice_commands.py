@@ -11,7 +11,7 @@ from services.tts import voices
 
 PREVIEW_TEXT = "こんにちは。この声で、旅の案内をお届けします。"
 
-VOICE_ACTIONS = ("tts_voices_list", "tts_voice_add", "tts_voice_delete", "tts_voice_preview")
+VOICE_ACTIONS = ("tts_voices_list", "tts_voice_add", "tts_voice_delete", "tts_voice_preview", "tts_engines", "tts_install_kokoro")
 
 
 def voices_list(_payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -32,22 +32,44 @@ def voice_delete(payload: Dict[str, Any]) -> Dict[str, Any]:
     return {"success": True, "id": voice_id}
 
 
-def voice_preview(payload: Dict[str, Any]) -> Dict[str, Any]:
-    from services.tts.ttsengine import IrodoriTTSClient, tts_config_from_settings
+def engines(_payload: Dict[str, Any]) -> Dict[str, Any]:
+    """What the Voice tab needs to offer the fast engine: whether it is set up and the voices it has."""
+    from services import tuning
+    from services.tts.ttsengine import KokoroTTSClient
 
+    return {
+        "success": True,
+        "kokoro": {
+            "ready": KokoroTTSClient.is_ready(),
+            "default_voice": tuning.KOKORO_VOICE,
+            "voices": [{"id": vid, "label": label} for vid, label in tuning.KOKORO_VOICES.items()],
+        },
+    }
+
+
+def install_kokoro(_payload: Dict[str, Any]) -> Dict[str, Any]:
+    from services.tts.kokoro_setup import install_kokoro as run
+
+    return run()
+
+
+def voice_preview(payload: Dict[str, Any]) -> Dict[str, Any]:
+    from services.tts.ttsengine import make_tts_client
+
+    engine = str(payload.get("engine") or "irodori")
     voice = str(payload.get("voice") or "").strip()
-    if not voices.voice_exists(voice):
+    if engine == "irodori" and not voices.voice_exists(voice):
         raise FileNotFoundError(f"Voice '{voice}' was not found.")
-    tts = {"voice": voice}
+    tts = {"engine": engine, "voice": voice, "kokoro_voice": voice}
     if payload.get("speed") is not None:
         tts["speed"] = payload["speed"]
     if payload.get("quality"):
         tts["quality"] = payload["quality"]
-    config = tts_config_from_settings({"tts": tts, "hardware_spec_override": payload.get("hardware")})
-    text = str(payload.get("text") or PREVIEW_TEXT).strip()
     out_dir = voices.voices_dir() / ".preview"
-    safe = re.sub(r"[^A-Za-z0-9_-]", "_", voice)
-    client = IrodoriTTSClient(output_dir=out_dir, config=config)
+    client = make_tts_client({"tts": tts, "hardware_spec_override": payload.get("hardware")}, out_dir)
+    config = client.config
+    text = str(payload.get("text") or PREVIEW_TEXT).strip()
+    safe = re.sub(r"[^A-Za-z0-9_-]", "_", f"{engine}_{voice}")
     # Server left running on purpose: the next preview is fast, the idle watchdog stops it.
     path = asyncio.run(client.generate_speech(text, f"{safe}.wav"))
     return {"success": True, "voice": voice, "speed": config.speed, "text": text, "path": path}
@@ -58,6 +80,8 @@ _HANDLERS: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "tts_voice_add": voice_add,
     "tts_voice_delete": voice_delete,
     "tts_voice_preview": voice_preview,
+    "tts_engines": engines,
+    "tts_install_kokoro": install_kokoro,
 }
 
 

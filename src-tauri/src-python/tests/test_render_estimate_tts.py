@@ -46,9 +46,9 @@ def test_requests_follow_how_the_text_is_chunked():
 
 def test_the_cpu_estimate_applies_without_a_gpu_only():
     units = {"tts": 100, "tts_requests": 5}
-    assert re_._irodori_cpu_estimate({"settings": {}}, units, GPU) is None
-    cpu = re_._irodori_cpu_estimate({"settings": {"tts": {"quality": "fast"}}}, units, CPU)
-    best = re_._irodori_cpu_estimate({"settings": {"tts": {"quality": "best"}}}, units, CPU)
+    assert re_._narration_estimate({"settings": {}}, units, GPU) is None
+    cpu = re_._narration_estimate({"settings": {"tts": {"quality": "fast"}}}, units, CPU)
+    best = re_._narration_estimate({"settings": {"tts": {"quality": "best"}}}, units, CPU)
     assert cpu is not None and best is not None and cpu < best
     assert best > 100  # for 100 characters / 5 lines this is minutes, not the old ~20 s
 
@@ -60,3 +60,20 @@ def test_estimate_uses_it_for_a_project_with_narration(monkeypatch):
     result = re_.estimate(config)
     assert result["units"]["tts_requests"] == 2
     assert result["stages"]["tts"] > 60
+
+
+def test_the_fast_voice_is_estimated_in_seconds_not_minutes():
+    # 3 waypoints of narration on the Kokoro engine: ~12 lines, ~300 characters
+    kokoro = re_.kokoro_narration_seconds(12, 300)
+    assert 40 < kokoro < 120
+    assert kokoro < re_.cpu_narration_seconds(12, 300, 40, True) / 5
+    assert re_.kokoro_narration_seconds(0, 0) == 0
+
+
+def test_the_engine_in_the_project_decides_which_estimate_is_used():
+    units = {"tts": 300, "tts_requests": 12}
+    on_gpu = {"gpu": "NVIDIA RTX"}
+    kokoro = {"settings": {"tts": {"engine": "kokoro"}}}
+    assert re_._narration_estimate(kokoro, units, on_gpu) == pytest.approx(re_.kokoro_narration_seconds(12, 300))
+    assert re_._narration_estimate({"settings": {}}, units, on_gpu) is None  # Irodori on a GPU: the generic cost
+    assert re_._narration_estimate({"settings": {}}, units, CPU) > 300  # Irodori on a CPU

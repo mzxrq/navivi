@@ -46,11 +46,11 @@ def _prepare(job_config_path: str, output_audio_dir: str = None):
 
     output_dir = Path(output_audio_dir) if output_audio_dir else project_audio_dir(config_path.parent)
     output_dir.mkdir(parents=True, exist_ok=True)
-    from services.tts.ttsengine import AudioProcessor, IrodoriTTSClient, tts_config_from_settings
+    from services.tts.ttsengine import AudioProcessor, make_tts_client
 
     return (
         settings, config_path, waypoints, output_dir,
-        IrodoriTTSClient(output_dir=output_dir, config=tts_config_from_settings(settings)),
+        make_tts_client(settings, output_dir),
         AudioProcessor(output_dir=output_dir),
         merge_pronunciation(settings.get("global_pronunciation_dictionary"), settings.get("pronunciation_dictionary")),
     )

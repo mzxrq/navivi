@@ -17,6 +17,12 @@ interface Voice {
   builtin: boolean;
 }
 
+interface KokoroInfo {
+  ready: boolean;
+  default_voice: string;
+  voices: { id: string; label: string }[];
+}
+
 const DEFAULT_VOICE = "test1";
 const fallback = DEFAULT_VOICE;
 const DEFAULT_SPEED = 1.25;
@@ -41,13 +47,16 @@ const iconButton =
 export function VoiceTab() {
   const { settings, updateSettings, setIsDirty } = useWorkspace();
   const [voices, setVoices] = useState<Voice[] | null>(null);
-  const [busy, setBusy] = useState<null | "list" | "add" | "delete" | "preview">(null);
+  const [busy, setBusy] = useState<null | "list" | "add" | "delete" | "preview" | "install">(null);
+  const [kokoro, setKokoro] = useState<KokoroInfo | null>(null);
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [message, setMessage] = useState<{ tone: "error" | "info"; text: string } | null>(null);
   const [adding, setAdding] = useState<{ path: string; id: string; exists?: boolean } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
+  const engine = settings.tts?.engine ?? "irodori";
+  const kokoroVoice = settings.tts?.kokoro_voice ?? kokoro?.default_voice ?? "jf_tebukuro";
   const selected = settings.tts?.voice ?? DEFAULT_VOICE;
   const speed = settings.tts?.speed ?? DEFAULT_SPEED;
   const quality = settings.tts?.quality ?? DEFAULT_QUALITY;
@@ -56,8 +65,11 @@ export function VoiceTab() {
 
   const refresh = useCallback(async () => {
     setBusy("list");
+    // One after the other: the app runs one Python call at a time and a new call kills the running one.
     const res = await callSidecarShared<{ voices: Voice[] }>("tts_voices_list");
+    const engines = res.success ? await callSidecarShared<{ kokoro: KokoroInfo }>("tts_engines") : null;
     setBusy(null);
+    if (engines?.success) setKokoro(engines.kokoro);
     if (res.success) {
       setVoices(res.voices);
       setMessage((m) => (m?.tone === "error" ? null : m));
@@ -71,7 +83,7 @@ export function VoiceTab() {
     return () => audioRef.current?.pause();
   }, [refresh]);
 
-  const save = (patch: { voice?: string; speed?: number; quality?: "fast" | "balanced" | "best" }) => {
+  const save = (patch: NonNullable<typeof settings.tts>) => {
     updateSettings({ tts: { ...settings.tts, ...patch } });
     setIsDirty(true);
   };
@@ -82,6 +94,7 @@ export function VoiceTab() {
     setPreviewId(id);
     setMessage(null);
     const res = await callSidecar<{ path: string }>("tts_voice_preview", {
+      engine,
       voice: id,
       speed,
       quality,
@@ -93,6 +106,15 @@ export function VoiceTab() {
     const audio = new Audio(`${convertFileSrc(res.path)}?t=${Date.now()}`);
     audioRef.current = audio;
     audio.play().catch((e) => setMessage({ tone: "error", text: String(e) }));
+  };
+
+  const install = async () => {
+    setBusy("install");
+    setMessage(null);
+    const res = await callSidecar("tts_install_kokoro", {});
+    setBusy(null);
+    if (!res.success) return res.cancelled ? undefined : setMessage({ tone: "error", text: res.error });
+    await refresh();
   };
 
   const pickFile = async () => {
@@ -141,6 +163,84 @@ export function VoiceTab() {
         </Trans>
       </p>
 
+      <section>
+        <h4 className="mb-2 px-0.5 text-[12px] font-semibold text-zinc-500 dark:text-zinc-400"><Trans>Voice engine</Trans></h4>
+        <div className="rounded-xl border border-zinc-200 dark:border-white/10 p-3 space-y-2.5">
+          <Segmented
+            value={engine}
+            onChange={(e) => save({ engine: e })}
+            options={[
+              { id: "irodori", label: t`Natural voice` },
+              { id: "kokoro", label: t`Fast voice` },
+            ]}
+          />
+          <p className="text-[12px] leading-relaxed text-zinc-500 dark:text-zinc-400">
+            {engine === "irodori" ? (
+              <Trans>
+                Natural voice can clone a voice from a recording and sounds the most natural, but takes about half a minute per line on a PC
+                without a graphics card.
+              </Trans>
+            ) : (
+              <Trans>
+                Fast voice has a few built-in Japanese voices and takes a few seconds per line. It sounds a little flatter and cannot clone a voice.
+              </Trans>
+            )}
+          </p>
+        </div>
+      </section>
+
+      {engine === "kokoro" && (
+        <section>
+          <h4 className="mb-2 px-0.5 text-[12px] font-semibold text-zinc-500 dark:text-zinc-400"><Trans>Voice</Trans></h4>
+          {!kokoro?.ready ? (
+            <div className="rounded-xl border border-zinc-200 dark:border-white/10 p-3 space-y-2.5">
+              <p className="text-[12px] leading-relaxed text-zinc-500 dark:text-zinc-400">
+                <Trans>
+                  The fast voice needs a one-time setup: a small separate Python environment and the model files (about 2 GB in all). It takes a few
+                  minutes and needs an internet connection. Keep this window open while it runs.
+                </Trans>
+              </p>
+              <button type="button" className={primaryButton} disabled={disabled || !kokoro} onClick={install}>
+                {busy === "install" && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                {busy === "install" ? t`Setting up…` : t`Set up fast voice`}
+              </button>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-zinc-200 dark:border-white/10 divide-y divide-zinc-100 dark:divide-white/5">
+              {kokoro.voices.map((v) => {
+                const active = kokoroVoice === v.id;
+                return (
+                  <div key={v.id} className="flex items-center gap-2 px-3 py-2">
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={active}
+                      disabled={disabled}
+                      onClick={() => save({ kokoro_voice: v.id })}
+                      className="flex items-center gap-3 flex-1 min-w-0 text-left disabled:pointer-events-none"
+                    >
+                      <span className={`w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center ${active ? "border-navi" : "border-zinc-300 dark:border-zinc-600"}`}>
+                        {active && <span className="w-2 h-2 rounded-full bg-navi" />}
+                      </span>
+                      <span className="block truncate text-[13px] font-medium text-zinc-900 dark:text-zinc-100">{v.label}</span>
+                    </button>
+                    <button type="button" aria-label={t`Preview ${v.label}`} title={t`Preview`} disabled={disabled} onClick={() => preview(v.id)} className={iconButton}>
+                      {previewId === v.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          {busy === "preview" && (
+            <p className="mt-2 px-0.5 flex items-center gap-1.5 text-[11px] text-zinc-400">
+              <Volume2 className="w-3 h-3" /> <Trans>Generating the sample. The first one takes about 20 seconds while the voice model loads.</Trans>
+            </p>
+          )}
+        </section>
+      )}
+
+      {engine === "irodori" && (
       <section>
         <div className="flex items-center justify-between mb-2 px-0.5">
           <h4 className="text-[12px] font-semibold text-zinc-500 dark:text-zinc-400">
@@ -213,6 +313,7 @@ export function VoiceTab() {
           </p>
         )}
       </section>
+      )}
 
       <section>
         <div className="flex items-baseline justify-between mb-2 px-0.5">
@@ -236,6 +337,8 @@ export function VoiceTab() {
         </div>
       </section>
 
+      {engine === "irodori" && (
+      <>
       <section>
         <h4 className="mb-2 px-0.5 text-[12px] font-semibold text-zinc-500 dark:text-zinc-400"><Trans>Narration quality</Trans></h4>
         <div className="rounded-xl border border-zinc-200 dark:border-white/10 p-3 space-y-2.5">
@@ -298,6 +401,8 @@ export function VoiceTab() {
           )}
         </div>
       </section>
+      </>
+      )}
 
       {message && (
         <p className={`text-[12px] leading-snug select-text ${message.tone === "error" ? "text-red-500" : "text-amber-700 dark:text-amber-400"}`}>{message.text}</p>

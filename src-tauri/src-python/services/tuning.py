@@ -1227,3 +1227,23 @@ TTS_CPU_COST = {
     "char_decode": 0.5,  # per character
 }
 TTS_BASE_STEPS = 40
+
+# --- Narration engines -----------------------------------------------------------
+# "irodori": natural, clones a voice from a recording, slow on a CPU (see TTS_CPU_COST). "kokoro": a small model with a few fixed Japanese
+# voices and no cloning, 1-4 s per line on the same CPU. settings.tts.engine picks one; the project's voice fingerprint includes it, so
+# switching marks finished narration as made with another voice.
+TTS_ENGINES = ("irodori", "kokoro")
+TTS_ENGINE_DEFAULT = "irodori"
+KOKORO_PORT = 8089
+KOKORO_VOICE = "jf_tebukuro"
+# id -> label. The model's own ids: jf_ = Japanese female, jm_ = Japanese male.
+KOKORO_VOICES: Dict[str, str] = {
+    "jf_tebukuro": "Tebukuro (female)",
+    "jf_alpha": "Alpha (female)",
+    "jf_gongitsune": "Gongitsune (female)",
+    "jf_nezumi": "Nezumi (female)",
+    "jm_kumo": "Kumo (male)",
+}
+# Measured on a Ryzen 5 5600GE: ~1 s per request plus ~0.09 s per character once loaded; the model takes ~35 s to import and load, once
+# per process (the server stays up between lines).
+KOKORO_COST = {"request": 1.0, "char": 0.09, "startup": 35.0}

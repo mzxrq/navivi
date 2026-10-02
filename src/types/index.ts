@@ -83,7 +83,7 @@ export interface ProjectSettings {
   marked_regeneration_waypoints?: string[];
   ai_features_enabled?: boolean;
   pronunciation_dictionary?: Array<{ word: string; reading: string }>;
-  tts?: { voice?: string; speed?: number; quality?: "fast" | "balanced" | "best" };
+  tts?: { engine?: "irodori" | "kokoro"; voice?: string; kokoro_voice?: string; speed?: number; quality?: "fast" | "balanced" | "best" };
   global_pronunciation_dictionary?: Array<{ word: string; reading: string }>;
   enable_attraction_videos?: boolean;
   burn_subtitles?: boolean;

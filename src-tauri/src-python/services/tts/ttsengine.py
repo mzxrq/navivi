@@ -25,7 +25,7 @@ import os
 import shutil
 
 import logging
-from typing import Final, Optional, Tuple, List, Dict, Any
+from typing import Any, ClassVar, Dict, Final, List, Optional, Tuple
 
 from services import tuning
 from services.tts import phrase_cache
@@ -59,6 +59,7 @@ class TTSConfig:
     hardware_override: Optional[str] = None
     extra_options: Dict[str, Any] = field(default_factory=dict)
     quality: str = tuning.TTS_QUALITY_DEFAULT
+    engine: str = tuning.TTS_ENGINE_DEFAULT
 
     def __post_init__(self) -> None:
         if not (tuning.TTS_MIN_SPEED <= self.speed <= tuning.TTS_MAX_SPEED):
@@ -85,16 +86,16 @@ class TTSConfig:
         return payload
 
 
-# [Config] Builds a TTSConfig from job_config.json's settings (settings.tts.voice/speed, hardware_spec_override)
+# [Config] Builds a TTSConfig from job_config.json's settings (settings.tts.engine/voice/kokoro_voice/speed/quality, hardware_spec_override)
 def tts_config_from_settings(settings: Optional[Dict[str, Any]]) -> TTSConfig:
     from services.tts import voices
 
     settings = settings or {}
     tts = settings.get("tts") or {}
-    voice = str(tts.get("voice") or tuning.TTS_VOICE).strip()
-    if not voices.voice_exists(voice):
-        logger.warning("TTS voice '%s' not found in %s; using '%s'.", voice, voices.voices_dir(), tuning.TTS_VOICE)
-        voice = tuning.TTS_VOICE
+    engine = str(tts.get("engine") or tuning.TTS_ENGINE_DEFAULT)
+    if engine not in tuning.TTS_ENGINES:
+        logger.warning("TTS engine '%s' is not one of %s; using '%s'.", engine, list(tuning.TTS_ENGINES), tuning.TTS_ENGINE_DEFAULT)
+        engine = tuning.TTS_ENGINE_DEFAULT
     try:
         speed = float(tts.get("speed", tuning.TTS_SPEED))
     except (TypeError, ValueError):
@@ -102,6 +103,18 @@ def tts_config_from_settings(settings: Optional[Dict[str, Any]]) -> TTSConfig:
     if not (tuning.TTS_MIN_SPEED <= speed <= tuning.TTS_MAX_SPEED):
         logger.warning("TTS speed %s out of range; using %s.", speed, tuning.TTS_SPEED)
         speed = tuning.TTS_SPEED
+
+    if engine == "kokoro":
+        voice = str(tts.get("kokoro_voice") or tuning.KOKORO_VOICE)
+        if voice not in tuning.KOKORO_VOICES:
+            logger.warning("Kokoro voice '%s' is not one of %s; using '%s'.", voice, list(tuning.KOKORO_VOICES), tuning.KOKORO_VOICE)
+            voice = tuning.KOKORO_VOICE
+        return TTSConfig(model="kokoro", voice=voice, speed=speed, caption=None, engine="kokoro")
+
+    voice = str(tts.get("voice") or tuning.TTS_VOICE).strip()
+    if not voices.voice_exists(voice):
+        logger.warning("TTS voice '%s' not found in %s; using '%s'.", voice, voices.voices_dir(), tuning.TTS_VOICE)
+        voice = tuning.TTS_VOICE
     caption = tts.get("caption", tuning.TTS_CAPTION)
     caption = str(caption).strip() if caption else None
     quality = str(tts.get("quality") or tuning.TTS_QUALITY_DEFAULT)
@@ -118,7 +131,6 @@ def tts_config_from_settings(settings: Optional[Dict[str, Any]]) -> TTSConfig:
     )
 
 
-# [HACK] [Util] Force-kills a process and its children; Windows has no SIGTERM equivalent, so taskkill /T/F is the only reliable way to reap a subprocess tree
 def _kill_process_tree(pid: int) -> None:
     """Same approach as idle_watchdog.py's _kill — /T also takes down the
     child process(es) a server subprocess may have spawned, not just the
@@ -321,6 +333,54 @@ class IrodoriTTSClient:
     # can each construct their own IrodoriTTSClient).
     _server_process: Optional[subprocess.Popen] = None
 
+    # [TTS] Starts the server process (Irodori: its own venv and model; a subclass launches its own).
+    def _spawn_server(self, port: int, popen_kwargs: Dict[str, Any]) -> subprocess.Popen:
+        log_path = self._SERVER_DIR / "server.log"
+        log_file = open(log_path, "ab")
+        # Base device from env or tuning.py
+        device = os.environ.get("NAVIVI_TTS_DEVICE") or tuning.TTS_DEVICE
+
+        # [Hardware Detection] Check frontend flag first, fallback to nvidia-smi
+        if self.config.hardware_override == "low":
+            has_nvidia = False
+            logger.info("Hardware override set to 'low'. Forcing TTS to CPU mode.")
+        elif self.config.hardware_override == "high":
+            has_nvidia = True
+            logger.info("Hardware override set to 'high'. Trusting GPU presence.")
+        else:
+            has_nvidia = shutil.which("nvidia-smi") is not None
+
+        # Force CPU fallback for older PCs    
+        if not has_nvidia and device != "cpu":
+            logger.warning("No NVIDIA GPU detected/reported. Forcing TTS device to 'cpu' and precision to 'fp32'.")
+            device = "cpu"
+
+        # bf16 requires a CUDA GPU, standard CPUs need fp32
+        precision = "bf16" if device == "cuda" else "fp32"
+
+        from services.tts.voices import voices_dir
+
+        server_env = {
+            **os.environ,
+            "IRODORI_MODEL_DEVICE": device,
+            "IRODORI_CODEC_DEVICE": device,
+            "IRODORI_HF_CHECKPOINT": "Aratako/Irodori-TTS-v4.1-Small",
+            "IRODORI_MODEL_PRECISION": precision,
+            "IRODORI_VOICES_DIR": str(voices_dir()),
+        }
+        logger.info("Irodori TTS server device: %s (Precision: %s).", device, precision)
+        return subprocess.Popen(
+            [
+                str(self._SERVER_VENV_PYTHON), "-m", "irodori_openai_tts",
+                "--host", "127.0.0.1", "--port", str(port),
+            ],
+            cwd=str(self._SERVER_DIR),
+            env=server_env,
+            stdout=log_file,    
+            stderr=subprocess.STDOUT,
+            **popen_kwargs,
+        )
+
     # [Config] Initializes the TTS client with output directory, API base URL, and synthesis config
     def __init__(
         self,
@@ -393,16 +453,11 @@ class IrodoriTTSClient:
             return
 
         if not self._SERVER_VENV_PYTHON.exists():
-            raise RuntimeError(
-                f"Irodori TTS server isn't reachable at {self.base_url} and its "
-                f"bundled venv wasn't found at {self._SERVER_VENV_PYTHON} to "
-                "auto-start it. Set it up per bin/Irodori-TTS-Server/README.md "
-                "(uv sync), or start it manually."
-            )
+            raise RuntimeError(self._missing_server_message())
 
         if (
-            IrodoriTTSClient._server_process is None
-            or IrodoriTTSClient._server_process.poll() is not None
+            type(self)._server_process is None
+            or type(self)._server_process.poll() is not None
         ):
             if self._other_process_is_starting_server():
                 logger.info(
@@ -434,57 +489,13 @@ class IrodoriTTSClient:
                     )
                 else:
                     popen_kwargs["start_new_session"] = True
-                log_path = self._SERVER_DIR / "server.log"
-                log_file = open(log_path, "ab")
-                # Base device from env or tuning.py
-                device = os.environ.get("NAVIVI_TTS_DEVICE") or tuning.TTS_DEVICE
-                    
-                # [Hardware Detection] Check frontend flag first, fallback to nvidia-smi
-                if self.config.hardware_override == "low":
-                    has_nvidia = False
-                    logger.info("Hardware override set to 'low'. Forcing TTS to CPU mode.")
-                elif self.config.hardware_override == "high":
-                    has_nvidia = True
-                    logger.info("Hardware override set to 'high'. Trusting GPU presence.")
-                else:
-                    has_nvidia = shutil.which("nvidia-smi") is not None
-                
-                # Force CPU fallback for older PCs    
-                if not has_nvidia and device != "cpu":
-                    logger.warning("No NVIDIA GPU detected/reported. Forcing TTS device to 'cpu' and precision to 'fp32'.")
-                    device = "cpu"
-
-                # bf16 requires a CUDA GPU, standard CPUs need fp32
-                precision = "bf16" if device == "cuda" else "fp32"
-                
-                from services.tts.voices import voices_dir
-
-                server_env = {
-                    **os.environ,
-                    "IRODORI_MODEL_DEVICE": device,
-                    "IRODORI_CODEC_DEVICE": device,
-                    "IRODORI_HF_CHECKPOINT": "Aratako/Irodori-TTS-v4.1-Small",
-                    "IRODORI_MODEL_PRECISION": precision,
-                    "IRODORI_VOICES_DIR": str(voices_dir()),
-                }
-                logger.info("Irodori TTS server device: %s (Precision: %s).", device, precision)
-                IrodoriTTSClient._server_process = subprocess.Popen(
-                    [
-                        str(self._SERVER_VENV_PYTHON), "-m", "irodori_openai_tts",
-                        "--host", "127.0.0.1", "--port", str(port),
-                    ],
-                    cwd=str(self._SERVER_DIR),
-                    env=server_env,
-                    stdout=log_file,    
-                    stderr=subprocess.STDOUT,
-                    **popen_kwargs,
-                )
-                self._PIDFILE.write_text(str(IrodoriTTSClient._server_process.pid))
+                type(self)._server_process = self._spawn_server(port, popen_kwargs)
+                self._PIDFILE.write_text(str(type(self)._server_process.pid))
                 # Baseline activity timestamp so the watchdog's idle clock
                 # starts from "just launched", not from whatever this file's
                 # mtime happened to be left at by a previous run.
                 self._touch_activity()
-                self._start_idle_watchdog(IrodoriTTSClient._server_process.pid)
+                self._start_idle_watchdog(type(self)._server_process.pid)
 
         deadline = time.monotonic() + self._SERVER_START_TIMEOUT_SECONDS
         while time.monotonic() < deadline:
@@ -492,8 +503,8 @@ class IrodoriTTSClient:
                 logger.info("Irodori TTS server is up at %s.", self.base_url)
                 return
             if (
-                IrodoriTTSClient._server_process is not None
-                and IrodoriTTSClient._server_process.poll() is not None
+                type(self)._server_process is not None
+                and type(self)._server_process.poll() is not None
             ):
                 raise RuntimeError(
                     "Irodori TTS server subprocess exited while starting up — "
@@ -535,8 +546,20 @@ class IrodoriTTSClient:
             _kill_process_tree(pid)
         cls._PIDFILE.unlink(missing_ok=True)
 
-    @staticmethod
-    def _pid_is_server(pid: int) -> bool:
+    # What the server's command line contains, to tell it from an unrelated process that reused a stale pidfile's PID.
+    _PROCESS_MARKER: ClassVar[str] = "irodori_openai_tts"
+    _SERVER_NAME: ClassVar[str] = "Irodori TTS"
+
+    def _missing_server_message(self) -> str:
+        return (
+            f"Irodori TTS server isn't reachable at {self.base_url} and its "
+            f"bundled venv wasn't found at {self._SERVER_VENV_PYTHON} to "
+            "auto-start it. Set it up per bin/Irodori-TTS-Server/README.md "
+            "(uv sync), or start it manually."
+        )
+
+    @classmethod
+    def _pid_is_server(cls, pid: int) -> bool:
         """Guards against a stale pidfile whose PID now belongs to something else."""
         try:
             if os.name == "nt":
@@ -549,7 +572,7 @@ class IrodoriTTSClient:
                 out = Path(f"/proc/{pid}/cmdline").read_bytes().decode(errors="replace")
         except Exception:
             return False
-        return "irodori_openai_tts" in out
+        return cls._PROCESS_MARKER in out
 
     def _touch_activity(self) -> None:
         """Marks the server as just-used — read by idle_watchdog.py (as the
@@ -710,6 +733,84 @@ class IrodoriTTSClient:
                 Path(p).unlink(missing_ok=True)
         return str(file_path)
 
+
+
+# [TTS] The fast engine: Kokoro, a small model with a few fixed Japanese voices (no cloning), run by services/tts/kokoro_server.py in
+# its own venv (bin/Kokoro-TTS, set up by services/tts/kokoro_setup.py). Everything else (chunking, gaps, cache, server reuse across
+# processes) is the Irodori client's.
+class KokoroTTSClient(IrodoriTTSClient):
+    _SERVER_DIR: Final[Path] = Path(__file__).resolve().parents[2] / "bin" / "Kokoro-TTS"
+    _SERVER_VENV_PYTHON: Final[Path] = _SERVER_DIR / ".venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    _SERVER_START_TIMEOUT_SECONDS: Final[float] = 300.0
+    _IDLE_TIMEOUT_SECONDS: Final[float] = 600.0
+    _ACTIVITY_FILE: Final[Path] = _SERVER_DIR / ".last_active"
+    _PIDFILE: Final[Path] = _SERVER_DIR / ".server.pid"
+    _READY_FILE: Final[Path] = _SERVER_DIR / ".ready"
+    _PROCESS_MARKER: ClassVar[str] = "kokoro_server"
+    _SERVER_NAME: ClassVar[str] = "Kokoro TTS"
+    _server_process: Optional[subprocess.Popen] = None
+
+    def __init__(
+        self,
+        output_dir: Path = Path("data/outputs/audio"),
+        base_url: str = f"http://127.0.0.1:{tuning.KOKORO_PORT}/v1/audio/speech",
+        config: Optional[TTSConfig] = None,
+    ):
+        super().__init__(output_dir=output_dir, base_url=base_url, config=config or TTSConfig(engine="kokoro", voice=tuning.KOKORO_VOICE, model="kokoro", caption=None))
+
+    @classmethod
+    def is_ready(cls) -> bool:
+        return cls._SERVER_VENV_PYTHON.exists() and cls._READY_FILE.exists()
+
+    def _missing_server_message(self) -> str:
+        return "The fast voice (Kokoro) is not set up yet. Open Settings > Voice and press Set up fast voice."
+
+    def _spawn_server(self, port: int, popen_kwargs: Dict[str, Any]) -> subprocess.Popen:
+        log_file = open(self._SERVER_DIR / "server.log", "ab")
+        return subprocess.Popen(
+            [
+                str(self._SERVER_VENV_PYTHON), str(Path(__file__).with_name("kokoro_server.py")),
+                "--host", "127.0.0.1", "--port", str(port), "--idle-seconds", str(int(self._IDLE_TIMEOUT_SECONDS)),
+            ],
+            cwd=str(self._SERVER_DIR),
+            env={**os.environ, "PYTHONIOENCODING": "utf-8", "HF_HUB_DISABLE_SYMLINKS_WARNING": "1"},
+            stdout=log_file,
+            stderr=subprocess.STDOUT,
+            **popen_kwargs,
+        )
+
+    def _start_idle_watchdog(self, server_pid: int) -> None:
+        pass  # the server stops itself after --idle-seconds without a request
+
+    def _voice_sha256(self) -> Optional[str]:
+        return None  # the voice is built into the model
+
+    async def call_api(self, text: str) -> bytes:
+        payload = {"input": text, "voice": self.config.voice, "speed": self.config.speed}
+        key = phrase_cache.cache_key({"engine": "kokoro", **payload}, None)
+        cached = phrase_cache.get(key)
+        if cached is not None:
+            logger.info("TTS line served from the cache (%d characters).", len(text))
+            return cached
+        try:
+            audio = await self._post_speech(payload)
+        except (httpx.ConnectError, httpx.ConnectTimeout):
+            await self._ensure_server_running()
+            audio = await self._post_speech(payload)
+        phrase_cache.put(key, audio)
+        return audio
+
+
+# [TTS] The client for the project's engine (settings.tts.engine).
+def make_tts_client(settings: Optional[Dict[str, Any]], output_dir: Path) -> IrodoriTTSClient:
+    config = tts_config_from_settings(settings)
+    client_class = KokoroTTSClient if config.engine == "kokoro" else IrodoriTTSClient
+    return client_class(output_dir=output_dir, config=config)
+
+
+def stop_all_tts_servers() -> None:
+    IrodoriTTSClient.stop_server()
+    KokoroTTSClient.stop_server()
 
 _SENTENCE_END = re.compile(r"(?<=[。！？!?\n])")
 _CLAUSE_END = re.compile(r"(?<=[、，,])")

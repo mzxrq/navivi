@@ -346,11 +346,11 @@ msgstr "30秒"
 #~ msgid "9:16 Vertical"
 #~ msgstr "9:16 垂直"
 
-#: src/components/ui/VoiceSettings.tsx:252
+#: src/components/ui/VoiceSettings.tsx:356
 msgid "A fast draft takes about half the time per line and sounds a little rougher. Use it while you are checking a project and switch to Best for the final render. Narration you already have is kept; use Redo voice in the review step to remake it with this setting."
 msgstr "高速ドラフトは1行あたりの時間が約半分で、音は少し粗くなります。確認中に使い、最終レンダリングでは「最高」に切り替えてください。すでにあるナレーションはそのまま残ります。この設定で作り直すには、確認ステップの「音声をやり直す」を使ってください。"
 
-#: src/components/ui/VoiceSettings.tsx:291
+#: src/components/ui/VoiceSettings.tsx:395
 msgid "A voice with this name already exists."
 msgstr "この名前のボイスはすでにあります。"
 
@@ -411,7 +411,7 @@ msgstr "先に動画を追加してから字幕を読み込んでください"
 msgid "Add a video to start"
 msgstr "動画を追加して開始"
 
-#: src/components/ui/VoiceSettings.tsx:261
+#: src/components/ui/VoiceSettings.tsx:365
 msgid "Add a voice"
 msgstr "ボイスを追加"
 
@@ -517,7 +517,7 @@ msgstr "ここに中継点を追加"
 msgid "Add video"
 msgstr "動画を追加"
 
-#: src/components/ui/VoiceSettings.tsx:285
+#: src/components/ui/VoiceSettings.tsx:389
 msgid "Add voice"
 msgstr "ボイスを追加"
 
@@ -736,7 +736,7 @@ msgstr "観光地動画"
 #~ msgid "audio"
 #~ msgstr "音声"
 
-#: src/components/ui/VoiceSettings.tsx:99
+#: src/components/ui/VoiceSettings.tsx:122
 #: src/features/editor/EditorView.tsx:74
 msgid "Audio"
 msgstr "音声"
@@ -869,7 +869,7 @@ msgstr "BGM"
 msgid "Background opacity"
 msgstr "背景の不透明度"
 
-#: src/components/ui/VoiceSettings.tsx:247
+#: src/components/ui/VoiceSettings.tsx:351
 msgid "Balanced"
 msgstr "標準"
 
@@ -885,7 +885,7 @@ msgstr "ベースマップのスタイル"
 msgid "Based on your earlier renders on this PC. Unchanged clips are reused, so it may finish sooner."
 msgstr "このPCでの過去のレンダリングに基づく目安です。変更のないクリップは再利用されるため、早く終わる場合があります。"
 
-#: src/components/ui/VoiceSettings.tsx:248
+#: src/components/ui/VoiceSettings.tsx:352
 msgid "Best"
 msgstr "最高"
 
@@ -956,8 +956,8 @@ msgstr "キャンセル"
 #: src/components/ui/RenderOverlay.tsx:951
 #: src/components/ui/SaveAs.tsx:105
 #: src/components/ui/UnsavedChanges.tsx:35
-#: src/components/ui/VoiceSettings.tsx:191
-#: src/components/ui/VoiceSettings.tsx:289
+#: src/components/ui/VoiceSettings.tsx:292
+#: src/components/ui/VoiceSettings.tsx:393
 #: src/components/view/ProjectManager.tsx:613
 #: src/components/view/ProjectManager.tsx:658
 #: src/components/view/ProjectSettingsModal.tsx:129
@@ -1021,7 +1021,7 @@ msgstr "ファイルを選択…"
 msgid "Choose a leg"
 msgstr "区間を選択"
 
-#: src/components/ui/VoiceSettings.tsx:296
+#: src/components/ui/VoiceSettings.tsx:400
 msgid "Choose a recording…"
 msgstr "録音ファイルを選択…"
 
@@ -1410,15 +1410,15 @@ msgstr "デフォルトの移動手段"
 msgid "default-routing-mode-detail"
 msgstr "ポイントを配置する際のデフォルトの経路検索"
 
-#: src/components/ui/VoiceSettings.tsx:188
-#: src/components/ui/VoiceSettings.tsx:200
+#: src/components/ui/VoiceSettings.tsx:289
+#: src/components/ui/VoiceSettings.tsx:301
 #: src/features/editor/Inspector.tsx:188
 #: src/features/map/components/WaypointEditor.tsx:693
 msgid "Delete"
 msgstr "削除"
 
 #. placeholder {0}: v.id
-#: src/components/ui/VoiceSettings.tsx:200
+#: src/components/ui/VoiceSettings.tsx:301
 msgid "Delete {0}"
 msgstr "{0}を削除"
 
@@ -2027,7 +2027,7 @@ msgstr "プロジェクトの更新に失敗しました"
 #~ msgid "Fast"
 #~ msgstr "高速"
 
-#: src/components/ui/VoiceSettings.tsx:246
+#: src/components/ui/VoiceSettings.tsx:350
 msgid "Fast draft"
 msgstr "高速ドラフト"
 
@@ -2040,6 +2040,14 @@ msgstr "高速レンダリング"
 #: src/components/ui/NewProject.tsx:387
 msgid "Fast render mode"
 msgstr "高速レンダリングモード"
+
+#: src/components/ui/VoiceSettings.tsx:175
+msgid "Fast voice"
+msgstr "高速な声"
+
+#: src/components/ui/VoiceSettings.tsx:185
+msgid "Fast voice has a few built-in Japanese voices and takes a few seconds per line. It sounds a little flatter and cannot clone a voice."
+msgstr "高速な声は内蔵の日本語の声がいくつかあり、1行あたり数秒で作れます。やや平坦な響きになり、声の複製はできません。"
 
 #: src/features/export/components/ExportModal.tsx:116
 #~ msgid "Fastest export with compact file size for quick previews (12 Mbps 4K / 5 Mbps 1080p)"
@@ -2156,9 +2164,13 @@ msgstr "アセットを生成中..."
 msgid "Generating Subtitles{prog}..."
 msgstr "字幕を生成中{prog}..."
 
-#: src/components/ui/VoiceSettings.tsx:212
+#: src/components/ui/VoiceSettings.tsx:313
 msgid "Generating the sample. The first one can take a minute or more while the voice model loads."
 msgstr "サンプルを生成しています。初回は音声モデルの読み込みで1分以上かかることがあります。"
+
+#: src/components/ui/VoiceSettings.tsx:238
+msgid "Generating the sample. The first one takes about 20 seconds while the voice model loads."
+msgstr "サンプルを生成しています。最初の1回は音声モデルの読み込みのため約20秒かかります。"
 
 #: src/features/map/components/Sidebar.tsx:299
 msgid "Generating..."
@@ -2484,7 +2496,7 @@ msgstr "線の太さ"
 msgid "Listen to the narration"
 msgstr "ナレーションを聞く"
 
-#: src/components/ui/VoiceSettings.tsx:156
+#: src/components/ui/VoiceSettings.tsx:257
 msgid "Loading voices…"
 msgstr "ボイスを読み込み中…"
 
@@ -2716,17 +2728,25 @@ msgstr "ナレーション"
 msgid "Narration audio"
 msgstr "ナレーション音声"
 
-#: src/components/ui/VoiceSettings.tsx:240
+#: src/components/ui/VoiceSettings.tsx:344
 msgid "Narration quality"
 msgstr "ナレーションの品質"
 
-#: src/components/ui/VoiceSettings.tsx:229
+#: src/components/ui/VoiceSettings.tsx:331
 msgid "Narration speed"
 msgstr "ナレーションの速度"
 
 #: src/components/ui/ReviewStep.tsx:246
 msgid "Narration text"
 msgstr "ナレーションのテキスト"
+
+#: src/components/ui/VoiceSettings.tsx:174
+msgid "Natural voice"
+msgstr "自然な声"
+
+#: src/components/ui/VoiceSettings.tsx:180
+msgid "Natural voice can clone a voice from a recording and sounds the most natural, but takes about half a minute per line on a PC without a graphics card."
+msgstr "自然な声は録音した声を複製でき、いちばん自然に聞こえますが、グラフィックスカードのないPCでは1行あたり30秒ほどかかります。"
 
 #: src/features/export/components/ExportModal.tsx:272
 #~ msgid "Navivi_Project"
@@ -2819,7 +2839,7 @@ msgstr "最近のアクティビティはありません"
 msgid "No recent projects"
 msgstr "最近のプロジェクトはありません"
 
-#: src/components/ui/VoiceSettings.tsx:133
+#: src/components/ui/VoiceSettings.tsx:156
 msgid "No reference (model default)"
 msgstr "参照なし(モデル標準)"
 
@@ -3105,12 +3125,15 @@ msgstr "事前構成済みのサンプルプロジェクト"
 #~ msgstr "プリセット"
 
 #: src/components/ui/AppSettings.tsx:683
-#: src/components/ui/VoiceSettings.tsx:196
+#: src/components/ui/VoiceSettings.tsx:228
+#: src/components/ui/VoiceSettings.tsx:297
 msgid "Preview"
 msgstr "プレビュー"
 
 #. placeholder {0}: label(v)
-#: src/components/ui/VoiceSettings.tsx:196
+#. placeholder {0}: v.label
+#: src/components/ui/VoiceSettings.tsx:228
+#: src/components/ui/VoiceSettings.tsx:297
 msgid "Preview {0}"
 msgstr "{0}を試聴"
 
@@ -3517,7 +3540,7 @@ msgstr "ルート動画をレンダリング中{prog}..."
 msgid "renderTerminalMessage"
 msgstr "Python生成パイプラインを開始しています..."
 
-#: src/components/ui/VoiceSettings.tsx:281
+#: src/components/ui/VoiceSettings.tsx:385
 msgid "Replace existing voice"
 msgstr "既存のボイスを置き換える"
 
@@ -3533,7 +3556,7 @@ msgstr "マップのレンダリングや3D地形で必要です"
 msgid "Requires Ollama"
 msgstr "Ollamaが必要"
 
-#: src/components/ui/VoiceSettings.tsx:234
+#: src/components/ui/VoiceSettings.tsx:336
 #: src/components/view/ProjectSettingsModal.tsx:179
 #: src/features/map/components/WaypointEditor.tsx:666
 msgid "Reset"
@@ -3870,6 +3893,14 @@ msgstr "レンダラーに中断信号を送信しています"
 msgid "Services"
 msgstr "サービス"
 
+#: src/components/ui/VoiceSettings.tsx:206
+msgid "Set up fast voice"
+msgstr "高速な声をセットアップ"
+
+#: src/components/ui/VoiceSettings.tsx:206
+msgid "Setting up…"
+msgstr "セットアップ中…"
+
 #: src/components/ui/AppSettings.tsx:218
 #: src/components/ui/AppSettings.tsx:223
 msgid "Settings"
@@ -4009,7 +4040,7 @@ msgstr "問題が発生しました"
 #~ msgid "Sound Effects"
 #~ msgstr "サウンドエフェクト"
 
-#: src/components/ui/VoiceSettings.tsx:219
+#: src/components/ui/VoiceSettings.tsx:321
 msgid "Speed"
 msgstr "速度"
 
@@ -4241,6 +4272,10 @@ msgstr "文字の色"
 #~ msgid "Text colour"
 #~ msgstr "文字の色"
 
+#: src/components/ui/VoiceSettings.tsx:199
+msgid "The fast voice needs a one-time setup: a small separate Python environment and the model files (about 2 GB in all). It takes a few minutes and needs an internet connection. Keep this window open while it runs."
+msgstr "高速な声には一度だけセットアップが必要です。独立した小さなPython環境とモデルファイル（合計約2GB）を用意します。数分かかり、インターネット接続が必要です。実行中はこのウィンドウを開いたままにしてください。"
+
 #: src/components/ui/RenderOverlay.tsx:785
 msgid "The files that were removed will be made again the next time you generate."
 msgstr "削除したファイルは、次回の生成時にあらためて作られます。"
@@ -4281,7 +4316,7 @@ msgstr "動画はルートから直接始まります。タイトルカードを
 msgid "The voice is ready. Listen to check it."
 msgstr "音声ができました。聞いて確認してください。"
 
-#: src/components/ui/VoiceSettings.tsx:138
+#: src/components/ui/VoiceSettings.tsx:161
 msgid "The voice reads every narration in this project. Changing the voice or the speed regenerates the narration the next time you generate. The voice library is shared by all projects."
 msgstr "このプロジェクトのすべてのナレーションをこのボイスが読み上げます。ボイスや速度を変更すると、次回の生成時にナレーションが作り直されます。ボイスライブラリはすべてのプロジェクトで共有されます。"
 
@@ -4548,7 +4583,7 @@ msgstr "無題のプロジェクト"
 msgid "Updated in place {0} times"
 msgstr "{0}回更新"
 
-#: src/components/ui/VoiceSettings.tsx:264
+#: src/components/ui/VoiceSettings.tsx:368
 msgid "Upload 5–20 seconds of clear speech from one person, with no music or background noise."
 msgstr "1人の話し声を5〜20秒、音楽や雑音なしでアップロードしてください。"
 
@@ -4572,7 +4607,7 @@ msgstr "この地点にご自身の映像を使います。アニメーション
 #~ msgid "Used as the default when exporting"
 #~ msgstr "書き出し時の初期設定になります"
 
-#: src/components/ui/VoiceSettings.tsx:186
+#: src/components/ui/VoiceSettings.tsx:287
 msgid "Used by all projects."
 msgstr "すべてのプロジェクトで使われます。"
 
@@ -4657,16 +4692,21 @@ msgstr "タイムラインで表示"
 #~ msgstr "ビビッドローズ"
 
 #: src/components/ui/AppSettings.tsx:187
-#: src/components/ui/VoiceSettings.tsx:147
+#: src/components/ui/VoiceSettings.tsx:195
+#: src/components/ui/VoiceSettings.tsx:248
 msgid "Voice"
 msgstr "ボイス"
 
-#: src/components/ui/VoiceSettings.tsx:151
+#: src/components/ui/VoiceSettings.tsx:252
 msgid "Voice \"{selected}\" is missing, using {fallback}"
 msgstr "ボイス「{selected}」が見つからないため{fallback}を使用します"
 
-#: src/components/ui/VoiceSettings.tsx:273
-#: src/components/ui/VoiceSettings.tsx:274
+#: src/components/ui/VoiceSettings.tsx:168
+msgid "Voice engine"
+msgstr "音声エンジン"
+
+#: src/components/ui/VoiceSettings.tsx:377
+#: src/components/ui/VoiceSettings.tsx:378
 msgid "Voice name"
 msgstr "ボイス名"
 

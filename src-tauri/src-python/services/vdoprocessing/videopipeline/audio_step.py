@@ -170,7 +170,7 @@ def _client_fingerprint(client: Any) -> Optional[dict]:
     fp = getattr(client, "_voice_fingerprint", None)
     if fp is None:
         from services.tts.voices import voice_fingerprint
-        fp = voice_fingerprint(config.voice, config.speed, getattr(config, "caption", None))
+        fp = voice_fingerprint(config.voice, config.speed, getattr(config, "caption", None), getattr(config, "engine", "irodori"))
         try:
             client._voice_fingerprint = fp
         except AttributeError:
@@ -495,8 +495,8 @@ def stop_tts_server() -> None:
     """Force-stops the TTS server immediately after use — its idle timeout
     would otherwise keep it loaded in VRAM, contending with the attraction
     step's ComfyUI/SDXL pipeline right after."""
-    from services.tts.ttsengine import IrodoriTTSClient
-    IrodoriTTSClient.stop_server()
+    from services.tts.ttsengine import stop_all_tts_servers
+    stop_all_tts_servers()
 
 
 def generate_audio(
@@ -552,14 +552,11 @@ def generate_audio(
         waypoints = project_config.get("waypoints", [])
         apply_cued_scripts(waypoints, config_path.parent)
 
-        from services.tts.ttsengine import AudioProcessor, IrodoriTTSClient, tts_config_from_settings
+        from services.tts.ttsengine import AudioProcessor, make_tts_client
 
         output_dir = Path(output_audio_dir) if output_audio_dir else project_audio_dir(config_path.parent)
         output_dir.mkdir(parents=True, exist_ok=True)
-        client = IrodoriTTSClient(
-            output_dir=output_dir,
-            config=tts_config_from_settings(project_config.get("settings", {})),
-        )
+        client = make_tts_client(project_config.get("settings", {}), output_dir)
         processor = AudioProcessor(output_dir=output_dir)
 
         # [NOTE] [TTS] Awaits each waypoint in order inside this loop, so despite being async the TTS calls run fully sequentially, not concurrently.
