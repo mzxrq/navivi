@@ -3,6 +3,10 @@ import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 import { Copy, Download, Music, Trash2 } from "../../components/ui/icons";
 import { Switch } from "../../components/ui/Switch";
+import { CaptionRow, CaptionStyleFields } from "../../components/ui/CaptionStyleFields";
+import { useWorkspace } from "../../hooks/useWorkspace";
+import type { TextStyle } from "../../types";
+import { resolveCaptionStyle } from "../../utils/textStyle";
 import { anchorCue, DEFAULT_EXTRA_VOLUME, layout, MIN_CUE, MIN_SEGMENT, placedCues, Segment, SubtitleCue, TimelineData } from "./model";
 import { formatTime, player } from "./player";
 import type { Selection } from "./TimelinePane";
@@ -93,6 +97,73 @@ function TextBlock({ value, onCommit }: { value: string; onCommit: (v: string) =
       onBlur={() => text !== value && onCommit(text)}
       className="w-full px-2 py-1.5 rounded-lg bg-white dark:bg-zinc-950/40 border border-zinc-200 dark:border-white/10 text-[13px] leading-snug text-zinc-900 dark:text-zinc-100 outline-none focus:border-navi focus:ring-2 focus:ring-navi/20 transition resize-none"
     />
+  );
+}
+
+const styleRow: CaptionRow = (key, label, control, hint) => (
+  <div key={key}>
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-[12px] text-zinc-600 dark:text-zinc-300 min-w-0">{label}</span>
+      <div className="w-32 shrink-0 flex justify-end">{control}</div>
+    </div>
+    {hint && <p className="mt-0.5 text-[11px] text-zinc-400">{hint}</p>}
+  </div>
+);
+
+/** The shared look (project caption_style, also in Settings) every subtitle starts from. */
+function DefaultSubtitleStyleSection() {
+  const { settings, updateSettings, setIsDirty } = useWorkspace();
+  const save = (caption_style: TextStyle | undefined) => {
+    updateSettings({ caption_style });
+    setIsDirty(true);
+  };
+  return (
+    <Section title={t`Default subtitle style`}>
+      <p className="text-[11px] text-zinc-400">{t`Subtitles you have styled one by one keep their own style.`}</p>
+      <CaptionStyleFields
+        style={resolveCaptionStyle(settings)}
+        onChange={(patch) => save({ ...(settings.caption_style ?? {}), ...patch })}
+        row={styleRow}
+      />
+      {settings.caption_style && (
+        <button type="button" className={iconButton} onClick={() => save(undefined)}>
+          <Trans>Reset to default</Trans>
+        </button>
+      )}
+    </Section>
+  );
+}
+
+/** One subtitle's own style: overrides on top of the default, or pushed to every subtitle. */
+function CueStyleSection({ cue, timeline, commit }: { cue: SubtitleCue; timeline: TimelineData; commit: (t: TimelineData) => void }) {
+  const { settings, updateSettings, setIsDirty } = useWorkspace();
+  const style = resolveCaptionStyle(settings, cue.style);
+  const setOwn = (own: TextStyle | undefined) =>
+    commit({ ...timeline, subtitles: timeline.subtitles.map((c) => (c.id === cue.id ? { ...c, style: own } : c)) });
+  const othersStyled = timeline.subtitles.some((c) => c.id !== cue.id && c.style);
+  const applyToAll = () => {
+    if (othersStyled && !window.confirm(t`Other subtitles have their own style. Replace it with this one?`)) return;
+    updateSettings({ caption_style: { ...style } });
+    setIsDirty(true);
+    commit({ ...timeline, subtitles: timeline.subtitles.map(({ style: _own, ...c }) => c) });
+  };
+  return (
+    <Section title={t`Style`}>
+      <p className="text-[11px] text-zinc-400">
+        {cue.style ? t`This subtitle has its own style.` : t`Uses the default subtitle style. Changes here apply to this subtitle only.`}
+      </p>
+      <CaptionStyleFields style={style} onChange={(patch) => setOwn({ ...(cue.style ?? {}), ...patch })} row={styleRow} />
+      <div className="flex flex-wrap items-center gap-1 -mx-1">
+        <button type="button" className={iconButton} onClick={applyToAll}>
+          <Trans>Apply to all subtitles</Trans>
+        </button>
+        {cue.style && (
+          <button type="button" className={iconButton} onClick={() => setOwn(undefined)}>
+            <Trans>Use default style</Trans>
+          </button>
+        )}
+      </div>
+    </Section>
   );
 }
 
@@ -191,6 +262,7 @@ export function Inspector(p: InspectorProps) {
             <NumberField value={cue.globalEnd} min={cue.globalStart + MIN_CUE} onCommit={(v) => move(cue.globalStart, v)} />
           </Row>
         </Section>
+        <CueStyleSection cue={cue} timeline={timeline} commit={commit} />
         <div className="flex items-center gap-1 px-3 py-3">
           <button
             type="button"
@@ -239,6 +311,7 @@ export function Inspector(p: InspectorProps) {
           {!cues.length && <li className="px-2 text-[12px] text-zinc-400">{t`No subtitles yet. Use Subtitles in the toolbar.`}</li>}
         </ul>
       </Section>
+      <DefaultSubtitleStyleSection />
       <Section title={t`Music`}>
         {timeline.music ? (
           <>

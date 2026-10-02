@@ -107,11 +107,23 @@ class TestWriteTitleAss:
         content = ass_path.read_text(encoding="utf-8")
         assert introclip._format_ass_timestamp(12.34) in content
 
-    def test_subtitle_goes_on_a_smaller_second_line(self, tmp_path):
+    def test_subtitle_is_a_separate_staggered_event(self, tmp_path):
         ass_path = introclip._write_title_ass("Trip", "{x}Day 1", 5.0, tmp_path)
-        dialogue_line = [l for l in ass_path.read_text(encoding="utf-8").splitlines() if l.startswith("Dialogue:")][0]
-        assert r"Trip\N{\fs" + str(introclip.tuning.INTRO_SUBTITLE_FONT_SIZE) + "\\" in dialogue_line
-        assert dialogue_line.endswith("}xDay 1")
+        lines = [l for l in ass_path.read_text(encoding="utf-8").splitlines() if l.startswith("Dialogue:")]
+        assert len(lines) == 2
+        title_line, sub_line = lines
+        assert title_line.endswith("}Trip")
+        assert sub_line.endswith("}xDay 1")
+        assert r"\fs" + str(introclip.tuning.INTRO_SUBTITLE_FONT_SIZE) in sub_line
+        assert r"\move(" in sub_line
+        delay = introclip.tuning.INTRO_SUBTITLE_DELAY_SECONDS
+        assert f",{introclip._format_ass_timestamp(delay)},{introclip._format_ass_timestamp(5.0 - delay)}," in sub_line
+
+    def test_no_subtitle_writes_single_centered_event(self, tmp_path):
+        ass_path = introclip._write_title_ass("Trip", "", 5.0, tmp_path)
+        lines = [l for l in ass_path.read_text(encoding="utf-8").splitlines() if l.startswith("Dialogue:")]
+        assert len(lines) == 1
+        assert rf"\pos({introclip.tuning.INTRO_WIDTH // 2},{introclip.tuning.INTRO_HEIGHT // 2})" in lines[0]
 
 
 class TestPickRandomImages:

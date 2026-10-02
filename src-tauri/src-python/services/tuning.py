@@ -1227,11 +1227,14 @@ INTRO_IMAGE_COUNT = 3
 INTRO_PER_IMAGE_SECONDS = 3.5
 INTRO_CROSSFADE_SECONDS = 0.8
 # Font/outline are in intro pixels; scaled x1080/704 from the old 1280x704 intro to look the same.
+# These are defaults; settings.intro_title_style / intro_subtitle_style override per project.
+INTRO_TITLE_FONT_FAMILY = "Yu Gothic UI"
 INTRO_TITLE_FONT_SIZE = 74
 INTRO_TITLE_OUTLINE = 2
 INTRO_TITLE_BOLD = True
 INTRO_TITLE_COLOR: Tuple[int, int, int] = (255, 255, 255)
 # Second line under the title (only drawn when a subtitle is set).
+INTRO_SUBTITLE_FONT_FAMILY = "Yu Gothic UI"
 INTRO_SUBTITLE_FONT_SIZE = 36
 INTRO_SUBTITLE_OUTLINE = 0
 INTRO_SUBTITLE_BOLD = True
@@ -1264,6 +1267,11 @@ INTRO_LABEL_FADE_SECONDS = 1.1
 # Starting/ending scale (percent of normal size) the title pops in from /
 # shrinks back to — 100 would be a plain fade with no scale motion.
 INTRO_LABEL_SCALE_START_PCT = 65
+# Subtitle enters this long after the title and leaves this long before it,
+# with its own fade + rise instead of the title's scale pop.
+INTRO_SUBTITLE_DELAY_SECONDS = 0.8
+INTRO_SUBTITLE_FADE_SECONDS = 0.7
+INTRO_SUBTITLE_RISE_PX = 28
 
 # --- Outro card grid (end-of-video "places visited" summary) ---------------
 # A single composited frame (project title + a thumbnail grid of every

@@ -26,6 +26,7 @@ import cv2
 import numpy as np
 
 from services.localization.subtitle import SubtitleStyle
+from services.localization.text_style import TextStyle
 from services.logger.logger import setup_logger
 from services.tts.ttsengine import FFmpegManager
 from services import tuning
@@ -48,6 +49,22 @@ _TITLE_STYLE = SubtitleStyle(
     outline=tuning.INTRO_TITLE_OUTLINE,
     shadow=1.0,
     margin_v=0,
+)
+
+
+DEFAULT_TITLE_STYLE = TextStyle(
+    font_family=tuning.INTRO_TITLE_FONT_FAMILY,
+    font_size=tuning.INTRO_TITLE_FONT_SIZE,
+    color=tuning.INTRO_TITLE_COLOR,
+    bold=tuning.INTRO_TITLE_BOLD,
+    outline_width=tuning.INTRO_TITLE_OUTLINE,
+)
+DEFAULT_SUBTITLE_STYLE = TextStyle(
+    font_family=tuning.INTRO_SUBTITLE_FONT_FAMILY,
+    font_size=tuning.INTRO_SUBTITLE_FONT_SIZE,
+    color=tuning.INTRO_SUBTITLE_COLOR,
+    bold=tuning.INTRO_SUBTITLE_BOLD,
+    outline_width=tuning.INTRO_SUBTITLE_OUTLINE,
 )
 
 
@@ -173,15 +190,19 @@ def _format_ass_timestamp(seconds: float) -> str:
     return f"{hours}:{minutes:02d}:{secs:02d}.{cs:02d}"
 
 
-def _write_title_ass(title: str, subtitle: str, duration_sec: float, tmp_dir: Path) -> Path:
-    """Writes a throwaway single-line .ass (not .srt) spanning the whole
-    intro, with inline ASS override tags on the dialogue line itself giving
-    the TITLE TEXT its own "pop in" transition — a combined scale-up +
-    fade-in on the way in, and the reverse on the way out — independent of
-    the whole-frame fade applied later in the same ffmpeg pass. force_style
-    (applied via the `subtitles` filter, same as before) still controls
-    font/size/color/position; the Style line below just needs to exist and
-    be named "Default" for that to have something to override."""
+def _write_title_ass(
+    title: str,
+    subtitle: str,
+    duration_sec: float,
+    tmp_dir: Path,
+    title_style: TextStyle = DEFAULT_TITLE_STYLE,
+    subtitle_style: TextStyle = DEFAULT_SUBTITLE_STYLE,
+) -> Path:
+    """Writes a throwaway .ass (not .srt) spanning the whole intro. The title
+    gets a scale-up + fade "pop" in and the reverse out; the subtitle is a
+    separate event that enters later and leaves earlier with a fade + rise.
+    Both are independent of the whole-frame fade applied later in the same
+    ffmpeg pass. Each event carries its own TextStyle as inline tags."""
     fade_ms = int(round(tuning.INTRO_LABEL_FADE_SECONDS * 1000))
     duration_ms = int(round(duration_sec * 1000))
     fade_out_start_ms = max(0, duration_ms - fade_ms)
@@ -192,27 +213,47 @@ def _write_title_ass(title: str, subtitle: str, duration_sec: float, tmp_dir: Pa
     # \t(start,end,...) animates toward the scale given inside it over that
     # window, in timeline order: pop up to 100% during the fade-in window,
     # hold, then shrink back down during the fade-out window.
-    override = (
-        f"{{\\fad({fade_ms},{fade_ms})"
-        f"\\fscx{scale_start}\\fscy{scale_start}"
-        f"\\t(0,{fade_ms},\\fscx100\\fscy100)"
-        f"\\t({fade_out_start_ms},{duration_ms},\\fscx{scale_start}\\fscy{scale_start})}}"
-    )
     # Braces would be parsed as an ASS override-tag delimiter if left in —
     # strip them from arbitrary project-name text rather than escaping.
     safe_title = (title or "").replace("{", "").replace("}", "")
     safe_subtitle = (subtitle or "").replace("{", "").replace("}", "")
+
+    # Separate events so the subtitle animates on its own schedule; \an5\pos
+    # stacks them where the old single "title\Nsubtitle" line sat.
+    cx = tuning.INTRO_WIDTH // 2
+    cy = tuning.INTRO_HEIGHT // 2
     if safe_subtitle:
-        sub_tags = (
-            f"\\fs{tuning.INTRO_SUBTITLE_FONT_SIZE}"
-            f"\\bord{tuning.INTRO_SUBTITLE_OUTLINE}"
-            f"\\b{1 if tuning.INTRO_SUBTITLE_BOLD else 0}"
-            f"\\c&H{_ass_bgr(tuning.INTRO_SUBTITLE_COLOR)}&"
-        )
-        safe_text = f"{safe_title}\\N{{{sub_tags}}}{safe_subtitle}"
+        title_y = cy - int(subtitle_style.font_size * 0.6)
+        sub_y = cy + int(title_style.font_size * 0.6)
     else:
-        safe_text = safe_title
+        title_y = cy
+
+    title_override = (
+        f"{{\\an5\\pos({cx},{title_y}){title_style.to_ass_tags()}"
+        f"\\fad({fade_ms},{fade_ms})"
+        f"\\fscx{scale_start}\\fscy{scale_start}"
+        f"\\t(0,{fade_ms},\\fscx100\\fscy100)"
+        f"\\t({fade_out_start_ms},{duration_ms},\\fscx{scale_start}\\fscy{scale_start})}}"
+    )
     end_ts = _format_ass_timestamp(duration_sec)
+    events = [
+        f"Dialogue: Marked=0,0:00:00.00,{end_ts},Default,,0000,0000,0000,,"
+        f"{title_override}{safe_title}\n"
+    ]
+
+    if safe_subtitle:
+        delay = min(tuning.INTRO_SUBTITLE_DELAY_SECONDS, duration_sec / 4)
+        sub_fade_ms = int(round(tuning.INTRO_SUBTITLE_FADE_SECONDS * 1000))
+        rise = tuning.INTRO_SUBTITLE_RISE_PX
+        sub_override = (
+            f"{{\\an5\\move({cx},{sub_y + rise},{cx},{sub_y},0,{sub_fade_ms})"
+            f"\\fad({sub_fade_ms},{sub_fade_ms}){subtitle_style.to_ass_tags()}}}"
+        )
+        events.append(
+            f"Dialogue: Marked=0,{_format_ass_timestamp(delay)},"
+            f"{_format_ass_timestamp(duration_sec - delay)},Default,,0000,0000,0000,,"
+            f"{sub_override}{safe_subtitle}\n"
+        )
 
     ass_path = tmp_dir / f"intro_title_{uuid.uuid4().hex[:8]}.ass"
     ass_path.write_text(
@@ -227,9 +268,7 @@ def _write_title_ass(title: str, subtitle: str, duration_sec: float, tmp_dir: Pa
         "Style: Default,Arial,20,16777215,65535,0,0,0,0,1,2,2,2,10,10,10,0,1\n\n"
         "[Events]\n"
         "Format: Marked, Start, End, Style, Name, MarginL, MarginR, MarginV, "
-        "Effect, Text\n"
-        f"Dialogue: Marked=0,0:00:00.00,{end_ts},Default,,0000,0000,0000,,"
-        f"{override}{safe_text}\n",
+        "Effect, Text\n" + "".join(events),
         encoding="utf-8",
     )
     return ass_path
@@ -260,6 +299,8 @@ def generate_intro_clip(
     subtitle: str,
     waypoints: List[Dict[str, Any]],
     output_filename: str = tuning.INTRO_OUTPUT_FILENAME,
+    title_style: Optional[Dict[str, Any]] = None,
+    subtitle_style: Optional[Dict[str, Any]] = None,
 ) -> Optional[str]:
     """Picks up to INTRO_IMAGE_COUNT random, distinct waypoint popup images
     (a fresh pick every call), renders a slow zoom-in over each, crossfades
@@ -310,7 +351,13 @@ def generate_intro_clip(
         )
         _crossfade_chain(per_clip_raw_paths, per_clip_sec, crossfade_sec, str(combined_path))
 
-        title_path = _write_title_ass(title or "", subtitle or "", total_sec, video_dir_path)
+        title_path = _write_title_ass(
+            title or "", subtitle or "", total_sec, video_dir_path,
+            title_style=DEFAULT_TITLE_STYLE.merged(title_style)
+            .with_installed_font(DEFAULT_TITLE_STYLE.font_family),
+            subtitle_style=DEFAULT_SUBTITLE_STYLE.merged(subtitle_style)
+            .with_installed_font(DEFAULT_SUBTITLE_STYLE.font_family),
+        )
 
         # [HACK] [Subtitle] Absolute, forward-slashed, colon-escaped path — libass's
         # subtitles filter needs this exact escaping, same as combine_video_and_audio.

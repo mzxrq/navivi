@@ -4,31 +4,52 @@ import { Pause, Play, SkipBack } from "../../components/ui/icons";
 import { Tip } from "../../components/ui/Tip";
 import { DEFAULT_EXTRA_VOLUME, layout, placedCues, segmentAt, trimmedLength, TimelineData } from "./model";
 import { formatTime, mediaUrl, player, usePlayerTime, usePlaying } from "./player";
+import { useWorkspace } from "../../hooks/useWorkspace";
+import { resolveCaptionStyle, textStyleToCss, wrapText } from "../../utils/textStyle";
 
 interface PreviewProps {
   timeline: TimelineData;
   projectDir: string;
 }
 
-// Same font the export burns in (EDITOR_SUBTITLE_STYLE in vdoexporter.py).
-const SUBTITLE_FONT = 'Meiryo, "Yu Gothic UI", sans-serif';
 
-// Drops each line's closing 。/、 so the caption box is even on both sides (same as the export).
-const subtitleDisplayText = (text: string) =>
-  text
-    .trim()
-    .split(/\r?\n/)
+// Wraps to max_chars_per_line, then drops each line's closing 。/、 so the caption box
+// is even on both sides (same as _subtitle_display_text in the export).
+const subtitleDisplayText = (text: string, maxChars: number) =>
+  wrapText(
+    text
+      .trim()
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .join("\n"),
+    maxChars,
+  )
+    .split("\n")
     .map((line) => line.trim().replace(/[。、]+$/, "").trimEnd() || line.trim())
     .join("\n");
 
+const ALIGN = { bottom: "items-end", middle: "items-center", top: "items-start" } as const;
+
 function SubtitleOverlay({ cues, show }: { cues: ReturnType<typeof placedCues>; show: boolean }) {
   const time = usePlayerTime();
+  const { settings } = useWorkspace();
   const cue = show ? cues.find((c) => time >= c.globalStart && time < c.globalEnd) : null;
+  // Same look and placement the export burns in (caption_style + this subtitle's own style).
+  const caption = useMemo(() => resolveCaptionStyle(settings, cue?.style), [settings, cue?.style]);
+  const style = useMemo(() => textStyleToCss(caption), [caption]);
   if (!cue) return null;
+  const edge = `${(caption.margin_v / 1080) * 100}cqh`;
   return (
-    <div className="absolute inset-x-0 bottom-[7%] flex justify-center px-6 pointer-events-none">
-      <span style={{ fontFamily: SUBTITLE_FONT }} className="max-w-[85%] px-2.5 py-1 rounded-md bg-black/60 text-white text-[clamp(11px,1.6vw,20px)] leading-snug text-center whitespace-pre-line">
-        {subtitleDisplayText(cue.text)}
+    <div
+      className={`absolute inset-0 flex ${ALIGN[caption.position]} justify-center px-6 pointer-events-none`}
+      style={{
+        containerType: "size",
+        paddingBottom: caption.position === "bottom" ? edge : undefined,
+        paddingTop: caption.position === "top" ? edge : undefined,
+      }}
+    >
+      <span style={style} className="max-w-[85%] rounded-md leading-snug text-center whitespace-pre-line">
+        {subtitleDisplayText(cue.text, caption.max_chars_per_line)}
       </span>
     </div>
   );

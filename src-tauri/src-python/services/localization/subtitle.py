@@ -43,6 +43,9 @@ class SubtitleStyle:
     outline_color: str = "&H00000000"  # outline/border (black)
     back_color: str = "&H80000000"  # box background, only used if border_style=3
     bold: bool = False
+    italic: bool = False
+    underline: bool = False
+    spacing: float = 0.0  # extra letter spacing, libass units
     border_style: int = 1  # 1 = outline+shadow, 3 = opaque background box
     outline: float = 2.0  # outline thickness in px
     shadow: float = 0.5  # drop-shadow distance in px
@@ -63,7 +66,9 @@ class SubtitleStyle:
         return (
             f"FontName={self.font_name},FontSize={self.font_size},"
             f"PrimaryColour={self.primary_color},OutlineColour={self.outline_color},"
-            f"BackColour={self.back_color},Bold={bold_flag},BorderStyle={self.border_style},"
+            f"BackColour={self.back_color},Bold={bold_flag},"
+            f"Italic={-1 if self.italic else 0},Underline={-1 if self.underline else 0},"
+            f"Spacing={self.spacing:g},BorderStyle={self.border_style},"
             f"Outline={self.outline},Shadow={self.shadow},Alignment={self.alignment},"
             f"MarginV={self.margin_v}{margin_l}"
         )

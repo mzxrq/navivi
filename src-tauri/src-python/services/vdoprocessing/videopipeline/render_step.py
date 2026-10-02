@@ -1418,6 +1418,8 @@ def render_route_video(
         # dict, not just read off raw settings" requirement as
         # summary_card_style above.
         "summary_card_labels": settings.get("summary_card_labels"),
+        # Legs keep their path above a band sized to the project's caption.
+        "caption_style": settings.get("caption_style"),
     }
 
     animator = RouteAnimator(animator_config)

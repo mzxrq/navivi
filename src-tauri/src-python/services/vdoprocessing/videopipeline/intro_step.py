@@ -39,8 +39,11 @@ def render_intro_clip(project_config_path: str) -> Optional[str]:
     video_dir = project_video_dir(job_config.get("directory_path", config_path.parent))
 
     logger.info("Intro step: building intro clip for project '%s'.", project_name)
+    settings = job_config.get_settings()
     intro_path = generate_intro_clip(
-        video_dir=str(video_dir), title=video_title, subtitle=video_subtitle, waypoints=waypoints
+        video_dir=str(video_dir), title=video_title, subtitle=video_subtitle, waypoints=waypoints,
+        title_style=settings.get("intro_title_style"),
+        subtitle_style=settings.get("intro_subtitle_style"),
     )
 
     if intro_path:

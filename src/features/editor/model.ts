@@ -1,3 +1,5 @@
+import type { TextStyle } from "../../types";
+
 export type SegmentKind = "intro" | "overview" | "route" | "attraction" | "outro" | "custom";
 
 export interface Segment {
@@ -25,6 +27,8 @@ export interface SubtitleCue {
   start: number;
   end: number;
   text: string;
+  // Overrides on top of the project's caption_style; absent = the shared style.
+  style?: TextStyle;
 }
 
 export interface MusicBed {
@@ -295,9 +299,14 @@ export function cuesFromSegmentFile(seg: Segment, timed: TimedText[]): SubtitleC
 
 // ── Timeline manifest (timeline.json) ────────────────────────────────────────
 
-export function toManifest(projectName: string, timeline: TimelineData) {
+export function toManifest(projectName: string, timeline: TimelineData, captionStyle?: TextStyle) {
   const { placed, total } = layout(timeline);
-  const cues = placedCues(timeline, placed).map((c) => ({ start: c.globalStart, end: c.globalEnd, text: c.text }));
+  const cues = placedCues(timeline, placed).map((c) => ({
+    start: c.globalStart,
+    end: c.globalEnd,
+    text: c.text,
+    ...(c.style ? { style: c.style } : {}),
+  }));
   return {
     project_name: projectName,
     total_duration_seconds: total,
@@ -320,6 +329,8 @@ export function toManifest(projectName: string, timeline: TimelineData) {
     })),
     subtitles: cues,
     burn_subtitles: true,
+    // Omitted: the export falls back to the project's saved settings.
+    ...(captionStyle ? { caption_style: captionStyle } : {}),
     music: timeline.music ? { path: timeline.music.path, volume: timeline.music.volume } : null,
     editor: { version: EDITOR_VERSION, ...timeline },
   };

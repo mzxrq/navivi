@@ -9,6 +9,9 @@ import { useAnimatedUnmount } from "../../hooks/useAnimatedUnmount";
 import { useTheme } from "../../hooks/useTheme";
 import { useUI } from "../../hooks/useUI";
 import { useWorkspace } from "../../hooks/useWorkspace";
+import { CaptionStyleFields } from "./CaptionStyleFields";
+import { resolveCaptionStyle } from "../../utils/textStyle";
+import type { TextStyle } from "../../types";
 import { getLocalModels, pullModelStream } from "../../services/ollamaApi";
 import { dynamicActivate } from "../../i18n";
 import { db } from "../../services/db";
@@ -511,42 +514,12 @@ export function AppSettings() {
                   </Row>
                 </Section>
 
-                <Section title={t`Subtitles`}>
-                  <Row title={t`Font`}>
-                    <input
-                      type="text"
-                      value={settings.subtitle_font || "Calibri"}
-                      onChange={(e) => updateProject({ subtitle_font: e.target.value })}
-                      className={`${inputClass} w-48`}
-                    />
-                  </Row>
-                  <Row title={t`Font size`}>
-                    <NumberInput
-                      value={settings.subtitle_font_size || 30}
-                      onChange={(v) => updateProject({ subtitle_font_size: v })}
-                    />
-                  </Row>
-                  <Row title={t`Text colour`} description={t`ASS colour, e.g. &H00FFFFFF`}>
-                    <input
-                      type="text"
-                      value={settings.subtitle_color || "&H00FFFFFF"}
-                      onChange={(e) => updateProject({ subtitle_color: e.target.value })}
-                      spellCheck={false}
-                      className={`${inputClass} w-36 text-[12px] tabular-nums`}
-                    />
-                  </Row>
-                  <Row title={t`Outline colour`} description={t`ASS colour, e.g. &H00000000`}>
-                    <input
-                      type="text"
-                      value={settings.subtitle_outline_color || "&H00000000"}
-                      onChange={(e) =>
-                        updateProject({ subtitle_outline_color: e.target.value })
-                      }
-                      spellCheck={false}
-                      className={`${inputClass} w-36 text-[12px] tabular-nums`}
-                    />
-                  </Row>
-                </Section>
+                <CaptionStyleSection
+                  style={resolveCaptionStyle(settings)}
+                  onChange={(patch) =>
+                    updateProject({ caption_style: { ...(settings.caption_style ?? {}), ...patch } })
+                  }
+                />
               </>
             )}
 
@@ -816,6 +789,28 @@ function Badge({ tone, children }: { tone: "violet" | "amber"; children: React.R
     <span className={`h-4.5 px-1.5 inline-flex items-center rounded-md text-[10px] font-medium whitespace-nowrap ${tones[tone]}`}>
       {children}
     </span>
+  );
+}
+
+function CaptionStyleSection({
+  style,
+  onChange,
+}: {
+  style: Required<TextStyle>;
+  onChange: (patch: TextStyle) => void;
+}) {
+  return (
+    <Section title={t`Subtitles`}>
+      <CaptionStyleFields
+        style={style}
+        onChange={onChange}
+        row={(key, label, control, hint) => (
+          <Row key={key} title={label} description={hint}>
+            <div className="w-48 flex justify-end">{control}</div>
+          </Row>
+        )}
+      />
+    </Section>
   );
 }
 

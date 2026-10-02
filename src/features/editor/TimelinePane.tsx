@@ -362,6 +362,7 @@ export function TimelinePane(props: PaneProps) {
                   }`}
                   style={{ left: c.globalStart * pps, width: Math.max(6, (c.globalEnd - c.globalStart) * pps - 1) }}
                 >
+                  {c.style && <span title={t`Has its own style`} className="inline-block w-1.5 h-1.5 mr-1 mb-px rounded-full bg-amber-500 align-middle" />}
                   {c.text}
                   <div onPointerDown={(e) => onCueDown(e, c, "start")} className="absolute left-0 top-0 bottom-0 w-1.5 cursor-ew-resize hover:bg-navi/60" />
                   <div onPointerDown={(e) => onCueDown(e, c, "end")} className="absolute right-0 top-0 bottom-0 w-1.5 cursor-ew-resize hover:bg-navi/60" />
