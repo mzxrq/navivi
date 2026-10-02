@@ -1388,8 +1388,11 @@ TTS_RESPONSE_FORMAT = None  # None = let the server use its own default (wav)
 # Per-project override: settings.tts.caption.
 TTS_CAPTION = "明るく元気で、楽しそうな話し方。"
 
-# --- Attraction clip place-name label (top-left, burned for the whole clip) -
+# --- Attraction clip place-name label (top-left, for the whole clip) -------
 # See services/vdoprocessing/img2vdo.py's AttractionVideoGenerator._fit_and_finalize.
+# True: the label is a text item on the editor's text track (place_label.py),
+# not burned into the clip. Clips finalized earlier keep their burned label.
+ATTRACTION_LABEL_ON_TEXT_TRACK = True
 ATTRACTION_LABEL_FONT_SIZE = 26
 ATTRACTION_LABEL_OUTLINE = 0.8
 # Distance from the top / left edge (libass units, scaled with the video like

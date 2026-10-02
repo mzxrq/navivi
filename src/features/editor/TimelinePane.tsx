@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { t } from "@lingui/core/macro";
-import { Music, Subtitles, Video, Volume2, VolumeX } from "../../components/ui/icons";
+import { Music, Subtitles, Type, Video, Volume2, VolumeX } from "../../components/ui/icons";
 import {
   anchorCue,
   layout,
@@ -9,13 +9,17 @@ import {
   newId,
   placedCues,
   PlacedCue,
+  placedTexts,
+  PlacedText,
+  TextClip,
   Segment,
   SegmentKind,
   TimelineData,
 } from "./model";
 import { formatTime, mediaUrl, player, usePlayerTime, usePlaying } from "./player";
 
-export type Selection = { type: "segment" | "cue"; id: string } | null;
+export type Selection = { type: "segment" | "cue" | "text"; id: string } | null;
+export type Lane = "video" | "text" | "subtitle" | "music";
 
 interface PaneProps {
   timeline: TimelineData;
@@ -28,12 +32,16 @@ interface PaneProps {
   commit: (t: TimelineData) => void;
   onSegmentMenu: (e: React.MouseEvent, seg: Segment) => void;
   onCueMenu: (e: React.MouseEvent, cue: PlacedCue) => void;
-  onLaneMenu: (e: React.MouseEvent, time: number, lane: "video" | "subtitle" | "music") => void;
+  onTextMenu: (e: React.MouseEvent, text: PlacedText) => void;
+  onLaneMenu: (e: React.MouseEvent, time: number, lane: Lane) => void;
+  onAddText: (time: number) => void;
 }
 
 const LABEL_W = 36;
 const GUTTER = 120;
-const LANE = { ruler: 26, video: 68, voice: 26, subtitle: 34, music: 26 };
+const LANE = { ruler: 26, video: 68, voice: 26, text: 34, subtitle: 34, music: 26 };
+// Lanes plus room for the horizontal scrollbar.
+export const TIMELINE_HEIGHT = Object.values(LANE).reduce((a, b) => a + b, 0) + 48;
 
 const kindColor: Record<SegmentKind, string> = {
   intro: "bg-violet-500",
@@ -79,6 +87,7 @@ export function TimelinePane(props: PaneProps) {
 
   const { placed, total } = useMemo(() => layout(timeline), [timeline]);
   const cues = useMemo(() => placedCues(timeline, placed), [timeline, placed]);
+  const texts = useMemo(() => placedTexts(timeline, placed), [timeline, placed]);
   const width = Math.max(total * pps + GUTTER, 600);
 
   const timeAt = (clientX: number) => {
@@ -199,6 +208,33 @@ export function TimelinePane(props: PaneProps) {
           apply(clamp(cue.globalStart + dt, 0, cue.globalEnd - MIN_CUE), cue.globalEnd);
         } else {
           apply(cue.globalStart, clamp(cue.globalEnd + dt, cue.globalStart + MIN_CUE, total));
+        }
+      },
+      (moved) => {
+        if (moved) commit(latest.current);
+        setDraft(null);
+      },
+    );
+  };
+
+  const onTextDown = (e: React.PointerEvent, item: PlacedText, mode: "move" | "start" | "end") => {
+    const base = timeline;
+    onSelect({ type: "text", id: item.id });
+    const apply = (g0: number, g1: number) => {
+      const next: TextClip = anchorCue(base, item, g0, g1, mode !== "move");
+      setDraft({ ...base, texts: base.texts.map((x) => (x.id === item.id ? { ...x, segmentId: next.segmentId, start: next.start, end: next.end } : x)) });
+    };
+    startDrag(
+      e,
+      (dt) => {
+        if (mode === "move") {
+          const len = item.globalEnd - item.globalStart;
+          const g0 = clamp(item.globalStart + dt, 0, Math.max(0, total - len));
+          apply(g0, g0 + len);
+        } else if (mode === "start") {
+          apply(clamp(item.globalStart + dt, 0, item.globalEnd - MIN_CUE), item.globalEnd);
+        } else {
+          apply(item.globalStart, clamp(item.globalEnd + dt, item.globalStart + MIN_CUE, total));
         }
       },
       (moved) => {
@@ -332,6 +368,44 @@ export function TimelinePane(props: PaneProps) {
                   {p.seg.label}
                 </div>
               ))}
+          </div>
+        </div>
+
+        <div
+          className="relative flex border-b border-zinc-200/70 dark:border-white/5"
+          style={{ height: LANE.text }}
+          onDoubleClick={(e) => {
+            if (e.target === e.currentTarget || (e.target as HTMLElement).dataset.lane) props.onAddText(timeAt(e.clientX));
+          }}
+          onContextMenu={(e) => props.onLaneMenu(e, timeAt(e.clientX), "text")}
+        >
+          <div className={laneLabel} style={{ width: LABEL_W }}>
+            <Type className="w-3.5 h-3.5" />
+          </div>
+          <div className="relative flex-1" data-lane="text">
+            {texts.map((x) => {
+              const selected = selection?.type === "text" && selection.id === x.id;
+              return (
+                <div
+                  key={x.id}
+                  onPointerDown={(e) => onTextDown(e, x, "move")}
+                  onContextMenu={(e) => {
+                    onSelect({ type: "text", id: x.id });
+                    props.onTextMenu(e, x);
+                  }}
+                  className={`absolute top-1 bottom-1 rounded-md px-1.5 text-[11px] leading-[22px] truncate cursor-grab bg-fuchsia-500/15 text-zinc-800 dark:text-zinc-100 ${
+                    selected ? "ring-2 ring-fuchsia-500" : "ring-1 ring-fuchsia-500/30"
+                  }`}
+                  style={{ left: x.globalStart * pps, width: Math.max(6, (x.globalEnd - x.globalStart) * pps - 1) }}
+                >
+                  <span className="font-semibold">{x.title.text}</span>
+                  {x.subtitle.text && <span className="opacity-70"> · {x.subtitle.text}</span>}
+                  <div onPointerDown={(e) => onTextDown(e, x, "start")} className="absolute left-0 top-0 bottom-0 w-1.5 cursor-ew-resize hover:bg-fuchsia-500/60" />
+                  <div onPointerDown={(e) => onTextDown(e, x, "end")} className="absolute right-0 top-0 bottom-0 w-1.5 cursor-ew-resize hover:bg-fuchsia-500/60" />
+                </div>
+              );
+            })}
+            {!texts.length && <div className="absolute inset-0 flex items-center px-3 text-[12px] text-zinc-400 pointer-events-none">{t`Double-click to add a title`}</div>}
           </div>
         </div>
 

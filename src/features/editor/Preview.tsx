@@ -2,10 +2,20 @@ import { useEffect, useMemo, useRef } from "react";
 import { t } from "@lingui/core/macro";
 import { Pause, Play, SkipBack } from "../../components/ui/icons";
 import { Tip } from "../../components/ui/Tip";
-import { DEFAULT_EXTRA_VOLUME, layout, placedCues, segmentAt, trimmedLength, TimelineData } from "./model";
+import { DEFAULT_EXTRA_VOLUME, layout, placedCues, placedTexts, PlacedText, segmentAt, trimmedLength, TimelineData } from "./model";
 import { formatTime, mediaUrl, player, usePlayerTime, usePlaying } from "./player";
 import { useWorkspace } from "../../hooks/useWorkspace";
-import { resolveCaptionStyle, textStyleToCss, wrapText } from "../../utils/textStyle";
+import {
+  DEFAULT_TEXT_SUBTITLE_STYLE,
+  DEFAULT_TEXT_TITLE_STYLE,
+  resolveCaptionStyle,
+  TEXT_DEFAULT_MARGIN,
+  textBlockCenterY,
+  lineFrame,
+  lineMotion,
+  textStyleToCss,
+  wrapText,
+} from "../../utils/textStyle";
 
 interface PreviewProps {
   timeline: TimelineData;
@@ -55,6 +65,64 @@ function SubtitleOverlay({ cues, show }: { cues: ReturnType<typeof placedCues>; 
   );
 }
 
+// Text-track items: centred title + subtitle, animated like the export (introclip.title_events).
+function TextOverlay({ texts }: { texts: PlacedText[] }) {
+  const time = usePlayerTime();
+  const active = texts.filter((x) => time >= x.globalStart && time < x.globalEnd);
+  if (!active.length) return null;
+  const cq = (px: number) => `${(px / 1080) * 100}cqh`;
+  return (
+    <div className="absolute inset-0 pointer-events-none" style={{ containerType: "size" }}>
+      {active.map((x) => {
+        const title = { ...DEFAULT_TEXT_TITLE_STYLE, ...(x.title.style ?? {}) };
+        const sub = { ...DEFAULT_TEXT_SUBTITLE_STYLE, ...(x.subtitle.style ?? {}) };
+        const hasTitle = !!x.title.text.trim();
+        const hasSub = !!x.subtitle.text.trim();
+        const t = time - x.globalStart;
+        const dur = x.globalEnd - x.globalStart;
+        const paired = hasTitle && hasSub;
+        const tm = lineMotion("title", x.title.animation, x.title.delay, x.animation, dur, paired);
+        const sm = lineMotion("subtitle", x.subtitle.animation, x.subtitle.delay, x.animation, dur, paired);
+        const tf = lineFrame(t, dur, tm.animation, tm.delay);
+        const sf = lineFrame(t, dur, sm.animation, sm.delay);
+        // Same anchors as the export: the block's left/centre/right edge, vertically centred.
+        const side = cq(x.margin_h ?? TEXT_DEFAULT_MARGIN);
+        const place: React.CSSProperties =
+          x.align === "left"
+            ? { left: side, transformOrigin: "left center" }
+            : x.align === "right"
+              ? { right: side, transformOrigin: "right center" }
+              : { left: "50%", transformOrigin: "center" };
+        const shift = x.align === "left" ? "translate(0, -50%)" : x.align === "right" ? "translate(0, -50%)" : "translate(-50%, -50%)";
+        const cy = textBlockCenterY(x.position, x.margin_v, title.font_size, sub.font_size, hasTitle, hasSub);
+        const titleY = hasTitle && hasSub ? cy - Math.trunc(sub.font_size * 0.6) : cy;
+        const subY = hasTitle && hasSub ? cy + Math.trunc(title.font_size * 0.6) : cy;
+        const line = "absolute whitespace-nowrap leading-none";
+        return (
+          <div key={x.id}>
+            {hasTitle && tf.opacity > 0 && (
+              <span
+                className={line}
+                style={{ ...textStyleToCss(title), ...place, top: cq(titleY + tf.rise), opacity: tf.opacity * title.opacity, transform: `${shift} scale(${tf.scale})` }}
+              >
+                {x.title.text}
+              </span>
+            )}
+            {hasSub && sf.opacity > 0 && (
+              <span
+                className={line}
+                style={{ ...textStyleToCss(sub), ...place, top: cq(subY + sf.rise), opacity: sf.opacity * sub.opacity, transform: `${shift} scale(${sf.scale})` }}
+              >
+                {x.subtitle.text}
+              </span>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function Timecode({ total }: { total: number }) {
   const time = usePlayerTime();
   return (
@@ -74,6 +142,7 @@ export function Preview({ timeline, projectDir }: PreviewProps) {
 
   const { placed, total } = useMemo(() => layout(timeline), [timeline]);
   const cues = useMemo(() => placedCues(timeline, placed), [timeline, placed]);
+  const texts = useMemo(() => placedTexts(timeline, placed), [timeline, placed]);
 
   const stateRef = useRef({ placed, total, timeline, projectDir });
   stateRef.current = { placed, total, timeline, projectDir };
@@ -222,6 +291,7 @@ export function Preview({ timeline, projectDir }: PreviewProps) {
             </div>
           )}
           <SubtitleOverlay cues={cues} show />
+          <TextOverlay texts={texts} />
         </div>
       </div>
       <div className="flex items-center justify-center gap-2 h-10 shrink-0">

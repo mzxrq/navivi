@@ -105,35 +105,75 @@ def _ass_text(text: str) -> str:
 def write_caption_ass(
     cues: list, shared_style: Optional[dict], frame_size: Optional[Tuple[int, int]], path: Path,
     check_font: bool = True,
+    texts: Optional[list] = None,
 ) -> Path:
     """Burned captions as .ass: every cue gets the shared style (settings.caption_style)
-    with its own `style` overrides on top, so lines can differ in font, colour and place."""
+    with its own `style` overrides on top, so lines can differ in font, colour and place.
+    `texts` are text-track items (an animated title + subtitle, centred), drawn on top."""
+    from services.vdoprocessing.introclip import (
+        DEFAULT_SUBTITLE_STYLE,
+        DEFAULT_TITLE_STYLE,
+        TEXT_DEFAULT_MARGIN_PX,
+        text_block_center_y,
+        title_events,
+    )
+
     shared = DEFAULT_CAPTION_STYLE.merged(shared_style)
     w, h = frame_size or (1920, 1080)
+    play_w = round(1080 * w / h)
     fonts: dict = {}
+
+    def installed(style: TextStyle, fallback: str) -> TextStyle:
+        if not check_font:
+            return style
+        if style.font_family not in fonts:
+            fonts[style.font_family] = style.with_installed_font(fallback).font_family
+        return replace(style, font_family=fonts[style.font_family])
+
     styles: dict = {}
     events = []
     for cue in sorted(cues, key=lambda c: float(c["start"])):
-        style = shared.merged(cue.get("style"))
-        if check_font:
-            if style.font_family not in fonts:
-                fonts[style.font_family] = style.with_installed_font(DEFAULT_CAPTION_STYLE.font_family).font_family
-            style = replace(style, font_family=fonts[style.font_family])
+        style = installed(shared.merged(cue.get("style")), DEFAULT_CAPTION_STYLE.font_family)
         name = styles.setdefault(style, f"S{len(styles)}")
         text = _ass_text(_subtitle_display_text(str(cue["text"]), style.max_chars_per_line))
         events.append(
             f"Dialogue: 0,{_ass_timestamp(float(cue['start']))},{_ass_timestamp(float(cue['end']))},"
             f"{name},,0,0,0,,{text}"
         )
+    for item in sorted(texts or [], key=lambda x: float(x["start"])):
+        title, subtitle = item.get("title") or {}, item.get("subtitle") or {}
+        title_text, sub_text = str(title.get("text") or ""), str(subtitle.get("text") or "")
+        title_style = installed(DEFAULT_TITLE_STYLE.merged(title.get("style")), DEFAULT_TITLE_STYLE.font_family)
+        sub_style = installed(DEFAULT_SUBTITLE_STYLE.merged(subtitle.get("style")), DEFAULT_SUBTITLE_STYLE.font_family)
+        def px(key: str) -> float:
+            v = item.get(key)
+            return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else TEXT_DEFAULT_MARGIN_PX
+
+        cy = text_block_center_y(
+            str(item.get("position") or "middle"), px("margin_v"),
+            title_style.font_size, sub_style.font_size, bool(title_text.strip()), bool(sub_text.strip()),
+        )
+        align = item.get("align") if item.get("align") in ("left", "right") else "center"
+        cx = {"left": px("margin_h"), "right": play_w - px("margin_h")}.get(align, play_w / 2)
+        for a, b, text in title_events(
+            title_text, sub_text, float(item["start"]), float(item["end"]),
+            title_style, sub_style, int(round(cx)), cy, align=align,
+            animation=item.get("animation"),
+            title_motion={"animation": title.get("animation"), "delay": title.get("delay")},
+            subtitle_motion={"animation": subtitle.get("animation"), "delay": subtitle.get("delay")},
+        ):
+            # Layer 1: above captions. Every look is in the event's own tags.
+            events.append(f"Dialogue: 1,{_ass_timestamp(a)},{_ass_timestamp(b)},Text,,0,0,0,,{text}")
     path.write_text(
         "[Script Info]\nScriptType: v4.00+\nWrapStyle: 0\nScaledBorderAndShadow: yes\n"
         # 1080 lines tall, as wide as the frame's aspect, so style px read as 1080p px.
-        f"PlayResX: {round(1080 * w / h)}\nPlayResY: 1080\n\n"
+        f"PlayResX: {play_w}\nPlayResY: 1080\n\n"
         "[V4+ Styles]\n"
         "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, "
         "Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, "
         "Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n"
         + "".join(s.to_ass_style_line(n) + "\n" for s, n in styles.items())
+        + "Style: Text,Arial,20,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,5,0,0,0,1\n"
         + "\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
         + "".join(e + "\n" for e in events),
         encoding="utf-8",
@@ -946,10 +986,16 @@ class VideoExporter:
                 logger.warning("music bed skipped: %s", result.stderr[-400:])
 
         cues = VideoExporter._burn_cues(timeline_data)
-        if cues:
+        # Text-track items (e.g. the intro title) burn even when subtitles are off.
+        texts = [
+            x for x in timeline_data.get("texts") or []
+            if str((x.get("title") or {}).get("text", "")).strip()
+            or str((x.get("subtitle") or {}).get("text", "")).strip()
+        ]
+        if cues or texts:
             ass = write_caption_ass(
                 cues, timeline_data.get("caption_style"), VideoExporter._video_size(Path(output_path)),
-                tmp_dir / "subtitles.ass",
+                tmp_dir / "subtitles.ass", texts=texts,
             )
             burned = tmp_dir / "with_subtitles.mp4"
             try:

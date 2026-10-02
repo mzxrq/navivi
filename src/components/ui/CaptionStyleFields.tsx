@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useState } from "react";
+import { ReactNode, useEffect, useId, useState } from "react";
 import { t } from "@lingui/core/macro";
 import { useInstalledFonts } from "../../hooks/useInstalledFonts";
 import type { TextStyle } from "../../types";
@@ -16,7 +16,7 @@ const toggle = (on: boolean) =>
   }`;
 
 /** Whole-number input that commits on blur/Enter, clamped to [min, max]. */
-function IntInput({ value, min, max, onCommit }: { value: number; min: number; max: number; onCommit: (v: number) => void }) {
+export function IntInput({ value, min, max, onCommit }: { value: number; min: number; max: number; onCommit: (v: number) => void }) {
   const [text, setText] = useState(String(Math.round(value)));
   useEffect(() => setText(String(Math.round(value))), [value]);
   const done = () => {
@@ -42,16 +42,23 @@ function IntInput({ value, min, max, onCommit }: { value: number; min: number; m
 
 export type CaptionRow = (key: string, label: string, control: ReactNode, hint?: string) => ReactNode;
 
-/** Caption look + placement controls; `row` lays each one out in the host panel's own style. */
+/** Look (+ placement, for captions) controls; `row` lays each one out in the host panel's own style.
+ * kind "text" is a text-track line: no box, position or line limit, and its own fallback font. */
 export function CaptionStyleFields({
   style,
   onChange,
   row,
+  kind = "caption",
+  fallbackFont = DEFAULT_CAPTION_STYLE.font_family,
 }: {
   style: Required<TextStyle>;
   onChange: (patch: TextStyle) => void;
   row: CaptionRow;
+  kind?: "caption" | "text";
+  fallbackFont?: string;
 }) {
+  const caption = kind === "caption";
+  const listId = useId();
   const fonts = useInstalledFonts();
   const [font, setFont] = useState(style.font_family);
   useEffect(() => setFont(style.font_family), [style.font_family]);
@@ -65,20 +72,20 @@ export function CaptionStyleFields({
         <>
           <input
             type="text"
-            list="caption-fonts"
+            list={listId}
             value={font}
             onChange={(e) => setFont(e.target.value)}
             onBlur={() => font.trim() && font !== style.font_family && onChange({ font_family: font.trim() })}
             onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
             className={field}
           />
-          <datalist id="caption-fonts">
+          <datalist id={listId}>
             {fonts.map((f) => (
               <option key={f} value={f} />
             ))}
           </datalist>
         </>,
-        missing ? t`Not installed on this PC, so the export uses ${DEFAULT_CAPTION_STYLE.font_family}` : undefined,
+        missing ? t`Not installed on this PC, so the export uses ${fallbackFont}` : undefined,
       )}
       {row("size", t`Font size`, <IntInput value={style.font_size} min={8} max={300} onCommit={(v) => onChange({ font_size: v })} />, t`Pixels on a 1080p frame`)}
       {row(
@@ -97,8 +104,8 @@ export function CaptionStyleFields({
         </div>,
       )}
       {row("color", t`Text colour`, <input type="color" value={style.color} onChange={(e) => onChange({ color: e.target.value })} className={colorField} />)}
-      {row("box", t`Background box`, <Switch checked={style.background} onChange={(v) => onChange({ background: v })} label={t`Background box`} />)}
-      {style.background ? (
+      {caption && row("box", t`Background box`, <Switch checked={style.background} onChange={(v) => onChange({ background: v })} label={t`Background box`} />)}
+      {caption && style.background ? (
         <>
           {row("box-color", t`Box colour`, <input type="color" value={style.background_color} onChange={(e) => onChange({ background_color: e.target.value })} className={colorField} />)}
           {row(
@@ -114,7 +121,7 @@ export function CaptionStyleFields({
           {row("outline", t`Outline width`, <IntInput value={style.outline_width} min={0} max={20} onCommit={(v) => onChange({ outline_width: v })} />)}
         </>
       )}
-      {row(
+      {caption && row(
         "position",
         t`Position`,
         <select value={style.position} onChange={(e) => onChange({ position: e.target.value as TextStyle["position"] })} className={`${field} cursor-pointer`}>
@@ -123,14 +130,14 @@ export function CaptionStyleFields({
           <option value="top">{t`Top`}</option>
         </select>,
       )}
-      {style.position !== "middle" &&
+      {caption && style.position !== "middle" &&
         row(
           "margin",
           style.position === "top" ? t`Distance from top` : t`Distance from bottom`,
           <IntInput value={style.margin_v} min={0} max={400} onCommit={(v) => onChange({ margin_v: v })} />,
           t`Pixels on a 1080p frame`,
         )}
-      {row(
+      {caption && row(
         "max-chars",
         t`Max characters per line`,
         <IntInput value={style.max_chars_per_line} min={0} max={200} onCommit={(v) => onChange({ max_chars_per_line: v })} />,

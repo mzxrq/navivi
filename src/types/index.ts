@@ -108,6 +108,16 @@ export interface ProjectSettings {
   caption_style?: TextStyle;
   intro_title_style?: TextStyle;
   intro_subtitle_style?: TextStyle;
+  // Look for attraction place names on the text track (editor's "Apply to all").
+  place_label_look?: {
+    position?: "top" | "middle" | "bottom";
+    margin_v?: number;
+    align?: "left" | "center" | "right";
+    margin_h?: number;
+    animation?: "pop" | "fade" | "none";
+    title_style?: TextStyle;
+    subtitle_style?: TextStyle;
+  };
   show_route_heatmap?: boolean;
   weather_sync_enabled?: boolean;
   ai_model?: string;

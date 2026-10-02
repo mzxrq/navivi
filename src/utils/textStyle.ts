@@ -101,3 +101,108 @@ export function wrapLine(line: string, max: number): string[] {
 
 export const wrapText = (text: string, max: number) =>
   text.split("\n").flatMap((line) => wrapLine(line, max)).join("\n");
+
+// ── Text track (title + subtitle): mirrors introclip.py's defaults and title_events ──
+
+const TEXT_LINE_DEFAULTS = {
+  opacity: 1,
+  bold: true,
+  italic: false,
+  underline: false,
+  outline_color: "#000000",
+  shadow: 1,
+  shadow_color: "#000000",
+  letter_spacing: 0,
+  background: false,
+  background_color: "#000000",
+  background_opacity: 0.6,
+  position: "middle",
+  margin_v: 0,
+  max_chars_per_line: 0,
+} as const;
+
+export const DEFAULT_TEXT_TITLE_STYLE: Required<TextStyle> = {
+  ...TEXT_LINE_DEFAULTS,
+  font_family: "Yu Gothic UI",
+  font_size: 74,
+  color: "#FFFFFF",
+  outline_width: 2,
+};
+
+export const DEFAULT_TEXT_SUBTITLE_STYLE: Required<TextStyle> = {
+  ...TEXT_LINE_DEFAULTS,
+  font_family: "Yu Gothic UI",
+  font_size: 36,
+  color: "#FFFFFF",
+  outline_width: 0,
+};
+
+// tuning.py INTRO_LABEL_* / INTRO_SUBTITLE_*.
+const LABEL_FADE = 1.1;
+const LABEL_SCALE_START = 0.65;
+const SUB_DELAY = 0.8;
+const SUB_FADE = 0.7;
+const SUB_RISE = 28;
+const TEXT_FADE = 0.5;
+
+export const TEXT_DEFAULT_MARGIN = 100;
+
+/** Vertical centre (1080p px) of a title + subtitle block; mirrors text_block_center_y in introclip.py. */
+export function textBlockCenterY(
+  position: "top" | "middle" | "bottom" | undefined,
+  margin: number | undefined,
+  titleSize: number,
+  subSize: number,
+  hasTitle: boolean,
+  hasSub: boolean,
+): number {
+  if (position !== "top" && position !== "bottom") return 540;
+  const half = hasTitle && hasSub ? 0.55 * (titleSize + subSize) : (hasTitle ? titleSize : subSize) / 2;
+  const m = Math.max(0, margin ?? TEXT_DEFAULT_MARGIN);
+  return Math.round(position === "top" ? m + half : 1080 - m - half);
+}
+
+export type LineAnimation = "pop" | "rise" | "fade" | "none";
+const LINE_ANIMATIONS: LineAnimation[] = ["pop", "rise", "fade", "none"];
+
+/** A line's (animation, delay); mirrors line_motion in introclip.py. */
+export function lineMotion(
+  which: "title" | "subtitle",
+  animation: string | undefined,
+  delay: number | undefined,
+  groupAnimation: string | undefined,
+  duration: number,
+  paired: boolean,
+): { animation: LineAnimation; delay: number } {
+  const group = groupAnimation === "fade" || groupAnimation === "none" ? groupAnimation : undefined;
+  const anim = LINE_ANIMATIONS.includes(animation as LineAnimation)
+    ? (animation as LineAnimation)
+    : (group ?? (which === "title" ? "pop" : "rise"));
+  let d: number;
+  if (typeof delay === "number" && Number.isFinite(delay)) d = Math.max(0, delay);
+  else if (group || which === "title" || !paired) d = 0;
+  else d = Math.min(SUB_DELAY, duration / 4);
+  return { animation: anim, delay: Math.min(d, Math.max(0, duration * 0.45)) };
+}
+
+/** Opacity, scale and downward shift (1080p px) of one line `t` seconds into an item of `duration`. */
+export function lineFrame(t: number, duration: number, animation: LineAnimation, delay: number) {
+  const ramp = (x: number, len: number) => (len <= 0 ? 1 : Math.min(1, Math.max(0, x / len)));
+  const lt = t - delay;
+  const len = Math.max(0, duration - 2 * delay);
+  if (lt < 0 || lt > len) return { opacity: 0, scale: 1, rise: 0 };
+  if (animation === "pop") {
+    const f = Math.min(LABEL_FADE, len / 2);
+    const k = Math.min(ramp(lt, f), ramp(len - lt, f));
+    return { opacity: k, scale: LABEL_SCALE_START + (1 - LABEL_SCALE_START) * k, rise: 0 };
+  }
+  if (animation === "rise") {
+    const f = Math.min(SUB_FADE, len / 3);
+    return { opacity: Math.min(ramp(lt, f), ramp(len - lt, f)), scale: 1, rise: SUB_RISE * (1 - ramp(lt, f)) };
+  }
+  if (animation === "fade") {
+    const f = Math.min(TEXT_FADE, len / 2);
+    return { opacity: Math.min(ramp(lt, f), ramp(len - lt, f)), scale: 1, rise: 0 };
+  }
+  return { opacity: 1, scale: 1, rise: 0 };
+}

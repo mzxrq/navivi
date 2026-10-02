@@ -39,11 +39,10 @@ def render_intro_clip(project_config_path: str) -> Optional[str]:
     video_dir = project_video_dir(job_config.get("directory_path", config_path.parent))
 
     logger.info("Intro step: building intro clip for project '%s'.", project_name)
-    settings = job_config.get_settings()
+    # The title and subtitle are a text item on the timeline (intro_text_item), not burned in.
     intro_path = generate_intro_clip(
         video_dir=str(video_dir), title=video_title, subtitle=video_subtitle, waypoints=waypoints,
-        title_style=settings.get("intro_title_style"),
-        subtitle_style=settings.get("intro_subtitle_style"),
+        burn_text=False,
     )
 
     if intro_path:
@@ -54,3 +53,28 @@ def render_intro_clip(project_config_path: str) -> Optional[str]:
         )
 
     return intro_path
+
+
+def intro_text_item(project_config_path: str) -> Optional[dict]:
+    """The intro's title + subtitle as a text-track item: each line's text and
+    its style (settings.intro_title_style / intro_subtitle_style). Times are
+    filled in by build_timeline, which spans it over the intro clip."""
+    config_path = Path(project_config_path)
+    if not config_path.exists():
+        return None
+    job_config = JobConfigManager(config_path)
+    title = job_config.get("video_title") or job_config.get("project_name", "")
+    subtitle = job_config.get("video_subtitle", "")
+    if not (title or subtitle):
+        return None
+    settings = job_config.get_settings()
+
+    def line(text: str, style_key: str) -> dict:
+        style = settings.get(style_key)
+        return {"text": text or "", **({"style": style} if isinstance(style, dict) else {})}
+
+    return {
+        "kind": "intro",
+        "title": line(title, "intro_title_style"),
+        "subtitle": line(subtitle, "intro_subtitle_style"),
+    }

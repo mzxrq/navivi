@@ -6,12 +6,13 @@ import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { useUI } from "../../hooks/useUI";
-import { Copy, FileText, Film, Maximize, Music, Plus, Sparkles, Subtitles, Trash2, Video, VolumeX, ZoomIn, ZoomOut } from "../../components/ui/icons";
+import { Copy, FileText, Film, Maximize, Music, Plus, Sparkles, Subtitles, Trash2, Type, Video, VolumeX, ZoomIn, ZoomOut } from "../../components/ui/icons";
 import { Tip } from "../../components/ui/Tip";
 import { openContextMenu, separator } from "../../components/ui/menuItems";
 import { probeDuration, toAbsoluteProjectPath, toRelativeProjectPath } from "../../services/fileSystem";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import {
+  anchorCue,
   autoArrange,
   autoTimeBlocks,
   cuesFromSegmentFile,
@@ -24,6 +25,7 @@ import {
   placedCues,
   Segment,
   SubtitleCue,
+  TextClip,
   TimelineData,
 } from "./model";
 import { ExportDialog } from "./ExportDialog";
@@ -31,7 +33,7 @@ import { LibraryTrack, MusicPicker } from "./MusicPicker";
 import { Inspector } from "./Inspector";
 import { player } from "./player";
 import { Preview } from "./Preview";
-import { Selection, TimelinePane } from "./TimelinePane";
+import { Lane, Selection, TIMELINE_HEIGHT, TimelinePane } from "./TimelinePane";
 
 const VIDEO_EXT = ["mp4", "mov", "mkv", "webm", "m4v"];
 const AUDIO_EXT = ["mp3", "wav", "m4a", "aac", "ogg", "flac"];
@@ -208,7 +210,12 @@ export function EditorView() {
   };
 
   const removeSegment = (id: string) => {
-    commit({ ...timeline, segments: timeline.segments.filter((s) => s.id !== id), subtitles: timeline.subtitles.filter((c) => c.segmentId !== id) });
+    commit({
+      ...timeline,
+      segments: timeline.segments.filter((s) => s.id !== id),
+      subtitles: timeline.subtitles.filter((c) => c.segmentId !== id),
+      texts: (timeline.texts ?? []).filter((x) => x.segmentId !== id),
+    });
     setSelection(null);
   };
 
@@ -220,8 +227,27 @@ export function EditorView() {
     setSelection(null);
   };
 
-  const keyRef = useRef({ selection, removeSegment, removeCue, patchSegment, timeline, total });
-  keyRef.current = { selection, removeSegment, removeCue, patchSegment, timeline, total };
+  const removeText = (id: string) => {
+    commit({ ...timeline, texts: (timeline.texts ?? []).filter((x) => x.id !== id) });
+    setSelection(null);
+  };
+
+  // A title + subtitle pair, 4 s long, on the clip under `time`.
+  const addTextAt = (time: number) => {
+    const at = placed.find((p) => time < p.start + p.length) ?? placed[placed.length - 1];
+    if (!at) return;
+    const item = anchorCue<TextClip>(
+      timeline,
+      { id: newId(), segmentId: at.seg.id, start: 0, end: 0, title: { text: t`Title` }, subtitle: { text: "" } },
+      time,
+      time + 4,
+    );
+    commit({ ...timeline, texts: [...(timeline.texts ?? []), item] });
+    setSelection({ type: "text", id: item.id });
+  };
+
+  const keyRef = useRef({ selection, removeSegment, removeCue, removeText, patchSegment, timeline, total });
+  keyRef.current = { selection, removeSegment, removeCue, removeText, patchSegment, timeline, total };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -239,6 +265,7 @@ export function EditorView() {
       } else if ((e.key === "Delete" || e.key === "Backspace") && k.selection) {
         e.preventDefault();
         if (k.selection.type === "segment") k.removeSegment(k.selection.id);
+        else if (k.selection.type === "text") k.removeText(k.selection.id);
         else k.removeCue(k.selection.id);
       } else if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
         e.preventDefault();
@@ -274,8 +301,12 @@ export function EditorView() {
   const cueMenu = (e: React.MouseEvent, cue: { id: string }) =>
     openContextMenu(e, [{ label: t`Delete subtitle`, icon: Trash2, danger: true, kbd: "Del", onSelect: () => removeCue(cue.id) }]);
 
-  const laneMenu = (e: React.MouseEvent, time: number, lane: "video" | "subtitle" | "music") => {
+  const textMenu = (e: React.MouseEvent, item: { id: string }) =>
+    openContextMenu(e, [{ label: t`Delete title`, icon: Trash2, danger: true, kbd: "Del", onSelect: () => removeText(item.id) }]);
+
+  const laneMenu = (e: React.MouseEvent, time: number, lane: Lane) => {
     if (lane === "video") openContextMenu(e, [{ label: t`Add video`, icon: Video, onSelect: addVideos }]);
+    else if (lane === "text") openContextMenu(e, [{ label: t`Add title here`, icon: Plus, onSelect: () => addTextAt(time) }]);
     else if (lane === "music") openContextMenu(e, [{ label: t`Add music`, icon: Music, onSelect: addMusic }, timeline.music && { label: t`Remove music`, icon: Trash2, danger: true, onSelect: () => commit({ ...timeline, music: null }) }]);
     else
       openContextMenu(e, [
@@ -316,6 +347,10 @@ export function EditorView() {
         <button type="button" aria-label={t`Add music`} onClick={addMusic} className={toolButton}>
           <Music className="w-4 h-4" />
           <Tip label={t`Add music`} />
+        </button>
+        <button type="button" aria-label={t`Add title`} onClick={() => addTextAt(player.time)} disabled={empty} className={toolButton}>
+          <Type className="w-4 h-4" />
+          <Tip label={t`Add title`} />
         </button>
         <button type="button" aria-label={t`Subtitles`} onClick={subtitleMenu} disabled={empty} className={toolButton}>
           <Subtitles className="w-4 h-4" />
@@ -366,7 +401,7 @@ export function EditorView() {
         </aside>
       </div>
 
-      <div className="h-[228px] shrink-0 flex flex-col border-t border-zinc-200 dark:border-white/5">
+      <div className="shrink-0 flex flex-col border-t border-zinc-200 dark:border-white/5" style={{ height: TIMELINE_HEIGHT }}>
         <TimelinePane
           timeline={view}
           projectDir={dir}
@@ -378,7 +413,9 @@ export function EditorView() {
           commit={commit}
           onSegmentMenu={segmentMenu}
           onCueMenu={cueMenu}
+          onTextMenu={textMenu}
           onLaneMenu={laneMenu}
+          onAddText={addTextAt}
         />
       </div>
 

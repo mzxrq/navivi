@@ -141,7 +141,7 @@ def test_position_sets_alignment_and_band():
 class TestCaptionAss:
     def _write(self, tmp_path, cues, shared=None, size=(1920, 1080)):
         text = write_caption_ass(cues, shared, size, tmp_path / "c.ass", check_font=False).read_text(encoding="utf-8")
-        styles = [l for l in text.splitlines() if l.startswith("Style:")]
+        styles = [l for l in text.splitlines() if l.startswith("Style: S")]  # captions, not the text-track base
         events = [l for l in text.splitlines() if l.startswith("Dialogue:")]
         return text, styles, events
 

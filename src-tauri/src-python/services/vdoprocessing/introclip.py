@@ -15,12 +15,13 @@ dependency to load just for three lines of crop math.
 
 from __future__ import annotations
 
+import math
 import random
 import shutil
 import subprocess
 import uuid
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import cv2
 import numpy as np
@@ -190,6 +191,125 @@ def _format_ass_timestamp(seconds: float) -> str:
     return f"{hours}:{minutes:02d}:{secs:02d}.{cs:02d}"
 
 
+TEXT_POSITIONS = ("top", "middle", "bottom")
+TEXT_DEFAULT_MARGIN_PX = 100
+
+
+def text_block_center_y(
+    position: str, margin_px: float, title_size: int, subtitle_size: int,
+    has_title: bool, has_subtitle: bool, frame_h: int = 1080,
+) -> int:
+    """Vertical centre of a title + subtitle block placed at the top, middle or
+    bottom of the frame, `margin_px` from that edge. The block's height follows
+    title_events' stacking. Mirrors textBlockCenterY in src/utils/textStyle.ts."""
+    if position not in ("top", "bottom"):
+        return frame_h // 2
+    if has_title and has_subtitle:
+        half = 0.55 * (title_size + subtitle_size)
+    else:
+        half = (title_size if has_title else subtitle_size) / 2
+    margin = max(0.0, float(margin_px))
+    # Halves round up, like Math.round in the preview.
+    return int(math.floor((margin + half if position == "top" else frame_h - margin - half) + 0.5))
+
+
+TEXT_ANIMATIONS = ("pop", "rise", "fade", "none")
+TEXT_FADE_SECONDS = 0.5
+# \an numbers for a left / centre / right edge, vertically centred.
+_ALIGN_AN = {"left": 4, "center": 5, "right": 6}
+
+
+def line_motion(
+    which: str, animation: Optional[str], delay: Optional[float], group_animation: Optional[str], duration_sec: float,
+    paired: bool = True,
+) -> Tuple[str, float]:
+    """(animation, delay) for the title or subtitle line. A line's own setting
+    wins; else the item-wide "fade"/"none"; else the intro's: the title pops in
+    at once, the subtitle rises in INTRO_SUBTITLE_DELAY_SECONDS later (at once
+    when it's shown alone).
+    Mirrors lineMotion in src/utils/textStyle.ts."""
+    if animation not in TEXT_ANIMATIONS:
+        animation = group_animation if group_animation in ("fade", "none") else ("pop" if which == "title" else "rise")
+    if isinstance(delay, (int, float)) and not isinstance(delay, bool):
+        delay = max(0.0, float(delay))
+    elif group_animation in ("fade", "none") or which == "title" or not paired:
+        delay = 0.0
+    else:
+        delay = min(tuning.INTRO_SUBTITLE_DELAY_SECONDS, duration_sec / 4)
+    # A line keeps at least a tenth of the item on screen.
+    return animation, min(delay, max(0.0, duration_sec * 0.45))
+
+
+def _line_tags(animation: str, an: int, x: int, y: int, line_ms: int, line_sec: float) -> str:
+    if animation == "pop":
+        # \fad is the opacity half; \t animates \fscx/\fscy for the scale half.
+        fade_ms = int(round(min(tuning.INTRO_LABEL_FADE_SECONDS, line_sec / 2) * 1000))
+        s = tuning.INTRO_LABEL_SCALE_START_PCT
+        return (
+            rf"\an{an}\pos({x},{y})\fad({fade_ms},{fade_ms})\fscx{s}\fscy{s}"
+            rf"\t(0,{fade_ms},\fscx100\fscy100)\t({max(0, line_ms - fade_ms)},{line_ms},\fscx{s}\fscy{s})"
+        )
+    if animation == "rise":
+        fade_ms = int(round(min(tuning.INTRO_SUBTITLE_FADE_SECONDS, line_sec / 3) * 1000))
+        rise = tuning.INTRO_SUBTITLE_RISE_PX
+        return rf"\an{an}\move({x},{y + rise},{x},{y},0,{fade_ms})\fad({fade_ms},{fade_ms})"
+    if animation == "fade":
+        fade_ms = int(round(min(TEXT_FADE_SECONDS, line_sec / 2) * 1000))
+        return rf"\an{an}\pos({x},{y})\fad({fade_ms},{fade_ms})"
+    return rf"\an{an}\pos({x},{y})"
+
+
+def title_events(
+    title: str,
+    subtitle: str,
+    start_sec: float,
+    end_sec: float,
+    title_style: TextStyle,
+    subtitle_style: TextStyle,
+    cx: int,
+    cy: int,
+    align: str = "center",
+    animation: Optional[str] = None,
+    title_motion: Optional[dict] = None,
+    subtitle_motion: Optional[dict] = None,
+) -> List[Tuple[float, float, str]]:
+    """(start, end, text with override tags) for a title + subtitle block whose
+    `align` edge (left/center/right) sits at cx, centred vertically on cy.
+    Each line has its own animation ("pop", "rise", "fade", "none") and enters
+    `delay` seconds after the item starts, leaving as long before it ends
+    (title_motion / subtitle_motion: {"animation", "delay"}; see line_motion).
+    Used by the intro and by text items on the editor's text track."""
+    duration_sec = max(0.0, end_sec - start_sec)
+    an = _ALIGN_AN.get(align, 5)
+    # Braces open override tags and backslashes start escapes — strip them
+    # from arbitrary project-name text rather than escaping.
+    clean = lambda t: (t or "").replace("{", "").replace("}", "").replace("\\", "")  # noqa: E731
+    safe_title, safe_subtitle = clean(title), clean(subtitle)
+
+    # Stacked where the old single "title\Nsubtitle" line sat.
+    if safe_title and safe_subtitle:
+        title_y = cy - int(subtitle_style.font_size * 0.6)
+        sub_y = cy + int(title_style.font_size * 0.6)
+    else:
+        title_y = sub_y = cy
+
+    events: List[Tuple[float, float, str]] = []
+    for which, text, y, style, motion in (
+        ("title", safe_title, title_y, title_style, title_motion or {}),
+        ("subtitle", safe_subtitle, sub_y, subtitle_style, subtitle_motion or {}),
+    ):
+        if not text:
+            continue
+        anim, delay = line_motion(
+            which, motion.get("animation"), motion.get("delay"), animation, duration_sec,
+            paired=bool(safe_title and safe_subtitle),
+        )
+        line_sec = max(0.0, duration_sec - 2 * delay)
+        tags = _line_tags(anim, an, cx, y, int(round(line_sec * 1000)), line_sec)
+        events.append((start_sec + delay, end_sec - delay, f"{{{tags}{style.to_ass_tags()}}}{text}"))
+    return events
+
+
 def _write_title_ass(
     title: str,
     subtitle: str,
@@ -198,62 +318,15 @@ def _write_title_ass(
     title_style: TextStyle = DEFAULT_TITLE_STYLE,
     subtitle_style: TextStyle = DEFAULT_SUBTITLE_STYLE,
 ) -> Path:
-    """Writes a throwaway .ass (not .srt) spanning the whole intro. The title
-    gets a scale-up + fade "pop" in and the reverse out; the subtitle is a
-    separate event that enters later and leaves earlier with a fade + rise.
-    Both are independent of the whole-frame fade applied later in the same
-    ffmpeg pass. Each event carries its own TextStyle as inline tags."""
-    fade_ms = int(round(tuning.INTRO_LABEL_FADE_SECONDS * 1000))
-    duration_ms = int(round(duration_sec * 1000))
-    fade_out_start_ms = max(0, duration_ms - fade_ms)
-    scale_start = tuning.INTRO_LABEL_SCALE_START_PCT
-    # \fad handles the opacity half of the transition; \t animates \fscx/
-    # \fscy (ASS's font-scale override) across the same windows for the
-    # scale half — \fscx60\fscy60 sets the STARTING scale (t=0), then each
-    # \t(start,end,...) animates toward the scale given inside it over that
-    # window, in timeline order: pop up to 100% during the fade-in window,
-    # hold, then shrink back down during the fade-out window.
-    # Braces would be parsed as an ASS override-tag delimiter if left in —
-    # strip them from arbitrary project-name text rather than escaping.
-    safe_title = (title or "").replace("{", "").replace("}", "")
-    safe_subtitle = (subtitle or "").replace("{", "").replace("}", "")
-
-    # Separate events so the subtitle animates on its own schedule; \an5\pos
-    # stacks them where the old single "title\Nsubtitle" line sat.
-    cx = tuning.INTRO_WIDTH // 2
-    cy = tuning.INTRO_HEIGHT // 2
-    if safe_subtitle:
-        title_y = cy - int(subtitle_style.font_size * 0.6)
-        sub_y = cy + int(title_style.font_size * 0.6)
-    else:
-        title_y = cy
-
-    title_override = (
-        f"{{\\an5\\pos({cx},{title_y}){title_style.to_ass_tags()}"
-        f"\\fad({fade_ms},{fade_ms})"
-        f"\\fscx{scale_start}\\fscy{scale_start}"
-        f"\\t(0,{fade_ms},\\fscx100\\fscy100)"
-        f"\\t({fade_out_start_ms},{duration_ms},\\fscx{scale_start}\\fscy{scale_start})}}"
-    )
-    end_ts = _format_ass_timestamp(duration_sec)
+    """Writes a throwaway .ass (not .srt) spanning the whole intro, with the
+    animated title + subtitle from title_events."""
     events = [
-        f"Dialogue: Marked=0,0:00:00.00,{end_ts},Default,,0000,0000,0000,,"
-        f"{title_override}{safe_title}\n"
+        f"Dialogue: Marked=0,{_format_ass_timestamp(a)},{_format_ass_timestamp(b)},Default,,0000,0000,0000,,{text}\n"
+        for a, b, text in title_events(
+            title, subtitle, 0.0, duration_sec, title_style, subtitle_style,
+            tuning.INTRO_WIDTH // 2, tuning.INTRO_HEIGHT // 2,
+        )
     ]
-
-    if safe_subtitle:
-        delay = min(tuning.INTRO_SUBTITLE_DELAY_SECONDS, duration_sec / 4)
-        sub_fade_ms = int(round(tuning.INTRO_SUBTITLE_FADE_SECONDS * 1000))
-        rise = tuning.INTRO_SUBTITLE_RISE_PX
-        sub_override = (
-            f"{{\\an5\\move({cx},{sub_y + rise},{cx},{sub_y},0,{sub_fade_ms})"
-            f"\\fad({sub_fade_ms},{sub_fade_ms}){subtitle_style.to_ass_tags()}}}"
-        )
-        events.append(
-            f"Dialogue: Marked=0,{_format_ass_timestamp(delay)},"
-            f"{_format_ass_timestamp(duration_sec - delay)},Default,,0000,0000,0000,,"
-            f"{sub_override}{safe_subtitle}\n"
-        )
 
     ass_path = tmp_dir / f"intro_title_{uuid.uuid4().hex[:8]}.ass"
     ass_path.write_text(
@@ -301,6 +374,7 @@ def generate_intro_clip(
     output_filename: str = tuning.INTRO_OUTPUT_FILENAME,
     title_style: Optional[Dict[str, Any]] = None,
     subtitle_style: Optional[Dict[str, Any]] = None,
+    burn_text: bool = True,
 ) -> Optional[str]:
     """Picks up to INTRO_IMAGE_COUNT random, distinct waypoint popup images
     (a fresh pick every call), renders a slow zoom-in over each, crossfades
@@ -351,23 +425,26 @@ def generate_intro_clip(
         )
         _crossfade_chain(per_clip_raw_paths, per_clip_sec, crossfade_sec, str(combined_path))
 
-        title_path = _write_title_ass(
-            title or "", subtitle or "", total_sec, video_dir_path,
-            title_style=DEFAULT_TITLE_STYLE.merged(title_style)
-            .with_installed_font(DEFAULT_TITLE_STYLE.font_family),
-            subtitle_style=DEFAULT_SUBTITLE_STYLE.merged(subtitle_style)
-            .with_installed_font(DEFAULT_SUBTITLE_STYLE.font_family),
-        )
-
-        # [HACK] [Subtitle] Absolute, forward-slashed, colon-escaped path — libass's
-        # subtitles filter needs this exact escaping, same as combine_video_and_audio.
-        escaped_title_path = str(title_path.resolve()).replace("\\", "/").replace(":", r"\:")
         fade_sec = tuning.INTRO_FADE_SECONDS
         vf_filter = (
-            f"subtitles=filename='{escaped_title_path}':force_style='{_TITLE_STYLE.to_force_style()}',"
             f"fade=t=in:st=0:d={fade_sec:.2f},"
             f"fade=t=out:st={max(0.0, total_sec - fade_sec):.2f}:d={fade_sec:.2f}"
         )
+        if burn_text:
+            title_path = _write_title_ass(
+                title or "", subtitle or "", total_sec, video_dir_path,
+                title_style=DEFAULT_TITLE_STYLE.merged(title_style)
+                .with_installed_font(DEFAULT_TITLE_STYLE.font_family),
+                subtitle_style=DEFAULT_SUBTITLE_STYLE.merged(subtitle_style)
+                .with_installed_font(DEFAULT_SUBTITLE_STYLE.font_family),
+            )
+            # [HACK] [Subtitle] Absolute, forward-slashed, colon-escaped path — libass's
+            # subtitles filter needs this exact escaping, same as combine_video_and_audio.
+            escaped_title_path = str(title_path.resolve()).replace("\\", "/").replace(":", r"\:")
+            vf_filter = (
+                f"subtitles=filename='{escaped_title_path}':force_style='{_TITLE_STYLE.to_force_style()}',"
+                + vf_filter
+            )
 
         ffmpeg_cmd = FFmpegManager.resolve_ffmpeg_bin()
         cmd = [
