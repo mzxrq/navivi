@@ -30,7 +30,7 @@ npm install
 ```
 
 **3. Configure Environment Variables**
-Copy the example environment file and add your API keys (`VITE_MAPBOX_KEY` and `VITE_ORS_API_KEY`):
+Copy the example environment file and add your API keys (`VITE_MAPBOX_TOKEN` and `VITE_ORS_API_KEY`):
 
 ```bash
 cp .env.example .env
