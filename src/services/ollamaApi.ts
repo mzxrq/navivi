@@ -9,6 +9,12 @@ const OLLAMA_URL = "http://127.0.0.1:11434";
 // Models that answered 400 to a request with photos; they are not sent any again this session.
 const textOnlyModels = new Set<string>();
 
+// Keeps the model in memory between requests (Ollama's default unloads it after 5 minutes, and a big model takes a minute to load back).
+const KEEP_ALIVE = "30m";
+
+// A narration is 3-4 sentences; the cap stops a model that rambles from running for minutes on a CPU.
+const SCRIPT_OPTIONS = { num_predict: 400, num_ctx: 4096 };
+
 function uint8ArrayToBase64(bytes: Uint8Array): string {
     const chunk = 0x8000;
     const c = [];
@@ -54,6 +60,32 @@ export async function getLocalModels(): Promise<string[]> {
     } catch (error) {
         return [];
     }
+}
+
+// Disk size of each installed model in bytes; its weights take about as much memory when it runs.
+export async function getModelSizes(): Promise<Record<string, number>> {
+    try {
+        const res = await fetch(`${OLLAMA_URL}/api/tags`);
+        if (!res.ok) return {};
+        const data = await res.json();
+        return Object.fromEntries((data.models ?? []).map((m: any) => [m.name, Number(m.size) || 0]));
+    } catch {
+        return {};
+    }
+}
+
+const warmed = new Set<string>();
+
+// Loads the model into memory while the user is still typing, so the first script does not also pay the load (a minute for a big one).
+// Quiet if Ollama is not running; once per model per session.
+export function warmUpModel(model: string): void {
+    if (!model || warmed.has(model)) return;
+    warmed.add(model);
+    fetch(`${OLLAMA_URL}/api/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model, keep_alive: KEEP_ALIVE }),
+    }).catch(() => warmed.delete(model));
 }
 
 // Whether the model can read photos, from the capabilities Ollama reports; null when it can't tell (older Ollama, not running).
@@ -197,7 +229,7 @@ async function errorText(res: Response): Promise<string> {
 // ✨ NEW: Unified Streaming Engine
 async function streamLLM(prompt: string, engine: string, onChunk: (text: string) => void, signal?: AbortSignal, images?: string[], onThought?: (text: string) => void, options?: Record<string, number>) {
     // Narration is short and fact-bound; a thinking model otherwise spends minutes on a CPU recounting characters before the first word.
-    const payload: any = { model: engine, prompt, stream: true, think: false };
+    const payload: any = { model: engine, prompt, stream: true, think: false, keep_alive: KEEP_ALIVE };
     if (options) payload.options = options;
     if (images && images.length > 0 && !textOnlyModels.has(engine)) {
         payload.images = images;
@@ -304,7 +336,7 @@ ${themeContext}
 2. 音声合成で読み上げるため、効果音や映像の指示（例：[波の音]、[カメラがズーム]など）は絶対に書かないこと。
 3. 歓迎の挨拶から始めること。`;
 
-    await streamLLM(prompt, engine, onChunk, signal);
+    await streamLLM(prompt, engine, onChunk, signal, undefined, undefined, SCRIPT_OPTIONS);
 }
 
 // ✨ Stream Waypoint Script
@@ -352,7 +384,7 @@ export async function generateWaypointScriptStream(
         signal,
         base64Images,
         onThought,
-        { temperature: 0.4, top_p: 0.9, repeat_penalty: 1.1 },
+        { ...SCRIPT_OPTIONS, temperature: 0.4, top_p: 0.9, repeat_penalty: 1.1 },
     );
 }
 

@@ -12,9 +12,11 @@ import { useWorkspace } from "../../hooks/useWorkspace";
 import {
   getLocalModels,
   modelSeesPhotos,
+  getModelSizes,
   pullModelStream,
 } from "../../services/ollamaApi";
 import { callSidecar } from "../../services/sidecar";
+import { modelFit } from "../../utils/modelFit";
 import { dynamicActivate } from "../../i18n";
 import { db } from "../../services/db";
 import { GLOBAL_DICTIONARY_KEY } from "../../config/constants";
@@ -1066,6 +1068,16 @@ function AiModelsTab() {
     };
   }, [activeModel, localModels]);
 
+  const [modelSizes, setModelSizes] = useState<Record<string, number>>({});
+  const [ramGb, setRamGb] = useState<number | undefined>();
+  useEffect(() => {
+    getModelSizes().then(setModelSizes);
+    callSidecar<{ ram_total_gb: number }>("system_info", "").then(
+      (reply) => reply.success && setRamGb(reply.ram_total_gb),
+    );
+  }, [localModels]);
+  const fit = modelFit(modelSizes[activeModel], ramGb);
+
   const recommendedModels = [
     {
       id: "schroneko/gemma-2-2b-jpn-it",
@@ -1184,6 +1196,21 @@ function AiModelsTab() {
             )}
           </select>
         </Row>
+        {fit?.tooBig && (
+          <div className="px-4 py-3">
+            <div className="flex items-start gap-2 rounded-lg bg-amber-500/10 px-3 py-2 text-[12px] leading-snug text-amber-700 dark:text-amber-400">
+              <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+              <span>
+                <Trans>
+                  This model is about {fit.sizeGb.toFixed(0)} GB and this PC has{" "}
+                  {fit.ramGb.toFixed(0)} GB of memory, so it loads slowly and
+                  writes only a word or two a second. A 3-4B model is much
+                  faster here.
+                </Trans>
+              </span>
+            </div>
+          </div>
+        )}
         {seesPhotos === false && (
           <div className="px-4 py-3">
             <div className="flex items-start gap-2 rounded-lg bg-amber-500/10 px-3 py-2 text-[12px] leading-snug text-amber-700 dark:text-amber-400">

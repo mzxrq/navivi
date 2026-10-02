@@ -110,6 +110,12 @@ if __name__ == "__main__":
             print(json.dumps(run_voice_action(command_arg, payload), ensure_ascii=False))
             sys.exit(0)
 
+        # Total/free memory and core count, for the "this model is too big for this PC" hint in Settings.
+        if command_arg == "system_info":
+            from services.cli.system_commands import system_info
+            print(json.dumps(system_info()))
+            sys.exit(0)
+
         # Photo import (HEIC to JPEG): argv[2] is a JSON payload, stdout one JSON object.
         # See services/cli/image_commands.py.
         from services.cli.image_commands import IMAGE_ACTIONS, run_image_action
