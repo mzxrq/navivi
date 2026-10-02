@@ -46,6 +46,16 @@ npm run tauri dev
 
 More detail: [Getting started](./docs/GETTING_STARTED.md) and [Features](./docs/FEATURES.md).
 
+## Checks
+
+The same three checks run on every pull request (`.github/workflows/ci.yml`):
+
+```bash
+npm run typecheck && npm test                              # TypeScript, and the frontend unit tests (Vitest)
+cd src-tauri/src-python && pip install -r requirements-test.txt && python -m pytest -q   # media pipeline
+cargo test --manifest-path src-tauri/Cargo.toml            # Rust shell
+```
+
 ## Where your projects live
 
 Projects are folders under `Documents/Navivi/Workspaces/<project>/`:

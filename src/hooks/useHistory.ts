@@ -1,64 +1,52 @@
 import { useState, useCallback, SetStateAction } from "react";
 
+interface History<T> {
+  past: T[];
+  present: T;
+  future: T[];
+}
+
+// One state object, updated only through pure updaters: React may run an updater twice (StrictMode), and a
+// setState call inside another updater would then record every edit twice.
 export function useHistory<T>(initialState: T, maxHistory: number = 50) {
-  const [past, setPast] = useState<T[]>([]);
-  const [present, setPresent] = useState<T>(initialState);
-  const [future, setFuture] = useState<T[]>([]);
+  const [history, setHistory] = useState<History<T>>({ past: [], present: initialState, future: [] });
 
   const set = useCallback((action: SetStateAction<T>) => {
-    setPresent((prevPresent) => {
+    setHistory((prev) => {
       // Resolve the functional update if the user passed a function
-      const newState = typeof action === 'function' 
-        ? (action as (prevState: T) => T)(prevPresent) 
-        : action;
-      
-      setPast((prevPast) => {
-        const newPast = [...prevPast, prevPresent];
-        // Cap the history array to prevent memory leaks!
-        if (newPast.length > maxHistory) {
-          return newPast.slice(newPast.length - maxHistory);
-        }
-        return newPast;
-      });
-      setFuture([]); // Editing clears the redo future
-      
-      return newState;
+      const next = typeof action === "function" ? (action as (prevState: T) => T)(prev.present) : action;
+      if (Object.is(next, prev.present)) return prev;
+      const past = [...prev.past, prev.present];
+      // Cap the history array to prevent memory leaks!
+      return { past: past.length > maxHistory ? past.slice(past.length - maxHistory) : past, present: next, future: [] };
     });
   }, [maxHistory]);
 
   const undo = useCallback(() => {
-    if (past.length === 0) return;
-    const previous = past[past.length - 1];
-    const newPast = past.slice(0, past.length - 1);
-    
-    setPast(newPast);
-    setFuture([present, ...future]);
-    setPresent(previous);
-  }, [past, present, future]);
+    setHistory((prev) => {
+      if (prev.past.length === 0) return prev;
+      return { past: prev.past.slice(0, -1), present: prev.past[prev.past.length - 1], future: [prev.present, ...prev.future] };
+    });
+  }, []);
 
   const redo = useCallback(() => {
-    if (future.length === 0) return;
-    const next = future[0];
-    const newFuture = future.slice(1);
-    
-    setPast((prev) => [...prev, present]);
-    setPresent(next);
-    setFuture(newFuture);
-  }, [future, present]);
+    setHistory((prev) => {
+      if (prev.future.length === 0) return prev;
+      return { past: [...prev.past, prev.present], present: prev.future[0], future: prev.future.slice(1) };
+    });
+  }, []);
 
   const reset = useCallback((newState: T) => {
-    setPast([]);
-    setPresent(newState);
-    setFuture([]);
+    setHistory({ past: [], present: newState, future: [] });
   }, []);
 
   return {
-    state: present,
+    state: history.present,
     set,
     undo,
     redo,
     reset,
-    canUndo: past.length > 0,
-    canRedo: future.length > 0,
+    canUndo: history.past.length > 0,
+    canRedo: history.future.length > 0,
   };
 }

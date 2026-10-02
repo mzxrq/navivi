@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { callSidecar } from "./sidecar";
 import { t } from "@lingui/core/macro";
 
 export interface RenderEstimate {
@@ -10,16 +10,8 @@ export interface RenderEstimate {
 }
 
 export async function fetchRenderEstimate(projectDir: string): Promise<RenderEstimate | null> {
-  try {
-    const raw = await invoke<string>("run_python_blueprint", {
-      action: "estimate",
-      payload: `${projectDir}/job_config.json`,
-    });
-    const data = JSON.parse(raw.trim().split(String.fromCharCode(10)).pop() ?? "");
-    return data.success ? data : null;
-  } catch {
-    return null;
-  }
+  const reply = await callSidecar<RenderEstimate>("estimate", `${projectDir}/job_config.json`);
+  return reply.success ? reply : null;
 }
 
 export function formatDuration(seconds: number): string {

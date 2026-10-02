@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 import { useWorkspace } from "../../hooks/useWorkspace";
+import { callSidecar, callSidecarShared } from "../../services/sidecar";
 import { Loader2, Play, Plus, Trash2, Volume2 } from "./icons";
 
 interface Voice {
@@ -14,21 +15,10 @@ interface Voice {
   builtin: boolean;
 }
 
-type Reply<T> = ({ success: true } & T) | { success: false; error: string };
-
 const DEFAULT_VOICE = "test1";
 const fallback = DEFAULT_VOICE;
 const DEFAULT_SPEED = 1.25;
 const AUDIO_EXT = ["wav", "flac", "mp3", "m4a", "ogg", "opus", "aac", "webm"];
-
-async function voiceAction<T>(action: string, payload: object = {}): Promise<Reply<T>> {
-  try {
-    const raw = await invoke<string>("run_python_blueprint", { action, payload: JSON.stringify(payload) });
-    return JSON.parse(raw.trim().split(String.fromCharCode(10)).pop() ?? "");
-  } catch (e) {
-    return { success: false, error: String(e) };
-  }
-}
 
 function slugFromPath(path: string): string {
   const stem = (path.split(/[\\/]/).pop() ?? "").replace(/\.[^.]+$/, "");
@@ -62,10 +52,14 @@ export function VoiceTab() {
 
   const refresh = useCallback(async () => {
     setBusy("list");
-    const res = await voiceAction<{ voices: Voice[] }>("tts_voices_list");
+    const res = await callSidecarShared<{ voices: Voice[] }>("tts_voices_list");
     setBusy(null);
-    if (res.success) setVoices(res.voices);
-    else setMessage({ tone: "error", text: res.error });
+    if (res.success) {
+      setVoices(res.voices);
+      setMessage((m) => (m?.tone === "error" ? null : m));
+    } else if (!res.cancelled) {
+      setMessage({ tone: "error", text: res.error });
+    }
   }, []);
 
   useEffect(() => {
@@ -83,14 +77,14 @@ export function VoiceTab() {
     setBusy("preview");
     setPreviewId(id);
     setMessage(null);
-    const res = await voiceAction<{ path: string }>("tts_voice_preview", {
+    const res = await callSidecar<{ path: string }>("tts_voice_preview", {
       voice: id,
       speed,
       hardware: settings.hardware_spec_override,
     });
     setBusy(null);
     setPreviewId(null);
-    if (!res.success) return setMessage({ tone: "error", text: res.error });
+    if (!res.success) return res.cancelled ? undefined : setMessage({ tone: "error", text: res.error });
     const audio = new Audio(`${convertFileSrc(res.path)}?t=${Date.now()}`);
     audioRef.current = audio;
     audio.play().catch((e) => setMessage({ tone: "error", text: String(e) }));
@@ -107,7 +101,7 @@ export function VoiceTab() {
   const add = async (replace = false) => {
     if (!adding) return;
     setBusy("add");
-    const res = await voiceAction<{ voice: { id: string; warning: string | null } }>("tts_voice_add", {
+    const res = await callSidecar<{ voice: { id: string; warning: string | null } }>("tts_voice_add", {
       path: adding.path,
       id: adding.id,
       replace,
@@ -124,7 +118,7 @@ export function VoiceTab() {
 
   const remove = async (id: string) => {
     setBusy("delete");
-    const res = await voiceAction<{ id: string }>("tts_voice_delete", { id });
+    const res = await callSidecar<{ id: string }>("tts_voice_delete", { id });
     setBusy(null);
     setConfirmDelete(null);
     if (!res.success) return setMessage({ tone: "error", text: res.error });

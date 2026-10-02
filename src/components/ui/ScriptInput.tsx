@@ -9,7 +9,7 @@ import {
 } from "../ui/icons";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
-import { invoke } from "@tauri-apps/api/core";
+import { callSidecar } from "../../services/sidecar";
 import { useWorkspace } from "../../hooks/useWorkspace";
 
 const getThinkingSteps = () => [
@@ -116,13 +116,9 @@ export function ScriptInput({
 
   // Whole words with their readings from the Python analyser; plain kanji runs if it can't be reached.
   const findWords = async (text: string): Promise<{ word: string; reading: string }[]> => {
-    try {
-      const res = await invoke<string>("run_python_blueprint", { action: "extract_words", payload: text });
-      const parsed = JSON.parse(res.trim().split(String.fromCharCode(10)).pop() ?? "");
-      if (parsed.success && Array.isArray(parsed.words)) return parsed.words;
-    } catch (err) {
-      console.warn("extract_words failed, scanning kanji runs instead:", err);
-    }
+    const reply = await callSidecar<{ words: { word: string; reading: string }[] }>("extract_words", text);
+    if (reply.success && Array.isArray(reply.words)) return reply.words;
+    if (!reply.success) console.warn("extract_words failed, scanning kanji runs instead:", reply.error);
     const runs = text.match(/[一-龯㐀-䶿]+/g) ?? [];
     return [...new Set(runs)].map((word) => ({ word, reading: "" }));
   };

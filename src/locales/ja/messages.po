@@ -8,47 +8,47 @@ msgstr ""
 "Language: ja\n"
 
 #. js-lingui-explicit-id
-#: src/components/ui/AppSettings.tsx:293
+#: src/components/ui/AppSettings.tsx:303
 msgid "Light"
 msgstr "ライト"
 
 #. js-lingui-explicit-id
-#: src/components/ui/AppSettings.tsx:294
+#: src/components/ui/AppSettings.tsx:304
 msgid "Dark"
 msgstr "ダーク"
 
 #. js-lingui-explicit-id
-#: src/components/ui/AppSettings.tsx:295
+#: src/components/ui/AppSettings.tsx:305
 msgid "System"
 msgstr "コンピュータと同期"
 
 #. js-lingui-explicit-id
-#: src/components/ui/AppSettings.tsx:316
+#: src/components/ui/AppSettings.tsx:326
 msgid "Navi Blue"
 msgstr "Navi青色"
 
 #. js-lingui-explicit-id
-#: src/components/ui/AppSettings.tsx:317
+#: src/components/ui/AppSettings.tsx:327
 msgid "Emerald"
 msgstr "エメラルド色"
 
 #. js-lingui-explicit-id
-#: src/components/ui/AppSettings.tsx:318
+#: src/components/ui/AppSettings.tsx:328
 msgid "Violet"
 msgstr "紫色"
 
 #. js-lingui-explicit-id
-#: src/components/ui/AppSettings.tsx:319
+#: src/components/ui/AppSettings.tsx:329
 msgid "Amber"
 msgstr "アンバー色"
 
 #. js-lingui-explicit-id
-#: src/components/ui/AppSettings.tsx:320
+#: src/components/ui/AppSettings.tsx:330
 msgid "Rose"
 msgstr "ローズ色"
 
 #. js-lingui-explicit-id
-#: src/components/ui/AppSettings.tsx:883
+#: src/components/ui/AppSettings.tsx:900
 msgid "Starting..."
 msgstr "ダウンロード開始中..."
 
@@ -233,7 +233,11 @@ msgstr "{narrated}クリップ"
 msgid "{populatedStops} with media"
 msgstr "メディアあり {populatedStops}"
 
-#: src/hooks/useFileActions.ts:101
+#: src/hooks/useFileActions.ts:118
+msgid "{skipped} files were skipped: only photos, GPX files and text files can be dropped here."
+msgstr "{skipped}個のファイルをスキップしました。ここにドロップできるのは写真、GPXファイル、テキストファイルだけです。"
+
+#: src/hooks/useFileActions.ts:103
 msgid "{skipped} photos without a location were skipped."
 msgstr "位置情報のない写真{skipped}枚をスキップしました。"
 
@@ -290,11 +294,15 @@ msgstr "1クリップ"
 msgid "1 file"
 msgstr "1ファイル"
 
+#: src/hooks/useFileActions.ts:118
+msgid "1 file was skipped: only photos, GPX files and text files can be dropped here."
+msgstr "1個のファイルをスキップしました。ここにドロップできるのは写真、GPXファイル、テキストファイルだけです。"
+
 #: src/features/map/components/GenerateDialog.tsx:73
 msgid "1 leg"
 msgstr "1区間"
 
-#: src/components/ui/AppSettings.tsx:250
+#: src/components/ui/AppSettings.tsx:260
 msgid "1 minute"
 msgstr "1分"
 
@@ -310,7 +318,7 @@ msgstr "1か所にナレーションがなく、無音になります"
 msgid "1 voice"
 msgstr "1件の音声"
 
-#: src/components/ui/AppSettings.tsx:251
+#: src/components/ui/AppSettings.tsx:261
 msgid "10 minutes"
 msgstr "10分"
 
@@ -318,11 +326,11 @@ msgstr "10分"
 #~ msgid "16:9 Landscape"
 #~ msgstr "16:9 水平"
 
-#: src/components/ui/AppSettings.tsx:248
+#: src/components/ui/AppSettings.tsx:258
 msgid "3 seconds"
 msgstr "3秒"
 
-#: src/components/ui/AppSettings.tsx:249
+#: src/components/ui/AppSettings.tsx:259
 msgid "30 seconds"
 msgstr "30秒"
 
@@ -343,7 +351,7 @@ msgstr "約{0}"
 #~ msgid "About {minutes} min"
 #~ msgstr "約{minutes}分"
 
-#: src/components/ui/AppSettings.tsx:313
+#: src/components/ui/AppSettings.tsx:323
 msgid "Accent colour"
 msgstr "アクセントカラー"
 
@@ -370,7 +378,7 @@ msgstr "承認して書き出す"
 #~ msgid "Active"
 #~ msgstr "有効"
 
-#: src/components/ui/AppSettings.tsx:963
+#: src/components/ui/AppSettings.tsx:980
 msgid "Active model"
 msgstr "使用するモデル"
 
@@ -426,7 +434,7 @@ msgstr "経路を描くには地点を2つ以上追加してください。"
 msgid "Add music"
 msgstr "音楽を追加"
 
-#: src/features/map/components/MapArea.tsx:1144
+#: src/features/map/components/MapArea.tsx:1131
 msgid "Add new points after this one"
 msgstr "この点の後に点を追加"
 
@@ -442,7 +450,7 @@ msgstr "この点の後に点を追加"
 msgid "Add photo"
 msgstr "写真を追加"
 
-#: src/features/map/components/MapArea.tsx:349
+#: src/features/map/components/MapArea.tsx:347
 msgid "Add point here"
 msgstr "ここに点を追加"
 
@@ -482,7 +490,7 @@ msgstr "ここに字幕を追加"
 msgid "Add up to 3 images that will pop up during the narration at this stop"
 msgstr "この地点のナレーション中にポップアップ表示させる画像を最大3枚まで追加できます"
 
-#: src/features/map/components/MapArea.tsx:364
+#: src/features/map/components/MapArea.tsx:362
 msgid "Add via point here"
 msgstr "ここに中継点を追加"
 
@@ -497,11 +505,11 @@ msgstr "動画を追加"
 msgid "Add voice"
 msgstr "ボイスを追加"
 
-#: src/components/ui/AppSettings.tsx:692
+#: src/components/ui/AppSettings.tsx:698
 msgid "Add word"
 msgstr "単語を追加"
 
-#: src/components/ui/AppSettings.tsx:677
+#: src/components/ui/AppSettings.tsx:683
 msgid "Add words below or extract them from narration scripts."
 msgstr "以下に単語を追加するか、スクリプトから抽出する"
 
@@ -538,12 +546,12 @@ msgstr "ルートを調整 (経由地を追加して微調整)"
 #~ msgid "Advanced Settings"
 #~ msgstr "詳細設定"
 
-#: src/components/ui/AppSettings.tsx:262
-#: src/components/ui/AppSettings.tsx:269
+#: src/components/ui/AppSettings.tsx:272
+#: src/components/ui/AppSettings.tsx:279
 msgid "AI features"
 msgstr "AI 機能"
 
-#: src/components/ui/AppSettings.tsx:136
+#: src/components/ui/AppSettings.tsx:146
 msgid "AI models"
 msgstr "AI モデル"
 
@@ -571,7 +579,7 @@ msgstr "手動での確認を挟むことなく、すべてのメディアが自
 msgid "all projects"
 msgstr "すべてのプロジェクト"
 
-#: src/components/ui/AppSettings.tsx:562
+#: src/components/ui/AppSettings.tsx:568
 #: src/components/ui/ReviewStep.tsx:91
 msgid "All projects"
 msgstr "すべてのプロジェクト"
@@ -594,7 +602,7 @@ msgid "An unknown error occurred during rendering."
 msgstr "レンダリング中に予期せぬエラーが発生しました"
 
 #. placeholder {0}: idx + 1
-#: src/features/map/components/MapArea.tsx:1180
+#: src/features/map/components/MapArea.tsx:1167
 msgid "Anchor {0}"
 msgstr "アンカー{0}"
 
@@ -611,11 +619,11 @@ msgstr "地点の写真をアニメーション化"
 msgid "Anything you redo is made in the background while you work in the timeline editor. Turn that off below to change a clip's photo, script or route first."
 msgstr "やり直したものは、タイムラインエディタで作業している間にバックグラウンドで作られます。クリップの写真、台本、ルートを先に変えたいときは、下でオフにしてください。"
 
-#: src/components/ui/AppSettings.tsx:443
+#: src/components/ui/AppSettings.tsx:453
 msgid "API key"
 msgstr "API キー"
 
-#: src/components/ui/AppSettings.tsx:127
+#: src/components/ui/AppSettings.tsx:137
 msgid "API keys"
 msgstr "API キー"
 
@@ -624,11 +632,11 @@ msgstr "API キー"
 msgid "App Settings"
 msgstr "アプリ設定"
 
-#: src/components/ui/AppSettings.tsx:126
+#: src/components/ui/AppSettings.tsx:136
 msgid "Appearance"
 msgstr "外観"
 
-#: src/components/ui/AppSettings.tsx:216
+#: src/components/ui/AppSettings.tsx:226
 msgid "Application"
 msgstr "アプリ"
 
@@ -655,7 +663,7 @@ msgstr "アプリ"
 #~ msgstr "選択したクリップに適用"
 
 #. placeholder {0}: modalState.project?.name
-#: src/components/view/ProjectManager.tsx:621
+#: src/components/view/ProjectManager.tsx:629
 msgid "Are you sure you want to remove <0>{0}</0> from your recent list? The original files will remain on your computer."
 msgstr "本当に <0>{0}</0> を最近のプロジェクトから削除しますか？元のファイルはコンピュータ上に残ります。"
 
@@ -667,11 +675,11 @@ msgstr "到着時のスクリプト"
 #~ msgid "Aspect Ratio & Platform Target"
 #~ msgstr "アスペクト比とプラットフォーム設定"
 
-#: src/components/ui/AppSettings.tsx:527
+#: src/components/ui/AppSettings.tsx:533
 msgid "ASS colour, e.g. &H00000000"
 msgstr "ASS 形式の色（例: &H00000000）"
 
-#: src/components/ui/AppSettings.tsx:518
+#: src/components/ui/AppSettings.tsx:524
 msgid "ASS colour, e.g. &H00FFFFFF"
 msgstr "ASS 形式の色（例: &H00FFFFFF）"
 
@@ -759,7 +767,7 @@ msgstr "自動編集"
 msgid "Auto edit: order clips, add fades and subtitles"
 msgstr "自動編集:クリップの並び替え、フェード、字幕を追加"
 
-#: src/components/ui/AppSettings.tsx:496
+#: src/components/ui/AppSettings.tsx:494
 msgid "Auto-Detect (Recommended)"
 msgstr "自動検出 (推奨)"
 
@@ -787,11 +795,11 @@ msgstr "オートディレクターの提案"
 #~ msgid "Auto-Ducking Armed (Click to disable)"
 #~ msgstr "自動ダッキング待機中 (クリックで無効か)"
 
-#: src/components/ui/AppSettings.tsx:727
+#: src/components/ui/AppSettings.tsx:733
 msgid "Auto-fill readings"
 msgstr "読み方を自動入力"
 
-#: src/components/ui/AppSettings.tsx:235
+#: src/components/ui/AppSettings.tsx:245
 msgid "Auto-save"
 msgstr "自動保存"
 
@@ -909,8 +917,8 @@ msgstr "キャンセル"
 #: src/components/ui/UnsavedChanges.tsx:35
 #: src/components/ui/VoiceSettings.tsx:192
 #: src/components/ui/VoiceSettings.tsx:269
-#: src/components/view/ProjectManager.tsx:607
-#: src/components/view/ProjectManager.tsx:652
+#: src/components/view/ProjectManager.tsx:615
+#: src/components/view/ProjectManager.tsx:660
 #: src/components/view/ProjectSettingsModal.tsx:129
 #: src/features/editor/ExportDialog.tsx:66
 #: src/features/map/components/GenerateDialog.tsx:107
@@ -919,8 +927,8 @@ msgstr "キャンセル"
 msgid "Cancel"
 msgstr "キャンセル"
 
-#: src/components/ui/AppSettings.tsx:1031
-#: src/components/ui/AppSettings.tsx:1032
+#: src/components/ui/AppSettings.tsx:1058
+#: src/components/ui/AppSettings.tsx:1059
 msgid "Cancel download"
 msgstr "ダウンロードをキャンセル"
 
@@ -976,12 +984,12 @@ msgstr "区間を選択"
 msgid "Choose a recording…"
 msgstr "録音ファイルを選択…"
 
-#: src/components/ui/AppSettings.tsx:400
+#: src/components/ui/AppSettings.tsx:410
 #: src/components/view/ProjectSettingsModal.tsx:171
 msgid "Choose file…"
 msgstr "ファイルを選択…"
 
-#: src/components/ui/AppSettings.tsx:219
+#: src/components/ui/AppSettings.tsx:229
 msgid "Choose your preferred language for the application"
 msgstr "アプリケーションの言語を選択してください"
 
@@ -997,8 +1005,8 @@ msgstr "選択…"
 #~ msgid "Clean modern sans-serif"
 #~ msgstr "クリーンでモダンなサンセリフ"
 
-#: src/components/ui/AppSettings.tsx:1031
-#: src/components/ui/AppSettings.tsx:1032
+#: src/components/ui/AppSettings.tsx:1058
+#: src/components/ui/AppSettings.tsx:1059
 #: src/components/ui/NewProject.tsx:315
 #: src/components/ui/ReviewStep.tsx:174
 #: src/components/ui/StatusBar.tsx:402
@@ -1050,7 +1058,7 @@ msgstr "地図をクリックして点を追加。点はドラッグで移動、
 msgid "Click the map to add:"
 msgstr "地図をクリックして追加:"
 
-#: src/features/map/components/MapArea.tsx:831
+#: src/features/map/components/MapArea.tsx:818
 msgid "Click the map to nudge the route. Drag a via point to move it, or right-click it for options."
 msgstr "地図をクリックしてルートを調整します。中継点はドラッグで移動、右クリックでその他の操作ができます。"
 
@@ -1088,8 +1096,8 @@ msgstr "クリップを並べ替え、フェードと字幕を追加しました
 #~ msgid "Clips unlinked"
 #~ msgstr "クリップのリンクを解除しました"
 
-#: src/components/ui/AppSettings.tsx:202
-#: src/components/ui/AppSettings.tsx:203
+#: src/components/ui/AppSettings.tsx:212
+#: src/components/ui/AppSettings.tsx:213
 #: src/components/ui/ErrorBoundary.tsx:85
 #: src/components/ui/NewProject.tsx:230
 #: src/components/ui/RenderOverlay.tsx:1298
@@ -1113,7 +1121,7 @@ msgstr "折りたたむ"
 #~ msgid "Color Adjustments"
 #~ msgstr "カラー調整"
 
-#: src/components/ui/AppSettings.tsx:406
+#: src/components/ui/AppSettings.tsx:416
 msgid "Color GPX routes dynamically based on steepness"
 msgstr "勾配に応じてGPSルートを動的に色付けする"
 
@@ -1133,7 +1141,7 @@ msgstr "すべてのルートセグメント、ナレーション音声、トラ
 #~ msgid "Configure aspect ratio, quality profiles, and compile timeline manifest"
 #~ msgstr "アスペクト比、品質プロファイルを設定し、タイムラインマニフェストをコンパイルします"
 
-#: src/components/view/ProjectManager.tsx:660
+#: src/components/view/ProjectManager.tsx:668
 msgid "Confirm"
 msgstr "確認"
 
@@ -1154,11 +1162,11 @@ msgstr "ドキュメントのコンテキスト: {0}"
 #~ msgid "Contrast"
 #~ msgstr "コントラスト"
 
-#: src/components/ui/AppSettings.tsx:236
+#: src/components/ui/AppSettings.tsx:246
 msgid "Controls auto save of editors that have unsaved changes"
 msgstr "未保存の変更があるエディタの自動保存を制御します"
 
-#: src/hooks/useFileActions.ts:130
+#: src/hooks/useFileActions.ts:156
 msgid "Converting GPS file format..."
 msgstr "GPSファイル形式を変換しています..."
 
@@ -1194,7 +1202,7 @@ msgstr "メッセージをコピー"
 msgid "Copy path from"
 msgstr "経路をコピー"
 
-#: src/components/ui/AppSettings.tsx:547
+#: src/components/ui/AppSettings.tsx:553
 msgid "Correct words or kanji that are read incorrectly by the AI voice. You can auto-extract entries from scripts by typing <0>漢字(よみがな)</0> in any narration script."
 msgstr "以下に音声が誤って読み上げる単語や漢字を修正してください。"
 
@@ -1219,7 +1227,7 @@ msgid "Could not load audio for {0}"
 msgstr "{0} の音声委を読み込めませんでした"
 
 #: src/components/ui/TitleBar.tsx:268
-#: src/components/view/ProjectManager.tsx:259
+#: src/components/view/ProjectManager.tsx:267
 msgid "Could not open file location"
 msgstr "ファイルの場所を開けませんでした"
 
@@ -1302,9 +1310,9 @@ msgstr "建物のデータを照合しています..."
 msgid "Custom Color"
 msgstr "カスタムカラー"
 
-#: src/components/ui/AppSettings.tsx:374
-#: src/features/map/components/MapArea.tsx:977
-#: src/features/map/components/MapArea.tsx:1039
+#: src/components/ui/AppSettings.tsx:384
+#: src/features/map/components/MapArea.tsx:964
+#: src/features/map/components/MapArea.tsx:1026
 #: src/features/map/components/WaypointEditor.tsx:616
 msgid "Custom Marker"
 msgstr "カスタムマーカー"
@@ -1326,12 +1334,12 @@ msgstr "切り取り"
 msgid "Cut to next clip"
 msgstr "次のクリップへカット"
 
-#: src/components/ui/AppSettings.tsx:347
+#: src/components/ui/AppSettings.tsx:357
 #: src/components/view/ProjectSettingsModal.tsx:144
 msgid "Default marker for all waypoints. Can be overridden per-stop."
 msgstr "すべてのポイントのデフォルトマーカーです。ポイントごとに上書きできます"
 
-#: src/components/ui/AppSettings.tsx:354
+#: src/components/ui/AppSettings.tsx:364
 #: src/features/map/components/WaypointEditor.tsx:628
 msgid "Default pin"
 msgstr "標準のピン"
@@ -1373,7 +1381,7 @@ msgstr "削除して生成"
 #~ msgid "Delete marker"
 #~ msgstr "マーカーを削除"
 
-#: src/features/map/components/MapArea.tsx:1158
+#: src/features/map/components/MapArea.tsx:1145
 msgid "Delete point"
 msgstr "点を削除"
 
@@ -1487,17 +1495,17 @@ msgstr "保存しない"
 #: src/components/ui/RenderOverlay.tsx:1229
 #: src/features/editor/ExportDialog.tsx:60
 #: src/features/map/components/DrawBar.tsx:319
-#: src/features/map/components/MapArea.tsx:845
+#: src/features/map/components/MapArea.tsx:832
 #: src/features/map/components/Sidebar.tsx:273
 msgid "Done"
 msgstr "完了"
 
-#: src/features/map/components/MapArea.tsx:369
+#: src/features/map/components/MapArea.tsx:367
 #: src/features/map/components/WaypointItem.tsx:384
 msgid "Done adjusting"
 msgstr "調整を終了"
 
-#: src/features/map/components/MapArea.tsx:354
+#: src/features/map/components/MapArea.tsx:352
 msgid "Done drawing"
 msgstr "描画を終了"
 
@@ -1509,7 +1517,7 @@ msgstr "ダブルクリックで字幕を追加"
 #~ msgid "Double-sided horizontal perspective warp effect"
 #~ msgstr "両面水平パースペクティブワープ効果"
 
-#: src/components/ui/AppSettings.tsx:1047
+#: src/components/ui/AppSettings.tsx:1074
 msgid "Download"
 msgstr "ダウンロード"
 
@@ -1564,7 +1572,7 @@ msgstr "車"
 #~ msgid "Drop photos here to auto-plot your route"
 #~ msgstr "ここに写真をドロップしてルートを自動作成"
 
-#: src/features/map/components/MapArea.tsx:1197
+#: src/features/map/components/MapArea.tsx:1184
 msgid "Drop photos or GPS files to plot route"
 msgstr "写真またはGPSファイルをドロップしてルートを作成"
 
@@ -1586,18 +1594,18 @@ msgstr "写真またはGPSファイルをドロップしてルートを作成"
 #~ msgid "duplicate"
 #~ msgstr "複製"
 
-#: src/components/view/ProjectManager.tsx:225
+#: src/components/view/ProjectManager.tsx:227
 #: src/features/editor/EditorView.tsx:258
 #: src/features/editor/Inspector.tsx:169
 #: src/features/map/hooks/useStopMenus.ts:239
 msgid "Duplicate"
 msgstr "複製"
 
-#: src/components/view/ProjectManager.tsx:640
+#: src/components/view/ProjectManager.tsx:648
 msgid "Duplicate Project"
 msgstr "プロジェクトを複製"
 
-#: src/components/view/ProjectManager.tsx:674
+#: src/components/view/ProjectManager.tsx:682
 msgid "Duplicate Project Name"
 msgstr "複製するプロジェクト名"
 
@@ -1605,11 +1613,11 @@ msgstr "複製するプロジェクト名"
 #~ msgid "duplicate-clip"
 #~ msgstr "クリップを複製"
 
-#: src/components/ui/AppSettings.tsx:460
-msgid "Duration"
-msgstr "長さ"
+#: src/components/ui/AppSettings.tsx:461
+#~ msgid "Duration"
+#~ msgstr "長さ"
 
-#: src/features/map/components/MapArea.tsx:926
+#: src/features/map/components/MapArea.tsx:913
 msgid "E"
 msgstr "終"
 
@@ -1651,8 +1659,8 @@ msgstr "マップ上のポイントを編集しています"
 msgid "Editor view"
 msgstr "エディター表示"
 
-#: src/components/ui/AppSettings.tsx:405
-#: src/components/ui/AppSettings.tsx:411
+#: src/components/ui/AppSettings.tsx:415
+#: src/components/ui/AppSettings.tsx:421
 msgid "Elevation heatmap"
 msgstr "標高ヒートマップ"
 
@@ -1673,7 +1681,7 @@ msgstr "3D地形を有効にする"
 #: src/features/editor/Inspector.tsx:128
 #: src/features/editor/Inspector.tsx:190
 #: src/features/map/components/MapToolbar.tsx:91
-#: src/hooks/useFileActions.ts:212
+#: src/hooks/useFileActions.ts:238
 msgid "End"
 msgstr "終了"
 
@@ -1780,7 +1788,7 @@ msgid "Export for sharing"
 msgstr "共有用に書き出し"
 
 #: src/components/ui/TitleBar.tsx:247
-#: src/components/view/ProjectManager.tsx:235
+#: src/components/view/ProjectManager.tsx:243
 msgid "Export for sharing..."
 msgstr "共有用に書き出し..."
 
@@ -1829,7 +1837,7 @@ msgstr "エクスポート処理が正常に完了しました！"
 msgid "Extracting locations using AI..."
 msgstr "場所を抽出中..."
 
-#: src/hooks/useFileActions.ts:176
+#: src/hooks/useFileActions.ts:202
 msgid "Extracting waypoints from GPS data..."
 msgstr "GPSデータからポイントを抽出しています..."
 
@@ -1870,7 +1878,7 @@ msgstr "次のクリップへフェードします"
 msgid "Failed"
 msgstr "失敗"
 
-#: src/components/view/ProjectManager.tsx:201
+#: src/components/view/ProjectManager.tsx:203
 msgid "Failed to duplicate project"
 msgstr "プロジェクトの複製に失敗しました"
 
@@ -1903,7 +1911,7 @@ msgstr "デモルートを読み込めませんでした"
 msgid "Failed to load project: "
 msgstr "プロジェクトの読み込みに失敗しました"
 
-#: src/hooks/useFileActions.ts:266
+#: src/hooks/useFileActions.ts:292
 msgid "Failed to open file dialog"
 msgstr "ファイルダイアログを開けませんでした"
 
@@ -1911,7 +1919,7 @@ msgstr "ファイルダイアログを開けませんでした"
 msgid "Failed to open file explorer:"
 msgstr "ファイルエクスプローラーを開けませんでした"
 
-#: src/hooks/useFileActions.ts:247
+#: src/hooks/useFileActions.ts:273
 msgid "Failed to parse file"
 msgstr "ファイルの解析に失敗しました"
 
@@ -1919,7 +1927,8 @@ msgstr "ファイルの解析に失敗しました"
 msgid "Failed to process document"
 msgstr "ドキュメントの処理に失敗しました"
 
-#: src/hooks/useFileActions.ts:106
+#: src/hooks/useFileActions.ts:108
+#: src/hooks/useFileActions.ts:132
 msgid "Failed to process dropped files"
 msgstr "ドロップされたファイルの処理に失敗しました"
 
@@ -1931,11 +1940,11 @@ msgstr "プロジェクトファイルの読み込みに失敗しました"
 msgid "Failed to read project folder"
 msgstr "プロジェクトフォルダの読み込みに失敗しました"
 
-#: src/components/view/ProjectManager.tsx:203
+#: src/components/view/ProjectManager.tsx:205
 msgid "Failed to remove project"
 msgstr "プロジェクトの削除に失敗しました"
 
-#: src/components/view/ProjectManager.tsx:199
+#: src/components/view/ProjectManager.tsx:201
 msgid "Failed to rename project"
 msgstr "プロジェクト名の変更に失敗しました"
 
@@ -1947,7 +1956,7 @@ msgstr "プロジェクトの保存に失敗しました"
 msgid "Failed to save settings"
 msgstr "設定の保存に失敗しました"
 
-#: src/components/view/ProjectManager.tsx:205
+#: src/components/view/ProjectManager.tsx:207
 msgid "Failed to update project"
 msgstr "プロジェクトの更新に失敗しました"
 
@@ -1963,8 +1972,8 @@ msgstr "プロジェクトの更新に失敗しました"
 msgid "Fast render"
 msgstr "高速レンダリング"
 
-#: src/components/ui/AppSettings.tsx:273
-#: src/components/ui/AppSettings.tsx:279
+#: src/components/ui/AppSettings.tsx:283
+#: src/components/ui/AppSettings.tsx:289
 #: src/components/ui/NewProject.tsx:399
 msgid "Fast render mode"
 msgstr "高速レンダリングモード"
@@ -1978,7 +1987,7 @@ msgstr "高速レンダリングモード"
 msgid "Ferry"
 msgstr "フェリー"
 
-#: src/components/view/ProjectManager.tsx:514
+#: src/components/view/ProjectManager.tsx:522
 msgid "File Path"
 msgstr "ファイルパス"
 
@@ -2005,6 +2014,7 @@ msgstr "飛行"
 msgid "Follow timing cues in scripts"
 msgstr "台本のタイミング指定に従う"
 
+#: src/components/ui/AppSettings.tsx:502
 #: src/components/ui/AppSettings.tsx:504
 msgid "Font"
 msgstr "フォント"
@@ -2014,6 +2024,7 @@ msgstr "フォント"
 #~ msgstr "フォントファミリー"
 
 #: src/components/ui/AppSettings.tsx:512
+#: src/components/ui/AppSettings.tsx:514
 msgid "Font size"
 msgstr "フォントサイズ"
 
@@ -2044,7 +2055,7 @@ msgstr "ファイルから…"
 msgid "From narration"
 msgstr "ナレーションから"
 
-#: src/components/ui/AppSettings.tsx:125
+#: src/components/ui/AppSettings.tsx:135
 msgid "General"
 msgstr "一般"
 
@@ -2090,7 +2101,7 @@ msgstr "サンプルを生成しています。初回は音声モデルの読み
 msgid "Generating..."
 msgstr "生成中..."
 
-#: src/components/ui/AppSettings.tsx:474
+#: src/components/ui/AppSettings.tsx:472
 msgid "Generation"
 msgstr "生成"
 
@@ -2125,7 +2136,7 @@ msgid "GPS track"
 msgstr "GPSトラック"
 
 #: src/components/ui/NewProject.tsx:137
-#: src/hooks/useFileActions.ts:114
+#: src/hooks/useFileActions.ts:140
 msgid "GPS/Text Files"
 msgstr "GPS/テキストファイル"
 
@@ -2142,7 +2153,7 @@ msgstr "グラデーションヒートマップ"
 msgid "Green"
 msgstr "緑"
 
-#: src/components/view/ProjectManager.tsx:409
+#: src/components/view/ProjectManager.tsx:417
 msgid "Grid View"
 msgstr "グリッド表示"
 
@@ -2150,7 +2161,7 @@ msgstr "グリッド表示"
 msgid "Hard cut"
 msgstr "カット"
 
-#: src/components/ui/AppSettings.tsx:486
+#: src/components/ui/AppSettings.tsx:484
 msgid "Hardware mode"
 msgstr "ハードウェアモード"
 
@@ -2183,7 +2194,7 @@ msgstr "ログを隠す"
 #~ msgid "High-Spec (Discrete GPU)"
 #~ msgstr "ハイスペック (ディスクリートGPU)"
 
-#: src/components/ui/AppSettings.tsx:498
+#: src/components/ui/AppSettings.tsx:496
 msgid "High-spec Mode"
 msgstr "ハイスペックモード"
 
@@ -2234,12 +2245,12 @@ msgid "Import Photos..."
 msgstr "写真をインポート..."
 
 #. placeholder {0}: photoPoints.length
-#: src/hooks/useFileActions.ts:99
+#: src/hooks/useFileActions.ts:101
 msgid "Imported {0} photos and generated route."
 msgstr "{0}枚の写真をインポートし、ルートを生成しました。"
 
 #. placeholder {0}: newNaviviWaypoints.length
-#: src/hooks/useFileActions.ts:244
+#: src/hooks/useFileActions.ts:270
 msgid "Imported {0} waypoints successfully"
 msgstr "{0}個のポイントを正常にインポートしました"
 
@@ -2269,7 +2280,7 @@ msgstr "パイプラインを初期化しています..."
 #~ msgid "Inspector"
 #~ msgstr "インスペクタ"
 
-#: src/components/ui/AppSettings.tsx:289
+#: src/components/ui/AppSettings.tsx:299
 msgid "Interface"
 msgstr "インターフェース"
 
@@ -2313,7 +2324,7 @@ msgstr "作業を続ける"
 msgid "Keep working in the timeline editor. Export is available when it finishes."
 msgstr "タイムラインエディタで作業を続けられます。書き出しは完了後に使えます。"
 
-#: src/components/view/ProjectManager.tsx:384
+#: src/components/view/ProjectManager.tsx:392
 msgid "Kyoto Demo Route"
 msgstr "京都デモルート"
 
@@ -2321,11 +2332,11 @@ msgstr "京都デモルート"
 msgid "Landscape 16:9"
 msgstr "横長 16:9"
 
-#: src/components/ui/AppSettings.tsx:218
+#: src/components/ui/AppSettings.tsx:228
 msgid "Language"
 msgstr "言語"
 
-#: src/components/view/ProjectManager.tsx:517
+#: src/components/view/ProjectManager.tsx:525
 msgid "Last Opened"
 msgstr "最後に開いた日時"
 
@@ -2403,9 +2414,9 @@ msgstr "ボイスを読み込み中…"
 msgid "Loading…"
 msgstr "読み込み中…"
 
-#: src/features/map/components/MapArea.tsx:412
-#: src/features/map/components/MapArea.tsx:454
-#: src/features/map/components/MapArea.tsx:495
+#: src/features/map/components/MapArea.tsx:410
+#: src/features/map/components/MapArea.tsx:452
+#: src/features/map/components/MapArea.tsx:493
 #: src/hooks/useWaypointActions.ts:16
 #: src/hooks/useWaypointActions.ts:54
 msgid "Locating..."
@@ -2440,7 +2451,7 @@ msgstr "ログ表示"
 #~ msgid "Low-Spec (Integrated Graphics)"
 #~ msgstr "ロースペック (統合グラフィックス)"
 
-#: src/components/ui/AppSettings.tsx:497
+#: src/components/ui/AppSettings.tsx:495
 msgid "Low-spec Mode"
 msgstr "ロースペックモード"
 
@@ -2477,7 +2488,7 @@ msgstr "新しい音声を作成しています。最初の1件は時間がか�
 #~ msgid "Manage timeline markers"
 #~ msgstr "タイムラインマーカーを管理"
 
-#: src/components/ui/AppSettings.tsx:344
+#: src/components/ui/AppSettings.tsx:354
 #: src/components/ui/TitleBar.tsx:391
 msgid "Map"
 msgstr "マップ"
@@ -2490,7 +2501,7 @@ msgstr "マップの外観"
 msgid "Map tools"
 msgstr "マップツール"
 
-#: src/components/ui/AppSettings.tsx:421
+#: src/components/ui/AppSettings.tsx:431
 msgid "Mapbox"
 msgstr "Mapbox"
 
@@ -2561,10 +2572,10 @@ msgstr "モデル {engine} が見つかりません。アプリ設定からイ�
 msgid "More"
 msgstr "その他"
 
-#: src/components/view/ProjectManager.tsx:496
-#: src/components/view/ProjectManager.tsx:497
-#: src/components/view/ProjectManager.tsx:573
-#: src/components/view/ProjectManager.tsx:574
+#: src/components/view/ProjectManager.tsx:504
+#: src/components/view/ProjectManager.tsx:505
+#: src/components/view/ProjectManager.tsx:581
+#: src/components/view/ProjectManager.tsx:582
 msgid "More actions"
 msgstr "その他の操作"
 
@@ -2612,7 +2623,7 @@ msgstr "ナレーションをミュート"
 msgid "Name your project to continue"
 msgstr "続行するにはプロジェクト名を入力してください"
 
-#: src/components/ui/AppSettings.tsx:961
+#: src/components/ui/AppSettings.tsx:978
 #: src/features/editor/ExportDialog.tsx:42
 #: src/features/editor/Inspector.tsx:136
 #: src/features/map/components/WaypointEditor.tsx:380
@@ -2641,11 +2652,11 @@ msgid "New points go after point {0}. Click it again to add at the end."
 msgstr "新しい点は点{0}の後ろに追加されます。もう一度クリックすると末尾に追加します。"
 
 #: src/components/ui/TitleBar.tsx:279
-#: src/components/view/ProjectManager.tsx:355
+#: src/components/view/ProjectManager.tsx:363
 msgid "New Project"
 msgstr "新規プロジェクト"
 
-#: src/components/view/ProjectManager.tsx:673
+#: src/components/view/ProjectManager.tsx:681
 msgid "New Project Name"
 msgstr "新しいプロジェクト名"
 
@@ -2678,7 +2689,7 @@ msgstr "アクティブなプロジェクトフォルダが見つかりません
 msgid "No clips yet"
 msgstr "クリップがありません"
 
-#: src/components/ui/AppSettings.tsx:674
+#: src/components/ui/AppSettings.tsx:680
 msgid "No entries yet."
 msgstr "まだ投稿がありません"
 
@@ -2690,7 +2701,7 @@ msgstr "まだ投稿がありません"
 msgid "No locations found in document"
 msgstr "ドキュメントに場所が見つかりませんでした"
 
-#: src/components/ui/AppSettings.tsx:976
+#: src/components/ui/AppSettings.tsx:993
 msgid "No models installed"
 msgstr "インストールされているモデルがありません"
 
@@ -2718,7 +2729,7 @@ msgstr "まだ点がありません"
 msgid "No recent activity"
 msgstr "最近のアクティビティはありません"
 
-#: src/components/view/ProjectManager.tsx:439
+#: src/components/view/ProjectManager.tsx:447
 msgid "No recent projects"
 msgstr "最近のプロジェクトはありません"
 
@@ -2766,7 +2777,7 @@ msgstr "インターネット接続がありません"
 msgid "None"
 msgstr "なし"
 
-#: src/hooks/useFileActions.ts:66
+#: src/hooks/useFileActions.ts:68
 msgid "None of these photos has a location. Photos saved from websites or chat apps usually don't."
 msgstr "これらの写真には位置情報がありません。Webサイトやチャットアプリから保存した写真には、通常ありません。"
 
@@ -2778,7 +2789,7 @@ msgstr "何も選択されていません。承認して書き出すか、やり
 msgid "Nothing to review yet."
 msgstr "確認できるものがまだありません。"
 
-#: src/components/ui/AppSettings.tsx:247
+#: src/components/ui/AppSettings.tsx:257
 #: src/features/map/components/GenerateDialog.tsx:93
 #: src/features/map/components/OverviewPanel.tsx:14
 msgid "Off"
@@ -2806,7 +2817,7 @@ msgstr "人に送ったりバックアップにしたりできる1つのファ�
 #~ msgid "Opacity Fade"
 #~ msgstr "不透明度フェード"
 
-#: src/components/view/ProjectManager.tsx:345
+#: src/components/view/ProjectManager.tsx:353
 msgid "Open a single project file (.nvv or .zip archive)"
 msgstr "単一のプロジェクトファイル (.nvvまたは.zipアーカイブ)を開く"
 
@@ -2814,7 +2825,7 @@ msgstr "単一のプロジェクトファイル (.nvvまたは.zipアーカイ�
 msgid "Open dictionary…"
 msgstr "辞書を開く…"
 
-#: src/components/view/ProjectManager.tsx:348
+#: src/components/view/ProjectManager.tsx:356
 msgid "Open File..."
 msgstr "ファイルを開く..."
 
@@ -2826,7 +2837,7 @@ msgstr "フォルダを開く"
 msgid "Open music folder"
 msgstr "音楽フォルダを開く"
 
-#: src/components/view/ProjectManager.tsx:214
+#: src/components/view/ProjectManager.tsx:216
 msgid "Open Project"
 msgstr "プロジェクトを開く"
 
@@ -2850,7 +2861,7 @@ msgstr "フォルダを開く..."
 msgid "Opening the timeline editor so you can change the clip by hand."
 msgstr "タイムラインエディタを開きます。クリップを手動で変更できます。"
 
-#: src/components/ui/AppSettings.tsx:435
+#: src/components/ui/AppSettings.tsx:445
 msgid "OpenRouteService"
 msgstr "OpenRouteService"
 
@@ -2874,11 +2885,11 @@ msgstr "元の音声"
 #~ msgid "Outline Color"
 #~ msgstr "縁取りの色"
 
-#: src/components/ui/AppSettings.tsx:527
+#: src/components/ui/AppSettings.tsx:533
 msgid "Outline colour"
 msgstr "縁取りの色"
 
-#: src/components/ui/AppSettings.tsx:453
+#: src/components/ui/AppSettings.tsx:463
 msgid "Output"
 msgstr "出力"
 
@@ -2906,7 +2917,7 @@ msgstr "上へパン"
 msgid "Parsing Maps & GPS Data{prog}..."
 msgstr "マップとGPSデータを解析中{prog}..."
 
-#: src/features/map/components/MapArea.tsx:1206
+#: src/features/map/components/MapArea.tsx:1193
 msgid "Parsing Route Data..."
 msgstr "ルートデータを解析中..."
 
@@ -2934,7 +2945,7 @@ msgstr "写真クリップ"
 msgid "Photos"
 msgstr "写真"
 
-#: src/hooks/useFileActions.ts:255
+#: src/hooks/useFileActions.ts:281
 msgid "Photos & Images"
 msgstr "写真と画像"
 
@@ -2979,7 +2990,7 @@ msgstr "再生中..."
 #~ msgstr "トランジションは2つのクリップの間のカット部分に直接ドロップしてください"
 
 #. placeholder {0}: idx + 1
-#: src/features/map/components/MapArea.tsx:1142
+#: src/features/map/components/MapArea.tsx:1129
 msgid "Point {0}"
 msgstr "点 {0}"
 
@@ -2987,7 +2998,7 @@ msgstr "点 {0}"
 msgid "Polishing voiceover tone..."
 msgstr "ナレーションのトーンを調整中..."
 
-#: src/components/view/ProjectManager.tsx:387
+#: src/components/view/ProjectManager.tsx:395
 msgid "Pre-configured sample project"
 msgstr "事前構成済みのサンプルプロジェクト"
 
@@ -3021,13 +3032,17 @@ msgstr "{0}を試聴"
 #~ msgid "Project"
 #~ msgstr "プロジェクト"
 
+#: src/components/view/ProjectManager.tsx:197
+msgid "Project duplicated"
+msgstr "プロジェクトを複製しました"
+
 #: src/components/ui/TitleBar.tsx:157
 msgid "Project duplicated successfully"
 msgstr "プロジェクトが正常に複製されました"
 
 #: src/components/view/ProjectManager.tsx:195
-msgid "Project duplicated\""
-msgstr "プロジェクトが複製されました"
+#~ msgid "Project duplicated\""
+#~ msgstr "プロジェクトが複製されました"
 
 #: src/components/ui/ExportProjectDialog.tsx:72
 msgid "Project exported"
@@ -3041,7 +3056,7 @@ msgstr "プロジェクトが正常に読み込まれました"
 
 #: src/components/ui/TitleBar.tsx:251
 #: src/components/ui/TitleBar.tsx:373
-#: src/components/view/ProjectManager.tsx:331
+#: src/components/view/ProjectManager.tsx:339
 msgid "Project Manager"
 msgstr "プロジェクトマネージャー"
 
@@ -3050,7 +3065,7 @@ msgid "Project name"
 msgstr "プロジェクト名"
 
 #: src/components/ui/SaveAs.tsx:125
-#: src/components/view/ProjectManager.tsx:511
+#: src/components/view/ProjectManager.tsx:519
 msgid "Project Name"
 msgstr "プロジェクト名"
 
@@ -3070,7 +3085,7 @@ msgstr "プロジェクトが保存されました"
 msgid "Project saved to {fileName}"
 msgstr "プロジェクトを{fileName}に保存しました"
 
-#: src/components/view/ProjectManager.tsx:230
+#: src/components/view/ProjectManager.tsx:238
 msgid "Project settings"
 msgstr "プロジェクト設定"
 
@@ -3090,7 +3105,7 @@ msgstr "プロジェクトタイトル"
 msgid "project-name-placeholder"
 msgstr "京都観光"
 
-#: src/components/ui/AppSettings.tsx:134
+#: src/components/ui/AppSettings.tsx:144
 msgid "Pronunciation"
 msgstr "発音辞書"
 
@@ -3114,8 +3129,8 @@ msgstr "紫"
 #~ msgid "Push transition smoothly sliding incoming clip from left"
 #~ msgstr "次のクリップを左からスムーズにスライドさせるプッシュトランジション"
 
-#: src/components/ui/AppSettings.tsx:476
-#: src/components/ui/AppSettings.tsx:482
+#: src/components/ui/AppSettings.tsx:474
+#: src/components/ui/AppSettings.tsx:480
 msgid "Quick export"
 msgstr "クイック書き出し"
 
@@ -3131,7 +3146,7 @@ msgstr "クイックエクスポート"
 msgid "Quick Export Complete!"
 msgstr "クイックエクスポート完了しました"
 
-#: src/components/view/ProjectManager.tsx:248
+#: src/components/view/ProjectManager.tsx:256
 msgid "Quick Render"
 msgstr "クイックレンダリング"
 
@@ -3159,7 +3174,7 @@ msgstr "動画を結合してエクスポートしています..."
 msgid "Reading"
 msgstr "読み"
 
-#: src/components/ui/AppSettings.tsx:648
+#: src/components/ui/AppSettings.tsx:654
 msgid "Reading (e.g. かだ)"
 msgstr "読み方 (例: かだ)"
 
@@ -3167,15 +3182,15 @@ msgstr "読み方 (例: かだ)"
 msgid "Reading (e.g. さんだんべき)"
 msgstr "読み(例: さんだんべき)"
 
-#: src/components/ui/AppSettings.tsx:628
+#: src/components/ui/AppSettings.tsx:634
 msgid "Reading (Furigana)"
 msgstr "読み方（フリガナ）"
 
-#: src/components/view/ProjectManager.tsx:320
+#: src/components/view/ProjectManager.tsx:328
 msgid "Reading Project File..."
 msgstr "プロジェクトファイルを読み込み中..."
 
-#: src/components/ui/AppSettings.tsx:1039
+#: src/components/ui/AppSettings.tsx:1066
 msgid "Ready"
 msgstr "準備完了"
 
@@ -3187,11 +3202,11 @@ msgstr "準備完了"
 #~ msgid "Ready to Generate?"
 #~ msgstr "生成する準備はできましたか？"
 
-#: src/components/view/ProjectManager.tsx:398
+#: src/components/view/ProjectManager.tsx:406
 msgid "Recent"
 msgstr "最近のプロジェクト"
 
-#: src/components/ui/AppSettings.tsx:989
+#: src/components/ui/AppSettings.tsx:1016
 msgid "Recommended models"
 msgstr "おすすめのモデル"
 
@@ -3278,10 +3293,10 @@ msgstr "アプリを再読み込み"
 #~ msgid "Reload saved timeline"
 #~ msgstr "保存されたタイムラインを再読み込み"
 
-#: src/components/ui/AppSettings.tsx:660
-#: src/components/ui/AppSettings.tsx:661
+#: src/components/ui/AppSettings.tsx:666
+#: src/components/ui/AppSettings.tsx:667
 #: src/components/ui/ReviewStep.tsx:103
-#: src/components/view/ProjectManager.tsx:615
+#: src/components/view/ProjectManager.tsx:623
 #: src/features/editor/EditorView.tsx:271
 #: src/features/editor/Inspector.tsx:172
 msgid "Remove"
@@ -3296,7 +3311,7 @@ msgstr "{0}地点をすべて削除しますか？"
 msgid "Remove all {count} via points"
 msgstr "中継点 {count} 個をすべて削除"
 
-#: src/components/view/ProjectManager.tsx:265
+#: src/components/view/ProjectManager.tsx:273
 msgid "Remove from List"
 msgstr "リストから削除"
 
@@ -3315,7 +3330,7 @@ msgstr "音楽を削除"
 msgid "Remove narration"
 msgstr "ナレーションを削除"
 
-#: src/components/view/ProjectManager.tsx:598
+#: src/components/view/ProjectManager.tsx:606
 msgid "Remove Project"
 msgstr "プロジェクトを削除"
 
@@ -3346,7 +3361,7 @@ msgstr "動画を削除"
 #~ msgid "rename"
 #~ msgstr "名前を変更"
 
-#: src/components/view/ProjectManager.tsx:220
+#: src/components/view/ProjectManager.tsx:222
 msgid "Rename"
 msgstr "名前を変更"
 
@@ -3354,7 +3369,7 @@ msgstr "名前を変更"
 #~ msgid "Rename marker"
 #~ msgstr "マーカー名を変更"
 
-#: src/components/view/ProjectManager.tsx:638
+#: src/components/view/ProjectManager.tsx:646
 msgid "Rename Project"
 msgstr "プロジェクト名を変更"
 
@@ -3411,15 +3426,15 @@ msgstr "Python生成パイプラインを開始しています..."
 msgid "Replace existing voice"
 msgstr "既存のボイスを置き換える"
 
-#: src/components/ui/AppSettings.tsx:436
+#: src/components/ui/AppSettings.tsx:446
 msgid "Required for driving and some hiking routes"
 msgstr "自動車ルートや一部の歩行ルートで必要です"
 
-#: src/components/ui/AppSettings.tsx:422
+#: src/components/ui/AppSettings.tsx:432
 msgid "Required for map rendering and 3D terrain"
 msgstr "マップのレンダリングや3D地形で必要です"
 
-#: src/components/ui/AppSettings.tsx:263
+#: src/components/ui/AppSettings.tsx:273
 msgid "Requires Ollama"
 msgstr "Ollamaが必要"
 
@@ -3447,9 +3462,9 @@ msgstr "トリミングをリセット"
 msgid "Reset View (North)"
 msgstr "ビューをリセット (北)"
 
-#: src/components/ui/AppSettings.tsx:466
-msgid "Residential duration"
-msgstr "住宅地区間の長さ"
+#: src/components/ui/AppSettings.tsx:467
+#~ msgid "Residential duration"
+#~ msgstr "住宅地区間の長さ"
 
 #: src/features/export/components/ExportModal.tsx:500
 #~ msgid "Resolution & Quality Profile"
@@ -3478,7 +3493,7 @@ msgid "Retry"
 msgstr "再試行"
 
 #: src/components/ui/TitleBar.tsx:272
-#: src/components/view/ProjectManager.tsx:253
+#: src/components/view/ProjectManager.tsx:261
 #: src/features/map/components/WaypointEditor.tsx:480
 #: src/features/map/components/WaypointVideos.tsx:58
 msgid "Reveal in File Explorer"
@@ -3534,7 +3549,7 @@ msgstr "ルート線"
 msgid "Route Lines Config"
 msgstr "ルート線の設定"
 
-#: src/components/ui/AppSettings.tsx:346
+#: src/components/ui/AppSettings.tsx:356
 #: src/components/view/ProjectSettingsModal.tsx:141
 msgid "Route marker"
 msgstr "ルートマーカー"
@@ -3569,7 +3584,7 @@ msgstr "ルート動画"
 #~ msgid "Routes are limited to {0} waypoints in this preview build."
 #~ msgstr "このプレビュービルドでは、ルートは {0} 個のポイントに制限されています"
 
-#: src/features/map/components/MapArea.tsx:923
+#: src/features/map/components/MapArea.tsx:910
 msgid "S"
 msgstr "始"
 
@@ -3641,7 +3656,7 @@ msgstr "バージョン履歴を有効にするにはプロジェクトを保存
 msgid "Saved"
 msgstr "保存済み"
 
-#: src/components/ui/AppSettings.tsx:259
+#: src/components/ui/AppSettings.tsx:269
 msgid "Saved with the project"
 msgstr "プロジェクトに保存されます"
 
@@ -3678,10 +3693,10 @@ msgstr "場所を検索..."
 msgid "Searching..."
 msgstr "検索中..."
 
-#: src/components/ui/AppSettings.tsx:460
-#: src/components/ui/AppSettings.tsx:466
-msgid "Seconds"
-msgstr "秒"
+#: src/components/ui/AppSettings.tsx:461
+#: src/components/ui/AppSettings.tsx:467
+#~ msgid "Seconds"
+#~ msgstr "秒"
 
 #: src/components/view/ProjectSettingsModal.tsx:221
 msgid "Seconds a leg dissolves into the clip that follows it. 0 is a hard cut."
@@ -3703,7 +3718,7 @@ msgstr "選択"
 #~ msgid "Select a clip on the timeline to edit its properties"
 #~ msgstr "タイムライン上のクリップを選択してプロパティを編集"
 
-#: src/components/view/ProjectManager.tsx:334
+#: src/components/view/ProjectManager.tsx:342
 msgid "Select a recent route or create a new workspace to begin"
 msgstr "最近のルートを選択するか、新しいワークスペースを作成して開始"
 
@@ -3728,7 +3743,7 @@ msgstr "すべて選択"
 #~ msgid "Select Photos..."
 #~ msgstr "写真を選択..."
 
-#: src/components/ui/AppSettings.tsx:964
+#: src/components/ui/AppSettings.tsx:981
 msgid "Select which model to use for narration synthesis, only downloaded models are shown"
 msgstr "ナレーション合成に使用するモデルを選択します。ダウンロード済みのモデルのみが表示されます"
 
@@ -3752,12 +3767,12 @@ msgstr "バックエンドにキャンセル信号を送信しています..."
 msgid "Sending interrupt signal to renderer."
 msgstr "レンダラーに中断信号を送信しています"
 
-#: src/components/ui/AppSettings.tsx:419
+#: src/components/ui/AppSettings.tsx:429
 msgid "Services"
 msgstr "サービス"
 
-#: src/components/ui/AppSettings.tsx:162
-#: src/components/ui/AppSettings.tsx:167
+#: src/components/ui/AppSettings.tsx:172
+#: src/components/ui/AppSettings.tsx:177
 msgid "Settings"
 msgstr "設定"
 
@@ -3781,7 +3796,7 @@ msgstr "セットアップ"
 #~ msgid "Shorts, Reels & TikTok"
 #~ msgstr "Shorts、Reels、TikTok"
 
-#: src/components/ui/AppSettings.tsx:264
+#: src/components/ui/AppSettings.tsx:274
 msgid "Show Auto-Write script buttons and overview narration. Requires Ollama to be installed and running locally."
 msgstr "AI機能を有効にする。開催されてインストールされているOllamaが必要です。"
 
@@ -3829,7 +3844,7 @@ msgstr "動画の冒頭にタイトルとサブタイトルを表示します"
 msgid "Simple"
 msgstr "シンプル"
 
-#: src/components/ui/AppSettings.tsx:274
+#: src/components/ui/AppSettings.tsx:284
 #: src/components/ui/NewProject.tsx:400
 msgid "Skip AI voiceover synthesis and pop-up images during generation"
 msgstr "生成時にAI音声合成とポップアップ画像をスキップする"
@@ -3849,7 +3864,7 @@ msgstr "動画のエクスポート時にスキップ"
 msgid "Skipped"
 msgstr "スキップ"
 
-#: src/components/ui/AppSettings.tsx:477
+#: src/components/ui/AppSettings.tsx:475
 msgid "Skips asset review and automatically stitches & exports finished video"
 msgstr "アセットの確認をスキップし、完成した動画を自動的に結合してエクスポートします"
 
@@ -3925,7 +3940,7 @@ msgstr "この地点へ向かう間に読み上げます。"
 #: src/features/map/components/MapToolbar.tsx:90
 #: src/features/map/components/WaypointEditor.tsx:312
 #: src/features/map/hooks/useStopMenus.ts:220
-#: src/hooks/useFileActions.ts:212
+#: src/hooks/useFileActions.ts:238
 msgid "Start"
 msgstr "出発地"
 
@@ -3974,7 +3989,7 @@ msgstr "地点"
 #~ msgstr "地点 "
 
 #. placeholder {0}: i + 1
-#: src/hooks/useFileActions.ts:212
+#: src/hooks/useFileActions.ts:238
 msgid "Stop {0}"
 msgstr "地点 {0}"
 
@@ -3982,7 +3997,7 @@ msgstr "地点 {0}"
 #~ msgid "Stop {stopNum}: {stopName}"
 #~ msgstr "地点 {stopNum}: {stopName}"
 
-#: src/features/map/components/MapArea.tsx:511
+#: src/features/map/components/MapArea.tsx:509
 msgid "Stop By"
 msgstr "経由地"
 
@@ -4035,7 +4050,7 @@ msgstr "字幕の焼き付け"
 msgid "Subtitle lines in the timeline"
 msgstr "タイムライン内の字幕行"
 
-#: src/components/ui/AppSettings.tsx:503
+#: src/components/ui/AppSettings.tsx:501
 #: src/components/ui/PipelineLogPanel.tsx:51
 #: src/features/editor/EditorView.tsx:164
 #: src/features/editor/EditorView.tsx:320
@@ -4083,7 +4098,7 @@ msgstr "システムログ"
 msgid "System Logs & Notifications"
 msgstr "システムログと通知"
 
-#: src/components/view/ProjectManager.tsx:410
+#: src/components/view/ProjectManager.tsx:418
 msgid "Table View"
 msgstr "テーブル表示"
 
@@ -4091,7 +4106,7 @@ msgstr "テーブル表示"
 #~ msgid "Target Canvas"
 #~ msgstr "ターゲットキャンバス"
 
-#: src/components/ui/AppSettings.tsx:454
+#: src/components/ui/AppSettings.tsx:464
 msgid "Target FPS"
 msgstr "ターゲットフレームレート"
 
@@ -4099,7 +4114,7 @@ msgstr "ターゲットフレームレート"
 msgid "Tauri Window API error:"
 msgstr "Tauri Window APIエラー"
 
-#: src/components/view/ProjectManager.tsx:370
+#: src/components/view/ProjectManager.tsx:378
 msgid "Templates"
 msgstr "テンプレート"
 
@@ -4115,7 +4130,7 @@ msgstr "テンプレート"
 #~ msgid "Text Color"
 #~ msgstr "テキストの色"
 
-#: src/components/ui/AppSettings.tsx:518
+#: src/components/ui/AppSettings.tsx:524
 msgid "Text colour"
 msgstr "文字の色"
 
@@ -4163,7 +4178,7 @@ msgstr "音声ができました。聞いて確認してください。"
 msgid "The voice reads every narration in this project. Changing the voice or the speed regenerates the narration the next time you generate. The voice library is shared by all projects."
 msgstr "このプロジェクトのすべてのナレーションをこのボイスが読み上げます。ボイスや速度を変更すると、次回の生成時にナレーションが作り直されます。ボイスライブラリはすべてのプロジェクトで共有されます。"
 
-#: src/components/ui/AppSettings.tsx:290
+#: src/components/ui/AppSettings.tsx:300
 msgid "Theme"
 msgstr "テーマ"
 
@@ -4171,12 +4186,16 @@ msgstr "テーマ"
 #~ msgid "This asset is missing from the project"
 #~ msgstr "このアセットはプロジェクトから欠落しています"
 
+#: src/components/ui/AppSettings.tsx:1009
+msgid "This model cannot read photos. Scripts for stops with photos are written from the place name and location facts only. A vision model such as Gemma 4 can use the photos."
+msgstr "このモデルは写真を読み取れません。写真のある立ち寄り先でも、台本は地名と位置情報だけから作られます。Gemma 4 などの画像対応モデルなら写真を活用できます。"
+
 #: src/components/ui/ReviewStep.tsx:102
 msgid "this project"
 msgstr "このプロジェクト"
 
-#: src/components/ui/AppSettings.tsx:258
-#: src/components/ui/AppSettings.tsx:561
+#: src/components/ui/AppSettings.tsx:268
+#: src/components/ui/AppSettings.tsx:567
 #: src/components/ui/ReviewStep.tsx:90
 msgid "This project"
 msgstr "このプロジェクト"
@@ -4189,7 +4208,11 @@ msgstr "このプロジェクトにはすでに素材があります"
 msgid "This project is archived. Please open it first to render"
 msgstr "このプロジェクトはアーカイブされています。レンダリングするにはまずプロジェクトを開いてください"
 
-#: src/components/view/ProjectManager.tsx:240
+#: src/components/view/ProjectManager.tsx:231
+msgid "This project is still an archive file. Open it once, then duplicate it."
+msgstr "このプロジェクトはまだアーカイブファイルのままです。一度開いてから複製してください。"
+
+#: src/components/view/ProjectManager.tsx:248
 msgid "This project is still an archive file. Open it once, then export."
 msgstr "このプロジェクトはまだアーカイブファイルのままです。一度開いてから書き出してください。"
 
@@ -4341,9 +4364,9 @@ msgstr "元に戻す"
 #~ msgid "Unhide Track"
 #~ msgstr "トラックを表示"
 
-#: src/features/map/components/MapArea.tsx:438
-#: src/features/map/components/MapArea.tsx:480
-#: src/features/map/components/MapArea.tsx:518
+#: src/features/map/components/MapArea.tsx:436
+#: src/features/map/components/MapArea.tsx:478
+#: src/features/map/components/MapArea.tsx:516
 #: src/features/map/components/WaypointEditor.tsx:129
 #: src/hooks/useWaypointActions.ts:47
 #: src/hooks/useWaypointActions.ts:64
@@ -4461,7 +4484,7 @@ msgstr "縦長 9:16"
 #~ msgstr "縦長ポートレート形式 (1080x1920)"
 
 #. placeholder {0}: idx + 1
-#: src/features/map/components/MapArea.tsx:1092
+#: src/features/map/components/MapArea.tsx:1079
 msgid "Via {0} · Right-click for options"
 msgstr "中継点 {0} · 右クリックで操作"
 
@@ -4474,7 +4497,7 @@ msgstr "中継点 {0} / {count}"
 #~ msgid "video"
 #~ msgstr "ビデオ"
 
-#: src/components/ui/AppSettings.tsx:130
+#: src/components/ui/AppSettings.tsx:140
 #: src/features/editor/EditorView.tsx:74
 msgid "Video"
 msgstr "動画"
@@ -4516,7 +4539,7 @@ msgstr "タイムラインで表示"
 #~ msgid "Vivid Rose"
 #~ msgstr "ビビッドローズ"
 
-#: src/components/ui/AppSettings.tsx:131
+#: src/components/ui/AppSettings.tsx:141
 #: src/components/ui/VoiceSettings.tsx:148
 msgid "Voice"
 msgstr "ボイス"
@@ -4551,9 +4574,9 @@ msgid "Walk"
 msgstr "徒歩"
 
 #: src/features/map/components/DrawBar.tsx:285
-#: src/features/map/components/MapArea.tsx:473
-#: src/features/map/components/MapArea.tsx:961
-#: src/features/map/components/MapArea.tsx:1022
+#: src/features/map/components/MapArea.tsx:471
+#: src/features/map/components/MapArea.tsx:948
+#: src/features/map/components/MapArea.tsx:1009
 #: src/features/map/hooks/useStopMenus.ts:151
 #: src/features/map/hooks/useStopMenus.ts:207
 msgid "Waypoint"
@@ -4598,7 +4621,7 @@ msgstr "読み込んだデータを配置する前に地図を開く場所"
 msgid "Where to save"
 msgstr "保存先"
 
-#: src/components/ui/AppSettings.tsx:487
+#: src/components/ui/AppSettings.tsx:485
 msgid "Which pipeline to use when regenerating assets"
 msgstr "素材を再生成するときに使う処理方式"
 
@@ -4620,11 +4643,11 @@ msgstr "単語"
 msgid "Word (e.g. 三段壁)"
 msgstr "単語(例: 三段壁)"
 
-#: src/components/ui/AppSettings.tsx:637
+#: src/components/ui/AppSettings.tsx:643
 msgid "Word (e.g. 加太)"
 msgstr "単語 (例: 加太)"
 
-#: src/components/ui/AppSettings.tsx:625
+#: src/components/ui/AppSettings.tsx:631
 msgid "Word / Kanji"
 msgstr "単語 / 漢字"
 
@@ -4632,7 +4655,7 @@ msgstr "単語 / 漢字"
 msgid "Words every project shares live in App Settings, which you can open from here without opening a project."
 msgstr "すべてのプロジェクトで共有する単語はアプリ設定にあります。プロジェクトを開かずにここから開けます。"
 
-#: src/components/ui/AppSettings.tsx:584
+#: src/components/ui/AppSettings.tsx:590
 msgid "Words here apply to every project. A project's own entry for the same word wins."
 msgstr "ここにある単語はすべてのプロジェクトに適用されます。同じ単語がプロジェクト側にある場合は、プロジェクトが優先されます。"
 
@@ -4644,7 +4667,7 @@ msgstr "スクリプトを作成中..."
 #~ msgid "You can drag these clips together on the timeline, copy/paste them, or press Delete to remove them"
 #~ msgstr "これらのクリップをタイムライン上で一緒にドラッグしたり, コピー/貼り付けしたり、Deleteキーを押して削除したりできます"
 
-#: src/components/view/ProjectManager.tsx:442
+#: src/components/view/ProjectManager.tsx:450
 msgid "You don't have any recent workspaces. Create a new project or open an existing .nvv file to get started."
 msgstr "最近のワークスペースはありませんね。新しいプロジェクトを作成するか、既存の.nvvファイルを開いて開始してください"
 

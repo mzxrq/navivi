@@ -24,7 +24,8 @@ import {
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 import { ProjectSettingsModal } from "./ProjectSettingsModal";
-import { removeRecent, renameRecent } from "../../services/projectStore";
+import { duplicateProject, listRecents, removeRecent, renameRecent } from "../../services/projectStore";
+import { runStage } from "../../services/sidecar";
 import { MenuEntry, openContextMenu, separator } from "../ui/menuItems";
 import { Dialog, dialogButton, dialogInput } from "../ui/Dialog";
 
@@ -98,10 +99,7 @@ export function ProjectManager() {
       }
 
       showToast(t`Quick Render started for ` + project.name, "info");
-      await invoke("run_python_blueprint", {
-        action: configPath,
-        payload: "concat",
-      });
+      await runStage(configPath, "concat");
       showToast(t`Quick Render complete for ` + project.name, "success");
     } catch (err: any) {
       showToast(
@@ -192,7 +190,9 @@ export function ProjectManager() {
         showToast(t`Project renamed successfully`, "success");
       } else if (type === "duplicate") {
         if (!modalInput.trim()) return closeModal();
-        showToast(t`Project duplicated"`, "info");
+        await duplicateProject(project, modalInput.trim());
+        if (setRecentProjects) setRecentProjects(await listRecents());
+        showToast(t`Project duplicated`, "success");
       }
     } catch (err) {
       if (type === "rename") {
@@ -224,7 +224,13 @@ export function ProjectManager() {
     {
       label: t`Duplicate`,
       icon: Copy,
-      onSelect: () => openModal("duplicate", project),
+      onSelect: () => {
+        if (project.path.toLowerCase().endsWith(".nvv")) {
+          showToast(t`This project is still an archive file. Open it once, then duplicate it.`, "info");
+          return;
+        }
+        openModal("duplicate", project);
+      },
     },
     {
       label: t`Project settings`,

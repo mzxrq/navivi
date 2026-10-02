@@ -14,7 +14,7 @@ from services.vdoprocessing.cliptiming import read_audio_offset
 from services.vdoprocessing.vdoexporter import VideoExporter
 
 from .audio_step import _resolve_attraction_narration_script, _resolve_narration_script
-from .helpers import logger, output_is_valid
+from .helpers import is_newer_than, logger, output_is_valid
 
 
 def _burn_checkpoint_key(video_path: str, sub_path: str) -> str:
@@ -115,7 +115,7 @@ def build_waypoint_subtitle(
     output_dir = Path(output_dir)
     subtitle_path = output_dir / f"{Path(audio_path).stem}.srt"
 
-    if not force and output_is_valid(subtitle_path, min_bytes=10):
+    if not force and output_is_valid(subtitle_path, min_bytes=10) and is_newer_than(subtitle_path, audio_path):
         return {
             "index": idx,
             "label": label,
@@ -166,7 +166,7 @@ def build_overview_subtitle(
     output_dir = Path(output_dir)
     subtitle_path = output_dir / f"{Path(audio_path).stem}.srt"
 
-    if not force and output_is_valid(subtitle_path, min_bytes=10):
+    if not force and output_is_valid(subtitle_path, min_bytes=10) and is_newer_than(subtitle_path, audio_path):
         return str(subtitle_path)
 
     from services.localization.subtitle import SRTDocument, SubtitleBuilder
@@ -239,7 +239,7 @@ def build_attraction_subtitles(
         script = _resolve_attraction_narration_script(wp)
         subtitle_path = output_dir / f"{Path(audio_path).stem}.srt"
 
-        if not force and output_is_valid(subtitle_path, min_bytes=10):
+        if not force and output_is_valid(subtitle_path, min_bytes=10) and is_newer_than(subtitle_path, audio_path):
             subtitle_paths.append(str(subtitle_path))
             continue
 

@@ -1,7 +1,7 @@
 import { useLingui } from "@lingui/react";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
-import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -9,11 +9,17 @@ import { useAnimatedUnmount } from "../../hooks/useAnimatedUnmount";
 import { useTheme } from "../../hooks/useTheme";
 import { useUI } from "../../hooks/useUI";
 import { useWorkspace } from "../../hooks/useWorkspace";
-import { getLocalModels, pullModelStream } from "../../services/ollamaApi";
+import {
+  getLocalModels,
+  modelSeesPhotos,
+  pullModelStream,
+} from "../../services/ollamaApi";
+import { callSidecar } from "../../services/sidecar";
 import { dynamicActivate } from "../../i18n";
 import { db } from "../../services/db";
 import { GLOBAL_DICTIONARY_KEY } from "../../config/constants";
 import {
+  AlertTriangle,
   Check,
   CheckCircle2,
   Film,
@@ -32,6 +38,7 @@ import {
   Volume2,
   X,
 } from "./icons";
+import { ComboBox } from "./ComboBox";
 import { Switch } from "./Switch";
 import { VoiceTab } from "./VoiceSettings";
 
@@ -47,6 +54,44 @@ type SettingsTab =
 const inputClass =
   "h-8 min-w-0 px-2.5 rounded-lg bg-white dark:bg-zinc-950/40 border border-zinc-200 dark:border-white/10 text-[13px] text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 outline-none focus:border-navi focus:ring-2 focus:ring-navi/20 transition";
 const selectClass = `${inputClass} pr-7 cursor-pointer`;
+const SUBTITLE_SIZES = [
+  "16",
+  "18",
+  "20",
+  "24",
+  "28",
+  "30",
+  "32",
+  "36",
+  "40",
+  "48",
+  "56",
+  "64",
+];
+// Common fonts; the saved one is always listed, so a project made with another font keeps it.
+const SUBTITLE_FONTS = [
+  "Yu Gothic UI",
+  "Yu Gothic",
+  "Meiryo",
+  "Meiryo UI",
+  "MS Gothic",
+  "MS PGothic",
+  "BIZ UDPGothic",
+  "Noto Sans JP",
+  "Noto Serif JP",
+  "Segoe UI",
+  "Calibri",
+  "Arial",
+  "Verdana",
+  "Tahoma",
+  "Times New Roman",
+  "Georgia",
+  "Consolas",
+];
+const subtitleFonts = (current: string) =>
+  SUBTITLE_FONTS.some((f) => f.toLowerCase() === current.toLowerCase())
+    ? SUBTITLE_FONTS
+    : [current, ...SUBTITLE_FONTS];
 const secondaryButton =
   "inline-flex items-center justify-center gap-1.5 h-8 px-3 rounded-lg border border-zinc-200 dark:border-white/10 bg-white dark:bg-white/5 text-[12px] font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-white/10 transition-colors";
 
@@ -86,12 +131,16 @@ export function AppSettings() {
   // Voice and video settings belong to a project; outside the editor only app-wide tabs are shown.
   const inEditor = currentView === "editor";
   useEffect(() => {
-    if (activeTab === "ai" && !settings.ai_features_enabled) setActiveTab("general");
-    if (!inEditor && (activeTab === "video" || activeTab === "voice")) setActiveTab("general");
+    if (activeTab === "ai" && !settings.ai_features_enabled)
+      setActiveTab("general");
+    if (!inEditor && (activeTab === "video" || activeTab === "voice"))
+      setActiveTab("general");
   }, [activeTab, settings.ai_features_enabled, inEditor]);
 
   const [dictScope, setDictScope] = useState<"project" | "global">("project");
-  const [globalDictionary, setGlobalDictionary] = useState<DictionaryEntry[]>([]);
+  const [globalDictionary, setGlobalDictionary] = useState<DictionaryEntry[]>(
+    [],
+  );
   const globalSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -99,14 +148,24 @@ export function AppSettings() {
     db.appSettings
       .get<DictionaryEntry[]>(GLOBAL_DICTIONARY_KEY)
       .then((saved) => setGlobalDictionary(Array.isArray(saved) ? saved : []))
-      .catch((err) => console.error("Could not load the shared pronunciation dictionary:", err));
+      .catch((err) =>
+        console.error(
+          "Could not load the shared pronunciation dictionary:",
+          err,
+        ),
+      );
   }, [showAppSettings]);
 
   const saveGlobalDictionary = (next: DictionaryEntry[]) => {
     setGlobalDictionary(next);
     if (globalSaveTimer.current) clearTimeout(globalSaveTimer.current);
     globalSaveTimer.current = setTimeout(
-      () => db.appSettings.set(GLOBAL_DICTIONARY_KEY, next).catch((err) => console.error("Could not save the shared dictionary:", err)),
+      () =>
+        db.appSettings
+          .set(GLOBAL_DICTIONARY_KEY, next)
+          .catch((err) =>
+            console.error("Could not save the shared dictionary:", err),
+          ),
       400,
     );
     if (inEditor) setIsDirty(true); // the open project keeps a copy, written on its next save
@@ -166,7 +225,11 @@ export function AppSettings() {
           <h2 className="px-2.5 pt-2 pb-3 text-[13px] font-semibold text-zinc-900 dark:text-zinc-100">
             <Trans>Settings</Trans>
           </h2>
-          <div role="tablist" aria-orientation="vertical" className="flex flex-col gap-0.5">
+          <div
+            role="tablist"
+            aria-orientation="vertical"
+            className="flex flex-col gap-0.5"
+          >
             {tabs.map(({ id, icon: Icon, label }) => {
               const active = activeTab === id;
               return (
@@ -265,7 +328,9 @@ export function AppSettings() {
                     >
                       <Switch
                         checked={!!settings.ai_features_enabled}
-                        onChange={(v) => updateProject({ ai_features_enabled: v })}
+                        onChange={(v) =>
+                          updateProject({ ai_features_enabled: v })
+                        }
                         label={t`AI features`}
                       />
                     </Row>
@@ -292,7 +357,11 @@ export function AppSettings() {
                       {[
                         { id: "light", icon: Sun, label: i18n._("Light") },
                         { id: "dark", icon: Moon, label: i18n._("Dark") },
-                        { id: "system", icon: Monitor, label: i18n._("System") },
+                        {
+                          id: "system",
+                          icon: Monitor,
+                          label: i18n._("System"),
+                        },
                       ].map((option) => (
                         <button
                           key={option.id}
@@ -313,10 +382,26 @@ export function AppSettings() {
                   <Row title={t`Accent colour`}>
                     <div className="flex items-center gap-2">
                       {[
-                        { id: "navi", color: "#4287f5", label: i18n._("Navi Blue") },
-                        { id: "emerald", color: "#10b981", label: i18n._("Emerald") },
-                        { id: "violet", color: "#8b5cf6", label: i18n._("Violet") },
-                        { id: "amber", color: "#f59e0b", label: i18n._("Amber") },
+                        {
+                          id: "navi",
+                          color: "#4287f5",
+                          label: i18n._("Navi Blue"),
+                        },
+                        {
+                          id: "emerald",
+                          color: "#10b981",
+                          label: i18n._("Emerald"),
+                        },
+                        {
+                          id: "violet",
+                          color: "#8b5cf6",
+                          label: i18n._("Violet"),
+                        },
+                        {
+                          id: "amber",
+                          color: "#f59e0b",
+                          label: i18n._("Amber"),
+                        },
                         { id: "rose", color: "#f43f5e", label: i18n._("Rose") },
                       ].map((swatch) => {
                         const selected = accentTheme === swatch.id;
@@ -330,10 +415,17 @@ export function AppSettings() {
                             aria-pressed={selected}
                             style={{ backgroundColor: swatch.color }}
                             className={`w-6 h-6 rounded-full flex items-center justify-center transition ring-offset-2 ring-offset-white dark:ring-offset-zinc-900 ${
-                              selected ? "ring-2 ring-zinc-900/25 dark:ring-white/40" : "hover:scale-110"
+                              selected
+                                ? "ring-2 ring-zinc-900/25 dark:ring-white/40"
+                                : "hover:scale-110"
                             }`}
                           >
-                            {selected && <Check className="w-3.5 h-3.5 text-white" strokeWidth={3} />}
+                            {selected && (
+                              <Check
+                                className="w-3.5 h-3.5 text-white"
+                                strokeWidth={3}
+                              />
+                            )}
                           </button>
                         );
                       })}
@@ -366,12 +458,20 @@ export function AppSettings() {
                           onClick={() => updateProject({ routeMarker: preset })}
                           label={preset.split("/").pop()!.replace(".svg", "")}
                         >
-                          <img src={preset} alt="" className="w-6 h-6 object-contain" />
+                          <img
+                            src={preset}
+                            alt=""
+                            className="w-6 h-6 object-contain"
+                          />
                         </MarkerTile>
                       ))}
                       {settings.routeMarker &&
                         !settings.routeMarker.startsWith("/defaults/") && (
-                          <MarkerTile selected onClick={() => {}} label={t`Custom Marker`}>
+                          <MarkerTile
+                            selected
+                            onClick={() => {}}
+                            label={t`Custom Marker`}
+                          >
                             <img
                               src={markerSrc(settings.routeMarker)}
                               alt=""
@@ -425,7 +525,9 @@ export function AppSettings() {
                   <input
                     type="text"
                     value={settings.mapbox_api_key || ""}
-                    onChange={(e) => updateProject({ mapbox_api_key: e.target.value })}
+                    onChange={(e) =>
+                      updateProject({ mapbox_api_key: e.target.value })
+                    }
                     placeholder="pk.eyJ1..."
                     spellCheck={false}
                     className={`${inputClass} w-full text-[12px]`}
@@ -439,7 +541,9 @@ export function AppSettings() {
                   <input
                     type="text"
                     value={settings.ors_api_key || ""}
-                    onChange={(e) => updateProject({ ors_api_key: e.target.value })}
+                    onChange={(e) =>
+                      updateProject({ ors_api_key: e.target.value })
+                    }
                     placeholder={t`API key`}
                     spellCheck={false}
                     className={`${inputClass} w-full text-[12px]`}
@@ -455,18 +559,6 @@ export function AppSettings() {
                     <NumberInput
                       value={settings.fps || 60}
                       onChange={(v) => updateProject({ fps: v })}
-                    />
-                  </Row>
-                  <Row title={t`Duration`} description={t`Seconds`}>
-                    <NumberInput
-                      value={settings.duration_seconds || 15}
-                      onChange={(v) => updateProject({ duration_seconds: v })}
-                    />
-                  </Row>
-                  <Row title={t`Residential duration`} description={t`Seconds`}>
-                    <NumberInput
-                      value={settings.res_duration || 5}
-                      onChange={(v) => updateProject({ res_duration: v })}
                     />
                   </Row>
                 </Section>
@@ -489,7 +581,9 @@ export function AppSettings() {
                     <select
                       value={settings.hardware_spec_override || "auto"}
                       onChange={(e) =>
-                        updateProject({ hardware_spec_override: e.target.value as any })
+                        updateProject({
+                          hardware_spec_override: e.target.value as any,
+                        })
                       }
                       className={`${selectClass} w-56`}
                     >
@@ -502,34 +596,58 @@ export function AppSettings() {
 
                 <Section title={t`Subtitles`}>
                   <Row title={t`Font`}>
-                    <input
-                      type="text"
+                    <ComboBox
+                      label={t`Font`}
                       value={settings.subtitle_font || "Calibri"}
-                      onChange={(e) => updateProject({ subtitle_font: e.target.value })}
-                      className={`${inputClass} w-48`}
+                      onChange={(v) => updateProject({ subtitle_font: v })}
+                      options={subtitleFonts(
+                        settings.subtitle_font || "Calibri",
+                      )}
+                      previewFont
+                      className="w-56"
                     />
                   </Row>
                   <Row title={t`Font size`}>
-                    <NumberInput
-                      value={settings.subtitle_font_size || 30}
-                      onChange={(v) => updateProject({ subtitle_font_size: v })}
+                    <ComboBox
+                      label={t`Font size`}
+                      value={String(settings.subtitle_font_size || 30)}
+                      onChange={(v) =>
+                        updateProject({ subtitle_font_size: Number(v) })
+                      }
+                      options={SUBTITLE_SIZES}
+                      allowCustom
+                      validate={(v) =>
+                        /^\d+$/.test(v) && Number(v) >= 8 && Number(v) <= 200
+                      }
+                      inputMode="numeric"
+                      className="w-28"
                     />
                   </Row>
-                  <Row title={t`Text colour`} description={t`ASS colour, e.g. &H00FFFFFF`}>
+                  <Row
+                    title={t`Text colour`}
+                    description={t`ASS colour, e.g. &H00FFFFFF`}
+                  >
                     <input
                       type="text"
                       value={settings.subtitle_color || "&H00FFFFFF"}
-                      onChange={(e) => updateProject({ subtitle_color: e.target.value })}
+                      onChange={(e) =>
+                        updateProject({ subtitle_color: e.target.value })
+                      }
                       spellCheck={false}
                       className={`${inputClass} w-36 text-[12px] tabular-nums`}
                     />
                   </Row>
-                  <Row title={t`Outline colour`} description={t`ASS colour, e.g. &H00000000`}>
+                  <Row
+                    title={t`Outline colour`}
+                    description={t`ASS colour, e.g. &H00000000`}
+                  >
                     <input
                       type="text"
                       value={settings.subtitle_outline_color || "&H00000000"}
                       onChange={(e) =>
-                        updateProject({ subtitle_outline_color: e.target.value })
+                        updateProject({
+                          subtitle_outline_color: e.target.value,
+                        })
                       }
                       spellCheck={false}
                       className={`${inputClass} w-36 text-[12px] tabular-nums`}
@@ -543,7 +661,7 @@ export function AppSettings() {
 
             {activeTab === "tts_dictionary" && (
               <>
-                <p className="text-[12px] leading-relaxed text-zinc-500 dark:text-zinc-400 select-text">
+                <p className="text-[12px] leading-relaxed text-zinc-500 dark:text-zinc-400">
                   <Trans>
                     Correct words or kanji that are read incorrectly by the AI
                     voice. You can auto-extract entries from scripts by typing{" "}
@@ -555,7 +673,10 @@ export function AppSettings() {
                 </p>
 
                 {inEditor && (
-                  <div role="tablist" className="inline-flex p-0.5 rounded-lg bg-zinc-100 dark:bg-white/5">
+                  <div
+                    role="tablist"
+                    className="inline-flex p-0.5 rounded-lg bg-zinc-100 dark:bg-white/5"
+                  >
                     {(
                       [
                         ["project", t`This project`],
@@ -581,19 +702,30 @@ export function AppSettings() {
                 )}
                 {(!inEditor || dictScope === "global") && (
                   <p className="text-[11px] text-zinc-400 -mt-1">
-                    <Trans>Words here apply to every project. A project's own entry for the same word wins.</Trans>
+                    <Trans>
+                      Words here apply to every project. A project's own entry
+                      for the same word wins.
+                    </Trans>
                   </p>
                 )}
 
                 {inEditor && dictScope === "project" ? (
-                  <PronunciationEditor entries={dictionary} onChange={setDictionary} />
+                  <PronunciationEditor
+                    entries={dictionary}
+                    onChange={setDictionary}
+                  />
                 ) : (
-                  <PronunciationEditor entries={globalDictionary} onChange={saveGlobalDictionary} />
+                  <PronunciationEditor
+                    entries={globalDictionary}
+                    onChange={saveGlobalDictionary}
+                  />
                 )}
               </>
             )}
 
-            {activeTab === "ai" && settings.ai_features_enabled && <AiModelsTab />}
+            {activeTab === "ai" && settings.ai_features_enabled && (
+              <AiModelsTab />
+            )}
           </div>
         </div>
       </div>
@@ -601,7 +733,6 @@ export function AppSettings() {
     document.body,
   );
 }
-
 
 interface DictionaryEntry {
   word: string;
@@ -617,117 +748,118 @@ function PronunciationEditor({
 }) {
   return (
     <>
-        <div className="rounded-xl border border-zinc-200 dark:border-white/10 overflow-hidden">
-          {entries.length > 0 ? (
-            <>
-              <div className="flex items-center gap-2 h-8 px-3 bg-zinc-50 dark:bg-white/3 border-b border-zinc-200 dark:border-white/10 text-[11px] font-medium text-zinc-500">
-                <span className="flex-1">
-                  <Trans>Word / Kanji</Trans>
-                </span>
-                <span className="flex-1">
-                  <Trans>Reading (Furigana)</Trans>
-                </span>
-                <span className="w-7" />
-              </div>
-              <div className="divide-y divide-zinc-100 dark:divide-white/5">
-                {entries.map((entry, idx) => (
-                  <div key={idx} className="group flex items-center gap-2 px-2 py-1.5">
-                    <input
-                      type="text"
-                      placeholder={t`Word (e.g. 加太)`}
-                      value={entry.word}
-                      onChange={(e) => {
-                        const next = [...entries];
-                        next[idx] = { ...next[idx], word: e.target.value };
-                        onChange(next);
-                      }}
-                      className={`${inputClass} flex-1 border-transparent dark:border-transparent bg-transparent dark:bg-transparent hover:border-zinc-200 dark:hover:border-white/10`}
-                    />
-                    <input
-                      type="text"
-                      placeholder={t`Reading (e.g. かだ)`}
-                      value={entry.reading}
-                      onChange={(e) => {
-                        const next = [...entries];
-                        next[idx] = { ...next[idx], reading: e.target.value };
-                        onChange(next);
-                      }}
-                      className={`${inputClass} flex-1 border-transparent dark:border-transparent bg-transparent dark:bg-transparent hover:border-zinc-200 dark:hover:border-white/10`}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => onChange(entries.filter((_, i) => i !== idx))}
-                      aria-label={t`Remove`}
-                      title={t`Remove`}
-                      className="flex items-center justify-center w-7 h-7 rounded-lg text-zinc-400 opacity-0 group-hover:opacity-100 focus:opacity-100 hover:text-red-500 hover:bg-red-500/10 transition"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </>
-          ) : (
-            <div className="py-10 text-center">
-              <Mic className="w-6 h-6 mx-auto mb-2 text-zinc-300 dark:text-zinc-600" />
-              <p className="text-[13px] text-zinc-600 dark:text-zinc-300">
-                <Trans>No entries yet.</Trans>
-              </p>
-              <p className="text-[12px] text-zinc-400 mt-0.5">
-                <Trans>
-                  Add words below or extract them from narration
-                  scripts.
-                </Trans>
-              </p>
+      <div className="rounded-xl border border-zinc-200 dark:border-white/10 overflow-hidden">
+        {entries.length > 0 ? (
+          <>
+            <div className="flex items-center gap-2 h-8 px-3 bg-zinc-50 dark:bg-white/3 border-b border-zinc-200 dark:border-white/10 text-[11px] font-medium text-zinc-500">
+              <span className="flex-1">
+                <Trans>Word / Kanji</Trans>
+              </span>
+              <span className="flex-1">
+                <Trans>Reading (Furigana)</Trans>
+              </span>
+              <span className="w-7" />
             </div>
-          )}
-        </div>
+            <div className="divide-y divide-zinc-100 dark:divide-white/5">
+              {entries.map((entry, idx) => (
+                <div
+                  key={idx}
+                  className="group flex items-center gap-2 px-2 py-1.5"
+                >
+                  <input
+                    type="text"
+                    placeholder={t`Word (e.g. 加太)`}
+                    value={entry.word}
+                    onChange={(e) => {
+                      const next = [...entries];
+                      next[idx] = { ...next[idx], word: e.target.value };
+                      onChange(next);
+                    }}
+                    className={`${inputClass} flex-1 border-transparent dark:border-transparent bg-transparent dark:bg-transparent hover:border-zinc-200 dark:hover:border-white/10`}
+                  />
+                  <input
+                    type="text"
+                    placeholder={t`Reading (e.g. かだ)`}
+                    value={entry.reading}
+                    onChange={(e) => {
+                      const next = [...entries];
+                      next[idx] = { ...next[idx], reading: e.target.value };
+                      onChange(next);
+                    }}
+                    className={`${inputClass} flex-1 border-transparent dark:border-transparent bg-transparent dark:bg-transparent hover:border-zinc-200 dark:hover:border-white/10`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onChange(entries.filter((_, i) => i !== idx))
+                    }
+                    aria-label={t`Remove`}
+                    title={t`Remove`}
+                    className="flex items-center justify-center w-7 h-7 rounded-lg text-zinc-400 opacity-0 group-hover:opacity-100 focus:opacity-100 hover:text-red-500 hover:bg-red-500/10 transition"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <div className="py-10 text-center">
+            <Mic className="w-6 h-6 mx-auto mb-2 text-zinc-300 dark:text-zinc-600" />
+            <p className="text-[13px] text-zinc-600 dark:text-zinc-300">
+              <Trans>No entries yet.</Trans>
+            </p>
+            <p className="text-[12px] text-zinc-400 mt-0.5">
+              <Trans>
+                Add words below or extract them from narration scripts.
+              </Trans>
+            </p>
+          </div>
+        )}
+      </div>
 
-        <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => onChange([...entries, { word: "", reading: "" }])}
+          className={secondaryButton}
+        >
+          <Plus className="w-3.5 h-3.5" /> <Trans>Add word</Trans>
+        </button>
+
+        {entries.some((e) => !e.reading && e.word) && (
           <button
             type="button"
-            onClick={() => onChange([...entries, { word: "", reading: "" }])}
+            onClick={async () => {
+              const emptyWords = entries
+                .filter((e) => e.word && !e.reading)
+                .map((e) => e.word);
+              if (emptyWords.length === 0) return;
+
+              const reply = await callSidecar<{
+                readings: Record<string, string>;
+              }>("get_furigana", emptyWords);
+              if (!reply.success) {
+                if (!reply.cancelled)
+                  console.error("get_furigana failed:", reply.error);
+                return;
+              }
+              onChange(
+                entries.map((e) => ({
+                  ...e,
+                  reading:
+                    !e.reading && reply.readings?.[e.word]
+                      ? reply.readings[e.word]
+                      : e.reading,
+                })),
+              );
+            }}
             className={secondaryButton}
           >
-            <Plus className="w-3.5 h-3.5" /> <Trans>Add word</Trans>
+            <Trans>Auto-fill readings</Trans>
           </button>
-
-          {entries.some((e) => !e.reading && e.word) && (
-            <button
-              type="button"
-              onClick={async () => {
-                const emptyWords = entries
-                  .filter((e) => e.word && !e.reading)
-                  .map((e) => e.word);
-                if (emptyWords.length === 0) return;
-
-                try {
-                  const res = await invoke<string>("run_python_blueprint", {
-                    action: "get_furigana",
-                    payload: JSON.stringify(emptyWords),
-                  });
-                  const parsed = JSON.parse(res);
-                  if (parsed.success && parsed.readings) {
-                    onChange(
-                      entries.map((e) => ({
-                        ...e,
-                        reading:
-                          !e.reading && parsed.readings[e.word]
-                            ? parsed.readings[e.word]
-                            : e.reading,
-                      })),
-                    );
-                  }
-                } catch (err) {
-                  console.error("get_furigana failed:", err);
-                }
-              }}
-              className={secondaryButton}
-            >
-              <Trans>Auto-fill readings</Trans>
-            </button>
-          )}
-        </div>
+        )}
+      </div>
     </>
   );
 }
@@ -744,8 +876,14 @@ function Section({
   return (
     <section>
       <div className="flex items-baseline justify-between mb-2 px-0.5">
-        <h4 className="text-[12px] font-semibold text-zinc-500 dark:text-zinc-400">{title}</h4>
-        {hint && <span className="text-[11px] text-zinc-400 dark:text-zinc-500">{hint}</span>}
+        <h4 className="text-[12px] font-semibold text-zinc-500 dark:text-zinc-400">
+          {title}
+        </h4>
+        {hint && (
+          <span className="text-[11px] text-zinc-400 dark:text-zinc-500">
+            {hint}
+          </span>
+        )}
       </div>
       <div className="rounded-xl border border-zinc-200 dark:border-white/10 divide-y divide-zinc-100 dark:divide-white/5">
         {children}
@@ -770,7 +908,9 @@ function Row({
   const text = (
     <div className="min-w-0">
       <div className="flex items-center gap-2">
-        <span className="text-[13px] font-medium text-zinc-900 dark:text-zinc-100">{title}</span>
+        <span className="text-[13px] font-medium text-zinc-900 dark:text-zinc-100">
+          {title}
+        </span>
         {badge}
       </div>
       {description && (
@@ -796,19 +936,33 @@ function Row({
   );
 }
 
-function Badge({ tone, children }: { tone: "violet" | "amber"; children: React.ReactNode }) {
+function Badge({
+  tone,
+  children,
+}: {
+  tone: "violet" | "amber";
+  children: React.ReactNode;
+}) {
   const tones = {
     violet: "bg-violet-500/10 text-violet-600 dark:text-violet-400",
     amber: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
   };
   return (
-    <span className={`h-4.5 px-1.5 inline-flex items-center rounded-md text-[10px] font-medium whitespace-nowrap ${tones[tone]}`}>
+    <span
+      className={`h-4.5 px-1.5 inline-flex items-center rounded-md text-[10px] font-medium whitespace-nowrap ${tones[tone]}`}
+    >
       {children}
     </span>
   );
 }
 
-function NumberInput({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+function NumberInput({
+  value,
+  onChange,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+}) {
   return (
     <input
       type="number"
@@ -848,7 +1002,6 @@ function MarkerTile({
   );
 }
 
-
 function AiModelsTab() {
   const { settings, updateSettings, setIsDirty } = useWorkspace();
   const { i18n } = useLingui();
@@ -865,6 +1018,19 @@ function AiModelsTab() {
   useEffect(() => {
     getLocalModels().then(setLocalModels);
   }, []);
+
+  const activeModel = settings.ai_model || "schroneko/gemma-2-2b-jpn-it";
+  const [seesPhotos, setSeesPhotos] = useState<boolean | null>(null);
+  useEffect(() => {
+    let current = true;
+    setSeesPhotos(null);
+    modelSeesPhotos(activeModel).then(
+      (result) => current && setSeesPhotos(result),
+    );
+    return () => {
+      current = false;
+    };
+  }, [activeModel, localModels]);
 
   const recommendedModels = [
     {
@@ -964,7 +1130,7 @@ function AiModelsTab() {
           description={t`Select which model to use for narration synthesis, only downloaded models are shown`}
         >
           <select
-            value={settings.ai_model || "schroneko/gemma-2-2b-jpn-it"}
+            value={activeModel}
             onChange={(e) => {
               updateSettings({ ai_model: e.target.value });
               setIsDirty(true);
@@ -984,6 +1150,20 @@ function AiModelsTab() {
             )}
           </select>
         </Row>
+        {seesPhotos === false && (
+          <div className="px-4 py-3">
+            <div className="flex items-start gap-2 rounded-lg bg-amber-500/10 px-3 py-2 text-[12px] leading-snug text-amber-700 dark:text-amber-400">
+              <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+              <span>
+                <Trans>
+                  This model cannot read photos. Scripts for stops with photos
+                  are written from the place name and location facts only. A
+                  vision model such as Gemma 4 can use the photos.
+                </Trans>
+              </span>
+            </div>
+          </div>
+        )}
       </Section>
 
       <Section title={t`Recommended models`}>
@@ -1000,7 +1180,9 @@ function AiModelsTab() {
                   <span className="text-[13px] font-medium text-zinc-900 dark:text-zinc-100">
                     {model.name}
                   </span>
-                  <span className="text-[11px] text-zinc-400 tabular-nums">{model.size}</span>
+                  <span className="text-[11px] text-zinc-400 tabular-nums">
+                    {model.size}
+                  </span>
                 </div>
                 <div className="text-[11px] tracking-tight text-zinc-500 dark:text-zinc-400 truncate select-text">
                   {model.id}
@@ -1029,14 +1211,17 @@ function AiModelsTab() {
                       onClick={() => handleCancel(model.id)}
                       className="flex items-center justify-center w-7 h-7 rounded-lg text-zinc-400 hover:text-red-500 hover:bg-red-500/10 transition-colors shrink-0"
                       title={dlStatus.failed ? t`Clear` : t`Cancel download`}
-                      aria-label={dlStatus.failed ? t`Clear` : t`Cancel download`}
+                      aria-label={
+                        dlStatus.failed ? t`Clear` : t`Cancel download`
+                      }
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 ) : isLocal ? (
                   <span className="inline-flex items-center gap-1 text-[12px] font-medium text-emerald-600 dark:text-emerald-400">
-                    <CheckCircle2 className="w-3.5 h-3.5" /> <Trans>Ready</Trans>
+                    <CheckCircle2 className="w-3.5 h-3.5" />{" "}
+                    <Trans>Ready</Trans>
                   </span>
                 ) : (
                   <button

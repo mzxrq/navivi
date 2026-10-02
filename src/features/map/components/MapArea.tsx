@@ -1,6 +1,5 @@
 import { useEffect, useState, useRef } from "react";
 import Map, { Marker, MapRef, Source } from "react-map-gl/mapbox";
-import { listen } from "@tauri-apps/api/event";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { UploadCloud } from "../../../components/ui/icons";
 import { AddType, MapToolbar } from "./MapToolbar";
@@ -18,7 +17,6 @@ import { useMapRouting } from "../hooks/useMapRouting";
 import { useFileActions } from "../../../hooks/useFileActions";
 import { takePendingImport } from "../../../utils/pendingImport";
 import { useUI } from "../../../hooks/useUI";
-import { loadProjectData } from "../../../services/fileSystem";
 import { WaypointEditor } from "./WaypointEditor";
 import { LayerManager } from "./MapLayers/LayerManager";
 import { RouteLayer } from "./MapLayers/RouteLayer";
@@ -44,7 +42,7 @@ export function MapArea() {
     setActiveWaypointId,
     registerThumbnailGetter,
   } = useWorkspace();
-  const { handleDroppedFiles, importRouteFile } = useFileActions();
+  const { handleDroppedBrowserFiles, importRouteFile } = useFileActions();
 
   useEffect(() => {
     const pending = takePendingImport();
@@ -721,38 +719,27 @@ export function MapArea() {
     };
   }, [selectedStyle]);
 
-  // Drag and Drop Listeners
-  useEffect(() => {
-    const unlistenHover = listen("tauri://drag-enter", () =>
-      setIsHovering(true),
-    );
-    const unlistenLeave = listen("tauri://drag-leave", () =>
-      setIsHovering(false),
-    );
-    const unlistenDrop = listen<{ paths: string[] }>(
-      "tauri://drag-drop",
-      async (event) => {
-        setIsHovering(false);
-        if (event.payload.paths && event.payload.paths.length > 0) {
-          const path = event.payload.paths[0];
-          if (
-            path.toLowerCase().endsWith(".json") ||
-            path.toLowerCase().endsWith(".navivi")
-          ) {
-            await loadProjectData(path);
-          } else {
-            await handleDroppedFiles(event.payload.paths);
-          }
-        }
-      },
-    );
-
-    return () => {
-      unlistenHover.then((f) => f());
-      unlistenLeave.then((f) => f());
-      unlistenDrop.then((f) => f());
-    };
-  }, [handleDroppedFiles]);
+  // Files dropped from the desktop. Native drop events are off (the markers use HTML5 drag), so the page handles them.
+  const hasFiles = (e: React.DragEvent) => Array.from(e.dataTransfer?.types ?? []).includes("Files");
+  const fileDropHandlers = {
+    onDragEnter: (e: React.DragEvent) => {
+      if (hasFiles(e)) setIsHovering(true);
+    },
+    onDragOver: (e: React.DragEvent) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "copy";
+    },
+    onDragLeave: (e: React.DragEvent) => {
+      if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setIsHovering(false);
+    },
+    onDrop: (e: React.DragEvent) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      setIsHovering(false);
+      void handleDroppedBrowserFiles(Array.from(e.dataTransfer.files));
+    },
+  };
 
   const mapboxToken =
     settings?.mapbox_api_key || import.meta.env.VITE_MAPBOX_TOKEN;
@@ -784,7 +771,7 @@ export function MapArea() {
       : null;
 
   return (
-    <main className="flex-1 relative bg-zinc-100 dark:bg-[#09090b] overflow-hidden transition-colors">
+    <main {...fileDropHandlers} className="flex-1 relative bg-zinc-100 dark:bg-[#09090b] overflow-hidden transition-colors">
       <div className="absolute z-200 top-14 left-1/2 -translate-x-1/2 max-w-[calc(100%-2rem)] flex flex-col items-center gap-2 pointer-events-none *:pointer-events-auto">
         <MapToolbar
           isAddMode={isAddMode}

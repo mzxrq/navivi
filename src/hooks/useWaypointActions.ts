@@ -82,8 +82,28 @@ export function useWaypointActions() {
       attractionNarration: "",
       images: [],
       imagePans: [],
+      imageTransitions: [],
+      videos: [],
+      videoSound: [],
       isStopBy: false,
-      connectToRoute: undefined
+      connectToRoute: undefined,
+      // Belongs to the original stop's outgoing leg or generated clips, not to a new final stop.
+      customRoute: undefined,
+      viaPoints: undefined,
+      curveOffset: undefined,
+      lineColor: undefined,
+      audioUrl: undefined,
+      videoUrl: undefined,
+      videoPrompt: undefined,
+      isGeneratingAudio: false,
+      isGeneratingVideo: false,
+      generatingScriptType: null,
+      skipAssetGeneration: undefined,
+      isStub: undefined,
+      timestamp: undefined,
+      timelineOffset: undefined,
+      videoOffset: undefined,
+      audioOffset: undefined,
     };
 
     setWaypoints((prev) => [...prev, returnWaypoint]);

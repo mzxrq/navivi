@@ -6,6 +6,7 @@ import { appConfig, fileSystem, GLOBAL_DICTIONARY_KEY } from "../config/constant
 import { buildAssetManifest } from "../utils/manifestBuilder";
 import { TimelineData, RecentProjects } from "../types";
 import { routeCacheKey } from "../utils/routeCacheKey";
+import { planFileNames } from "../utils/fileNames";
 import { emptyTimeline, timelineFromEditorState, timelineFromPipeline, toManifest } from "../features/editor/model";
 import { i18n } from "@lingui/core";
 import { db } from "./db";
@@ -19,6 +20,8 @@ async function isProjectIdTaken(id: string, directoryPath: string): Promise<bool
     return false;
   }
 }
+
+const xmlText = (text: string) => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 // Haversine distance calculator
 function calculateDistance(pos1: [number, number], pos2: [number, number]) {
@@ -100,13 +103,13 @@ export const saveProjectData = async (
   // export waypoints
   waypoints.forEach((wp) => {
     gpxLines.push(` <wpt lat="${wp.lat}" lon="${wp.lng}">`);
-    const safeName = (wp.name || "Navivi Stop").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const safeName = xmlText(wp.name || "Navivi Stop");
     gpxLines.push(`   <name>${safeName}</name>`);
     gpxLines.push(` </wpt>`);
   });
 
   // track segments
-  gpxLines.push(`  <trk>\n    <name>${projName}</name>\n    <trkseg>`);
+  gpxLines.push(`  <trk>\n    <name>${xmlText(projName)}</name>\n    <trkseg>`);
 
   let currentTime = new Date();
   let lastPos: [number, number] | null = null;
@@ -144,13 +147,16 @@ export const saveProjectData = async (
   const gpxStr = gpxLines.join('\n');
   await writeTextFile(gpxPath, gpxStr);
 
+  const imageNames = await planFileNames(imageAssetsDir, waypoints.flatMap((wp) => [...(wp.images ?? []), ...(wp.customMarker ? [wp.customMarker] : [])]));
+  const videoNames = await planFileNames(userVideoDir, waypoints.flatMap((wp) => wp.videos ?? []));
+
   const processedWaypoints = await Promise.all(
     waypoints.map(async (wp) => {
       const relativeImagePaths: string[] = [];
 
       if (wp.images && wp.images.length > 0) {
         for (const imgPath of wp.images) {
-          const fileName = await basename(imgPath);
+          const fileName = imageNames.get(imgPath) ?? (await basename(imgPath));
           const absoluteDest = await join(imageAssetsDir, fileName);
           if (imgPath !== absoluteDest) {
             await copyFile(imgPath, absoluteDest);
@@ -160,7 +166,7 @@ export const saveProjectData = async (
       }
       const relativeVideoPaths: string[] = [];
       for (const videoPath of wp.videos ?? []) {
-        const fileName = await basename(videoPath);
+        const fileName = videoNames.get(videoPath) ?? (await basename(videoPath));
         const absoluteDest = await join(userVideoDir, fileName);
         if (videoPath !== absoluteDest && !(await exists(absoluteDest))) {
           await copyFile(videoPath, absoluteDest);
@@ -169,7 +175,7 @@ export const saveProjectData = async (
       }
       let finalCustomMarker = "";
       if (wp.customMarker) {
-        const markerName = await basename(wp.customMarker);
+        const markerName = imageNames.get(wp.customMarker) ?? (await basename(wp.customMarker));
         const markerDest = await join(imageAssetsDir, markerName);
         if (wp.customMarker !== markerDest) {
           await copyFile(wp.customMarker, markerDest);
@@ -353,6 +359,19 @@ async function freeWorkspaceDir(docsPath: string, projectName: string): Promise<
   let candidate = await join(root, slug);
   for (let n = 2; await exists(candidate); n++) candidate = await join(root, `${slug}_${n}`);
   return candidate;
+}
+
+// A copy of a project folder under a new name, with its own project id so it is a separate project in the database.
+export async function duplicateProjectFolder(sourceDir: string, name: string): Promise<string> {
+  const destDir = await freeWorkspaceDir(await documentDir(), name);
+  const config = JSON.parse(await readProjectFile(sourceDir, (await readDir(sourceDir)).map((e) => e.name ?? "")));
+  await invoke("duplicate_project_folder", { sourceDir, destDir });
+  let id = await basename(destDir);
+  if (await isProjectIdTaken(id, destDir)) id = `${id}_${Date.now()}`;
+  config.project_id = id;
+  config.project_name = name;
+  await writeTextFile(await join(destDir, fileSystem.configFile), JSON.stringify(config, null, 2));
+  return destDir;
 }
 
 export const loadProjectData = async (forcePath?: string, isFolder = false) => {

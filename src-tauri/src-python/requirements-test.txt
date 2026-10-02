@@ -1,0 +1,24 @@
+# What the unit tests import. The full requirements.txt also installs diffusers/transformers/accelerate (the
+# local pan/zoom fallback), which no test needs, so CI installs this lighter list instead.
+numpy
+pandas
+pyproj
+contextily
+scipy
+Pillow
+opencv-python-headless
+httpx
+requests
+websocket-client
+ollama
+pydantic
+deep-translator
+pykakasi
+tqdm
+pydeck
+playwright
+python-dotenv
+psutil
+fugashi
+unidic-lite
+pytest

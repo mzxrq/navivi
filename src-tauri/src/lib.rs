@@ -12,6 +12,22 @@ use std::fs;
 
 mod db;
 
+// Killing python.exe alone leaves what the pipeline started (ffmpeg, headless Chromium, the TTS and ComfyUI servers) running
+// and holding the GPU and open files, so the whole process tree goes.
+fn kill_tree(child: &mut Child) {
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        let _ = Command::new("taskkill")
+            .args(["/PID", &child.id().to_string(), "/T", "/F"])
+            .creation_flags(0x0800_0000) // CREATE_NO_WINDOW
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+    }
+    let _ = child.kill();
+}
+
 // Startup: a small "splash" window plays the logo while the (hidden) main window loads; app_ready swaps them.
 struct StartedAt(std::time::Instant);
 const SPLASH_MIN: Duration = Duration::from_millis(3600);
@@ -46,12 +62,12 @@ struct BlueprintState {
 fn kill_tracked_children(state: &BlueprintState) {
     if let Ok(mut lock) = state.process.lock() {
         if let Some(mut child) = lock.take() {
-            let _ = child.kill();
+            kill_tree(&mut child);
         }
     }
     if let Ok(mut lock) = state.render_process.lock() {
         if let Some(mut child) = lock.take() {
-            let _ = child.kill();
+            kill_tree(&mut child);
         }
     }
 }
@@ -80,11 +96,12 @@ async fn run_python_blueprint(
     let mut stderr = child.stderr.take().ok_or("Failed to capture stderr")?;
 
     // 2. Lock the Mutex and store the child process safely
+    let my_pid = child.id();
     {
         let mut lock = state.process.lock().unwrap();
         // If there's an existing process stuck, kill it before starting a new one
         if let Some(mut old_child) = lock.take() {
-            let _ = old_child.kill();
+            kill_tree(&mut old_child);
             let _ = old_child.wait();
         }
         *lock = Some(child);
@@ -105,21 +122,24 @@ async fn run_python_blueprint(
     let err_str = stderr_thread.join().unwrap_or_default();
 
     // 5. Streams are closed. Clean up and get the exit status.
+    // Only this call's own process is reaped here: if a newer call (or a cancel) replaced it, the slot holds someone else's child.
     let mut lock = state.process.lock().unwrap();
-    if let Some(mut child) = lock.take() {
-        match child.wait() {
-            Ok(status) => {
-                if status.success() {
-                    return Ok(out_str);
-                } else {
-                    return Err(if err_str.is_empty() { "Process terminated".to_string() } else { err_str });
+    if lock.as_ref().map(|c| c.id()) == Some(my_pid) {
+        if let Some(mut child) = lock.take() {
+            match child.wait() {
+                Ok(status) => {
+                    if status.success() {
+                        return Ok(out_str);
+                    } else {
+                        return Err(if err_str.is_empty() { "Process terminated".to_string() } else { err_str });
+                    }
                 }
+                Err(e) => return Err(e.to_string()),
             }
-            Err(e) => return Err(e.to_string()),
         }
     }
 
-    // If lock.take() was None, it means the cancel command already took it and reaped it!
+    // The slot was taken: a cancel or a newer call already killed and reaped this one.
     Err("Process was cancelled".to_string())
 }
 #[tauri::command]
@@ -127,7 +147,7 @@ fn cancel_python_blueprint(state: State<'_, BlueprintState>) -> Result<String, S
     let mut lock = state.process.lock().map_err(|e| e.to_string())?;
 
     if let Some(mut child) = lock.take() {
-        let _ = child.kill();
+        kill_tree(&mut child);
         let _ = child.wait();
         Ok("Cancelled".to_string())
     } else {
@@ -140,7 +160,7 @@ fn cancel_render(app: AppHandle, state: State<'_, BlueprintState>) -> Result<Str
     state.render_cancelled.store(true, Ordering::SeqCst);
     let mut lock = state.render_process.lock().map_err(|e| e.to_string())?;
     if let Some(mut child) = lock.take() {
-        let _ = child.kill();
+        kill_tree(&mut child);
         let _ = child.wait();
         let _ = app.emit("render-finish", "Cancelled");
         Ok("Cancelled".to_string())
@@ -184,7 +204,7 @@ fn start_render(
     {
         let mut lock = state.render_process.lock().unwrap();
         if let Some(mut old_child) = lock.take() {
-            let _ = old_child.kill();
+            kill_tree(&mut old_child);
             let _ = old_child.wait();
         }
         *lock = Some(child);
@@ -438,6 +458,7 @@ pub fn run() {
             open_in_explorer,
             project_files::export_project_archive,
             project_files::tidy_project_folder,
+            project_files::duplicate_project_folder,
             unzip_project,
             convert_gps_to_gpx,
             db::commands::project_create,
@@ -518,4 +539,41 @@ async fn unzip_project(source_file: String, dest_dir: String) -> Result<(), Stri
         }
     }
     Ok(())
+}
+
+#[cfg(all(test, target_os = "windows"))]
+mod tests {
+    use super::*;
+    use std::collections::HashSet;
+
+    fn ping_pids() -> HashSet<String> {
+        let out = Command::new("tasklist")
+            .args(["/FI", "IMAGENAME eq PING.EXE", "/FO", "CSV", "/NH"])
+            .output()
+            .expect("tasklist");
+        String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .filter_map(|l| l.split(',').nth(1).map(|p| p.trim_matches('"').to_string()))
+            .filter(|p| p.chars().all(|c| c.is_ascii_digit()) && !p.is_empty())
+            .collect()
+    }
+
+    #[test]
+    fn kill_tree_also_ends_the_grandchildren() {
+        let before = ping_pids();
+        let mut child = Command::new("cmd")
+            .args(["/C", "ping -n 60 127.0.0.1 >nul"])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("spawn");
+        thread::sleep(Duration::from_millis(1500));
+        let started: Vec<String> = ping_pids().difference(&before).cloned().collect();
+        assert_eq!(started.len(), 1, "the ping grandchild should be running");
+
+        kill_tree(&mut child);
+        let _ = child.wait();
+        thread::sleep(Duration::from_millis(1000));
+        assert!(!ping_pids().contains(&started[0]), "the grandchild survived");
+    }
 }

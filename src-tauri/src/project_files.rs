@@ -189,6 +189,42 @@ pub async fn export_project_archive(source_dir: String, dest_file: String, inclu
         .map_err(|e| e.to_string())?
 }
 
+/// Copies a project folder for "Duplicate". Leaves out what is not the user's work (`.history`, the old tile `cache`,
+/// archives in the root); the caller rewrites job_config.json for the copy.
+pub fn copy_project(source: &Path, dest: &Path) -> Result<(), String> {
+    if !source.is_dir() {
+        return Err(format!("{} is not a project folder", source.display()));
+    }
+    if dest.exists() {
+        return Err(format!("{} already exists", dest.display()));
+    }
+    fs::create_dir_all(dest).map_err(|e| e.to_string())?;
+    for entry in WalkDir::new(source).min_depth(1) {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let rel = entry.path().strip_prefix(source).map_err(|e| e.to_string())?;
+        let top = rel.components().next().and_then(|c| c.as_os_str().to_str()).unwrap_or("");
+        let in_root = rel.components().count() == 1;
+        let is_archive = in_root && entry.file_type().is_file() && matches!(rel.extension().and_then(|e| e.to_str()), Some("nvv") | Some("zip"));
+        if top == ".history" || top == "cache" || is_archive {
+            continue;
+        }
+        let target = dest.join(rel);
+        if entry.file_type().is_dir() {
+            fs::create_dir_all(&target).map_err(|e| e.to_string())?;
+        } else {
+            fs::copy(entry.path(), &target).map_err(|e| format!("{}: {}", rel.display(), e))?;
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn duplicate_project_folder(source_dir: String, dest_dir: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || copy_project(Path::new(&source_dir), Path::new(&dest_dir)))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 #[tauri::command]
 pub async fn tidy_project_folder(project_dir: String, shared_tile_cache: String, remove_history: bool) -> Result<TidyReport, String> {
     tauri::async_runtime::spawn_blocking(move || tidy(Path::new(&project_dir), Path::new(&shared_tile_cache), remove_history))
@@ -213,6 +249,28 @@ mod tests {
     fn write(path: &Path, text: &str) {
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(path, text).unwrap();
+    }
+
+    #[test]
+    fn duplicate_copies_the_work_and_not_the_clutter() {
+        let src = scratch();
+        let dest = scratch().join("copy");
+        write(&src.join("job_config.json"), "{}");
+        write(&src.join("assets/image/a.jpg"), "img");
+        write(&src.join("assets/audio/a.wav"), "wav");
+        write(&src.join(".navivi/routecache.json"), "{}");
+        write(&src.join(".history/v1.json"), "{}");
+        write(&src.join("cache/tiles/t.png"), "tile");
+        write(&src.join("old.nvv"), "{}");
+        write(&src.join("assets/video/user/mine.mp4"), "vid");
+        copy_project(&src, &dest).unwrap();
+        for kept in ["job_config.json", "assets/image/a.jpg", "assets/audio/a.wav", ".navivi/routecache.json", "assets/video/user/mine.mp4"] {
+            assert!(dest.join(kept).is_file(), "{kept} should be copied");
+        }
+        for left in [".history", "cache", "old.nvv"] {
+            assert!(!dest.join(left).exists(), "{left} should not be copied");
+        }
+        assert!(copy_project(&src, &dest).is_err(), "must not copy over an existing folder");
     }
 
     #[test]
