@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useMemo, useState } from "react";
+import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 import { Copy, Download, Music, Trash2 } from "../../components/ui/icons";
@@ -21,6 +21,7 @@ import {
   layout,
   MIN_CUE,
   MIN_SEGMENT,
+  PlacedCue,
   placedCues,
   placedTexts,
   Segment,
@@ -30,7 +31,7 @@ import {
   TextLine,
   TimelineData,
 } from "./model";
-import { formatTime, player } from "./player";
+import { formatTime, player, usePlayerTime } from "./player";
 import type { Selection } from "./TimelinePane";
 
 interface InspectorProps {
@@ -128,6 +129,54 @@ function TextBlock({ value, onCommit }: { value: string; onCommit: (v: string) =
       onBlur={() => text !== value && onCommit(text)}
       className="w-full px-2 py-1.5 rounded-lg bg-white dark:bg-zinc-950/40 border border-zinc-200 dark:border-white/10 text-[13px] leading-snug text-zinc-900 dark:text-zinc-100 outline-none focus:border-navi focus:ring-2 focus:ring-navi/20 transition resize-none"
     />
+  );
+}
+
+/** Every subtitle, with the one under the playhead highlighted and kept in view. */
+function CueList({ cues, onPick }: { cues: PlacedCue[]; onPick: (id: string) => void }) {
+  const time = usePlayerTime();
+  const listRef = useRef<HTMLUListElement>(null);
+  const current = cues.find((c) => time >= c.globalStart && time < c.globalEnd)?.id;
+
+  useEffect(() => {
+    const list = listRef.current;
+    const row = current ? list?.querySelector<HTMLElement>(`[data-cue="${current}"]`) : null;
+    if (!list || !row) return;
+    // Scrolls only the list, never the panel around it.
+    if (row.offsetTop < list.scrollTop) list.scrollTop = row.offsetTop;
+    else if (row.offsetTop + row.offsetHeight > list.scrollTop + list.clientHeight)
+      list.scrollTop = row.offsetTop + row.offsetHeight - list.clientHeight;
+  }, [current]);
+
+  return (
+    <ul ref={listRef} className="relative max-h-64 overflow-y-auto custom-scrollbar -mx-2">
+      {cues.map((c) => {
+        const on = c.id === current;
+        return (
+          <li key={c.id} data-cue={c.id}>
+            <button
+              type="button"
+              onClick={() => {
+                onPick(c.id);
+                player.set({ playing: false, time: c.globalStart });
+              }}
+              aria-current={on || undefined}
+              className={`w-full flex gap-2 px-2 py-1.5 rounded-md text-left transition-colors ${
+                on ? "bg-navi/10" : "hover:bg-zinc-100 dark:hover:bg-white/5"
+              }`}
+            >
+              <span className={`shrink-0 w-11 text-[11px] tabular-nums pt-px ${on ? "text-navi" : "text-zinc-400"}`}>
+                {formatTime(c.globalStart, false)}
+              </span>
+              <span className={`text-[12px] leading-snug line-clamp-2 ${on ? "text-zinc-900 dark:text-white" : "text-zinc-700 dark:text-zinc-300"}`}>
+                {c.text}
+              </span>
+            </button>
+          </li>
+        );
+      })}
+      {!cues.length && <li className="px-2 text-[12px] text-zinc-400">{t`No subtitles yet. Use Subtitles in the toolbar.`}</li>}
+    </ul>
   );
 }
 
@@ -514,24 +563,7 @@ export function Inspector(p: InspectorProps) {
             </button>
           </div>
         )}
-        <ul className="max-h-64 overflow-y-auto custom-scrollbar -mx-2">
-          {cues.map((c) => (
-            <li key={c.id}>
-              <button
-                type="button"
-                onClick={() => {
-                  p.onSelect({ type: "cue", id: c.id });
-                  player.set({ playing: false, time: c.globalStart });
-                }}
-                className="w-full flex gap-2 px-2 py-1.5 rounded-md text-left hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors"
-              >
-                <span className="shrink-0 w-11 text-[11px] tabular-nums text-zinc-400 pt-px">{formatTime(c.globalStart, false)}</span>
-                <span className="text-[12px] leading-snug text-zinc-700 dark:text-zinc-300 line-clamp-2">{c.text}</span>
-              </button>
-            </li>
-          ))}
-          {!cues.length && <li className="px-2 text-[12px] text-zinc-400">{t`No subtitles yet. Use Subtitles in the toolbar.`}</li>}
-        </ul>
+        <CueList cues={cues} onPick={(id) => p.onSelect({ type: "cue", id })} />
       </Section>
       <DefaultSubtitleStyleSection />
       <Section title={t`Music`}>
