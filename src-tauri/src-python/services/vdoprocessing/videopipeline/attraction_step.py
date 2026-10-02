@@ -23,6 +23,22 @@ def _resolve_attraction_prompt(waypoint: dict) -> list:
     return [waypoint.get("label", "Beautiful Japanese scenery, high quality")]
 
 
+def needs_wan(waypoints: list) -> bool:
+    """Whether any of these waypoints' attraction clips will run on ComfyUI
+    (a photo with a moving preset); stills and the user's own videos don't."""
+    from services import tuning
+    from services.vdoprocessing.camera_pan import STILL_PRESET, normalize_camera_pan
+
+    if tuning.ATTRACTION_GENERATOR == "parallax":
+        return False
+    for wp in waypoints:
+        if not isinstance(wp, dict) or wp.get("videos") or not wp.get("popup_image") or is_passed_only(wp):
+            continue
+        if any(normalize_camera_pan(p) != STILL_PRESET for p in _resolve_attraction_prompt(wp)):
+            return True
+    return False
+
+
 def generate_waypoint_attraction_video(
     waypoint: dict,
     idx: int,
@@ -134,10 +150,12 @@ def render_attraction_videos(
     # ComfyUI job running server-side — the next run's submissions just
     # queue up behind it (and behind each other, across repeated restarts)
     # instead of ever starting fresh. Clear the slate before this run's
-    # first submission.
-    ComfyUII2VClient().clear_queue()
-
+    # first submission. Only when this run uses Wan: an all-stills run would
+    # otherwise kill another process's job on the shared server.
     waypoints = job_config.get("waypoints", [])
+    if needs_wan(waypoints):
+        ComfyUII2VClient().clear_queue()
+
     generated_videos = []
     audio_durations = audio_durations or []
     audio_paths = audio_paths or []

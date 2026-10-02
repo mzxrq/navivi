@@ -48,3 +48,20 @@ def test_trim_and_music_and_subtitles(media):
 def test_cues_to_srt_sorted():
     srt = VideoExporter.cues_to_srt([{"start": 5, "end": 6, "text": "b"}, {"start": 1, "end": 2, "text": "a"}])
     assert srt.startswith("1\n00:00:01,000 --> 00:00:02,000\na")
+
+
+def test_editor_durations_make_the_export_as_long_as_the_preview(media):
+    # Preview lengths: max(trimmed video, offset + voice) -> 2.5 and 4.0, no tail hold.
+    timeline = {
+        "video_tracks": [
+            {"file_path": str(media / "a.mp4"), "audio_path": str(media / "voice.wav"),
+             "audio_offset": 0.5, "trim_in": 2.0, "duration": 2.5},
+            {"file_path": str(media / "b.mp4"), "duration": 4.0},
+        ],
+        "subtitles": [{"start": 0.5, "end": 2.0, "text": "ようこそ。"}],
+        "burn_subtitles": True,
+    }
+    out = media / "out.mp4"
+    VideoExporter.concat_from_timeline(timeline, str(out))
+    assert abs(FFmpegManager.get_media_duration(str(out)) - 6.5) < 0.15
+    assert _has_audio(out)

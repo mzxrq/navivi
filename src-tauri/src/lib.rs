@@ -318,13 +318,37 @@ async fn export_video(app: tauri::AppHandle, project_dir: String) -> Result<Stri
 
     let timeline_path = format!("{}/timeline.json", project_dir);
 
-    let output = std::process::Command::new("python")
+    let mut child = Command::new("python")
         .env("PYTHONIOENCODING", "utf-8")
         .arg("src-python/main.py")
         .arg("render_timeline")
         .arg(&timeline_path)
-        .output()
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
         .map_err(|e| e.to_string())?;
+
+    // "EXPORT_PROGRESS <pct>" lines become export-progress events; the rest is kept for errors.
+    let stderr = child.stderr.take().ok_or("Failed to capture stderr")?;
+    let app_progress = app.clone();
+    let stderr_reader = thread::spawn(move || {
+        let mut rest = String::new();
+        for line in BufReader::new(stderr).lines().map_while(Result::ok) {
+            match line.strip_prefix("EXPORT_PROGRESS ").and_then(|p| p.trim().parse::<f64>().ok()) {
+                Some(pct) => {
+                    let _ = app_progress.emit("export-progress", pct);
+                }
+                None => {
+                    rest.push_str(&line);
+                    rest.push('\n');
+                }
+            }
+        }
+        rest
+    });
+
+    let output = child.wait_with_output().map_err(|e| e.to_string())?;
+    let err = stderr_reader.join().unwrap_or_default();
 
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
     if output.status.success() {
@@ -334,7 +358,6 @@ async fn export_video(app: tauri::AppHandle, project_dir: String) -> Result<Stri
         Ok(last.trim().trim_matches('"').replace("\\\\", "\\"))
     } else {
         // main.py prints its failure as JSON on stdout; stderr only carries progress text.
-        let err = String::from_utf8_lossy(&output.stderr);
         Err(format!("{}
 {}", stdout.trim(), err.trim()).trim().to_string())
     }

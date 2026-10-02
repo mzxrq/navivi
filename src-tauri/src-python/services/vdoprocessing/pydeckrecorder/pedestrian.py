@@ -14,16 +14,18 @@ does not touch.
 from __future__ import annotations
 
 import asyncio
+import base64
 import bisect
 import json
 import math
 import os
 import random
 import shutil
+import string
 import tempfile
 import urllib.parse
 from html import escape
-from typing import Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 
 import pandas as pd
 import pydeck as pdk
@@ -456,6 +458,8 @@ def _fit_view_for_path(
     output_size: Tuple[int, int],
     padding_frac: float = 0.05,
     pitch: float = 0.0,
+    bottom_margin_px: float = 100.0,
+    top_margin_px: float = 100.0,
 ) -> Tuple[float, float, float]:
     """Center (lon, lat) and Mapbox GL zoom that fits every point of
     `lons`/`lats` inside `output_size`, padded by `padding_frac` on each
@@ -463,7 +467,8 @@ def _fit_view_for_path(
     animation (see render_residential_leg_pydeck's locked-camera
     docstring): unlike `follow_zoom` (sized for a close, street-level
     chase-cam), this is sized to keep the ENTIRE leg's path on screen at
-    once."""
+    once. `top_margin_px`/`bottom_margin_px` keep taller clear bands (the
+    corner banners, the burned-in caption) and center the path between them."""
     lat_min, lat_max = min(lats), max(lats)
     lon_min, lon_max = min(lons), max(lons)
     lat_span = lat_max - lat_min
@@ -507,17 +512,38 @@ def _fit_view_for_path(
     # percentage padding) guarantees that much real screen space around the
     # path regardless of how small its own span is.
     _marker_margin_px = 100.0
-    usable_h = max(1.0, out_h - 2.0 * _marker_margin_px)
+    bottom_margin_px = max(_marker_margin_px, bottom_margin_px)
+    top_margin_px = max(_marker_margin_px, top_margin_px)
+    usable_h = max(1.0, out_h - top_margin_px - bottom_margin_px)
     usable_w = max(1.0, out_w - 2.0 * _marker_margin_px)
     pad = 1.0 + padding_frac
+    # Web Mercator stretches north-south by 1/cos(lat), same as east-west.
     zoom_for_lat = math.log2(
-        _WEBMERCATOR_EARTH_CIRCUMFERENCE_M * usable_h / (_WEBMERCATOR_TILE_PX * lat_span_m * pad)
+        _WEBMERCATOR_EARTH_CIRCUMFERENCE_M * lon_scale * usable_h / (_WEBMERCATOR_TILE_PX * lat_span_m * pad)
     )
     zoom_for_lon = math.log2(
         _WEBMERCATOR_EARTH_CIRCUMFERENCE_M * lon_scale * usable_w / (_WEBMERCATOR_TILE_PX * lon_span_m * pad)
     )
     zoom = min(zoom_for_lat, zoom_for_lon)
+    # Shift the camera so the path sits centered between the two margins
+    # (south when the bottom band is taller).
+    shift_px = (bottom_margin_px - top_margin_px) / 2.0
+    if shift_px:
+        meters_per_px = _WEBMERCATOR_EARTH_CIRCUMFERENCE_M * lon_scale / (_WEBMERCATOR_TILE_PX * 2.0 ** zoom)
+        center_lat -= shift_px * meters_per_px / meters_per_deg_lat
     return center_lon, center_lat, zoom
+
+
+# Top clearance for a leg's locked framing, measured to a pin's POINT: the
+# corner banners (#hud-banner/#hud-chain: 24px down, ~54px tall), a 16px gap,
+# then the 60px pin standing above its point.
+_LEG_TOP_MARGIN_PX = 24.0 + 54.0 + 16.0 + 60.0
+
+
+def _leg_bottom_margin_px(bottom_reserve_px: float) -> float:
+    """Bottom margin for a leg's locked framing: the caption band plus room
+    for the start pin's name pill under its point."""
+    return max(100.0, float(bottom_reserve_px or 0.0) + 60.0)
 
 
 def _project_lonlat_to_px(
@@ -825,40 +851,54 @@ async def _record_overview(
 # RESIDENTIAL: per-leg tilted chase camera + turn-by-turn HUD
 # ---------------------------------------------------------------------------
 
-_HUD_CSS = """
+_HUD_CSS_TEMPLATE = string.Template("""
 #hud-banner {
     position: fixed; top: 24px; right: 24px;
-    background: rgba(30, 34, 40, 0.88); color: #fff;
+    background: $pill_bg; color: $pill_text;
     font-family: "Noto Sans JP", sans-serif; font-weight: 700; font-size: 22px;
     padding: 12px 28px; border-radius: 999px; box-shadow: 0 4px 14px rgba(0,0,0,0.35);
     white-space: nowrap; z-index: 1000;
 }
 #hud-card {
     position: fixed; bottom: 32px; right: 32px;
-    background: #fff; border: 3px solid #111; border-radius: 30px;
+    background: $card_bg; border: 3px solid $card_text; border-radius: 30px;
     padding: 28px 56px; display: flex; align-items: center; gap: 44px;
     font-family: "Noto Sans JP", sans-serif; box-shadow: 0 6px 20px rgba(0,0,0,0.35);
     z-index: 1000;
 }
 #hud-card .metric { text-align: center; }
-#hud-card .metric .label { font-size: 20px; color: #555; display: flex; align-items: center; justify-content: center; gap: 6px; }
-#hud-card .metric .value { font-size: 46px; font-weight: 700; color: #111; margin-top: 2px; }
-#hud-card .divider { width: 1px; height: 64px; background: #ddd; }
+#hud-card .metric .label { font-size: 20px; color: $card_label; display: flex; align-items: center; justify-content: center; gap: 6px; }
+#hud-card .metric .value { font-size: 46px; font-weight: 700; color: $card_text; margin-top: 2px; }
+#hud-card .divider { width: 1px; height: 64px; background: $divider; }
 #hud-card .icon { width: 26px; height: 26px; line-height: 1; }
 #hud-card .icon svg { display: block; width: 100%; height: 100%; }
+#hud-card.hidden { display: none; }
+#hud-card-img { position: fixed; bottom: 20px; right: 20px; z-index: 1000; }
 #hud-banner .icon { font-size: 20px; line-height: 1; }
 /* Sized to match #hud-banner, the pill it sits opposite in the other top
    corner -- at its old 16px against the banner's 22px the two read as
    different tiers of information rather than as a pair. */
 #hud-chain {
     position: fixed; top: 24px; left: 24px;
-    background: rgba(30, 34, 40, 0.72); color: #fff;
+    background: $pill_bg; color: $pill_text;
     font-family: "Noto Sans JP", sans-serif; font-weight: 700; font-size: 22px;
     padding: 12px 28px; border-radius: 999px; box-shadow: 0 4px 14px rgba(0,0,0,0.35);
     white-space: nowrap; z-index: 1000;
 }
 #hud-chain .arrow { opacity: 0.6; margin: 0 6px; }
-"""
+""")
+
+
+def _css_rgba(rgba) -> str:
+    r, g, b, a = rgba
+    return f"rgba({r}, {g}, {b}, {a / 255:.2f})"
+
+
+def _hud_css(theme: Optional[str] = None) -> str:
+    """Leg HUD CSS in the light/dark palette from tuning.UI_THEMES."""
+    return _HUD_CSS_TEMPLATE.substitute(
+        {k: _css_rgba(v) for k, v in tuning.ui_theme(theme).items()}
+    )
 
 # Per-mode distance-card icon: a plain black line-drawing SVG (currentColor
 # stroke, no fill) instead of a platform emoji -- emoji glyphs are
@@ -1015,6 +1055,9 @@ def render_residential_leg_pydeck(
     dest_image_display: str = "cover",
     start_pin: Optional[Dict] = None,
     dest_pin: Optional[Dict] = None,
+    hud_card_png: Optional[Callable[[float, float], bytes]] = None,
+    theme: Optional[str] = None,
+    bottom_reserve_px: float = 0.0,
 ) -> List[str]:
     """Renders one leg as a straight-down, locked-camera video with a live
     turn-by-turn HUD (destination banner + time/distance card) -- the
@@ -1300,6 +1343,8 @@ def render_residential_leg_pydeck(
     locked_lon, locked_lat, locked_zoom = _fit_view_for_path(
         fit_df["lon"].tolist(), fit_df["lat"].tolist(), output_size,
         padding_frac=0.15, pitch=follow_pitch,
+        bottom_margin_px=_leg_bottom_margin_px(bottom_reserve_px),
+        top_margin_px=_LEG_TOP_MARGIN_PX,
     )
     # Lock max zoom to 17.5 to prevent extreme zoom-in for very short segments
     locked_zoom = min(locked_zoom, 17.5)
@@ -1333,6 +1378,7 @@ def render_residential_leg_pydeck(
             start_popup_image, start_popup_freeze_seconds, start_cue_seconds,
             arrival_photo_hold_seconds, arrival_wait_seconds, dest_image_display,
             dest_pin_url=_leg_pin_url(dest_pin, _DEST_PIN_URL),
+            hud_card_png=hud_card_png, theme=theme, bottom_reserve_px=bottom_reserve_px,
         ))
 
     logger.info(f"Residential leg rendered ({mode}): {produced_paths}")
@@ -1672,6 +1718,9 @@ async def _record_leg(
     start_popup_image=None, start_popup_freeze_seconds=None, start_cue_seconds=None,
     arrival_photo_hold_seconds=None, arrival_wait_seconds=None, dest_image_display="cover",
     dest_pin_url=_DEST_PIN_URL,
+    hud_card_png: Optional[Callable[[float, float], bytes]] = None,
+    theme: Optional[str] = None,
+    bottom_reserve_px: float = 0.0,
 ):
     from pathlib import Path
 
@@ -2168,7 +2217,7 @@ async def _record_leg(
                 await page.wait_for_timeout(2500)
 
                 await page.evaluate(
-                    """([css, bannerIcon, timeLabel, cardIcon, chainPlaces]) => {
+                    """([css, bannerIcon, timeLabel, cardIcon, chainPlaces, useImgCard]) => {
                         const style = document.createElement('style');
                         style.textContent = css;
                         document.head.appendChild(style);
@@ -2184,6 +2233,12 @@ async def _record_leg(
                             <div class="metric"><div class="label">距離</div><div class="value" id="hud-dist">--</div></div>
                         `;
                         document.body.appendChild(card);
+                        if (useImgCard) {
+                            card.classList.add('hidden');
+                            const img = document.createElement('img');
+                            img.id = 'hud-card-img';
+                            document.body.appendChild(img);
+                        }
                         if (chainPlaces && chainPlaces.length) {
                             const chain = document.createElement('div');
                             chain.id = 'hud-chain';
@@ -2202,8 +2257,36 @@ async def _record_leg(
                             document.body.appendChild(chain);
                         }
                     }""",
-                    [_HUD_CSS, mode_hud["banner_icon"], mode_hud["time_label"], mode_hud["icon"], route_chain],
+                    [_hud_css(theme), mode_hud["banner_icon"], mode_hud["time_label"], mode_hud["icon"], route_chain,
+                     hud_card_png is not None],
                 )
+
+                hud_card_cache: Dict[Tuple[int, int], str] = {}
+                hud_card_shown: List[Optional[str]] = [None]
+
+                async def _set_hud_card(rem_m: float, rem_min: int) -> None:
+                    """Swaps in the summary-card image for these numbers (rendered
+                    once per distinct value) and waits for it to decode."""
+                    if hud_card_png is None:
+                        return
+                    key = (int(round(rem_m)), int(rem_min))
+                    src = hud_card_cache.get(key)
+                    if src is None:
+                        png = hud_card_png(key[0] / 1000.0, key[1] * 60.0)
+                        src = "data:image/png;base64," + base64.b64encode(png).decode("ascii")
+                        hud_card_cache[key] = src
+                    if hud_card_shown[0] == src:
+                        return
+                    hud_card_shown[0] = src
+                    await page.evaluate(
+                        """async (src) => {
+                            const img = document.getElementById('hud-card-img');
+                            if (!img) return;
+                            img.src = src;
+                            try { await img.decode(); } catch (e) {}
+                        }""",
+                        src,
+                    )
 
                 all_trail_points = df_raw[["lon", "lat"]].values.tolist()
                 c_trail = json.dumps(walker_color)
@@ -2343,6 +2426,7 @@ async def _record_leg(
                         }}
                         """
                         await page.evaluate(js)
+                        await _set_hud_card(rem_m0, rem_min0)
                         await page.wait_for_timeout(50)
                         png_bytes = await page.screenshot(**_FRAME_SHOT)
                         await _write_frame(png_bytes)
@@ -2518,6 +2602,7 @@ async def _record_leg(
                     }}
                     """
                     await page.evaluate(js)
+                    await _set_hud_card(rem_m, rem_min)
                     await _wait_for_paint(page)
                     png_bytes = await page.screenshot(**_FRAME_SHOT)
                     try:
@@ -2597,6 +2682,8 @@ async def _record_leg(
                                 new_lon, new_lat, new_zoom = _fit_view_for_path(
                                     next_fit_df["lon"].tolist(), next_fit_df["lat"].tolist(), output_size,
                                     padding_frac=0.15, pitch=follow_pitch,
+                                    bottom_margin_px=_leg_bottom_margin_px(bottom_reserve_px),
+                                    top_margin_px=_LEG_TOP_MARGIN_PX,
                                 )
                                 # Lock max zoom to prevent zooming in too much on short segments
                                 new_zoom = min(new_zoom, 17.5)
@@ -2692,6 +2779,7 @@ async def _record_leg(
                         }""",
                         [total_dist_text, f"{total_min} 分"],
                     )
+                    await _set_hud_card(total_m, total_min)
                     await _wait_for_paint(page)
                     last_png_bytes = await page.screenshot(**_FRAME_SHOT)
 

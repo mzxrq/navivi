@@ -88,7 +88,7 @@ class _PopupBoxMixin:
         longest = max(draw.textlength(line, font=font) for line in lines)
         while longest > max_width and size > self._LABEL_MIN_FONT_SIZE:
             size = max(self._LABEL_MIN_FONT_SIZE, int(size * 0.9))
-            font = self._load_font(font_candidates, size)
+            font = self._card_font(font_candidates, size)
             longest = max(draw.textlength(line, font=font) for line in lines)
         return lines, font
 
@@ -138,7 +138,7 @@ class _PopupBoxMixin:
         text_block_h = 0
         if has_label and not is_cover:
             probe_draw = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
-            font = self._load_font(self.FONT_CANDIDATES_REGULAR, font_size)
+            font = self._card_font(self.FONT_CANDIDATES_REGULAR, font_size)
             label_lines, font = self._fit_label_caption(
                 probe_draw, popup_info["label"], font,
                 self.FONT_CANDIDATES_REGULAR, max(1, total_w - 16),
@@ -359,7 +359,7 @@ class _PopupBoxMixin:
                     # into/past the photo instead of the intended bold-
                     # but-contained title-card look).
                     cover_scrim_h = max(1, ph // 5)
-                    font = self._load_font(
+                    font = self._card_font(
                         self.FONT_CANDIDATES_BOLD,
                         max(self._LABEL_MIN_FONT_SIZE, int(cover_scrim_h * 0.55)),
                     )
@@ -368,7 +368,7 @@ class _PopupBoxMixin:
                     # clearly enough at this size (unlike the old Kosugi Maru
                     # default this used to be bumped to bold for), and matches
                     # the smaller, lighter caption look under the photo.
-                    font = self._load_font(self.FONT_CANDIDATES_REGULAR, font_size)
+                    font = self._card_font(self.FONT_CANDIDATES_REGULAR, font_size)
                 has_label = RouteGeometryProcessor.is_real_label(label_text)
                 has_label = (
                     RouteGeometryProcessor.is_real_label(label_text)
@@ -432,7 +432,7 @@ class _PopupBoxMixin:
                 draw.rounded_rectangle(
                     card_box,
                     radius=14,
-                    fill=(255, 255, 255, 250),
+                    fill=self.ui["card_bg"][:3] + (250,),
                 )
 
                 base_pil = Image.fromarray(cv2.cvtColor(working_frame, cv2.COLOR_BGR2RGBA))
@@ -529,7 +529,7 @@ class _PopupBoxMixin:
                             line_w = draw_text_layer.textlength(line, font=label_font)
                             draw_text_layer.text(
                                 (box_x + (total_w - line_w) // 2, line_y),
-                                line, font=label_font, fill=(40, 40, 40, 255),
+                                line, font=label_font, fill=self.ui["card_text"],
                             )
                             line_y += label_font.size + line_gap
 

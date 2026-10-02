@@ -40,7 +40,6 @@ const STAGE_MATCHERS: RegExp[] = [
   /^(generating|skipping) subtitles\b/i,
   /attraction videos/i,
   /rendering overview/i,
-  /subtitle burn|burning subtitles/i,
   /intro\/outro/i,
 ];
 
@@ -51,7 +50,6 @@ function useStageLabels(): string[] {
     t`Subtitles`,
     t`Attraction videos`,
     t`Route video`,
-    t`Subtitle burn-in`,
     t`Intro & outro`,
   ];
 }

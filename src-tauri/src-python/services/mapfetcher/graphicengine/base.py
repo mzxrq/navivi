@@ -117,8 +117,11 @@ class _GraphicsEngineBase:
         summary_card_style=tuning.DEFAULT_SUMMARY_CARD_STYLE,
         summary_card_labels: Optional[Dict] = None,
         mode_line_colors: Optional[Dict[str, Tuple[int, int, int]]] = None,
+        theme: Optional[str] = None,
     ):
         self.line_color = line_color
+        self.theme = theme if theme in tuning.UI_THEMES else tuning.DEFAULT_UI_THEME
+        self.ui = tuning.ui_theme(self.theme)
         # Per-mode route-line colors, merged OVER the class-level defaults
         # (see MODE_COLORS below) rather than replacing them, so a caller
         # naming one mode doesn't silently drop the rest. The pipeline
@@ -221,6 +224,13 @@ class _GraphicsEngineBase:
         x = margin if "left" in corner else w - total_w - margin
         y = h - total_h - margin if "bottom" in corner else margin
         return x, y
+
+    def _card_font(self, candidates: List[str], size: int) -> FreeTypeFont | Any:
+        """UI text font (pills, notices, pop-up labels); the dark theme
+        draws every line in Bold. Summary cards use _load_font directly."""
+        if self.theme == "dark":
+            candidates = self.FONT_CANDIDATES_BOLD
+        return self._load_font(candidates, size)
 
     def _load_font(self, candidates: List[str], size: int) -> FreeTypeFont | Any:
         # Memoized — without this, every popup card / summary card /

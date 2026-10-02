@@ -49,7 +49,6 @@ def stubbed_pipeline(monkeypatch):
     monkeypatch.setattr(
         pipeline, "compute_leg_narration_splits", lambda videos, *a, **k: (videos, {})
     )
-    monkeypatch.setattr(pipeline, "burn_subtitles", lambda *a, **k: [])
     monkeypatch.setattr(pipeline, "render_intro_clip", lambda *_: None)
     monkeypatch.setattr(pipeline, "render_outro_clip", lambda *_: None)
     monkeypatch.setattr(pipeline, "build_timeline", lambda *a, **k: "timeline.json")
@@ -66,9 +65,8 @@ def stubbed_pipeline(monkeypatch):
         {},
         {"enable_attraction_videos": False},
         {"skip_rich_media": True},
-        {"burn_subtitles": True},
     ],
-    ids=["default", "no-attractions", "skip-rich-media", "burn-subtitles"],
+    ids=["default", "no-attractions", "skip-rich-media"],
 )
 def test_every_path_announces_exactly_the_declared_stages(tmp_path, stubbed_pipeline, settings):
     (tmp_path / "job_config.json").write_text(

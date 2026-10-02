@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 import { CheckCircle, Folder, Loader2 } from "../../components/ui/icons";
@@ -19,11 +20,18 @@ export function ExportDialog({ timeline, projectDir, projectName, onClose }: Exp
   const [phase, setPhase] = useState<"ready" | "working" | "done" | "error">("ready");
   const [output, setOutput] = useState("");
   const [error, setError] = useState("");
+  const [progress, setProgress] = useState(0);
+  const startedAt = useRef(0);
+  const [now, setNow] = useState(0);
   const { total } = layout(timeline);
   const narrated = timeline.segments.filter((s) => s.audio && !s.muted).length;
 
   const run = async () => {
     setPhase("working");
+    setProgress(0);
+    startedAt.current = Date.now();
+    setNow(startedAt.current);
+    const unlisten = await listen<number>("export-progress", (e) => setProgress((p) => Math.max(p, e.payload)));
     try {
       if (!(await saveTimelineManifest(projectDir, projectName, timeline))) throw new Error(t`Could not save the timeline`);
       setOutput(await invoke<string>("export_video", { projectDir }));
@@ -31,8 +39,20 @@ export function ExportDialog({ timeline, projectDir, projectName, onClose }: Exp
     } catch (e: any) {
       setError(String(e?.message ?? e));
       setPhase("error");
+    } finally {
+      unlisten();
     }
   };
+
+  useEffect(() => {
+    if (phase !== "working") return;
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [phase]);
+
+  // Time left from the pace so far; shown once there's enough progress to judge it.
+  const elapsed = Math.max(0, (now - startedAt.current) / 1000);
+  const remaining = progress >= 3 && elapsed >= 3 ? (elapsed * (100 - progress)) / progress : null;
 
   const reveal = () => invoke("open_in_explorer", { path: output || projectDir }).catch(() => undefined);
 
@@ -40,7 +60,7 @@ export function ExportDialog({ timeline, projectDir, projectName, onClose }: Exp
     [t`Length`, formatTime(total, false)],
     [t`Clips`, String(timeline.segments.length)],
     [t`Narration`, narrated ? t`${narrated} clips` : t`None`],
-    [t`Subtitles`, timeline.subtitles.length ? (timeline.burnSubtitles ? t`${timeline.subtitles.length} lines, burned in` : t`${timeline.subtitles.length} lines, not shown`) : t`None`],
+    [t`Subtitles`, timeline.subtitles.length ? t`${timeline.subtitles.length} lines, burned in` : t`None`],
     [t`Music`, timeline.music ? timeline.music.label : t`None`],
   ];
 
@@ -96,9 +116,27 @@ export function ExportDialog({ timeline, projectDir, projectName, onClose }: Exp
             </p>
           )}
           {phase === "working" && (
-            <p className="mt-3 flex items-center gap-2 text-[12px] text-zinc-500">
-              <Loader2 className="w-3.5 h-3.5 animate-spin" /> <Trans>Stitching clips, narration and subtitles. This can take a few minutes.</Trans>
-            </p>
+            <div className="mt-3">
+              <div className="flex items-center justify-between text-[12px] text-zinc-500">
+                <span className="flex items-center gap-2">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> <Trans>Stitching clips, narration and subtitles.</Trans>
+                </span>
+                <span className="tabular-nums">{Math.round(progress)}%</span>
+              </div>
+              <div
+                className="mt-2 h-1.5 rounded-full bg-zinc-200 dark:bg-white/10 overflow-hidden"
+                role="progressbar"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={Math.round(progress)}
+              >
+                <div className="h-full bg-navi transition-[width] duration-300" style={{ width: `${progress}%` }} />
+              </div>
+              <div className="mt-1.5 flex items-center justify-between text-[11px] text-zinc-400 tabular-nums">
+                <span>{t`${formatTime(elapsed, false)} elapsed`}</span>
+                <span>{remaining === null ? t`Estimating time left…` : t`About ${formatTime(remaining, false)} left`}</span>
+              </div>
+            </div>
           )}
           {phase === "error" && <p className="mt-3 max-h-32 overflow-y-auto text-[12px] text-red-500 whitespace-pre-wrap break-words">{error}</p>}
         </>

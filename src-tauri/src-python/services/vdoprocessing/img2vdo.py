@@ -80,11 +80,13 @@ class AttractionVideoGenerator:
     # None (chains to the whole narration; the user's choice). The 5s cap
     # above then applies only to the local pan/zoom fallback it was written
     # for.
+    # Shots/parallax fill any length themselves (parallax is cheap, on the CPU).
     _MAX_EXTENDED_CLIP_SECONDS: Final[float] = (
-        math.inf if tuning.COMFYUI_EXTEND_MAX_SEGMENTS is None
+        math.inf if tuning.ATTRACTION_GENERATOR in ("shots", "parallax")
+        or tuning.COMFYUI_EXTEND_MAX_SEGMENTS is None
         else max(
             _MAX_GENERATED_CLIP_SECONDS,
-            tuning.COMFYUI_EXTEND_MAX_SEGMENTS * tuning.COMFYUI_MAX_FRAMES / tuning.COMFYUI_FPS + 0.5,
+            tuning.COMFYUI_EXTEND_MAX_SEGMENTS * tuning.COMFYUI_MAX_FRAMES / tuning.COMFYUI_GEN_FPS + 0.5,
         )
     )
 
@@ -143,6 +145,11 @@ class AttractionVideoGenerator:
             for chunk in iter(lambda: f.read(1 << 20), b""):
                 digest.update(chunk)
         digest.update(b"|" + pan.encode("utf-8"))
+        # Switching generator rebuilds the kept clips.
+        if pan in tuning.ATTRACTION_LTX_PRESETS:
+            digest.update(f"|ltxv13b-crops|{tuning.ATTRACTION_SECOND_SHOT}".encode("utf-8"))
+        elif tuning.ATTRACTION_GENERATOR != "chain":
+            digest.update(b"|" + tuning.ATTRACTION_GENERATOR.encode("utf-8"))
         return digest.hexdigest()[:12]
 
     # [NOTE] [IO] Called at the start of a fresh generate for a waypoint (the
@@ -248,6 +255,31 @@ class AttractionVideoGenerator:
         if normalize_camera_pan(prompt_text) == STILL_PRESET:
             return self._still_clip(local_image_path, str(save_path), duration_sec)
 
+        if normalize_camera_pan(prompt_text) in tuning.ATTRACTION_LTX_PRESETS:
+            from services.vdoprocessing.ltx_keyframed import generate_ltx_move
+
+            try:
+                return generate_ltx_move(local_image_path, str(save_path), prompt_text)
+            except Exception as exc:
+                logger.warning(
+                    "LTXV clip failed for %s (%s: %s) - 3D photo instead.",
+                    local_image_path, type(exc).__name__, exc,
+                )
+                return self._parallax_clip(local_image_path, str(save_path), duration_sec, prompt_text)
+
+        if tuning.ATTRACTION_GENERATOR in ("shots", "parallax"):
+            if tuning.ATTRACTION_GENERATOR == "shots":
+                from services.vdoprocessing.shot_builder import build_shots
+
+                try:
+                    return build_shots(local_image_path, str(save_path), duration_sec, prompt_text)
+                except Exception as exc:
+                    logger.warning(
+                        "Shot building failed for %s (%s: %s) - parallax only.",
+                        local_image_path, type(exc).__name__, exc,
+                    )
+            return self._parallax_clip(local_image_path, str(save_path), duration_sec, prompt_text)
+
         from services.gpu_cooldown import wait_for_gpu_cooldown
         from services.vdoprocessing.comfyui_i2v_client import ComfyUII2VClient
 
@@ -274,30 +306,17 @@ class AttractionVideoGenerator:
             match_clip_to_photo(str(save_path), local_image_path)
             return str(save_path)
 
-        try:
-            # [FIXME] [Animation] Import moved inside this try — it previously sat
-            # above it, so a missing torch/diffusers/transformers install (the local
-            # fallback's own dependencies, not bundled by default) raised
-            # ModuleNotFoundError uncaught, crashing the whole waypoint instead of
-            # the graceful None this function's docstring promises.
-            from services.vdoprocessing.local_pan_generator import generate_local_clip
+        return self._parallax_clip(local_image_path, str(save_path), duration_sec, prompt_text)
 
-            generate_local_clip(
-                image_path=local_image_path,
-                output_path=str(save_path),
-                duration_sec=min(duration_sec, self._MAX_GENERATED_CLIP_SECONDS),
-                camera_pan_hint=prompt_text,
-            )
-            return str(save_path)
-        except ModuleNotFoundError as exc:
-            logger.error(
-                "Local pan/zoom fallback unavailable for %s — its dependencies "
-                "(torch/diffusers/transformers) aren't installed: %s",
-                local_image_path, exc,
-            )
-            return None
+    @staticmethod
+    def _parallax_clip(image_path: str, save_path: str, duration_sec: float, preset) -> Optional[str]:
+        """The depth-parallax move over the photo (CPU, nothing generated); None on failure."""
+        try:
+            from services.vdoprocessing.parallax_generator import generate_parallax_clip
+
+            return generate_parallax_clip(image_path, save_path, duration_sec, preset)
         except Exception as exc:
-            logger.error("Local clip generation failed for %s: %s", local_image_path, exc)
+            logger.error("Parallax clip failed for %s (%s: %s)", image_path, type(exc).__name__, exc)
             return None
 
     # [NOTE] [Editor] Decides whether a generated clip needs trimming (runs
@@ -648,30 +667,15 @@ class AttractionVideoGenerator:
     def _concat_reencoded(paths: List[str], output_path: str) -> None:
         """Joins clips in order, re-encoded at one size/fps: the pieces come
         from different encoders (Wan, still photo, slow-move tail), which a
-        stream-copy join can glitch on."""
-        import subprocess
+        stream-copy join can glitch on. At the final size, so 1920x1080
+        shot/parallax clips aren't shrunk and blown back up."""
+        from services.vdoprocessing.shot_builder import concat_clips
 
-        from services.tts.ttsengine import FFmpegManager
-
-        w, h, fps = tuning.COMFYUI_WIDTH, tuning.COMFYUI_HEIGHT, tuning.COMFYUI_FPS
-        inputs, chains = [], []
-        for i, path in enumerate(paths):
-            inputs += ["-i", path]
-            chains.append(
-                f"[{i}:v]scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},"
-                f"fps={fps},setsar=1,format=yuv420p[v{i}]"
-            )
-        graph = ";".join(chains) + ";" + "".join(f"[v{i}]" for i in range(len(paths)))
-        graph += f"concat=n={len(paths)}:v=1:a=0[out]"
-        result = subprocess.run(
-            [FFmpegManager.resolve_ffmpeg_bin(), "-y", *tuning.ffmpeg_log_args(), *inputs,
-             "-filter_complex", graph, "-map", "[out]",
-             "-c:v", "libx264", *tuning.ffmpeg_thread_args(), "-crf", "18", "-preset", "fast",
-             "-pix_fmt", "yuv420p", output_path],
-            capture_output=True, encoding="utf-8", errors="replace",
+        concat_clips(
+            paths, output_path,
+            AttractionVideoGenerator._TARGET_WIDTH, AttractionVideoGenerator._TARGET_HEIGHT,
+            tuning.COMFYUI_FPS,
         )
-        if result.returncode != 0:
-            raise RuntimeError(f"joining attraction clips failed: {result.stderr.strip()}")
 
     def _combine_clips(
         self,
@@ -835,7 +839,7 @@ class AttractionVideoGenerator:
         # when there's no narration yet to size against.
         # No narration: one normal Wan generation per photo (a single
         # COMFYUI_MAX_FRAMES segment, ~3.7s), no extension.
-        _DEFAULT_CLIP_SECONDS = tuning.COMFYUI_MAX_FRAMES / tuning.COMFYUI_FPS
+        _DEFAULT_CLIP_SECONDS = tuning.COMFYUI_MAX_FRAMES / tuning.COMFYUI_GEN_FPS
         per_clip_duration = (
             (target_audio_duration / len(image_list))
             if target_audio_duration > 0

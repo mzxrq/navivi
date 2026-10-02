@@ -22,6 +22,7 @@ from services import tuning
 from services.vdoprocessing.spatial_renderer import SpatialRenderer
 from services.vdoprocessing.pydeckrecorder import record_headless_video
 from services.vdoprocessing.route_inputs import photo_inputs_hash
+from services.vdoprocessing.vdoexporter import subtitle_band_px
 
 # Logging configuration
 logger = setup_logger("RouteAnimator")
@@ -48,8 +49,9 @@ def _output_is_valid(path, min_bytes: int = 1024) -> bool:
 
 # Bump when the leg rendering code changes what it draws (v2: stop-by
 # photos always go fullscreen, image_display ignored; v3: legs open on the
-# departure photo, not the destination's).
-LEG_RENDER_VERSION = 3
+# departure photo, not the destination's; v4: HUD card is the overview's
+# summary card; v5: framing clears the corner banners and the caption).
+LEG_RENDER_VERSION = 5
 # A leg is reused unless its waypoints' route inputs (see route_inputs.py) or
 # the render version changed, or its files are missing. Not "latlon": the app
 # can save a different line for the same waypoints.
@@ -166,6 +168,7 @@ class RouteAnimator:
             # panel instead of tuning.py's walking blue — see
             # render_step.py's _mode_line_color_overrides.
             mode_line_colors=self.config.get("mode_line_colors"),
+            theme=tuning.resolve_ui_theme(self.config),
         )
 
         self.out_dir = Path(config.get("output_dir", ""))
@@ -346,6 +349,25 @@ class RouteAnimator:
         return render_overview_video_pydeck(
             route_latlon, waypoints, output_path, duration=duration, fps=fps, title_text=title_text,
         )
+
+    def _leg_hud_card_png(self, mode: str):
+        """PNG renderer for the pydeck leg's distance/time card, drawn with
+        the same summary card the overview uses."""
+        import cv2
+
+        def render(distance_km: float, duration_seconds: float) -> bytes:
+            card = self.graphics.render_summary_card(
+                distance_km=distance_km,
+                duration_seconds=duration_seconds,
+                mode_breakdown={mode: distance_km},
+                mode_duration={mode: duration_seconds},
+            )
+            ok, buf = cv2.imencode(".png", card)
+            if not ok:
+                raise RuntimeError("Failed to encode leg HUD card")
+            return buf.tobytes()
+
+        return render
 
     def _render_residential_pydeck(self, res_sequence: List[Dict], fps: int) -> List[str]:
         """GeoJsonLayer-driven alternative to both SpatialRenderer.
@@ -615,6 +637,8 @@ class RouteAnimator:
             leg_glob_prefix = f"02_waypoint_{leg_file_num:02d}_"
             leg_kwargs = dict(
                 mode=leg_mode,
+                # Keep pins out of the burned caption's band (legs render at 1080p).
+                bottom_reserve_px=subtitle_band_px(1080),
                 walker_color=res_data.get("line_color"),
                 target_duration_seconds=target_duration,
                 landmarks=landmarks, route_chain=leg_labels or None,
@@ -635,6 +659,7 @@ class RouteAnimator:
                 dest_image_display=dest_image_display,
                 start_pin=res_data.get("start_pin"),
                 dest_pin=res_data.get("dest_pin"),
+                theme=self.graphics.theme,
             )
             # Everything this leg's clip is made from. Existing files are
             # only reused when it matches what they were rendered from: a
@@ -704,7 +729,8 @@ class RouteAnimator:
             # leg's departure narration, instead of the same departure
             # narration restarting on every piece.
             leg_paths = render_residential_leg_pydeck(
-                leg_latlon, dest_label, output_path, **leg_kwargs,
+                leg_latlon, dest_label, output_path,
+                hud_card_png=self._leg_hud_card_png(leg_mode), **leg_kwargs,
             )
             if leg_paths:
                 keep = {Path(p).resolve() for p in leg_paths}

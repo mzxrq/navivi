@@ -11,7 +11,7 @@ from services import tuning
 from services.vdoprocessing import comfyui_i2v_client as client_mod
 from services.vdoprocessing.comfyui_i2v_client import ComfyUII2VClient
 
-SEGMENT_SEC = tuning.COMFYUI_MAX_FRAMES / tuning.COMFYUI_FPS
+SEGMENT_SEC = tuning.COMFYUI_MAX_FRAMES / tuning.COMFYUI_GEN_FPS
 LONG_ENOUGH = SEGMENT_SEC * 1.5  # needs more than one segment
 
 
@@ -51,11 +51,27 @@ class _Recorder:
 
 @pytest.fixture
 def recorder(tmp_path, monkeypatch):
+    monkeypatch.setattr(tuning, "COMFYUI_MODEL", "5b")
+    monkeypatch.setattr(tuning, "COMFYUI_GEN_FPS", tuning.COMFYUI_FPS)
     monkeypatch.setattr(tuning, "COMFYUI_CHAIN_LAST_FRAME", True)
     monkeypatch.setattr(tuning, "COMFYUI_EXTEND_MAX_SEGMENTS", 2)
+    monkeypatch.setattr(tuning, "COMFYUI_INPUT_EDGE_CROP", 0.0)
     rec = _Recorder(tmp_path)
     monkeypatch.setattr(client_mod, "_join_segments", lambda paths, out: setattr(rec, "joined", list(paths)) or out)
     return rec
+
+
+class TestEdgeCrop:
+    def test_trims_every_edge(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(tuning, "COMFYUI_INPUT_EDGE_CROP", 0.05)
+        photo = tmp_path / "photo.png"
+        cv2.imwrite(str(photo), np.zeros((200, 400, 3), np.uint8))
+        out = client_mod._edge_cropped(str(photo), str(tmp_path / "in.png"))
+        assert cv2.imread(out).shape[:2] == (180, 360)
+
+    def test_off_uses_the_photo_itself(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(tuning, "COMFYUI_INPUT_EDGE_CROP", 0.0)
+        assert client_mod._edge_cropped("photo.png", "in.png") == "photo.png"
 
 
 class TestChainedGeneration:
@@ -121,3 +137,22 @@ class TestChainedFrame:
         empty.write_bytes(b"")
         with pytest.raises(RuntimeError):
             client_mod._write_last_frame(str(empty), str(photo), str(tmp_path / "f.png"))
+
+
+class TestGenerationFps:
+    def test_a_lower_generation_rate_is_resampled_even_for_one_segment(self, recorder, tmp_path, monkeypatch):
+        monkeypatch.setattr(tuning, "COMFYUI_GEN_FPS", 16)
+        photo = _write_photo(tmp_path / "photo.jpg", (120, 120, 120))
+        recorder.client.generate_clip(str(photo), str(tmp_path / "out.mp4"), 2.0, "pan-right")
+
+        assert len(recorder.joined) == 1
+        assert not list(tmp_path.glob("*.gen.mp4"))
+
+    def test_the_a14b_model_always_chains(self, recorder, tmp_path, monkeypatch):
+        monkeypatch.setattr(tuning, "COMFYUI_CHAIN_LAST_FRAME", False)
+        monkeypatch.setattr(tuning, "COMFYUI_MODEL", "a14b")
+        photo = _write_photo(tmp_path / "photo.jpg", (120, 120, 120))
+        recorder.client.generate_clip(str(photo), str(tmp_path / "out.mp4"), LONG_ENOUGH, "pan-right")
+
+        assert len(recorder.graphs) == 2 and len(recorder.joined) == 2
+        assert all(g["55"]["class_type"] == "WanImageToVideo" for g in recorder.graphs)

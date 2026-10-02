@@ -95,7 +95,7 @@ def test_attraction_of_an_unconnected_stopby_is_not_used(tmp_path):
     assert "04_attraction_02_x.mp4" in names  # c: connected, still used
 
 
-def test_subtitles_are_written_into_the_timeline_not_burned(tmp_path, monkeypatch):
+def test_subtitles_are_written_into_the_timeline_to_burn_at_export(tmp_path, monkeypatch):
     from services.vdoprocessing.videopipeline import timeline_step
 
     lengths = {"02_waypoint_01_b.mp4": 10.0, "leg1.wav": 4.0, "04_attraction_01_x.mp4": 6.0}
@@ -118,7 +118,7 @@ def test_subtitles_are_written_into_the_timeline_not_burned(tmp_path, monkeypatc
         attraction_audio_paths=[None, _touch(tmp_path / "attr.wav")], attraction_subtitle_paths=[None, str(attr_srt)],
     )
     data = json.loads(Path(path).read_text(encoding="utf-8"))
-    assert data["burn_subtitles"] is False
+    assert data["burn_subtitles"] is True
     assert data["video_tracks"][0]["subtitles"] == [
         {"start": 2.5, "end": 3.5, "text": "hello"}, {"start": 4.0, "end": 5.25, "text": "there"}]
     # attraction starts after the 10s leg; attraction narration has no offset
