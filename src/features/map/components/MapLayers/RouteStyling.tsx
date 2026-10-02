@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useWorkspace } from "../../../../hooks/useWorkspace";
 import { Palette, X } from "../../../../components/ui/icons";
+import { Slider } from "../../../../components/ui/Slider";
 import { Switch } from "../../../../components/ui/Switch";
 import { ColorSwatches, RGB, rgbToHex } from "../../../../components/ui/ColorSwatches";
 import { t } from "@lingui/core/macro";
@@ -45,14 +46,7 @@ function SliderRow({
         <span className="text-[12px] text-zinc-700 dark:text-zinc-300">{label}</span>
         <span className="text-[11px] text-zinc-500 tabular-nums">{value}px</span>
       </span>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        value={value}
-        onChange={(e) => onChange(parseInt(e.target.value))}
-        className="w-full h-1 accent-navi cursor-pointer"
-      />
+      <Slider label={label} min={min} max={max} value={value} onChange={onChange} format={(v) => `${v}px`} />
     </label>
   );
 }

@@ -6,6 +6,7 @@ import { Trans } from "@lingui/react/macro";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { callSidecar, callSidecarShared } from "../../services/sidecar";
 import { Loader2, Play, Plus, Trash2, Volume2 } from "./icons";
+import { Slider } from "./Slider";
 
 interface Voice {
   id: string;
@@ -215,15 +216,15 @@ export function VoiceTab() {
           <span className="text-[12px] tabular-nums text-zinc-500">{speed.toFixed(2)}×</span>
         </div>
         <div className="rounded-xl border border-zinc-200 dark:border-white/10 px-3 py-3 flex items-center gap-3">
-          <input
-            type="range"
+          <Slider
             min={0.5}
             max={2}
             step={0.05}
             value={speed}
-            onChange={(e) => save({ speed: parseFloat(e.target.value) })}
-            className="flex-1 accent-navi"
-            aria-label={t`Narration speed`}
+            onChange={(v) => save({ speed: v })}
+            label={t`Narration speed`}
+            format={(v) => `${v.toFixed(2)}×`}
+            className="flex-1"
           />
           <button type="button" className={secondaryButton} disabled={speed === DEFAULT_SPEED} onClick={() => save({ speed: DEFAULT_SPEED })}>
             <Trans>Reset</Trans>

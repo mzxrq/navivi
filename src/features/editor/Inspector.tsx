@@ -2,10 +2,13 @@ import { ReactNode, useEffect, useMemo, useState } from "react";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 import { Copy, Download, Music, Trash2 } from "../../components/ui/icons";
+import { Slider } from "../../components/ui/Slider";
 import { Switch } from "../../components/ui/Switch";
 import { anchorCue, DEFAULT_EXTRA_VOLUME, layout, MIN_CUE, MIN_SEGMENT, placedCues, Segment, SubtitleCue, TimelineData } from "./model";
 import { formatTime, player } from "./player";
 import type { Selection } from "./TimelinePane";
+
+const percent = (v: number) => `${Math.round(v * 100)}%`;
 
 interface InspectorProps {
   timeline: TimelineData;
@@ -60,24 +63,6 @@ function NumberField({ value, onCommit, min, max, step = 0.1 }: { value: number;
       onBlur={done}
       onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
       className={input}
-    />
-  );
-}
-
-function Slider({ value, onCommit, min, max, step }: { value: number; onCommit: (v: number) => void; min: number; max: number; step: number }) {
-  const [live, setLive] = useState(value);
-  useEffect(() => setLive(value), [value]);
-  return (
-    <input
-      type="range"
-      min={min}
-      max={max}
-      step={step}
-      value={live}
-      onChange={(e) => setLive(parseFloat(e.target.value))}
-      onPointerUp={() => live !== value && onCommit(live)}
-      onKeyUp={() => live !== value && onCommit(live)}
-      className="w-full accent-navi"
     />
   );
 }
@@ -138,7 +123,7 @@ export function Inspector(p: InspectorProps) {
               <NumberField value={seg.audioOffset} min={0} max={60} onCommit={(v) => patchSegment({ audioOffset: v })} />
             </Row>
             <Row label={t`Volume`}>
-              <Slider value={seg.volume} min={0} max={1.5} step={0.05} onCommit={(v) => patchSegment({ volume: v })} />
+              <Slider label={t`Volume`} format={percent} value={seg.volume} min={0} max={1.5} step={0.05} onCommit={(v) => patchSegment({ volume: v })} />
             </Row>
             <Row label={t`Mute`}>
               <Switch checked={seg.muted} onChange={(v) => patchSegment({ muted: v })} label={t`Mute narration`} />
@@ -151,7 +136,7 @@ export function Inspector(p: InspectorProps) {
         {seg.extraAudio && (
           <Section title={t`Original sound`}>
             <Row label={t`Volume`}>
-              <Slider value={seg.extraVolume ?? DEFAULT_EXTRA_VOLUME} min={0} max={1} step={0.05} onCommit={(v) => patchSegment({ extraVolume: v })} />
+              <Slider label={t`Original sound volume`} format={percent} value={seg.extraVolume ?? DEFAULT_EXTRA_VOLUME} min={0} max={1} step={0.05} onCommit={(v) => patchSegment({ extraVolume: v })} />
             </Row>
             <p className="text-[11px] text-zinc-400">
               <Trans>The sound of your own video, mixed under the narration.</Trans>
@@ -160,7 +145,7 @@ export function Inspector(p: InspectorProps) {
         )}
         <Section title={t`Transition`}>
           <Row label={t`Fade into next`}>
-            <Slider value={seg.fadeIntoNext} min={0} max={2} step={0.1} onCommit={(v) => patchSegment({ fadeIntoNext: +v.toFixed(1) })} />
+            <Slider label={t`Fade into next`} format={(v) => `${v.toFixed(1)} s`} value={seg.fadeIntoNext} min={0} max={2} step={0.1} onCommit={(v) => patchSegment({ fadeIntoNext: +v.toFixed(1) })} />
           </Row>
           <p className="text-[11px] text-zinc-400">{seg.fadeIntoNext > 0 ? t`${seg.fadeIntoNext.toFixed(1)} s dissolve` : t`Hard cut`}</p>
         </Section>
@@ -253,7 +238,7 @@ export function Inspector(p: InspectorProps) {
               </button>
             </div>
             <Row label={t`Volume`}>
-              <Slider value={timeline.music.volume} min={0} max={1} step={0.05} onCommit={(v) => commit({ ...timeline, music: { ...timeline.music!, volume: v } })} />
+              <Slider label={t`Music volume`} format={percent} value={timeline.music.volume} min={0} max={1} step={0.05} onCommit={(v) => commit({ ...timeline, music: { ...timeline.music!, volume: v } })} />
             </Row>
           </>
         ) : (

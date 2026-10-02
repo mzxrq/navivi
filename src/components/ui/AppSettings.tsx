@@ -42,6 +42,7 @@ import { assOpacity, assToRgb, rgbToAss, withOpacity } from "../../utils/assColo
 import { CAPTION } from "../../utils/subtitleLook";
 import { ColorSwatches, type RGB } from "./ColorSwatches";
 import { ComboBox } from "./ComboBox";
+import { Slider } from "./Slider";
 import { SubtitleSample } from "./SubtitleSample";
 import { Switch } from "./Switch";
 import { VoiceTab } from "./VoiceSettings";
@@ -645,8 +646,7 @@ export function AppSettings() {
                   </Row>
                   <Row title={t`Background opacity`}>
                     <div className="flex items-center gap-3">
-                      <input
-                        type="range"
+                      <Slider
                         min={0}
                         max={100}
                         step={5}
@@ -655,17 +655,18 @@ export function AppSettings() {
                             settings.subtitle_outline_color || CAPTION.boxColor,
                           ) * 100,
                         )}
-                        onChange={(e) =>
+                        onChange={(v) =>
                           updateProject({
                             subtitle_outline_color: withOpacity(
                               settings.subtitle_outline_color ||
                                 CAPTION.boxColor,
-                              Number(e.target.value) / 100,
+                              v / 100,
                             ),
                           })
                         }
-                        aria-label={t`Background opacity`}
-                        className="w-40 accent-navi cursor-pointer"
+                        label={t`Background opacity`}
+                        format={(v) => `${v}%`}
+                        className="w-40"
                       />
                       <span className="w-9 text-right text-[12px] tabular-nums text-zinc-500">
                         {Math.round(
