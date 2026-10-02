@@ -9,6 +9,7 @@ from typing import Optional
 from services import tuning
 from services.config.job_config import JobConfigManager
 from services.config.upscaled_images import upscale_enabled
+from services.localization.subtitle import caption_style
 from services.logger.progress import tracker
 from services.render_estimate import StageRecorder
 from services.vdoprocessing.vdoexporter import VideoExporter, sweep_stale_temp_files
@@ -263,6 +264,7 @@ def run_full_pipeline(
             overview_subtitle_path=overview_subtitle_path,
             attraction_subtitle_paths=attraction_subtitle_paths,
             leg_narration_splits=leg_narration_splits,
+            style=caption_style(job_config.get("settings", {})),
         )
     else:
         tracker.stage("Skipping subtitle burn (settings.burn_subtitles is off)...")

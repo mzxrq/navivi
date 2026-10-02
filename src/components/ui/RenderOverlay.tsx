@@ -101,8 +101,8 @@ export function RenderOverlay() {
   const [redoInBackground, setRedoInBackground] = useState(true);
   const [backgroundLabel, setBackgroundLabel] = useState("");
   // The finish handler lives in an effect closure, so it reads what the editor looks like now through this.
-  const live = useRef({ timeline, canUndoTimeline, background: isBackgroundRender, collapsed: isRenderCollapsed });
-  live.current = { timeline, canUndoTimeline, background: isBackgroundRender, collapsed: isRenderCollapsed };
+  const live = useRef({ timeline, settings, canUndoTimeline, background: isBackgroundRender, collapsed: isRenderCollapsed });
+  live.current = { timeline, settings, canUndoTimeline, background: isBackgroundRender, collapsed: isRenderCollapsed };
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
   // Audio Regeneration State
@@ -544,7 +544,7 @@ export function RenderOverlay() {
     if (dir) {
       // The pipeline rewrote timeline.json. Edits made meanwhile live only in the editor, so they are written back.
       if (now.canUndoTimeline && now.timeline.segments.length > 0) {
-        kept = await saveTimelineManifest(dir, metadata.project_name, now.timeline);
+        kept = await saveTimelineManifest(dir, metadata.project_name, now.timeline, now.settings);
       }
       if (!kept) await autoLoadTimeline(dir);
     }

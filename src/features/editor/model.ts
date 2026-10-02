@@ -297,7 +297,7 @@ export function cuesFromSegmentFile(seg: Segment, timed: TimedText[]): SubtitleC
 
 // ── Timeline manifest (timeline.json) ────────────────────────────────────────
 
-export function toManifest(projectName: string, timeline: TimelineData) {
+export function toManifest(projectName: string, timeline: TimelineData, subtitleStyle?: Record<string, unknown>) {
   const { placed, total } = layout(timeline);
   const cues = placedCues(timeline, placed).map((c) => ({ start: c.globalStart, end: c.globalEnd, text: c.text }));
   return {
@@ -320,6 +320,7 @@ export function toManifest(projectName: string, timeline: TimelineData) {
     })),
     subtitles: cues,
     burn_subtitles: timeline.burnSubtitles,
+    subtitle_style: subtitleStyle,
     music: timeline.music ? { path: timeline.music.path, volume: timeline.music.volume } : null,
     editor: { version: EDITOR_VERSION, ...timeline },
   };

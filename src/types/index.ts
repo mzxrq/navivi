@@ -69,9 +69,9 @@ export interface ProjectSettings {
   default_export_resolution?: "4k" | "1080p" | "720p";
   default_ducking_level?: number;
   subtitle_font?: string; // either uses Calibri or some nice looking font as default
-  subtitle_font_size?: number; // could be at least size 30
+  subtitle_font_size?: number; // libass units, 16 by default (a share of a 288-line frame)
   subtitle_color?: string; // This uses ASS color format, &HAABBGGRR -- alpha,  blue-green-red
-  subtitle_outline_color?: string; // same as above, ASS color format
+  subtitle_outline_color?: string; // the caption box color (libass fills the box with it), same format, &H66000000 by default
   subtitle_bold?: boolean; // false unless necessary
   subtitle_alignment?: number;
   subtitle_margin_v?: number;

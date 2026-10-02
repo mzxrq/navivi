@@ -4,6 +4,7 @@ import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 import { CheckCircle, Folder, Loader2 } from "../../components/ui/icons";
 import { Dialog, dialogButton } from "../../components/ui/Dialog";
+import { useWorkspace } from "../../hooks/useWorkspace";
 import { saveTimelineManifest } from "../../services/fileSystem";
 import { layout, TimelineData } from "./model";
 import { formatTime } from "./player";
@@ -16,6 +17,7 @@ interface ExportDialogProps {
 }
 
 export function ExportDialog({ timeline, projectDir, projectName, onClose }: ExportDialogProps) {
+  const { settings } = useWorkspace();
   const [phase, setPhase] = useState<"ready" | "working" | "done" | "error">("ready");
   const [output, setOutput] = useState("");
   const [error, setError] = useState("");
@@ -25,7 +27,7 @@ export function ExportDialog({ timeline, projectDir, projectName, onClose }: Exp
   const run = async () => {
     setPhase("working");
     try {
-      if (!(await saveTimelineManifest(projectDir, projectName, timeline))) throw new Error(t`Could not save the timeline`);
+      if (!(await saveTimelineManifest(projectDir, projectName, timeline, settings))) throw new Error(t`Could not save the timeline`);
       setOutput(await invoke<string>("export_video", { projectDir }));
       setPhase("done");
     } catch (e: any) {

@@ -39,6 +39,7 @@ import {
   X,
 } from "./icons";
 import { assToRgb, rgbToAss } from "../../utils/assColor";
+import { CAPTION } from "../../utils/subtitleLook";
 import { ColorSwatches, type RGB } from "./ColorSwatches";
 import { ComboBox } from "./ComboBox";
 import { SubtitleSample } from "./SubtitleSample";
@@ -60,20 +61,7 @@ const selectClass = `${inputClass} pr-7 cursor-pointer`;
 const WHITE: RGB = [255, 255, 255];
 const BLACK: RGB = [0, 0, 0];
 
-const SUBTITLE_SIZES = [
-  "16",
-  "18",
-  "20",
-  "24",
-  "28",
-  "30",
-  "32",
-  "36",
-  "40",
-  "48",
-  "56",
-  "64",
-];
+const SUBTITLE_SIZES = ["12", "14", "16", "18", "20", "22", "24", "28", "32"];
 // Common fonts; the saved one is always listed, so a project made with another font keeps it.
 const SUBTITLE_FONTS = [
   "Yu Gothic UI",
@@ -604,10 +592,10 @@ export function AppSettings() {
                   <Row title={t`Font`}>
                     <ComboBox
                       label={t`Font`}
-                      value={settings.subtitle_font || "Calibri"}
+                      value={settings.subtitle_font || CAPTION.font}
                       onChange={(v) => updateProject({ subtitle_font: v })}
                       options={subtitleFonts(
-                        settings.subtitle_font || "Calibri",
+                        settings.subtitle_font || CAPTION.font,
                       )}
                       previewFont
                       className="w-56"
@@ -616,7 +604,7 @@ export function AppSettings() {
                   <Row title={t`Font size`}>
                     <ComboBox
                       label={t`Font size`}
-                      value={String(settings.subtitle_font_size || 30)}
+                      value={String(settings.subtitle_font_size || CAPTION.defaultSize)}
                       onChange={(v) =>
                         updateProject({ subtitle_font_size: Number(v) })
                       }
@@ -639,14 +627,17 @@ export function AppSettings() {
                       }
                     />
                   </Row>
-                  <Row title={t`Outline color`}>
+                  <Row title={t`Background color`}>
                     <ColorSwatches
-                      color={assToRgb(settings.subtitle_outline_color, BLACK)}
+                      color={assToRgb(
+                        settings.subtitle_outline_color || CAPTION.boxColor,
+                        BLACK,
+                      )}
                       onChange={(rgb) =>
                         updateProject({
                           subtitle_outline_color: rgbToAss(
                             rgb,
-                            settings.subtitle_outline_color,
+                            settings.subtitle_outline_color || CAPTION.boxColor,
                           ),
                         })
                       }
@@ -654,10 +645,10 @@ export function AppSettings() {
                   </Row>
                   <Row title={t`Preview`} stacked>
                     <SubtitleSample
-                      font={settings.subtitle_font || "Calibri"}
-                      size={settings.subtitle_font_size || 30}
-                      color={settings.subtitle_color || "&H00FFFFFF"}
-                      outlineColor={settings.subtitle_outline_color || "&H00000000"}
+                      font={settings.subtitle_font}
+                      size={settings.subtitle_font_size}
+                      color={settings.subtitle_color}
+                      boxColor={settings.subtitle_outline_color}
                       bold={settings.subtitle_bold}
                     />
                   </Row>

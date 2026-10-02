@@ -2,7 +2,6 @@ import re
 from typing import Any
 from services.localization.romaji import RomajiConverter
 from services.config.job_config import JobConfigManager
-from services.localization.subtitle import SubtitleStyle
 from services.logger.logger import setup_logger
 
 logger = setup_logger("Localization Service")
@@ -56,16 +55,3 @@ def build_display_text(original_jp: str, target_lang: Any) -> str:
         )
         return RomajiConverter.to_romaji(original_jp)
     return translated
-
-
-def _build_subtitle_style(job_config: "JobConfigManager") -> SubtitleStyle:
-    settings = job_config.get_settings()
-    return SubtitleStyle(
-        font_name=settings.get("subtitle_font", "Yu Gothic UI"),
-        font_size=int(settings.get("subtitle_font_size", 30)),
-        primary_color=settings.get("subtitle_color", "&H00FFFFFF"),
-        outline_color=settings.get("subtitle_outline_color", "&H00000000"),
-        bold=bool(settings.get("subtitle_bold", False)),
-        alignment=int(settings.get("subtitle_alignment", 2)),
-        margin_v=int(settings.get("subtitle_margin_v", 50)),
-    )

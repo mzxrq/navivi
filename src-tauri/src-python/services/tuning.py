@@ -1187,3 +1187,17 @@ ATTRACTION_LABEL_MARGIN_LEFT = 4
 # resize itself introduces. Off by default elsewhere since it's tuned for exactly
 # this upscale ratio, not a general-purpose sharpen.
 ATTRACTION_UPSCALE_SHARPEN = True
+
+# --- Burned-in captions (timeline export and the per-clip subtitle burn) -----
+# A translucent dark box with the text on it, narrow and centred at the bottom so
+# it stays clear of the walk-time/distance card in the bottom-right corner of
+# route clips. Mirrored in the editor preview and the Settings sample
+# (src/utils/subtitleLook.ts) so what is seen there is what is burned in.
+# libass sizes everything against a 288-line frame (384 wide for the SRT that
+# FFmpeg converts), so these are in those units, not pixels.
+CAPTION_DEFAULT_SIZE = 16
+CAPTION_MAX_WIDTH = 0.5  # share of the frame width the box may use
+CAPTION_MARGIN_V = 20  # gap above the bottom edge
+CAPTION_BOX_PADDING = 2.0  # libass pads a box by its outline width
+CAPTION_BOX_COLOR = "&H66000000"  # ASS alpha 66 = 60% opaque black
+CAPTION_PLAY_RES_X = 384

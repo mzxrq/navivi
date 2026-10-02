@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef } from "react";
 import { t } from "@lingui/core/macro";
 import { Pause, Play, SkipBack } from "../../components/ui/icons";
+import { Caption } from "../../components/ui/Caption";
 import { Tip } from "../../components/ui/Tip";
+import { useWorkspace } from "../../hooks/useWorkspace";
 import { DEFAULT_EXTRA_VOLUME, layout, placedCues, segmentAt, trimmedLength, TimelineData } from "./model";
 import { formatTime, mediaUrl, player, usePlayerTime, usePlaying } from "./player";
 
@@ -11,15 +13,19 @@ interface PreviewProps {
 }
 
 function SubtitleOverlay({ cues, show }: { cues: ReturnType<typeof placedCues>; show: boolean }) {
+  const { settings } = useWorkspace();
   const time = usePlayerTime();
   const cue = show ? cues.find((c) => time >= c.globalStart && time < c.globalEnd) : null;
   if (!cue) return null;
   return (
-    <div className="absolute inset-x-0 bottom-[7%] flex justify-center px-6 pointer-events-none">
-      <span className="max-w-[85%] px-2.5 py-1 rounded-md bg-black/60 text-white text-[clamp(11px,1.6vw,20px)] leading-snug text-center whitespace-pre-line">
-        {cue.text}
-      </span>
-    </div>
+    <Caption
+      text={cue.text}
+      font={settings.subtitle_font}
+      size={settings.subtitle_font_size}
+      color={settings.subtitle_color}
+      boxColor={settings.subtitle_outline_color}
+      bold={settings.subtitle_bold}
+    />
   );
 }
 
@@ -179,7 +185,10 @@ export function Preview({ timeline, projectDir }: PreviewProps) {
   return (
     <div className="flex flex-col min-h-0 flex-1">
       <div className="flex-1 min-h-0 flex items-center justify-center p-4">
-        <div className="relative max-h-full max-w-full aspect-video h-full bg-black rounded-xl overflow-hidden shadow-sm ring-1 ring-black/10 dark:ring-white/10">
+        <div
+          className="relative max-h-full max-w-full aspect-video h-full bg-black rounded-xl overflow-hidden shadow-sm ring-1 ring-black/10 dark:ring-white/10"
+          style={{ containerType: "size" }}
+        >
           <video ref={videoRef} muted playsInline preload="auto" className="absolute inset-0 w-full h-full object-contain" />
           <audio ref={voiceRef} preload="auto" />
           <audio ref={musicRef} preload="auto" />

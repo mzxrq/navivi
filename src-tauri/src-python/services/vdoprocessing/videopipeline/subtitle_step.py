@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from services.localization.cues import clean_text
+from services.localization.subtitle import SubtitleStyle, caption_style
 from services.logger.progress import tracker
 from services.vdoprocessing.cliptiming import read_audio_offset
 from services.vdoprocessing.vdoexporter import VideoExporter
@@ -17,7 +18,7 @@ from .audio_step import _resolve_attraction_narration_script, _resolve_narration
 from .helpers import is_newer_than, logger, output_is_valid
 
 
-def _burn_checkpoint_key(video_path: str, sub_path: str) -> str:
+def _burn_checkpoint_key(video_path: str, sub_path: str, style: Optional[SubtitleStyle] = None) -> str:
     """Fingerprint of everything that decides what a subtitle-burn produces:
     the subtitle file's own content (hashed directly — it's tiny) plus the
     source video's size+mtime (a cheap stand-in for its content; hashing a
@@ -27,8 +28,11 @@ def _burn_checkpoint_key(video_path: str, sub_path: str) -> str:
     apart from "nothing changed, safe to skip" — a bare
     output-file-exists check can't tell those apart, which is exactly how
     a re-narrated clip kept its OLD subtitle burned in across runs before
-    this existed."""
+    this existed. The caption style is part of it too, so changing the font or
+    colours re-burns clips that were already done."""
     hasher = hashlib.sha256()
+    if style is not None:
+        hasher.update(style.to_force_style().encode("utf-8"))
     try:
         with open(sub_path, "rb") as f:
             hasher.update(f.read())
@@ -279,6 +283,7 @@ def burn_subtitles(
     overview_subtitle_path: Optional[str] = None,
     attraction_subtitle_paths: Optional[list[str]] = None,
     leg_narration_splits: Optional[dict[str, tuple[Optional[str], Optional[str]]]] = None,
+    style: Optional[SubtitleStyle] = None,
 ) -> list[str]:
     """Step 5: Permanently burns SRT subtitles onto the finished video files.
 
@@ -365,7 +370,7 @@ def burn_subtitles(
             # render_step.py's own manifest checkpoint does for the whole
             # render — comparing actual inputs, not just "does a file
             # exist here."
-            checkpoint_key = _burn_checkpoint_key(video_path, sub_path)
+            checkpoint_key = _burn_checkpoint_key(video_path, sub_path, style)
             sidecar_path = _burn_hash_sidecar(subtitled_output)
             cached_key = None
             if sidecar_path.exists():
@@ -405,6 +410,7 @@ def burn_subtitles(
                     input_video_path=video_path,
                     subtitle_file_path=sub_path,
                     output_video_path=subtitled_output,
+                    style=style,
                 )
                 try:
                     sidecar_path.write_text(checkpoint_key, encoding="utf-8")

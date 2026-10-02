@@ -43,7 +43,7 @@ import cv2
 import numpy as np
 
 from services import tuning
-from services.localization.subtitle import SubtitleStyle
+from services.localization.subtitle import SubtitleStyle, caption_style
 from services.logger.logger import setup_logger
 
 FFMPEG_BIN = (
@@ -800,7 +800,10 @@ class VideoExporter:
             srt.write_text(VideoExporter.cues_to_srt(cues), encoding="utf-8")
             burned = tmp_dir / "with_subtitles.mp4"
             try:
-                VideoExporter.burn_subtitles(str(output_path), str(srt), str(burned))
+                VideoExporter.burn_subtitles(
+                    str(output_path), str(srt), str(burned),
+                    style=caption_style(timeline_data.get("subtitle_style")),
+                )
                 _replace_with_retry(str(burned), str(output_path))
             except Exception as exc:  # the stitched video is still good without them
                 logger.warning("subtitle burn skipped: %s", exc)
@@ -816,7 +819,10 @@ class VideoExporter:
 
     @staticmethod
     def burn_subtitles(
-        input_video_path: str, subtitle_file_path: str, output_video_path: str
+        input_video_path: str,
+        subtitle_file_path: str,
+        output_video_path: str,
+        style: Optional[SubtitleStyle] = None,
     ) -> str:
         """NLE Engine: Burns an .srt or .ass subtitle file permanently into a video track (Cross-Platform Safe)."""
         video_path = Path(input_video_path)
@@ -843,6 +849,9 @@ class VideoExporter:
         # We must format the path with forward slashes and escape the colon for the filter.
         # e.g., 'C\:/Users/...' -> safely parsed by the FFmpeg filter graph.
         safe_sub_path = sub_path.as_posix().replace(":", "\\:")
+        sub_filter = f"subtitles='{safe_sub_path}'"
+        if style is not None:
+            sub_filter += f":force_style='{style.to_force_style()}'"
 
         result = subprocess.run(
             [
@@ -851,7 +860,7 @@ class VideoExporter:
                 "-i",
                 str(video_path),
                 "-vf",
-                f"subtitles='{safe_sub_path}'",
+                sub_filter,
                 *tuning.ffmpeg_thread_args(),
                 "-c:a",
                 "copy",  # Copy the audio without re-encoding it

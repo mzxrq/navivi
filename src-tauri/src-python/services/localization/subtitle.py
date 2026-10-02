@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+from services import tuning
 from services.logger.logger import setup_logger
 
 # Logging configuration
@@ -55,17 +56,19 @@ class SubtitleStyle:
     alignment: int = 2  # bottom-center
     margin_v: int = 10  # vertical margin from frame edge, px
     margin_l: Optional[int] = None  # left margin; None keeps libass's default
+    margin_r: Optional[int] = None  # right margin; None keeps libass's default
 
     def to_force_style(self) -> str:
         """Serializes to the comma-separated key=value string libass expects."""
         bold_flag = -1 if self.bold else 0  # ASS uses -1 for True, 0 for False
         margin_l = f",MarginL={self.margin_l}" if self.margin_l is not None else ""
+        margin_r = f",MarginR={self.margin_r}" if self.margin_r is not None else ""
         return (
             f"FontName={self.font_name},FontSize={self.font_size},"
             f"PrimaryColour={self.primary_color},OutlineColour={self.outline_color},"
             f"BackColour={self.back_color},Bold={bold_flag},BorderStyle={self.border_style},"
             f"Outline={self.outline},Shadow={self.shadow},Alignment={self.alignment},"
-            f"MarginV={self.margin_v}{margin_l}"
+            f"MarginV={self.margin_v}{margin_l}{margin_r}"
         )
 
 
@@ -345,3 +348,26 @@ class MasterSubtitleAssembler:
         for cues, offset in zip(segment_cues, segment_offsets):
             master.extend(cue.shifted(offset) for cue in cues)
         return master
+
+
+def caption_style(settings: Optional[dict] = None) -> SubtitleStyle:
+    """The look of burned-in captions: font, size, text colour and box colour come from the project's
+    settings (`subtitle_*`), the box shape and position from tuning.CAPTION_*. `settings` can be the
+    project's settings or the `subtitle_style` block the editor writes into timeline.json; anything
+    missing falls back to the defaults. In box mode libass fills the box with the OUTLINE colour, which
+    is why `subtitle_outline_color` is the box colour here."""
+    settings = settings or {}
+    side = round(tuning.CAPTION_PLAY_RES_X * (1 - tuning.CAPTION_MAX_WIDTH) / 2)
+    return SubtitleStyle(
+        font_name=settings.get("subtitle_font") or "Yu Gothic UI",
+        font_size=int(settings.get("subtitle_font_size") or tuning.CAPTION_DEFAULT_SIZE),
+        primary_color=settings.get("subtitle_color") or "&H00FFFFFF",
+        outline_color=settings.get("subtitle_outline_color") or tuning.CAPTION_BOX_COLOR,
+        bold=bool(settings.get("subtitle_bold", False)),
+        border_style=3,
+        outline=tuning.CAPTION_BOX_PADDING,
+        shadow=0,
+        margin_v=tuning.CAPTION_MARGIN_V,
+        margin_l=side,
+        margin_r=side,
+    )
