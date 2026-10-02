@@ -320,6 +320,10 @@ SUMMARY_CARD_VALUE_FONT_SIZE = 34
 # user's own sketch, refined over two rounds — create_summary_card_columns).
 # Overridable per project via job_config.json's settings.summary_card_style.
 DEFAULT_SUMMARY_CARD_STYLE = "columns"  # the user's choice (2026-09-30)
+# "columns" card: every column's text area is at least as wide as these
+# sample strings, so the card keeps one width whatever the values are.
+SUMMARY_CARD_FIXED_DISTANCE_SAMPLE = "88.8 km"
+SUMMARY_CARD_FIXED_DURATION_SAMPLE = "8時間88分"
 
 # --- HUD/card theme (light | dark) ------------------------------------------
 # Summary card, top banner, corner HUD labels and popup caption cards.

@@ -8,47 +8,83 @@ msgstr ""
 "Language: en\n"
 
 #. js-lingui-explicit-id
-#: src/components/ui/AppSettings.tsx:307
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:304
+=======
+#: src/components/ui/AppSettings.tsx:308
+>>>>>>> Stashed changes
 msgid "Light"
 msgstr "Light"
 
 #. js-lingui-explicit-id
-#: src/components/ui/AppSettings.tsx:308
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:305
+=======
+#: src/components/ui/AppSettings.tsx:309
+>>>>>>> Stashed changes
 msgid "Dark"
 msgstr "Dark"
 
 #. js-lingui-explicit-id
-#: src/components/ui/AppSettings.tsx:309
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:306
+=======
+#: src/components/ui/AppSettings.tsx:310
+>>>>>>> Stashed changes
 msgid "System"
 msgstr "System"
 
 #. js-lingui-explicit-id
-#: src/components/ui/AppSettings.tsx:330
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:327
+=======
+#: src/components/ui/AppSettings.tsx:331
+>>>>>>> Stashed changes
 msgid "Navi Blue"
 msgstr "Navi Blue"
 
 #. js-lingui-explicit-id
-#: src/components/ui/AppSettings.tsx:331
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:328
+=======
+#: src/components/ui/AppSettings.tsx:332
+>>>>>>> Stashed changes
 msgid "Emerald"
 msgstr "Emerald"
 
 #. js-lingui-explicit-id
-#: src/components/ui/AppSettings.tsx:332
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:329
+=======
+#: src/components/ui/AppSettings.tsx:333
+>>>>>>> Stashed changes
 msgid "Violet"
 msgstr "Violet"
 
 #. js-lingui-explicit-id
-#: src/components/ui/AppSettings.tsx:333
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:330
+=======
+#: src/components/ui/AppSettings.tsx:334
+>>>>>>> Stashed changes
 msgid "Amber"
 msgstr "Amber"
 
 #. js-lingui-explicit-id
-#: src/components/ui/AppSettings.tsx:334
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:331
+=======
+#: src/components/ui/AppSettings.tsx:335
+>>>>>>> Stashed changes
 msgid "Rose"
 msgstr "Rose"
 
 #. js-lingui-explicit-id
-#: src/components/ui/AppSettings.tsx:889
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:894
+=======
+#: src/components/ui/AppSettings.tsx:893
+>>>>>>> Stashed changes
 msgid "Starting..."
 msgstr "Starting..."
 
@@ -141,7 +177,11 @@ msgid "{0} of {1} stops"
 msgstr "{0} of {1} stops"
 
 #. placeholder {0}: seg.fadeIntoNext.toFixed(1)
-#: src/features/editor/Inspector.tsx:401
+<<<<<<< Updated upstream
+#: src/features/editor/Inspector.tsx:165
+=======
+#: src/features/editor/Inspector.tsx:411
+>>>>>>> Stashed changes
 msgid "{0} s dissolve"
 msgstr "{0} s dissolve"
 
@@ -267,15 +307,22 @@ msgstr "~{0} to render"
 msgid "💡 <0>Quick Export Notice:</0> To customize individual video clips or fix TTS pronunciation, uncheck \"Quick Export\" in generation settings and re-run."
 msgstr "💡 <0>Quick Export Notice:</0> To customize individual video clips or fix TTS pronunciation, uncheck \"Quick Export\" in generation settings and re-run."
 
-#: src/components/ui/CaptionStyleFields.tsx:144
+<<<<<<< Updated upstream
+=======
+#: src/components/ui/CaptionStyleFields.tsx:154
 msgid "0 = no limit"
 msgstr "0 = no limit"
 
+>>>>>>> Stashed changes
 #: src/features/map/components/GenerateDialog.tsx:54
 msgid "1 leg"
 msgstr "1 leg"
 
-#: src/components/ui/AppSettings.tsx:253
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:250
+=======
+#: src/components/ui/AppSettings.tsx:254
+>>>>>>> Stashed changes
 msgid "1 minute"
 msgstr "1 minute"
 
@@ -287,7 +334,11 @@ msgstr "1 stop"
 msgid "1 stop has no narration and will be silent"
 msgstr "1 stop has no narration and will be silent"
 
-#: src/components/ui/AppSettings.tsx:254
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:251
+=======
+#: src/components/ui/AppSettings.tsx:255
+>>>>>>> Stashed changes
 msgid "10 minutes"
 msgstr "10 minutes"
 
@@ -295,11 +346,19 @@ msgstr "10 minutes"
 #~ msgid "16:9 Landscape"
 #~ msgstr "16:9 Landscape"
 
-#: src/components/ui/AppSettings.tsx:251
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:248
 msgid "3 seconds"
 msgstr "3 seconds"
 
+#: src/components/ui/AppSettings.tsx:249
+=======
 #: src/components/ui/AppSettings.tsx:252
+msgid "3 seconds"
+msgstr "3 seconds"
+
+#: src/components/ui/AppSettings.tsx:253
+>>>>>>> Stashed changes
 msgid "30 seconds"
 msgstr "30 seconds"
 
@@ -325,7 +384,11 @@ msgstr "About {0} left"
 #~ msgid "About {minutes} min"
 #~ msgstr "About {minutes} min"
 
-#: src/components/ui/AppSettings.tsx:327
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:324
+=======
+#: src/components/ui/AppSettings.tsx:328
+>>>>>>> Stashed changes
 msgid "Accent colour"
 msgstr "Accent colour"
 
@@ -348,7 +411,11 @@ msgstr "Accept assets to automatically stitch and export"
 #~ msgid "Active"
 #~ msgstr "Active"
 
-#: src/components/ui/AppSettings.tsx:969
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:974
+=======
+#: src/components/ui/AppSettings.tsx:973
+>>>>>>> Stashed changes
 msgid "Active model"
 msgstr "Active model"
 
@@ -483,11 +550,19 @@ msgstr "Add video"
 msgid "Add voice"
 msgstr "Add voice"
 
-#: src/components/ui/AppSettings.tsx:676
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:703
 msgid "Add word"
 msgstr "Add word"
 
-#: src/components/ui/AppSettings.tsx:661
+#: src/components/ui/AppSettings.tsx:688
+=======
+#: src/components/ui/AppSettings.tsx:677
+msgid "Add word"
+msgstr "Add word"
+
+#: src/components/ui/AppSettings.tsx:662
+>>>>>>> Stashed changes
 msgid "Add words below or extract them from narration scripts."
 msgstr "Add words below or extract them from narration scripts."
 
@@ -524,12 +599,21 @@ msgstr "Adjust Route (Add via points to nudge)"
 #~ msgid "Advanced Settings"
 #~ msgstr "Advanced Settings"
 
-#: src/components/ui/AppSettings.tsx:265
-#: src/components/ui/AppSettings.tsx:272
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:262
+#: src/components/ui/AppSettings.tsx:269
 msgid "AI features"
 msgstr "AI features"
 
-#: src/components/ui/AppSettings.tsx:139
+#: src/components/ui/AppSettings.tsx:136
+=======
+#: src/components/ui/AppSettings.tsx:266
+#: src/components/ui/AppSettings.tsx:273
+msgid "AI features"
+msgstr "AI features"
+
+#: src/components/ui/AppSettings.tsx:140
+>>>>>>> Stashed changes
 msgid "AI models"
 msgstr "AI models"
 
@@ -537,10 +621,13 @@ msgstr "AI models"
 msgid "AI voiceover"
 msgstr "AI voiceover"
 
-#: src/features/editor/Inspector.tsx:300
+<<<<<<< Updated upstream
+=======
+#: src/features/editor/Inspector.tsx:310
 msgid "Align"
 msgstr "Align"
 
+>>>>>>> Stashed changes
 #: src/features/timeline/components/MediaPool.tsx:354
 #~ msgid "all"
 #~ msgstr "all"
@@ -557,7 +644,11 @@ msgstr "All changes safely stored to disk"
 msgid "All media was automatically generated, stitched, and exported to your project folder without stopping for manual review"
 msgstr "All media was automatically generated, stitched, and exported to your project folder without stopping for manual review"
 
-#: src/components/ui/AppSettings.tsx:546
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:573
+=======
+#: src/components/ui/AppSettings.tsx:547
+>>>>>>> Stashed changes
 msgid "All projects"
 msgstr "All projects"
 
@@ -583,15 +674,23 @@ msgstr "Anchor {0}"
 msgid "Animate photos at stops"
 msgstr "Animate photos at stops"
 
-#: src/features/editor/Inspector.tsx:217
-msgid "Animation"
-msgstr "Animation"
-
-#: src/components/ui/AppSettings.tsx:457
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:454
 msgid "API key"
 msgstr "API key"
 
-#: src/components/ui/AppSettings.tsx:130
+#: src/components/ui/AppSettings.tsx:127
+=======
+#: src/features/editor/Inspector.tsx:227
+msgid "Animation"
+msgstr "Animation"
+
+#: src/components/ui/AppSettings.tsx:458
+msgid "API key"
+msgstr "API key"
+
+#: src/components/ui/AppSettings.tsx:131
+>>>>>>> Stashed changes
 msgid "API keys"
 msgstr "API keys"
 
@@ -600,15 +699,23 @@ msgstr "API keys"
 msgid "App Settings"
 msgstr "App Settings"
 
-#: src/components/ui/AppSettings.tsx:129
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:126
 msgid "Appearance"
 msgstr "Appearance"
 
-#: src/features/editor/Inspector.tsx:229
+#: src/components/ui/AppSettings.tsx:216
+=======
+#: src/components/ui/AppSettings.tsx:130
+msgid "Appearance"
+msgstr "Appearance"
+
+#: src/features/editor/Inspector.tsx:239
 msgid "Appears after"
 msgstr "Appears after"
 
-#: src/components/ui/AppSettings.tsx:219
+#: src/components/ui/AppSettings.tsx:220
+>>>>>>> Stashed changes
 msgid "Application"
 msgstr "Application"
 
@@ -634,18 +741,21 @@ msgstr "Application"
 #~ msgid "Apply"
 #~ msgstr "Apply"
 
-#: src/features/editor/Inspector.tsx:319
+<<<<<<< Updated upstream
+=======
+#: src/features/editor/Inspector.tsx:329
 msgid "Apply to all place names"
 msgstr "Apply to all place names"
 
-#: src/features/editor/Inspector.tsx:179
+#: src/features/editor/Inspector.tsx:189
 msgid "Apply to all subtitles"
 msgstr "Apply to all subtitles"
 
-#: src/features/editor/Inspector.tsx:319
+#: src/features/editor/Inspector.tsx:329
 msgid "Apply to all titles like this"
 msgstr "Apply to all titles like this"
 
+>>>>>>> Stashed changes
 #: src/features/timeline/components/elements/TransitionsPanel.tsx:373
 #~ msgid "Apply to selected clip"
 #~ msgstr "Apply to selected clip"
@@ -751,7 +861,11 @@ msgstr "Auto edit"
 msgid "Auto edit: order clips, add fades and subtitles"
 msgstr "Auto edit: order clips, add fades and subtitles"
 
-#: src/components/ui/AppSettings.tsx:510
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:507
+=======
+#: src/components/ui/AppSettings.tsx:511
+>>>>>>> Stashed changes
 msgid "Auto-Detect (Recommended)"
 msgstr "Auto-Detect (Recommended)"
 
@@ -779,11 +893,19 @@ msgstr "Auto-Director Proposal"
 #~ msgid "Auto-Ducking Armed (Click to disable)"
 #~ msgstr "Auto-Ducking Armed (Click to disable)"
 
-#: src/components/ui/AppSettings.tsx:711
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:738
 msgid "Auto-fill readings"
 msgstr "Auto-fill readings"
 
-#: src/components/ui/AppSettings.tsx:238
+#: src/components/ui/AppSettings.tsx:235
+=======
+#: src/components/ui/AppSettings.tsx:712
+msgid "Auto-fill readings"
+msgstr "Auto-fill readings"
+
+#: src/components/ui/AppSettings.tsx:239
+>>>>>>> Stashed changes
 msgid "Auto-save"
 msgstr "Auto-save"
 
@@ -812,11 +934,14 @@ msgstr "Auto-Write"
 msgid "Back to start"
 msgstr "Back to start"
 
-#: src/components/ui/CaptionStyleFields.tsx:107
-#: src/components/ui/CaptionStyleFields.tsx:107
+<<<<<<< Updated upstream
+=======
+#: src/components/ui/CaptionStyleFields.tsx:117
+#: src/components/ui/CaptionStyleFields.tsx:117
 msgid "Background box"
 msgstr "Background box"
 
+>>>>>>> Stashed changes
 #: src/features/editor/MusicPicker.tsx:98
 msgid "Background music"
 msgstr "Background music"
@@ -861,19 +986,22 @@ msgstr "Border"
 msgid "Border Width"
 msgstr "Border Width"
 
-#: src/components/ui/CaptionStyleFields.tsx:128
-#: src/features/editor/Inspector.tsx:292
+<<<<<<< Updated upstream
+=======
+#: src/components/ui/CaptionStyleFields.tsx:138
+#: src/features/editor/Inspector.tsx:302
 msgid "Bottom"
 msgstr "Bottom"
 
-#: src/components/ui/CaptionStyleFields.tsx:110
+#: src/components/ui/CaptionStyleFields.tsx:120
 msgid "Box colour"
 msgstr "Box colour"
 
-#: src/components/ui/CaptionStyleFields.tsx:113
+#: src/components/ui/CaptionStyleFields.tsx:123
 msgid "Box opacity"
 msgstr "Box opacity"
 
+>>>>>>> Stashed changes
 #: src/features/timeline/components/elements/inspector/InspectorColorPanel.tsx:43
 #~ msgid "Brightness"
 #~ msgstr "Brightness"
@@ -921,16 +1049,25 @@ msgstr "Cancel"
 #: src/components/ui/VoiceSettings.tsx:269
 #: src/components/view/ProjectManager.tsx:607
 #: src/components/view/ProjectManager.tsx:652
-#: src/components/view/ProjectSettingsModal.tsx:128
+#: src/components/view/ProjectSettingsModal.tsx:129
+<<<<<<< Updated upstream
+#: src/features/editor/ExportDialog.tsx:66
+=======
 #: src/features/editor/ExportDialog.tsx:88
+>>>>>>> Stashed changes
 #: src/features/map/components/GenerateDialog.tsx:88
 #: src/features/map/components/Sidebar.tsx:238
 #: src/features/map/components/WaypointEditor.tsx:672
 msgid "Cancel"
 msgstr "Cancel"
 
-#: src/components/ui/AppSettings.tsx:1037
-#: src/components/ui/AppSettings.tsx:1038
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:1042
+#: src/components/ui/AppSettings.tsx:1043
+=======
+#: src/components/ui/AppSettings.tsx:1041
+#: src/components/ui/AppSettings.tsx:1042
+>>>>>>> Stashed changes
 msgid "Cancel download"
 msgstr "Cancel download"
 
@@ -946,7 +1083,7 @@ msgstr "Cannot close window. Check Tauri capabilities"
 #~ msgid "Cannot drop here: overlaps with another clip"
 #~ msgstr "Cannot drop here: overlaps with another clip"
 
-#: src/components/view/ProjectSettingsModal.tsx:58
+#: src/components/view/ProjectSettingsModal.tsx:59
 msgid "Cannot edit settings directly in .nvv archive. Please open project first."
 msgstr "Cannot edit settings directly in .nvv archive. Please open project first."
 
@@ -962,10 +1099,13 @@ msgstr "Cannot generate: Please add at least one waypoint."
 #~ msgid "Cannot place Audio on a Video track"
 #~ msgstr "Cannot place Audio on a Video track"
 
-#: src/features/editor/Inspector.tsx:307
+<<<<<<< Updated upstream
+=======
+#: src/features/editor/Inspector.tsx:317
 msgid "Centre"
 msgstr "Centre"
 
+>>>>>>> Stashed changes
 #: src/components/ui/RenderOverlay.tsx:832
 msgid "Check Audio & Video"
 msgstr "Check Audio & Video"
@@ -982,12 +1122,20 @@ msgstr "Choose a leg"
 msgid "Choose a recording…"
 msgstr "Choose a recording…"
 
-#: src/components/ui/AppSettings.tsx:414
-#: src/components/view/ProjectSettingsModal.tsx:170
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:411
+=======
+#: src/components/ui/AppSettings.tsx:415
+>>>>>>> Stashed changes
+#: src/components/view/ProjectSettingsModal.tsx:171
 msgid "Choose file…"
 msgstr "Choose file…"
 
-#: src/components/ui/AppSettings.tsx:222
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:219
+=======
+#: src/components/ui/AppSettings.tsx:223
+>>>>>>> Stashed changes
 msgid "Choose your preferred language for the application"
 msgstr "Choose your preferred language for the application"
 
@@ -1003,15 +1151,24 @@ msgstr "Choose…"
 #~ msgid "Clean modern sans-serif"
 #~ msgstr "Clean modern sans-serif"
 
-#: src/components/ui/AppSettings.tsx:1037
-#: src/components/ui/AppSettings.tsx:1038
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:1042
+#: src/components/ui/AppSettings.tsx:1043
+=======
+#: src/components/ui/AppSettings.tsx:1041
+#: src/components/ui/AppSettings.tsx:1042
+>>>>>>> Stashed changes
 #: src/components/ui/NewProject.tsx:315
 #: src/components/ui/StatusBar.tsx:402
 #: src/features/map/components/Sidebar.tsx:248
 msgid "Clear"
 msgstr "Clear"
 
-#: src/features/editor/Inspector.tsx:503
+<<<<<<< Updated upstream
+#: src/features/editor/Inspector.tsx:222
+=======
+#: src/features/editor/Inspector.tsx:513
+>>>>>>> Stashed changes
 msgid "Clear all"
 msgstr "Clear all"
 
@@ -1063,7 +1220,11 @@ msgstr "Click the map to nudge the route. Drag a via point to move it, or right-
 #~ msgid "Click to jump playhead"
 #~ msgstr "Click to jump playhead"
 
-#: src/features/editor/Inspector.tsx:352
+<<<<<<< Updated upstream
+#: src/features/editor/Inspector.tsx:116
+=======
+#: src/features/editor/Inspector.tsx:362
+>>>>>>> Stashed changes
 msgid "Clip"
 msgstr "Clip"
 
@@ -1093,9 +1254,15 @@ msgstr "Clips ordered, fades added and subtitles filled in"
 #~ msgid "Clips unlinked"
 #~ msgstr "Clips unlinked"
 
-#: src/components/ui/AppSettings.tsx:205
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:202
+#: src/components/ui/AppSettings.tsx:203
+#: src/components/ui/ErrorBoundary.tsx:77
+=======
 #: src/components/ui/AppSettings.tsx:206
+#: src/components/ui/AppSettings.tsx:207
 #: src/components/ui/ErrorBoundary.tsx:85
+>>>>>>> Stashed changes
 #: src/components/ui/NewProject.tsx:230
 #: src/components/ui/StatusBar.tsx:454
 #: src/components/ui/TitleBar.tsx:446
@@ -1117,7 +1284,11 @@ msgstr "Collapse"
 #~ msgid "Color Adjustments"
 #~ msgstr "Color Adjustments"
 
-#: src/components/ui/AppSettings.tsx:420
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:417
+=======
+#: src/components/ui/AppSettings.tsx:421
+>>>>>>> Stashed changes
 msgid "Color GPX routes dynamically based on steepness"
 msgstr "Color GPX routes dynamically based on steepness"
 
@@ -1158,7 +1329,11 @@ msgstr "Context from document: {0}"
 #~ msgid "Contrast"
 #~ msgstr "Contrast"
 
-#: src/components/ui/AppSettings.tsx:239
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:236
+=======
+#: src/components/ui/AppSettings.tsx:240
+>>>>>>> Stashed changes
 msgid "Controls auto save of editors that have unsaved changes"
 msgstr "Controls auto save of editors that have unsaved changes"
 
@@ -1170,11 +1345,13 @@ msgstr "Converting GPS file format..."
 msgid "Copied"
 msgstr "Copied"
 
-#: src/features/editor/Inspector.tsx:324
+<<<<<<< Updated upstream
+=======
+#: src/features/editor/Inspector.tsx:334
 msgid "Copies position and both lines' animation and style; the words stay."
 msgstr "Copies position and both lines' animation and style; the words stay."
 
-#: src/features/editor/Inspector.tsx:323
+#: src/features/editor/Inspector.tsx:333
 msgid "Copies position and both lines' animation and style. Place names made later use it too."
 msgstr "Copies position and both lines' animation and style. Place names made later use it too."
 
@@ -1186,6 +1363,7 @@ msgstr "Copies position and both lines' animation and style. Place names made la
 #~ msgid "Copies position, animation and both lines' style. Place names made later use it too."
 #~ msgstr "Copies position, animation and both lines' style. Place names made later use it too."
 
+>>>>>>> Stashed changes
 #: src/components/ui/ContextMenu.tsx:390
 #: src/components/ui/ContextMenu.tsx:429
 msgid "Copy"
@@ -1214,7 +1392,11 @@ msgstr "Copy Message"
 msgid "Copy path from"
 msgstr "Copy path from"
 
-#: src/components/ui/AppSettings.tsx:531
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:558
+=======
+#: src/components/ui/AppSettings.tsx:532
+>>>>>>> Stashed changes
 msgid "Correct words or kanji that are read incorrectly by the AI voice. You can auto-extract entries from scripts by typing <0>漢字(よみがな)</0> in any narration script."
 msgstr "Correct words or kanji that are read incorrectly by the AI voice. You can auto-extract entries from scripts by typing <0>漢字(よみがな)</0> in any narration script."
 
@@ -1243,7 +1425,7 @@ msgstr "Could not load audio for {0}"
 msgid "Could not open file location"
 msgstr "Could not open file location"
 
-#: src/components/view/ProjectSettingsModal.tsx:69
+#: src/components/view/ProjectSettingsModal.tsx:70
 msgid "Could not read project config."
 msgstr "Could not read project config."
 
@@ -1317,7 +1499,11 @@ msgstr "Cross-checking building data..."
 msgid "Custom Color"
 msgstr "Custom Color"
 
-#: src/components/ui/AppSettings.tsx:388
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:385
+=======
+#: src/components/ui/AppSettings.tsx:389
+>>>>>>> Stashed changes
 #: src/features/map/components/MapArea.tsx:1028
 #: src/features/map/components/MapArea.tsx:1090
 #: src/features/map/components/WaypointEditor.tsx:616
@@ -1341,20 +1527,35 @@ msgstr "Cut"
 msgid "Cut to next clip"
 msgstr "Cut to next clip"
 
-#: src/components/ui/AppSettings.tsx:361
-#: src/components/view/ProjectSettingsModal.tsx:143
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:358
+=======
+#: src/components/ui/StepButtons.tsx:16
+msgid "Decrease"
+msgstr "Decrease"
+
+#: src/components/ui/AppSettings.tsx:362
+>>>>>>> Stashed changes
+#: src/components/view/ProjectSettingsModal.tsx:144
 msgid "Default marker for all waypoints. Can be overridden per-stop."
 msgstr "Default marker for all waypoints. Can be overridden per-stop."
 
-#: src/components/ui/AppSettings.tsx:368
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:365
+=======
+#: src/components/ui/AppSettings.tsx:369
+>>>>>>> Stashed changes
 #: src/features/map/components/WaypointEditor.tsx:628
 msgid "Default pin"
 msgstr "Default pin"
 
-#: src/features/editor/Inspector.tsx:142
+<<<<<<< Updated upstream
+=======
+#: src/features/editor/Inspector.tsx:152
 msgid "Default subtitle style"
 msgstr "Default subtitle style"
 
+>>>>>>> Stashed changes
 #: src/components/ui/NewProject.tsx:349
 msgid "Default travel mode"
 msgstr "Default travel mode"
@@ -1365,8 +1566,12 @@ msgstr "Sets the default pathfinding engine when placing waypoints"
 
 #: src/components/ui/VoiceSettings.tsx:189
 #: src/components/ui/VoiceSettings.tsx:201
-#: src/features/editor/Inspector.tsx:455
-#: src/features/editor/Inspector.tsx:487
+<<<<<<< Updated upstream
+#: src/features/editor/Inspector.tsx:203
+=======
+#: src/features/editor/Inspector.tsx:465
+#: src/features/editor/Inspector.tsx:497
+>>>>>>> Stashed changes
 #: src/features/map/components/WaypointEditor.tsx:679
 msgid "Delete"
 msgstr "Delete"
@@ -1477,24 +1682,27 @@ msgstr "Dismiss"
 #~ msgid "Dissolve"
 #~ msgstr "Dissolve"
 
-#: src/components/ui/CaptionStyleFields.tsx:136
-#: src/features/editor/Inspector.tsx:296
+<<<<<<< Updated upstream
+=======
+#: src/components/ui/CaptionStyleFields.tsx:146
+#: src/features/editor/Inspector.tsx:306
 msgid "Distance from bottom"
 msgstr "Distance from bottom"
 
-#: src/features/editor/Inspector.tsx:312
+#: src/features/editor/Inspector.tsx:322
 msgid "Distance from left"
 msgstr "Distance from left"
 
-#: src/features/editor/Inspector.tsx:312
+#: src/features/editor/Inspector.tsx:322
 msgid "Distance from right"
 msgstr "Distance from right"
 
-#: src/components/ui/CaptionStyleFields.tsx:136
-#: src/features/editor/Inspector.tsx:296
+#: src/components/ui/CaptionStyleFields.tsx:146
+#: src/features/editor/Inspector.tsx:306
 msgid "Distance from top"
 msgstr "Distance from top"
 
+>>>>>>> Stashed changes
 #: src/features/timeline/components/elements/TransitionsPanel.tsx:53
 #~ msgid "Dithering noise pixel dissolve between scenes"
 #~ msgstr "Dithering noise pixel dissolve between scenes"
@@ -1537,7 +1745,11 @@ msgstr "Double-click to add a title"
 #~ msgid "Double-sided horizontal perspective warp effect"
 #~ msgstr "Double-sided horizontal perspective warp effect"
 
-#: src/components/ui/AppSettings.tsx:1053
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:1058
+=======
+#: src/components/ui/AppSettings.tsx:1057
+>>>>>>> Stashed changes
 msgid "Download"
 msgstr "Download"
 
@@ -1615,8 +1827,13 @@ msgstr "Drop photos or GPS files to plot route"
 #~ msgstr "Duplicate"
 
 #: src/components/view/ProjectManager.tsx:225
+<<<<<<< Updated upstream
+#: src/features/editor/EditorView.tsx:258
+#: src/features/editor/Inspector.tsx:169
+=======
 #: src/features/editor/EditorView.tsx:285
-#: src/features/editor/Inspector.tsx:405
+#: src/features/editor/Inspector.tsx:415
+>>>>>>> Stashed changes
 #: src/features/map/hooks/useStopMenus.ts:239
 msgid "Duplicate"
 msgstr "Duplicate"
@@ -1633,7 +1850,11 @@ msgstr "Duplicate Project Name"
 #~ msgid "duplicate-clip"
 #~ msgstr "Duplicate Clip"
 
-#: src/components/ui/AppSettings.tsx:474
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:471
+=======
+#: src/components/ui/AppSettings.tsx:475
+>>>>>>> Stashed changes
 msgid "Duration"
 msgstr "Duration"
 
@@ -1679,8 +1900,13 @@ msgstr "Editing Waypoint on Map"
 msgid "Editor view"
 msgstr "Editor view"
 
-#: src/components/ui/AppSettings.tsx:419
-#: src/components/ui/AppSettings.tsx:425
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:416
+#: src/components/ui/AppSettings.tsx:422
+=======
+#: src/components/ui/AppSettings.tsx:420
+#: src/components/ui/AppSettings.tsx:426
+>>>>>>> Stashed changes
 msgid "Elevation heatmap"
 msgstr "Elevation heatmap"
 
@@ -1697,9 +1923,14 @@ msgstr "Enable 3D Terrain"
 #~ msgid "Enable Auto-Ducking"
 #~ msgstr "Enable Auto-Ducking"
 
-#: src/features/editor/Inspector.tsx:364
-#: src/features/editor/Inspector.tsx:427
-#: src/features/editor/Inspector.tsx:473
+<<<<<<< Updated upstream
+#: src/features/editor/Inspector.tsx:128
+#: src/features/editor/Inspector.tsx:190
+=======
+#: src/features/editor/Inspector.tsx:374
+#: src/features/editor/Inspector.tsx:437
+#: src/features/editor/Inspector.tsx:483
+>>>>>>> Stashed changes
 #: src/features/map/components/MapToolbar.tsx:91
 #: src/hooks/useFileActions.ts:212
 msgid "End"
@@ -1779,7 +2010,11 @@ msgstr "Expand"
 msgid "Expand Review"
 msgstr "Expand Review"
 
-#: src/components/ui/AppSettings.tsx:287
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:284
+=======
+#: src/components/ui/AppSettings.tsx:288
+>>>>>>> Stashed changes
 msgid "Experimental"
 msgstr "Experimental"
 
@@ -1861,15 +2096,22 @@ msgstr "Extracting locations using AI..."
 msgid "Extracting waypoints from GPS data..."
 msgstr "Extracting waypoints from GPS data..."
 
-#: src/features/editor/Inspector.tsx:225
+<<<<<<< Updated upstream
+=======
+#: src/features/editor/Inspector.tsx:235
 msgid "Fade"
 msgstr "Fade"
 
+>>>>>>> Stashed changes
 #: src/features/timeline/components/elements/inspector/InspectorAudioPanel.tsx:135
 #~ msgid "Fade In (s)"
 #~ msgstr "Fade In (s)"
 
-#: src/features/editor/Inspector.tsx:398
+<<<<<<< Updated upstream
+#: src/features/editor/Inspector.tsx:162
+=======
+#: src/features/editor/Inspector.tsx:408
+>>>>>>> Stashed changes
 msgid "Fade into next"
 msgstr "Fade into next"
 
@@ -1877,7 +2119,11 @@ msgstr "Fade into next"
 msgid "Fade into next clip"
 msgstr "Fade into next clip"
 
-#: src/components/view/ProjectSettingsModal.tsx:209
+<<<<<<< Updated upstream
+#: src/components/view/ProjectSettingsModal.tsx:220
+=======
+#: src/components/view/ProjectSettingsModal.tsx:210
+>>>>>>> Stashed changes
 msgid "Fade into the stop's clip"
 msgstr "Fade into the stop's clip"
 
@@ -1995,8 +2241,13 @@ msgstr "Failed to update project"
 msgid "Fast render"
 msgstr "Fast render"
 
-#: src/components/ui/AppSettings.tsx:276
-#: src/components/ui/AppSettings.tsx:282
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:273
+#: src/components/ui/AppSettings.tsx:279
+=======
+#: src/components/ui/AppSettings.tsx:277
+#: src/components/ui/AppSettings.tsx:283
+>>>>>>> Stashed changes
 #: src/components/ui/NewProject.tsx:399
 msgid "Fast render mode"
 msgstr "Fast render mode"
@@ -2032,12 +2283,21 @@ msgstr "Fit to window"
 msgid "Fly"
 msgstr "Fly"
 
-#: src/components/view/ProjectSettingsModal.tsx:199
-#: src/components/view/ProjectSettingsModal.tsx:205
+<<<<<<< Updated upstream
+#: src/components/view/ProjectSettingsModal.tsx:210
+#: src/components/view/ProjectSettingsModal.tsx:216
 msgid "Follow timing cues in scripts"
 msgstr "Follow timing cues in scripts"
 
-#: src/components/ui/CaptionStyleFields.tsx:71
+#: src/components/ui/AppSettings.tsx:515
+=======
+#: src/components/view/ProjectSettingsModal.tsx:200
+#: src/components/view/ProjectSettingsModal.tsx:206
+msgid "Follow timing cues in scripts"
+msgstr "Follow timing cues in scripts"
+
+#: src/components/ui/CaptionStyleFields.tsx:81
+>>>>>>> Stashed changes
 msgid "Font"
 msgstr "Font"
 
@@ -2045,7 +2305,11 @@ msgstr "Font"
 #~ msgid "Font Family"
 #~ msgstr "Font Family"
 
-#: src/components/ui/CaptionStyleFields.tsx:90
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:523
+=======
+#: src/components/ui/CaptionStyleFields.tsx:100
+>>>>>>> Stashed changes
 msgid "Font size"
 msgstr "Font size"
 
@@ -2076,7 +2340,11 @@ msgstr "From a file…"
 msgid "From narration"
 msgstr "From narration"
 
-#: src/components/ui/AppSettings.tsx:128
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:125
+=======
+#: src/components/ui/AppSettings.tsx:129
+>>>>>>> Stashed changes
 msgid "General"
 msgstr "General"
 
@@ -2118,7 +2386,11 @@ msgstr "Generating the sample. The first one can take a minute or more while the
 msgid "Generating..."
 msgstr "Generating..."
 
-#: src/components/ui/AppSettings.tsx:488
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:485
+=======
+#: src/components/ui/AppSettings.tsx:489
+>>>>>>> Stashed changes
 msgid "Generation"
 msgstr "Generation"
 
@@ -2170,11 +2442,19 @@ msgstr "Green"
 msgid "Grid View"
 msgstr "Grid View"
 
-#: src/features/editor/Inspector.tsx:401
+<<<<<<< Updated upstream
+#: src/features/editor/Inspector.tsx:165
 msgid "Hard cut"
 msgstr "Hard cut"
 
-#: src/components/ui/AppSettings.tsx:500
+#: src/components/ui/AppSettings.tsx:497
+=======
+#: src/features/editor/Inspector.tsx:411
+msgid "Hard cut"
+msgstr "Hard cut"
+
+#: src/components/ui/AppSettings.tsx:501
+>>>>>>> Stashed changes
 msgid "Hardware mode"
 msgstr "Hardware mode"
 
@@ -2211,7 +2491,11 @@ msgstr "Hide log"
 msgid "High-Spec (Discrete GPU)"
 msgstr "High-Spec (Discrete GPU)"
 
-#: src/components/ui/AppSettings.tsx:512
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:509
+=======
+#: src/components/ui/AppSettings.tsx:513
+>>>>>>> Stashed changes
 msgid "High-spec Mode"
 msgstr "High-spec Mode"
 
@@ -2228,8 +2512,13 @@ msgstr "High-spec system detected: {gpuRenderer} ({logicalCores} CPU threads)"
 #~ msgid "Highlight Color"
 #~ msgstr "Highlight Color"
 
-#: src/components/ui/AppSettings.tsx:286
-#: src/components/ui/AppSettings.tsx:293
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:283
+#: src/components/ui/AppSettings.tsx:290
+=======
+#: src/components/ui/AppSettings.tsx:287
+#: src/components/ui/AppSettings.tsx:294
+>>>>>>> Stashed changes
 msgid "Historical weather"
 msgstr "Historical weather"
 
@@ -2289,6 +2578,10 @@ msgstr "Include rendered video clips"
 msgid "Included"
 msgstr "Included"
 
+#: src/components/ui/StepButtons.tsx:13
+msgid "Increase"
+msgstr "Increase"
+
 #: src/components/ui/RenderOverlay.tsx:953
 msgid "Initializing pipeline..."
 msgstr "Initializing pipeline..."
@@ -2297,7 +2590,11 @@ msgstr "Initializing pipeline..."
 #~ msgid "Inspector"
 #~ msgstr "Inspector"
 
-#: src/components/ui/AppSettings.tsx:303
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:300
+=======
+#: src/components/ui/AppSettings.tsx:304
+>>>>>>> Stashed changes
 msgid "Interface"
 msgstr "Interface"
 
@@ -2337,7 +2634,11 @@ msgstr "Kyoto Demo Route"
 msgid "Landscape 16:9"
 msgstr "Landscape 16:9"
 
-#: src/components/ui/AppSettings.tsx:221
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:218
+=======
+#: src/components/ui/AppSettings.tsx:222
+>>>>>>> Stashed changes
 msgid "Language"
 msgstr "Language"
 
@@ -2361,14 +2662,17 @@ msgstr "Layers"
 msgid "Leave blank to use the project name."
 msgstr "Leave blank to use the project name."
 
-#: src/features/editor/Inspector.tsx:214
+<<<<<<< Updated upstream
+=======
+#: src/features/editor/Inspector.tsx:224
 msgid "Leave empty to hide this line"
 msgstr "Leave empty to hide this line"
 
-#: src/features/editor/Inspector.tsx:306
+#: src/features/editor/Inspector.tsx:316
 msgid "Left"
 msgstr "Left"
 
+>>>>>>> Stashed changes
 #. placeholder {0}: departureIdx + 1
 #. placeholder {1}: wp ? wp.name : t`Stop ` + (departureIdx + 1)
 #. placeholder {2}: nextWp ? nextWp.name : t`Next Stop`
@@ -2456,7 +2760,11 @@ msgstr "Log view"
 msgid "Low-Spec (Integrated Graphics)"
 msgstr "Low-Spec (Integrated Graphics)"
 
-#: src/components/ui/AppSettings.tsx:511
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:508
+=======
+#: src/components/ui/AppSettings.tsx:512
+>>>>>>> Stashed changes
 msgid "Low-spec Mode"
 msgstr "Low-spec Mode"
 
@@ -2489,7 +2797,11 @@ msgstr "Makes the file much larger. Without them the other person renders the cl
 #~ msgid "Manage timeline markers"
 #~ msgstr "Manage timeline markers"
 
-#: src/components/ui/AppSettings.tsx:358
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:355
+=======
+#: src/components/ui/AppSettings.tsx:359
+>>>>>>> Stashed changes
 #: src/components/ui/TitleBar.tsx:390
 msgid "Map"
 msgstr "Map"
@@ -2502,7 +2814,11 @@ msgstr "Map Appearance"
 msgid "Map tools"
 msgstr "Map tools"
 
-#: src/components/ui/AppSettings.tsx:435
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:432
+=======
+#: src/components/ui/AppSettings.tsx:436
+>>>>>>> Stashed changes
 msgid "Mapbox"
 msgstr "Mapbox"
 
@@ -2523,10 +2839,13 @@ msgstr "Marker"
 #~ msgid "Marker time in seconds"
 #~ msgstr "Marker time in seconds"
 
-#: src/components/ui/CaptionStyleFields.tsx:142
+<<<<<<< Updated upstream
+=======
+#: src/components/ui/CaptionStyleFields.tsx:152
 msgid "Max characters per line"
 msgstr "Max characters per line"
 
+>>>>>>> Stashed changes
 #: src/components/ui/TitleBar.tsx:438
 msgid "Maximize"
 msgstr "Maximize"
@@ -2551,11 +2870,14 @@ msgstr "Maximize"
 msgid "Menu"
 msgstr "Menu"
 
-#: src/components/ui/CaptionStyleFields.tsx:129
-#: src/features/editor/Inspector.tsx:291
+<<<<<<< Updated upstream
+=======
+#: src/components/ui/CaptionStyleFields.tsx:139
+#: src/features/editor/Inspector.tsx:301
 msgid "Middle"
 msgstr "Middle"
 
+>>>>>>> Stashed changes
 #: src/features/timeline/components/elements/inspector/InspectorTextPanel.tsx:72
 #~ msgid "Minimalist"
 #~ msgstr "Minimalist"
@@ -2591,8 +2913,13 @@ msgstr "More actions"
 #~ msgid "Multiply Blend"
 #~ msgstr "Multiply Blend"
 
+<<<<<<< Updated upstream
+#: src/features/editor/ExportDialog.tsx:44
+#: src/features/editor/Inspector.tsx:245
+=======
 #: src/features/editor/ExportDialog.tsx:66
-#: src/features/editor/Inspector.tsx:527
+#: src/features/editor/Inspector.tsx:537
+>>>>>>> Stashed changes
 msgid "Music"
 msgstr "Music"
 
@@ -2600,7 +2927,11 @@ msgstr "Music"
 msgid "Music credit, to include where you publish the video:"
 msgstr "Music credit, to include where you publish the video:"
 
-#: src/features/editor/Inspector.tsx:379
+<<<<<<< Updated upstream
+#: src/features/editor/Inspector.tsx:143
+=======
+#: src/features/editor/Inspector.tsx:389
+>>>>>>> Stashed changes
 msgid "Mute"
 msgstr "Mute"
 
@@ -2608,8 +2939,13 @@ msgstr "Mute"
 #~ msgid "Mute Clip"
 #~ msgstr "Mute Clip"
 
+<<<<<<< Updated upstream
+#: src/features/editor/EditorView.tsx:260
+#: src/features/editor/Inspector.tsx:144
+=======
 #: src/features/editor/EditorView.tsx:287
-#: src/features/editor/Inspector.tsx:380
+#: src/features/editor/Inspector.tsx:390
+>>>>>>> Stashed changes
 msgid "Mute narration"
 msgstr "Mute narration"
 
@@ -2629,9 +2965,15 @@ msgstr "Mute narration"
 msgid "Name your project to continue"
 msgstr "Name your project to continue"
 
-#: src/components/ui/AppSettings.tsx:967
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:972
+#: src/features/editor/ExportDialog.tsx:42
+#: src/features/editor/Inspector.tsx:136
+=======
+#: src/components/ui/AppSettings.tsx:971
 #: src/features/editor/ExportDialog.tsx:64
-#: src/features/editor/Inspector.tsx:372
+#: src/features/editor/Inspector.tsx:382
+>>>>>>> Stashed changes
 #: src/features/map/components/WaypointEditor.tsx:380
 msgid "Narration"
 msgstr "Narration"
@@ -2691,7 +3033,11 @@ msgstr "No active project folder found"
 msgid "No clips yet"
 msgstr "No clips yet"
 
-#: src/components/ui/AppSettings.tsx:658
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:685
+=======
+#: src/components/ui/AppSettings.tsx:659
+>>>>>>> Stashed changes
 msgid "No entries yet."
 msgstr "No entries yet."
 
@@ -2703,11 +3049,19 @@ msgstr "No entries yet."
 msgid "No locations found in document"
 msgstr "No locations found in document"
 
-#: src/components/ui/AppSettings.tsx:982
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:987
 msgid "No models installed"
 msgstr "No models installed"
 
-#: src/features/editor/Inspector.tsx:542
+#: src/features/editor/Inspector.tsx:260
+=======
+#: src/components/ui/AppSettings.tsx:986
+msgid "No models installed"
+msgstr "No models installed"
+
+#: src/features/editor/Inspector.tsx:552
+>>>>>>> Stashed changes
 msgid "No music. Use Music in the toolbar."
 msgstr "No music. Use Music in the toolbar."
 
@@ -2747,7 +3101,11 @@ msgstr "No saved versions yet"
 msgid "No stops added yet"
 msgstr "No stops added yet"
 
-#: src/features/editor/Inspector.tsx:523
+<<<<<<< Updated upstream
+#: src/features/editor/Inspector.tsx:242
+=======
+#: src/features/editor/Inspector.tsx:533
+>>>>>>> Stashed changes
 msgid "No subtitles yet. Use Subtitles in the toolbar."
 msgstr "No subtitles yet. Use Subtitles in the toolbar."
 
@@ -2772,10 +3130,16 @@ msgstr "No voiceover scripts were found in this generation."
 msgid "no-internet"
 msgstr "No Internet Connection"
 
+<<<<<<< Updated upstream
+#: src/features/editor/ExportDialog.tsx:42
+#: src/features/editor/ExportDialog.tsx:43
+#: src/features/editor/ExportDialog.tsx:44
+=======
 #: src/features/editor/ExportDialog.tsx:64
 #: src/features/editor/ExportDialog.tsx:65
 #: src/features/editor/ExportDialog.tsx:66
-#: src/features/editor/Inspector.tsx:226
+#: src/features/editor/Inspector.tsx:236
+>>>>>>> Stashed changes
 #: src/features/map/components/WaypointEditor.tsx:466
 msgid "None"
 msgstr "None"
@@ -2784,12 +3148,15 @@ msgstr "None"
 msgid "None of these photos has a location. Photos saved from websites or chat apps usually don't."
 msgstr "None of these photos has a location. Photos saved from websites or chat apps usually don't."
 
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:247
+=======
 #. placeholder {0}: DEFAULT_CAPTION_STYLE.font_family
 #: src/components/ui/CaptionStyleFields.tsx:81
 #~ msgid "Not installed on this PC, so the export uses {0}"
 #~ msgstr "Not installed on this PC, so the export uses {0}"
 
-#: src/components/ui/CaptionStyleFields.tsx:88
+#: src/components/ui/CaptionStyleFields.tsx:98
 msgid "Not installed on this PC, so the export uses {fallbackFont}"
 msgstr "Not installed on this PC, so the export uses {fallbackFont}"
 
@@ -2797,7 +3164,8 @@ msgstr "Not installed on this PC, so the export uses {fallbackFont}"
 #~ msgid "Not installed on this PC, so the export uses Meiryo"
 #~ msgstr "Not installed on this PC, so the export uses Meiryo"
 
-#: src/components/ui/AppSettings.tsx:250
+#: src/components/ui/AppSettings.tsx:251
+>>>>>>> Stashed changes
 #: src/features/map/components/GenerateDialog.tsx:74
 #: src/features/map/components/OverviewPanel.tsx:14
 msgid "Off"
@@ -2829,7 +3197,11 @@ msgstr "One file you can send to someone, or keep as a backup. It holds the rout
 msgid "Open a single project file (.nvv or .zip archive)"
 msgstr "Open a single project file (.nvv or .zip archive)"
 
-#: src/components/view/ProjectSettingsModal.tsx:240
+<<<<<<< Updated upstream
+#: src/components/view/ProjectSettingsModal.tsx:251
+=======
+#: src/components/view/ProjectSettingsModal.tsx:248
+>>>>>>> Stashed changes
 msgid "Open dictionary…"
 msgstr "Open dictionary…"
 
@@ -2865,7 +3237,11 @@ msgstr "Open Project Folder..."
 #~ msgid "open-project"
 #~ msgstr "Open Project"
 
-#: src/components/ui/AppSettings.tsx:449
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:446
+=======
+#: src/components/ui/AppSettings.tsx:450
+>>>>>>> Stashed changes
 msgid "OpenRouteService"
 msgstr "OpenRouteService"
 
@@ -2877,14 +3253,21 @@ msgstr "OpenRouteService"
 msgid "Orange"
 msgstr "Orange"
 
-#: src/features/editor/Inspector.tsx:388
+<<<<<<< Updated upstream
+#: src/features/editor/Inspector.tsx:152
 msgid "Original sound"
 msgstr "Original sound"
 
-#: src/features/editor/Inspector.tsx:166
+=======
+#: src/features/editor/Inspector.tsx:398
+msgid "Original sound"
+msgstr "Original sound"
+
+#: src/features/editor/Inspector.tsx:176
 msgid "Other subtitles have their own style. Replace it with this one?"
 msgstr "Other subtitles have their own style. Replace it with this one?"
 
+>>>>>>> Stashed changes
 #: src/features/timeline/components/elements/inspector/InspectorTransitionsPanel.tsx:126
 #~ msgid "Out-Transition"
 #~ msgstr "Out-Transition"
@@ -2893,15 +3276,23 @@ msgstr "Other subtitles have their own style. Replace it with this one?"
 #~ msgid "Outline Color"
 #~ msgstr "Outline Color"
 
-#: src/components/ui/CaptionStyleFields.tsx:120
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:538
 msgid "Outline colour"
 msgstr "Outline colour"
 
-#: src/components/ui/CaptionStyleFields.tsx:121
+#: src/components/ui/AppSettings.tsx:464
+=======
+#: src/components/ui/CaptionStyleFields.tsx:130
+msgid "Outline colour"
+msgstr "Outline colour"
+
+#: src/components/ui/CaptionStyleFields.tsx:131
 msgid "Outline width"
 msgstr "Outline width"
 
-#: src/components/ui/AppSettings.tsx:467
+#: src/components/ui/AppSettings.tsx:468
+>>>>>>> Stashed changes
 msgid "Output"
 msgstr "Output"
 
@@ -2948,10 +3339,13 @@ msgstr "Pause"
 msgid "Pause at Location"
 msgstr "Pause at Location"
 
-#: src/components/ui/CaptionStyleFields.tsx:115
+<<<<<<< Updated upstream
+=======
+#: src/components/ui/CaptionStyleFields.tsx:125
 msgid "Percent"
 msgstr "Percent"
 
+>>>>>>> Stashed changes
 #: src/features/map/components/GenerateDialog.tsx:66
 msgid "Photo clips"
 msgstr "Photo clips"
@@ -2982,15 +3376,18 @@ msgstr "Pipeline Log"
 #~ msgid "Pixelize"
 #~ msgstr "Pixelize"
 
-#: src/components/ui/CaptionStyleFields.tsx:90
-#: src/components/ui/CaptionStyleFields.tsx:138
+<<<<<<< Updated upstream
+=======
+#: src/components/ui/CaptionStyleFields.tsx:100
+#: src/components/ui/CaptionStyleFields.tsx:148
 msgid "Pixels on a 1080p frame"
 msgstr "Pixels on a 1080p frame"
 
-#: src/features/editor/Inspector.tsx:284
+#: src/features/editor/Inspector.tsx:294
 msgid "Place"
 msgstr "Place"
 
+>>>>>>> Stashed changes
 #: src/features/editor/MusicPicker.tsx:148
 #: src/features/editor/Preview.tsx:304
 #: src/features/editor/Preview.tsx:309
@@ -3018,15 +3415,18 @@ msgstr "Point {0}"
 msgid "Polishing voiceover tone..."
 msgstr "Polishing voiceover tone..."
 
-#: src/features/editor/Inspector.tsx:223
+<<<<<<< Updated upstream
+=======
+#: src/features/editor/Inspector.tsx:233
 msgid "Pop in"
 msgstr "Pop in"
 
-#: src/components/ui/CaptionStyleFields.tsx:126
-#: src/features/editor/Inspector.tsx:283
+#: src/components/ui/CaptionStyleFields.tsx:136
+#: src/features/editor/Inspector.tsx:293
 msgid "Position"
 msgstr "Position"
 
+>>>>>>> Stashed changes
 #: src/components/view/ProjectManager.tsx:387
 msgid "Pre-configured sample project"
 msgstr "Pre-configured sample project"
@@ -3130,11 +3530,19 @@ msgstr "Project Title"
 msgid "project-name-placeholder"
 msgstr "Kyoto Sightseeing"
 
-#: src/components/ui/AppSettings.tsx:137
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:134
 msgid "Pronunciation"
 msgstr "Pronunciation"
 
-#: src/components/view/ProjectSettingsModal.tsx:226
+#: src/components/view/ProjectSettingsModal.tsx:237
+=======
+#: src/components/ui/AppSettings.tsx:138
+msgid "Pronunciation"
+msgstr "Pronunciation"
+
+#: src/components/view/ProjectSettingsModal.tsx:234
+>>>>>>> Stashed changes
 msgid "Pronunciation dictionary"
 msgstr "Pronunciation dictionary"
 
@@ -3154,8 +3562,13 @@ msgstr "Purple"
 #~ msgid "Push transition smoothly sliding incoming clip from left"
 #~ msgstr "Push transition smoothly sliding incoming clip from left"
 
-#: src/components/ui/AppSettings.tsx:490
-#: src/components/ui/AppSettings.tsx:496
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:487
+#: src/components/ui/AppSettings.tsx:493
+=======
+#: src/components/ui/AppSettings.tsx:491
+#: src/components/ui/AppSettings.tsx:497
+>>>>>>> Stashed changes
 msgid "Quick export"
 msgstr "Quick export"
 
@@ -3195,11 +3608,19 @@ msgstr "Stitching videos together and exporting..."
 #~ msgid "Razor Tool (C)"
 #~ msgstr "Razor Tool (C)"
 
-#: src/components/ui/AppSettings.tsx:632
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:659
 msgid "Reading (e.g. かだ)"
 msgstr "Reading (e.g. かだ)"
 
-#: src/components/ui/AppSettings.tsx:612
+#: src/components/ui/AppSettings.tsx:639
+=======
+#: src/components/ui/AppSettings.tsx:633
+msgid "Reading (e.g. かだ)"
+msgstr "Reading (e.g. かだ)"
+
+#: src/components/ui/AppSettings.tsx:613
+>>>>>>> Stashed changes
 msgid "Reading (Furigana)"
 msgstr "Reading (Furigana)"
 
@@ -3207,7 +3628,11 @@ msgstr "Reading (Furigana)"
 msgid "Reading Project File..."
 msgstr "Reading Project File..."
 
-#: src/components/ui/AppSettings.tsx:1045
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:1050
+=======
+#: src/components/ui/AppSettings.tsx:1049
+>>>>>>> Stashed changes
 msgid "Ready"
 msgstr "Ready"
 
@@ -3223,7 +3648,11 @@ msgstr "Ready"
 msgid "Recent"
 msgstr "Recent"
 
-#: src/components/ui/AppSettings.tsx:995
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:1000
+=======
+#: src/components/ui/AppSettings.tsx:999
+>>>>>>> Stashed changes
 msgid "Recommended models"
 msgstr "Recommended models"
 
@@ -3273,11 +3702,19 @@ msgstr "Reload Application"
 #~ msgid "Reload saved timeline"
 #~ msgstr "Reload saved timeline"
 
-#: src/components/ui/AppSettings.tsx:644
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:671
+#: src/components/ui/AppSettings.tsx:672
+#: src/components/view/ProjectManager.tsx:615
+#: src/features/editor/EditorView.tsx:271
+#: src/features/editor/Inspector.tsx:172
+=======
 #: src/components/ui/AppSettings.tsx:645
+#: src/components/ui/AppSettings.tsx:646
 #: src/components/view/ProjectManager.tsx:615
 #: src/features/editor/EditorView.tsx:298
-#: src/features/editor/Inspector.tsx:408
+#: src/features/editor/Inspector.tsx:418
+>>>>>>> Stashed changes
 msgid "Remove"
 msgstr "Remove"
 
@@ -3300,12 +3737,21 @@ msgstr "Remove from List"
 msgid "Remove Image"
 msgstr "Remove Image"
 
-#: src/features/editor/EditorView.tsx:310
-#: src/features/editor/Inspector.tsx:533
+<<<<<<< Updated upstream
+#: src/features/editor/EditorView.tsx:279
+#: src/features/editor/Inspector.tsx:251
 msgid "Remove music"
 msgstr "Remove music"
 
-#: src/features/editor/Inspector.tsx:383
+#: src/features/editor/Inspector.tsx:147
+=======
+#: src/features/editor/EditorView.tsx:310
+#: src/features/editor/Inspector.tsx:543
+msgid "Remove music"
+msgstr "Remove music"
+
+#: src/features/editor/Inspector.tsx:393
+>>>>>>> Stashed changes
 msgid "Remove narration"
 msgstr "Remove narration"
 
@@ -3405,7 +3851,8 @@ msgstr "Starting Python generation pipeline..."
 msgid "Replace existing voice"
 msgstr "Replace existing voice"
 
-#: src/components/ui/AppSettings.tsx:450
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:447
 msgid "Required for driving and some hiking routes"
 msgstr "Required for driving and some hiking routes"
 
@@ -3413,7 +3860,18 @@ msgstr "Required for driving and some hiking routes"
 msgid "Required for map rendering and 3D terrain"
 msgstr "Required for map rendering and 3D terrain"
 
-#: src/components/ui/AppSettings.tsx:266
+#: src/components/ui/AppSettings.tsx:263
+=======
+#: src/components/ui/AppSettings.tsx:451
+msgid "Required for driving and some hiking routes"
+msgstr "Required for driving and some hiking routes"
+
+#: src/components/ui/AppSettings.tsx:437
+msgid "Required for map rendering and 3D terrain"
+msgstr "Required for map rendering and 3D terrain"
+
+#: src/components/ui/AppSettings.tsx:267
+>>>>>>> Stashed changes
 msgid "Requires Ollama"
 msgstr "Requires Ollama"
 
@@ -3427,20 +3885,28 @@ msgstr "Reset"
 #~ msgid "Reset all color adjustments to 0"
 #~ msgstr "Reset all color adjustments to 0"
 
-#: src/features/editor/Inspector.tsx:242
+<<<<<<< Updated upstream
+=======
+#: src/features/editor/Inspector.tsx:252
 msgid "Reset style"
 msgstr "Reset style"
 
+>>>>>>> Stashed changes
 #: src/features/timeline/components/elements/inspector/InspectorAudioPanel.tsx:91
 #~ msgid "Reset to 100% (0 dB)"
 #~ msgstr "Reset to 100% (0 dB)"
 
-#: src/features/editor/Inspector.tsx:151
+<<<<<<< Updated upstream
+#: src/features/editor/EditorView.tsx:266
+#: src/features/editor/Inspector.tsx:132
+=======
+#: src/features/editor/Inspector.tsx:161
 msgid "Reset to default"
 msgstr "Reset to default"
 
 #: src/features/editor/EditorView.tsx:293
-#: src/features/editor/Inspector.tsx:368
+#: src/features/editor/Inspector.tsx:378
+>>>>>>> Stashed changes
 msgid "Reset trim"
 msgstr "Reset trim"
 
@@ -3449,7 +3915,11 @@ msgstr "Reset trim"
 msgid "Reset View (North)"
 msgstr "Reset View (North)"
 
-#: src/components/ui/AppSettings.tsx:480
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:477
+=======
+#: src/components/ui/AppSettings.tsx:481
+>>>>>>> Stashed changes
 msgid "Residential duration"
 msgstr "Residential duration"
 
@@ -3494,10 +3964,13 @@ msgstr "Review Assets"
 #~ msgid "Rich Text"
 #~ msgstr "Rich Text"
 
-#: src/features/editor/Inspector.tsx:308
+<<<<<<< Updated upstream
+=======
+#: src/features/editor/Inspector.tsx:318
 msgid "Right"
 msgstr "Right"
 
+>>>>>>> Stashed changes
 #: src/features/map/components/WaypointItem.tsx:391
 msgid "Right-click the leg to clear via points"
 msgstr "Right-click the leg to clear via points"
@@ -3506,10 +3979,13 @@ msgstr "Right-click the leg to clear via points"
 #~ msgid "Ripple Insert Mode"
 #~ msgstr "Ripple Insert Mode"
 
-#: src/features/editor/Inspector.tsx:224
+<<<<<<< Updated upstream
+=======
+#: src/features/editor/Inspector.tsx:234
 msgid "Rise"
 msgstr "Rise"
 
+>>>>>>> Stashed changes
 #: src/features/timeline/components/elements/inspector/InspectorTransformPanel.tsx:57
 #~ msgid "Rotation"
 #~ msgstr "Rotation"
@@ -3535,8 +4011,12 @@ msgstr "Route Line"
 msgid "Route Lines Config"
 msgstr "Route Lines Config"
 
-#: src/components/ui/AppSettings.tsx:360
-#: src/components/view/ProjectSettingsModal.tsx:140
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:357
+=======
+#: src/components/ui/AppSettings.tsx:361
+>>>>>>> Stashed changes
+#: src/components/view/ProjectSettingsModal.tsx:141
 msgid "Route marker"
 msgstr "Route marker"
 
@@ -3580,7 +4060,11 @@ msgstr "S"
 msgid "Save"
 msgstr "Save"
 
-#: src/features/editor/Inspector.tsx:500
+<<<<<<< Updated upstream
+#: src/features/editor/Inspector.tsx:219
+=======
+#: src/features/editor/Inspector.tsx:510
+>>>>>>> Stashed changes
 msgid "Save .srt"
 msgstr "Save .srt"
 
@@ -3637,7 +4121,11 @@ msgstr "Save the project to enable version history"
 msgid "Saved"
 msgstr "Saved"
 
-#: src/components/ui/AppSettings.tsx:262
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:259
+=======
+#: src/components/ui/AppSettings.tsx:263
+>>>>>>> Stashed changes
 msgid "Saved with the project"
 msgstr "Saved with the project"
 
@@ -3674,8 +4162,9 @@ msgstr "Search Location"
 msgid "Searching..."
 msgstr "Searching..."
 
-#: src/components/ui/AppSettings.tsx:474
-#: src/components/ui/AppSettings.tsx:480
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:471
+#: src/components/ui/AppSettings.tsx:477
 msgid "Seconds"
 msgstr "Seconds"
 
@@ -3683,10 +4172,21 @@ msgstr "Seconds"
 msgid "Seconds a leg dissolves into the clip that follows it. 0 is a hard cut."
 msgstr "Seconds a leg dissolves into the clip that follows it. 0 is a hard cut."
 
-#: src/features/editor/Inspector.tsx:232
+=======
+#: src/components/ui/AppSettings.tsx:475
+#: src/components/ui/AppSettings.tsx:481
+msgid "Seconds"
+msgstr "Seconds"
+
+#: src/components/view/ProjectSettingsModal.tsx:211
+msgid "Seconds a leg dissolves into the clip that follows it. 0 is a hard cut."
+msgstr "Seconds a leg dissolves into the clip that follows it. 0 is a hard cut."
+
+#: src/features/editor/Inspector.tsx:242
 msgid "Seconds after the title item starts. It leaves the same time before the end."
 msgstr "Seconds after the title item starts. It leaves the same time before the end."
 
+>>>>>>> Stashed changes
 #: src/features/timeline/components/elements/MarkersPanel.tsx:71
 #~ msgid "Seek to marker"
 #~ msgstr "Seek to marker"
@@ -3727,7 +4227,11 @@ msgstr "Select all"
 msgid "Select Photos..."
 msgstr "Select Photos..."
 
-#: src/components/ui/AppSettings.tsx:970
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:975
+=======
+#: src/components/ui/AppSettings.tsx:974
+>>>>>>> Stashed changes
 msgid "Select which model to use for narration synthesis, only downloaded models are shown"
 msgstr "Select which model to use for narration synthesis, only downloaded models are shown"
 
@@ -3743,12 +4247,21 @@ msgstr "Sending cancellation signal to backend..."
 msgid "Sending interrupt signal to renderer."
 msgstr "Sending interrupt signal to renderer."
 
-#: src/components/ui/AppSettings.tsx:433
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:430
 msgid "Services"
 msgstr "Services"
 
-#: src/components/ui/AppSettings.tsx:165
-#: src/components/ui/AppSettings.tsx:170
+#: src/components/ui/AppSettings.tsx:162
+#: src/components/ui/AppSettings.tsx:167
+=======
+#: src/components/ui/AppSettings.tsx:434
+msgid "Services"
+msgstr "Services"
+
+#: src/components/ui/AppSettings.tsx:166
+#: src/components/ui/AppSettings.tsx:171
+>>>>>>> Stashed changes
 msgid "Settings"
 msgstr "Settings"
 
@@ -3772,7 +4285,11 @@ msgstr "Setup"
 #~ msgid "Shorts, Reels & TikTok"
 #~ msgstr "Shorts, Reels & TikTok"
 
-#: src/components/ui/AppSettings.tsx:267
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:264
+=======
+#: src/components/ui/AppSettings.tsx:268
+>>>>>>> Stashed changes
 msgid "Show Auto-Write script buttons and overview narration. Requires Ollama to be installed and running locally."
 msgstr "Show Auto-Write script buttons and overview narration. Requires Ollama to be installed and running locally."
 
@@ -3820,7 +4337,11 @@ msgstr "Shows the title and subtitle at the start of the video"
 msgid "Simple"
 msgstr "Simple"
 
-#: src/components/ui/AppSettings.tsx:277
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:274
+=======
+#: src/components/ui/AppSettings.tsx:278
+>>>>>>> Stashed changes
 #: src/components/ui/NewProject.tsx:400
 msgid "Skip AI voiceover synthesis and pop-up images during generation"
 msgstr "Skip AI voiceover synthesis and pop-up images during generation"
@@ -3840,7 +4361,11 @@ msgstr "Skip in Video Export"
 msgid "Skipped"
 msgstr "Skipped"
 
-#: src/components/ui/AppSettings.tsx:491
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:488
+=======
+#: src/components/ui/AppSettings.tsx:492
+>>>>>>> Stashed changes
 msgid "Skips asset review and automatically stitches & exports finished video"
 msgstr "Skips asset review and automatically stitches & exports finished video"
 
@@ -3910,9 +4435,14 @@ msgstr "Spoken while the route travels to this stop."
 #~ msgid "Standard widescreen (1920x1080)"
 #~ msgstr "Standard widescreen (1920x1080)"
 
-#: src/features/editor/Inspector.tsx:361
-#: src/features/editor/Inspector.tsx:424
-#: src/features/editor/Inspector.tsx:470
+<<<<<<< Updated upstream
+#: src/features/editor/Inspector.tsx:125
+#: src/features/editor/Inspector.tsx:187
+=======
+#: src/features/editor/Inspector.tsx:371
+#: src/features/editor/Inspector.tsx:434
+#: src/features/editor/Inspector.tsx:480
+>>>>>>> Stashed changes
 #: src/features/map/components/MapToolbar.tsx:90
 #: src/features/map/components/WaypointEditor.tsx:312
 #: src/features/map/hooks/useStopMenus.ts:220
@@ -3936,7 +4466,11 @@ msgstr "Search for a city, landmark, or address..."
 msgid "Starting point"
 msgstr "Starting point"
 
-#: src/features/editor/Inspector.tsx:373
+<<<<<<< Updated upstream
+#: src/features/editor/Inspector.tsx:137
+=======
+#: src/features/editor/Inspector.tsx:383
+>>>>>>> Stashed changes
 msgid "Starts after"
 msgstr "Starts after"
 
@@ -4007,18 +4541,25 @@ msgstr "Stops containing custom images or AI scripts"
 #~ msgid "Stroke Width"
 #~ msgstr "Stroke Width"
 
-#: src/components/ui/CaptionStyleFields.tsx:93
-#: src/features/editor/Inspector.tsx:172
+<<<<<<< Updated upstream
+=======
+#: src/components/ui/CaptionStyleFields.tsx:103
+#: src/features/editor/Inspector.tsx:182
 msgid "Style"
 msgstr "Style"
 
+>>>>>>> Stashed changes
 #: src/features/timeline/components/elements/inspector/InspectorTextPanel.tsx:119
 #~ msgid "Style Presets"
 #~ msgstr "Style Presets"
 
 #: src/components/ui/NewProject.tsx:391
-#: src/features/editor/Inspector.tsx:440
-#: src/features/editor/Inspector.tsx:466
+<<<<<<< Updated upstream
+#: src/features/editor/Inspector.tsx:183
+=======
+#: src/features/editor/Inspector.tsx:450
+#: src/features/editor/Inspector.tsx:476
+>>>>>>> Stashed changes
 #: src/features/map/components/OverviewPanel.tsx:98
 msgid "Subtitle"
 msgstr "Subtitle"
@@ -4035,17 +4576,27 @@ msgstr "Subtitle (optional)"
 msgid "Subtitle lines in the timeline"
 msgstr "Subtitle lines in the timeline"
 
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:514
+#: src/components/ui/PipelineLogPanel.tsx:51
+#: src/features/editor/EditorView.tsx:164
+#: src/features/editor/EditorView.tsx:320
+#: src/features/editor/EditorView.tsx:322
+#: src/features/editor/ExportDialog.tsx:43
+#: src/features/editor/Inspector.tsx:212
+=======
 #: src/features/editor/Inspector.tsx:111
 #~ msgid "Subtitle style"
 #~ msgstr "Subtitle style"
 
-#: src/components/ui/AppSettings.tsx:803
+#: src/components/ui/AppSettings.tsx:804
 #: src/components/ui/PipelineLogPanel.tsx:50
 #: src/features/editor/EditorView.tsx:166
 #: src/features/editor/EditorView.tsx:355
 #: src/features/editor/EditorView.tsx:357
 #: src/features/editor/ExportDialog.tsx:65
-#: src/features/editor/Inspector.tsx:496
+#: src/features/editor/Inspector.tsx:506
+>>>>>>> Stashed changes
 msgid "Subtitles"
 msgstr "Subtitles"
 
@@ -4053,15 +4604,22 @@ msgstr "Subtitles"
 #~ msgid "Subtitles are managed automatically or via text clips."
 #~ msgstr "Subtitles are managed automatically or via text clips."
 
-#: src/features/editor/Inspector.tsx:143
+<<<<<<< Updated upstream
+=======
+#: src/features/editor/Inspector.tsx:153
 msgid "Subtitles you have styled one by one keep their own style."
 msgstr "Subtitles you have styled one by one keep their own style."
 
+>>>>>>> Stashed changes
 #: src/components/ui/AutoDirectorModal.tsx:149
 msgid "Successfully processed the document. Here is the proposed route and script:"
 msgstr "Successfully processed the document. Here is the proposed route and script:"
 
-#: src/components/ui/AppSettings.tsx:288
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:285
+=======
+#: src/components/ui/AppSettings.tsx:289
+>>>>>>> Stashed changes
 msgid "Synchronize historical weather conditions from photo EXIF dates using Open-Meteo to dynamically apply atmospheric fog and rain effects"
 msgstr "Synchronize historical weather conditions from photo EXIF dates using Open-Meteo to dynamically apply atmospheric fog and rain effects"
 
@@ -4098,7 +4656,11 @@ msgstr "Table View"
 #~ msgid "Target Canvas"
 #~ msgstr "Target Canvas"
 
-#: src/components/ui/AppSettings.tsx:468
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:465
+=======
+#: src/components/ui/AppSettings.tsx:469
+>>>>>>> Stashed changes
 msgid "Target FPS"
 msgstr "Target FPS"
 
@@ -4122,7 +4684,11 @@ msgstr "Templates"
 #~ msgid "Text Color"
 #~ msgstr "Text Color"
 
-#: src/components/ui/CaptionStyleFields.tsx:106
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:529
+=======
+#: src/components/ui/CaptionStyleFields.tsx:116
+>>>>>>> Stashed changes
 msgid "Text colour"
 msgstr "Text colour"
 
@@ -4130,7 +4696,11 @@ msgstr "Text colour"
 #~ msgid "The project is saved first. Unchanged clips are reused."
 #~ msgstr "The project is saved first. Unchanged clips are reused."
 
-#: src/features/editor/Inspector.tsx:393
+<<<<<<< Updated upstream
+#: src/features/editor/Inspector.tsx:157
+=======
+#: src/features/editor/Inspector.tsx:403
+>>>>>>> Stashed changes
 msgid "The sound of your own video, mixed under the narration."
 msgstr "The sound of your own video, mixed under the narration."
 
@@ -4146,7 +4716,11 @@ msgstr "The video starts directly on the route. Turn the intro on to add a title
 msgid "The voice reads every narration in this project. Changing the voice or the speed regenerates the narration the next time you generate. The voice library is shared by all projects."
 msgstr "The voice reads every narration in this project. Changing the voice or the speed regenerates the narration the next time you generate. The voice library is shared by all projects."
 
-#: src/components/ui/AppSettings.tsx:304
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:301
+=======
+#: src/components/ui/AppSettings.tsx:305
+>>>>>>> Stashed changes
 msgid "Theme"
 msgstr "Theme"
 
@@ -4154,8 +4728,13 @@ msgstr "Theme"
 #~ msgid "This asset is missing from the project"
 #~ msgstr "This asset is missing from the project"
 
-#: src/components/ui/AppSettings.tsx:261
-#: src/components/ui/AppSettings.tsx:545
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:258
+#: src/components/ui/AppSettings.tsx:572
+=======
+#: src/components/ui/AppSettings.tsx:262
+#: src/components/ui/AppSettings.tsx:546
+>>>>>>> Stashed changes
 msgid "This project"
 msgstr "This project"
 
@@ -4167,10 +4746,13 @@ msgstr "This project is archived. Please open it first to render"
 msgid "This project is still an archive file. Open it once, then export."
 msgstr "This project is still an archive file. Open it once, then export."
 
-#: src/features/editor/Inspector.tsx:174
+<<<<<<< Updated upstream
+=======
+#: src/features/editor/Inspector.tsx:184
 msgid "This subtitle has its own style."
 msgstr "This subtitle has its own style."
 
+>>>>>>> Stashed changes
 #: src/components/ui/StatusBar.tsx:203
 msgid "This version could not be deleted"
 msgstr "This version could not be deleted"
@@ -4207,19 +4789,30 @@ msgstr "Timeline"
 #~ msgid "Timeline reloaded"
 #~ msgstr "Timeline reloaded"
 
-#: src/features/editor/Inspector.tsx:423
-#: src/features/editor/Inspector.tsx:469
+<<<<<<< Updated upstream
+#: src/features/editor/Inspector.tsx:186
 msgid "Timing"
 msgstr "Timing"
 
-#: src/components/view/ProjectSettingsModal.tsx:200
+#: src/components/view/ProjectSettingsModal.tsx:211
+=======
+#: src/features/editor/Inspector.tsx:433
+#: src/features/editor/Inspector.tsx:479
+msgid "Timing"
+msgstr "Timing"
+
+#: src/components/view/ProjectSettingsModal.tsx:201
+>>>>>>> Stashed changes
 msgid "Timing cues written in a narration decide when the walker reaches the stop."
 msgstr "Timing cues written in a narration decide when the walker reaches the stop."
 
 #: src/components/ui/NewProject.tsx:382
 #: src/components/ui/NewProject.tsx:383
+<<<<<<< Updated upstream
+=======
 #: src/features/editor/EditorView.tsx:241
-#: src/features/editor/Inspector.tsx:433
+#: src/features/editor/Inspector.tsx:443
+>>>>>>> Stashed changes
 #: src/features/map/components/OverviewPanel.tsx:82
 #: src/features/map/components/OverviewPanel.tsx:88
 msgid "Title"
@@ -4234,11 +4827,14 @@ msgstr "Title card"
 msgid "Title card at the start of the video"
 msgstr "Title card at the start of the video"
 
-#: src/components/ui/CaptionStyleFields.tsx:130
-#: src/features/editor/Inspector.tsx:290
+<<<<<<< Updated upstream
+=======
+#: src/components/ui/CaptionStyleFields.tsx:140
+#: src/features/editor/Inspector.tsx:300
 msgid "Top"
 msgstr "Top"
 
+>>>>>>> Stashed changes
 #: src/components/ui/StatusBar.tsx:242
 msgid "Total individual clips"
 msgstr "Total individual clips"
@@ -4271,7 +4867,11 @@ msgstr "Tracks in your Music folder"
 #~ msgid "Transform"
 #~ msgstr "Transform"
 
-#: src/features/editor/Inspector.tsx:397
+<<<<<<< Updated upstream
+#: src/features/editor/Inspector.tsx:161
+=======
+#: src/features/editor/Inspector.tsx:407
+>>>>>>> Stashed changes
 msgid "Transition"
 msgstr "Transition"
 
@@ -4289,7 +4889,11 @@ msgstr "Transition"
 msgid "Travel mode to the next stop"
 msgstr "Travel mode to the next stop"
 
-#: src/features/editor/Inspector.tsx:360
+<<<<<<< Updated upstream
+#: src/features/editor/Inspector.tsx:124
+=======
+#: src/features/editor/Inspector.tsx:370
+>>>>>>> Stashed changes
 msgid "Trim"
 msgstr "Trim"
 
@@ -4397,10 +5001,13 @@ msgstr "Updated in place {0} times"
 msgid "Upload 5–20 seconds of clear speech from one person, with no music or background noise."
 msgstr "Upload 5–20 seconds of clear speech from one person, with no music or background noise."
 
-#: src/features/editor/Inspector.tsx:183
+<<<<<<< Updated upstream
+=======
+#: src/features/editor/Inspector.tsx:193
 msgid "Use default style"
 msgstr "Use default style"
 
+>>>>>>> Stashed changes
 #: src/features/map/components/LegColorButton.tsx:79
 msgid "Use route colour"
 msgstr "Use route colour"
@@ -4425,10 +5032,13 @@ msgstr "Used by all projects."
 #~ msgid "Uses photo locations"
 #~ msgstr "Uses photo locations"
 
-#: src/features/editor/Inspector.tsx:174
+<<<<<<< Updated upstream
+=======
+#: src/features/editor/Inspector.tsx:184
 msgid "Uses the default subtitle style. Changes here apply to this subtitle only."
 msgstr "Uses the default subtitle style. Changes here apply to this subtitle only."
 
+>>>>>>> Stashed changes
 #: src/components/ui/RenderOverlay.tsx:1056
 msgid "Verify that video visuals are factually correct"
 msgstr "Verify that video visuals are factually correct"
@@ -4463,8 +5073,13 @@ msgstr "Via point {0} of {count}"
 #~ msgid "video"
 #~ msgstr "video"
 
-#: src/components/ui/AppSettings.tsx:133
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:130
+#: src/features/editor/EditorView.tsx:74
+=======
+#: src/components/ui/AppSettings.tsx:134
 #: src/features/editor/EditorView.tsx:76
+>>>>>>> Stashed changes
 msgid "Video"
 msgstr "Video"
 
@@ -4505,7 +5120,11 @@ msgstr "View in Timeline"
 #~ msgid "Vivid Rose"
 #~ msgstr "Vivid Rose"
 
-#: src/components/ui/AppSettings.tsx:134
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:131
+=======
+#: src/components/ui/AppSettings.tsx:135
+>>>>>>> Stashed changes
 #: src/components/ui/VoiceSettings.tsx:148
 msgid "Voice"
 msgstr "Voice"
@@ -4519,9 +5138,15 @@ msgstr "Voice \"{selected}\" is missing, using {fallback}"
 msgid "Voice name"
 msgstr "Voice name"
 
-#: src/features/editor/Inspector.tsx:376
-#: src/features/editor/Inspector.tsx:389
-#: src/features/editor/Inspector.tsx:537
+<<<<<<< Updated upstream
+#: src/features/editor/Inspector.tsx:140
+#: src/features/editor/Inspector.tsx:153
+#: src/features/editor/Inspector.tsx:255
+=======
+#: src/features/editor/Inspector.tsx:386
+#: src/features/editor/Inspector.tsx:399
+#: src/features/editor/Inspector.tsx:547
+>>>>>>> Stashed changes
 msgid "Volume"
 msgstr "Volume"
 
@@ -4579,7 +5204,11 @@ msgstr "Waypoint {idx}"
 msgid "Where the map opens before your import is placed"
 msgstr "Where the map opens before your import is placed"
 
-#: src/components/ui/AppSettings.tsx:501
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:498
+=======
+#: src/components/ui/AppSettings.tsx:502
+>>>>>>> Stashed changes
 msgid "Which pipeline to use when regenerating assets"
 msgstr "Which pipeline to use when regenerating assets"
 
@@ -4593,7 +5222,8 @@ msgstr "White"
 #~ msgid "Wipe"
 #~ msgstr "Wipe"
 
-#: src/components/ui/AppSettings.tsx:621
+<<<<<<< Updated upstream
+#: src/components/ui/AppSettings.tsx:648
 msgid "Word (e.g. 加太)"
 msgstr "Word (e.g. 加太)"
 
@@ -4605,7 +5235,22 @@ msgstr "Word / Kanji"
 msgid "Words every project shares live in App Settings, which you can open from here without opening a project."
 msgstr "Words every project shares live in App Settings, which you can open from here without opening a project."
 
-#: src/components/ui/AppSettings.tsx:568
+#: src/components/ui/AppSettings.tsx:595
+=======
+#: src/components/ui/AppSettings.tsx:622
+msgid "Word (e.g. 加太)"
+msgstr "Word (e.g. 加太)"
+
+#: src/components/ui/AppSettings.tsx:610
+msgid "Word / Kanji"
+msgstr "Word / Kanji"
+
+#: src/components/view/ProjectSettingsModal.tsx:237
+msgid "Words every project shares live in App Settings, which you can open from here without opening a project."
+msgstr "Words every project shares live in App Settings, which you can open from here without opening a project."
+
+#: src/components/ui/AppSettings.tsx:569
+>>>>>>> Stashed changes
 msgid "Words here apply to every project. A project's own entry for the same word wins."
 msgstr "Words here apply to every project. A project's own entry for the same word wins."
 

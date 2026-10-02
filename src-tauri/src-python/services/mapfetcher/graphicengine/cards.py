@@ -747,7 +747,12 @@ class _CardMixin:
             )
             rows.append((label, mode, dist_s, dur_s, color, text_w))
 
-        col_w = icon_col_w + icon_col_gap + max(r[5] for r in rows) + col_pad_x * 2
+        # Fixed width: pad to sample strings so the card doesn't resize with its values.
+        fixed_text_w = max(
+            probe_draw.textlength(tuning.SUMMARY_CARD_FIXED_DISTANCE_SAMPLE, font=font_value),
+            probe_draw.textlength(tuning.SUMMARY_CARD_FIXED_DURATION_SAMPLE, font=font_time),
+        )
+        col_w = icon_col_w + icon_col_gap + max(fixed_text_w, *(r[5] for r in rows)) + col_pad_x * 2
         card_w_px = int(col_w * len(rows))
         card_h_px = int(content_h + margin_y * 2)
 

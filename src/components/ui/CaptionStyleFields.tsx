@@ -3,6 +3,7 @@ import { t } from "@lingui/core/macro";
 import { useInstalledFonts } from "../../hooks/useInstalledFonts";
 import type { TextStyle } from "../../types";
 import { DEFAULT_CAPTION_STYLE } from "../../utils/textStyle";
+import { StepButtons } from "./StepButtons";
 import { Switch } from "./Switch";
 
 const field =
@@ -26,17 +27,26 @@ export function IntInput({ value, min, max, onCommit }: { value: number; min: nu
     setText(String(v));
     if (v !== Math.round(value)) onCommit(v);
   };
+  const stepBy = (dir: 1 | -1) => {
+    const n = Math.round(Number(text));
+    const v = Math.min(max, Math.max(min, (Number.isFinite(n) ? n : Math.round(value)) + dir));
+    setText(String(v));
+    if (v !== Math.round(value)) onCommit(v);
+  };
   return (
-    <input
-      type="number"
-      value={text}
-      min={min}
-      max={max}
-      onChange={(e) => setText(e.target.value)}
-      onBlur={done}
-      onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
-      className={`${field} text-right tabular-nums`}
-    />
+    <div className="relative w-full">
+      <input
+        type="number"
+        value={text}
+        min={min}
+        max={max}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={done}
+        onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+        className={`${field} pr-6 text-right tabular-nums`}
+      />
+      <StepButtons onStep={stepBy} />
+    </div>
   );
 }
 

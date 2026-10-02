@@ -2,6 +2,7 @@ import { ReactNode, useEffect, useMemo, useState } from "react";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 import { Copy, Download, Music, Trash2 } from "../../components/ui/icons";
+import { StepButtons } from "../../components/ui/StepButtons";
 import { Switch } from "../../components/ui/Switch";
 import { CaptionRow, CaptionStyleFields, IntInput } from "../../components/ui/CaptionStyleFields";
 import { useWorkspace } from "../../hooks/useWorkspace";
@@ -76,16 +77,25 @@ function NumberField({ value, onCommit, min, max, step = 0.1 }: { value: number;
     setText(clamped.toFixed(2));
     if (Math.abs(clamped - value) > 0.001) onCommit(clamped);
   };
+  const stepBy = (dir: 1 | -1) => {
+    const base = parseFloat(text);
+    const next = +Math.min(max ?? Infinity, Math.max(min ?? -Infinity, (Number.isFinite(base) ? base : value) + dir * step)).toFixed(2);
+    setText(next.toFixed(2));
+    if (Math.abs(next - value) > 0.001) onCommit(next);
+  };
   return (
-    <input
-      type="number"
-      step={step}
-      value={text}
-      onChange={(e) => setText(e.target.value)}
-      onBlur={done}
-      onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
-      className={input}
-    />
+    <div className="relative">
+      <input
+        type="number"
+        step={step}
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={done}
+        onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+        className={`${input} pr-6`}
+      />
+      <StepButtons onStep={stepBy} />
+    </div>
   );
 }
 

@@ -35,6 +35,7 @@ import {
   Volume2,
   X,
 } from "./icons";
+import { StepButtons } from "./StepButtons";
 import { Switch } from "./Switch";
 import { VoiceTab } from "./VoiceSettings";
 
@@ -816,12 +817,15 @@ function CaptionStyleSection({
 
 function NumberInput({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   return (
-    <input
-      type="number"
-      value={value}
-      onChange={(e) => onChange(Number(e.target.value))}
-      className={`${inputClass} w-24 text-right tabular-nums`}
-    />
+    <div className="relative w-24">
+      <input
+        type="number"
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className={`${inputClass} w-full pr-6 text-right tabular-nums`}
+      />
+      <StepButtons onStep={(dir) => onChange((Number(value) || 0) + dir)} />
+    </div>
   );
 }
 

@@ -2,11 +2,13 @@
 and how the extra segments are wired into the one ComfyUI graph. Pure graph
 building - no ComfyUI server involved."""
 
+import pytest
+
 from services import tuning
 from services.vdoprocessing import comfyui_i2v_client as client_mod
 from services.vdoprocessing.comfyui_i2v_client import ComfyUII2VClient
 
-SEGMENT_SEC = tuning.COMFYUI_MAX_FRAMES / tuning.COMFYUI_FPS
+SEGMENT_SEC = tuning.COMFYUI_MAX_FRAMES / tuning.COMFYUI_GEN_FPS
 
 
 def _graph(segments):
@@ -27,9 +29,9 @@ class TestResolveSegments:
         assert count == 2
         assert length == tuning.COMFYUI_MAX_FRAMES
 
-    def test_default_caps_a_photo_at_five_segments(self):
-        count, length = client_mod._resolve_segments(30.0)
-        assert count == 5
+    def test_default_caps_a_photo_at_the_configured_segments(self):
+        count, length = client_mod._resolve_segments(60.0)
+        assert count == tuning.COMFYUI_EXTEND_MAX_SEGMENTS
         assert length == tuning.COMFYUI_MAX_FRAMES
 
     def test_uncapped_chains_the_whole_narration(self, monkeypatch):
@@ -51,6 +53,10 @@ class TestResolveSegments:
 
 
 class TestBuildGraph:
+    @pytest.fixture(autouse=True)
+    def _five_b(self, monkeypatch):
+        monkeypatch.setattr(tuning, "COMFYUI_MODEL", "5b")
+
     def test_one_segment_is_the_plain_template(self):
         graph = _graph(1)
         assert not [k for k in graph if k.startswith("ext")]
@@ -98,3 +104,94 @@ class TestMotionPrompt:
     def test_unknown_hint_is_treated_as_a_scene_description(self):
         prompt = client_mod._resolve_motion_prompt("old shrine gate")
         assert prompt.startswith("old shrine gate, ")
+
+
+class TestA14BGraph:
+    def _graph(self, monkeypatch, segments=1):
+        monkeypatch.setattr(tuning, "COMFYUI_MODEL", "a14b")
+        return _graph(segments)
+
+    def test_high_expert_hands_its_noisy_latent_to_the_low_one(self, monkeypatch):
+        graph = self._graph(monkeypatch)
+        high, low = graph["3"]["inputs"], graph["3_low"]["inputs"]
+        assert high["model"] == ["shift_high", 0] and low["model"] == ["shift_low", 0]
+        assert high["return_with_leftover_noise"] == "enable" and low["add_noise"] == "disable"
+        assert high["end_at_step"] == low["start_at_step"] == tuning.COMFYUI_A14B_SPLIT_STEP
+        assert low["latent_image"] == ["3", 0]
+        assert graph["8"]["inputs"]["samples"] == ["3_low", 0]
+
+    def test_each_expert_loads_its_own_gguf_and_lora(self, monkeypatch):
+        graph = self._graph(monkeypatch)
+        assert graph["unet_high"]["inputs"]["unet_name"] == tuning.COMFYUI_A14B_HIGH_UNET_NAME
+        assert graph["unet_low"]["inputs"]["unet_name"] == tuning.COMFYUI_A14B_LOW_UNET_NAME
+        assert graph["lora_high"]["inputs"]["model"] == ["unet_high", 0]
+        assert graph["shift_low"]["inputs"]["model"] == ["lora_low", 0]
+
+    def test_conditioning_and_latent_come_from_wan_image_to_video(self, monkeypatch):
+        graph = self._graph(monkeypatch)
+        assert graph["55"]["class_type"] == "WanImageToVideo"
+        assert graph["55"]["inputs"]["length"] == tuning.COMFYUI_MAX_FRAMES
+        assert graph["3"]["inputs"]["positive"] == ["55", 0]
+        assert graph["3"]["inputs"]["latent_image"] == ["55", 2]
+        assert isinstance(graph["3"]["inputs"]["noise_seed"], int)
+
+    def test_every_reference_points_at_a_real_node(self, monkeypatch):
+        graph = self._graph(monkeypatch)
+        for node in graph.values():
+            for value in node["inputs"].values():
+                if isinstance(value, list) and len(value) == 2 and isinstance(value[0], str):
+                    assert value[0] in graph, value
+
+    def test_segments_are_never_unrolled(self, monkeypatch):
+        with pytest.raises(ValueError):
+            self._graph(monkeypatch, segments=2)
+
+
+class TestFunCameraGraph:
+    def _graph(self, monkeypatch, pose="Pan Right", segments=1):
+        monkeypatch.setattr(tuning, "COMFYUI_MODEL", "fun_camera")
+        return ComfyUII2VClient.__new__(ComfyUII2VClient)._build_graph(
+            "in.png", "pan-right", 81, "attraction/x", segments, pose
+        )
+
+    def test_the_preset_becomes_the_camera_path(self, monkeypatch):
+        graph = self._graph(monkeypatch, "Zoom Out")
+        camera = graph["camera"]["inputs"]
+        assert camera["camera_pose"] == "Zoom Out" and camera["length"] == 81
+        assert graph["55"]["class_type"] == "WanCameraImageToVideo"
+        assert graph["55"]["inputs"]["camera_conditions"] == ["camera", 0]
+        assert graph["55"]["inputs"]["length"] == ["camera", 3]
+
+    def test_the_photo_is_also_given_as_clip_vision(self, monkeypatch):
+        graph = self._graph(monkeypatch)
+        assert graph["clip_vision_encode"]["inputs"]["image"] == ["56", 0]
+        assert graph["55"]["inputs"]["clip_vision_output"] == ["clip_vision_encode", 0]
+
+    def test_sampler_uses_its_conditioning_and_latent(self, monkeypatch):
+        graph = self._graph(monkeypatch)
+        sampler = graph["3"]["inputs"]
+        assert sampler["model"] == ["48", 0] and sampler["latent_image"] == ["55", 2]
+        assert sampler["positive"] == ["55", 0] and sampler["negative"] == ["55", 1]
+        assert isinstance(sampler["seed"], int)
+
+    def test_every_reference_points_at_a_real_node(self, monkeypatch):
+        graph = self._graph(monkeypatch)
+        for node in graph.values():
+            for value in node["inputs"].values():
+                if isinstance(value, list) and len(value) == 2 and isinstance(value[0], str):
+                    assert value[0] in graph, value
+
+    def test_segments_are_never_unrolled(self, monkeypatch):
+        with pytest.raises(ValueError):
+            self._graph(monkeypatch, segments=2)
+
+
+class TestCameraPose:
+    def test_every_editor_preset_has_a_camera_move(self):
+        for hint, pose in (("pan-left", "Pan Left"), ("Pan Up", "Pan Up"), ("pan_down", "Pan Down"),
+                           ("zoom-in", "Zoom In"), ("zoomout", "Zoom Out"), ("pan-right", "Pan Right")):
+            assert client_mod._resolve_camera_pose(hint) == pose
+
+    def test_anything_else_holds_the_camera_still(self):
+        assert client_mod._resolve_camera_pose("old shrine gate") == "Static"
+        assert client_mod._resolve_camera_pose(None) == "Static"
