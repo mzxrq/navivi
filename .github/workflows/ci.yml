@@ -14,10 +14,10 @@ jobs:
     name: Frontend (types and tests)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
       - run: npm ci
       - run: npm run typecheck
@@ -30,8 +30,8 @@ jobs:
       run:
         working-directory: src-tauri/src-python
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
@@ -51,7 +51,7 @@ jobs:
     name: Rust shell
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       # tauri::generate_context! needs the frontend folder to exist; the tests do not use it.
       - run: |
           mkdir dist
