@@ -1,0 +1,62 @@
+"""The first narration estimate on a CPU PC: close to what a real run costs, instead of ~10x too low."""
+
+import pytest
+
+from services import render_estimate as re_
+from services import tuning
+
+CPU = {"gpu": None}
+GPU = {"gpu": "NVIDIA RTX"}
+
+
+def seconds(requests, chars, quality="best", saved=True):
+    return re_.cpu_narration_seconds(requests, chars, int(tuning.TTS_QUALITY_PRESETS[quality]["num_steps"]), saved)
+
+
+def test_matches_the_measured_requests_to_within_a_fifth():
+    measured = {  # (characters, preset) -> seconds, one request each, saved latent
+        (6, "best"): 40.0, (14, "best"): 45.3, (31, "best"): 77.0,
+        (6, "balanced"): 26.2, (14, "balanced"): 30.7, (31, "balanced"): 50.9,
+        (6, "fast"): 19.5, (14, "fast"): 24.8, (31, "fast"): 42.0,
+    }
+    for (chars, preset), took in measured.items():
+        assert seconds(1, chars, preset) == pytest.approx(took, rel=0.2)
+
+
+def test_fewer_steps_and_a_saved_latent_are_cheaper():
+    assert seconds(5, 100, "fast") < seconds(5, 100, "balanced") < seconds(5, 100, "best")
+    assert seconds(5, 100, saved=True) < seconds(5, 100, saved=False)
+
+
+def test_many_short_lines_cost_more_than_the_same_text_in_one_request():
+    assert seconds(10, 100) > seconds(1, 100)
+
+
+def test_nothing_to_say_costs_nothing():
+    assert seconds(0, 0) == 0
+
+
+def test_requests_follow_how_the_text_is_chunked():
+    assert re_._tts_requests([]) == 0
+    assert re_._tts_requests(["", None, "  "]) == 0
+    assert re_._tts_requests(["お疲れ様です"]) == 1
+    assert re_._tts_requests(["お疲れ様です", "ユニバーサルシティへようこそ"]) == 2
+    assert re_._tts_requests(["{cue} " + "あ" * 200]) > 1
+
+
+def test_the_cpu_estimate_applies_without_a_gpu_only():
+    units = {"tts": 100, "tts_requests": 5}
+    assert re_._irodori_cpu_estimate({"settings": {}}, units, GPU) is None
+    cpu = re_._irodori_cpu_estimate({"settings": {"tts": {"quality": "fast"}}}, units, CPU)
+    best = re_._irodori_cpu_estimate({"settings": {"tts": {"quality": "best"}}}, units, CPU)
+    assert cpu is not None and best is not None and cpu < best
+    assert best > 100  # for 100 characters / 5 lines this is minutes, not the old ~20 s
+
+
+def test_estimate_uses_it_for_a_project_with_narration(monkeypatch):
+    monkeypatch.setattr(re_, "hardware_profile", lambda: {"cpu_cores": 12, "ram_gb": 15.3, "gpu": None, "vram_gb": 0.0, "speed_factor": 2.25})
+    monkeypatch.setattr(re_, "load_history", lambda: {})
+    config = {"settings": {}, "waypoints": [{"arrivingNarration": "お疲れ様です"}, {"arrivingNarration": "ユニバーサルシティへようこそ"}]}
+    result = re_.estimate(config)
+    assert result["units"]["tts_requests"] == 2
+    assert result["stages"]["tts"] > 60

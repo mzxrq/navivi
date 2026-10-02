@@ -1201,3 +1201,29 @@ CAPTION_MARGIN_V = 20  # gap above the bottom edge
 CAPTION_BOX_PADDING = 2.0  # libass pads a box by its outline width
 CAPTION_BOX_COLOR = "&H66000000"  # ASS alpha 66 = 60% opaque black
 CAPTION_PLAY_RES_X = 384
+
+# --- Narration speed presets and cache (Irodori) -------------------------------
+# On a CPU a request costs ~22 s of fixed work plus sampling that scales with the number of steps, so fewer steps is the one big
+# knob (measured on a Ryzen 5 5600GE: 40 steps = 26.6 s of sampling for a 1.6 s line). Sent as the request's `irodori` options;
+# settings.tts.quality picks one. Not part of the voice fingerprint: finished audio stays valid when the preset changes.
+TTS_QUALITY_PRESETS: Dict[str, Dict[str, object]] = {
+    "fast": {"num_steps": 16},
+    "balanced": {"num_steps": 24},
+    "best": {"num_steps": 40},
+}
+TTS_QUALITY_DEFAULT = "best"
+# Lines already spoken are kept here (shared by every project) so a repeated line, or a regenerate after "delete assets", is instant.
+TTS_CACHE_MAX_MB = 500
+
+# Narration cost on a CPU (Irodori), used for the first estimate of a project before real timings exist. Seconds, a straight-line fit of
+# measured requests (Ryzen 5 5600GE, saved reference latent; 6/14/31 characters took 40/45/77 s at 40 steps, 26/31/51 s at 24, 20/25/42 s
+# at 16): every request pays a fixed part, plus the reference-voice encode until its latent is saved; the sampling parts scale with the
+# number of steps.
+TTS_CPU_COST = {
+    "request_fixed": 3.0,  # duration prediction, watermark
+    "reference_encode": 5.0,  # only until the reference latent is saved
+    "request_sampling": 28.3,  # per request, at 40 steps
+    "char_sampling": 0.96,  # per character, at 40 steps
+    "char_decode": 0.5,  # per character
+}
+TTS_BASE_STEPS = 40

@@ -6,6 +6,7 @@ import { Trans } from "@lingui/react/macro";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { callSidecar, callSidecarShared } from "../../services/sidecar";
 import { Loader2, Play, Plus, Trash2, Volume2 } from "./icons";
+import { Segmented } from "./Segmented";
 import { Slider } from "./Slider";
 
 interface Voice {
@@ -19,6 +20,7 @@ interface Voice {
 const DEFAULT_VOICE = "test1";
 const fallback = DEFAULT_VOICE;
 const DEFAULT_SPEED = 1.25;
+const DEFAULT_QUALITY = "best";
 const AUDIO_EXT = ["wav", "flac", "mp3", "m4a", "ogg", "opus", "aac", "webm"];
 
 function slugFromPath(path: string): string {
@@ -48,6 +50,7 @@ export function VoiceTab() {
 
   const selected = settings.tts?.voice ?? DEFAULT_VOICE;
   const speed = settings.tts?.speed ?? DEFAULT_SPEED;
+  const quality = settings.tts?.quality ?? DEFAULT_QUALITY;
   const missing = !!voices && !voices.some((v) => v.id === selected);
   const disabled = busy !== null;
 
@@ -68,7 +71,7 @@ export function VoiceTab() {
     return () => audioRef.current?.pause();
   }, [refresh]);
 
-  const save = (patch: { voice?: string; speed?: number }) => {
+  const save = (patch: { voice?: string; speed?: number; quality?: "fast" | "balanced" | "best" }) => {
     updateSettings({ tts: { ...settings.tts, ...patch } });
     setIsDirty(true);
   };
@@ -81,6 +84,7 @@ export function VoiceTab() {
     const res = await callSidecar<{ path: string }>("tts_voice_preview", {
       voice: id,
       speed,
+      quality,
       hardware: settings.hardware_spec_override,
     });
     setBusy(null);
@@ -229,6 +233,27 @@ export function VoiceTab() {
           <button type="button" className={secondaryButton} disabled={speed === DEFAULT_SPEED} onClick={() => save({ speed: DEFAULT_SPEED })}>
             <Trans>Reset</Trans>
           </button>
+        </div>
+      </section>
+
+      <section>
+        <h4 className="mb-2 px-0.5 text-[12px] font-semibold text-zinc-500 dark:text-zinc-400"><Trans>Narration quality</Trans></h4>
+        <div className="rounded-xl border border-zinc-200 dark:border-white/10 p-3 space-y-2.5">
+          <Segmented
+            value={quality}
+            onChange={(q) => save({ quality: q })}
+            options={[
+              { id: "fast", label: t`Fast draft` },
+              { id: "balanced", label: t`Balanced` },
+              { id: "best", label: t`Best` },
+            ]}
+          />
+          <p className="text-[12px] leading-relaxed text-zinc-500 dark:text-zinc-400">
+            <Trans>
+              A fast draft takes about half the time per line and sounds a little rougher. Use it while you are checking a project and switch to
+              Best for the final render. Narration you already have is kept; use Redo voice in the review step to remake it with this setting.
+            </Trans>
+          </p>
         </div>
       </section>
 

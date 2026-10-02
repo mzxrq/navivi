@@ -83,7 +83,7 @@ export interface ProjectSettings {
   marked_regeneration_waypoints?: string[];
   ai_features_enabled?: boolean;
   pronunciation_dictionary?: Array<{ word: string; reading: string }>;
-  tts?: { voice?: string; speed?: number };
+  tts?: { voice?: string; speed?: number; quality?: "fast" | "balanced" | "best" };
   global_pronunciation_dictionary?: Array<{ word: string; reading: string }>;
   enable_attraction_videos?: boolean;
   burn_subtitles?: boolean;

@@ -43,8 +43,16 @@ def gps_data_dir(project_dir: PathLike) -> Path:
     return meta_dir(project_dir) / "gpsdata"
 
 
+def _shared_cache_base() -> Path:
+    override = os.environ.get("NAVIVI_CACHE_DIR")
+    return Path(override) if override else Path.home() / "Documents" / "Navivi" / "Cache"
+
+
+def tts_cache_dir() -> Path:
+    """Narration lines already spoken, shared by every project."""
+    return _shared_cache_base() / "tts"
+
+
 def tile_cache_dir() -> Path:
     """Map tiles are shared by every project (and never archived with one)."""
-    override = os.environ.get("NAVIVI_CACHE_DIR")
-    base = Path(override) if override else Path.home() / "Documents" / "Navivi" / "Cache"
-    return base / "tiles"
+    return _shared_cache_base() / "tiles"

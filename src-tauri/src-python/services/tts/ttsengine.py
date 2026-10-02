@@ -28,6 +28,7 @@ import logging
 from typing import Final, Optional, Tuple, List, Dict, Any
 
 from services import tuning
+from services.tts import phrase_cache
 from services.tts.artifacts import remove_stray_bursts
 from services.localization.subtitle import SubtitleStyle
 from services.logger.logger import setup_logger
@@ -57,6 +58,7 @@ class TTSConfig:
     caption: Optional[str] = tuning.TTS_CAPTION
     hardware_override: Optional[str] = None
     extra_options: Dict[str, Any] = field(default_factory=dict)
+    quality: str = tuning.TTS_QUALITY_DEFAULT
 
     def __post_init__(self) -> None:
         if not (tuning.TTS_MIN_SPEED <= self.speed <= tuning.TTS_MAX_SPEED):
@@ -77,8 +79,9 @@ class TTSConfig:
             payload["response_format"] = self.response_format
         if self.caption:
             payload["caption"] = self.caption
-        if self.extra_options:
-            payload["irodori"] = self.extra_options
+        options = {**tuning.TTS_QUALITY_PRESETS.get(self.quality, {}), **self.extra_options}
+        if options:
+            payload["irodori"] = options
         return payload
 
 
@@ -101,11 +104,16 @@ def tts_config_from_settings(settings: Optional[Dict[str, Any]]) -> TTSConfig:
         speed = tuning.TTS_SPEED
     caption = tts.get("caption", tuning.TTS_CAPTION)
     caption = str(caption).strip() if caption else None
+    quality = str(tts.get("quality") or tuning.TTS_QUALITY_DEFAULT)
+    if quality not in tuning.TTS_QUALITY_PRESETS:
+        logger.warning("TTS quality '%s' is not one of %s; using '%s'.", quality, list(tuning.TTS_QUALITY_PRESETS), tuning.TTS_QUALITY_DEFAULT)
+        quality = tuning.TTS_QUALITY_DEFAULT
     hardware = settings.get("hardware_spec_override")
     return TTSConfig(
         voice=voice,
         speed=speed,
         caption=caption,
+        quality=quality,
         hardware_override=hardware if hardware in ("low", "high") else None,
     )
 
@@ -232,6 +240,36 @@ class FFmpegManager:
 
 
 # [Core] IrodoriTTSClient : Handles communication with the local Irodori TTS service.
+_latent_failures: set = set()
+
+
+# [TTS] Encodes `voice`'s reference file into a latent next to the voices (once per file content) using the server's own Python.
+def ensure_reference_latent(voice: str) -> Optional[Path]:
+    from services.tts import voices
+
+    path = voices.voice_file(voice)
+    python = IrodoriTTSClient._SERVER_VENV_PYTHON
+    if path is None or not python.exists() or voice in _latent_failures:
+        return None
+    out = voices.voices_dir() / ".latents" / f"{voice}-{voices._sha256(path)[:12]}.pt"
+    if out.exists():
+        return out
+    try:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        logger.info("Encoding the reference voice '%s' once (saves ~5 s on every narration line)...", voice)
+        result = subprocess.run(
+            [str(python), str(Path(__file__).with_name("make_latent.py")), str(path), str(out)],
+            capture_output=True, encoding="utf-8", errors="replace", timeout=600,
+        )
+        if result.returncode == 0 and out.exists():
+            return out
+        logger.warning("Could not encode the reference voice, using the plain file: %s", result.stderr[-300:])
+    except (OSError, subprocess.SubprocessError) as exc:
+        logger.warning("Could not encode the reference voice, using the plain file: %s", exc)
+    _latent_failures.add(voice)
+    return None
+
+
 class IrodoriTTSClient:
     """Handles communication with the local Irodori TTS service."""
 
@@ -574,11 +612,35 @@ class IrodoriTTSClient:
         starts/waits for it as a subprocess and retries once it's healthy."""
         payload = self.config.to_payload(text)
 
+        # A line spoken before (in this or any project) is not synthesized again; ~40 s each on a CPU.
+        key = phrase_cache.cache_key(payload, self._voice_sha256())
+        cached = phrase_cache.get(key)
+        if cached is not None:
+            logger.info("TTS line served from the cache (%d characters).", len(text))
+            return cached
+
+        wire = await self._with_reference_latent(payload)
         try:
-            return await self._post_speech(payload)
+            audio = await self._post_speech(wire)
         except (httpx.ConnectError, httpx.ConnectTimeout):
             await self._ensure_server_running()
-            return await self._post_speech(payload)
+            audio = await self._post_speech(wire)
+        phrase_cache.put(key, audio)
+        return audio
+
+    def _voice_sha256(self) -> Optional[str]:
+        from services.tts import voices
+
+        path = voices.voice_file(self.config.voice)
+        return voices._sha256(path) if path else None
+
+    # [TTS] The voice's reference audio, encoded once and reused: the server otherwise re-encodes the wav on every request (~5 s on a CPU).
+    # Anything that goes wrong falls back to the plain voice, which the server resolves itself.
+    async def _with_reference_latent(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        latent = await asyncio.to_thread(ensure_reference_latent, self.config.voice)
+        if latent is None:
+            return payload
+        return {**payload, "irodori": {**payload.get("irodori", {}), "ref_latent": str(latent)}}
 
     # [TTS] Generates speech audio for the given text and saves it to a local WAV file, returning the file path
     async def generate_speech(

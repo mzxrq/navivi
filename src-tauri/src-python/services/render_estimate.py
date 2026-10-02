@@ -114,6 +114,47 @@ def _chars(*texts) -> int:
     return total
 
 
+def _tts_requests(texts) -> int:
+    """How many requests the narration takes: each text is cut into chunks, and every chunk is one request to the voice server."""
+    from services import tuning
+    from services.tts.ttsengine import split_text_for_tts
+
+    count = 0
+    for t in texts:
+        if isinstance(t, str):
+            clean = re.sub(r"\{[a-z_]+\}", "", t).strip()
+            if clean:
+                count += len(split_text_for_tts(clean, tuning.TTS_MAX_CHUNK_CHARS, tuning.TTS_MIN_CHUNK_CHARS))
+    return count
+
+
+def cpu_narration_seconds(requests: int, chars: int, steps: int, latent_saved: bool) -> float:
+    """Narration time of the Irodori voice on a CPU: fixed work per request plus work that grows with the text."""
+    from services import tuning
+
+    c, scale = tuning.TTS_CPU_COST, steps / tuning.TTS_BASE_STEPS
+    per_request = c["request_fixed"] + c["request_sampling"] * scale + (0 if latent_saved else c["reference_encode"])
+    return requests * per_request + chars * (c["char_sampling"] * scale + c["char_decode"])
+
+
+def _irodori_cpu_estimate(config: dict, units: dict, hw: dict) -> Optional[float]:
+    """The CPU narration estimate when this machine will synthesize on its CPU, else None (the generic cost applies)."""
+    from services import tuning
+    from services.tts import voices
+
+    if hw.get("gpu"):
+        return None
+    tts = (config.get("settings", {}) or {}).get("tts") or {}
+    quality = tts.get("quality") if tts.get("quality") in tuning.TTS_QUALITY_PRESETS else tuning.TTS_QUALITY_DEFAULT
+    steps = int(tuning.TTS_QUALITY_PRESETS[quality].get("num_steps", tuning.TTS_BASE_STEPS))
+    voice = str(tts.get("voice") or tuning.TTS_VOICE)
+    try:
+        saved = any((voices.voices_dir() / ".latents").glob(f"{voice}-*.pt"))
+    except OSError:
+        saved = False
+    return cpu_narration_seconds(units.get("tts_requests", 0), units["tts"], steps, saved)
+
+
 def workload(config: dict) -> dict:
     """Stage -> units of work for a project's job_config."""
     settings = config.get("settings", {}) or {}
@@ -122,16 +163,18 @@ def workload(config: dict) -> dict:
     attractions_on = bool(settings.get("enable_attraction_videos", True)) and not fast
 
     legs = max(0, len(waypoints) - 1)
-    chars = 0 if fast else _chars(
+    texts = [] if fast else [
         config.get("overview_narration"),
         *[wp.get("arrivingNarration") or wp.get("narration") for wp in waypoints],
         *[wp.get("attractionNarration") for wp in waypoints],
-    )
+    ]
+    chars = _chars(*texts)
     clips = sum(1 for wp in waypoints if (wp.get("images") or wp.get("popup_image")) and not wp.get("videos")) if attractions_on else 0
     leg_seconds = float(settings.get("res_duration", 12)) * legs + float(settings.get("duration_seconds", 8))
     return {
         "gps": 1,
         "tts": chars,
+        "tts_requests": _tts_requests(texts),
         "subtitles": 0 if fast else chars,
         "upscale": _small_photos(config),
         "attraction": clips,
@@ -173,6 +216,10 @@ def estimate(config: dict) -> dict:
         cost, learned = _cost_per_unit(stage, history, hw["speed_factor"], has_comfy)
         measured += learned
         stages[stage] = round(cost * (1 if stage in _FIXED_UNITS else n), 1)
+        if stage == "tts" and not learned:
+            cpu = _irodori_cpu_estimate(config, units, hw)
+            if cpu is not None:
+                stages[stage] = round(cpu, 1)
     active = [s for s in STAGES if units[s]]
     return {
         "success": True,

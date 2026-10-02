@@ -41,6 +41,8 @@ def voice_preview(payload: Dict[str, Any]) -> Dict[str, Any]:
     tts = {"voice": voice}
     if payload.get("speed") is not None:
         tts["speed"] = payload["speed"]
+    if payload.get("quality"):
+        tts["quality"] = payload["quality"]
     config = tts_config_from_settings({"tts": tts, "hardware_spec_override": payload.get("hardware")})
     text = str(payload.get("text") or PREVIEW_TEXT).strip()
     out_dir = voices.voices_dir() / ".preview"
