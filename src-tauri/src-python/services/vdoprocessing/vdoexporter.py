@@ -60,6 +60,13 @@ EDITOR_SUBTITLE_STYLE = SubtitleStyle(
 )
 
 
+def subtitle_band_px(frame_h: int, style: SubtitleStyle = EDITOR_SUBTITLE_STYLE, lines: int = 2) -> int:
+    """Height (px) of the bottom band a burned caption of `lines` lines can cover.
+    libass scales SRT style values from its default PlayResY of 288."""
+    units = style.margin_v + lines * style.font_size * 1.25 + 2 * style.outline
+    return int(round(units * frame_h / 288))
+
+
 def _subtitle_display_text(text: str) -> str:
     """Drops each line's closing 。/、: the mark sits left in its full-width cell, leaving
     the caption box wider on the right. Same rule as subtitleDisplayText in Preview.tsx."""

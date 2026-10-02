@@ -458,6 +458,8 @@ def _fit_view_for_path(
     output_size: Tuple[int, int],
     padding_frac: float = 0.05,
     pitch: float = 0.0,
+    bottom_margin_px: float = 100.0,
+    top_margin_px: float = 100.0,
 ) -> Tuple[float, float, float]:
     """Center (lon, lat) and Mapbox GL zoom that fits every point of
     `lons`/`lats` inside `output_size`, padded by `padding_frac` on each
@@ -465,7 +467,8 @@ def _fit_view_for_path(
     animation (see render_residential_leg_pydeck's locked-camera
     docstring): unlike `follow_zoom` (sized for a close, street-level
     chase-cam), this is sized to keep the ENTIRE leg's path on screen at
-    once."""
+    once. `top_margin_px`/`bottom_margin_px` keep taller clear bands (the
+    corner banners, the burned-in caption) and center the path between them."""
     lat_min, lat_max = min(lats), max(lats)
     lon_min, lon_max = min(lons), max(lons)
     lat_span = lat_max - lat_min
@@ -509,17 +512,38 @@ def _fit_view_for_path(
     # percentage padding) guarantees that much real screen space around the
     # path regardless of how small its own span is.
     _marker_margin_px = 100.0
-    usable_h = max(1.0, out_h - 2.0 * _marker_margin_px)
+    bottom_margin_px = max(_marker_margin_px, bottom_margin_px)
+    top_margin_px = max(_marker_margin_px, top_margin_px)
+    usable_h = max(1.0, out_h - top_margin_px - bottom_margin_px)
     usable_w = max(1.0, out_w - 2.0 * _marker_margin_px)
     pad = 1.0 + padding_frac
+    # Web Mercator stretches north-south by 1/cos(lat), same as east-west.
     zoom_for_lat = math.log2(
-        _WEBMERCATOR_EARTH_CIRCUMFERENCE_M * usable_h / (_WEBMERCATOR_TILE_PX * lat_span_m * pad)
+        _WEBMERCATOR_EARTH_CIRCUMFERENCE_M * lon_scale * usable_h / (_WEBMERCATOR_TILE_PX * lat_span_m * pad)
     )
     zoom_for_lon = math.log2(
         _WEBMERCATOR_EARTH_CIRCUMFERENCE_M * lon_scale * usable_w / (_WEBMERCATOR_TILE_PX * lon_span_m * pad)
     )
     zoom = min(zoom_for_lat, zoom_for_lon)
+    # Shift the camera so the path sits centered between the two margins
+    # (south when the bottom band is taller).
+    shift_px = (bottom_margin_px - top_margin_px) / 2.0
+    if shift_px:
+        meters_per_px = _WEBMERCATOR_EARTH_CIRCUMFERENCE_M * lon_scale / (_WEBMERCATOR_TILE_PX * 2.0 ** zoom)
+        center_lat -= shift_px * meters_per_px / meters_per_deg_lat
     return center_lon, center_lat, zoom
+
+
+# Top clearance for a leg's locked framing, measured to a pin's POINT: the
+# corner banners (#hud-banner/#hud-chain: 24px down, ~54px tall), a 16px gap,
+# then the 60px pin standing above its point.
+_LEG_TOP_MARGIN_PX = 24.0 + 54.0 + 16.0 + 60.0
+
+
+def _leg_bottom_margin_px(bottom_reserve_px: float) -> float:
+    """Bottom margin for a leg's locked framing: the caption band plus room
+    for the start pin's name pill under its point."""
+    return max(100.0, float(bottom_reserve_px or 0.0) + 60.0)
 
 
 def _project_lonlat_to_px(
@@ -1033,6 +1057,7 @@ def render_residential_leg_pydeck(
     dest_pin: Optional[Dict] = None,
     hud_card_png: Optional[Callable[[float, float], bytes]] = None,
     theme: Optional[str] = None,
+    bottom_reserve_px: float = 0.0,
 ) -> List[str]:
     """Renders one leg as a straight-down, locked-camera video with a live
     turn-by-turn HUD (destination banner + time/distance card) -- the
@@ -1318,6 +1343,8 @@ def render_residential_leg_pydeck(
     locked_lon, locked_lat, locked_zoom = _fit_view_for_path(
         fit_df["lon"].tolist(), fit_df["lat"].tolist(), output_size,
         padding_frac=0.15, pitch=follow_pitch,
+        bottom_margin_px=_leg_bottom_margin_px(bottom_reserve_px),
+        top_margin_px=_LEG_TOP_MARGIN_PX,
     )
     # Lock max zoom to 17.5 to prevent extreme zoom-in for very short segments
     locked_zoom = min(locked_zoom, 17.5)
@@ -1351,7 +1378,7 @@ def render_residential_leg_pydeck(
             start_popup_image, start_popup_freeze_seconds, start_cue_seconds,
             arrival_photo_hold_seconds, arrival_wait_seconds, dest_image_display,
             dest_pin_url=_leg_pin_url(dest_pin, _DEST_PIN_URL),
-            hud_card_png=hud_card_png, theme=theme,
+            hud_card_png=hud_card_png, theme=theme, bottom_reserve_px=bottom_reserve_px,
         ))
 
     logger.info(f"Residential leg rendered ({mode}): {produced_paths}")
@@ -1693,6 +1720,7 @@ async def _record_leg(
     dest_pin_url=_DEST_PIN_URL,
     hud_card_png: Optional[Callable[[float, float], bytes]] = None,
     theme: Optional[str] = None,
+    bottom_reserve_px: float = 0.0,
 ):
     from pathlib import Path
 
@@ -2654,6 +2682,8 @@ async def _record_leg(
                                 new_lon, new_lat, new_zoom = _fit_view_for_path(
                                     next_fit_df["lon"].tolist(), next_fit_df["lat"].tolist(), output_size,
                                     padding_frac=0.15, pitch=follow_pitch,
+                                    bottom_margin_px=_leg_bottom_margin_px(bottom_reserve_px),
+                                    top_margin_px=_LEG_TOP_MARGIN_PX,
                                 )
                                 # Lock max zoom to prevent zooming in too much on short segments
                                 new_zoom = min(new_zoom, 17.5)

@@ -22,6 +22,7 @@ from services import tuning
 from services.vdoprocessing.spatial_renderer import SpatialRenderer
 from services.vdoprocessing.pydeckrecorder import record_headless_video
 from services.vdoprocessing.route_inputs import photo_inputs_hash
+from services.vdoprocessing.vdoexporter import subtitle_band_px
 
 # Logging configuration
 logger = setup_logger("RouteAnimator")
@@ -49,8 +50,8 @@ def _output_is_valid(path, min_bytes: int = 1024) -> bool:
 # Bump when the leg rendering code changes what it draws (v2: stop-by
 # photos always go fullscreen, image_display ignored; v3: legs open on the
 # departure photo, not the destination's; v4: HUD card is the overview's
-# summary card).
-LEG_RENDER_VERSION = 4
+# summary card; v5: framing clears the corner banners and the caption).
+LEG_RENDER_VERSION = 5
 # A leg is reused unless its waypoints' route inputs (see route_inputs.py) or
 # the render version changed, or its files are missing. Not "latlon": the app
 # can save a different line for the same waypoints.
@@ -636,6 +637,8 @@ class RouteAnimator:
             leg_glob_prefix = f"02_waypoint_{leg_file_num:02d}_"
             leg_kwargs = dict(
                 mode=leg_mode,
+                # Keep pins out of the burned caption's band (legs render at 1080p).
+                bottom_reserve_px=subtitle_band_px(1080),
                 walker_color=res_data.get("line_color"),
                 target_duration_seconds=target_duration,
                 landmarks=landmarks, route_chain=leg_labels or None,
