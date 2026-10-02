@@ -54,7 +54,15 @@ export const defaultProjectSettings = {
     ai_features_enabled: false,
 };
 
-export const mapStyles = [
+export interface MapStyleOption {
+    id: string;
+    label: string;
+    url: any;
+    // Past the finest zoom a tile set has, the map only stretches pixels.
+    maxZoom?: number;
+}
+
+export const mapStyles: MapStyleOption[] = [
     {
         id: "outdoors",
         label: "Outdoors (3D Terrain)",
@@ -107,11 +115,11 @@ export const mapStyles = [
                     type: "raster",
                     tiles: ["https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png"],
                     tileSize: 256,
+                    maxzoom: 18,
                 },
             },
-            layers: [
-                { id: "gsi", type: "raster", source: "gsi", minzoom: 0, maxzoom: 18 },
-            ],
+            layers: [{ id: "gsi", type: "raster", source: "gsi" }],
         } as any,
+        maxZoom: 17,
     },
 ];

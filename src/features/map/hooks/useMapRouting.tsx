@@ -4,6 +4,7 @@ import { getCurve, fillRouteCoordinates } from "../../../utils/mapUtils";
 import bezierSpline from "@turf/bezier-spline";
 import { lineString } from "@turf/helpers";
 import { routeCacheKey } from "../../../utils/routeCacheKey";
+import { closeGaps } from "../../../utils/gsiPaths";
 
 // kill switch fetcher
 const fetchWithTimeout = async (
@@ -95,6 +96,13 @@ const fetchSingleSegment = async (
       } catch {
         positions = points;
       }
+    }
+    if (mode === "walking") {
+      positions = await closeGaps(
+        positions,
+        [wp1.lat, wp1.lng],
+        [wp2.lat, wp2.lng],
+      );
     }
   } else {
     // driving

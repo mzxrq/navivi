@@ -227,6 +227,8 @@ export function MapArea() {
   const [selectedStyle, setSelectedStyle] = useState<string>(() =>
     isDarkMap ? "dark" : "outdoors",
   );
+  const currentStyle =
+    mapStyles.find((s) => s.id === selectedStyle) ?? mapStyles[0];
 
   // Mapbox UI/Label Localization
   useEffect(() => {
@@ -870,15 +872,12 @@ export function MapArea() {
               };
             }
           }}
-          mapStyle={
-            mapStyles.find((s) => s.id === selectedStyle)?.url ||
-            mapStyles[0].url
-          }
+          mapStyle={currentStyle.url}
           mapboxAccessToken={mapboxToken}
           attributionControl={false}
           dragRotate={true}
           doubleClickZoom={!isDrawMode && !isViaMode}
-          maxZoom={20}
+          maxZoom={currentStyle.maxZoom ?? 20}
           terrain={
             is3D ? { source: "mapbox-dem", exaggeration: 1.5 } : undefined
           }
