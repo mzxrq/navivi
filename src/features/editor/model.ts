@@ -117,6 +117,19 @@ export function layout(timeline: TimelineData): { placed: PlacedSegment[]; total
   return { placed, total: t };
 }
 
+/** Seconds segment i dissolves in from i-1, as the export's _crossfade_pair applies it:
+ * capped at half of segment i, skipped under 0.1s, and a segment joined to the one before
+ * by a fade never fades into the next. */
+export function fadeIns(placed: PlacedSegment[]): number[] {
+  const fades = placed.map(() => 0);
+  for (let i = 1; i < placed.length; i++) {
+    if (fades[i - 1] > 0) continue;
+    const d = Math.min(placed[i - 1].seg.fadeIntoNext, placed[i].length / 2);
+    if (d >= 0.1) fades[i] = d;
+  }
+  return fades;
+}
+
 export interface PlacedCue extends SubtitleCue {
   globalStart: number;
   globalEnd: number;

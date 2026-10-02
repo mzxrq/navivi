@@ -8,6 +8,7 @@ import {
   cuesFromTimed,
   cuesToSrt,
   emptyTimeline,
+  fadeIns,
   formatSrtTime,
   kindFromName,
   layout,
@@ -48,6 +49,21 @@ describe("layout", () => {
 
   it("never lets a trimmed clip get shorter than the minimum", () => {
     expect(trimmedLength(seg("a", { trimIn: 4, trimOut: 4.1 }))).toBe(0.5);
+  });
+});
+
+describe("fadeIns", () => {
+  const fadesOf = (segments: Segment[]) => fadeIns(layout(timeline(segments)).placed);
+
+  it("dissolves into the next clip, at most half its length", () => {
+    expect(fadesOf([seg("a", { fadeIntoNext: 0.8 }), seg("b")])).toEqual([0, 0.8]);
+    expect(fadesOf([seg("a", { fadeIntoNext: 0.8 }), seg("b", { trimOut: 1 })])).toEqual([0, 0.5]);
+  });
+
+  it("skips what the export skips: a last clip, tiny fades, a clip already joined by a fade", () => {
+    expect(fadesOf([seg("a"), seg("b", { fadeIntoNext: 0.8 })])).toEqual([0, 0]);
+    expect(fadesOf([seg("a", { fadeIntoNext: 0.05 }), seg("b")])).toEqual([0, 0]);
+    expect(fadesOf([seg("a", { fadeIntoNext: 0.8 }), seg("b", { fadeIntoNext: 0.8 }), seg("c")])).toEqual([0, 0.8, 0]);
   });
 });
 

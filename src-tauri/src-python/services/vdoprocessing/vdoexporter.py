@@ -673,6 +673,11 @@ class VideoExporter:
             cmd += ["-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100"]
         extra = bool(extra_audio and Path(extra_audio).exists() and extra_volume > 0.001)
         if extra:
+            # The footage's sound is cut like its picture, so it stays in sync and stops on a held frame.
+            if trim_in > 0.01:
+                cmd += ["-ss", f"{trim_in:.3f}"]
+            if trim_out is not None:
+                cmd += ["-t", f"{max(0.1, trim_out - trim_in):.3f}"]
             cmd += ["-i", str(Path(extra_audio).resolve())]
             cmd += ["-map", "0:v:0"]
         else:
