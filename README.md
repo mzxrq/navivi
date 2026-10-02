@@ -39,7 +39,7 @@ cd ../..
 # 2. Frontend dependencies
 npm install
 
-# 3. API keys: copy the example and fill in VITE_MAPBOX_KEY and VITE_ORS_API_KEY
+# 3. API keys: copy the example and fill in VITE_MAPBOX_TOKEN and VITE_ORS_API_KEY
 cp .env.example .env
 
 # 4. Run the app (starts Vite and builds the Rust shell)
