@@ -17,6 +17,14 @@ export function rgbToAss([r, g, b]: RGB, previous?: string): string {
   return `&H${alpha.toUpperCase()}${hex(b)}${hex(g)}${hex(r)}`;
 }
 
+// 0 = invisible, 1 = solid. An ASS value without an alpha byte is solid.
+export const assOpacity = (ass: string | undefined) => 1 - parseInt(parse(ass)?.[1] ?? "00", 16) / 255;
+
+export function withOpacity(ass: string, opacity: number): string {
+  const [r, g, b] = assToRgb(ass, [0, 0, 0]);
+  return `&H${hex((1 - Math.min(1, Math.max(0, opacity))) * 255)}${hex(b)}${hex(g)}${hex(r)}`;
+}
+
 export function assToCss(ass: string | undefined, fallback: RGB): string {
   const [r, g, b] = assToRgb(ass, fallback);
   const opacity = 1 - parseInt(parse(ass)?.[1] ?? "00", 16) / 255;

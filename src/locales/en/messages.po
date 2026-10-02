@@ -48,7 +48,7 @@ msgid "Rose"
 msgstr "Rose"
 
 #. js-lingui-explicit-id
-#: src/components/ui/AppSettings.tsx:1048
+#: src/components/ui/AppSettings.tsx:1082
 msgid "Starting..."
 msgstr "Starting..."
 
@@ -390,7 +390,7 @@ msgstr "Accept and export"
 #~ msgid "Active"
 #~ msgstr "Active"
 
-#: src/components/ui/AppSettings.tsx:1128
+#: src/components/ui/AppSettings.tsx:1162
 msgid "Active model"
 msgstr "Active model"
 
@@ -517,11 +517,11 @@ msgstr "Add video"
 msgid "Add voice"
 msgstr "Add voice"
 
-#: src/components/ui/AppSettings.tsx:826
+#: src/components/ui/AppSettings.tsx:860
 msgid "Add word"
 msgstr "Add word"
 
-#: src/components/ui/AppSettings.tsx:812
+#: src/components/ui/AppSettings.tsx:846
 msgid "Add words below or extract them from narration scripts."
 msgstr "Add words below or extract them from narration scripts."
 
@@ -591,7 +591,7 @@ msgstr "All media was automatically generated, stitched, and exported to your pr
 msgid "all projects"
 msgstr "all projects"
 
-#: src/components/ui/AppSettings.tsx:682
+#: src/components/ui/AppSettings.tsx:716
 #: src/components/ui/ReviewStep.tsx:91
 msgid "All projects"
 msgstr "All projects"
@@ -815,7 +815,7 @@ msgstr "Auto-Director Proposal"
 #~ msgid "Auto-Ducking Armed (Click to disable)"
 #~ msgstr "Auto-Ducking Armed (Click to disable)"
 
-#: src/components/ui/AppSettings.tsx:858
+#: src/components/ui/AppSettings.tsx:892
 msgid "Auto-fill readings"
 msgstr "Auto-fill readings"
 
@@ -859,6 +859,11 @@ msgstr "Background music"
 #: src/features/timeline/components/elements/TimelineToolbar.tsx:204
 #~ msgid "Background music added to A2: Music track"
 #~ msgstr "Background music added to A2: Music track"
+
+#: src/components/ui/AppSettings.tsx:646
+#: src/components/ui/AppSettings.tsx:667
+msgid "Background opacity"
+msgstr "Background opacity"
 
 #: src/features/export/components/ExportModal.tsx:105
 #~ msgid "Balanced / Standard"
@@ -951,8 +956,8 @@ msgstr "Cancel"
 msgid "Cancel"
 msgstr "Cancel"
 
-#: src/components/ui/AppSettings.tsx:1212
-#: src/components/ui/AppSettings.tsx:1214
+#: src/components/ui/AppSettings.tsx:1246
+#: src/components/ui/AppSettings.tsx:1248
 msgid "Cancel download"
 msgstr "Cancel download"
 
@@ -1029,8 +1034,8 @@ msgstr "Choose…"
 #~ msgid "Clean modern sans-serif"
 #~ msgstr "Clean modern sans-serif"
 
-#: src/components/ui/AppSettings.tsx:1212
-#: src/components/ui/AppSettings.tsx:1214
+#: src/components/ui/AppSettings.tsx:1246
+#: src/components/ui/AppSettings.tsx:1248
 #: src/components/ui/NewProject.tsx:313
 #: src/components/ui/ReviewStep.tsx:174
 #: src/components/ui/StatusBar.tsx:402
@@ -1238,7 +1243,7 @@ msgstr "Copy Message"
 msgid "Copy path from"
 msgstr "Copy path from"
 
-#: src/components/ui/AppSettings.tsx:664
+#: src/components/ui/AppSettings.tsx:698
 msgid "Correct words or kanji that are read incorrectly by the AI voice. You can auto-extract entries from scripts by typing <0>漢字(よみがな)</0> in any narration script."
 msgstr "Correct words or kanji that are read incorrectly by the AI voice. You can auto-extract entries from scripts by typing <0>漢字(よみがな)</0> in any narration script."
 
@@ -1558,7 +1563,7 @@ msgstr "Double-click to add a subtitle"
 #~ msgid "Double-sided horizontal perspective warp effect"
 #~ msgstr "Double-sided horizontal perspective warp effect"
 
-#: src/components/ui/AppSettings.tsx:1231
+#: src/components/ui/AppSettings.tsx:1265
 msgid "Download"
 msgstr "Download"
 
@@ -2679,7 +2684,7 @@ msgstr "Mute narration"
 msgid "Name your project to continue"
 msgstr "Name your project to continue"
 
-#: src/components/ui/AppSettings.tsx:1126
+#: src/components/ui/AppSettings.tsx:1160
 #: src/features/editor/ExportDialog.tsx:44
 #: src/features/editor/Inspector.tsx:136
 #: src/features/map/components/WaypointEditor.tsx:394
@@ -2745,7 +2750,7 @@ msgstr "No active project folder found"
 msgid "No clips yet"
 msgstr "No clips yet"
 
-#: src/components/ui/AppSettings.tsx:809
+#: src/components/ui/AppSettings.tsx:843
 msgid "No entries yet."
 msgstr "No entries yet."
 
@@ -2757,7 +2762,7 @@ msgstr "No entries yet."
 msgid "No locations found in document"
 msgstr "No locations found in document"
 
-#: src/components/ui/AppSettings.tsx:1141
+#: src/components/ui/AppSettings.tsx:1175
 msgid "No models installed"
 msgstr "No models installed"
 
@@ -3070,7 +3075,7 @@ msgstr "Pre-configured sample project"
 #~ msgid "Presets"
 #~ msgstr "Presets"
 
-#: src/components/ui/AppSettings.tsx:646
+#: src/components/ui/AppSettings.tsx:680
 #: src/components/ui/VoiceSettings.tsx:191
 msgid "Preview"
 msgstr "Preview"
@@ -3235,7 +3240,7 @@ msgstr "Stitching videos together and exporting..."
 msgid "Reading"
 msgstr "Reading"
 
-#: src/components/ui/AppSettings.tsx:781
+#: src/components/ui/AppSettings.tsx:815
 msgid "Reading (e.g. かだ)"
 msgstr "Reading (e.g. かだ)"
 
@@ -3243,7 +3248,7 @@ msgstr "Reading (e.g. かだ)"
 msgid "Reading (e.g. さんだんべき)"
 msgstr "Reading (e.g. さんだんべき)"
 
-#: src/components/ui/AppSettings.tsx:758
+#: src/components/ui/AppSettings.tsx:792
 msgid "Reading (Furigana)"
 msgstr "Reading (Furigana)"
 
@@ -3251,7 +3256,7 @@ msgstr "Reading (Furigana)"
 msgid "Reading Project File..."
 msgstr "Reading Project File..."
 
-#: src/components/ui/AppSettings.tsx:1223
+#: src/components/ui/AppSettings.tsx:1257
 msgid "Ready"
 msgstr "Ready"
 
@@ -3267,7 +3272,7 @@ msgstr "Ready"
 msgid "Recent"
 msgstr "Recent"
 
-#: src/components/ui/AppSettings.tsx:1168
+#: src/components/ui/AppSettings.tsx:1202
 msgid "Recommended models"
 msgstr "Recommended models"
 
@@ -3354,8 +3359,8 @@ msgstr "Reload Application"
 #~ msgid "Reload saved timeline"
 #~ msgstr "Reload saved timeline"
 
-#: src/components/ui/AppSettings.tsx:795
-#: src/components/ui/AppSettings.tsx:796
+#: src/components/ui/AppSettings.tsx:829
+#: src/components/ui/AppSettings.tsx:830
 #: src/components/ui/ReviewStep.tsx:103
 #: src/components/view/ProjectManager.tsx:621
 #: src/features/editor/EditorView.tsx:271
@@ -3808,7 +3813,7 @@ msgstr "Select all"
 #~ msgid "Select Photos..."
 #~ msgstr "Select Photos..."
 
-#: src/components/ui/AppSettings.tsx:1129
+#: src/components/ui/AppSettings.tsx:1163
 msgid "Select which model to use for narration synthesis, only downloaded models are shown"
 msgstr "Select which model to use for narration synthesis, only downloaded models are shown"
 
@@ -4259,7 +4264,7 @@ msgstr "Theme"
 #~ msgid "This asset is missing from the project"
 #~ msgstr "This asset is missing from the project"
 
-#: src/components/ui/AppSettings.tsx:1157
+#: src/components/ui/AppSettings.tsx:1191
 msgid "This model cannot read photos. Scripts for stops with photos are written from the place name and location facts only. A vision model such as Gemma 4 can use the photos."
 msgstr "This model cannot read photos. Scripts for stops with photos are written from the place name and location facts only. A vision model such as Gemma 4 can use the photos."
 
@@ -4268,7 +4273,7 @@ msgid "this project"
 msgstr "this project"
 
 #: src/components/ui/AppSettings.tsx:315
-#: src/components/ui/AppSettings.tsx:681
+#: src/components/ui/AppSettings.tsx:715
 #: src/components/ui/ReviewStep.tsx:90
 msgid "This project"
 msgstr "This project"
@@ -4720,11 +4725,11 @@ msgstr "Word"
 msgid "Word (e.g. 三段壁)"
 msgstr "Word (e.g. 三段壁)"
 
-#: src/components/ui/AppSettings.tsx:770
+#: src/components/ui/AppSettings.tsx:804
 msgid "Word (e.g. 加太)"
 msgstr "Word (e.g. 加太)"
 
-#: src/components/ui/AppSettings.tsx:755
+#: src/components/ui/AppSettings.tsx:789
 msgid "Word / Kanji"
 msgstr "Word / Kanji"
 
@@ -4732,7 +4737,7 @@ msgstr "Word / Kanji"
 msgid "Words every project shares live in App Settings, which you can open from here without opening a project."
 msgstr "Words every project shares live in App Settings, which you can open from here without opening a project."
 
-#: src/components/ui/AppSettings.tsx:704
+#: src/components/ui/AppSettings.tsx:738
 msgid "Words here apply to every project. A project's own entry for the same word wins."
 msgstr "Words here apply to every project. A project's own entry for the same word wins."
 

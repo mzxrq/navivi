@@ -48,7 +48,7 @@ msgid "Rose"
 msgstr "ローズ色"
 
 #. js-lingui-explicit-id
-#: src/components/ui/AppSettings.tsx:1048
+#: src/components/ui/AppSettings.tsx:1082
 msgid "Starting..."
 msgstr "ダウンロード開始中..."
 
@@ -390,7 +390,7 @@ msgstr "承認して書き出す"
 #~ msgid "Active"
 #~ msgstr "有効"
 
-#: src/components/ui/AppSettings.tsx:1128
+#: src/components/ui/AppSettings.tsx:1162
 msgid "Active model"
 msgstr "使用するモデル"
 
@@ -517,11 +517,11 @@ msgstr "動画を追加"
 msgid "Add voice"
 msgstr "ボイスを追加"
 
-#: src/components/ui/AppSettings.tsx:826
+#: src/components/ui/AppSettings.tsx:860
 msgid "Add word"
 msgstr "単語を追加"
 
-#: src/components/ui/AppSettings.tsx:812
+#: src/components/ui/AppSettings.tsx:846
 msgid "Add words below or extract them from narration scripts."
 msgstr "以下に単語を追加するか、スクリプトから抽出する"
 
@@ -591,7 +591,7 @@ msgstr "手動での確認を挟むことなく、すべてのメディアが自
 msgid "all projects"
 msgstr "すべてのプロジェクト"
 
-#: src/components/ui/AppSettings.tsx:682
+#: src/components/ui/AppSettings.tsx:716
 #: src/components/ui/ReviewStep.tsx:91
 msgid "All projects"
 msgstr "すべてのプロジェクト"
@@ -815,7 +815,7 @@ msgstr "オートディレクターの提案"
 #~ msgid "Auto-Ducking Armed (Click to disable)"
 #~ msgstr "自動ダッキング待機中 (クリックで無効か)"
 
-#: src/components/ui/AppSettings.tsx:858
+#: src/components/ui/AppSettings.tsx:892
 msgid "Auto-fill readings"
 msgstr "読み方を自動入力"
 
@@ -859,6 +859,11 @@ msgstr "BGM"
 #: src/features/timeline/components/elements/TimelineToolbar.tsx:204
 #~ msgid "Background music added to A2: Music track"
 #~ msgstr "ミュージックトラックにBGMを追加しました"
+
+#: src/components/ui/AppSettings.tsx:646
+#: src/components/ui/AppSettings.tsx:667
+msgid "Background opacity"
+msgstr "背景の不透明度"
 
 #: src/features/export/components/ExportModal.tsx:105
 #~ msgid "Balanced / Standard"
@@ -951,8 +956,8 @@ msgstr "キャンセル"
 msgid "Cancel"
 msgstr "キャンセル"
 
-#: src/components/ui/AppSettings.tsx:1212
-#: src/components/ui/AppSettings.tsx:1214
+#: src/components/ui/AppSettings.tsx:1246
+#: src/components/ui/AppSettings.tsx:1248
 msgid "Cancel download"
 msgstr "ダウンロードをキャンセル"
 
@@ -1029,8 +1034,8 @@ msgstr "選択…"
 #~ msgid "Clean modern sans-serif"
 #~ msgstr "クリーンでモダンなサンセリフ"
 
-#: src/components/ui/AppSettings.tsx:1212
-#: src/components/ui/AppSettings.tsx:1214
+#: src/components/ui/AppSettings.tsx:1246
+#: src/components/ui/AppSettings.tsx:1248
 #: src/components/ui/NewProject.tsx:313
 #: src/components/ui/ReviewStep.tsx:174
 #: src/components/ui/StatusBar.tsx:402
@@ -1238,7 +1243,7 @@ msgstr "メッセージをコピー"
 msgid "Copy path from"
 msgstr "経路をコピー"
 
-#: src/components/ui/AppSettings.tsx:664
+#: src/components/ui/AppSettings.tsx:698
 msgid "Correct words or kanji that are read incorrectly by the AI voice. You can auto-extract entries from scripts by typing <0>漢字(よみがな)</0> in any narration script."
 msgstr "以下に音声が誤って読み上げる単語や漢字を修正してください。"
 
@@ -1558,7 +1563,7 @@ msgstr "ダブルクリックで字幕を追加"
 #~ msgid "Double-sided horizontal perspective warp effect"
 #~ msgstr "両面水平パースペクティブワープ効果"
 
-#: src/components/ui/AppSettings.tsx:1231
+#: src/components/ui/AppSettings.tsx:1265
 msgid "Download"
 msgstr "ダウンロード"
 
@@ -2679,7 +2684,7 @@ msgstr "ナレーションをミュート"
 msgid "Name your project to continue"
 msgstr "続行するにはプロジェクト名を入力してください"
 
-#: src/components/ui/AppSettings.tsx:1126
+#: src/components/ui/AppSettings.tsx:1160
 #: src/features/editor/ExportDialog.tsx:44
 #: src/features/editor/Inspector.tsx:136
 #: src/features/map/components/WaypointEditor.tsx:394
@@ -2745,7 +2750,7 @@ msgstr "アクティブなプロジェクトフォルダが見つかりません
 msgid "No clips yet"
 msgstr "クリップがありません"
 
-#: src/components/ui/AppSettings.tsx:809
+#: src/components/ui/AppSettings.tsx:843
 msgid "No entries yet."
 msgstr "まだ投稿がありません"
 
@@ -2757,7 +2762,7 @@ msgstr "まだ投稿がありません"
 msgid "No locations found in document"
 msgstr "ドキュメントに場所が見つかりませんでした"
 
-#: src/components/ui/AppSettings.tsx:1141
+#: src/components/ui/AppSettings.tsx:1175
 msgid "No models installed"
 msgstr "インストールされているモデルがありません"
 
@@ -3070,7 +3075,7 @@ msgstr "事前構成済みのサンプルプロジェクト"
 #~ msgid "Presets"
 #~ msgstr "プリセット"
 
-#: src/components/ui/AppSettings.tsx:646
+#: src/components/ui/AppSettings.tsx:680
 #: src/components/ui/VoiceSettings.tsx:191
 msgid "Preview"
 msgstr "プレビュー"
@@ -3235,7 +3240,7 @@ msgstr "動画を結合してエクスポートしています..."
 msgid "Reading"
 msgstr "読み"
 
-#: src/components/ui/AppSettings.tsx:781
+#: src/components/ui/AppSettings.tsx:815
 msgid "Reading (e.g. かだ)"
 msgstr "読み方 (例: かだ)"
 
@@ -3243,7 +3248,7 @@ msgstr "読み方 (例: かだ)"
 msgid "Reading (e.g. さんだんべき)"
 msgstr "読み(例: さんだんべき)"
 
-#: src/components/ui/AppSettings.tsx:758
+#: src/components/ui/AppSettings.tsx:792
 msgid "Reading (Furigana)"
 msgstr "読み方（フリガナ）"
 
@@ -3251,7 +3256,7 @@ msgstr "読み方（フリガナ）"
 msgid "Reading Project File..."
 msgstr "プロジェクトファイルを読み込み中..."
 
-#: src/components/ui/AppSettings.tsx:1223
+#: src/components/ui/AppSettings.tsx:1257
 msgid "Ready"
 msgstr "準備完了"
 
@@ -3267,7 +3272,7 @@ msgstr "準備完了"
 msgid "Recent"
 msgstr "最近のプロジェクト"
 
-#: src/components/ui/AppSettings.tsx:1168
+#: src/components/ui/AppSettings.tsx:1202
 msgid "Recommended models"
 msgstr "おすすめのモデル"
 
@@ -3354,8 +3359,8 @@ msgstr "アプリを再読み込み"
 #~ msgid "Reload saved timeline"
 #~ msgstr "保存されたタイムラインを再読み込み"
 
-#: src/components/ui/AppSettings.tsx:795
-#: src/components/ui/AppSettings.tsx:796
+#: src/components/ui/AppSettings.tsx:829
+#: src/components/ui/AppSettings.tsx:830
 #: src/components/ui/ReviewStep.tsx:103
 #: src/components/view/ProjectManager.tsx:621
 #: src/features/editor/EditorView.tsx:271
@@ -3808,7 +3813,7 @@ msgstr "すべて選択"
 #~ msgid "Select Photos..."
 #~ msgstr "写真を選択..."
 
-#: src/components/ui/AppSettings.tsx:1129
+#: src/components/ui/AppSettings.tsx:1163
 msgid "Select which model to use for narration synthesis, only downloaded models are shown"
 msgstr "ナレーション合成に使用するモデルを選択します。ダウンロード済みのモデルのみが表示されます"
 
@@ -4259,7 +4264,7 @@ msgstr "テーマ"
 #~ msgid "This asset is missing from the project"
 #~ msgstr "このアセットはプロジェクトから欠落しています"
 
-#: src/components/ui/AppSettings.tsx:1157
+#: src/components/ui/AppSettings.tsx:1191
 msgid "This model cannot read photos. Scripts for stops with photos are written from the place name and location facts only. A vision model such as Gemma 4 can use the photos."
 msgstr "このモデルは写真を読み取れません。写真のある立ち寄り先でも、台本は地名と位置情報だけから作られます。Gemma 4 などの画像対応モデルなら写真を活用できます。"
 
@@ -4268,7 +4273,7 @@ msgid "this project"
 msgstr "このプロジェクト"
 
 #: src/components/ui/AppSettings.tsx:315
-#: src/components/ui/AppSettings.tsx:681
+#: src/components/ui/AppSettings.tsx:715
 #: src/components/ui/ReviewStep.tsx:90
 msgid "This project"
 msgstr "このプロジェクト"
@@ -4720,11 +4725,11 @@ msgstr "単語"
 msgid "Word (e.g. 三段壁)"
 msgstr "単語(例: 三段壁)"
 
-#: src/components/ui/AppSettings.tsx:770
+#: src/components/ui/AppSettings.tsx:804
 msgid "Word (e.g. 加太)"
 msgstr "単語 (例: 加太)"
 
-#: src/components/ui/AppSettings.tsx:755
+#: src/components/ui/AppSettings.tsx:789
 msgid "Word / Kanji"
 msgstr "単語 / 漢字"
 
@@ -4732,7 +4737,7 @@ msgstr "単語 / 漢字"
 msgid "Words every project shares live in App Settings, which you can open from here without opening a project."
 msgstr "すべてのプロジェクトで共有する単語はアプリ設定にあります。プロジェクトを開かずにここから開けます。"
 
-#: src/components/ui/AppSettings.tsx:704
+#: src/components/ui/AppSettings.tsx:738
 msgid "Words here apply to every project. A project's own entry for the same word wins."
 msgstr "ここにある単語はすべてのプロジェクトに適用されます。同じ単語がプロジェクト側にある場合は、プロジェクトが優先されます。"
 

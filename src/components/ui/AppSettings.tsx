@@ -38,7 +38,7 @@ import {
   Volume2,
   X,
 } from "./icons";
-import { assToRgb, rgbToAss } from "../../utils/assColor";
+import { assOpacity, assToRgb, rgbToAss, withOpacity } from "../../utils/assColor";
 import { CAPTION } from "../../utils/subtitleLook";
 import { ColorSwatches, type RGB } from "./ColorSwatches";
 import { ComboBox } from "./ComboBox";
@@ -642,6 +642,40 @@ export function AppSettings() {
                         })
                       }
                     />
+                  </Row>
+                  <Row title={t`Background opacity`}>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        step={5}
+                        value={Math.round(
+                          assOpacity(
+                            settings.subtitle_outline_color || CAPTION.boxColor,
+                          ) * 100,
+                        )}
+                        onChange={(e) =>
+                          updateProject({
+                            subtitle_outline_color: withOpacity(
+                              settings.subtitle_outline_color ||
+                                CAPTION.boxColor,
+                              Number(e.target.value) / 100,
+                            ),
+                          })
+                        }
+                        aria-label={t`Background opacity`}
+                        className="w-40 accent-navi cursor-pointer"
+                      />
+                      <span className="w-9 text-right text-[12px] tabular-nums text-zinc-500">
+                        {Math.round(
+                          assOpacity(
+                            settings.subtitle_outline_color || CAPTION.boxColor,
+                          ) * 100,
+                        )}
+                        %
+                      </span>
+                    </div>
                   </Row>
                   <Row title={t`Preview`} stacked>
                     <SubtitleSample

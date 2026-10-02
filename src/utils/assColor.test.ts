@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assToCss, assToRgb, rgbToAss } from "./assColor";
+import { assOpacity, assToCss, assToRgb, rgbToAss, withOpacity } from "./assColor";
 
 const WHITE: [number, number, number] = [255, 255, 255];
 
@@ -58,5 +58,32 @@ describe("assToCss", () => {
 
   it("uses the fallback, fully opaque, for an unreadable value", () => {
     expect(assToCss("nope", [0, 0, 0])).toBe("rgba(0, 0, 0, 1)");
+  });
+});
+
+describe("opacity", () => {
+  it("reads it from the alpha byte, 00 being solid", () => {
+    expect(assOpacity("&H00000000")).toBe(1);
+    expect(assOpacity("&H66000000")).toBeCloseTo(0.6, 2);
+    expect(assOpacity("&HFF000000")).toBe(0);
+    expect(assOpacity("&HFFFFFF")).toBe(1);
+    expect(assOpacity(undefined)).toBe(1);
+  });
+
+  it("sets the alpha byte and keeps the colour", () => {
+    expect(withOpacity("&H00112233", 0.6)).toBe("&H66112233");
+    expect(withOpacity("&H66112233", 1)).toBe("&H00112233");
+    expect(withOpacity("&H66112233", 0)).toBe("&HFF112233");
+  });
+
+  it("clamps what it is given", () => {
+    expect(withOpacity("&H00000000", 2)).toBe("&H00000000");
+    expect(withOpacity("&H00000000", -1)).toBe("&HFF000000");
+  });
+
+  it("round-trips every whole percent the slider can give", () => {
+    for (let pct = 0; pct <= 100; pct++) {
+      expect(Math.round(assOpacity(withOpacity("&H00000000", pct / 100)) * 100)).toBe(pct);
+    }
   });
 });
