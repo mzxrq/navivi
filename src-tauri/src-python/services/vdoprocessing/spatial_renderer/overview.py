@@ -609,11 +609,17 @@ class _OverviewRenderMixin:
         # No leg between two waypoints (start and end included) animates for
         # longer than this: a longer one is played faster.
         cap_frames = int(fps * float(self.config.get("overview_max_leg_seconds", 10.0)))
+        def _effectively_stopby(ap_dict):
+            d = ap_dict["data"]
+            return d.get("is_stopby") and not (
+                d.get("connect_to_route") and d.get("pause_at_waypoint", True)
+            )
+
         if cap_frames > 0:
             marks = [0, num_frames_lookup - 1] + [
                 min(num_frames_lookup - 1, _estimate_frame(ap["index"]))
                 for ap in active_popups
-                if ap["index"] != 0 and not ap["data"].get("is_stopby")
+                if ap["index"] != 0 and not _effectively_stopby(ap)
             ]
             capped, capped_cum = cap_segments(smooth_arr_lookup, cum_smooth_dist, marks, cap_frames)
             if len(capped) != num_frames_lookup:
@@ -631,7 +637,7 @@ class _OverviewRenderMixin:
             natural_frames = {
                 ap["order"]: _estimate_frame(ap["index"])
                 for ap in active_popups
-                if ap["index"] != 0 and not ap["data"].get("is_stopby")
+                if ap["index"] != 0 and not _effectively_stopby(ap)
                 and (not stop_popup or ap["index"] != stop_popup["index"])
             }
             # Popups that freeze the map (and stop-by batches) add frames ahead of
