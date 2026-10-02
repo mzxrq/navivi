@@ -24,7 +24,7 @@ from .helpers import (
     project_video_dir,
     skip_rich_media,
 )
-from .intro_step import render_intro_clip
+from .intro_step import intro_text_item, render_intro_clip
 from .leg_pieces import compute_leg_narration_splits
 from .narration_step import add_default_cues, add_overview_cues, record_cue_times
 from .outro_step import render_outro_clip
@@ -287,6 +287,8 @@ def run_full_pipeline(
         attraction_fade_seconds=float(
             job_config.get("settings", {}).get("attraction_fade_seconds", 0.8)
         ),
+        intro_text=intro_text_item(str(config_file_path)) if intro_path else None,
+        place_label_look=job_config.get("settings", {}).get("place_label_look"),
     )
     recorder.finish()
     tracker.on_stage = None
@@ -330,6 +332,20 @@ def recover_narration_paths(timeline_data: dict) -> int:
     return fixed
 
 
+def _project_caption_style(project_dir: Path) -> dict:
+    """Caption look from the project's settings (job_config.json beside timeline.json)."""
+    config_path = project_dir / "job_config.json"
+    if not config_path.exists():
+        return {}
+    try:
+        with open(config_path, "r", encoding="utf-8") as f:
+            style = (json.load(f).get("settings") or {}).get("caption_style")
+        return style if isinstance(style, dict) else {}
+    except Exception as exc:  # a bad config must not block the export
+        logger.warning("Caption style: could not read %s (%s); using the default.", config_path, exc)
+        return {}
+
+
 def render_from_timeline(
     timeline_json_path: str, output_video_path: Optional[str] = None
 ) -> str:
@@ -351,6 +367,8 @@ def render_from_timeline(
             if track.get(key) and not Path(track[key]).is_absolute():
                 track[key] = str(project_dir / track[key])
     timeline_data["burn_subtitles"] = True
+    if "caption_style" not in timeline_data:
+        timeline_data["caption_style"] = _project_caption_style(project_dir)
     music = timeline_data.get("music") or {}
     if music.get("path") and not Path(music["path"]).is_absolute():
         music["path"] = str(project_dir / music["path"])

@@ -4,7 +4,7 @@ import { open as dialogOpen } from "@tauri-apps/plugin-dialog";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { appConfig, fileSystem, GLOBAL_DICTIONARY_KEY } from "../config/constants";
 import { buildAssetManifest } from "../utils/manifestBuilder";
-import { TimelineData, RecentProjects } from "../types";
+import { TimelineData, RecentProjects, TextStyle } from "../types";
 import { routeCacheKey } from "../utils/routeCacheKey";
 import { planFileNames } from "../utils/fileNames";
 import { emptyTimeline, timelineFromEditorState, timelineFromPipeline, toManifest } from "../features/editor/model";
@@ -632,12 +632,13 @@ export async function saveTimelineManifest(
   projectDir: string,
   projectName: string,
   timeline: TimelineData,
+  captionStyle?: TextStyle,
 ): Promise<boolean> {
   try {
     const manifestPath = await join(projectDir, "timeline.json");
     // An empty timeline (editor never opened) must not wipe what the pipeline wrote.
     if (timeline.segments.length === 0 && (await exists(manifestPath))) return true;
-    await writeTextFile(manifestPath, JSON.stringify(toManifest(projectName, timeline), null, 2));
+    await writeTextFile(manifestPath, JSON.stringify(toManifest(projectName, timeline, captionStyle), null, 2));
     return true;
   } catch (error) {
     console.error("Failed to save timeline.json:", error);

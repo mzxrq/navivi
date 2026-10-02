@@ -6,6 +6,17 @@
 @custom-variant dark (&:where(.dark, .dark *));
 @custom-variant short (@media (max-height: 760px));
 
+/* The browser's own number spinner ignores dark mode; StepButtons replaces it. */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
 :root {
   /* Default Blue (navi) */
   --accent-base: #4287f5;

@@ -15,6 +15,9 @@ import {
   pullModelStream,
 } from "../../services/ollamaApi";
 import { callSidecar } from "../../services/sidecar";
+import { CaptionStyleFields } from "./CaptionStyleFields";
+import { resolveCaptionStyle } from "../../utils/textStyle";
+import type { TextStyle } from "../../types";
 import { dynamicActivate } from "../../i18n";
 import { db } from "../../services/db";
 import { GLOBAL_DICTIONARY_KEY } from "../../config/constants";
@@ -38,7 +41,7 @@ import {
   Volume2,
   X,
 } from "./icons";
-import { ComboBox } from "./ComboBox";
+import { StepButtons } from "./StepButtons";
 import { Switch } from "./Switch";
 import { VoiceTab } from "./VoiceSettings";
 
@@ -54,44 +57,6 @@ type SettingsTab =
 const inputClass =
   "h-8 min-w-0 px-2.5 rounded-lg bg-white dark:bg-zinc-950/40 border border-zinc-200 dark:border-white/10 text-[13px] text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 outline-none focus:border-navi focus:ring-2 focus:ring-navi/20 transition";
 const selectClass = `${inputClass} pr-7 cursor-pointer`;
-const SUBTITLE_SIZES = [
-  "16",
-  "18",
-  "20",
-  "24",
-  "28",
-  "30",
-  "32",
-  "36",
-  "40",
-  "48",
-  "56",
-  "64",
-];
-// Common fonts; the saved one is always listed, so a project made with another font keeps it.
-const SUBTITLE_FONTS = [
-  "Yu Gothic UI",
-  "Yu Gothic",
-  "Meiryo",
-  "Meiryo UI",
-  "MS Gothic",
-  "MS PGothic",
-  "BIZ UDPGothic",
-  "Noto Sans JP",
-  "Noto Serif JP",
-  "Segoe UI",
-  "Calibri",
-  "Arial",
-  "Verdana",
-  "Tahoma",
-  "Times New Roman",
-  "Georgia",
-  "Consolas",
-];
-const subtitleFonts = (current: string) =>
-  SUBTITLE_FONTS.some((f) => f.toLowerCase() === current.toLowerCase())
-    ? SUBTITLE_FONTS
-    : [current, ...SUBTITLE_FONTS];
 const secondaryButton =
   "inline-flex items-center justify-center gap-1.5 h-8 px-3 rounded-lg border border-zinc-200 dark:border-white/10 bg-white dark:bg-white/5 text-[12px] font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-white/10 transition-colors";
 
@@ -594,66 +559,12 @@ export function AppSettings() {
                   </Row>
                 </Section>
 
-                <Section title={t`Subtitles`}>
-                  <Row title={t`Font`}>
-                    <ComboBox
-                      label={t`Font`}
-                      value={settings.subtitle_font || "Calibri"}
-                      onChange={(v) => updateProject({ subtitle_font: v })}
-                      options={subtitleFonts(
-                        settings.subtitle_font || "Calibri",
-                      )}
-                      previewFont
-                      className="w-56"
-                    />
-                  </Row>
-                  <Row title={t`Font size`}>
-                    <ComboBox
-                      label={t`Font size`}
-                      value={String(settings.subtitle_font_size || 30)}
-                      onChange={(v) =>
-                        updateProject({ subtitle_font_size: Number(v) })
-                      }
-                      options={SUBTITLE_SIZES}
-                      allowCustom
-                      validate={(v) =>
-                        /^\d+$/.test(v) && Number(v) >= 8 && Number(v) <= 200
-                      }
-                      inputMode="numeric"
-                      className="w-28"
-                    />
-                  </Row>
-                  <Row
-                    title={t`Text colour`}
-                    description={t`ASS colour, e.g. &H00FFFFFF`}
-                  >
-                    <input
-                      type="text"
-                      value={settings.subtitle_color || "&H00FFFFFF"}
-                      onChange={(e) =>
-                        updateProject({ subtitle_color: e.target.value })
-                      }
-                      spellCheck={false}
-                      className={`${inputClass} w-36 text-[12px] tabular-nums`}
-                    />
-                  </Row>
-                  <Row
-                    title={t`Outline colour`}
-                    description={t`ASS colour, e.g. &H00000000`}
-                  >
-                    <input
-                      type="text"
-                      value={settings.subtitle_outline_color || "&H00000000"}
-                      onChange={(e) =>
-                        updateProject({
-                          subtitle_outline_color: e.target.value,
-                        })
-                      }
-                      spellCheck={false}
-                      className={`${inputClass} w-36 text-[12px] tabular-nums`}
-                    />
-                  </Row>
-                </Section>
+                <CaptionStyleSection
+                  style={resolveCaptionStyle(settings)}
+                  onChange={(patch) =>
+                    updateProject({ caption_style: { ...(settings.caption_style ?? {}), ...patch } })
+                  }
+                />
               </>
             )}
 
@@ -956,6 +867,28 @@ function Badge({
   );
 }
 
+function CaptionStyleSection({
+  style,
+  onChange,
+}: {
+  style: Required<TextStyle>;
+  onChange: (patch: TextStyle) => void;
+}) {
+  return (
+    <Section title={t`Subtitles`}>
+      <CaptionStyleFields
+        style={style}
+        onChange={onChange}
+        row={(key, label, control, hint) => (
+          <Row key={key} title={label} description={hint}>
+            <div className="w-48 flex justify-end">{control}</div>
+          </Row>
+        )}
+      />
+    </Section>
+  );
+}
+
 function NumberInput({
   value,
   onChange,
@@ -964,12 +897,15 @@ function NumberInput({
   onChange: (v: number) => void;
 }) {
   return (
-    <input
-      type="number"
-      value={value}
-      onChange={(e) => onChange(Number(e.target.value))}
-      className={`${inputClass} w-24 text-right tabular-nums`}
-    />
+    <div className="relative w-24">
+      <input
+        type="number"
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className={`${inputClass} w-full pr-6 text-right tabular-nums`}
+      />
+      <StepButtons onStep={(dir) => onChange((Number(value) || 0) + dir)} />
+    </div>
   );
 }
 

@@ -141,6 +141,8 @@ def build_timeline(
     attraction_subtitle_paths: Optional[list[str]] = None,
     leg_narration_splits: Optional[dict[str, tuple[Optional[str], Optional[str]]]] = None,
     attraction_fade_seconds: float = 0.0,
+    intro_text: Optional[dict] = None,
+    place_label_look: Optional[dict] = None,
 ) -> str:
     """Builds timeline.json with clips ordered intro -> overview -> for each
     leg in travel order, that leg's departure waypoint's own attraction
@@ -316,6 +318,7 @@ def build_timeline(
 
     tracks = []
     all_cues = []
+    all_texts = []
     clip_start = 0.0
     for order, (kind, source_or_name, burned) in enumerate(ordered):
         source_name = Path(source_or_name).name
@@ -353,6 +356,21 @@ def build_timeline(
             {"start": round(clip_start + c["start"], 3), "end": round(clip_start + c["end"], 3), "text": c["text"]}
             for c in clip_cues
         )
+        # The intro's title + subtitle ride on the text track, over the whole intro.
+        clip_texts = []
+        if intro_text and source_name == tuning.INTRO_OUTPUT_FILENAME:
+            clip_texts.append({"start": 0.0, "end": round(length, 3), **intro_text})
+        # An attraction's place name, when its clip was finalized without it.
+        if kind == "attraction":
+            from services.vdoprocessing.place_label import place_text_item, unburned_place_label
+
+            place = unburned_place_label(source_or_name)
+            if place:
+                clip_texts.append({"start": 0.0, "end": round(length, 3), **place_text_item(place, place_label_look)})
+        all_texts.extend(
+            {**x, "start": round(clip_start + x["start"], 3), "end": round(clip_start + x["end"], 3)}
+            for x in clip_texts
+        )
         clip_start += length
 
         tracks.append(
@@ -366,6 +384,7 @@ def build_timeline(
                 "audio_offset": audio_offset,
                 "subtitle_path": _resolve(subtitle_path),
                 "subtitles": clip_cues,
+                **({"texts": clip_texts} if clip_texts else {}),
             }
         )
 
@@ -388,6 +407,7 @@ def build_timeline(
         "total_duration_seconds": round(clip_start, 3),
         "video_tracks": tracks,
         "subtitles": all_cues,
+        "texts": all_texts,
         "burn_subtitles": True,
     }
 

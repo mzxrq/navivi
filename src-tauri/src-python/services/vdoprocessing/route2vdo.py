@@ -22,7 +22,7 @@ from services import tuning
 from services.vdoprocessing.spatial_renderer import SpatialRenderer
 from services.vdoprocessing.pydeckrecorder import record_headless_video
 from services.vdoprocessing.route_inputs import photo_inputs_hash
-from services.vdoprocessing.vdoexporter import subtitle_band_px
+from services.vdoprocessing.vdoexporter import caption_subtitle_style, subtitle_band_px
 
 # Logging configuration
 logger = setup_logger("RouteAnimator")
@@ -638,7 +638,9 @@ class RouteAnimator:
             leg_kwargs = dict(
                 mode=leg_mode,
                 # Keep pins out of the burned caption's band (legs render at 1080p).
-                bottom_reserve_px=subtitle_band_px(1080),
+                bottom_reserve_px=subtitle_band_px(
+                    1080, caption_subtitle_style(self.config.get("caption_style"), check_font=False)
+                ),
                 walker_color=res_data.get("line_color"),
                 target_duration_seconds=target_duration,
                 landmarks=landmarks, route_chain=leg_labels or None,

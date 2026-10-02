@@ -171,8 +171,8 @@ describe("timeline.json", () => {
   const edited: TimelineData = {
     segments: [seg("a", { audio: "a.wav", audioDuration: 4, audioOffset: 1, trimIn: 1, trimOut: 6 })],
     subtitles: [{ id: "c1", segmentId: "a", start: 1, end: 3, text: "hello" }],
+    texts: [],
     music: { path: "assets/audio/music/bed.mp3", label: "bed", volume: 0.3 },
-    burnSubtitles: false,
   };
 
   it("keeps the whole editor state, so the next open gives the same timeline back", () => {
@@ -183,7 +183,7 @@ describe("timeline.json", () => {
     const manifest = toManifest("Trip", edited);
     expect(manifest.video_tracks[0]).toMatchObject({ file_path: "assets/video/a.mp4", audio_path: "a.wav", audio_offset: 1, trim_in: 1, trim_out: 6 });
     expect(manifest.subtitles).toEqual([{ start: 1, end: 3, text: "hello" }]);
-    expect(manifest.burn_subtitles).toBe(false);
+    expect(manifest.burn_subtitles).toBe(true);
     expect(manifest.music).toEqual({ path: "assets/audio/music/bed.mp3", volume: 0.3 });
   });
 
@@ -209,6 +209,5 @@ describe("timeline.json", () => {
     const built = await timelineFromPipeline(raw, probe);
     expect(built.segments).toHaveLength(1);
     expect(built.segments[0]).toMatchObject({ kind: "route", videoDuration: 12, trimOut: 12, audioDuration: 7, audioOffset: 0.5, fadeIntoNext: 0.8 });
-    expect(built.burnSubtitles).toBe(false);
   });
 });

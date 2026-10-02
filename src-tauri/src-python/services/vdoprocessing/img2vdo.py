@@ -450,6 +450,11 @@ class AttractionVideoGenerator:
         # pass, then a separate label-burn pass) — three full decode/encode
         # passes over the same clip. finalize_clip fuses whichever of those
         # are actually needed into one filter graph and one encode.
+        # The place name goes on the editor's text track instead of into the pixels.
+        from services.vdoprocessing.place_label import record_place_label
+
+        on_track = tuning.ATTRACTION_LABEL_ON_TEXT_TRACK
+        burned_label = None if on_track else place_label
         try:
             try:
                 VideoExporter.finalize_clip(
@@ -459,8 +464,9 @@ class AttractionVideoGenerator:
                     hold_to=hold_to,
                     scale_to=(self._TARGET_WIDTH, self._TARGET_HEIGHT),
                     sharpen=tuning.ATTRACTION_UPSCALE_SHARPEN,
-                    label_text=place_label,
+                    label_text=burned_label,
                 )
+                record_place_label(final_path, place_label, burned=not on_track)
                 return str(final_path)
             except Exception as exc:
                 logger.warning(
@@ -469,9 +475,11 @@ class AttractionVideoGenerator:
                     video_path, type(exc).__name__, exc,
                 )
 
-            return self._fit_and_finalize_stagewise(
-                video_path, trim_to, hold_to, final_path, place_label
+            result = self._fit_and_finalize_stagewise(
+                video_path, trim_to, hold_to, final_path, burned_label
             )
+            record_place_label(result, place_label, burned=not on_track)
+            return result
         finally:
             moved_path.unlink(missing_ok=True)
 

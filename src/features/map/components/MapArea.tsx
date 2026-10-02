@@ -228,52 +228,18 @@ export function MapArea() {
     isDarkMap ? "dark" : "outdoors",
   );
 
-// Mapbox UI/Label Localization
+  // Mapbox UI/Label Localization
   useEffect(() => {
-    const currentMap = mapRef.current?.getMap();
-    if (!currentMap) return;
-    
-    // Wait for the style to be fully loaded if it isn't already
-    if (!currentMap.isStyleLoaded()) {
-      currentMap.once("styledata", () => {
-        // styledata fires when the style is loaded/changed
-        syncLanguage(currentMap);
-      });
-      return;
-    }
-    
-    syncLanguage(currentMap);
-
-    function syncLanguage(m: mapboxgl.Map) {
-      try {
-        // 1. Try Mapbox Standard style (v3) built-in API
-        if (typeof m.setLanguage === "function") {
-          m.setLanguage(i18n.locale);
-        }
-        
-        // 2. For classic styles (outdoors-v12, satellite-streets-v12, etc)
-        // that rely on vector tile text-field expressions:
-        import("@mapbox/mapbox-gl-language").then(({ default: MapboxLanguage }) => {
-          const lang = new MapboxLanguage({ defaultLanguage: i18n.locale });
-          const style = m.getStyle();
-          if (style && style.sources) {
-            // Check if this style has the mapbox streets v8 source (used by classic styles)
-            const isClassicMapboxStyle = Object.values(style.sources).some(
-              (src: any) => src.url && src.url.includes("mapbox.mapbox-streets-v8")
-            );
-            if (isClassicMapboxStyle) {
-              const newStyle = lang.setLanguage(style, i18n.locale);
-              m.setStyle(newStyle);
-            }
-          }
-        }).catch(() => {
-          console.warn("[Navivi] @mapbox/mapbox-gl-language not available");
-        });
-      } catch (e) {
-        console.warn("[Navivi] Could not set map language:", e);
+    const map = mapRef.current?.getMap();
+    if (!map) return;
+    try {
+      if (typeof map.setLanguage === "function") {
+        map.setLanguage(i18n.locale);
       }
+    } catch (e) {
+      console.warn("[Navivi] Could not set map language:", e);
     }
-  }, [i18n.locale, selectedStyle, isMapLoaded]);
+  }, [i18n.locale, selectedStyle, mapRef.current]);
 
   // The canvas is sized once when created (and a reused map keeps its old size); follow the container instead.
   const mapBoxRef = useRef<HTMLDivElement>(null);

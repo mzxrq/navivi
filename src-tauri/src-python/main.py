@@ -102,6 +102,12 @@ if __name__ == "__main__":
             print(json.dumps({"success": True, "words": analyze_words(text)}, ensure_ascii=False))
             sys.exit(0)
 
+        # Installed font families for the font editor's picker.
+        if command_arg == "list_fonts":
+            from services.localization.fonts import installed_font_families
+            print(json.dumps({"success": True, "fonts": installed_font_families()}, ensure_ascii=False))
+            sys.exit(0)
+
         # Voice library (list/add/delete/preview): argv[2] is a JSON payload,
         # stdout is one JSON object. See services/cli/voice_commands.py.
         from services.cli.voice_commands import VOICE_ACTIONS, run_voice_action

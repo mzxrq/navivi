@@ -13,6 +13,7 @@ import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 import { MapPin } from "../ui/icons";
 import { Dialog, dialogButton, dialogInput } from "../ui/Dialog";
+import { StepButtons } from "../ui/StepButtons";
 import { Switch } from "../ui/Switch";
 import { db } from "../../services/db";
 
@@ -209,15 +210,22 @@ export function ProjectSettingsModal({
           title={t`Fade into the stop's clip`}
           description={t`Seconds a leg dissolves into the clip that follows it. 0 is a hard cut.`}
         >
-          <input
-            type="number"
-            min={0}
-            max={3}
-            step={0.1}
-            value={options.attraction_fade_seconds ?? 0.8}
-            onChange={(e) => setOption({ attraction_fade_seconds: Math.min(3, Math.max(0, Number(e.target.value) || 0)) })}
-            className={`${dialogInput} w-20 text-right tabular-nums`}
-          />
+          <div className="relative w-20">
+            <input
+              type="number"
+              min={0}
+              max={3}
+              step={0.1}
+              value={options.attraction_fade_seconds ?? 0.8}
+              onChange={(e) => setOption({ attraction_fade_seconds: Math.min(3, Math.max(0, Number(e.target.value) || 0)) })}
+              className={`${dialogInput} w-full pr-6 text-right tabular-nums`}
+            />
+            <StepButtons
+              onStep={(dir) =>
+                setOption({ attraction_fade_seconds: +Math.min(3, Math.max(0, (options.attraction_fade_seconds ?? 0.8) + dir * 0.1)).toFixed(1) })
+              }
+            />
+          </div>
         </OptionRow>
       </div>
 

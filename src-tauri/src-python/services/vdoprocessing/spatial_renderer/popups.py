@@ -439,24 +439,23 @@ class _PopupMixin:
             # Seed the search directly above the pin (centered on it)
             # rather than beside it — a card beside the pin routinely sat
             # right on top of the route line leading into/out of that
+            # same pin, since the route passes close by on either side of
             # where it just arrived. A pin near the top of the frame
             # (where "above" would run off-screen) seeds below instead.
-            # top_margin reserves the banner-pill band at the top of the frame
-            # so popup cards never land on that chip (see render_top_banner).
-            top_margin = tuning.OVERVIEW_TOP_CARD_CLEARANCE
+            # --- MODIFICATION: Add extra vertical clearance ---
+            extra_lift = 30  # Increase this value to push the card higher
+            
             start_x = x - card_w / 2
-            # Use own_head (2.5*radius + 4 ≈ 54px) as the gap between card
-            # bottom and pin centre so the card clears the pin's drawn head.
             start_y = (
-                y - card_h - own_head
-                if y - card_h - own_head >= top_margin
-                else y + lead_offset
+                y - card_h - lead_offset - extra_lift
+                if y - card_h - lead_offset - extra_lift >= margin
+                else y + lead_offset + extra_lift
             )
 
             def clamp(bx: float, by: float) -> Tuple[float, float]:
                 return (
                     max(margin, min(bx, w - card_w - margin)),
-                    max(top_margin, min(by, h - card_h - margin)),
+                    max(margin, min(by, h - card_h - margin)),
                 )
 
             # A small buffer on top of the raw rectangles so two cards end

@@ -1,3 +1,5 @@
+import type { TextStyle } from "../../types";
+
 export type SegmentKind = "intro" | "overview" | "route" | "attraction" | "outro" | "custom";
 
 export interface Segment {
@@ -25,7 +27,43 @@ export interface SubtitleCue {
   start: number;
   end: number;
   text: string;
+  // Overrides on top of the project's caption_style; absent = the shared style.
+  style?: TextStyle;
 }
+
+// A title + subtitle pair on the text track (e.g. the intro's), each line styled on its own.
+export type LineAnimation = "pop" | "rise" | "fade" | "none";
+
+export interface TextLine {
+  text: string;
+  style?: TextStyle;
+  // How the line comes in and goes out, and how many seconds after the item
+  // starts it appears (it leaves as long before the end). Absent = the intro's.
+  animation?: LineAnimation;
+  delay?: number;
+}
+
+export interface TextClip {
+  id: string;
+  segmentId: string;
+  start: number;
+  end: number;
+  title: TextLine;
+  subtitle: TextLine;
+  // Where the block sits; absent = centred.
+  position?: "top" | "middle" | "bottom";
+  margin_v?: number; // px from that edge (1080p frame)
+  align?: "left" | "center" | "right"; // absent = centred
+  margin_h?: number; // px from the left/right edge
+  animation?: TextAnimation; // absent = "pop"
+  // What made it: the intro's title, an attraction's place name, or added by hand.
+  kind?: "intro" | "place";
+}
+
+export type TextAnimation = "pop" | "fade" | "none";
+
+// The look a text item can share with others of its kind ("Apply to all").
+export const TEXT_LOOK_KEYS = ["position", "margin_v", "align", "margin_h", "animation"] as const;
 
 export interface MusicBed {
   path: string;
@@ -38,6 +76,7 @@ export interface MusicBed {
 export interface TimelineData {
   segments: Segment[];
   subtitles: SubtitleCue[];
+  texts: TextClip[];
   music: MusicBed | null;
 }
 
@@ -50,6 +89,7 @@ export const DEFAULT_EXTRA_VOLUME = 0.5;
 export const emptyTimeline = (): TimelineData => ({
   segments: [],
   subtitles: [],
+  texts: [],
   music: null,
 });
 
@@ -80,6 +120,23 @@ export function layout(timeline: TimelineData): { placed: PlacedSegment[]; total
 export interface PlacedCue extends SubtitleCue {
   globalStart: number;
   globalEnd: number;
+}
+
+export interface PlacedText extends TextClip {
+  globalStart: number;
+  globalEnd: number;
+}
+
+export function placedTexts(timeline: TimelineData, placed: PlacedSegment[]): PlacedText[] {
+  const bySegment = new Map(placed.map((p) => [p.seg.id, p]));
+  return (timeline.texts ?? [])
+    .map((x) => {
+      const p = bySegment.get(x.segmentId);
+      if (!p) return null;
+      return { ...x, globalStart: p.start + x.start, globalEnd: p.start + Math.min(x.end, p.length) };
+    })
+    .filter((x): x is PlacedText => !!x)
+    .sort((a, b) => a.globalStart - b.globalStart);
 }
 
 export function placedCues(timeline: TimelineData, placed: PlacedSegment[]): PlacedCue[] {
@@ -211,14 +268,14 @@ function clampToSegment(p: PlacedSegment, globalStart: number, globalEnd: number
   return { start, end };
 }
 
-// Places a cue at global times; it belongs to the clip under its middle unless `keepSegment` pins it.
-export function anchorCue(
+// Places a cue (or text clip) at global times; it belongs to the clip under its middle unless `keepSegment` pins it.
+export function anchorCue<T extends { segmentId: string; start: number; end: number }>(
   timeline: TimelineData,
-  cue: SubtitleCue,
+  cue: T,
   globalStart: number,
   globalEnd: number,
   keepSegment = false,
-): SubtitleCue {
+): T {
   const { placed } = layout(timeline);
   const p = (keepSegment ? placed.find((x) => x.seg.id === cue.segmentId) : null) ?? segmentAt(placed, (globalStart + globalEnd) / 2);
   if (!p) return cue;
@@ -295,9 +352,14 @@ export function cuesFromSegmentFile(seg: Segment, timed: TimedText[]): SubtitleC
 
 // ── Timeline manifest (timeline.json) ────────────────────────────────────────
 
-export function toManifest(projectName: string, timeline: TimelineData) {
+export function toManifest(projectName: string, timeline: TimelineData, captionStyle?: TextStyle) {
   const { placed, total } = layout(timeline);
-  const cues = placedCues(timeline, placed).map((c) => ({ start: c.globalStart, end: c.globalEnd, text: c.text }));
+  const cues = placedCues(timeline, placed).map((c) => ({
+    start: c.globalStart,
+    end: c.globalEnd,
+    text: c.text,
+    ...(c.style ? { style: c.style } : {}),
+  }));
   return {
     project_name: projectName,
     total_duration_seconds: total,
@@ -319,7 +381,21 @@ export function toManifest(projectName: string, timeline: TimelineData) {
       fade_into_next_seconds: s.fadeIntoNext,
     })),
     subtitles: cues,
+    texts: placedTexts(timeline, placed).map((x) => ({
+      start: x.globalStart,
+      end: x.globalEnd,
+      title: x.title,
+      subtitle: x.subtitle,
+      ...(x.position ? { position: x.position } : {}),
+      ...(x.margin_v !== undefined ? { margin_v: x.margin_v } : {}),
+      ...(x.align ? { align: x.align } : {}),
+      ...(x.margin_h !== undefined ? { margin_h: x.margin_h } : {}),
+      ...(x.animation ? { animation: x.animation } : {}),
+      ...(x.kind ? { kind: x.kind } : {}),
+    })),
     burn_subtitles: true,
+    // Omitted: the export falls back to the project's saved settings.
+    ...(captionStyle ? { caption_style: captionStyle } : {}),
     music: timeline.music ? { path: timeline.music.path, volume: timeline.music.volume } : null,
     editor: { version: EDITOR_VERSION, ...timeline },
   };
@@ -331,6 +407,7 @@ export function timelineFromEditorState(raw: any): TimelineData | null {
   return {
     segments: e.segments,
     subtitles: Array.isArray(e.subtitles) ? e.subtitles : [],
+    texts: Array.isArray(e.texts) ? e.texts : [],
     music: e.music ?? null,
   };
 }
@@ -347,6 +424,7 @@ export async function timelineFromPipeline(
 
   const segments: Segment[] = [];
   const subtitles: SubtitleCue[] = [];
+  const texts: TextClip[] = [];
   for (const t of tracks) {
     if (!t.file_path || t.type === "static_popup") continue;
     let audio: string | undefined = t.audio_path || undefined;
@@ -382,6 +460,32 @@ export async function timelineFromPipeline(
       const end = Math.min(limit, Number(c.end) || 0);
       if (c.text && end - start >= 0.05) subtitles.push({ id: newId(), segmentId: seg.id, start, end, text: String(c.text) });
     }
+    // Text-track items (the intro's title + subtitle), relative to the clip like the cues.
+    const line = (l: any): TextLine => ({
+      text: String(l?.text ?? ""),
+      ...(l?.style ? { style: l.style } : {}),
+      ...(l?.animation ? { animation: l.animation } : {}),
+      ...(typeof l?.delay === "number" ? { delay: l.delay } : {}),
+    });
+    for (const x of Array.isArray(t.texts) ? t.texts : []) {
+      const start = Math.min(Number(x.start) || 0, Math.max(0, limit - MIN_CUE));
+      const end = Math.min(limit, Number(x.end) || limit);
+      if (end - start >= 0.05)
+        texts.push({
+          id: newId(),
+          segmentId: seg.id,
+          start,
+          end,
+          title: line(x.title),
+          subtitle: line(x.subtitle),
+          ...(x.position ? { position: x.position } : {}),
+          ...(typeof x.margin_v === "number" ? { margin_v: x.margin_v } : {}),
+          ...(x.align ? { align: x.align } : {}),
+          ...(typeof x.margin_h === "number" ? { margin_h: x.margin_h } : {}),
+          ...(x.animation ? { animation: x.animation } : {}),
+          ...(x.kind ? { kind: x.kind } : {}),
+        });
+    }
   }
-  return { ...emptyTimeline(), segments, subtitles };
+  return { ...emptyTimeline(), segments, subtitles, texts };
 }

@@ -2,8 +2,34 @@ import { ReactNode, useEffect, useMemo, useState } from "react";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 import { Copy, Download, Music, Trash2 } from "../../components/ui/icons";
+import { StepButtons } from "../../components/ui/StepButtons";
 import { Switch } from "../../components/ui/Switch";
-import { anchorCue, DEFAULT_EXTRA_VOLUME, layout, MIN_CUE, MIN_SEGMENT, placedCues, Segment, SubtitleCue, TimelineData } from "./model";
+import { CaptionRow, CaptionStyleFields, IntInput } from "../../components/ui/CaptionStyleFields";
+import { useWorkspace } from "../../hooks/useWorkspace";
+import type { TextStyle } from "../../types";
+import {
+  DEFAULT_TEXT_SUBTITLE_STYLE,
+  DEFAULT_TEXT_TITLE_STYLE,
+  LineAnimation,
+  lineMotion,
+  resolveCaptionStyle,
+  TEXT_DEFAULT_MARGIN,
+} from "../../utils/textStyle";
+import {
+  anchorCue,
+  DEFAULT_EXTRA_VOLUME,
+  layout,
+  MIN_CUE,
+  MIN_SEGMENT,
+  placedCues,
+  placedTexts,
+  Segment,
+  SubtitleCue,
+  TEXT_LOOK_KEYS,
+  TextClip,
+  TextLine,
+  TimelineData,
+} from "./model";
 import { formatTime, player } from "./player";
 import type { Selection } from "./TimelinePane";
 
@@ -51,16 +77,25 @@ function NumberField({ value, onCommit, min, max, step = 0.1 }: { value: number;
     setText(clamped.toFixed(2));
     if (Math.abs(clamped - value) > 0.001) onCommit(clamped);
   };
+  const stepBy = (dir: 1 | -1) => {
+    const base = parseFloat(text);
+    const next = +Math.min(max ?? Infinity, Math.max(min ?? -Infinity, (Number.isFinite(base) ? base : value) + dir * step)).toFixed(2);
+    setText(next.toFixed(2));
+    if (Math.abs(next - value) > 0.001) onCommit(next);
+  };
   return (
-    <input
-      type="number"
-      step={step}
-      value={text}
-      onChange={(e) => setText(e.target.value)}
-      onBlur={done}
-      onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
-      className={input}
-    />
+    <div className="relative">
+      <input
+        type="number"
+        step={step}
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={done}
+        onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+        className={`${input} pr-6`}
+      />
+      <StepButtons onStep={stepBy} />
+    </div>
   );
 }
 
@@ -96,6 +131,214 @@ function TextBlock({ value, onCommit }: { value: string; onCommit: (v: string) =
   );
 }
 
+const styleRow: CaptionRow = (key, label, control, hint) => (
+  <div key={key}>
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-[12px] text-zinc-600 dark:text-zinc-300 min-w-0">{label}</span>
+      <div className="w-32 shrink-0 flex justify-end">{control}</div>
+    </div>
+    {hint && <p className="mt-0.5 text-[11px] text-zinc-400">{hint}</p>}
+  </div>
+);
+
+/** The shared look (project caption_style, also in Settings) every subtitle starts from. */
+function DefaultSubtitleStyleSection() {
+  const { settings, updateSettings, setIsDirty } = useWorkspace();
+  const save = (caption_style: TextStyle | undefined) => {
+    updateSettings({ caption_style });
+    setIsDirty(true);
+  };
+  return (
+    <Section title={t`Default subtitle style`}>
+      <p className="text-[11px] text-zinc-400">{t`Subtitles you have styled one by one keep their own style.`}</p>
+      <CaptionStyleFields
+        style={resolveCaptionStyle(settings)}
+        onChange={(patch) => save({ ...(settings.caption_style ?? {}), ...patch })}
+        row={styleRow}
+      />
+      {settings.caption_style && (
+        <button type="button" className={iconButton} onClick={() => save(undefined)}>
+          <Trans>Reset to default</Trans>
+        </button>
+      )}
+    </Section>
+  );
+}
+
+/** One subtitle's own style: overrides on top of the default, or pushed to every subtitle. */
+function CueStyleSection({ cue, timeline, commit }: { cue: SubtitleCue; timeline: TimelineData; commit: (t: TimelineData) => void }) {
+  const { settings, updateSettings, setIsDirty } = useWorkspace();
+  const style = resolveCaptionStyle(settings, cue.style);
+  const setOwn = (own: TextStyle | undefined) =>
+    commit({ ...timeline, subtitles: timeline.subtitles.map((c) => (c.id === cue.id ? { ...c, style: own } : c)) });
+  const othersStyled = timeline.subtitles.some((c) => c.id !== cue.id && c.style);
+  const applyToAll = () => {
+    if (othersStyled && !window.confirm(t`Other subtitles have their own style. Replace it with this one?`)) return;
+    updateSettings({ caption_style: { ...style } });
+    setIsDirty(true);
+    commit({ ...timeline, subtitles: timeline.subtitles.map(({ style: _own, ...c }) => c) });
+  };
+  return (
+    <Section title={t`Style`}>
+      <p className="text-[11px] text-zinc-400">
+        {cue.style ? t`This subtitle has its own style.` : t`Uses the default subtitle style. Changes here apply to this subtitle only.`}
+      </p>
+      <CaptionStyleFields style={style} onChange={(patch) => setOwn({ ...(cue.style ?? {}), ...patch })} row={styleRow} />
+      <div className="flex flex-wrap items-center gap-1 -mx-1">
+        <button type="button" className={iconButton} onClick={applyToAll}>
+          <Trans>Apply to all subtitles</Trans>
+        </button>
+        {cue.style && (
+          <button type="button" className={iconButton} onClick={() => setOwn(undefined)}>
+            <Trans>Use default style</Trans>
+          </button>
+        )}
+      </div>
+    </Section>
+  );
+}
+
+/** One line of a text clip (title or subtitle): its words and its own look. */
+function TextLineSection({
+  title,
+  line,
+  defaults,
+  motion,
+  onChange,
+}: {
+  title: string;
+  line: TextLine;
+  defaults: Required<TextStyle>;
+  motion: { animation: LineAnimation; delay: number };
+  onChange: (line: TextLine) => void;
+}) {
+  const [text, setText] = useState(line.text);
+  useEffect(() => setText(line.text), [line.text]);
+  return (
+    <Section title={title}>
+      <input
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={() => text !== line.text && onChange({ ...line, text })}
+        onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+        placeholder={t`Leave empty to hide this line`}
+        className={input}
+      />
+      <Row label={t`Animation`}>
+        <select
+          value={motion.animation}
+          onChange={(e) => onChange({ ...line, animation: e.target.value as LineAnimation })}
+          className={`${input} cursor-pointer`}
+        >
+          <option value="pop">{t`Pop in`}</option>
+          <option value="rise">{t`Rise`}</option>
+          <option value="fade">{t`Fade`}</option>
+          <option value="none">{t`None`}</option>
+        </select>
+      </Row>
+      <Row label={t`Appears after`}>
+        <NumberField value={motion.delay} min={0} max={60} onCommit={(v) => onChange({ ...line, delay: +v.toFixed(2) })} />
+      </Row>
+      <p className="-mt-1 text-[11px] text-zinc-400">{t`Seconds after the title item starts. It leaves the same time before the end.`}</p>
+      <CaptionStyleFields
+        kind="text"
+        fallbackFont={defaults.font_family}
+        style={{ ...defaults, ...(line.style ?? {}) }}
+        onChange={(patch) => onChange({ ...line, style: { ...(line.style ?? {}), ...patch } })}
+        row={styleRow}
+      />
+      {(line.style || line.animation || line.delay !== undefined) && (
+        <button type="button" className={iconButton} onClick={() => onChange({ text: line.text })}>
+          <Trans>Reset style</Trans>
+        </button>
+      )}
+    </Section>
+  );
+}
+
+/** Where a text item sits and how it moves, plus sharing that look with others of its kind. */
+function TextLookSection({ text, timeline, commit }: { text: TextClip; timeline: TimelineData; commit: (t: TimelineData) => void }) {
+  const { updateSettings, setIsDirty } = useWorkspace();
+  const patch = (change: Partial<TextClip>) =>
+    commit({ ...timeline, texts: timeline.texts.map((x) => (x.id === text.id ? { ...x, ...change } : x)) });
+  const sameKind = (x: TextClip) => (x.kind ?? "custom") === (text.kind ?? "custom");
+  const peers = timeline.texts.filter((x) => x.id !== text.id && sameKind(x));
+
+  const applyToAll = () => {
+    const look: Partial<TextClip> = {};
+    for (const k of TEXT_LOOK_KEYS) (look as any)[k] = text[k];
+    commit({
+      ...timeline,
+      texts: timeline.texts.map((x) =>
+        x.id === text.id || !sameKind(x)
+          ? x
+          : { ...x, ...look, title: { ...text.title, text: x.title.text }, subtitle: { ...text.subtitle, text: x.subtitle.text } },
+      ),
+    });
+    // Place names come from the pipeline: keep the look for its next run too.
+    if (text.kind === "place") {
+      const saved: Record<string, unknown> = {};
+      for (const which of ["title", "subtitle"] as const) {
+        saved[`${which}_style`] = text[which].style;
+        saved[`${which}_animation`] = text[which].animation;
+        saved[`${which}_delay`] = text[which].delay;
+      }
+      for (const k of TEXT_LOOK_KEYS) saved[k] = text[k];
+      updateSettings({ place_label_look: JSON.parse(JSON.stringify(saved)) });
+      setIsDirty(true);
+    }
+  };
+
+  return (
+    <Section title={t`Position`}>
+      <Row label={t`Place`}>
+        <select
+          value={text.position ?? "middle"}
+          onChange={(e) => patch({ position: e.target.value === "middle" ? undefined : (e.target.value as TextClip["position"]) })}
+          className={`${input} cursor-pointer`}
+        >
+          <option value="top">{t`Top`}</option>
+          <option value="middle">{t`Middle`}</option>
+          <option value="bottom">{t`Bottom`}</option>
+        </select>
+      </Row>
+      {text.position && text.position !== "middle" && (
+        <Row label={text.position === "top" ? t`Distance from top` : t`Distance from bottom`}>
+          <IntInput value={text.margin_v ?? TEXT_DEFAULT_MARGIN} min={0} max={500} onCommit={(v) => patch({ margin_v: v })} />
+        </Row>
+      )}
+      <Row label={t`Align`}>
+        <select
+          value={text.align ?? "center"}
+          onChange={(e) => patch({ align: e.target.value === "center" ? undefined : (e.target.value as TextClip["align"]) })}
+          className={`${input} cursor-pointer`}
+        >
+          <option value="left">{t`Left`}</option>
+          <option value="center">{t`Centre`}</option>
+          <option value="right">{t`Right`}</option>
+        </select>
+      </Row>
+      {text.align && text.align !== "center" && (
+        <Row label={text.align === "left" ? t`Distance from left` : t`Distance from right`}>
+          <IntInput value={text.margin_h ?? TEXT_DEFAULT_MARGIN} min={0} max={900} onCommit={(v) => patch({ margin_h: v })} />
+        </Row>
+      )}
+      {(peers.length > 0 || text.kind === "place") && (
+        <>
+          <button type="button" className={iconButton} onClick={applyToAll}>
+            {text.kind === "place" ? <Trans>Apply to all place names</Trans> : <Trans>Apply to all titles like this</Trans>}
+          </button>
+          <p className="text-[11px] text-zinc-400">
+            {text.kind === "place"
+              ? t`Copies position and both lines' animation and style. Place names made later use it too.`
+              : t`Copies position and both lines' animation and style; the words stay.`}
+          </p>
+        </>
+      )}
+    </Section>
+  );
+}
+
 export function Inspector(p: InspectorProps) {
   const { timeline, selection, commit } = p;
   const { placed } = useMemo(() => layout(timeline), [timeline]);
@@ -103,6 +346,9 @@ export function Inspector(p: InspectorProps) {
 
   const seg = selection?.type === "segment" ? timeline.segments.find((s) => s.id === selection.id) : undefined;
   const cue = selection?.type === "cue" ? cues.find((c) => c.id === selection.id) : undefined;
+  const text = selection?.type === "text" ? placedTexts(timeline, placed).find((x) => x.id === selection.id) : undefined;
+  const patchText = (patch: Partial<TextClip>) =>
+    text && commit({ ...timeline, texts: timeline.texts.map((x) => (x.id === text.id ? { ...x, ...patch } : x)) });
 
   const patchSegment = (patch: Partial<Segment>) =>
     seg && commit({ ...timeline, segments: timeline.segments.map((s) => (s.id === seg.id ? { ...s, ...patch } : s)) });
@@ -176,6 +422,53 @@ export function Inspector(p: InspectorProps) {
     );
   }
 
+  if (text) {
+    const paired = !!text.title.text.trim() && !!text.subtitle.text.trim();
+    const move = (g0: number, g1: number) => {
+      const next = anchorCue(timeline, text, g0, g1, true);
+      patchText({ segmentId: next.segmentId, start: next.start, end: next.end });
+    };
+    return (
+      <div className="overflow-y-auto custom-scrollbar">
+        <Section title={t`Timing`}>
+          <Row label={t`Start`}>
+            <NumberField value={text.globalStart} min={0} max={text.globalEnd - MIN_CUE} onCommit={(v) => move(v, text.globalEnd)} />
+          </Row>
+          <Row label={t`End`}>
+            <NumberField value={text.globalEnd} min={text.globalStart + MIN_CUE} onCommit={(v) => move(text.globalStart, v)} />
+          </Row>
+        </Section>
+        <TextLookSection text={text} timeline={timeline} commit={commit} />
+        <TextLineSection
+          title={t`Title`}
+          line={text.title}
+          defaults={DEFAULT_TEXT_TITLE_STYLE}
+          motion={lineMotion("title", text.title.animation, text.title.delay, text.animation, text.globalEnd - text.globalStart, paired)}
+          onChange={(title) => patchText({ title })}
+        />
+        <TextLineSection
+          title={t`Subtitle`}
+          line={text.subtitle}
+          defaults={DEFAULT_TEXT_SUBTITLE_STYLE}
+          motion={lineMotion("subtitle", text.subtitle.animation, text.subtitle.delay, text.animation, text.globalEnd - text.globalStart, paired)}
+          onChange={(subtitle) => patchText({ subtitle })}
+        />
+        <div className="flex items-center gap-1 px-3 py-3">
+          <button
+            type="button"
+            className={`${iconButton} text-red-500 dark:text-red-400`}
+            onClick={() => {
+              commit({ ...timeline, texts: timeline.texts.filter((x) => x.id !== text.id) });
+              p.onSelect(null);
+            }}
+          >
+            <Trash2 className="w-3.5 h-3.5" /> <Trans>Delete</Trans>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (cue) {
     const move = (g0: number, g1: number) => patchCue((c) => anchorCue(timeline, c, g0, g1, true));
     return (
@@ -191,6 +484,7 @@ export function Inspector(p: InspectorProps) {
             <NumberField value={cue.globalEnd} min={cue.globalStart + MIN_CUE} onCommit={(v) => move(cue.globalStart, v)} />
           </Row>
         </Section>
+        <CueStyleSection cue={cue} timeline={timeline} commit={commit} />
         <div className="flex items-center gap-1 px-3 py-3">
           <button
             type="button"
@@ -239,6 +533,7 @@ export function Inspector(p: InspectorProps) {
           {!cues.length && <li className="px-2 text-[12px] text-zinc-400">{t`No subtitles yet. Use Subtitles in the toolbar.`}</li>}
         </ul>
       </Section>
+      <DefaultSubtitleStyleSection />
       <Section title={t`Music`}>
         {timeline.music ? (
           <>
