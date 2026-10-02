@@ -36,6 +36,14 @@ jobs:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: src-tauri/src-python/requirements-test.txt
+      # The attraction, mux and TTS tests run the real ffmpeg and ffprobe; the app finds them on PATH when
+      # src-python/bin has none.
+      - name: Install FFmpeg
+        shell: pwsh
+        run: |
+          choco install ffmpeg -y --no-progress
+          ffmpeg -version
+          ffprobe -version
       - run: python -m pip install -r requirements-test.txt
       - run: python -m pytest -q
 
