@@ -1,5 +1,7 @@
 [<img width="300" alt="Navivi logo" src="public/navivi.svg">](#)
 
+[![CI](https://github.com/mzxrq/navivi/actions/workflows/ci.yml/badge.svg)](https://github.com/mzxrq/navivi/actions/workflows/ci.yml)
+
 **Navivi** is a desktop app that turns a route into a narrated, cinematic travel video. Plot stops on a map or import a GPS track, write (or generate) a short script for each place, and Navivi renders the animated route, voices the narration, adds your photos and videos, and stitches everything into one video you can finish in a built-in editor.
 
 It runs locally: the interface is React inside Tauri, and a Python sidecar does the heavy work (map rendering, text-to-speech, video encoding). Nothing has to be uploaded to a cloud service.
