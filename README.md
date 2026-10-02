@@ -9,7 +9,7 @@ It runs locally: the interface is React inside Tauri, and a Python sidecar does 
 ## What you can do
 
 - **Plan a route on a 3D map.** Drive, walk, ferry, draw a path by hand, or fly in a straight curve between stops. Every leg can have its own line colour.
-- **Import what you already have.** GPX, FIT, TCX and KML tracks (stops are placed along the real recorded track), or drop photos with location data onto the map.
+- **Import what you already have.** GPX, FIT, TCX and KML tracks (stops are placed along the real recorded track), or drop photos with location data onto the map (iPhone HEIC photos are converted to JPEG on the way in, GPS tags kept).
 - **Write narration your way.** Per-stop scripts, optionally drafted by a local Ollama model that sticks to the facts it is given, with a pronunciation dictionary (per project and shared by all projects) for names the voice gets wrong.
 - **Choose a voice.** Pick a narration voice, clone a new one from a short recording, set the speed and preview it.
 - **Use your own footage.** Add photos or your own videos to a stop. Photos can be animated; videos play in place, fitted to the narration, with their sound off unless you turn it on.

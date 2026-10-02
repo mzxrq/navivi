@@ -3,6 +3,7 @@ import { fetchRenderEstimate, formatDuration, RenderEstimate } from "../../../se
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 import { Dialog, dialogButton } from "../../../components/ui/Dialog";
+import { Checkbox } from "../../../components/ui/Checkbox";
 import { Switch } from "../../../components/ui/Switch";
 import { AlertTriangle, Check, Clock, Film, ImageIcon, MapPin, Mic, Route } from "../../../components/ui/icons";
 import { ASSET_GROUPS, AssetCounts, AssetGroup, scanAssets, withDependents } from "../../../services/assetCleanup";
@@ -190,9 +191,8 @@ export function GenerateDialog({ onClose, onConfirm }: { onClose: () => void; on
                       dependent ? "opacity-60" : "cursor-pointer hover:bg-zinc-50 dark:hover:bg-white/5"
                     }`}
                   >
-                    <input
-                      type="checkbox"
-                      className="accent-navi"
+                    <Checkbox
+                      label={groupLabel[group]}
                       checked={effectiveClear.includes(group)}
                       disabled={dependent}
                       onChange={() => toggleGroup(group)}

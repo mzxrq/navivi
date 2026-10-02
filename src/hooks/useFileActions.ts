@@ -6,6 +6,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { documentDir, join } from "@tauri-apps/api/path";
 import { readTextFile, readFile, readDir, mkdir, writeFile } from "@tauri-apps/plugin-fs";
 import { fileSystem } from "../config/constants";
+import { PHOTO_EXTENSIONS, isHeic, isPhoto, preparePhotos } from "../services/imageImport";
 import * as exifr from "exifr";
 import { t } from "@lingui/core/macro";
 
@@ -25,7 +26,7 @@ export function useFileActions() {
         try {
           const stats = await readDir(path);
           for (const file of stats) {
-            if (file.name && (file.name.toLowerCase().endsWith(".jpg") || file.name.toLowerCase().endsWith(".jpeg") || file.name.toLowerCase().endsWith(".png"))) {
+            if (file.name && isPhoto(file.name)) {
               allFiles.push(path + "/" + file.name); // Assuming unix style or we can let tauri path API handle it, but for simplicity
             }
           }
@@ -35,10 +36,26 @@ export function useFileActions() {
         }
       }
 
+      // iPhone photos (HEIC) become JPEGs first, so the rest of the import only ever sees formats it can read.
+      let files: string[] = allFiles;
+      const heicCount = allFiles.filter(isHeic).length;
+      if (heicCount > 0) {
+        showToast(heicCount === 1 ? t`Converting 1 iPhone photo...` : t`Converting ${heicCount} iPhone photos...`, "info");
+        try {
+          const prepared = await preparePhotos(allFiles);
+          files = prepared.paths;
+          const failed = prepared.failed.length;
+          if (failed > 0) showToast(failed === 1 ? t`1 photo could not be converted and was skipped.` : t`${failed} photos could not be converted and were skipped.`, "warning");
+        } catch (e: any) {
+          showToast(e?.message ?? t`Could not convert the iPhone photos.`, "error");
+          files = allFiles.filter((p) => !isHeic(p));
+        }
+      }
+
       let imageCount = 0;
       const photoPoints = [];
-      for (const path of allFiles) {
-        if (path.toLowerCase().endsWith(".jpg") || path.toLowerCase().endsWith(".jpeg") || path.toLowerCase().endsWith(".png")) {
+      for (const path of files) {
+        if (isPhoto(path)) {
           imageCount++;
           try {
             const buffer = await readFile(path);
@@ -112,7 +129,7 @@ export function useFileActions() {
   // The window keeps HTML5 drag and drop for the map markers, so dropped files arrive as File objects without a path.
   // They are written under Documents/Navivi/Imports first and then go through the same import as a chosen file.
   const handleDroppedBrowserFiles = async (files: File[]) => {
-    const supported = /\.(jpe?g|png|gpx|txt|md)$/i;
+    const supported = /\.(jpe?g|png|heic|heif|gpx|txt|md)$/i;
     const usable = files.filter((f) => supported.test(f.name));
     const skipped = files.length - usable.length;
     if (skipped > 0) showToast(skipped === 1 ? t`1 file was skipped: only photos, GPX files and text files can be dropped here.` : t`${skipped} files were skipped: only photos, GPX files and text files can be dropped here.`, "warning");
@@ -278,7 +295,7 @@ export function useFileActions() {
     try {
       const selected = await open({
         multiple: true,
-        filters: [{ name: t`Photos & Images`, extensions: ["jpg", "jpeg", "png"] }],
+        filters: [{ name: t`Photos & Images`, extensions: PHOTO_EXTENSIONS }],
       });
 
       if (selected) {

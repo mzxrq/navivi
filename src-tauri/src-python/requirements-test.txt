@@ -6,6 +6,7 @@ pyproj
 contextily
 scipy
 Pillow
+pillow-heif
 opencv-python-headless
 httpx
 requests

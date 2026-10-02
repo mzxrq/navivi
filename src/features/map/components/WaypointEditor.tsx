@@ -30,6 +30,7 @@ import {
   generateWaypointScriptStream,
 } from "../../../services/ollamaApi";
 import { stopLabel } from "../../../utils/stopLabel";
+import { PHOTO_EXTENSIONS, isHeic, preparePhotos } from "../../../services/imageImport";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 
@@ -139,10 +140,22 @@ export function WaypointEditor({
     try {
       const selected = await open({
         multiple: true,
-        filters: [{ name: "Images", extensions: ["svg", "png", "jpg", "jpeg"] }],
+        filters: [{ name: "Images", extensions: ["svg", ...PHOTO_EXTENSIONS] }],
       });
-      const picked = Array.isArray(selected) ? selected : selected ? [selected] : [];
+      let picked = Array.isArray(selected) ? selected : selected ? [selected] : [];
       if (picked.length === 0) return;
+      if (picked.some(isHeic)) {
+        showToast(t`Converting iPhone photos...`, "info");
+        try {
+          const prepared = await preparePhotos(picked);
+          picked = prepared.paths;
+          if (prepared.failed.length > 0) showToast(t`Some photos could not be converted and were skipped.`, "warning");
+        } catch (e: any) {
+          showToast(e?.message ?? t`Could not convert the iPhone photos.`, "error");
+          picked = picked.filter((p) => !isHeic(p));
+        }
+        if (picked.length === 0) return;
+      }
       updateWaypoint(wp.id, {
         images: [...wpImages, ...picked].slice(0, MAX_IMAGES),
         imagePans: [...imagePans, ...picked.map(() => "none")].slice(0, MAX_IMAGES),

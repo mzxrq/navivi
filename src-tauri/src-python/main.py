@@ -110,6 +110,14 @@ if __name__ == "__main__":
             print(json.dumps(run_voice_action(command_arg, payload), ensure_ascii=False))
             sys.exit(0)
 
+        # Photo import (HEIC to JPEG): argv[2] is a JSON payload, stdout one JSON object.
+        # See services/cli/image_commands.py.
+        from services.cli.image_commands import IMAGE_ACTIONS, run_image_action
+        if command_arg in IMAGE_ACTIONS:
+            payload = json.loads(sys.argv[2]) if len(sys.argv) > 2 and sys.argv[2].strip() else {}
+            print(json.dumps(run_image_action(command_arg, payload), ensure_ascii=False))
+            sys.exit(0)
+
         if command_arg == "estimate":
             from services.render_estimate import estimate
 
