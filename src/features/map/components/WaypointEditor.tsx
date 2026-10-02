@@ -33,6 +33,7 @@ import { stopLabel } from "../../../utils/stopLabel";
 import { PHOTO_EXTENSIONS, isHeic, preparePhotos } from "../../../services/imageImport";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
+import { placeNameOf } from "../../../utils/placeName";
 
 const MAX_IMAGES = 3;
 
@@ -127,7 +128,7 @@ export function WaypointEditor({
       );
       const data = await res.json();
       updateWaypoint(wp.id, {
-        name: data.name || data.address?.road || data.address?.city || t`Unknown Location`,
+        name: placeNameOf(data, t`Unknown Location`),
       });
     } catch {
       showToast(t`Couldn't look up a place name for this location.`, "error");

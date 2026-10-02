@@ -1,5 +1,6 @@
 import { useWorkspace } from "./useWorkspace";
 import { t } from "@lingui/core/macro";
+import { placeNameOf } from "../utils/placeName";
 
 export function useWaypointActions() {
   const { updateWaypoint, waypoints, setWaypoints, setIsDirty } = useWorkspace();
@@ -32,11 +33,7 @@ export function useWaypointActions() {
         `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`
       );
       const data = await res.json();
-      const placeName =
-        data.name ||
-        data.address?.road ||
-        data.address?.city ||
-        t`Waypoint ${newId.substring(0, 4).toUpperCase()}`;
+      const placeName = placeNameOf(data, t`Waypoint ${newId.substring(0, 4).toUpperCase()}`);
 
       setWaypoints((prev) =>
         prev.map((wp) => (wp.id === newId ? { ...wp, name: placeName } : wp))
@@ -60,8 +57,7 @@ export function useWaypointActions() {
         `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`
       );
       const data = await res.json();
-      const placeName =
-        data.name || data.address?.road || data.address?.city || t`Unknown Location`;
+      const placeName = placeNameOf(data, t`Unknown Location`);
 
       updateWaypoint(id, { name: placeName });
     } catch (error) {

@@ -25,6 +25,7 @@ import { ElevationProfile } from "./ElevationProfile";
 import { t } from "@lingui/core/macro";
 import { useLingui } from "@lingui/react";
 import { Trans } from "@lingui/react/macro";
+import { placeNameOf } from "../../../utils/placeName";
 
 export function MapArea() {
   const { i18n } = useLingui();
@@ -423,11 +424,10 @@ export function MapArea() {
         `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`,
       );
       const data = await res.json();
-      const placeName =
-        data.name ||
-        data.address?.road ||
-        data.address?.city ||
-        `Waypoint ${newId.substring(0, 4).toUpperCase()}`;
+      const placeName = placeNameOf(
+        data,
+        `Waypoint ${newId.substring(0, 4).toUpperCase()}`,
+      );
 
       setWaypoints((prev) =>
         prev.map((wp) => (wp.id === newId ? { ...wp, name: placeName } : wp)),
@@ -469,8 +469,7 @@ export function MapArea() {
         `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`,
       );
       const data = await res.json();
-      const placeName =
-        data.name || data.address?.road || data.address?.city || t`Waypoint`;
+      const placeName = placeNameOf(data, t`Waypoint`);
       setWaypoints((prev) =>
         prev.map((wp) => (wp.id === newId ? { ...wp, name: placeName } : wp)),
       );
@@ -507,8 +506,7 @@ export function MapArea() {
         `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`,
       );
       const data = await res.json();
-      const placeName =
-        data.name || data.address?.road || data.address?.city || t`Stop By`;
+      const placeName = placeNameOf(data, t`Stop By`);
       setWaypoints((prev) =>
         prev.map((wp) => (wp.id === newId ? { ...wp, name: placeName } : wp)),
       );

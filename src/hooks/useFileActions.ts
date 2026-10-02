@@ -9,6 +9,7 @@ import { fileSystem } from "../config/constants";
 import { PHOTO_EXTENSIONS, isHeic, isPhoto, preparePhotos } from "../services/imageImport";
 import * as exifr from "exifr";
 import { t } from "@lingui/core/macro";
+import { placeNameOf } from "../utils/placeName";
 
 export function useFileActions() {
   const { setRoutePoints, waypoints, setWaypoints, setIsDirty } = useWorkspace();
@@ -97,7 +98,7 @@ export function useFileActions() {
           try {
             const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${pt.lat}&lon=${pt.lng}`);
             const data = await res.json();
-            placeName = data.name || data.address?.road || data.address?.city || placeName;
+            placeName = placeNameOf(data, placeName);
           } catch { }
 
           newWaypoints.push({
@@ -257,7 +258,7 @@ export function useFileActions() {
           if (lookedUp++ > 0) await new Promise((res) => setTimeout(res, 1100)); // Rate limit OSM
           const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${stops[i].lat}&lon=${stops[i].lng}`);
           const data = await res.json();
-          stops[i].name = data.name || data.address?.road || data.address?.city || fallback;
+          stops[i].name = placeNameOf(data, fallback);
         } catch {
           stops[i].name = fallback;
         }
