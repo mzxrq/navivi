@@ -4,7 +4,6 @@ export type AppView = "title_screen" | "editor" | "new_project";
 export type EditorMode = "map" | "timeline";
 
 export type AppTheme = "light" | "dark" | "system";
-export type MapTheme = "light" | "dark" | "sync";
 
 export interface AppNotification {
   id: string;

@@ -1,7 +1,6 @@
 import { createContext, useContext, useEffect, useState, } from 'react';
 
 type Theme = 'dark' | 'light' | 'system';
-type MapTheme = 'dark' | 'light' | 'sync';
 type AccentTheme = 'navi' | 'emerald' | 'violet' | 'amber' | 'rose';
 
 type ThemeProviderProps = {
@@ -12,8 +11,6 @@ type ThemeProviderProps = {
 type ThemeProviderState = {
     theme: Theme;
     setTheme: (theme: Theme) => void;
-    mapTheme: MapTheme;
-    setMapTheme: (theme: MapTheme) => void;
     accentTheme: AccentTheme;
     setAccentTheme: (theme: AccentTheme) => void;
 }
@@ -23,10 +20,6 @@ const ThemeProviderContext = createContext<ThemeProviderState | undefined>(undef
 export function ThemeProvider({ children, defaultTheme = 'system' }: ThemeProviderProps) {
     const [theme, setTheme] = useState<Theme>(
         () => (localStorage.getItem('app-theme') as Theme || defaultTheme)
-    );
-
-    const [mapTheme, setMapTheme] = useState<MapTheme>(
-        () => (localStorage.getItem('map-theme') as MapTheme || 'sync')
     );
 
     const [accentTheme, setAccentTheme] = useState<AccentTheme>(
@@ -62,11 +55,6 @@ export function ThemeProvider({ children, defaultTheme = 'system' }: ThemeProvid
         setTheme: (theme: Theme) => {
             localStorage.setItem('app-theme', theme);
             setTheme(theme);
-        },
-        mapTheme,
-        setMapTheme: (theme: MapTheme) => {
-            localStorage.setItem('map-theme', theme);
-            setMapTheme(theme);
         },
         accentTheme,
         setAccentTheme: (theme: AccentTheme) => {

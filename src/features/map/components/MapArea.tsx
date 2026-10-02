@@ -12,7 +12,6 @@ import "@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css";
 import { mapStyles } from "../../../config/constants";
 import { RouteStyling } from "./MapLayers/RouteStyling";
 import { useWorkspace } from "../../../hooks/useWorkspace";
-import { useTheme } from "../../../hooks/useTheme";
 import { useMapRouting } from "../hooks/useMapRouting";
 import { useFileActions } from "../../../hooks/useFileActions";
 import { takePendingImport } from "../../../utils/pendingImport";
@@ -29,7 +28,6 @@ import { placeNameOf } from "../../../utils/placeName";
 
 export function MapArea() {
   const { i18n } = useLingui();
-  const { theme, mapTheme } = useTheme();
   const { showToast } = useUI();
   const {
     waypoints,
@@ -218,16 +216,19 @@ export function MapArea() {
     }
   }, [waypoints.length, routePoints.length, routeSegments.length]);
 
-  const isDarkMap =
-    mapTheme === "dark" ||
-    (mapTheme === "sync" &&
-      (theme === "dark" ||
-        (theme === "system" &&
-          window.matchMedia("(prefers-color-scheme: dark)").matches)));
-
-  const [selectedStyle, setSelectedStyle] = useState<string>(() =>
-    isDarkMap ? "dark" : "outdoors",
-  );
+  const [selectedStyle, setSelectedStyle] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem("map-style");
+      if (saved && mapStyles.some((s) => s.id === saved)) return saved;
+    } catch {}
+    return mapStyles[0].id;
+  });
+  const chooseStyle = (id: string) => {
+    setSelectedStyle(id);
+    try {
+      localStorage.setItem("map-style", id);
+    } catch {}
+  };
   const currentStyle =
     mapStyles.find((s) => s.id === selectedStyle) ?? mapStyles[0];
 
@@ -844,7 +845,7 @@ export function MapArea() {
 
         <LayerManager
           selectedStyle={selectedStyle}
-          setSelectedStyle={setSelectedStyle}
+          setSelectedStyle={chooseStyle}
           mapboxToken={mapboxToken}
           is3D={is3D}
           setIs3D={setIs3D}
