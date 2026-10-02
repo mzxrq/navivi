@@ -184,19 +184,37 @@ export async function gsiPath(from: LatLng, to: LatLng): Promise<LatLng[] | null
 
 export const GAP_M = 25;
 
-// Routers snap to the nearest mapped way, so a route can stop short of its stop (a trail that is not in the data). The
-// missing stretch is filled from GSI's paths when they have one, otherwise it is a straight segment to the stop.
-export async function closeGaps(
-  route: LatLng[],
-  start: LatLng,
-  end: LatLng,
-  bridge: (from: LatLng, to: LatLng) => Promise<LatLng[] | null> = gsiPath,
-): Promise<LatLng[]> {
-  if (route.length < 2) return route;
-  let out = route;
-  const last = out[out.length - 1];
-  if (distanceM(last, end) > GAP_M) out = [...out, ...((await bridge(last, end)) ?? []), end];
-  const first = out[0];
-  if (distanceM(first, start) > GAP_M) out = [start, ...((await bridge(start, first)) ?? []), ...out];
+type Bridge = (from: LatLng, to: LatLng) => Promise<LatLng[] | null>;
+
+const pathLength = (path: LatLng[]) => path.slice(1).reduce((sum, p, i) => sum + distanceM(path[i], p), 0);
+
+// The whole walk on GSI paths, through every stop in order; null when any hop has no path.
+async function throughStops(stops: LatLng[], bridge: Bridge): Promise<LatLng[] | null> {
+  const out: LatLng[] = [stops[0]];
+  for (let i = 1; i < stops.length; i++) {
+    const hop = await bridge(stops[i - 1], stops[i]);
+    if (!hop) return null;
+    out.push(...hop, stops[i]);
+  }
   return out;
+}
+
+// Routers snap to the nearest mapped way, so a route can stop short of its stop (a trail that is not in the data). The
+// missing stretch is filled from GSI's paths when they have one, otherwise it is a straight segment to the stop. The router
+// may also have gone round a long way to reach that way, so when GSI can walk the whole leg (through the via points) in a
+// shorter distance, that is used instead. `stops` is [start, ...via points, end].
+export async function closeGaps(route: LatLng[], stops: LatLng[], bridge: Bridge = gsiPath): Promise<LatLng[]> {
+  if (route.length < 2) return route;
+  const start = stops[0];
+  const end = stops[stops.length - 1];
+  const gapAtEnd = distanceM(route[route.length - 1], end) > GAP_M;
+  const gapAtStart = distanceM(route[0], start) > GAP_M;
+  if (!gapAtEnd && !gapAtStart) return route;
+
+  let filled = route;
+  if (gapAtEnd) filled = [...filled, ...((await bridge(route[route.length - 1], end)) ?? []), end];
+  if (gapAtStart) filled = [start, ...((await bridge(start, route[0])) ?? []), ...filled];
+
+  const direct = await throughStops(stops, bridge);
+  return direct && pathLength(direct) < pathLength(filled) ? direct : filled;
 }

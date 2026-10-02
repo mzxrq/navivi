@@ -53,10 +53,11 @@ describe("findPath", () => {
 
 describe("closeGaps", () => {
   const route: LatLng[] = [at(0, 0), at(0, 100), at(0, 200)];
+  const noPath = async () => null;
 
   it("leaves a route that reaches both stops alone and never asks for a path", async () => {
     const bridge = vi.fn();
-    const out = await closeGaps(route, at(5, 0), at(0, 210), bridge);
+    const out = await closeGaps(route, [at(5, 0), at(0, 210)], bridge);
     expect(out).toBe(route);
     expect(bridge).not.toHaveBeenCalled();
   });
@@ -64,20 +65,46 @@ describe("closeGaps", () => {
   it("fills a short end with the path it finds, then the stop", async () => {
     const stop = at(0, 260);
     const climb: LatLng[] = [at(0, 200), at(30, 230), at(0, 255)];
-    const bridge = vi.fn().mockResolvedValue(climb);
-    const out = await closeGaps(route, at(0, 0), stop, bridge);
+    const bridge = vi.fn(async (from: LatLng) => (from === route[2] ? climb : null));
+    const out = await closeGaps(route, [at(0, 0), stop], bridge);
     expect(bridge).toHaveBeenCalledWith(route[2], stop);
     expect(out).toEqual([...route, ...climb, stop]);
   });
 
   it("draws a straight segment to the stop when there is no path", async () => {
     const stop = at(0, 260);
-    expect(await closeGaps(route, at(0, 0), stop, async () => null)).toEqual([...route, stop]);
+    expect(await closeGaps(route, [at(0, 0), stop], noPath)).toEqual([...route, stop]);
   });
 
   it("closes the start of the route too", async () => {
     const stop = at(0, -60);
-    const out = await closeGaps(route, stop, at(0, 200), async () => null);
-    expect(out).toEqual([stop, ...route]);
+    expect(await closeGaps(route, [stop, at(0, 200)], noPath)).toEqual([stop, ...route]);
+  });
+
+  describe("when GSI can walk the whole leg", () => {
+    const start = at(0, 0);
+    const via = at(100, 50);
+    const end = at(0, 260);
+    const long: LatLng[] = [at(0, 0), at(0, 400), at(0, 200)]; // router went a long way round and stopped short
+    const hop = (from: LatLng, to: LatLng): LatLng[] => [from, to];
+
+    it("uses it, through the via point, when it is shorter than router plus fill", async () => {
+      const bridge = vi.fn(async (from: LatLng, to: LatLng) => hop(from, to));
+      const out = await closeGaps(long, [start, via, end], bridge);
+      expect(out).toEqual([start, start, via, via, via, end, end]);
+    });
+
+    it("keeps the router's route when the GSI one would be longer", async () => {
+      const winding = async (from: LatLng, to: LatLng): Promise<LatLng[]> => [from, at(900, 900), to];
+      const out = await closeGaps(long, [start, via, end], winding);
+      expect(out[0]).toEqual(long[0]);
+      expect(out).toContainEqual(long[1]);
+    });
+
+    it("keeps the router's route when one hop has no path", async () => {
+      const bridge = async (from: LatLng, to: LatLng) => (to === via ? null : hop(from, to));
+      const out = await closeGaps(long, [start, via, end], bridge);
+      expect(out).toContainEqual(long[1]);
+    });
   });
 });

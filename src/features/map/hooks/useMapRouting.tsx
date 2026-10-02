@@ -98,11 +98,7 @@ const fetchSingleSegment = async (
       }
     }
     if (mode === "walking") {
-      positions = await closeGaps(
-        positions,
-        [wp1.lat, wp1.lng],
-        [wp2.lat, wp2.lng],
-      );
+      positions = await closeGaps(positions, points);
     }
   } else {
     // driving
