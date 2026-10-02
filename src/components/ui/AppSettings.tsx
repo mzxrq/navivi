@@ -38,7 +38,10 @@ import {
   Volume2,
   X,
 } from "./icons";
+import { assToRgb, rgbToAss } from "../../utils/assColor";
+import { ColorSwatches, type RGB } from "./ColorSwatches";
 import { ComboBox } from "./ComboBox";
+import { SubtitleSample } from "./SubtitleSample";
 import { Switch } from "./Switch";
 import { VoiceTab } from "./VoiceSettings";
 
@@ -54,6 +57,9 @@ type SettingsTab =
 const inputClass =
   "h-8 min-w-0 px-2.5 rounded-lg bg-white dark:bg-zinc-950/40 border border-zinc-200 dark:border-white/10 text-[13px] text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 outline-none focus:border-navi focus:ring-2 focus:ring-navi/20 transition";
 const selectClass = `${inputClass} pr-7 cursor-pointer`;
+const WHITE: RGB = [255, 255, 255];
+const BLACK: RGB = [0, 0, 0];
+
 const SUBTITLE_SIZES = [
   "16",
   "18",
@@ -623,34 +629,36 @@ export function AppSettings() {
                       className="w-28"
                     />
                   </Row>
-                  <Row
-                    title={t`Text color`}
-                    description={t`ASS color, e.g. &H00FFFFFF`}
-                  >
-                    <input
-                      type="text"
-                      value={settings.subtitle_color || "&H00FFFFFF"}
-                      onChange={(e) =>
-                        updateProject({ subtitle_color: e.target.value })
-                      }
-                      spellCheck={false}
-                      className={`${inputClass} w-36 text-[12px] tabular-nums`}
-                    />
-                  </Row>
-                  <Row
-                    title={t`Outline color`}
-                    description={t`ASS color, e.g. &H00000000`}
-                  >
-                    <input
-                      type="text"
-                      value={settings.subtitle_outline_color || "&H00000000"}
-                      onChange={(e) =>
+                  <Row title={t`Text color`}>
+                    <ColorSwatches
+                      color={assToRgb(settings.subtitle_color, WHITE)}
+                      onChange={(rgb) =>
                         updateProject({
-                          subtitle_outline_color: e.target.value,
+                          subtitle_color: rgbToAss(rgb, settings.subtitle_color),
                         })
                       }
-                      spellCheck={false}
-                      className={`${inputClass} w-36 text-[12px] tabular-nums`}
+                    />
+                  </Row>
+                  <Row title={t`Outline color`}>
+                    <ColorSwatches
+                      color={assToRgb(settings.subtitle_outline_color, BLACK)}
+                      onChange={(rgb) =>
+                        updateProject({
+                          subtitle_outline_color: rgbToAss(
+                            rgb,
+                            settings.subtitle_outline_color,
+                          ),
+                        })
+                      }
+                    />
+                  </Row>
+                  <Row title={t`Preview`} stacked>
+                    <SubtitleSample
+                      font={settings.subtitle_font || "Calibri"}
+                      size={settings.subtitle_font_size || 30}
+                      color={settings.subtitle_color || "&H00FFFFFF"}
+                      outlineColor={settings.subtitle_outline_color || "&H00000000"}
+                      bold={settings.subtitle_bold}
                     />
                   </Row>
                 </Section>
