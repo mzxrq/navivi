@@ -145,6 +145,14 @@ def kokoro_narration_seconds(requests: int, chars: int) -> float:
     return c["startup"] + requests * c["request"] + chars * c["char"] if requests else 0.0
 
 
+def qwen3_narration_seconds(requests: int, chars: int) -> float:
+    """Narration time of the balanced voice: loading the model once, then a fixed part per request and a part that grows with the text."""
+    from services import tuning
+
+    c = tuning.QWEN3_COST
+    return c["startup"] + requests * c["request"] + chars * c["char"] if requests else 0.0
+
+
 def _narration_estimate(config: dict, units: dict, hw: dict) -> Optional[float]:
     """The first narration estimate for the project's voice engine; None means the generic cost applies (Irodori on a GPU)."""
     from services import tuning
@@ -153,6 +161,8 @@ def _narration_estimate(config: dict, units: dict, hw: dict) -> Optional[float]:
     tts = (config.get("settings", {}) or {}).get("tts") or {}
     if tts.get("engine") == "kokoro":
         return kokoro_narration_seconds(units.get("tts_requests", 0), units["tts"])
+    if tts.get("engine") == "qwen3":
+        return qwen3_narration_seconds(units.get("tts_requests", 0), units["tts"])
     if hw.get("gpu"):
         return None
     quality = tts.get("quality") if tts.get("quality") in tuning.TTS_QUALITY_PRESETS else tuning.TTS_QUALITY_DEFAULT

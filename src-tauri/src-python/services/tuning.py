@@ -1232,7 +1232,7 @@ TTS_BASE_STEPS = 40
 # "irodori": natural, clones a voice from a recording, slow on a CPU (see TTS_CPU_COST). "kokoro": a small model with a few fixed Japanese
 # voices and no cloning, 1-4 s per line on the same CPU. settings.tts.engine picks one; the project's voice fingerprint includes it, so
 # switching marks finished narration as made with another voice.
-TTS_ENGINES = ("irodori", "kokoro")
+TTS_ENGINES = ("irodori", "qwen3", "kokoro")
 TTS_ENGINE_DEFAULT = "irodori"
 KOKORO_PORT = 8089
 KOKORO_VOICE = "jf_tebukuro"
@@ -1247,3 +1247,10 @@ KOKORO_VOICES: Dict[str, str] = {
 # Measured on a Ryzen 5 5600GE: ~1 s per request plus ~0.09 s per character once loaded; the model takes ~35 s to import and load, once
 # per process (the server stays up between lines).
 KOKORO_COST = {"request": 1.0, "char": 0.09, "startup": 35.0}
+
+# "qwen3": Qwen3-TTS 0.6B Base, clones a voice from a recording like Irodori but at ~6.5 s of compute per second of audio on a CPU (Irodori at
+# 40 steps: ~15-25). Uses the same voice library as Irodori; ~3 GB of RAM while loaded. Measured (Ryzen 5 5600GE): 10/13/31 s for lines of
+# 6/14/31 characters, a fit of ~5 s per request + 0.85 s per character, and ~40 s to import and load once per process.
+QWEN3_PORT = 8090
+QWEN3_MODEL = "Qwen/Qwen3-TTS-12Hz-0.6B-Base"
+QWEN3_COST = {"request": 5.0, "char": 0.85, "startup": 40.0}

@@ -11,7 +11,7 @@ from services.tts import voices
 
 PREVIEW_TEXT = "こんにちは。この声で、旅の案内をお届けします。"
 
-VOICE_ACTIONS = ("tts_voices_list", "tts_voice_add", "tts_voice_delete", "tts_voice_preview", "tts_engines", "tts_install_kokoro")
+VOICE_ACTIONS = ("tts_voices_list", "tts_voice_add", "tts_voice_delete", "tts_voice_preview", "tts_engines", "tts_install_kokoro", "tts_install_qwen3")
 
 
 def voices_list(_payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -35,10 +35,11 @@ def voice_delete(payload: Dict[str, Any]) -> Dict[str, Any]:
 def engines(_payload: Dict[str, Any]) -> Dict[str, Any]:
     """What the Voice tab needs to offer the fast engine: whether it is set up and the voices it has."""
     from services import tuning
-    from services.tts.ttsengine import KokoroTTSClient
+    from services.tts.ttsengine import KokoroTTSClient, Qwen3TTSClient
 
     return {
         "success": True,
+        "qwen3": {"ready": Qwen3TTSClient.is_ready()},
         "kokoro": {
             "ready": KokoroTTSClient.is_ready(),
             "default_voice": tuning.KOKORO_VOICE,
@@ -53,12 +54,18 @@ def install_kokoro(_payload: Dict[str, Any]) -> Dict[str, Any]:
     return run()
 
 
+def install_qwen3(_payload: Dict[str, Any]) -> Dict[str, Any]:
+    from services.tts.qwen3_setup import install_qwen3 as run
+
+    return run()
+
+
 def voice_preview(payload: Dict[str, Any]) -> Dict[str, Any]:
     from services.tts.ttsengine import make_tts_client
 
     engine = str(payload.get("engine") or "irodori")
     voice = str(payload.get("voice") or "").strip()
-    if engine == "irodori" and not voices.voice_exists(voice):
+    if engine != "kokoro" and not voices.voice_exists(voice):
         raise FileNotFoundError(f"Voice '{voice}' was not found.")
     tts = {"engine": engine, "voice": voice, "kokoro_voice": voice}
     if payload.get("speed") is not None:
@@ -82,6 +89,7 @@ _HANDLERS: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "tts_voice_preview": voice_preview,
     "tts_engines": engines,
     "tts_install_kokoro": install_kokoro,
+    "tts_install_qwen3": install_qwen3,
 }
 
 

@@ -49,6 +49,7 @@ export function VoiceTab() {
   const [voices, setVoices] = useState<Voice[] | null>(null);
   const [busy, setBusy] = useState<null | "list" | "add" | "delete" | "preview" | "install">(null);
   const [kokoro, setKokoro] = useState<KokoroInfo | null>(null);
+  const [qwen3Ready, setQwen3Ready] = useState<boolean | null>(null);
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [message, setMessage] = useState<{ tone: "error" | "info"; text: string } | null>(null);
   const [adding, setAdding] = useState<{ path: string; id: string; exists?: boolean } | null>(null);
@@ -67,9 +68,12 @@ export function VoiceTab() {
     setBusy("list");
     // One after the other: the app runs one Python call at a time and a new call kills the running one.
     const res = await callSidecarShared<{ voices: Voice[] }>("tts_voices_list");
-    const engines = res.success ? await callSidecarShared<{ kokoro: KokoroInfo }>("tts_engines") : null;
+    const engines = res.success ? await callSidecarShared<{ kokoro: KokoroInfo; qwen3: { ready: boolean } }>("tts_engines") : null;
     setBusy(null);
-    if (engines?.success) setKokoro(engines.kokoro);
+    if (engines?.success) {
+      setKokoro(engines.kokoro);
+      setQwen3Ready(engines.qwen3.ready);
+    }
     if (res.success) {
       setVoices(res.voices);
       setMessage((m) => (m?.tone === "error" ? null : m));
@@ -108,10 +112,10 @@ export function VoiceTab() {
     audio.play().catch((e) => setMessage({ tone: "error", text: String(e) }));
   };
 
-  const install = async () => {
+  const install = async (which: "kokoro" | "qwen3") => {
     setBusy("install");
     setMessage(null);
-    const res = await callSidecar("tts_install_kokoro", {});
+    const res = await callSidecar(which === "kokoro" ? "tts_install_kokoro" : "tts_install_qwen3", {});
     setBusy(null);
     if (!res.success) return res.cancelled ? undefined : setMessage({ tone: "error", text: res.error });
     await refresh();
@@ -168,9 +172,12 @@ export function VoiceTab() {
         <div className="rounded-xl border border-zinc-200 dark:border-white/10 p-3 space-y-2.5">
           <Segmented
             value={engine}
-            onChange={(e) => save({ engine: e })}
+            onChange={(e) =>
+              save({ engine: e, ...(e === "qwen3" && selected === "none" ? { voice: voices?.find((v) => !v.builtin)?.id ?? DEFAULT_VOICE } : {}) })
+            }
             options={[
               { id: "irodori", label: t`Natural voice` },
+              { id: "qwen3", label: t`Balanced voice` },
               { id: "kokoro", label: t`Fast voice` },
             ]}
           />
@@ -179,6 +186,11 @@ export function VoiceTab() {
               <Trans>
                 Natural voice can clone a voice from a recording and sounds the most natural, but takes about half a minute per line on a PC
                 without a graphics card.
+              </Trans>
+            ) : engine === "qwen3" ? (
+              <Trans>
+                Balanced voice also clones a voice from a recording, in less than half the time. It sounds a little less natural and can
+                occasionally change the intonation of a short line. It uses about 3 GB of memory while it runs.
               </Trans>
             ) : (
               <Trans>
@@ -200,7 +212,7 @@ export function VoiceTab() {
                   minutes and needs an internet connection. Keep this window open while it runs.
                 </Trans>
               </p>
-              <button type="button" className={primaryButton} disabled={disabled || !kokoro} onClick={install}>
+              <button type="button" className={primaryButton} disabled={disabled || !kokoro} onClick={() => install("kokoro")}>
                 {busy === "install" && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                 {busy === "install" ? t`Setting up…` : t`Set up fast voice`}
               </button>
@@ -240,7 +252,25 @@ export function VoiceTab() {
         </section>
       )}
 
-      {engine === "irodori" && (
+      {engine === "qwen3" && qwen3Ready === false && (
+        <section>
+          <h4 className="mb-2 px-0.5 text-[12px] font-semibold text-zinc-500 dark:text-zinc-400"><Trans>Balanced voice setup</Trans></h4>
+          <div className="rounded-xl border border-zinc-200 dark:border-white/10 p-3 space-y-2.5">
+            <p className="text-[12px] leading-relaxed text-zinc-500 dark:text-zinc-400">
+              <Trans>
+                The balanced voice needs a one-time setup: a separate Python environment and the model files (about 4 GB in all). It takes several
+                minutes and needs an internet connection. Keep this window open while it runs.
+              </Trans>
+            </p>
+            <button type="button" className={primaryButton} disabled={disabled} onClick={() => install("qwen3")}>
+              {busy === "install" && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              {busy === "install" ? t`Setting up…` : t`Set up balanced voice`}
+            </button>
+          </div>
+        </section>
+      )}
+
+      {engine !== "kokoro" && (
       <section>
         <div className="flex items-center justify-between mb-2 px-0.5">
           <h4 className="text-[12px] font-semibold text-zinc-500 dark:text-zinc-400">
@@ -254,7 +284,7 @@ export function VoiceTab() {
         </div>
         <div className="rounded-xl border border-zinc-200 dark:border-white/10 divide-y divide-zinc-100 dark:divide-white/5">
           {!voices && <div className="flex items-center gap-2 px-3 h-12 text-[12px] text-zinc-400"><Loader2 className="w-3.5 h-3.5 animate-spin" /> <Trans>Loading voices…</Trans></div>}
-          {voices?.map((v) => {
+          {voices?.filter((v) => engine !== "qwen3" || !v.builtin).map((v) => {
             const active = !missing && selected === v.id;
             const previewing = previewId === v.id;
             return (
@@ -337,8 +367,9 @@ export function VoiceTab() {
         </div>
       </section>
 
-      {engine === "irodori" && (
+      {engine !== "kokoro" && (
       <>
+      {engine === "irodori" && (
       <section>
         <h4 className="mb-2 px-0.5 text-[12px] font-semibold text-zinc-500 dark:text-zinc-400"><Trans>Narration quality</Trans></h4>
         <div className="rounded-xl border border-zinc-200 dark:border-white/10 p-3 space-y-2.5">
@@ -359,6 +390,7 @@ export function VoiceTab() {
           </p>
         </div>
       </section>
+      )}
 
       <section>
         <h4 className="mb-2 px-0.5 text-[12px] font-semibold text-zinc-500 dark:text-zinc-400"><Trans>Add a voice</Trans></h4>

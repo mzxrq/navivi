@@ -77,3 +77,25 @@ def test_the_engine_in_the_project_decides_which_estimate_is_used():
     assert re_._narration_estimate(kokoro, units, on_gpu) == pytest.approx(re_.kokoro_narration_seconds(12, 300))
     assert re_._narration_estimate({"settings": {}}, units, on_gpu) is None  # Irodori on a GPU: the generic cost
     assert re_._narration_estimate({"settings": {}}, units, CPU) > 300  # Irodori on a CPU
+
+
+def test_the_balanced_voice_sits_between_the_other_two():
+    fast = re_.kokoro_narration_seconds(12, 300)
+    balanced = re_.qwen3_narration_seconds(12, 300)
+    natural = re_.cpu_narration_seconds(12, 300, 40, True)
+    assert fast < balanced < natural
+    assert re_.qwen3_narration_seconds(0, 0) == 0
+
+
+def test_the_balanced_estimate_matches_what_was_measured():
+    # 6, 14 and 31 characters took 10, 13 and 31 s once the model was loaded
+    for chars, took in ((6, 10.4), (14, 13.0), (31, 31.4)):
+        assert re_.qwen3_narration_seconds(1, chars) - 40 == pytest.approx(took, rel=0.3)
+    # the 64-character, three-line narration took about 65 s at 1.25x speed (~9.5 s of audio)
+    assert re_.qwen3_narration_seconds(3, 64) - 40 == pytest.approx(69, rel=0.2)
+
+
+def test_the_estimate_follows_the_projects_engine():
+    units = {"tts": 300, "tts_requests": 12}
+    qwen = {"settings": {"tts": {"engine": "qwen3"}}}
+    assert re_._narration_estimate(qwen, units, {"gpu": "NVIDIA RTX"}) == pytest.approx(re_.qwen3_narration_seconds(12, 300))

@@ -112,6 +112,8 @@ def tts_config_from_settings(settings: Optional[Dict[str, Any]]) -> TTSConfig:
         return TTSConfig(model="kokoro", voice=voice, speed=speed, caption=None, engine="kokoro")
 
     voice = str(tts.get("voice") or tuning.TTS_VOICE).strip()
+    if engine == "qwen3" and (voice == voices.NO_REF_VOICE or not voices.voice_file(voice)):
+        voice = tuning.TTS_VOICE  # it clones a recording, so "no reference" cannot work
     if not voices.voice_exists(voice):
         logger.warning("TTS voice '%s' not found in %s; using '%s'.", voice, voices.voices_dir(), tuning.TTS_VOICE)
         voice = tuning.TTS_VOICE
@@ -123,10 +125,12 @@ def tts_config_from_settings(settings: Optional[Dict[str, Any]]) -> TTSConfig:
         quality = tuning.TTS_QUALITY_DEFAULT
     hardware = settings.get("hardware_spec_override")
     return TTSConfig(
+        model="qwen3" if engine == "qwen3" else TTSConfig.model,
         voice=voice,
         speed=speed,
-        caption=caption,
+        caption=None if engine == "qwen3" else caption,
         quality=quality,
+        engine=engine,
         hardware_override=hardware if hardware in ("low", "high") else None,
     )
 
@@ -735,41 +739,27 @@ class IrodoriTTSClient:
 
 
 
-# [TTS] The fast engine: Kokoro, a small model with a few fixed Japanese voices (no cloning), run by services/tts/kokoro_server.py in
-# its own venv (bin/Kokoro-TTS, set up by services/tts/kokoro_setup.py). Everything else (chunking, gaps, cache, server reuse across
-# processes) is the Irodori client's.
-class KokoroTTSClient(IrodoriTTSClient):
-    _SERVER_DIR: Final[Path] = Path(__file__).resolve().parents[2] / "bin" / "Kokoro-TTS"
-    _SERVER_VENV_PYTHON: Final[Path] = _SERVER_DIR / ".venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+# [TTS] Engines that run as a small server of their own, in a venv of their own (bin/<Engine>-TTS/.venv, put there by services/tts/<engine>_setup.py).
+# Everything else (chunking, gaps, the shared phrase cache, server reuse across processes) is the Irodori client's.
+class _VenvEngineClient(IrodoriTTSClient):
+    _SERVER_SCRIPT: ClassVar[str] = ""
+    _SERVER_PORT: ClassVar[int] = 0
+    _SETUP_HINT: ClassVar[str] = ""
     _SERVER_START_TIMEOUT_SECONDS: Final[float] = 300.0
     _IDLE_TIMEOUT_SECONDS: Final[float] = 600.0
-    _ACTIVITY_FILE: Final[Path] = _SERVER_DIR / ".last_active"
-    _PIDFILE: Final[Path] = _SERVER_DIR / ".server.pid"
-    _READY_FILE: Final[Path] = _SERVER_DIR / ".ready"
-    _PROCESS_MARKER: ClassVar[str] = "kokoro_server"
-    _SERVER_NAME: ClassVar[str] = "Kokoro TTS"
-    _server_process: Optional[subprocess.Popen] = None
-
-    def __init__(
-        self,
-        output_dir: Path = Path("data/outputs/audio"),
-        base_url: str = f"http://127.0.0.1:{tuning.KOKORO_PORT}/v1/audio/speech",
-        config: Optional[TTSConfig] = None,
-    ):
-        super().__init__(output_dir=output_dir, base_url=base_url, config=config or TTSConfig(engine="kokoro", voice=tuning.KOKORO_VOICE, model="kokoro", caption=None))
 
     @classmethod
     def is_ready(cls) -> bool:
         return cls._SERVER_VENV_PYTHON.exists() and cls._READY_FILE.exists()
 
     def _missing_server_message(self) -> str:
-        return "The fast voice (Kokoro) is not set up yet. Open Settings > Voice and press Set up fast voice."
+        return self._SETUP_HINT
 
     def _spawn_server(self, port: int, popen_kwargs: Dict[str, Any]) -> subprocess.Popen:
         log_file = open(self._SERVER_DIR / "server.log", "ab")
         return subprocess.Popen(
             [
-                str(self._SERVER_VENV_PYTHON), str(Path(__file__).with_name("kokoro_server.py")),
+                str(self._SERVER_VENV_PYTHON), str(Path(__file__).with_name(self._SERVER_SCRIPT)),
                 "--host", "127.0.0.1", "--port", str(port), "--idle-seconds", str(int(self._IDLE_TIMEOUT_SECONDS)),
             ],
             cwd=str(self._SERVER_DIR),
@@ -782,6 +772,36 @@ class KokoroTTSClient(IrodoriTTSClient):
     def _start_idle_watchdog(self, server_pid: int) -> None:
         pass  # the server stops itself after --idle-seconds without a request
 
+    async def _post_starting_the_server(self, payload: Dict[str, Any]) -> bytes:
+        try:
+            return await self._post_speech(payload)
+        except (httpx.ConnectError, httpx.ConnectTimeout):
+            await self._ensure_server_running()
+            return await self._post_speech(payload)
+
+
+# [TTS] The fast engine: Kokoro, a small model with a few fixed Japanese voices (no cloning).
+class KokoroTTSClient(_VenvEngineClient):
+    _SERVER_DIR: Final[Path] = Path(__file__).resolve().parents[2] / "bin" / "Kokoro-TTS"
+    _SERVER_VENV_PYTHON: Final[Path] = _SERVER_DIR / ".venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    _ACTIVITY_FILE: Final[Path] = _SERVER_DIR / ".last_active"
+    _PIDFILE: Final[Path] = _SERVER_DIR / ".server.pid"
+    _READY_FILE: Final[Path] = _SERVER_DIR / ".ready"
+    _PROCESS_MARKER: ClassVar[str] = "kokoro_server"
+    _SERVER_NAME: ClassVar[str] = "Kokoro TTS"
+    _SERVER_SCRIPT: ClassVar[str] = "kokoro_server.py"
+    _SERVER_PORT: ClassVar[int] = tuning.KOKORO_PORT
+    _SETUP_HINT: ClassVar[str] = "The fast voice (Kokoro) is not set up yet. Open Settings > Voice and press Set up fast voice."
+    _server_process: Optional[subprocess.Popen] = None
+
+    def __init__(
+        self,
+        output_dir: Path = Path("data/outputs/audio"),
+        base_url: str = f"http://127.0.0.1:{tuning.KOKORO_PORT}/v1/audio/speech",
+        config: Optional[TTSConfig] = None,
+    ):
+        super().__init__(output_dir=output_dir, base_url=base_url, config=config or TTSConfig(engine="kokoro", voice=tuning.KOKORO_VOICE, model="kokoro", caption=None))
+
     def _voice_sha256(self) -> Optional[str]:
         return None  # the voice is built into the model
 
@@ -792,11 +812,79 @@ class KokoroTTSClient(IrodoriTTSClient):
         if cached is not None:
             logger.info("TTS line served from the cache (%d characters).", len(text))
             return cached
-        try:
-            audio = await self._post_speech(payload)
-        except (httpx.ConnectError, httpx.ConnectTimeout):
-            await self._ensure_server_running()
-            audio = await self._post_speech(payload)
+        audio = await self._post_starting_the_server(payload)
+        phrase_cache.put(key, audio)
+        return audio
+
+
+# [TTS] ffmpeg's atempo only takes 0.5-2.0 per filter, so a bigger change is a chain of them.
+def _atempo_filter(speed: float) -> str:
+    stages = []
+    while speed > 2.0:
+        stages.append("atempo=2.0")
+        speed /= 2.0
+    while speed < 0.5:
+        stages.append("atempo=0.5")
+        speed /= 0.5
+    stages.append(f"atempo={speed:.4f}")
+    return ",".join(stages)
+
+
+# [TTS] Qwen3-TTS has no speed control, so the narration speed is applied to the finished line.
+def apply_speed(wav: bytes, speed: float) -> bytes:
+    if abs(speed - 1.0) < 0.01:
+        return wav
+    result = subprocess.run(
+        [FFmpegManager.resolve_ffmpeg_bin(), "-loglevel", "error", "-i", "pipe:0", "-filter:a", _atempo_filter(speed), "-f", "wav", "pipe:1"],
+        input=wav, capture_output=True,
+    )
+    if result.returncode != 0 or not result.stdout:
+        logger.warning("Could not change the speed of a narration line, using it as spoken: %s", result.stderr[-200:])
+        return wav
+    return result.stdout
+
+
+# [TTS] The middle engine: Qwen3-TTS 0.6B, clones a voice from a recording (the same library as Irodori) at about a third of Irodori's time.
+class Qwen3TTSClient(_VenvEngineClient):
+    _SERVER_DIR: Final[Path] = Path(__file__).resolve().parents[2] / "bin" / "Qwen3-TTS"
+    _SERVER_VENV_PYTHON: Final[Path] = _SERVER_DIR / ".venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    _ACTIVITY_FILE: Final[Path] = _SERVER_DIR / ".last_active"
+    _PIDFILE: Final[Path] = _SERVER_DIR / ".server.pid"
+    _READY_FILE: Final[Path] = _SERVER_DIR / ".ready"
+    _PROCESS_MARKER: ClassVar[str] = "qwen3_server"
+    _SERVER_NAME: ClassVar[str] = "Qwen3 TTS"
+    _SERVER_SCRIPT: ClassVar[str] = "qwen3_server.py"
+    _SERVER_PORT: ClassVar[int] = tuning.QWEN3_PORT
+    _SETUP_HINT: ClassVar[str] = "The balanced voice (Qwen3-TTS) is not set up yet. Open Settings > Voice and press Set up balanced voice."
+    _server_process: Optional[subprocess.Popen] = None
+
+    def __init__(
+        self,
+        output_dir: Path = Path("data/outputs/audio"),
+        base_url: str = f"http://127.0.0.1:{tuning.QWEN3_PORT}/v1/audio/speech",
+        config: Optional[TTSConfig] = None,
+    ):
+        super().__init__(output_dir=output_dir, base_url=base_url, config=config or TTSConfig(engine="qwen3", model="qwen3", caption=None))
+
+    def _reference(self) -> Path:
+        from services.tts import voices
+
+        path = voices.voice_file(self.config.voice)
+        if path is None:
+            raise FileNotFoundError(
+                f"The balanced voice clones a recording, and voice '{self.config.voice}' has none. Choose a voice in Settings > Voice."
+            )
+        return path
+
+    async def call_api(self, text: str) -> bytes:
+        reference = self._reference()
+        key = phrase_cache.cache_key({"engine": "qwen3", "input": text, "speed": self.config.speed}, self._voice_sha256())
+        cached = phrase_cache.get(key)
+        if cached is not None:
+            logger.info("TTS line served from the cache (%d characters).", len(text))
+            return cached
+        audio = await self._post_starting_the_server({"input": text, "ref_audio": str(reference)})
+        audio = await asyncio.to_thread(apply_speed, audio, self.config.speed)
         phrase_cache.put(key, audio)
         return audio
 
@@ -804,13 +892,14 @@ class KokoroTTSClient(IrodoriTTSClient):
 # [TTS] The client for the project's engine (settings.tts.engine).
 def make_tts_client(settings: Optional[Dict[str, Any]], output_dir: Path) -> IrodoriTTSClient:
     config = tts_config_from_settings(settings)
-    client_class = KokoroTTSClient if config.engine == "kokoro" else IrodoriTTSClient
+    client_class = {"kokoro": KokoroTTSClient, "qwen3": Qwen3TTSClient}.get(config.engine, IrodoriTTSClient)
     return client_class(output_dir=output_dir, config=config)
 
 
 def stop_all_tts_servers() -> None:
     IrodoriTTSClient.stop_server()
     KokoroTTSClient.stop_server()
+    Qwen3TTSClient.stop_server()
 
 _SENTENCE_END = re.compile(r"(?<=[。！？!?\n])")
 _CLAUSE_END = re.compile(r"(?<=[、，,])")

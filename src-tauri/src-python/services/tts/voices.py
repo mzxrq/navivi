@@ -146,13 +146,14 @@ def _sha256(path: Path) -> str:
 
 def voice_fingerprint(voice: str, speed: float, caption: Optional[str] = None, engine: str = "irodori") -> Dict[str, Any]:
     """What a narration clip was spoken with; a mismatch means it's remade."""
-    if engine != "irodori":  # the engine's own voice, not a file of ours; the style caption is Irodori's
+    if engine == "kokoro":  # the engine's own voice, not a file of ours
         return {"voice": voice, "sha256": None, "speed": float(speed), "caption": None, "engine": engine}
     path = voice_file(voice)
-    return {
+    fingerprint = {
         "voice": voice, "sha256": _sha256(path) if path else None,
-        "speed": float(speed), "caption": caption or None,
+        "speed": float(speed), "caption": (caption or None) if engine == "irodori" else None,  # the style caption is Irodori's
     }
+    return fingerprint if engine == "irodori" else {**fingerprint, "engine": engine}
 
 
 # Clips made before fingerprints existed used the old fixed defaults.

@@ -346,11 +346,11 @@ msgstr "30 seconds"
 #~ msgid "9:16 Vertical"
 #~ msgstr "9:16 Vertical"
 
-#: src/components/ui/VoiceSettings.tsx:356
+#: src/components/ui/VoiceSettings.tsx:386
 msgid "A fast draft takes about half the time per line and sounds a little rougher. Use it while you are checking a project and switch to Best for the final render. Narration you already have is kept; use Redo voice in the review step to remake it with this setting."
 msgstr "A fast draft takes about half the time per line and sounds a little rougher. Use it while you are checking a project and switch to Best for the final render. Narration you already have is kept; use Redo voice in the review step to remake it with this setting."
 
-#: src/components/ui/VoiceSettings.tsx:395
+#: src/components/ui/VoiceSettings.tsx:426
 msgid "A voice with this name already exists."
 msgstr "A voice with this name already exists."
 
@@ -411,7 +411,7 @@ msgstr "Add a video first, then import subtitles"
 msgid "Add a video to start"
 msgstr "Add a video to start"
 
-#: src/components/ui/VoiceSettings.tsx:365
+#: src/components/ui/VoiceSettings.tsx:396
 msgid "Add a voice"
 msgstr "Add a voice"
 
@@ -517,7 +517,7 @@ msgstr "Add via point here"
 msgid "Add video"
 msgstr "Add video"
 
-#: src/components/ui/VoiceSettings.tsx:389
+#: src/components/ui/VoiceSettings.tsx:420
 msgid "Add voice"
 msgstr "Add voice"
 
@@ -736,7 +736,7 @@ msgstr "Attraction videos"
 #~ msgid "audio"
 #~ msgstr "audio"
 
-#: src/components/ui/VoiceSettings.tsx:122
+#: src/components/ui/VoiceSettings.tsx:125
 #: src/features/editor/EditorView.tsx:74
 msgid "Audio"
 msgstr "Audio"
@@ -869,13 +869,25 @@ msgstr "Background music"
 msgid "Background opacity"
 msgstr "Background opacity"
 
-#: src/components/ui/VoiceSettings.tsx:351
+#: src/components/ui/VoiceSettings.tsx:381
 msgid "Balanced"
 msgstr "Balanced"
 
 #: src/features/export/components/ExportModal.tsx:105
 #~ msgid "Balanced / Standard"
 #~ msgstr "Balanced / Standard"
+
+#: src/components/ui/VoiceSettings.tsx:180
+msgid "Balanced voice"
+msgstr "Balanced voice"
+
+#: src/components/ui/VoiceSettings.tsx:191
+msgid "Balanced voice also clones a voice from a recording, in less than half the time. It sounds a little less natural and can occasionally change the intonation of a short line. It uses about 3 GB of memory while it runs."
+msgstr "Balanced voice also clones a voice from a recording, in less than half the time. It sounds a little less natural and can occasionally change the intonation of a short line. It uses about 3 GB of memory while it runs."
+
+#: src/components/ui/VoiceSettings.tsx:257
+msgid "Balanced voice setup"
+msgstr "Balanced voice setup"
 
 #: src/features/map/components/MapLayers/LayerManager.tsx:70
 msgid "Base Map Style"
@@ -885,7 +897,7 @@ msgstr "Base Map Style"
 msgid "Based on your earlier renders on this PC. Unchanged clips are reused, so it may finish sooner."
 msgstr "Based on your earlier renders on this PC. Unchanged clips are reused, so it may finish sooner."
 
-#: src/components/ui/VoiceSettings.tsx:352
+#: src/components/ui/VoiceSettings.tsx:382
 msgid "Best"
 msgstr "Best"
 
@@ -956,8 +968,8 @@ msgstr "Cancel"
 #: src/components/ui/RenderOverlay.tsx:951
 #: src/components/ui/SaveAs.tsx:105
 #: src/components/ui/UnsavedChanges.tsx:35
-#: src/components/ui/VoiceSettings.tsx:292
-#: src/components/ui/VoiceSettings.tsx:393
+#: src/components/ui/VoiceSettings.tsx:321
+#: src/components/ui/VoiceSettings.tsx:424
 #: src/components/view/ProjectManager.tsx:613
 #: src/components/view/ProjectManager.tsx:658
 #: src/components/view/ProjectSettingsModal.tsx:129
@@ -1021,7 +1033,7 @@ msgstr "Choose a file…"
 msgid "Choose a leg"
 msgstr "Choose a leg"
 
-#: src/components/ui/VoiceSettings.tsx:400
+#: src/components/ui/VoiceSettings.tsx:431
 msgid "Choose a recording…"
 msgstr "Choose a recording…"
 
@@ -1410,15 +1422,15 @@ msgstr "Default travel mode"
 msgid "default-routing-mode-detail"
 msgstr "Sets the default pathfinding engine when placing waypoints"
 
-#: src/components/ui/VoiceSettings.tsx:289
-#: src/components/ui/VoiceSettings.tsx:301
+#: src/components/ui/VoiceSettings.tsx:318
+#: src/components/ui/VoiceSettings.tsx:330
 #: src/features/editor/Inspector.tsx:188
 #: src/features/map/components/WaypointEditor.tsx:693
 msgid "Delete"
 msgstr "Delete"
 
 #. placeholder {0}: v.id
-#: src/components/ui/VoiceSettings.tsx:301
+#: src/components/ui/VoiceSettings.tsx:330
 msgid "Delete {0}"
 msgstr "Delete {0}"
 
@@ -2027,7 +2039,7 @@ msgstr "Failed to update project"
 #~ msgid "Fast"
 #~ msgstr "Fast"
 
-#: src/components/ui/VoiceSettings.tsx:350
+#: src/components/ui/VoiceSettings.tsx:380
 msgid "Fast draft"
 msgstr "Fast draft"
 
@@ -2041,11 +2053,11 @@ msgstr "Fast render"
 msgid "Fast render mode"
 msgstr "Fast render mode"
 
-#: src/components/ui/VoiceSettings.tsx:175
+#: src/components/ui/VoiceSettings.tsx:181
 msgid "Fast voice"
 msgstr "Fast voice"
 
-#: src/components/ui/VoiceSettings.tsx:185
+#: src/components/ui/VoiceSettings.tsx:196
 msgid "Fast voice has a few built-in Japanese voices and takes a few seconds per line. It sounds a little flatter and cannot clone a voice."
 msgstr "Fast voice has a few built-in Japanese voices and takes a few seconds per line. It sounds a little flatter and cannot clone a voice."
 
@@ -2164,11 +2176,11 @@ msgstr "Generating Assets..."
 msgid "Generating Subtitles{prog}..."
 msgstr "Generating Subtitles{prog}..."
 
-#: src/components/ui/VoiceSettings.tsx:313
+#: src/components/ui/VoiceSettings.tsx:342
 msgid "Generating the sample. The first one can take a minute or more while the voice model loads."
 msgstr "Generating the sample. The first one can take a minute or more while the voice model loads."
 
-#: src/components/ui/VoiceSettings.tsx:238
+#: src/components/ui/VoiceSettings.tsx:249
 msgid "Generating the sample. The first one takes about 20 seconds while the voice model loads."
 msgstr "Generating the sample. The first one takes about 20 seconds while the voice model loads."
 
@@ -2496,7 +2508,7 @@ msgstr "Line Thickness"
 msgid "Listen to the narration"
 msgstr "Listen to the narration"
 
-#: src/components/ui/VoiceSettings.tsx:257
+#: src/components/ui/VoiceSettings.tsx:286
 msgid "Loading voices…"
 msgstr "Loading voices…"
 
@@ -2728,11 +2740,11 @@ msgstr "Narration"
 msgid "Narration audio"
 msgstr "Narration audio"
 
-#: src/components/ui/VoiceSettings.tsx:344
+#: src/components/ui/VoiceSettings.tsx:374
 msgid "Narration quality"
 msgstr "Narration quality"
 
-#: src/components/ui/VoiceSettings.tsx:331
+#: src/components/ui/VoiceSettings.tsx:360
 msgid "Narration speed"
 msgstr "Narration speed"
 
@@ -2740,11 +2752,11 @@ msgstr "Narration speed"
 msgid "Narration text"
 msgstr "Narration text"
 
-#: src/components/ui/VoiceSettings.tsx:174
+#: src/components/ui/VoiceSettings.tsx:179
 msgid "Natural voice"
 msgstr "Natural voice"
 
-#: src/components/ui/VoiceSettings.tsx:180
+#: src/components/ui/VoiceSettings.tsx:186
 msgid "Natural voice can clone a voice from a recording and sounds the most natural, but takes about half a minute per line on a PC without a graphics card."
 msgstr "Natural voice can clone a voice from a recording and sounds the most natural, but takes about half a minute per line on a PC without a graphics card."
 
@@ -2839,7 +2851,7 @@ msgstr "No recent activity"
 msgid "No recent projects"
 msgstr "No recent projects"
 
-#: src/components/ui/VoiceSettings.tsx:156
+#: src/components/ui/VoiceSettings.tsx:159
 msgid "No reference (model default)"
 msgstr "No reference (model default)"
 
@@ -3125,15 +3137,15 @@ msgstr "Pre-configured sample project"
 #~ msgstr "Presets"
 
 #: src/components/ui/AppSettings.tsx:683
-#: src/components/ui/VoiceSettings.tsx:228
-#: src/components/ui/VoiceSettings.tsx:297
+#: src/components/ui/VoiceSettings.tsx:239
+#: src/components/ui/VoiceSettings.tsx:326
 msgid "Preview"
 msgstr "Preview"
 
 #. placeholder {0}: label(v)
 #. placeholder {0}: v.label
-#: src/components/ui/VoiceSettings.tsx:228
-#: src/components/ui/VoiceSettings.tsx:297
+#: src/components/ui/VoiceSettings.tsx:239
+#: src/components/ui/VoiceSettings.tsx:326
 msgid "Preview {0}"
 msgstr "Preview {0}"
 
@@ -3540,7 +3552,7 @@ msgstr "Rendering Route Video{prog}..."
 msgid "renderTerminalMessage"
 msgstr "Starting Python generation pipeline..."
 
-#: src/components/ui/VoiceSettings.tsx:385
+#: src/components/ui/VoiceSettings.tsx:416
 msgid "Replace existing voice"
 msgstr "Replace existing voice"
 
@@ -3556,7 +3568,7 @@ msgstr "Required for map rendering and 3D terrain"
 msgid "Requires Ollama"
 msgstr "Requires Ollama"
 
-#: src/components/ui/VoiceSettings.tsx:336
+#: src/components/ui/VoiceSettings.tsx:365
 #: src/components/view/ProjectSettingsModal.tsx:179
 #: src/features/map/components/WaypointEditor.tsx:666
 msgid "Reset"
@@ -3893,11 +3905,16 @@ msgstr "Sending interrupt signal to renderer."
 msgid "Services"
 msgstr "Services"
 
-#: src/components/ui/VoiceSettings.tsx:206
+#: src/components/ui/VoiceSettings.tsx:267
+msgid "Set up balanced voice"
+msgstr "Set up balanced voice"
+
+#: src/components/ui/VoiceSettings.tsx:217
 msgid "Set up fast voice"
 msgstr "Set up fast voice"
 
-#: src/components/ui/VoiceSettings.tsx:206
+#: src/components/ui/VoiceSettings.tsx:217
+#: src/components/ui/VoiceSettings.tsx:267
 msgid "Setting up…"
 msgstr "Setting up…"
 
@@ -4040,7 +4057,7 @@ msgstr "Something went wrong"
 #~ msgid "Sound Effects"
 #~ msgstr "Sound Effects"
 
-#: src/components/ui/VoiceSettings.tsx:321
+#: src/components/ui/VoiceSettings.tsx:350
 msgid "Speed"
 msgstr "Speed"
 
@@ -4272,7 +4289,11 @@ msgstr "Text color"
 #~ msgid "Text colour"
 #~ msgstr "Text colour"
 
-#: src/components/ui/VoiceSettings.tsx:199
+#: src/components/ui/VoiceSettings.tsx:260
+msgid "The balanced voice needs a one-time setup: a separate Python environment and the model files (about 4 GB in all). It takes several minutes and needs an internet connection. Keep this window open while it runs."
+msgstr "The balanced voice needs a one-time setup: a separate Python environment and the model files (about 4 GB in all). It takes several minutes and needs an internet connection. Keep this window open while it runs."
+
+#: src/components/ui/VoiceSettings.tsx:210
 msgid "The fast voice needs a one-time setup: a small separate Python environment and the model files (about 2 GB in all). It takes a few minutes and needs an internet connection. Keep this window open while it runs."
 msgstr "The fast voice needs a one-time setup: a small separate Python environment and the model files (about 2 GB in all). It takes a few minutes and needs an internet connection. Keep this window open while it runs."
 
@@ -4316,7 +4337,7 @@ msgstr "The video starts directly on the route. Turn the intro on to add a title
 msgid "The voice is ready. Listen to check it."
 msgstr "The voice is ready. Listen to check it."
 
-#: src/components/ui/VoiceSettings.tsx:161
+#: src/components/ui/VoiceSettings.tsx:164
 msgid "The voice reads every narration in this project. Changing the voice or the speed regenerates the narration the next time you generate. The voice library is shared by all projects."
 msgstr "The voice reads every narration in this project. Changing the voice or the speed regenerates the narration the next time you generate. The voice library is shared by all projects."
 
@@ -4583,7 +4604,7 @@ msgstr "Untitled Project"
 msgid "Updated in place {0} times"
 msgstr "Updated in place {0} times"
 
-#: src/components/ui/VoiceSettings.tsx:368
+#: src/components/ui/VoiceSettings.tsx:399
 msgid "Upload 5–20 seconds of clear speech from one person, with no music or background noise."
 msgstr "Upload 5–20 seconds of clear speech from one person, with no music or background noise."
 
@@ -4607,7 +4628,7 @@ msgstr "Use your own footage for this stop. It plays in place of the animated ph
 #~ msgid "Used as the default when exporting"
 #~ msgstr "Used as the default when exporting"
 
-#: src/components/ui/VoiceSettings.tsx:287
+#: src/components/ui/VoiceSettings.tsx:316
 msgid "Used by all projects."
 msgstr "Used by all projects."
 
@@ -4692,21 +4713,21 @@ msgstr "View in Timeline"
 #~ msgstr "Vivid Rose"
 
 #: src/components/ui/AppSettings.tsx:187
-#: src/components/ui/VoiceSettings.tsx:195
-#: src/components/ui/VoiceSettings.tsx:248
+#: src/components/ui/VoiceSettings.tsx:206
+#: src/components/ui/VoiceSettings.tsx:277
 msgid "Voice"
 msgstr "Voice"
 
-#: src/components/ui/VoiceSettings.tsx:252
+#: src/components/ui/VoiceSettings.tsx:281
 msgid "Voice \"{selected}\" is missing, using {fallback}"
 msgstr "Voice \"{selected}\" is missing, using {fallback}"
 
-#: src/components/ui/VoiceSettings.tsx:168
+#: src/components/ui/VoiceSettings.tsx:171
 msgid "Voice engine"
 msgstr "Voice engine"
 
-#: src/components/ui/VoiceSettings.tsx:377
-#: src/components/ui/VoiceSettings.tsx:378
+#: src/components/ui/VoiceSettings.tsx:408
+#: src/components/ui/VoiceSettings.tsx:409
 msgid "Voice name"
 msgstr "Voice name"
 
