@@ -42,6 +42,7 @@ import { PipelineLogPanel } from "./PipelineLogPanel";
 import { Switch } from "./Switch";
 import { PronunciationFix, ReviewEdits, ReviewRow, ReviewSelection, ReviewStep } from "./ReviewStep";
 import { db } from "../../services/db";
+import { runStage } from "../../services/sidecar";
 import { GLOBAL_DICTIONARY_KEY } from "../../config/constants";
 
 type WizardStep = "generating" | "verifying" | "exporting" | "finished";
@@ -455,9 +456,9 @@ export function RenderOverlay() {
     if (!dir) return;
     await prepareVoices(rows);
     const configPath = `${dir}/job_config.json`;
-    await invoke("run_python_blueprint", { action: configPath, payload: "tts-all" });
+    await runStage(configPath, "tts-all");
     try {
-      await invoke("run_python_blueprint", { action: configPath, payload: "subtitle-all" });
+      await runStage(configPath, "subtitle-all");
     } catch (e) {
       console.warn("Subtitles were not rebuilt:", e);
     }

@@ -25,6 +25,7 @@ import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 import { ProjectSettingsModal } from "./ProjectSettingsModal";
 import { duplicateProject, listRecents, removeRecent, renameRecent } from "../../services/projectStore";
+import { runStage } from "../../services/sidecar";
 import { MenuEntry, openContextMenu, separator } from "../ui/menuItems";
 import { Dialog, dialogButton, dialogInput } from "../ui/Dialog";
 
@@ -98,10 +99,7 @@ export function ProjectManager() {
       }
 
       showToast(t`Quick Render started for ` + project.name, "info");
-      await invoke("run_python_blueprint", {
-        action: configPath,
-        payload: "concat",
-      });
+      await runStage(configPath, "concat");
       showToast(t`Quick Render complete for ` + project.name, "success");
     } catch (err: any) {
       showToast(

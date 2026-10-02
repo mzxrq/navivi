@@ -50,7 +50,6 @@ export interface RouteSegment {
 // start dev 1 settings
 export interface ProjectSettings {
   fps: number;
-  duration_seconds: number;
   line_color: [number, number, number];
   line_thickness: number;
   route_line_border_color?: [number, number, number];
@@ -58,7 +57,6 @@ export interface ProjectSettings {
   marker_color: [number, number, number];
   marker_radius: number;
   routeMarker?: string;
-  res_duration: number;
   pause: number;
   summary_hold: number;
   summary_fade: number;
