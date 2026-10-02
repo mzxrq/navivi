@@ -214,7 +214,10 @@ def upscale_waypoint_images(config_file_path: str, force: bool = False) -> dict:
         from services.vdoprocessing.comfyui_i2v_client import ComfyUII2VClient
 
         client = ComfyUII2VClient()
-        client.clear_queue()
+        # Only when a photo really goes to ComfyUI: an all-cached run used to
+        # interrupt another process's job on the shared server.
+        if force or any(not output_is_valid(cached_path(project_dir, p)) for p in todo):
+            client.clear_queue()
 
     tracker.begin_substeps(len(todo))
     for i, src in enumerate(todo, start=1):

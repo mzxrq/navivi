@@ -37,9 +37,10 @@ class FakeClient:
     def __init__(self):
         self.inputs = []
         self.freed = False
+        self.cleared = 0
 
     def clear_queue(self):
-        pass
+        self.cleared += 1
 
     def run_image_graph(self, build_graph, image_path, output_node, output_path, timeout=None):
         graph = build_graph("uploaded.png")
@@ -77,6 +78,14 @@ def test_only_small_raster_photos_are_upscaled(tmp_path, gpu):
     assert list(result["map"]) == [str(Path(images["small"]).resolve())]
     assert not upscale_step.needs_upscale(str(tmp_path / "assets" / "image" / "logo.svg"))
     assert gpu.freed
+
+
+def test_an_all_cached_run_leaves_the_shared_comfyui_queue_alone(tmp_path, gpu):
+    cfg, _ = _project(tmp_path, small=(800, 600))
+    upscale_step.upscale_waypoint_images(str(cfg))
+    assert gpu.cleared == 1
+    upscale_step.upscale_waypoint_images(str(cfg))  # everything cached now
+    assert gpu.cleared == 1
 
 
 def test_input_is_shrunk_so_4x_output_stays_within_max_side(tmp_path, gpu):

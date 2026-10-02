@@ -320,6 +320,10 @@ SUMMARY_CARD_VALUE_FONT_SIZE = 34
 # user's own sketch, refined over two rounds — create_summary_card_columns).
 # Overridable per project via job_config.json's settings.summary_card_style.
 DEFAULT_SUMMARY_CARD_STYLE = "columns"  # the user's choice (2026-09-30)
+# "columns" card: every column's text area is at least as wide as these
+# sample strings, so the card keeps one width whatever the values are.
+SUMMARY_CARD_FIXED_DISTANCE_SAMPLE = "88.8 km"
+SUMMARY_CARD_FIXED_DURATION_SAMPLE = "8時間88分"
 
 # --- HUD/card theme (light | dark) ------------------------------------------
 # Summary card, top banner, corner HUD labels and popup caption cards.
@@ -586,12 +590,6 @@ OVERVIEW_POPUP_TRIGGER_TOLERANCE_SECONDS = 0.2
 # meters, since the 2D overview has no consistent meters-per-pixel scale
 # to compare against.
 OVERVIEW_BANNER_NEAR_SECONDS = 3.0
-# Vertical clearance (px) kept free at the TOP of the overview frame for
-# popup card placement — the "next stop" pill banner (render_top_banner) sits
-# at top_margin=30 and is ~35px tall, total footprint ~65px; this floor
-# keeps beside-pin popup cards from landing on top of that chip.
-# Applied as the top-edge constraint in _layout_beside_popups's clamp().
-OVERVIEW_TOP_CARD_CLEARANCE = 80
 # End-of-video recap: every waypoint's photo card ends up on screen at once
 # (laid out around the frame's border by popups.py's _layout_recap_cards),
 # all fading in together from the clean map in a single crossfade of this
@@ -1108,6 +1106,125 @@ COMFYUI_CAMERA_PAN_PROMPTS: Dict[str, str] = {
     ),
 }
 COMFYUI_DEFAULT_MOTION_PROMPT = COMFYUI_CAMERA_PAN_PROMPTS["none"]
+
+# --- LTXV-13B keyframed moves (vdoprocessing/ltx_keyframed.py) ---------------
+# Presets listed here are made by LTXV-13B 0.9.8 distilled (Q3_K_M GGUF) between
+# two real crops of the photo - first and last frame pinned, so it can't wander
+# or invent - instead of ATTRACTION_GENERATOR. "panright" is the user's approved
+# test 13 on 西ノ庄駅 (2026-10-02): smooth level pan, sign readable, ~2 min.
+ATTRACTION_LTX_PRESETS: Tuple[str, ...] = ("panright", "panleft", "panup", "pandown", "zoomin", "zoomout")
+# After the chosen move, a second, closer shot of the same photo joined by a
+# dissolve - like the Tomogashima reference (one photo, several angles).
+# "random": a move from ATTRACTION_SECOND_SHOT_MOVES, picked per photo (seeded
+# by its content, so a rerun picks the same) and never the first shot's
+# direction. A move name fixes it; None = the chosen move only.
+ATTRACTION_SECOND_SHOT: Optional[str] = "random"
+ATTRACTION_SECOND_SHOT_MOVES: Tuple[str, ...] = (
+    "closein", "closeout", "closepanleft", "closepanright", "closepanup", "closepandown",
+)
+LTXV_CROSSFADE_SECONDS = 0.5
+# Files (downloaded on first use into bin/ComfyUI/models/<folder>, sha256-checked).
+LTXV_FILES: Dict[str, Dict[str, str]] = {
+    "unet": {
+        "folder": "unet", "file": "LTXV-13B-0.9.8-distilled-Q3_K_M.gguf",
+        "url": "https://huggingface.co/QuantStack/LTXV-13B-0.9.8-distilled-GGUF/resolve/main/LTXV-13B-0.9.8-distilled-Q3_K_M.gguf",
+        "sha256": "1301695484240e3423df052825eabb836302e43b68fc04111cc25076f5c64b24",
+    },
+    "vae": {
+        "folder": "vae", "file": "LTXV-13B-0.9.8-distilled-VAE.safetensors",
+        "url": "https://huggingface.co/QuantStack/LTXV-13B-0.9.8-distilled-GGUF/resolve/main/vae/LTXV-13B-0.9.8-distilled-VAE.safetensors",
+        "sha256": "5bbe6f857ede5e9b262e4a294c26a1df5dc33a817f229a777cbf3adfab5ba61e",
+    },
+    "text_encoder": {
+        "folder": "text_encoders", "file": "t5xxl_fp8_e4m3fn_scaled.safetensors",
+        "url": "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/t5xxl_fp8_e4m3fn_scaled.safetensors",
+        "sha256": "a498f0485dc9536735258018417c3fd7758dc3bccc0a645feaa472b34955557a",
+    },
+}
+LTXV_WIDTH, LTXV_HEIGHT = 960, 544  # 540p 16:9 (32 px grid); finalize upscales
+LTXV_FRAMES = 97  # 8k+1, ~4 s
+LTXV_FPS = 24
+LTXV_SIGMAS = "1.0, 0.9937, 0.9875, 0.9812, 0.975, 0.9094, 0.725, 0.4219, 0.0"  # distilled, CFG 1
+# Decode in time chunks of this many frames: one chunk for the whole clip.
+# 32 (overlap 8) left a visible hitch at every seam - each second, frames
+# 24/48/72 (test 13, 2026-10-02). The decode runs alone in a fresh server.
+LTXV_DECODE_TEMPORAL_SIZE = 128
+LTXV_DECODE_TEMPORAL_OVERLAP = 8
+# How firmly the last frame is pinned (1.0 = exact copy).
+LTXV_GUIDE_STRENGTH = 0.8
+# Keyframe crops (shares of the widest 16:9 window that fits the photo). Pans
+# slide a CROP_WIDTH window from one edge to the other; zooms go from ZOOM_WIDE
+# to ZOOM_TIGHT around the middle; the second shot pushes in from CLOSE_WIDE to
+# CLOSE_TIGHT around the middle (55% -> 46% of a 1920 px photo in test 16).
+LTXV_CROP_WIDTH = 0.85
+LTXV_ZOOM_WIDE = 1.0
+LTXV_ZOOM_TIGHT = 0.8
+LTXV_CLOSE_WIDE = 0.55
+LTXV_CLOSE_TIGHT = 0.46
+# Close pans: a CLOSE_WIDE window moved this share of the widest window's
+# width (or height, for tilts) across the middle.
+LTXV_CLOSE_PAN = 0.18
+# A job takes ~15 GB of RAM on top of what's in use: below this much free it
+# waits (tuning.ensure_free_ram), then falls back to the 3D photo.
+LTXV_MIN_FREE_RAM_GB = 15.0
+# CFG 1: the negative is ignored, so everything is said positively.
+_LTXV_STILL = (
+    "The scene is still and solid and only the camera moves, steadily and slowly. Natural daylight, "
+    "realistic travel documentary footage, sharp detail."
+)
+LTXV_PROMPTS: Dict[str, str] = {
+    "panright": (
+        "A slow, calm gimbal shot pans smoothly to the right at eye height across {place} on a quiet sunny "
+        "afternoon. The camera stays perfectly level; the scene is still and solid and only the camera turns, "
+        "steadily and slowly. Soft clouds drift in a blue sky. Natural daylight, realistic travel documentary "
+        "footage, sharp detail."
+    ),
+    "panleft": (
+        "A slow, calm gimbal shot pans smoothly to the left at eye height across {place} on a quiet sunny "
+        "afternoon. The camera stays perfectly level. " + _LTXV_STILL
+    ),
+    "panup": (
+        "A slow, calm gimbal shot tilts smoothly upward across {place} on a quiet sunny afternoon, rising "
+        "gently toward the sky. " + _LTXV_STILL
+    ),
+    "pandown": (
+        "A slow, calm gimbal shot tilts smoothly downward across {place} on a quiet sunny afternoon. "
+        + _LTXV_STILL
+    ),
+    "zoomin": (
+        "A slow, calm gimbal shot pushes gently in toward the middle of {place} on a quiet sunny afternoon, "
+        "moving straight ahead at eye height. The camera stays perfectly level. " + _LTXV_STILL
+    ),
+    "zoomout": (
+        "A slow, calm gimbal shot pulls gently back from the middle of {place} on a quiet sunny afternoon, "
+        "moving straight back at eye height. The camera stays perfectly level. " + _LTXV_STILL
+    ),
+    "closein": (
+        "A slow, calm close-up gimbal shot pushes gently in toward the main subject of {place} on a quiet "
+        "sunny afternoon, moving straight ahead at eye height. The camera stays perfectly level. " + _LTXV_STILL
+    ),
+    "closeout": (
+        "A slow, calm close-up gimbal shot pulls gently back from the main subject of {place} on a quiet "
+        "sunny afternoon, moving straight back at eye height. The camera stays perfectly level. " + _LTXV_STILL
+    ),
+    "closepanleft": (
+        "A slow, calm close-up gimbal shot pans smoothly to the left across the main subject of {place} on a "
+        "quiet sunny afternoon. The camera stays perfectly level. " + _LTXV_STILL
+    ),
+    "closepanright": (
+        "A slow, calm close-up gimbal shot pans smoothly to the right across the main subject of {place} on a "
+        "quiet sunny afternoon. The camera stays perfectly level. " + _LTXV_STILL
+    ),
+    "closepanup": (
+        "A slow, calm close-up gimbal shot tilts smoothly upward across the main subject of {place} on a quiet "
+        "sunny afternoon. " + _LTXV_STILL
+    ),
+    "closepandown": (
+        "A slow, calm close-up gimbal shot tilts smoothly downward across the main subject of {place} on a quiet "
+        "sunny afternoon. " + _LTXV_STILL
+    ),
+}
+LTXV_NEGATIVE = "low quality, worst quality, deformed, distorted, motion smear, motion artifacts, morphing, people, hands, feet"
 
 # --- Attraction clips: multi-shot + QC + parallax fill ------------------------
 # "shots": Wan shots from the original photo, each cut where QC finds it going
