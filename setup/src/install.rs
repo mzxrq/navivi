@@ -131,6 +131,18 @@ pub fn data_size() -> u64 {
     data_dirs().iter().map(|d| dir_size(d)).sum()
 }
 
+/// A fresh .exe can be held for a moment by a virus scanner or a process that is still closing, so a locked file gets a few more tries.
+fn remove_file_retrying(path: &Path) {
+    for attempt in 0..6 {
+        match fs::remove_file(path) {
+            Ok(()) => return,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return,
+            Err(_) if attempt < 5 => std::thread::sleep(std::time::Duration::from_millis(400)),
+            Err(_) => {}
+        }
+    }
+}
+
 /// Removes the files the installer listed, then any folders that are left empty. Anything else in the folder stays.
 pub fn remove_installed_files(dir: &Path) -> Result<(), String> {
     let list = fs::read_to_string(dir.join(FILE_LIST)).unwrap_or_default();
@@ -141,7 +153,7 @@ pub fn remove_installed_files(dir: &Path) -> Result<(), String> {
             folders.insert(path.clone());
             path.parent()
         } else {
-            let _ = fs::remove_file(&path);
+            remove_file_retrying(&path);
             path.parent()
         };
         while let Some(p) = parent {

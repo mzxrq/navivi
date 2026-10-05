@@ -154,9 +154,20 @@ fn finish_uninstall(dir: &Path, own_exe: &Path) {
     system::delete_after_exit(own_exe);
 }
 
+/// An SVG as a `data:` URL for an `<img>`, so a stylesheet cannot reach into it and a missing size cannot blow it up.
+fn svg_data_uri(svg: &str) -> String {
+    let mut out = String::from("data:image/svg+xml;utf8,");
+    for b in svg.trim_start_matches('\u{feff}').trim().bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => out.push(b as char),
+            _ => out.push_str(&format!("%{b:02X}")),
+        }
+    }
+    out
+}
+
 fn page() -> String {
-    let strip = |svg: &str| svg.trim_start_matches('\u{feff}').to_string();
-    PAGE.replace("{{LOGO_SVG}}", &strip(LOGO_SVG)).replace("{{TYPE_SVG}}", &strip(TYPE_SVG))
+    PAGE.replace("{{LOGO_SVG}}", LOGO_SVG.trim_start_matches('\u{feff}')).replace("{{TYPE_URI}}", &svg_data_uri(TYPE_SVG))
 }
 
 fn window_main_uninstall(dir: PathBuf, exe: PathBuf, args: Args) {
@@ -335,7 +346,8 @@ mod tests {
     #[test]
     fn the_page_gets_both_logos_filled_in() {
         let html = page();
-        assert!(!html.contains("{{LOGO_SVG}}") && !html.contains("{{TYPE_SVG}}"));
+        assert!(!html.contains("{{LOGO_SVG}}") && !html.contains("{{TYPE_URI}}"));
         assert!(html.contains("<svg"));
+        assert!(html.contains("src=\"data:image/svg+xml;utf8,%3Csvg"));
     }
 }
