@@ -188,7 +188,7 @@ export function TitleBar() {
     <>
       <div
         data-tauri-drag-region
-        className="absolute top-0 inset-x-0 h-10 z-9999 flex items-center justify-between select-none shrink-0 bg-zinc-50/85 dark:bg-zinc-950/85 backdrop-blur-xl border-b border-zinc-200/80 dark:border-white/10 transition-colors"
+        className="absolute top-0 inset-x-0 h-10 z-100000 flex items-center justify-between select-none shrink-0 bg-zinc-50/85 dark:bg-zinc-950/85 backdrop-blur-xl border-b border-zinc-200/80 dark:border-white/10 transition-colors"
       >
         <div className="flex items-center gap-0.5 h-full shrink-0 pl-2">
           <div className="relative" ref={menuRef}>
