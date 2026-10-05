@@ -424,7 +424,14 @@ Var AppStartMenuFolder
 !define MUI_FINISHPAGE_RUN
 !define MUI_FINISHPAGE_RUN_FUNCTION RunMainBinary
 !define MUI_PAGE_CUSTOMFUNCTION_PRE SkipIfPassive
+; [NAVIVI] The two checkboxes keep the system's black text on our dark page unless told otherwise.
+!define MUI_PAGE_CUSTOMFUNCTION_SHOW NaviviFinishShow
 !insertmacro MUI_PAGE_FINISH
+
+Function NaviviFinishShow
+  SetCtlColors $mui.FinishPage.Run "FFFFFF" "0F172A"
+  SetCtlColors $mui.FinishPage.ShowReadme "FFFFFF" "0F172A"
+FunctionEnd
 
 Function RunMainBinary
   nsis_tauri_utils::RunAsUser "$INSTDIR\${MAINBINARYNAME}.exe" ""
