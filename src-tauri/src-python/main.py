@@ -94,6 +94,16 @@ if __name__ == "__main__":
             print(json.dumps({"success": True, "readings": readings}, ensure_ascii=False))
             sys.exit(0)
 
+        # Reads a GPS file for the import dialog: track points, named waypoints, and the places it stayed at.
+        # argv[2] is JSON: {"path", "radius_m"?, "min_stay_sec"?}.
+        if command_arg == "import_gps_track":
+            from services.gpsparser.stays import DEFAULT_MIN_STAY_SEC, DEFAULT_RADIUS_M, import_track
+            args = json.loads(sys.argv[2]) if len(sys.argv) > 2 else {}
+            track = import_track(args["path"], float(args.get("radius_m", DEFAULT_RADIUS_M)),
+                                 float(args.get("min_stay_sec", DEFAULT_MIN_STAY_SEC)))
+            print(json.dumps({"success": True, **track}, ensure_ascii=False))
+            sys.exit(0)
+
         # Words with kanji in a script (whole words, not single kanji), each with its reading.
         # argv[2] is the script text itself.
         if command_arg == "extract_words":
