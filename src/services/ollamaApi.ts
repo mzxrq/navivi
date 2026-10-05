@@ -11,6 +11,14 @@ import { splitThoughts } from './ai/thoughts';
 
 const OLLAMA_URL = "http://127.0.0.1:11434";
 
+// The http plugin sends the window's origin (http://tauri.localhost once installed), which Ollama answers with 403
+// unless OLLAMA_ORIGINS lists it. An empty Origin makes the plugin leave the header out (needs its unsafe-headers feature).
+const ollamaFetch = (url: string, init: RequestInit = {}) => {
+    const headers = new Headers(init.headers);
+    headers.set("Origin", "");
+    return fetch(url, { ...init, headers });
+};
+
 // Models that answered 400 to a request with photos; they are not sent any again this session.
 const textOnlyModels = new Set<string>();
 
@@ -43,7 +51,7 @@ export function detectLanguage(...texts: (string | undefined)[]): "Japanese" | "
 export async function checkModelExists(targetModel: AiEngine = "schroneko/gemma-2-2b-jpn-it"): Promise<boolean> {
     if (isOnlineEngine(targetModel)) return hasApiKey(targetModel.provider);
     try {
-        const res = await fetch(`${OLLAMA_URL}/api/tags`);
+        const res = await ollamaFetch(`${OLLAMA_URL}/api/tags`);
         if (!res.ok) {
             console.error(`Ollama /api/tags answered HTTP ${res.status}`);
             return false;
@@ -63,7 +71,7 @@ export async function checkModelExists(targetModel: AiEngine = "schroneko/gemma-
 
 export async function getLocalModels(): Promise<string[]> {
     try {
-        const res = await fetch(`${OLLAMA_URL}/api/tags`);
+        const res = await ollamaFetch(`${OLLAMA_URL}/api/tags`);
         if (!res.ok) return [];
         const data = await res.json();
         return data.models.map((m: any) => m.name);
@@ -75,7 +83,7 @@ export async function getLocalModels(): Promise<string[]> {
 // Disk size of each installed model in bytes; its weights take about as much memory when it runs.
 export async function getModelSizes(): Promise<Record<string, number>> {
     try {
-        const res = await fetch(`${OLLAMA_URL}/api/tags`);
+        const res = await ollamaFetch(`${OLLAMA_URL}/api/tags`);
         if (!res.ok) return {};
         const data = await res.json();
         return Object.fromEntries((data.models ?? []).map((m: any) => [m.name, Number(m.size) || 0]));
@@ -91,7 +99,7 @@ const warmed = new Set<string>();
 export function warmUpModel(model: AiEngine): void {
     if (isOnlineEngine(model) || !model || warmed.has(model)) return;
     warmed.add(model);
-    fetch(`${OLLAMA_URL}/api/generate`, {
+    ollamaFetch(`${OLLAMA_URL}/api/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         // Ollama reloads a model whose context differs from the request's, so warm it with the one scripts use.
@@ -103,7 +111,7 @@ export function warmUpModel(model: AiEngine): void {
 export async function modelSeesPhotos(model: string): Promise<boolean | null> {
     if (textOnlyModels.has(model)) return false;
     try {
-        const res = await fetch(`${OLLAMA_URL}/api/show`, {
+        const res = await ollamaFetch(`${OLLAMA_URL}/api/show`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ model }),
@@ -118,7 +126,7 @@ export async function modelSeesPhotos(model: string): Promise<boolean | null> {
 
 async function ollamaAnswers(): Promise<boolean> {
     try {
-        return (await fetch(`${OLLAMA_URL}/api/tags`)).ok;
+        return (await ollamaFetch(`${OLLAMA_URL}/api/tags`)).ok;
     } catch {
         return false;
     }
@@ -147,7 +155,7 @@ export async function pullModelStream(
 ): Promise<void> {
     onProgress("Starting Ollama...");
     await ensureOllamaRunning();
-    const res = await fetch(`${OLLAMA_URL}/api/pull`, {
+    const res = await ollamaFetch(`${OLLAMA_URL}/api/pull`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: model, stream: true }),
@@ -262,7 +270,7 @@ async function streamLLM(prompt: string, engine: AiEngine, onChunk: (text: strin
         payload.images = images;
     }
 
-    const send = () => fetch(`${OLLAMA_URL}/api/generate`, {
+    const send = () => ollamaFetch(`${OLLAMA_URL}/api/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
