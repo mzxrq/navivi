@@ -161,7 +161,7 @@ export function TitleBar() {
         if (pendingNavigation) {
           if (pendingNavigation === "close") {
             try {
-              await getCurrentWindow().close();
+              await getCurrentWindow().destroy();
             } catch (e) {
               console.error(e);
             }
@@ -469,7 +469,7 @@ export function TitleBar() {
           setIsDirty(false);
           if (pendingNavigation === "close") {
             try {
-              await getCurrentWindow().close();
+              await getCurrentWindow().destroy();
             } catch (e) {
               console.error(e);
             }
@@ -495,7 +495,7 @@ export function TitleBar() {
           if (saved && pendingNavigation) {
             if (pendingNavigation === "close") {
               try {
-                await getCurrentWindow().close();
+                await getCurrentWindow().destroy();
               } catch (e) {
                 console.error(e);
               }
