@@ -1,6 +1,6 @@
 import type { Waypoint } from "../../types";
 import type { AiEngine } from "../ai/engine";
-import { geocodePlace, type GeoPoint } from "../geocode";
+import { geocodeRoute } from "../geocode";
 import { cleanNarration } from "../narrationPrompt";
 import { completeText, generateWaypointScriptStream } from "../ollamaApi";
 import type { ProjectBrief } from "./brief";
@@ -16,6 +16,7 @@ export interface BuiltProject {
   name: string;
   waypoints: Waypoint[];
   failedPlaces: string[];
+  uncertainPlaces: string[]; // placed, but only by a wider search: worth a look on the map
 }
 
 interface BuildInput {
@@ -50,6 +51,24 @@ export function tidyPlaces(places: unknown[], cap = MAX_PLACES): string[] {
     if (out.length >= cap) break;
   }
   return out;
+}
+
+// Maps and OpenStreetMap index most small places under their own script, so a miss is retried under the local name.
+export async function localNames(names: string[], region: string | null, engine: AiEngine, signal?: AbortSignal): Promise<Record<string, string>> {
+  if (names.length === 0) return {};
+  const where = region ? `in ${region} (Japan if it is a Japanese area)` : "";
+  const prompt = `Give the name each of these places has on local maps ${where}: the original script (for Japanese places: kanji and kana, e.g. "Sainen-ji Temple" -> "西念寺", "Mt. Kabuto" -> "兜山"). Return ONLY a JSON object mapping each input exactly as written to its local name. If you do not know a place, map it to itself.
+Places: ${JSON.stringify(names)}`;
+  const reply = await completeText(prompt, engine, signal, { num_predict: 600 });
+  const match = reply.match(/\{[\s\S]*\}/);
+  try {
+    const parsed = JSON.parse(match ? match[0] : reply);
+    const out: Record<string, string> = {};
+    for (const name of names) if (typeof parsed?.[name] === "string" && parsed[name].trim() && parsed[name] !== name) out[name] = parsed[name].trim();
+    return out;
+  } catch {
+    return {};
+  }
 }
 
 function parsePlaces(reply: string): string[] {
@@ -106,16 +125,20 @@ function perStopLength(brief: ProjectBrief, stopCount: number): string {
 }
 
 // The "user requests" text for one stop's script (it goes under the prompt's highest-priority request heading).
-export function briefToScriptRequest(brief: ProjectBrief, stopCount: number, stop?: { index: number; excerpt?: string }): string {
+// `kind` "arriving" is the short narration while travelling to the stop: only the voice of the video applies, not its length,
+// facts or call to action.
+export function briefToScriptRequest(brief: ProjectBrief, stopCount: number, stop?: { index: number; excerpt?: string; kind?: "arriving" | "attraction" }): string {
   const lines: string[] = [];
   const last = stop !== undefined && stopCount > 0 && stop.index === stopCount - 1;
+  const arriving = stop?.kind === "arriving";
   if (brief.tone) lines.push(`トーン: ${brief.tone}`);
   if (brief.audience) lines.push(`対象視聴者: ${brief.audience}`);
   if (brief.languages.length === 1 && brief.languages[0] === "en") lines.push("ナレーションは英語で書くこと");
+  if (brief.avoid.length > 0) lines.push(`避けること: ${brief.avoid.join("、")}`);
+  if (arriving) return lines.join("\n");
   const length = perStopLength(brief, stopCount);
   if (length) lines.push(length);
   if (brief.mustInclude.length > 0) lines.push(`含めること: ${brief.mustInclude.join("、")}`);
-  if (brief.avoid.length > 0) lines.push(`避けること: ${brief.avoid.join("、")}`);
   if (brief.purpose && (stop === undefined || stop.index === 0 || last)) lines.push(`この動画の目的: ${brief.purpose}`);
   if (brief.callToAction && last) lines.push(`最後に行動を促す: ${brief.callToAction}`);
   if (stop?.excerpt) lines.push(`参考資料のこの場所に関する記述:\n${stop.excerpt}`);
@@ -127,15 +150,14 @@ export async function buildProject({ brief, sourceText, engine, mapboxToken, sig
   const places = brief.places.length > 0 ? tidyPlaces(brief.places) : await extractPlaces(brief, sourceText, engine, signal);
   onProgress({ step: "places", done: 1, total: 1, label: "" });
 
-  const found: { name: string; point: GeoPoint }[] = [];
-  const failedPlaces: string[] = [];
-  for (const [i, place] of places.entries()) {
-    abortIfNeeded(signal);
-    onProgress({ step: "geocode", done: i, total: places.length, label: place });
-    const point = await geocodePlace(place, { mapboxToken, near: found[found.length - 1]?.point, signal });
-    if (point) found.push({ name: place, point });
-    else failedPlaces.push(place);
-  }
+  onProgress({ step: "geocode", done: 0, total: places.length, label: "" });
+  const { found, failed: failedPlaces } = await geocodeRoute(places, {
+    mapboxToken,
+    signal,
+    onProgress: (done, label) => onProgress({ step: "geocode", done, total: places.length, label }),
+    rename: (names, region) => localNames(names, region, engine, signal),
+    hopKm: wantsWalking(brief) ? 15 : 40,
+  });
   onProgress({ step: "geocode", done: places.length, total: places.length, label: "" });
 
   const mode = wantsWalking(brief) ? "walking" : "driving";
@@ -149,30 +171,36 @@ export async function buildProject({ brief, sourceText, engine, mapboxToken, sig
     imagePans: [],
   }));
 
+  // Both boxes of a stop: the short narration while travelling there, then the one spoken over its photos.
+  const total = waypoints.length * 2;
   for (const [i, wp] of waypoints.entries()) {
-    abortIfNeeded(signal);
-    onProgress({ step: "scripts", done: i, total: waypoints.length, label: wp.name });
-    let script = "";
-    await generateWaypointScriptStream(
-      wp.name,
-      briefToScriptRequest(brief, waypoints.length, { index: i, excerpt: findExcerpt(sourceText, wp.name) }),
-      engine,
-      brief.name,
-      (chunk) => {
-        script = chunk;
-      },
-      wp.lat,
-      wp.lng,
-      [],
-      undefined,
-      "attraction",
-      i === 0,
-      signal,
-      { previous: waypoints[i - 1]?.name, next: waypoints[i + 1]?.name, index: i, total: waypoints.length },
-    );
-    wp.attractionNarration = cleanNarration(script);
+    for (const [k, kind] of (["arriving", "attraction"] as const).entries()) {
+      abortIfNeeded(signal);
+      onProgress({ step: "scripts", done: i * 2 + k, total, label: wp.name });
+      let script = "";
+      await generateWaypointScriptStream(
+        wp.name,
+        briefToScriptRequest(brief, waypoints.length, { index: i, kind, excerpt: kind === "attraction" ? findExcerpt(sourceText, wp.name) : undefined }),
+        engine,
+        brief.name,
+        (chunk) => {
+          script = chunk;
+        },
+        wp.lat,
+        wp.lng,
+        [],
+        undefined,
+        kind,
+        i === 0,
+        signal,
+        { previous: waypoints[i - 1]?.name, next: waypoints[i + 1]?.name, index: i, total: waypoints.length },
+      );
+      if (kind === "arriving") wp.arrivingNarration = cleanNarration(script);
+      else wp.attractionNarration = cleanNarration(script);
+    }
   }
-  onProgress({ step: "scripts", done: waypoints.length, total: waypoints.length, label: "" });
+  onProgress({ step: "scripts", done: total, total, label: "" });
 
-  return { name: brief.name || `${places[0] ?? "My"} trip`, waypoints, failedPlaces };
+  const uncertainPlaces = found.filter((f) => f.uncertain).map((f) => f.name);
+  return { name: brief.name || `${places[0] ?? "My"} trip`, waypoints, failedPlaces, uncertainPlaces };
 }

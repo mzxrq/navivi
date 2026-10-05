@@ -52,8 +52,13 @@ msgstr "ローズ色"
 msgid "Starting..."
 msgstr "ダウンロード開始中..."
 
+#. placeholder {0}: built.uncertainPlaces.join(", ")
+#: src/hooks/useAssistant.tsx:164
+msgid " I am not sure where these are, so check them on the map: {0}."
+msgstr "場所を特定できなかったため、おおよその位置に置いています。地図で確認してください: {0}。"
+
 #. placeholder {0}: built.failedPlaces.join(", ")
-#: src/hooks/useAssistant.tsx:162
+#: src/hooks/useAssistant.tsx:163
 msgid " I could not find: {0}."
 msgstr "見つからなかった場所: {0}。"
 
@@ -1174,7 +1179,7 @@ msgstr "開始座標とルーティング動作を設定"
 
 #. placeholder {0}: built.name
 #. placeholder {1}: built.waypoints.length
-#: src/hooks/useAssistant.tsx:163
+#: src/hooks/useAssistant.tsx:165
 msgid "Created \"{0}\" with {1} stops and their scripts.{missed} Review them, then press Generate Assets."
 msgstr "「{0}」を {1} か所の立ち寄り先と台本つきで作成しました。{missed} 内容を確認してから「アセットを生成」を押してください。"
 
@@ -1958,7 +1963,7 @@ msgid "Hue"
 msgstr "色相"
 
 #. placeholder {0}: e?.message ?? e
-#: src/hooks/useAssistant.tsx:168
+#: src/hooks/useAssistant.tsx:170
 msgid "I could not finish building: {0}"
 msgstr "作成を最後まで進められませんでした: {0}"
 
@@ -3223,7 +3228,7 @@ msgstr "彩度と明度"
 
 #: src/components/ui/OnlineAiSettings.tsx:195
 #: src/components/ui/SaveAs.tsx:113
-#: src/components/ui/ScriptInput.tsx:267
+#: src/components/ui/ScriptInput.tsx:266
 #: src/components/ui/StatusBar.tsx:323
 #: src/components/ui/UnsavedChanges.tsx:38
 msgid "Save"
@@ -3233,7 +3238,7 @@ msgstr "保存"
 msgid "Save .srt"
 msgstr ".srtを保存"
 
-#: src/components/ui/ScriptInput.tsx:259
+#: src/components/ui/ScriptInput.tsx:258
 msgid "Save (Ctrl+Enter)"
 msgstr "保存 (Ctrl+Enter)"
 
@@ -3277,7 +3282,7 @@ msgstr "先にプロジェクトを保存してください"
 msgid "Save the project to enable version history"
 msgstr "バージョン履歴を有効にするにはプロジェクトを保存してください"
 
-#: src/components/ui/ScriptInput.tsx:267
+#: src/components/ui/ScriptInput.tsx:266
 #: src/components/ui/StatusBar.tsx:264
 msgid "Saved"
 msgstr "保存済み"
@@ -3290,8 +3295,8 @@ msgstr "このPCの資格情報ストアに保存されています（プロジ�
 msgid "Saved with the project"
 msgstr "プロジェクトに保存されます"
 
+#: src/components/ui/ScriptInput.tsx:248
 #: src/components/ui/ScriptInput.tsx:249
-#: src/components/ui/ScriptInput.tsx:250
 msgid "Scan script for all Kanji and add to Dictionary"
 msgstr "スクリプト内にあるすべての漢字をスキャンし辞書に追加する"
 
@@ -3620,7 +3625,7 @@ msgid "Stop-by"
 msgstr "経由地"
 
 #: src/hooks/useAssistant.tsx:107
-#: src/hooks/useAssistant.tsx:166
+#: src/hooks/useAssistant.tsx:168
 msgid "Stopped."
 msgstr "中止しました。"
 
@@ -3725,7 +3730,7 @@ msgstr "文字の色"
 #~ msgid "The app's interface"
 #~ msgstr "アプリの画面"
 
-#: src/hooks/useAssistant.tsx:169
+#: src/hooks/useAssistant.tsx:171
 msgid "The assistant could not build the project"
 msgstr "アシスタントがプロジェクトを作成できませんでした"
 

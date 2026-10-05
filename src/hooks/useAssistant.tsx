@@ -159,7 +159,9 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
       enterEditor(first ? { start_coords: [first.lat, first.lng] } : {});
       setWaypoints(built.waypoints);
       if (files.length) setPendingImport({ kind: "files", paths: files });
-      const missed = built.failedPlaces.length ? t` I could not find: ${built.failedPlaces.join(", ")}.` : "";
+      const missed =
+        (built.failedPlaces.length ? t` I could not find: ${built.failedPlaces.join(", ")}.` : "") +
+        (built.uncertainPlaces.length ? t` I am not sure where these are, so check them on the map: ${built.uncertainPlaces.join(", ")}.` : "");
       setMessages((m) => [...m, asNote(t`Created "${built.name}" with ${built.waypoints.length} stops and their scripts.${missed} Review them, then press Generate Assets.`)]);
       setPanelOpen(inEditor);
     } catch (e: any) {

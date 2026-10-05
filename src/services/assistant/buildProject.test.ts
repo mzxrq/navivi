@@ -4,7 +4,9 @@ vi.mock("../ollamaApi", () => ({ completeText: vi.fn(), generateWaypointScriptSt
 
 import { briefToScriptRequest, buildProject, findExcerpt, tidyPlaces } from "./buildProject";
 import { EMPTY_BRIEF } from "./brief";
-import { geocodeUrl } from "../geocode";
+import { geocodeSettings, geocodeUrl } from "../geocode";
+
+geocodeSettings.nominatimGapMs = 0;
 import * as ollama from "../ollamaApi";
 
 describe("tidyPlaces", () => {
@@ -45,6 +47,14 @@ describe("briefToScriptRequest", () => {
     expect(briefToScriptRequest({ ...brief, wordCount: { min: 500, max: 800 } }, 5)).toContain("100〜160語");
     expect(briefToScriptRequest({ ...brief, durationMin: 5 }, 5)).toContain("300文字前後");
     expect(briefToScriptRequest(brief, 5)).not.toMatch(/語を目安|文字前後/);
+  });
+
+  it("keeps the arriving narration to the voice of the video, without length, facts or call to action", () => {
+    const request = briefToScriptRequest({ ...brief, callToAction: "訪れてください", durationMin: 5 }, 2, { index: 1, kind: "arriving", excerpt: "古い社です" });
+    expect(request).toContain("トーン");
+    expect(request).not.toContain("訪れてください");
+    expect(request).not.toContain("古い社です");
+    expect(request).not.toContain("文字前後");
   });
 
   it("asks for English when that is the only language, and quotes the stop's excerpt", () => {
@@ -88,9 +98,11 @@ describe("buildProject", () => {
       onProgress: (p) => progress.push(p.step),
     });
     expect(built.name).toBe("Pilgrimage");
-    expect(built.waypoints.map((w) => w.name)).toEqual(["Hongu", "Nachi"]);
-    expect(built.failedPlaces).toEqual(["Nowhere"]);
-    expect(built.waypoints[0]).toMatchObject({ lat: 33.8, lng: 135.7, routeMode: "driving", attractionNarration: "ここは静かです。" });
+    expect(built.waypoints.map((w) => w.name)).toEqual(["Hongu", "Nowhere", "Nachi"]);
+    expect(built.failedPlaces).toEqual([]);
+    expect(built.uncertainPlaces).toEqual(["Nowhere"]);
+    expect(built.waypoints[0]).toMatchObject({ lat: 33.8, lng: 135.7, routeMode: "driving", arrivingNarration: "ここは静かです。", attractionNarration: "ここは静かです。" });
+    expect(vi.mocked(ollama.generateWaypointScriptStream).mock.calls.slice(0, 2).map((c) => c[9])).toEqual(["arriving", "attraction"]);
     expect(new Set(progress)).toEqual(new Set(["places", "geocode", "scripts"]));
     vi.unstubAllGlobals();
   });

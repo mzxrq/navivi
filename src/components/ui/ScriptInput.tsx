@@ -230,17 +230,16 @@ export function ScriptInput({
           onFocus={() => aiEnabled && warmUpModel(aiEngine(settings))}
           readOnly={isGenerating}
           placeholder={t`Type a prompt or write your own script...`}
-          className="w-full h-full resize-none p-2.5 pb-10 text-[13px] leading-relaxed custom-scrollbar bg-transparent text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:outline-none read-only:opacity-80"
+          className="w-full h-full resize-none p-2.5 pb-11 text-[13px] leading-relaxed custom-scrollbar bg-transparent text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:outline-none read-only:opacity-80"
         />
 
-        {localPrompt.length > 0 && (
-          <span className="absolute bottom-2.5 left-2.5 text-[11px] text-zinc-400 dark:text-zinc-500 tabular-nums pointer-events-none">
-            {t`${localPrompt.length} characters`}
+        <div className="absolute inset-x-0 bottom-0 z-10 flex h-9 items-center justify-between gap-2 px-2.5 border-t border-zinc-100 dark:border-white/5 bg-white dark:bg-zinc-950 pointer-events-none">
+          <span className="text-[11px] text-zinc-400 dark:text-zinc-500 tabular-nums">
+            {localPrompt.length > 0 ? t`${localPrompt.length} characters` : ""}
           </span>
-        )}
 
-        {!isGenerating && (
-          <div className="absolute bottom-1.5 right-1.5 flex items-center gap-1">
+          {!isGenerating && (
+            <div className="pointer-events-auto flex items-center gap-1">
             <button
               type="button"
               onMouseDown={(e) => e.preventDefault()}
@@ -266,8 +265,9 @@ export function ScriptInput({
               <Check className="w-3 h-3" />
               {hasUnsavedChanges ? t`Save` : t`Saved`}
             </button>
-          </div>
-        )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
