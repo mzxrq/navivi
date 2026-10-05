@@ -1,5 +1,6 @@
 import type { Dispatch, SetStateAction, } from "react";
 import type { TimelineData } from "../features/editor/model";
+import type { AiProviderId, OnlineProvider } from "../services/ai/providers";
 
 export type RouteMode = "driving" | "walking" | "direct" | "curve" | "ferry" | "calculating" | "draw";
 export type TrackKind = "video" | "overlay" | "subtitle" | "audio";
@@ -87,6 +88,10 @@ export interface ProjectSettings {
   subtitle_margin_v?: number;
   show_route_heatmap?: boolean;
   ai_model?: string;
+  ai_provider?: AiProviderId; // who writes the scripts; unset = the local Ollama model in ai_model
+  ai_online_models?: Partial<Record<OnlineProvider, string>>;
+  ai_online_base_url?: string; // only the "Other (OpenAI-compatible)" provider asks for one
+  ai_online_send_photos?: boolean; // true unless switched off
   quick_export?: boolean;
   hardware_spec_override?: "auto" | "high" | "low";
   show_render_terminal?: boolean;

@@ -3,6 +3,11 @@ import { readFile } from '@tauri-apps/plugin-fs';
 import { invoke } from '@tauri-apps/api/core';
 import { tidyPlaceName } from '../utils/gpxTrack';
 import { buildWaypointPrompt, cleanNarration, RouteContext } from './narrationPrompt';
+import { AiEngine, isOnlineEngine } from './ai/engine';
+import { hasApiKey, streamOnline } from './ai/online';
+import { shrinkForUpload, MAX_ONLINE_PHOTOS } from './ai/photos';
+import { sniffImageMime } from './ai/providers';
+import { splitThoughts } from './ai/thoughts';
 
 const OLLAMA_URL = "http://127.0.0.1:11434";
 
@@ -14,6 +19,9 @@ const KEEP_ALIVE = "30m";
 
 // A narration is 3-4 sentences; the cap stops a model that rambles from running for minutes on a CPU.
 const SCRIPT_OPTIONS = { num_predict: 400, num_ctx: 4096 };
+
+// Online reasoning models spend part of the cap on thinking, so it is far above the narration's real length.
+const ONLINE_MAX_TOKENS = 2000;
 
 function uint8ArrayToBase64(bytes: Uint8Array): string {
     const chunk = 0x8000;
@@ -31,7 +39,9 @@ export function detectLanguage(...texts: (string | undefined)[]): "Japanese" | "
     return jpRegex.test(combinedText) ? "Japanese" : "English";
 }
 
-export async function checkModelExists(targetModel: string = "schroneko/gemma-2-2b-jpn-it"): Promise<boolean> {
+// Whether the engine can be used right now: an installed local model, or an online provider with a key saved.
+export async function checkModelExists(targetModel: AiEngine = "schroneko/gemma-2-2b-jpn-it"): Promise<boolean> {
+    if (isOnlineEngine(targetModel)) return hasApiKey(targetModel.provider);
     try {
         const res = await fetch(`${OLLAMA_URL}/api/tags`);
         if (!res.ok) {
@@ -78,8 +88,8 @@ const warmed = new Set<string>();
 
 // Loads the model into memory while the user is still typing, so the first script does not also pay the load (a minute for a big one).
 // Quiet if Ollama is not running; once per model per session.
-export function warmUpModel(model: string): void {
-    if (!model || warmed.has(model)) return;
+export function warmUpModel(model: AiEngine): void {
+    if (isOnlineEngine(model) || !model || warmed.has(model)) return;
     warmed.add(model);
     fetch(`${OLLAMA_URL}/api/generate`, {
         method: "POST",
@@ -228,7 +238,23 @@ async function errorText(res: Response): Promise<string> {
 }
 
 // ✨ NEW: Unified Streaming Engine
-async function streamLLM(prompt: string, engine: string, onChunk: (text: string) => void, signal?: AbortSignal, images?: string[], onThought?: (text: string) => void, options?: Record<string, number>) {
+// An online model writes the same script; a thinking model's reasoning is split off here as it is for Ollama.
+async function streamOnlineLLM(prompt: string, engine: Extract<AiEngine, object>, onChunk: (text: string) => void, signal?: AbortSignal, images?: string[], onThought?: (text: string) => void, options?: Record<string, number>) {
+    const photos = (images ?? []).map((base64) => ({ mime: sniffImageMime(base64), base64 }));
+    await streamOnline(
+        engine,
+        { prompt, photos, maxTokens: ONLINE_MAX_TOKENS, temperature: options?.temperature },
+        (full) => {
+            const { text, thoughts } = splitThoughts(full);
+            onChunk(text);
+            if (onThought && thoughts) onThought(thoughts);
+        },
+        signal,
+    );
+}
+
+async function streamLLM(prompt: string, engine: AiEngine, onChunk: (text: string) => void, signal?: AbortSignal, images?: string[], onThought?: (text: string) => void, options?: Record<string, number>) {
+    if (isOnlineEngine(engine)) return streamOnlineLLM(prompt, engine, onChunk, signal, images, onThought, options);
     // Narration is short and fact-bound; a thinking model otherwise spends minutes on a CPU recounting characters before the first word.
     const payload: any = { model: engine, prompt, stream: true, think: false, keep_alive: KEEP_ALIVE };
     if (options) payload.options = options;
@@ -290,23 +316,9 @@ async function streamLLM(prompt: string, engine: string, onChunk: (text: string)
                             consoleBuffer = consoleLines[consoleLines.length - 1];
                         }
                         
-                        let thoughtBlocks = [];
-                        const matches = fullText.matchAll(/(?:<think>|<\|channel>thought|<thought>)([\s\S]*?)(?:<\/think>|<\/thought>|<channel\|>|$)/g);
-                        for (const m of matches) {
-                            thoughtBlocks.push(m[1]);
-                        }
-                        const allThoughts = thoughtBlocks.join("\n");
-                        
-                        let currentClean = fullText;
-                        currentClean = currentClean.replace(/<think>[\s\S]*?(<\/think>|$)/g, "");
-                        currentClean = currentClean.replace(/<\|channel>thought[\s\S]*?(<channel\|>|$)/g, "");
-                        currentClean = currentClean.replace(/<\|think\|>[\s\S]*?(<turn\|>|$)/g, "");
-                        currentClean = currentClean.replace(/<thought>[\s\S]*?(<\/thought>|$)/g, "");
-
-                        onChunk(currentClean);
-                        if (onThought && allThoughts) {
-                            onThought(allThoughts);
-                        }
+                        const { text, thoughts } = splitThoughts(fullText);
+                        onChunk(text);
+                        if (onThought && thoughts) onThought(thoughts);
                     }
                 } catch (e) {
                     console.warn("Failed to parse JSON chunk in streamLLM:", line);
@@ -319,7 +331,7 @@ async function streamLLM(prompt: string, engine: string, onChunk: (text: string)
 // ✨ Stream Overview Script
 export async function generateOverviewScriptStream(
     waypoints: string[],
-    engine: string = "schroneko/gemma-2-2b-jpn-it",
+    engine: AiEngine = "schroneko/gemma-2-2b-jpn-it",
     theme: string = "",
     onChunk: (text: string) => void,
     signal?: AbortSignal
@@ -344,7 +356,7 @@ ${themeContext}
 export async function generateWaypointScriptStream(
     locationName: string,
     userPrompt: string,
-    engine: string = "schroneko/gemma-2-2b-jpn-it",
+    engine: AiEngine = "schroneko/gemma-2-2b-jpn-it",
     theme: string = "",
     onChunk: (text: string) => void,
     lat: number = 0,
@@ -367,11 +379,13 @@ export async function generateWaypointScriptStream(
 
     const prompt = buildWaypointPrompt({ place, theme, userPrompt, facts, scriptType, isFirstWaypoint, route });
 
+    const online = isOnlineEngine(engine);
     const base64Images: string[] = [];
-    for (const p of imagePaths) {
+    for (const p of online && !engine.sendPhotos ? [] : imagePaths.slice(0, online ? MAX_ONLINE_PHOTOS : undefined)) {
         try {
             const bytes = await readFile(p);
-            base64Images.push(uint8ArrayToBase64(bytes));
+            const encoded = online ? await shrinkForUpload(bytes) : uint8ArrayToBase64(bytes);
+            if (encoded) base64Images.push(encoded);
         } catch (e) {
             console.warn("Failed to load image for vision context", e);
         }
@@ -391,7 +405,7 @@ export async function generateWaypointScriptStream(
 
 export async function extractLocationsFromDocument(
     text: string,
-    engine: string = "schroneko/gemma-2-2b-jpn-it"
+    engine: AiEngine = "schroneko/gemma-2-2b-jpn-it"
 ): Promise<string[]> {
     const prompt = `Extract a list of geographic locations mentioned in the following text, in chronological order. Return ONLY a JSON array of strings, e.g. ["Paris", "London"]. No other text. Text: ${text}`;
     
@@ -413,7 +427,7 @@ export async function extractLocationsFromDocument(
 export async function generateVideoPromptStream(
     locationName: string,
     narrationText: string,
-    engine: string = "schroneko/gemma-2-2b-jpn-it",
+    engine: AiEngine = "schroneko/gemma-2-2b-jpn-it",
     onChunk: (text: string) => void
 ): Promise<void> {
     const prompt = `You are an expert video prompt engineer for Wan 2.1 (a high-quality video generation AI).
