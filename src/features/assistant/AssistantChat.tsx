@@ -22,7 +22,7 @@ function briefSummary(brief: ReturnType<typeof useAssistant>["brief"]): string[]
 }
 
 export function AssistantChat({ variant }: { variant: "hero" | "panel" }) {
-  const { messages, brief, attachments, phase, progress, ready, send, build, stop, reset } = useAssistant();
+  const { messages, brief, sources, attachments, phase, progress, ready, send, build, stop, reset } = useAssistant();
   const { settings } = useWorkspace();
   const { setShowAppSettings } = useUI();
   const [text, setText] = useState("");
@@ -113,7 +113,7 @@ export function AssistantChat({ variant }: { variant: "hero" | "panel" }) {
           {ready && phase === "idle" && (
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-navi/30 bg-navi/5 px-3 py-2">
               <div className="min-w-0 text-[12px] text-zinc-600 dark:text-zinc-300">
-                <span className="font-medium text-zinc-900 dark:text-zinc-100">{brief.name || (attachments.gpx ? baseName(attachments.gpx) : t`Your trip`)}</span>
+                <span className="font-medium text-zinc-900 dark:text-zinc-100">{brief.name || (attachments.gpx ? baseName(attachments.gpx) : (sources[0]?.name ?? t`Your trip`))}</span>
                 {summary.length > 0 && <span className="text-zinc-500 dark:text-zinc-400"> · {summary.join(" · ")}</span>}
               </div>
               <button type="button" className={primaryButton} onClick={() => void build()}>

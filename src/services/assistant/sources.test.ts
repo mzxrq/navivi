@@ -43,6 +43,15 @@ describe("readSource", () => {
     expect(callSidecar).toHaveBeenCalledWith("read_document", "C:\\a b\\guide.pdf");
   });
 
+  it("tries again when another sidecar call cancels the read, and gives up with a clear message", async () => {
+    const cancelled = { success: false, error: "Process was cancelled", cancelled: true } as never;
+    vi.mocked(callSidecar).mockReset().mockResolvedValueOnce(cancelled).mockResolvedValueOnce(cancelled).mockResolvedValue({ success: true, text: "ok", truncated: false } as never);
+    expect((await readSource("a.pdf")).text).toBe("ok");
+    vi.mocked(callSidecar).mockReset().mockResolvedValue(cancelled);
+    await expect(readSource("a.pdf")).rejects.toThrow("interrupted");
+    expect(callSidecar).toHaveBeenCalledTimes(5);
+  }, 15000);
+
   it("passes the sidecar's error on and rejects unsupported files", async () => {
     vi.mocked(callSidecar).mockResolvedValue({ success: false, error: "This PDF is password protected." });
     await expect(readSource("x.pdf")).rejects.toThrow("password protected");

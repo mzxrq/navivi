@@ -53,12 +53,12 @@ msgid "Starting..."
 msgstr "Starting..."
 
 #. placeholder {0}: built.uncertainPlaces.join(", ")
-#: src/hooks/useAssistant.tsx:164
+#: src/hooks/useAssistant.tsx:166
 msgid " I am not sure where these are, so check them on the map: {0}."
 msgstr " I am not sure where these are, so check them on the map: {0}."
 
 #. placeholder {0}: built.failedPlaces.join(", ")
-#: src/hooks/useAssistant.tsx:163
+#: src/hooks/useAssistant.tsx:165
 msgid " I could not find: {0}."
 msgstr " I could not find: {0}."
 
@@ -1123,7 +1123,7 @@ msgstr "Could not load audio for {0}"
 msgid "Could not open file location"
 msgstr "Could not open file location"
 
-#: src/hooks/useAssistant.tsx:93
+#: src/hooks/useAssistant.tsx:94
 msgid "Could not read {input}."
 msgstr "Could not read {input}."
 
@@ -1179,11 +1179,11 @@ msgstr "Set your starting coordinates and routing behavior"
 
 #. placeholder {0}: built.name
 #. placeholder {1}: built.waypoints.length
-#: src/hooks/useAssistant.tsx:165
+#: src/hooks/useAssistant.tsx:167
 msgid "Created \"{0}\" with {1} stops and their scripts.{missed} Review them, then press Generate Assets."
 msgstr "Created \"{0}\" with {1} stops and their scripts.{missed} Review them, then press Generate Assets."
 
-#: src/hooks/useAssistant.tsx:143
+#: src/hooks/useAssistant.tsx:145
 msgid "Created \"{name}\" from your GPX file. Write the stop scripts with the script button on each stop."
 msgstr "Created \"{name}\" from your GPX file. Write the stop scripts with the script button on each stop."
 
@@ -1405,7 +1405,7 @@ msgstr "Done adjusting"
 msgid "Done drawing"
 msgstr "Done drawing"
 
-#: src/hooks/useAssistant.tsx:105
+#: src/hooks/useAssistant.tsx:107
 msgid "Done. Tell me more, or press Create project."
 msgstr "Done. Tell me more, or press Create project."
 
@@ -1963,12 +1963,12 @@ msgid "Hue"
 msgstr "Hue"
 
 #. placeholder {0}: e?.message ?? e
-#: src/hooks/useAssistant.tsx:170
+#: src/hooks/useAssistant.tsx:172
 msgid "I could not finish building: {0}"
 msgstr "I could not finish building: {0}"
 
 #. placeholder {0}: e?.message ?? e
-#: src/hooks/useAssistant.tsx:108
+#: src/hooks/useAssistant.tsx:110
 msgid "I could not reach the AI: {0}. Check Settings > AI models."
 msgstr "I could not reach the AI: {0}. Check Settings > AI models."
 
@@ -3064,7 +3064,7 @@ msgstr "Starting Python generation pipeline..."
 msgid "Replace existing voice"
 msgstr "Replace existing voice"
 
-#: src/hooks/useAssistant.tsx:119
+#: src/hooks/useAssistant.tsx:121
 msgid "Replace the stops in this project with the new ones?"
 msgstr "Replace the stops in this project with the new ones?"
 
@@ -3624,8 +3624,8 @@ msgstr "Stop type"
 msgid "Stop-by"
 msgstr "Stop-by"
 
-#: src/hooks/useAssistant.tsx:107
-#: src/hooks/useAssistant.tsx:168
+#: src/hooks/useAssistant.tsx:109
+#: src/hooks/useAssistant.tsx:170
 msgid "Stopped."
 msgstr "Stopped."
 
@@ -3730,7 +3730,7 @@ msgstr "Text colour"
 #~ msgid "The app's interface"
 #~ msgstr "The app's interface"
 
-#: src/hooks/useAssistant.tsx:171
+#: src/hooks/useAssistant.tsx:173
 msgid "The assistant could not build the project"
 msgstr "The assistant could not build the project"
 
@@ -4032,8 +4032,8 @@ msgstr "Untitled"
 #: src/components/ui/TitleBar.tsx:90
 #: src/components/ui/TitleBar.tsx:223
 #: src/components/ui/TitleBar.tsx:503
-#: src/hooks/useAssistant.tsx:122
-#: src/hooks/useAssistant.tsx:129
+#: src/hooks/useAssistant.tsx:124
+#: src/hooks/useAssistant.tsx:131
 msgid "Untitled Project"
 msgstr "Untitled Project"
 
@@ -4206,6 +4206,10 @@ msgstr "Where to save"
 #: src/components/ui/AppSettings.tsx:586
 msgid "Which pipeline to use when regenerating assets"
 msgstr "Which pipeline to use when regenerating assets"
+
+#: src/hooks/useAssistant.tsx:107
+msgid "Which places should the video visit?"
+msgstr "Which places should the video visit?"
 
 #: src/components/ui/ColorSwatches.tsx:17
 msgid "White"

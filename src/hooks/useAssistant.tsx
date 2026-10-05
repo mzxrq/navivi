@@ -53,7 +53,8 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
   const [panelOpen, setPanelOpen] = useState(false);
   const abort = useRef<AbortController | null>(null);
 
-  const ready = missingForBuild(brief).length === 0 || attachments.gpx !== null;
+  // With no places in the brief yet, the builder finds them in an attached document itself.
+  const ready = missingForBuild(brief).length === 0 || attachments.gpx !== null || sources.length > 0;
 
   const reset = useCallback(() => {
     abort.current?.abort();
@@ -102,7 +103,8 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
 
         const result = await converse({ history, brief, sources: nextSources, engine: aiEngine(settings), signal });
         setBrief((b) => mergeBrief(b, result.patch));
-        setMessages([...history, ...notes, asNote(result.reply || t`Done. Tell me more, or press Create project.`)]);
+        const canBuild = result.ready || nextSources.length > 0 || nextAttachments.gpx !== null;
+        setMessages([...history, ...notes, asNote(result.reply || (canBuild ? t`Done. Tell me more, or press Create project.` : t`Which places should the video visit?`))]);
       } catch (e: any) {
         if (signal.aborted) setMessages([...history, asNote(t`Stopped.`)]);
         else setMessages([...history, asNote(t`I could not reach the AI: ${e?.message ?? e}. Check Settings > AI models.`)]);

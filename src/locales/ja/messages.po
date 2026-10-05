@@ -53,12 +53,12 @@ msgid "Starting..."
 msgstr "ダウンロード開始中..."
 
 #. placeholder {0}: built.uncertainPlaces.join(", ")
-#: src/hooks/useAssistant.tsx:164
+#: src/hooks/useAssistant.tsx:166
 msgid " I am not sure where these are, so check them on the map: {0}."
 msgstr "場所を特定できなかったため、おおよその位置に置いています。地図で確認してください: {0}。"
 
 #. placeholder {0}: built.failedPlaces.join(", ")
-#: src/hooks/useAssistant.tsx:163
+#: src/hooks/useAssistant.tsx:165
 msgid " I could not find: {0}."
 msgstr "見つからなかった場所: {0}。"
 
@@ -1123,7 +1123,7 @@ msgstr "{0} の音声委を読み込めませんでした"
 msgid "Could not open file location"
 msgstr "ファイルの場所を開けませんでした"
 
-#: src/hooks/useAssistant.tsx:93
+#: src/hooks/useAssistant.tsx:94
 msgid "Could not read {input}."
 msgstr "{input} を読み込めませんでした。"
 
@@ -1179,11 +1179,11 @@ msgstr "開始座標とルーティング動作を設定"
 
 #. placeholder {0}: built.name
 #. placeholder {1}: built.waypoints.length
-#: src/hooks/useAssistant.tsx:165
+#: src/hooks/useAssistant.tsx:167
 msgid "Created \"{0}\" with {1} stops and their scripts.{missed} Review them, then press Generate Assets."
 msgstr "「{0}」を {1} か所の立ち寄り先と台本つきで作成しました。{missed} 内容を確認してから「アセットを生成」を押してください。"
 
-#: src/hooks/useAssistant.tsx:143
+#: src/hooks/useAssistant.tsx:145
 msgid "Created \"{name}\" from your GPX file. Write the stop scripts with the script button on each stop."
 msgstr "GPX ファイルから「{name}」を作成しました。各立ち寄り先の台本ボタンで台本を書けます。"
 
@@ -1405,7 +1405,7 @@ msgstr "調整を終了"
 msgid "Done drawing"
 msgstr "描画を終了"
 
-#: src/hooks/useAssistant.tsx:105
+#: src/hooks/useAssistant.tsx:107
 msgid "Done. Tell me more, or press Create project."
 msgstr "準備できました。補足があれば教えてください。よければ「プロジェクトを作成」を押してください。"
 
@@ -1963,12 +1963,12 @@ msgid "Hue"
 msgstr "色相"
 
 #. placeholder {0}: e?.message ?? e
-#: src/hooks/useAssistant.tsx:170
+#: src/hooks/useAssistant.tsx:172
 msgid "I could not finish building: {0}"
 msgstr "作成を最後まで進められませんでした: {0}"
 
 #. placeholder {0}: e?.message ?? e
-#: src/hooks/useAssistant.tsx:108
+#: src/hooks/useAssistant.tsx:110
 msgid "I could not reach the AI: {0}. Check Settings > AI models."
 msgstr "AI に接続できませんでした: {0}。設定の「AI モデル」を確認してください。"
 
@@ -3064,7 +3064,7 @@ msgstr "Python生成パイプラインを開始しています..."
 msgid "Replace existing voice"
 msgstr "既存のボイスを置き換える"
 
-#: src/hooks/useAssistant.tsx:119
+#: src/hooks/useAssistant.tsx:121
 msgid "Replace the stops in this project with the new ones?"
 msgstr "このプロジェクトの立ち寄り先を新しいものに置き換えますか？"
 
@@ -3624,8 +3624,8 @@ msgstr "地点の種類"
 msgid "Stop-by"
 msgstr "経由地"
 
-#: src/hooks/useAssistant.tsx:107
-#: src/hooks/useAssistant.tsx:168
+#: src/hooks/useAssistant.tsx:109
+#: src/hooks/useAssistant.tsx:170
 msgid "Stopped."
 msgstr "中止しました。"
 
@@ -3730,7 +3730,7 @@ msgstr "文字の色"
 #~ msgid "The app's interface"
 #~ msgstr "アプリの画面"
 
-#: src/hooks/useAssistant.tsx:171
+#: src/hooks/useAssistant.tsx:173
 msgid "The assistant could not build the project"
 msgstr "アシスタントがプロジェクトを作成できませんでした"
 
@@ -4032,8 +4032,8 @@ msgstr "無題"
 #: src/components/ui/TitleBar.tsx:90
 #: src/components/ui/TitleBar.tsx:223
 #: src/components/ui/TitleBar.tsx:503
-#: src/hooks/useAssistant.tsx:122
-#: src/hooks/useAssistant.tsx:129
+#: src/hooks/useAssistant.tsx:124
+#: src/hooks/useAssistant.tsx:131
 msgid "Untitled Project"
 msgstr "無題のプロジェクト"
 
@@ -4206,6 +4206,10 @@ msgstr "保存先"
 #: src/components/ui/AppSettings.tsx:586
 msgid "Which pipeline to use when regenerating assets"
 msgstr "素材を再生成するときに使う処理方式"
+
+#: src/hooks/useAssistant.tsx:107
+msgid "Which places should the video visit?"
+msgstr "動画ではどの場所を巡りますか？"
 
 #: src/components/ui/ColorSwatches.tsx:17
 msgid "White"

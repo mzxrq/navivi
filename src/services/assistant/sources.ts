@@ -81,7 +81,13 @@ export async function readSource(input: string): Promise<SourceText> {
     return cut(name, collapse(text));
   }
 
-  const reply = await callSidecar<{ text: string; truncated: boolean }>("read_document", source);
-  if (!reply.success) throw new Error(reply.error);
+  // Rust runs one sidecar process at a time and kills it for the next call, so another screen's startup calls can cancel
+  // this read; reading a file is safe to repeat.
+  let reply = await callSidecar<{ text: string; truncated: boolean }>("read_document", source);
+  for (let attempt = 0; attempt < 4 && !reply.success && reply.cancelled; attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    reply = await callSidecar<{ text: string; truncated: boolean }>("read_document", source);
+  }
+  if (!reply.success) throw new Error(reply.cancelled ? `Reading ${name} was interrupted. Try attaching it again.` : reply.error);
   return cut(name, reply.text, reply.truncated);
 }
