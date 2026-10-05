@@ -545,12 +545,15 @@ class IrodoriTTSClient:
     _PROCESS_MARKER: ClassVar[str] = "irodori_openai_tts"
     _SERVER_NAME: ClassVar[str] = "Irodori TTS"
 
+    @classmethod
+    def is_ready(cls) -> bool:
+        return cls._SERVER_VENV_PYTHON.exists()
+
     def _missing_server_message(self) -> str:
         return (
             f"Irodori TTS server isn't reachable at {self.base_url} and its "
-            f"bundled venv wasn't found at {self._SERVER_VENV_PYTHON} to "
-            "auto-start it. Set it up per bin/Irodori-TTS-Server/README.md "
-            "(uv sync), or start it manually."
+            f"venv wasn't found at {self._SERVER_VENV_PYTHON} to auto-start it. "
+            "Open Settings > Voice and press Set up natural voice, or start the server by hand."
         )
 
     @classmethod

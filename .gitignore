@@ -117,3 +117,7 @@ src-tauri/src-python/logs
 # Playwright output
 test-results/
 playwright-report/
+
+# Installer build
+src-tauri/installer-staging/
+scripts/.cache/

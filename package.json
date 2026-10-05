@@ -12,7 +12,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "extract": "lingui extract",
-    "compile": "lingui compile --typescript"
+    "compile": "lingui compile --typescript",
+    "stage:installer": "node scripts/stage-installer.mjs",
+    "build:installer": "tauri build --config src-tauri/tauri.installer.conf.json"
   },
   "dependencies": {
     "@hello-pangea/dnd": "^18.0.1",

@@ -11,7 +11,7 @@ from services.tts import voices
 
 PREVIEW_TEXT = "こんにちは。この声で、旅の案内をお届けします。"
 
-VOICE_ACTIONS = ("tts_voices_list", "tts_voice_add", "tts_voice_delete", "tts_voice_preview", "tts_engines", "tts_install_kokoro", "tts_install_qwen3")
+VOICE_ACTIONS = ("tts_voices_list", "tts_voice_add", "tts_voice_delete", "tts_voice_preview", "tts_engines", "tts_install_kokoro", "tts_install_qwen3", "tts_install_irodori")
 
 
 def voices_list(_payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -35,10 +35,11 @@ def voice_delete(payload: Dict[str, Any]) -> Dict[str, Any]:
 def engines(_payload: Dict[str, Any]) -> Dict[str, Any]:
     """What the Voice tab needs to offer the fast engine: whether it is set up and the voices it has."""
     from services import tuning
-    from services.tts.ttsengine import KokoroTTSClient, Qwen3TTSClient
+    from services.tts.ttsengine import IrodoriTTSClient, KokoroTTSClient, Qwen3TTSClient
 
     return {
         "success": True,
+        "irodori": {"ready": IrodoriTTSClient.is_ready()},
         "qwen3": {"ready": Qwen3TTSClient.is_ready()},
         "kokoro": {
             "ready": KokoroTTSClient.is_ready(),
@@ -50,6 +51,12 @@ def engines(_payload: Dict[str, Any]) -> Dict[str, Any]:
 
 def install_kokoro(_payload: Dict[str, Any]) -> Dict[str, Any]:
     from services.tts.kokoro_setup import install_kokoro as run
+
+    return run()
+
+
+def install_irodori(_payload: Dict[str, Any]) -> Dict[str, Any]:
+    from services.tts.irodori_setup import install_irodori as run
 
     return run()
 
@@ -90,6 +97,7 @@ _HANDLERS: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "tts_engines": engines,
     "tts_install_kokoro": install_kokoro,
     "tts_install_qwen3": install_qwen3,
+    "tts_install_irodori": install_irodori,
 }
 
 
