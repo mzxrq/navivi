@@ -1572,6 +1572,49 @@ OUTRO_SCROLL_MAX_SECONDS = 30.0
 # Height of the soft fade at the top and bottom screen edges, so cards ease
 # in and out of view instead of being cut by the frame edge.
 OUTRO_SCROLL_EDGE_FADE_PX = 56
+# With route info the scroll is a timeline instead of the photo grid: the
+# title and a trip summary (held OUTRO_SUMMARY_HOLD_SECONDS to be read), then
+# one card per leg (the destination's photo, its name, where the leg started,
+# and mode/distance/time chips; route_brief's numbers, the same ones the
+# narration speaks), ending on the last card.
+# Off per project via settings.outro_route_info: false (back to the grid).
+DEFAULT_OUTRO_ROUTE_INFO = True
+OUTRO_ROUTE_FROM_TEMPLATE = "{name} から"
+OUTRO_ROUTE_ROW_HEIGHT = 128
+OUTRO_ROUTE_ROW_GAP = 16
+OUTRO_ROUTE_NAME_FONT_SIZE = 24
+OUTRO_ROUTE_FROM_FONT_SIZE = 15
+OUTRO_ROUTE_DISTANCE_FONT_SIZE = 22
+# Leg cards per row (together as wide as the summary), the gap between them,
+# and the photo's width:height.
+# The route page's title + subtitle use the intro's text and styles, at this
+# fraction of the intro's size (the intro's title fills a whole screen).
+OUTRO_HEADING_SCALE = 0.7
+OUTRO_HEADING_LINE_GAP = 10  # px between title and subtitle
+OUTRO_ROUTE_COLS = 2
+OUTRO_ROUTE_COL_GAP = 16
+OUTRO_ROUTE_THUMB_ASPECT = 1.0
+OUTRO_LEG_FONT_SIZE = 16
+OUTRO_SUMMARY_VALUE_FONT_SIZE = 30
+OUTRO_PANEL_COLOR: Tuple[int, int, int] = (31, 42, 64)
+OUTRO_CHIP_COLOR: Tuple[int, int, int] = (45, 58, 86)
+OUTRO_ARROW_COLOR: Tuple[int, int, int] = (110, 120, 140)
+OUTRO_SUMMARY_HOLD_SECONDS = 4.0
+OUTRO_ROUTE_END_HOLD_SECONDS = 2.0
+OUTRO_SUMMARY_LABELS: Dict[str, str] = {
+    "distance": "総距離",
+    "legs": "{count}区間",
+    "time": "移動時間",
+    "time_note": "目安",
+    "places": "訪れた場所",
+    "places_value": "{count}か所",
+    "longest": "最長区間",
+}
+# The number on each leg card's photo: a white pill with a soft shadow and a
+# dark number, readable on light and dark photos alike.
+OUTRO_PHOTO_BADGE_HEIGHT = 26
+OUTRO_PHOTO_BADGE_FILL: Tuple[int, int, int, int] = (255, 255, 255, 240)
+OUTRO_PHOTO_BADGE_TEXT: Tuple[int, int, int, int] = (19, 28, 46, 255)
 
 # When a clip's narration outlasts its video, the export holds the video's last
 # frame until the narration ends plus this many seconds (so the picture never

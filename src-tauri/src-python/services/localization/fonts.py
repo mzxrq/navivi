@@ -163,6 +163,41 @@ def find_font_family(name: str) -> Optional[str]:
     return _index().get((name or "").strip().casefold())
 
 
+@lru_cache(maxsize=32)
+def font_file(family: str, bold: bool = False) -> Optional[tuple]:
+    """(path, face index) of the installed face of `family` closest to regular
+    or bold weight, for drawing with PIL; None when it isn't installed."""
+    from fontTools.ttLib import TTCollection, TTFont
+
+    wanted = (family or "").strip().casefold()
+    target = 700 if bold else 400
+    best = None
+    for folder in _font_dirs():
+        for path in folder.iterdir():
+            if path.suffix.lower() not in _FONT_EXTS:
+                continue
+            try:
+                if path.suffix.lower() in (".ttc", ".otc"):
+                    faces = TTCollection(str(path), lazy=True).fonts
+                else:
+                    faces = [TTFont(str(path), lazy=True, fontNumber=0)]
+                for index, face in enumerate(faces):
+                    names = {
+                        r.toUnicode().strip().casefold()
+                        for r in face["name"].names if r.nameID in _FAMILY_NAME_IDS
+                    }
+                    if wanted not in names:
+                        continue
+                    weight = face["OS/2"].usWeightClass if "OS/2" in face else 400
+                    italic = bool(face["head"].macStyle & 2)
+                    score = abs(weight - target) + (1000 if italic else 0)
+                    if best is None or score < best[0]:
+                        best = (score, str(path), index)
+            except Exception as exc:
+                logger.debug("Skipping unreadable font %s: %s", path, exc)
+    return (best[1], best[2]) if best else None
+
+
 def resolve_font_family(name: str, fallback: str) -> str:
     """`name` if installed, else `fallback` (logged). Unknown when no font folder
     can be read (non-Windows): trust the name rather than override it."""
