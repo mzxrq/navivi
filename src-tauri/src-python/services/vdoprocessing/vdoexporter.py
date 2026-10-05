@@ -42,13 +42,10 @@ import uuid
 import cv2
 import numpy as np
 
-from services import tuning
+from services import runtime_paths, tuning
 from services.localization.subtitle import SubtitleStyle, caption_style
 from services.logger.logger import setup_logger
 
-FFMPEG_BIN = (
-    Path(__file__).resolve().parent.parent / "bin" / "FFmpeg" / "bin" / "ffmpeg.exe"
-)
 
 # [NOTE] [Editor] This module previously had no logger at all — every ffmpeg
 # failure was either swallowed (DEVNULL) or surfaced as a bare exception
@@ -169,9 +166,7 @@ class VideoExporter:
 
     @staticmethod
     def resolve_ffmpeg() -> Optional[str]:
-        if FFMPEG_BIN.exists():
-            return str(FFMPEG_BIN)
-        return shutil.which("ffmpeg")
+        return runtime_paths.ffmpeg_exe()
 
     def _open_ffmpeg_writer(self, output_path: str) -> Optional[subprocess.Popen]:
         ffmpeg_cmd = self.resolve_ffmpeg()

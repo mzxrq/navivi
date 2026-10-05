@@ -13,7 +13,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from services import tuning
+from services import runtime_paths, tuning
 from services.logger.logger import setup_logger
 
 logger = setup_logger("TTSVoices")
@@ -33,7 +33,7 @@ _voices_dir_override: Optional[Path] = None
 def voices_dir() -> Path:
     if _voices_dir_override is not None:
         return _voices_dir_override
-    return Path(__file__).resolve().parents[2] / "bin" / "Irodori-TTS-Server" / "voices"
+    return runtime_paths.engine_dir("Irodori-TTS-Server") / "voices"
 
 
 def set_voices_dir(path: Optional[Path]) -> None:

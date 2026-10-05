@@ -16,15 +16,32 @@ import os
 import uuid
 import cv2
 import numpy as np
-import torch
 from PIL import Image, ImageFilter
-from diffusers import AutoPipelineForInpainting
-from transformers import BlipForConditionalGeneration, BlipProcessor
 
 from services import tuning
 from services.logger.logger import setup_logger
 
 logger = setup_logger("LocalPanGenerator")
+
+
+def _cuda_available() -> bool:
+    """False when there is no GPU or no PyTorch at all.
+
+    [NOTE] [Animation] torch, diffusers and transformers are imported only where the AI outpaint needs them: the installed app's
+    Python has none of them (several GB), and the plain pan over the original photo, which is the fallback, must still work."""
+    try:
+        import torch
+
+        return torch.cuda.is_available()
+    except ImportError:
+        return False
+
+
+def _free_gpu_memory() -> None:
+    if _cuda_available():
+        import torch
+
+        torch.cuda.empty_cache()
 
 # [HACK] [Animation] Loaded once and reused across every waypoint in a batch, instead of a fresh
 # from_pretrained() + del per call. Reloading per waypoint (the original
@@ -48,7 +65,9 @@ def _cap_memory_fraction() -> None:
     shared system memory — cheap insurance against a repeat of the VRAM-
     linked instability seen during earlier exploration."""
     global _MEMORY_FRACTION_SET
-    if not _MEMORY_FRACTION_SET and torch.cuda.is_available():
+    if not _MEMORY_FRACTION_SET and _cuda_available():
+        import torch
+
         torch.cuda.set_per_process_memory_fraction(0.85, 0)
         _MEMORY_FRACTION_SET = True
 
@@ -56,6 +75,9 @@ def _cap_memory_fraction() -> None:
 def _get_pipe():
     global _pipe
     if _pipe is None:
+        import torch
+        from diffusers import AutoPipelineForInpainting
+
         _cap_memory_fraction()
         logger.info("Loading SDXL inpainting pipeline (once, reused for the whole batch)...")
         _pipe = AutoPipelineForInpainting.from_pretrained(
@@ -87,9 +109,11 @@ def _get_pipe():
 def _get_blip():
     global _blip_model, _blip_processor
     if _blip_model is None:
+        from transformers import BlipForConditionalGeneration, BlipProcessor
+
         _cap_memory_fraction()
         logger.info("Loading BLIP captioner (once, reused for the whole batch)...")
-        device = "cuda" if torch.cuda.is_available() else "cpu"
+        device = "cuda" if _cuda_available() else "cpu"
         _blip_processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base")
         _blip_model = BlipForConditionalGeneration.from_pretrained(
             "Salesforce/blip-image-captioning-base"
@@ -132,7 +156,7 @@ def _describe_scene(pil_img: Image.Image) -> str:
     """One-shot BLIP captioning so the outpaint prompt is grounded in
     whatever is actually in THIS photo, not a hand-written/stale prompt."""
     model, processor = _get_blip()
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = "cuda" if _cuda_available() else "cpu"
     inputs = processor(pil_img, return_tensors="pt").to(device)
     out = model.generate(**inputs, max_new_tokens=40)
     return processor.decode(out[0], skip_special_tokens=True).strip()
@@ -144,7 +168,7 @@ def _outpaint(raw: Image.Image) -> Image.Image:
     
     # [NOTE] SDXL outpainting is unbearably slow (hours) on CPU. If CUDA isn't available,
     # skip it immediately so we gracefully fallback to a standard static pan.
-    if not torch.cuda.is_available():
+    if not _cuda_available():
         raise RuntimeError("CUDA is not available. Skipping SDXL outpainting to prevent endless CPU hang.")
 
     prompt = _describe_scene(raw) + CAPTION_SUFFIX
@@ -199,8 +223,7 @@ def _outpaint(raw: Image.Image) -> Image.Image:
 
     # [NOTE] [Animation] Frees this generation's activations/latents (not the persistent pipe
     # itself) so peak VRAM doesn't creep up across waypoints.
-    if torch.cuda.is_available():
-        torch.cuda.empty_cache()
+    _free_gpu_memory()
 
     return result.convert("RGB").resize((canvas_w, canvas_h))
 
@@ -314,8 +337,7 @@ def generate_local_clip(
             "Outpaint failed for %s (%s: %s) - panning the plain image instead.",
             image_path, type(exc).__name__, exc,
         )
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
+        _free_gpu_memory()
         wide = raw
 
     _render_pan(wide, output_path, duration_sec, camera_pan_hint)

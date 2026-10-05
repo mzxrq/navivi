@@ -12,7 +12,7 @@ import subprocess
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from services import tuning
+from services import runtime_paths, tuning
 from services.logger.logger import setup_logger
 from services.tts.ttsengine import KokoroTTSClient
 
@@ -28,13 +28,7 @@ MODEL_FILES = ["config.json", "kokoro-v1_0.pth"]
 
 
 def find_uv() -> Optional[str]:
-    found = shutil.which("uv")
-    if found:
-        return found
-    for candidate in (Path.home() / ".local" / "bin" / ("uv.exe" if os.name == "nt" else "uv"), Path.home() / ".cargo" / "bin" / "uv"):
-        if candidate.exists():
-            return str(candidate)
-    return None
+    return runtime_paths.uv_exe()
 
 
 def _run(cmd: List[str], what: str) -> None:

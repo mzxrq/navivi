@@ -16,7 +16,7 @@ import tempfile
 from pathlib import Path
 from typing import Final, List, Optional
 
-from services import tuning
+from services import runtime_paths, tuning
 from services.config.job_config import JobConfigManager
 from services.logger.logger import setup_logger
 
@@ -29,9 +29,7 @@ class FFmpegEngine:
     """Manages the discovery and execution of the FFmpeg binary."""
 
     # [Config] Default bundled FFmpeg binary path and execution timeout
-    FFMPEG_BIN: Final[Path] = (
-        Path(__file__).resolve().parent.parent / "bin" / "FFmpeg" / "bin" / "ffmpeg.exe"
-    )
+    FFMPEG_BIN: Final[Path] = Path(runtime_paths.ffmpeg_exe() or "ffmpeg")
 
     TIMEOUT_SECONDS: Final[int] = 300  # 5 minutes should be plenty for stream copying
 

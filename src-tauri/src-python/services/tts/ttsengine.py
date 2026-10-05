@@ -28,7 +28,7 @@ import tempfile
 import logging
 from typing import Any, ClassVar, Dict, Final, List, Optional, Tuple
 
-from services import tuning
+from services import runtime_paths, tuning
 from services.tts import phrase_cache
 from services.tts.artifacts import remove_stray_bursts
 from services.localization.subtitle import SubtitleStyle
@@ -158,16 +158,7 @@ class FFmpegManager:
     @staticmethod
     def resolve_ffmpeg_bin() -> str:
         """Locates the bundled FFmpeg binary or falls back to system PATH."""
-        bundled = (
-            Path(__file__).resolve().parent.parent
-            / "bin"
-            / "FFmpeg"
-            / "bin"
-            / "ffmpeg.exe"
-        )
-        if bundled.exists():
-            return str(bundled)
-        found = shutil.which("ffmpeg")
+        found = runtime_paths.ffmpeg_exe()
         if not found:
             raise RuntimeError(
                 "ffmpeg not found (bundled path or PATH). Check network/install settings."
@@ -187,7 +178,7 @@ class FFmpegManager:
                 return str(candidate)
         except Exception:
             pass
-        return shutil.which("ffprobe")
+        return runtime_paths.ffprobe_exe()
 
     # [TTS] Queries media duration precisely via ffprobe, raising an error if unavailable
     @classmethod
@@ -303,12 +294,8 @@ class IrodoriTTSClient:
     # (not torn down when this process exits) since it's slow to start —
     # it loads a real model — and every later call in the same session, or
     # a later main.py invocation, should find it already warm.
-    _SERVER_DIR: Final[Path] = (
-        Path(__file__).resolve().parents[2] / "bin" / "Irodori-TTS-Server"
-    )
-    _SERVER_VENV_PYTHON: Final[Path] = _SERVER_DIR / ".venv" / (
-        "Scripts/python.exe" if os.name == "nt" else "bin/python"
-    )
+    _SERVER_DIR: Final[Path] = runtime_paths.engine_dir("Irodori-TTS-Server")
+    _SERVER_VENV_PYTHON: Final[Path] = runtime_paths.venv_python(_SERVER_DIR)
     # The server's own IRODORI_MODEL_LOAD_TIMEOUT defaults to 300s for
     # loading an already-downloaded model — and the FIRST run also has to
     # download the model from Hugging Face before that even starts, which
@@ -792,8 +779,8 @@ class _VenvEngineClient(IrodoriTTSClient):
 
 # [TTS] The fast engine: Kokoro, a small model with a few fixed Japanese voices (no cloning).
 class KokoroTTSClient(_VenvEngineClient):
-    _SERVER_DIR: Final[Path] = Path(__file__).resolve().parents[2] / "bin" / "Kokoro-TTS"
-    _SERVER_VENV_PYTHON: Final[Path] = _SERVER_DIR / ".venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    _SERVER_DIR: Final[Path] = runtime_paths.engine_dir("Kokoro-TTS")
+    _SERVER_VENV_PYTHON: Final[Path] = runtime_paths.venv_python(_SERVER_DIR)
     _ACTIVITY_FILE: Final[Path] = _SERVER_DIR / ".last_active"
     _PIDFILE: Final[Path] = _SERVER_DIR / ".server.pid"
     _READY_FILE: Final[Path] = _SERVER_DIR / ".ready"
@@ -860,8 +847,8 @@ def apply_speed(wav: bytes, speed: float) -> bytes:
 
 # [TTS] The middle engine: Qwen3-TTS 0.6B, clones a voice from a recording (the same library as Irodori) at about a third of Irodori's time.
 class Qwen3TTSClient(_VenvEngineClient):
-    _SERVER_DIR: Final[Path] = Path(__file__).resolve().parents[2] / "bin" / "Qwen3-TTS"
-    _SERVER_VENV_PYTHON: Final[Path] = _SERVER_DIR / ".venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    _SERVER_DIR: Final[Path] = runtime_paths.engine_dir("Qwen3-TTS")
+    _SERVER_VENV_PYTHON: Final[Path] = runtime_paths.venv_python(_SERVER_DIR)
     _ACTIVITY_FILE: Final[Path] = _SERVER_DIR / ".last_active"
     _PIDFILE: Final[Path] = _SERVER_DIR / ".server.pid"
     _READY_FILE: Final[Path] = _SERVER_DIR / ".ready"

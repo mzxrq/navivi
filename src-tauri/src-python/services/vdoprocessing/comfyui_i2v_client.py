@@ -31,7 +31,7 @@ import httpx
 
 from services.logger.logger import setup_logger
 from services.logger.progress import tracker
-from services import tuning
+from services import runtime_paths, tuning
 
 logger = setup_logger("ComfyUII2VClient")
 
@@ -381,10 +381,8 @@ class ComfyUII2VClient:
     """Handles communication with the bundled local ComfyUI server for
     attraction image-to-video generation."""
 
-    _SERVER_DIR: Final[Path] = Path(__file__).resolve().parents[2] / "bin" / "ComfyUI"
-    _SERVER_VENV_PYTHON: Final[Path] = _SERVER_DIR / ".venv" / (
-        "Scripts/python.exe" if os.name == "nt" else "bin/python"
-    )
+    _SERVER_DIR: Final[Path] = runtime_paths.engine_dir("ComfyUI")
+    _SERVER_VENV_PYTHON: Final[Path] = runtime_paths.venv_python(_SERVER_DIR)
     _IDLE_WATCHDOG_SCRIPT: Final[Path] = (
         Path(__file__).resolve().parents[1] / "tts" / "idle_watchdog.py"
     )

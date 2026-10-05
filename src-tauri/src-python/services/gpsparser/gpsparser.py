@@ -15,6 +15,7 @@ from pathlib import Path
 from datetime import datetime
 
 # [I/O] Import service dependencies for Integration
+from services import runtime_paths
 from services.logger.logger import setup_logger
 from services.config.job_config import JobConfigManager
 from services.projectfiles import gps_data_dir
@@ -24,7 +25,7 @@ from services.gpsparser.gpscalculator import GPSMath
 logger = setup_logger("GPSParser")  
 
 # [I/O] Initialize the GPSBabel from abs path
-GPS_BABEL_PATH = Path(__file__).resolve().parent.parent.parent / "bin" / "GPSBabel" / "gpsbabel.exe"
+GPS_BABEL_PATH = runtime_paths.gpsbabel_exe()
 
 class GPSParser:
     """ Unified class to handle GPS file conversion, cleaning, stop detection, and metrics. """

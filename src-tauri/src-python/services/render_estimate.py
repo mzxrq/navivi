@@ -16,6 +16,8 @@ import time
 from pathlib import Path
 from typing import Callable, Optional
 
+from services import runtime_paths
+
 # Same order as pipeline.py's tracker.stage() calls: StageRecorder maps by position.
 STAGES = ("gps", "tts", "subtitles", "upscale", "attraction", "route", "burn", "intro")
 HISTORY_KEEP = 6
@@ -225,7 +227,7 @@ def estimate(config: dict) -> dict:
     hw = hardware_profile()
     history = load_history()
     units = workload(config)
-    has_comfy = (Path(__file__).resolve().parent.parent / "bin" / "ComfyUI").exists()
+    has_comfy = runtime_paths.engine_dir("ComfyUI").exists()
 
     stages, measured = {}, 0
     for stage in STAGES:
