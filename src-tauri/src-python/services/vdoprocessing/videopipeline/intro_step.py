@@ -6,6 +6,7 @@ dependency on any other step's rendered output.
 from pathlib import Path
 from typing import Optional
 
+from services import tuning
 from services.config.job_config import JobConfigManager
 
 from .helpers import logger, project_video_dir
@@ -55,26 +56,50 @@ def render_intro_clip(project_config_path: str) -> Optional[str]:
     return intro_path
 
 
+def place_count(waypoints) -> int:
+    """Places the walk goes to: every waypoint but unconnected stop-bys."""
+    from services.localization.route_brief import on_route
+
+    return sum(1 for w in waypoints or [] if isinstance(w, dict) and on_route(w))
+
+
+def intro_heading(job_config: JobConfigManager) -> dict:
+    """Kicker (settings.intro_location), title and subtitle shared by the intro
+    and the outro. The subtitle gets " · N か所" unless settings.intro_place_count
+    is false."""
+    settings = job_config.get_settings() or {}
+    title = job_config.get("video_title") or job_config.get("project_name", "") or ""
+    subtitle = (job_config.get("video_subtitle", "") or "").strip()
+    n = place_count(job_config.get("waypoints", []))
+    if n and settings.get("intro_place_count", tuning.DEFAULT_INTRO_PLACE_COUNT) is not False:
+        count = tuning.INTRO_PLACE_COUNT_FORMAT.format(n=n)
+        subtitle = tuning.INTRO_PLACE_COUNT_SEPARATOR.join(p for p in (subtitle, count) if p)
+    return {
+        "kicker": str(settings.get("intro_location") or "").strip(),
+        "title": title,
+        "subtitle": subtitle,
+        "kicker_style": settings.get("intro_kicker_style"),
+        "title_style": settings.get("intro_title_style"),
+        "subtitle_style": settings.get("intro_subtitle_style"),
+    }
+
+
 def intro_text_item(project_config_path: str) -> Optional[dict]:
-    """The intro's title + subtitle as a text-track item: each line's text and
-    its style (settings.intro_title_style / intro_subtitle_style). Times are
-    filled in by build_timeline, which spans it over the intro clip."""
+    """The intro's kicker + title + subtitle as a text-track item: each line's
+    text and its style (settings.intro_*_style). Times are filled in by
+    build_timeline, which spans it over the intro clip."""
     config_path = Path(project_config_path)
     if not config_path.exists():
         return None
-    job_config = JobConfigManager(config_path)
-    title = job_config.get("video_title") or job_config.get("project_name", "")
-    subtitle = job_config.get("video_subtitle", "")
-    if not (title or subtitle):
+    h = intro_heading(JobConfigManager(config_path))
+    if not (h["title"] or h["subtitle"] or h["kicker"]):
         return None
-    settings = job_config.get_settings()
 
-    def line(text: str, style_key: str) -> dict:
-        style = settings.get(style_key)
-        return {"text": text or "", **({"style": style} if isinstance(style, dict) else {})}
+    def line(which: str) -> dict:
+        style = h[f"{which}_style"]
+        return {"text": h[which], **({"style": style} if isinstance(style, dict) else {})}
 
-    return {
-        "kind": "intro",
-        "title": line(title, "intro_title_style"),
-        "subtitle": line(subtitle, "intro_subtitle_style"),
-    }
+    item = {"kind": "intro", "title": line("title"), "subtitle": line("subtitle")}
+    if h["kicker"]:
+        item["kicker"] = line("kicker")
+    return item

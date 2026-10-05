@@ -1,15 +1,40 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChevronDown, Clapperboard } from "../../../components/ui/icons";
 import { useWorkspace } from "../../../hooks/useWorkspace";
+import type { Waypoint } from "../../../types";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 
+// Prefecture + city of a point, e.g. "和歌山・和歌山市" (県/府 and 東京都's 都 dropped).
+// Same rule as route_brief.on_route for the count.
+async function detectLocation(lat: number, lng: number): Promise<string> {
+  const res = await fetch(
+    `https://nominatim.openstreetmap.org/reverse?format=json&accept-language=ja&zoom=10&lat=${lat}&lon=${lng}`,
+  );
+  const a = (await res.json())?.address ?? {};
+  const region = String(a.province || a.state || "").replace(/^東京都$/, "東京").replace(/[県府]$/, "");
+  const city = a.city || a.town || a.village || a.county || "";
+  return [region, city].filter(Boolean).filter((v, i, xs) => xs.indexOf(v) === i).join("・");
+}
+
+const placeCount = (waypoints: Waypoint[]) => waypoints.filter((w) => !(w.isStopBy && !w.connectToRoute)).length;
+
+const inputClass =
+  "w-full h-8 px-2.5 rounded-md bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-white/10 text-[13px] text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:outline-none focus:border-navi focus:ring-2 focus:ring-navi/20 transition-colors";
+
 export function OverviewPanel() {
-  const { metadata, updateMetadata, setIsDirty } = useWorkspace();
+  const { metadata, updateMetadata, settings, updateSettings, waypoints, setIsDirty } = useWorkspace();
   const [isOpen, setIsOpen] = useState(false);
+  const [detecting, setDetecting] = useState(false);
 
   const isEnabled = metadata.enable_intro !== false;
   const title = metadata.video_title || metadata.project_name || "";
+  const location = settings.intro_location ?? "";
+  const showCount = settings.intro_place_count !== false;
+  const count = placeCount(waypoints);
+  const subtitleLine = [metadata.video_subtitle?.trim(), showCount && count ? `${count} か所` : ""]
+    .filter(Boolean)
+    .join(" · ");
   const summary = !isEnabled
     ? t`Off`
     : [title, metadata.video_subtitle].filter(Boolean).join(" · ") ||
@@ -19,6 +44,39 @@ export function OverviewPanel() {
     updateMetadata(patch);
     setIsDirty(true);
   };
+  const updateSetting = (patch: Parameters<typeof updateSettings>[0]) => {
+    updateSettings(patch);
+    setIsDirty(true);
+  };
+
+  // Follows the first waypoint (~100 m grid, so a drag doesn't spam Nominatim) until the user types their own.
+  const first = waypoints[0];
+  const pointKey = first ? `${first.lat.toFixed(3)},${first.lng.toFixed(3)}` : "";
+  const manual = settings.intro_location_manual === true;
+  const request = useRef(0);
+
+  const detect = async (key: string, lat: number, lng: number) => {
+    const id = ++request.current;
+    setDetecting(true);
+    try {
+      const found = await detectLocation(lat, lng);
+      if (id !== request.current) return;
+      if (found && (found !== settings.intro_location || key !== settings.intro_location_at)) {
+        updateSetting({ intro_location: found, intro_location_at: key, intro_location_manual: false });
+      }
+    } catch {
+      // Offline: keep the last one; the user can type it.
+    } finally {
+      if (id === request.current) setDetecting(false);
+    }
+  };
+
+  useEffect(() => {
+    if (manual || !first || pointKey === settings.intro_location_at) return;
+    const timer = setTimeout(() => detect(pointKey, first.lat, first.lng), 800);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pointKey, manual, settings.intro_location_at]);
 
   return (
     <section className="rounded-lg border border-zinc-200 dark:border-white/8 bg-white dark:bg-white/2">
@@ -79,6 +137,33 @@ export function OverviewPanel() {
             <>
               <label className="block pt-1.5">
                 <span className="block text-[11px] font-medium text-zinc-500 mb-1">
+                  <Trans>Location</Trans>
+                </span>
+                <div className="flex gap-1.5">
+                  <input
+                    type="text"
+                    value={location}
+                    onChange={(e) => updateSetting({ intro_location: e.target.value, intro_location_manual: true })}
+                    placeholder={detecting ? t`Detecting...` : t`E.g. Wakayama, Wakayama City`}
+                    className={inputClass}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => updateSetting({ intro_location_manual: false, intro_location_at: "" })}
+                    disabled={detecting || !waypoints.length || (!manual && pointKey === settings.intro_location_at)}
+                    title={t`Follow the first waypoint again`}
+                    className="h-8 px-2.5 shrink-0 rounded-md border border-zinc-200 dark:border-white/10 text-[11px] text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-white/5 disabled:opacity-50 transition-colors"
+                  >
+                    <Trans>Detect</Trans>
+                  </button>
+                </div>
+                <span className="block text-[10px] text-zinc-400 mt-1">
+                  <Trans>Small line above the title, from the first waypoint. Also shown on the outro.</Trans>
+                </span>
+              </label>
+
+              <label className="block">
+                <span className="block text-[11px] font-medium text-zinc-500 mb-1">
                   <Trans>Title</Trans>
                 </span>
                 <input
@@ -86,7 +171,7 @@ export function OverviewPanel() {
                   value={metadata.video_title || ""}
                   onChange={(e) => update({ video_title: e.target.value })}
                   placeholder={metadata.project_name || t`Title`}
-                  className="w-full h-8 px-2.5 rounded-md bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-white/10 text-[13px] text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:outline-none focus:border-navi focus:ring-2 focus:ring-navi/20 transition-colors"
+                  className={inputClass}
                 />
                 <span className="block text-[10px] text-zinc-400 mt-1">
                   <Trans>Leave blank to use the project name.</Trans>
@@ -102,21 +187,32 @@ export function OverviewPanel() {
                   value={metadata.video_subtitle || ""}
                   onChange={(e) => update({ video_subtitle: e.target.value })}
                   placeholder={t`E.g. Tomogashima and Kada area...`}
-                  className="w-full h-8 px-2.5 rounded-md bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-white/10 text-[13px] text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:outline-none focus:border-navi focus:ring-2 focus:ring-navi/20 transition-colors"
+                  className={inputClass}
                 />
+              </label>
+
+              <label className="flex items-center gap-2 text-[11px] text-zinc-500 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={showCount}
+                  onChange={(e) => updateSetting({ intro_place_count: e.target.checked })}
+                  className="accent-navi"
+                />
+                <Trans>Add the number of places ({count} か所)</Trans>
               </label>
 
               <div
                 aria-hidden
-                className="aspect-video w-full rounded-md bg-zinc-900 ring-1 ring-black/5 dark:ring-white/10 flex flex-col items-center justify-center gap-1 px-4 text-center overflow-hidden"
+                className="aspect-video w-full rounded-md bg-linear-to-b from-zinc-800 to-zinc-950 ring-1 ring-black/5 dark:ring-white/10 flex flex-col items-center justify-center gap-1 px-4 text-center overflow-hidden"
               >
+                {location && (
+                  <span className="text-zinc-300 text-[9px] tracking-[0.15em] truncate max-w-full">{location}</span>
+                )}
                 <span className="text-white text-sm font-semibold truncate max-w-full">
                   {title || t`Project Title`}
                 </span>
-                {metadata.video_subtitle && (
-                  <span className="text-zinc-400 text-[10px] truncate max-w-full">
-                    {metadata.video_subtitle}
-                  </span>
+                {subtitleLine && (
+                  <span className="text-zinc-300 text-[10px] font-medium truncate max-w-full">{subtitleLine}</span>
                 )}
               </div>
             </>

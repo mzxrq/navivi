@@ -54,6 +54,7 @@ export interface TextClip {
   end: number;
   title: TextLine;
   subtitle: TextLine;
+  kicker?: TextLine; // small line above the title (the intro's location)
   // Where the block sits; absent = centred.
   position?: "top" | "middle" | "bottom";
   margin_v?: number; // px from that edge (1080p frame)
@@ -429,6 +430,7 @@ export function toManifest(projectName: string, timeline: TimelineData, captionS
       end: x.globalEnd,
       title: x.title,
       subtitle: x.subtitle,
+      ...(x.kicker?.text ? { kicker: x.kicker } : {}),
       ...(x.position ? { position: x.position } : {}),
       ...(x.margin_v !== undefined ? { margin_v: x.margin_v } : {}),
       ...(x.align ? { align: x.align } : {}),
@@ -521,6 +523,7 @@ export async function timelineFromPipeline(
           end,
           title: line(x.title),
           subtitle: line(x.subtitle),
+          ...(x.kicker?.text ? { kicker: line(x.kicker) } : {}),
           ...(x.position ? { position: x.position } : {}),
           ...(typeof x.margin_v === "number" ? { margin_v: x.margin_v } : {}),
           ...(x.align ? { align: x.align } : {}),

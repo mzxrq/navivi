@@ -1484,6 +1484,17 @@ INTRO_SUBTITLE_FONT_SIZE = 36
 INTRO_SUBTITLE_OUTLINE = 0
 INTRO_SUBTITLE_BOLD = True
 INTRO_SUBTITLE_COLOR: Tuple[int, int, int] = (255, 255, 255)
+# Small line above the title: where the walk is (settings.intro_location, e.g. "和歌山県 和歌山市").
+INTRO_KICKER_FONT_FAMILY = "Yu Gothic UI"
+INTRO_KICKER_FONT_SIZE = 30
+INTRO_KICKER_OUTLINE = 0
+INTRO_KICKER_BOLD = False
+INTRO_KICKER_COLOR: Tuple[int, int, int] = (205, 210, 220)
+INTRO_KICKER_LETTER_SPACING = 4
+# Appended to the intro subtitle as "<subtitle> · 18 か所" (settings.intro_place_count turns it off).
+INTRO_PLACE_COUNT_FORMAT = "{n} か所"
+INTRO_PLACE_COUNT_SEPARATOR = " · "
+DEFAULT_INTRO_PLACE_COUNT = True
 INTRO_OUTPUT_FILENAME = "00_intro.mp4"
 # Same frame size as every other clip, or the timeline preview draws it smaller.
 INTRO_WIDTH = 1920

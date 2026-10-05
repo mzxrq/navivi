@@ -397,14 +397,16 @@ def _style_font(style, size: int) -> FreeTypeFont | Any:
 def _heading_lines(
     title: str, subtitle: str, title_style: Optional[Dict[str, Any]],
     subtitle_style: Optional[Dict[str, Any]], height: int,
+    kicker: str = "", kicker_style: Optional[Dict[str, Any]] = None,
 ) -> List[Tuple[str, Any, int]]:
-    """(text, TextStyle, size px) for the title and subtitle, styled like the
-    intro's (settings.intro_title_style / intro_subtitle_style over its
-    defaults). Intro sizes are in 1080-line units."""
-    from services.vdoprocessing.introclip import DEFAULT_SUBTITLE_STYLE, DEFAULT_TITLE_STYLE
+    """(text, TextStyle, size px) for the kicker, title and subtitle, styled like
+    the intro's (settings.intro_*_style over its defaults). Intro sizes are in
+    1080-line units."""
+    from services.vdoprocessing.introclip import DEFAULT_KICKER_STYLE, DEFAULT_SUBTITLE_STYLE, DEFAULT_TITLE_STYLE
 
     lines = []
     for text, default, raw in (
+        (kicker, DEFAULT_KICKER_STYLE, kicker_style),
         (title, DEFAULT_TITLE_STYLE, title_style),
         (subtitle, DEFAULT_SUBTITLE_STYLE, subtitle_style),
     ):
@@ -469,6 +471,7 @@ def _build_route_page(
     lines = _heading_lines(
         heading.get("title", project_name), heading.get("subtitle", ""),
         heading.get("title_style"), heading.get("subtitle_style"), height,
+        heading.get("kicker", ""), heading.get("kicker_style"),
     )
     heading_top = px(30)
     panel_top = heading_top + _heading_height(lines, k) + px(30)
@@ -807,8 +810,8 @@ def generate_outro_clip(
     length follows the page). `size` is the finished video's frame size,
     which the scroll is drawn at (default: the 1280x704 canvas). `brief`
     (route_brief.build_brief) adds the per-leg route and trip summary, under
-    `heading` ({"title", "subtitle", "title_style", "subtitle_style"}, the
-    intro's text and styles).
+    `heading` (intro_step.intro_heading: kicker, title, subtitle and their
+    styles, the intro's).
     Returns the output path, or None (logged,
     never raises) on any failure — an outro is a nice-to-have, not something
     that should hard-fail a pipeline run."""

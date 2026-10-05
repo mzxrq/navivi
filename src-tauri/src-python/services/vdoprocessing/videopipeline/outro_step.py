@@ -53,14 +53,10 @@ def render_outro_clip(project_config_path: str) -> Optional[str]:
         except Exception as exc:
             logger.warning("Outro step: no route info (%s) — cards only.", exc)
 
-    # Same title + subtitle as the intro (intro_step.intro_text_item).
-    title = job_config.get("video_title") or project_name
-    heading = {
-        "title": title,
-        "subtitle": job_config.get("video_subtitle", ""),
-        "title_style": settings.get("intro_title_style"),
-        "subtitle_style": settings.get("intro_subtitle_style"),
-    }
+    from .intro_step import intro_heading
+
+    heading = intro_heading(job_config)
+    title = heading["title"]
 
     logger.info("Outro step: building %s outro clip for project '%s'.", style, project_name)
     outro_path = generate_outro_clip(

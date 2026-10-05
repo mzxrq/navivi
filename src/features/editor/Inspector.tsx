@@ -8,6 +8,7 @@ import { CaptionRow, CaptionStyleFields, IntInput } from "../../components/ui/Ca
 import { useWorkspace } from "../../hooks/useWorkspace";
 import type { TextStyle } from "../../types";
 import {
+  DEFAULT_TEXT_KICKER_STYLE,
   DEFAULT_TEXT_SUBTITLE_STYLE,
   DEFAULT_TEXT_TITLE_STYLE,
   LineAnimation,
@@ -480,6 +481,15 @@ export function Inspector(p: InspectorProps) {
           </Row>
         </Section>
         <TextLookSection text={text} timeline={timeline} commit={commit} />
+        {(text.kind === "intro" || text.kicker) && (
+          <TextLineSection
+            title={t`Location line`}
+            line={text.kicker ?? { text: "" }}
+            defaults={DEFAULT_TEXT_KICKER_STYLE}
+            motion={lineMotion("kicker", text.kicker?.animation, text.kicker?.delay, text.animation, text.globalEnd - text.globalStart, paired)}
+            onChange={(kicker) => patchText({ kicker })}
+          />
+        )}
         <TextLineSection
           title={t`Title`}
           line={text.title}

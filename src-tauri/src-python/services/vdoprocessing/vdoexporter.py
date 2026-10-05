@@ -111,6 +111,7 @@ def write_caption_ass(
     with its own `style` overrides on top, so lines can differ in font, colour and place.
     `texts` are text-track items (an animated title + subtitle, centred), drawn on top."""
     from services.vdoprocessing.introclip import (
+        DEFAULT_KICKER_STYLE,
         DEFAULT_SUBTITLE_STYLE,
         DEFAULT_TITLE_STYLE,
         TEXT_DEFAULT_MARGIN_PX,
@@ -141,10 +142,12 @@ def write_caption_ass(
             f"{name},,0,0,0,,{text}"
         )
     for item in sorted(texts or [], key=lambda x: float(x["start"])):
-        title, subtitle = item.get("title") or {}, item.get("subtitle") or {}
+        title, subtitle, kicker = item.get("title") or {}, item.get("subtitle") or {}, item.get("kicker") or {}
         title_text, sub_text = str(title.get("text") or ""), str(subtitle.get("text") or "")
+        kicker_text = str(kicker.get("text") or "")
         title_style = installed(DEFAULT_TITLE_STYLE.merged(title.get("style")), DEFAULT_TITLE_STYLE.font_family)
         sub_style = installed(DEFAULT_SUBTITLE_STYLE.merged(subtitle.get("style")), DEFAULT_SUBTITLE_STYLE.font_family)
+        kicker_style = installed(DEFAULT_KICKER_STYLE.merged(kicker.get("style")), DEFAULT_KICKER_STYLE.font_family)
         def px(key: str) -> float:
             v = item.get(key)
             return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else TEXT_DEFAULT_MARGIN_PX
@@ -152,6 +155,7 @@ def write_caption_ass(
         cy = text_block_center_y(
             str(item.get("position") or "middle"), px("margin_v"),
             title_style.font_size, sub_style.font_size, bool(title_text.strip()), bool(sub_text.strip()),
+            kicker_size=kicker_style.font_size if kicker_text.strip() else 0,
         )
         align = item.get("align") if item.get("align") in ("left", "right") else "center"
         cx = {"left": px("margin_h"), "right": play_w - px("margin_h")}.get(align, play_w / 2)
@@ -161,6 +165,8 @@ def write_caption_ass(
             animation=item.get("animation"),
             title_motion={"animation": title.get("animation"), "delay": title.get("delay")},
             subtitle_motion={"animation": subtitle.get("animation"), "delay": subtitle.get("delay")},
+            kicker=kicker_text, kicker_style=kicker_style,
+            kicker_motion={"animation": kicker.get("animation"), "delay": kicker.get("delay")},
         ):
             # Layer 1: above captions. Every look is in the event's own tags.
             events.append(f"Dialogue: 1,{_ass_timestamp(a)},{_ass_timestamp(b)},Text,,0,0,0,,{text}")

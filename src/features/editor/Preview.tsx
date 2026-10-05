@@ -6,6 +6,7 @@ import { DEFAULT_EXTRA_VOLUME, fadeIns, isUnlinked, layout, placedCues, placedTe
 import { formatTime, mediaUrl, player, usePlayerTime, usePlaying } from "./player";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import {
+  DEFAULT_TEXT_KICKER_STYLE,
   DEFAULT_TEXT_SUBTITLE_STYLE,
   DEFAULT_TEXT_TITLE_STYLE,
   resolveCaptionStyle,
@@ -13,6 +14,7 @@ import {
   textBlockCenterY,
   lineFrame,
   lineMotion,
+  stackedLineYs,
   textStyleToCss,
   wrapText,
 } from "../../utils/textStyle";
@@ -94,12 +96,23 @@ function TextOverlay({ texts }: { texts: PlacedText[] }) {
               ? { right: side, transformOrigin: "right center" }
               : { left: "50%", transformOrigin: "center" };
         const shift = x.align === "left" ? "translate(0, -50%)" : x.align === "right" ? "translate(0, -50%)" : "translate(-50%, -50%)";
-        const cy = textBlockCenterY(x.position, x.margin_v, title.font_size, sub.font_size, hasTitle, hasSub);
-        const titleY = hasTitle && hasSub ? cy - Math.trunc(sub.font_size * 0.6) : cy;
-        const subY = hasTitle && hasSub ? cy + Math.trunc(title.font_size * 0.6) : cy;
+        const kicker = { ...DEFAULT_TEXT_KICKER_STYLE, ...(x.kicker?.style ?? {}) };
+        const hasKicker = !!x.kicker?.text.trim();
+        const km = lineMotion("kicker", x.kicker?.animation, x.kicker?.delay, x.animation, dur, paired);
+        const kf = lineFrame(t, dur, km.animation, km.delay);
+        const cy = textBlockCenterY(x.position, x.margin_v, title.font_size, sub.font_size, hasTitle, hasSub, hasKicker ? kicker.font_size : 0);
+        const { kickerY, titleY, subY } = stackedLineYs(cy, kicker.font_size, title.font_size, sub.font_size, hasKicker, hasTitle, hasSub);
         const line = "absolute whitespace-nowrap leading-none";
         return (
           <div key={x.id}>
+            {hasKicker && kf.opacity > 0 && (
+              <span
+                className={line}
+                style={{ ...textStyleToCss(kicker), ...place, top: cq(kickerY + kf.rise), opacity: kf.opacity * kicker.opacity, transform: `${shift} scale(${kf.scale})` }}
+              >
+                {x.kicker!.text}
+              </span>
+            )}
             {hasTitle && tf.opacity > 0 && (
               <span
                 className={line}
