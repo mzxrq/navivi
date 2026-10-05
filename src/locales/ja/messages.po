@@ -289,7 +289,7 @@ msgstr "3秒"
 msgid "30 seconds"
 msgstr "30秒"
 
-#: src/features/assistant/AssistantChat.tsx:57
+#: src/features/assistant/AssistantChat.tsx:59
 msgid "A calm 5 minute video of the pilgrimage route in the PDF I attach, for visitors from abroad"
 msgstr "添付する PDF の巡礼ルートを、訪日外国人向けに落ち着いた雰囲気で紹介する 5 分の動画"
 
@@ -304,6 +304,10 @@ msgstr "高速ドラフトは1行あたりの時間が約半分で、音は少�
 #: src/components/ui/ComponentsChecklist.tsx:70
 msgid "A few built-in Japanese voices, a few seconds per line. A little flatter, and it cannot clone a voice."
 msgstr "内蔵の日本語ボイスが数種類あり、1行あたり数秒で生成します。やや平坦な声で、声のクローンはできません。"
+
+#: src/features/assistant/AssistantChat.tsx:60
+msgid "A relaxed walking video that follows the GPX track I attach, with English narration, about 4 minutes"
+msgstr "添付する GPX トラックをたどる、のんびりとした散策動画。英語ナレーションで約 4 分"
 
 #: src/components/ui/VoiceSettings.tsx:448
 msgid "A voice with this name already exists."
@@ -602,7 +606,7 @@ msgstr "本当に <0>{0}</0> を最近のプロジェクトから削除します
 msgid "Arriving Script"
 msgstr "到着時のスクリプト"
 
-#: src/features/assistant/AssistantChat.tsx:144
+#: src/features/assistant/AssistantChat.tsx:162
 msgid "Ask or add details…"
 msgstr "質問や補足を入力…"
 
@@ -612,7 +616,6 @@ msgstr "アセットが承認され、最終的な動画として結合されま
 
 #: src/components/ui/TitleBar.tsx:424
 #: src/components/ui/TitleBar.tsx:429
-#: src/features/assistant/AssistantChat.tsx:79
 #: src/features/assistant/AssistantPanel.tsx:17
 msgid "Assistant"
 msgstr "アシスタント"
@@ -622,14 +625,14 @@ msgid "At {stopName}"
 msgstr "{stopName}"
 
 #: src/features/assistant/AssistantChat.tsx:162
-msgid "Attach a file"
-msgstr "ファイルを添付"
+#~ msgid "Attach a file"
+#~ msgstr "ファイルを添付"
 
-#: src/features/assistant/AssistantChat.tsx:160
+#: src/features/assistant/AssistantChat.tsx:178
 msgid "Attach an itinerary (PDF, Word, text), a GPX track or photos. Paste a web link into the message."
 msgstr "旅程表（PDF、Word、テキスト）、GPX の記録、写真を添付できます。Web ページのリンクはメッセージに貼り付けてください。"
 
-#: src/features/assistant/AssistantChat.tsx:162
+#: src/features/assistant/AssistantChat.tsx:178
 msgid "Attach files"
 msgstr "ファイルを添付"
 
@@ -1168,7 +1171,7 @@ msgstr "この場所の地名を取得できませんでした。"
 msgid "Create a copy of this workspace"
 msgstr "このワークスペースのコピーを作成"
 
-#: src/features/assistant/AssistantChat.tsx:117
+#: src/features/assistant/AssistantChat.tsx:134
 msgid "Create project"
 msgstr "プロジェクトを作成"
 
@@ -1221,6 +1224,10 @@ msgstr "切り取り"
 #: src/features/editor/EditorView.tsx:301
 msgid "Cut to next clip"
 msgstr "次のクリップへカット"
+
+#: src/features/assistant/AssistantChat.tsx:58
+msgid "Day trip"
+msgstr "日帰り旅"
 
 #: src/components/ui/StepButtons.tsx:16
 msgid "Decrease"
@@ -1314,7 +1321,7 @@ msgstr "古いファイルを{removed}件削除しました。あらためて作
 msgid "Deleted 1 old file. It will be made again."
 msgstr "古いファイルを1件削除しました。あらためて作成されます。"
 
-#: src/features/assistant/AssistantChat.tsx:90
+#: src/features/assistant/AssistantChat.tsx:106
 msgid "Describe a trip and I will set up the stops and scripts for you. Attach an itinerary if you have one."
 msgstr "旅の内容を伝えてください。立ち寄り先と台本を用意します。旅程表があれば添付してください。"
 
@@ -1322,13 +1329,13 @@ msgstr "旅の内容を伝えてください。立ち寄り先と台本を用意
 #~ msgid "Describe the video you want, or attach an itinerary…"
 #~ msgstr "作りたい動画を説明するか、旅程表を添付してください…"
 
-#: src/features/assistant/AssistantChat.tsx:144
+#: src/features/assistant/AssistantChat.tsx:162
 msgid "Describe the video you want: where it goes, how long, and in what tone."
 msgstr "作りたい動画を説明してください。行き先、長さ、トーンなど。"
 
 #: src/components/view/ProjectManager.tsx:369
-msgid "Describe your trip"
-msgstr "旅の内容を伝える"
+#~ msgid "Describe your trip"
+#~ msgstr "旅の内容を伝える"
 
 #: src/features/map/components/WaypointEditor.tsx:333
 #: src/features/map/hooks/useStopMenus.ts:223
@@ -1381,7 +1388,7 @@ msgstr "上端からの距離"
 msgid "Do you want to save the changes you made to "
 msgstr "次のプロジェクトへの変更を保存しますか: "
 
-#: src/features/assistant/AssistantChat.tsx:48
+#: src/features/assistant/AssistantChat.tsx:49
 msgid "Documents, GPS tracks and photos"
 msgstr "ドキュメント、GPS の記録、写真"
 
@@ -1548,8 +1555,8 @@ msgid "English"
 msgstr "英語"
 
 #: src/features/assistant/AssistantChat.tsx:165
-msgid "Enter to send · Shift+Enter for a new line"
-msgstr "Enter で送信 · Shift+Enter で改行"
+#~ msgid "Enter to send · Shift+Enter for a new line"
+#~ msgstr "Enter で送信 · Shift+Enter で改行"
 
 #: src/features/map/components/DrawBar.tsx:207
 msgid "Erase"
@@ -1786,7 +1793,7 @@ msgstr "ファイルパス"
 msgid "Finalizing Project Timeline..."
 msgstr "プロジェクトのタイムラインを確定しています..."
 
-#: src/features/assistant/AssistantChat.tsx:60
+#: src/features/assistant/AssistantChat.tsx:63
 msgid "Finding places"
 msgstr "場所を探しています"
 
@@ -1803,6 +1810,10 @@ msgstr "ウィンドウに合わせる"
 #: src/features/map/hooks/useStopMenus.ts:41
 msgid "Fly"
 msgstr "飛行"
+
+#: src/features/assistant/AssistantChat.tsx:60
+msgid "Follow my GPS track"
+msgstr "GPS トラックをたどる"
 
 #: src/components/view/ProjectSettingsModal.tsx:200
 #: src/components/view/ProjectSettingsModal.tsx:206
@@ -1823,6 +1834,10 @@ msgstr "フォント"
 #: src/features/editor/EditorView.tsx:344
 msgid "From a file…"
 msgstr "ファイルから…"
+
+#: src/features/assistant/AssistantChat.tsx:61
+msgid "From an itinerary"
+msgstr "旅程表から作る"
 
 #: src/features/editor/EditorView.tsx:334
 #: src/features/editor/EditorView.tsx:343
@@ -2159,7 +2174,7 @@ msgstr "ボイスを読み込み中…"
 msgid "Loading…"
 msgstr "読み込み中…"
 
-#: src/features/assistant/AssistantChat.tsx:60
+#: src/features/assistant/AssistantChat.tsx:63
 msgid "Locating places"
 msgstr "位置を特定しています"
 
@@ -2594,7 +2609,7 @@ msgstr "プロジェクトフォルダを開く"
 msgid "Open Project Folder..."
 msgstr "フォルダを開く..."
 
-#: src/features/assistant/AssistantChat.tsx:70
+#: src/features/assistant/AssistantChat.tsx:75
 msgid "Open settings"
 msgstr "設定を開く"
 
@@ -2607,8 +2622,8 @@ msgid "OpenRouteService"
 msgstr "OpenRouteService"
 
 #: src/features/assistant/AssistantChat.tsx:182
-msgid "Or start from an example"
-msgstr "または例から始める"
+#~ msgid "Or start from an example"
+#~ msgstr "または例から始める"
 
 #: src/components/ui/ColorSwatches.tsx:17
 msgid "Orange"
@@ -2709,6 +2724,10 @@ msgstr "一覧から選ぶか、名前を入力してください。更新を押
 #: src/features/map/components/DrawBar.tsx:325
 msgid "Pick the leg you want to draw, or select a stop in the list."
 msgstr "描く区間を選ぶか、リストで地点を選択してください。"
+
+#: src/features/assistant/AssistantChat.tsx:59
+msgid "Pilgrimage guide"
+msgstr "巡礼ガイド"
 
 #: src/components/ui/ColorSwatches.tsx:17
 msgid "Pink"
@@ -2923,7 +2942,7 @@ msgstr "プロジェクトファイルを読み込み中..."
 msgid "Ready"
 msgstr "準備完了"
 
-#: src/features/assistant/AssistantChat.tsx:112
+#: src/features/assistant/AssistantChat.tsx:129
 msgid "Ready to build"
 msgstr "作成の準備ができました"
 
@@ -3000,7 +3019,7 @@ msgstr "アプリを再読み込み"
 #: src/components/ui/OnlineAiSettings.tsx:174
 #: src/components/ui/ReviewStep.tsx:103
 #: src/components/view/ProjectManager.tsx:632
-#: src/features/assistant/AssistantChat.tsx:152
+#: src/features/assistant/AssistantChat.tsx:170
 #: src/features/editor/EditorView.tsx:303
 #: src/features/editor/Inspector.tsx:477
 msgid "Remove"
@@ -3388,7 +3407,8 @@ msgstr "選択:"
 msgid "Selected to redo: clips {pickedClips}, voices {pickedVoices}"
 msgstr "やり直し対象: クリップ{pickedClips}件、音声{pickedVoices}件"
 
-#: src/features/assistant/AssistantChat.tsx:172
+#: src/features/assistant/AssistantChat.tsx:186
+#: src/features/assistant/AssistantChat.tsx:186
 msgid "Send"
 msgstr "送信"
 
@@ -3592,7 +3612,7 @@ msgstr "開始"
 msgid "Start from"
 msgstr "作成方法"
 
-#: src/features/assistant/AssistantChat.tsx:198
+#: src/features/assistant/AssistantChat.tsx:215
 msgid "Start over"
 msgstr "最初からやり直す"
 
@@ -3609,7 +3629,7 @@ msgid "Starting point"
 msgstr "出発地点"
 
 #: src/components/ui/SetupGate.tsx:130
-#: src/features/assistant/AssistantChat.tsx:60
+#: src/features/assistant/AssistantChat.tsx:63
 msgid "Starting…"
 msgstr "開始中…"
 
@@ -3630,12 +3650,16 @@ msgid "Stitching Videos & Finalizing Export..."
 msgstr "動画を結合し、エクスポートを確定しています．．．"
 
 #: src/components/ui/RenderOverlay.tsx:375
-#: src/features/assistant/AssistantChat.tsx:168
 #: src/features/map/components/MapToolbar.tsx:88
 #: src/features/map/components/WaypointEditor.tsx:338
 #: src/features/map/hooks/useStopMenus.ts:221
 msgid "Stop"
 msgstr "地点"
+
+#: src/features/assistant/AssistantChat.tsx:65
+msgctxt "stop the assistant"
+msgid "Stop"
+msgstr "停止"
 
 #. placeholder {0}: i + 1
 #: src/hooks/useFileActions.ts:256
@@ -3738,6 +3762,10 @@ msgstr "ターゲットフレームレート"
 msgid "Tauri Window API error:"
 msgstr "Tauri Window APIエラー"
 
+#: src/components/view/ProjectManager.tsx:372
+msgid "Tell me about the trip and I will find the places, put them on the map and write a script for each stop."
+msgstr "旅の内容を教えてください。場所を見つけて地図に置き、各地点のスクリプトを書きます。"
+
 #: src/components/view/ProjectManager.tsx:387
 msgid "Templates"
 msgstr "テンプレート"
@@ -3772,10 +3800,10 @@ msgid "The assistant could not build the project"
 msgstr "アシスタントがプロジェクトを作成できませんでした"
 
 #: src/components/view/ProjectManager.tsx:372
-msgid "The assistant finds the places, puts them on the map and writes a script for each stop."
-msgstr "アシスタントが場所を見つけて地図に置き、各地点のスクリプトを書きます。"
+#~ msgid "The assistant finds the places, puts them on the map and writes a script for each stop."
+#~ msgstr "アシスタントが場所を見つけて地図に置き、各地点のスクリプトを書きます。"
 
-#: src/features/assistant/AssistantChat.tsx:67
+#: src/features/assistant/AssistantChat.tsx:72
 msgid "The assistant needs an AI model. Turn on AI features, then pick a local model or add an API key."
 msgstr "アシスタントには AI モデルが必要です。AI 機能をオンにして、ローカルモデルを選ぶか API キーを追加してください。"
 
@@ -3859,7 +3887,7 @@ msgstr "このプロジェクトのすべてのナレーションをこのボイ
 msgid "Theme"
 msgstr "テーマ"
 
-#: src/features/assistant/AssistantChat.tsx:84
+#: src/features/assistant/AssistantChat.tsx:96
 msgid "Thinking…"
 msgstr "考え中…"
 
@@ -4012,6 +4040,10 @@ msgstr "再試行"
 #: src/features/map/components/WaypointEditor.tsx:439
 msgid "TTS Pronunciation Dictionary"
 msgstr "TTS 発音辞書"
+
+#: src/features/assistant/AssistantChat.tsx:61
+msgid "Turn the itinerary I attach into a 3 minute video with Japanese narration"
+msgstr "添付する旅程表を、日本語ナレーションの約 3 分の動画にしてください"
 
 #: src/components/view/ProjectSettingsModal.tsx:191
 msgid "Turn the photos of a stop into a moving clip. Off skips them, which renders faster."
@@ -4236,6 +4268,14 @@ msgstr "ポイント {idx}"
 msgid "What else do you want to set up?"
 msgstr "ほかに何をセットアップしますか？"
 
+#: src/components/view/ProjectManager.tsx:369
+msgid "Where are we going today?"
+msgstr "今日はどこへ行きましょうか?"
+
+#: src/features/assistant/AssistantChat.tsx:103
+msgid "Where are we going?"
+msgstr "どこへ行きましょうか?"
+
 #: src/components/ui/OnlineAiSettings.tsx:35
 msgid "Where scripts are written. A provider on the internet is usually faster than a local model and does not need a powerful PC."
 msgstr "スクリプトを書く場所です。インターネット上のプロバイダーは通常ローカルモデルより速く、高性能なPCも必要ありません。"
@@ -4292,7 +4332,7 @@ msgstr "動作しています"
 #~ msgid "Writes narration scripts on your PC"
 #~ msgstr "お使いの PC でナレーション原稿を書きます"
 
-#: src/features/assistant/AssistantChat.tsx:60
+#: src/features/assistant/AssistantChat.tsx:63
 msgid "Writing scripts"
 msgstr "スクリプトを作成しています"
 
@@ -4305,8 +4345,8 @@ msgstr "台本を作成中（{done} / {total}）{label}"
 #~ msgstr "スクリプトを作成中..."
 
 #: src/features/assistant/AssistantChat.tsx:79
-msgid "You"
-msgstr "あなた"
+#~ msgid "You"
+#~ msgstr "あなた"
 
 #: src/components/ui/SetupGate.tsx:60
 msgid "You can do this later in Settings > Setup"
@@ -4320,7 +4360,7 @@ msgstr "最近のワークスペースはありませんね。新しいプロジ
 msgid "Your Project Name Here"
 msgstr "ここにプロジェクト名を入力"
 
-#: src/features/assistant/AssistantChat.tsx:114
+#: src/features/assistant/AssistantChat.tsx:131
 msgid "Your trip"
 msgstr "あなたの旅"
 

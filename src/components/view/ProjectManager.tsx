@@ -365,11 +365,11 @@ export function ProjectManager() {
             </header>
 
             <section className="mb-8 max-w-3xl">
-              <h2 className="text-[13px] font-semibold text-zinc-700 dark:text-zinc-200">
-                <Trans>Describe your trip</Trans>
+              <h2 className="font-serif text-[26px] leading-tight text-zinc-900 dark:text-zinc-50">
+                <Trans>Where are we going today?</Trans>
               </h2>
-              <p className="mb-2 text-[12px] text-zinc-500 dark:text-zinc-400">
-                <Trans>The assistant finds the places, puts them on the map and writes a script for each stop.</Trans>
+              <p className="mt-1 mb-4 text-[13px] text-zinc-500 dark:text-zinc-400">
+                <Trans>Tell me about the trip and I will find the places, put them on the map and write a script for each stop.</Trans>
               </p>
               <AssistantChat variant="hero" />
             </section>
