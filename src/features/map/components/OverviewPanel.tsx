@@ -1,11 +1,67 @@
 import { useState } from "react";
 import { ChevronDown, Clapperboard } from "../../../components/ui/icons";
 import { useWorkspace } from "../../../hooks/useWorkspace";
+import { Checkbox } from "../../../components/ui/Checkbox";
+import { ColorSwatches } from "../../../components/ui/ColorSwatches";
+import { Slider } from "../../../components/ui/Slider";
+import { INTRO_SIZE_MAX, INTRO_SIZE_MIN, introLookOf, introSizeToCqw } from "../../../utils/introLook";
+import type { IntroStyle } from "../../../types";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 
+type Rgb = [number, number, number];
+
+function LookRow({
+  label,
+  size,
+  color,
+  bold,
+  onSize,
+  onColor,
+  onBold,
+}: {
+  label: string;
+  size: number;
+  color: Rgb;
+  bold: boolean;
+  onSize: (v: number) => void;
+  onColor: (c: Rgb) => void;
+  onBold: (b: boolean) => void;
+}) {
+  return (
+    <div className="space-y-1.5 -mt-0.5">
+      <div className="flex items-center gap-2">
+        <span className="w-9 text-[11px] text-zinc-500 shrink-0">
+          <Trans>Size</Trans>
+        </span>
+        <Slider
+          min={INTRO_SIZE_MIN}
+          max={INTRO_SIZE_MAX}
+          step={2}
+          value={size}
+          onChange={onSize}
+          label={t`${label} size`}
+          format={(v) => `${v}px`}
+          className="flex-1"
+        />
+        <span className="w-9 text-right text-[11px] tabular-nums text-zinc-500">{size}</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <span className="w-9 text-[11px] text-zinc-500 shrink-0">
+          <Trans>Color</Trans>
+        </span>
+        <ColorSwatches color={color} onChange={onColor} />
+      </div>
+      <label className="flex items-center gap-2 text-[11px] text-zinc-500 cursor-pointer w-fit">
+        <Checkbox checked={bold} onChange={onBold} label={t`${label} bold`} />
+        <Trans>Bold</Trans>
+      </label>
+    </div>
+  );
+}
+
 export function OverviewPanel() {
-  const { metadata, updateMetadata, setIsDirty } = useWorkspace();
+  const { metadata, updateMetadata, settings, updateSettings, setIsDirty } = useWorkspace();
   const [isOpen, setIsOpen] = useState(false);
 
   const isEnabled = metadata.enable_intro !== false;
@@ -15,8 +71,15 @@ export function OverviewPanel() {
     : [title, metadata.video_subtitle].filter(Boolean).join(" · ") ||
       t`Title card at the start of the video`;
 
+  const look = introLookOf(settings.intro_style);
+
   const update = (patch: Parameters<typeof updateMetadata>[0]) => {
     updateMetadata(patch);
+    setIsDirty(true);
+  };
+
+  const updateLook = (patch: IntroStyle) => {
+    updateSettings({ intro_style: { ...settings.intro_style, ...patch } });
     setIsDirty(true);
   };
 
@@ -92,6 +155,15 @@ export function OverviewPanel() {
                   <Trans>Leave blank to use the project name.</Trans>
                 </span>
               </label>
+              <LookRow
+                label={t`Title`}
+                size={look.title_size}
+                color={look.title_color}
+                bold={look.title_bold}
+                onSize={(v) => updateLook({ title_size: v })}
+                onColor={(c) => updateLook({ title_color: c })}
+                onBold={(b) => updateLook({ title_bold: b })}
+              />
 
               <label className="block">
                 <span className="block text-[11px] font-medium text-zinc-500 mb-1">
@@ -105,16 +177,40 @@ export function OverviewPanel() {
                   className="w-full h-8 px-2.5 rounded-md bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-white/10 text-[13px] text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:outline-none focus:border-navi focus:ring-2 focus:ring-navi/20 transition-colors"
                 />
               </label>
+              <LookRow
+                label={t`Subtitle`}
+                size={look.subtitle_size}
+                color={look.subtitle_color}
+                bold={look.subtitle_bold}
+                onSize={(v) => updateLook({ subtitle_size: v })}
+                onColor={(c) => updateLook({ subtitle_color: c })}
+                onBold={(b) => updateLook({ subtitle_bold: b })}
+              />
 
               <div
                 aria-hidden
-                className="aspect-video w-full rounded-md bg-zinc-900 ring-1 ring-black/5 dark:ring-white/10 flex flex-col items-center justify-center gap-1 px-4 text-center overflow-hidden"
+                style={{ containerType: "inline-size" }}
+                className="aspect-video w-full rounded-md bg-zinc-900 ring-1 ring-black/5 dark:ring-white/10 flex flex-col items-center justify-center px-[4%] text-center overflow-hidden leading-tight"
               >
-                <span className="text-white text-sm font-semibold truncate max-w-full">
+                <span
+                  className="max-w-full wrap-break-word"
+                  style={{
+                    fontSize: introSizeToCqw(look.title_size),
+                    fontWeight: look.title_bold ? 700 : 400,
+                    color: `rgb(${look.title_color.join(",")})`,
+                  }}
+                >
                   {title || t`Project Title`}
                 </span>
                 {metadata.video_subtitle && (
-                  <span className="text-zinc-400 text-[10px] truncate max-w-full">
+                  <span
+                    className="max-w-full wrap-break-word"
+                    style={{
+                      fontSize: introSizeToCqw(look.subtitle_size),
+                      fontWeight: look.subtitle_bold ? 700 : 400,
+                      color: `rgb(${look.subtitle_color.join(",")})`,
+                    }}
+                  >
                     {metadata.video_subtitle}
                   </span>
                 )}

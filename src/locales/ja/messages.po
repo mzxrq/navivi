@@ -221,6 +221,14 @@ msgstr "{h}時間{rest}分"
 msgid "{imageCount} photos"
 msgstr "写真{imageCount}枚"
 
+#: src/features/map/components/OverviewPanel.tsx:56
+msgid "{label} bold"
+msgstr "{label}を太字にする"
+
+#: src/features/map/components/OverviewPanel.tsx:43
+msgid "{label} size"
+msgstr "{label}のサイズ"
+
 #: src/features/map/components/GenerateDialog.tsx:74
 msgid "{legs} legs"
 msgstr "{legs}区間"
@@ -917,6 +925,10 @@ msgstr "白紙の地図"
 msgid "Blue"
 msgstr "青"
 
+#: src/features/map/components/OverviewPanel.tsx:57
+msgid "Bold"
+msgstr "太字"
+
 #: src/features/map/components/MapLayers/RouteStyling.tsx:110
 msgid "Border"
 msgstr "枠線"
@@ -1169,6 +1181,10 @@ msgstr "閉じる"
 #: src/features/map/components/WaypointEditor.tsx:371
 msgid "Collapse"
 msgstr "折りたたむ"
+
+#: src/features/map/components/OverviewPanel.tsx:51
+msgid "Color"
+msgstr "色"
 
 #: src/features/timeline/components/elements/inspector/InspectorColorPanel.tsx:19
 #~ msgid "Color Adjustments"
@@ -1691,7 +1707,7 @@ msgstr "複製するプロジェクト名"
 msgid "E"
 msgstr "終"
 
-#: src/features/map/components/OverviewPanel.tsx:104
+#: src/features/map/components/OverviewPanel.tsx:176
 msgid "E.g. Tomogashima and Kada area..."
 msgstr "ここにサブタイトルを入れます..."
 
@@ -2151,8 +2167,8 @@ msgstr "アセットを生成"
 msgid "Generate Assets"
 msgstr "アセットを生成"
 
-#: src/features/map/components/OverviewPanel.tsx:61
-#: src/features/map/components/OverviewPanel.tsx:62
+#: src/features/map/components/OverviewPanel.tsx:124
+#: src/features/map/components/OverviewPanel.tsx:125
 msgid "Generate intro video"
 msgstr "イントロ動画を生成"
 
@@ -2375,7 +2391,7 @@ msgstr "パイプラインを初期化しています..."
 msgid "Interface"
 msgstr "インターフェース"
 
-#: src/features/map/components/OverviewPanel.tsx:43
+#: src/features/map/components/OverviewPanel.tsx:106
 msgid "Intro"
 msgstr "イントロ"
 
@@ -2443,7 +2459,7 @@ msgstr "レイヤーマネージャー"
 msgid "Layers"
 msgstr "レイヤー"
 
-#: src/features/map/components/OverviewPanel.tsx:92
+#: src/features/map/components/OverviewPanel.tsx:155
 msgid "Leave blank to use the project name."
 msgstr "空欄のままにすればプロジェクト名を使用します"
 
@@ -2909,7 +2925,7 @@ msgstr "確認できるものがまだありません。"
 
 #: src/components/ui/AppSettings.tsx:307
 #: src/features/map/components/GenerateDialog.tsx:94
-#: src/features/map/components/OverviewPanel.tsx:14
+#: src/features/map/components/OverviewPanel.tsx:70
 msgid "Off"
 msgstr "オフ"
 
@@ -3227,7 +3243,7 @@ msgstr "プロジェクト設定"
 msgid "Project settings saved"
 msgstr "プロジェクト設定を保存しました"
 
-#: src/features/map/components/OverviewPanel.tsx:114
+#: src/features/map/components/OverviewPanel.tsx:203
 msgid "Project Title"
 msgstr "プロジェクトタイトル"
 
@@ -3991,6 +4007,10 @@ msgstr "動画の冒頭にタイトルとサブタイトルを表示します"
 msgid "Simple"
 msgstr "シンプル"
 
+#: src/features/map/components/OverviewPanel.tsx:35
+msgid "Size"
+msgstr "サイズ"
+
 #: src/components/ui/AppSettings.tsx:336
 #: src/components/ui/NewProject.tsx:388
 msgid "Skip AI voiceover synthesis and pop-up images during generation"
@@ -4185,7 +4205,8 @@ msgstr "カスタム画像またはスクリプトを含む地点"
 
 #: src/components/ui/NewProject.tsx:379
 #: src/features/editor/Inspector.tsx:168
-#: src/features/map/components/OverviewPanel.tsx:98
+#: src/features/map/components/OverviewPanel.tsx:170
+#: src/features/map/components/OverviewPanel.tsx:181
 msgid "Subtitle"
 msgstr "字幕"
 
@@ -4329,7 +4350,7 @@ msgstr "ご自身の動画の音声を、ナレーションの下にミックス
 msgid "The start and destination are always included."
 msgstr "出発地と目的地は常に含まれます。"
 
-#: src/features/map/components/OverviewPanel.tsx:125
+#: src/features/map/components/OverviewPanel.tsx:221
 msgid "The video starts directly on the route. Turn the intro on to add a title card."
 msgstr "動画はルートから直接始まります。タイトルカードを追加するにはイントロをオンにしてください。"
 
@@ -4431,8 +4452,9 @@ msgstr "ナレーションに書いたタイミング指定で、地点に到着
 
 #: src/components/ui/NewProject.tsx:370
 #: src/components/ui/NewProject.tsx:371
-#: src/features/map/components/OverviewPanel.tsx:82
-#: src/features/map/components/OverviewPanel.tsx:88
+#: src/features/map/components/OverviewPanel.tsx:145
+#: src/features/map/components/OverviewPanel.tsx:151
+#: src/features/map/components/OverviewPanel.tsx:159
 msgid "Title"
 msgstr "タイトル"
 
@@ -4446,7 +4468,7 @@ msgstr "タイトルカードとエンディングカード"
 msgid "Title card"
 msgstr "タイトルカード"
 
-#: src/features/map/components/OverviewPanel.tsx:16
+#: src/features/map/components/OverviewPanel.tsx:72
 msgid "Title card at the start of the video"
 msgstr "動画の冒頭に表示するタイトルカード"
 

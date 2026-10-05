@@ -48,8 +48,18 @@ export interface RouteSegment {
 }
 
 // start dev 1 settings
+export interface IntroStyle {
+  title_size?: number;
+  title_color?: [number, number, number];
+  title_bold?: boolean;
+  subtitle_size?: number;
+  subtitle_color?: [number, number, number];
+  subtitle_bold?: boolean;
+}
+
 export interface ProjectSettings {
   fps: number;
+  intro_style?: IntroStyle;
   line_color: [number, number, number];
   line_thickness: number;
   route_line_border_color?: [number, number, number];

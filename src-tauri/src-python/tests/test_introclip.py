@@ -114,6 +114,42 @@ class TestWriteTitleAss:
         assert dialogue_line.endswith("}xDay 1")
 
 
+class TestIntroLook:
+    def test_no_settings_gives_the_tuning_defaults(self):
+        look = introclip.intro_look(None)
+        assert look.title_size == introclip.tuning.INTRO_TITLE_FONT_SIZE
+        assert look.subtitle_size == introclip.tuning.INTRO_SUBTITLE_FONT_SIZE
+        assert introclip.intro_look({"intro_style": "junk"}) == look
+
+    def test_each_field_overrides_on_its_own(self):
+        look = introclip.intro_look(
+            {"intro_style": {"subtitle_size": 120, "subtitle_color": [255, 200, 0], "title_bold": False}}
+        )
+        assert look.subtitle_size == 120
+        assert look.subtitle_color == (255, 200, 0)
+        assert look.title_bold is False
+        assert look.title_size == introclip.tuning.INTRO_TITLE_FONT_SIZE
+
+    def test_sizes_are_clamped_and_bad_values_ignored(self):
+        tuning = introclip.tuning
+        look = introclip.intro_look(
+            {"intro_style": {"title_size": 9999, "subtitle_size": "abc", "title_color": [1, 2], "subtitle_color": [300, -5, 9]}}
+        )
+        assert look.title_size == tuning.INTRO_FONT_SIZE_MAX
+        assert look.subtitle_size == tuning.INTRO_SUBTITLE_FONT_SIZE
+        assert look.title_color == tuning.INTRO_TITLE_COLOR
+        assert look.subtitle_color == (255, 0, 9)
+        assert introclip.intro_look({"intro_style": {"title_size": 1}}).title_size == tuning.INTRO_FONT_SIZE_MIN
+
+    def test_subtitle_can_be_larger_than_the_title(self, tmp_path):
+        look = introclip.intro_look({"intro_style": {"title_size": 50, "subtitle_size": 120, "subtitle_color": [255, 0, 0]}})
+        ass = introclip._write_title_ass("Trip", "Day 1", 5.0, tmp_path, look)
+        dialogue = [l for l in ass.read_text(encoding="utf-8").splitlines() if l.startswith("Dialogue:")][0]
+        assert r"\fs120" in dialogue
+        assert r"\c&H0000FF&" in dialogue  # red as ASS BGR
+        assert "FontSize=50" in introclip._title_style(look).to_force_style()
+
+
 class TestPickRandomImages:
     def test_no_images_returns_empty(self):
         assert introclip._pick_random_images([{"label": "a"}], count=3) == []

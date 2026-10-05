@@ -22,7 +22,7 @@ def render_intro_clip(project_config_path: str) -> Optional[str]:
         logger.warning("Intro step: no project config found at %s — skipping.", config_path)
         return None
 
-    from services.vdoprocessing.introclip import generate_intro_clip
+    from services.vdoprocessing.introclip import generate_intro_clip, intro_look
 
     job_config = JobConfigManager(config_path)
     if job_config.get("enable_intro") is False:
@@ -40,7 +40,11 @@ def render_intro_clip(project_config_path: str) -> Optional[str]:
 
     logger.info("Intro step: building intro clip for project '%s'.", project_name)
     intro_path = generate_intro_clip(
-        video_dir=str(video_dir), title=video_title, subtitle=video_subtitle, waypoints=waypoints
+        video_dir=str(video_dir),
+        title=video_title,
+        subtitle=video_subtitle,
+        waypoints=waypoints,
+        look=intro_look(job_config.get("settings", {})),
     )
 
     if intro_path:

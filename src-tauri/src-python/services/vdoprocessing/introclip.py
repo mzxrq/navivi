@@ -19,8 +19,9 @@ import random
 import shutil
 import subprocess
 import uuid
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import cv2
 import numpy as np
@@ -40,15 +41,63 @@ def _ass_bgr(rgb) -> str:
     return f"{b:02X}{g:02X}{r:02X}"
 
 
-_TITLE_STYLE = SubtitleStyle(
-    font_size=tuning.INTRO_TITLE_FONT_SIZE,
-    primary_color=f"&H00{_ass_bgr(tuning.INTRO_TITLE_COLOR)}",
-    bold=tuning.INTRO_TITLE_BOLD,
-    alignment=10,  # old-SSA numbering (see SubtitleStyle.alignment) = middle-center
-    outline=tuning.INTRO_TITLE_OUTLINE,
-    shadow=1.0,
-    margin_v=0,
-)
+@dataclass(frozen=True)
+class IntroLook:
+    """Size, color and weight of the title and the subtitle line, each on its own so the subtitle
+    can be set larger than the title. Defaults are tuning.INTRO_*; the project's settings.intro_style
+    overrides whatever it sets."""
+
+    title_size: int = tuning.INTRO_TITLE_FONT_SIZE
+    title_color: Tuple[int, int, int] = tuning.INTRO_TITLE_COLOR
+    title_bold: bool = tuning.INTRO_TITLE_BOLD
+    subtitle_size: int = tuning.INTRO_SUBTITLE_FONT_SIZE
+    subtitle_color: Tuple[int, int, int] = tuning.INTRO_SUBTITLE_COLOR
+    subtitle_bold: bool = tuning.INTRO_SUBTITLE_BOLD
+
+
+def _clean_size(value: Any, default: int) -> int:
+    try:
+        size = int(round(float(value)))
+    except (TypeError, ValueError):
+        return default
+    return min(tuning.INTRO_FONT_SIZE_MAX, max(tuning.INTRO_FONT_SIZE_MIN, size))
+
+
+def _clean_color(value: Any, default: Tuple[int, int, int]) -> Tuple[int, int, int]:
+    if isinstance(value, (list, tuple)) and len(value) == 3:
+        try:
+            return tuple(min(255, max(0, int(c))) for c in value)  # type: ignore[return-value]
+        except (TypeError, ValueError):
+            pass
+    return default
+
+
+def intro_look(settings: Optional[Dict[str, Any]] = None) -> IntroLook:
+    """Reads settings['intro_style'] (the Intro panel's block); a missing or malformed field keeps its default."""
+    raw = (settings or {}).get("intro_style")
+    if not isinstance(raw, dict):
+        return IntroLook()
+    base = IntroLook()
+    return IntroLook(
+        title_size=_clean_size(raw.get("title_size"), base.title_size),
+        title_color=_clean_color(raw.get("title_color"), base.title_color),
+        title_bold=bool(raw["title_bold"]) if "title_bold" in raw else base.title_bold,
+        subtitle_size=_clean_size(raw.get("subtitle_size"), base.subtitle_size),
+        subtitle_color=_clean_color(raw.get("subtitle_color"), base.subtitle_color),
+        subtitle_bold=bool(raw["subtitle_bold"]) if "subtitle_bold" in raw else base.subtitle_bold,
+    )
+
+
+def _title_style(look: IntroLook) -> SubtitleStyle:
+    return SubtitleStyle(
+        font_size=look.title_size,
+        primary_color=f"&H00{_ass_bgr(look.title_color)}",
+        bold=look.title_bold,
+        alignment=10,  # old-SSA numbering (see SubtitleStyle.alignment) = middle-center
+        outline=tuning.INTRO_TITLE_OUTLINE,
+        shadow=1.0,
+        margin_v=0,
+    )
 
 
 def _read_image_safe(path: str) -> Optional[np.ndarray]:
@@ -173,7 +222,9 @@ def _format_ass_timestamp(seconds: float) -> str:
     return f"{hours}:{minutes:02d}:{secs:02d}.{cs:02d}"
 
 
-def _write_title_ass(title: str, subtitle: str, duration_sec: float, tmp_dir: Path) -> Path:
+def _write_title_ass(
+    title: str, subtitle: str, duration_sec: float, tmp_dir: Path, look: Optional[IntroLook] = None
+) -> Path:
     """Writes a throwaway single-line .ass (not .srt) spanning the whole
     intro, with inline ASS override tags on the dialogue line itself giving
     the TITLE TEXT its own "pop in" transition — a combined scale-up +
@@ -182,6 +233,7 @@ def _write_title_ass(title: str, subtitle: str, duration_sec: float, tmp_dir: Pa
     (applied via the `subtitles` filter, same as before) still controls
     font/size/color/position; the Style line below just needs to exist and
     be named "Default" for that to have something to override."""
+    look = look or IntroLook()
     fade_ms = int(round(tuning.INTRO_LABEL_FADE_SECONDS * 1000))
     duration_ms = int(round(duration_sec * 1000))
     fade_out_start_ms = max(0, duration_ms - fade_ms)
@@ -204,10 +256,10 @@ def _write_title_ass(title: str, subtitle: str, duration_sec: float, tmp_dir: Pa
     safe_subtitle = (subtitle or "").replace("{", "").replace("}", "")
     if safe_subtitle:
         sub_tags = (
-            f"\\fs{tuning.INTRO_SUBTITLE_FONT_SIZE}"
+            f"\\fs{look.subtitle_size}"
             f"\\bord{tuning.INTRO_SUBTITLE_OUTLINE}"
-            f"\\b{1 if tuning.INTRO_SUBTITLE_BOLD else 0}"
-            f"\\c&H{_ass_bgr(tuning.INTRO_SUBTITLE_COLOR)}&"
+            f"\\b{1 if look.subtitle_bold else 0}"
+            f"\\c&H{_ass_bgr(look.subtitle_color)}&"
         )
         safe_text = f"{safe_title}\\N{{{sub_tags}}}{safe_subtitle}"
     else:
@@ -260,6 +312,7 @@ def generate_intro_clip(
     subtitle: str,
     waypoints: List[Dict[str, Any]],
     output_filename: str = tuning.INTRO_OUTPUT_FILENAME,
+    look: Optional[IntroLook] = None,
 ) -> Optional[str]:
     """Picks up to INTRO_IMAGE_COUNT random, distinct waypoint popup images
     (a fresh pick every call), renders a slow zoom-in over each, crossfades
@@ -310,14 +363,15 @@ def generate_intro_clip(
         )
         _crossfade_chain(per_clip_raw_paths, per_clip_sec, crossfade_sec, str(combined_path))
 
-        title_path = _write_title_ass(title or "", subtitle or "", total_sec, video_dir_path)
+        look = look or IntroLook()
+        title_path = _write_title_ass(title or "", subtitle or "", total_sec, video_dir_path, look)
 
         # [HACK] [Subtitle] Absolute, forward-slashed, colon-escaped path — libass's
         # subtitles filter needs this exact escaping, same as combine_video_and_audio.
         escaped_title_path = str(title_path.resolve()).replace("\\", "/").replace(":", r"\:")
         fade_sec = tuning.INTRO_FADE_SECONDS
         vf_filter = (
-            f"subtitles=filename='{escaped_title_path}':force_style='{_TITLE_STYLE.to_force_style()}',"
+            f"subtitles=filename='{escaped_title_path}':force_style='{_title_style(look).to_force_style()}',"
             f"fade=t=in:st=0:d={fade_sec:.2f},"
             f"fade=t=out:st={max(0.0, total_sec - fade_sec):.2f}:d={fade_sec:.2f}"
         )

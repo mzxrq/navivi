@@ -221,6 +221,14 @@ msgstr "{h} h {rest} min"
 msgid "{imageCount} photos"
 msgstr "{imageCount} photos"
 
+#: src/features/map/components/OverviewPanel.tsx:56
+msgid "{label} bold"
+msgstr "{label} bold"
+
+#: src/features/map/components/OverviewPanel.tsx:43
+msgid "{label} size"
+msgstr "{label} size"
+
 #: src/features/map/components/GenerateDialog.tsx:74
 msgid "{legs} legs"
 msgstr "{legs} legs"
@@ -917,6 +925,10 @@ msgstr "Blank map"
 msgid "Blue"
 msgstr "Blue"
 
+#: src/features/map/components/OverviewPanel.tsx:57
+msgid "Bold"
+msgstr "Bold"
+
 #: src/features/map/components/MapLayers/RouteStyling.tsx:110
 msgid "Border"
 msgstr "Border"
@@ -1169,6 +1181,10 @@ msgstr "Close"
 #: src/features/map/components/WaypointEditor.tsx:371
 msgid "Collapse"
 msgstr "Collapse"
+
+#: src/features/map/components/OverviewPanel.tsx:51
+msgid "Color"
+msgstr "Color"
 
 #: src/features/timeline/components/elements/inspector/InspectorColorPanel.tsx:19
 #~ msgid "Color Adjustments"
@@ -1691,7 +1707,7 @@ msgstr "Duplicate Project Name"
 msgid "E"
 msgstr "E"
 
-#: src/features/map/components/OverviewPanel.tsx:104
+#: src/features/map/components/OverviewPanel.tsx:176
 msgid "E.g. Tomogashima and Kada area..."
 msgstr "E.g. Tomogashima and Kada area..."
 
@@ -2151,8 +2167,8 @@ msgstr "Generate assets"
 msgid "Generate Assets"
 msgstr "Generate Assets"
 
-#: src/features/map/components/OverviewPanel.tsx:61
-#: src/features/map/components/OverviewPanel.tsx:62
+#: src/features/map/components/OverviewPanel.tsx:124
+#: src/features/map/components/OverviewPanel.tsx:125
 msgid "Generate intro video"
 msgstr "Generate intro video"
 
@@ -2375,7 +2391,7 @@ msgstr "Initializing pipeline..."
 msgid "Interface"
 msgstr "Interface"
 
-#: src/features/map/components/OverviewPanel.tsx:43
+#: src/features/map/components/OverviewPanel.tsx:106
 msgid "Intro"
 msgstr "Intro"
 
@@ -2443,7 +2459,7 @@ msgstr "Layer Manager"
 msgid "Layers"
 msgstr "Layers"
 
-#: src/features/map/components/OverviewPanel.tsx:92
+#: src/features/map/components/OverviewPanel.tsx:155
 msgid "Leave blank to use the project name."
 msgstr "Leave blank to use the project name."
 
@@ -2909,7 +2925,7 @@ msgstr "Nothing to review yet."
 
 #: src/components/ui/AppSettings.tsx:307
 #: src/features/map/components/GenerateDialog.tsx:94
-#: src/features/map/components/OverviewPanel.tsx:14
+#: src/features/map/components/OverviewPanel.tsx:70
 msgid "Off"
 msgstr "Off"
 
@@ -3227,7 +3243,7 @@ msgstr "Project Settings"
 msgid "Project settings saved"
 msgstr "Project settings saved"
 
-#: src/features/map/components/OverviewPanel.tsx:114
+#: src/features/map/components/OverviewPanel.tsx:203
 msgid "Project Title"
 msgstr "Project Title"
 
@@ -3991,6 +4007,10 @@ msgstr "Shows the title and subtitle at the start of the video"
 msgid "Simple"
 msgstr "Simple"
 
+#: src/features/map/components/OverviewPanel.tsx:35
+msgid "Size"
+msgstr "Size"
+
 #: src/components/ui/AppSettings.tsx:336
 #: src/components/ui/NewProject.tsx:388
 msgid "Skip AI voiceover synthesis and pop-up images during generation"
@@ -4185,7 +4205,8 @@ msgstr "Stops containing custom images or AI scripts"
 
 #: src/components/ui/NewProject.tsx:379
 #: src/features/editor/Inspector.tsx:168
-#: src/features/map/components/OverviewPanel.tsx:98
+#: src/features/map/components/OverviewPanel.tsx:170
+#: src/features/map/components/OverviewPanel.tsx:181
 msgid "Subtitle"
 msgstr "Subtitle"
 
@@ -4329,7 +4350,7 @@ msgstr "The sound of your own video, mixed under the narration."
 msgid "The start and destination are always included."
 msgstr "The start and destination are always included."
 
-#: src/features/map/components/OverviewPanel.tsx:125
+#: src/features/map/components/OverviewPanel.tsx:221
 msgid "The video starts directly on the route. Turn the intro on to add a title card."
 msgstr "The video starts directly on the route. Turn the intro on to add a title card."
 
@@ -4431,8 +4452,9 @@ msgstr "Timing cues written in a narration decide when the walker reaches the st
 
 #: src/components/ui/NewProject.tsx:370
 #: src/components/ui/NewProject.tsx:371
-#: src/features/map/components/OverviewPanel.tsx:82
-#: src/features/map/components/OverviewPanel.tsx:88
+#: src/features/map/components/OverviewPanel.tsx:145
+#: src/features/map/components/OverviewPanel.tsx:151
+#: src/features/map/components/OverviewPanel.tsx:159
 msgid "Title"
 msgstr "Title"
 
@@ -4446,7 +4468,7 @@ msgstr "Title and ending cards"
 msgid "Title card"
 msgstr "Title card"
 
-#: src/features/map/components/OverviewPanel.tsx:16
+#: src/features/map/components/OverviewPanel.tsx:72
 msgid "Title card at the start of the video"
 msgstr "Title card at the start of the video"
 

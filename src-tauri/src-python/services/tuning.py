@@ -1029,6 +1029,9 @@ INTRO_SUBTITLE_FONT_SIZE = 36
 INTRO_SUBTITLE_OUTLINE = 0
 INTRO_SUBTITLE_BOLD = True
 INTRO_SUBTITLE_COLOR: Tuple[int, int, int] = (255, 255, 255)
+# Bounds for the sizes a project can set in settings.intro_style.
+INTRO_FONT_SIZE_MIN = 20
+INTRO_FONT_SIZE_MAX = 200
 INTRO_OUTPUT_FILENAME = "00_intro.mp4"
 # Same frame size as every other clip, or the timeline preview draws it smaller.
 INTRO_WIDTH = 1920
