@@ -36,7 +36,7 @@ pub struct Runtime {
 
 /// What the shell can see of the machine; separate from `resolve` so the decision can be tested.
 pub struct Layout {
-    pub dev_script_exists: bool,
+    pub dev_script_exists: bool, // see running_from_repo
     pub resource_dir: Option<PathBuf>,
     pub local_data_dir: Option<PathBuf>,
 }
@@ -85,6 +85,12 @@ pub fn resolve(layout: &Layout) -> Runtime {
     }
 }
 
+/// Whether this is a development run from the repo. Only a debug build can be: an installed app's working directory is its
+/// install folder, which also holds `src-python/main.py`, so the file alone proves nothing.
+pub fn running_from_repo() -> bool {
+    cfg!(debug_assertions) && Path::new("src-python/main.py").exists()
+}
+
 static RUNTIME: OnceLock<Runtime> = OnceLock::new();
 
 pub fn init(layout: Layout) {
@@ -95,7 +101,7 @@ pub fn init(layout: Layout) {
 pub fn get() -> &'static Runtime {
     RUNTIME.get_or_init(|| {
         resolve(&Layout {
-            dev_script_exists: Path::new("src-python/main.py").exists(),
+            dev_script_exists: running_from_repo(),
             resource_dir: None,
             local_data_dir: None,
         })
@@ -224,7 +230,8 @@ struct SetupStep {
 
 /// Runs a child to the end, sending each line it prints to the setup screen as `setup-log`.
 fn run_logged(app: &AppHandle, mut cmd: Command, title: &str) -> Result<(), String> {
-    cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+    // Plain text for the log panel: no color codes, no animated progress bars.
+    cmd.env("NO_COLOR", "1").env("UV_NO_PROGRESS", "1").stdout(Stdio::piped()).stderr(Stdio::piped());
     hide_window(&mut cmd);
     let mut child = cmd.spawn().map_err(|e| format!("{title}: {e}"))?;
     let stderr = child.stderr.take().ok_or("no stderr")?;

@@ -43,6 +43,7 @@ import { Switch } from "./Switch";
 import { PronunciationFix, ReviewEdits, ReviewRow, ReviewSelection, ReviewStep } from "./ReviewStep";
 import { db } from "../../services/db";
 import { runStage } from "../../services/sidecar";
+import { announceSetupRequired, isSetupRequired } from "../../services/setup";
 import { GLOBAL_DICTIONARY_KEY } from "../../config/constants";
 
 type WizardStep = "generating" | "verifying" | "exporting" | "finished";
@@ -238,6 +239,7 @@ export function RenderOverlay() {
       // Never start a render from an effect run that has already been torn down.
       if (disposed) return;
       invoke("start_render", { configPath }).catch((err) => {
+        if (isSetupRequired(err)) announceSetupRequired();
         setStatus("error");
         pushSystemLog(t`Failed to invoke Python render: ${err}`, "error");
       });

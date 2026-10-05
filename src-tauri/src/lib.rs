@@ -440,7 +440,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             runtime::init(runtime::Layout {
-                dev_script_exists: Path::new("src-python/main.py").exists(),
+                dev_script_exists: runtime::running_from_repo(),
                 resource_dir: app.path().resource_dir().ok().map(runtime::clean_path),
                 local_data_dir: app.path().app_local_data_dir().ok().map(runtime::clean_path),
             });

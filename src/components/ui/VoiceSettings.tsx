@@ -50,6 +50,7 @@ export function VoiceTab() {
   const [busy, setBusy] = useState<null | "list" | "add" | "delete" | "preview" | "install">(null);
   const [kokoro, setKokoro] = useState<KokoroInfo | null>(null);
   const [qwen3Ready, setQwen3Ready] = useState<boolean | null>(null);
+  const [irodoriReady, setIrodoriReady] = useState<boolean | null>(null);
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [message, setMessage] = useState<{ tone: "error" | "info"; text: string } | null>(null);
   const [adding, setAdding] = useState<{ path: string; id: string; exists?: boolean } | null>(null);
@@ -68,11 +69,14 @@ export function VoiceTab() {
     setBusy("list");
     // One after the other: the app runs one Python call at a time and a new call kills the running one.
     const res = await callSidecarShared<{ voices: Voice[] }>("tts_voices_list");
-    const engines = res.success ? await callSidecarShared<{ kokoro: KokoroInfo; qwen3: { ready: boolean } }>("tts_engines") : null;
+    const engines = res.success
+      ? await callSidecarShared<{ kokoro: KokoroInfo; qwen3: { ready: boolean }; irodori: { ready: boolean } }>("tts_engines")
+      : null;
     setBusy(null);
     if (engines?.success) {
       setKokoro(engines.kokoro);
       setQwen3Ready(engines.qwen3.ready);
+      setIrodoriReady(engines.irodori.ready);
     }
     if (res.success) {
       setVoices(res.voices);
@@ -112,10 +116,10 @@ export function VoiceTab() {
     audio.play().catch((e) => setMessage({ tone: "error", text: String(e) }));
   };
 
-  const install = async (which: "kokoro" | "qwen3") => {
+  const install = async (which: "kokoro" | "qwen3" | "irodori") => {
     setBusy("install");
     setMessage(null);
-    const res = await callSidecar(which === "kokoro" ? "tts_install_kokoro" : "tts_install_qwen3", {});
+    const res = await callSidecar(`tts_install_${which}`, {});
     setBusy(null);
     if (!res.success) return res.cancelled ? undefined : setMessage({ tone: "error", text: res.error });
     await refresh();
@@ -249,6 +253,24 @@ export function VoiceTab() {
               <Volume2 className="w-3 h-3" /> <Trans>Generating the sample. The first one takes about 20 seconds while the voice model loads.</Trans>
             </p>
           )}
+        </section>
+      )}
+
+      {engine === "irodori" && irodoriReady === false && (
+        <section>
+          <h4 className="mb-2 px-0.5 text-[12px] font-semibold text-zinc-500 dark:text-zinc-400"><Trans>Natural voice setup</Trans></h4>
+          <div className="rounded-xl border border-zinc-200 dark:border-white/10 p-3 space-y-2.5">
+            <p className="text-[12px] leading-relaxed text-zinc-500 dark:text-zinc-400">
+              <Trans>
+                The natural voice needs a one-time setup: a separate Python environment and the model files (about 3 GB, more with a graphics card).
+                It takes several minutes and needs an internet connection. Keep this window open while it runs.
+              </Trans>
+            </p>
+            <button type="button" className={primaryButton} disabled={disabled} onClick={() => install("irodori")}>
+              {busy === "install" && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              {busy === "install" ? t`Setting up…` : t`Set up natural voice`}
+            </button>
+          </div>
         </section>
       )}
 

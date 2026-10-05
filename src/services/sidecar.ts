@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { announceSetupRequired, isSetupRequired } from "./setup";
 
 // The Python sidecar (src-tauri/src-python/main.py), reached through the Rust command `run_python_blueprint`.
 //
@@ -31,7 +32,10 @@ export function parseReply<T>(stdout: string): SidecarReply<T> {
 
 // A pipeline stage run on a project: resolves with the process's stdout, rejects with its error text.
 export function runStage(configPath: string, mode: string): Promise<string> {
-  return invoke<string>("run_python_blueprint", { action: configPath, payload: mode });
+  return invoke<string>("run_python_blueprint", { action: configPath, payload: mode }).catch((e) => {
+    if (isSetupRequired(e)) announceSetupRequired();
+    throw e;
+  });
 }
 
 // A utility mode with its input (a string is passed as is, anything else as JSON); never throws.
@@ -40,6 +44,7 @@ export async function callSidecar<T>(mode: string, input: string | object = {}):
   try {
     return parseReply<T>(await invoke<string>("run_python_blueprint", { action: mode, payload }));
   } catch (e) {
+    if (isSetupRequired(e)) announceSetupRequired();
     const error = messageOf(e);
     return { success: false, error, cancelled: CANCELLED.test(error) };
   }

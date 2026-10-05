@@ -1,7 +1,7 @@
 import { useLingui } from "@lingui/react";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -27,6 +27,7 @@ import {
   Film,
   Key,
   MapPin,
+  ExternalLink,
   Mic,
   Monitor,
   Moon,
@@ -1102,6 +1103,23 @@ function AiModelsTab() {
         <OnlineProviderSettings provider={settings.ai_provider as OnlineProvider} />
       ) : (
         <>
+      {localModels.length === 0 && (
+        <div className="flex items-start gap-2.5 rounded-xl border border-zinc-200 dark:border-white/10 px-4 py-3">
+          <div className="flex-1 min-w-0 text-[12px] leading-relaxed text-zinc-500 dark:text-zinc-400">
+            <Trans>
+              No local models found. To write scripts on this PC, install Ollama and keep it running, then download a model below. Or pick an
+              online provider above, which needs nothing installed.
+            </Trans>
+          </div>
+          <button
+            type="button"
+            className={secondaryButton}
+            onClick={() => invoke("plugin:opener|open_url", { url: "https://ollama.com/download" }).catch(console.error)}
+          >
+            <ExternalLink className="w-3.5 h-3.5" /> <Trans>Get Ollama</Trans>
+          </button>
+        </div>
+      )}
       <Section title={t`Narration`}>
         <Row
           title={t`Active model`}
