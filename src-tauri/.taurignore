@@ -1,25 +1,13 @@
-# Python Data & Assets
-src-python/data/**
-src-python/frames/**
-src-python/**/*.mp4
-src-python/**/*.wav
-src-python/**/*.jpg
-src-python/**/*.png
-src-python/services/**
+# The Python pipeline is run from disk on every spawn (cwd = src-tauri), so nothing under
+# src-python needs a Rust rebuild: code edits apply on the next run, and downloads (models,
+# venvs, ComfyUI, FFmpeg, caches) must not restart `tauri dev` and kill a render in progress.
+src-python/**
 
-# Bundled ComfyUI (runtime state files churn constantly, don't watch)
-src-python/bin/**
-
-# Python Caches
-src-python/**/__pycache__/**
-
-# ✨ FIXED: Logger & Services Ignores (Use Forward Slashes!)
-services/logger/**
-services/logger/*.log
-src-python/services/logs/**
-src-python/services/logs/*.log
+# Runtime output written next to the Rust crate
+data/**
+logs/**
+services/**
+assets/**
 
 # Blanket ignore all log files anywhere in the src-tauri directory just in case
 **/*.log
-assets/assets/image/**/*.png
-assets/assets/**
