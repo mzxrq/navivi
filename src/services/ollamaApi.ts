@@ -84,7 +84,8 @@ export function warmUpModel(model: string): void {
     fetch(`${OLLAMA_URL}/api/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model, keep_alive: KEEP_ALIVE }),
+        // Ollama reloads a model whose context differs from the request's, so warm it with the one scripts use.
+        body: JSON.stringify({ model, keep_alive: KEEP_ALIVE, options: { num_ctx: SCRIPT_OPTIONS.num_ctx } }),
     }).catch(() => warmed.delete(model));
 }
 

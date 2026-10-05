@@ -15,7 +15,7 @@ import {
   getModelSizes,
   pullModelStream,
 } from "../../services/ollamaApi";
-import { callSidecar } from "../../services/sidecar";
+import { callSidecar, systemRamGb } from "../../services/sidecar";
 import { modelFit } from "../../utils/modelFit";
 import { dynamicActivate } from "../../i18n";
 import { db } from "../../services/db";
@@ -1072,10 +1072,10 @@ function AiModelsTab() {
   const [ramGb, setRamGb] = useState<number | undefined>();
   useEffect(() => {
     getModelSizes().then(setModelSizes);
-    callSidecar<{ ram_total_gb: number }>("system_info", "").then(
-      (reply) => reply.success && setRamGb(reply.ram_total_gb),
-    );
   }, [localModels]);
+  useEffect(() => {
+    systemRamGb().then(setRamGb);
+  }, []);
   const fit = modelFit(modelSizes[activeModel], ramGb);
 
   const recommendedModels = [

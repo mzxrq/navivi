@@ -58,3 +58,15 @@ export function callSidecarShared<T>(mode: string, input: string | object = {}):
   }
   return run as Promise<SidecarReply<T>>;
 }
+
+let ramGb: Promise<number | undefined> | undefined;
+
+// The PC's RAM never changes within a session, so the sidecar is asked once (and a failed or cancelled ask is retried).
+export function systemRamGb(): Promise<number | undefined> {
+  ramGb ??= callSidecarShared<{ ram_total_gb: number }>("system_info", "").then((reply) => {
+    if (reply.success) return reply.ram_total_gb;
+    ramGb = undefined;
+    return undefined;
+  });
+  return ramGb;
+}

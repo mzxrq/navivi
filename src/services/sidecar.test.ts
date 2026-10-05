@@ -102,3 +102,22 @@ describe("callSidecarShared", () => {
     expect(invoke).toHaveBeenCalledTimes(2);
   });
 });
+
+describe("systemRamGb", () => {
+  it("asks the sidecar once and remembers the answer", async () => {
+    vi.resetModules();
+    const { systemRamGb } = await import("./sidecar");
+    invoke.mockResolvedValue(JSON.stringify({ success: true, ram_total_gb: 16 }));
+    await expect(systemRamGb()).resolves.toBe(16);
+    await expect(systemRamGb()).resolves.toBe(16);
+    expect(invoke).toHaveBeenCalledTimes(1);
+  });
+
+  it("asks again after a failed attempt", async () => {
+    vi.resetModules();
+    const { systemRamGb } = await import("./sidecar");
+    invoke.mockRejectedValueOnce("Process was cancelled").mockResolvedValue(JSON.stringify({ success: true, ram_total_gb: 8 }));
+    await expect(systemRamGb()).resolves.toBeUndefined();
+    await expect(systemRamGb()).resolves.toBe(8);
+  });
+});
