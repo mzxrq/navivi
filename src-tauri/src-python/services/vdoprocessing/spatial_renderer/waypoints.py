@@ -32,6 +32,9 @@ class _WaypointRenderMixin:
     # entrance and the intro card's hold/exit compositing further down.
     _CARD_SLIDE_MARGIN_PX = 40
 
+    # Same corner margin overview.py docks its summary card with.
+    _LEG_CARD_MARGIN_PX = 20
+
     # Default hold time (seconds) for a merged-in mid-route stop-by's
     # pass-by popup card when it doesn't specify its own freeze_seconds.
     _DEFAULT_PASSBY_FREEZE_SECONDS = 2.0
@@ -59,6 +62,16 @@ class _WaypointRenderMixin:
         pans — kept as its own copy rather than imported since that module
         is coupled to its own photo pipeline/VideoWriter."""
         return 0.5 - 0.5 * math.cos(math.pi * t)
+
+    def _leg_summary_card(self, res_data: Dict, duration_seconds: float, mode: str) -> np.ndarray:
+        """This leg's summary card, in the same template as the overview's."""
+        distance_km = res_data.get("distance_km", 0.0)
+        return self.graphics.render_summary_card(
+            distance_km=distance_km,
+            duration_seconds=duration_seconds,
+            mode_breakdown={mode: distance_km},
+            mode_duration={mode: duration_seconds},
+        )
 
     def _play_leg_summary_card(
         self,
@@ -88,10 +101,7 @@ class _WaypointRenderMixin:
         render_waypoints' own intro_card_hold_frames/
         intro_card_exit_frames) so the card stays visible while the route
         animation is already playing, not just before it starts.
-        `margin`/`corner` forward to composite_card_on_frame — pass
-        margin=0 for a create_leg_summary_bar full-width bar so it sits
-        flush against both side edges instead of floating with the usual
-        card margin."""
+        `margin`/`corner` forward to composite_card_on_frame."""
         card_h = seg_card.shape[0]
         slide_distance = card_h + self._CARD_SLIDE_MARGIN_PX
         fade_frames = max(1, int(fade_sec * fps))
@@ -835,17 +845,10 @@ class _WaypointRenderMixin:
             intro_card_exit_frames = 0
             intro_card_slide_distance = 0.0
             if show_segment_summary:
-                intro_seg_card = self.graphics.create_leg_summary_bar(
-                    frame_width=w,
-                    distance_km=res_data.get("distance_km", 0.0),
-                    duration_seconds=seg_real_duration,
-                    mode=res_mode,
-                    from_label=leg_from_label,
-                    to_label=leg_to_label,
-                )
+                intro_seg_card = self._leg_summary_card(res_data, seg_real_duration, res_mode)
                 self._play_leg_summary_card(
                     video, route_preview_frame, intro_seg_card, fps, fade_sec, clip_hold_sec,
-                    margin=0, play_exit=False, play_hold=False,
+                    margin=self._LEG_CARD_MARGIN_PX, play_exit=False, play_hold=False,
                 )
                 # Held for the leg's ENTIRE animation (not just a brief
                 # clip_hold_sec beat) — this used to fade out after ~2s,
@@ -1109,17 +1112,10 @@ class _WaypointRenderMixin:
                         # composited onto the destination photo afterward.
                         if show_segment_summary:
                             summary_shown_inline = True
-                            seg_card = self.graphics.create_leg_summary_bar(
-                                frame_width=w,
-                                distance_km=res_data.get("distance_km", 0.0),
-                                duration_seconds=seg_real_duration,
-                                mode=res_mode,
-                                from_label=leg_from_label,
-                                to_label=leg_to_label,
-                            )
+                            seg_card = self._leg_summary_card(res_data, seg_real_duration, res_mode)
                             self._play_leg_summary_card(
                                 video, frame, seg_card, fps, fade_sec, clip_hold_sec,
-                                margin=0,
+                                margin=self._LEG_CARD_MARGIN_PX,
                             )
 
                         # Every arrival now transitions the same way —
@@ -1162,7 +1158,7 @@ class _WaypointRenderMixin:
                             eased = 1 - (1 - t) ** 3
                             alpha, slide = 1.0 - t, intro_card_slide_distance * eased
                         frame = self.graphics.composite_card_on_frame(
-                            frame, intro_seg_card, alpha=alpha, margin=0,
+                            frame, intro_seg_card, alpha=alpha, margin=self._LEG_CARD_MARGIN_PX,
                             slide_offset_y=slide,
                         )
                     video.write(frame)
@@ -1180,17 +1176,10 @@ class _WaypointRenderMixin:
             # at the very end instead of before a transition that doesn't
             # happen here.
             if show_segment_summary and not summary_shown_inline:
-                seg_card = self.graphics.create_leg_summary_bar(
-                    frame_width=w,
-                    distance_km=res_data.get("distance_km", 0.0),
-                    duration_seconds=seg_real_duration,
-                    mode=res_mode,
-                    from_label=leg_from_label,
-                    to_label=leg_to_label,
-                )
+                seg_card = self._leg_summary_card(res_data, seg_real_duration, res_mode)
                 self._play_leg_summary_card(
                     video, self.last_frame, seg_card, fps, fade_sec, clip_hold_sec,
-                    play_exit=False, margin=0,
+                    play_exit=False, margin=self._LEG_CARD_MARGIN_PX,
                 )
 
             output_paths.append(video.release(str(self.out_dir / chunk_filename)))

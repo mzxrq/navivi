@@ -1,5 +1,5 @@
 """ComfyUI-backed image-to-video client for attraction clips
-(Wan2.2-TI2V-5B-Turbo-GGUF, Q4_K_M quant - see tuning.COMFYUI_UNET_NAME).
+(Wan2.2 GGUF: TI2V-5B-Turbo or the I2V-A14B pair - see tuning.COMFYUI_MODEL).
 
 Talks to the bundled ComfyUI install at src-python/bin/ComfyUI over its
 REST API (submit a workflow graph, poll for completion, download the
@@ -226,7 +226,7 @@ _WORKFLOW_TEMPLATE: Dict[str, Any] = {
     },
     "57": {
         "inputs": {
-            "fps": tuning.COMFYUI_FPS,
+            "fps": tuning.COMFYUI_GEN_FPS,
             "bit_depth": "auto",
             "color_space": "sRGB",
             "images": ["8", 0],
@@ -248,10 +248,152 @@ _WORKFLOW_TEMPLATE: Dict[str, Any] = {
 _SAVE_VIDEO_NODE_ID: Final[str] = "58"
 
 
+def _a14b_expert(unet_name: str, lora_name: str) -> Dict[str, Any]:
+    return {
+        "unet": {"inputs": {"unet_name": unet_name}, "class_type": "UnetLoaderGGUF"},
+        "lora": {"inputs": {"lora_name": lora_name, "strength_model": 1.0}, "class_type": "LoraLoaderModelOnly"},
+        "shift": {"inputs": {"shift": tuning.COMFYUI_MODEL_SHIFT}, "class_type": "ModelSamplingSD3"},
+    }
+
+
+def _a14b_template() -> Dict[str, Any]:
+    """Wiring from ComfyUI's "Wan 2.2 14B I2V" template (video_wan2_2_14B_i2v)
+    with its 4-step Lightx2v path on: the high-noise expert samples steps
+    0..COMFYUI_A14B_SPLIT_STEP and hands its noisy latent to the low-noise
+    one. UNETLoader swapped for UnetLoaderGGUF, VAEDecode for the tiled one."""
+    graph: Dict[str, Any] = {}
+    for tag, unet, lora in (
+        ("high", tuning.COMFYUI_A14B_HIGH_UNET_NAME, tuning.COMFYUI_A14B_HIGH_LORA_NAME),
+        ("low", tuning.COMFYUI_A14B_LOW_UNET_NAME, tuning.COMFYUI_A14B_LOW_LORA_NAME),
+    ):
+        nodes = _a14b_expert(unet, lora)
+        nodes["lora"]["inputs"]["model"] = [f"unet_{tag}", 0]
+        nodes["shift"]["inputs"]["model"] = [f"lora_{tag}", 0]
+        graph.update({f"{name}_{tag}": node for name, node in nodes.items()})
+    for node_id in ("38", "56", "6", "7", "8", "57", "58"):
+        graph[node_id] = copy.deepcopy(_WORKFLOW_TEMPLATE[node_id])
+    graph["39"] = {"inputs": {"vae_name": tuning.COMFYUI_VAE_NAME}, "class_type": "VAELoader"}
+    graph["55"] = {
+        "inputs": {
+            "width": tuning.COMFYUI_WIDTH,
+            "height": tuning.COMFYUI_HEIGHT,
+            "length": None,  # set per-call
+            "batch_size": 1,
+            "positive": ["6", 0],
+            "negative": ["7", 0],
+            "vae": ["39", 0],
+            "start_image": ["56", 0],
+        },
+        "class_type": "WanImageToVideo",
+    }
+    sampler = {
+        "steps": tuning.COMFYUI_STEPS,
+        "cfg": tuning.COMFYUI_CFG,
+        "sampler_name": tuning.COMFYUI_SAMPLER,
+        "scheduler": tuning.COMFYUI_SCHEDULER,
+        "positive": ["55", 0],
+        "negative": ["55", 1],
+    }
+    graph["3"] = {
+        "inputs": {
+            **sampler,
+            "add_noise": "enable",
+            "noise_seed": None,  # set per-call: randomized
+            "start_at_step": 0,
+            "end_at_step": tuning.COMFYUI_A14B_SPLIT_STEP,
+            "return_with_leftover_noise": "enable",
+            "model": ["shift_high", 0],
+            "latent_image": ["55", 2],
+        },
+        "class_type": "KSamplerAdvanced",
+    }
+    graph["3_low"] = {
+        "inputs": {
+            **sampler,
+            "add_noise": "disable",
+            "noise_seed": 0,
+            "start_at_step": tuning.COMFYUI_A14B_SPLIT_STEP,
+            "end_at_step": tuning.COMFYUI_STEPS,
+            "return_with_leftover_noise": "disable",
+            "model": ["shift_low", 0],
+            "latent_image": ["3", 0],
+        },
+        "class_type": "KSamplerAdvanced",
+    }
+    graph["8"]["inputs"]["samples"] = ["3_low", 0]
+    graph["57"]["inputs"]["fps"] = tuning.COMFYUI_GEN_FPS
+    return graph
+
+
+def _fun_camera_template() -> Dict[str, Any]:
+    """Wiring from ComfyUI's "Wan2.1 Fun Camera 1.3B" template
+    (video_wan2.1_fun_camera_v1.1_1.3B): WanCameraEmbedding turns the preset
+    into a camera path, WanCameraImageToVideo conditions on it plus a
+    CLIP-vision encoding of the photo. VAEDecode swapped for the tiled one."""
+    graph = {k: copy.deepcopy(_WORKFLOW_TEMPLATE[k]) for k in ("38", "56", "6", "7", "3", "8", "57", "58")}
+    graph["unet"] = {
+        "inputs": {"unet_name": tuning.COMFYUI_FUN_CAMERA_UNET_NAME, "weight_dtype": "default"},
+        "class_type": "UNETLoader",
+    }
+    graph["48"] = {"inputs": {"shift": tuning.COMFYUI_MODEL_SHIFT, "model": ["unet", 0]}, "class_type": "ModelSamplingSD3"}
+    graph["39"] = {"inputs": {"vae_name": tuning.COMFYUI_VAE_NAME}, "class_type": "VAELoader"}
+    graph["clip_vision"] = {"inputs": {"clip_name": tuning.COMFYUI_CLIP_VISION_NAME}, "class_type": "CLIPVisionLoader"}
+    graph["clip_vision_encode"] = {
+        "inputs": {"crop": "none", "clip_vision": ["clip_vision", 0], "image": ["56", 0]},
+        "class_type": "CLIPVisionEncode",
+    }
+    graph["camera"] = {
+        "inputs": {
+            "camera_pose": None,  # set per-call
+            "width": tuning.COMFYUI_WIDTH,
+            "height": tuning.COMFYUI_HEIGHT,
+            "length": None,  # set per-call
+            "speed": tuning.COMFYUI_FUN_CAMERA_SPEED,
+            "fx": 0.5, "fy": 0.5, "cx": 0.5, "cy": 0.5,
+        },
+        "class_type": "WanCameraEmbedding",
+    }
+    graph["55"] = {
+        "inputs": {
+            "batch_size": 1,
+            "positive": ["6", 0],
+            "negative": ["7", 0],
+            "vae": ["39", 0],
+            "clip_vision_output": ["clip_vision_encode", 0],
+            "start_image": ["56", 0],
+            "camera_conditions": ["camera", 0],
+            "width": ["camera", 1],
+            "height": ["camera", 2],
+            "length": ["camera", 3],
+        },
+        "class_type": "WanCameraImageToVideo",
+    }
+    graph["3"]["inputs"].update({
+        "model": ["48", 0], "positive": ["55", 0], "negative": ["55", 1], "latent_image": ["55", 2],
+    })
+    graph["57"]["inputs"]["fps"] = tuning.COMFYUI_GEN_FPS
+    return graph
+
+
+def _resolve_camera_pose(camera_pan_hint: Any) -> str:
+    from services.vdoprocessing.camera_pan import normalize_camera_pan
+
+    return tuning.COMFYUI_FUN_CAMERA_POSES.get(normalize_camera_pan(camera_pan_hint), "Static")
+
+
+def _is_a14b() -> bool:
+    return tuning.COMFYUI_MODEL == "a14b"
+
+
+def _chains_only() -> bool:
+    """Only the 5B graph can be unrolled into one multi-segment job."""
+    return tuning.COMFYUI_MODEL != "5b"
+
+
 def _resolve_frame_length(duration_sec: float) -> int:
     """Wan wants a frame count of the form 4k+1. Rounds duration*fps to the
     nearest such value, clamped to a sane range."""
-    raw = max(1, round(duration_sec * tuning.COMFYUI_FPS))
+    raw = max(1, round(duration_sec * tuning.COMFYUI_GEN_FPS))
     k = round((raw - 1) / 4)
     length = 4 * k + 1
     return max(tuning.COMFYUI_MIN_FRAMES, min(tuning.COMFYUI_MAX_FRAMES, length))
@@ -264,7 +406,7 @@ def _resolve_segments(duration_sec: float) -> Tuple[int, int]:
     tuning.COMFYUI_EXTEND_MAX_SEGMENTS, or uncapped (chains the whole
     narration) when that's None."""
     one = _resolve_frame_length(duration_sec)
-    segment_sec = tuning.COMFYUI_MAX_FRAMES / tuning.COMFYUI_FPS
+    segment_sec = tuning.COMFYUI_MAX_FRAMES / tuning.COMFYUI_GEN_FPS
     cap = tuning.COMFYUI_EXTEND_MAX_SEGMENTS
     if duration_sec <= segment_sec or cap == 1:
         return 1, one
@@ -304,6 +446,25 @@ def _read_image(path: str):
     if image is None:
         image = cv2.imdecode(np.fromfile(path, dtype=np.uint8), cv2.IMREAD_COLOR)
     return image
+
+
+def _edge_cropped(image_path: str, output_png: str) -> str:
+    """image_path with tuning.COMFYUI_INPUT_EDGE_CROP trimmed off every edge,
+    as output_png; image_path itself when there's nothing to trim."""
+    import cv2
+    import numpy as np
+
+    crop = tuning.COMFYUI_INPUT_EDGE_CROP
+    image = _read_image(image_path) if crop > 0 else None
+    if image is None:
+        return image_path
+    h, w = image.shape[:2]
+    dy, dx = round(h * crop), round(w * crop)
+    ok, buffer = cv2.imencode(".png", image[dy:h - dy, dx:w - dx])
+    if not ok:
+        return image_path
+    np.asarray(buffer).tofile(output_png)
+    return output_png
 
 
 def _write_last_frame(video_path: str, photo_path: str, output_png: str) -> str:
@@ -346,13 +507,15 @@ def _write_last_frame(video_path: str, photo_path: str, output_png: str) -> str:
 
 
 def _join_segments(segment_paths: list, output_path: str) -> str:
-    """Joins the chained segments into output_path. Every segment after the
-    first opens on a re-render of the frame it started from - the segment
-    before it already ended on that frame - so its first frame is dropped."""
+    """Joins the chained segments into output_path at COMFYUI_FPS (frames
+    repeated when Wan generated at a lower COMFYUI_GEN_FPS). Every segment
+    after the first opens on a re-render of the frame it started from - the
+    segment before it already ended on that frame - so its first frame is
+    dropped."""
     from services.tts.ttsengine import FFmpegManager
 
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-    if len(segment_paths) == 1:
+    if len(segment_paths) == 1 and tuning.COMFYUI_GEN_FPS == tuning.COMFYUI_FPS:
         Path(segment_paths[0]).replace(output_path)
         return output_path
 
@@ -487,6 +650,10 @@ class ComfyUII2VClient:
                         str(self._SERVER_VENV_PYTHON), "main.py",
                         "--listen", "127.0.0.1", "--port", str(port),
                         "--disable-auto-launch",
+                        *(
+                            ["--reserve-vram", str(tuning.COMFYUI_RESERVE_VRAM_GB)]
+                            if tuning.COMFYUI_RESERVE_VRAM_GB else []
+                        ),
                     ],
                     cwd=str(self._SERVER_DIR),
                     stdout=log_file,
@@ -602,6 +769,7 @@ class ComfyUII2VClient:
         length: int,
         filename_prefix: str,
         segments: int = 1,
+        camera_pose: str = "Static",
     ) -> Dict[str, Any]:
         """The template graph, filled in. With segments > 1 it is extended in
         place (sequential extension, unrolled): each extra segment takes the
@@ -609,11 +777,23 @@ class ComfyUII2VClient:
         decodes `length` more frames, drops its own first frame (a copy of
         that start frame), and all segments are batched together before
         CreateVideo - one graph, so the model stays loaded throughout."""
-        graph = copy.deepcopy(_WORKFLOW_TEMPLATE)
+        if _chains_only() and segments > 1:
+            raise ValueError(f"{tuning.COMFYUI_MODEL} segments are chained, never unrolled into one graph.")
+        if _is_a14b():
+            graph = _a14b_template()
+            graph["3"]["inputs"]["noise_seed"] = uuid.uuid4().int & 0xFFFFFFFFFFFF
+        elif tuning.COMFYUI_MODEL == "fun_camera":
+            graph = _fun_camera_template()
+            graph["3"]["inputs"]["seed"] = uuid.uuid4().int & 0xFFFFFFFFFFFF
+            graph["camera"]["inputs"]["camera_pose"] = camera_pose
+            graph["camera"]["inputs"]["length"] = length
+        else:
+            graph = copy.deepcopy(_WORKFLOW_TEMPLATE)
+            graph["3"]["inputs"]["seed"] = uuid.uuid4().int & 0xFFFFFFFFFFFF
         graph["56"]["inputs"]["image"] = uploaded_image_name
-        graph["55"]["inputs"]["length"] = length
+        if tuning.COMFYUI_MODEL != "fun_camera":  # there it comes from the camera node
+            graph["55"]["inputs"]["length"] = length
         graph["6"]["inputs"]["text"] = prompt_text
-        graph["3"]["inputs"]["seed"] = uuid.uuid4().int & 0xFFFFFFFFFFFF
         graph["58"]["inputs"]["filename_prefix"] = filename_prefix
 
         parts = [["8", 0]]
@@ -790,7 +970,7 @@ class ComfyUII2VClient:
         camera_pan_hint: Any = None,
     ) -> str:
         """Generates one attraction clip via the bundled ComfyUI server
-        (Wan2.2-TI2V-5B-Turbo-GGUF image-to-video) and saves it to
+        (Wan2.2 image-to-video, tuning.COMFYUI_MODEL) and saves it to
         output_path. Raises on any failure (server unreachable, execution
         error, timeout) — callers should catch and fall back to
         local_pan_generator.generate_local_clip."""
@@ -798,25 +978,39 @@ class ComfyUII2VClient:
 
         segments, length = _resolve_segments(duration_sec)
         prompt_text = _resolve_motion_prompt(camera_pan_hint)
+        camera_pose = _resolve_camera_pose(camera_pan_hint)
+        cropped = f"{output_path}.input.png"
+        image_path = _edge_cropped(image_path, cropped)
+        try:
+            self._generate(image_path, output_path, segments, length, prompt_text, camera_pose)
+        finally:
+            Path(cropped).unlink(missing_ok=True)
+        logger.info("ComfyUI I2V clip saved to %s", output_path)
+        return output_path
 
+    def _generate(self, image_path, output_path, segments, length, prompt_text, camera_pose) -> None:
         with httpx.Client() as client:
-            if segments > 1 and tuning.COMFYUI_CHAIN_LAST_FRAME:
+            if segments > 1 and (tuning.COMFYUI_CHAIN_LAST_FRAME or _chains_only()):
                 self._generate_chained(
-                    client, image_path, output_path, segments, length, prompt_text
+                    client, image_path, output_path, segments, length, prompt_text, camera_pose
                 )
             else:
                 graph = self._build_graph(
                     self._upload_image(client, image_path), prompt_text, length,
-                    f"attraction/{uuid.uuid4().hex[:8]}", segments,
+                    f"attraction/{uuid.uuid4().hex[:8]}", segments, camera_pose,
                 )
                 logger.info(
                     "ComfyUI I2V: one graph, %d segment(s) x %d frames, prompt=%r",
                     segments, length, prompt_text,
                 )
-                self._run_segment(client, graph, output_path)
-
-        logger.info("ComfyUI I2V clip saved to %s", output_path)
-        return output_path
+                if tuning.COMFYUI_GEN_FPS == tuning.COMFYUI_FPS:
+                    self._run_segment(client, graph, output_path)
+                else:
+                    raw = f"{output_path}.gen.mp4"
+                    try:
+                        _join_segments([self._run_segment(client, graph, raw)], output_path)
+                    finally:
+                        Path(raw).unlink(missing_ok=True)
 
     def _run_segment(
         self, client: httpx.Client, graph: Dict[str, Any], output_path: str, label: str = "Wan",
@@ -850,6 +1044,7 @@ class ComfyUII2VClient:
         segments: int,
         length: int,
         prompt_text: str,
+        camera_pose: str = "Static",
     ) -> str:
         """Last-frame chaining: one ComfyUI job per segment, each started from
         a PNG of the previous segment last frame (colour-matched back to the
@@ -864,7 +1059,7 @@ class ComfyUII2VClient:
             for k in range(segments):
                 graph = self._build_graph(
                     self._upload_image(client, start_image), prompt_text, length,
-                    f"attraction/{uuid.uuid4().hex[:8]}", 1,
+                    f"attraction/{uuid.uuid4().hex[:8]}", 1, camera_pose,
                 )
                 segment_path = str(work / f"seg{k}.mp4")
                 logger.info(

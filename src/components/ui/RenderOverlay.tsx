@@ -546,7 +546,7 @@ export function RenderOverlay() {
     if (dir) {
       // The pipeline rewrote timeline.json. Edits made meanwhile live only in the editor, so they are written back.
       if (now.canUndoTimeline && now.timeline.segments.length > 0) {
-        kept = await saveTimelineManifest(dir, metadata.project_name, now.timeline, now.settings);
+        kept = await saveTimelineManifest(dir, metadata.project_name, now.timeline, now.settings.caption_style);
       }
       if (!kept) await autoLoadTimeline(dir);
     }

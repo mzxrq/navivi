@@ -14,14 +14,15 @@ _ICON_DIR = Path(__file__).resolve().parents[3] / "assets" / "image" / "icon"
 _WALKING_SVG_PATH = _ICON_DIR / "walking.svg"
 _FERRY_SVG_PATH = _ICON_DIR / "ferry.svg"
 _CAR_SVG_PATH = _ICON_DIR / "car.svg"
+_ROUTE_SVG_PATH = _ICON_DIR / "route.svg"
 
-_SVG_COMMAND_CHARS = set("MmLlCcZz")
-_SVG_TOKEN_RE = re.compile(r"[MmLlCcZz]|-?\d+\.?\d*(?:[eE][+-]?\d+)?")
+_SVG_COMMAND_CHARS = set("MmLlHhVvCcZz")
+_SVG_TOKEN_RE = re.compile(r"[MmLlHhVvCcZz]|-?\d+\.?\d*(?:[eE][+-]?\d+)?")
 _SVG_TRANSFORM_RE = re.compile(r"(translate|scale)\(\s*([-\d.eE]+)[ ,]+([-\d.eE]+)\s*\)")
 
 
 def _parse_svg_path_polygons(d: str) -> List[List[Tuple[float, float]]]:
-    """A `<path d="...">` string (M/L/C/Z, absolute or relative, with the
+    """A `<path d="...">` string (M/L/H/V/C/Z, absolute or relative, with the
     implicit-lineto-after-moveto repeat SVG's grammar allows — everything
     potrace itself emits) flattened into closed polygons: each cubic Bezier
     is sampled into straight segments, since PIL's ImageDraw can't stroke or
@@ -72,6 +73,14 @@ def _parse_svg_path_polygons(d: str) -> List[List[Tuple[float, float]]]:
                 x, y = cur[0] + x, cur[1] + y
             cur = (x, y)
             poly.append(cur)
+        elif cmd in ("H", "h"):
+            x = read_float()
+            cur = (cur[0] + x if cmd == "h" else x, cur[1])
+            poly.append(cur)
+        elif cmd in ("V", "v"):
+            y = read_float()
+            cur = (cur[0], cur[1] + y if cmd == "v" else y)
+            poly.append(cur)
         elif cmd in ("C", "c"):
             x1, y1 = read_float(), read_float()
             x2, y2 = read_float(), read_float()
@@ -96,7 +105,9 @@ def _parse_svg_path_polygons(d: str) -> List[List[Tuple[float, float]]]:
 
 
 @lru_cache(maxsize=None)
-def _load_svg_icon_polygons(svg_path: Path) -> Tuple[Tuple[Tuple[float, float], ...], ...]:
+def _load_svg_icon_polygons(
+    svg_path: Path, filled_only: bool = False
+) -> Tuple[Tuple[Tuple[float, float], ...], ...]:
     """One SVG file's own <path> outlines, in normalized 0..1 coordinates
     (its own aspect ratio kept, longest side spanning 0..1, centered on the
     shorter one) so a _draw_*_icon method can scale/center them into any
@@ -106,7 +117,10 @@ def _load_svg_icon_polygons(svg_path: Path) -> Tuple[Tuple[Tuple[float, float], 
     plain single-path file with no group transform at all (ferry.svg).
     Parsed once per file (an SVG icon never changes at runtime) rather than
     on every frame's icon draw, keyed by path so different icons don't
-    collide in the cache."""
+    collide in the cache.
+
+    `filled_only` skips <path>s with no fill of their own (e.g. the
+    invisible 24x24 frame SVG Repo files wrap their icons in)."""
     try:
         svg_text = svg_path.read_text(encoding="utf-8")
     except OSError:
@@ -123,8 +137,15 @@ def _load_svg_icon_polygons(svg_path: Path) -> Tuple[Tuple[Tuple[float, float], 
                 sx, sy = float(a), float(b)
 
     polygons: List[List[Tuple[float, float]]] = []
-    for path_d in re.findall(r'<path\s+[^>]*\bd="([^"]+)"', svg_text):
-        for poly in _parse_svg_path_polygons(path_d):
+    for attrs in re.findall(r"<path\b([^>]*)>", svg_text):
+        d_match = re.search(r'\bd="([^"]+)"', attrs)
+        if not d_match:
+            continue
+        if filled_only:
+            fill = re.search(r'\bfill="([^"]*)"', attrs)
+            if not fill or fill.group(1).strip().lower() in ("", "none"):
+                continue
+        for poly in _parse_svg_path_polygons(d_match.group(1)):
             # The group's own transform (potrace's usual "translate(0,H)
             # scale(0.1,-0.1)": shrink 10x and flip the y axis it traced
             # bottom-up in) is applied to the raw path coordinates before
@@ -249,6 +270,20 @@ class _IconMixin:
             width=max(2, round(width * 0.8)),
             joint="curve",
         )
+
+    def _draw_total_icon(
+        self, draw: ImageDraw.ImageDraw, cx: int, cy: int, size: int, color: Tuple
+    ):
+        """The 合計 (total) icon: route.svg's start/end dots joined by a
+        route band, all filled solid. Falls back to the ruler if the file
+        is missing."""
+        polygons = _load_svg_icon_polygons(_ROUTE_SVG_PATH, filled_only=True)
+        if not polygons:
+            self._draw_ruler_icon(draw, cx, cy, size, color)
+            return
+        left, top = cx - size / 2, cy - size / 2
+        for poly in polygons:
+            draw.polygon([(left + nx * size, top + ny * size) for nx, ny in poly], fill=color)
 
     def _draw_ruler_icon(
         self, draw: ImageDraw.ImageDraw, cx: int, cy: int, size: int, color: Tuple

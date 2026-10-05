@@ -48,19 +48,35 @@ export interface RouteSegment {
   mode: string;
 }
 
-// start dev 1 settings
-export interface IntroStyle {
-  title_size?: number;
-  title_color?: [number, number, number];
-  title_bold?: boolean;
-  subtitle_size?: number;
-  subtitle_color?: [number, number, number];
-  subtitle_bold?: boolean;
+// One text look, shared by the intro title/subtitle and burned captions
+// (services/localization/text_style.py). Sizes are px on a 1920x1080 frame;
+// colours are CSS hex. Every field is optional; missing ones use the default.
+export interface TextStyle {
+  font_family?: string;
+  font_size?: number; // 8–300
+  color?: string; // "#RRGGBB"
+  opacity?: number; // 0–1
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+  outline_width?: number; // 0–20
+  outline_color?: string;
+  shadow?: number; // 0–20
+  shadow_color?: string;
+  letter_spacing?: number; // -20–50
+  // Captions only: box behind the text (the default caption look).
+  background?: boolean;
+  background_color?: string;
+  background_opacity?: number; // 0–1
+  // Captions only.
+  position?: "bottom" | "middle" | "top";
+  margin_v?: number; // px from that edge, 0–400
+  max_chars_per_line?: number; // 0 = no limit
 }
 
+// start dev 1 settings
 export interface ProjectSettings {
   fps: number;
-  intro_style?: IntroStyle;
   line_color: [number, number, number];
   line_thickness: number;
   route_line_border_color?: [number, number, number];
@@ -79,13 +95,27 @@ export interface ProjectSettings {
   default_route_mode?: RouteMode;
   default_export_resolution?: "4k" | "1080p" | "720p";
   default_ducking_level?: number;
-  subtitle_font?: string; // either uses Calibri or some nice looking font as default
-  subtitle_font_size?: number; // libass units, 16 by default (a share of a 288-line frame)
+  subtitle_font?: string; // default Meiryo
+  subtitle_font_size?: number; // px on a 1080p frame, default 71
   subtitle_color?: string; // This uses ASS color format, &HAABBGGRR -- alpha,  blue-green-red
   subtitle_outline_color?: string; // the caption box color (libass fills the box with it), same format, &H66000000 by default
   subtitle_bold?: boolean; // false unless necessary
   subtitle_alignment?: number;
   subtitle_margin_v?: number;
+  // The subtitle_* fields above are no longer read; captions use caption_style.
+  caption_style?: TextStyle;
+  intro_title_style?: TextStyle;
+  intro_subtitle_style?: TextStyle;
+  // Look for attraction place names on the text track (editor's "Apply to all").
+  place_label_look?: {
+    position?: "top" | "middle" | "bottom";
+    margin_v?: number;
+    align?: "left" | "center" | "right";
+    margin_h?: number;
+    animation?: "pop" | "fade" | "none";
+    title_style?: TextStyle;
+    subtitle_style?: TextStyle;
+  };
   show_route_heatmap?: boolean;
   ai_model?: string;
   ai_provider?: AiProviderId; // who writes the scripts; unset = the local Ollama model in ai_model
@@ -101,7 +131,6 @@ export interface ProjectSettings {
   tts?: { engine?: "irodori" | "qwen3" | "kokoro"; voice?: string; kokoro_voice?: string; speed?: number; quality?: "fast" | "balanced" | "best" };
   global_pronunciation_dictionary?: Array<{ word: string; reading: string }>;
   enable_attraction_videos?: boolean;
-  burn_subtitles?: boolean;
   use_narration_cues?: boolean;
   attraction_fade_seconds?: number;
 }

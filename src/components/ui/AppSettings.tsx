@@ -17,6 +17,9 @@ import {
 } from "../../services/ollamaApi";
 import { callSidecar, systemRamGb } from "../../services/sidecar";
 import { modelFit } from "../../utils/modelFit";
+import { CaptionStyleFields } from "./CaptionStyleFields";
+import { resolveCaptionStyle } from "../../utils/textStyle";
+import type { TextStyle } from "../../types";
 import { dynamicActivate } from "../../i18n";
 import { db } from "../../services/db";
 import { GLOBAL_DICTIONARY_KEY } from "../../config/constants";
@@ -48,6 +51,7 @@ import { ColorSwatches, type RGB } from "./ColorSwatches";
 import { ComboBox } from "./ComboBox";
 import { Slider } from "./Slider";
 import { SubtitleSample } from "./SubtitleSample";
+import { StepButtons } from "./StepButtons";
 import { Switch } from "./Switch";
 import { VoiceTab } from "./VoiceSettings";
 import { OnlineProviderSettings, ProviderPicker } from "./OnlineAiSettings";
@@ -93,6 +97,7 @@ const subtitleFonts = (current: string) =>
   SUBTITLE_FONTS.some((f) => f.toLowerCase() === current.toLowerCase())
     ? SUBTITLE_FONTS
     : [current, ...SUBTITLE_FONTS];
+
 export function AppSettings() {
   const { settings, updateSettings, setIsDirty } = useWorkspace();
   const { i18n } = useLingui();
@@ -593,105 +598,12 @@ export function AppSettings() {
                   </Row>
                 </Section>
 
-                <Section title={t`Subtitles`}>
-                  <Row title={t`Font`}>
-                    <ComboBox
-                      label={t`Font`}
-                      value={settings.subtitle_font || CAPTION.font}
-                      onChange={(v) => updateProject({ subtitle_font: v })}
-                      options={subtitleFonts(
-                        settings.subtitle_font || CAPTION.font,
-                      )}
-                      previewFont
-                      className="w-56"
-                    />
-                  </Row>
-                  <Row title={t`Font size`}>
-                    <ComboBox
-                      label={t`Font size`}
-                      value={String(settings.subtitle_font_size || CAPTION.defaultSize)}
-                      onChange={(v) =>
-                        updateProject({ subtitle_font_size: Number(v) })
-                      }
-                      options={SUBTITLE_SIZES}
-                      allowCustom
-                      validate={(v) =>
-                        /^\d+$/.test(v) && Number(v) >= 8 && Number(v) <= 200
-                      }
-                      inputMode="numeric"
-                      className="w-28"
-                    />
-                  </Row>
-                  <Row title={t`Text color`}>
-                    <ColorSwatches
-                      color={assToRgb(settings.subtitle_color, WHITE)}
-                      onChange={(rgb) =>
-                        updateProject({
-                          subtitle_color: rgbToAss(rgb, settings.subtitle_color),
-                        })
-                      }
-                    />
-                  </Row>
-                  <Row title={t`Background color`}>
-                    <ColorSwatches
-                      color={assToRgb(
-                        settings.subtitle_outline_color || CAPTION.boxColor,
-                        BLACK,
-                      )}
-                      onChange={(rgb) =>
-                        updateProject({
-                          subtitle_outline_color: rgbToAss(
-                            rgb,
-                            settings.subtitle_outline_color || CAPTION.boxColor,
-                          ),
-                        })
-                      }
-                    />
-                  </Row>
-                  <Row title={t`Background opacity`}>
-                    <div className="flex items-center gap-3">
-                      <Slider
-                        min={0}
-                        max={100}
-                        step={5}
-                        value={Math.round(
-                          assOpacity(
-                            settings.subtitle_outline_color || CAPTION.boxColor,
-                          ) * 100,
-                        )}
-                        onChange={(v) =>
-                          updateProject({
-                            subtitle_outline_color: withOpacity(
-                              settings.subtitle_outline_color ||
-                                CAPTION.boxColor,
-                              v / 100,
-                            ),
-                          })
-                        }
-                        label={t`Background opacity`}
-                        format={(v) => `${v}%`}
-                        className="w-40"
-                      />
-                      <span className="w-9 text-right text-[12px] tabular-nums text-zinc-500">
-                        {Math.round(
-                          assOpacity(
-                            settings.subtitle_outline_color || CAPTION.boxColor,
-                          ) * 100,
-                        )}
-                        %
-                      </span>
-                    </div>
-                  </Row>
-                  <Row title={t`Preview`} stacked>
-                    <SubtitleSample
-                      font={settings.subtitle_font}
-                      size={settings.subtitle_font_size}
-                      color={settings.subtitle_color}
-                      boxColor={settings.subtitle_outline_color}
-                      bold={settings.subtitle_bold}
-                    />
-                  </Row>
-                </Section>
+                <CaptionStyleSection
+                  style={resolveCaptionStyle(settings)}
+                  onChange={(patch) =>
+                    updateProject({ caption_style: { ...(settings.caption_style ?? {}), ...patch } })
+                  }
+                />
               </>
             )}
 
@@ -924,6 +836,28 @@ function Badge({
   );
 }
 
+function CaptionStyleSection({
+  style,
+  onChange,
+}: {
+  style: Required<TextStyle>;
+  onChange: (patch: TextStyle) => void;
+}) {
+  return (
+    <Section title={t`Subtitles`}>
+      <CaptionStyleFields
+        style={style}
+        onChange={onChange}
+        row={(key, label, control, hint) => (
+          <Row key={key} title={label} description={hint}>
+            <div className="w-48 flex justify-end">{control}</div>
+          </Row>
+        )}
+      />
+    </Section>
+  );
+}
+
 function NumberInput({
   value,
   onChange,
@@ -932,12 +866,15 @@ function NumberInput({
   onChange: (v: number) => void;
 }) {
   return (
-    <input
-      type="number"
-      value={value}
-      onChange={(e) => onChange(Number(e.target.value))}
-      className={`${inputClass} w-24 text-right tabular-nums`}
-    />
+    <div className="relative w-24">
+      <input
+        type="number"
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className={`${inputClass} w-full pr-6 text-right tabular-nums`}
+      />
+      <StepButtons onStep={(dir) => onChange((Number(value) || 0) + dir)} />
+    </div>
   );
 }
 

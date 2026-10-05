@@ -85,26 +85,6 @@ def test_burn_with_a_style_passes_it_to_libass(tmp_path, ffmpeg_calls):
     assert f"force_style='{style.to_force_style()}'" in flt and "FontSize=22" in flt and "BorderStyle=3" in flt
 
 
-def test_timeline_export_burns_with_the_style_written_into_timeline_json(tmp_path, ffmpeg_calls):
-    out = tmp_path / "joined.mp4"
-    out.write_bytes(b"v")
-    data = {
-        "subtitles": [{"start": 0, "end": 1, "text": "hi"}],
-        "burn_subtitles": True,
-        "subtitle_style": {"subtitle_font_size": 24, "subtitle_color": "&H0000FFFF"},
-    }
-    VideoExporter._finish_timeline_output("ffmpeg", data, str(out), tmp_path)
-    flt = _filter(ffmpeg_calls[0])
-    assert "FontSize=24" in flt and "PrimaryColour=&H0000FFFF" in flt
-
-
-def test_timeline_export_without_a_style_block_uses_the_default_caption_look(tmp_path, ffmpeg_calls):
-    out = tmp_path / "joined.mp4"
-    out.write_bytes(b"v")
-    VideoExporter._finish_timeline_output("ffmpeg", {"subtitles": [{"start": 0, "end": 1, "text": "hi"}], "burn_subtitles": True}, str(out), tmp_path)
-    assert f"FontSize={tuning.CAPTION_DEFAULT_SIZE}" in _filter(ffmpeg_calls[0])
-
-
 def test_changing_the_style_makes_an_already_burned_clip_stale(tmp_path):
     video, srt = tmp_path / "clip.mp4", tmp_path / "clip.srt"
     video.write_bytes(b"v")

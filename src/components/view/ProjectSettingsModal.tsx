@@ -13,6 +13,7 @@ import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 import { MapPin } from "../ui/icons";
 import { Dialog, dialogButton, dialogInput } from "../ui/Dialog";
+import { StepButtons } from "../ui/StepButtons";
 import { Switch } from "../ui/Switch";
 import { db } from "../../services/db";
 
@@ -90,7 +91,6 @@ export function ProjectSettingsModal({
           await db.settings.patch(project.projectId, {
             routeMarker: s.routeMarker ?? null,
             enable_attraction_videos: s.enable_attraction_videos,
-            burn_subtitles: s.burn_subtitles,
             use_narration_cues: s.use_narration_cues,
             attraction_fade_seconds: s.attraction_fade_seconds,
           });
@@ -197,16 +197,6 @@ export function ProjectSettingsModal({
           />
         </OptionRow>
         <OptionRow
-          title={t`Burn subtitles into clips`}
-          description={t`Draws subtitles onto each clip while rendering. The editor can also burn them at export.`}
-        >
-          <Switch
-            checked={options.burn_subtitles ?? false}
-            onChange={(v) => setOption({ burn_subtitles: v })}
-            label={t`Burn subtitles into clips`}
-          />
-        </OptionRow>
-        <OptionRow
           title={t`Follow timing cues in scripts`}
           description={t`Timing cues written in a narration decide when the walker reaches the stop.`}
         >
@@ -220,15 +210,22 @@ export function ProjectSettingsModal({
           title={t`Fade into the stop's clip`}
           description={t`Seconds a leg dissolves into the clip that follows it. 0 is a hard cut.`}
         >
-          <input
-            type="number"
-            min={0}
-            max={3}
-            step={0.1}
-            value={options.attraction_fade_seconds ?? 0.8}
-            onChange={(e) => setOption({ attraction_fade_seconds: Math.min(3, Math.max(0, Number(e.target.value) || 0)) })}
-            className={`${dialogInput} w-20 text-right tabular-nums`}
-          />
+          <div className="relative w-20">
+            <input
+              type="number"
+              min={0}
+              max={3}
+              step={0.1}
+              value={options.attraction_fade_seconds ?? 0.8}
+              onChange={(e) => setOption({ attraction_fade_seconds: Math.min(3, Math.max(0, Number(e.target.value) || 0)) })}
+              className={`${dialogInput} w-full pr-6 text-right tabular-nums`}
+            />
+            <StepButtons
+              onStep={(dir) =>
+                setOption({ attraction_fade_seconds: +Math.min(3, Math.max(0, (options.attraction_fade_seconds ?? 0.8) + dir * 0.1)).toFixed(1) })
+              }
+            />
+          </div>
         </OptionRow>
       </div>
 

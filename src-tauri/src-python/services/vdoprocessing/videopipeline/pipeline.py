@@ -2,6 +2,7 @@
 
 import copy
 import json
+import sys
 import time
 from pathlib import Path
 from typing import Optional
@@ -9,7 +10,6 @@ from typing import Optional
 from services import tuning
 from services.config.job_config import JobConfigManager
 from services.config.upscaled_images import upscale_enabled
-from services.localization.subtitle import caption_style
 from services.ollama_memory import unload_ollama_models
 from services.logger.progress import tracker
 from services.render_estimate import StageRecorder
@@ -25,7 +25,7 @@ from .helpers import (
     project_video_dir,
     skip_rich_media,
 )
-from .intro_step import render_intro_clip
+from .intro_step import intro_text_item, render_intro_clip
 from .leg_pieces import compute_leg_narration_splits
 from .narration_step import add_default_cues, add_overview_cues, record_cue_times
 from .outro_step import render_outro_clip
@@ -34,14 +34,13 @@ from .subtitle_step import (
     build_attraction_subtitles,
     build_overview_subtitle,
     build_subtitles,
-    burn_subtitles,
 )
 from .timeline_step import build_timeline
 from .upscale_step import upscale_waypoint_images
 
 
-# GPS, TTS, subtitles, photo upscale, attraction videos, route render, subtitle burn, intro/outro.
-PIPELINE_STAGES = 8
+# GPS, TTS, subtitles, photo upscale, attraction videos, route render, intro/outro.
+PIPELINE_STAGES = 7
 
 
 def _stop_gpu_servers() -> None:
@@ -240,12 +239,11 @@ def run_full_pipeline(
     # A connectToRoute stop-by's fullscreen photo-pause (see pydeckrecorder/
     # pedestrian.py's `landmarks` docstring) can cut one leg's silent video
     # into several "_contN" pieces, each one the walk TOWARD its own next
-    # stop. Resolved here (once, from Step 4's pre-burn video_paths) into
-    # each piece's own target narration — padding that piece's video first
-    # if its target's narration runs longer than the piece's own natural
-    # length — and reused by both Step 5's burn below (so the right
-    # subtitle gets burned onto each piece's pixels) and Step 6's
-    # build_timeline (so the right audio gets muxed at final export) — see
+    # stop. Resolved here (once, from Step 4's video_paths) into each piece's
+    # own target narration — padding that piece's video first if its
+    # target's narration runs longer than the piece's own natural length —
+    # and used by build_timeline (so the right audio and subtitles land on
+    # each piece at final export) — see
     # leg_pieces.py. video_paths is replaced with the (possibly padded)
     # result so every later step sees the final piece lengths.
     video_paths, leg_narration_splits = compute_leg_narration_splits(
@@ -253,29 +251,12 @@ def run_full_pipeline(
     )
     all_videos = video_paths + attraction_videos
 
-    # --- STEP 5 ---
-    # Off by default: subtitles are still built (.srt files, listed per clip in
-    # timeline.json) but not burned onto the video. settings.burn_subtitles
-    # turns the burn back on.
-    if not fast_render and job_config.get("settings", {}).get("burn_subtitles", False):
-        tracker.stage("Burning subtitles...")
-        final_videos = burn_subtitles(
-            video_paths=all_videos,
-            subtitle_paths=subtitle_paths,
-            force=force_regenerate,
-            overview_subtitle_path=overview_subtitle_path,
-            attraction_subtitle_paths=attraction_subtitle_paths,
-            leg_narration_splits=leg_narration_splits,
-            style=caption_style(job_config.get("settings", {})),
-        )
-    else:
-        tracker.stage("Skipping subtitle burn (settings.burn_subtitles is off)...")
-        final_videos = list(all_videos)
+    # Subtitles are burned once, onto the whole video, at export (render_timeline).
+    final_videos = list(all_videos)
 
     # --- STEP 5b ---
-    # Intro/outro carry no narration, so they deliberately bypass subtitle
-    # burning above — attached here instead, directly to the final clip
-    # order. Prepending intro to BOTH video_paths and final_videos (rather
+    # Intro/outro carry no narration, so they're attached here, directly to
+    # the final clip order. Prepending intro to BOTH video_paths and final_videos (rather
     # than just final_videos) keeps build_timeline's own indexing correct,
     # since it uses len(video_paths) as the boundary between "route" and
     # "attraction" clips; outro is only ever appended to the very end of
@@ -308,6 +289,8 @@ def run_full_pipeline(
         attraction_fade_seconds=float(
             job_config.get("settings", {}).get("attraction_fade_seconds", 0.8)
         ),
+        intro_text=intro_text_item(str(config_file_path)) if intro_path else None,
+        place_label_look=job_config.get("settings", {}).get("place_label_look"),
     )
     recorder.finish()
     tracker.on_stage = None
@@ -351,6 +334,20 @@ def recover_narration_paths(timeline_data: dict) -> int:
     return fixed
 
 
+def _project_caption_style(project_dir: Path) -> dict:
+    """Caption look from the project's settings (job_config.json beside timeline.json)."""
+    config_path = project_dir / "job_config.json"
+    if not config_path.exists():
+        return {}
+    try:
+        with open(config_path, "r", encoding="utf-8") as f:
+            style = (json.load(f).get("settings") or {}).get("caption_style")
+        return style if isinstance(style, dict) else {}
+    except Exception as exc:  # a bad config must not block the export
+        logger.warning("Caption style: could not read %s (%s); using the default.", config_path, exc)
+        return {}
+
+
 def render_from_timeline(
     timeline_json_path: str, output_video_path: Optional[str] = None
 ) -> str:
@@ -371,6 +368,9 @@ def render_from_timeline(
         for key in ("file_path", "audio_path", "extra_audio_path"):
             if track.get(key) and not Path(track[key]).is_absolute():
                 track[key] = str(project_dir / track[key])
+    timeline_data["burn_subtitles"] = True
+    if "caption_style" not in timeline_data:
+        timeline_data["caption_style"] = _project_caption_style(project_dir)
     music = timeline_data.get("music") or {}
     if music.get("path") and not Path(music["path"]).is_absolute():
         music["path"] = str(project_dir / music["path"])
@@ -381,8 +381,17 @@ def render_from_timeline(
     print(f"NLE Engine: Re-rendering video from {timeline_path.name}...")
     logger.info("NLE Engine: Re-rendering video from %s...", timeline_path.name)
 
+    last = [-1]
+
+    def progress(pct: float) -> None:
+        # Read by export_video in lib.rs, which forwards it to the app as "export-progress".
+        if int(pct) != last[0]:
+            last[0] = int(pct)
+            print(f"EXPORT_PROGRESS {int(pct)}", file=sys.stderr, flush=True)
+
     final_path = VideoExporter.concat_from_timeline(
-        timeline_data=timeline_data, output_path=output_video_path, save_json_path=None
+        timeline_data=timeline_data, output_path=output_video_path, save_json_path=None,
+        on_progress=progress,
     )
 
     print(f"Fast re-render complete  {final_path}")

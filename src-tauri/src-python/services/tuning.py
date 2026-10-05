@@ -320,6 +320,49 @@ SUMMARY_CARD_VALUE_FONT_SIZE = 34
 # user's own sketch, refined over two rounds — create_summary_card_columns).
 # Overridable per project via job_config.json's settings.summary_card_style.
 DEFAULT_SUMMARY_CARD_STYLE = "columns"  # the user's choice (2026-09-30)
+# "columns" card: every column's text area is at least as wide as these
+# sample strings, so the card keeps one width whatever the values are.
+SUMMARY_CARD_FIXED_DISTANCE_SAMPLE = "88.8 km"
+SUMMARY_CARD_FIXED_DURATION_SAMPLE = "8時間88分"
+
+# --- HUD/card theme (light | dark) ------------------------------------------
+# Summary card, top banner, corner HUD labels and popup caption cards.
+# job_config.json's settings.theme wins (top-level "theme" too, but only when
+# it is exactly "light"/"dark" — that key is normally the trip's narration theme).
+DEFAULT_UI_THEME = "dark"
+# RGBA, PIL (RGB) channel order.
+UI_THEMES: Dict[str, Dict[str, Tuple[int, int, int, int]]] = {
+    "light": {
+        "card_bg": (255, 255, 255, 240),
+        "card_text": (35, 35, 35, 255),
+        "card_label": (110, 110, 110, 255),
+        "divider": (0, 0, 0, 30),
+        "pill_bg": (255, 255, 255, 235),
+        "pill_text": (35, 35, 35, 255),
+    },
+    "dark": {
+        "card_bg": (30, 34, 40, 235),
+        "card_text": (245, 245, 245, 255),
+        "card_label": (170, 174, 180, 255),
+        "divider": (255, 255, 255, 40),
+        "pill_bg": (30, 34, 40, 225),
+        "pill_text": (255, 255, 255, 255),
+    },
+}
+
+
+def resolve_ui_theme(job_config_or_settings: Optional[Dict] = None) -> str:
+    """'light' or 'dark' from a job_config (or its settings dict), else DEFAULT_UI_THEME."""
+    cfg = job_config_or_settings or {}
+    settings = cfg.get("settings") if isinstance(cfg.get("settings"), dict) else {}
+    for value in (settings.get("theme"), cfg.get("theme")):
+        if isinstance(value, str) and value.strip().lower() in UI_THEMES:
+            return value.strip().lower()
+    return DEFAULT_UI_THEME
+
+
+def ui_theme(name: Optional[str]) -> Dict[str, Tuple[int, int, int, int]]:
+    return UI_THEMES.get((name or "").lower(), UI_THEMES[DEFAULT_UI_THEME])
 # Floor on the residential-chunk zoom level computed from a leg's physical
 # span (see TileDownloader.fetch_residential_chunk) — a leg whose path
 # bulges or loops (e.g. a detour around a highway on-ramp) can inflate
@@ -668,8 +711,8 @@ OVERVIEW_CONNECTED_STOPBY_HOLD_SECONDS = 2.0
 # raise a tier past its own threshold only once the card layout can also
 # handle the wider crop it produces.
 OVERVIEW_PADDING_BY_SPAN_KM: Tuple[Tuple[float, float], ...] = (
-    (1.5, 0.08),
-    (5.0, 0.12),
+    (1.5, 0.10),
+    (5.0, 0.15),
     (15.0, 0.20),
     (40.0, 0.25),
 )
@@ -754,6 +797,43 @@ TRIGGER_RADIUS_PADDING_DEFAULTS: Dict[str, float] = {"overview": 10, "waypoint":
 # bundled instance never collides with a developer's own separately-running
 # ComfyUI on the same machine.
 COMFYUI_BASE_URL = "http://127.0.0.1:8189"
+# "5b": Wan2.2-TI2V-5B-Turbo, one model (below).
+# "a14b": Wan2.2-I2V-A14B high + low noise experts with the Lightx2v 4-step
+#   LoRAs. Best motion, but it fills 32 GB of RAM, invented a cyclist at CFG 1,
+#   and the PC hit HYPERVISOR_ERROR during its test (2026-10-01).
+# "fun_camera": Wan2.1 Fun Camera 1.3B. Fits in 8 GB and moves exactly as the
+#   preset says, but at 480p it smears small text (kanji signs) - rejected
+#   2026-10-01. Its camera move comes from COMFYUI_FUN_CAMERA_POSES.
+COMFYUI_MODEL = "5b"
+# Fun Camera files (Comfy-Org Wan 2.1 repackaged).
+COMFYUI_FUN_CAMERA_UNET_NAME = "wan2.1_fun_camera_v1.1_1.3B_bf16.safetensors"
+COMFYUI_CLIP_VISION_NAME = "clip_vision_h.safetensors"
+# Editor preset -> WanCameraEmbedding camera_pose.
+COMFYUI_FUN_CAMERA_POSES: Dict[str, str] = {
+    "panright": "Pan Right",
+    "panleft": "Pan Left",
+    "panup": "Pan Up",
+    "pandown": "Pan Down",
+    "zoomin": "Zoom In",
+    "zoomout": "Zoom Out",
+    "none": "Static",
+}
+# How far the camera travels per segment (1.0 = the node's default).
+COMFYUI_FUN_CAMERA_SPEED = 0.5
+# A14B files (QuantStack GGUFs + Comfy-Org repackaged LoRAs/VAE), same
+# exact-filename rule as COMFYUI_UNET_NAME. Q3_K_S (~6.5 GB each) is the
+# quant most likely to stay in VRAM; Q4_K_M (~9.7 GB) always offloads.
+COMFYUI_A14B_HIGH_UNET_NAME = "Wan2.2-I2V-A14B-HighNoise-Q3_K_S.gguf"
+COMFYUI_A14B_LOW_UNET_NAME = "Wan2.2-I2V-A14B-LowNoise-Q3_K_S.gguf"
+COMFYUI_A14B_HIGH_LORA_NAME = "wan2.2_i2v_lightx2v_4steps_lora_v1_high_noise.safetensors"
+COMFYUI_A14B_LOW_LORA_NAME = "wan2.2_i2v_lightx2v_4steps_lora_v1_low_noise.safetensors"
+# The step the high-noise expert hands over to the low-noise one (of
+# COMFYUI_STEPS), as in ComfyUI's own "Wan 2.2 14B I2V" template.
+COMFYUI_A14B_SPLIT_STEP = 2
+# Passed to ComfyUI as --reserve-vram (GB) when set: it then loads only what
+# fits and streams the rest from RAM itself, rather than overcommitting into
+# Windows shared GPU memory.
+COMFYUI_RESERVE_VRAM_GB: Optional[float] = None
 # From huggingface.co/hum-ma/Wan2.2-TI2V-5B-Turbo-GGUF, placed in
 # bin/ComfyUI/models/diffusion_models. Must be the exact filename there: a
 # name ComfyUI doesn't have makes it reject every clip, and the attraction
@@ -776,6 +856,9 @@ COMFYUI_VAE_NAME = "wan2.2_vae.safetensors"
 # after generation to match the rest of the pipeline's clips).
 COMFYUI_WIDTH = 1280
 COMFYUI_HEIGHT = 704
+# Share trimmed off each edge of the photo before Wan sees it: things cut off
+# at the edge (a red banner) were "completed" into big invented signs.
+COMFYUI_INPUT_EDGE_CROP = 0.05
 COMFYUI_FPS = 24
 # Turbo-model recommended settings (see the model card): 4 steps, euler/simple.
 # CFG is 2.0, not the card's 1.0: at CFG 1 ComfyUI skips the negative prompt
@@ -802,6 +885,35 @@ COMFYUI_MODEL_SHIFT = 8.0
 # Turbo checkpoint is distilled specifically for 4 steps).
 COMFYUI_MIN_FRAMES = 25  # ~1s @ 24fps
 COMFYUI_MAX_FRAMES = 89  # ~3.7s @ 24fps (was 121 ~5s, then 65 ~2.7s — middle ground)
+# The rate Wan generates at. COMFYUI_FPS is the rate its clips come out at;
+# a lower one is resampled up in comfyui_i2v_client._join_segments.
+COMFYUI_GEN_FPS = COMFYUI_FPS
+if COMFYUI_MODEL == "a14b":
+    # A14B uses the Wan 2.1 VAE (wan2.2_vae is the 5B's own).
+    COMFYUI_VAE_NAME = "wan_2.1_vae.safetensors"
+    # 480p is what fits next to an offloaded 14B expert on 8 GB; 848 keeps
+    # the aspect near 16:9 for the upscale to 1920x1080.
+    COMFYUI_WIDTH = 848
+    COMFYUI_HEIGHT = 480
+    COMFYUI_GEN_FPS = 16
+    COMFYUI_MAX_FRAMES = 81  # ~5s @ 16fps
+    COMFYUI_MODEL_SHIFT = 5.0
+    # The Lightning LoRAs are distilled for CFG 1, which skips
+    # COMFYUI_NEGATIVE_PROMPT (see COMFYUI_CFG) - watch for invented
+    # people/vehicles.
+    COMFYUI_CFG = 1.0
+    COMFYUI_RESERVE_VRAM_GB = 1.0
+elif COMFYUI_MODEL == "fun_camera":
+    # From ComfyUI's "Wan2.1 Fun Camera 1.3B" template.
+    COMFYUI_VAE_NAME = "wan_2.1_vae.safetensors"
+    COMFYUI_WIDTH = 832
+    COMFYUI_HEIGHT = 480
+    COMFYUI_GEN_FPS = 16
+    COMFYUI_MAX_FRAMES = 81  # ~5s @ 16fps
+    COMFYUI_STEPS = 20
+    COMFYUI_CFG = 6.0
+    COMFYUI_SAMPLER = "uni_pc"
+    COMFYUI_MODEL_SHIFT = 8.0
 # Sequential extension: when a narration outlasts one COMFYUI_MAX_FRAMES
 # segment, the attraction clip is built from more segments, each one started
 # from the previous segment's last frame (so the motion carries on instead of
@@ -817,6 +929,9 @@ COMFYUI_MAX_FRAMES = 89  # ~3.7s @ 24fps (was 121 ~5s, then 65 ~2.7s — middle 
 # (COMFYUI_CHAIN_COLOR_MATCH), which is what makes chaining to full length
 # safe to leave uncapped.
 COMFYUI_EXTEND_MAX_SEGMENTS: Optional[int] = 5
+if COMFYUI_MODEL == "a14b":
+    # A14B segments are far slower; 2 (~10s of Wan) until it's benchmarked.
+    COMFYUI_EXTEND_MAX_SEGMENTS = 2
 # HOW the segments are chained.
 # True ("last frame" chaining): each segment is its own ComfyUI job, started
 # from a real PNG of the previous segment's last frame - so that frame can be
@@ -892,7 +1007,19 @@ ATTRACTION_COLOR_MATCH_SMOOTH_SECONDS = 0.25
 #   shape (the 石標 clip's road-sign arrow bent into a different symbol);
 # - cinematic realism: cartoon, anime, CG/3D render look, plastic texture,
 #   painting, over-sharpened, flicker, unnatural motion, morphing scenery.
+# - one of Wan's anti-static terms (静止不动的画面): without it the 5B barely
+#   moved; all four (静态, 静止, 画面静止 too) made it orbit wildly (2026-10-02);
+# - no orbit/truck/rotation/big moves, and nothing invented at the frame edge
+#   (a cut-off red banner grew into a big disc sign);
+# - subtitles, watermarks;
+# - body parts / POV (feet, toes, legs, shoes, fingers, arms): walk-in shots
+#   invite the walker's own feet and hands into frame.
 COMFYUI_NEGATIVE_PROMPT = (
+    "静止不动的画面, 环绕镜头, 镜头横移, 镜头旋转, 大幅度运动, "
+    "新出现的招牌, 新出现的文字, 旗帜变形, 字幕, 水印, "
+    "脚, 脚趾, 腿, 鞋, 手指, 手臂, 身体部位, 第一人称视角, "
+    # objects moving on their own (a vending machine slid and turned to camera)
+    "物体移动, 物体自行移动, 物体滑动, 物体旋转, 物体漂移, "
     # 1. Core Exclusions: People, vehicles, and unnecessary props are strictly prohibited 
     "人, 人物, 行人, 游客, 人影, 摩托车, 自行车, 汽车, 车辆, 交通工具, 机器设备, 头盔, "
     "手, 拿相机的手, 摄像机, 拍摄设备, 凭空出现的道具, 随机生成的杂物, 漂浮的物体, "
@@ -911,57 +1038,254 @@ COMFYUI_NEGATIVE_PROMPT = (
     "文字扭曲, 乱码文字, 标志变形, 路标扭曲, 细节模糊不清, JPEG压缩残留, 最差质量, 低质量, "
     "卡通, 动漫, CG渲染, 3D渲染感, 塑料质感, 绘画感, 画面闪烁"
 )
-# What every motion prompt adds after its camera move: the scene, its colours
-# and its shapes stay exactly as in the photo (see COMFYUI_NEGATIVE_PROMPT for
-# what each part is guarding against). Kept short so it doesn't drown the move;
-# no "legible text" - that invites Wan to draw new text.
-_COMFYUI_SCENE_LOCK = (
-    "deserted empty scenery, no people, no vehicles, nothing in the foreground, "
-    "same scene throughout, locked manual exposure and white balance, "
-    "brightness constant from first frame to last, colors and lighting identical to the photo, "
-    "existing signs and buildings unchanged, realistic cinematic footage"
+# Motion-first (Wan's I2V guide): the photo decides how things look, the
+# prompt only says what moves - the camera, in film terms, plus gentle ambient
+# motion. Nothing unwanted is named here (T5 ignores "no", so "no people"
+# primes people); that all lives in COMFYUI_NEGATIVE_PROMPT. No "fixed",
+# "locked" or "same throughout" either - those read as "don't move".
+# Constant speed, no ease: chained segments would stutter at each seam.
+_COMFYUI_AMBIENT = (
+    "Gentle natural ambient motion: clouds drift slowly, leaves and grass sway softly in a light breeze, "
+    "sunlight shimmers subtly."
 )
-# Maps attraction_step.py's camera_pans vocabulary (also used by
-# local_pan_generator.py's _CAMERA_PAN_PRESETS) to an English motion prompt
-# Wan responds to — camera_pans entries are otherwise just short keywords,
-# not descriptive prose.
-# Every move is deliberately very slow over a scene that stays the same: a
-# fast or vague move gives Wan room to invent things (a painted wall turned
-# into a van driving in), and that compounds across extension segments.
-# Keys are the editor's presets normalised (vdoprocessing/camera_pan.py).
-# "none" never reaches Wan - that preset holds the photo still instead (see
-# img2vdo._generate_single_clip); its prompt here is the default for a
-# waypoint with no preset at all.
-# Moves never ease to a stop: segments are chained, so a settle at each end
-# would stutter at every seam.
+_COMFYUI_LOOK = (
+    "Smooth, steady cinematic camera move at a slow constant speed. Photorealistic travel documentary "
+    "footage, natural light, true-to-photo colors, crisp detail."
+)
+# Said as a positive fact: Wan animated a vending machine (slid, turned to camera).
+_COMFYUI_RIGID = (
+    "Only the camera moves; every building, pole, sign and machine stays fixed in place, rooted to the ground."
+)
+
+
+def _motion_prompt(camera: str) -> str:
+    return f"{camera} {_COMFYUI_RIGID} {_COMFYUI_AMBIENT} {_COMFYUI_LOOK}"
+
+
+# Keys: the editor's presets normalised (vdoprocessing/camera_pan.py). "none"
+# never reaches Wan (a still photo, img2vdo._generate_single_clip); it is the
+# default for a waypoint with no preset.
 COMFYUI_CAMERA_PAN_PROMPTS: Dict[str, str] = {
-    "panright": (
-        "very slow pan right from a fixed tripod position, constant gentle speed, horizon level, "
-        "only the continuation of the same scenery comes into view on the right, " + _COMFYUI_SCENE_LOCK
+    # No "revealing more ...": that invites Wan to invent what comes into view.
+    "panright": _motion_prompt(
+        "The camera pans gently to the right, a small, subtle, level move."
     ),
-    "panleft": (
-        "very slow pan left from a fixed tripod position, constant gentle speed, horizon level, "
-        "only the continuation of the same scenery comes into view on the left, " + _COMFYUI_SCENE_LOCK
+    "panleft": _motion_prompt(
+        "The camera pans gently to the left, a small, subtle, level move."
     ),
-    "panup": (
-        "very slow tilt up from a fixed tripod position, constant gentle speed, vertical lines stay straight, "
-        "only the continuation of the same scenery comes into view at the top, " + _COMFYUI_SCENE_LOCK
+    "panup": _motion_prompt(
+        "The camera tilts gently upward, a small, subtle move."
     ),
-    "pandown": (
-        "very slow tilt down from a fixed tripod position, constant gentle speed, vertical lines stay straight, "
-        "only the continuation of the same scenery comes into view at the bottom, " + _COMFYUI_SCENE_LOCK
+    "pandown": _motion_prompt(
+        "The camera tilts gently downward, a small, subtle move."
     ),
-    "zoomin": (
-        "very slow smooth zoom in toward the center of the frame, constant gentle speed, "
-        "the main subject grows larger with its details unchanged, " + _COMFYUI_SCENE_LOCK
+    "zoomin": _motion_prompt(
+        "The camera pushes in gently, straight ahead and centered, a small, subtle move toward the main subject."
     ),
-    "zoomout": (
-        "very slow smooth zoom out from the center of the frame, constant gentle speed, "
-        "only the continuation of the same scenery appears around the edges, " + _COMFYUI_SCENE_LOCK
+    "zoomout": _motion_prompt(
+        "The camera pulls back gently, straight back and centered, a small, subtle move."
     ),
-    "none": "very slow steady camera movement, subtle natural ambient motion, " + _COMFYUI_SCENE_LOCK,
+    "none": f"Static camera. {_COMFYUI_AMBIENT} Photorealistic travel documentary footage, natural light, "
+    "true-to-photo colors, crisp detail.",
+    # Extra shots (ATTRACTION_SHOT_MOVES), not editor presets.
+    "walkin": _motion_prompt(
+        "Smooth steadicam shot gliding slowly forward at eye level toward the main subject, a small, subtle move."
+    ),
+    "dollyback": _motion_prompt(
+        "The camera pulls straight back slowly, centered, a small, subtle move."
+    ),
+    # Walking pans: a gimbal carried forward at eye height while turning -
+    # "gimbal", not "first-person", which invites the walker's feet and hands.
+    "walkpanright": _motion_prompt(
+        "Smooth gimbal shot carried forward at a slow walking pace at eye height, gently turning to the right "
+        "as it moves along the street, with a very subtle natural walking sway."
+    ),
+    "walkpanleft": _motion_prompt(
+        "Smooth gimbal shot carried forward at a slow walking pace at eye height, gently turning to the left "
+        "as it moves along the street, with a very subtle natural walking sway."
+    ),
 }
 COMFYUI_DEFAULT_MOTION_PROMPT = COMFYUI_CAMERA_PAN_PROMPTS["none"]
+
+# --- LTXV-13B keyframed moves (vdoprocessing/ltx_keyframed.py) ---------------
+# Presets listed here are made by LTXV-13B 0.9.8 distilled (Q3_K_M GGUF) between
+# two real crops of the photo - first and last frame pinned, so it can't wander
+# or invent - instead of ATTRACTION_GENERATOR. "panright" is the user's approved
+# test 13 on 西ノ庄駅 (2026-10-02): smooth level pan, sign readable, ~2 min.
+ATTRACTION_LTX_PRESETS: Tuple[str, ...] = ("panright", "panleft", "panup", "pandown", "zoomin", "zoomout")
+# After the chosen move, a second, closer shot of the same photo joined by a
+# dissolve - like the Tomogashima reference (one photo, several angles).
+# "random": a move from ATTRACTION_SECOND_SHOT_MOVES, picked per photo (seeded
+# by its content, so a rerun picks the same) and never the first shot's
+# direction. A move name fixes it; None = the chosen move only.
+ATTRACTION_SECOND_SHOT: Optional[str] = "random"
+ATTRACTION_SECOND_SHOT_MOVES: Tuple[str, ...] = (
+    "closein", "closeout", "closepanleft", "closepanright", "closepanup", "closepandown",
+)
+LTXV_CROSSFADE_SECONDS = 0.5
+# Files (downloaded on first use into bin/ComfyUI/models/<folder>, sha256-checked).
+LTXV_FILES: Dict[str, Dict[str, str]] = {
+    "unet": {
+        "folder": "unet", "file": "LTXV-13B-0.9.8-distilled-Q3_K_M.gguf",
+        "url": "https://huggingface.co/QuantStack/LTXV-13B-0.9.8-distilled-GGUF/resolve/main/LTXV-13B-0.9.8-distilled-Q3_K_M.gguf",
+        "sha256": "1301695484240e3423df052825eabb836302e43b68fc04111cc25076f5c64b24",
+    },
+    "vae": {
+        "folder": "vae", "file": "LTXV-13B-0.9.8-distilled-VAE.safetensors",
+        "url": "https://huggingface.co/QuantStack/LTXV-13B-0.9.8-distilled-GGUF/resolve/main/vae/LTXV-13B-0.9.8-distilled-VAE.safetensors",
+        "sha256": "5bbe6f857ede5e9b262e4a294c26a1df5dc33a817f229a777cbf3adfab5ba61e",
+    },
+    "text_encoder": {
+        "folder": "text_encoders", "file": "t5xxl_fp8_e4m3fn_scaled.safetensors",
+        "url": "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/t5xxl_fp8_e4m3fn_scaled.safetensors",
+        "sha256": "a498f0485dc9536735258018417c3fd7758dc3bccc0a645feaa472b34955557a",
+    },
+}
+LTXV_WIDTH, LTXV_HEIGHT = 960, 544  # 540p 16:9 (32 px grid); finalize upscales
+LTXV_FRAMES = 97  # 8k+1, ~4 s
+LTXV_FPS = 24
+LTXV_SIGMAS = "1.0, 0.9937, 0.9875, 0.9812, 0.975, 0.9094, 0.725, 0.4219, 0.0"  # distilled, CFG 1
+# Decode in time chunks of this many frames: one chunk for the whole clip.
+# 32 (overlap 8) left a visible hitch at every seam - each second, frames
+# 24/48/72 (test 13, 2026-10-02). The decode runs alone in a fresh server.
+LTXV_DECODE_TEMPORAL_SIZE = 128
+LTXV_DECODE_TEMPORAL_OVERLAP = 8
+# How firmly the last frame is pinned (1.0 = exact copy).
+LTXV_GUIDE_STRENGTH = 0.8
+# Keyframe crops (shares of the widest 16:9 window that fits the photo). Pans
+# slide a CROP_WIDTH window from one edge to the other; zooms go from ZOOM_WIDE
+# to ZOOM_TIGHT around the middle; the second shot pushes in from CLOSE_WIDE to
+# CLOSE_TIGHT around the middle (55% -> 46% of a 1920 px photo in test 16).
+LTXV_CROP_WIDTH = 0.85
+LTXV_ZOOM_WIDE = 1.0
+LTXV_ZOOM_TIGHT = 0.8
+LTXV_CLOSE_WIDE = 0.55
+LTXV_CLOSE_TIGHT = 0.46
+# Close pans: a CLOSE_WIDE window moved this share of the widest window's
+# width (or height, for tilts) across the middle.
+LTXV_CLOSE_PAN = 0.18
+# A job takes ~15 GB of RAM on top of what's in use: below this much free it
+# waits (tuning.ensure_free_ram), then falls back to the 3D photo.
+LTXV_MIN_FREE_RAM_GB = 15.0
+# CFG 1: the negative is ignored, so everything is said positively.
+_LTXV_STILL = (
+    "The scene is still and solid and only the camera moves, steadily and slowly. Natural daylight, "
+    "realistic travel documentary footage, sharp detail."
+)
+LTXV_PROMPTS: Dict[str, str] = {
+    "panright": (
+        "A slow, calm gimbal shot pans smoothly to the right at eye height across {place} on a quiet sunny "
+        "afternoon. The camera stays perfectly level; the scene is still and solid and only the camera turns, "
+        "steadily and slowly. Soft clouds drift in a blue sky. Natural daylight, realistic travel documentary "
+        "footage, sharp detail."
+    ),
+    "panleft": (
+        "A slow, calm gimbal shot pans smoothly to the left at eye height across {place} on a quiet sunny "
+        "afternoon. The camera stays perfectly level. " + _LTXV_STILL
+    ),
+    "panup": (
+        "A slow, calm gimbal shot tilts smoothly upward across {place} on a quiet sunny afternoon, rising "
+        "gently toward the sky. " + _LTXV_STILL
+    ),
+    "pandown": (
+        "A slow, calm gimbal shot tilts smoothly downward across {place} on a quiet sunny afternoon. "
+        + _LTXV_STILL
+    ),
+    "zoomin": (
+        "A slow, calm gimbal shot pushes gently in toward the middle of {place} on a quiet sunny afternoon, "
+        "moving straight ahead at eye height. The camera stays perfectly level. " + _LTXV_STILL
+    ),
+    "zoomout": (
+        "A slow, calm gimbal shot pulls gently back from the middle of {place} on a quiet sunny afternoon, "
+        "moving straight back at eye height. The camera stays perfectly level. " + _LTXV_STILL
+    ),
+    "closein": (
+        "A slow, calm close-up gimbal shot pushes gently in toward the main subject of {place} on a quiet "
+        "sunny afternoon, moving straight ahead at eye height. The camera stays perfectly level. " + _LTXV_STILL
+    ),
+    "closeout": (
+        "A slow, calm close-up gimbal shot pulls gently back from the main subject of {place} on a quiet "
+        "sunny afternoon, moving straight back at eye height. The camera stays perfectly level. " + _LTXV_STILL
+    ),
+    "closepanleft": (
+        "A slow, calm close-up gimbal shot pans smoothly to the left across the main subject of {place} on a "
+        "quiet sunny afternoon. The camera stays perfectly level. " + _LTXV_STILL
+    ),
+    "closepanright": (
+        "A slow, calm close-up gimbal shot pans smoothly to the right across the main subject of {place} on a "
+        "quiet sunny afternoon. The camera stays perfectly level. " + _LTXV_STILL
+    ),
+    "closepanup": (
+        "A slow, calm close-up gimbal shot tilts smoothly upward across the main subject of {place} on a quiet "
+        "sunny afternoon. " + _LTXV_STILL
+    ),
+    "closepandown": (
+        "A slow, calm close-up gimbal shot tilts smoothly downward across the main subject of {place} on a quiet "
+        "sunny afternoon. " + _LTXV_STILL
+    ),
+}
+LTXV_NEGATIVE = "low quality, worst quality, deformed, distorted, motion smear, motion artifacts, morphing, people, hands, feet"
+
+# --- Attraction clips: multi-shot + QC + parallax fill ------------------------
+# "shots": Wan shots from the original photo, each cut where QC finds it going
+#   bad, then a depth-parallax move over the real photo for the rest.
+# "parallax": the parallax move only (no Wan, no GPU).
+# "chain": the old last-frame chained Wan segments.
+ATTRACTION_GENERATOR = "shots"
+# Moves for shots 1..N, each from the original photo; "preset" = the editor's.
+ATTRACTION_SHOT_MOVES: List[str] = ["preset", "walkin", "dollyback"]
+ATTRACTION_MAX_WAN_SHOTS = 3
+# A shot with less clean footage than this is dropped.
+ATTRACTION_MIN_SHOT_SECONDS = 1.0
+# Before each hard cut the last this-many seconds of the shot ease to a stop
+# (played over twice as long), then the frame holds briefly.
+ATTRACTION_SHOT_SETTLE_SECONDS = 0.5
+ATTRACTION_SHOT_HOLD_SECONDS = 0.25
+# Cut this many frames before the first bad one (QC lags the eye slightly).
+ATTRACTION_QC_BACKOFF_FRAMES = 3
+# QC (vdoprocessing/clip_qc.py): 32 px patches (frame at 640 wide) looked up in
+# the photo near where the camera model puts them. Calibrated 2026-10-02 on two
+# 西ノ庄駅 clips whose cut-off red banner grew into an invented sign from the
+# frame edge (visibly by frame 6-9, 3-4 bad patches) against a clean digital
+# push-in and real depth parallax (0 bad patches).
+ATTRACTION_QC_MAX_BAD_FRACTION = 0.12
+ATTRACTION_QC_MAX_BAD_CLUSTER = 3
+# Share of the frame showing what's outside the photo (necessarily invented);
+# moves that reveal (pans, pull-backs) get the looser cap.
+ATTRACTION_QC_MAX_OUTSIDE = 0.15
+ATTRACTION_QC_MAX_OUTSIDE_REVEAL = 0.35
+# Cinematic 3D photo (vdoprocessing/parallax_generator.py): Depth-Anything-V2
+# Small on this device ("cpu" keeps the GPU out of it), the photo split into
+# LAYERS by depth. Motion is given for the nearest things; the farthest move
+# FAR_WEIGHT of that. Pans truck PAN of the frame (plus a PAN_PUSH dolly-in),
+# zooms dolly ZOOM with an ARC sideways drift.
+PARALLAX_DEPTH_MODEL = "depth-anything/Depth-Anything-V2-Small-hf"
+PARALLAX_DEVICE = "cpu"
+# What a moving foreground uncovers is filled by LaMa (big-lama TorchScript, CPU,
+# ~5 s per photo; continues the surrounding texture rather than inventing
+# objects), saved in bin/ComfyUI/models/inpaint and downloaded on first use.
+# Without it (offline, bad checksum) OpenCV's Telea fill is used, which smears.
+PARALLAX_LAMA = {
+    "file": "big-lama.pt",
+    "url": "https://github.com/enesmsahin/simple-lama-inpainting/releases/download/v0.1.0/big-lama.pt",
+    "sha256": "7ba7aa7ac37a4d41fdbbeba3a2af7ead18058552997e3a3cd1a3b2210c9e6b4c",
+}
+PARALLAX_LAMA_MAX_SIDE = 1824
+# 2 layers split at the foreground/background break: 3 quantile layers tore a
+# pole between layers and ghosted it (2026-10-02).
+PARALLAX_LAYERS = 2
+PARALLAX_PAN = 0.08
+PARALLAX_PAN_PUSH = 0.04
+PARALLAX_ZOOM = 0.16
+PARALLAX_ARC = 0.015
+PARALLAX_FAR_WEIGHT = 0.3
+# Film finish: motion blur sub-frames per frame, focus-pull blur (px sigma at
+# 1080p for things far from focus; 0 = off - starting on the foreground left
+# the station soft for the first second), corner darkening, grain (0-255 std).
+PARALLAX_MOTION_BLUR_SAMPLES = 2
+PARALLAX_DOF_SIGMA = 0.0
+PARALLAX_VIGNETTE = 0.18
+PARALLAX_GRAIN = 2.5
 # How long the bundled server can sit unused before idle_watchdog.py shuts
 # it down — mirrors IrodoriTTSClient's reasoning (10 min covers gaps between
 # waypoints in one run without wasting VRAM/RAM long after the job ends).
@@ -1020,18 +1344,18 @@ INTRO_IMAGE_COUNT = 3
 INTRO_PER_IMAGE_SECONDS = 3.5
 INTRO_CROSSFADE_SECONDS = 0.8
 # Font/outline are in intro pixels; scaled x1080/704 from the old 1280x704 intro to look the same.
+# These are defaults; settings.intro_title_style / intro_subtitle_style override per project.
+INTRO_TITLE_FONT_FAMILY = "Yu Gothic UI"
 INTRO_TITLE_FONT_SIZE = 74
 INTRO_TITLE_OUTLINE = 2
 INTRO_TITLE_BOLD = True
 INTRO_TITLE_COLOR: Tuple[int, int, int] = (255, 255, 255)
 # Second line under the title (only drawn when a subtitle is set).
+INTRO_SUBTITLE_FONT_FAMILY = "Yu Gothic UI"
 INTRO_SUBTITLE_FONT_SIZE = 36
 INTRO_SUBTITLE_OUTLINE = 0
 INTRO_SUBTITLE_BOLD = True
 INTRO_SUBTITLE_COLOR: Tuple[int, int, int] = (255, 255, 255)
-# Bounds for the sizes a project can set in settings.intro_style.
-INTRO_FONT_SIZE_MIN = 20
-INTRO_FONT_SIZE_MAX = 200
 INTRO_OUTPUT_FILENAME = "00_intro.mp4"
 # Same frame size as every other clip, or the timeline preview draws it smaller.
 INTRO_WIDTH = 1920
@@ -1060,6 +1384,11 @@ INTRO_LABEL_FADE_SECONDS = 1.1
 # Starting/ending scale (percent of normal size) the title pops in from /
 # shrinks back to — 100 would be a plain fade with no scale motion.
 INTRO_LABEL_SCALE_START_PCT = 65
+# Subtitle enters this long after the title and leaves this long before it,
+# with its own fade + rise instead of the title's scale pop.
+INTRO_SUBTITLE_DELAY_SECONDS = 0.8
+INTRO_SUBTITLE_FADE_SECONDS = 0.7
+INTRO_SUBTITLE_RISE_PX = 28
 
 # --- Outro card grid (end-of-video "places visited" summary) ---------------
 # A single composited frame (project title + a thumbnail grid of every
@@ -1176,8 +1505,11 @@ TTS_RESPONSE_FORMAT = None  # None = let the server use its own default (wav)
 # Per-project override: settings.tts.caption.
 TTS_CAPTION = "明るく元気で、楽しそうな話し方。"
 
-# --- Attraction clip place-name label (top-left, burned for the whole clip) -
+# --- Attraction clip place-name label (top-left, for the whole clip) -------
 # See services/vdoprocessing/img2vdo.py's AttractionVideoGenerator._fit_and_finalize.
+# True: the label is a text item on the editor's text track (place_label.py),
+# not burned into the clip. Clips finalized earlier keep their burned label.
+ATTRACTION_LABEL_ON_TEXT_TRACK = True
 ATTRACTION_LABEL_FONT_SIZE = 26
 ATTRACTION_LABEL_OUTLINE = 0.8
 # Distance from the top / left edge (libass units, scaled with the video like

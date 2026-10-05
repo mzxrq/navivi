@@ -10,6 +10,7 @@ from typing import Any, Dict
 from services.logger.progress import tracker as _tracker
 from services.vdoprocessing.videopipeline.attraction_step import (
     generate_waypoint_attraction_video,
+    needs_wan,
 )
 from services.vdoprocessing.videopipeline.audio_step import is_passed_only, passed_only_reason
 from services.vdoprocessing.videopipeline.helpers import (
@@ -56,7 +57,9 @@ def test_attraction_video(
     # See attraction_step.render_attraction_videos's identical call for why:
     # a killed/restarted invocation otherwise leaves its job running
     # server-side, queuing every retry further behind instead of starting fresh.
-    ComfyUII2VClient().clear_queue()
+    _, waypoints = _load_tts_waypoints(job_config_path)
+    if needs_wan(waypoints[waypoint_index:waypoint_index + 1] if waypoint_index >= 0 else []):
+        ComfyUII2VClient().clear_queue()
     try:
         return _generate_attraction_video(job_config_path, output_video_dir, waypoint_index, force)
     finally:
@@ -146,7 +149,8 @@ def test_attraction_videos(
             label = waypoint.get("label", f"Waypoint {index + 1}")
             _tracker.note(f"Skipped attraction video {index + 1}/{len(waypoints)}: {label} ({passed_only_reason(waypoint)})")
     results = []
-    ComfyUII2VClient().clear_queue()
+    if needs_wan([waypoint for _, waypoint in candidates]):
+        ComfyUII2VClient().clear_queue()
     try:
         for progress_index, (index, waypoint) in enumerate(candidates):
             label = waypoint.get("label", f"Waypoint {index + 1}")

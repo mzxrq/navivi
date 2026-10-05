@@ -364,7 +364,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         freshThumbnail,
       );
 
-      await saveTimelineManifest(result.projectDir, result.projName, timeline, settings);
+      await saveTimelineManifest(result.projectDir, result.projName, timeline, settings.caption_style);
 
       setMetadata({
         ...metadata,

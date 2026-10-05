@@ -3,29 +3,124 @@ import { t } from "@lingui/core/macro";
 import { Pause, Play, SkipBack } from "../../components/ui/icons";
 import { Caption } from "../../components/ui/Caption";
 import { Tip } from "../../components/ui/Tip";
-import { useWorkspace } from "../../hooks/useWorkspace";
-import { DEFAULT_EXTRA_VOLUME, layout, placedCues, segmentAt, trimmedLength, TimelineData } from "./model";
+import { DEFAULT_EXTRA_VOLUME, layout, placedCues, placedTexts, PlacedText, segmentAt, trimmedLength, TimelineData } from "./model";
 import { formatTime, mediaUrl, player, usePlayerTime, usePlaying } from "./player";
+import { useWorkspace } from "../../hooks/useWorkspace";
+import {
+  DEFAULT_TEXT_SUBTITLE_STYLE,
+  DEFAULT_TEXT_TITLE_STYLE,
+  resolveCaptionStyle,
+  TEXT_DEFAULT_MARGIN,
+  textBlockCenterY,
+  lineFrame,
+  lineMotion,
+  textStyleToCss,
+  wrapText,
+} from "../../utils/textStyle";
 
 interface PreviewProps {
   timeline: TimelineData;
   projectDir: string;
 }
 
+
+// Wraps to max_chars_per_line, then drops each line's closing 。/、 so the caption box
+// is even on both sides (same as _subtitle_display_text in the export).
+const subtitleDisplayText = (text: string, maxChars: number) =>
+  wrapText(
+    text
+      .trim()
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .join("\n"),
+    maxChars,
+  )
+    .split("\n")
+    .map((line) => line.trim().replace(/[。、]+$/, "").trimEnd() || line.trim())
+    .join("\n");
+
+const ALIGN = { bottom: "items-end", middle: "items-center", top: "items-start" } as const;
+
 function SubtitleOverlay({ cues, show }: { cues: ReturnType<typeof placedCues>; show: boolean }) {
   const { settings } = useWorkspace();
   const time = usePlayerTime();
   const cue = show ? cues.find((c) => time >= c.globalStart && time < c.globalEnd) : null;
+  // Same look and placement the export burns in (caption_style + this subtitle's own style).
+  const caption = useMemo(() => resolveCaptionStyle(settings, cue?.style), [settings, cue?.style]);
+  const style = useMemo(() => textStyleToCss(caption), [caption]);
   if (!cue) return null;
+  const edge = `${(caption.margin_v / 1080) * 100}cqh`;
   return (
-    <Caption
-      text={cue.text}
-      font={settings.subtitle_font}
-      size={settings.subtitle_font_size}
-      color={settings.subtitle_color}
-      boxColor={settings.subtitle_outline_color}
-      bold={settings.subtitle_bold}
-    />
+    <div
+      className={`absolute inset-0 flex ${ALIGN[caption.position]} justify-center px-6 pointer-events-none`}
+      style={{
+        containerType: "size",
+        paddingBottom: caption.position === "bottom" ? edge : undefined,
+        paddingTop: caption.position === "top" ? edge : undefined,
+      }}
+    >
+      <span style={style} className="max-w-[85%] rounded-md leading-snug text-center whitespace-pre-line">
+        {subtitleDisplayText(cue.text, caption.max_chars_per_line)}
+      </span>
+    </div>
+  );
+}
+
+// Text-track items: centred title + subtitle, animated like the export (introclip.title_events).
+function TextOverlay({ texts }: { texts: PlacedText[] }) {
+  const time = usePlayerTime();
+  const active = texts.filter((x) => time >= x.globalStart && time < x.globalEnd);
+  if (!active.length) return null;
+  const cq = (px: number) => `${(px / 1080) * 100}cqh`;
+  return (
+    <div className="absolute inset-0 pointer-events-none" style={{ containerType: "size" }}>
+      {active.map((x) => {
+        const title = { ...DEFAULT_TEXT_TITLE_STYLE, ...(x.title.style ?? {}) };
+        const sub = { ...DEFAULT_TEXT_SUBTITLE_STYLE, ...(x.subtitle.style ?? {}) };
+        const hasTitle = !!x.title.text.trim();
+        const hasSub = !!x.subtitle.text.trim();
+        const t = time - x.globalStart;
+        const dur = x.globalEnd - x.globalStart;
+        const paired = hasTitle && hasSub;
+        const tm = lineMotion("title", x.title.animation, x.title.delay, x.animation, dur, paired);
+        const sm = lineMotion("subtitle", x.subtitle.animation, x.subtitle.delay, x.animation, dur, paired);
+        const tf = lineFrame(t, dur, tm.animation, tm.delay);
+        const sf = lineFrame(t, dur, sm.animation, sm.delay);
+        // Same anchors as the export: the block's left/centre/right edge, vertically centred.
+        const side = cq(x.margin_h ?? TEXT_DEFAULT_MARGIN);
+        const place: React.CSSProperties =
+          x.align === "left"
+            ? { left: side, transformOrigin: "left center" }
+            : x.align === "right"
+              ? { right: side, transformOrigin: "right center" }
+              : { left: "50%", transformOrigin: "center" };
+        const shift = x.align === "left" ? "translate(0, -50%)" : x.align === "right" ? "translate(0, -50%)" : "translate(-50%, -50%)";
+        const cy = textBlockCenterY(x.position, x.margin_v, title.font_size, sub.font_size, hasTitle, hasSub);
+        const titleY = hasTitle && hasSub ? cy - Math.trunc(sub.font_size * 0.6) : cy;
+        const subY = hasTitle && hasSub ? cy + Math.trunc(title.font_size * 0.6) : cy;
+        const line = "absolute whitespace-nowrap leading-none";
+        return (
+          <div key={x.id}>
+            {hasTitle && tf.opacity > 0 && (
+              <span
+                className={line}
+                style={{ ...textStyleToCss(title), ...place, top: cq(titleY + tf.rise), opacity: tf.opacity * title.opacity, transform: `${shift} scale(${tf.scale})` }}
+              >
+                {x.title.text}
+              </span>
+            )}
+            {hasSub && sf.opacity > 0 && (
+              <span
+                className={line}
+                style={{ ...textStyleToCss(sub), ...place, top: cq(subY + sf.rise), opacity: sf.opacity * sub.opacity, transform: `${shift} scale(${sf.scale})` }}
+              >
+                {x.subtitle.text}
+              </span>
+            )}
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
@@ -48,6 +143,7 @@ export function Preview({ timeline, projectDir }: PreviewProps) {
 
   const { placed, total } = useMemo(() => layout(timeline), [timeline]);
   const cues = useMemo(() => placedCues(timeline, placed), [timeline, placed]);
+  const texts = useMemo(() => placedTexts(timeline, placed), [timeline, placed]);
 
   const stateRef = useRef({ placed, total, timeline, projectDir });
   stateRef.current = { placed, total, timeline, projectDir };
@@ -199,6 +295,7 @@ export function Preview({ timeline, projectDir }: PreviewProps) {
             </div>
           )}
           <SubtitleOverlay cues={cues} show />
+          <TextOverlay texts={texts} />
         </div>
       </div>
       <div className="flex items-center justify-center gap-2 h-10 shrink-0">

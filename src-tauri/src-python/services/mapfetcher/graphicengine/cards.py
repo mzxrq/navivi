@@ -21,23 +21,12 @@ from services import tuning
 # those two are merged one level deeper instead.
 _NESTED_LABEL_KEYS = ("mode_name", "mode_duration_label")
 
-# Shared light "glass" card palette (white background, dark text, muted
-# gray labels) reused by every one of this file's summary/leg-bar card
-# templates.
-_CARD_BG_COLOR: Tuple[int, int, int, int] = (255, 255, 255, 240)
-_CARD_TEXT_COLOR: Tuple[int, int, int, int] = (35, 35, 35, 255)
-_CARD_LABEL_COLOR: Tuple[int, int, int, int] = (110, 110, 110, 255)
-# Total column/row always reads in this same neutral dark color rather than
-# borrowing whichever mode happens to be self.line_color, or one of the
-# per-mode accent colors below - it summarizes across modes, not one of
-# them, and every _mode_accent color is a vivid, fully-saturated hue
-# (MODE_LINE_COLORS), so a plain near-black can never coincidentally match
-# one, unlike a specific color pick could as modes are added. (This used to
-# be a literal copy of walking's own BGR tuple, meant to read as blue once
-# reversed for PIL - but this file draws directly in PIL's RGB space and
-# never reverses it, so it rendered as orange instead, indistinguishable
-# from ferry's own orange - see _mode_accent's own reversal for how a mode
-# color is actually meant to make that BGR->RGB trip.)
+# Light-theme palette, kept for callers outside the engine; card methods
+# read the active theme from self.ui (tuning.UI_THEMES).
+_CARD_BG_COLOR: Tuple[int, int, int, int] = tuning.UI_THEMES["light"]["card_bg"]
+_CARD_TEXT_COLOR: Tuple[int, int, int, int] = tuning.UI_THEMES["light"]["card_text"]
+_CARD_LABEL_COLOR: Tuple[int, int, int, int] = tuning.UI_THEMES["light"]["card_label"]
+# Total column/row uses the neutral text color, never a vivid mode accent.
 _TOTAL_ACCENT_COLOR: Tuple[int, int, int, int] = _CARD_TEXT_COLOR
 
 
@@ -131,11 +120,11 @@ class _CardMixin:
         column/row back to its own line color on the map instead of
         every one sharing one generic accent. "total" isn't a real
         travel mode with a line color of its own, so it always gets the
-        same neutral dark color instead (_TOTAL_ACCENT_COLOR) — never one
+        same neutral dark color instead (self.ui["card_text"]) — never one
         of the vivid per-mode accents, so it can't end up looking like
         whichever mode happens to also be that hue (walking's blue, say)."""
         if mode == "total":
-            return _TOTAL_ACCENT_COLOR
+            return self.ui["card_text"]
         return tuple(reversed(self.MODE_COLORS.get(mode, self.line_color))) + (255,)
 
     @staticmethod
@@ -173,8 +162,8 @@ class _CardMixin:
         body box). Shared by the drawing and by `stopby_notice_box`."""
         s = h / 1080.0
         margin = int(28 * s)
-        title_font = self._load_font(self.FONT_CANDIDATES_BOLD, int(26 * s))
-        body_font = self._load_font(self.FONT_CANDIDATES_REGULAR, int(21 * s))
+        title_font = self._card_font(self.FONT_CANDIDATES_BOLD, int(26 * s))
+        body_font = self._card_font(self.FONT_CANDIDATES_REGULAR, int(21 * s))
         probe = ImageDraw.Draw(Image.new("RGB", (8, 8)))
         icon_d = int(26 * s)
         text_x0 = int(22 * s) + icon_d + int(14 * s)
@@ -313,9 +302,9 @@ class _CardMixin:
         # since that layout (mode header + big number + small time row)
         # doesn't fit the pill style once there's more than one stat pair.
         if num_columns == 1:
-            bg_color = _CARD_BG_COLOR
-            text_color, label_color = _CARD_TEXT_COLOR, _CARD_LABEL_COLOR
-            icon_color = _CARD_TEXT_COLOR
+            bg_color = self.ui["card_bg"]
+            text_color, label_color = self.ui["card_text"], self.ui["card_label"]
+            icon_color = self.ui["card_text"]
             # BGR, like every other color in job_config.json's settings —
             # reversed here since the canvas is RGBA->BGR swapped as a
             # whole at the end (see _mode_accent's own comment).
@@ -397,9 +386,9 @@ class _CardMixin:
             # above (white glass, dark text, thin neutral border) rather
             # than a separate dark-glass/yellow-accent look — only the
             # layout (one column per mode) differs between the two.
-            bg_color = _CARD_BG_COLOR
-            text_color, label_color = _CARD_TEXT_COLOR, _CARD_LABEL_COLOR
-            divider_color = (0, 0, 0, 30)
+            bg_color = self.ui["card_bg"]
+            text_color, label_color = self.ui["card_text"], self.ui["card_label"]
+            divider_color = self.ui["divider"]
             # BGR, like every other color in job_config.json's settings —
             # reversed here since the canvas is RGBA->BGR swapped as a
             # whole at the end (see _mode_accent's own comment).
@@ -503,7 +492,7 @@ class _CardMixin:
                     )
 
                 if mode == "total":
-                    self._draw_ruler_icon(draw, col_cx, icon_cy, icon_size, text_color)
+                    self._draw_total_icon(draw, col_cx, icon_cy, icon_size, text_color)
                 else:
                     self._draw_mode_icon(draw, mode, col_cx, icon_cy, icon_size, col_accent)
 
@@ -568,7 +557,7 @@ class _CardMixin:
         pill uses. More than one mode gets a "route mode" block per mode
         (distance row, then duration row, each colored in that mode's own
         route-line accent — see _mode_accent) plus a Total block in
-        _TOTAL_ACCENT_COLOR, the same color language create_summary_card's
+        self.ui["card_text"], the same color language create_summary_card's
         multi-column layout already uses, just as rows instead of columns."""
         scale = 2
 
@@ -604,14 +593,14 @@ class _CardMixin:
                     (self._draw_clock_icon, fmt_duration(mode_duration.get(mode, 0.0)), accent),
                 ])
             blocks.append([
-                (self._draw_ruler_icon, fmt_distance(distance_km), _TOTAL_ACCENT_COLOR),
-                (self._draw_clock_icon, fmt_duration(duration_seconds), _TOTAL_ACCENT_COLOR),
+                (self._draw_ruler_icon, fmt_distance(distance_km), self.ui["card_text"]),
+                (self._draw_clock_icon, fmt_duration(duration_seconds), self.ui["card_text"]),
             ])
             block_gap = 22 * scale
         else:
             blocks = [[
-                (self._draw_walking_icon, fmt_distance(distance_km), _CARD_TEXT_COLOR),
-                (self._draw_clock_icon, fmt_duration(duration_seconds), _CARD_TEXT_COLOR),
+                (self._draw_walking_icon, fmt_distance(distance_km), self.ui["card_text"]),
+                (self._draw_clock_icon, fmt_duration(duration_seconds), self.ui["card_text"]),
             ]]
             block_gap = row_gap
 
@@ -638,7 +627,7 @@ class _CardMixin:
         draw.rounded_rectangle(
             [0, 0, card_w_px - 1, card_h_px - 1],
             radius=card_radius_px,
-            fill=_CARD_BG_COLOR,
+            fill=self.ui["card_bg"],
             outline=border_rgba if self.card_border_thickness else None,
             width=self.card_border_thickness * scale,
         )
@@ -681,7 +670,7 @@ class _CardMixin:
         VALUE_FONT_SIZE size the label/value; time reuses the label size).
         A single mode (or no breakdown at all) is one column, no dividers,
         in plain text color; more than one mode gets one column per mode
-        plus a Total column, colored via _mode_accent / _TOTAL_ACCENT_COLOR
+        plus a Total column, colored via _mode_accent / self.ui["card_text"]
         — same reasoning create_summary_card's own single-vs-multi split
         uses."""
         scale = 2
@@ -710,7 +699,7 @@ class _CardMixin:
             ]
             columns.append((
                 self.summary_card_labels["total_label"], "total", distance_km, duration_seconds,
-                _TOTAL_ACCENT_COLOR,
+                self.ui["card_text"],
             ))
         elif mode_breakdown and len(mode_breakdown) == 1:
             # The total is shown even when it repeats the one mode (user's choice).
@@ -722,13 +711,13 @@ class _CardMixin:
                 ),
                 (
                     self.summary_card_labels["total_label"], "total", distance_km, duration_seconds,
-                    _TOTAL_ACCENT_COLOR,
+                    self.ui["card_text"],
                 ),
             ]
         else:
             columns = [(
                 self.summary_card_labels["distance_label"], "walking", distance_km, duration_seconds,
-                _CARD_TEXT_COLOR,
+                self.ui["card_text"],
             )]
 
         label_ascent, _ = font_label.getmetrics()
@@ -758,7 +747,12 @@ class _CardMixin:
             )
             rows.append((label, mode, dist_s, dur_s, color, text_w))
 
-        col_w = icon_col_w + icon_col_gap + max(r[5] for r in rows) + col_pad_x * 2
+        # Fixed width: pad to sample strings so the card doesn't resize with its values.
+        fixed_text_w = max(
+            probe_draw.textlength(tuning.SUMMARY_CARD_FIXED_DISTANCE_SAMPLE, font=font_value),
+            probe_draw.textlength(tuning.SUMMARY_CARD_FIXED_DURATION_SAMPLE, font=font_time),
+        )
+        col_w = icon_col_w + icon_col_gap + max(fixed_text_w, *(r[5] for r in rows)) + col_pad_x * 2
         card_w_px = int(col_w * len(rows))
         card_h_px = int(content_h + margin_y * 2)
 
@@ -768,12 +762,12 @@ class _CardMixin:
         draw.rounded_rectangle(
             [0, 0, card_w_px - 1, card_h_px - 1],
             radius=card_radius_px,
-            fill=_CARD_BG_COLOR,
+            fill=self.ui["card_bg"],
             outline=border_rgba if self.card_border_thickness else None,
             width=self.card_border_thickness * scale,
         )
 
-        divider_color = (0, 0, 0, 30)
+        divider_color = self.ui["divider"]
         for i, (label_text, mode, dist_s, dur_s, color, text_w) in enumerate(rows):
             col_x0 = col_w * i + col_pad_x
             if i > 0:
@@ -784,7 +778,7 @@ class _CardMixin:
                 )
 
             icon_fn = (
-                self._draw_ruler_icon if mode == "total"
+                self._draw_total_icon if mode == "total"
                 else (lambda d, cx, cy, sz, col, m=mode: self._draw_mode_icon(d, m, cx, cy, sz, col))
             )
             icon_cx = col_x0 + icon_col_w / 2  # both icons share this x - vertical alignment
@@ -857,11 +851,11 @@ class _CardMixin:
         # Light "white glass" flyout — same family as create_summary_card's
         # own light palette (this project's actual card theme) rather than
         # the dark mica look this template first shipped with.
-        bg_color = _CARD_BG_COLOR
-        header_color = _CARD_TEXT_COLOR
-        label_color = _CARD_LABEL_COLOR
-        value_color = _CARD_TEXT_COLOR
-        divider_color = (0, 0, 0, 24)
+        bg_color = self.ui["card_bg"]
+        header_color = self.ui["card_text"]
+        label_color = self.ui["card_label"]
+        value_color = self.ui["card_text"]
+        divider_color = self.ui["divider"]
         border_rgba = tuple(reversed(self.card_border_color)) + (255,)
         # BGR, like every other color in job_config.json's settings —
         # reversed here since the canvas is RGBA->BGR swapped as a whole
@@ -960,7 +954,7 @@ class _CardMixin:
             row_cy = row_top + row_h / 2
             icon_cx = pad_x + icon_size / 2
             if mode == "total":
-                self._draw_ruler_icon(draw, icon_cx, row_cy, icon_size, col_accent)
+                self._draw_total_icon(draw, icon_cx, row_cy, icon_size, col_accent)
             else:
                 self._draw_mode_icon(draw, mode, icon_cx, row_cy, icon_size, col_accent)
 
@@ -1032,9 +1026,9 @@ class _CardMixin:
         # replaces the old flat top border line entirely.
         shadow_h_px = 34 * scale
 
-        bg_color = (255, 255, 255, 242)
-        route_color = (28, 28, 30, 255)
-        label_color = (120, 120, 126, 255)
+        bg_color = self.ui["card_bg"]
+        route_color = self.ui["card_text"]
+        label_color = self.ui["card_label"]
         col_accent = tuple(reversed(self.MODE_COLORS.get(mode, self.line_color))) + (255,)
 
         font_route = self._load_font(self.FONT_CANDIDATES_BOLD, 36 * scale)
@@ -1218,7 +1212,7 @@ class _CardMixin:
             return frame
 
         scale = 2  # supersampled for antialiased text/corners, then downscaled
-        font = self._load_font(self.FONT_CANDIDATES_BOLD, 22 * scale)
+        font = self._card_font(self.FONT_CANDIDATES_BOLD, 22 * scale)
         measure = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
         bbox = measure.textbbox((0, 0), text, font=font)
         text_w, text_h = bbox[2] - bbox[0], bbox[3] - bbox[1]
@@ -1227,11 +1221,11 @@ class _CardMixin:
 
         canvas = Image.new("RGBA", (card_w, card_h), (0, 0, 0, 0))
         draw = ImageDraw.Draw(canvas)
-        draw.rounded_rectangle([0, 0, card_w, card_h], radius=card_h // 2, fill=(30, 34, 40, 225))
-        draw.text((pad_x - bbox[0], pad_y - bbox[1]), text, font=font, fill=(255, 255, 255, 255))
+        draw.rounded_rectangle([0, 0, card_w, card_h], radius=card_h // 2, fill=self.ui["pill_bg"])
+        draw.text((pad_x - bbox[0], pad_y - bbox[1]), text, font=font, fill=self.ui["pill_text"])
         canvas = canvas.resize((max(1, card_w // scale), max(1, card_h // scale)), Image.LANCZOS)
 
-        card_bgra = np.array(canvas)
+        card_bgra = np.array(canvas)[:, :, [2, 1, 0, 3]]
         ch, cw = card_bgra.shape[:2]
         h, w = frame.shape[:2]
         x0 = max(0, (w - cw) // 2)

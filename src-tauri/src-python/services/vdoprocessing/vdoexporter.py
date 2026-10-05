@@ -29,6 +29,7 @@ raise immediately with the stderr tail attached.
 ---------------------------------------------------------------------------
 """
 
+from dataclasses import replace
 import json
 import os
 import shutil
@@ -36,16 +37,171 @@ import subprocess
 import tempfile
 import time
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Callable, List, Optional, Tuple
 import uuid
 
 import cv2
 import numpy as np
 
 from services import runtime_paths, tuning
-from services.localization.subtitle import SubtitleStyle, caption_style
+from services.localization.subtitle import SubtitleStyle
+from services.localization.text_style import TextStyle, wrap_text
 from services.logger.logger import setup_logger
 
+# The editor preview's caption: white text on a 60% black box, low in the frame.
+# settings.caption_style overrides it per project.
+DEFAULT_CAPTION_STYLE = TextStyle(
+    font_family="Meiryo",
+    font_size=71,
+    bold=False,
+    shadow=0.0,
+    outline_width=9.375,
+    background=True,
+    background_opacity=0.6,
+    margin_v=75,
+)
+EDITOR_SUBTITLE_STYLE = DEFAULT_CAPTION_STYLE.to_subtitle_style()
+
+
+def caption_subtitle_style(raw: Optional[dict], check_font: bool = True) -> SubtitleStyle:
+    style = DEFAULT_CAPTION_STYLE.merged(raw)
+    if check_font:
+        style = style.with_installed_font(DEFAULT_CAPTION_STYLE.font_family)
+    return style.to_subtitle_style()
+
+
+def subtitle_band_px(frame_h: int, style: SubtitleStyle = EDITOR_SUBTITLE_STYLE, lines: int = 2) -> int:
+    """Height (px) of the bottom band a burned caption of `lines` lines can cover
+    (0 when captions sit at the middle or top). libass scales SRT style values
+    from its default PlayResY of 288."""
+    if style.alignment not in (1, 2, 3):
+        return 0
+    units = style.margin_v + lines * style.font_size * 1.25 + 2 * style.outline
+    return int(round(units * frame_h / 288))
+
+
+def _subtitle_display_text(text: str, max_chars_per_line: int = 0) -> str:
+    """Wraps to max_chars_per_line, then drops each line's closing 。/、: the mark sits
+    left in its full-width cell, leaving the caption box wider on the right. Same
+    rule as subtitleDisplayText in Preview.tsx."""
+    text = wrap_text("\n".join(l.strip() for l in text.strip().splitlines()), max_chars_per_line)
+    lines = [line.strip().rstrip("。、").rstrip() or line.strip() for line in text.splitlines()]
+    return "\n".join(lines)
+
+
+def _ass_timestamp(seconds: float) -> str:
+    cs = max(0, int(round(seconds * 100)))
+    h, cs = divmod(cs, 360_000)
+    m, cs = divmod(cs, 6_000)
+    s, cs = divmod(cs, 100)
+    return f"{h}:{m:02d}:{s:02d}.{cs:02d}"
+
+
+def _ass_text(text: str) -> str:
+    # Braces open override tags and backslashes start escapes; show them as full-width look-alikes.
+    return text.replace("\\", "＼").replace("{", "｛").replace("}", "｝").replace("\n", "\\N")
+
+
+def write_caption_ass(
+    cues: list, shared_style: Optional[dict], frame_size: Optional[Tuple[int, int]], path: Path,
+    check_font: bool = True,
+    texts: Optional[list] = None,
+) -> Path:
+    """Burned captions as .ass: every cue gets the shared style (settings.caption_style)
+    with its own `style` overrides on top, so lines can differ in font, colour and place.
+    `texts` are text-track items (an animated title + subtitle, centred), drawn on top."""
+    from services.vdoprocessing.introclip import (
+        DEFAULT_SUBTITLE_STYLE,
+        DEFAULT_TITLE_STYLE,
+        TEXT_DEFAULT_MARGIN_PX,
+        text_block_center_y,
+        title_events,
+    )
+
+    shared = DEFAULT_CAPTION_STYLE.merged(shared_style)
+    w, h = frame_size or (1920, 1080)
+    play_w = round(1080 * w / h)
+    fonts: dict = {}
+
+    def installed(style: TextStyle, fallback: str) -> TextStyle:
+        if not check_font:
+            return style
+        if style.font_family not in fonts:
+            fonts[style.font_family] = style.with_installed_font(fallback).font_family
+        return replace(style, font_family=fonts[style.font_family])
+
+    styles: dict = {}
+    events = []
+    for cue in sorted(cues, key=lambda c: float(c["start"])):
+        style = installed(shared.merged(cue.get("style")), DEFAULT_CAPTION_STYLE.font_family)
+        name = styles.setdefault(style, f"S{len(styles)}")
+        text = _ass_text(_subtitle_display_text(str(cue["text"]), style.max_chars_per_line))
+        events.append(
+            f"Dialogue: 0,{_ass_timestamp(float(cue['start']))},{_ass_timestamp(float(cue['end']))},"
+            f"{name},,0,0,0,,{text}"
+        )
+    for item in sorted(texts or [], key=lambda x: float(x["start"])):
+        title, subtitle = item.get("title") or {}, item.get("subtitle") or {}
+        title_text, sub_text = str(title.get("text") or ""), str(subtitle.get("text") or "")
+        title_style = installed(DEFAULT_TITLE_STYLE.merged(title.get("style")), DEFAULT_TITLE_STYLE.font_family)
+        sub_style = installed(DEFAULT_SUBTITLE_STYLE.merged(subtitle.get("style")), DEFAULT_SUBTITLE_STYLE.font_family)
+        def px(key: str) -> float:
+            v = item.get(key)
+            return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else TEXT_DEFAULT_MARGIN_PX
+
+        cy = text_block_center_y(
+            str(item.get("position") or "middle"), px("margin_v"),
+            title_style.font_size, sub_style.font_size, bool(title_text.strip()), bool(sub_text.strip()),
+        )
+        align = item.get("align") if item.get("align") in ("left", "right") else "center"
+        cx = {"left": px("margin_h"), "right": play_w - px("margin_h")}.get(align, play_w / 2)
+        for a, b, text in title_events(
+            title_text, sub_text, float(item["start"]), float(item["end"]),
+            title_style, sub_style, int(round(cx)), cy, align=align,
+            animation=item.get("animation"),
+            title_motion={"animation": title.get("animation"), "delay": title.get("delay")},
+            subtitle_motion={"animation": subtitle.get("animation"), "delay": subtitle.get("delay")},
+        ):
+            # Layer 1: above captions. Every look is in the event's own tags.
+            events.append(f"Dialogue: 1,{_ass_timestamp(a)},{_ass_timestamp(b)},Text,,0,0,0,,{text}")
+    path.write_text(
+        "[Script Info]\nScriptType: v4.00+\nWrapStyle: 0\nScaledBorderAndShadow: yes\n"
+        # 1080 lines tall, as wide as the frame's aspect, so style px read as 1080p px.
+        f"PlayResX: {play_w}\nPlayResY: 1080\n\n"
+        "[V4+ Styles]\n"
+        "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, "
+        "Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, "
+        "Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n"
+        + "".join(s.to_ass_style_line(n) + "\n" for s, n in styles.items())
+        + "Style: Text,Arial,20,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,5,0,0,0,1\n"
+        + "\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
+        + "".join(e + "\n" for e in events),
+        encoding="utf-8",
+    )
+    return path
+
+
+def _run_with_progress(
+    cmd: List[str], input_path: str, on_progress: Callable[[float], None]
+) -> subprocess.CompletedProcess:
+    """Runs an ffmpeg command, calling on_progress(0..1) from ffmpeg's -progress output."""
+    from services.tts.ttsengine import FFmpegManager
+
+    try:
+        total = FFmpegManager.get_media_duration(input_path)
+    except (RuntimeError, OSError):
+        total = 0.0
+    # -progress goes before the output path; stderr goes to a file so an unread pipe can't stall ffmpeg.
+    cmd = [c for c in cmd[:-1] if c != "-stats"] + ["-progress", "pipe:1", "-nostats", cmd[-1]]
+    with tempfile.TemporaryFile(mode="w+", encoding="utf-8", errors="replace") as err:
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=err, encoding="utf-8", errors="replace")
+        for line in proc.stdout:
+            key, _, value = line.strip().partition("=")
+            if key == "out_time_us" and total > 0 and value.isdigit():
+                on_progress(min(1.0, int(value) / 1e6 / total))
+        proc.wait()
+        err.seek(0)
+        return subprocess.CompletedProcess(cmd, proc.returncode, "", err.read())
 
 # [NOTE] [Editor] This module previously had no logger at all — every ffmpeg
 # failure was either swallowed (DEVNULL) or surfaced as a bare exception
@@ -423,6 +579,7 @@ class VideoExporter:
         trim_in: float = 0.0, trim_out: Optional[float] = None,
         volume: float = 1.0, muted: bool = False,
         extra_audio: Optional[str] = None, extra_volume: float = 0.5,
+        duration: Optional[float] = None,
     ) -> Path:
         """Combines one timeline track's silent video with its own separate
         audio track (see timeline_step.build_timeline — video and audio are
@@ -449,16 +606,20 @@ class VideoExporter:
         # picture would end while the voice is still speaking, and every clip
         # after it would drift against its sound. Hold the last frame until the
         # voice is done, and a little beyond (tuning.AUDIO_END_HOLD_SECONDS).
+        # An editor timeline states each clip's length (as its preview plays it), used as is.
         hold_extra = 0.0
-        if has_audio:
+        if has_audio or duration:
             try:
                 from services.tts.ttsengine import FFmpegManager
 
-                needed = (
-                    max(0.0, audio_offset)
-                    + FFmpegManager.get_media_duration(str(audio_path))
-                    + tuning.AUDIO_END_HOLD_SECONDS
-                )
+                if duration:
+                    needed = duration
+                else:
+                    needed = (
+                        max(0.0, audio_offset)
+                        + FFmpegManager.get_media_duration(str(audio_path))
+                        + tuning.AUDIO_END_HOLD_SECONDS
+                    )
                 video_len = FFmpegManager.get_media_duration(str(video_path))
                 if trim_out is not None or trim_in > 0:
                     video_len = min(video_len, trim_out if trim_out is not None else video_len) - trim_in
@@ -544,6 +705,8 @@ class VideoExporter:
             ]
         elif audio_filters:
             cmd += ["-af", ",".join(audio_filters)]
+        if duration:
+            cmd += ["-t", f"{duration:.3f}"]
         cmd += ["-shortest", "-video_track_timescale", str(_TIMESCALE)]
         cmd.append(str(tmp_out))
 
@@ -643,7 +806,8 @@ class VideoExporter:
 
     @staticmethod
     def concat_from_timeline(
-        timeline_data: dict, output_path: str, save_json_path: Optional[str] = None
+        timeline_data: dict, output_path: str, save_json_path: Optional[str] = None,
+        on_progress: Optional[Callable[[float], None]] = None,
     ) -> str:
         """NLE Engine: Stitches atomic clips using strict absolute paths and pre-flight file checks.
 
@@ -684,9 +848,18 @@ class VideoExporter:
         tmp_dir = Path(tempfile.mkdtemp(prefix="navivi_concat_"))
         target_size = VideoExporter._timeline_size(timeline_data, tracks)
         target_fps = float(timeline_data.get("fps") or 30)
+
+        # Percent of the export each step takes, from a timed real export (clips ~25%,
+        # crossfades ~22%, music ~1%, subtitle burn ~50%), so the bar moves at an even pace.
+        report = on_progress or (lambda _pct: None)
+        burning = bool(VideoExporter._burn_cues(timeline_data))
+        mux_end, join_end, music_end = (26.0, 49.0, 50.0) if burning else (53.0, 97.0, 99.0)
+        weights = [float(t.get("duration") or 0.0) or 1.0 for t in tracks]
+        report(0.0)
         try:
-            muxed_paths = [
-                VideoExporter._mux_track_for_concat(
+            muxed_paths: List[Path] = []
+            for i, track in enumerate(tracks):
+                muxed_paths.append(VideoExporter._mux_track_for_concat(
                     ffmpeg_cmd, Path(track["file_path"]).resolve(), track.get("audio_path"), tmp_dir, i,
                     audio_offset=float(track.get("audio_offset") or 0.0), target_size=target_size,
                     target_fps=target_fps,
@@ -695,14 +868,15 @@ class VideoExporter:
                     volume=float(track.get("volume", 1.0)), muted=bool(track.get("muted")),
                     extra_audio=track.get("extra_audio_path"),
                     extra_volume=float(track.get("extra_audio_volume") if track.get("extra_audio_volume") is not None else 0.5),
-                )
-                for i, track in enumerate(tracks)
-            ]
+                    duration=float(track["duration"]) if track.get("duration") else None,
+                ))
+                report(mux_end * sum(weights[: i + 1]) / sum(weights))
 
             # A track marked fade_into_next_seconds dissolves into the track
             # after it (see timeline_step): the pair becomes one segment.
             joined_paths: List[Path] = []
             skip_next = False
+            fades = [i for i, t in enumerate(tracks[:-1]) if float(t.get("fade_into_next_seconds") or 0.0) > 0]
             for i, muxed in enumerate(muxed_paths):
                 if skip_next:
                     skip_next = False
@@ -712,6 +886,8 @@ class VideoExporter:
                     merged = VideoExporter._crossfade_pair(
                         ffmpeg_cmd, muxed, muxed_paths[i + 1], fade, tmp_dir, i, target_fps=target_fps
                     )
+                    done = sum(1 for k in fades if k <= i)
+                    report(mux_end + (join_end - mux_end) * done / max(1, len(fades)))
                     if merged is not None:
                         joined_paths.append(merged)
                         skip_next = True
@@ -760,13 +936,27 @@ class VideoExporter:
                     f"FFmpeg reported success, but the output file is missing or 0 bytes! STDERR: {result.stderr}"
                 )
 
-            VideoExporter._finish_timeline_output(ffmpeg_cmd, timeline_data, output_path, tmp_dir)
+            report(join_end)
+            VideoExporter._finish_timeline_output(
+                ffmpeg_cmd, timeline_data, output_path, tmp_dir,
+                on_progress=lambda f: report(music_end + (100.0 - music_end) * f),
+            )
+            report(100.0)
             return output_path
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)
 
     @staticmethod
-    def _finish_timeline_output(ffmpeg_cmd: str, timeline_data: dict, output_path: str, tmp_dir: Path) -> None:
+    def _burn_cues(timeline_data: dict) -> list:
+        if not timeline_data.get("burn_subtitles", True):
+            return []
+        return [c for c in timeline_data.get("subtitles") or [] if str(c.get("text", "")).strip()]
+
+    @staticmethod
+    def _finish_timeline_output(
+        ffmpeg_cmd: str, timeline_data: dict, output_path: str, tmp_dir: Path,
+        on_progress: Optional[Callable[[float], None]] = None,
+    ) -> None:
         """Music bed and burned subtitles, applied to the joined video in place."""
         music = timeline_data.get("music") or {}
         music_path = music.get("path")
@@ -789,16 +979,21 @@ class VideoExporter:
             else:
                 logger.warning("music bed skipped: %s", result.stderr[-400:])
 
-        cues = [c for c in timeline_data.get("subtitles") or [] if str(c.get("text", "")).strip()]
-        if cues and timeline_data.get("burn_subtitles"):
-            srt = tmp_dir / "subtitles.srt"
-            srt.write_text(VideoExporter.cues_to_srt(cues), encoding="utf-8")
+        cues = VideoExporter._burn_cues(timeline_data)
+        # Text-track items (e.g. the intro title) burn even when subtitles are off.
+        texts = [
+            x for x in timeline_data.get("texts") or []
+            if str((x.get("title") or {}).get("text", "")).strip()
+            or str((x.get("subtitle") or {}).get("text", "")).strip()
+        ]
+        if cues or texts:
+            ass = write_caption_ass(
+                cues, timeline_data.get("caption_style"), VideoExporter._video_size(Path(output_path)),
+                tmp_dir / "subtitles.ass", texts=texts,
+            )
             burned = tmp_dir / "with_subtitles.mp4"
             try:
-                VideoExporter.burn_subtitles(
-                    str(output_path), str(srt), str(burned),
-                    style=caption_style(timeline_data.get("subtitle_style")),
-                )
+                VideoExporter.burn_subtitles(str(output_path), str(ass), str(burned), on_progress=on_progress)
                 _replace_with_retry(str(burned), str(output_path))
             except Exception as exc:  # the stitched video is still good without them
                 logger.warning("subtitle burn skipped: %s", exc)
@@ -814,10 +1009,9 @@ class VideoExporter:
 
     @staticmethod
     def burn_subtitles(
-        input_video_path: str,
-        subtitle_file_path: str,
-        output_video_path: str,
+        input_video_path: str, subtitle_file_path: str, output_video_path: str,
         style: Optional[SubtitleStyle] = None,
+        on_progress: Optional[Callable[[float], None]] = None,
     ) -> str:
         """NLE Engine: Burns an .srt or .ass subtitle file permanently into a video track (Cross-Platform Safe)."""
         video_path = Path(input_video_path)
@@ -845,26 +1039,25 @@ class VideoExporter:
         # e.g., 'C\:/Users/...' -> safely parsed by the FFmpeg filter graph.
         safe_sub_path = sub_path.as_posix().replace(":", "\\:")
         sub_filter = f"subtitles='{safe_sub_path}'"
-        if style is not None:
-            sub_filter += f":force_style='{style.to_force_style()}'"
+        if style:
+            sub_filter = f"subtitles=filename='{safe_sub_path}':force_style='{style.to_force_style()}'"
 
-        result = subprocess.run(
-            [
-                ffmpeg_cmd,
-                "-y", *tuning.ffmpeg_log_args(),
-                "-i",
-                str(video_path),
-                "-vf",
-                sub_filter,
-                *tuning.ffmpeg_thread_args(),
-                "-c:a",
-                "copy",  # Copy the audio without re-encoding it
-                str(out_path),
-            ],
-            capture_output=True,
-            encoding="utf-8",
-            errors="replace",
-        )
+        cmd = [
+            ffmpeg_cmd,
+            "-y", *tuning.ffmpeg_log_args(),
+            "-i",
+            str(video_path),
+            "-vf",
+            sub_filter,
+            *tuning.ffmpeg_thread_args(),
+            "-c:a",
+            "copy",  # Copy the audio without re-encoding it
+            str(out_path),
+        ]
+        if on_progress:
+            result = _run_with_progress(cmd, str(video_path), on_progress)
+        else:
+            result = subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace")
 
         if result.returncode != 0:
             logger.error("burn_subtitles failed: %s", result.stderr)

@@ -19,7 +19,7 @@ from typing import Callable, Optional
 from services import runtime_paths
 
 # Same order as pipeline.py's tracker.stage() calls: StageRecorder maps by position.
-STAGES = ("gps", "tts", "subtitles", "upscale", "attraction", "route", "burn", "intro")
+STAGES = ("gps", "tts", "subtitles", "upscale", "attraction", "route", "intro")
 HISTORY_KEEP = 6
 HISTORY_MIN_SAMPLES = 2
 
@@ -31,7 +31,6 @@ _DEFAULT_COST = {
     "upscale": 6.0,
     "attraction": 90.0,
     "route": 1.6,
-    "burn": 0.5,
     "intro": 8.0,
 }
 _PAN_ATTRACTION_COST = 6.0
@@ -201,7 +200,6 @@ def workload(config: dict) -> dict:
         "upscale": _small_photos(config),
         "attraction": clips,
         "route": round(leg_seconds, 1),
-        "burn": round(leg_seconds, 1) if (not fast and settings.get("burn_subtitles", False)) else 0,
         "intro": 1 if config.get("enable_intro", True) else 0,
     }
 
