@@ -255,8 +255,8 @@ export function OnlineProviderSettings({ provider }: { provider: OnlineProvider 
         <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
         <span>
           {settings.ai_online_send_photos !== false
-            ? t`When you write a script, the prompt, the place name, its location facts and the stop's photos are sent to ${info.label}. Nothing is sent until you press Auto-Write, and usage is billed to your own account there.`
-            : t`When you write a script, the prompt, the place name and its location facts are sent to ${info.label}. Nothing is sent until you press Auto-Write, and usage is billed to your own account there.`}
+            ? t`Auto-Write sends the prompt, the place name, its location facts and the stop's photos to ${info.label}. Generate Assets also sends your stops' names and scripts to ${info.label} when it drafts the overview narration. Nothing is sent before then, and usage is billed to your own account there.`
+            : t`Auto-Write sends the prompt, the place name and its location facts to ${info.label}. Generate Assets also sends your stops' names and scripts to ${info.label} when it drafts the overview narration. Nothing is sent before then, and usage is billed to your own account there.`}
         </span>
       </div>
     </>

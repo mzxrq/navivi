@@ -204,16 +204,17 @@ def ensure_overview_narration(project_config_path: str) -> bool:
             logger.info("Step 2: reused the saved overview_narration (waypoints unchanged).")
             return False
 
-    from services.cli.script_commands import DEFAULT_SCRIPT_MODEL
-    from services.localization.overview_script import build_tour_script, ollama_generate
+    from services.localization.overview_script import build_tour_script
+    from services.localization.script_engine import script_generator
 
     try:
         cache = json.loads(meta_file(config_path.parent, ROUTE_CACHE).read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         cache = {}
-    model = project.get("settings", {}).get("overview_script_model", DEFAULT_SCRIPT_MODEL)
     try:
-        script, _report = build_tour_script(project, cache, ollama_generate(model))
+        generate, model = script_generator(project.get("settings", {}))
+        logger.info("Step 2: drafting the overview narration with %s.", model)
+        script, _report = build_tour_script(project, cache, generate)
     except Exception as e:
         logger.warning("Step 2: auto overview-narration generation failed: %s", e)
         return False

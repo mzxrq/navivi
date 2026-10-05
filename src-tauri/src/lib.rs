@@ -82,15 +82,15 @@ async fn run_python_blueprint(
 ) -> Result<String, String> {
     
     // Spawn instead of output()
-    let mut child = Command::new("python")
-        .env("PYTHONIOENCODING", "utf-8")
+    let mut cmd = Command::new("python");
+    cmd.env("PYTHONIOENCODING", "utf-8")
         .arg("src-python/main.py")
         .arg(&action)
         .arg(&payload)
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| e.to_string())?;
+        .stderr(Stdio::piped());
+    secrets::export_keys(&mut cmd);
+    let mut child = cmd.spawn().map_err(|e| e.to_string())?;
 
     // Extract the pipes before moving the child to the state
     let mut stdout = child.stdout.take().ok_or("Failed to capture stdout")?;
@@ -183,6 +183,7 @@ fn start_render(
         .arg("src-python/main.py")
         .arg("full_pipeline")
         .arg(&config_path);
+    secrets::export_keys(&mut command);
     if force.unwrap_or(false) {
         // Bypasses the checkpoint/resume logic so every stage regenerates
         // from scratch, instead of skipping steps whose output already exists.

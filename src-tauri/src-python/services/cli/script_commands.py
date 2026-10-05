@@ -7,7 +7,6 @@ from typing import Any, Dict
 
 from services.localization.cues import clean_text
 
-DEFAULT_SCRIPT_MODEL = "schroneko/gemma-2-2b-jpn-it"
 DRAFT_NAME = "overview_script_draft.txt"
 
 
@@ -18,8 +17,9 @@ def test_overview_script(job_config_path: str, use_llm: bool = True) -> Dict[str
     draft is written beside job_config.json (never over overview_narration);
     `use_llm=False` builds it from the facts alone, with no model."""
     from services.localization.overview_script import (
-        build_tour_script, in_overview_range, ollama_generate, plan_budget,
+        build_tour_script, in_overview_range, plan_budget,
     )
+    from services.localization.script_engine import script_generator
     from services.localization.route_brief import build_brief
     from services.projectfiles import ROUTE_CACHE, meta_file
 
@@ -29,8 +29,7 @@ def test_overview_script(job_config_path: str, use_llm: bool = True) -> Dict[str
         cache = json.loads(meta_file(config_path.parent, ROUTE_CACHE).read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         cache = {}
-    model = project.get("settings", {}).get("overview_script_model", DEFAULT_SCRIPT_MODEL)
-    generate = ollama_generate(model) if use_llm else None
+    generate, model = script_generator(project.get("settings", {})) if use_llm else (None, None)
     script, report = build_tour_script(project, cache, generate)
     draft = config_path.parent / DRAFT_NAME
     draft.write_text(script, encoding="utf-8")

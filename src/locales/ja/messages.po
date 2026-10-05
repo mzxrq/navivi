@@ -862,6 +862,18 @@ msgstr "自動結合された動画"
 msgid "Auto-Write"
 msgstr "自動作成"
 
+#. placeholder {0}: info.label
+#. placeholder {1}: info.label
+#: src/components/ui/OnlineAiSettings.tsx:259
+msgid "Auto-Write sends the prompt, the place name and its location facts to {0}. Generate Assets also sends your stops' names and scripts to {1} when it drafts the overview narration. Nothing is sent before then, and usage is billed to your own account there."
+msgstr "自動作成では、プロンプト、地点名、位置情報が{0}に送信されます。アセットを生成で概要ナレーションの下書きを作るときも、各地点の名前とスクリプトが{1}に送信されます。それ以前に送信されることはなく、利用料金はそちらのご自身のアカウントに請求されます。"
+
+#. placeholder {0}: info.label
+#. placeholder {1}: info.label
+#: src/components/ui/OnlineAiSettings.tsx:258
+msgid "Auto-Write sends the prompt, the place name, its location facts and the stop's photos to {0}. Generate Assets also sends your stops' names and scripts to {1} when it drafts the overview narration. Nothing is sent before then, and usage is billed to your own account there."
+msgstr "自動作成では、プロンプト、地点名、位置情報、地点の写真が{0}に送信されます。アセットを生成で概要ナレーションの下書きを作るときも、各地点の名前とスクリプトが{1}に送信されます。それ以前に送信されることはなく、利用料金はそちらのご自身のアカウントに請求されます。"
+
 #: src/features/map/components/Sidebar.tsx:354
 #~ msgid "Automatically stitch all video segments and export upon completion without pausing for asset review"
 #~ msgstr "アセットの確認で一時停止することなく、完了後にすべての動画セグメントを自動的に結合してエクスポートします"
@@ -4909,8 +4921,8 @@ msgstr "ポイント {idx}"
 
 #. placeholder {0}: info.label
 #: src/components/ui/OnlineAiSettings.tsx:259
-msgid "When you write a script, the prompt, the place name and its location facts are sent to {0}. Nothing is sent until you press Auto-Write, and usage is billed to your own account there."
-msgstr "スクリプトを書くとき、プロンプト、地点名、位置情報が{0}に送信されます。自動作成を押すまでは何も送信されず、利用料金はそちらのご自身のアカウントに請求されます。"
+#~ msgid "When you write a script, the prompt, the place name and its location facts are sent to {0}. Nothing is sent until you press Auto-Write, and usage is billed to your own account there."
+#~ msgstr "スクリプトを書くとき、プロンプト、地点名、位置情報が{0}に送信されます。自動作成を押すまでは何も送信されず、利用料金はそちらのご自身のアカウントに請求されます。"
 
 #. placeholder {0}: info.label
 #: src/components/ui/OnlineAiSettings.tsx:258
@@ -4919,8 +4931,8 @@ msgstr "スクリプトを書くとき、プロンプト、地点名、位置情
 
 #. placeholder {0}: info.label
 #: src/components/ui/OnlineAiSettings.tsx:258
-msgid "When you write a script, the prompt, the place name, its location facts and the stop's photos are sent to {0}. Nothing is sent until you press Auto-Write, and usage is billed to your own account there."
-msgstr "スクリプトを書くとき、プロンプト、地点名、位置情報、地点の写真が{0}に送信されます。自動作成を押すまでは何も送信されず、利用料金はそちらのご自身のアカウントに請求されます。"
+#~ msgid "When you write a script, the prompt, the place name, its location facts and the stop's photos are sent to {0}. Nothing is sent until you press Auto-Write, and usage is billed to your own account there."
+#~ msgstr "スクリプトを書くとき、プロンプト、地点名、位置情報、地点の写真が{0}に送信されます。自動作成を押すまでは何も送信されず、利用料金はそちらのご自身のアカウントに請求されます。"
 
 #: src/components/ui/OnlineAiSettings.tsx:34
 msgid "Where scripts are written. A provider on the internet is usually faster than a local model and does not need a powerful PC."

@@ -25,6 +25,22 @@ fn entry(name: &str) -> Result<Entry, String> {
     Entry::new(SERVICE, name).map_err(|e| e.to_string())
 }
 
+const PROVIDERS: [&str; 5] = ["anthropic", "openai", "gemini", "openrouter", "custom"];
+
+fn env_name(provider: &str) -> String {
+    format!("NAVIVI_AI_KEY_{}", provider.to_ascii_uppercase())
+}
+
+/// Hands the saved provider keys to a Python child as `NAVIVI_AI_KEY_<PROVIDER>`, which is how the pipeline
+/// (overview narration written by an online model) gets them. They live in that process only.
+pub fn export_keys(cmd: &mut std::process::Command) {
+    for provider in PROVIDERS {
+        if let Ok(Some(key)) = secret_get(format!("ai-key:{provider}")) {
+            cmd.env(env_name(provider), key);
+        }
+    }
+}
+
 #[tauri::command]
 pub fn secret_set(name: String, value: String) -> Result<(), String> {
     if value.is_empty() || value.len() > MAX_VALUE_BYTES {
@@ -63,6 +79,13 @@ mod tests {
         assert!(!valid_name("other:anthropic"));
         assert!(!valid_name("ai-key:../x"));
         assert!(!valid_name(&format!("ai-key:{}", "a".repeat(41))));
+    }
+
+    #[test]
+    fn a_key_reaches_python_under_its_providers_variable() {
+        assert_eq!(env_name("anthropic"), "NAVIVI_AI_KEY_ANTHROPIC");
+        assert_eq!(env_name("openrouter"), "NAVIVI_AI_KEY_OPENROUTER");
+        assert!(PROVIDERS.iter().all(|p| valid_name(&format!("ai-key:{p}"))));
     }
 
     // Touches the real credential store (a throwaway entry): `cargo test -- --ignored`.

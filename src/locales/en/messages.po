@@ -862,6 +862,18 @@ msgstr "Auto-stitched Video"
 msgid "Auto-Write"
 msgstr "Auto-Write"
 
+#. placeholder {0}: info.label
+#. placeholder {1}: info.label
+#: src/components/ui/OnlineAiSettings.tsx:259
+msgid "Auto-Write sends the prompt, the place name and its location facts to {0}. Generate Assets also sends your stops' names and scripts to {1} when it drafts the overview narration. Nothing is sent before then, and usage is billed to your own account there."
+msgstr "Auto-Write sends the prompt, the place name and its location facts to {0}. Generate Assets also sends your stops' names and scripts to {1} when it drafts the overview narration. Nothing is sent before then, and usage is billed to your own account there."
+
+#. placeholder {0}: info.label
+#. placeholder {1}: info.label
+#: src/components/ui/OnlineAiSettings.tsx:258
+msgid "Auto-Write sends the prompt, the place name, its location facts and the stop's photos to {0}. Generate Assets also sends your stops' names and scripts to {1} when it drafts the overview narration. Nothing is sent before then, and usage is billed to your own account there."
+msgstr "Auto-Write sends the prompt, the place name, its location facts and the stop's photos to {0}. Generate Assets also sends your stops' names and scripts to {1} when it drafts the overview narration. Nothing is sent before then, and usage is billed to your own account there."
+
 #: src/features/map/components/Sidebar.tsx:354
 #~ msgid "Automatically stitch all video segments and export upon completion without pausing for asset review"
 #~ msgstr "Automatically stitch all video segments and export upon completion without pausing for asset review"
@@ -4909,8 +4921,8 @@ msgstr "Waypoint {idx}"
 
 #. placeholder {0}: info.label
 #: src/components/ui/OnlineAiSettings.tsx:259
-msgid "When you write a script, the prompt, the place name and its location facts are sent to {0}. Nothing is sent until you press Auto-Write, and usage is billed to your own account there."
-msgstr "When you write a script, the prompt, the place name and its location facts are sent to {0}. Nothing is sent until you press Auto-Write, and usage is billed to your own account there."
+#~ msgid "When you write a script, the prompt, the place name and its location facts are sent to {0}. Nothing is sent until you press Auto-Write, and usage is billed to your own account there."
+#~ msgstr "When you write a script, the prompt, the place name and its location facts are sent to {0}. Nothing is sent until you press Auto-Write, and usage is billed to your own account there."
 
 #. placeholder {0}: info.label
 #: src/components/ui/OnlineAiSettings.tsx:258
@@ -4919,8 +4931,8 @@ msgstr "When you write a script, the prompt, the place name and its location fac
 
 #. placeholder {0}: info.label
 #: src/components/ui/OnlineAiSettings.tsx:258
-msgid "When you write a script, the prompt, the place name, its location facts and the stop's photos are sent to {0}. Nothing is sent until you press Auto-Write, and usage is billed to your own account there."
-msgstr "When you write a script, the prompt, the place name, its location facts and the stop's photos are sent to {0}. Nothing is sent until you press Auto-Write, and usage is billed to your own account there."
+#~ msgid "When you write a script, the prompt, the place name, its location facts and the stop's photos are sent to {0}. Nothing is sent until you press Auto-Write, and usage is billed to your own account there."
+#~ msgstr "When you write a script, the prompt, the place name, its location facts and the stop's photos are sent to {0}. Nothing is sent until you press Auto-Write, and usage is billed to your own account there."
 
 #: src/components/ui/OnlineAiSettings.tsx:34
 msgid "Where scripts are written. A provider on the internet is usually faster than a local model and does not need a powerful PC."
