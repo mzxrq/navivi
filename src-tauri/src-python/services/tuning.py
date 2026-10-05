@@ -1128,7 +1128,11 @@ ATTRACTION_LTX_PRESETS: Tuple[str, ...] = ("panright", "panleft", "panup", "pand
 ATTRACTION_SECOND_SHOT: Optional[str] = "random"
 ATTRACTION_SECOND_SHOT_MOVES: Tuple[str, ...] = (
     "closein", "closeout", "closepanleft", "closepanright", "closepanup", "closepandown",
+    "walkthrough", "walkthroughleft", "walkthroughright",
 )
+# Moves with no pinned last frame: LTXV starts from the whole photo and
+# generates the walk into the place itself (it may show what the photo doesn't).
+LTXV_FREE_MOVES: Tuple[str, ...] = ("walkthrough", "walkthroughleft", "walkthroughright")
 LTXV_CROSSFADE_SECONDS = 0.5
 # Files (downloaded on first use into bin/ComfyUI/models/<folder>, sha256-checked).
 LTXV_FILES: Dict[str, Dict[str, str]] = {
@@ -1171,6 +1175,10 @@ LTXV_CLOSE_TIGHT = 0.46
 # Close pans: a CLOSE_WIDE window moved this share of the widest window's
 # width (or height, for tilts) across the middle.
 LTXV_CLOSE_PAN = 0.18
+# Walk-in second shots: CLOSE_WIDE at the middle -> WALK_TIGHT, its end moved
+# WALK_TURN of the widest window's width sideways for walkfwdleft/right.
+LTXV_WALK_TIGHT = 0.38
+LTXV_WALK_TURN = 0.12
 # A job takes ~15 GB of RAM on top of what's in use: below this much free it
 # waits (tuning.ensure_free_ram), then falls back to the 3D photo.
 LTXV_MIN_FREE_RAM_GB = 15.0
@@ -1178,6 +1186,17 @@ LTXV_MIN_FREE_RAM_GB = 15.0
 _LTXV_STILL = (
     "The scene is still and solid and only the camera moves, steadily and slowly. Natural daylight, "
     "realistic travel documentary footage, sharp detail."
+)
+# "Gimbal carried", never "first-person": that invites the walker's feet/hands.
+_LTXV_WALK_END = (
+    " The place is quiet and empty of people; the scene is still and solid and only the camera moves, with a "
+    "very subtle natural walking sway. Natural daylight, realistic travel documentary footage, sharp detail."
+)
+# CFG 1 ignores the negative, so the empty, unobstructed view is said positively.
+_LTXV_POV_END = (
+    " The view bobs gently up and down with each footstep, like the eyes of someone walking in. The place is "
+    "completely deserted and still; the view is clean and unobstructed, only the place itself fills the "
+    "frame. Natural daylight, realistic travel documentary footage, sharp detail."
 )
 LTXV_PROMPTS: Dict[str, str] = {
     "panright": (
@@ -1230,7 +1249,109 @@ LTXV_PROMPTS: Dict[str, str] = {
         "A slow, calm close-up gimbal shot tilts smoothly downward across the main subject of {place} on a quiet "
         "sunny afternoon. " + _LTXV_STILL
     ),
+    # Camera-only words: "walks" drew a person into frame (test 22, 2026-10-05).
+    "walkthrough": (
+        "Point-of-view camera at eye height moving continuously straight forward into {place}, toward the "
+        "entrance, getting closer and closer until it passes inside." + _LTXV_POV_END
+    ),
+    "walkthroughleft": (
+        "Point-of-view camera at eye height moving continuously straight forward into {place}, toward the "
+        "entrance, getting closer and closer, then slowly turning its view to the left." + _LTXV_POV_END
+    ),
+    "walkthroughright": (
+        "Point-of-view camera at eye height moving continuously straight forward into {place}, toward the "
+        "entrance, getting closer and closer, then slowly turning its view to the right." + _LTXV_POV_END
+    ),
+    "walkfwd": (
+        "A smooth gimbal shot carried at eye height walks slowly forward into {place}. The camera stays "
+        "perfectly level. " + _LTXV_STILL
+    ),
+    "walkfwdleft": (
+        "A smooth gimbal shot carried at eye height walks slowly forward into {place}, turning gently to the "
+        "left. " + _LTXV_STILL
+    ),
+    "walkfwdright": (
+        "A smooth gimbal shot carried at eye height walks slowly forward into {place}, turning gently to the "
+        "right. " + _LTXV_STILL
+    ),
 }
+# Second shot as a walk inside the place: "walk" = a prompt from
+# LTXV_WALK_PROMPTS (picked per photo, seeded like the move); None = LTXV_PROMPTS.
+ATTRACTION_SECOND_SHOT_STYLE: Optional[str] = "walk"
+LTXV_WALK_PROMPTS: Dict[str, Tuple[str, ...]] = {
+    "walkfwd": (
+        "A smooth gimbal shot carried at eye height walks slowly forward into {place}, several unhurried steps "
+        "drawing closer to its main subject." + _LTXV_WALK_END,
+        "A calm walking shot at eye height strolls slowly deeper into {place}, as if a visitor has just "
+        "arrived and is walking up to the heart of it." + _LTXV_WALK_END,
+    ),
+    "walkfwdleft": (
+        "A smooth gimbal shot carried at eye height walks slowly forward into {place} while turning gently to "
+        "the left to look around." + _LTXV_WALK_END,
+        "A calm walking shot at eye height strolls slowly deeper into {place}, the gaze drifting to the left "
+        "as it goes." + _LTXV_WALK_END,
+    ),
+    "walkfwdright": (
+        "A smooth gimbal shot carried at eye height walks slowly forward into {place} while turning gently to "
+        "the right to look around." + _LTXV_WALK_END,
+        "A calm walking shot at eye height strolls slowly deeper into {place}, the gaze drifting to the right "
+        "as it goes." + _LTXV_WALK_END,
+    ),
+    "closein": (
+        "A smooth gimbal shot carried at eye height walks slowly forward inside {place}, drawing closer to its "
+        "main subject step by step." + _LTXV_WALK_END,
+        "A calm walking shot at eye height moves slowly deeper into {place}, as if a visitor has just stepped "
+        "inside and is strolling toward the heart of it." + _LTXV_WALK_END,
+    ),
+    "closeout": (
+        "A smooth gimbal shot carried at eye height walks slowly backward through {place}, the view opening up "
+        "around the main subject." + _LTXV_WALK_END,
+        "A calm walking shot at eye height eases slowly back through {place}, taking in more of it with each "
+        "step." + _LTXV_WALK_END,
+    ),
+    "closepanleft": (
+        "A smooth gimbal shot carried at eye height strolls slowly through {place} while turning gently to the "
+        "left to look around." + _LTXV_WALK_END,
+        "A calm walking shot at eye height wanders slowly inside {place}, the gaze drifting to the left across "
+        "the main subject." + _LTXV_WALK_END,
+    ),
+    "closepanright": (
+        "A smooth gimbal shot carried at eye height strolls slowly through {place} while turning gently to the "
+        "right to look around." + _LTXV_WALK_END,
+        "A calm walking shot at eye height wanders slowly inside {place}, the gaze drifting to the right across "
+        "the main subject." + _LTXV_WALK_END,
+    ),
+    "closepanup": (
+        "A smooth gimbal shot carried at eye height walks slowly inside {place} and looks gently upward, "
+        "taking in its height." + _LTXV_WALK_END,
+        "A calm walking shot at eye height stops beneath the main subject of {place} and tilts slowly up to "
+        "admire it." + _LTXV_WALK_END,
+    ),
+    "closepandown": (
+        "A smooth gimbal shot carried at eye height walks slowly inside {place} and looks gently downward "
+        "across the main subject." + _LTXV_WALK_END,
+        "A calm walking shot at eye height moves slowly through {place}, the view tilting gently down over "
+        "its details." + _LTXV_WALK_END,
+    ),
+}
+# --- Sign lock (vdoprocessing/sign_lock.py) ---------------------------------
+# Video models redraw kanji as kanji-like shapes, so the photo's own sign
+# pixels are tracked into every LTXV frame and pasted back.
+SIGN_LOCK = True
+SIGN_LOCK_MIN_TEXT_PX = 12  # text lines shorter than this (photo px) are left alone
+SIGN_LOCK_MAX_SIGNS = 6  # largest signs per photo (each costs ~10 s of CPU per clip)
+SIGN_LOCK_PAD = 0.35  # padding around each text line, in line heights
+SIGN_LOCK_CONTEXT = 1.5  # SIFT area around the sign, in sign sizes each side
+SIGN_LOCK_MIN_INLIERS = 15
+SIGN_LOCK_FOLLOW_MIN_POINTS = 6  # frame-to-frame fallback once the photo match fails
+SIGN_LOCK_MIN_CORR = 0.6  # ECC fit of the photo's sign to the frame, else no paste
+SIGN_LOCK_FADE_FRAMES = 6  # paste fades in/out where tracking starts or stops
+SIGN_LOCK_MIN_SCALE, SIGN_LOCK_MAX_SCALE = 0.1, 8.0  # sanity bounds on the tracked size
+SIGN_LOCK_MAX_GAP = 4  # untracked frames bridged between tracked ones
+SIGN_LOCK_SMOOTH = 2  # corner averaging radius, frames
+SIGN_LOCK_FEATHER = 0.12  # soft edge, share of the padded box's short side
+SIGN_LOCK_COLOR_STRENGTH = 0.8
+
 LTXV_NEGATIVE = "low quality, worst quality, deformed, distorted, motion smear, motion artifacts, morphing, people, hands, feet"
 
 # --- Attraction clips: multi-shot + QC + parallax fill ------------------------
