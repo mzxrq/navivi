@@ -1,5 +1,6 @@
 mod project_files;
 mod runtime;
+mod oauth;
 mod secrets;
 use std::net::TcpStream;
 use std::process::{Child, Command, Stdio};
@@ -480,6 +481,7 @@ pub fn run() {
             });
             Ok(())
         })
+        .manage(oauth::OauthListener::default())
         .manage(BlueprintState {
             process: Mutex::new(None),
             render_process: Mutex::new(None),
@@ -497,6 +499,8 @@ pub fn run() {
             open_in_explorer,
             runtime::runtime_status,
             runtime::runtime_install,
+            oauth::oauth_listen_start,
+            oauth::oauth_listen_wait,
             secrets::secret_set,
             secrets::secret_get,
             secrets::secret_delete,

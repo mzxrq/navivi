@@ -457,7 +457,7 @@ msgstr "Add words below or extract them from narration scripts."
 msgid "Add your {0} API key in Settings > AI models"
 msgstr "Add your {0} API key in Settings > AI models"
 
-#: src/components/ui/OnlineAiSettings.tsx:191
+#: src/components/ui/OnlineAiSettings.tsx:212
 msgid "Address"
 msgstr "Address"
 
@@ -553,8 +553,8 @@ msgid "Anything you redo is made in the background while you work in the timelin
 msgstr "Anything you redo is made in the background while you work in the timeline editor. Turn that off below to change a clip's photo, script or route first."
 
 #: src/components/ui/AppSettings.tsx:554
-#: src/components/ui/OnlineAiSettings.tsx:141
-#: src/components/ui/OnlineAiSettings.tsx:168
+#: src/components/ui/OnlineAiSettings.tsx:157
+#: src/components/ui/OnlineAiSettings.tsx:189
 msgid "API key"
 msgstr "API key"
 
@@ -689,13 +689,13 @@ msgstr "Auto-Write"
 
 #. placeholder {0}: info.label
 #. placeholder {1}: info.label
-#: src/components/ui/OnlineAiSettings.tsx:259
+#: src/components/ui/OnlineAiSettings.tsx:280
 msgid "Auto-Write sends the prompt, the place name and its location facts to {0}. Generate Assets also sends your stops' names and scripts to {1} when it drafts the overview narration. Nothing is sent before then, and usage is billed to your own account there."
 msgstr "Auto-Write sends the prompt, the place name and its location facts to {0}. Generate Assets also sends your stops' names and scripts to {1} when it drafts the overview narration. Nothing is sent before then, and usage is billed to your own account there."
 
 #. placeholder {0}: info.label
 #. placeholder {1}: info.label
-#: src/components/ui/OnlineAiSettings.tsx:258
+#: src/components/ui/OnlineAiSettings.tsx:279
 msgid "Auto-Write sends the prompt, the place name, its location facts and the stop's photos to {0}. Generate Assets also sends your stops' names and scripts to {1} when it drafts the overview narration. Nothing is sent before then, and usage is billed to your own account there."
 msgstr "Auto-Write sends the prompt, the place name, its location facts and the stop's photos to {0}. Generate Assets also sends your stops' names and scripts to {1} when it drafts the overview narration. Nothing is sent before then, and usage is billed to your own account there."
 
@@ -1867,7 +1867,7 @@ msgstr "Generation Failed"
 msgid "Generation On Hold"
 msgstr "Generation On Hold"
 
-#: src/components/ui/OnlineAiSettings.tsx:182
+#: src/components/ui/OnlineAiSettings.tsx:203
 msgid "Get a key"
 msgstr "Get a key"
 
@@ -2058,7 +2058,7 @@ msgstr "Keep working"
 msgid "Keep working in the timeline editor. Export is available when it finishes."
 msgstr "Keep working in the timeline editor. Export is available when it finishes."
 
-#: src/components/ui/OnlineAiSettings.tsx:153
+#: src/components/ui/OnlineAiSettings.tsx:169
 msgid "Key saved"
 msgstr "Key saved"
 
@@ -2107,7 +2107,7 @@ msgstr "Leg {n}: {fromName} → {toName}"
 msgid "Length"
 msgstr "Length"
 
-#: src/components/ui/OnlineAiSettings.tsx:230
+#: src/components/ui/OnlineAiSettings.tsx:251
 msgid "Lets the model see a stop's photos (up to 4, shrunk first) when it writes the script."
 msgstr "Lets the model see a stop's photos (up to 4, shrunk first) when it writes the script."
 
@@ -2251,8 +2251,8 @@ msgstr "Minimize"
 msgid "Misread a word? Say how it should sound. It goes into the pronunciation dictionary and the voice is made again."
 msgstr "Misread a word? Say how it should sound. It goes into the pronunciation dictionary and the voice is made again."
 
-#: src/components/ui/OnlineAiSettings.tsx:206
-#: src/components/ui/OnlineAiSettings.tsx:209
+#: src/components/ui/OnlineAiSettings.tsx:227
+#: src/components/ui/OnlineAiSettings.tsx:230
 msgid "Model"
 msgstr "Model"
 
@@ -2632,7 +2632,7 @@ msgstr "Parsing Route Data..."
 msgid "Paste"
 msgstr "Paste"
 
-#: src/components/ui/OnlineAiSettings.tsx:145
+#: src/components/ui/OnlineAiSettings.tsx:161
 msgid "Paste your key. It is kept in this PC's credential store, never in the project or in shared files."
 msgstr "Paste your key. It is kept in this PC's credential store, never in the project or in shared files."
 
@@ -2668,7 +2668,7 @@ msgstr "Photos & Images"
 msgid "Pick at least one"
 msgstr "Pick at least one"
 
-#: src/components/ui/OnlineAiSettings.tsx:206
+#: src/components/ui/OnlineAiSettings.tsx:227
 msgid "Pick one from the list or type its name. Refresh asks the provider what your key can use."
 msgstr "Pick one from the list or type its name. Refresh asks the provider what your key can use."
 
@@ -2821,7 +2821,7 @@ msgstr "Pronunciation"
 msgid "Pronunciation dictionary"
 msgstr "Pronunciation dictionary"
 
-#: src/components/ui/OnlineAiSettings.tsx:33
+#: src/components/ui/OnlineAiSettings.tsx:34
 msgid "Provider"
 msgstr "Provider"
 
@@ -2948,8 +2948,8 @@ msgstr "Redoing in the background"
 msgid "Redoing in the background. You can keep working in the timeline editor."
 msgstr "Redoing in the background. You can keep working in the timeline editor."
 
-#: src/components/ui/OnlineAiSettings.tsx:220
-#: src/components/ui/OnlineAiSettings.tsx:221
+#: src/components/ui/OnlineAiSettings.tsx:241
+#: src/components/ui/OnlineAiSettings.tsx:242
 msgid "Refresh the model list"
 msgstr "Refresh the model list"
 
@@ -2959,7 +2959,7 @@ msgstr "Reload Application"
 
 #: src/components/ui/AppSettings.tsx:753
 #: src/components/ui/AppSettings.tsx:754
-#: src/components/ui/OnlineAiSettings.tsx:156
+#: src/components/ui/OnlineAiSettings.tsx:172
 #: src/components/ui/ReviewStep.tsx:103
 #: src/components/view/ProjectManager.tsx:629
 #: src/features/assistant/AssistantChat.tsx:130
@@ -3221,7 +3221,7 @@ msgstr "S"
 msgid "Saturation and brightness"
 msgstr "Saturation and brightness"
 
-#: src/components/ui/OnlineAiSettings.tsx:172
+#: src/components/ui/OnlineAiSettings.tsx:193
 #: src/components/ui/SaveAs.tsx:113
 #: src/components/ui/ScriptInput.tsx:267
 #: src/components/ui/StatusBar.tsx:323
@@ -3282,7 +3282,7 @@ msgstr "Save the project to enable version history"
 msgid "Saved"
 msgstr "Saved"
 
-#: src/components/ui/OnlineAiSettings.tsx:144
+#: src/components/ui/OnlineAiSettings.tsx:160
 msgid "Saved in this PC's credential store, not in the project."
 msgstr "Saved in this PC's credential store, not in the project."
 
@@ -3300,7 +3300,7 @@ msgid "Script"
 msgstr "Script"
 
 #: src/components/ui/ComponentsChecklist.tsx:75
-#: src/components/ui/OnlineAiSettings.tsx:31
+#: src/components/ui/OnlineAiSettings.tsx:32
 msgid "Script writer"
 msgstr "Script writer"
 
@@ -3354,8 +3354,8 @@ msgstr "Selected to redo: clips {pickedClips}, voices {pickedVoices}"
 msgid "Send"
 msgstr "Send"
 
-#: src/components/ui/OnlineAiSettings.tsx:230
-#: src/components/ui/OnlineAiSettings.tsx:234
+#: src/components/ui/OnlineAiSettings.tsx:251
+#: src/components/ui/OnlineAiSettings.tsx:255
 msgid "Send photos"
 msgstr "Send photos"
 
@@ -3367,7 +3367,7 @@ msgstr "Sending cancellation signal to backend..."
 msgid "Sending interrupt signal to renderer."
 msgstr "Sending interrupt signal to renderer."
 
-#: src/components/ui/OnlineAiSettings.tsx:238
+#: src/components/ui/OnlineAiSettings.tsx:259
 msgid "Sends a one-word request to check the key and the model."
 msgstr "Sends a one-word request to check the key and the model."
 
@@ -3456,6 +3456,10 @@ msgstr "Show Video"
 #: src/components/ui/NewProject.tsx:360
 msgid "Shows the title and subtitle at the start of the video"
 msgstr "Shows the title and subtitle at the start of the video"
+
+#: src/components/ui/OnlineAiSettings.tsx:179
+msgid "Sign in with OpenRouter"
+msgstr "Sign in with OpenRouter"
 
 #: src/components/ui/PipelineLogPanel.tsx:118
 msgid "Simple"
@@ -3692,11 +3696,11 @@ msgstr "Tauri Window API error:"
 msgid "Templates"
 msgstr "Templates"
 
-#: src/components/ui/OnlineAiSettings.tsx:238
+#: src/components/ui/OnlineAiSettings.tsx:259
 msgid "Test"
 msgstr "Test"
 
-#: src/components/ui/OnlineAiSettings.tsx:247
+#: src/components/ui/OnlineAiSettings.tsx:268
 msgid "Test connection"
 msgstr "Test connection"
 
@@ -3733,7 +3737,7 @@ msgstr "The assistant, Auto-Write script buttons and overview narration, in ever
 msgid "The balanced voice needs a one-time setup: a separate Python environment and the model files (about 4 GB in all). It takes several minutes and needs an internet connection. Keep this window open while it runs."
 msgstr "The balanced voice needs a one-time setup: a separate Python environment and the model files (about 4 GB in all). It takes several minutes and needs an internet connection. Keep this window open while it runs."
 
-#: src/components/ui/OnlineAiSettings.tsx:192
+#: src/components/ui/OnlineAiSettings.tsx:213
 msgid "The base address of a server that speaks the OpenAI API, for example https://example.com/v1"
 msgstr "The base address of a server that speaks the OpenAI API, for example https://example.com/v1"
 
@@ -3823,7 +3827,7 @@ msgstr "This model cannot read photos. Scripts for stops with photos are written
 msgid "This model is about {0} GB and this PC has {1} GB of memory, so it loads slowly and writes only a word or two a second. A 3-4B model is much faster here."
 msgstr "This model is about {0} GB and this PC has {1} GB of memory, so it loads slowly and writes only a word or two a second. A 3-4B model is much faster here."
 
-#: src/components/ui/OnlineAiSettings.tsx:44
+#: src/components/ui/OnlineAiSettings.tsx:45
 msgid "This PC (Ollama)"
 msgstr "This PC (Ollama)"
 
@@ -4147,6 +4151,10 @@ msgstr "Volume"
 msgid "Waiting for pipeline..."
 msgstr "Waiting for pipeline..."
 
+#: src/components/ui/OnlineAiSettings.tsx:179
+msgid "Waiting for the browser…"
+msgstr "Waiting for the browser…"
+
 #: src/components/ui/NewProject.tsx:179
 #: src/features/map/hooks/useStopMenus.ts:38
 msgid "Walk"
@@ -4174,7 +4182,7 @@ msgstr "Waypoint {idx}"
 msgid "What else do you want to set up?"
 msgstr "What else do you want to set up?"
 
-#: src/components/ui/OnlineAiSettings.tsx:34
+#: src/components/ui/OnlineAiSettings.tsx:35
 msgid "Where scripts are written. A provider on the internet is usually faster than a local model and does not need a powerful PC."
 msgstr "Where scripts are written. A provider on the internet is usually faster than a local model and does not need a powerful PC."
 
@@ -4218,7 +4226,7 @@ msgstr "Words every project shares live in App Settings, which you can open from
 msgid "Words here apply to every project. A project's own entry for the same word wins."
 msgstr "Words here apply to every project. A project's own entry for the same word wins."
 
-#: src/components/ui/OnlineAiSettings.tsx:242
+#: src/components/ui/OnlineAiSettings.tsx:263
 msgid "Works"
 msgstr "Works"
 

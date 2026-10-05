@@ -5,6 +5,7 @@ import { Trans } from "@lingui/react/macro";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { aiEngine, isOnlineEngine } from "../../services/ai/engine";
 import { deleteApiKey, saveApiKey } from "../../services/ai/keys";
+import { signInWithOpenRouter } from "../../services/ai/openrouterAuth";
 import { hasApiKey, listOnlineModels, testOnline } from "../../services/ai/online";
 import {
   isOnlineProvider,
@@ -98,6 +99,21 @@ export function OnlineProviderSettings({ provider }: { provider: OnlineProvider 
     }
   };
 
+  const [signingIn, setSigningIn] = useState(false);
+  const signIn = async () => {
+    setKeyError("");
+    setSigningIn(true);
+    try {
+      await saveApiKey(provider, await signInWithOpenRouter());
+      setSaved(true);
+      setTest({ state: "idle" });
+    } catch (e) {
+      setKeyError(messageOf(e));
+    } finally {
+      setSigningIn(false);
+    }
+  };
+
   const removeKey = async () => {
     try {
       await deleteApiKey(provider);
@@ -158,6 +174,11 @@ export function OnlineProviderSettings({ provider }: { provider: OnlineProvider 
               </>
             ) : (
               <>
+                {provider === "openrouter" && (
+                  <button type="button" onClick={signIn} disabled={signingIn} className={primaryButton}>
+                    {signingIn ? t`Waiting for the browser…` : t`Sign in with OpenRouter`}
+                  </button>
+                )}
                 <input
                   type="password"
                   autoComplete="off"
