@@ -21,6 +21,7 @@ import { Switch } from "../../components/ui/Switch";
 import { CaptionRow, CaptionStyleFields, IntInput } from "../../components/ui/CaptionStyleFields";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import type { TextStyle } from "../../types";
+import { formatTimeValue, parseTime } from "../../utils/timeInput";
 import {
   DEFAULT_TEXT_SUBTITLE_STYLE,
   DEFAULT_TEXT_TITLE_STYLE,
@@ -83,33 +84,44 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function NumberField({ value, onCommit, min, max, step = 0.1 }: { value: number; onCommit: (v: number) => void; min?: number; max?: number; step?: number }) {
-  const [text, setText] = useState(value.toFixed(2));
-  useEffect(() => setText(value.toFixed(2)), [value]);
+// "Start" and "End" here are moments on the timeline; the same words elsewhere mean a route's start (the Japanese differs).
+const startLabel = () => t({ message: "Start", context: "a moment on the timeline" });
+const endLabel = () => t({ message: "End", context: "a moment on the timeline" });
+const unitLabel = (unit: "sec" | "min") =>
+  unit === "min" ? t({ message: "min", context: "unit of time" }) : t({ message: "sec", context: "unit of time" });
+
+// A time in seconds, written the way people read it: `12.50 sec` under a minute, `1:06.00 min` from a minute on. Typing
+// "75", "1:15", "1m15s" or "1.5m" all work; the unit shown in the box says which one you are looking at.
+function TimeField({ value, onCommit, min, max, step = 0.1 }: { value: number; onCommit: (v: number) => void; min?: number; max?: number; step?: number }) {
+  const shown = formatTimeValue(value);
+  const [text, setText] = useState(shown.text);
+  useEffect(() => setText(formatTimeValue(value).text), [value]);
+  const clampTime = (v: number) => +Math.min(max ?? Infinity, Math.max(min ?? -Infinity, v)).toFixed(2);
   const done = () => {
-    const parsed = parseFloat(text);
-    if (!Number.isFinite(parsed)) return setText(value.toFixed(2));
-    const clamped = Math.min(max ?? Infinity, Math.max(min ?? -Infinity, parsed));
-    setText(clamped.toFixed(2));
+    const parsed = parseTime(text);
+    if (parsed === null) return setText(shown.text);
+    const clamped = clampTime(parsed);
+    setText(formatTimeValue(clamped).text);
     if (Math.abs(clamped - value) > 0.001) onCommit(clamped);
   };
   const stepBy = (dir: 1 | -1) => {
-    const base = parseFloat(text);
-    const next = +Math.min(max ?? Infinity, Math.max(min ?? -Infinity, (Number.isFinite(base) ? base : value) + dir * step)).toFixed(2);
-    setText(next.toFixed(2));
+    const next = clampTime((parseTime(text) ?? value) + dir * step);
+    setText(formatTimeValue(next).text);
     if (Math.abs(next - value) > 0.001) onCommit(next);
   };
   return (
     <div className="relative">
       <input
-        type="number"
-        step={step}
+        type="text"
+        inputMode="decimal"
         value={text}
+        title={t`Type seconds, or a time like 1:15 or 1m15s`}
         onChange={(e) => setText(e.target.value)}
         onBlur={done}
         onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
-        className={`${input} pr-6`}
+        className={`${input} pr-[3.25rem] text-right`}
       />
+      <span className="pointer-events-none absolute right-6 top-0 h-8 flex items-center text-[11px] text-zinc-400">{unitLabel(shown.unit)}</span>
       <StepButtons onStep={stepBy} />
     </div>
   );
@@ -247,7 +259,7 @@ function TextLineSection({
         />
       </Row>
       <Row label={t`Appears after`}>
-        <NumberField value={motion.delay} min={0} max={60} onCommit={(v) => onChange({ ...line, delay: +v.toFixed(2) })} />
+        <TimeField value={motion.delay} min={0} max={60} onCommit={(v) => onChange({ ...line, delay: +v.toFixed(2) })} />
       </Row>
       <p className="-mt-1 text-[11px] text-zinc-400">{t`Seconds after the title item starts. It leaves the same time before the end.`}</p>
       <CaptionStyleFields
@@ -382,11 +394,11 @@ export function Inspector(p: InspectorProps) {
           />
         </Section>
         <Section title={t`Trim`}>
-          <Row label={t`Start`}>
-            <NumberField value={seg.trimIn} min={0} max={seg.trimOut - MIN_SEGMENT} onCommit={(v) => patchSegment({ trimIn: v })} />
+          <Row label={startLabel()}>
+            <TimeField value={seg.trimIn} min={0} max={seg.trimOut - MIN_SEGMENT} onCommit={(v) => patchSegment({ trimIn: v })} />
           </Row>
-          <Row label={t`End`}>
-            <NumberField value={seg.trimOut} min={seg.trimIn + MIN_SEGMENT} max={seg.videoDuration} onCommit={(v) => patchSegment({ trimOut: v })} />
+          <Row label={endLabel()}>
+            <TimeField value={seg.trimOut} min={seg.trimIn + MIN_SEGMENT} max={seg.videoDuration} onCommit={(v) => patchSegment({ trimOut: v })} />
           </Row>
           <button type="button" className={iconButton} disabled={seg.trimIn === 0 && seg.trimOut === seg.videoDuration} onClick={() => patchSegment({ trimIn: 0, trimOut: seg.videoDuration })}>
             <Trans>Reset trim</Trans>
@@ -395,7 +407,7 @@ export function Inspector(p: InspectorProps) {
         {seg.audio && (
           <Section title={t`Narration`}>
             <Row label={t`Starts after`}>
-              <NumberField value={seg.audioOffset} min={0} max={60} onCommit={(v) => patchSegment({ audioOffset: v })} />
+              <TimeField value={seg.audioOffset} min={0} max={60} onCommit={(v) => patchSegment({ audioOffset: v })} />
             </Row>
             <Row label={t`Volume`}>
               <Slider label={t`Volume`} format={percent} value={seg.volume} min={0} max={1.5} step={0.05} onCommit={(v) => patchSegment({ volume: v })} />
@@ -420,7 +432,7 @@ export function Inspector(p: InspectorProps) {
         )}
         <Section title={t`Transition`}>
           <Row label={t`Fade into next`}>
-            <Slider label={t`Fade into next`} format={(v) => `${v.toFixed(1)} s`} value={seg.fadeIntoNext} min={0} max={2} step={0.1} onCommit={(v) => patchSegment({ fadeIntoNext: +v.toFixed(1) })} />
+            <Slider label={t`Fade into next`} format={(v) => `${v.toFixed(1)} ${unitLabel("sec")}`} value={seg.fadeIntoNext} min={0} max={2} step={0.1} onCommit={(v) => patchSegment({ fadeIntoNext: +v.toFixed(1) })} />
           </Row>
           <p className="text-[11px] text-zinc-400">{seg.fadeIntoNext > 0 ? t`${seg.fadeIntoNext.toFixed(1)} s dissolve` : t`Hard cut`}</p>
         </Section>
@@ -445,11 +457,11 @@ export function Inspector(p: InspectorProps) {
     return (
       <div className="overflow-y-auto custom-scrollbar">
         <Section title={t`Timing`}>
-          <Row label={t`Start`}>
-            <NumberField value={text.globalStart} min={0} max={text.globalEnd - MIN_CUE} onCommit={(v) => move(v, text.globalEnd)} />
+          <Row label={startLabel()}>
+            <TimeField value={text.globalStart} min={0} max={text.globalEnd - MIN_CUE} onCommit={(v) => move(v, text.globalEnd)} />
           </Row>
-          <Row label={t`End`}>
-            <NumberField value={text.globalEnd} min={text.globalStart + MIN_CUE} onCommit={(v) => move(text.globalStart, v)} />
+          <Row label={endLabel()}>
+            <TimeField value={text.globalEnd} min={text.globalStart + MIN_CUE} onCommit={(v) => move(text.globalStart, v)} />
           </Row>
         </Section>
         <TextLookSection text={text} timeline={timeline} commit={commit} />
@@ -491,11 +503,11 @@ export function Inspector(p: InspectorProps) {
           <TextBlock value={cue.text} onCommit={(text) => patchCue((c) => ({ ...c, text }))} />
         </Section>
         <Section title={t`Timing`}>
-          <Row label={t`Start`}>
-            <NumberField value={cue.globalStart} min={0} max={cue.globalEnd - MIN_CUE} onCommit={(v) => move(v, cue.globalEnd)} />
+          <Row label={startLabel()}>
+            <TimeField value={cue.globalStart} min={0} max={cue.globalEnd - MIN_CUE} onCommit={(v) => move(v, cue.globalEnd)} />
           </Row>
-          <Row label={t`End`}>
-            <NumberField value={cue.globalEnd} min={cue.globalStart + MIN_CUE} onCommit={(v) => move(cue.globalStart, v)} />
+          <Row label={endLabel()}>
+            <TimeField value={cue.globalEnd} min={cue.globalStart + MIN_CUE} onCommit={(v) => move(cue.globalStart, v)} />
           </Row>
         </Section>
         <CueStyleSection cue={cue} timeline={timeline} commit={commit} />
