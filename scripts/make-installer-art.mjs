@@ -38,7 +38,7 @@ const sidebar = `
 </div>`;
 
 const header = `
-<div style="position:relative;width:150px;height:57px;background:#fff;font-family:${FONT}">
+<div style="position:relative;width:150px;height:57px;background:#0f172a;font-family:${FONT}">
   <img src="${markUri}" width="40" height="40" style="position:absolute;right:14px;top:8px"/>
 </div>`;
 
