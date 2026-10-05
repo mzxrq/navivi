@@ -14,9 +14,9 @@ describe("PKCE helpers", () => {
   });
 
   it("points the callback at the local port", () => {
-    const url = new URL(authUrl(51423, "abc"));
+    const url = new URL(authUrl(51423, "abc", "nonce123"));
     expect(url.origin + url.pathname).toBe("https://openrouter.ai/auth");
-    expect(url.searchParams.get("callback_url")).toBe("http://localhost:51423/callback");
+    expect(url.searchParams.get("callback_url")).toBe("http://localhost:51423/callback/nonce123");
     expect(url.searchParams.get("code_challenge_method")).toBe("S256");
   });
 });

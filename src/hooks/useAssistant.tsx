@@ -88,9 +88,10 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
         const nextAttachments = { ...attachments };
         for (const input of [...paths.filter(isSupportedDocument), ...urls]) {
           try {
-            const read = await readSource(input);
+            const read = await readSource(input, signal);
             nextSources.push({ name: read.name, text: read.text });
           } catch (e: any) {
+            if (signal.aborted) throw e;
             notes.push(asNote(e?.message ?? t`Could not read ${input}.`));
           }
         }
@@ -158,6 +159,7 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
         onProgress: setProgress,
       });
       const first = built.waypoints[0];
+      if (!first) throw new Error(t`No places could be found in your sources`);
       enterEditor(first ? { start_coords: [first.lat, first.lng] } : {});
       setWaypoints(built.waypoints);
       if (files.length) setPendingImport({ kind: "files", paths: files });

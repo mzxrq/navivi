@@ -5,7 +5,7 @@ import { Trans } from "@lingui/react/macro";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { aiEngine, isOnlineEngine } from "../../services/ai/engine";
 import { deleteApiKey, saveApiKey } from "../../services/ai/keys";
-import { signInWithOpenRouter } from "../../services/ai/openrouterAuth";
+import { cancelSignIn, signInWithOpenRouter } from "../../services/ai/openrouterAuth";
 import { hasApiKey, listOnlineModels, testOnline } from "../../services/ai/online";
 import {
   isOnlineProvider,
@@ -177,9 +177,16 @@ export function OnlineProviderSettings({ provider }: { provider: OnlineProvider 
             ) : (
               <>
                 {provider === "openrouter" && (
-                  <button type="button" onClick={signIn} disabled={signingIn} className={primaryButton}>
-                    {signingIn ? t`Waiting for the browser…` : t`Sign in with OpenRouter`}
-                  </button>
+                  <>
+                    <button type="button" onClick={signIn} disabled={signingIn} className={primaryButton}>
+                      {signingIn ? t`Waiting for the browser…` : t`Sign in with OpenRouter`}
+                    </button>
+                    {signingIn && (
+                      <button type="button" onClick={cancelSignIn} className={secondaryButton}>
+                        <Trans>Cancel</Trans>
+                      </button>
+                    )}
+                  </>
                 )}
                 <input
                   type="password"

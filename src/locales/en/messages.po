@@ -53,12 +53,12 @@ msgid "Starting..."
 msgstr "Starting..."
 
 #. placeholder {0}: built.uncertainPlaces.join(", ")
-#: src/hooks/useAssistant.tsx:166
+#: src/hooks/useAssistant.tsx:168
 msgid " I am not sure where these are, so check them on the map: {0}."
 msgstr " I am not sure where these are, so check them on the map: {0}."
 
 #. placeholder {0}: built.failedPlaces.join(", ")
-#: src/hooks/useAssistant.tsx:165
+#: src/hooks/useAssistant.tsx:167
 msgid " I could not find: {0}."
 msgstr " I could not find: {0}."
 
@@ -462,7 +462,7 @@ msgstr "Add words below or extract them from narration scripts."
 msgid "Add your {0} API key in Settings > AI models"
 msgstr "Add your {0} API key in Settings > AI models"
 
-#: src/components/ui/OnlineAiSettings.tsx:214
+#: src/components/ui/OnlineAiSettings.tsx:221
 msgid "Address"
 msgstr "Address"
 
@@ -559,7 +559,7 @@ msgstr "Anything you redo is made in the background while you work in the timeli
 
 #: src/components/ui/AppSettings.tsx:554
 #: src/components/ui/OnlineAiSettings.tsx:157
-#: src/components/ui/OnlineAiSettings.tsx:191
+#: src/components/ui/OnlineAiSettings.tsx:198
 msgid "API key"
 msgstr "API key"
 
@@ -694,13 +694,13 @@ msgstr "Auto-Write"
 
 #. placeholder {0}: info.label
 #. placeholder {1}: info.label
-#: src/components/ui/OnlineAiSettings.tsx:282
+#: src/components/ui/OnlineAiSettings.tsx:289
 msgid "Auto-Write sends the prompt, the place name and its location facts to {0}. Generate Assets also sends your stops' names and scripts to {1} when it drafts the overview narration. Nothing is sent before then, and usage is billed to your own account there."
 msgstr "Auto-Write sends the prompt, the place name and its location facts to {0}. Generate Assets also sends your stops' names and scripts to {1} when it drafts the overview narration. Nothing is sent before then, and usage is billed to your own account there."
 
 #. placeholder {0}: info.label
 #. placeholder {1}: info.label
-#: src/components/ui/OnlineAiSettings.tsx:281
+#: src/components/ui/OnlineAiSettings.tsx:288
 msgid "Auto-Write sends the prompt, the place name, its location facts and the stop's photos to {0}. Generate Assets also sends your stops' names and scripts to {1} when it drafts the overview narration. Nothing is sent before then, and usage is billed to your own account there."
 msgstr "Auto-Write sends the prompt, the place name, its location facts and the stop's photos to {0}. Generate Assets also sends your stops' names and scripts to {1} when it drafts the overview narration. Nothing is sent before then, and usage is billed to your own account there."
 
@@ -813,6 +813,7 @@ msgstr "Cancel"
 #: src/components/ui/AutoDirectorModal.tsx:120
 #: src/components/ui/ExportProjectDialog.tsx:88
 #: src/components/ui/NewProject.tsx:398
+#: src/components/ui/OnlineAiSettings.tsx:186
 #: src/components/ui/RenderOverlay.tsx:794
 #: src/components/ui/RenderOverlay.tsx:953
 #: src/components/ui/SaveAs.tsx:105
@@ -1123,7 +1124,7 @@ msgstr "Could not load audio for {0}"
 msgid "Could not open file location"
 msgstr "Could not open file location"
 
-#: src/hooks/useAssistant.tsx:94
+#: src/hooks/useAssistant.tsx:95
 msgid "Could not read {input}."
 msgstr "Could not read {input}."
 
@@ -1179,11 +1180,11 @@ msgstr "Set your starting coordinates and routing behavior"
 
 #. placeholder {0}: built.name
 #. placeholder {1}: built.waypoints.length
-#: src/hooks/useAssistant.tsx:167
+#: src/hooks/useAssistant.tsx:169
 msgid "Created \"{0}\" with {1} stops and their scripts.{missed} Review them, then press Generate Assets."
 msgstr "Created \"{0}\" with {1} stops and their scripts.{missed} Review them, then press Generate Assets."
 
-#: src/hooks/useAssistant.tsx:145
+#: src/hooks/useAssistant.tsx:146
 msgid "Created \"{name}\" from your GPX file. Write the stop scripts with the script button on each stop."
 msgstr "Created \"{name}\" from your GPX file. Write the stop scripts with the script button on each stop."
 
@@ -1405,7 +1406,7 @@ msgstr "Done adjusting"
 msgid "Done drawing"
 msgstr "Done drawing"
 
-#: src/hooks/useAssistant.tsx:107
+#: src/hooks/useAssistant.tsx:108
 msgid "Done. Tell me more, or press Create project."
 msgstr "Done. Tell me more, or press Create project."
 
@@ -1872,7 +1873,7 @@ msgstr "Generation Failed"
 msgid "Generation On Hold"
 msgstr "Generation On Hold"
 
-#: src/components/ui/OnlineAiSettings.tsx:205
+#: src/components/ui/OnlineAiSettings.tsx:212
 msgid "Get a key"
 msgstr "Get a key"
 
@@ -1963,12 +1964,12 @@ msgid "Hue"
 msgstr "Hue"
 
 #. placeholder {0}: e?.message ?? e
-#: src/hooks/useAssistant.tsx:172
+#: src/hooks/useAssistant.tsx:174
 msgid "I could not finish building: {0}"
 msgstr "I could not finish building: {0}"
 
 #. placeholder {0}: e?.message ?? e
-#: src/hooks/useAssistant.tsx:110
+#: src/hooks/useAssistant.tsx:111
 msgid "I could not reach the AI: {0}. Check Settings > AI models."
 msgstr "I could not reach the AI: {0}. Check Settings > AI models."
 
@@ -2112,7 +2113,7 @@ msgstr "Leg {n}: {fromName} → {toName}"
 msgid "Length"
 msgstr "Length"
 
-#: src/components/ui/OnlineAiSettings.tsx:253
+#: src/components/ui/OnlineAiSettings.tsx:260
 msgid "Lets the model see a stop's photos (up to 4, shrunk first) when it writes the script."
 msgstr "Lets the model see a stop's photos (up to 4, shrunk first) when it writes the script."
 
@@ -2256,8 +2257,8 @@ msgstr "Minimize"
 msgid "Misread a word? Say how it should sound. It goes into the pronunciation dictionary and the voice is made again."
 msgstr "Misread a word? Say how it should sound. It goes into the pronunciation dictionary and the voice is made again."
 
-#: src/components/ui/OnlineAiSettings.tsx:229
-#: src/components/ui/OnlineAiSettings.tsx:232
+#: src/components/ui/OnlineAiSettings.tsx:236
+#: src/components/ui/OnlineAiSettings.tsx:239
 msgid "Model"
 msgstr "Model"
 
@@ -2408,6 +2409,10 @@ msgstr "No narration subtitles found for these clips"
 #: src/features/map/components/DrawBar.tsx:266
 msgid "No other drawn paths yet"
 msgstr "No other drawn paths yet"
+
+#: src/hooks/useAssistant.tsx:162
+msgid "No places could be found in your sources"
+msgstr "No places could be found in your sources"
 
 #: src/features/map/components/DrawBar.tsx:339
 msgid "No points yet"
@@ -2673,7 +2678,7 @@ msgstr "Photos & Images"
 msgid "Pick at least one"
 msgstr "Pick at least one"
 
-#: src/components/ui/OnlineAiSettings.tsx:229
+#: src/components/ui/OnlineAiSettings.tsx:236
 msgid "Pick one from the list or type its name. Refresh asks the provider what your key can use."
 msgstr "Pick one from the list or type its name. Refresh asks the provider what your key can use."
 
@@ -2953,8 +2958,8 @@ msgstr "Redoing in the background"
 msgid "Redoing in the background. You can keep working in the timeline editor."
 msgstr "Redoing in the background. You can keep working in the timeline editor."
 
-#: src/components/ui/OnlineAiSettings.tsx:243
-#: src/components/ui/OnlineAiSettings.tsx:244
+#: src/components/ui/OnlineAiSettings.tsx:250
+#: src/components/ui/OnlineAiSettings.tsx:251
 msgid "Refresh the model list"
 msgstr "Refresh the model list"
 
@@ -3064,7 +3069,7 @@ msgstr "Starting Python generation pipeline..."
 msgid "Replace existing voice"
 msgstr "Replace existing voice"
 
-#: src/hooks/useAssistant.tsx:121
+#: src/hooks/useAssistant.tsx:122
 msgid "Replace the stops in this project with the new ones?"
 msgstr "Replace the stops in this project with the new ones?"
 
@@ -3226,7 +3231,7 @@ msgstr "S"
 msgid "Saturation and brightness"
 msgstr "Saturation and brightness"
 
-#: src/components/ui/OnlineAiSettings.tsx:195
+#: src/components/ui/OnlineAiSettings.tsx:202
 #: src/components/ui/SaveAs.tsx:113
 #: src/components/ui/ScriptInput.tsx:266
 #: src/components/ui/StatusBar.tsx:323
@@ -3359,8 +3364,8 @@ msgstr "Selected to redo: clips {pickedClips}, voices {pickedVoices}"
 msgid "Send"
 msgstr "Send"
 
-#: src/components/ui/OnlineAiSettings.tsx:253
-#: src/components/ui/OnlineAiSettings.tsx:257
+#: src/components/ui/OnlineAiSettings.tsx:260
+#: src/components/ui/OnlineAiSettings.tsx:264
 msgid "Send photos"
 msgstr "Send photos"
 
@@ -3372,7 +3377,7 @@ msgstr "Sending cancellation signal to backend..."
 msgid "Sending interrupt signal to renderer."
 msgstr "Sending interrupt signal to renderer."
 
-#: src/components/ui/OnlineAiSettings.tsx:261
+#: src/components/ui/OnlineAiSettings.tsx:268
 msgid "Sends a one-word request to check the key and the model."
 msgstr "Sends a one-word request to check the key and the model."
 
@@ -3466,7 +3471,7 @@ msgstr "Shows the title and subtitle at the start of the video"
 msgid "Sign in to use Claude, GPT, Gemini and more through one OpenRouter account, billed by OpenRouter. Or paste a key. It is kept in this PC's credential store, never in the project."
 msgstr "Sign in to use Claude, GPT, Gemini and more through one OpenRouter account, billed by OpenRouter. Or paste a key. It is kept in this PC's credential store, never in the project."
 
-#: src/components/ui/OnlineAiSettings.tsx:181
+#: src/components/ui/OnlineAiSettings.tsx:182
 msgid "Sign in with OpenRouter"
 msgstr "Sign in with OpenRouter"
 
@@ -3624,8 +3629,8 @@ msgstr "Stop type"
 msgid "Stop-by"
 msgstr "Stop-by"
 
-#: src/hooks/useAssistant.tsx:109
-#: src/hooks/useAssistant.tsx:170
+#: src/hooks/useAssistant.tsx:110
+#: src/hooks/useAssistant.tsx:172
 msgid "Stopped."
 msgstr "Stopped."
 
@@ -3705,11 +3710,11 @@ msgstr "Tauri Window API error:"
 msgid "Templates"
 msgstr "Templates"
 
-#: src/components/ui/OnlineAiSettings.tsx:261
+#: src/components/ui/OnlineAiSettings.tsx:268
 msgid "Test"
 msgstr "Test"
 
-#: src/components/ui/OnlineAiSettings.tsx:270
+#: src/components/ui/OnlineAiSettings.tsx:277
 msgid "Test connection"
 msgstr "Test connection"
 
@@ -3730,7 +3735,7 @@ msgstr "Text colour"
 #~ msgid "The app's interface"
 #~ msgstr "The app's interface"
 
-#: src/hooks/useAssistant.tsx:173
+#: src/hooks/useAssistant.tsx:175
 msgid "The assistant could not build the project"
 msgstr "The assistant could not build the project"
 
@@ -3746,7 +3751,7 @@ msgstr "The assistant, Auto-Write script buttons and overview narration, in ever
 msgid "The balanced voice needs a one-time setup: a separate Python environment and the model files (about 4 GB in all). It takes several minutes and needs an internet connection. Keep this window open while it runs."
 msgstr "The balanced voice needs a one-time setup: a separate Python environment and the model files (about 4 GB in all). It takes several minutes and needs an internet connection. Keep this window open while it runs."
 
-#: src/components/ui/OnlineAiSettings.tsx:215
+#: src/components/ui/OnlineAiSettings.tsx:222
 msgid "The base address of a server that speaks the OpenAI API, for example https://example.com/v1"
 msgstr "The base address of a server that speaks the OpenAI API, for example https://example.com/v1"
 
@@ -4032,8 +4037,8 @@ msgstr "Untitled"
 #: src/components/ui/TitleBar.tsx:90
 #: src/components/ui/TitleBar.tsx:223
 #: src/components/ui/TitleBar.tsx:503
-#: src/hooks/useAssistant.tsx:124
-#: src/hooks/useAssistant.tsx:131
+#: src/hooks/useAssistant.tsx:125
+#: src/hooks/useAssistant.tsx:132
 msgid "Untitled Project"
 msgstr "Untitled Project"
 
@@ -4160,7 +4165,7 @@ msgstr "Volume"
 msgid "Waiting for pipeline..."
 msgstr "Waiting for pipeline..."
 
-#: src/components/ui/OnlineAiSettings.tsx:181
+#: src/components/ui/OnlineAiSettings.tsx:182
 msgid "Waiting for the browser…"
 msgstr "Waiting for the browser…"
 
@@ -4207,7 +4212,7 @@ msgstr "Where to save"
 msgid "Which pipeline to use when regenerating assets"
 msgstr "Which pipeline to use when regenerating assets"
 
-#: src/hooks/useAssistant.tsx:107
+#: src/hooks/useAssistant.tsx:108
 msgid "Which places should the video visit?"
 msgstr "Which places should the video visit?"
 
@@ -4239,7 +4244,7 @@ msgstr "Words every project shares live in App Settings, which you can open from
 msgid "Words here apply to every project. A project's own entry for the same word wins."
 msgstr "Words here apply to every project. A project's own entry for the same word wins."
 
-#: src/components/ui/OnlineAiSettings.tsx:265
+#: src/components/ui/OnlineAiSettings.tsx:272
 msgid "Works"
 msgstr "Works"
 

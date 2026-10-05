@@ -215,7 +215,7 @@ export function ScriptInput({
       </div>
       )}
 
-      <div className="relative w-full h-28 rounded-lg overflow-hidden border border-zinc-200 dark:border-white/10 bg-white dark:bg-zinc-950 group focus-within:border-navi focus-within:ring-2 focus-within:ring-navi/20 transition-colors">
+      <div className="flex flex-col w-full h-28 rounded-lg overflow-hidden border border-zinc-200 dark:border-white/10 bg-white dark:bg-zinc-950 group focus-within:border-navi focus-within:ring-2 focus-within:ring-navi/20 transition-colors">
         <textarea
           ref={textareaRef}
           value={localPrompt}
@@ -230,16 +230,16 @@ export function ScriptInput({
           onFocus={() => aiEnabled && warmUpModel(aiEngine(settings))}
           readOnly={isGenerating}
           placeholder={t`Type a prompt or write your own script...`}
-          className="w-full h-full resize-none p-2.5 pb-11 text-[13px] leading-relaxed custom-scrollbar bg-transparent text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:outline-none read-only:opacity-80"
+          className="w-full flex-1 min-h-0 resize-none p-2.5 text-[13px] leading-relaxed custom-scrollbar bg-transparent text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:outline-none read-only:opacity-80"
         />
 
-        <div className="absolute inset-x-0 bottom-0 z-10 flex h-9 items-center justify-between gap-2 px-2.5 border-t border-zinc-100 dark:border-white/5 bg-white dark:bg-zinc-950 pointer-events-none">
+        <div className="shrink-0 flex h-9 items-center justify-between gap-2 px-2.5 border-t border-zinc-100 dark:border-white/5">
           <span className="text-[11px] text-zinc-400 dark:text-zinc-500 tabular-nums">
             {localPrompt.length > 0 ? t`${localPrompt.length} characters` : ""}
           </span>
 
           {!isGenerating && (
-            <div className="pointer-events-auto flex items-center gap-1">
+            <div className="flex items-center gap-1">
             <button
               type="button"
               onMouseDown={(e) => e.preventDefault()}

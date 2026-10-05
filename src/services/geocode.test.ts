@@ -10,6 +10,12 @@ describe("regionOf / stripRegion", () => {
     expect(stripRegion(places[0], "Wakayama")).toBe("Sainen-ji Temple");
     expect(stripRegion(places[2], "Wakayama")).toBe("Kyoshi Sta., Osaka");
   });
+  it("keeps the prefecture with the country instead of the country alone", () => {
+    const places = ["Sainen-ji, Wakayama, Japan", "Mt. Kabuto, Wakayama, Japan", "Hongu, Wakayama, Japan"];
+    expect(regionOf(places)).toBe("Wakayama, Japan");
+    expect(stripRegion(places[0], "Wakayama, Japan")).toBe("Sainen-ji");
+    expect(regionOf(["A, Tokyo, Japan", "B, Kyoto, Japan"])).toBe("Japan");
+  });
   it("finds none when names carry no shared area", () => {
     expect(regionOf(["Hongu", "Nachi"])).toBeNull();
     expect(regionOf(["A, X", "B, Y", "C, Z"])).toBeNull();

@@ -53,12 +53,12 @@ msgid "Starting..."
 msgstr "ダウンロード開始中..."
 
 #. placeholder {0}: built.uncertainPlaces.join(", ")
-#: src/hooks/useAssistant.tsx:166
+#: src/hooks/useAssistant.tsx:168
 msgid " I am not sure where these are, so check them on the map: {0}."
 msgstr "場所を特定できなかったため、おおよその位置に置いています。地図で確認してください: {0}。"
 
 #. placeholder {0}: built.failedPlaces.join(", ")
-#: src/hooks/useAssistant.tsx:165
+#: src/hooks/useAssistant.tsx:167
 msgid " I could not find: {0}."
 msgstr "見つからなかった場所: {0}。"
 
@@ -462,7 +462,7 @@ msgstr "以下に単語を追加するか、スクリプトから抽出する"
 msgid "Add your {0} API key in Settings > AI models"
 msgstr "設定 > AIモデルで{0}のAPIキーを追加してください"
 
-#: src/components/ui/OnlineAiSettings.tsx:214
+#: src/components/ui/OnlineAiSettings.tsx:221
 msgid "Address"
 msgstr "アドレス"
 
@@ -559,7 +559,7 @@ msgstr "やり直したものは、タイムラインエディタで作業して
 
 #: src/components/ui/AppSettings.tsx:554
 #: src/components/ui/OnlineAiSettings.tsx:157
-#: src/components/ui/OnlineAiSettings.tsx:191
+#: src/components/ui/OnlineAiSettings.tsx:198
 msgid "API key"
 msgstr "API キー"
 
@@ -694,13 +694,13 @@ msgstr "自動作成"
 
 #. placeholder {0}: info.label
 #. placeholder {1}: info.label
-#: src/components/ui/OnlineAiSettings.tsx:282
+#: src/components/ui/OnlineAiSettings.tsx:289
 msgid "Auto-Write sends the prompt, the place name and its location facts to {0}. Generate Assets also sends your stops' names and scripts to {1} when it drafts the overview narration. Nothing is sent before then, and usage is billed to your own account there."
 msgstr "自動作成では、プロンプト、地点名、位置情報が{0}に送信されます。アセットを生成で概要ナレーションの下書きを作るときも、各地点の名前とスクリプトが{1}に送信されます。それ以前に送信されることはなく、利用料金はそちらのご自身のアカウントに請求されます。"
 
 #. placeholder {0}: info.label
 #. placeholder {1}: info.label
-#: src/components/ui/OnlineAiSettings.tsx:281
+#: src/components/ui/OnlineAiSettings.tsx:288
 msgid "Auto-Write sends the prompt, the place name, its location facts and the stop's photos to {0}. Generate Assets also sends your stops' names and scripts to {1} when it drafts the overview narration. Nothing is sent before then, and usage is billed to your own account there."
 msgstr "自動作成では、プロンプト、地点名、位置情報、地点の写真が{0}に送信されます。アセットを生成で概要ナレーションの下書きを作るときも、各地点の名前とスクリプトが{1}に送信されます。それ以前に送信されることはなく、利用料金はそちらのご自身のアカウントに請求されます。"
 
@@ -813,6 +813,7 @@ msgstr "キャンセル"
 #: src/components/ui/AutoDirectorModal.tsx:120
 #: src/components/ui/ExportProjectDialog.tsx:88
 #: src/components/ui/NewProject.tsx:398
+#: src/components/ui/OnlineAiSettings.tsx:186
 #: src/components/ui/RenderOverlay.tsx:794
 #: src/components/ui/RenderOverlay.tsx:953
 #: src/components/ui/SaveAs.tsx:105
@@ -1123,7 +1124,7 @@ msgstr "{0} の音声委を読み込めませんでした"
 msgid "Could not open file location"
 msgstr "ファイルの場所を開けませんでした"
 
-#: src/hooks/useAssistant.tsx:94
+#: src/hooks/useAssistant.tsx:95
 msgid "Could not read {input}."
 msgstr "{input} を読み込めませんでした。"
 
@@ -1179,11 +1180,11 @@ msgstr "開始座標とルーティング動作を設定"
 
 #. placeholder {0}: built.name
 #. placeholder {1}: built.waypoints.length
-#: src/hooks/useAssistant.tsx:167
+#: src/hooks/useAssistant.tsx:169
 msgid "Created \"{0}\" with {1} stops and their scripts.{missed} Review them, then press Generate Assets."
 msgstr "「{0}」を {1} か所の立ち寄り先と台本つきで作成しました。{missed} 内容を確認してから「アセットを生成」を押してください。"
 
-#: src/hooks/useAssistant.tsx:145
+#: src/hooks/useAssistant.tsx:146
 msgid "Created \"{name}\" from your GPX file. Write the stop scripts with the script button on each stop."
 msgstr "GPX ファイルから「{name}」を作成しました。各立ち寄り先の台本ボタンで台本を書けます。"
 
@@ -1405,7 +1406,7 @@ msgstr "調整を終了"
 msgid "Done drawing"
 msgstr "描画を終了"
 
-#: src/hooks/useAssistant.tsx:107
+#: src/hooks/useAssistant.tsx:108
 msgid "Done. Tell me more, or press Create project."
 msgstr "準備できました。補足があれば教えてください。よければ「プロジェクトを作成」を押してください。"
 
@@ -1872,7 +1873,7 @@ msgstr "生成に失敗しました"
 msgid "Generation On Hold"
 msgstr "生成を保留中"
 
-#: src/components/ui/OnlineAiSettings.tsx:205
+#: src/components/ui/OnlineAiSettings.tsx:212
 msgid "Get a key"
 msgstr "キーを取得"
 
@@ -1963,12 +1964,12 @@ msgid "Hue"
 msgstr "色相"
 
 #. placeholder {0}: e?.message ?? e
-#: src/hooks/useAssistant.tsx:172
+#: src/hooks/useAssistant.tsx:174
 msgid "I could not finish building: {0}"
 msgstr "作成を最後まで進められませんでした: {0}"
 
 #. placeholder {0}: e?.message ?? e
-#: src/hooks/useAssistant.tsx:110
+#: src/hooks/useAssistant.tsx:111
 msgid "I could not reach the AI: {0}. Check Settings > AI models."
 msgstr "AI に接続できませんでした: {0}。設定の「AI モデル」を確認してください。"
 
@@ -2112,7 +2113,7 @@ msgstr "区間{n}: {fromName} → {toName}"
 msgid "Length"
 msgstr "長さ"
 
-#: src/components/ui/OnlineAiSettings.tsx:253
+#: src/components/ui/OnlineAiSettings.tsx:260
 msgid "Lets the model see a stop's photos (up to 4, shrunk first) when it writes the script."
 msgstr "スクリプトを書くときに、モデルが地点の写真（最大4枚、縮小して送信）を見られるようにします。"
 
@@ -2256,8 +2257,8 @@ msgstr "最小化"
 msgid "Misread a word? Say how it should sound. It goes into the pronunciation dictionary and the voice is made again."
 msgstr "読み間違いはありますか? 正しい読み方を入力すると発音辞書に追加され、音声が作り直されます。"
 
-#: src/components/ui/OnlineAiSettings.tsx:229
-#: src/components/ui/OnlineAiSettings.tsx:232
+#: src/components/ui/OnlineAiSettings.tsx:236
+#: src/components/ui/OnlineAiSettings.tsx:239
 msgid "Model"
 msgstr "モデル"
 
@@ -2408,6 +2409,10 @@ msgstr "これらのクリップにナレーション字幕が見つかりませ
 #: src/features/map/components/DrawBar.tsx:266
 msgid "No other drawn paths yet"
 msgstr "他に描いた経路はありません"
+
+#: src/hooks/useAssistant.tsx:162
+msgid "No places could be found in your sources"
+msgstr "資料から場所を見つけられませんでした"
 
 #: src/features/map/components/DrawBar.tsx:339
 msgid "No points yet"
@@ -2673,7 +2678,7 @@ msgstr "写真と画像"
 msgid "Pick at least one"
 msgstr "1つ以上選んでください"
 
-#: src/components/ui/OnlineAiSettings.tsx:229
+#: src/components/ui/OnlineAiSettings.tsx:236
 msgid "Pick one from the list or type its name. Refresh asks the provider what your key can use."
 msgstr "一覧から選ぶか、名前を入力してください。更新を押すと、お使いのキーで使えるモデルをプロバイダーに問い合わせます。"
 
@@ -2953,8 +2958,8 @@ msgstr "バックグラウンドでやり直し中"
 msgid "Redoing in the background. You can keep working in the timeline editor."
 msgstr "バックグラウンドでやり直しています。タイムラインエディタで作業を続けられます。"
 
-#: src/components/ui/OnlineAiSettings.tsx:243
-#: src/components/ui/OnlineAiSettings.tsx:244
+#: src/components/ui/OnlineAiSettings.tsx:250
+#: src/components/ui/OnlineAiSettings.tsx:251
 msgid "Refresh the model list"
 msgstr "モデル一覧を更新"
 
@@ -3064,7 +3069,7 @@ msgstr "Python生成パイプラインを開始しています..."
 msgid "Replace existing voice"
 msgstr "既存のボイスを置き換える"
 
-#: src/hooks/useAssistant.tsx:121
+#: src/hooks/useAssistant.tsx:122
 msgid "Replace the stops in this project with the new ones?"
 msgstr "このプロジェクトの立ち寄り先を新しいものに置き換えますか？"
 
@@ -3226,7 +3231,7 @@ msgstr "始"
 msgid "Saturation and brightness"
 msgstr "彩度と明度"
 
-#: src/components/ui/OnlineAiSettings.tsx:195
+#: src/components/ui/OnlineAiSettings.tsx:202
 #: src/components/ui/SaveAs.tsx:113
 #: src/components/ui/ScriptInput.tsx:266
 #: src/components/ui/StatusBar.tsx:323
@@ -3359,8 +3364,8 @@ msgstr "やり直し対象: クリップ{pickedClips}件、音声{pickedVoices}�
 msgid "Send"
 msgstr "送信"
 
-#: src/components/ui/OnlineAiSettings.tsx:253
-#: src/components/ui/OnlineAiSettings.tsx:257
+#: src/components/ui/OnlineAiSettings.tsx:260
+#: src/components/ui/OnlineAiSettings.tsx:264
 msgid "Send photos"
 msgstr "写真を送信"
 
@@ -3372,7 +3377,7 @@ msgstr "バックエンドにキャンセル信号を送信しています..."
 msgid "Sending interrupt signal to renderer."
 msgstr "レンダラーに中断信号を送信しています"
 
-#: src/components/ui/OnlineAiSettings.tsx:261
+#: src/components/ui/OnlineAiSettings.tsx:268
 msgid "Sends a one-word request to check the key and the model."
 msgstr "1語だけのリクエストを送って、キーとモデルを確認します。"
 
@@ -3466,7 +3471,7 @@ msgstr "動画の冒頭にタイトルとサブタイトルを表示します"
 msgid "Sign in to use Claude, GPT, Gemini and more through one OpenRouter account, billed by OpenRouter. Or paste a key. It is kept in this PC's credential store, never in the project."
 msgstr "サインインすると、1 つの OpenRouter アカウントで Claude、GPT、Gemini などを使えます（料金は OpenRouter から請求されます）。キーを貼り付けることもできます。キーはこの PC の資格情報ストアに保存され、プロジェクトには含まれません。"
 
-#: src/components/ui/OnlineAiSettings.tsx:181
+#: src/components/ui/OnlineAiSettings.tsx:182
 msgid "Sign in with OpenRouter"
 msgstr "OpenRouter でサインイン"
 
@@ -3624,8 +3629,8 @@ msgstr "地点の種類"
 msgid "Stop-by"
 msgstr "経由地"
 
-#: src/hooks/useAssistant.tsx:109
-#: src/hooks/useAssistant.tsx:170
+#: src/hooks/useAssistant.tsx:110
+#: src/hooks/useAssistant.tsx:172
 msgid "Stopped."
 msgstr "中止しました。"
 
@@ -3705,11 +3710,11 @@ msgstr "Tauri Window APIエラー"
 msgid "Templates"
 msgstr "テンプレート"
 
-#: src/components/ui/OnlineAiSettings.tsx:261
+#: src/components/ui/OnlineAiSettings.tsx:268
 msgid "Test"
 msgstr "テスト"
 
-#: src/components/ui/OnlineAiSettings.tsx:270
+#: src/components/ui/OnlineAiSettings.tsx:277
 msgid "Test connection"
 msgstr "接続をテスト"
 
@@ -3730,7 +3735,7 @@ msgstr "文字の色"
 #~ msgid "The app's interface"
 #~ msgstr "アプリの画面"
 
-#: src/hooks/useAssistant.tsx:173
+#: src/hooks/useAssistant.tsx:175
 msgid "The assistant could not build the project"
 msgstr "アシスタントがプロジェクトを作成できませんでした"
 
@@ -3746,7 +3751,7 @@ msgstr "アシスタント、台本の自動作成ボタン、全体ナレーシ
 msgid "The balanced voice needs a one-time setup: a separate Python environment and the model files (about 4 GB in all). It takes several minutes and needs an internet connection. Keep this window open while it runs."
 msgstr "標準の声には一度だけセットアップが必要です。独立したPython環境とモデルファイル（合計約4GB）を用意します。数分かかり、インターネット接続が必要です。実行中はこのウィンドウを開いたままにしてください。"
 
-#: src/components/ui/OnlineAiSettings.tsx:215
+#: src/components/ui/OnlineAiSettings.tsx:222
 msgid "The base address of a server that speaks the OpenAI API, for example https://example.com/v1"
 msgstr "OpenAI API に対応したサーバーのベースアドレス（例: https://example.com/v1）"
 
@@ -4032,8 +4037,8 @@ msgstr "無題"
 #: src/components/ui/TitleBar.tsx:90
 #: src/components/ui/TitleBar.tsx:223
 #: src/components/ui/TitleBar.tsx:503
-#: src/hooks/useAssistant.tsx:124
-#: src/hooks/useAssistant.tsx:131
+#: src/hooks/useAssistant.tsx:125
+#: src/hooks/useAssistant.tsx:132
 msgid "Untitled Project"
 msgstr "無題のプロジェクト"
 
@@ -4160,7 +4165,7 @@ msgstr "音量"
 msgid "Waiting for pipeline..."
 msgstr "パイプラインを待機中..."
 
-#: src/components/ui/OnlineAiSettings.tsx:181
+#: src/components/ui/OnlineAiSettings.tsx:182
 msgid "Waiting for the browser…"
 msgstr "ブラウザーでの操作を待っています…"
 
@@ -4207,7 +4212,7 @@ msgstr "保存先"
 msgid "Which pipeline to use when regenerating assets"
 msgstr "素材を再生成するときに使う処理方式"
 
-#: src/hooks/useAssistant.tsx:107
+#: src/hooks/useAssistant.tsx:108
 msgid "Which places should the video visit?"
 msgstr "動画ではどの場所を巡りますか？"
 
@@ -4239,7 +4244,7 @@ msgstr "すべてのプロジェクトで共有する単語はアプリ設定に
 msgid "Words here apply to every project. A project's own entry for the same word wins."
 msgstr "ここにある単語はすべてのプロジェクトに適用されます。同じ単語がプロジェクト側にある場合は、プロジェクトが優先されます。"
 
-#: src/components/ui/OnlineAiSettings.tsx:265
+#: src/components/ui/OnlineAiSettings.tsx:272
 msgid "Works"
 msgstr "動作しています"
 

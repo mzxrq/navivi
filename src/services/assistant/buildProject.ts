@@ -172,6 +172,7 @@ export async function buildProject({ brief, sourceText, engine, mapboxToken, sig
   }));
 
   // Both boxes of a stop: the short narration while travelling there, then the one spoken over its photos.
+  // Only the second looks up facts, and not for a guessed spot (0, 0 skips it): they would describe the wrong place.
   const total = waypoints.length * 2;
   for (const [i, wp] of waypoints.entries()) {
     for (const [k, kind] of (["arriving", "attraction"] as const).entries()) {
@@ -186,8 +187,8 @@ export async function buildProject({ brief, sourceText, engine, mapboxToken, sig
         (chunk) => {
           script = chunk;
         },
-        wp.lat,
-        wp.lng,
+        kind === "attraction" && !found[i].uncertain ? wp.lat : 0,
+        kind === "attraction" && !found[i].uncertain ? wp.lng : 0,
         [],
         undefined,
         kind,
