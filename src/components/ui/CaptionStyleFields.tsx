@@ -119,6 +119,14 @@ export function CaptionStyleFields({
             </div>,
             t`Percent`,
           )}
+          {row(
+            "box-radius",
+            t`Corner radius`,
+            <div className="w-24">
+              <IntInput value={style.background_radius} min={0} max={100} onCommit={(v) => onChange({ background_radius: v })} />
+            </div>,
+            t`Size in pixels on a 1080p frame; 0 is square`,
+          )}
         </>
       ) : (
         row(

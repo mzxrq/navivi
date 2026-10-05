@@ -10,7 +10,7 @@ from __future__ import annotations
 import os
 from functools import lru_cache
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional
+from typing import Dict, Iterable, List, Optional, Tuple
 
 from services.logger.logger import setup_logger
 
@@ -30,14 +30,16 @@ def _font_dirs() -> List[Path]:
 
 
 def _families_in(path: Path) -> Iterable[tuple]:
-    """(display name, every name it answers to) per face in the file."""
+    """(display name, every name it answers to, face number, bold, italic) per face in the file."""
     from fontTools.ttLib import TTCollection, TTFont
 
     if path.suffix.lower() in (".ttc", ".otc"):
         fonts = TTCollection(str(path), lazy=True).fonts
     else:
         fonts = [TTFont(str(path), lazy=True, fontNumber=0)]
-    for font in fonts:
+    for number, font in enumerate(fonts):
+        # fsSelection: bit 0 italic, bit 5 bold.
+        selection = font["OS/2"].fsSelection if "OS/2" in font else 0
         names = set()
         display = None
         for name_id in _FAMILY_NAME_IDS:
@@ -55,24 +57,40 @@ def _families_in(path: Path) -> Iterable[tuple]:
                         english = text
             display = display or english
         if names:
-            yield display or sorted(names)[0], names
+            yield display or sorted(names)[0], names, number, bool(selection & 0x20), bool(selection & 0x01)
 
 
 @lru_cache(maxsize=1)
-def _index() -> Dict[str, str]:
-    """lower-cased name (any language) -> display (English) family name."""
+def _scan() -> tuple:
+    """(index, faces): lower-cased name (any language) -> display family name,
+    and lower-cased name -> [(file, face number, bold, italic)]."""
     index: Dict[str, str] = {}
+    faces: Dict[str, list] = {}
     for folder in _font_dirs():
         for path in folder.iterdir():
             if path.suffix.lower() not in _FONT_EXTS:
                 continue
             try:
-                for display, names in _families_in(path):
+                for display, names, number, bold, italic in _families_in(path):
                     for n in names:
                         index.setdefault(n.casefold(), display)
+                        faces.setdefault(n.casefold(), []).append((str(path), number, bold, italic))
             except Exception as exc:  # one broken font must not hide the rest
                 logger.debug("Skipping unreadable font %s: %s", path, exc)
-    return index
+    return index, faces
+
+
+def _index() -> Dict[str, str]:
+    return _scan()[0]
+
+
+def find_font_file(name: str, bold: bool = False, italic: bool = False) -> Optional[Tuple[str, int]]:
+    """(file, face number) of the installed face closest to the requested weight and slant, or None."""
+    faces = _scan()[1].get((name or "").strip().casefold())
+    if not faces:
+        return None
+    best = min(faces, key=lambda f: (f[2] != bold) + (f[3] != italic))
+    return best[0], best[1]
 
 
 def installed_font_families() -> List[str]:

@@ -45,6 +45,7 @@ import numpy as np
 
 from services import runtime_paths, tuning
 from services.localization.subtitle import SubtitleStyle
+from services.localization.caption_box import box_event_text, build_box, text_position_tag
 from services.localization.text_style import TextStyle, wrap_text
 from services.logger.logger import setup_logger
 
@@ -134,12 +135,13 @@ def write_caption_ass(
     events = []
     for cue in sorted(cues, key=lambda c: float(c["start"])):
         style = installed(shared.merged(cue.get("style")), DEFAULT_CAPTION_STYLE.font_family)
-        name = styles.setdefault(style, f"S{len(styles)}")
-        text = _ass_text(_subtitle_display_text(str(cue["text"]), style.max_chars_per_line))
-        events.append(
-            f"Dialogue: 0,{_ass_timestamp(float(cue['start']))},{_ass_timestamp(float(cue['end']))},"
-            f"{name},,0,0,0,,{text}"
-        )
+        shown = _subtitle_display_text(str(cue["text"]), style.max_chars_per_line)
+        box = build_box(style, shown.split("\n"), play_w) if style.background and style.background_radius > 0 else None
+        name = styles.setdefault((style, box is not None), f"S{len(styles)}")
+        when = f"{_ass_timestamp(float(cue['start']))},{_ass_timestamp(float(cue['end']))}"
+        if box:
+            events.append(f"Dialogue: 0,{when},{name},,0,0,0,,{box_event_text(style, box)}")
+        events.append(f"Dialogue: 1,{when},{name},,0,0,0,,{text_position_tag(box) if box else ''}{_ass_text(shown)}")
     for item in sorted(texts or [], key=lambda x: float(x["start"])):
         title, subtitle = item.get("title") or {}, item.get("subtitle") or {}
         title_text, sub_text = str(title.get("text") or ""), str(subtitle.get("text") or "")
@@ -172,7 +174,7 @@ def write_caption_ass(
         "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, "
         "Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, "
         "Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n"
-        + "".join(s.to_ass_style_line(n) + "\n" for s, n in styles.items())
+        + "".join(s.to_ass_style_line(n, drawn) + "\n" for (s, drawn), n in styles.items())
         + "Style: Text,Arial,20,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,5,0,0,0,1\n"
         + "\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
         + "".join(e + "\n" for e in events),

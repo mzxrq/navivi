@@ -33,7 +33,7 @@ import { LibraryTrack, MusicPicker } from "./MusicPicker";
 import { Inspector } from "./Inspector";
 import { player } from "./player";
 import { Preview } from "./Preview";
-import { Lane, Selection, TIMELINE_HEIGHT, TimelinePane } from "./TimelinePane";
+import { cueSelection, Lane, Selection, selectedCueIds, TIMELINE_HEIGHT, TimelinePane } from "./TimelinePane";
 
 const VIDEO_EXT = ["mp4", "mov", "mkv", "webm", "m4v"];
 const AUDIO_EXT = ["mp3", "wav", "m4a", "aac", "ogg", "flac"];
@@ -222,8 +222,8 @@ export function EditorView() {
   const patchSegment = (id: string, patch: Partial<Segment>) =>
     commit({ ...timeline, segments: timeline.segments.map((s) => (s.id === id ? { ...s, ...patch } : s)) });
 
-  const removeCue = (id: string) => {
-    commit({ ...timeline, subtitles: timeline.subtitles.filter((c) => c.id !== id) });
+  const removeCues = (ids: string[]) => {
+    commit({ ...timeline, subtitles: timeline.subtitles.filter((c) => !ids.includes(c.id)) });
     setSelection(null);
   };
 
@@ -246,15 +246,20 @@ export function EditorView() {
     setSelection({ type: "text", id: item.id });
   };
 
-  const keyRef = useRef({ selection, removeSegment, removeCue, removeText, patchSegment, timeline, total });
-  keyRef.current = { selection, removeSegment, removeCue, removeText, patchSegment, timeline, total };
+  const keyRef = useRef({ selection, removeSegment, removeCues, removeText, patchSegment, timeline, total });
+  keyRef.current = { selection, removeSegment, removeCues, removeText, patchSegment, timeline, total };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
       if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
-      if (e.ctrlKey || e.metaKey || e.altKey) return;
       const k = keyRef.current;
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a" && k.selection?.type === "cue") {
+        e.preventDefault();
+        setSelection(cueSelection(k.timeline.subtitles.map((c) => c.id)));
+        return;
+      }
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
       if (e.key === " ") {
         e.preventDefault();
         if (player.playing) player.set({ playing: false });
@@ -266,7 +271,7 @@ export function EditorView() {
         e.preventDefault();
         if (k.selection.type === "segment") k.removeSegment(k.selection.id);
         else if (k.selection.type === "text") k.removeText(k.selection.id);
-        else k.removeCue(k.selection.id);
+        else k.removeCues(selectedCueIds(k.selection));
       } else if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
         e.preventDefault();
         const step = e.shiftKey ? 5 : 1;
@@ -298,8 +303,13 @@ export function EditorView() {
       { label: t`Remove`, icon: Trash2, danger: true, kbd: "Del", onSelect: () => removeSegment(seg.id) },
     ]);
 
-  const cueMenu = (e: React.MouseEvent, cue: { id: string }) =>
-    openContextMenu(e, [{ label: t`Delete subtitle`, icon: Trash2, danger: true, kbd: "Del", onSelect: () => removeCue(cue.id) }]);
+  const cueMenu = (e: React.MouseEvent, cue: { id: string }) => {
+    const picked = selectedCueIds(selection);
+    const ids = picked.includes(cue.id) ? picked : [cue.id];
+    openContextMenu(e, [
+      { label: ids.length > 1 ? t`Delete ${ids.length} subtitles` : t`Delete subtitle`, icon: Trash2, danger: true, kbd: "Del", onSelect: () => removeCues(ids) },
+    ]);
+  };
 
   const textMenu = (e: React.MouseEvent, item: { id: string }) =>
     openContextMenu(e, [{ label: t`Delete title`, icon: Trash2, danger: true, kbd: "Del", onSelect: () => removeText(item.id) }]);
@@ -396,6 +406,7 @@ export function EditorView() {
             commit={commit}
             onDuplicate={duplicate}
             onRemoveSegment={removeSegment}
+            onRemoveCues={removeCues}
             onSaveSrt={saveSrt}
           />
         </aside>

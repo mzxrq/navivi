@@ -18,6 +18,7 @@ export const DEFAULT_CAPTION_STYLE: Required<TextStyle> = {
   background: true,
   background_color: "#000000",
   background_opacity: 0.6,
+  background_radius: 0,
   position: "bottom",
   margin_v: 75,
   max_chars_per_line: 0,
@@ -49,6 +50,7 @@ export function textStyleToCss(s: Required<TextStyle>): CSSProperties {
   };
   if (s.background) {
     css.backgroundColor = rgba(s.background_color, s.background_opacity);
+    if (s.background_radius > 0) css.borderRadius = u(s.background_radius);
     css.padding = `${u(s.outline_width * 0.3)} ${u(s.outline_width)}`;
   } else {
     if (s.outline_width > 0) css.WebkitTextStroke = `${u(s.outline_width)} ${s.outline_color}`;
@@ -116,6 +118,7 @@ const TEXT_LINE_DEFAULTS = {
   background: false,
   background_color: "#000000",
   background_opacity: 0.6,
+  background_radius: 0,
   position: "middle",
   margin_v: 0,
   max_chars_per_line: 0,

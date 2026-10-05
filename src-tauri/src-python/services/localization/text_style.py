@@ -151,6 +151,7 @@ class TextStyle:
     background: bool = False
     background_color: RGB = (0, 0, 0)
     background_opacity: float = 0.6
+    background_radius: float = 0.0  # px on a 1080p frame; libass boxes are square, so > 0 is drawn (caption_box.py)
     # Captions only: where on screen, and how far from that edge (px).
     position: str = "bottom"
     margin_v: float = 75.0
@@ -183,6 +184,7 @@ class TextStyle:
         for key, lo, hi in (
             ("opacity", 0.0, 1.0),
             ("background_opacity", 0.0, 1.0),
+            ("background_radius", 0.0, 100.0),
             ("outline_width", 0.0, 20.0),
             ("shadow", 0.0, 20.0),
             ("letter_spacing", -20.0, 50.0),
@@ -219,9 +221,13 @@ class TextStyle:
 
         return replace(self, font_family=resolve_font_family(self.font_family, fallback))
 
-    def to_ass_style_line(self, name: str) -> str:
-        """A v4.00+ [V4+ Styles] line in 1080-line units (PlayResY: 1080), for captions."""
-        if self.background:
+    def to_ass_style_line(self, name: str, drawn_box: bool = False) -> str:
+        """A v4.00+ [V4+ Styles] line in 1080-line units (PlayResY: 1080), for captions.
+        `drawn_box`: the box is drawn as its own shape, so this style is the bare text."""
+        if drawn_box:
+            outline_color, back_color, border_style = _ass_color(self.outline_color), _ass_color(self.shadow_color), 1
+            outline, shadow = 0.0, 0.0
+        elif self.background:
             # libass draws the BorderStyle=3 box in OutlineColour; its padding is Outline.
             box = _ass_color(self.background_color, self.background_opacity)
             outline_color, back_color, border_style = box, box, 3

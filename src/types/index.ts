@@ -68,6 +68,7 @@ export interface TextStyle {
   background?: boolean;
   background_color?: string;
   background_opacity?: number; // 0–1
+  background_radius?: number; // corner radius, px on a 1080p frame (0–100)
   // Captions only.
   position?: "bottom" | "middle" | "top";
   margin_v?: number; // px from that edge, 0–400

@@ -46,7 +46,7 @@ import {
   TimelineData,
 } from "./model";
 import { formatTime, player } from "./player";
-import type { Selection } from "./TimelinePane";
+import { selectedCueIds, type Selection } from "./TimelinePane";
 
 const percent = (v: number) => `${Math.round(v * 100)}%`;
 
@@ -57,6 +57,7 @@ interface InspectorProps {
   commit: (t: TimelineData) => void;
   onDuplicate: (id: string) => void;
   onRemoveSegment: (id: string) => void;
+  onRemoveCues: (ids: string[]) => void;
   onSaveSrt: () => void;
 }
 
@@ -210,6 +211,37 @@ function CueStyleSection({ cue, timeline, commit }: { cue: SubtitleCue; timeline
         )}
       </div>
     </Section>
+  );
+}
+
+/** Several subtitles at once: a style change is written into each one's own style. Shows the first one's values. */
+function MultiCueSection({ ids, timeline, commit, onRemove }: { ids: string[]; timeline: TimelineData; commit: (t: TimelineData) => void; onRemove: (ids: string[]) => void }) {
+  const { settings } = useWorkspace();
+  const first = timeline.subtitles.find((c) => ids.includes(c.id));
+  const style = resolveCaptionStyle(settings, first?.style);
+  const patchAll = (fn: (c: SubtitleCue) => SubtitleCue) =>
+    commit({ ...timeline, subtitles: timeline.subtitles.map((c) => (ids.includes(c.id) ? fn(c) : c)) });
+  return (
+    <div className="overflow-y-auto custom-scrollbar">
+      <Section title={t`${ids.length} subtitles selected`}>
+        <p className="text-[11px] text-zinc-400">
+          <Trans>Drag them on the timeline to move them together. Style changes apply to every selected subtitle.</Trans>
+        </p>
+      </Section>
+      <Section title={t`Style`}>
+        <CaptionStyleFields style={style} onChange={(patch) => patchAll((c) => ({ ...c, style: { ...(c.style ?? {}), ...patch } }))} row={styleRow} />
+        <div className="flex flex-wrap items-center gap-1 -mx-1">
+          <button type="button" className={iconButton} onClick={() => patchAll(({ style: _own, ...c }) => c)}>
+            <Trans>Use default style</Trans>
+          </button>
+        </div>
+      </Section>
+      <div className="px-3 py-3">
+        <button type="button" className={`${iconButton} text-red-500 dark:text-red-400`} onClick={() => onRemove(ids)}>
+          <Trash2 className="w-3.5 h-3.5" /> <Trans>Delete {ids.length} subtitles</Trans>
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -371,7 +403,8 @@ export function Inspector(p: InspectorProps) {
   const cues = useMemo(() => placedCues(timeline, placed), [timeline, placed]);
 
   const seg = selection?.type === "segment" ? timeline.segments.find((s) => s.id === selection.id) : undefined;
-  const cue = selection?.type === "cue" ? cues.find((c) => c.id === selection.id) : undefined;
+  const pickedCues = selectedCueIds(selection);
+  const cue = selection?.type === "cue" && pickedCues.length === 1 ? cues.find((c) => c.id === selection.id) : undefined;
   const text = selection?.type === "text" ? placedTexts(timeline, placed).find((x) => x.id === selection.id) : undefined;
   const patchText = (patch: Partial<TextClip>) =>
     text && commit({ ...timeline, texts: timeline.texts.map((x) => (x.id === text.id ? { ...x, ...patch } : x)) });
@@ -494,6 +527,8 @@ export function Inspector(p: InspectorProps) {
       </div>
     );
   }
+
+  if (pickedCues.length > 1) return <MultiCueSection ids={pickedCues} timeline={timeline} commit={commit} onRemove={p.onRemoveCues} />;
 
   if (cue) {
     const move = (g0: number, g1: number) => patchCue((c) => anchorCue(timeline, c, g0, g1, true));

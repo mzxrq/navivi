@@ -18,7 +18,10 @@ import {
 } from "./model";
 import { formatTime, mediaUrl, player, usePlayerTime, usePlaying } from "./player";
 
-export type Selection = { type: "segment" | "cue" | "text"; id: string } | null;
+export type Selection = { type: "segment" | "text"; id: string } | { type: "cue"; id: string; ids?: string[] } | null;
+
+export const selectedCueIds = (s: Selection): string[] => (s?.type === "cue" ? (s.ids ?? [s.id]) : []);
+export const cueSelection = (ids: string[]): Selection => (ids.length ? { type: "cue", id: ids[0], ids } : null);
 export type Lane = "video" | "text" | "subtitle" | "music";
 
 interface PaneProps {
@@ -82,6 +85,8 @@ export function TimelinePane(props: PaneProps) {
   const scroller = useRef<HTMLDivElement>(null);
   const lanesRef = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<{ id: string; dx: number; drop: number } | null>(null);
+  const [marquee, setMarquee] = useState<{ a: number; b: number } | null>(null);
+  const pickedCues = useMemo(() => new Set(selectedCueIds(selection)), [selection]);
   const latest = useRef(timeline);
   latest.current = timeline;
 
@@ -192,27 +197,54 @@ export function TimelinePane(props: PaneProps) {
 
   const onCueDown = (e: React.PointerEvent, cue: PlacedCue, mode: "move" | "start" | "end") => {
     const base = timeline;
-    onSelect({ type: "cue", id: cue.id });
-    const apply = (g0: number, g1: number) => {
-      const next = anchorCue(base, cue, g0, g1, mode !== "move");
+    const picked = selectedCueIds(selection);
+    if (mode === "move" && (e.shiftKey || e.ctrlKey || e.metaKey)) {
+      e.stopPropagation();
+      onSelect(cueSelection(picked.includes(cue.id) ? picked.filter((id) => id !== cue.id) : [...picked, cue.id]));
+      return;
+    }
+    const group = mode === "move" && picked.length > 1 && picked.includes(cue.id) ? cues.filter((c) => picked.includes(c.id)) : [cue];
+    if (group.length === 1) onSelect(cueSelection([cue.id]));
+    const from = Math.min(...group.map((c) => c.globalStart));
+    const to = Math.max(...group.map((c) => c.globalEnd));
+    const apply = (shift: number) => {
+      const moved = new Map(group.map((c) => [c.id, anchorCue(base, c, c.globalStart + shift, c.globalEnd + shift, false)]));
+      setDraft({ ...base, subtitles: base.subtitles.map((c) => moved.get(c.id) ?? c) });
+    };
+    const resize = (g0: number, g1: number) => {
+      const next = anchorCue(base, cue, g0, g1, true);
       setDraft({ ...base, subtitles: base.subtitles.map((c) => (c.id === cue.id ? next : c)) });
     };
     startDrag(
       e,
       (dt) => {
-        if (mode === "move") {
-          const len = cue.globalEnd - cue.globalStart;
-          const g0 = clamp(cue.globalStart + dt, 0, Math.max(0, total - len));
-          apply(g0, g0 + len);
-        } else if (mode === "start") {
-          apply(clamp(cue.globalStart + dt, 0, cue.globalEnd - MIN_CUE), cue.globalEnd);
-        } else {
-          apply(cue.globalStart, clamp(cue.globalEnd + dt, cue.globalStart + MIN_CUE, total));
-        }
+        if (mode === "move") apply(clamp(dt, -from, Math.max(-from, total - to)));
+        else if (mode === "start") resize(clamp(cue.globalStart + dt, 0, cue.globalEnd - MIN_CUE), cue.globalEnd);
+        else resize(cue.globalStart, clamp(cue.globalEnd + dt, cue.globalStart + MIN_CUE, total));
       },
       (moved) => {
         if (moved) commit(latest.current);
         setDraft(null);
+      },
+    );
+  };
+
+  const onCueLaneDown = (e: React.PointerEvent) => {
+    if (e.target !== e.currentTarget) return;
+    const t0 = timeAt(e.clientX);
+    const kept = e.shiftKey || e.ctrlKey || e.metaKey ? selectedCueIds(selection) : [];
+    startDrag(
+      e,
+      (_dt, ev) => {
+        const t1 = timeAt(ev.clientX);
+        const [a, b] = t0 < t1 ? [t0, t1] : [t1, t0];
+        setMarquee({ a, b });
+        const hit = cues.filter((c) => c.globalEnd > a && c.globalStart < b).map((c) => c.id);
+        onSelect(cueSelection([...new Set([...kept, ...hit])]));
+      },
+      (moved) => {
+        setMarquee(null);
+        if (!moved && !kept.length) onSelect(null);
       },
     );
   };
@@ -420,15 +452,16 @@ export function TimelinePane(props: PaneProps) {
           <div className={laneLabel} style={{ width: LABEL_W }}>
             <Subtitles className="w-3.5 h-3.5" />
           </div>
-          <div className="relative flex-1" data-lane="subtitle">
+          <div className="relative flex-1" data-lane="subtitle" onPointerDown={onCueLaneDown}>
+            {marquee && <div className="absolute top-0 bottom-0 bg-navi/10 border border-navi/50 rounded-sm pointer-events-none" style={{ left: marquee.a * pps, width: (marquee.b - marquee.a) * pps }} />}
             {cues.map((c) => {
-              const selected = selection?.type === "cue" && selection.id === c.id;
+              const selected = pickedCues.has(c.id);
               return (
                 <div
                   key={c.id}
                   onPointerDown={(e) => onCueDown(e, c, "move")}
                   onContextMenu={(e) => {
-                    onSelect({ type: "cue", id: c.id });
+                    if (!pickedCues.has(c.id)) onSelect(cueSelection([c.id]));
                     props.onCueMenu(e, c);
                   }}
                   className={`absolute top-1 bottom-1 rounded-md px-1.5 text-[11px] leading-[22px] truncate cursor-grab bg-navi/15 text-zinc-800 dark:text-zinc-100 ${
