@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useUI } from "../../hooks/useUI";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { extractLocationsFromDocument, generateWaypointScriptStream } from "../../services/ollamaApi";
+import { aiEngine } from "../../services/ai/engine";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 
@@ -24,7 +25,7 @@ export function AutoDirectorModal() {
     setIsProcessing(true);
     try {
       setStatus(t`Extracting locations using AI...`);
-      const locations = await extractLocationsFromDocument(text);
+      const locations = await extractLocationsFromDocument(text, aiEngine(settings));
       
       if (!locations || locations.length === 0) {
         showToast(t`No locations found in document`, "warning");
@@ -90,8 +91,8 @@ export function AutoDirectorModal() {
          await generateWaypointScriptStream(
              wp.name, 
              t`Context from document: ${text.substring(0, 500)}`, 
-             "schroneko/gemma-2-2b-jpn-it", 
-             "", 
+             aiEngine(settings),
+             "",
              (chunk) => {
                  fullScript = chunk;
              }, 

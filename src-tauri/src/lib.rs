@@ -428,6 +428,8 @@ pub fn run() {
         // The frontend's Ollama calls (src/services/ollamaApi.ts) go through
         // @tauri-apps/plugin-http; without this they fail with "plugin http not found".
         .plugin(tauri_plugin_http::init())
+        // Opens a provider's "get an API key" page in the browser (Settings > AI models).
+        .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let dir = app.path().app_data_dir()?;
             fs::create_dir_all(&dir)?;

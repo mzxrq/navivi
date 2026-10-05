@@ -8,47 +8,47 @@ msgstr ""
 "Language: ja\n"
 
 #. js-lingui-explicit-id
-#: src/components/ui/AppSettings.tsx:355
+#: src/components/ui/AppSettings.tsx:352
 msgid "Light"
 msgstr "ライト"
 
 #. js-lingui-explicit-id
-#: src/components/ui/AppSettings.tsx:356
+#: src/components/ui/AppSettings.tsx:353
 msgid "Dark"
 msgstr "ダーク"
 
 #. js-lingui-explicit-id
-#: src/components/ui/AppSettings.tsx:360
+#: src/components/ui/AppSettings.tsx:357
 msgid "System"
 msgstr "コンピュータと同期"
 
 #. js-lingui-explicit-id
-#: src/components/ui/AppSettings.tsx:385
+#: src/components/ui/AppSettings.tsx:382
 msgid "Navi Blue"
 msgstr "Navi青色"
 
 #. js-lingui-explicit-id
-#: src/components/ui/AppSettings.tsx:390
+#: src/components/ui/AppSettings.tsx:387
 msgid "Emerald"
 msgstr "エメラルド色"
 
 #. js-lingui-explicit-id
-#: src/components/ui/AppSettings.tsx:395
+#: src/components/ui/AppSettings.tsx:392
 msgid "Violet"
 msgstr "紫色"
 
 #. js-lingui-explicit-id
-#: src/components/ui/AppSettings.tsx:400
+#: src/components/ui/AppSettings.tsx:397
 msgid "Amber"
 msgstr "アンバー色"
 
 #. js-lingui-explicit-id
-#: src/components/ui/AppSettings.tsx:402
+#: src/components/ui/AppSettings.tsx:399
 msgid "Rose"
 msgstr "ローズ色"
 
 #. js-lingui-explicit-id
-#: src/components/ui/AppSettings.tsx:1095
+#: src/components/ui/AppSettings.tsx:1020
 msgid "Starting..."
 msgstr "ダウンロード開始中..."
 
@@ -105,7 +105,7 @@ msgstr "{0} (復路)"
 #~ msgstr "この位置には、すでに{0}のマーカーがあります"
 
 #. placeholder {0}: localPrompt.length
-#: src/components/ui/ScriptInput.tsx:237
+#: src/components/ui/ScriptInput.tsx:238
 msgid "{0} characters"
 msgstr "{0} 文字"
 
@@ -314,7 +314,7 @@ msgstr "1個のファイルをスキップしました。ここにドロップ�
 msgid "1 leg"
 msgstr "1区間"
 
-#: src/components/ui/AppSettings.tsx:310
+#: src/components/ui/AppSettings.tsx:307
 msgid "1 minute"
 msgstr "1分"
 
@@ -334,7 +334,7 @@ msgstr "1か所にナレーションがなく、無音になります"
 msgid "1 voice"
 msgstr "1件の音声"
 
-#: src/components/ui/AppSettings.tsx:311
+#: src/components/ui/AppSettings.tsx:308
 msgid "10 minutes"
 msgstr "10分"
 
@@ -342,11 +342,11 @@ msgstr "10分"
 #~ msgid "16:9 Landscape"
 #~ msgstr "16:9 水平"
 
-#: src/components/ui/AppSettings.tsx:308
+#: src/components/ui/AppSettings.tsx:305
 msgid "3 seconds"
 msgstr "3秒"
 
-#: src/components/ui/AppSettings.tsx:309
+#: src/components/ui/AppSettings.tsx:306
 msgid "30 seconds"
 msgstr "30秒"
 
@@ -371,7 +371,7 @@ msgstr "約{0}"
 #~ msgid "About {minutes} min"
 #~ msgstr "約{minutes}分"
 
-#: src/components/ui/AppSettings.tsx:379
+#: src/components/ui/AppSettings.tsx:376
 msgid "Accent color"
 msgstr "アクセントカラー"
 
@@ -379,7 +379,7 @@ msgstr "アクセントカラー"
 #~ msgid "Accent colour"
 #~ msgstr "アクセントカラー"
 
-#: src/components/ui/AutoDirectorModal.tsx:181
+#: src/components/ui/AutoDirectorModal.tsx:182
 msgid "Accept & Apply to Project"
 msgstr "プロジェクトに承認して適用"
 
@@ -402,7 +402,7 @@ msgstr "承認して書き出す"
 #~ msgid "Active"
 #~ msgstr "有効"
 
-#: src/components/ui/AppSettings.tsx:1175
+#: src/components/ui/AppSettings.tsx:1107
 msgid "Active model"
 msgstr "使用するモデル"
 
@@ -470,7 +470,7 @@ msgstr "この点の後に点を追加"
 #~ msgid "Add one at the current playhead position"
 #~ msgstr "現在のプレイヘッド位置にマーカーを追加"
 
-#: src/features/map/components/WaypointEditor.tsx:573
+#: src/features/map/components/WaypointEditor.tsx:580
 msgid "Add photo"
 msgstr "写真を追加"
 
@@ -510,7 +510,7 @@ msgstr "ここに字幕を追加"
 #~ msgid "Add Text Layer"
 #~ msgstr "テキストレイヤーを追加"
 
-#: src/features/map/components/WaypointEditor.tsx:464
+#: src/features/map/components/WaypointEditor.tsx:471
 msgid "Add up to 3 images that will pop up during the narration at this stop"
 msgstr "この地点のナレーション中にポップアップ表示させる画像を最大3枚まで追加できます"
 
@@ -529,13 +529,18 @@ msgstr "動画を追加"
 msgid "Add voice"
 msgstr "ボイスを追加"
 
-#: src/components/ui/AppSettings.tsx:863
+#: src/components/ui/AppSettings.tsx:860
 msgid "Add word"
 msgstr "単語を追加"
 
-#: src/components/ui/AppSettings.tsx:849
+#: src/components/ui/AppSettings.tsx:846
 msgid "Add words below or extract them from narration scripts."
 msgstr "以下に単語を追加するか、スクリプトから抽出する"
+
+#. placeholder {0}: PROVIDERS[engine.provider].label
+#: src/features/map/components/WaypointEditor.tsx:198
+msgid "Add your {0} API key in Settings > AI models"
+msgstr "設定 > AIモデルで{0}のAPIキーを追加してください"
 
 #: src/components/ui/ContextMenu.tsx:504
 #~ msgid "add-audio-track"
@@ -549,7 +554,11 @@ msgstr "以下に単語を追加するか、スクリプトから抽出する"
 #~ msgid "add-visual-track"
 #~ msgstr "映像トラックを追加"
 
-#: src/features/map/components/WaypointEditor.tsx:615
+#: src/components/ui/OnlineAiSettings.tsx:191
+msgid "Address"
+msgstr "アドレス"
+
+#: src/features/map/components/WaypointEditor.tsx:622
 msgid "Adds a brief pause in the generated video at this waypoint before continuing the journey"
 msgstr "このポイントで生成された動画に短い一時停止を挿入して、旅を続ける"
 
@@ -570,12 +579,12 @@ msgstr "ルートを調整 (経由地を追加して微調整)"
 #~ msgid "Advanced Settings"
 #~ msgstr "詳細設定"
 
-#: src/components/ui/AppSettings.tsx:322
-#: src/components/ui/AppSettings.tsx:331
+#: src/components/ui/AppSettings.tsx:319
+#: src/components/ui/AppSettings.tsx:328
 msgid "AI features"
 msgstr "AI 機能"
 
-#: src/components/ui/AppSettings.tsx:192
+#: src/components/ui/AppSettings.tsx:189
 msgid "AI models"
 msgstr "AI モデル"
 
@@ -603,7 +612,7 @@ msgstr "手動での確認を挟むことなく、すべてのメディアが自
 msgid "all projects"
 msgstr "すべてのプロジェクト"
 
-#: src/components/ui/AppSettings.tsx:719
+#: src/components/ui/AppSettings.tsx:716
 #: src/components/ui/ReviewStep.tsx:91
 msgid "All projects"
 msgstr "すべてのプロジェクト"
@@ -643,11 +652,13 @@ msgstr "地点の写真をアニメーション化"
 msgid "Anything you redo is made in the background while you work in the timeline editor. Turn that off below to change a clip's photo, script or route first."
 msgstr "やり直したものは、タイムラインエディタで作業している間にバックグラウンドで作られます。クリップの写真、台本、ルートを先に変えたいときは、下でオフにしてください。"
 
-#: src/components/ui/AppSettings.tsx:544
+#: src/components/ui/AppSettings.tsx:541
+#: src/components/ui/OnlineAiSettings.tsx:141
+#: src/components/ui/OnlineAiSettings.tsx:168
 msgid "API key"
 msgstr "API キー"
 
-#: src/components/ui/AppSettings.tsx:183
+#: src/components/ui/AppSettings.tsx:180
 msgid "API keys"
 msgstr "API キー"
 
@@ -656,11 +667,11 @@ msgstr "API キー"
 msgid "App Settings"
 msgstr "アプリ設定"
 
-#: src/components/ui/AppSettings.tsx:182
+#: src/components/ui/AppSettings.tsx:179
 msgid "Appearance"
 msgstr "外観"
 
-#: src/components/ui/AppSettings.tsx:276
+#: src/components/ui/AppSettings.tsx:273
 msgid "Application"
 msgstr "アプリ"
 
@@ -691,7 +702,7 @@ msgstr "アプリ"
 msgid "Are you sure you want to remove <0>{0}</0> from your recent list? The original files will remain on your computer."
 msgstr "本当に <0>{0}</0> を最近のプロジェクトから削除しますか？元のファイルはコンピュータ上に残ります。"
 
-#: src/features/map/components/WaypointEditor.tsx:251
+#: src/features/map/components/WaypointEditor.tsx:258
 msgid "Arriving Script"
 msgstr "到着時のスクリプト"
 
@@ -727,7 +738,7 @@ msgstr "{stopName}"
 #~ msgid "Attenuation"
 #~ msgstr "音量減衰"
 
-#: src/features/map/components/WaypointEditor.tsx:261
+#: src/features/map/components/WaypointEditor.tsx:268
 msgid "Attraction Script"
 msgstr "見どころスクリプト"
 
@@ -799,15 +810,15 @@ msgstr "自動編集"
 msgid "Auto edit: order clips, add fades and subtitles"
 msgstr "自動編集:クリップの並び替え、フェード、字幕を追加"
 
-#: src/components/ui/AppSettings.tsx:587
+#: src/components/ui/AppSettings.tsx:584
 msgid "Auto-Detect (Recommended)"
 msgstr "自動検出 (推奨)"
 
-#: src/components/ui/AutoDirectorModal.tsx:128
+#: src/components/ui/AutoDirectorModal.tsx:129
 msgid "Auto-Director applied successfully!"
 msgstr "オートディレクターが正常に適用されました"
 
-#: src/components/ui/AutoDirectorModal.tsx:137
+#: src/components/ui/AutoDirectorModal.tsx:138
 msgid "Auto-Director Proposal"
 msgstr "オートディレクターの提案"
 
@@ -827,11 +838,11 @@ msgstr "オートディレクターの提案"
 #~ msgid "Auto-Ducking Armed (Click to disable)"
 #~ msgstr "自動ダッキング待機中 (クリックで無効か)"
 
-#: src/components/ui/AppSettings.tsx:895
+#: src/components/ui/AppSettings.tsx:892
 msgid "Auto-fill readings"
 msgstr "読み方を自動入力"
 
-#: src/components/ui/AppSettings.tsx:295
+#: src/components/ui/AppSettings.tsx:292
 msgid "Auto-save"
 msgstr "自動保存"
 
@@ -847,7 +858,7 @@ msgstr "自動スキップ (クイックエクスポート)"
 msgid "Auto-stitched Video"
 msgstr "自動結合された動画"
 
-#: src/components/ui/ScriptInput.tsx:210
+#: src/components/ui/ScriptInput.tsx:211
 msgid "Auto-Write"
 msgstr "自動作成"
 
@@ -860,7 +871,7 @@ msgstr "自動作成"
 msgid "Back to start"
 msgstr "最初に戻る"
 
-#: src/components/ui/AppSettings.tsx:633
+#: src/components/ui/AppSettings.tsx:630
 msgid "Background color"
 msgstr "背景の色"
 
@@ -872,8 +883,8 @@ msgstr "BGM"
 #~ msgid "Background music added to A2: Music track"
 #~ msgstr "ミュージックトラックにBGMを追加しました"
 
-#: src/components/ui/AppSettings.tsx:649
-#: src/components/ui/AppSettings.tsx:669
+#: src/components/ui/AppSettings.tsx:646
+#: src/components/ui/AppSettings.tsx:666
 msgid "Background opacity"
 msgstr "背景の不透明度"
 
@@ -964,16 +975,16 @@ msgstr "クリップに字幕を焼き込む"
 msgid "Burn subtitles into the video"
 msgstr "字幕を映像に焼き込む"
 
-#: src/features/map/components/WaypointEditor.tsx:476
-#: src/features/map/components/WaypointEditor.tsx:532
+#: src/features/map/components/WaypointEditor.tsx:483
+#: src/features/map/components/WaypointEditor.tsx:539
 msgid "Camera Angle"
 msgstr "カメラアングル"
 
-#: src/components/ui/ScriptInput.tsx:200
+#: src/components/ui/ScriptInput.tsx:201
 msgid "cancel"
 msgstr "キャンセル"
 
-#: src/components/ui/AutoDirectorModal.tsx:175
+#: src/components/ui/AutoDirectorModal.tsx:176
 #: src/components/ui/ExportProjectDialog.tsx:88
 #: src/components/ui/NewProject.tsx:398
 #: src/components/ui/RenderOverlay.tsx:792
@@ -988,12 +999,12 @@ msgstr "キャンセル"
 #: src/features/editor/ExportDialog.tsx:68
 #: src/features/map/components/GenerateDialog.tsx:108
 #: src/features/map/components/Sidebar.tsx:244
-#: src/features/map/components/WaypointEditor.tsx:686
+#: src/features/map/components/WaypointEditor.tsx:693
 msgid "Cancel"
 msgstr "キャンセル"
 
-#: src/components/ui/AppSettings.tsx:1274
-#: src/components/ui/AppSettings.tsx:1276
+#: src/components/ui/AppSettings.tsx:1206
+#: src/components/ui/AppSettings.tsx:1208
 msgid "Cancel download"
 msgstr "ダウンロードをキャンセル"
 
@@ -1049,16 +1060,16 @@ msgstr "区間を選択"
 msgid "Choose a recording…"
 msgstr "録音ファイルを選択…"
 
-#: src/components/ui/AppSettings.tsx:497
+#: src/components/ui/AppSettings.tsx:494
 #: src/components/view/ProjectSettingsModal.tsx:171
 msgid "Choose file…"
 msgstr "ファイルを選択…"
 
-#: src/components/ui/AppSettings.tsx:279
+#: src/components/ui/AppSettings.tsx:276
 msgid "Choose your preferred language for the application"
 msgstr "アプリケーションの言語を選択してください"
 
-#: src/features/map/components/WaypointEditor.tsx:658
+#: src/features/map/components/WaypointEditor.tsx:665
 msgid "Choose…"
 msgstr "選択…"
 
@@ -1070,8 +1081,8 @@ msgstr "選択…"
 #~ msgid "Clean modern sans-serif"
 #~ msgstr "クリーンでモダンなサンセリフ"
 
-#: src/components/ui/AppSettings.tsx:1274
-#: src/components/ui/AppSettings.tsx:1276
+#: src/components/ui/AppSettings.tsx:1206
+#: src/components/ui/AppSettings.tsx:1208
 #: src/components/ui/NewProject.tsx:314
 #: src/components/ui/ReviewStep.tsx:174
 #: src/components/ui/StatusBar.tsx:402
@@ -1161,8 +1172,8 @@ msgstr "クリップを並べ替え、フェードと字幕を追加しました
 #~ msgid "Clips unlinked"
 #~ msgstr "クリップのリンクを解除しました"
 
-#: src/components/ui/AppSettings.tsx:262
-#: src/components/ui/AppSettings.tsx:263
+#: src/components/ui/AppSettings.tsx:259
+#: src/components/ui/AppSettings.tsx:260
 #: src/components/ui/ErrorBoundary.tsx:85
 #: src/components/ui/NewProject.tsx:229
 #: src/components/ui/RenderOverlay.tsx:1299
@@ -1172,13 +1183,13 @@ msgstr "クリップを並べ替え、フェードと字幕を追加しました
 #: src/features/map/components/MapLayers/LayerManager.tsx:76
 #: src/features/map/components/MapLayers/RouteStyling.tsx:95
 #: src/features/map/components/MapLayers/RouteStyling.tsx:96
-#: src/features/map/components/WaypointEditor.tsx:379
-#: src/features/map/components/WaypointEditor.tsx:380
+#: src/features/map/components/WaypointEditor.tsx:386
+#: src/features/map/components/WaypointEditor.tsx:387
 msgid "Close"
 msgstr "閉じる"
 
-#: src/features/map/components/WaypointEditor.tsx:370
-#: src/features/map/components/WaypointEditor.tsx:371
+#: src/features/map/components/WaypointEditor.tsx:377
+#: src/features/map/components/WaypointEditor.tsx:378
 msgid "Collapse"
 msgstr "折りたたむ"
 
@@ -1190,7 +1201,7 @@ msgstr "色"
 #~ msgid "Color Adjustments"
 #~ msgstr "カラー調整"
 
-#: src/components/ui/AppSettings.tsx:503
+#: src/components/ui/AppSettings.tsx:500
 msgid "Color GPX routes dynamically based on steepness"
 msgstr "勾配に応じてGPSルートを動的に色付けする"
 
@@ -1214,7 +1225,7 @@ msgstr "すべてのルートセグメント、ナレーション音声、トラ
 msgid "Confirm"
 msgstr "確認"
 
-#: src/features/map/components/WaypointEditor.tsx:356
+#: src/features/map/components/WaypointEditor.tsx:363
 msgid "Connected to route"
 msgstr "ルートに接続済み"
 
@@ -1223,7 +1234,7 @@ msgstr "ルートに接続済み"
 #~ msgstr "コンテンツ"
 
 #. placeholder {0}: text.substring(0, 500)
-#: src/components/ui/AutoDirectorModal.tsx:92
+#: src/components/ui/AutoDirectorModal.tsx:93
 msgid "Context from document: {0}"
 msgstr "ドキュメントのコンテキスト: {0}"
 
@@ -1231,7 +1242,7 @@ msgstr "ドキュメントのコンテキスト: {0}"
 #~ msgid "Contrast"
 #~ msgstr "コントラスト"
 
-#: src/components/ui/AppSettings.tsx:296
+#: src/components/ui/AppSettings.tsx:293
 msgid "Controls auto save of editors that have unsaved changes"
 msgstr "未保存の変更があるエディタの自動保存を制御します"
 
@@ -1247,7 +1258,7 @@ msgstr "iPhoneの写真1枚を変換しています..."
 msgid "Converting GPS file format..."
 msgstr "GPSファイル形式を変換しています..."
 
-#: src/features/map/components/WaypointEditor.tsx:149
+#: src/features/map/components/WaypointEditor.tsx:151
 msgid "Converting iPhone photos..."
 msgstr "iPhoneの写真を変換しています..."
 
@@ -1283,7 +1294,7 @@ msgstr "メッセージをコピー"
 msgid "Copy path from"
 msgstr "経路をコピー"
 
-#: src/components/ui/AppSettings.tsx:701
+#: src/components/ui/AppSettings.tsx:698
 msgid "Correct words or kanji that are read incorrectly by the AI voice. You can auto-extract entries from scripts by typing <0>漢字(よみがな)</0> in any narration script."
 msgstr "以下に音声が誤って読み上げる単語や漢字を修正してください。"
 
@@ -1298,7 +1309,7 @@ msgstr "音楽を追加できませんでした: {0}"
 msgid "Could not add the video: {0}"
 msgstr "動画を追加できませんでした: {0}"
 
-#: src/features/map/components/WaypointEditor.tsx:155
+#: src/features/map/components/WaypointEditor.tsx:157
 #: src/hooks/useFileActions.ts:51
 msgid "Could not convert the iPhone photos."
 msgstr "iPhoneの写真を変換できませんでした。"
@@ -1347,7 +1358,7 @@ msgstr "タイムラインを保存できませんでした"
 msgid "Could not save this version"
 msgstr "このバージョンを保存できませんでした"
 
-#: src/features/map/components/WaypointEditor.tsx:134
+#: src/features/map/components/WaypointEditor.tsx:136
 msgid "Couldn't look up a place name for this location."
 msgstr "この場所の地名を取得できませんでした。"
 
@@ -1378,7 +1389,7 @@ msgstr "クレジット: {0}"
 #~ msgid "Cross Warp"
 #~ msgstr "クロスワープ"
 
-#: src/components/ui/ScriptInput.tsx:19
+#: src/components/ui/ScriptInput.tsx:20
 msgid "Cross-checking building data..."
 msgstr "建物のデータを照合しています..."
 
@@ -1396,10 +1407,10 @@ msgstr "建物のデータを照合しています..."
 msgid "Custom Color"
 msgstr "カスタムカラー"
 
-#: src/components/ui/AppSettings.tsx:470
+#: src/components/ui/AppSettings.tsx:467
 #: src/features/map/components/MapArea.tsx:962
 #: src/features/map/components/MapArea.tsx:1024
-#: src/features/map/components/WaypointEditor.tsx:630
+#: src/features/map/components/WaypointEditor.tsx:637
 msgid "Custom Marker"
 msgstr "カスタムマーカー"
 
@@ -1420,13 +1431,13 @@ msgstr "切り取り"
 msgid "Cut to next clip"
 msgstr "次のクリップへカット"
 
-#: src/components/ui/AppSettings.tsx:436
+#: src/components/ui/AppSettings.tsx:433
 #: src/components/view/ProjectSettingsModal.tsx:144
 msgid "Default marker for all waypoints. Can be overridden per-stop."
 msgstr "すべてのポイントのデフォルトマーカーです。ポイントごとに上書きできます"
 
-#: src/components/ui/AppSettings.tsx:443
-#: src/features/map/components/WaypointEditor.tsx:642
+#: src/components/ui/AppSettings.tsx:440
+#: src/features/map/components/WaypointEditor.tsx:649
 msgid "Default pin"
 msgstr "標準のピン"
 
@@ -1441,7 +1452,7 @@ msgstr "ポイントを配置する際のデフォルトの経路検索"
 #: src/components/ui/VoiceSettings.tsx:318
 #: src/components/ui/VoiceSettings.tsx:330
 #: src/features/editor/Inspector.tsx:188
-#: src/features/map/components/WaypointEditor.tsx:693
+#: src/features/map/components/WaypointEditor.tsx:700
 msgid "Delete"
 msgstr "削除"
 
@@ -1475,7 +1486,7 @@ msgstr "点を削除"
 #~ msgid "Delete Selected"
 #~ msgstr "選択項目を削除"
 
-#: src/features/map/components/WaypointEditor.tsx:703
+#: src/features/map/components/WaypointEditor.tsx:710
 #: src/features/map/hooks/useStopMenus.ts:261
 msgid "Delete stop"
 msgstr "地点を削除"
@@ -1488,7 +1499,7 @@ msgstr "字幕を削除"
 msgid "Delete this saved version?"
 msgstr "この保存済みバージョンを削除しますか？"
 
-#: src/features/map/components/WaypointEditor.tsx:679
+#: src/features/map/components/WaypointEditor.tsx:686
 msgid "Delete this stop?"
 msgstr "この地点を削除しますか？"
 
@@ -1521,7 +1532,7 @@ msgstr "古いファイルを1件削除しました。あらためて作成さ�
 #~ msgid "Desktop & YouTube"
 #~ msgstr "デスクトップ&YouTube"
 
-#: src/features/map/components/WaypointEditor.tsx:326
+#: src/features/map/components/WaypointEditor.tsx:333
 #: src/features/map/hooks/useStopMenus.ts:223
 msgid "Destination"
 msgstr "目的地"
@@ -1531,7 +1542,7 @@ msgstr "目的地"
 msgid "Details"
 msgstr "詳細"
 
-#: src/components/ui/ScriptInput.tsx:17
+#: src/components/ui/ScriptInput.tsx:18
 msgid "Detecting context..."
 msgstr "コンテキストを検出中..."
 
@@ -1603,11 +1614,11 @@ msgstr "ダブルクリックで字幕を追加"
 #~ msgid "Double-sided horizontal perspective warp effect"
 #~ msgstr "両面水平パースペクティブワープ効果"
 
-#: src/components/ui/AppSettings.tsx:1293
+#: src/components/ui/AppSettings.tsx:1225
 msgid "Download"
 msgstr "ダウンロード"
 
-#: src/components/ui/ScriptInput.tsx:20
+#: src/components/ui/ScriptInput.tsx:21
 msgid "Drafting narration..."
 msgstr "ナレーションの草稿を作成中..."
 
@@ -1745,8 +1756,8 @@ msgstr "マップ上のポイントを編集しています"
 msgid "Editor view"
 msgstr "エディター表示"
 
-#: src/components/ui/AppSettings.tsx:502
-#: src/components/ui/AppSettings.tsx:508
+#: src/components/ui/AppSettings.tsx:499
+#: src/components/ui/AppSettings.tsx:505
 msgid "Elevation heatmap"
 msgstr "標高ヒートマップ"
 
@@ -1836,8 +1847,8 @@ msgstr "見積もり中…"
 msgid "Exit"
 msgstr "終了"
 
-#: src/features/map/components/WaypointEditor.tsx:370
-#: src/features/map/components/WaypointEditor.tsx:371
+#: src/features/map/components/WaypointEditor.tsx:377
+#: src/features/map/components/WaypointEditor.tsx:378
 msgid "Expand"
 msgstr "展開"
 
@@ -1919,7 +1930,7 @@ msgstr "書き出し…"
 msgid "exportSuccessToastMsg"
 msgstr "エクスポート処理が正常に完了しました！"
 
-#: src/components/ui/AutoDirectorModal.tsx:26
+#: src/components/ui/AutoDirectorModal.tsx:27
 msgid "Extracting locations using AI..."
 msgstr "場所を抽出中..."
 
@@ -1974,11 +1985,11 @@ msgstr "プロジェクトの複製に失敗しました"
 #~ msgid "Failed to export JSON: {0}"
 #~ msgstr "JSONのエクスポートに失敗しました: {0}"
 
-#: src/features/map/components/WaypointEditor.tsx:234
+#: src/features/map/components/WaypointEditor.tsx:241
 msgid "Failed to generate script"
 msgstr "スクリプトの生成に失敗しました"
 
-#: src/components/ui/AutoDirectorModal.tsx:81
+#: src/components/ui/AutoDirectorModal.tsx:82
 msgid "Failed to geocode any locations."
 msgstr "場所のジオコーディングに失敗しました"
 
@@ -2010,7 +2021,7 @@ msgstr "ファイルエクスプローラーを開けませんでした"
 msgid "Failed to parse file"
 msgstr "ファイルの解析に失敗しました"
 
-#: src/components/ui/AutoDirectorModal.tsx:115
+#: src/components/ui/AutoDirectorModal.tsx:116
 msgid "Failed to process document"
 msgstr "ドキュメントの処理に失敗しました"
 
@@ -2063,8 +2074,8 @@ msgstr "高速ドラフト"
 msgid "Fast render"
 msgstr "高速レンダリング"
 
-#: src/components/ui/AppSettings.tsx:335
-#: src/components/ui/AppSettings.tsx:341
+#: src/components/ui/AppSettings.tsx:332
+#: src/components/ui/AppSettings.tsx:338
 #: src/components/ui/NewProject.tsx:387
 msgid "Fast render mode"
 msgstr "高速レンダリングモード"
@@ -2113,8 +2124,8 @@ msgstr "飛行"
 msgid "Follow timing cues in scripts"
 msgstr "台本のタイミング指定に従う"
 
-#: src/components/ui/AppSettings.tsx:595
-#: src/components/ui/AppSettings.tsx:597
+#: src/components/ui/AppSettings.tsx:592
+#: src/components/ui/AppSettings.tsx:594
 msgid "Font"
 msgstr "フォント"
 
@@ -2122,8 +2133,8 @@ msgstr "フォント"
 #~ msgid "Font Family"
 #~ msgstr "フォントファミリー"
 
-#: src/components/ui/AppSettings.tsx:607
-#: src/components/ui/AppSettings.tsx:609
+#: src/components/ui/AppSettings.tsx:604
+#: src/components/ui/AppSettings.tsx:606
 msgid "Font size"
 msgstr "フォントサイズ"
 
@@ -2132,7 +2143,7 @@ msgstr "フォントサイズ"
 #~ msgstr "フォントサイズ"
 
 #. placeholder {0}: locations.length
-#: src/components/ui/AutoDirectorModal.tsx:36
+#: src/components/ui/AutoDirectorModal.tsx:37
 msgid "Found {0} locations. Geocoding..."
 msgstr "{0}件の場所が見つかりました。ジオコーディング中..."
 
@@ -2154,7 +2165,7 @@ msgstr "ファイルから…"
 msgid "From narration"
 msgstr "ナレーションから"
 
-#: src/components/ui/AppSettings.tsx:181
+#: src/components/ui/AppSettings.tsx:178
 msgid "General"
 msgstr "一般"
 
@@ -2204,7 +2215,7 @@ msgstr "サンプルを生成しています。最初の1回は音声モデル�
 msgid "Generating..."
 msgstr "生成中..."
 
-#: src/components/ui/AppSettings.tsx:563
+#: src/components/ui/AppSettings.tsx:560
 msgid "Generation"
 msgstr "生成"
 
@@ -2216,8 +2227,12 @@ msgstr "生成に失敗しました"
 msgid "Generation On Hold"
 msgstr "生成を保留中"
 
-#: src/features/map/components/WaypointEditor.tsx:315
-#: src/features/map/components/WaypointEditor.tsx:316
+#: src/components/ui/OnlineAiSettings.tsx:182
+msgid "Get a key"
+msgstr "キーを取得"
+
+#: src/features/map/components/WaypointEditor.tsx:322
+#: src/features/map/components/WaypointEditor.tsx:323
 msgid "Get name from coordinate"
 msgstr "座標から名前をと取得"
 
@@ -2264,7 +2279,7 @@ msgstr "グリッド表示"
 msgid "Hard cut"
 msgstr "カット"
 
-#: src/components/ui/AppSettings.tsx:575
+#: src/components/ui/AppSettings.tsx:572
 msgid "Hardware mode"
 msgstr "ハードウェアモード"
 
@@ -2297,7 +2312,7 @@ msgstr "ログを隠す"
 #~ msgid "High-Spec (Discrete GPU)"
 #~ msgstr "ハイスペック (ディスクリートGPU)"
 
-#: src/components/ui/AppSettings.tsx:589
+#: src/components/ui/AppSettings.tsx:586
 msgid "High-spec Mode"
 msgstr "ハイスペックモード"
 
@@ -2387,7 +2402,7 @@ msgstr "パイプラインを初期化しています..."
 #~ msgid "Inspector"
 #~ msgstr "インスペクタ"
 
-#: src/components/ui/AppSettings.tsx:351
+#: src/components/ui/AppSettings.tsx:348
 msgid "Interface"
 msgstr "インターフェース"
 
@@ -2431,6 +2446,10 @@ msgstr "作業を続ける"
 msgid "Keep working in the timeline editor. Export is available when it finishes."
 msgstr "タイムラインエディタで作業を続けられます。書き出しは完了後に使えます。"
 
+#: src/components/ui/OnlineAiSettings.tsx:153
+msgid "Key saved"
+msgstr "キーを保存しました"
+
 #: src/components/view/ProjectManager.tsx:390
 msgid "Kyoto Demo Route"
 msgstr "京都デモルート"
@@ -2439,7 +2458,7 @@ msgstr "京都デモルート"
 #~ msgid "Landscape 16:9"
 #~ msgstr "横長 16:9"
 
-#: src/components/ui/AppSettings.tsx:278
+#: src/components/ui/AppSettings.tsx:275
 msgid "Language"
 msgstr "言語"
 
@@ -2477,6 +2496,10 @@ msgstr "区間{n}: {fromName} → {toName}"
 #: src/features/editor/ExportDialog.tsx:42
 msgid "Length"
 msgstr "長さ"
+
+#: src/components/ui/OnlineAiSettings.tsx:230
+msgid "Lets the model see a stop's photos (up to 4, shrunk first) when it writes the script."
+msgstr "スクリプトを書くときに、モデルが地点の写真（最大4枚、縮小して送信）を見られるようにします。"
 
 #: src/features/map/components/LegColorButton.tsx:49
 #: src/features/map/components/LegColorButton.tsx:50
@@ -2540,12 +2563,12 @@ msgstr "読み込み中…"
 msgid "Locating..."
 msgstr "位置情報を取得中..."
 
-#: src/features/map/components/WaypointEditor.tsx:307
-#: src/features/map/components/WaypointEditor.tsx:308
+#: src/features/map/components/WaypointEditor.tsx:314
+#: src/features/map/components/WaypointEditor.tsx:315
 msgid "Location Name"
 msgstr "場所の名前"
 
-#: src/components/ui/AutoDirectorModal.tsx:159
+#: src/components/ui/AutoDirectorModal.tsx:160
 msgid "Locations & Scripts"
 msgstr "場所とスクリプト"
 
@@ -2569,7 +2592,7 @@ msgstr "ログ表示"
 #~ msgid "Low-Spec (Integrated Graphics)"
 #~ msgstr "ロースペック (統合グラフィックス)"
 
-#: src/components/ui/AppSettings.tsx:588
+#: src/components/ui/AppSettings.tsx:585
 msgid "Low-spec Mode"
 msgstr "ロースペックモード"
 
@@ -2606,7 +2629,7 @@ msgstr "新しい音声を作成しています。最初の1件は時間がか�
 #~ msgid "Manage timeline markers"
 #~ msgstr "タイムラインマーカーを管理"
 
-#: src/components/ui/AppSettings.tsx:433
+#: src/components/ui/AppSettings.tsx:430
 #: src/components/ui/TitleBar.tsx:391
 msgid "Map"
 msgstr "マップ"
@@ -2619,11 +2642,11 @@ msgstr "マップの外観"
 msgid "Map tools"
 msgstr "マップツール"
 
-#: src/components/ui/AppSettings.tsx:518
+#: src/components/ui/AppSettings.tsx:515
 msgid "Mapbox"
 msgstr "Mapbox"
 
-#: src/features/map/components/WaypointEditor.tsx:589
+#: src/features/map/components/WaypointEditor.tsx:596
 msgid "Marked for Regeneration: Edit image, narration, or route mode, then click Resume Generation"
 msgstr "再生成のマークが付けられました: 画像、ナレーション、またはルートモードを編集してから、「生成を再開」をクリックしてください"
 
@@ -2681,7 +2704,12 @@ msgstr "読み間違いはありますか? 正しい読み方を入力すると�
 #~ msgid "Missing file"
 #~ msgstr "ファイルが見つかりません"
 
-#: src/features/map/components/WaypointEditor.tsx:194
+#: src/components/ui/OnlineAiSettings.tsx:206
+#: src/components/ui/OnlineAiSettings.tsx:209
+msgid "Model"
+msgstr "モデル"
+
+#: src/features/map/components/WaypointEditor.tsx:199
 msgid "Model \"{engine}\" not found. Please install it from the App Settings"
 msgstr "モデル {engine} が見つかりません。アプリ設定からインストールしてください"
 
@@ -2745,10 +2773,10 @@ msgstr "ナレーションをミュート"
 msgid "Name your project to continue"
 msgstr "続行するにはプロジェクト名を入力してください"
 
-#: src/components/ui/AppSettings.tsx:1173
+#: src/components/ui/AppSettings.tsx:1105
 #: src/features/editor/ExportDialog.tsx:44
 #: src/features/editor/Inspector.tsx:121
-#: src/features/map/components/WaypointEditor.tsx:394
+#: src/features/map/components/WaypointEditor.tsx:401
 msgid "Narration"
 msgstr "ナレーション"
 
@@ -2823,7 +2851,7 @@ msgstr "アクティブなプロジェクトフォルダが見つかりません
 msgid "No clips yet"
 msgstr "クリップがありません"
 
-#: src/components/ui/AppSettings.tsx:846
+#: src/components/ui/AppSettings.tsx:843
 msgid "No entries yet."
 msgstr "まだ投稿がありません"
 
@@ -2831,11 +2859,11 @@ msgstr "まだ投稿がありません"
 #~ msgid "No GPS location data found in selected photos"
 #~ msgstr "選択した写真にGPS位置データが見つかりません"
 
-#: src/components/ui/AutoDirectorModal.tsx:30
+#: src/components/ui/AutoDirectorModal.tsx:31
 msgid "No locations found in document"
 msgstr "ドキュメントに場所が見つかりませんでした"
 
-#: src/components/ui/AppSettings.tsx:1188
+#: src/components/ui/AppSettings.tsx:1120
 msgid "No models installed"
 msgstr "インストールされているモデルがありません"
 
@@ -2907,7 +2935,7 @@ msgstr "インターネット接続がありません"
 #: src/features/editor/ExportDialog.tsx:44
 #: src/features/editor/ExportDialog.tsx:45
 #: src/features/editor/ExportDialog.tsx:46
-#: src/features/map/components/WaypointEditor.tsx:480
+#: src/features/map/components/WaypointEditor.tsx:487
 msgid "None"
 msgstr "なし"
 
@@ -2923,7 +2951,7 @@ msgstr "何も選択されていません。承認して書き出すか、やり
 msgid "Nothing to review yet."
 msgstr "確認できるものがまだありません。"
 
-#: src/components/ui/AppSettings.tsx:307
+#: src/components/ui/AppSettings.tsx:304
 #: src/features/map/components/GenerateDialog.tsx:94
 #: src/features/map/components/OverviewPanel.tsx:70
 msgid "Off"
@@ -2937,7 +2965,11 @@ msgstr "オフ"
 #~ msgid "Offset Y"
 #~ msgstr "Yオフセット"
 
-#: src/features/map/components/WaypointEditor.tsx:359
+#: src/components/ui/AppSettings.tsx:320
+msgid "Ollama or online AI"
+msgstr "Ollama またはオンラインAI"
+
+#: src/features/map/components/WaypointEditor.tsx:366
 #: src/features/map/hooks/useStopMenus.ts:227
 msgid "On route"
 msgstr "ルート上"
@@ -2995,7 +3027,7 @@ msgstr "フォルダを開く..."
 msgid "Opening the timeline editor so you can change the clip by hand."
 msgstr "タイムラインエディタを開きます。クリップを手動で変更できます。"
 
-#: src/components/ui/AppSettings.tsx:534
+#: src/components/ui/AppSettings.tsx:531
 msgid "OpenRouteService"
 msgstr "OpenRouteService"
 
@@ -3031,7 +3063,7 @@ msgstr "元の音の音量"
 #~ msgid "Outline colour"
 #~ msgstr "縁取りの色"
 
-#: src/components/ui/AppSettings.tsx:554
+#: src/components/ui/AppSettings.tsx:551
 msgid "Output"
 msgstr "出力"
 
@@ -3039,19 +3071,19 @@ msgstr "出力"
 #~ msgid "Output File:"
 #~ msgstr "出力ファイル:"
 
-#: src/features/map/components/WaypointEditor.tsx:45
+#: src/features/map/components/WaypointEditor.tsx:47
 msgid "Pan Down"
 msgstr "下へパン"
 
-#: src/features/map/components/WaypointEditor.tsx:42
+#: src/features/map/components/WaypointEditor.tsx:44
 msgid "Pan Left"
 msgstr "左へパン"
 
-#: src/features/map/components/WaypointEditor.tsx:43
+#: src/features/map/components/WaypointEditor.tsx:45
 msgid "Pan Right"
 msgstr "右へパン"
 
-#: src/features/map/components/WaypointEditor.tsx:44
+#: src/features/map/components/WaypointEditor.tsx:46
 msgid "Pan Up"
 msgstr "上へパン"
 
@@ -3067,14 +3099,18 @@ msgstr "ルートデータを解析中..."
 msgid "Paste"
 msgstr "貼り付け"
 
+#: src/components/ui/OnlineAiSettings.tsx:145
+msgid "Paste your key. It is kept in this PC's credential store, never in the project or in shared files."
+msgstr "キーを貼り付けてください。キーはこのPCの資格情報ストアに保存され、プロジェクトや共有ファイルには含まれません。"
+
 #: src/features/editor/MusicPicker.tsx:148
 #: src/features/editor/Preview.tsx:211
 #: src/features/editor/Preview.tsx:216
 msgid "Pause"
 msgstr "一時停止"
 
-#: src/features/map/components/WaypointEditor.tsx:614
-#: src/features/map/components/WaypointEditor.tsx:624
+#: src/features/map/components/WaypointEditor.tsx:621
+#: src/features/map/components/WaypointEditor.tsx:631
 msgid "Pause at Location"
 msgstr "この場所で一時停止"
 
@@ -3083,13 +3119,17 @@ msgstr "この場所で一時停止"
 msgid "Photo clips"
 msgstr "写真クリップ"
 
-#: src/features/map/components/WaypointEditor.tsx:395
+#: src/features/map/components/WaypointEditor.tsx:402
 msgid "Photos"
 msgstr "写真"
 
 #: src/hooks/useFileActions.ts:299
 msgid "Photos & Images"
 msgstr "写真と画像"
+
+#: src/components/ui/OnlineAiSettings.tsx:206
+msgid "Pick one from the list or type its name. Refresh asks the provider what your key can use."
+msgstr "一覧から選ぶか、名前を入力してください。更新を押すと、お使いのキーで使えるモデルをプロバイダーに問い合わせます。"
 
 #: src/features/map/components/DrawBar.tsx:325
 msgid "Pick the leg you want to draw, or select a stop in the list."
@@ -3136,7 +3176,7 @@ msgstr "再生中..."
 msgid "Point {0}"
 msgstr "点 {0}"
 
-#: src/components/ui/ScriptInput.tsx:21
+#: src/components/ui/ScriptInput.tsx:22
 msgid "Polishing voiceover tone..."
 msgstr "ナレーションのトーンを調整中..."
 
@@ -3152,7 +3192,7 @@ msgstr "事前構成済みのサンプルプロジェクト"
 #~ msgid "Presets"
 #~ msgstr "プリセット"
 
-#: src/components/ui/AppSettings.tsx:683
+#: src/components/ui/AppSettings.tsx:680
 #: src/components/ui/VoiceSettings.tsx:239
 #: src/components/ui/VoiceSettings.tsx:326
 msgid "Preview"
@@ -3251,7 +3291,7 @@ msgstr "プロジェクトタイトル"
 msgid "project-name-placeholder"
 msgstr "京都観光"
 
-#: src/components/ui/AppSettings.tsx:190
+#: src/components/ui/AppSettings.tsx:187
 msgid "Pronunciation"
 msgstr "発音辞書"
 
@@ -3262,6 +3302,10 @@ msgstr "発音辞書"
 #: src/components/ui/ContextMenu.tsx:617
 #~ msgid "properties"
 #~ msgstr "プロパティ"
+
+#: src/components/ui/OnlineAiSettings.tsx:33
+msgid "Provider"
+msgstr "プロバイダー"
 
 #: src/features/timeline/components/elements/inspector/InspectorTextPanel.tsx:54
 #~ msgid "Punchy Impact"
@@ -3275,8 +3319,8 @@ msgstr "紫"
 #~ msgid "Push transition smoothly sliding incoming clip from left"
 #~ msgstr "次のクリップを左からスムーズにスライドさせるプッシュトランジション"
 
-#: src/components/ui/AppSettings.tsx:565
-#: src/components/ui/AppSettings.tsx:571
+#: src/components/ui/AppSettings.tsx:562
+#: src/components/ui/AppSettings.tsx:568
 msgid "Quick export"
 msgstr "クイック書き出し"
 
@@ -3320,7 +3364,7 @@ msgstr "動画を結合してエクスポートしています..."
 msgid "Reading"
 msgstr "読み"
 
-#: src/components/ui/AppSettings.tsx:818
+#: src/components/ui/AppSettings.tsx:815
 msgid "Reading (e.g. かだ)"
 msgstr "読み方 (例: かだ)"
 
@@ -3328,7 +3372,7 @@ msgstr "読み方 (例: かだ)"
 msgid "Reading (e.g. さんだんべき)"
 msgstr "読み(例: さんだんべき)"
 
-#: src/components/ui/AppSettings.tsx:795
+#: src/components/ui/AppSettings.tsx:792
 msgid "Reading (Furigana)"
 msgstr "読み方（フリガナ）"
 
@@ -3336,7 +3380,7 @@ msgstr "読み方（フリガナ）"
 msgid "Reading Project File..."
 msgstr "プロジェクトファイルを読み込み中..."
 
-#: src/components/ui/AppSettings.tsx:1285
+#: src/components/ui/AppSettings.tsx:1217
 msgid "Ready"
 msgstr "準備完了"
 
@@ -3352,7 +3396,7 @@ msgstr "準備完了"
 msgid "Recent"
 msgstr "最近のプロジェクト"
 
-#: src/components/ui/AppSettings.tsx:1230
+#: src/components/ui/AppSettings.tsx:1162
 msgid "Recommended models"
 msgstr "おすすめのモデル"
 
@@ -3406,6 +3450,11 @@ msgstr "バックグラウンドでやり直しています。タイムライン
 #~ msgid "Refresh asset library"
 #~ msgstr "アセットライブラリを更新"
 
+#: src/components/ui/OnlineAiSettings.tsx:220
+#: src/components/ui/OnlineAiSettings.tsx:221
+msgid "Refresh the model list"
+msgstr "モデル一覧を更新"
+
 #: src/components/ui/RenderOverlay.tsx:1095
 #~ msgid "Regenerate"
 #~ msgstr "再生成"
@@ -3439,8 +3488,9 @@ msgstr "アプリを再読み込み"
 #~ msgid "Reload saved timeline"
 #~ msgstr "保存されたタイムラインを再読み込み"
 
-#: src/components/ui/AppSettings.tsx:832
-#: src/components/ui/AppSettings.tsx:833
+#: src/components/ui/AppSettings.tsx:829
+#: src/components/ui/AppSettings.tsx:830
+#: src/components/ui/OnlineAiSettings.tsx:156
 #: src/components/ui/ReviewStep.tsx:103
 #: src/components/view/ProjectManager.tsx:621
 #: src/features/editor/EditorView.tsx:271
@@ -3461,9 +3511,9 @@ msgstr "中継点 {count} 個をすべて削除"
 msgid "Remove from List"
 msgstr "リストから削除"
 
-#: src/features/map/components/WaypointEditor.tsx:501
-#: src/features/map/components/WaypointEditor.tsx:519
-#: src/features/map/components/WaypointEditor.tsx:520
+#: src/features/map/components/WaypointEditor.tsx:508
+#: src/features/map/components/WaypointEditor.tsx:526
+#: src/features/map/components/WaypointEditor.tsx:527
 msgid "Remove Image"
 msgstr "画像を削除"
 
@@ -3572,21 +3622,21 @@ msgstr "Python生成パイプラインを開始しています..."
 msgid "Replace existing voice"
 msgstr "既存のボイスを置き換える"
 
-#: src/components/ui/AppSettings.tsx:535
+#: src/components/ui/AppSettings.tsx:532
 msgid "Required for driving and some hiking routes"
 msgstr "自動車ルートや一部の歩行ルートで必要です"
 
-#: src/components/ui/AppSettings.tsx:519
+#: src/components/ui/AppSettings.tsx:516
 msgid "Required for map rendering and 3D terrain"
 msgstr "マップのレンダリングや3D地形で必要です"
 
 #: src/components/ui/AppSettings.tsx:323
-msgid "Requires Ollama"
-msgstr "Ollamaが必要"
+#~ msgid "Requires Ollama"
+#~ msgstr "Ollamaが必要"
 
 #: src/components/ui/VoiceSettings.tsx:365
 #: src/components/view/ProjectSettingsModal.tsx:179
-#: src/features/map/components/WaypointEditor.tsx:666
+#: src/features/map/components/WaypointEditor.tsx:673
 msgid "Reset"
 msgstr "リセット"
 
@@ -3640,7 +3690,7 @@ msgstr "再試行"
 
 #: src/components/ui/TitleBar.tsx:272
 #: src/components/view/ProjectManager.tsx:259
-#: src/features/map/components/WaypointEditor.tsx:494
+#: src/features/map/components/WaypointEditor.tsx:501
 #: src/features/map/components/WaypointVideos.tsx:58
 msgid "Reveal in File Explorer"
 msgstr "エクスプローラーで表示"
@@ -3699,7 +3749,7 @@ msgstr "ルート線"
 msgid "Route Lines Config"
 msgstr "ルート線の設定"
 
-#: src/components/ui/AppSettings.tsx:435
+#: src/components/ui/AppSettings.tsx:432
 #: src/components/view/ProjectSettingsModal.tsx:141
 msgid "Route marker"
 msgstr "ルートマーカー"
@@ -3742,8 +3792,9 @@ msgstr "始"
 #~ msgid "Saturation"
 #~ msgstr "彩度"
 
+#: src/components/ui/OnlineAiSettings.tsx:172
 #: src/components/ui/SaveAs.tsx:113
-#: src/components/ui/ScriptInput.tsx:266
+#: src/components/ui/ScriptInput.tsx:267
 #: src/components/ui/StatusBar.tsx:323
 #: src/components/ui/UnsavedChanges.tsx:38
 msgid "Save"
@@ -3753,7 +3804,7 @@ msgstr "保存"
 msgid "Save .srt"
 msgstr ".srtを保存"
 
-#: src/components/ui/ScriptInput.tsx:258
+#: src/components/ui/ScriptInput.tsx:259
 msgid "Save (Ctrl+Enter)"
 msgstr "保存 (Ctrl+Enter)"
 
@@ -3801,12 +3852,16 @@ msgstr "先にプロジェクトを保存してください"
 msgid "Save the project to enable version history"
 msgstr "バージョン履歴を有効にするにはプロジェクトを保存してください"
 
-#: src/components/ui/ScriptInput.tsx:266
+#: src/components/ui/ScriptInput.tsx:267
 #: src/components/ui/StatusBar.tsx:264
 msgid "Saved"
 msgstr "保存済み"
 
-#: src/components/ui/AppSettings.tsx:319
+#: src/components/ui/OnlineAiSettings.tsx:144
+msgid "Saved in this PC's credential store, not in the project."
+msgstr "このPCの資格情報ストアに保存されています（プロジェクトには保存されません）。"
+
+#: src/components/ui/AppSettings.tsx:316
 msgid "Saved with the project"
 msgstr "プロジェクトに保存されます"
 
@@ -3818,14 +3873,18 @@ msgstr "プロジェクトに保存されます"
 #~ msgid "Scale"
 #~ msgstr "スケール"
 
-#: src/components/ui/ScriptInput.tsx:248
 #: src/components/ui/ScriptInput.tsx:249
+#: src/components/ui/ScriptInput.tsx:250
 msgid "Scan script for all Kanji and add to Dictionary"
 msgstr "スクリプト内にあるすべての漢字をスキャンし辞書に追加する"
 
-#: src/components/ui/ScriptInput.tsx:168
+#: src/components/ui/ScriptInput.tsx:169
 msgid "Script"
 msgstr "スクリプト"
+
+#: src/components/ui/OnlineAiSettings.tsx:31
+msgid "Script writer"
+msgstr "スクリプトの作成元"
 
 #: src/features/timeline/components/MediaPool.tsx:333
 #~ msgid "Search assets"
@@ -3839,7 +3898,7 @@ msgstr "スクリプト"
 msgid "search-location"
 msgstr "場所を検索..."
 
-#: src/components/ui/ScriptInput.tsx:18
+#: src/components/ui/ScriptInput.tsx:19
 msgid "Searching..."
 msgstr "検索中..."
 
@@ -3893,7 +3952,7 @@ msgstr "すべて選択"
 #~ msgid "Select Photos..."
 #~ msgstr "写真を選択..."
 
-#: src/components/ui/AppSettings.tsx:1176
+#: src/components/ui/AppSettings.tsx:1108
 msgid "Select which model to use for narration synthesis, only downloaded models are shown"
 msgstr "ナレーション合成に使用するモデルを選択します。ダウンロード済みのモデルのみが表示されます"
 
@@ -3909,6 +3968,11 @@ msgstr "やり直し対象: クリップ{pickedClips}件、音声{pickedVoices}�
 #~ msgid "Selection Tool (V)"
 #~ msgstr "選択ツール (V)"
 
+#: src/components/ui/OnlineAiSettings.tsx:230
+#: src/components/ui/OnlineAiSettings.tsx:234
+msgid "Send photos"
+msgstr "写真を送信"
+
 #: src/components/ui/RenderOverlay.tsx:722
 msgid "Sending cancellation signal to backend..."
 msgstr "バックエンドにキャンセル信号を送信しています..."
@@ -3917,7 +3981,11 @@ msgstr "バックエンドにキャンセル信号を送信しています..."
 msgid "Sending interrupt signal to renderer."
 msgstr "レンダラーに中断信号を送信しています"
 
-#: src/components/ui/AppSettings.tsx:516
+#: src/components/ui/OnlineAiSettings.tsx:238
+msgid "Sends a one-word request to check the key and the model."
+msgstr "1語だけのリクエストを送って、キーとモデルを確認します。"
+
+#: src/components/ui/AppSettings.tsx:513
 msgid "Services"
 msgstr "サービス"
 
@@ -3934,12 +4002,12 @@ msgstr "高速な声をセットアップ"
 msgid "Setting up…"
 msgstr "セットアップ中…"
 
-#: src/components/ui/AppSettings.tsx:218
-#: src/components/ui/AppSettings.tsx:223
+#: src/components/ui/AppSettings.tsx:215
+#: src/components/ui/AppSettings.tsx:220
 msgid "Settings"
 msgstr "設定"
 
-#: src/components/ui/AutoDirectorModal.tsx:152
+#: src/components/ui/AutoDirectorModal.tsx:153
 msgid "Settings Applied"
 msgstr "設定が適用されました"
 
@@ -3959,9 +4027,13 @@ msgstr "セットアップ"
 #~ msgid "Shorts, Reels & TikTok"
 #~ msgstr "Shorts、Reels、TikTok"
 
+#: src/components/ui/AppSettings.tsx:321
+msgid "Show Auto-Write script buttons and overview narration. Needs Ollama running locally, or an online provider set up in AI models."
+msgstr "自動作成ボタンと概要ナレーションを表示します。ローカルで動作する Ollama、または AIモデルで設定したオンラインプロバイダーが必要です。"
+
 #: src/components/ui/AppSettings.tsx:324
-msgid "Show Auto-Write script buttons and overview narration. Requires Ollama to be installed and running locally."
-msgstr "AI機能を有効にする。開催されてインストールされているOllamaが必要です。"
+#~ msgid "Show Auto-Write script buttons and overview narration. Requires Ollama to be installed and running locally."
+#~ msgstr "AI機能を有効にする。開催されてインストールされているOllamaが必要です。"
 
 #: src/components/ui/ErrorBoundary.tsx:127
 msgid "Show details"
@@ -4011,13 +4083,13 @@ msgstr "シンプル"
 msgid "Size"
 msgstr "サイズ"
 
-#: src/components/ui/AppSettings.tsx:336
+#: src/components/ui/AppSettings.tsx:333
 #: src/components/ui/NewProject.tsx:388
 msgid "Skip AI voiceover synthesis and pop-up images during generation"
 msgstr "生成時にAI音声合成とポップアップ画像をスキップする"
 
-#: src/features/map/components/WaypointEditor.tsx:598
-#: src/features/map/components/WaypointEditor.tsx:609
+#: src/features/map/components/WaypointEditor.tsx:605
+#: src/features/map/components/WaypointEditor.tsx:616
 msgid "Skip in Video Export"
 msgstr "動画のエクスポート時にスキップ"
 
@@ -4031,11 +4103,11 @@ msgstr "動画のエクスポート時にスキップ"
 msgid "Skipped"
 msgstr "スキップ"
 
-#: src/components/ui/AppSettings.tsx:566
+#: src/components/ui/AppSettings.tsx:563
 msgid "Skips asset review and automatically stitches & exports finished video"
 msgstr "アセットの確認をスキップし、完成した動画を自動的に結合してエクスポートします"
 
-#: src/features/map/components/WaypointEditor.tsx:602
+#: src/features/map/components/WaypointEditor.tsx:609
 msgid "Skips this location during video generation"
 msgstr "動画生成時にこの場所をスキップします"
 
@@ -4065,7 +4137,7 @@ msgstr "なめらか"
 msgid "Smooth the path through the points"
 msgstr "点を通る経路をなめらかにする"
 
-#: src/features/map/components/WaypointEditor.tsx:153
+#: src/features/map/components/WaypointEditor.tsx:155
 msgid "Some photos could not be converted and were skipped."
 msgstr "変換できなかった写真はスキップしました。"
 
@@ -4081,11 +4153,11 @@ msgstr "問題が発生しました"
 msgid "Speed"
 msgstr "速度"
 
-#: src/features/map/components/WaypointEditor.tsx:262
+#: src/features/map/components/WaypointEditor.tsx:269
 msgid "Spoken over this stop's photos once you arrive."
 msgstr "到着後、この地点の写真に合わせて読み上げます。"
 
-#: src/features/map/components/WaypointEditor.tsx:252
+#: src/features/map/components/WaypointEditor.tsx:259
 msgid "Spoken while the route travels to this stop."
 msgstr "この地点へ向かう間に読み上げます。"
 
@@ -4109,7 +4181,7 @@ msgstr "この地点へ向かう間に読み上げます。"
 #: src/features/editor/Inspector.tsx:110
 #: src/features/editor/Inspector.tsx:172
 #: src/features/map/components/MapToolbar.tsx:90
-#: src/features/map/components/WaypointEditor.tsx:326
+#: src/features/map/components/WaypointEditor.tsx:333
 #: src/features/map/hooks/useStopMenus.ts:220
 #: src/hooks/useFileActions.ts:256
 msgid "Start"
@@ -4149,7 +4221,7 @@ msgstr "動画を結合し、エクスポートを確定しています．．．
 
 #: src/components/ui/RenderOverlay.tsx:373
 #: src/features/map/components/MapToolbar.tsx:88
-#: src/features/map/components/WaypointEditor.tsx:331
+#: src/features/map/components/WaypointEditor.tsx:338
 #: src/features/map/hooks/useStopMenus.ts:221
 msgid "Stop"
 msgstr "地点"
@@ -4177,7 +4249,7 @@ msgid "Stop type"
 msgstr "地点の種類"
 
 #: src/features/map/components/MapToolbar.tsx:89
-#: src/features/map/components/WaypointEditor.tsx:332
+#: src/features/map/components/WaypointEditor.tsx:339
 #: src/features/map/components/WaypointItem.tsx:203
 #: src/features/map/hooks/useStopMenus.ts:222
 msgid "Stop-by"
@@ -4222,7 +4294,7 @@ msgstr "字幕の焼き付け"
 msgid "Subtitle lines in the timeline"
 msgstr "タイムライン内の字幕行"
 
-#: src/components/ui/AppSettings.tsx:594
+#: src/components/ui/AppSettings.tsx:591
 #: src/components/ui/PipelineLogPanel.tsx:51
 #: src/features/editor/EditorView.tsx:164
 #: src/features/editor/EditorView.tsx:320
@@ -4237,7 +4309,7 @@ msgstr "字幕"
 #~ msgid "Subtitles are managed automatically or via text clips."
 #~ msgstr "字幕は自動的に、またはテキストクリップを介して管理されます"
 
-#: src/components/ui/AutoDirectorModal.tsx:149
+#: src/components/ui/AutoDirectorModal.tsx:150
 msgid "Successfully processed the document. Here is the proposed route and script:"
 msgstr "ドキュメントの処理に成功しました。以下が提案されたルートとスクリプトです:"
 
@@ -4278,7 +4350,7 @@ msgstr "テーブル表示"
 #~ msgid "Target Canvas"
 #~ msgstr "ターゲットキャンバス"
 
-#: src/components/ui/AppSettings.tsx:555
+#: src/components/ui/AppSettings.tsx:552
 msgid "Target FPS"
 msgstr "ターゲットフレームレート"
 
@@ -4290,6 +4362,14 @@ msgstr "Tauri Window APIエラー"
 msgid "Templates"
 msgstr "テンプレート"
 
+#: src/components/ui/OnlineAiSettings.tsx:238
+msgid "Test"
+msgstr "テスト"
+
+#: src/components/ui/OnlineAiSettings.tsx:247
+msgid "Test connection"
+msgstr "接続をテスト"
+
 #: src/features/timeline/components/MediaPool.tsx:361
 #~ msgid "text"
 #~ msgstr "テキスト"
@@ -4298,7 +4378,7 @@ msgstr "テンプレート"
 #~ msgid "Text added to timeline"
 #~ msgstr "タイムラインにテキストを追加しました"
 
-#: src/components/ui/AppSettings.tsx:623
+#: src/components/ui/AppSettings.tsx:620
 msgid "Text color"
 msgstr "文字の色"
 
@@ -4313,6 +4393,10 @@ msgstr "文字の色"
 #: src/components/ui/VoiceSettings.tsx:260
 msgid "The balanced voice needs a one-time setup: a separate Python environment and the model files (about 4 GB in all). It takes several minutes and needs an internet connection. Keep this window open while it runs."
 msgstr "標準の声には一度だけセットアップが必要です。独立したPython環境とモデルファイル（合計約4GB）を用意します。数分かかり、インターネット接続が必要です。実行中はこのウィンドウを開いたままにしてください。"
+
+#: src/components/ui/OnlineAiSettings.tsx:192
+msgid "The base address of a server that speaks the OpenAI API, for example https://example.com/v1"
+msgstr "OpenAI API に対応したサーバーのベースアドレス（例: https://example.com/v1）"
 
 #: src/components/ui/VoiceSettings.tsx:210
 msgid "The fast voice needs a one-time setup: a small separate Python environment and the model files (about 2 GB in all). It takes a few minutes and needs an internet connection. Keep this window open while it runs."
@@ -4346,7 +4430,7 @@ msgstr "やり直したクリップの準備ができました。タイムライ
 msgid "The sound of your own video, mixed under the narration."
 msgstr "ご自身の動画の音声を、ナレーションの下にミックスします。"
 
-#: src/features/map/components/WaypointEditor.tsx:601
+#: src/features/map/components/WaypointEditor.tsx:608
 msgid "The start and destination are always included."
 msgstr "出発地と目的地は常に含まれます。"
 
@@ -4362,7 +4446,7 @@ msgstr "音声ができました。聞いて確認してください。"
 msgid "The voice reads every narration in this project. Changing the voice or the speed regenerates the narration the next time you generate. The voice library is shared by all projects."
 msgstr "このプロジェクトのすべてのナレーションをこのボイスが読み上げます。ボイスや速度を変更すると、次回の生成時にナレーションが作り直されます。ボイスライブラリはすべてのプロジェクトで共有されます。"
 
-#: src/components/ui/AppSettings.tsx:352
+#: src/components/ui/AppSettings.tsx:349
 msgid "Theme"
 msgstr "テーマ"
 
@@ -4370,22 +4454,26 @@ msgstr "テーマ"
 #~ msgid "This asset is missing from the project"
 #~ msgstr "このアセットはプロジェクトから欠落しています"
 
-#: src/components/ui/AppSettings.tsx:1219
+#: src/components/ui/AppSettings.tsx:1151
 msgid "This model cannot read photos. Scripts for stops with photos are written from the place name and location facts only. A vision model such as Gemma 4 can use the photos."
 msgstr "このモデルは写真を読み取れません。写真のある立ち寄り先でも、台本は地名と位置情報だけから作られます。Gemma 4 などの画像対応モデルなら写真を活用できます。"
 
 #. placeholder {0}: fit.sizeGb.toFixed(0)
 #. placeholder {1}: fit.ramGb.toFixed(0)
-#: src/components/ui/AppSettings.tsx:1204
+#: src/components/ui/AppSettings.tsx:1136
 msgid "This model is about {0} GB and this PC has {1} GB of memory, so it loads slowly and writes only a word or two a second. A 3-4B model is much faster here."
 msgstr "このモデルは約 {0} GB で、このPCのメモリは {1} GB です。読み込みが遅く、1秒に1〜2語しか書けません。3〜4Bクラスのモデルのほうがずっと速く動きます。"
+
+#: src/components/ui/OnlineAiSettings.tsx:44
+msgid "This PC (Ollama)"
+msgstr "このPC（Ollama）"
 
 #: src/components/ui/ReviewStep.tsx:102
 msgid "this project"
 msgstr "このプロジェクト"
 
-#: src/components/ui/AppSettings.tsx:318
-#: src/components/ui/AppSettings.tsx:718
+#: src/components/ui/AppSettings.tsx:315
+#: src/components/ui/AppSettings.tsx:715
 #: src/components/ui/ReviewStep.tsx:90
 msgid "This project"
 msgstr "このプロジェクト"
@@ -4530,7 +4618,7 @@ msgstr "トリミング"
 msgid "Try again"
 msgstr "再試行"
 
-#: src/features/map/components/WaypointEditor.tsx:432
+#: src/features/map/components/WaypointEditor.tsx:439
 msgid "TTS Pronunciation Dictionary"
 msgstr "TTS 発音辞書"
 
@@ -4538,7 +4626,7 @@ msgstr "TTS 発音辞書"
 msgid "Turn the photos of a stop into a moving clip. Off skips them, which renders faster."
 msgstr "地点の写真を動くクリップにします。オフにすると省略され、レンダリングが速くなります。"
 
-#: src/components/ui/ScriptInput.tsx:231
+#: src/components/ui/ScriptInput.tsx:232
 msgid "Type a prompt or write your own script..."
 msgstr "プロンプトを入力するか、独自のスクリプトを作成してください"
 
@@ -4558,7 +4646,7 @@ msgstr "元に戻す"
 #: src/features/map/components/MapArea.tsx:439
 #: src/features/map/components/MapArea.tsx:480
 #: src/features/map/components/MapArea.tsx:517
-#: src/features/map/components/WaypointEditor.tsx:131
+#: src/features/map/components/WaypointEditor.tsx:133
 #: src/hooks/useWaypointActions.ts:44
 #: src/hooks/useWaypointActions.ts:60
 #: src/hooks/useWaypointActions.ts:64
@@ -4692,7 +4780,7 @@ msgstr "中継点 {0} / {count}"
 #~ msgid "video"
 #~ msgstr "ビデオ"
 
-#: src/components/ui/AppSettings.tsx:186
+#: src/components/ui/AppSettings.tsx:183
 #: src/features/editor/EditorView.tsx:74
 msgid "Video"
 msgstr "動画"
@@ -4721,7 +4809,7 @@ msgstr "動画のエクスポートに成功しました"
 #~ msgid "video-clip"
 #~ msgstr "ビデオクリップ"
 
-#: src/features/map/components/WaypointEditor.tsx:396
+#: src/features/map/components/WaypointEditor.tsx:403
 #: src/features/map/components/WaypointVideos.tsx:24
 msgid "Videos"
 msgstr "動画"
@@ -4734,7 +4822,7 @@ msgstr "タイムラインで表示"
 #~ msgid "Vivid Rose"
 #~ msgstr "ビビッドローズ"
 
-#: src/components/ui/AppSettings.tsx:187
+#: src/components/ui/AppSettings.tsx:184
 #: src/components/ui/VoiceSettings.tsx:206
 #: src/components/ui/VoiceSettings.tsx:277
 msgid "Voice"
@@ -4794,7 +4882,7 @@ msgstr "ポイント {0}"
 #~ msgid "Waypoint {0}: {1} at {formattedTime}"
 #~ msgstr "ポイント {0}: {1} at {formattedTime}"
 
-#: src/features/map/components/WaypointEditor.tsx:513
+#: src/features/map/components/WaypointEditor.tsx:520
 msgid "Waypoint {idx}"
 msgstr "ポイント {idx}"
 
@@ -4814,6 +4902,30 @@ msgstr "ポイント {idx}"
 #~ msgid "Waypoint-linked and custom markers"
 #~ msgstr "ポイントにリンクされたマーカーとカスタムマーカー"
 
+#. placeholder {0}: info.label
+#: src/components/ui/OnlineAiSettings.tsx:259
+#~ msgid "When you write a script, the prompt, the place name and its location facts are sent to {0}. Nothing is sent until you press Auto-write, and usage is billed to your own account there."
+#~ msgstr ""
+
+#. placeholder {0}: info.label
+#: src/components/ui/OnlineAiSettings.tsx:259
+msgid "When you write a script, the prompt, the place name and its location facts are sent to {0}. Nothing is sent until you press Auto-Write, and usage is billed to your own account there."
+msgstr "スクリプトを書くとき、プロンプト、地点名、位置情報が{0}に送信されます。自動作成を押すまでは何も送信されず、利用料金はそちらのご自身のアカウントに請求されます。"
+
+#. placeholder {0}: info.label
+#: src/components/ui/OnlineAiSettings.tsx:258
+#~ msgid "When you write a script, the prompt, the place name, its location facts and the stop's photos are sent to {0}. Nothing is sent until you press Auto-write, and usage is billed to your own account there."
+#~ msgstr ""
+
+#. placeholder {0}: info.label
+#: src/components/ui/OnlineAiSettings.tsx:258
+msgid "When you write a script, the prompt, the place name, its location facts and the stop's photos are sent to {0}. Nothing is sent until you press Auto-Write, and usage is billed to your own account there."
+msgstr "スクリプトを書くとき、プロンプト、地点名、位置情報、地点の写真が{0}に送信されます。自動作成を押すまでは何も送信されず、利用料金はそちらのご自身のアカウントに請求されます。"
+
+#: src/components/ui/OnlineAiSettings.tsx:34
+msgid "Where scripts are written. A provider on the internet is usually faster than a local model and does not need a powerful PC."
+msgstr "スクリプトを書く場所です。インターネット上のプロバイダーは通常ローカルモデルより速く、高性能なPCも必要ありません。"
+
 #: src/components/ui/NewProject.tsx:284
 msgid "Where the map opens before your import is placed"
 msgstr "読み込んだデータを配置する前に地図を開く場所"
@@ -4822,7 +4934,7 @@ msgstr "読み込んだデータを配置する前に地図を開く場所"
 msgid "Where to save"
 msgstr "保存先"
 
-#: src/components/ui/AppSettings.tsx:576
+#: src/components/ui/AppSettings.tsx:573
 msgid "Which pipeline to use when regenerating assets"
 msgstr "素材を再生成するときに使う処理方式"
 
@@ -4844,11 +4956,11 @@ msgstr "単語"
 msgid "Word (e.g. 三段壁)"
 msgstr "単語(例: 三段壁)"
 
-#: src/components/ui/AppSettings.tsx:807
+#: src/components/ui/AppSettings.tsx:804
 msgid "Word (e.g. 加太)"
 msgstr "単語 (例: 加太)"
 
-#: src/components/ui/AppSettings.tsx:792
+#: src/components/ui/AppSettings.tsx:789
 msgid "Word / Kanji"
 msgstr "単語 / 漢字"
 
@@ -4856,11 +4968,15 @@ msgstr "単語 / 漢字"
 msgid "Words every project shares live in App Settings, which you can open from here without opening a project."
 msgstr "すべてのプロジェクトで共有する単語はアプリ設定にあります。プロジェクトを開かずにここから開けます。"
 
-#: src/components/ui/AppSettings.tsx:741
+#: src/components/ui/AppSettings.tsx:738
 msgid "Words here apply to every project. A project's own entry for the same word wins."
 msgstr "ここにある単語はすべてのプロジェクトに適用されます。同じ単語がプロジェクト側にある場合は、プロジェクトが優先されます。"
 
-#: src/components/ui/AutoDirectorModal.tsx:87
+#: src/components/ui/OnlineAiSettings.tsx:242
+msgid "Works"
+msgstr "動作しています"
+
+#: src/components/ui/AutoDirectorModal.tsx:88
 msgid "Writing scripts with AI..."
 msgstr "スクリプトを作成中..."
 
@@ -4881,7 +4997,7 @@ msgstr "ここにプロジェクト名を入力"
 msgid "Zoom in"
 msgstr "拡大"
 
-#: src/features/map/components/WaypointEditor.tsx:46
+#: src/features/map/components/WaypointEditor.tsx:48
 msgid "Zoom In"
 msgstr "ズームイン"
 
@@ -4890,7 +5006,7 @@ msgstr "ズームイン"
 msgid "Zoom out"
 msgstr "縮小"
 
-#: src/features/map/components/WaypointEditor.tsx:47
+#: src/features/map/components/WaypointEditor.tsx:49
 msgid "Zoom Out"
 msgstr "ズームアウト"
 

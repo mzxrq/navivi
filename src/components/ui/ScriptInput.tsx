@@ -11,6 +11,7 @@ import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 import { callSidecar } from "../../services/sidecar";
 import { warmUpModel } from "../../services/ollamaApi";
+import { aiEngine } from "../../services/ai/engine";
 import { useWorkspace } from "../../hooks/useWorkspace";
 
 const getThinkingSteps = () => [
@@ -226,7 +227,7 @@ export function ScriptInput({
               commit();
             }
           }}
-          onFocus={() => aiEnabled && warmUpModel(settings.ai_model || "schroneko/gemma-2-2b-jpn-it")}
+          onFocus={() => aiEnabled && warmUpModel(aiEngine(settings))}
           readOnly={isGenerating}
           placeholder={t`Type a prompt or write your own script...`}
           className="w-full h-full resize-none p-2.5 pb-10 text-[13px] leading-relaxed custom-scrollbar bg-transparent text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:outline-none read-only:opacity-80"

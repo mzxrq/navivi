@@ -48,6 +48,9 @@ import { Slider } from "./Slider";
 import { SubtitleSample } from "./SubtitleSample";
 import { Switch } from "./Switch";
 import { VoiceTab } from "./VoiceSettings";
+import { OnlineProviderSettings, ProviderPicker } from "./OnlineAiSettings";
+import { inputClass, Row, secondaryButton, Section, selectClass } from "./SettingsParts";
+import { isOnlineProvider, type OnlineProvider } from "../../services/ai/providers";
 
 type SettingsTab =
   | "general"
@@ -58,9 +61,6 @@ type SettingsTab =
   | "voice"
   | "tts_dictionary";
 
-const inputClass =
-  "h-8 min-w-0 px-2.5 rounded-lg bg-white dark:bg-zinc-950/40 border border-zinc-200 dark:border-white/10 text-[13px] text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 outline-none focus:border-navi focus:ring-2 focus:ring-navi/20 transition";
-const selectClass = `${inputClass} pr-7 cursor-pointer`;
 const WHITE: RGB = [255, 255, 255];
 const BLACK: RGB = [0, 0, 0];
 
@@ -89,9 +89,6 @@ const subtitleFonts = (current: string) =>
   SUBTITLE_FONTS.some((f) => f.toLowerCase() === current.toLowerCase())
     ? SUBTITLE_FONTS
     : [current, ...SUBTITLE_FONTS];
-const secondaryButton =
-  "inline-flex items-center justify-center gap-1.5 h-8 px-3 rounded-lg border border-zinc-200 dark:border-white/10 bg-white dark:bg-white/5 text-[12px] font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-white/10 transition-colors";
-
 export function AppSettings() {
   const { settings, updateSettings, setIsDirty } = useWorkspace();
   const { i18n } = useLingui();
@@ -320,8 +317,8 @@ export function AppSettings() {
                   >
                     <Row
                       title={t`AI features`}
-                      badge={<Badge tone="violet">{t`Requires Ollama`}</Badge>}
-                      description={t`Show Auto-Write script buttons and overview narration. Requires Ollama to be installed and running locally.`}
+                      badge={<Badge tone="violet">{t`Ollama or online AI`}</Badge>}
+                      description={t`Show Auto-Write script buttons and overview narration. Needs Ollama running locally, or an online provider set up in AI models.`}
                     >
                       <Switch
                         checked={!!settings.ai_features_enabled}
@@ -900,78 +897,6 @@ function PronunciationEditor({
   );
 }
 
-function Section({
-  title,
-  hint,
-  children,
-}: {
-  title: string;
-  hint?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section>
-      <div className="flex items-baseline justify-between mb-2 px-0.5">
-        <h4 className="text-[12px] font-semibold text-zinc-500 dark:text-zinc-400">
-          {title}
-        </h4>
-        {hint && (
-          <span className="text-[11px] text-zinc-400 dark:text-zinc-500">
-            {hint}
-          </span>
-        )}
-      </div>
-      <div className="rounded-xl border border-zinc-200 dark:border-white/10 divide-y divide-zinc-100 dark:divide-white/5">
-        {children}
-      </div>
-    </section>
-  );
-}
-
-function Row({
-  title,
-  description,
-  badge,
-  stacked,
-  children,
-}: {
-  title: string;
-  description?: string;
-  badge?: React.ReactNode;
-  stacked?: boolean;
-  children: React.ReactNode;
-}) {
-  const text = (
-    <div className="min-w-0">
-      <div className="flex items-center gap-2">
-        <span className="text-[13px] font-medium text-zinc-900 dark:text-zinc-100">
-          {title}
-        </span>
-        {badge}
-      </div>
-      {description && (
-        <p className="mt-0.5 text-[12px] leading-relaxed text-zinc-500 dark:text-zinc-400">
-          {description}
-        </p>
-      )}
-    </div>
-  );
-  if (stacked) {
-    return (
-      <div className="px-4 py-3 space-y-2.5">
-        {text}
-        {children}
-      </div>
-    );
-  }
-  return (
-    <div className="flex items-center justify-between gap-6 px-4 py-3">
-      {text}
-      <div className="shrink-0">{children}</div>
-    </div>
-  );
-}
-
 function Badge({
   tone,
   children,
@@ -1168,8 +1093,15 @@ function AiModelsTab() {
     entry?.controller?.abort();
   };
 
+  const online = isOnlineProvider(settings.ai_provider);
+
   return (
     <>
+      <ProviderPicker />
+      {online ? (
+        <OnlineProviderSettings provider={settings.ai_provider as OnlineProvider} />
+      ) : (
+        <>
       <Section title={t`Narration`}>
         <Row
           title={t`Active model`}
@@ -1298,6 +1230,8 @@ function AiModelsTab() {
           );
         })}
       </Section>
+        </>
+      )}
     </>
   );
 }

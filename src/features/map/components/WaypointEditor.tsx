@@ -29,6 +29,8 @@ import {
   checkModelExists,
   generateWaypointScriptStream,
 } from "../../../services/ollamaApi";
+import { aiEngine, isOnlineEngine } from "../../../services/ai/engine";
+import { PROVIDERS } from "../../../services/ai/providers";
 import { stopLabel } from "../../../utils/stopLabel";
 import { PHOTO_EXTENSIONS, isHeic, preparePhotos } from "../../../services/imageImport";
 import { t } from "@lingui/core/macro";
@@ -181,7 +183,7 @@ export function WaypointEditor({
   };
 
   const handleGenerateScript = async (type: "arriving" | "attraction", prompt: string) => {
-    const engine = settings.ai_model || "schroneko/gemma-2-2b-jpn-it";
+    const engine = aiEngine(settings);
 
     abortControllerRef.current?.abort();
     abortControllerRef.current = new AbortController();
@@ -191,7 +193,12 @@ export function WaypointEditor({
       updateWaypoint(wp.id, { generatingScriptType: type });
 
       if (!(await checkModelExists(engine))) {
-        showToast(t`Model "${engine}" not found. Please install it from the App Settings`, "error");
+        showToast(
+          isOnlineEngine(engine)
+            ? t`Add your ${PROVIDERS[engine.provider].label} API key in Settings > AI models`
+            : t`Model "${engine}" not found. Please install it from the App Settings`,
+          "error",
+        );
         updateWaypoint(wp.id, { generatingScriptType: null });
         return;
       }
