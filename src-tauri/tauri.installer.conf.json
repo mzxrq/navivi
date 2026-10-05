@@ -5,6 +5,7 @@
   },
   "bundle": {
     "targets": ["nsis"],
+    "shortDescription": "Turn routes into narrated travel videos",
     "resources": {
       "installer-staging/src-python": "src-python",
       "installer-staging/tools": "tools"
@@ -13,7 +14,10 @@
       "nsis": {
         "installMode": "currentUser",
         "languages": ["Japanese", "English"],
-        "displayLanguageSelector": true
+        "displayLanguageSelector": true,
+        "installerIcon": "icons/icon.ico",
+        "sidebarImage": "installer/sidebar.bmp",
+        "headerImage": "installer/header.bmp"
       }
     }
   }
