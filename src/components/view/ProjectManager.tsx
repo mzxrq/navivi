@@ -365,9 +365,12 @@ export function ProjectManager() {
             </header>
 
             <section className="mb-8 max-w-3xl">
-              <h2 className="mb-2 text-[13px] font-semibold text-zinc-700 dark:text-zinc-200">
+              <h2 className="text-[13px] font-semibold text-zinc-700 dark:text-zinc-200">
                 <Trans>Describe your trip</Trans>
               </h2>
+              <p className="mb-2 text-[12px] text-zinc-500 dark:text-zinc-400">
+                <Trans>The assistant finds the places, puts them on the map and writes a script for each stop.</Trans>
+              </p>
               <AssistantChat variant="hero" />
             </section>
 

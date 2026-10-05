@@ -112,10 +112,8 @@ msgstr "{1}か所中{0}か所"
 msgid "{0} s dissolve"
 msgstr "{0}秒のディゾルブ"
 
-#. placeholder {0}: brief.places.length
 #. placeholder {0}: waypoints.length
 #: src/components/ui/StatusBar.tsx:222
-#: src/features/assistant/AssistantChat.tsx:17
 #: src/features/map/components/GenerateDialog.tsx:119
 msgid "{0} stops"
 msgstr "{0} 地点"
@@ -267,7 +265,6 @@ msgstr "1分"
 msgid "1 photo could not be converted and was skipped."
 msgstr "1枚の写真を変換できなかったため、スキップしました。"
 
-#: src/features/assistant/AssistantChat.tsx:17
 #: src/features/map/components/GenerateDialog.tsx:119
 msgid "1 stop"
 msgstr "1か所"
@@ -292,11 +289,11 @@ msgstr "3秒"
 msgid "30 seconds"
 msgstr "30秒"
 
-#: src/features/assistant/AssistantChat.tsx:56
+#: src/features/assistant/AssistantChat.tsx:57
 msgid "A calm 5 minute video of the pilgrimage route in the PDF I attach, for visitors from abroad"
 msgstr "添付する PDF の巡礼ルートを、訪日外国人向けに落ち着いた雰囲気で紹介する 5 分の動画"
 
-#: src/features/assistant/AssistantChat.tsx:57
+#: src/features/assistant/AssistantChat.tsx:58
 msgid "A day trip around Shirahama in Wakayama, Japanese narration, about 3 minutes"
 msgstr "和歌山・白浜を巡る日帰り旅。日本語ナレーションで 3 分ほど"
 
@@ -597,7 +594,7 @@ msgid "Apply to all titles like this"
 msgstr "同じ種類のタイトルすべてに適用"
 
 #. placeholder {0}: modalState.project?.name
-#: src/components/view/ProjectManager.tsx:635
+#: src/components/view/ProjectManager.tsx:638
 msgid "Are you sure you want to remove <0>{0}</0> from your recent list? The original files will remain on your computer."
 msgstr "本当に <0>{0}</0> を最近のプロジェクトから削除しますか？元のファイルはコンピュータ上に残ります。"
 
@@ -605,7 +602,7 @@ msgstr "本当に <0>{0}</0> を最近のプロジェクトから削除します
 msgid "Arriving Script"
 msgstr "到着時のスクリプト"
 
-#: src/features/assistant/AssistantChat.tsx:152
+#: src/features/assistant/AssistantChat.tsx:144
 msgid "Ask or add details…"
 msgstr "質問や補足を入力…"
 
@@ -615,6 +612,7 @@ msgstr "アセットが承認され、最終的な動画として結合されま
 
 #: src/components/ui/TitleBar.tsx:424
 #: src/components/ui/TitleBar.tsx:429
+#: src/features/assistant/AssistantChat.tsx:79
 #: src/features/assistant/AssistantPanel.tsx:17
 msgid "Assistant"
 msgstr "アシスタント"
@@ -623,11 +621,15 @@ msgstr "アシスタント"
 msgid "At {stopName}"
 msgstr "{stopName}"
 
-#: src/features/assistant/AssistantChat.tsx:139
+#: src/features/assistant/AssistantChat.tsx:162
+msgid "Attach a file"
+msgstr "ファイルを添付"
+
+#: src/features/assistant/AssistantChat.tsx:160
 msgid "Attach an itinerary (PDF, Word, text), a GPX track or photos. Paste a web link into the message."
 msgstr "旅程表（PDF、Word、テキスト）、GPX の記録、写真を添付できます。Web ページのリンクはメッセージに貼り付けてください。"
 
-#: src/features/assistant/AssistantChat.tsx:139
+#: src/features/assistant/AssistantChat.tsx:162
 msgid "Attach files"
 msgstr "ファイルを添付"
 
@@ -820,8 +822,8 @@ msgstr "キャンセル"
 #: src/components/ui/UnsavedChanges.tsx:35
 #: src/components/ui/VoiceSettings.tsx:343
 #: src/components/ui/VoiceSettings.tsx:446
-#: src/components/view/ProjectManager.tsx:621
-#: src/components/view/ProjectManager.tsx:666
+#: src/components/view/ProjectManager.tsx:624
+#: src/components/view/ProjectManager.tsx:669
 #: src/components/view/ProjectSettingsModal.tsx:129
 #: src/features/editor/ExportDialog.tsx:88
 #: src/features/map/components/GenerateDialog.tsx:108
@@ -1004,7 +1006,7 @@ msgstr "色と、幅（ピクセル、0 = なし）"
 msgid "Combining all route segments, narration voiceovers, and transitions into your completed master navigation video."
 msgstr "すべてのルートセグメント、ナレーション音声、トランジションを結合し、最終的なマスターナビ動画を生成しています"
 
-#: src/components/view/ProjectManager.tsx:674
+#: src/components/view/ProjectManager.tsx:677
 msgid "Confirm"
 msgstr "確認"
 
@@ -1166,7 +1168,7 @@ msgstr "この場所の地名を取得できませんでした。"
 msgid "Create a copy of this workspace"
 msgstr "このワークスペースのコピーを作成"
 
-#: src/features/assistant/AssistantChat.tsx:120
+#: src/features/assistant/AssistantChat.tsx:117
 msgid "Create project"
 msgstr "プロジェクトを作成"
 
@@ -1312,13 +1314,17 @@ msgstr "古いファイルを{removed}件削除しました。あらためて作
 msgid "Deleted 1 old file. It will be made again."
 msgstr "古いファイルを1件削除しました。あらためて作成されます。"
 
-#: src/features/assistant/AssistantChat.tsx:109
+#: src/features/assistant/AssistantChat.tsx:90
 msgid "Describe a trip and I will set up the stops and scripts for you. Attach an itinerary if you have one."
 msgstr "旅の内容を伝えてください。立ち寄り先と台本を用意します。旅程表があれば添付してください。"
 
 #: src/features/assistant/AssistantChat.tsx:152
-msgid "Describe the video you want, or attach an itinerary…"
-msgstr "作りたい動画を説明するか、旅程表を添付してください…"
+#~ msgid "Describe the video you want, or attach an itinerary…"
+#~ msgstr "作りたい動画を説明するか、旅程表を添付してください…"
+
+#: src/features/assistant/AssistantChat.tsx:144
+msgid "Describe the video you want: where it goes, how long, and in what tone."
+msgstr "作りたい動画を説明してください。行き先、長さ、トーンなど。"
 
 #: src/components/view/ProjectManager.tsx:369
 msgid "Describe your trip"
@@ -1375,7 +1381,7 @@ msgstr "上端からの距離"
 msgid "Do you want to save the changes you made to "
 msgstr "次のプロジェクトへの変更を保存しますか: "
 
-#: src/features/assistant/AssistantChat.tsx:47
+#: src/features/assistant/AssistantChat.tsx:48
 msgid "Documents, GPS tracks and photos"
 msgstr "ドキュメント、GPS の記録、写真"
 
@@ -1462,11 +1468,11 @@ msgstr "写真またはGPSファイルをドロップしてルートを作成"
 msgid "Duplicate"
 msgstr "複製"
 
-#: src/components/view/ProjectManager.tsx:654
+#: src/components/view/ProjectManager.tsx:657
 msgid "Duplicate Project"
 msgstr "プロジェクトを複製"
 
-#: src/components/view/ProjectManager.tsx:688
+#: src/components/view/ProjectManager.tsx:691
 msgid "Duplicate Project Name"
 msgstr "複製するプロジェクト名"
 
@@ -1540,6 +1546,10 @@ msgstr "エンディングカード"
 #: src/features/assistant/AssistantChat.tsx:19
 msgid "English"
 msgstr "英語"
+
+#: src/features/assistant/AssistantChat.tsx:165
+msgid "Enter to send · Shift+Enter for a new line"
+msgstr "Enter で送信 · Shift+Enter で改行"
 
 #: src/features/map/components/DrawBar.tsx:207
 msgid "Erase"
@@ -1768,13 +1778,17 @@ msgstr "高速な声は内蔵の日本語の声がいくつかあり、1行あ�
 msgid "Ferry"
 msgstr "フェリー"
 
-#: src/components/view/ProjectManager.tsx:528
+#: src/components/view/ProjectManager.tsx:531
 msgid "File Path"
 msgstr "ファイルパス"
 
 #: src/components/ui/RenderOverlay.tsx:298
 msgid "Finalizing Project Timeline..."
 msgstr "プロジェクトのタイムラインを確定しています..."
+
+#: src/features/assistant/AssistantChat.tsx:60
+msgid "Finding places"
+msgstr "場所を探しています"
 
 #: src/components/ui/AutoDirectorModal.tsx:27
 msgid "Finding the places in the document..."
@@ -1914,7 +1928,7 @@ msgstr "グラデーションヒートマップ"
 msgid "Green"
 msgstr "緑"
 
-#: src/components/view/ProjectManager.tsx:423
+#: src/components/view/ProjectManager.tsx:426
 msgid "Grid View"
 msgstr "グリッド表示"
 
@@ -2073,7 +2087,7 @@ msgstr "キーを保存しました"
 msgid "Key saved for {0}."
 msgstr "{0}のキーを保存済みです。"
 
-#: src/components/view/ProjectManager.tsx:398
+#: src/components/view/ProjectManager.tsx:401
 msgid "Kyoto Demo Route"
 msgstr "京都デモルート"
 
@@ -2081,7 +2095,7 @@ msgstr "京都デモルート"
 msgid "Language"
 msgstr "言語"
 
-#: src/components/view/ProjectManager.tsx:531
+#: src/components/view/ProjectManager.tsx:534
 msgid "Last Opened"
 msgstr "最後に開いた日時"
 
@@ -2109,6 +2123,7 @@ msgstr "左"
 msgid "Leg {n}: {fromName} → {toName}"
 msgstr "区間{n}: {fromName} → {toName}"
 
+#: src/features/assistant/AssistantChat.tsx:18
 #: src/features/editor/ExportDialog.tsx:62
 msgid "Length"
 msgstr "長さ"
@@ -2143,6 +2158,10 @@ msgstr "ボイスを読み込み中…"
 #: src/features/editor/MusicPicker.tsx:116
 msgid "Loading…"
 msgstr "読み込み中…"
+
+#: src/features/assistant/AssistantChat.tsx:60
+msgid "Locating places"
+msgstr "位置を特定しています"
 
 #: src/components/ui/AutoDirectorModal.tsx:28
 msgid "Locating places ({done} of {total}) {label}"
@@ -2271,10 +2290,10 @@ msgstr "モデル {engine} が見つかりません。アプリ設定からイ�
 msgid "More"
 msgstr "その他"
 
-#: src/components/view/ProjectManager.tsx:510
-#: src/components/view/ProjectManager.tsx:511
-#: src/components/view/ProjectManager.tsx:587
-#: src/components/view/ProjectManager.tsx:588
+#: src/components/view/ProjectManager.tsx:513
+#: src/components/view/ProjectManager.tsx:514
+#: src/components/view/ProjectManager.tsx:590
+#: src/components/view/ProjectManager.tsx:591
 msgid "More actions"
 msgstr "その他の操作"
 
@@ -2309,6 +2328,7 @@ msgid "Name your project to continue"
 msgstr "続行するにはプロジェクト名を入力してください"
 
 #: src/components/ui/AppSettings.tsx:1076
+#: src/features/assistant/AssistantChat.tsx:19
 #: src/features/editor/ExportDialog.tsx:64
 #: src/features/editor/Inspector.tsx:441
 #: src/features/map/components/WaypointEditor.tsx:401
@@ -2365,7 +2385,7 @@ msgstr "新しい点は点{0}の後ろに追加されます。もう一度クリ
 msgid "New Project"
 msgstr "新規プロジェクト"
 
-#: src/components/view/ProjectManager.tsx:687
+#: src/components/view/ProjectManager.tsx:690
 msgid "New Project Name"
 msgstr "新しいプロジェクト名"
 
@@ -2422,7 +2442,7 @@ msgstr "まだ点がありません"
 msgid "No recent activity"
 msgstr "最近のアクティビティはありません"
 
-#: src/components/view/ProjectManager.tsx:453
+#: src/components/view/ProjectManager.tsx:456
 msgid "No recent projects"
 msgstr "最近のプロジェクトはありません"
 
@@ -2574,7 +2594,7 @@ msgstr "プロジェクトフォルダを開く"
 msgid "Open Project Folder..."
 msgstr "フォルダを開く..."
 
-#: src/features/assistant/AssistantChat.tsx:68
+#: src/features/assistant/AssistantChat.tsx:70
 msgid "Open settings"
 msgstr "設定を開く"
 
@@ -2585,6 +2605,10 @@ msgstr "タイムラインエディタを開きます。クリップを手動で
 #: src/components/ui/AppSettings.tsx:544
 msgid "OpenRouteService"
 msgstr "OpenRouteService"
+
+#: src/features/assistant/AssistantChat.tsx:182
+msgid "Or start from an example"
+msgstr "または例から始める"
 
 #: src/components/ui/ColorSwatches.tsx:17
 msgid "Orange"
@@ -2734,7 +2758,7 @@ msgstr "ポップイン"
 msgid "Position"
 msgstr "位置"
 
-#: src/components/view/ProjectManager.tsx:401
+#: src/components/view/ProjectManager.tsx:404
 msgid "Pre-configured sample project"
 msgstr "事前構成済みのサンプルプロジェクト"
 
@@ -2783,7 +2807,7 @@ msgid "Project name"
 msgstr "プロジェクト名"
 
 #: src/components/ui/SaveAs.tsx:125
-#: src/components/view/ProjectManager.tsx:525
+#: src/components/view/ProjectManager.tsx:528
 msgid "Project Name"
 msgstr "プロジェクト名"
 
@@ -2899,8 +2923,12 @@ msgstr "プロジェクトファイルを読み込み中..."
 msgid "Ready"
 msgstr "準備完了"
 
+#: src/features/assistant/AssistantChat.tsx:112
+msgid "Ready to build"
+msgstr "作成の準備ができました"
+
 #: src/components/ui/ColorPicker.tsx:300
-#: src/components/view/ProjectManager.tsx:412
+#: src/components/view/ProjectManager.tsx:415
 msgid "Recent"
 msgstr "最近のプロジェクト"
 
@@ -2971,8 +2999,8 @@ msgstr "アプリを再読み込み"
 #: src/components/ui/AppSettings.tsx:754
 #: src/components/ui/OnlineAiSettings.tsx:174
 #: src/components/ui/ReviewStep.tsx:103
-#: src/components/view/ProjectManager.tsx:629
-#: src/features/assistant/AssistantChat.tsx:130
+#: src/components/view/ProjectManager.tsx:632
+#: src/features/assistant/AssistantChat.tsx:152
 #: src/features/editor/EditorView.tsx:303
 #: src/features/editor/Inspector.tsx:477
 msgid "Remove"
@@ -3006,7 +3034,7 @@ msgstr "音楽を削除"
 msgid "Remove narration"
 msgstr "ナレーションを削除"
 
-#: src/components/view/ProjectManager.tsx:612
+#: src/components/view/ProjectManager.tsx:615
 msgid "Remove Project"
 msgstr "プロジェクトを削除"
 
@@ -3029,7 +3057,7 @@ msgstr "動画を削除"
 msgid "Rename"
 msgstr "名前を変更"
 
-#: src/components/view/ProjectManager.tsx:652
+#: src/components/view/ProjectManager.tsx:655
 msgid "Rename Project"
 msgstr "プロジェクト名を変更"
 
@@ -3360,7 +3388,7 @@ msgstr "選択:"
 msgid "Selected to redo: clips {pickedClips}, voices {pickedVoices}"
 msgstr "やり直し対象: クリップ{pickedClips}件、音声{pickedVoices}件"
 
-#: src/features/assistant/AssistantChat.tsx:160
+#: src/features/assistant/AssistantChat.tsx:172
 msgid "Send"
 msgstr "送信"
 
@@ -3564,7 +3592,7 @@ msgstr "開始"
 msgid "Start from"
 msgstr "作成方法"
 
-#: src/features/assistant/AssistantChat.tsx:183
+#: src/features/assistant/AssistantChat.tsx:198
 msgid "Start over"
 msgstr "最初からやり直す"
 
@@ -3581,7 +3609,7 @@ msgid "Starting point"
 msgstr "出発地点"
 
 #: src/components/ui/SetupGate.tsx:130
-#: src/features/assistant/AssistantChat.tsx:98
+#: src/features/assistant/AssistantChat.tsx:60
 msgid "Starting…"
 msgstr "開始中…"
 
@@ -3602,7 +3630,7 @@ msgid "Stitching Videos & Finalizing Export..."
 msgstr "動画を結合し、エクスポートを確定しています．．．"
 
 #: src/components/ui/RenderOverlay.tsx:375
-#: src/features/assistant/AssistantChat.tsx:157
+#: src/features/assistant/AssistantChat.tsx:168
 #: src/features/map/components/MapToolbar.tsx:88
 #: src/features/map/components/WaypointEditor.tsx:338
 #: src/features/map/hooks/useStopMenus.ts:221
@@ -3637,6 +3665,10 @@ msgstr "中止しました。"
 #: src/components/ui/StatusBar.tsx:356
 msgid "stops"
 msgstr "地点"
+
+#: src/features/assistant/AssistantChat.tsx:17
+msgid "Stops"
+msgstr "地点数"
 
 #: src/components/ui/StatusBar.tsx:224
 msgid "Stops containing custom images or AI scripts"
@@ -3694,7 +3726,7 @@ msgstr "システムログ"
 msgid "System Logs & Notifications"
 msgstr "システムログと通知"
 
-#: src/components/view/ProjectManager.tsx:424
+#: src/components/view/ProjectManager.tsx:427
 msgid "Table View"
 msgstr "テーブル表示"
 
@@ -3706,7 +3738,7 @@ msgstr "ターゲットフレームレート"
 msgid "Tauri Window API error:"
 msgstr "Tauri Window APIエラー"
 
-#: src/components/view/ProjectManager.tsx:384
+#: src/components/view/ProjectManager.tsx:387
 msgid "Templates"
 msgstr "テンプレート"
 
@@ -3739,7 +3771,11 @@ msgstr "文字の色"
 msgid "The assistant could not build the project"
 msgstr "アシスタントがプロジェクトを作成できませんでした"
 
-#: src/features/assistant/AssistantChat.tsx:65
+#: src/components/view/ProjectManager.tsx:372
+msgid "The assistant finds the places, puts them on the map and writes a script for each stop."
+msgstr "アシスタントが場所を見つけて地図に置き、各地点のスクリプトを書きます。"
+
+#: src/features/assistant/AssistantChat.tsx:67
 msgid "The assistant needs an AI model. Turn on AI features, then pick a local model or add an API key."
 msgstr "アシスタントには AI モデルが必要です。AI 機能をオンにして、ローカルモデルを選ぶか API キーを追加してください。"
 
@@ -3823,7 +3859,7 @@ msgstr "このプロジェクトのすべてのナレーションをこのボイ
 msgid "Theme"
 msgstr "テーマ"
 
-#: src/features/assistant/AssistantChat.tsx:91
+#: src/features/assistant/AssistantChat.tsx:84
 msgid "Thinking…"
 msgstr "考え中…"
 
@@ -3926,6 +3962,10 @@ msgstr "タイトルカード"
 #: src/features/map/components/OverviewPanel.tsx:16
 msgid "Title card at the start of the video"
 msgstr "動画の冒頭に表示するタイトルカード"
+
+#: src/features/assistant/AssistantChat.tsx:20
+msgid "Tone"
+msgstr "トーン"
 
 #: src/components/ui/CaptionStyleFields.tsx:160
 #: src/features/editor/Inspector.tsx:355
@@ -4252,6 +4292,10 @@ msgstr "動作しています"
 #~ msgid "Writes narration scripts on your PC"
 #~ msgstr "お使いの PC でナレーション原稿を書きます"
 
+#: src/features/assistant/AssistantChat.tsx:60
+msgid "Writing scripts"
+msgstr "スクリプトを作成しています"
+
 #: src/components/ui/AutoDirectorModal.tsx:29
 msgid "Writing scripts ({done} of {total}) {label}"
 msgstr "台本を作成中（{done} / {total}）{label}"
@@ -4260,11 +4304,15 @@ msgstr "台本を作成中（{done} / {total}）{label}"
 #~ msgid "Writing scripts with AI..."
 #~ msgstr "スクリプトを作成中..."
 
+#: src/features/assistant/AssistantChat.tsx:79
+msgid "You"
+msgstr "あなた"
+
 #: src/components/ui/SetupGate.tsx:60
 msgid "You can do this later in Settings > Setup"
 msgstr "あとから 設定 > セットアップ でも行えます"
 
-#: src/components/view/ProjectManager.tsx:456
+#: src/components/view/ProjectManager.tsx:459
 msgid "You don't have any recent workspaces. Create a new project or open an existing .nvv file to get started."
 msgstr "最近のワークスペースはありませんね。新しいプロジェクトを作成するか、既存の.nvvファイルを開いて開始してください"
 
@@ -4272,7 +4320,7 @@ msgstr "最近のワークスペースはありませんね。新しいプロジ
 msgid "Your Project Name Here"
 msgstr "ここにプロジェクト名を入力"
 
-#: src/features/assistant/AssistantChat.tsx:116
+#: src/features/assistant/AssistantChat.tsx:114
 msgid "Your trip"
 msgstr "あなたの旅"
 

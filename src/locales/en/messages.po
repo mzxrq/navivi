@@ -112,10 +112,8 @@ msgstr "{0} of {1} stops"
 msgid "{0} s dissolve"
 msgstr "{0} s dissolve"
 
-#. placeholder {0}: brief.places.length
 #. placeholder {0}: waypoints.length
 #: src/components/ui/StatusBar.tsx:222
-#: src/features/assistant/AssistantChat.tsx:17
 #: src/features/map/components/GenerateDialog.tsx:119
 msgid "{0} stops"
 msgstr "{0} stops"
@@ -267,7 +265,6 @@ msgstr "1 minute"
 msgid "1 photo could not be converted and was skipped."
 msgstr "1 photo could not be converted and was skipped."
 
-#: src/features/assistant/AssistantChat.tsx:17
 #: src/features/map/components/GenerateDialog.tsx:119
 msgid "1 stop"
 msgstr "1 stop"
@@ -292,11 +289,11 @@ msgstr "3 seconds"
 msgid "30 seconds"
 msgstr "30 seconds"
 
-#: src/features/assistant/AssistantChat.tsx:56
+#: src/features/assistant/AssistantChat.tsx:57
 msgid "A calm 5 minute video of the pilgrimage route in the PDF I attach, for visitors from abroad"
 msgstr "A calm 5 minute video of the pilgrimage route in the PDF I attach, for visitors from abroad"
 
-#: src/features/assistant/AssistantChat.tsx:57
+#: src/features/assistant/AssistantChat.tsx:58
 msgid "A day trip around Shirahama in Wakayama, Japanese narration, about 3 minutes"
 msgstr "A day trip around Shirahama in Wakayama, Japanese narration, about 3 minutes"
 
@@ -597,7 +594,7 @@ msgid "Apply to all titles like this"
 msgstr "Apply to all titles like this"
 
 #. placeholder {0}: modalState.project?.name
-#: src/components/view/ProjectManager.tsx:635
+#: src/components/view/ProjectManager.tsx:638
 msgid "Are you sure you want to remove <0>{0}</0> from your recent list? The original files will remain on your computer."
 msgstr "Are you sure you want to remove <0>{0}</0> from your recent list? The original files will remain on your computer."
 
@@ -605,7 +602,7 @@ msgstr "Are you sure you want to remove <0>{0}</0> from your recent list? The or
 msgid "Arriving Script"
 msgstr "Arriving Script"
 
-#: src/features/assistant/AssistantChat.tsx:152
+#: src/features/assistant/AssistantChat.tsx:144
 msgid "Ask or add details…"
 msgstr "Ask or add details…"
 
@@ -615,6 +612,7 @@ msgstr "Assets accepted and stitched into your final deliverable video"
 
 #: src/components/ui/TitleBar.tsx:424
 #: src/components/ui/TitleBar.tsx:429
+#: src/features/assistant/AssistantChat.tsx:79
 #: src/features/assistant/AssistantPanel.tsx:17
 msgid "Assistant"
 msgstr "Assistant"
@@ -623,11 +621,15 @@ msgstr "Assistant"
 msgid "At {stopName}"
 msgstr "At {stopName}"
 
-#: src/features/assistant/AssistantChat.tsx:139
+#: src/features/assistant/AssistantChat.tsx:162
+msgid "Attach a file"
+msgstr "Attach a file"
+
+#: src/features/assistant/AssistantChat.tsx:160
 msgid "Attach an itinerary (PDF, Word, text), a GPX track or photos. Paste a web link into the message."
 msgstr "Attach an itinerary (PDF, Word, text), a GPX track or photos. Paste a web link into the message."
 
-#: src/features/assistant/AssistantChat.tsx:139
+#: src/features/assistant/AssistantChat.tsx:162
 msgid "Attach files"
 msgstr "Attach files"
 
@@ -820,8 +822,8 @@ msgstr "Cancel"
 #: src/components/ui/UnsavedChanges.tsx:35
 #: src/components/ui/VoiceSettings.tsx:343
 #: src/components/ui/VoiceSettings.tsx:446
-#: src/components/view/ProjectManager.tsx:621
-#: src/components/view/ProjectManager.tsx:666
+#: src/components/view/ProjectManager.tsx:624
+#: src/components/view/ProjectManager.tsx:669
 #: src/components/view/ProjectSettingsModal.tsx:129
 #: src/features/editor/ExportDialog.tsx:88
 #: src/features/map/components/GenerateDialog.tsx:108
@@ -1004,7 +1006,7 @@ msgstr "Colour, and width in pixels (0 = none)"
 msgid "Combining all route segments, narration voiceovers, and transitions into your completed master navigation video."
 msgstr "Combining all route segments, narration voiceovers, and transitions into your completed master navigation video."
 
-#: src/components/view/ProjectManager.tsx:674
+#: src/components/view/ProjectManager.tsx:677
 msgid "Confirm"
 msgstr "Confirm"
 
@@ -1166,7 +1168,7 @@ msgstr "Couldn't look up a place name for this location."
 msgid "Create a copy of this workspace"
 msgstr "Create a copy of this workspace"
 
-#: src/features/assistant/AssistantChat.tsx:120
+#: src/features/assistant/AssistantChat.tsx:117
 msgid "Create project"
 msgstr "Create project"
 
@@ -1312,13 +1314,17 @@ msgstr "Deleted {removed} old files. They will be made again."
 msgid "Deleted 1 old file. It will be made again."
 msgstr "Deleted 1 old file. It will be made again."
 
-#: src/features/assistant/AssistantChat.tsx:109
+#: src/features/assistant/AssistantChat.tsx:90
 msgid "Describe a trip and I will set up the stops and scripts for you. Attach an itinerary if you have one."
 msgstr "Describe a trip and I will set up the stops and scripts for you. Attach an itinerary if you have one."
 
 #: src/features/assistant/AssistantChat.tsx:152
-msgid "Describe the video you want, or attach an itinerary…"
-msgstr "Describe the video you want, or attach an itinerary…"
+#~ msgid "Describe the video you want, or attach an itinerary…"
+#~ msgstr "Describe the video you want, or attach an itinerary…"
+
+#: src/features/assistant/AssistantChat.tsx:144
+msgid "Describe the video you want: where it goes, how long, and in what tone."
+msgstr "Describe the video you want: where it goes, how long, and in what tone."
 
 #: src/components/view/ProjectManager.tsx:369
 msgid "Describe your trip"
@@ -1375,7 +1381,7 @@ msgstr "Distance from top"
 msgid "Do you want to save the changes you made to "
 msgstr "Do you want to save the changes you made to "
 
-#: src/features/assistant/AssistantChat.tsx:47
+#: src/features/assistant/AssistantChat.tsx:48
 msgid "Documents, GPS tracks and photos"
 msgstr "Documents, GPS tracks and photos"
 
@@ -1462,11 +1468,11 @@ msgstr "Drop photos or GPS files to plot route"
 msgid "Duplicate"
 msgstr "Duplicate"
 
-#: src/components/view/ProjectManager.tsx:654
+#: src/components/view/ProjectManager.tsx:657
 msgid "Duplicate Project"
 msgstr "Duplicate Project"
 
-#: src/components/view/ProjectManager.tsx:688
+#: src/components/view/ProjectManager.tsx:691
 msgid "Duplicate Project Name"
 msgstr "Duplicate Project Name"
 
@@ -1540,6 +1546,10 @@ msgstr "Ending card"
 #: src/features/assistant/AssistantChat.tsx:19
 msgid "English"
 msgstr "English"
+
+#: src/features/assistant/AssistantChat.tsx:165
+msgid "Enter to send · Shift+Enter for a new line"
+msgstr "Enter to send · Shift+Enter for a new line"
 
 #: src/features/map/components/DrawBar.tsx:207
 msgid "Erase"
@@ -1768,13 +1778,17 @@ msgstr "Fast voice has a few built-in Japanese voices and takes a few seconds pe
 msgid "Ferry"
 msgstr "Ferry"
 
-#: src/components/view/ProjectManager.tsx:528
+#: src/components/view/ProjectManager.tsx:531
 msgid "File Path"
 msgstr "File Path"
 
 #: src/components/ui/RenderOverlay.tsx:298
 msgid "Finalizing Project Timeline..."
 msgstr "Finalizing Project Timeline..."
+
+#: src/features/assistant/AssistantChat.tsx:60
+msgid "Finding places"
+msgstr "Finding places"
 
 #: src/components/ui/AutoDirectorModal.tsx:27
 msgid "Finding the places in the document..."
@@ -1914,7 +1928,7 @@ msgstr "Gradient Heatmap"
 msgid "Green"
 msgstr "Green"
 
-#: src/components/view/ProjectManager.tsx:423
+#: src/components/view/ProjectManager.tsx:426
 msgid "Grid View"
 msgstr "Grid View"
 
@@ -2073,7 +2087,7 @@ msgstr "Key saved"
 msgid "Key saved for {0}."
 msgstr "Key saved for {0}."
 
-#: src/components/view/ProjectManager.tsx:398
+#: src/components/view/ProjectManager.tsx:401
 msgid "Kyoto Demo Route"
 msgstr "Kyoto Demo Route"
 
@@ -2081,7 +2095,7 @@ msgstr "Kyoto Demo Route"
 msgid "Language"
 msgstr "Language"
 
-#: src/components/view/ProjectManager.tsx:531
+#: src/components/view/ProjectManager.tsx:534
 msgid "Last Opened"
 msgstr "Last Opened"
 
@@ -2109,6 +2123,7 @@ msgstr "Left"
 msgid "Leg {n}: {fromName} → {toName}"
 msgstr "Leg {n}: {fromName} → {toName}"
 
+#: src/features/assistant/AssistantChat.tsx:18
 #: src/features/editor/ExportDialog.tsx:62
 msgid "Length"
 msgstr "Length"
@@ -2143,6 +2158,10 @@ msgstr "Loading voices…"
 #: src/features/editor/MusicPicker.tsx:116
 msgid "Loading…"
 msgstr "Loading…"
+
+#: src/features/assistant/AssistantChat.tsx:60
+msgid "Locating places"
+msgstr "Locating places"
 
 #: src/components/ui/AutoDirectorModal.tsx:28
 msgid "Locating places ({done} of {total}) {label}"
@@ -2271,10 +2290,10 @@ msgstr "Model \"{engine}\" not found. Please install it from the App Settings"
 msgid "More"
 msgstr "More"
 
-#: src/components/view/ProjectManager.tsx:510
-#: src/components/view/ProjectManager.tsx:511
-#: src/components/view/ProjectManager.tsx:587
-#: src/components/view/ProjectManager.tsx:588
+#: src/components/view/ProjectManager.tsx:513
+#: src/components/view/ProjectManager.tsx:514
+#: src/components/view/ProjectManager.tsx:590
+#: src/components/view/ProjectManager.tsx:591
 msgid "More actions"
 msgstr "More actions"
 
@@ -2309,6 +2328,7 @@ msgid "Name your project to continue"
 msgstr "Name your project to continue"
 
 #: src/components/ui/AppSettings.tsx:1076
+#: src/features/assistant/AssistantChat.tsx:19
 #: src/features/editor/ExportDialog.tsx:64
 #: src/features/editor/Inspector.tsx:441
 #: src/features/map/components/WaypointEditor.tsx:401
@@ -2365,7 +2385,7 @@ msgstr "New points go after point {0}. Click it again to add at the end."
 msgid "New Project"
 msgstr "New Project"
 
-#: src/components/view/ProjectManager.tsx:687
+#: src/components/view/ProjectManager.tsx:690
 msgid "New Project Name"
 msgstr "New Project Name"
 
@@ -2422,7 +2442,7 @@ msgstr "No points yet"
 msgid "No recent activity"
 msgstr "No recent activity"
 
-#: src/components/view/ProjectManager.tsx:453
+#: src/components/view/ProjectManager.tsx:456
 msgid "No recent projects"
 msgstr "No recent projects"
 
@@ -2574,7 +2594,7 @@ msgstr "Open Project Folder"
 msgid "Open Project Folder..."
 msgstr "Open Project Folder..."
 
-#: src/features/assistant/AssistantChat.tsx:68
+#: src/features/assistant/AssistantChat.tsx:70
 msgid "Open settings"
 msgstr "Open settings"
 
@@ -2585,6 +2605,10 @@ msgstr "Opening the timeline editor so you can change the clip by hand."
 #: src/components/ui/AppSettings.tsx:544
 msgid "OpenRouteService"
 msgstr "OpenRouteService"
+
+#: src/features/assistant/AssistantChat.tsx:182
+msgid "Or start from an example"
+msgstr "Or start from an example"
 
 #: src/components/ui/ColorSwatches.tsx:17
 msgid "Orange"
@@ -2734,7 +2758,7 @@ msgstr "Pop in"
 msgid "Position"
 msgstr "Position"
 
-#: src/components/view/ProjectManager.tsx:401
+#: src/components/view/ProjectManager.tsx:404
 msgid "Pre-configured sample project"
 msgstr "Pre-configured sample project"
 
@@ -2783,7 +2807,7 @@ msgid "Project name"
 msgstr "Project name"
 
 #: src/components/ui/SaveAs.tsx:125
-#: src/components/view/ProjectManager.tsx:525
+#: src/components/view/ProjectManager.tsx:528
 msgid "Project Name"
 msgstr "Project Name"
 
@@ -2899,8 +2923,12 @@ msgstr "Reading Project File..."
 msgid "Ready"
 msgstr "Ready"
 
+#: src/features/assistant/AssistantChat.tsx:112
+msgid "Ready to build"
+msgstr "Ready to build"
+
 #: src/components/ui/ColorPicker.tsx:300
-#: src/components/view/ProjectManager.tsx:412
+#: src/components/view/ProjectManager.tsx:415
 msgid "Recent"
 msgstr "Recent"
 
@@ -2971,8 +2999,8 @@ msgstr "Reload Application"
 #: src/components/ui/AppSettings.tsx:754
 #: src/components/ui/OnlineAiSettings.tsx:174
 #: src/components/ui/ReviewStep.tsx:103
-#: src/components/view/ProjectManager.tsx:629
-#: src/features/assistant/AssistantChat.tsx:130
+#: src/components/view/ProjectManager.tsx:632
+#: src/features/assistant/AssistantChat.tsx:152
 #: src/features/editor/EditorView.tsx:303
 #: src/features/editor/Inspector.tsx:477
 msgid "Remove"
@@ -3006,7 +3034,7 @@ msgstr "Remove music"
 msgid "Remove narration"
 msgstr "Remove narration"
 
-#: src/components/view/ProjectManager.tsx:612
+#: src/components/view/ProjectManager.tsx:615
 msgid "Remove Project"
 msgstr "Remove Project"
 
@@ -3029,7 +3057,7 @@ msgstr "Remove video"
 msgid "Rename"
 msgstr "Rename"
 
-#: src/components/view/ProjectManager.tsx:652
+#: src/components/view/ProjectManager.tsx:655
 msgid "Rename Project"
 msgstr "Rename Project"
 
@@ -3360,7 +3388,7 @@ msgstr "Select:"
 msgid "Selected to redo: clips {pickedClips}, voices {pickedVoices}"
 msgstr "Selected to redo: clips {pickedClips}, voices {pickedVoices}"
 
-#: src/features/assistant/AssistantChat.tsx:160
+#: src/features/assistant/AssistantChat.tsx:172
 msgid "Send"
 msgstr "Send"
 
@@ -3564,7 +3592,7 @@ msgstr "Start"
 msgid "Start from"
 msgstr "Start from"
 
-#: src/features/assistant/AssistantChat.tsx:183
+#: src/features/assistant/AssistantChat.tsx:198
 msgid "Start over"
 msgstr "Start over"
 
@@ -3581,7 +3609,7 @@ msgid "Starting point"
 msgstr "Starting point"
 
 #: src/components/ui/SetupGate.tsx:130
-#: src/features/assistant/AssistantChat.tsx:98
+#: src/features/assistant/AssistantChat.tsx:60
 msgid "Starting…"
 msgstr "Starting…"
 
@@ -3602,7 +3630,7 @@ msgid "Stitching Videos & Finalizing Export..."
 msgstr "Stitching Videos & Finalizing Export..."
 
 #: src/components/ui/RenderOverlay.tsx:375
-#: src/features/assistant/AssistantChat.tsx:157
+#: src/features/assistant/AssistantChat.tsx:168
 #: src/features/map/components/MapToolbar.tsx:88
 #: src/features/map/components/WaypointEditor.tsx:338
 #: src/features/map/hooks/useStopMenus.ts:221
@@ -3637,6 +3665,10 @@ msgstr "Stopped."
 #: src/components/ui/StatusBar.tsx:356
 msgid "stops"
 msgstr "stops"
+
+#: src/features/assistant/AssistantChat.tsx:17
+msgid "Stops"
+msgstr "Stops"
 
 #: src/components/ui/StatusBar.tsx:224
 msgid "Stops containing custom images or AI scripts"
@@ -3694,7 +3726,7 @@ msgstr "System Log"
 msgid "System Logs & Notifications"
 msgstr "System Logs & Notifications"
 
-#: src/components/view/ProjectManager.tsx:424
+#: src/components/view/ProjectManager.tsx:427
 msgid "Table View"
 msgstr "Table View"
 
@@ -3706,7 +3738,7 @@ msgstr "Target FPS"
 msgid "Tauri Window API error:"
 msgstr "Tauri Window API error:"
 
-#: src/components/view/ProjectManager.tsx:384
+#: src/components/view/ProjectManager.tsx:387
 msgid "Templates"
 msgstr "Templates"
 
@@ -3739,7 +3771,11 @@ msgstr "Text colour"
 msgid "The assistant could not build the project"
 msgstr "The assistant could not build the project"
 
-#: src/features/assistant/AssistantChat.tsx:65
+#: src/components/view/ProjectManager.tsx:372
+msgid "The assistant finds the places, puts them on the map and writes a script for each stop."
+msgstr "The assistant finds the places, puts them on the map and writes a script for each stop."
+
+#: src/features/assistant/AssistantChat.tsx:67
 msgid "The assistant needs an AI model. Turn on AI features, then pick a local model or add an API key."
 msgstr "The assistant needs an AI model. Turn on AI features, then pick a local model or add an API key."
 
@@ -3823,7 +3859,7 @@ msgstr "The voice reads every narration in this project. Changing the voice or t
 msgid "Theme"
 msgstr "Theme"
 
-#: src/features/assistant/AssistantChat.tsx:91
+#: src/features/assistant/AssistantChat.tsx:84
 msgid "Thinking…"
 msgstr "Thinking…"
 
@@ -3926,6 +3962,10 @@ msgstr "Title card"
 #: src/features/map/components/OverviewPanel.tsx:16
 msgid "Title card at the start of the video"
 msgstr "Title card at the start of the video"
+
+#: src/features/assistant/AssistantChat.tsx:20
+msgid "Tone"
+msgstr "Tone"
 
 #: src/components/ui/CaptionStyleFields.tsx:160
 #: src/features/editor/Inspector.tsx:355
@@ -4252,6 +4292,10 @@ msgstr "Works"
 #~ msgid "Writes narration scripts on your PC"
 #~ msgstr "Writes narration scripts on your PC"
 
+#: src/features/assistant/AssistantChat.tsx:60
+msgid "Writing scripts"
+msgstr "Writing scripts"
+
 #: src/components/ui/AutoDirectorModal.tsx:29
 msgid "Writing scripts ({done} of {total}) {label}"
 msgstr "Writing scripts ({done} of {total}) {label}"
@@ -4260,11 +4304,15 @@ msgstr "Writing scripts ({done} of {total}) {label}"
 #~ msgid "Writing scripts with AI..."
 #~ msgstr "Writing scripts with AI..."
 
+#: src/features/assistant/AssistantChat.tsx:79
+msgid "You"
+msgstr "You"
+
 #: src/components/ui/SetupGate.tsx:60
 msgid "You can do this later in Settings > Setup"
 msgstr "You can do this later in Settings > Setup"
 
-#: src/components/view/ProjectManager.tsx:456
+#: src/components/view/ProjectManager.tsx:459
 msgid "You don't have any recent workspaces. Create a new project or open an existing .nvv file to get started."
 msgstr "You don't have any recent workspaces. Create a new project or open an existing .nvv file to get started."
 
@@ -4272,7 +4320,7 @@ msgstr "You don't have any recent workspaces. Create a new project or open an ex
 msgid "Your Project Name Here"
 msgstr "Your Project Name Here"
 
-#: src/features/assistant/AssistantChat.tsx:116
+#: src/features/assistant/AssistantChat.tsx:114
 msgid "Your trip"
 msgstr "Your trip"
 
