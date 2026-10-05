@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import re
 import shutil
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -136,12 +137,19 @@ def delete_voice(voice_id: str) -> bool:
     return True
 
 
-def _sha256(path: Path) -> str:
+@lru_cache(maxsize=64)
+def _sha256_of(path: str, mtime_ns: int, size: int) -> str:
     h = hashlib.sha256()
     with open(path, "rb") as f:
         for block in iter(lambda: f.read(1 << 20), b""):
             h.update(block)
     return h.hexdigest()
+
+
+# [NOTE] [TTS] Called for every narration line (cache key, fingerprint, latent name): hashed again only when the file changes.
+def _sha256(path: Path) -> str:
+    st = Path(path).stat()
+    return _sha256_of(str(path), st.st_mtime_ns, st.st_size)
 
 
 def voice_fingerprint(voice: str, speed: float, caption: Optional[str] = None, engine: str = "irodori") -> Dict[str, Any]:

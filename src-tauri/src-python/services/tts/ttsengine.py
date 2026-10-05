@@ -23,6 +23,7 @@ import numpy as np
 import subprocess
 import os
 import shutil
+import tempfile
 
 import logging
 from typing import Any, ClassVar, Dict, Final, List, Optional, Tuple
@@ -278,6 +279,9 @@ def ensure_reference_latent(voice: str) -> Optional[Path]:
             capture_output=True, encoding="utf-8", errors="replace", timeout=600,
         )
         if result.returncode == 0 and out.exists():
+            for stale in out.parent.glob(f"{voice}-*.pt"):  # latents of earlier versions of this recording
+                if stale != out:
+                    stale.unlink(missing_ok=True)
             return out
         logger.warning("Could not encode the reference voice, using the plain file: %s", result.stderr[-300:])
     except (OSError, subprocess.SubprocessError) as exc:
@@ -641,7 +645,7 @@ class IrodoriTTSClient:
 
         # A line spoken before (in this or any project) is not synthesized again; ~40 s each on a CPU.
         key = phrase_cache.cache_key(payload, self._voice_sha256())
-        cached = phrase_cache.get(key)
+        cached = self._cached_line(key)
         if cached is not None:
             logger.info("TTS line served from the cache (%d characters).", len(text))
             return cached
@@ -654,6 +658,12 @@ class IrodoriTTSClient:
             audio = await self._post_speech(wire)
         phrase_cache.put(key, audio)
         return audio
+
+    # [NOTE] [TTS] A forced regeneration ("Redo voice") must not get the same stored take back, so it skips the read; it still writes the new one.
+    bypass_cache: bool = False
+
+    def _cached_line(self, key: str) -> Optional[bytes]:
+        return None if self.bypass_cache else phrase_cache.get(key)
 
     def _voice_sha256(self) -> Optional[str]:
         from services.tts import voices
@@ -808,7 +818,7 @@ class KokoroTTSClient(_VenvEngineClient):
     async def call_api(self, text: str) -> bytes:
         payload = {"input": text, "voice": self.config.voice, "speed": self.config.speed}
         key = phrase_cache.cache_key({"engine": "kokoro", **payload}, None)
-        cached = phrase_cache.get(key)
+        cached = self._cached_line(key)
         if cached is not None:
             logger.info("TTS line served from the cache (%d characters).", len(text))
             return cached
@@ -834,14 +844,18 @@ def _atempo_filter(speed: float) -> str:
 def apply_speed(wav: bytes, speed: float) -> bytes:
     if abs(speed - 1.0) < 0.01:
         return wav
-    result = subprocess.run(
-        [FFmpegManager.resolve_ffmpeg_bin(), "-loglevel", "error", "-i", "pipe:0", "-filter:a", _atempo_filter(speed), "-f", "wav", "pipe:1"],
-        input=wav, capture_output=True,
-    )
-    if result.returncode != 0 or not result.stdout:
-        logger.warning("Could not change the speed of a narration line, using it as spoken: %s", result.stderr[-200:])
-        return wav
-    return result.stdout
+    # [NOTE] [TTS] ffmpeg can't seek back to fill in a WAV's sizes when it writes to a pipe, so it leaves them as
+    # 0xFFFFFFFF and the line reads as ~24 hours long. Write to a file so the header is finished.
+    with tempfile.TemporaryDirectory() as tmp:
+        out_path = Path(tmp) / "sped.wav"
+        result = subprocess.run(
+            [FFmpegManager.resolve_ffmpeg_bin(), "-y", "-loglevel", "error", "-i", "pipe:0", "-filter:a", _atempo_filter(speed), str(out_path)],
+            input=wav, capture_output=True,
+        )
+        if result.returncode != 0 or not out_path.exists() or out_path.stat().st_size == 0:
+            logger.warning("Could not change the speed of a narration line, using it as spoken: %s", result.stderr[-200:])
+            return wav
+        return out_path.read_bytes()
 
 
 # [TTS] The middle engine: Qwen3-TTS 0.6B, clones a voice from a recording (the same library as Irodori) at about a third of Irodori's time.
@@ -879,7 +893,7 @@ class Qwen3TTSClient(_VenvEngineClient):
     async def call_api(self, text: str) -> bytes:
         reference = self._reference()
         key = phrase_cache.cache_key({"engine": "qwen3", "input": text, "speed": self.config.speed}, self._voice_sha256())
-        cached = phrase_cache.get(key)
+        cached = self._cached_line(key)
         if cached is not None:
             logger.info("TTS line served from the cache (%d characters).", len(text))
             return cached

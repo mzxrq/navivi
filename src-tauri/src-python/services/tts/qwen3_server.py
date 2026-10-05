@@ -21,6 +21,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 MODEL_ID = "Qwen/Qwen3-TTS-12Hz-0.6B-Base"
 LANGUAGE = "Japanese"
+LOAD_WAIT_SECONDS = 300  # how long a request waits for the model before giving up
 MAX_ATTEMPTS = 3
 TAIL_SECONDS = 0.08  # the end of the clip that is checked
 TAIL_OK = 0.15  # its energy against the whole clip's: measured 0.00-0.12 for lines that end properly, 0.19-0.31 for cut-off ones
@@ -129,6 +130,9 @@ class Handler(BaseHTTPRequestHandler):
         _last_request = time.monotonic()
         if self.path != "/v1/audio/speech":
             return self._reply(404, b"{}", "application/json")
+        # The port is open while the model is still loading; a request that arrives then waits for it instead of failing.
+        if not _ready.wait(LOAD_WAIT_SECONDS):
+            return self._reply(503, b'{"error":"The model did not finish loading."}', "application/json")
         try:
             body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
             text = str(body.get("input") or "").strip()

@@ -244,6 +244,15 @@ class TestQwen3Client:
         assert asyncio.run(client.call_api("お疲れ様です")).endswith(b"@1.25")
         assert len(client.sent) == 1
 
+    def test_a_forced_redo_skips_the_cache_and_stores_the_new_take(self, client):
+        asyncio.run(client.call_api("もう一度"))
+        client.bypass_cache = True
+        asyncio.run(client.call_api("もう一度"))
+        assert len(client.sent) == 2
+        client.bypass_cache = False
+        asyncio.run(client.call_api("もう一度"))
+        assert len(client.sent) == 2
+
     def test_another_speed_or_recording_is_a_new_line(self, client, tmp_path, voice_lib):
         asyncio.run(client.call_api("一"))
         slower = make_tts_client({"tts": {"engine": "qwen3", "voice": "alice", "speed": 0.9}}, tmp_path / "o2")
@@ -316,6 +325,18 @@ class TestSpeed:
         faster = tmp_path / "out.wav"
         faster.write_bytes(apply_speed(source.read_bytes(), 2.0))
         assert ttsengine.FFmpegManager.get_media_duration(str(faster)) == pytest.approx(1.0, abs=0.1)
+        # the header must be finished, not left at 0xFFFFFFFF as a pipe write does
+        with wave.open(str(faster), "rb") as wf:
+            assert wf.getnframes() == pytest.approx(24000, abs=1200)
+
+    def test_the_phrase_cache_drops_a_line_with_an_unfinished_header(self, cache_dir):
+        from services.tts import phrase_cache
+
+        bad = b"RIFF\xff\xff\xff\xffWAVEdata"
+        phrase_cache.put("k", bad)
+        assert phrase_cache.get("k") is None
+        phrase_cache.put("k", b"RIFF\x24\x00\x00\x00WAVEdata")
+        assert phrase_cache.get("k") is not None
 
 
 class TestQwen3Actions:

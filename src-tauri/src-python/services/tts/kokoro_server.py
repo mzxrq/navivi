@@ -19,6 +19,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 SAMPLE_RATE = 24000
 LANG_CODE = "j"  # Japanese
 REPO_ID = "hexgrad/Kokoro-82M"
+LOAD_WAIT_SECONDS = 300  # how long a request waits for the model before giving up
 
 _pipeline = None
 _ready = threading.Event()
@@ -71,6 +72,9 @@ class Handler(BaseHTTPRequestHandler):
         _last_request = time.monotonic()
         if self.path != "/v1/audio/speech":
             return self._reply(404, b"{}", "application/json")
+        # The port is open while the model is still loading; a request that arrives then waits for it instead of failing.
+        if not _ready.wait(LOAD_WAIT_SECONDS):
+            return self._reply(503, b'{"error":"The model did not finish loading."}', "application/json")
         try:
             body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
             text = str(body.get("input") or "").strip()

@@ -557,6 +557,7 @@ def generate_audio(
         output_dir = Path(output_audio_dir) if output_audio_dir else project_audio_dir(config_path.parent)
         output_dir.mkdir(parents=True, exist_ok=True)
         client = make_tts_client(project_config.get("settings", {}), output_dir)
+        client.bypass_cache = force
         processor = AudioProcessor(output_dir=output_dir)
 
         # [NOTE] [TTS] Awaits each waypoint in order inside this loop, so despite being async the TTS calls run fully sequentially, not concurrently.

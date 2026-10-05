@@ -25,10 +25,17 @@ def _path(key: str) -> Path:
     return tts_cache_dir() / f"{key}.wav"
 
 
+def _has_unfinished_header(data: bytes) -> bool:
+    return data[:4] == b"RIFF" and data[4:8] == b"\xff\xff\xff\xff"
+
+
 def get(key: str) -> Optional[bytes]:
     path = _path(key)
     try:
         data = path.read_bytes()
+        if _has_unfinished_header(data):
+            path.unlink(missing_ok=True)  # written by ffmpeg to a pipe: reads as ~24 hours long
+            return None
         os.utime(path)  # a line that keeps being used is the last to go
         return data or None
     except OSError:
@@ -36,7 +43,7 @@ def get(key: str) -> Optional[bytes]:
 
 
 def put(key: str, data: bytes) -> None:
-    if not data:
+    if not data or _has_unfinished_header(data):
         return
     path = _path(key)
     try:

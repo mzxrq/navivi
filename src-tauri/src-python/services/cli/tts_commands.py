@@ -36,9 +36,10 @@ from .helpers import _apply_pipeline_settings, _load_tts_waypoints
 logger = setup_logger("TTSCommands")
 
 
-def _prepare(job_config_path: str, output_audio_dir: str = None):
+def _prepare(job_config_path: str, output_audio_dir: str = None, force: bool = False):
     """Pipeline setup shared by every TTS mode: switches, default cues, the
-    cued waypoints and the TTS client/processor pair."""
+    cued waypoints and the TTS client/processor pair. `force` also makes the
+    client skip the shared phrase cache, so a redo is a new take."""
     settings = _apply_pipeline_settings(job_config_path)
     add_default_cues(job_config_path)
     config_path, waypoints = _load_tts_waypoints(job_config_path)
@@ -48,9 +49,12 @@ def _prepare(job_config_path: str, output_audio_dir: str = None):
     output_dir.mkdir(parents=True, exist_ok=True)
     from services.tts.ttsengine import AudioProcessor, make_tts_client
 
+    client = make_tts_client(settings, output_dir)
+    client.bypass_cache = force
+
     return (
         settings, config_path, waypoints, output_dir,
-        make_tts_client(settings, output_dir),
+        client,
         AudioProcessor(output_dir=output_dir),
         merge_pronunciation(settings.get("global_pronunciation_dictionary"), settings.get("pronunciation_dictionary")),
     )
@@ -80,7 +84,7 @@ def test_tts(
 ) -> Dict[str, Any]:
     """Generate and inspect the leg narration audio for one waypoint."""
     settings, config_path, waypoints, output_dir, client, processor, p_dict = _prepare(
-        job_config_path, output_audio_dir
+        job_config_path, output_audio_dir, force
     )
     _check_index(waypoints, waypoint_index)
     waypoint = waypoints[waypoint_index]
@@ -140,7 +144,7 @@ def test_overview_tts(
     """Generate only the overview narration audio (00_overview_narration.wav)."""
     add_overview_cues(job_config_path)
     settings, config_path, _waypoints, output_dir, client, processor, p_dict = _prepare(
-        job_config_path, output_audio_dir
+        job_config_path, output_audio_dir, force
     )
     project_config = json.loads(config_path.read_text(encoding="utf-8"))
     _tracker.show("Generating overview narration audio")
@@ -179,7 +183,7 @@ def test_attraction_tts(
     """Generate the attraction-only narration audio (the clip the attraction
     video plays) for one waypoint."""
     _settings, _config_path, waypoints, output_dir, client, processor, p_dict = _prepare(
-        job_config_path, output_audio_dir
+        job_config_path, output_audio_dir, force
     )
     _check_index(waypoints, waypoint_index)
     waypoint = waypoints[waypoint_index]
@@ -210,7 +214,7 @@ def test_attraction_tts_all(
     """Generate the attraction-only narration audio for every waypoint that
     has one (stop-bys not connected to the route are skipped)."""
     _settings, _config_path, waypoints, output_dir, client, processor, p_dict = _prepare(
-        job_config_path, output_audio_dir
+        job_config_path, output_audio_dir, force
     )
     todo = [(i, w) for i, w in enumerate(waypoints) if not _attraction_tts_skip_reason(w)]
     for i, w in enumerate(waypoints):
