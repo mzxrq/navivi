@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Navivi Setup</title>
+<style>
+  :root {
+    --bg: #0b1020; --panel: #101830; --line: rgba(255,255,255,.09); --text: #eef2ff; --dim: #9fb0d8; --faint: #6b7aa6;
+    --accent: #4287f5; --violet: #8b5cf6; --coral: #ff7e5f; --danger: #f0556a;
+    --grad: linear-gradient(90deg, #3b82f6, #8b5cf6 55%, #ff7e5f);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
+  html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text);
+    font: 14px/1.55 'Segoe UI', 'Yu Gothic UI', 'Meiryo UI', sans-serif; }
+  body { border: 1px solid var(--line); }
+  .app { display: grid; grid-template-columns: 252px 1fr; height: 100%; }
+
+  .side { position: relative; overflow: hidden; padding: 34px 26px;
+    background: linear-gradient(172deg, #0a0f1f 0%, #111d3b 52%, #1b3d8c 100%); }
+  .side .logo { width: 62px; height: 62px; display: block; }
+  .side .logo svg { width: 100%; height: 100%; }
+  .side .type { margin-top: 20px; height: 26px; }
+  .side .type svg { height: 100%; width: auto; display: block; }
+  .side .type svg * { fill: #fff !important; }
+  .side p { margin-top: 12px; color: var(--dim); font-size: 12.5px; line-height: 1.5; max-width: 190px; }
+  .route { position: absolute; left: 0; bottom: 0; width: 100%; height: 190px; pointer-events: none; }
+
+  .main { position: relative; display: flex; flex-direction: column; min-width: 0; }
+  .bar { height: 38px; display: flex; justify-content: flex-end; align-items: center; flex: none; }
+  .bar .drag { flex: 1; height: 100%; }
+  .bar button { width: 44px; height: 38px; border: 0; background: none; color: var(--dim); font-size: 15px; cursor: default; }
+  .bar button:hover { background: rgba(255,255,255,.07); color: #fff; }
+  .bar .x:hover { background: var(--danger); }
+
+  .view { display: none; flex: 1; flex-direction: column; padding: 8px 40px 30px 40px; min-height: 0; }
+  .view.on { display: flex; animation: in .22s ease; }
+  @keyframes in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  h1 { font-size: 24px; font-weight: 600; letter-spacing: -.01em; }
+  .lead { margin-top: 10px; color: var(--dim); }
+  .grow { flex: 1; }
+
+  .opts { margin-top: 20px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+  .opts .row { display: flex; align-items: center; gap: 12px; padding: 11px 14px; }
+  .opts .row + .row { border-top: 1px solid var(--line); }
+  .opts .path { flex: 1; min-width: 0; color: var(--dim); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
+  .opts .lbl { font-size: 12.5px; color: var(--faint); flex: none; }
+  .link { background: none; border: 0; color: var(--accent); font: inherit; font-size: 12.5px; cursor: pointer; padding: 2px 4px; border-radius: 6px; }
+  .link:hover { background: rgba(66,135,245,.12); }
+  .more { margin-top: 14px; }
+
+  label.check { display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 13.5px; }
+  label.check input { position: absolute; opacity: 0; }
+  label.check .box { width: 18px; height: 18px; border-radius: 5px; border: 1.5px solid #4a5a88; display: grid; place-items: center; flex: none; transition: .12s; }
+  label.check input:checked + .box { background: var(--accent); border-color: var(--accent); }
+  label.check input:checked + .box::after { content: ""; width: 9px; height: 5px; border-left: 2px solid #fff; border-bottom: 2px solid #fff; transform: rotate(-45deg) translate(1px,-1px); }
+  label.check input:focus-visible + .box { outline: 2px solid rgba(66,135,245,.6); outline-offset: 2px; }
+
+  .note { margin-top: 14px; font-size: 12px; color: var(--faint); }
+  .banner { margin-top: 14px; padding: 9px 12px; border-radius: 10px; background: rgba(255,126,95,.1); color: #ffb7a3; font-size: 12.5px; display: none; }
+  .banner.on { display: block; }
+
+  .actions { display: flex; align-items: center; gap: 10px; margin-top: 18px; }
+  .actions .sp { flex: 1; }
+  button.btn { height: 38px; padding: 0 22px; border-radius: 10px; border: 1px solid var(--line); background: rgba(255,255,255,.05);
+    color: var(--text); font: inherit; font-weight: 500; cursor: pointer; transition: .12s; }
+  button.btn:hover { background: rgba(255,255,255,.1); }
+  button.btn.primary { border: 0; background: var(--accent); color: #fff; font-weight: 600; padding: 0 30px; }
+  button.btn.primary:hover { filter: brightness(1.1); }
+  button.btn.danger { border: 0; background: var(--danger); color: #fff; font-weight: 600; }
+  button.btn:disabled { opacity: .45; pointer-events: none; }
+  :focus-visible { outline: 2px solid rgba(66,135,245,.7); outline-offset: 2px; }
+
+  .track { margin-top: 26px; height: 8px; border-radius: 99px; background: rgba(255,255,255,.09); overflow: hidden; }
+  .fill { height: 100%; width: 0; border-radius: 99px; background: var(--grad); transition: width .15s linear; }
+  .meta { margin-top: 10px; display: flex; justify-content: space-between; color: var(--faint); font-size: 12px; gap: 16px; }
+  .meta .file { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
+  .badge { width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; background: rgba(66,135,245,.14); margin-bottom: 18px; }
+  .badge svg { width: 28px; height: 28px; }
+  .badge.bad { background: rgba(240,85,106,.14); }
+  .err { margin-top: 12px; padding: 10px 12px; border-radius: 10px; background: rgba(240,85,106,.1); color: #ffb3bd; font-size: 12.5px; user-select: text; -webkit-user-select: text; word-break: break-word; }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <span class="logo">{{LOGO_SVG}}</span>
+    <span class="type">{{TYPE_SVG}}</span>
+    <p id="tagline"></p>
+    <svg class="route" viewBox="0 0 252 190" preserveAspectRatio="none" aria-hidden="true">
+      <defs><linearGradient id="g" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#3b82f6"/><stop offset=".5" stop-color="#8b5cf6"/><stop offset="1" stop-color="#ff7e5f"/></linearGradient></defs>
+      <path d="M-10 182 C 40 176, 62 128, 112 126 S 190 104, 262 40" fill="none" stroke="#fff" stroke-opacity=".07" stroke-width="1.2"/>
+      <path id="trail" d="M-10 168 C 36 164, 56 112, 104 112 S 186 88, 262 30" fill="none" stroke="url(#g)" stroke-width="3" stroke-linecap="round" stroke-dasharray="1 9" opacity=".9"/>
+      <circle id="pin" cx="104" cy="112" r="5" fill="#fff"/><circle id="pinring" cx="104" cy="112" r="10" fill="none" stroke="#fff" stroke-opacity=".35"/>
+    </svg>
+  </aside>
+
+  <main class="main">
+    <div class="bar"><div class="drag" id="drag"></div><button id="min" title="Minimize">&#8211;</button><button id="close" class="x" title="Close">&#10005;</button></div>
+
+    <section class="view" id="v-welcome">
+      <h1 id="w-title"></h1>
+      <p class="lead" id="w-text"></p>
+      <div class="banner" id="w-running"></div>
+      <button class="link more" id="w-more"></button>
+      <div class="opts" id="w-opts" hidden>
+        <div class="row"><span class="lbl" id="w-where"></span><span class="path" id="w-dir"></span><button class="link" id="w-browse"></button></div>
+        <div class="row"><label class="check"><input type="checkbox" id="w-desktop" checked><span class="box"></span><span id="w-desktop-l"></span></label></div>
+        <div class="row"><label class="check"><input type="checkbox" id="w-menu" checked><span class="box"></span><span id="w-menu-l"></span></label></div>
+      </div>
+      <div class="grow"></div>
+      <p class="note" id="w-size"></p>
+      <div class="actions"><span class="sp"></span><button class="btn primary" id="w-install"></button></div>
+    </section>
+
+    <section class="view" id="v-working">
+      <div class="grow"></div>
+      <h1 id="p-title"></h1>
+      <p class="lead" id="p-text"></p>
+      <div class="track"><div class="fill" id="p-fill"></div></div>
+      <div class="meta"><span class="file" id="p-file"></span><span id="p-pct">0%</span></div>
+      <div class="grow"></div>
+    </section>
+
+    <section class="view" id="v-done">
+      <div class="grow"></div>
+      <div class="badge"><svg viewBox="0 0 24 24" fill="none" stroke="#4287f5" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+      <h1 id="d-title"></h1>
+      <p class="lead" id="d-text"></p>
+      <div class="opts" id="d-launch-wrap" style="margin-top:18px"><div class="row"><label class="check"><input type="checkbox" id="d-launch" checked><span class="box"></span><span id="d-launch-l"></span></label></div></div>
+      <div class="grow"></div>
+      <div class="actions"><span class="sp"></span><button class="btn primary" id="d-finish"></button></div>
+    </section>
+
+    <section class="view" id="v-error">
+      <div class="grow"></div>
+      <div class="badge bad"><svg viewBox="0 0 24 24" fill="none" stroke="#f0556a" stroke-width="2.4" stroke-linecap="round"><path d="M12 7v6M12 17h.01"/></svg></div>
+      <h1 id="e-title"></h1>
+      <div class="err" id="e-msg"></div>
+      <div class="grow"></div>
+      <div class="actions"><span class="sp"></span><button class="btn" id="e-close"></button><button class="btn primary" id="e-retry"></button></div>
+    </section>
+
+    <section class="view" id="v-uninstall">
+      <h1 id="u-title"></h1>
+      <p class="lead" id="u-text"></p>
+      <div class="opts" style="margin-top:20px"><div class="row"><label class="check"><input type="checkbox" id="u-data"><span class="box"></span><span id="u-data-l"></span></label></div></div>
+      <p class="note" id="u-note"></p>
+      <div class="grow"></div>
+      <div class="actions"><span class="sp"></span><button class="btn" id="u-cancel"></button><button class="btn danger" id="u-go"></button></div>
+    </section>
+  </main>
+</div>
+
+<script>
+const TEXT = {
+  ja: {
+    tagline: "ルートを、ナレーション付きの旅動画に。",
+    welcomeTitle: "Navivi をインストール", welcomeText: "地図のルートや GPS の軌跡から、ナレーション付きの旅動画を作るアプリです。数分で完了します。",
+    more: "インストールの設定", where: "インストール先", browse: "変更…", desktop: "デスクトップにショートカットを作成", menu: "スタートメニューに追加",
+    size: (mb) => `約 ${mb} MB のディスク容量が必要です。`, install: "インストール", update: "更新する",
+    running: "Navivi が起動中です。続けると、いったん終了します。",
+    closing: "準備しています…", copying: "ファイルをコピーしています…", finishing: "仕上げています…", installing: "インストール中",
+    doneTitle: "準備ができました", doneText: "初めて起動したときに、動画づくりに必要なツールのセットアップが始まります（約800MB、インターネット接続が必要です）。",
+    launch: "Navivi を起動する", finish: "完了",
+    errTitle: "インストールできませんでした", retry: "もう一度", close: "閉じる",
+    uTitle: "Navivi を削除しますか？", uText: "アプリとショートカットを削除します。作成したプロジェクトは削除されません。",
+    uData: (mb) => `ダウンロード済みのツールと音声も削除する（約 ${mb} MB）`, uNote: "あとで再インストールすると、もう一度ダウンロードが必要になります。",
+    remove: "削除する", cancel: "キャンセル", removing: "削除しています…", removed: "削除しました", removedText: "ご利用ありがとうございました。",
+  },
+  en: {
+    tagline: "Turn your routes into narrated travel videos.",
+    welcomeTitle: "Install Navivi", welcomeText: "Make narrated travel videos from a map route or a GPS track. It takes a minute.",
+    more: "Installation options", where: "Install to", browse: "Change…", desktop: "Create a desktop shortcut", menu: "Add to the Start menu",
+    size: (mb) => `Needs about ${mb} MB of disk space.`, install: "Install", update: "Update",
+    running: "Navivi is running. Continuing will close it first.",
+    closing: "Getting ready…", copying: "Copying files…", finishing: "Finishing up…", installing: "Installing",
+    doneTitle: "Navivi is ready", doneText: "The first launch sets up the tools that make videos (about 800 MB, internet connection needed).",
+    launch: "Start Navivi", finish: "Finish",
+    errTitle: "Couldn't install Navivi", retry: "Try again", close: "Close",
+    uTitle: "Remove Navivi?", uText: "This removes the app and its shortcuts. Your projects are not deleted.",
+    uData: (mb) => `Also delete the downloaded tools and voices (about ${mb} MB)`, uNote: "If you install again later, they have to be downloaded again.",
+    remove: "Remove", cancel: "Cancel", removing: "Removing…", removed: "Navivi was removed", removedText: "Thanks for using it.",
+  },
+};
+
+let S = { lang: "en", mode: "install", dir: "", running: false, sizeMb: 0, dataMb: 0 };
+const $ = (id) => document.getElementById(id);
+const t = (k, ...a) => { const v = TEXT[S.lang][k]; return typeof v === "function" ? v(...a) : v; };
+const send = (o) => window.ipc.postMessage(JSON.stringify(o));
+const show = (name) => document.querySelectorAll(".view").forEach((v) => v.classList.toggle("on", v.id === "v-" + name));
+
+$("drag").addEventListener("mousedown", (e) => { if (e.button === 0) send({ cmd: "drag" }); });
+$("min").onclick = () => send({ cmd: "min" });
+$("close").onclick = () => send({ cmd: "close" });
+
+// The route in the sidebar: the pin rides along the dotted line as the install moves forward.
+const trail = $("trail");
+function movePin(f) {
+  const p = trail.getPointAtLength(trail.getTotalLength() * Math.max(0.12, Math.min(1, 0.12 + f * 0.88)));
+  for (const id of ["pin", "pinring"]) { $(id).setAttribute("cx", p.x); $(id).setAttribute("cy", p.y); }
+}
+movePin(0);
+
+function paint() {
+  document.documentElement.lang = S.lang;
+  $("tagline").textContent = t("tagline");
+  if (S.mode === "uninstall") {
+    $("u-title").textContent = t("uTitle"); $("u-text").textContent = t("uText"); $("u-data-l").textContent = t("uData", S.dataMb);
+    $("u-note").textContent = t("uNote"); $("u-cancel").textContent = t("cancel"); $("u-go").textContent = t("remove");
+    show("uninstall");
+    return;
+  }
+  $("w-title").textContent = t("welcomeTitle"); $("w-text").textContent = t("welcomeText"); $("w-more").textContent = t("more") + "  ›";
+  $("w-where").textContent = t("where"); $("w-browse").textContent = t("browse"); $("w-dir").textContent = "‎" + S.dir;
+  $("w-desktop-l").textContent = t("desktop"); $("w-menu-l").textContent = t("menu"); $("w-size").textContent = t("size", S.sizeMb);
+  $("w-install").textContent = t("install"); $("w-running").textContent = t("running"); $("w-running").classList.toggle("on", S.running);
+  show("welcome");
+}
+
+$("w-more").onclick = () => { const o = $("w-opts"); o.hidden = !o.hidden; };
+$("w-browse").onclick = () => send({ cmd: "browse" });
+$("w-install").onclick = () => start(S.running);
+function start(closeRunning) {
+  setWorking("installing", "closing", 0);
+  send({ cmd: "install", dir: S.dir, desktop: $("w-desktop").checked, startMenu: $("w-menu").checked, closeRunning });
+}
+function setWorking(title, text, pct) {
+  $("p-title").textContent = t(title); $("p-text").textContent = t(text); $("p-fill").style.width = pct + "%"; $("p-pct").textContent = Math.round(pct) + "%";
+  movePin(pct / 100); show("working");
+}
+
+$("d-finish").onclick = () => send({ cmd: $("d-launch").checked ? "launch" : "close" });
+$("e-close").onclick = () => send({ cmd: "close" });
+$("e-retry").onclick = () => { S.running = false; paint(); };
+$("u-cancel").onclick = () => send({ cmd: "close" });
+$("u-go").onclick = () => { setWorking("removing", "removing", 100); send({ cmd: "uninstall", removeData: $("u-data").checked }); };
+
+const handlers = {
+  init(e) {
+    Object.assign(S, { lang: e.lang, mode: e.mode, dir: e.dir, running: e.running, sizeMb: e.sizeMb, dataMb: e.dataMb });
+    paint();
+  },
+  dir(e) { S.dir = e.path; $("w-dir").textContent = "‎" + S.dir; },
+  step(e) { $("p-text").textContent = t(e.name); },
+  progress(e) { $("p-fill").style.width = e.pct + "%"; $("p-pct").textContent = Math.round(e.pct) + "%"; $("p-file").textContent = "‎" + e.file; movePin(e.pct / 100); },
+  running() { S.running = true; paint(); },
+  done() {
+    movePin(1);
+    if (S.mode === "uninstall") {
+      $("d-title").textContent = t("removed"); $("d-text").textContent = t("removedText"); $("d-launch-wrap").style.display = "none";
+      $("d-finish").textContent = t("close"); $("d-finish").onclick = () => send({ cmd: "close" });
+    } else {
+      $("d-title").textContent = t("doneTitle"); $("d-text").textContent = t("doneText"); $("d-launch-l").textContent = t("launch"); $("d-finish").textContent = t("finish");
+    }
+    show("done");
+  },
+  error(e) { $("e-title").textContent = t("errTitle"); $("e-msg").textContent = e.message; $("e-close").textContent = t("close"); $("e-retry").textContent = t("retry"); show("error"); },
+};
+window.__emit = (e) => handlers[e.type] && handlers[e.type](e);
+window.addEventListener("keydown", (e) => { if (e.key === "Escape") send({ cmd: "close" }); });
+send({ cmd: "ready" });
+</script>
+</body>
+</html>

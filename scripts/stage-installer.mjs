@@ -18,8 +18,9 @@ const FFMPEG_URL = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials
 const UV_URL = "https://github.com/astral-sh/uv/releases/latest/download/uv-x86_64-pc-windows-msvc.zip";
 
 // Not shipped: engines made on first run, caches, tests.
-const SKIP_DIRS = new Set(["bin", "tests", "data", "frames", "__pycache__", ".pytest_cache", "logs"]);
-const SKIP_FILES = /(\.pyc$|^pytest\.ini$|^requirements-test\.txt$)/;
+const SKIP_DIRS = new Set(["bin", "tests", "data", "frames", "__pycache__", ".pytest_cache", "logs", ".venv"]);
+// .env holds the developer's own API keys: never packaged. Users enter theirs in Settings > API keys.
+const SKIP_FILES = /(\.pyc$|^pytest\.ini$|^requirements-test\.txt$|^\.env(\..*)?$)/;
 
 const mb = (bytes) => `${(bytes / 1048576).toFixed(1)} MB`;
 const warn = (message) => console.warn(`  ! ${message}`);

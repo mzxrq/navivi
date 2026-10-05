@@ -121,3 +121,9 @@ playwright-report/
 # Installer build
 src-tauri/installer-staging/
 scripts/.cache/
+
+# Custom setup program
+setup/target/
+setup/dist/
+setup/payload.zip
+setup/stage/

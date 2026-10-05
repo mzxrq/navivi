@@ -15,7 +15,8 @@
     "compile": "lingui compile --typescript",
     "stage:installer": "node scripts/stage-installer.mjs",
     "build:installer": "tauri build --config src-tauri/tauri.installer.conf.json",
-    "art:installer": "node scripts/make-installer-art.mjs"
+    "art:installer": "node scripts/make-installer-art.mjs",
+    "build:setup": "node scripts/build-setup.mjs"
   },
   "dependencies": {
     "@hello-pangea/dnd": "^18.0.1",
