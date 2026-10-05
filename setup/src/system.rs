@@ -75,10 +75,15 @@ pub fn create_shortcuts(name: &str, target: &Path, workdir: &Path, desktop: bool
     let _ = powershell(&script);
 }
 
-pub fn remove_shortcuts(name: &str) {
+/// Removes the shortcuts called `name` that point into `dir`; one that leads to another install of the app is not ours to delete.
+pub fn remove_shortcuts(name: &str, dir: &Path) {
     let script = format!(
-        "foreach ($f in @([Environment]::GetFolderPath('Desktop'), [Environment]::GetFolderPath('Programs'))) {{ Remove-Item -LiteralPath (Join-Path $f ({} + '.lnk')) -Force -ErrorAction SilentlyContinue }}",
-        ps_quote(name)
+        "$s = New-Object -ComObject WScript.Shell; \
+         foreach ($f in @([Environment]::GetFolderPath('Desktop'), [Environment]::GetFolderPath('Programs'))) {{ \
+           $p = Join-Path $f ({n} + '.lnk'); \
+           if (Test-Path -LiteralPath $p) {{ if ($s.CreateShortcut($p).TargetPath -like ({d} + '*')) {{ Remove-Item -LiteralPath $p -Force -ErrorAction SilentlyContinue }} }} }}",
+        n = ps_quote(name),
+        d = ps_quote(&dir.display().to_string()),
     );
     let _ = powershell(&script);
 }
@@ -117,8 +122,21 @@ pub fn write_uninstall_entry(values: &[(&'static str, RegValue)]) -> Result<(), 
     Ok(())
 }
 
-pub fn remove_uninstall_entry() {
-    let _ = RegKey::predef(HKEY_CURRENT_USER).delete_subkey_all(UNINSTALL_KEY);
+/// Whether `location` (as stored in the registry, maybe quoted or with a trailing slash) is the folder `dir`.
+pub fn same_folder(location: &str, dir: &Path) -> bool {
+    let norm = |s: &str| s.trim().trim_matches('"').trim_end_matches(['\\', '/']).replace('/', "\\").to_lowercase();
+    norm(location) == norm(&dir.display().to_string())
+}
+
+/// Removes the Apps & features entry, but only when it describes the install in `dir` (the NSIS installer uses the same key).
+pub fn remove_uninstall_entry(dir: &Path) {
+    let root = RegKey::predef(HKEY_CURRENT_USER);
+    let Ok(key) = root.open_subkey(UNINSTALL_KEY) else { return };
+    let location: String = key.get_value("InstallLocation").unwrap_or_default();
+    drop(key);
+    if same_folder(&location, dir) {
+        let _ = root.delete_subkey_all(UNINSTALL_KEY);
+    }
 }
 
 /// Where the previous install is, if there is one (so an update goes to the same place).
@@ -163,6 +181,15 @@ mod tests {
         assert_eq!(get("QuietUninstallString"), Some(&RegValue::Text(r#""C:\Apps\Navivi\uninstall.exe" --uninstall --silent"#.into())));
         assert_eq!(get("InstallLocation"), Some(&RegValue::Text(r"C:\Apps\Navivi".into())));
         assert_eq!(get("EstimatedSize"), Some(&RegValue::Number(321_000)));
+    }
+
+    #[test]
+    fn a_registry_location_matches_its_folder_however_it_is_written() {
+        let dir = Path::new(r"C:\Users\u\AppData\Local\Navivi");
+        assert!(same_folder(r#""C:\Users\u\AppData\Local\Navivi""#, dir));
+        assert!(same_folder(r"c:\users\U\appdata\local\navivi\", dir));
+        assert!(!same_folder(r"C:\Users\u\AppData\Local\Programs\Navivi", dir));
+        assert!(!same_folder("", dir));
     }
 
     #[test]

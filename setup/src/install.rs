@@ -181,8 +181,8 @@ pub fn uninstall(dir: &Path, remove_data: bool) -> Result<(), String> {
         }
         std::thread::sleep(std::time::Duration::from_millis(300));
     }
-    system::remove_shortcuts("Navivi");
-    system::remove_uninstall_entry();
+    system::remove_shortcuts("Navivi", dir);
+    system::remove_uninstall_entry(dir);
     if remove_data {
         for d in data_dirs() {
             let _ = fs::remove_dir_all(d);
