@@ -49,6 +49,18 @@ describe("findPath", () => {
   it("gives up when the two paths are not connected", () => {
     expect(findPath(graph, at(0, 50), at(500, 550))).toBeNull();
   });
+
+  it("finds the shortest way across a 12 x 12 grid (the heap orders many open nodes)", () => {
+    const lines: LatLng[][] = [];
+    for (let i = 0; i <= 11; i++) {
+      lines.push(Array.from({ length: 12 }, (_, j) => at(i * 20, j * 20)));
+      lines.push(Array.from({ length: 12 }, (_, j) => at(j * 20, i * 20)));
+    }
+    const grid = buildGraph(lines);
+    expect(length(findPath(grid, at(0, 0), at(0, 220))!)).toBeCloseTo(220, -1);
+    // corner to corner: no diagonal lanes, so the shortest walk is the Manhattan distance
+    expect(length(findPath(grid, at(0, 0), at(220, 220))!)).toBeCloseTo(440, -1);
+  });
 });
 
 describe("closeGaps", () => {

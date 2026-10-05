@@ -8,6 +8,8 @@ const ZOOM = 16;
 const SNAP_MAX_M = 60;
 const GRID = 1e5; // vertices closer than ~1 m are one junction
 const MAX_TILES = 9;
+const MAX_CACHED_TILES = 36;
+const MAX_CACHED_GRAPHS = 6;
 const PAD_M = 300;
 
 export const distanceM = (a: LatLng, b: LatLng) =>
@@ -73,6 +75,56 @@ export function buildGraph(lines: LatLng[][]): PathGraph {
   return { nodes, edges };
 }
 
+class MinHeap {
+  private keys: number[] = [];
+  private items: number[] = [];
+
+  get size() {
+    return this.keys.length;
+  }
+
+  push(key: number, item: number) {
+    let i = this.keys.length;
+    this.keys.push(key);
+    this.items.push(item);
+    while (i > 0) {
+      const parent = (i - 1) >> 1;
+      if (this.keys[parent] <= key) break;
+      this.move(parent, i);
+      i = parent;
+    }
+    this.keys[i] = key;
+    this.items[i] = item;
+  }
+
+  pop(): number | undefined {
+    const n = this.keys.length;
+    if (!n) return undefined;
+    const top = this.items[0];
+    const key = this.keys.pop()!;
+    const item = this.items.pop()!;
+    if (n > 1) {
+      let i = 0;
+      for (;;) {
+        let child = 2 * i + 1;
+        if (child >= n - 1) break;
+        if (child + 1 < n - 1 && this.keys[child + 1] < this.keys[child]) child++;
+        if (this.keys[child] >= key) break;
+        this.move(child, i);
+        i = child;
+      }
+      this.keys[i] = key;
+      this.items[i] = item;
+    }
+    return top;
+  }
+
+  private move(from: number, to: number) {
+    this.keys[to] = this.keys[from];
+    this.items[to] = this.items[from];
+  }
+}
+
 interface Snap {
   a: number;
   b: number;
@@ -124,11 +176,11 @@ export function findPath(graph: PathGraph, from: LatLng, to: LatLng): LatLng[] |
 
   const cost = new Map<number, number>([[start, 0]]);
   const prev = new Map<number, number>();
-  const open: [number, number][] = [[distanceM(s.point, e.point), start]];
+  const open = new MinHeap();
+  open.push(distanceM(s.point, e.point), start);
   const done = new Set<number>();
-  while (open.length) {
-    open.sort((p, q) => p[0] - q[0]);
-    const [, u] = open.shift()!;
+  while (open.size) {
+    const u = open.pop()!;
     if (done.has(u)) continue;
     if (u === goal) break;
     done.add(u);
@@ -138,7 +190,7 @@ export function findPath(graph: PathGraph, from: LatLng, to: LatLng): LatLng[] |
       if (next < (cost.get(v) ?? Infinity)) {
         cost.set(v, next);
         prev.set(v, u);
-        open.push([next + distanceM(coord(v), e.point), v]);
+        open.push(next + distanceM(coord(v), e.point), v);
       }
     }
   }
@@ -150,6 +202,17 @@ export function findPath(graph: PathGraph, from: LatLng, to: LatLng): LatLng[] |
 }
 
 const tiles = new Map<string, Promise<LatLng[][]>>();
+const graphs = new Map<string, PathGraph>();
+
+// Oldest-used first; the Map's insertion order is the recency order.
+function remember<V>(cache: Map<string, V>, key: string, value: V, max: number) {
+  cache.delete(key);
+  cache.set(key, value);
+  for (const old of cache.keys()) {
+    if (cache.size <= max) break;
+    cache.delete(old);
+  }
+}
 
 function loadTile(x: number, y: number): Promise<LatLng[][]> {
   const key = `${x}/${y}`;
@@ -160,9 +223,22 @@ function loadTile(x: number, y: number): Promise<LatLng[][]> {
       return decodeTile(await res.arrayBuffer(), x, y);
     });
     tile.catch(() => tiles.delete(key));
-    tiles.set(key, tile);
   }
+  remember(tiles, key, tile, MAX_CACHED_TILES);
   return tile;
+}
+
+async function graphFor(wanted: [number, number][]): Promise<PathGraph> {
+  const key = wanted.map(([x, y]) => `${x}/${y}`).join(",");
+  const cached = graphs.get(key);
+  if (cached) {
+    remember(graphs, key, cached, MAX_CACHED_GRAPHS);
+    return cached;
+  }
+  const lines = (await Promise.all(wanted.map(([x, y]) => loadTile(x, y)))).flat();
+  const graph = buildGraph(lines);
+  remember(graphs, key, graph, MAX_CACHED_GRAPHS);
+  return graph;
 }
 
 // A walkable path between two points from GSI's vector tiles (Japan only), or null when the map has none.
@@ -175,8 +251,7 @@ export async function gsiPath(from: LatLng, to: LatLng): Promise<LatLng[] | null
   for (let x = lo[0]; x <= hi[0]; x++) for (let y = lo[1]; y <= hi[1]; y++) wanted.push([x, y]);
   if (wanted.length > MAX_TILES) return null;
   try {
-    const lines = (await Promise.all(wanted.map(([x, y]) => loadTile(x, y)))).flat();
-    return findPath(buildGraph(lines), from, to);
+    return findPath(await graphFor(wanted), from, to);
   } catch {
     return null;
   }
@@ -199,10 +274,7 @@ async function throughStops(stops: LatLng[], bridge: Bridge): Promise<LatLng[] |
   return out;
 }
 
-// Routers snap to the nearest mapped way, so a route can stop short of its stop (a trail that is not in the data). The
-// missing stretch is filled from GSI's paths when they have one, otherwise it is a straight segment to the stop. The router
-// may also have gone round a long way to reach that way, so when GSI can walk the whole leg (through the via points) in a
-// shorter distance, that is used instead. `stops` is [start, ...via points, end].
+// Fills the stretch a router left short of its stop; `stops` is [start, ...via points, end]. See CODEMAP.
 export async function closeGaps(route: LatLng[], stops: LatLng[], bridge: Bridge = gsiPath): Promise<LatLng[]> {
   if (route.length < 2) return route;
   const start = stops[0];
