@@ -84,6 +84,19 @@ def _is_word_char(ch: str) -> bool:
     return ch.isascii() and ch.isalnum()
 
 
+def _is_kana(ch: str) -> bool:
+    return "ぁ" <= ch <= "ゟ"
+
+
+def _is_phrase_start(ch: str) -> bool:
+    return "一" <= ch <= "鿿" or "ァ" <= ch <= "ヺ" or _is_word_char(ch) or ch in _NO_LINE_END
+
+
+def _phrase_breaks(rest: str, window: range) -> List[int]:
+    """Rough bunsetsu ends: hiragana (particles, okurigana) followed by kanji/katakana/Latin."""
+    return [i for i in window if _is_kana(rest[i - 1]) and _is_phrase_start(rest[i])]
+
+
 def _break_index(rest: str, max_chars: int, target: int) -> tuple:
     """(cut, skip): the line is rest[:cut], the next starts at rest[cut + skip:]."""
     spaces = [i for i in range(1, min(len(rest), max_chars + 1)) if rest[i] == " "]
@@ -95,6 +108,9 @@ def _break_index(rest: str, max_chars: int, target: int) -> tuple:
     marks = [i for i in window if rest[i - 1] in _BREAK_AFTER]
     if marks:
         return min(marks, key=lambda i: abs(i - target)), 0
+    phrases = _phrase_breaks(rest, window)
+    if phrases:
+        return min(phrases, key=lambda i: abs(i - target)), 0
     cut = min(target, max_chars)
     while cut < max_chars and rest[cut] in _NO_LINE_START:
         cut += 1
