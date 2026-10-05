@@ -1,20 +1,16 @@
-import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
+import { callSidecarShared } from "../services/sidecar";
 
-// Font families the renderer can actually use (main.py list_fonts). Fetched once per app run.
+// Font families the renderer can actually use (main.py list_fonts). Fetched once per app run, and through the shared call:
+// the app runs one Python call at a time and a plain call would cancel whatever is running (a render, a voice preview).
 let cached: Promise<string[]> | null = null;
 
 function loadFonts(): Promise<string[]> {
-  cached ??= invoke<string>("run_python_blueprint", { action: "list_fonts", payload: "" })
-    .then((raw) => {
-      const reply = JSON.parse(raw.trim().split("\n").pop() ?? "{}");
-      return Array.isArray(reply.fonts) ? (reply.fonts as string[]) : [];
-    })
-    .catch((e) => {
-      console.error("Could not list installed fonts:", e);
-      cached = null;
-      return [];
-    });
+  cached ??= callSidecarShared<{ fonts: string[] }>("list_fonts", "").then((reply) => {
+    if (reply.success && Array.isArray(reply.fonts)) return reply.fonts;
+    cached = null; // asked again next time, e.g. when the call was cancelled by another job
+    return [];
+  });
   return cached;
 }
 

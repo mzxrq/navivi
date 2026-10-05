@@ -19,7 +19,7 @@ const field =
   "h-8 w-full min-w-0 pl-2.5 pr-8 rounded-lg bg-white dark:bg-zinc-950/40 border border-zinc-200 dark:border-white/10 text-[13px] text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 outline-none focus:border-navi focus:ring-2 focus:ring-navi/20 transition";
 
 // Under the field when there is room, above it when there is more room there, never past the window edge.
-function listPlacement(rect: DOMRect): React.CSSProperties {
+export function listPlacement(rect: DOMRect): React.CSSProperties {
   const below = window.innerHeight - rect.bottom - 12;
   const above = rect.top - 12;
   if (below < 180 && above > below) return { bottom: window.innerHeight - rect.top + 4, maxHeight: Math.min(224, above) };

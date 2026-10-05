@@ -1,7 +1,20 @@
 import { ReactNode, useEffect, useMemo, useState } from "react";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
-import { Copy, Download, Music, Trash2 } from "../../components/ui/icons";
+import {
+  AlignCenter,
+  AlignLeft,
+  AlignRight,
+  AlignVerticalJustifyCenter,
+  AlignVerticalJustifyEnd,
+  AlignVerticalJustifyStart,
+  Copy,
+  Download,
+  Music,
+  Trash2,
+} from "../../components/ui/icons";
+import { Segmented } from "../../components/ui/Segmented";
+import { Select } from "../../components/ui/Select";
 import { Slider } from "../../components/ui/Slider";
 import { StepButtons } from "../../components/ui/StepButtons";
 import { Switch } from "../../components/ui/Switch";
@@ -116,15 +129,20 @@ function TextBlock({ value, onCommit }: { value: string; onCommit: (v: string) =
   );
 }
 
-const styleRow: CaptionRow = (key, label, control, hint) => (
-  <div key={key}>
-    <div className="flex items-center justify-between gap-3">
-      <span className="text-[12px] text-zinc-600 dark:text-zinc-300 min-w-0">{label}</span>
-      <div className="w-32 shrink-0 flex justify-end">{control}</div>
+// The panel is narrow, so a style control gets the full width under its label (a switch stays beside it).
+const styleRow: CaptionRow = (key, label, control, hint) =>
+  key === "box" ? (
+    <div key={key} className="flex items-center justify-between gap-3">
+      <span className="text-[12px] text-zinc-600 dark:text-zinc-300">{label}</span>
+      {control}
     </div>
-    {hint && <p className="mt-0.5 text-[11px] text-zinc-400">{hint}</p>}
-  </div>
-);
+  ) : (
+    <div key={key}>
+      <span className="mb-1 block text-[12px] text-zinc-600 dark:text-zinc-300">{label}</span>
+      {control}
+      {hint && <p className="mt-1 text-[11px] text-zinc-400">{hint}</p>}
+    </div>
+  );
 
 /** The shared look (project caption_style, also in Settings) every subtitle starts from. */
 function DefaultSubtitleStyleSection() {
@@ -201,25 +219,32 @@ function TextLineSection({
   useEffect(() => setText(line.text), [line.text]);
   return (
     <Section title={title}>
-      <input
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        onBlur={() => text !== line.text && onChange({ ...line, text })}
-        onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
-        placeholder={t`Leave empty to hide this line`}
-        className={input}
-      />
+      <div>
+        <span className="mb-1 block text-[12px] text-zinc-600 dark:text-zinc-300">{t`Text`}</span>
+        <textarea
+          value={text}
+          rows={2}
+          aria-label={title}
+          onChange={(e) => setText(e.target.value.replace(/\n/g, " "))}
+          onBlur={() => text !== line.text && onChange({ ...line, text })}
+          onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLTextAreaElement).blur()}
+          placeholder={t`Type the words here`}
+          className="w-full px-2.5 py-2 rounded-lg bg-white dark:bg-zinc-950/40 border border-zinc-200 dark:border-white/10 text-[13px] leading-snug text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 outline-none focus:border-navi focus:ring-2 focus:ring-navi/20 transition resize-none"
+        />
+        <p className="mt-1 text-[11px] text-zinc-400">{t`Leave empty to hide this line`}</p>
+      </div>
       <Row label={t`Animation`}>
-        <select
+        <Select<LineAnimation>
+          label={t`Animation`}
           value={motion.animation}
-          onChange={(e) => onChange({ ...line, animation: e.target.value as LineAnimation })}
-          className={`${input} cursor-pointer`}
-        >
-          <option value="pop">{t`Pop in`}</option>
-          <option value="rise">{t`Rise`}</option>
-          <option value="fade">{t`Fade`}</option>
-          <option value="none">{t`None`}</option>
-        </select>
+          onChange={(animation) => onChange({ ...line, animation })}
+          options={[
+            { value: "pop", label: t`Pop in` },
+            { value: "rise", label: t`Rise` },
+            { value: "fade", label: t`Fade` },
+            { value: "none", label: t`None` },
+          ]}
+        />
       </Row>
       <Row label={t`Appears after`}>
         <NumberField value={motion.delay} min={0} max={60} onCommit={(v) => onChange({ ...line, delay: +v.toFixed(2) })} />
@@ -277,15 +302,17 @@ function TextLookSection({ text, timeline, commit }: { text: TextClip; timeline:
   return (
     <Section title={t`Position`}>
       <Row label={t`Place`}>
-        <select
+        <Segmented<NonNullable<TextClip["position"]>>
+          compact
+          iconOnly
           value={text.position ?? "middle"}
-          onChange={(e) => patch({ position: e.target.value === "middle" ? undefined : (e.target.value as TextClip["position"]) })}
-          className={`${input} cursor-pointer`}
-        >
-          <option value="top">{t`Top`}</option>
-          <option value="middle">{t`Middle`}</option>
-          <option value="bottom">{t`Bottom`}</option>
-        </select>
+          onChange={(v) => patch({ position: v === "middle" ? undefined : v })}
+          options={[
+            { id: "top", label: t`Top`, icon: <AlignVerticalJustifyStart className="w-3.5 h-3.5" /> },
+            { id: "middle", label: t`Middle`, icon: <AlignVerticalJustifyCenter className="w-3.5 h-3.5" /> },
+            { id: "bottom", label: t`Bottom`, icon: <AlignVerticalJustifyEnd className="w-3.5 h-3.5" /> },
+          ]}
+        />
       </Row>
       {text.position && text.position !== "middle" && (
         <Row label={text.position === "top" ? t`Distance from top` : t`Distance from bottom`}>
@@ -293,15 +320,17 @@ function TextLookSection({ text, timeline, commit }: { text: TextClip; timeline:
         </Row>
       )}
       <Row label={t`Align`}>
-        <select
+        <Segmented<NonNullable<TextClip["align"]>>
+          compact
+          iconOnly
           value={text.align ?? "center"}
-          onChange={(e) => patch({ align: e.target.value === "center" ? undefined : (e.target.value as TextClip["align"]) })}
-          className={`${input} cursor-pointer`}
-        >
-          <option value="left">{t`Left`}</option>
-          <option value="center">{t`Centre`}</option>
-          <option value="right">{t`Right`}</option>
-        </select>
+          onChange={(v) => patch({ align: v === "center" ? undefined : v })}
+          options={[
+            { id: "left", label: t`Left`, icon: <AlignLeft className="w-3.5 h-3.5" /> },
+            { id: "center", label: t`Centre`, icon: <AlignCenter className="w-3.5 h-3.5" /> },
+            { id: "right", label: t`Right`, icon: <AlignRight className="w-3.5 h-3.5" /> },
+          ]}
+        />
       </Row>
       {text.align && text.align !== "center" && (
         <Row label={text.align === "left" ? t`Distance from left` : t`Distance from right`}>

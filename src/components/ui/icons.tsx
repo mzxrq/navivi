@@ -136,6 +136,15 @@ export {
   Minimize2,
   RotateCcw,
   Zap,
+  Bold, // text style editors
+  Italic,
+  Underline,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  AlignVerticalJustifyStart,
+  AlignVerticalJustifyCenter,
+  AlignVerticalJustifyEnd,
 } from "lucide-react";
 
 export const Navivi = ({

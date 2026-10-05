@@ -56,6 +56,7 @@ import { Switch } from "./Switch";
 import { VoiceTab } from "./VoiceSettings";
 import { OnlineProviderSettings, ProviderPicker } from "./OnlineAiSettings";
 import { ComponentsChecklist } from "./ComponentsChecklist";
+import { CaptionPreview } from "./CaptionPreview";
 import { inputClass, Row, secondaryButton, Section, selectClass } from "./SettingsParts";
 import { isOnlineProvider, type OnlineProvider } from "../../services/ai/providers";
 
@@ -844,13 +845,18 @@ function CaptionStyleSection({
   onChange: (patch: TextStyle) => void;
 }) {
   return (
-    <Section title={t`Subtitles`}>
+    <Section title={t`Subtitles`} hint={t`Every subtitle starts from this look`}>
+      <div className="p-4 flex justify-center">
+        <div className="w-full max-w-sm">
+          <CaptionPreview style={style} />
+        </div>
+      </div>
       <CaptionStyleFields
         style={style}
         onChange={onChange}
         row={(key, label, control, hint) => (
           <Row key={key} title={label} description={hint}>
-            <div className="w-48 flex justify-end">{control}</div>
+            <div className="w-64 flex justify-end">{control}</div>
           </Row>
         )}
       />
