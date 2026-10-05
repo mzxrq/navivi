@@ -17,8 +17,10 @@ def lib(tmp_path):
     root = tmp_path / "voices"
     root.mkdir()
     voices.set_voices_dir(root)
+    voices.set_stock_dir(tmp_path / "no-stock-voices")  # the real bundle must not leak into tests
     yield root
     voices.set_voices_dir(None)
+    voices.set_stock_dir(None)
 
 
 def _wav(path: Path, seconds: float = 1.0, level: int = 16) -> Path:
@@ -185,3 +187,42 @@ def test_cli_actions_return_json_errors(lib, tmp_path):
     res = run_voice_action("tts_voice_delete", {"id": "nobody"})
     assert res["success"] is False
     assert run_voice_action("tts_voice_add", {})["success"] is False
+
+
+class TestBundledVoices:
+    @pytest.fixture
+    def stock(self, lib, tmp_path):
+        stock = tmp_path / "stock"
+        stock.mkdir()
+        _wav(stock / "amitaro.wav")
+        _wav(stock / "test1.wav")
+        (stock / "notes.txt").write_text("not a voice")
+        voices.set_stock_dir(stock)
+        return stock
+
+    def test_a_fresh_voice_library_gets_the_bundled_voices(self, lib, stock):
+        listed = [v["id"] for v in voices.list_voices()]
+        assert {"amitaro", "test1"} <= set(listed)
+        assert voices.voice_file("test1") is not None
+        assert not (lib / "notes.txt").exists()
+
+    def test_a_voice_the_user_deleted_does_not_come_back(self, lib, stock):
+        voices.list_voices()
+        assert voices.delete_voice("amitaro") is True
+        assert "amitaro" not in [v["id"] for v in voices.list_voices()]
+        assert voices.voice_file("amitaro") is None
+
+    def test_the_users_own_voice_with_the_same_name_is_left_alone(self, lib, stock):
+        _wav(lib / "test1.wav", seconds=2.0)
+        mine = (lib / "test1.wav").read_bytes()
+        voices.list_voices()
+        assert (lib / "test1.wav").read_bytes() == mine
+
+    def test_a_voice_added_to_the_bundle_later_arrives_on_the_next_look(self, lib, stock):
+        voices.list_voices()
+        _wav(stock / "newone.wav")
+        assert "newone" in [v["id"] for v in voices.list_voices()]
+
+    def test_without_a_bundle_nothing_happens(self, lib):
+        assert voices.sync_stock_voices() == []
+        assert [v["id"] for v in voices.list_voices()] == ["none"]

@@ -3,7 +3,7 @@
 //   tools/       ffmpeg/bin/{ffmpeg,ffprobe}.exe, gpsbabel/, uv.exe
 // Downloads go to scripts/.cache and are reused. Run with: npm run stage:installer
 import { execFileSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, createWriteStream } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync, createWriteStream } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { pipeline } from "node:stream/promises";
@@ -42,6 +42,31 @@ function stageCode() {
     },
   });
   console.log(`  ${mb(size(join(staging, "src-python")))}`);
+}
+
+// The voices listed in scripts/stock-voices.json as verified, from the developer's own voice folder, plus a CREDITS.txt.
+function stageVoices() {
+  console.log("Bundled voices");
+  const list = JSON.parse(readFileSync(join(root, "scripts", "stock-voices.json"), "utf8")).voices;
+  const from = join(pyDir, "bin", "Irodori-TTS-Server", "voices");
+  const out = join(staging, "src-python", "assets", "voices");
+  mkdirSync(out, { recursive: true });
+  const credits = [];
+  for (const voice of list) {
+    if (!voice.verified) {
+      console.log(`  - ${voice.id}: not verified for redistribution, left out`);
+      continue;
+    }
+    if (!existsSync(join(from, voice.file))) {
+      warn(`${voice.file} is not in ${from}: ${voice.id} is not bundled.`);
+      continue;
+    }
+    cpSync(join(from, voice.file), join(out, voice.file));
+    if (voice.credit) credits.push(`${voice.id}: ${voice.credit}`);
+    else warn(`${voice.id} has no credit line in scripts/stock-voices.json (add one if its license asks for it).`);
+  }
+  if (credits.length) writeFileSync(join(out, "CREDITS.txt"), `${credits.join("\n")}\n`);
+  console.log(`  ${mb(size(out))}`);
 }
 
 async function download(url, file) {
@@ -124,6 +149,7 @@ async function stageUv() {
 rmSync(staging, { recursive: true, force: true });
 mkdirSync(staging, { recursive: true });
 stageCode();
+stageVoices();
 await stageFfmpeg();
 stageGpsbabel();
 await stageUv();

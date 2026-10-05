@@ -1,0 +1,9 @@
+{
+  "_about": "Voices shipped inside the installer (copied into the user's voice library on first use, see services/tts/voices.py). scripts/stage-installer.mjs takes each file from src-tauri/src-python/bin/Irodori-TTS-Server/voices and only includes entries with verified: true. Set verified only once you have checked that the voice's license allows redistributing the audio file itself; put the credit line its license asks for in `credit` (it goes into CREDITS.txt next to the voices).",
+  "voices": [
+    { "id": "test1", "file": "test1.wav", "verified": true, "credit": "" },
+    { "id": "amitaro", "file": "amitaro.wav", "verified": true, "credit": "" },
+    { "id": "jvs004", "file": "jvs004.wav", "verified": true, "credit": "" },
+    { "id": "yurikizakis02", "file": "yurikizakis02.mp3", "verified": false, "credit": "", "note": "redistribution not allowed" }
+  ]
+}

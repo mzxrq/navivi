@@ -7,6 +7,7 @@ The server rescans the folder on every request."""
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 import shutil
 from functools import lru_cache
@@ -42,6 +43,54 @@ def set_voices_dir(path: Optional[Path]) -> None:
     _voices_dir_override = Path(path) if path is not None else None
 
 
+# [NOTE] [TTS] Voices that ship with the app (src-python/assets/voices, put there by scripts/stage-installer.mjs from the
+# list in scripts/stock-voices.json). They are copied into the voices folder once, so they are ordinary voices afterwards:
+# every engine and the Irodori server find them, and deleting one sticks (the copy is recorded and not repeated).
+_stock_dir_override: Optional[Path] = None
+STOCK_RECORD = ".stock.json"
+
+
+def stock_dir() -> Path:
+    return _stock_dir_override if _stock_dir_override is not None else runtime_paths.SRC_PYTHON / "assets" / "voices"
+
+
+def set_stock_dir(path: Optional[Path]) -> None:
+    """Test hook."""
+    global _stock_dir_override
+    _stock_dir_override = Path(path) if path is not None else None
+
+
+def sync_stock_voices() -> List[str]:
+    """Copies the bundled voices the user does not have yet (and has not deleted) into the voices folder; returns their ids."""
+    source = stock_dir()
+    if not source.is_dir():
+        return []
+    root = voices_dir()
+    record_path = root / STOCK_RECORD
+    try:
+        copied = set(json.loads(record_path.read_text(encoding="utf-8")).get("copied", []))
+    except (OSError, ValueError):
+        copied = set()
+    added: List[str] = []
+    changed = False
+    for path in sorted(source.iterdir()):
+        if not path.is_file() or path.suffix.lower() not in VOICE_EXTENSIONS or path.stem in copied:
+            continue
+        have = root.is_dir() and any(p.stem == path.stem and p.suffix.lower() in VOICE_EXTENSIONS for p in root.iterdir())
+        if not have:
+            root.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(path, root / path.name)
+            added.append(path.stem)
+        copied.add(path.stem)
+        changed = True
+    if changed:
+        root.mkdir(parents=True, exist_ok=True)
+        record_path.write_text(json.dumps({"copied": sorted(copied)}), encoding="utf-8")
+    if added:
+        logger.info("Bundled voices copied to the voice library: %s", ", ".join(added))
+    return added
+
+
 def _duration(path: Path) -> Optional[float]:
     try:
         from services.tts.ttsengine import FFmpegManager
@@ -51,6 +100,7 @@ def _duration(path: Path) -> Optional[float]:
 
 
 def voice_file(voice_id: str) -> Optional[Path]:
+    sync_stock_voices()
     root = voices_dir()
     if not voice_id or not root.is_dir():
         return None
@@ -76,6 +126,7 @@ def list_voices() -> List[Dict[str, Any]]:
         "id": NO_REF_VOICE, "filename": None, "bytes": 0,
         "duration_seconds": None, "builtin": True,
     }]
+    sync_stock_voices()
     root = voices_dir()
     if root.is_dir():
         for path in sorted(root.iterdir(), key=lambda p: p.name.lower()):
