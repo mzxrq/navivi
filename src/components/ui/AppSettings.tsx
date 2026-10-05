@@ -32,6 +32,7 @@ import {
   MapPin,
   Download,
   ExternalLink,
+  Info,
   Mic,
   Monitor,
   Moon,
@@ -56,6 +57,7 @@ import { Switch } from "./Switch";
 import { VoiceTab } from "./VoiceSettings";
 import { OnlineProviderSettings, ProviderPicker } from "./OnlineAiSettings";
 import { ComponentsChecklist } from "./ComponentsChecklist";
+import { AboutPanel } from "./AboutPanel";
 import { CaptionPreview } from "./CaptionPreview";
 import { inputClass, Row, secondaryButton, Section, selectClass } from "./SettingsParts";
 import { isOnlineProvider, type OnlineProvider } from "../../services/ai/providers";
@@ -68,6 +70,7 @@ type SettingsTab =
   | "ai"
   | "voice"
   | "setup"
+  | "about"
   | "tts_dictionary";
 
 const WHITE: RGB = [255, 255, 255];
@@ -199,6 +202,7 @@ export function AppSettings() {
       ? [{ id: "ai" as const, icon: Sparkles, label: t`AI models` }]
       : []),
     { id: "setup", icon: Download, label: t`Setup` },
+    { id: "about", icon: Info, label: t`About` },
   ];
   const activeLabel = tabs.find((tab) => tab.id === activeTab)?.label;
 
@@ -611,6 +615,8 @@ export function AppSettings() {
             {activeTab === "voice" && <VoiceTab />}
 
             {activeTab === "setup" && <ComponentsChecklist />}
+
+            {activeTab === "about" && <AboutPanel />}
 
             {activeTab === "tts_dictionary" && (
               <>
