@@ -1,17 +1,22 @@
 import { useEffect, useRef, useState } from "react";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
+import { db } from "../../services/db";
 import { getRuntimeStatus, installRuntime, needsSetup, SETUP_REQUIRED_EVENT, type SetupStep } from "../../services/setup";
+import { ComponentsChecklist } from "./ComponentsChecklist";
 import { Dialog, dialogButton } from "./Dialog";
 import { CheckCircle2, Loader2 } from "./icons";
 
 type Phase = "idle" | "running" | "failed";
+
+const CHECKLIST_DONE = "firstRunChecklistDone";
 
 const MAX_LOG_LINES = 200;
 
 // First run of an installed app: the media tools need their own Python, made here. Not shown when running from the repo.
 export function SetupGate() {
   const [open, setOpen] = useState(false);
+  const [checklist, setChecklist] = useState(false);
   const [phase, setPhase] = useState<Phase>("idle");
   const [step, setStep] = useState<SetupStep | null>(null);
   const [log, setLog] = useState<string[]>([]);
@@ -23,7 +28,12 @@ export function SetupGate() {
     let current = true;
     const check = () =>
       getRuntimeStatus()
-        .then((status) => current && needsSetup(status) && setOpen(true))
+        .then(async (status) => {
+          if (!current) return;
+          if (needsSetup(status)) return setOpen(true);
+          // The media tools are there: offer the optional parts once, on the first run of an installed app.
+          if (status.installed && !(await db.appSettings.get<boolean>(CHECKLIST_DONE))) setChecklist(true);
+        })
         .catch(() => {});
     check();
     window.addEventListener(SETUP_REQUIRED_EVENT, check);
@@ -37,6 +47,29 @@ export function SetupGate() {
     if (showLog) logEnd.current?.scrollIntoView({ block: "end" });
   }, [log, showLog]);
 
+  const closeChecklist = () => {
+    setChecklist(false);
+    void db.appSettings.set(CHECKLIST_DONE, true).catch(() => {});
+  };
+
+  if (checklist && !open) {
+    return (
+      <Dialog
+        width="w-[36rem]"
+        title={t`What else do you want to set up?`}
+        subtitle={t`You can do this later in Settings > Setup`}
+        onClose={closeChecklist}
+        footer={
+          <button type="button" className={dialogButton.primary} onClick={closeChecklist}>
+            <Trans>Done</Trans>
+          </button>
+        }
+      >
+        <ComponentsChecklist />
+      </Dialog>
+    );
+  }
+
   if (!open) return null;
 
   const run = async () => {
@@ -48,6 +81,7 @@ export function SetupGate() {
       await installRuntime(setStep, (line) => setLog((prev) => [...prev.slice(-(MAX_LOG_LINES - 1)), line]));
       setOpen(false);
       setPhase("idle");
+      setChecklist(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setPhase("failed");

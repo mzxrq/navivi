@@ -27,6 +27,7 @@ import {
   Film,
   Key,
   MapPin,
+  Download,
   ExternalLink,
   Mic,
   Monitor,
@@ -50,6 +51,7 @@ import { SubtitleSample } from "./SubtitleSample";
 import { Switch } from "./Switch";
 import { VoiceTab } from "./VoiceSettings";
 import { OnlineProviderSettings, ProviderPicker } from "./OnlineAiSettings";
+import { ComponentsChecklist } from "./ComponentsChecklist";
 import { inputClass, Row, secondaryButton, Section, selectClass } from "./SettingsParts";
 import { isOnlineProvider, type OnlineProvider } from "../../services/ai/providers";
 
@@ -60,6 +62,7 @@ type SettingsTab =
   | "video"
   | "ai"
   | "voice"
+  | "setup"
   | "tts_dictionary";
 
 const WHITE: RGB = [255, 255, 255];
@@ -189,6 +192,7 @@ export function AppSettings() {
     ...(settings.ai_features_enabled
       ? [{ id: "ai" as const, icon: Sparkles, label: t`AI models` }]
       : []),
+    { id: "setup", icon: Download, label: t`Setup` },
   ];
   const activeLabel = tabs.find((tab) => tab.id === activeTab)?.label;
 
@@ -692,6 +696,8 @@ export function AppSettings() {
             )}
 
             {activeTab === "voice" && <VoiceTab />}
+
+            {activeTab === "setup" && <ComponentsChecklist />}
 
             {activeTab === "tts_dictionary" && (
               <>

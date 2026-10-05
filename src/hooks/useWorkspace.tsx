@@ -71,11 +71,15 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const dirtyRevisionRef = useRef(0);
   // Every edit bumps this, so autosave can tell "still the same unsaved edit" from "edited again".
   const [dirtyRevision, setDirtyRevision] = useState(0);
+  // The window's close handler reads this instead of the state: "Don't Save" clears the flag and closes in the same tick,
+  // before a re-render could hand the handler the new value, and it used to open a second "unsaved changes" dialog.
+  const isDirtyRef = useRef(false);
   const setIsDirty = useCallback((dirty: boolean) => {
     if (dirty) {
       dirtyRevisionRef.current += 1;
       setDirtyRevision(dirtyRevisionRef.current);
     }
+    isDirtyRef.current = dirty;
     setIsDirtyState(dirty);
   }, []);
 
@@ -185,7 +189,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     try {
       const appWindow = getCurrentWindow();
       const unlisten = appWindow.onCloseRequested(async (event) => {
-        if (isDirty) {
+        if (isDirtyRef.current) {
           event.preventDefault(); // Stop app from closing immediately
           setUnsavedAction(() => () => appWindow.destroy()); // Force close after choice
           setIsUnsavedModalOpen(true);
@@ -197,7 +201,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     } catch (e) {
       console.log("Tauri window API not available in browser mode");
     }
-  }, [isDirty]);
+  }, []);
 
   const addToRecents = useCallback(
     (name: string, path: string, thumbnailPath?: string, projectId?: string) => {
@@ -370,7 +374,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         project_id: result.projId,
         thumbnail_path: result.thumbnailPath || "",
       });
-      if (dirtyRevisionRef.current === saveRevision) setIsDirtyState(false);
+      if (dirtyRevisionRef.current === saveRevision) {
+        isDirtyRef.current = false;
+        setIsDirtyState(false);
+      }
 
       const savedMetadata = {
         ...metadata,
