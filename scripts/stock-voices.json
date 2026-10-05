@@ -5,7 +5,7 @@
       "id": "test1",
       "file": "test1.wav",
       "verified": true,
-      "credit": "Local voice cloned from ElevenLab's Haru"
+      "credit": "Trained from in-house company video"
     },
     {
       "id": "amitaro",
@@ -17,7 +17,7 @@
       "id": "jvs004",
       "file": "jvs004.wav",
       "verified": true,
-      "credit": "Ryosuke Sonobe, Shinnosuke Takamichi and Hiroshi Saruwatari,  \"JSUT corpus: free large-scale Japanese speech corpus for end-to-end speech synthesis,\" arXiv preprint, 1711.00354, 2017. https://sites.google.com/site/shinnosuketakamichi/publication/jsut"
+      "credit": "Shinnosuke Takamichi, Kentaro Mitsui, Yuki Saito, Tomoki Koriyama, Naoko Tanji, and Hiroshi Saruwatari, \"JVS corpus: free Japanese multi-speaker voice corpus,\" arXiv preprint, 1908.06248, Aug. 2019. https://sites.google.com/site/shinnosuketakamichi/research-topics/jvs_corpus, Voice: JVS004 parallel100 voiceactress100_088"
     }
   ]
 }
