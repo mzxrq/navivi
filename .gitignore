@@ -127,3 +127,6 @@ setup/target/
 setup/dist/
 setup/payload.zip
 setup/stage/
+
+# Claude Code local settings
+.claude/
