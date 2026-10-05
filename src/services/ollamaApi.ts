@@ -411,6 +411,13 @@ export async function generateWaypointScriptStream(
     );
 }
 
+// One prompt in, the whole reply out, from whichever engine is set up (local Ollama or an online provider).
+export async function completeText(prompt: string, engine: AiEngine, signal?: AbortSignal, options?: Record<string, number>): Promise<string> {
+    let result = "";
+    await streamLLM(prompt, engine, (chunk) => { result = chunk; }, signal, undefined, undefined, options);
+    return result;
+}
+
 export async function extractLocationsFromDocument(
     text: string,
     engine: AiEngine = "schroneko/gemma-2-2b-jpn-it"

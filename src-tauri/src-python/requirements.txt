@@ -5,6 +5,7 @@ contextily
 scipy
 Pillow
 pillow-heif
+pypdf
 opencv-python
 httpx
 requests

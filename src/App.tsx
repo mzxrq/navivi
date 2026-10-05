@@ -6,6 +6,7 @@ import { RenderOverlay } from "./components/ui/RenderOverlay";
 import { ProjectManager } from "./components/view/ProjectManager";
 import { NewProject } from "./components/ui/NewProject";
 import { AppSettings } from "./components/ui/AppSettings";
+import { AssistantPanel } from "./features/assistant/AssistantPanel";
 import { SetupGate } from "./components/ui/SetupGate";
 import { Toast } from "./components/ui/Toast";
 import { useUI } from "./hooks/useUI";
@@ -54,6 +55,7 @@ export default function App() {
         </div>
       )}
 
+      <AssistantPanel />
       <ContextMenu />
       <Toast />
       {currentView === "editor" && <StatusBar />}

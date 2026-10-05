@@ -60,7 +60,7 @@ if __name__ == "__main__":
 
     # run_python_blueprint hands over ONE payload argument, so the app sends "tts 3 --force" as a single
     # string: split it back into arguments. Payloads that are text or JSON for their command stay whole.
-    _WHOLE_PAYLOAD = {"get_furigana", "extract_words", "estimate", "full_pipeline", "render_timeline"}
+    _WHOLE_PAYLOAD = {"get_furigana", "extract_words", "read_document", "estimate", "full_pipeline", "render_timeline"}
     if (
         len(sys.argv) == 3
         and sys.argv[1] not in _WHOLE_PAYLOAD
@@ -101,6 +101,13 @@ if __name__ == "__main__":
             text = sys.argv[2] if len(sys.argv) > 2 else ""
             print(json.dumps({"success": True, "words": analyze_words(text)}, ensure_ascii=False))
             sys.exit(0)
+
+        # Plain text of a PDF / Word / text file the user gave the assistant. argv[2] is the file path.
+        if command_arg == "read_document":
+            from services.documents import read_document
+            result = read_document(sys.argv[2] if len(sys.argv) > 2 else "")
+            print(json.dumps(result, ensure_ascii=False))
+            sys.exit(0)  # a failure is still a normal reply the chat shows, not a crashed run
 
         # Installed font families for the font editor's picker.
         if command_arg == "list_fonts":

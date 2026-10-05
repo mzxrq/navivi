@@ -51,7 +51,7 @@ export const defaultProjectSettings = {
     show_route_heatmap: false,
     quick_export: false,
     hardware_spec_override: "auto" as "auto" | "high" | "low",
-    ai_features_enabled: false,
+    ai_features_enabled: true,
 };
 
 export interface MapStyleOption {

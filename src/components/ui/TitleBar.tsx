@@ -10,10 +10,12 @@ import {
   Square,
   Map,
   Settings2,
+  Sparkles,
   Undo2,
   Redo2,
   Film,
 } from "../ui/icons";
+import { useAssistant } from "../../hooks/useAssistant";
 import { Tip } from "./Tip";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
@@ -53,6 +55,7 @@ export function TitleBar() {
   } = useWorkspace();
 
   const { importRouteFile, importPhotos } = useFileActions();
+  const { panelOpen, setPanelOpen } = useAssistant();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [showSaveAs, setShowSaveAs] = useState(false);
   const [saveMode, setSaveMode] = useState<"initial" | "duplicate">("initial");
@@ -412,6 +415,19 @@ export function TitleBar() {
                 );
               })}
             </div>
+          )}
+
+          {currentView === "editor" && (
+            <button
+              type="button"
+              onClick={() => setPanelOpen(!panelOpen)}
+              aria-label={t`Assistant`}
+              aria-pressed={panelOpen}
+              className={`${barButton} ${panelOpen ? "bg-navi/10! text-navi!" : ""}`}
+            >
+              <Sparkles className="w-4 h-4" />
+              <Tip label={t`Assistant`} align="end" />
+            </button>
           )}
 
           <button

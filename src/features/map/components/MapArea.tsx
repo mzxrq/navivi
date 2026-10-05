@@ -41,11 +41,12 @@ export function MapArea() {
     setActiveWaypointId,
     registerThumbnailGetter,
   } = useWorkspace();
-  const { handleDroppedBrowserFiles, importRouteFile } = useFileActions();
+  const { handleDroppedBrowserFiles, handleDroppedFiles, importRouteFile } = useFileActions();
 
   useEffect(() => {
     const pending = takePendingImport();
     if (pending?.kind === "route") importRouteFile(pending.path);
+    else if (pending?.kind === "files") handleDroppedFiles(pending.paths);
   }, []);
 
   const [isHovering, setIsHovering] = useState(false);

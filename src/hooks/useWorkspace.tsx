@@ -6,6 +6,7 @@ import {
   useCallback,
   useEffect,
   useRef,
+  useMemo,
   ReactNode,
 } from "react";
 import {
@@ -46,6 +47,15 @@ import { useUI } from "./useUI";
 import { UnsavedChanges } from "../components/ui/UnsavedChanges";
 
 const WorkspaceContext = createContext<WorkspaceState | undefined>(undefined);
+
+const GLOBAL_AI_KEY = "ai_settings";
+const AI_SETTING_KEYS = ["ai_features_enabled", "ai_provider", "ai_model", "ai_online_models", "ai_online_base_url", "ai_online_send_photos"] as const;
+
+function pickAiSettings(source: Partial<ProjectSettings>): Partial<ProjectSettings> {
+  const picked: Record<string, unknown> = {};
+  for (const key of AI_SETTING_KEYS) if (source[key] !== undefined) picked[key] = source[key];
+  return picked as Partial<ProjectSettings>;
+}
 
 const DefaultSettings: ProjectSettings = {
   ...defaultProjectSettings,
@@ -147,7 +157,19 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     created_at: new Date().toISOString(),
   }));
 
-  const [settings, setSettings] = useState<ProjectSettings>(DefaultSettings);
+  const [projectSettings, setSettings] = useState<ProjectSettings>(DefaultSettings);
+  // The AI choices belong to the app, not to a project: they survive new and opened projects, and AI features start on.
+  const [globalAi, setGlobalAi] = useState<Partial<ProjectSettings>>({ ai_features_enabled: true });
+  const globalAiRef = useRef(globalAi);
+  globalAiRef.current = globalAi;
+  const settings = useMemo<ProjectSettings>(() => ({ ...projectSettings, ...globalAi }), [projectSettings, globalAi]);
+
+  useEffect(() => {
+    db.appSettings
+      .get<Partial<ProjectSettings>>(GLOBAL_AI_KEY)
+      .then((saved) => saved && setGlobalAi((prev) => ({ ...prev, ...pickAiSettings(saved) })))
+      .catch((err) => console.error("Could not load the AI settings:", err));
+  }, []);
   const [routingCache, setRoutingCache] = useState<
     Record<string, [number, number][]>
   >({});
@@ -326,6 +348,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const updateSettings = useCallback((data: Partial<ProjectSettings>) => {
+    const ai = pickAiSettings(data);
+    if (Object.keys(ai).length > 0) {
+      const next = { ...globalAiRef.current, ...ai };
+      globalAiRef.current = next;
+      setGlobalAi(next);
+      db.appSettings.set(GLOBAL_AI_KEY, next).catch((err) => console.error("Could not save the AI settings:", err));
+    }
     setSettings((prev) => ({ ...prev, ...data }));
     setIsDirty(true);
   }, []);

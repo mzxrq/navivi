@@ -4,6 +4,7 @@ import App from "./App";
 import "./App.css";
 import { ThemeProvider } from "./hooks/useTheme";
 import { WorkspaceProvider } from "./hooks/useWorkspace";
+import { AssistantProvider } from "./hooks/useAssistant";
 import { UIProvider } from "./hooks/useUI";
 import { ErrorBoundary } from "./components/ui/ErrorBoundary";
 import { i18n } from "@lingui/core";
@@ -22,7 +23,9 @@ dynamicActivate(savedLocale)
             <I18nProvider i18n={i18n}>
               <UIProvider>
                 <WorkspaceProvider>
-                  <App />
+                  <AssistantProvider>
+                    <App />
+                  </AssistantProvider>
                 </WorkspaceProvider>
               </UIProvider>
             </I18nProvider>

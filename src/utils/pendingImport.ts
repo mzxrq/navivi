@@ -1,4 +1,4 @@
-export type PendingImport = { kind: "route"; path: string };
+export type PendingImport = { kind: "route"; path: string } | { kind: "files"; paths: string[] };
 
 let pending: PendingImport | null = null;
 

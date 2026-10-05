@@ -24,6 +24,7 @@ import {
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 import { ProjectSettingsModal } from "./ProjectSettingsModal";
+import { AssistantChat } from "../../features/assistant/AssistantChat";
 import { duplicateProject, listRecents, removeRecent, renameRecent } from "../../services/projectStore";
 import { runStage } from "../../services/sidecar";
 import { MenuEntry, openContextMenu, separator } from "../ui/menuItems";
@@ -362,6 +363,13 @@ export function ProjectManager() {
                 </button>
               </div>
             </header>
+
+            <section className="mb-8 max-w-3xl">
+              <h2 className="mb-2 text-[13px] font-semibold text-zinc-700 dark:text-zinc-200">
+                <Trans>Describe your trip</Trans>
+              </h2>
+              <AssistantChat variant="hero" />
+            </section>
 
             <section className="mb-8">
               <button

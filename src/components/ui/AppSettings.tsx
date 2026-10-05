@@ -323,6 +323,17 @@ export function AppSettings() {
                       <option value={600}>{t`10 minutes`}</option>
                     </select>
                   </Row>
+                  <Row
+                    title={t`AI features`}
+                    badge={<Badge tone="violet">{t`Ollama or online AI`}</Badge>}
+                    description={t`The assistant, Auto-Write script buttons and overview narration, in every project. Needs Ollama running locally, or an online provider set up in AI models.`}
+                  >
+                    <Switch
+                      checked={!!settings.ai_features_enabled}
+                      onChange={(v) => updateSettings({ ai_features_enabled: v })}
+                      label={t`AI features`}
+                    />
+                  </Row>
                 </Section>
 
                 {currentView === "editor" && (
@@ -330,19 +341,6 @@ export function AppSettings() {
                     title={t`This project`}
                     hint={t`Saved with the project`}
                   >
-                    <Row
-                      title={t`AI features`}
-                      badge={<Badge tone="violet">{t`Ollama or online AI`}</Badge>}
-                      description={t`Show Auto-Write script buttons and overview narration. Needs Ollama running locally, or an online provider set up in AI models.`}
-                    >
-                      <Switch
-                        checked={!!settings.ai_features_enabled}
-                        onChange={(v) =>
-                          updateProject({ ai_features_enabled: v })
-                        }
-                        label={t`AI features`}
-                      />
-                    </Row>
                     <Row
                       title={t`Fast render mode`}
                       description={t`Skip AI voiceover synthesis and pop-up images during generation`}

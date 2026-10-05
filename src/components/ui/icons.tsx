@@ -87,6 +87,8 @@ export {
   CheckCircle2,
   AlertCircle, // Toast
   Copy,
+  Paperclip,
+  SquarePen, // Assistant
   CircleDashed,
   History,
   Bell, // StatusBar
