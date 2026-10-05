@@ -1,4 +1,5 @@
 mod project_files;
+mod runtime;
 mod secrets;
 use std::net::TcpStream;
 use std::process::{Child, Command, Stdio};
@@ -74,6 +75,18 @@ fn kill_tracked_children(state: &BlueprintState) {
 }
 
 
+/// `python main.py` for this build (the repo's, or the installed app's own), with the saved AI keys in its environment.
+/// Fails with a `SETUP_REQUIRED` message the frontend turns into the setup screen when an installed app has no Python yet.
+fn python_command() -> Result<Command, String> {
+    let rt = runtime::get();
+    if !rt.python_ready() {
+        return Err("SETUP_REQUIRED: the media tools are not installed yet.".into());
+    }
+    let mut cmd = rt.command();
+    secrets::export_keys(&mut cmd);
+    Ok(cmd)
+}
+
 #[tauri::command]
 async fn run_python_blueprint(
     action: String, 
@@ -82,14 +95,11 @@ async fn run_python_blueprint(
 ) -> Result<String, String> {
     
     // Spawn instead of output()
-    let mut cmd = Command::new("python");
-    cmd.env("PYTHONIOENCODING", "utf-8")
-        .arg("src-python/main.py")
-        .arg(&action)
+    let mut cmd = python_command()?;
+    cmd.arg(&action)
         .arg(&payload)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    secrets::export_keys(&mut cmd);
     let mut child = cmd.spawn().map_err(|e| e.to_string())?;
 
     // Extract the pipes before moving the child to the state
@@ -177,13 +187,8 @@ fn start_render(
     force: Option<bool>,
     state: State<'_, BlueprintState>,
 ) -> Result<String, String> {
-    let mut command = Command::new("python");
-    command
-        .env("PYTHONIOENCODING", "utf-8")
-        .arg("src-python/main.py")
-        .arg("full_pipeline")
-        .arg(&config_path);
-    secrets::export_keys(&mut command);
+    let mut command = python_command()?;
+    command.arg("full_pipeline").arg(&config_path);
     if force.unwrap_or(false) {
         // Bypasses the checkpoint/resume logic so every stage regenerates
         // from scratch, instead of skipping steps whose output already exists.
@@ -279,10 +284,10 @@ fn is_ollama_running() -> bool {
     ).is_ok()
 }
 
-// PATH first, then the build bundled under src-python/bin, then the per-user installer's folder.
+// PATH first, then the build downloaded into the app's bin folder, then the per-user installer's folder.
 fn ollama_candidates() -> Vec<std::path::PathBuf> {
     let mut found = vec![std::path::PathBuf::from("ollama")];
-    found.push(Path::new("src-python/bin/ollama-windows-amd64/ollama.exe").to_path_buf());
+    found.push(runtime::get().bundled_ollama());
     if let Ok(local) = std::env::var("LOCALAPPDATA") {
         found.push(Path::new(&local).join("Programs").join("Ollama").join("ollama.exe"));
     }
@@ -300,7 +305,9 @@ fn wake_up_ollama() -> Result<String, String> {
         if exe.components().count() > 1 && !exe.exists() {
             continue;
         }
-        let spawned = Command::new(&exe)
+        let mut serve = Command::new(&exe);
+        runtime::hide_window(&mut serve);
+        let spawned = serve
             .env("OLLAMA_ORIGINS", "*")
             .arg("serve")
             .stdout(Stdio::null())
@@ -320,9 +327,7 @@ async fn export_video(app: tauri::AppHandle, project_dir: String) -> Result<Stri
 
     let timeline_path = format!("{}/timeline.json", project_dir);
 
-    let output = std::process::Command::new("python")
-        .env("PYTHONIOENCODING", "utf-8")
-        .arg("src-python/main.py")
+    let output = python_command()?
         .arg("render_timeline")
         .arg(&timeline_path)
         .output()
@@ -397,7 +402,9 @@ fn open_in_explorer(path: String) -> Result<(), String> {
 
 #[tauri::command]
 async fn convert_gps_to_gpx(input_path: String, input_format: String) -> Result<String, String> {
-    let output = std::process::Command::new("gpsbabel")
+    let mut gpsbabel = Command::new(runtime::get().gpsbabel());
+    runtime::hide_window(&mut gpsbabel);
+    let output = gpsbabel
         .arg("-i")
         .arg(&input_format)
         .arg("-f")
@@ -432,6 +439,11 @@ pub fn run() {
         // Opens a provider's "get an API key" page in the browser (Settings > AI models).
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
+            runtime::init(runtime::Layout {
+                dev_script_exists: Path::new("src-python/main.py").exists(),
+                resource_dir: app.path().resource_dir().ok().map(runtime::clean_path),
+                local_data_dir: app.path().app_local_data_dir().ok().map(runtime::clean_path),
+            });
             let dir = app.path().app_data_dir()?;
             fs::create_dir_all(&dir)?;
             let conn = db::open(&dir.join("navivi.db"))?;
@@ -460,6 +472,8 @@ pub fn run() {
             app_ready,
             copy_asset_file,
             open_in_explorer,
+            runtime::runtime_status,
+            runtime::runtime_install,
             secrets::secret_set,
             secrets::secret_get,
             secrets::secret_delete,

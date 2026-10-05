@@ -1,0 +1,25 @@
+# What the installed app's own Python needs (made on first run by the setup screen, see src-tauri/src/runtime.rs).
+# requirements.txt is the developer set; it also lists diffusers/transformers/accelerate for the optional AI outpaint of the
+# local attraction-clip fallback, which needs PyTorch (several GB). Without them that fallback pans over the plain photo.
+numpy
+pandas
+pyproj
+contextily
+scipy
+Pillow
+pillow-heif
+opencv-python
+httpx
+requests
+websocket-client
+ollama
+pydantic
+deep-translator
+pykakasi
+tqdm
+pydeck
+playwright
+python-dotenv
+psutil
+fugashi
+unidic-lite
