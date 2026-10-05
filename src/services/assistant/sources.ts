@@ -47,11 +47,12 @@ const cut = (name: string, text: string, alreadyCut = false): SourceText => ({
   truncated: alreadyCut || text.length > MAX_CHARS,
 });
 
-async function readWebPage(url: string): Promise<SourceText> {
+async function readWebPage(url: string, signal?: AbortSignal): Promise<SourceText> {
   let res: Response;
   try {
-    res = await fetch(url, { headers: { Accept: "text/html,text/plain" } });
+    res = await fetch(url, { headers: { Accept: "text/html,text/plain" }, signal });
   } catch {
+    if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
     throw new Error("Could not reach that web page. Check the address and your connection.");
   }
   if (!res.ok) throw new Error(`That web page answered with an error (HTTP ${res.status}).`);
@@ -65,7 +66,7 @@ async function readWebPage(url: string): Promise<SourceText> {
 // `input` is a file path or an http(s) address. Throws an Error whose message can be shown to the user.
 export async function readSource(input: string, signal?: AbortSignal): Promise<SourceText> {
   const source = input.trim();
-  if (isWebAddress(source)) return readWebPage(source);
+  if (isWebAddress(source)) return readWebPage(source, signal);
 
   const name = source.split(/[\\/]/).pop() || source;
   const extension = extensionOf(source);

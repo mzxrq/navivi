@@ -161,7 +161,9 @@ export async function geocodeRoute(
   if (!anchor) {
     const rough: GeoPoint[] = [];
     const step = Math.max(1, Math.ceil(places.length / MAX_ROUGH));
-    for (const place of places.filter((_, i) => i % step === 0)) {
+    const sample = places.filter((_, i) => i % step === 0);
+    for (const place of [...sample, ...places.filter((p) => !sample.includes(p))]) {
+      if (rough.length > 0 && !sample.includes(place)) break;
       const hit = await lookup(place, {});
       if (hit) rough.push(hit);
     }

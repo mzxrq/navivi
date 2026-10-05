@@ -179,6 +179,7 @@ export async function buildProject({ brief, sourceText, engine, mapboxToken, sig
       abortIfNeeded(signal);
       onProgress({ step: "scripts", done: i * 2 + k, total, label: wp.name });
       let script = "";
+      const withFacts = kind === "attraction" && !found[i].uncertain;
       await generateWaypointScriptStream(
         wp.name,
         briefToScriptRequest(brief, waypoints.length, { index: i, kind, excerpt: kind === "attraction" ? findExcerpt(sourceText, wp.name) : undefined }),
@@ -187,8 +188,8 @@ export async function buildProject({ brief, sourceText, engine, mapboxToken, sig
         (chunk) => {
           script = chunk;
         },
-        kind === "attraction" && !found[i].uncertain ? wp.lat : 0,
-        kind === "attraction" && !found[i].uncertain ? wp.lng : 0,
+        withFacts ? wp.lat : 0,
+        withFacts ? wp.lng : 0,
         [],
         undefined,
         kind,

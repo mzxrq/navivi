@@ -160,7 +160,7 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
       });
       const first = built.waypoints[0];
       if (!first) throw new Error(t`No places could be found in your sources`);
-      enterEditor(first ? { start_coords: [first.lat, first.lng] } : {});
+      enterEditor({ start_coords: [first.lat, first.lng] });
       setWaypoints(built.waypoints);
       if (files.length) setPendingImport({ kind: "files", paths: files });
       const missed =
