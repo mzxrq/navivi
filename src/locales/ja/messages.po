@@ -457,7 +457,7 @@ msgstr "以下に単語を追加するか、スクリプトから抽出する"
 msgid "Add your {0} API key in Settings > AI models"
 msgstr "設定 > AIモデルで{0}のAPIキーを追加してください"
 
-#: src/components/ui/OnlineAiSettings.tsx:212
+#: src/components/ui/OnlineAiSettings.tsx:214
 msgid "Address"
 msgstr "アドレス"
 
@@ -554,7 +554,7 @@ msgstr "やり直したものは、タイムラインエディタで作業して
 
 #: src/components/ui/AppSettings.tsx:554
 #: src/components/ui/OnlineAiSettings.tsx:157
-#: src/components/ui/OnlineAiSettings.tsx:189
+#: src/components/ui/OnlineAiSettings.tsx:191
 msgid "API key"
 msgstr "API キー"
 
@@ -689,13 +689,13 @@ msgstr "自動作成"
 
 #. placeholder {0}: info.label
 #. placeholder {1}: info.label
-#: src/components/ui/OnlineAiSettings.tsx:280
+#: src/components/ui/OnlineAiSettings.tsx:282
 msgid "Auto-Write sends the prompt, the place name and its location facts to {0}. Generate Assets also sends your stops' names and scripts to {1} when it drafts the overview narration. Nothing is sent before then, and usage is billed to your own account there."
 msgstr "自動作成では、プロンプト、地点名、位置情報が{0}に送信されます。アセットを生成で概要ナレーションの下書きを作るときも、各地点の名前とスクリプトが{1}に送信されます。それ以前に送信されることはなく、利用料金はそちらのご自身のアカウントに請求されます。"
 
 #. placeholder {0}: info.label
 #. placeholder {1}: info.label
-#: src/components/ui/OnlineAiSettings.tsx:279
+#: src/components/ui/OnlineAiSettings.tsx:281
 msgid "Auto-Write sends the prompt, the place name, its location facts and the stop's photos to {0}. Generate Assets also sends your stops' names and scripts to {1} when it drafts the overview narration. Nothing is sent before then, and usage is billed to your own account there."
 msgstr "自動作成では、プロンプト、地点名、位置情報、地点の写真が{0}に送信されます。アセットを生成で概要ナレーションの下書きを作るときも、各地点の名前とスクリプトが{1}に送信されます。それ以前に送信されることはなく、利用料金はそちらのご自身のアカウントに請求されます。"
 
@@ -1867,7 +1867,7 @@ msgstr "生成に失敗しました"
 msgid "Generation On Hold"
 msgstr "生成を保留中"
 
-#: src/components/ui/OnlineAiSettings.tsx:203
+#: src/components/ui/OnlineAiSettings.tsx:205
 msgid "Get a key"
 msgstr "キーを取得"
 
@@ -2058,7 +2058,7 @@ msgstr "作業を続ける"
 msgid "Keep working in the timeline editor. Export is available when it finishes."
 msgstr "タイムラインエディタで作業を続けられます。書き出しは完了後に使えます。"
 
-#: src/components/ui/OnlineAiSettings.tsx:169
+#: src/components/ui/OnlineAiSettings.tsx:171
 msgid "Key saved"
 msgstr "キーを保存しました"
 
@@ -2107,7 +2107,7 @@ msgstr "区間{n}: {fromName} → {toName}"
 msgid "Length"
 msgstr "長さ"
 
-#: src/components/ui/OnlineAiSettings.tsx:251
+#: src/components/ui/OnlineAiSettings.tsx:253
 msgid "Lets the model see a stop's photos (up to 4, shrunk first) when it writes the script."
 msgstr "スクリプトを書くときに、モデルが地点の写真（最大4枚、縮小して送信）を見られるようにします。"
 
@@ -2251,8 +2251,8 @@ msgstr "最小化"
 msgid "Misread a word? Say how it should sound. It goes into the pronunciation dictionary and the voice is made again."
 msgstr "読み間違いはありますか? 正しい読み方を入力すると発音辞書に追加され、音声が作り直されます。"
 
-#: src/components/ui/OnlineAiSettings.tsx:227
-#: src/components/ui/OnlineAiSettings.tsx:230
+#: src/components/ui/OnlineAiSettings.tsx:229
+#: src/components/ui/OnlineAiSettings.tsx:232
 msgid "Model"
 msgstr "モデル"
 
@@ -2632,7 +2632,7 @@ msgstr "ルートデータを解析中..."
 msgid "Paste"
 msgstr "貼り付け"
 
-#: src/components/ui/OnlineAiSettings.tsx:161
+#: src/components/ui/OnlineAiSettings.tsx:163
 msgid "Paste your key. It is kept in this PC's credential store, never in the project or in shared files."
 msgstr "キーを貼り付けてください。キーはこのPCの資格情報ストアに保存され、プロジェクトや共有ファイルには含まれません。"
 
@@ -2668,7 +2668,7 @@ msgstr "写真と画像"
 msgid "Pick at least one"
 msgstr "1つ以上選んでください"
 
-#: src/components/ui/OnlineAiSettings.tsx:227
+#: src/components/ui/OnlineAiSettings.tsx:229
 msgid "Pick one from the list or type its name. Refresh asks the provider what your key can use."
 msgstr "一覧から選ぶか、名前を入力してください。更新を押すと、お使いのキーで使えるモデルをプロバイダーに問い合わせます。"
 
@@ -2948,8 +2948,8 @@ msgstr "バックグラウンドでやり直し中"
 msgid "Redoing in the background. You can keep working in the timeline editor."
 msgstr "バックグラウンドでやり直しています。タイムラインエディタで作業を続けられます。"
 
-#: src/components/ui/OnlineAiSettings.tsx:241
-#: src/components/ui/OnlineAiSettings.tsx:242
+#: src/components/ui/OnlineAiSettings.tsx:243
+#: src/components/ui/OnlineAiSettings.tsx:244
 msgid "Refresh the model list"
 msgstr "モデル一覧を更新"
 
@@ -2959,7 +2959,7 @@ msgstr "アプリを再読み込み"
 
 #: src/components/ui/AppSettings.tsx:753
 #: src/components/ui/AppSettings.tsx:754
-#: src/components/ui/OnlineAiSettings.tsx:172
+#: src/components/ui/OnlineAiSettings.tsx:174
 #: src/components/ui/ReviewStep.tsx:103
 #: src/components/view/ProjectManager.tsx:629
 #: src/features/assistant/AssistantChat.tsx:130
@@ -3221,7 +3221,7 @@ msgstr "始"
 msgid "Saturation and brightness"
 msgstr "彩度と明度"
 
-#: src/components/ui/OnlineAiSettings.tsx:193
+#: src/components/ui/OnlineAiSettings.tsx:195
 #: src/components/ui/SaveAs.tsx:113
 #: src/components/ui/ScriptInput.tsx:267
 #: src/components/ui/StatusBar.tsx:323
@@ -3354,8 +3354,8 @@ msgstr "やり直し対象: クリップ{pickedClips}件、音声{pickedVoices}�
 msgid "Send"
 msgstr "送信"
 
-#: src/components/ui/OnlineAiSettings.tsx:251
-#: src/components/ui/OnlineAiSettings.tsx:255
+#: src/components/ui/OnlineAiSettings.tsx:253
+#: src/components/ui/OnlineAiSettings.tsx:257
 msgid "Send photos"
 msgstr "写真を送信"
 
@@ -3367,7 +3367,7 @@ msgstr "バックエンドにキャンセル信号を送信しています..."
 msgid "Sending interrupt signal to renderer."
 msgstr "レンダラーに中断信号を送信しています"
 
-#: src/components/ui/OnlineAiSettings.tsx:259
+#: src/components/ui/OnlineAiSettings.tsx:261
 msgid "Sends a one-word request to check the key and the model."
 msgstr "1語だけのリクエストを送って、キーとモデルを確認します。"
 
@@ -3457,7 +3457,11 @@ msgstr "動画を表示"
 msgid "Shows the title and subtitle at the start of the video"
 msgstr "動画の冒頭にタイトルとサブタイトルを表示します"
 
-#: src/components/ui/OnlineAiSettings.tsx:179
+#: src/components/ui/OnlineAiSettings.tsx:162
+msgid "Sign in to use Claude, GPT, Gemini and more through one OpenRouter account, billed by OpenRouter. Or paste a key. It is kept in this PC's credential store, never in the project."
+msgstr "サインインすると、1 つの OpenRouter アカウントで Claude、GPT、Gemini などを使えます（料金は OpenRouter から請求されます）。キーを貼り付けることもできます。キーはこの PC の資格情報ストアに保存され、プロジェクトには含まれません。"
+
+#: src/components/ui/OnlineAiSettings.tsx:181
 msgid "Sign in with OpenRouter"
 msgstr "OpenRouter でサインイン"
 
@@ -3696,11 +3700,11 @@ msgstr "Tauri Window APIエラー"
 msgid "Templates"
 msgstr "テンプレート"
 
-#: src/components/ui/OnlineAiSettings.tsx:259
+#: src/components/ui/OnlineAiSettings.tsx:261
 msgid "Test"
 msgstr "テスト"
 
-#: src/components/ui/OnlineAiSettings.tsx:268
+#: src/components/ui/OnlineAiSettings.tsx:270
 msgid "Test connection"
 msgstr "接続をテスト"
 
@@ -3737,7 +3741,7 @@ msgstr "アシスタント、台本の自動作成ボタン、全体ナレーシ
 msgid "The balanced voice needs a one-time setup: a separate Python environment and the model files (about 4 GB in all). It takes several minutes and needs an internet connection. Keep this window open while it runs."
 msgstr "標準の声には一度だけセットアップが必要です。独立したPython環境とモデルファイル（合計約4GB）を用意します。数分かかり、インターネット接続が必要です。実行中はこのウィンドウを開いたままにしてください。"
 
-#: src/components/ui/OnlineAiSettings.tsx:213
+#: src/components/ui/OnlineAiSettings.tsx:215
 msgid "The base address of a server that speaks the OpenAI API, for example https://example.com/v1"
 msgstr "OpenAI API に対応したサーバーのベースアドレス（例: https://example.com/v1）"
 
@@ -4151,7 +4155,7 @@ msgstr "音量"
 msgid "Waiting for pipeline..."
 msgstr "パイプラインを待機中..."
 
-#: src/components/ui/OnlineAiSettings.tsx:179
+#: src/components/ui/OnlineAiSettings.tsx:181
 msgid "Waiting for the browser…"
 msgstr "ブラウザーでの操作を待っています…"
 
@@ -4226,7 +4230,7 @@ msgstr "すべてのプロジェクトで共有する単語はアプリ設定に
 msgid "Words here apply to every project. A project's own entry for the same word wins."
 msgstr "ここにある単語はすべてのプロジェクトに適用されます。同じ単語がプロジェクト側にある場合は、プロジェクトが優先されます。"
 
-#: src/components/ui/OnlineAiSettings.tsx:263
+#: src/components/ui/OnlineAiSettings.tsx:265
 msgid "Works"
 msgstr "動作しています"
 

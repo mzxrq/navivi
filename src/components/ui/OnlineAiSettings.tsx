@@ -158,7 +158,9 @@ export function OnlineProviderSettings({ provider }: { provider: OnlineProvider 
           description={
             saved
               ? t`Saved in this PC's credential store, not in the project.`
-              : t`Paste your key. It is kept in this PC's credential store, never in the project or in shared files.`
+              : provider === "openrouter"
+                ? t`Sign in to use Claude, GPT, Gemini and more through one OpenRouter account, billed by OpenRouter. Or paste a key. It is kept in this PC's credential store, never in the project.`
+                : t`Paste your key. It is kept in this PC's credential store, never in the project or in shared files.`
           }
           stacked
         >
