@@ -364,13 +364,7 @@ export function ProjectManager() {
               </div>
             </header>
 
-            <section className="mb-8 max-w-3xl">
-              <h2 className="font-serif text-[26px] leading-tight text-zinc-900 dark:text-zinc-50">
-                <Trans>Where are we going today?</Trans>
-              </h2>
-              <p className="mt-1 mb-4 text-[13px] text-zinc-500 dark:text-zinc-400">
-                <Trans>Tell me about the trip and I will find the places, put them on the map and write a script for each stop.</Trans>
-              </p>
+            <section className="my-10 mx-auto max-w-3xl">
               <AssistantChat variant="hero" />
             </section>
 

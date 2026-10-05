@@ -98,14 +98,9 @@ export function AssistantChat({ variant }: { variant: "hero" | "panel" }) {
           )}
 
           {messages.length === 0 && !hero && (
-            <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-2 px-6 text-center">
-              <p className="font-serif text-[18px] text-zinc-800 dark:text-zinc-100">
-                <Trans>Where are we going?</Trans>
-              </p>
-              <p className="text-[12px] leading-relaxed text-zinc-400">
-                <Trans>Describe a trip and I will set up the stops and scripts for you. Attach an itinerary if you have one.</Trans>
-              </p>
-            </div>
+            <p className="flex-1 min-h-0 flex items-center justify-center px-6 text-center text-[12px] leading-relaxed text-zinc-400">
+              <Trans>Describe a trip and I will set up the stops and scripts for you. Attach an itinerary if you have one.</Trans>
+            </p>
           )}
 
           {phase === "building" && (
@@ -191,7 +186,7 @@ export function AssistantChat({ variant }: { variant: "hero" | "panel" }) {
           </div>
 
           {messages.length === 0 && hero && (
-            <div className="mt-3 flex flex-wrap gap-2">
+            <div className="mt-3 flex flex-wrap justify-center gap-2">
               {starters.map(({ icon: Icon, label, prompt }) => (
                 <button
                   key={label}
