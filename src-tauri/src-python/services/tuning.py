@@ -423,6 +423,13 @@ RESIDENTIAL_MAP_BOTTOM_BAR_FRACTION = 0.16
 # to stay well clear of the tile provider's own rate limiting; raise with
 # caution, and only alongside TileDownloader's wait/retry backoff settings.
 RESIDENTIAL_TILE_FETCH_WORKERS = 4
+# Leg HUD compass under the top-right destination pill. The dial stays north-up (the
+# map is always north-up); the needle turns to the walker's heading, taken
+# across +/- RESIDENTIAL_COMPASS_HEADING_WINDOW_M of path so GPS wiggles
+# don't make it twitch.
+RESIDENTIAL_SHOW_COMPASS = True
+RESIDENTIAL_COMPASS_SIZE_PX = 104
+RESIDENTIAL_COMPASS_HEADING_WINDOW_M = 20.0
 # Whether a stop-by waypoint (job_config.json's "isStopBy": true) merges
 # into the surrounding real-to-real leg (True — just shows its pin as the
 # traveler passes, no popup, no new map tile) instead of forcing its own
