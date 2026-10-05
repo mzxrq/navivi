@@ -515,8 +515,8 @@ msgid "Animate photos at stops"
 msgstr "Animate photos at stops"
 
 #: src/components/ui/AboutPanel.tsx:53
-msgid "Animates attraction photos"
-msgstr "Animates attraction photos"
+#~ msgid "Animates attraction photos"
+#~ msgstr "Animates attraction photos"
 
 #: src/features/editor/Inspector.tsx:280
 #: src/features/editor/Inspector.tsx:282
@@ -670,7 +670,6 @@ msgstr "Background music"
 msgid "Balanced"
 msgstr "Balanced"
 
-#: src/components/ui/AboutPanel.tsx:51
 #: src/components/ui/VoiceSettings.tsx:184
 msgid "Balanced voice"
 msgstr "Balanced voice"
@@ -691,7 +690,7 @@ msgstr "Balanced voice setup"
 msgid "Base Map Style"
 msgstr "Base Map Style"
 
-#: src/components/ui/AboutPanel.tsx:98
+#: src/components/ui/AboutPanel.tsx:74
 msgid "Base maps and place names."
 msgstr "Base maps and place names."
 
@@ -746,8 +745,8 @@ msgid "Build Assets"
 msgstr "Build Assets"
 
 #: src/components/ui/AboutPanel.tsx:87
-msgid "Built with"
-msgstr "Built with"
+#~ msgid "Built with"
+#~ msgstr "Built with"
 
 #: src/features/map/components/WaypointEditor.tsx:483
 #: src/features/map/components/WaypointEditor.tsx:539
@@ -983,7 +982,7 @@ msgstr "Converting GPS file format..."
 msgid "Converting iPhone photos..."
 msgstr "Converting iPhone photos..."
 
-#: src/components/ui/AboutPanel.tsx:82
+#: src/components/ui/AboutPanel.tsx:68
 #: src/components/ui/ErrorBoundary.tsx:135
 msgid "Copied"
 msgstr "Copied"
@@ -1005,7 +1004,7 @@ msgstr "Copy"
 msgid "Copy coordinates"
 msgstr "Copy coordinates"
 
-#: src/components/ui/AboutPanel.tsx:82
+#: src/components/ui/AboutPanel.tsx:68
 msgid "Copy details"
 msgstr "Copy details"
 
@@ -1245,7 +1244,7 @@ msgstr "Deleted 1 old file. It will be made again."
 msgid "Destination"
 msgstr "Destination"
 
-#: src/components/ui/AboutPanel.tsx:99
+#: src/components/ui/AboutPanel.tsx:75
 #: src/components/ui/PipelineLogPanel.tsx:119
 #: src/components/ui/RenderOverlay.tsx:825
 msgid "Details"
@@ -1655,7 +1654,6 @@ msgstr "Fast render"
 msgid "Fast render mode"
 msgstr "Fast render mode"
 
-#: src/components/ui/AboutPanel.tsx:52
 #: src/components/ui/VoiceSettings.tsx:185
 msgid "Fast voice"
 msgstr "Fast voice"
@@ -1887,7 +1885,7 @@ msgstr "Imported {0} waypoints successfully"
 msgid "Include rendered video clips"
 msgstr "Include rendered video clips"
 
-#: src/components/ui/AboutPanel.tsx:77
+#: src/components/ui/AboutPanel.tsx:63
 msgid "Include the version and system details from \"This copy\" so it is easier to reproduce."
 msgstr "Include the version and system details from \"This copy\" so it is easier to reproduce."
 
@@ -1928,8 +1926,8 @@ msgid "Italic"
 msgstr "Italic"
 
 #: src/components/ui/AboutPanel.tsx:47
-msgid "Joins clips, narration and subtitles into the video"
-msgstr "Joins clips, narration and subtitles into the video"
+#~ msgid "Joins clips, narration and subtitles into the video"
+#~ msgstr "Joins clips, narration and subtitles into the video"
 
 #: src/features/map/components/GenerateDialog.tsx:180
 msgid "Keep all"
@@ -2085,7 +2083,7 @@ msgstr "Map"
 msgid "Map Appearance"
 msgstr "Map Appearance"
 
-#: src/components/ui/AboutPanel.tsx:97
+#: src/components/ui/AboutPanel.tsx:73
 msgid "Map data"
 msgstr "Map data"
 
@@ -2210,7 +2208,6 @@ msgstr "Narration speed"
 msgid "Narration text"
 msgstr "Narration text"
 
-#: src/components/ui/AboutPanel.tsx:50
 #: src/components/ui/VoiceSettings.tsx:183
 msgid "Natural voice"
 msgstr "Natural voice"
@@ -2402,17 +2399,17 @@ msgstr "One-time setup"
 msgid "Online AI"
 msgstr "Online AI"
 
-#: src/components/ui/AboutPanel.tsx:75
+#: src/components/ui/AboutPanel.tsx:61
+#: src/components/ui/AboutPanel.tsx:64
 #: src/components/ui/AboutPanel.tsx:78
-#: src/components/ui/AboutPanel.tsx:102
-#: src/components/ui/AboutPanel.tsx:105
+#: src/components/ui/AboutPanel.tsx:81
 msgid "Open"
 msgstr "Open"
 
 #. placeholder {0}: lib.name
 #: src/components/ui/AboutPanel.tsx:90
-msgid "Open {0} website"
-msgstr "Open {0} website"
+#~ msgid "Open {0} website"
+#~ msgstr "Open {0} website"
 
 #: src/components/view/ProjectManager.tsx:351
 msgid "Open a single project file (.nvv or .zip archive)"
@@ -2622,7 +2619,7 @@ msgstr "Preview"
 msgid "Preview {0}"
 msgstr "Preview {0}"
 
-#: src/components/ui/AboutPanel.tsx:73
+#: src/components/ui/AboutPanel.tsx:59
 msgid "Project"
 msgstr "Project"
 
@@ -2781,8 +2778,8 @@ msgid "Recommended models"
 msgstr "Recommended models"
 
 #: src/components/ui/AboutPanel.tsx:48
-msgid "Records the route animation"
-msgstr "Records the route animation"
+#~ msgid "Records the route animation"
+#~ msgstr "Records the route animation"
 
 #: src/components/ui/ColorSwatches.tsx:17
 msgid "Red"
@@ -2940,7 +2937,7 @@ msgstr "Starting Python generation pipeline..."
 msgid "Replace existing voice"
 msgstr "Replace existing voice"
 
-#: src/components/ui/AboutPanel.tsx:77
+#: src/components/ui/AboutPanel.tsx:63
 msgid "Report a problem"
 msgstr "Report a problem"
 
@@ -3030,7 +3027,7 @@ msgstr "Right-click the leg to clear via points"
 msgid "Rise"
 msgstr "Rise"
 
-#: src/components/ui/AboutPanel.tsx:104
+#: src/components/ui/AboutPanel.tsx:80
 msgid "Road and path data that drawn routes snap to in Japan."
 msgstr "Road and path data that drawn routes snap to in Japan."
 
@@ -3081,7 +3078,7 @@ msgstr "Route video"
 msgid "Route videos"
 msgstr "Route videos"
 
-#: src/components/ui/AboutPanel.tsx:101
+#: src/components/ui/AboutPanel.tsx:77
 msgid "Routes between stops, when you let the app find them."
 msgstr "Routes between stops, when you let the app find them."
 
@@ -3386,7 +3383,7 @@ msgstr "Some photos could not be converted and were skipped."
 msgid "something-went-wrong"
 msgstr "Something went wrong"
 
-#: src/components/ui/AboutPanel.tsx:74
+#: src/components/ui/AboutPanel.tsx:60
 msgid "Source code"
 msgstr "Source code"
 
@@ -3572,12 +3569,12 @@ msgid "Text colour"
 msgstr "Text colour"
 
 #: src/components/ui/AboutPanel.tsx:46
-msgid "The 3D route flythroughs"
-msgstr "The 3D route flythroughs"
+#~ msgid "The 3D route flythroughs"
+#~ msgstr "The 3D route flythroughs"
 
 #: src/components/ui/AboutPanel.tsx:44
-msgid "The app's interface"
-msgstr "The app's interface"
+#~ msgid "The app's interface"
+#~ msgstr "The app's interface"
 
 #: src/components/ui/VoiceSettings.tsx:282
 msgid "The balanced voice needs a one-time setup: a separate Python environment and the model files (about 4 GB in all). It takes several minutes and needs an internet connection. Keep this window open while it runs."
@@ -3588,8 +3585,8 @@ msgid "The base address of a server that speaks the OpenAI API, for example http
 msgstr "The base address of a server that speaks the OpenAI API, for example https://example.com/v1"
 
 #: src/components/ui/AboutPanel.tsx:43
-msgid "The desktop shell"
-msgstr "The desktop shell"
+#~ msgid "The desktop shell"
+#~ msgstr "The desktop shell"
 
 #: src/components/ui/VoiceSettings.tsx:214
 msgid "The fast voice needs a one-time setup: a small separate Python environment and the model files (about 2 GB in all). It takes a few minutes and needs an internet connection. Keep this window open while it runs."
@@ -3604,8 +3601,8 @@ msgid "The first sunlight reaches the harbour, and the town slowly wakes up."
 msgstr "The first sunlight reaches the harbour, and the town slowly wakes up."
 
 #: src/components/ui/AboutPanel.tsx:45
-msgid "The map you edit on"
-msgstr "The map you edit on"
+#~ msgid "The map you edit on"
+#~ msgstr "The map you edit on"
 
 #: src/components/ui/ComponentsChecklist.tsx:72
 msgid "The most natural, and it clones a voice. Slowest on a PC without a graphics card."
@@ -3655,7 +3652,7 @@ msgstr "The voice reads every narration in this project. Changing the voice or t
 msgid "Theme"
 msgstr "Theme"
 
-#: src/components/ui/AboutPanel.tsx:80
+#: src/components/ui/AboutPanel.tsx:66
 msgid "This copy"
 msgstr "This copy"
 
@@ -3805,7 +3802,7 @@ msgstr "TTS Pronunciation Dictionary"
 msgid "Turn the photos of a stop into a moving clip. Off skips them, which renders faster."
 msgstr "Turn the photos of a stop into a moving clip. Off skips them, which renders faster."
 
-#: src/components/ui/AboutPanel.tsx:68
+#: src/components/ui/AboutPanel.tsx:54
 msgid "Turns waypoints and GPS tracks into narrated, cinematic map-route travel videos. Everything runs on your PC."
 msgstr "Turns waypoints and GPS tracks into narrated, cinematic map-route travel videos. Everything runs on your PC."
 
@@ -3902,8 +3899,8 @@ msgstr "Used by all projects."
 msgid "Uses the default subtitle style. Changes here apply to this subtitle only."
 msgstr "Uses the default subtitle style. Changes here apply to this subtitle only."
 
-#: src/components/ui/AboutPanel.tsx:65
-#: src/components/ui/AboutPanel.tsx:80
+#: src/components/ui/AboutPanel.tsx:51
+#: src/components/ui/AboutPanel.tsx:66
 msgid "Version {version}"
 msgstr "Version {version}"
 
@@ -3975,7 +3972,7 @@ msgstr "Voiceover"
 msgid "Voices"
 msgstr "Voices"
 
-#: src/components/ui/AboutPanel.tsx:110
+#: src/components/ui/AboutPanel.tsx:86
 msgid "Voices that come with Navivi"
 msgstr "Voices that come with Navivi"
 
@@ -4067,8 +4064,8 @@ msgid "Works"
 msgstr "Works"
 
 #: src/components/ui/AboutPanel.tsx:49
-msgid "Writes narration scripts on your PC"
-msgstr "Writes narration scripts on your PC"
+#~ msgid "Writes narration scripts on your PC"
+#~ msgstr "Writes narration scripts on your PC"
 
 #: src/components/ui/AutoDirectorModal.tsx:88
 msgid "Writing scripts with AI..."

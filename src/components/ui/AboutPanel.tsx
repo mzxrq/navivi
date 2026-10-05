@@ -39,20 +39,6 @@ export function AboutPanel() {
     }
   };
 
-  const builtWith: { name: string; role: string; url: string }[] = [
-    { name: "Tauri", role: t`The desktop shell`, url: "https://tauri.app" },
-    { name: "React", role: t`The app's interface`, url: "https://react.dev" },
-    { name: "Mapbox GL JS", role: t`The map you edit on`, url: "https://www.mapbox.com" },
-    { name: "deck.gl", role: t`The 3D route flythroughs`, url: "https://deck.gl" },
-    { name: "FFmpeg", role: t`Joins clips, narration and subtitles into the video`, url: "https://ffmpeg.org" },
-    { name: "Playwright", role: t`Records the route animation`, url: "https://playwright.dev" },
-    { name: "Ollama", role: t`Writes narration scripts on your PC`, url: "https://ollama.com" },
-    { name: "Irodori-TTS", role: t`Natural voice`, url: "https://github.com/Aratako/Irodori-TTS" },
-    { name: "Qwen3-TTS", role: t`Balanced voice`, url: "https://github.com/QwenLM/Qwen3-TTS" },
-    { name: "Kokoro", role: t`Fast voice`, url: "https://github.com/hexgrad/kokoro" },
-    { name: "ComfyUI", role: t`Animates attraction photos`, url: "https://www.comfy.org" },
-  ];
-
   const credits = stockVoices.voices.filter((v) => v.verified && v.credit);
 
   return (
@@ -82,16 +68,6 @@ export function AboutPanel() {
             {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />} {copied ? t`Copied` : t`Copy details`}
           </button>
         </Row>
-      </Section>
-
-      <Section title={t`Built with`}>
-        {builtWith.map((lib) => (
-          <Row key={lib.name} title={lib.name} description={lib.role}>
-            <button type="button" className={secondaryButton} aria-label={t`Open ${lib.name} website`} onClick={() => open(lib.url)}>
-              <ExternalLink className="w-3.5 h-3.5" />
-            </button>
-          </Row>
-        ))}
       </Section>
 
       <Section title={t`Map data`}>

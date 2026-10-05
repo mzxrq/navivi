@@ -515,8 +515,8 @@ msgid "Animate photos at stops"
 msgstr "地点の写真をアニメーション化"
 
 #: src/components/ui/AboutPanel.tsx:53
-msgid "Animates attraction photos"
-msgstr "名所の写真を動かします"
+#~ msgid "Animates attraction photos"
+#~ msgstr "名所の写真を動かします"
 
 #: src/features/editor/Inspector.tsx:280
 #: src/features/editor/Inspector.tsx:282
@@ -670,7 +670,6 @@ msgstr "BGM"
 msgid "Balanced"
 msgstr "標準"
 
-#: src/components/ui/AboutPanel.tsx:51
 #: src/components/ui/VoiceSettings.tsx:184
 msgid "Balanced voice"
 msgstr "標準の声"
@@ -691,7 +690,7 @@ msgstr "標準の声のセットアップ"
 msgid "Base Map Style"
 msgstr "ベースマップのスタイル"
 
-#: src/components/ui/AboutPanel.tsx:98
+#: src/components/ui/AboutPanel.tsx:74
 msgid "Base maps and place names."
 msgstr "ベースマップと地名。"
 
@@ -746,8 +745,8 @@ msgid "Build Assets"
 msgstr "アセットを構築"
 
 #: src/components/ui/AboutPanel.tsx:87
-msgid "Built with"
-msgstr "使用している技術"
+#~ msgid "Built with"
+#~ msgstr "使用している技術"
 
 #: src/features/map/components/WaypointEditor.tsx:483
 #: src/features/map/components/WaypointEditor.tsx:539
@@ -983,7 +982,7 @@ msgstr "GPSファイル形式を変換しています..."
 msgid "Converting iPhone photos..."
 msgstr "iPhoneの写真を変換しています..."
 
-#: src/components/ui/AboutPanel.tsx:82
+#: src/components/ui/AboutPanel.tsx:68
 #: src/components/ui/ErrorBoundary.tsx:135
 msgid "Copied"
 msgstr "コピーしました"
@@ -1005,7 +1004,7 @@ msgstr "コピー"
 msgid "Copy coordinates"
 msgstr "座標をコピー"
 
-#: src/components/ui/AboutPanel.tsx:82
+#: src/components/ui/AboutPanel.tsx:68
 msgid "Copy details"
 msgstr "詳細をコピー"
 
@@ -1245,7 +1244,7 @@ msgstr "古いファイルを1件削除しました。あらためて作成さ�
 msgid "Destination"
 msgstr "目的地"
 
-#: src/components/ui/AboutPanel.tsx:99
+#: src/components/ui/AboutPanel.tsx:75
 #: src/components/ui/PipelineLogPanel.tsx:119
 #: src/components/ui/RenderOverlay.tsx:825
 msgid "Details"
@@ -1655,7 +1654,6 @@ msgstr "高速レンダリング"
 msgid "Fast render mode"
 msgstr "高速レンダリングモード"
 
-#: src/components/ui/AboutPanel.tsx:52
 #: src/components/ui/VoiceSettings.tsx:185
 msgid "Fast voice"
 msgstr "高速な声"
@@ -1887,7 +1885,7 @@ msgstr "{0}個のポイントを正常にインポートしました"
 msgid "Include rendered video clips"
 msgstr "レンダリング済みの動画クリップを含める"
 
-#: src/components/ui/AboutPanel.tsx:77
+#: src/components/ui/AboutPanel.tsx:63
 msgid "Include the version and system details from \"This copy\" so it is easier to reproduce."
 msgstr "再現しやすいよう、「このバージョン」のバージョンとシステム情報を添えてください。"
 
@@ -1928,8 +1926,8 @@ msgid "Italic"
 msgstr "斜体"
 
 #: src/components/ui/AboutPanel.tsx:47
-msgid "Joins clips, narration and subtitles into the video"
-msgstr "クリップ、ナレーション、字幕を1本の動画にまとめます"
+#~ msgid "Joins clips, narration and subtitles into the video"
+#~ msgstr "クリップ、ナレーション、字幕を1本の動画にまとめます"
 
 #: src/features/map/components/GenerateDialog.tsx:180
 msgid "Keep all"
@@ -2085,7 +2083,7 @@ msgstr "マップ"
 msgid "Map Appearance"
 msgstr "マップの外観"
 
-#: src/components/ui/AboutPanel.tsx:97
+#: src/components/ui/AboutPanel.tsx:73
 msgid "Map data"
 msgstr "地図データ"
 
@@ -2210,7 +2208,6 @@ msgstr "ナレーションの速度"
 msgid "Narration text"
 msgstr "ナレーションのテキスト"
 
-#: src/components/ui/AboutPanel.tsx:50
 #: src/components/ui/VoiceSettings.tsx:183
 msgid "Natural voice"
 msgstr "自然な声"
@@ -2402,17 +2399,17 @@ msgstr "初回のみのセットアップ"
 msgid "Online AI"
 msgstr "オンラインAI"
 
-#: src/components/ui/AboutPanel.tsx:75
+#: src/components/ui/AboutPanel.tsx:61
+#: src/components/ui/AboutPanel.tsx:64
 #: src/components/ui/AboutPanel.tsx:78
-#: src/components/ui/AboutPanel.tsx:102
-#: src/components/ui/AboutPanel.tsx:105
+#: src/components/ui/AboutPanel.tsx:81
 msgid "Open"
 msgstr "開く"
 
 #. placeholder {0}: lib.name
 #: src/components/ui/AboutPanel.tsx:90
-msgid "Open {0} website"
-msgstr "{0} のウェブサイトを開く"
+#~ msgid "Open {0} website"
+#~ msgstr "{0} のウェブサイトを開く"
 
 #: src/components/view/ProjectManager.tsx:351
 msgid "Open a single project file (.nvv or .zip archive)"
@@ -2622,7 +2619,7 @@ msgstr "プレビュー"
 msgid "Preview {0}"
 msgstr "{0}を試聴"
 
-#: src/components/ui/AboutPanel.tsx:73
+#: src/components/ui/AboutPanel.tsx:59
 msgid "Project"
 msgstr "プロジェクト"
 
@@ -2781,8 +2778,8 @@ msgid "Recommended models"
 msgstr "おすすめのモデル"
 
 #: src/components/ui/AboutPanel.tsx:48
-msgid "Records the route animation"
-msgstr "ルートのアニメーションを録画します"
+#~ msgid "Records the route animation"
+#~ msgstr "ルートのアニメーションを録画します"
 
 #: src/components/ui/ColorSwatches.tsx:17
 msgid "Red"
@@ -2940,7 +2937,7 @@ msgstr "Python生成パイプラインを開始しています..."
 msgid "Replace existing voice"
 msgstr "既存のボイスを置き換える"
 
-#: src/components/ui/AboutPanel.tsx:77
+#: src/components/ui/AboutPanel.tsx:63
 msgid "Report a problem"
 msgstr "不具合を報告"
 
@@ -3030,7 +3027,7 @@ msgstr "区間を右クリックすると中継点を削除できます"
 msgid "Rise"
 msgstr "下から浮上"
 
-#: src/components/ui/AboutPanel.tsx:104
+#: src/components/ui/AboutPanel.tsx:80
 msgid "Road and path data that drawn routes snap to in Japan."
 msgstr "日本国内で、描いたルートが沿う道路・小道のデータ。"
 
@@ -3081,7 +3078,7 @@ msgstr "ルート動画"
 msgid "Route videos"
 msgstr "ルート動画"
 
-#: src/components/ui/AboutPanel.tsx:101
+#: src/components/ui/AboutPanel.tsx:77
 msgid "Routes between stops, when you let the app find them."
 msgstr "アプリにお任せしたときの、立ち寄り先どうしのルート。"
 
@@ -3386,7 +3383,7 @@ msgstr "変換できなかった写真はスキップしました。"
 msgid "something-went-wrong"
 msgstr "問題が発生しました"
 
-#: src/components/ui/AboutPanel.tsx:74
+#: src/components/ui/AboutPanel.tsx:60
 msgid "Source code"
 msgstr "ソースコード"
 
@@ -3572,12 +3569,12 @@ msgid "Text colour"
 msgstr "文字の色"
 
 #: src/components/ui/AboutPanel.tsx:46
-msgid "The 3D route flythroughs"
-msgstr "3D のルート飛行映像"
+#~ msgid "The 3D route flythroughs"
+#~ msgstr "3D のルート飛行映像"
 
 #: src/components/ui/AboutPanel.tsx:44
-msgid "The app's interface"
-msgstr "アプリの画面"
+#~ msgid "The app's interface"
+#~ msgstr "アプリの画面"
 
 #: src/components/ui/VoiceSettings.tsx:282
 msgid "The balanced voice needs a one-time setup: a separate Python environment and the model files (about 4 GB in all). It takes several minutes and needs an internet connection. Keep this window open while it runs."
@@ -3588,8 +3585,8 @@ msgid "The base address of a server that speaks the OpenAI API, for example http
 msgstr "OpenAI API に対応したサーバーのベースアドレス（例: https://example.com/v1）"
 
 #: src/components/ui/AboutPanel.tsx:43
-msgid "The desktop shell"
-msgstr "デスクトップアプリの土台"
+#~ msgid "The desktop shell"
+#~ msgstr "デスクトップアプリの土台"
 
 #: src/components/ui/VoiceSettings.tsx:214
 msgid "The fast voice needs a one-time setup: a small separate Python environment and the model files (about 2 GB in all). It takes a few minutes and needs an internet connection. Keep this window open while it runs."
@@ -3604,8 +3601,8 @@ msgid "The first sunlight reaches the harbour, and the town slowly wakes up."
 msgstr "朝の光が港に差し込み、街がゆっくりと目を覚まします。"
 
 #: src/components/ui/AboutPanel.tsx:45
-msgid "The map you edit on"
-msgstr "編集に使う地図"
+#~ msgid "The map you edit on"
+#~ msgstr "編集に使う地図"
 
 #: src/components/ui/ComponentsChecklist.tsx:72
 msgid "The most natural, and it clones a voice. Slowest on a PC without a graphics card."
@@ -3655,7 +3652,7 @@ msgstr "このプロジェクトのすべてのナレーションをこのボイ
 msgid "Theme"
 msgstr "テーマ"
 
-#: src/components/ui/AboutPanel.tsx:80
+#: src/components/ui/AboutPanel.tsx:66
 msgid "This copy"
 msgstr "このバージョン"
 
@@ -3805,7 +3802,7 @@ msgstr "TTS 発音辞書"
 msgid "Turn the photos of a stop into a moving clip. Off skips them, which renders faster."
 msgstr "地点の写真を動くクリップにします。オフにすると省略され、レンダリングが速くなります。"
 
-#: src/components/ui/AboutPanel.tsx:68
+#: src/components/ui/AboutPanel.tsx:54
 msgid "Turns waypoints and GPS tracks into narrated, cinematic map-route travel videos. Everything runs on your PC."
 msgstr "経由地や GPS の記録から、ナレーション付きのシネマティックなルート旅行動画を作ります。処理はすべてお使いの PC 上で行われます。"
 
@@ -3902,8 +3899,8 @@ msgstr "すべてのプロジェクトで使われます。"
 msgid "Uses the default subtitle style. Changes here apply to this subtitle only."
 msgstr "既定の字幕スタイルを使用しています。ここでの変更はこの字幕だけに適用されます。"
 
-#: src/components/ui/AboutPanel.tsx:65
-#: src/components/ui/AboutPanel.tsx:80
+#: src/components/ui/AboutPanel.tsx:51
+#: src/components/ui/AboutPanel.tsx:66
 msgid "Version {version}"
 msgstr "バージョン {version}"
 
@@ -3975,7 +3972,7 @@ msgstr "ナレーション"
 msgid "Voices"
 msgstr "音声"
 
-#: src/components/ui/AboutPanel.tsx:110
+#: src/components/ui/AboutPanel.tsx:86
 msgid "Voices that come with Navivi"
 msgstr "Navivi に付属する音声"
 
@@ -4067,8 +4064,8 @@ msgid "Works"
 msgstr "動作しています"
 
 #: src/components/ui/AboutPanel.tsx:49
-msgid "Writes narration scripts on your PC"
-msgstr "お使いの PC でナレーション原稿を書きます"
+#~ msgid "Writes narration scripts on your PC"
+#~ msgstr "お使いの PC でナレーション原稿を書きます"
 
 #: src/components/ui/AutoDirectorModal.tsx:88
 msgid "Writing scripts with AI..."
