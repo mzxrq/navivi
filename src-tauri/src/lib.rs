@@ -1,4 +1,5 @@
 mod project_files;
+mod secrets;
 use std::net::TcpStream;
 use std::process::{Child, Command, Stdio};
 use std::io::{BufRead, BufReader};
@@ -456,6 +457,9 @@ pub fn run() {
             app_ready,
             copy_asset_file,
             open_in_explorer,
+            secrets::secret_set,
+            secrets::secret_get,
+            secrets::secret_delete,
             project_files::export_project_archive,
             project_files::tidy_project_folder,
             project_files::duplicate_project_folder,

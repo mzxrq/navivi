@@ -30,3 +30,13 @@ walkdir = "2.5.0"
 rusqlite = { version = "0.32", features = ["bundled"] }
 thiserror = "2"
 
+# Without a platform feature keyring silently falls back to an in-memory store, so each OS names its own.
+[target.'cfg(windows)'.dependencies]
+keyring = { version = "3", features = ["windows-native"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3", features = ["apple-native"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { version = "3", features = ["linux-native"] }
+
