@@ -118,6 +118,13 @@ if __name__ == "__main__":
             result = read_document(sys.argv[2] if len(sys.argv) > 2 else "")
             print(json.dumps(result, ensure_ascii=False))
             sys.exit(0)  # a failure is still a normal reply the chat shows, not a crashed run
+        # How long a typed overview script is when spoken, from the project's own voice speed and route.
+        # argv[2] is JSON: {"config": job_config.json path, "text": the script}. Read-only, no model.
+        if command_arg == "overview_length":
+            from services.cli.script_commands import overview_length
+            args = json.loads(sys.argv[2]) if len(sys.argv) > 2 else {}
+            print(json.dumps(overview_length(args["config"], args.get("text", "")), ensure_ascii=False))
+            sys.exit(0)
         # Google Fonts for one picker language (argv[2]: "ja"/"en"), and installing one (argv[2]: family).
         if command_arg in ("google_fonts_catalog", "install_google_font"):
             from services.localization import google_fonts
