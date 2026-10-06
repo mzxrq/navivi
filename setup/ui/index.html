@@ -124,7 +124,7 @@
       <div class="grow"></div>
       <div class="badge"><svg viewBox="0 0 24 24" fill="none" stroke="#4287f5" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
       <h1 id="d-title"></h1>
-      <p class="lead" id="d-text"></p>
+      <p class="lead" id="d-text" style="white-space:pre-line"></p>
       <div class="opts" id="d-launch-wrap" style="margin-top:18px"><div class="row"><label class="check"><input type="checkbox" id="d-launch" checked><span class="box"></span><span id="d-launch-l"></span></label></div></div>
       <div class="grow"></div>
       <div class="actions"><span class="sp"></span><button class="btn primary" id="d-finish"></button></div>
@@ -165,6 +165,8 @@ const TEXT = {
     uTitle: "Navivi を削除しますか？", uText: "アプリとショートカットを削除します。作成したプロジェクトは削除されません。",
     uData: (mb) => `ダウンロード済みのツールと音声も削除する（約 ${mb} MB）`, uNote: "あとで再インストールすると、もう一度ダウンロードが必要になります。",
     remove: "削除する", cancel: "キャンセル", removing: "削除しています…", removed: "削除しました", removedText: "ご利用ありがとうございました。",
+    runtime: "Microsoft Visual C++ ランタイムをインストールしています…",
+    runtimeMissing: "音声エンジンに必要な Microsoft Visual C++ ランタイムを入れられませんでした。音声のセットアップ前に https://aka.ms/vs/17/release/vc_redist.x64.exe からインストールしてください。",
   },
   en: {
     tagline: "Turn your routes into narrated travel videos.",
@@ -179,6 +181,8 @@ const TEXT = {
     uTitle: "Remove Navivi?", uText: "This removes the app and its shortcuts. Your projects are not deleted.",
     uData: (mb) => `Also delete the downloaded tools and voices (about ${mb} MB)`, uNote: "If you install again later, they have to be downloaded again.",
     remove: "Remove", cancel: "Cancel", removing: "Removing…", removed: "Navivi was removed", removedText: "Thanks for using it.",
+    runtime: "Installing the Microsoft Visual C++ runtime…",
+    runtimeMissing: "The Microsoft Visual C++ runtime that the voice engines need could not be installed. Install it from https://aka.ms/vs/17/release/vc_redist.x64.exe before you set up a voice.",
   },
 };
 
@@ -241,6 +245,7 @@ const handlers = {
   },
   dir(e) { S.dir = e.path; $("w-dir").textContent = "‎" + S.dir; },
   step(e) { $("p-text").textContent = t(e.name); },
+  note(e) { S.note = t(e.name); },
   progress(e) { $("p-fill").style.width = e.pct + "%"; $("p-pct").textContent = Math.round(e.pct) + "%"; $("p-file").textContent = "‎" + e.file; movePin(e.pct / 100); },
   running() { S.running = true; paint(); },
   done() {
@@ -249,7 +254,7 @@ const handlers = {
       $("d-title").textContent = t("removed"); $("d-text").textContent = t("removedText"); $("d-launch-wrap").style.display = "none";
       $("d-finish").textContent = t("close"); $("d-finish").onclick = () => send({ cmd: "close" });
     } else {
-      $("d-title").textContent = t("doneTitle"); $("d-text").textContent = t("doneText"); $("d-launch-l").textContent = t("launch"); $("d-finish").textContent = t("finish");
+      $("d-title").textContent = t("doneTitle"); $("d-text").textContent = t("doneText") + (S.note ? "\n\n" + S.note : ""); $("d-launch-l").textContent = t("launch"); $("d-finish").textContent = t("finish");
     }
     show("done");
   },
