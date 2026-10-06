@@ -4,6 +4,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { useLingui } from "@lingui/react";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { useUI } from "../../hooks/useUI";
+import { useAssistant } from "../../hooks/useAssistant";
 import {
   Car,
   ChevronRight,
@@ -54,6 +55,7 @@ const fileName = (path: string) => path.split(/[\\/]/).pop() || path;
 export function NewProject() {
   const { setCurrentView } = useUI();
   const { updateMetadata, updateSettings, resetWorkspace } = useWorkspace();
+  const { reset: resetAssistant } = useAssistant();
   const { i18n } = useLingui();
 
   const [projectName, setProjectName] = useState(t`Untitled Project`);
@@ -149,6 +151,7 @@ export function NewProject() {
     const name = projectName.trim() || t`Untitled Project`;
 
     resetWorkspace();
+    resetAssistant(); // a new project starts with a new conversation
     updateMetadata({
       project_name: name,
       project_id: "",

@@ -417,6 +417,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       );
 
       await saveTimelineManifest(result.projectDir, result.projName, timeline, settings.caption_style);
+      // The assistant keeps its chat in the project folder: a first save or a Save As tells it where the chat now lives.
+      window.dispatchEvent(new CustomEvent("project-saved", { detail: { dir: result.projectDir, saveAs: !!asDuplicate } }));
 
       setMetadata({
         ...metadata,
