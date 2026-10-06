@@ -25,6 +25,8 @@ pub struct Options {
 pub enum Event {
     Progress { pct: f64, file: String },
     Step { name: &'static str },
+    /// Something worth telling the user that did not stop the install.
+    Note { name: &'static str },
 }
 
 pub fn default_dir() -> PathBuf {
@@ -96,6 +98,14 @@ pub fn install(opts: &Options, payload: &Payload, mut emit: impl FnMut(Event)) -
     }
     let size_kb = (dir_size(&opts.dir) / 1024).min(u32::MAX as u64) as u32;
     system::write_uninstall_entry(&system::uninstall_entry_values(&manifest.name, &manifest.version, &opts.dir, &exe, size_kb))?;
+
+    // Last, so that a refused permission prompt or no internet never costs the install itself: only the voices need this.
+    if !system::vc_runtime_installed() {
+        emit(Event::Step { name: "runtime" });
+        if system::install_vc_runtime().is_err() {
+            emit(Event::Note { name: "runtimeMissing" });
+        }
+    }
     Ok(manifest)
 }
 

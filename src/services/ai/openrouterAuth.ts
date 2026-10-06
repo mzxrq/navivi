@@ -15,17 +15,26 @@ export async function challengeFor(verifier: string): Promise<string> {
   return base64Url(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier))));
 }
 
-export function authUrl(port: number, challenge: string): string {
-  const callback = `http://localhost:${port}/callback`;
+export function authUrl(port: number, challenge: string, nonce: string): string {
+  const callback = `http://localhost:${port}/callback/${nonce}`;
   return `${AUTH_PAGE}?callback_url=${encodeURIComponent(callback)}&code_challenge=${challenge}&code_challenge_method=S256`;
 }
+
+export const cancelSignIn = () => invoke("oauth_listen_cancel").catch(() => {});
 
 // Opens the browser, waits for the redirect on a local port, and trades the code for the user's own key.
 export async function signInWithOpenRouter(): Promise<string> {
   const verifier = newVerifier();
-  const port = await invoke<number>("oauth_listen_start");
-  await invoke("plugin:opener|open_url", { url: authUrl(port, await challengeFor(verifier)) });
-  const code = await invoke<string>("oauth_listen_wait", { timeoutSecs: WAIT_SECONDS });
+  const nonce = newVerifier();
+  const port = await invoke<number>("oauth_listen_start", { nonce });
+  let code: string;
+  try {
+    await invoke("plugin:opener|open_url", { url: authUrl(port, await challengeFor(verifier), nonce) });
+    code = await invoke<string>("oauth_listen_wait", { timeoutSecs: WAIT_SECONDS });
+  } catch (e) {
+    await cancelSignIn();
+    throw e;
+  }
 
   const res = await fetch(KEY_EXCHANGE, {
     method: "POST",

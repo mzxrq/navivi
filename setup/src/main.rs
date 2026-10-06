@@ -269,6 +269,7 @@ fn run_window(payload: Option<Payload>, uninstall: bool, default_dir: PathBuf, o
                         match install::install(&opts, &payload, |event| match event {
                             Event::Progress { pct, file } => say(&progress, json!({ "type": "progress", "pct": pct, "file": file })),
                             Event::Step { name } => say(&progress, json!({ "type": "step", "name": name })),
+                            Event::Note { name } => say(&progress, json!({ "type": "note", "name": name })),
                         }) {
                             Ok(manifest) => {
                                 *installed.lock().unwrap() = Some((opts.dir.clone(), manifest.exe));

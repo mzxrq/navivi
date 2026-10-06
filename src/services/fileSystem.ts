@@ -7,6 +7,7 @@ import { buildAssetManifest } from "../utils/manifestBuilder";
 import { TimelineData, RecentProjects, TextStyle } from "../types";
 import { routeCacheKey } from "../utils/routeCacheKey";
 import { planFileNames } from "../utils/fileNames";
+import { renameCredits } from "../utils/photoCredits";
 import { emptyTimeline, timelineFromEditorState, timelineFromPipeline, toManifest } from "../features/editor/model";
 import { i18n } from "@lingui/core";
 import { db } from "./db";
@@ -34,6 +35,9 @@ function calculateDistance(pos1: [number, number], pos2: [number, number]) {
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }
+
+// A path that is already absolute (a drive letter or a leading slash) is left alone when a project is opened.
+const isAbsolutePath = (p: string) => /^[a-zA-Z]:/.test(p) || p.startsWith("/") || p.startsWith(String.fromCharCode(92));
 
 export const saveProjectData = async (
   waypoints: any[],
@@ -153,6 +157,8 @@ export const saveProjectData = async (
   const processedWaypoints = await Promise.all(
     waypoints.map(async (wp) => {
       const relativeImagePaths: string[] = [];
+      // A credit belongs to its photo, so it moves to the photo's new name when the file is copied into the project.
+      const renamed = new Map<string, string>();
 
       if (wp.images && wp.images.length > 0) {
         for (const imgPath of wp.images) {
@@ -162,6 +168,7 @@ export const saveProjectData = async (
             await copyFile(imgPath, absoluteDest);
           }
           relativeImagePaths.push("assets/image/" + fileName);
+          renamed.set(imgPath, "assets/image/" + fileName);
         }
       }
       const relativeVideoPaths: string[] = [];
@@ -191,7 +198,7 @@ export const saveProjectData = async (
         name: wp.name,
         customMarker: finalCustomMarker || undefined,
 
-        popup_image: relativeImagePaths.length > 0 ? [relativeImagePaths[0]] : [],
+        popup_image: relativeImagePaths,
         camera_pans: relativeImagePaths.length > 0
           ? relativeImagePaths.map((_, i) => (wp.imagePans && wp.imagePans[i] ? wp.imagePans[i] : "panright"))
           : [],
@@ -201,6 +208,7 @@ export const saveProjectData = async (
         videos: relativeVideoPaths,
         videoSound: relativeVideoPaths.map((_, i) => wp.videoSound?.[i] ?? false),
         imagePans: wp.imagePans || [],
+        imageCredits: renameCredits(wp.imageCredits, renamed),
         imageTransitions: wp.imageTransitions || [],
         narration: wp.narration || "",
         arrivingNarration: wp.arrivingNarration || "",
@@ -460,6 +468,11 @@ export const loadProjectData = async (forcePath?: string, isFolder = false) => {
             wp.images[i] = await join(projectDir, wp.images[i]);
           }
         }
+      }
+      if (wp.imageCredits) {
+        const absolute = new Map<string, string>();
+        for (const rel of Object.keys(wp.imageCredits)) absolute.set(rel, isAbsolutePath(rel) ? rel : await join(projectDir, rel));
+        wp.imageCredits = renameCredits(wp.imageCredits, absolute);
       }
       if (wp.videos) {
         for (let i = 0; i < wp.videos.length; i++) {

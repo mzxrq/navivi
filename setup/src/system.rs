@@ -3,7 +3,7 @@
 use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use winreg::enums::{HKEY_CURRENT_USER, KEY_ALL_ACCESS};
+use winreg::enums::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_ALL_ACCESS};
 use winreg::RegKey;
 
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
@@ -33,6 +33,34 @@ fn powershell(script: &str) -> Option<String> {
         .output()
         .ok()?;
     Some(String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
+/// Whether the Microsoft Visual C++ 2015-2022 runtime (x64) is installed. The app itself does not need it (its runtime is built in),
+/// but the PyTorch behind the voices and the moving videos loads msvcp140.dll / vcruntime140.dll from the system.
+pub fn vc_runtime_installed() -> bool {
+    RegKey::predef(HKEY_LOCAL_MACHINE)
+        .open_subkey(r"SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64")
+        .and_then(|key| key.get_value::<u32, _>("Installed"))
+        .map(|installed| installed == 1)
+        .unwrap_or(false)
+}
+
+/// Downloads Microsoft's redistributable and runs it quietly (Windows asks for permission). Exit codes 0, 1638 (a newer one is
+/// already there) and 3010 (done, restart pending) all mean it is in place.
+pub fn install_vc_runtime() -> Result<(), String> {
+    let script = "$ErrorActionPreference = 'Stop';         [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;         $f = Join-Path $env:TEMP 'navivi_vc_redist.x64.exe';         Invoke-WebRequest -UseBasicParsing 'https://aka.ms/vs/17/release/vc_redist.x64.exe' -OutFile $f;         $p = Start-Process -FilePath $f -ArgumentList '/install','/quiet','/norestart' -Verb RunAs -Wait -PassThru;         Remove-Item $f -ErrorAction SilentlyContinue;         $p.ExitCode";
+    let out = Command::new("powershell")
+        .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script])
+        .creation_flags(CREATE_NO_WINDOW)
+        .stdin(Stdio::null())
+        .output()
+        .map_err(|e| e.to_string())?;
+    let text = String::from_utf8_lossy(&out.stdout);
+    match text.trim().lines().last().and_then(|l| l.trim().parse::<i32>().ok()) {
+        Some(0 | 1638 | 3010) => Ok(()),
+        Some(code) => Err(format!("the Visual C++ runtime setup ended with code {code}")),
+        None => Err(String::from_utf8_lossy(&out.stderr).trim().to_string()),
+    }
 }
 
 /// Process ids of `navivi.exe` running from `dir`.

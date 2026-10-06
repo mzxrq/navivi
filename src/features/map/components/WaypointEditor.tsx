@@ -16,6 +16,8 @@ import {
   ZoomOut,
   Footprints,
   Plus,
+  Search,
+  Loader2,
 } from "../../../components/ui/icons";
 import { useWorkspace } from "../../../hooks/useWorkspace";
 import { useUI } from "../../../hooks/useUI";
@@ -37,8 +39,10 @@ import { PHOTO_EXTENSIONS, isHeic, preparePhotos } from "../../../services/image
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 import { placeNameOf } from "../../../utils/placeName";
+import { downloadPhotos, findPlacePhotos } from "../../../services/placePhotos";
+import { MAX_PHOTOS_PER_STOP, creditLine, shortCredit, withFoundPhotos } from "../../../utils/photoCredits";
 
-const MAX_IMAGES = 3;
+const MAX_IMAGES = MAX_PHOTOS_PER_STOP;
 
 function useCameraMotions() {
   return [
@@ -98,6 +102,10 @@ export function WaypointEditor({
   const [activeTab, setActiveTab] = useState<"scripts" | "images" | "videos">("scripts");
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
+  const [findingPhotos, setFindingPhotos] = useState(false);
+  const photoAbortRef = useRef<AbortController | null>(null);
+  const latestWp = useRef(wp);
+  latestWp.current = wp;
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [thoughtProcess, setThoughtProcess] = useState("");
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -105,6 +113,7 @@ export function WaypointEditor({
   useEffect(() => {
     setIsCollapsed(false);
     setConfirmDelete(false);
+    return () => photoAbortRef.current?.abort(); // a lookup for the stop that was just left must not add photos to it later
   }, [wpId]);
 
   if (!wp) return null;
@@ -167,6 +176,33 @@ export function WaypointEditor({
       });
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  // Free photos of this place from Wikimedia Commons go into the empty photo slots; the ones already there are left alone.
+  const findOnline = async () => {
+    if (findingPhotos) return;
+    photoAbortRef.current?.abort();
+    const controller = new AbortController();
+    photoAbortRef.current = controller;
+    setFindingPhotos(true);
+    try {
+      const room = MAX_IMAGES - wpImages.length;
+      const candidates = await findPlacePhotos({ name: wp.name, lat: wp.lat, lng: wp.lng }, { limit: room, signal: controller.signal });
+      const saved = await downloadPhotos(candidates, controller.signal);
+      const current = latestWp.current ?? wp;
+      const patch = withFoundPhotos(current, saved, MAX_IMAGES);
+      if (!patch) {
+        showToast(t`No free photos of this place were found.`, "info");
+        return;
+      }
+      updateWaypoint(wp.id, patch);
+      setIsDirty(true);
+      showToast(t`Added ${saved.length} photos from Wikimedia Commons. Check that they show the right place.`, "success");
+    } catch (e: any) {
+      if (!controller.signal.aborted) showToast(t`Could not look for photos: ${e?.message ?? e}`, "error");
+    } finally {
+      setFindingPhotos(false);
     }
   };
 
@@ -470,9 +506,21 @@ export function WaypointEditor({
                   <WaypointVideos wp={wp} />
                 ) : (
                   <div>
-                    <p className="text-[11px] text-zinc-500 mb-3">
-                      <Trans>Add up to 3 images that will pop up during the narration at this stop</Trans>
-                    </p>
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <p className="text-[11px] text-zinc-500">
+                        <Trans>Add up to 3 images that will pop up during the narration at this stop</Trans>
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => void findOnline()}
+                        disabled={findingPhotos || wpImages.length >= MAX_IMAGES}
+                        title={t`Looks on Wikimedia Commons for free photos of this place. Sends the place name and position to Wikimedia.`}
+                        className="shrink-0 inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md border border-zinc-200 dark:border-white/10 text-[11px] font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-white/5 disabled:opacity-40 disabled:pointer-events-none transition-colors"
+                      >
+                        {findingPhotos ? <Loader2 className="w-3 h-3 animate-spin" /> : <Search className="w-3 h-3" />}
+                        {findingPhotos ? <Trans>Looking…</Trans> : <Trans>Find photos online</Trans>}
+                      </button>
+                    </div>
                     <div className="flex flex-wrap gap-3">
                       {wpImages.map((img, idx) => {
                         const currentPan = imagePans[idx] || "none";
@@ -537,6 +585,17 @@ export function WaypointEditor({
                               <p className="text-[11px] text-zinc-600 dark:text-zinc-400 truncate" title={img}>
                                 {img.split(/\\|\//).pop()}
                               </p>
+                              {wp.imageCredits?.[img] && (
+                                <button
+                                  type="button"
+                                  onClick={() => void invoke("plugin:opener|open_url", { url: wp.imageCredits![img].url }).catch(console.error)}
+                                  title={`${creditLine(wp.imageCredits[img])}
+${t`Open the photo's page on Wikimedia Commons`}`}
+                                  className="block w-full text-left text-[10px] text-zinc-400 hover:text-navi truncate transition-colors"
+                                >
+                                  {shortCredit(wp.imageCredits[img])}
+                                </button>
+                              )}
                               <div>
                                 <p className="text-[10px] text-zinc-400 mb-1">
                                   <Trans>Camera Angle</Trans>

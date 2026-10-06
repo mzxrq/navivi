@@ -501,6 +501,7 @@ pub fn run() {
             runtime::runtime_install,
             oauth::oauth_listen_start,
             oauth::oauth_listen_wait,
+            oauth::oauth_listen_cancel,
             secrets::secret_set,
             secrets::secret_get,
             secrets::secret_delete,

@@ -47,11 +47,12 @@ const cut = (name: string, text: string, alreadyCut = false): SourceText => ({
   truncated: alreadyCut || text.length > MAX_CHARS,
 });
 
-async function readWebPage(url: string): Promise<SourceText> {
+async function readWebPage(url: string, signal?: AbortSignal): Promise<SourceText> {
   let res: Response;
   try {
-    res = await fetch(url, { headers: { Accept: "text/html,text/plain" } });
+    res = await fetch(url, { headers: { Accept: "text/html,text/plain" }, signal });
   } catch {
+    if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
     throw new Error("Could not reach that web page. Check the address and your connection.");
   }
   if (!res.ok) throw new Error(`That web page answered with an error (HTTP ${res.status}).`);
@@ -63,9 +64,9 @@ async function readWebPage(url: string): Promise<SourceText> {
 }
 
 // `input` is a file path or an http(s) address. Throws an Error whose message can be shown to the user.
-export async function readSource(input: string): Promise<SourceText> {
+export async function readSource(input: string, signal?: AbortSignal): Promise<SourceText> {
   const source = input.trim();
-  if (isWebAddress(source)) return readWebPage(source);
+  if (isWebAddress(source)) return readWebPage(source, signal);
 
   const name = source.split(/[\\/]/).pop() || source;
   const extension = extensionOf(source);
@@ -82,12 +83,15 @@ export async function readSource(input: string): Promise<SourceText> {
   }
 
   // Rust runs one sidecar process at a time and kills it for the next call, so another screen's startup calls can cancel
-  // this read; reading a file is safe to repeat.
-  let reply = await callSidecar<{ text: string; truncated: boolean }>("read_document", source);
-  for (let attempt = 0; attempt < 4 && !reply.success && reply.cancelled; attempt++) {
+  // this read; reading a file is safe to repeat, until the user presses Stop.
+  const read = () => callSidecar<{ text: string; truncated: boolean }>("read_document", source);
+  let reply = await read();
+  for (let attempt = 0; attempt < 4 && !reply.success && reply.cancelled && !signal?.aborted; attempt++) {
     await new Promise((resolve) => setTimeout(resolve, 600));
-    reply = await callSidecar<{ text: string; truncated: boolean }>("read_document", source);
+    if (signal?.aborted) break;
+    reply = await read();
   }
+  if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
   if (!reply.success) throw new Error(reply.cancelled ? `Reading ${name} was interrupted. Try attaching it again.` : reply.error);
   return cut(name, reply.text, reply.truncated);
 }

@@ -10,8 +10,13 @@ describe("regionOf / stripRegion", () => {
     expect(stripRegion(places[0], "Wakayama")).toBe("Sainen-ji Temple");
     expect(stripRegion(places[2], "Wakayama")).toBe("Kyoshi Sta., Osaka");
   });
-  it("finds none when names carry no shared area", () => {
-    expect(regionOf(["Hongu", "Nachi"])).toBeNull();
+  it("keeps the prefecture with the country instead of the country alone", () => {
+    const places = ["Sainen-ji, Wakayama, Japan", "Mt. Kabuto, Wakayama, Japan", "Hongu, Wakayama, Japan"];
+    expect(regionOf(places)).toBe("Wakayama, Japan");
+    expect(stripRegion(places[0], "Wakayama, Japan")).toBe("Sainen-ji");
+    expect(regionOf(["A, Tokyo, Japan", "B, Kyoto, Japan"])).toBe("Japan");
+  });
+  it("finds none when names carry no shared area", () => {    expect(regionOf(["Hongu", "Nachi"])).toBeNull();
     expect(regionOf(["A, X", "B, Y", "C, Z"])).toBeNull();
     expect(regionOf(["Only, Here"])).toBe("Here");
   });
@@ -69,6 +74,14 @@ describe("geocodeRoute", () => {
     const out = await geocodeRoute(["Nowhere, X", "Nothing, X"], { lookup: async () => null });
     expect(out.found).toEqual([]);
     expect(out.failed).toHaveLength(2);
+  });
+
+  it("keeps looking past its sample when the anchor sample all misses", async () => {
+    const places = Array.from({ length: 20 }, (_, i) => `P${i}`);
+    const lookup: Lookup = async (place) => (place === "P19" ? { lat: 35, lng: 135 } : null);
+    const out = await geocodeRoute(places, { lookup });
+    expect(out.failed).toEqual([]);
+    expect(out.found[19].uncertain).toBe(false);
   });
 
   it("tries variants of a name and the local name from the rename step", async () => {

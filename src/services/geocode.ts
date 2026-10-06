@@ -99,16 +99,24 @@ const TOLERANCE_KM = 0.05; // a hit this close to the region's own point is the 
 const DEFAULT_HOP_KM = 40; // the next stop of a route is searched this close to its neighbor
 const KM_PER_DEGREE = 111;
 const REGION_DEGREES = 0.8;
+const MAX_ROUGH = 6; // places looked up unbounded to find the route's area; the median of a spread sample is enough
+const MAX_NAMES = 4; // spellings tried per place: every one is a rate-limited request when it misses
 
 // The area most names end with: "Sainen-ji Temple, Wakayama" -> "Wakayama".
 export function regionOf(places: string[]): string | null {
-  const counts = new Map<string, number>();
-  for (const p of places) {
-    const tail = p.includes(",") ? p.slice(p.lastIndexOf(",") + 1).trim() : "";
-    if (tail) counts.set(tail, (counts.get(tail) ?? 0) + 1);
-  }
-  const [best, n] = [...counts.entries()].sort((a, b) => b[1] - a[1])[0] ?? [];
-  return best && n >= Math.min(2, places.length) && n * 2 >= places.length ? best : null;
+  // "Sainen-ji, Wakayama, Japan": the last two parts name the area, the country alone is too wide to anchor a search box.
+  const shared = (parts: number): string | null => {
+    const counts = new Map<string, number>();
+    for (const p of places) {
+      const segments = p.split(",").map((s) => s.trim());
+      if (segments.length <= parts) continue;
+      const tail = segments.slice(-parts).join(", ");
+      if (tail) counts.set(tail, (counts.get(tail) ?? 0) + 1);
+    }
+    const [best, n] = [...counts.entries()].sort((a, b) => b[1] - a[1])[0] ?? [];
+    return best && n >= Math.min(2, places.length) && n * 2 >= places.length ? best : null;
+  };
+  return shared(2) ?? shared(1);
 }
 
 // Spellings of one name a search index is likely to know: abbreviations expanded, notes dropped, generic suffixes cut.
@@ -152,7 +160,10 @@ export async function geocodeRoute(
   const anchorIsRegion = anchor !== null;
   if (!anchor) {
     const rough: GeoPoint[] = [];
-    for (const place of places) {
+    const step = Math.max(1, Math.ceil(places.length / MAX_ROUGH));
+    const sample = places.filter((_, i) => i % step === 0);
+    for (const place of [...sample, ...places.filter((p) => !sample.includes(p))]) {
+      if (rough.length > 0 && !sample.includes(place)) break;
       const hit = await lookup(place, {});
       if (hit) rough.push(hit);
     }
@@ -184,7 +195,7 @@ export async function geocodeRoute(
     return null;
   };
   const namesFor = (place: string, local?: string) =>
-    [local, ...nameVariants(stripRegion(place, region)), place].filter((n, k, all): n is string => !!n && all.indexOf(n) === k);
+    [local, ...nameVariants(stripRegion(place, region)), place].filter((n, k, all): n is string => !!n && all.indexOf(n) === k).slice(0, MAX_NAMES);
 
   for (const [i, place] of places.entries()) {
     if (signal?.aborted) throw aborted();

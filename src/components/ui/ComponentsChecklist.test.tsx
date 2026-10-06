@@ -17,11 +17,12 @@ import { ComponentsChecklist } from "./ComponentsChecklist";
 i18n.load("en", {});
 i18n.activate("en");
 
-const engines = (ready: Partial<Record<"irodori" | "qwen3" | "kokoro", boolean>>) => ({
+const engines = (ready: Partial<Record<"irodori" | "qwen3" | "kokoro" | "comfyui", boolean>>, nvidia = false) => ({
   success: true,
   irodori: { ready: !!ready.irodori },
   qwen3: { ready: !!ready.qwen3 },
   kokoro: { ready: !!ready.kokoro },
+  comfyui: { ready: !!ready.comfyui, nvidia },
 });
 
 const show = () =>
@@ -91,5 +92,44 @@ describe("ComponentsChecklist", () => {
   it("points to the Ollama download page when it is not found", async () => {
     show();
     await waitFor(() => expect(screen.getByRole("button", { name: /Get Ollama/ })).toBeTruthy());
+  });
+
+  it("names the model behind each voice so it can be credited", async () => {
+    show();
+    await waitFor(() => expect(screen.getByText("Fast voice · Kokoro-82M")).toBeTruthy());
+    expect(screen.getByText("Balanced voice · Qwen3-TTS")).toBeTruthy();
+    expect(screen.getByText("Natural voice · Irodori-TTS")).toBeTruthy();
+    expect(screen.getByText(/By hexgrad, Apache-2.0/)).toBeTruthy();
+  });
+
+  it("offers the moving attraction videos with its own install action when an NVIDIA card is there", async () => {
+    sidecar.callSidecarShared.mockResolvedValue(engines({}, true));
+    show();
+    const buttons = await waitFor(() => {
+      const found = screen.getAllByRole("button", { name: "Set up" });
+      expect(found).toHaveLength(4);
+      return found;
+    });
+    sidecar.callSidecar.mockReturnValue(new Promise(() => {}));
+    fireEvent.click(buttons[3]);
+    await waitFor(() => expect(sidecar.callSidecar).toHaveBeenCalledWith("comfyui_install", {}));
+    await waitFor(() => expect(screen.getByText(/about 30 GB and can take an hour/)).toBeTruthy());
+  });
+
+  it("does not offer the download without an NVIDIA card and says why", async () => {
+    show();
+    await waitFor(() => expect(screen.getByText("Needs an NVIDIA graphics card")).toBeTruthy());
+    expect(screen.getAllByRole("button", { name: "Set up" })).toHaveLength(3);
+  });
+
+  it("tells the user what is still missing, and when nothing is", async () => {
+    show();
+    await waitFor(() => expect(screen.getByText(/Set up at least one voice/)).toBeTruthy());
+    expect(screen.getByText(/Optional: a script writer/)).toBeTruthy();
+    cleanup();
+    sidecar.callSidecarShared.mockResolvedValue(engines({ kokoro: true, comfyui: true }, true));
+    ollama.getLocalModels.mockResolvedValue(["gemma4:26b"]);
+    show();
+    await waitFor(() => expect(screen.getByText("Everything you need is set up.")).toBeTruthy());
   });
 });

@@ -364,10 +364,7 @@ export function ProjectManager() {
               </div>
             </header>
 
-            <section className="mb-8 max-w-3xl">
-              <h2 className="mb-2 text-[13px] font-semibold text-zinc-700 dark:text-zinc-200">
-                <Trans>Describe your trip</Trans>
-              </h2>
+            <section className="my-10 mx-auto max-w-3xl">
               <AssistantChat variant="hero" />
             </section>
 

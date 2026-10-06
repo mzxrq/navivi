@@ -33,6 +33,7 @@ import {
   tidyProjectFolder,
   saveTimelineManifest,
 } from "../services/fileSystem";
+import { savedImages } from "../utils/waypointImages";
 import {
   deleteProjectVersion,
   listProjectVersions,
@@ -164,11 +165,29 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   globalAiRef.current = globalAi;
   const settings = useMemo<ProjectSettings>(() => ({ ...projectSettings, ...globalAi }), [projectSettings, globalAi]);
 
+  // Until the saved choice has been read, a change made by the user is held back from the database (it would replace the whole
+  // saved record with the defaults) and wins over the saved value once that arrives.
+  const aiLoadedRef = useRef(false);
+  const aiEarlyRef = useRef<Partial<ProjectSettings>>({});
   useEffect(() => {
-    db.appSettings
-      .get<Partial<ProjectSettings>>(GLOBAL_AI_KEY)
-      .then((saved) => saved && setGlobalAi((prev) => ({ ...prev, ...pickAiSettings(saved) })))
-      .catch((err) => console.error("Could not load the AI settings:", err));
+    let attempts = 0;
+    const load = () =>
+      db.appSettings
+        .get<Partial<ProjectSettings>>(GLOBAL_AI_KEY)
+        .then((saved) => {
+          const merged = { ...globalAiRef.current, ...pickAiSettings(saved ?? {}), ...aiEarlyRef.current };
+          aiLoadedRef.current = true;
+          globalAiRef.current = merged;
+          setGlobalAi(merged);
+          if (Object.keys(aiEarlyRef.current).length > 0) {
+            db.appSettings.set(GLOBAL_AI_KEY, merged).catch((err) => console.error("Could not save the AI settings:", err));
+          }
+        })
+        .catch((err) => {
+          console.error("Could not load the AI settings:", err);
+          if (++attempts < 3) setTimeout(load, 1000 * attempts);
+        });
+    load();
   }, []);
   const [routingCache, setRoutingCache] = useState<
     Record<string, [number, number][]>
@@ -353,7 +372,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       const next = { ...globalAiRef.current, ...ai };
       globalAiRef.current = next;
       setGlobalAi(next);
-      db.appSettings.set(GLOBAL_AI_KEY, next).catch((err) => console.error("Could not save the AI settings:", err));
+      if (aiLoadedRef.current) {
+        db.appSettings.set(GLOBAL_AI_KEY, next).catch((err) => console.error("Could not save the AI settings:", err));
+      } else {
+        aiEarlyRef.current = { ...aiEarlyRef.current, ...ai };
+      }
     }
     setSettings((prev) => ({ ...prev, ...data }));
     setIsDirty(true);
@@ -394,6 +417,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       );
 
       await saveTimelineManifest(result.projectDir, result.projName, timeline, settings.caption_style);
+      // The assistant keeps its chat in the project folder: a first save or a Save As tells it where the chat now lives.
+      window.dispatchEvent(new CustomEvent("project-saved", { detail: { dir: result.projectDir, saveAs: !!asDuplicate } }));
 
       setMetadata({
         ...metadata,
@@ -513,10 +538,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           connectToRoute: wp.connectToRoute || false,
           skipAssetGeneration: wp.skipAssetGeneration ?? undefined,
           pauseAtWaypoint: wp.pauseAtWaypoint ?? undefined,
-          images: wp.popup_image || wp.images || [],
+          images: savedImages(wp),
           videos: wp.videos || [],
           videoSound: wp.videoSound || [],
           imagePans: wp.imagePans || [],
+          imageCredits: wp.imageCredits || undefined,
           imageTransitions: wp.imageTransitions || [],
           imageDisplay: wp.image_display || "pip",
           narration: wp.narration || "",
