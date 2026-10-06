@@ -14,6 +14,7 @@ import {
   ArrowDown,
   ZoomIn,
   ZoomOut,
+  Footprints,
   Plus,
 } from "../../../components/ui/icons";
 import { useWorkspace } from "../../../hooks/useWorkspace";
@@ -43,6 +44,7 @@ function useCameraMotions() {
     { value: "pan-down", label: t`Pan Down`, icon: ArrowDown },
     { value: "zoom-in", label: t`Zoom In`, icon: ZoomIn },
     { value: "zoom-out", label: t`Zoom Out`, icon: ZoomOut },
+    { value: "walk-in", label: t`Walk In`, icon: Footprints },
   ];
 }
 

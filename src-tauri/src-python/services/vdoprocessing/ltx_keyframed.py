@@ -197,8 +197,11 @@ def second_shot(preset: str, seed: str = "") -> Optional[str]:
 
     second = tuning.ATTRACTION_SECOND_SHOT
     if second == "random":
+        # A walk-in first shot is followed by a close shot, not another walk.
+        free_first = preset in tuning.LTXV_FREE_MOVES
         choices = [m for m in tuning.ATTRACTION_SECOND_SHOT_MOVES
-                   if m != _SAME_WAY.get(preset) and m in tuning.LTXV_PROMPTS]
+                   if m != _SAME_WAY.get(preset) and m in tuning.LTXV_PROMPTS
+                   and not (free_first and m in tuning.LTXV_FREE_MOVES)]
         return random.Random(f"{seed}|{preset}").choice(choices) if choices else None
     return second if second and second != preset and second in tuning.LTXV_PROMPTS else None
 

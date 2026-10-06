@@ -823,6 +823,7 @@ COMFYUI_FUN_CAMERA_POSES: Dict[str, str] = {
     "pandown": "Pan Down",
     "zoomin": "Zoom In",
     "zoomout": "Zoom Out",
+    "walkin": "Zoom In",
     "none": "Static",
 }
 # How far the camera travels per segment (1.0 = the node's default).
@@ -1119,7 +1120,7 @@ COMFYUI_DEFAULT_MOTION_PROMPT = COMFYUI_CAMERA_PAN_PROMPTS["none"]
 # two real crops of the photo - first and last frame pinned, so it can't wander
 # or invent - instead of ATTRACTION_GENERATOR. "panright" is the user's approved
 # test 13 on 西ノ庄駅 (2026-10-02): smooth level pan, sign readable, ~2 min.
-ATTRACTION_LTX_PRESETS: Tuple[str, ...] = ("panright", "panleft", "panup", "pandown", "zoomin", "zoomout")
+ATTRACTION_LTX_PRESETS: Tuple[str, ...] = ("panright", "panleft", "panup", "pandown", "zoomin", "zoomout", "walkin")
 # After the chosen move, a second, closer shot of the same photo joined by a
 # dissolve - like the Tomogashima reference (one photo, several angles).
 # "random": a move from ATTRACTION_SECOND_SHOT_MOVES, picked per photo (seeded
@@ -1132,7 +1133,8 @@ ATTRACTION_SECOND_SHOT_MOVES: Tuple[str, ...] = (
 )
 # Moves with no pinned last frame: LTXV starts from the whole photo and
 # generates the walk into the place itself (it may show what the photo doesn't).
-LTXV_FREE_MOVES: Tuple[str, ...] = ("walkthrough", "walkthroughleft", "walkthroughright")
+# The editor's "Walk In" preset is one of them.
+LTXV_FREE_MOVES: Tuple[str, ...] = ("walkthrough", "walkthroughleft", "walkthroughright", "walkin")
 LTXV_CROSSFADE_SECONDS = 0.5
 # Files (downloaded on first use into bin/ComfyUI/models/<folder>, sha256-checked).
 LTXV_FILES: Dict[str, Dict[str, str]] = {
@@ -1275,6 +1277,7 @@ LTXV_PROMPTS: Dict[str, str] = {
         "right. " + _LTXV_STILL
     ),
 }
+LTXV_PROMPTS["walkin"] = LTXV_PROMPTS["walkthrough"]
 # Second shot as a walk inside the place: "walk" = a prompt from
 # LTXV_WALK_PROMPTS (picked per photo, seeded like the move); None = LTXV_PROMPTS.
 ATTRACTION_SECOND_SHOT_STYLE: Optional[str] = "walk"
