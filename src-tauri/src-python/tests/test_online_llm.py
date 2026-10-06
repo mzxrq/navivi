@@ -165,6 +165,9 @@ class TestScriptGenerator:
 
         monkeypatch.setattr(overview_script, "ollama_generate", lambda model: f"local<{model}>")
         assert script_engine.script_generator({"overview_script_model": "gemma3"}) == ("local<gemma3>", "gemma3")
+        assert script_engine.script_generator({"ai_model": "qwen3"}) == ("local<qwen3>", "qwen3")
+        assert script_engine.script_generator({"ai_model": "qwen3", "overview_script_model": "gemma3"}) == ("local<gemma3>", "gemma3")
+        assert script_engine.script_generator({"ai_model": ""}) == (f"local<{script_engine.DEFAULT_SCRIPT_MODEL}>", script_engine.DEFAULT_SCRIPT_MODEL)
         assert script_engine.script_generator(None) == (f"local<{script_engine.DEFAULT_SCRIPT_MODEL}>", script_engine.DEFAULT_SCRIPT_MODEL)
 
 
