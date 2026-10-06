@@ -1,6 +1,7 @@
 import type { Dispatch, SetStateAction, } from "react";
 import type { TimelineData } from "../features/editor/model";
 import type { AiProviderId, OnlineProvider } from "../services/ai/providers";
+import type { PhotoCredit } from "../services/placePhotos";
 
 export type RouteMode = "driving" | "walking" | "direct" | "curve" | "ferry" | "calculating" | "draw";
 export type TrackKind = "video" | "overlay" | "subtitle" | "audio";
@@ -16,6 +17,7 @@ export interface Waypoint {
   images?: string[];
   imageDisplay?: "pip" | "fullscreen";
   imagePans?: string[];
+  imageCredits?: Record<string, PhotoCredit>; // who took a photo that was found online, keyed by the photo's path
   videos?: string[];
   videoSound?: boolean[];
   imageTransitions?: string[];

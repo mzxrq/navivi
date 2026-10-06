@@ -7,6 +7,7 @@ import { emptyChat, hasContent, loadChat, saveChat, serializeChat, StoredChat } 
 import { ChatMessage, converse, Source } from "../services/assistant/converse";
 import { isSupportedDocument, readSource } from "../services/assistant/sources";
 import { isPhoto } from "../services/imageImport";
+import { downloadPhotos, findPlacePhotos } from "../services/placePhotos";
 import { setPendingImport } from "../utils/pendingImport";
 import { useUI } from "./useUI";
 import { useWorkspace } from "./useWorkspace";
@@ -31,6 +32,8 @@ interface AssistantContextType {
   ready: boolean;
   panelOpen: boolean;
   setPanelOpen: (open: boolean) => void;
+  findPhotos: boolean; // look up photos of each place on Wikimedia Commons while building
+  setFindPhotos: (on: boolean) => void;
   send: (text: string, paths: string[]) => Promise<void>;
   build: () => Promise<void>;
   stop: () => void;
@@ -42,6 +45,16 @@ const AssistantContext = createContext<AssistantContextType | null>(null);
 const asNote = (text: string): ChatMessage => ({ role: "assistant", text });
 
 const WRITE_DELAY_MS = 300;
+const PHOTOS_KEY = "navivi.assistant.findPhotos";
+const PHOTOS_PER_STOP = 2; // leaves a slot for the user's own photo
+
+const readPhotosChoice = () => {
+  try {
+    return localStorage.getItem(PHOTOS_KEY) !== "0";
+  } catch {
+    return true;
+  }
+};
 
 export function AssistantProvider({ children }: { children: ReactNode }) {
   const { setCurrentView, showToast, currentView } = useUI();
@@ -54,6 +67,15 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
   const [phase, setPhase] = useState<Phase>("idle");
   const [progress, setProgress] = useState<BuildProgress | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [findPhotos, setFindPhotosState] = useState(readPhotosChoice);
+  const setFindPhotos = useCallback((on: boolean) => {
+    setFindPhotosState(on);
+    try {
+      localStorage.setItem(PHOTOS_KEY, on ? "1" : "0");
+    } catch {
+      // the choice then lasts until the app closes
+    }
+  }, []);
   const abort = useRef<AbortController | null>(null);
 
   // Whose chat this is: the folder of the open project, or "" on the start screen and in a project that has no folder yet
@@ -248,6 +270,9 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
         mapboxToken: settings.mapbox_api_key || import.meta.env.VITE_MAPBOX_TOKEN,
         signal: abort.current.signal,
         onProgress: setProgress,
+        photos: findPhotos
+          ? async (stop) => downloadPhotos(await findPlacePhotos(stop, { limit: PHOTOS_PER_STOP, signal: abort.current?.signal }), abort.current?.signal)
+          : undefined,
       });
       if (!live()) return;
       const first = built.waypoints[0];
@@ -257,7 +282,8 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
       if (files.length) setPendingImport({ kind: "files", paths: files });
       const missed =
         (built.failedPlaces.length ? t` I could not find: ${built.failedPlaces.join(", ")}.` : "") +
-        (built.uncertainPlaces.length ? t` I am not sure where these are, so check them on the map: ${built.uncertainPlaces.join(", ")}.` : "");
+        (built.uncertainPlaces.length ? t` I am not sure where these are, so check them on the map: ${built.uncertainPlaces.join(", ")}.` : "") +
+        (built.photosAdded ? t` I added ${built.photosAdded} photos from Wikimedia Commons; check that they show the right place. Their credits are listed when you export the video.` : "");
       setMessages((m) => [...m, asNote(t`Created "${built.name}" with ${built.waypoints.length} stops and their scripts.${missed} Review them, then press Generate Assets.`)]);
       setPanelOpen(inEditor);
     } catch (e: any) {
@@ -273,11 +299,11 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
         setProgress(null);
       }
     }
-  }, [brief, sources, attachments, settings, currentView, waypoints, metadata, resetWorkspace, updateMetadata, updateSettings, setWaypoints, setIsDirty, setCurrentView, showToast]);
+  }, [brief, sources, attachments, settings, findPhotos, currentView, waypoints, metadata, resetWorkspace, updateMetadata, updateSettings, setWaypoints, setIsDirty, setCurrentView, showToast]);
 
   const value = useMemo(
-    () => ({ messages, brief, sources, attachments, phase, progress, ready, panelOpen, setPanelOpen, send, build, stop, reset }),
-    [messages, brief, sources, attachments, phase, progress, ready, panelOpen, send, build, stop, reset],
+    () => ({ messages, brief, sources, attachments, phase, progress, ready, panelOpen, setPanelOpen, findPhotos, setFindPhotos, send, build, stop, reset }),
+    [messages, brief, sources, attachments, phase, progress, ready, panelOpen, findPhotos, setFindPhotos, send, build, stop, reset],
   );
 
   return <AssistantContext.Provider value={value}>{children}</AssistantContext.Provider>;

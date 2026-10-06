@@ -1,4 +1,6 @@
 import type { Waypoint } from "../../types";
+import { withFoundPhotos } from "../../utils/photoCredits";
+import type { PhotoCredit, PlaceQuery } from "../placePhotos";
 import type { AiEngine } from "../ai/engine";
 import { geocodeRoute } from "../geocode";
 import { cleanNarration } from "../narrationPrompt";
@@ -6,7 +8,7 @@ import { completeText, generateWaypointScriptStream } from "../ollamaApi";
 import type { ProjectBrief } from "./brief";
 
 export interface BuildProgress {
-  step: "places" | "geocode" | "scripts";
+  step: "places" | "geocode" | "photos" | "scripts";
   done: number;
   total: number;
   label: string;
@@ -17,7 +19,11 @@ export interface BuiltProject {
   waypoints: Waypoint[];
   failedPlaces: string[];
   uncertainPlaces: string[]; // placed, but only by a wider search: worth a look on the map
+  photosAdded: number;
 }
+
+// Looks for photos of a stop and brings them onto this PC (see placePhotos.ts); passed in so building stays testable offline.
+export type PhotoFinder = (stop: PlaceQuery) => Promise<{ path: string; credit: PhotoCredit }[]>;
 
 interface BuildInput {
   brief: ProjectBrief;
@@ -26,6 +32,7 @@ interface BuildInput {
   mapboxToken?: string;
   signal?: AbortSignal;
   onProgress: (p: BuildProgress) => void;
+  photos?: PhotoFinder;
 }
 
 const MAX_PLACES = 25;
@@ -145,7 +152,7 @@ export function briefToScriptRequest(brief: ProjectBrief, stopCount: number, sto
   return lines.join("\n");
 }
 
-export async function buildProject({ brief, sourceText, engine, mapboxToken, signal, onProgress }: BuildInput): Promise<BuiltProject> {
+export async function buildProject({ brief, sourceText, engine, mapboxToken, signal, onProgress, photos }: BuildInput): Promise<BuiltProject> {
   onProgress({ step: "places", done: 0, total: 1, label: "" });
   const places = brief.places.length > 0 ? tidyPlaces(brief.places) : await extractPlaces(brief, sourceText, engine, signal);
   onProgress({ step: "places", done: 1, total: 1, label: "" });
@@ -170,6 +177,25 @@ export async function buildProject({ brief, sourceText, engine, mapboxToken, sig
     images: [],
     imagePans: [],
   }));
+
+  // A bonus: a stop without photos is still a good stop, so a lookup that fails only leaves it as it was.
+  let photosAdded = 0;
+  if (photos) {
+    for (const [i, wp] of waypoints.entries()) {
+      abortIfNeeded(signal);
+      onProgress({ step: "photos", done: i, total: waypoints.length, label: wp.name });
+      try {
+        const patch = withFoundPhotos(wp, await photos({ name: wp.name, lat: wp.lat, lng: wp.lng, uncertain: found[i].uncertain }));
+        if (patch) {
+          photosAdded += (patch.images?.length ?? 0) - (wp.images?.length ?? 0);
+          Object.assign(wp, patch);
+        }
+      } catch (e) {
+        if (signal?.aborted) throw e;
+      }
+    }
+    onProgress({ step: "photos", done: waypoints.length, total: waypoints.length, label: "" });
+  }
 
   // Both boxes of a stop: the short narration while travelling there, then the one spoken over its photos.
   // Only the second looks up facts, and not for a guessed spot (0, 0 skips it): they would describe the wrong place.
@@ -204,5 +230,5 @@ export async function buildProject({ brief, sourceText, engine, mapboxToken, sig
   onProgress({ step: "scripts", done: total, total, label: "" });
 
   const uncertainPlaces = found.filter((f) => f.uncertain).map((f) => f.name);
-  return { name: brief.name || `${places[0] ?? "My"} trip`, waypoints, failedPlaces, uncertainPlaces };
+  return { name: brief.name || `${places[0] ?? "My"} trip`, waypoints, failedPlaces, uncertainPlaces, photosAdded };
 }

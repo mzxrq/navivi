@@ -8,6 +8,7 @@ import { useWorkspace } from "../../hooks/useWorkspace";
 import { ArrowUp, FileText, Footprints, Map, Plus, Route, Square, X } from "../../components/ui/icons";
 import { SOURCE_EXTENSIONS } from "../../services/assistant/sources";
 import { primaryButton, secondaryButton } from "../../components/ui/SettingsParts";
+import { Checkbox } from "../../components/ui/Checkbox";
 
 const PICK_EXTENSIONS = [...SOURCE_EXTENSIONS, "gpx", "jpg", "jpeg", "png", "heic", "heif"];
 const baseName = (p: string) => p.split(/[\\/]/).pop() ?? p;
@@ -22,7 +23,7 @@ function briefFacts(brief: ReturnType<typeof useAssistant>["brief"]): { label: s
 }
 
 export function AssistantChat({ variant }: { variant: "hero" | "panel" }) {
-  const { messages, brief, sources, attachments, phase, progress, ready, send, build, stop, reset } = useAssistant();
+  const { messages, brief, sources, attachments, phase, progress, ready, findPhotos, setFindPhotos, send, build, stop, reset } = useAssistant();
   const { settings } = useWorkspace();
   const { setShowAppSettings } = useUI();
   const [text, setText] = useState("");
@@ -60,7 +61,7 @@ export function AssistantChat({ variant }: { variant: "hero" | "panel" }) {
     { icon: Route, label: t`Follow my GPS track`, prompt: t`A relaxed walking video that follows the GPX track I attach, with English narration, about 4 minutes` },
     { icon: FileText, label: t`From an itinerary`, prompt: t`Turn the itinerary I attach into a 3 minute video with Japanese narration` },
   ];
-  const stepName = progress?.step === "places" ? t`Finding places` : progress?.step === "geocode" ? t`Locating places` : progress?.step === "scripts" ? t`Writing scripts` : t`Starting…`;
+  const stepName = progress?.step === "places" ? t`Finding places` : progress?.step === "geocode" ? t`Locating places` : progress?.step === "photos" ? t`Finding photos` : progress?.step === "scripts" ? t`Writing scripts` : t`Starting…`;
   const canSend = !!text.trim() || picked.length > 0;
   const stopLabel = t({ message: "Stop", context: "stop the assistant" });
 
@@ -129,6 +130,19 @@ export function AssistantChat({ variant }: { variant: "hero" | "panel" }) {
                   <Trans>Create project</Trans>
                 </button>
               </div>
+              {!attachments.gpx && (
+                <label className="flex items-start gap-2 px-3.5 pt-2.5 text-[12px] text-zinc-600 dark:text-zinc-300 cursor-pointer">
+                  <span className="pt-px">
+                    <Checkbox checked={findPhotos} onChange={setFindPhotos} label={t`Find photos of each place`} />
+                  </span>
+                  <span>
+                    <Trans>Find photos of each place on Wikimedia Commons</Trans>
+                    <span className="block text-[11px] text-zinc-400">
+                      <Trans>Free photos with credits. This sends the place names and positions to Wikimedia.</Trans>
+                    </span>
+                  </span>
+                </label>
+              )}
               {facts.length > 0 && (
                 <dl className="flex flex-wrap gap-x-5 gap-y-1 px-3.5 pb-3 pt-2 text-[12px]">
                   {facts.map((f) => (

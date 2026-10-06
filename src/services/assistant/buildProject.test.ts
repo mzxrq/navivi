@@ -107,6 +107,43 @@ describe("buildProject", () => {
     vi.unstubAllGlobals();
   });
 
+  it("adds photos to the stops when given a finder, and carries on when one stop's lookup fails", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({ json: async () => ({ features: [{ center: [135.7, 33.8] }] }) })));
+    vi.mocked(ollama.generateWaypointScriptStream).mockImplementation(async (_n, _p, _e, _t, onChunk) => onChunk("script"));
+    const credit = { title: "File:A.jpg", author: "Taro", license: "CC BY 4.0", url: "https://commons.wikimedia.org/wiki/File:A.jpg" };
+    const asked: string[] = [];
+    const steps: string[] = [];
+    const built = await buildProject({
+      brief: { ...EMPTY_BRIEF, places: ["Hongu", "Broken", "Nachi"] },
+      sourceText: "",
+      engine: "m",
+      mapboxToken: "tk",
+      onProgress: (p) => steps.push(p.step),
+      photos: async (stop) => {
+        asked.push(stop.name);
+        if (stop.name === "Broken") throw new Error("offline");
+        return [{ path: `C:/Imports/${stop.name}.jpg`, credit }];
+      },
+    });
+    expect(asked).toEqual(["Hongu", "Broken", "Nachi"]);
+    expect(built.waypoints.map((w) => w.images)).toEqual([["C:/Imports/Hongu.jpg"], [], ["C:/Imports/Nachi.jpg"]]);
+    expect(built.waypoints[0].imageCredits).toEqual({ "C:/Imports/Hongu.jpg": credit });
+    expect(built.photosAdded).toBe(2);
+    expect(steps.indexOf("photos")).toBeGreaterThan(steps.indexOf("geocode"));
+    expect(steps.indexOf("photos")).toBeLessThan(steps.indexOf("scripts"));
+    vi.unstubAllGlobals();
+  });
+
+  it("looks for no photos unless a finder is given", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({ json: async () => ({ features: [{ center: [135.7, 33.8] }] }) })));
+    vi.mocked(ollama.generateWaypointScriptStream).mockImplementation(async (_n, _p, _e, _t, onChunk) => onChunk("script"));
+    const steps: string[] = [];
+    const built = await buildProject({ brief: { ...EMPTY_BRIEF, places: ["Hongu"] }, sourceText: "", engine: "m", mapboxToken: "tk", onProgress: (p) => steps.push(p.step) });
+    expect(steps).not.toContain("photos");
+    expect(built.photosAdded).toBe(0);
+    vi.unstubAllGlobals();
+  });
+
   it("stops when aborted", async () => {
     const controller = new AbortController();
     controller.abort();

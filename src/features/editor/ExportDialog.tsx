@@ -7,6 +7,7 @@ import { CheckCircle, Folder, Loader2 } from "../../components/ui/icons";
 import { Dialog, dialogButton } from "../../components/ui/Dialog";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { saveTimelineManifest } from "../../services/fileSystem";
+import { collectCredits } from "../../utils/photoCredits";
 import { layout, TimelineData } from "./model";
 import { formatTime } from "./player";
 
@@ -18,7 +19,8 @@ interface ExportDialogProps {
 }
 
 export function ExportDialog({ timeline, projectDir, projectName, onClose }: ExportDialogProps) {
-  const { settings } = useWorkspace();
+  const { settings, waypoints } = useWorkspace();
+  const photoCredits = collectCredits(waypoints);
   const [phase, setPhase] = useState<"ready" | "working" | "done" | "error">("ready");
   const [output, setOutput] = useState("");
   const [error, setError] = useState("");
@@ -116,6 +118,18 @@ export function ExportDialog({ timeline, projectDir, projectName, onClose }: Exp
             <p className="mt-3 text-[11px] leading-snug text-zinc-400 select-text">
               <Trans>Music credit, to include where you publish the video:</Trans> {timeline.music.credit}
             </p>
+          )}
+          {photoCredits.length > 0 && (
+            <div className="mt-3 text-[11px] leading-snug text-zinc-400 select-text">
+              <p>
+                <Trans>Photo credits (Wikimedia Commons), to include where you publish the video:</Trans>
+              </p>
+              <ul className="mt-1 space-y-0.5 max-h-24 overflow-y-auto custom-scrollbar">
+                {photoCredits.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+            </div>
           )}
           {phase === "working" && (
             <div className="mt-3">
