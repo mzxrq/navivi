@@ -235,6 +235,7 @@ export function WaypointEditor({
           next: waypoints[wpIndex + 1]?.name,
           index: wpIndex,
           total: waypoints.length,
+          otherScript: type === "arriving" ? wp.attractionNarration : wp.arrivingNarration,
         },
       );
     } catch (err: any) {

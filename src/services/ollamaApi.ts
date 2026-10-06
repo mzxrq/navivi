@@ -2,7 +2,7 @@ import { fetch } from '@tauri-apps/plugin-http';
 import { readFile } from '@tauri-apps/plugin-fs';
 import { invoke } from '@tauri-apps/api/core';
 import { tidyPlaceName } from '../utils/gpxTrack';
-import { buildWaypointPrompt, cleanNarration, RouteContext } from './narrationPrompt';
+import { buildWaypointPrompt, cleanNarration, dropRepeatedSentences, RouteContext } from './narrationPrompt';
 import { AiEngine, isOnlineEngine } from './ai/engine';
 import { hasApiKey, streamOnline } from './ai/online';
 import { shrinkForUpload, MAX_ONLINE_PHOTOS } from './ai/photos';
@@ -385,8 +385,6 @@ export async function generateWaypointScriptStream(
         facts = [geo && `地理情報: ${geo}`, webContext && `参考情報: ${webContext}`].filter(Boolean).join("\n");
     }
 
-    const prompt = buildWaypointPrompt({ place, theme, userPrompt, facts, scriptType, isFirstWaypoint, route });
-
     const online = isOnlineEngine(engine);
     const base64Images: string[] = [];
     for (const p of online && !engine.sendPhotos ? [] : imagePaths.slice(0, online ? MAX_ONLINE_PHOTOS : undefined)) {
@@ -400,15 +398,27 @@ export async function generateWaypointScriptStream(
     }
 
     // Lower temperature keeps a small model close to the facts it was given.
-    await streamLLM(
-        prompt,
-        engine,
-        (text) => onChunk(cleanNarration(text)),
-        signal,
-        base64Images,
-        onThought,
-        { ...SCRIPT_OPTIONS, temperature: 0.4, top_p: 0.9, repeat_penalty: 1.1 },
-    );
+    const run = async (context: RouteContext, temperature: number) => {
+        let raw = "";
+        await streamLLM(
+            buildWaypointPrompt({ place, theme, userPrompt, facts, scriptType, isFirstWaypoint, route: context }),
+            engine,
+            (text) => {
+                raw = cleanNarration(text);
+                onChunk(dropRepeatedSentences(raw, route.otherScript, scriptType) || raw);
+            },
+            signal,
+            base64Images,
+            onThought,
+            { ...SCRIPT_OPTIONS, temperature, top_p: 0.9, repeat_penalty: 1.1 },
+        );
+        return raw;
+    };
+    const first = await run(route, 0.4);
+    // Every sentence repeated the other script: once more without showing it, so there is nothing to copy.
+    if (first.trim() && !dropRepeatedSentences(first, route.otherScript, scriptType)) {
+        await run({ ...route, otherScript: undefined }, 0.8);
+    }
 }
 
 // One prompt in, the whole reply out, from whichever engine is set up (local Ollama or an online provider).

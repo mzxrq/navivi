@@ -193,7 +193,13 @@ export async function buildProject({ brief, sourceText, engine, mapboxToken, sig
         kind,
         i === 0,
         signal,
-        { previous: waypoints[i - 1]?.name, next: waypoints[i + 1]?.name, index: i, total: waypoints.length },
+        {
+          previous: waypoints[i - 1]?.name,
+          next: waypoints[i + 1]?.name,
+          index: i,
+          total: waypoints.length,
+          otherScript: kind === "attraction" ? wp.arrivingNarration : undefined,
+        },
       );
       if (kind === "arriving") wp.arrivingNarration = cleanNarration(script);
       else wp.attractionNarration = cleanNarration(script);
