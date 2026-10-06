@@ -37,6 +37,23 @@ def raster_style_id(settings: dict, lang: Optional[str], default: str) -> str:
     return settings.get("mapbox_style_id", default)
 
 
+_STYLE_URL_PREFIX = "mapbox://styles/"
+
+
+def resolve_map_style(settings: Optional[dict], default_id: str, lang: Optional[str] = None, raster: bool = False) -> str:
+    """The Mapbox style a render step draws on. `default_id` ("mapbox/outdoors-v12") is what that step used
+    before the setting existed, so a project without `mapbox_style_id` renders as it always did.
+    Raster tiles (`raster=True`) return "owner/id" and honor a per-language Studio style; the GL steps
+    return "mapbox://styles/owner/id" and use the base id only (the page's own script relabels them)."""
+    settings = settings or {}
+    chosen = raster_style_id(settings, lang, default_id) if raster else settings.get("mapbox_style_id")
+    path = str(chosen or default_id).strip()
+    if path.startswith(_STYLE_URL_PREFIX):
+        path = path[len(_STYLE_URL_PREFIX):]
+    path = path.strip("/") or default_id
+    return path if raster else _STYLE_URL_PREFIX + path
+
+
 # Runs before mapbox-gl loads: rewrites name_xx lookups in fetched style JSON to the target language
 _LOCALIZER_JS = """<script>(function () {
   var FIELD = %s;
