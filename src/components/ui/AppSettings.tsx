@@ -958,6 +958,9 @@ function AiModelsTab() {
   const fit = modelFit(modelSizes[activeModel], ramGb);
 
   const recommendedModels = [
+    { id: "gemma4:26b", name: "Gemma 4 (26B)", size: "~16GB" },
+    { id: "gemma4:12b", name: "Gemma 4 (12B)", size: "~7.7GB" },
+    { id: "gemma4:e4b", name: "Gemma 4 (E4B)", size: "~9.5GB" },
     {
       id: "schroneko/gemma-2-2b-jpn-it",
       name: "Gemma 2 (2B JPN IT)",
