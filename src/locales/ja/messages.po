@@ -48,7 +48,7 @@ msgid "Rose"
 msgstr "ローズ色"
 
 #. js-lingui-explicit-id
-#: src/components/ui/AppSettings.tsx:974
+#: src/components/ui/AppSettings.tsx:977
 msgid "Starting..."
 msgstr "ダウンロード開始中..."
 
@@ -302,8 +302,8 @@ msgid "A fast draft takes about half the time per line and sounds a little rough
 msgstr "高速ドラフトは1行あたりの時間が約半分で、音は少し粗くなります。確認中に使い、最終レンダリングでは「最高」に切り替えてください。すでにあるナレーションはそのまま残ります。この設定で作り直すには、確認ステップの「音声をやり直す」を使ってください。"
 
 #: src/components/ui/ComponentsChecklist.tsx:70
-msgid "A few built-in Japanese voices, a few seconds per line. A little flatter, and it cannot clone a voice."
-msgstr "内蔵の日本語ボイスが数種類あり、1行あたり数秒で生成します。やや平坦な声で、声のクローンはできません。"
+#~ msgid "A few built-in Japanese voices, a few seconds per line. A little flatter, and it cannot clone a voice."
+#~ msgstr "内蔵の日本語ボイスが数種類あり、1行あたり数秒で生成します。やや平坦な声で、声のクローンはできません。"
 
 #: src/features/assistant/AssistantChat.tsx:60
 msgid "A relaxed walking video that follows the GPX track I attach, with English narration, about 4 minutes"
@@ -327,6 +327,35 @@ msgstr "約{0}"
 msgid "About {0} left"
 msgstr "残り{0}"
 
+#. placeholder {0}: MODEL_CREDITS.kokoro.by
+#. placeholder {1}: MODEL_CREDITS.kokoro.license
+#: src/components/ui/ComponentsChecklist.tsx:111
+msgid "About 2 GB. A few built-in Japanese voices, a few seconds per line. A little flatter, and it cannot clone a voice. By {0}, {1}."
+msgstr "約2GB。内蔵の日本語の声がいくつかあり、1行あたり数秒で作れます。やや平坦な響きになり、声の複製はできません。作者: {0}、{1}。"
+
+#. placeholder {0}: MODEL_CREDITS.irodori.by
+#. placeholder {1}: MODEL_CREDITS.irodori.license
+#: src/components/ui/ComponentsChecklist.tsx:113
+msgid "About 3 GB, more with a graphics card. The most natural, and it clones a voice. Slowest on a PC without a graphics card. By {0}, {1}."
+msgstr "約3GB（グラフィックスカードがある場合はそれ以上）。いちばん自然で、声の複製もできます。グラフィックスカードのないPCでは最も遅くなります。作者: {0}、{1}。"
+
+#. placeholder {0}: MODEL_CREDITS.ltx.name
+#. placeholder {1}: MODEL_CREDITS.ltx.by
+#. placeholder {2}: MODEL_CREDITS.wan.name
+#. placeholder {3}: MODEL_CREDITS.wan.by
+#. placeholder {4}: MODEL_CREDITS.wan.license
+#. placeholder {5}: MODEL_CREDITS.comfyui.name
+#. placeholder {6}: MODEL_CREDITS.comfyui.license
+#: src/components/ui/ComponentsChecklist.tsx:159
+msgid "About 30 GB and an NVIDIA graphics card. Turns each photo into a camera move with {0} ({1}) and {2} ({3}, {4}), run by {5} ({6}). Without it, clips pan across the photo."
+msgstr "約30GBとNVIDIAのグラフィックスカードが必要です。{0}（{1}）と{2}（{3}、{4}）で写真ごとにカメラの動きを作り、{5}（{6}）で実行します。なければ、クリップは写真の上をパンするだけになります。"
+
+#. placeholder {0}: MODEL_CREDITS.qwen3.by
+#. placeholder {1}: MODEL_CREDITS.qwen3.license
+#: src/components/ui/ComponentsChecklist.tsx:112
+msgid "About 4 GB. Clones a voice from a recording in about a third of the natural voice's time. By {0}, {1}."
+msgstr "約4GB。録音から声を複製します。自然な声の約3分の1の時間で作れます。作者: {0}、{1}。"
+
 #: src/components/ui/AppSettings.tsx:389
 msgid "Accent color"
 msgstr "アクセントカラー"
@@ -343,7 +372,7 @@ msgstr "承認してプロジェクトに反映"
 msgid "Accept and export"
 msgstr "承認して書き出す"
 
-#: src/components/ui/AppSettings.tsx:1078
+#: src/components/ui/AppSettings.tsx:1081
 msgid "Active model"
 msgstr "使用するモデル"
 
@@ -732,8 +761,12 @@ msgid "Balanced voice"
 msgstr "標準の声"
 
 #: src/components/ui/ComponentsChecklist.tsx:71
-msgid "Balanced voice · about 4 GB"
-msgstr "バランス型の声 · 約4GB"
+#~ msgid "Balanced voice · about 4 GB"
+#~ msgstr "バランス型の声 · 約4GB"
+
+#: src/components/ui/ComponentsChecklist.tsx:112
+msgid "Balanced voice · Qwen3-TTS"
+msgstr "標準の声 · Qwen3-TTS"
 
 #: src/components/ui/VoiceSettings.tsx:195
 msgid "Balanced voice also clones a voice from a recording, in less than half the time. It sounds a little less natural and can occasionally change the intonation of a short line. It uses about 3 GB of memory while it runs."
@@ -747,7 +780,7 @@ msgstr "標準の声のセットアップ"
 msgid "Base Map Style"
 msgstr "ベースマップのスタイル"
 
-#: src/components/ui/AboutPanel.tsx:74
+#: src/components/ui/AboutPanel.tsx:75
 msgid "Base maps and place names."
 msgstr "ベースマップと地名。"
 
@@ -835,8 +868,8 @@ msgstr "キャンセル"
 msgid "Cancel"
 msgstr "キャンセル"
 
-#: src/components/ui/AppSettings.tsx:1177
-#: src/components/ui/AppSettings.tsx:1179
+#: src/components/ui/AppSettings.tsx:1180
+#: src/components/ui/AppSettings.tsx:1182
 msgid "Cancel download"
 msgstr "ダウンロードをキャンセル"
 
@@ -872,8 +905,12 @@ msgstr "オーディオとビデオを確認"
 msgid "Check the results"
 msgstr "結果を確認"
 
-#: src/components/ui/ComponentsChecklist.tsx:80
-#: src/components/ui/ComponentsChecklist.tsx:100
+#: src/components/ui/ComponentsChecklist.tsx:94
+msgid "Check what you need. Only one voice is required; everything else is optional and can be added later."
+msgstr "必要なものを確認してください。必須なのは声を1つだけで、ほかは任意です。あとから追加できます。"
+
+#: src/components/ui/ComponentsChecklist.tsx:121
+#: src/components/ui/ComponentsChecklist.tsx:141
 msgid "Checking…"
 msgstr "確認中…"
 
@@ -902,8 +939,8 @@ msgstr "アプリケーションの言語を選択してください"
 msgid "Choose…"
 msgstr "選択…"
 
-#: src/components/ui/AppSettings.tsx:1177
-#: src/components/ui/AppSettings.tsx:1179
+#: src/components/ui/AppSettings.tsx:1180
+#: src/components/ui/AppSettings.tsx:1182
 #: src/components/ui/NewProject.tsx:314
 #: src/components/ui/ReviewStep.tsx:174
 #: src/components/ui/StatusBar.tsx:402
@@ -968,8 +1005,8 @@ msgid "Clips ordered, fades added and subtitles filled in"
 msgstr "クリップを並べ替え、フェードと字幕を追加しました"
 
 #: src/components/ui/ComponentsChecklist.tsx:71
-msgid "Clones a voice from a recording in about a third of the natural voice's time."
-msgstr "録音から声をクローンします。自然な声の約3分の1の時間で生成できます。"
+#~ msgid "Clones a voice from a recording in about a third of the natural voice's time."
+#~ msgstr "録音から声をクローンします。自然な声の約3分の1の時間で生成できます。"
 
 #: src/components/ui/AppSettings.tsx:274
 #: src/components/ui/AppSettings.tsx:275
@@ -1042,7 +1079,7 @@ msgstr "GPSファイル形式を変換しています..."
 msgid "Converting iPhone photos..."
 msgstr "iPhoneの写真を変換しています..."
 
-#: src/components/ui/AboutPanel.tsx:68
+#: src/components/ui/AboutPanel.tsx:69
 #: src/components/ui/ErrorBoundary.tsx:135
 msgid "Copied"
 msgstr "コピーしました"
@@ -1064,7 +1101,7 @@ msgstr "コピー"
 msgid "Copy coordinates"
 msgstr "座標をコピー"
 
-#: src/components/ui/AboutPanel.tsx:68
+#: src/components/ui/AboutPanel.tsx:69
 msgid "Copy details"
 msgstr "詳細をコピー"
 
@@ -1342,7 +1379,7 @@ msgstr "作りたい動画を説明してください。行き先、長さ、ト
 msgid "Destination"
 msgstr "目的地"
 
-#: src/components/ui/AboutPanel.tsx:75
+#: src/components/ui/AboutPanel.tsx:76
 #: src/components/ui/PipelineLogPanel.tsx:119
 #: src/components/ui/RenderOverlay.tsx:825
 msgid "Details"
@@ -1431,7 +1468,7 @@ msgstr "ダブルクリックで字幕を追加"
 msgid "Double-click to add a title"
 msgstr "ダブルクリックでタイトルを追加"
 
-#: src/components/ui/AppSettings.tsx:1196
+#: src/components/ui/AppSettings.tsx:1199
 msgid "Download"
 msgstr "ダウンロード"
 
@@ -1598,6 +1635,10 @@ msgstr "見積もり中…"
 #: src/components/ui/AppSettings.tsx:852
 msgid "Every subtitle starts from this look"
 msgstr "すべての字幕の基本の見た目になります"
+
+#: src/components/ui/ComponentsChecklist.tsx:99
+msgid "Everything you need is set up."
+msgstr "必要なものはすべてセットアップ済みです。"
 
 #: src/components/ui/TitleBar.tsx:337
 msgid "Exit"
@@ -1773,8 +1814,12 @@ msgid "Fast voice"
 msgstr "高速な声"
 
 #: src/components/ui/ComponentsChecklist.tsx:70
-msgid "Fast voice · about 2 GB"
-msgstr "高速な声 · 約2GB"
+#~ msgid "Fast voice · about 2 GB"
+#~ msgstr "高速な声 · 約2GB"
+
+#: src/components/ui/ComponentsChecklist.tsx:111
+msgid "Fast voice · Kokoro-82M"
+msgstr "高速な声 · Kokoro-82M"
 
 #: src/components/ui/VoiceSettings.tsx:200
 msgid "Fast voice has a few built-in Japanese voices and takes a few seconds per line. It sounds a little flatter and cannot clone a voice."
@@ -1911,8 +1956,8 @@ msgstr "キーを取得"
 msgid "Get name from coordinate"
 msgstr "座標から名前をと取得"
 
-#: src/components/ui/AppSettings.tsx:1072
-#: src/components/ui/ComponentsChecklist.tsx:92
+#: src/components/ui/AppSettings.tsx:1075
+#: src/components/ui/ComponentsChecklist.tsx:133
 msgid "Get Ollama"
 msgstr "Ollama を入手"
 
@@ -2025,7 +2070,7 @@ msgstr "{0}個のポイントを正常にインポートしました"
 msgid "Include rendered video clips"
 msgstr "レンダリング済みの動画クリップを含める"
 
-#: src/components/ui/AboutPanel.tsx:63
+#: src/components/ui/AboutPanel.tsx:64
 msgid "Include the version and system details from \"This copy\" so it is easier to reproduce."
 msgstr "再現しやすいよう、「このバージョン」のバージョンとシステム情報を添えてください。"
 
@@ -2098,7 +2143,7 @@ msgid "Key saved"
 msgstr "キーを保存しました"
 
 #. placeholder {0}: keys.map((p) => PROVIDERS[p].label).join(", ")
-#: src/components/ui/ComponentsChecklist.tsx:102
+#: src/components/ui/ComponentsChecklist.tsx:143
 msgid "Key saved for {0}."
 msgstr "{0}のキーを保存済みです。"
 
@@ -2240,7 +2285,7 @@ msgstr "マップ"
 msgid "Map Appearance"
 msgstr "マップの外観"
 
-#: src/components/ui/AboutPanel.tsx:73
+#: src/components/ui/AboutPanel.tsx:74
 msgid "Map data"
 msgstr "地図データ"
 
@@ -2300,6 +2345,10 @@ msgstr "モデル"
 msgid "Model \"{engine}\" not found. Please install it from the App Settings"
 msgstr "モデル {engine} が見つかりません。アプリ設定からインストールしてください"
 
+#: src/components/ui/AboutPanel.tsx:86
+msgid "Models and engines you can download"
+msgstr "ダウンロードできるモデルとエンジン"
+
 #: src/features/map/components/DrawBar.tsx:253
 #: src/features/map/components/DrawBar.tsx:254
 msgid "More"
@@ -2313,8 +2362,12 @@ msgid "More actions"
 msgstr "その他の操作"
 
 #: src/components/ui/ComponentsChecklist.tsx:115
-msgid "Moving attraction videos"
-msgstr "動くアトラクション動画"
+#~ msgid "Moving attraction videos"
+#~ msgstr "動くアトラクション動画"
+
+#: src/components/ui/ComponentsChecklist.tsx:158
+msgid "Moving attraction videos · ComfyUI"
+msgstr "動くアトラクション動画 · ComfyUI"
 
 #: src/features/editor/ExportDialog.tsx:66
 #: src/features/editor/Inspector.tsx:598
@@ -2342,7 +2395,7 @@ msgstr "ナレーションをミュート"
 msgid "Name your project to continue"
 msgstr "続行するにはプロジェクト名を入力してください"
 
-#: src/components/ui/AppSettings.tsx:1076
+#: src/components/ui/AppSettings.tsx:1079
 #: src/features/assistant/AssistantChat.tsx:19
 #: src/features/editor/ExportDialog.tsx:64
 #: src/features/editor/Inspector.tsx:441
@@ -2371,8 +2424,12 @@ msgid "Natural voice"
 msgstr "自然な声"
 
 #: src/components/ui/ComponentsChecklist.tsx:72
-msgid "Natural voice · about 3 GB, more with a graphics card"
-msgstr "自然な声 · 約3GB（グラフィックスカードがある場合はそれ以上）"
+#~ msgid "Natural voice · about 3 GB, more with a graphics card"
+#~ msgstr "自然な声 · 約3GB（グラフィックスカードがある場合はそれ以上）"
+
+#: src/components/ui/ComponentsChecklist.tsx:113
+msgid "Natural voice · Irodori-TTS"
+msgstr "自然な声 · Irodori-TTS"
 
 #: src/components/ui/VoiceSettings.tsx:190
 msgid "Natural voice can clone a voice from a recording and sounds the most natural, but takes about half a minute per line on a PC without a graphics card."
@@ -2387,8 +2444,12 @@ msgid "Navivi needs its media tools before it can make videos: a Python environm
 msgstr "動画を作る前に、Navivi のメディアツール（Python 環境、動画・地図ライブラリ、ルートを描画するブラウザ）が必要です。サイズは約800MBで、インターネット接続が必要です。数分かかります。音声と AI モデルは、あとで設定から用意できます。"
 
 #: src/components/ui/ComponentsChecklist.tsx:115
-msgid "Needs a powerful graphics card and is not part of the installer yet. Until then, attraction clips pan across the photo."
-msgstr "高性能なグラフィックスカードが必要で、まだインストーラーには含まれていません。それまでは、アトラクションのクリップは写真の上をパンします。"
+#~ msgid "Needs a powerful graphics card and is not part of the installer yet. Until then, attraction clips pan across the photo."
+#~ msgstr "高性能なグラフィックスカードが必要で、まだインストーラーには含まれていません。それまでは、アトラクションのクリップは写真の上をパンします。"
+
+#: src/components/ui/ComponentsChecklist.tsx:70
+msgid "Needs an NVIDIA graphics card"
+msgstr "NVIDIAのグラフィックスカードが必要です"
 
 #. placeholder {0}: selectedAnchorIdx + 1
 #: src/features/map/components/DrawBar.tsx:329
@@ -2421,7 +2482,7 @@ msgstr "クリップがありません"
 msgid "No entries yet."
 msgstr "まだ投稿がありません"
 
-#: src/components/ui/AppSettings.tsx:1062
+#: src/components/ui/AppSettings.tsx:1065
 msgid "No local models found. To write scripts on this PC, install Ollama and keep it running, then download a model below. Or pick an online provider above, which needs nothing installed."
 msgstr "ローカルモデルが見つかりません。このPCでスクリプトを書くには、Ollama をインストールして起動したまま、下のモデルをダウンロードしてください。インストール不要のオンラインプロバイダーを上で選ぶこともできます。"
 
@@ -2429,7 +2490,7 @@ msgstr "ローカルモデルが見つかりません。このPCでスクリプ�
 msgid "No locations found in document"
 msgstr "ドキュメントに場所が見つかりませんでした"
 
-#: src/components/ui/AppSettings.tsx:1091
+#: src/components/ui/AppSettings.tsx:1094
 msgid "No models installed"
 msgstr "インストールされているモデルがありません"
 
@@ -2499,10 +2560,10 @@ msgid "None of these photos has a location. Photos saved from websites or chat a
 msgstr "これらの写真には位置情報がありません。Webサイトやチャットアプリから保存した写真には、通常ありません。"
 
 #: src/components/ui/ComponentsChecklist.tsx:117
-msgid "Not available yet"
-msgstr "まだ利用できません"
+#~ msgid "Not available yet"
+#~ msgstr "まだ利用できません"
 
-#: src/components/ui/ComponentsChecklist.tsx:83
+#: src/components/ui/ComponentsChecklist.tsx:124
 msgid "Not found. Install Ollama and keep it running, then download a model in Settings > AI models."
 msgstr "見つかりません。Ollama をインストールして起動したまま、設定 > AIモデルでモデルをダウンロードしてください。"
 
@@ -2523,8 +2584,12 @@ msgid "Nothing selected. Accept to export, or mark what to redo."
 msgstr "何も選択されていません。承認して書き出すか、やり直したいものを選んでください。"
 
 #: src/components/ui/ComponentsChecklist.tsx:103
-msgid "Nothing to install: add your own API key in Settings > AI models (turn on AI features in General first)."
-msgstr "インストールは不要です。設定 > AIモデルでご自身のAPIキーを追加してください（先に「一般」でAI機能をオンにします）。"
+#~ msgid "Nothing to install: add your own API key in Settings > AI models (turn on AI features in General first)."
+#~ msgstr "インストールは不要です。設定 > AIモデルでご自身のAPIキーを追加してください（先に「一般」でAI機能をオンにします）。"
+
+#: src/components/ui/ComponentsChecklist.tsx:144
+msgid "Nothing to install. Add a key from OpenRouter, Anthropic, OpenAI, Google Gemini or another provider in Settings > AI models (turn on AI features in General first)."
+msgstr "インストールは不要です。設定 > AIモデルで、OpenRouter、Anthropic、OpenAI、Google Gemini などのキーを追加してください（先に「一般」でAI機能をオンにします）。"
 
 #: src/components/ui/ReviewStep.tsx:182
 msgid "Nothing to review yet."
@@ -2537,8 +2602,12 @@ msgid "Off"
 msgstr "オフ"
 
 #: src/components/ui/ComponentsChecklist.tsx:77
-msgid "Ollama on this PC"
-msgstr "このPCの Ollama"
+#~ msgid "Ollama on this PC"
+#~ msgstr "このPCの Ollama"
+
+#: src/components/ui/ComponentsChecklist.tsx:118
+msgid "Ollama on this PC · open models such as Gemma 4"
+msgstr "このPCのOllama · Gemma 4 などのオープンモデル"
 
 #: src/components/ui/AppSettings.tsx:328
 msgid "Ollama or online AI"
@@ -2558,13 +2627,18 @@ msgid "One-time setup"
 msgstr "初回のみのセットアップ"
 
 #: src/components/ui/ComponentsChecklist.tsx:97
-msgid "Online AI"
-msgstr "オンラインAI"
+#~ msgid "Online AI"
+#~ msgstr "オンラインAI"
 
-#: src/components/ui/AboutPanel.tsx:61
-#: src/components/ui/AboutPanel.tsx:64
-#: src/components/ui/AboutPanel.tsx:78
-#: src/components/ui/AboutPanel.tsx:81
+#: src/components/ui/ComponentsChecklist.tsx:138
+msgid "Online AI service · your own API key"
+msgstr "オンラインAIサービス · 自分のAPIキー"
+
+#: src/components/ui/AboutPanel.tsx:62
+#: src/components/ui/AboutPanel.tsx:65
+#: src/components/ui/AboutPanel.tsx:79
+#: src/components/ui/AboutPanel.tsx:82
+#: src/components/ui/AboutPanel.tsx:89
 msgid "Open"
 msgstr "開く"
 
@@ -2620,6 +2694,18 @@ msgstr "タイムラインエディタを開きます。クリップを手動で
 #: src/components/ui/AppSettings.tsx:544
 msgid "OpenRouteService"
 msgstr "OpenRouteService"
+
+#: src/components/ui/ComponentsChecklist.tsx:155
+msgid "Optional"
+msgstr "任意"
+
+#: src/components/ui/ComponentsChecklist.tsx:87
+msgid "Optional: a script writer, for the assistant and Auto-Write. You can type every script yourself without one."
+msgstr "任意: アシスタントと自動作成のためのスクリプト作成元。なくても、スクリプトはすべて自分で入力できます。"
+
+#: src/components/ui/ComponentsChecklist.tsx:88
+msgid "Optional: moving attraction videos. Without them, each clip pans across the photo."
+msgstr "任意: 動くアトラクション動画。なければ、各クリップは写真の上をパンするだけになります。"
 
 #: src/features/assistant/AssistantChat.tsx:182
 #~ msgid "Or start from an example"
@@ -2713,7 +2799,7 @@ msgstr "写真"
 msgid "Photos & Images"
 msgstr "写真と画像"
 
-#: src/components/ui/ComponentsChecklist.tsx:69
+#: src/components/ui/ComponentsChecklist.tsx:110
 msgid "Pick at least one"
 msgstr "1つ以上選んでください"
 
@@ -2793,7 +2879,7 @@ msgstr "プレビュー"
 msgid "Preview {0}"
 msgstr "{0}を試聴"
 
-#: src/components/ui/AboutPanel.tsx:59
+#: src/components/ui/AboutPanel.tsx:60
 msgid "Project"
 msgstr "プロジェクト"
 
@@ -2935,10 +3021,10 @@ msgstr "読み方（フリガナ）"
 msgid "Reading Project File..."
 msgstr "プロジェクトファイルを読み込み中..."
 
-#: src/components/ui/AppSettings.tsx:1188
-#: src/components/ui/ComponentsChecklist.tsx:55
-#: src/components/ui/ComponentsChecklist.tsx:88
-#: src/components/ui/ComponentsChecklist.tsx:108
+#: src/components/ui/AppSettings.tsx:1191
+#: src/components/ui/ComponentsChecklist.tsx:66
+#: src/components/ui/ComponentsChecklist.tsx:129
+#: src/components/ui/ComponentsChecklist.tsx:149
 msgid "Ready"
 msgstr "準備完了"
 
@@ -2951,7 +3037,7 @@ msgstr "作成の準備ができました"
 msgid "Recent"
 msgstr "最近のプロジェクト"
 
-#: src/components/ui/AppSettings.tsx:1133
+#: src/components/ui/AppSettings.tsx:1136
 msgid "Recommended models"
 msgstr "おすすめのモデル"
 
@@ -3120,7 +3206,7 @@ msgstr "既存のボイスを置き換える"
 msgid "Replace the stops in this project with the new ones?"
 msgstr "このプロジェクトの立ち寄り先を新しいものに置き換えますか？"
 
-#: src/components/ui/AboutPanel.tsx:63
+#: src/components/ui/AboutPanel.tsx:64
 msgid "Report a problem"
 msgstr "不具合を報告"
 
@@ -3210,7 +3296,7 @@ msgstr "区間を右クリックすると中継点を削除できます"
 msgid "Rise"
 msgstr "下から浮上"
 
-#: src/components/ui/AboutPanel.tsx:80
+#: src/components/ui/AboutPanel.tsx:81
 msgid "Road and path data that drawn routes snap to in Japan."
 msgstr "日本国内で、描いたルートが沿う道路・小道のデータ。"
 
@@ -3261,12 +3347,12 @@ msgstr "ルート動画"
 msgid "Route videos"
 msgstr "ルート動画"
 
-#: src/components/ui/AboutPanel.tsx:77
+#: src/components/ui/AboutPanel.tsx:78
 msgid "Routes between stops, when you let the app find them."
 msgstr "アプリにお任せしたときの、立ち寄り先どうしのルート。"
 
 #. placeholder {0}: models.length
-#: src/components/ui/ComponentsChecklist.tsx:82
+#: src/components/ui/ComponentsChecklist.tsx:123
 msgid "Running, with {0} model(s). Download more in Settings > AI models."
 msgstr "起動中で、{0}個のモデルがあります。設定 > AIモデルでさらにダウンロードできます。"
 
@@ -3356,7 +3442,7 @@ msgstr "スクリプト内にあるすべての漢字をスキャンし辞書に
 msgid "Script"
 msgstr "スクリプト"
 
-#: src/components/ui/ComponentsChecklist.tsx:75
+#: src/components/ui/ComponentsChecklist.tsx:116
 #: src/components/ui/OnlineAiSettings.tsx:32
 msgid "Script writer"
 msgstr "スクリプトの作成元"
@@ -3395,7 +3481,7 @@ msgstr "最近のルートを選択するか、新しいワークスペースを
 msgid "Select all"
 msgstr "すべて選択"
 
-#: src/components/ui/AppSettings.tsx:1079
+#: src/components/ui/AppSettings.tsx:1082
 msgid "Select which model to use for narration synthesis, only downloaded models are shown"
 msgstr "ナレーション合成に使用するモデルを選択します。ダウンロード済みのモデルのみが表示されます"
 
@@ -3433,9 +3519,13 @@ msgstr "1語だけのリクエストを送って、キーとモデルを確認�
 msgid "Services"
 msgstr "サービス"
 
-#: src/components/ui/ComponentsChecklist.tsx:60
+#: src/components/ui/ComponentsChecklist.tsx:75
 msgid "Set up"
 msgstr "セットアップ"
+
+#: src/components/ui/ComponentsChecklist.tsx:86
+msgid "Set up at least one voice, or the video has no narration."
+msgstr "声を1つ以上セットアップしてください。ないと動画にナレーションが入りません。"
 
 #: src/components/ui/VoiceSettings.tsx:289
 msgid "Set up balanced voice"
@@ -3453,7 +3543,7 @@ msgstr "自然な声をセットアップ"
 msgid "Set up Navivi"
 msgstr "Navivi のセットアップ"
 
-#: src/components/ui/ComponentsChecklist.tsx:60
+#: src/components/ui/ComponentsChecklist.tsx:75
 #: src/components/ui/VoiceSettings.tsx:221
 #: src/components/ui/VoiceSettings.tsx:271
 #: src/components/ui/VoiceSettings.tsx:289
@@ -3579,7 +3669,7 @@ msgstr "変換できなかった写真はスキップしました。"
 msgid "something-went-wrong"
 msgstr "問題が発生しました"
 
-#: src/components/ui/AboutPanel.tsx:60
+#: src/components/ui/AboutPanel.tsx:61
 msgid "Source code"
 msgstr "ソースコード"
 
@@ -3840,8 +3930,8 @@ msgstr "朝の光が港に差し込み、街がゆっくりと目を覚ましま
 #~ msgstr "編集に使う地図"
 
 #: src/components/ui/ComponentsChecklist.tsx:72
-msgid "The most natural, and it clones a voice. Slowest on a PC without a graphics card."
-msgstr "最も自然な声で、声のクローンもできます。グラフィックスカードのないPCでは最も時間がかかります。"
+#~ msgid "The most natural, and it clones a voice. Slowest on a PC without a graphics card."
+#~ msgstr "最も自然な声で、声のクローンもできます。グラフィックスカードのないPCでは最も時間がかかります。"
 
 #: src/components/ui/VoiceSettings.tsx:264
 msgid "The natural voice needs a one-time setup: a separate Python environment and the model files (about 3 GB, more with a graphics card). It takes several minutes and needs an internet connection. Keep this window open while it runs."
@@ -3891,17 +3981,21 @@ msgstr "テーマ"
 msgid "Thinking…"
 msgstr "考え中…"
 
-#: src/components/ui/AboutPanel.tsx:66
+#: src/components/ui/AboutPanel.tsx:67
 msgid "This copy"
 msgstr "このバージョン"
 
-#: src/components/ui/AppSettings.tsx:1122
+#: src/components/ui/ComponentsChecklist.tsx:167
+msgid "This downloads about 30 GB and can take an hour or more. Stay on this tab; a stopped download continues where it left off."
+msgstr "約30GBをダウンロードするため、1時間以上かかることがあります。このタブを開いたままにしてください。中断してもダウンロードは続きから再開します。"
+
+#: src/components/ui/AppSettings.tsx:1125
 msgid "This model cannot read photos. Scripts for stops with photos are written from the place name and location facts only. A vision model such as Gemma 4 can use the photos."
 msgstr "このモデルは写真を読み取れません。写真のある立ち寄り先でも、台本は地名と位置情報だけから作られます。Gemma 4 などの画像対応モデルなら写真を活用できます。"
 
 #. placeholder {0}: fit.sizeGb.toFixed(0)
 #. placeholder {1}: fit.ramGb.toFixed(0)
-#: src/components/ui/AppSettings.tsx:1107
+#: src/components/ui/AppSettings.tsx:1110
 msgid "This model is about {0} GB and this PC has {1} GB of memory, so it loads slowly and writes only a word or two a second. A 3-4B model is much faster here."
 msgstr "このモデルは約 {0} GB で、このPCのメモリは {1} GB です。読み込みが遅く、1秒に1〜2語しか書けません。3〜4Bクラスのモデルのほうがずっと速く動きます。"
 
@@ -3939,7 +4033,7 @@ msgstr "このプロジェクトはまだアーカイブファイルのままで
 msgid "This subtitle has its own style."
 msgstr "この字幕には個別のスタイルがあります。"
 
-#: src/components/ui/ComponentsChecklist.tsx:124
+#: src/components/ui/ComponentsChecklist.tsx:169
 msgid "This takes several minutes. Keep this window open while it runs."
 msgstr "数分かかります。完了するまでこのウィンドウを開いたままにしてください。"
 
@@ -4049,7 +4143,7 @@ msgstr "添付する旅程表を、日本語ナレーションの約 3 分の動
 msgid "Turn the photos of a stop into a moving clip. Off skips them, which renders faster."
 msgstr "地点の写真を動くクリップにします。オフにすると省略され、レンダリングが速くなります。"
 
-#: src/components/ui/AboutPanel.tsx:54
+#: src/components/ui/AboutPanel.tsx:55
 msgid "Turns waypoints and GPS tracks into narrated, cinematic map-route travel videos. Everything runs on your PC."
 msgstr "経由地や GPS の記録から、ナレーション付きのシネマティックなルート旅行動画を作ります。処理はすべてお使いの PC 上で行われます。"
 
@@ -4148,8 +4242,8 @@ msgstr "すべてのプロジェクトで使われます。"
 msgid "Uses the default subtitle style. Changes here apply to this subtitle only."
 msgstr "既定の字幕スタイルを使用しています。ここでの変更はこの字幕だけに適用されます。"
 
-#: src/components/ui/AboutPanel.tsx:51
-#: src/components/ui/AboutPanel.tsx:66
+#: src/components/ui/AboutPanel.tsx:52
+#: src/components/ui/AboutPanel.tsx:67
 msgid "Version {version}"
 msgstr "バージョン {version}"
 
@@ -4172,7 +4266,7 @@ msgid "Via point {0} of {count}"
 msgstr "中継点 {0} / {count}"
 
 #: src/components/ui/AppSettings.tsx:196
-#: src/components/ui/ComponentsChecklist.tsx:114
+#: src/components/ui/ComponentsChecklist.tsx:155
 #: src/features/editor/EditorView.tsx:76
 msgid "Video"
 msgstr "動画"
@@ -4217,11 +4311,11 @@ msgstr "ボイス名"
 msgid "Voiceover"
 msgstr "ナレーション"
 
-#: src/components/ui/ComponentsChecklist.tsx:69
+#: src/components/ui/ComponentsChecklist.tsx:110
 msgid "Voices"
 msgstr "音声"
 
-#: src/components/ui/AboutPanel.tsx:86
+#: src/components/ui/AboutPanel.tsx:95
 msgid "Voices that come with Navivi"
 msgstr "Navivi に付属する音声"
 

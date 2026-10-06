@@ -48,7 +48,7 @@ msgid "Rose"
 msgstr "Rose"
 
 #. js-lingui-explicit-id
-#: src/components/ui/AppSettings.tsx:974
+#: src/components/ui/AppSettings.tsx:977
 msgid "Starting..."
 msgstr "Starting..."
 
@@ -302,8 +302,8 @@ msgid "A fast draft takes about half the time per line and sounds a little rough
 msgstr "A fast draft takes about half the time per line and sounds a little rougher. Use it while you are checking a project and switch to Best for the final render. Narration you already have is kept; use Redo voice in the review step to remake it with this setting."
 
 #: src/components/ui/ComponentsChecklist.tsx:70
-msgid "A few built-in Japanese voices, a few seconds per line. A little flatter, and it cannot clone a voice."
-msgstr "A few built-in Japanese voices, a few seconds per line. A little flatter, and it cannot clone a voice."
+#~ msgid "A few built-in Japanese voices, a few seconds per line. A little flatter, and it cannot clone a voice."
+#~ msgstr "A few built-in Japanese voices, a few seconds per line. A little flatter, and it cannot clone a voice."
 
 #: src/features/assistant/AssistantChat.tsx:60
 msgid "A relaxed walking video that follows the GPX track I attach, with English narration, about 4 minutes"
@@ -327,6 +327,35 @@ msgstr "About {0}"
 msgid "About {0} left"
 msgstr "About {0} left"
 
+#. placeholder {0}: MODEL_CREDITS.kokoro.by
+#. placeholder {1}: MODEL_CREDITS.kokoro.license
+#: src/components/ui/ComponentsChecklist.tsx:111
+msgid "About 2 GB. A few built-in Japanese voices, a few seconds per line. A little flatter, and it cannot clone a voice. By {0}, {1}."
+msgstr "About 2 GB. A few built-in Japanese voices, a few seconds per line. A little flatter, and it cannot clone a voice. By {0}, {1}."
+
+#. placeholder {0}: MODEL_CREDITS.irodori.by
+#. placeholder {1}: MODEL_CREDITS.irodori.license
+#: src/components/ui/ComponentsChecklist.tsx:113
+msgid "About 3 GB, more with a graphics card. The most natural, and it clones a voice. Slowest on a PC without a graphics card. By {0}, {1}."
+msgstr "About 3 GB, more with a graphics card. The most natural, and it clones a voice. Slowest on a PC without a graphics card. By {0}, {1}."
+
+#. placeholder {0}: MODEL_CREDITS.ltx.name
+#. placeholder {1}: MODEL_CREDITS.ltx.by
+#. placeholder {2}: MODEL_CREDITS.wan.name
+#. placeholder {3}: MODEL_CREDITS.wan.by
+#. placeholder {4}: MODEL_CREDITS.wan.license
+#. placeholder {5}: MODEL_CREDITS.comfyui.name
+#. placeholder {6}: MODEL_CREDITS.comfyui.license
+#: src/components/ui/ComponentsChecklist.tsx:159
+msgid "About 30 GB and an NVIDIA graphics card. Turns each photo into a camera move with {0} ({1}) and {2} ({3}, {4}), run by {5} ({6}). Without it, clips pan across the photo."
+msgstr "About 30 GB and an NVIDIA graphics card. Turns each photo into a camera move with {0} ({1}) and {2} ({3}, {4}), run by {5} ({6}). Without it, clips pan across the photo."
+
+#. placeholder {0}: MODEL_CREDITS.qwen3.by
+#. placeholder {1}: MODEL_CREDITS.qwen3.license
+#: src/components/ui/ComponentsChecklist.tsx:112
+msgid "About 4 GB. Clones a voice from a recording in about a third of the natural voice's time. By {0}, {1}."
+msgstr "About 4 GB. Clones a voice from a recording in about a third of the natural voice's time. By {0}, {1}."
+
 #: src/components/ui/AppSettings.tsx:389
 msgid "Accent color"
 msgstr "Accent color"
@@ -343,7 +372,7 @@ msgstr "Accept and apply to project"
 msgid "Accept and export"
 msgstr "Accept and export"
 
-#: src/components/ui/AppSettings.tsx:1078
+#: src/components/ui/AppSettings.tsx:1081
 msgid "Active model"
 msgstr "Active model"
 
@@ -732,8 +761,12 @@ msgid "Balanced voice"
 msgstr "Balanced voice"
 
 #: src/components/ui/ComponentsChecklist.tsx:71
-msgid "Balanced voice · about 4 GB"
-msgstr "Balanced voice · about 4 GB"
+#~ msgid "Balanced voice · about 4 GB"
+#~ msgstr "Balanced voice · about 4 GB"
+
+#: src/components/ui/ComponentsChecklist.tsx:112
+msgid "Balanced voice · Qwen3-TTS"
+msgstr "Balanced voice · Qwen3-TTS"
 
 #: src/components/ui/VoiceSettings.tsx:195
 msgid "Balanced voice also clones a voice from a recording, in less than half the time. It sounds a little less natural and can occasionally change the intonation of a short line. It uses about 3 GB of memory while it runs."
@@ -747,7 +780,7 @@ msgstr "Balanced voice setup"
 msgid "Base Map Style"
 msgstr "Base Map Style"
 
-#: src/components/ui/AboutPanel.tsx:74
+#: src/components/ui/AboutPanel.tsx:75
 msgid "Base maps and place names."
 msgstr "Base maps and place names."
 
@@ -835,8 +868,8 @@ msgstr "Cancel"
 msgid "Cancel"
 msgstr "Cancel"
 
-#: src/components/ui/AppSettings.tsx:1177
-#: src/components/ui/AppSettings.tsx:1179
+#: src/components/ui/AppSettings.tsx:1180
+#: src/components/ui/AppSettings.tsx:1182
 msgid "Cancel download"
 msgstr "Cancel download"
 
@@ -872,8 +905,12 @@ msgstr "Check Audio & Video"
 msgid "Check the results"
 msgstr "Check the results"
 
-#: src/components/ui/ComponentsChecklist.tsx:80
-#: src/components/ui/ComponentsChecklist.tsx:100
+#: src/components/ui/ComponentsChecklist.tsx:94
+msgid "Check what you need. Only one voice is required; everything else is optional and can be added later."
+msgstr "Check what you need. Only one voice is required; everything else is optional and can be added later."
+
+#: src/components/ui/ComponentsChecklist.tsx:121
+#: src/components/ui/ComponentsChecklist.tsx:141
 msgid "Checking…"
 msgstr "Checking…"
 
@@ -902,8 +939,8 @@ msgstr "Choose your preferred language for the application"
 msgid "Choose…"
 msgstr "Choose…"
 
-#: src/components/ui/AppSettings.tsx:1177
-#: src/components/ui/AppSettings.tsx:1179
+#: src/components/ui/AppSettings.tsx:1180
+#: src/components/ui/AppSettings.tsx:1182
 #: src/components/ui/NewProject.tsx:314
 #: src/components/ui/ReviewStep.tsx:174
 #: src/components/ui/StatusBar.tsx:402
@@ -968,8 +1005,8 @@ msgid "Clips ordered, fades added and subtitles filled in"
 msgstr "Clips ordered, fades added and subtitles filled in"
 
 #: src/components/ui/ComponentsChecklist.tsx:71
-msgid "Clones a voice from a recording in about a third of the natural voice's time."
-msgstr "Clones a voice from a recording in about a third of the natural voice's time."
+#~ msgid "Clones a voice from a recording in about a third of the natural voice's time."
+#~ msgstr "Clones a voice from a recording in about a third of the natural voice's time."
 
 #: src/components/ui/AppSettings.tsx:274
 #: src/components/ui/AppSettings.tsx:275
@@ -1042,7 +1079,7 @@ msgstr "Converting GPS file format..."
 msgid "Converting iPhone photos..."
 msgstr "Converting iPhone photos..."
 
-#: src/components/ui/AboutPanel.tsx:68
+#: src/components/ui/AboutPanel.tsx:69
 #: src/components/ui/ErrorBoundary.tsx:135
 msgid "Copied"
 msgstr "Copied"
@@ -1064,7 +1101,7 @@ msgstr "Copy"
 msgid "Copy coordinates"
 msgstr "Copy coordinates"
 
-#: src/components/ui/AboutPanel.tsx:68
+#: src/components/ui/AboutPanel.tsx:69
 msgid "Copy details"
 msgstr "Copy details"
 
@@ -1342,7 +1379,7 @@ msgstr "Describe the video you want: where it goes, how long, and in what tone."
 msgid "Destination"
 msgstr "Destination"
 
-#: src/components/ui/AboutPanel.tsx:75
+#: src/components/ui/AboutPanel.tsx:76
 #: src/components/ui/PipelineLogPanel.tsx:119
 #: src/components/ui/RenderOverlay.tsx:825
 msgid "Details"
@@ -1431,7 +1468,7 @@ msgstr "Double-click to add a subtitle"
 msgid "Double-click to add a title"
 msgstr "Double-click to add a title"
 
-#: src/components/ui/AppSettings.tsx:1196
+#: src/components/ui/AppSettings.tsx:1199
 msgid "Download"
 msgstr "Download"
 
@@ -1598,6 +1635,10 @@ msgstr "Estimating…"
 #: src/components/ui/AppSettings.tsx:852
 msgid "Every subtitle starts from this look"
 msgstr "Every subtitle starts from this look"
+
+#: src/components/ui/ComponentsChecklist.tsx:99
+msgid "Everything you need is set up."
+msgstr "Everything you need is set up."
 
 #: src/components/ui/TitleBar.tsx:337
 msgid "Exit"
@@ -1773,8 +1814,12 @@ msgid "Fast voice"
 msgstr "Fast voice"
 
 #: src/components/ui/ComponentsChecklist.tsx:70
-msgid "Fast voice · about 2 GB"
-msgstr "Fast voice · about 2 GB"
+#~ msgid "Fast voice · about 2 GB"
+#~ msgstr "Fast voice · about 2 GB"
+
+#: src/components/ui/ComponentsChecklist.tsx:111
+msgid "Fast voice · Kokoro-82M"
+msgstr "Fast voice · Kokoro-82M"
 
 #: src/components/ui/VoiceSettings.tsx:200
 msgid "Fast voice has a few built-in Japanese voices and takes a few seconds per line. It sounds a little flatter and cannot clone a voice."
@@ -1911,8 +1956,8 @@ msgstr "Get a key"
 msgid "Get name from coordinate"
 msgstr "Get name from coordinate"
 
-#: src/components/ui/AppSettings.tsx:1072
-#: src/components/ui/ComponentsChecklist.tsx:92
+#: src/components/ui/AppSettings.tsx:1075
+#: src/components/ui/ComponentsChecklist.tsx:133
 msgid "Get Ollama"
 msgstr "Get Ollama"
 
@@ -2025,7 +2070,7 @@ msgstr "Imported {0} waypoints successfully"
 msgid "Include rendered video clips"
 msgstr "Include rendered video clips"
 
-#: src/components/ui/AboutPanel.tsx:63
+#: src/components/ui/AboutPanel.tsx:64
 msgid "Include the version and system details from \"This copy\" so it is easier to reproduce."
 msgstr "Include the version and system details from \"This copy\" so it is easier to reproduce."
 
@@ -2098,7 +2143,7 @@ msgid "Key saved"
 msgstr "Key saved"
 
 #. placeholder {0}: keys.map((p) => PROVIDERS[p].label).join(", ")
-#: src/components/ui/ComponentsChecklist.tsx:102
+#: src/components/ui/ComponentsChecklist.tsx:143
 msgid "Key saved for {0}."
 msgstr "Key saved for {0}."
 
@@ -2240,7 +2285,7 @@ msgstr "Map"
 msgid "Map Appearance"
 msgstr "Map Appearance"
 
-#: src/components/ui/AboutPanel.tsx:73
+#: src/components/ui/AboutPanel.tsx:74
 msgid "Map data"
 msgstr "Map data"
 
@@ -2300,6 +2345,10 @@ msgstr "Model"
 msgid "Model \"{engine}\" not found. Please install it from the App Settings"
 msgstr "Model \"{engine}\" not found. Please install it from the App Settings"
 
+#: src/components/ui/AboutPanel.tsx:86
+msgid "Models and engines you can download"
+msgstr "Models and engines you can download"
+
 #: src/features/map/components/DrawBar.tsx:253
 #: src/features/map/components/DrawBar.tsx:254
 msgid "More"
@@ -2313,8 +2362,12 @@ msgid "More actions"
 msgstr "More actions"
 
 #: src/components/ui/ComponentsChecklist.tsx:115
-msgid "Moving attraction videos"
-msgstr "Moving attraction videos"
+#~ msgid "Moving attraction videos"
+#~ msgstr "Moving attraction videos"
+
+#: src/components/ui/ComponentsChecklist.tsx:158
+msgid "Moving attraction videos · ComfyUI"
+msgstr "Moving attraction videos · ComfyUI"
 
 #: src/features/editor/ExportDialog.tsx:66
 #: src/features/editor/Inspector.tsx:598
@@ -2342,7 +2395,7 @@ msgstr "Mute narration"
 msgid "Name your project to continue"
 msgstr "Name your project to continue"
 
-#: src/components/ui/AppSettings.tsx:1076
+#: src/components/ui/AppSettings.tsx:1079
 #: src/features/assistant/AssistantChat.tsx:19
 #: src/features/editor/ExportDialog.tsx:64
 #: src/features/editor/Inspector.tsx:441
@@ -2371,8 +2424,12 @@ msgid "Natural voice"
 msgstr "Natural voice"
 
 #: src/components/ui/ComponentsChecklist.tsx:72
-msgid "Natural voice · about 3 GB, more with a graphics card"
-msgstr "Natural voice · about 3 GB, more with a graphics card"
+#~ msgid "Natural voice · about 3 GB, more with a graphics card"
+#~ msgstr "Natural voice · about 3 GB, more with a graphics card"
+
+#: src/components/ui/ComponentsChecklist.tsx:113
+msgid "Natural voice · Irodori-TTS"
+msgstr "Natural voice · Irodori-TTS"
 
 #: src/components/ui/VoiceSettings.tsx:190
 msgid "Natural voice can clone a voice from a recording and sounds the most natural, but takes about half a minute per line on a PC without a graphics card."
@@ -2387,8 +2444,12 @@ msgid "Navivi needs its media tools before it can make videos: a Python environm
 msgstr "Navivi needs its media tools before it can make videos: a Python environment, the video and map libraries, and the browser that draws the route. That is about 800 MB. It needs an internet connection and takes a few minutes. Voices and AI models are set up later from Settings."
 
 #: src/components/ui/ComponentsChecklist.tsx:115
-msgid "Needs a powerful graphics card and is not part of the installer yet. Until then, attraction clips pan across the photo."
-msgstr "Needs a powerful graphics card and is not part of the installer yet. Until then, attraction clips pan across the photo."
+#~ msgid "Needs a powerful graphics card and is not part of the installer yet. Until then, attraction clips pan across the photo."
+#~ msgstr "Needs a powerful graphics card and is not part of the installer yet. Until then, attraction clips pan across the photo."
+
+#: src/components/ui/ComponentsChecklist.tsx:70
+msgid "Needs an NVIDIA graphics card"
+msgstr "Needs an NVIDIA graphics card"
 
 #. placeholder {0}: selectedAnchorIdx + 1
 #: src/features/map/components/DrawBar.tsx:329
@@ -2421,7 +2482,7 @@ msgstr "No clips yet"
 msgid "No entries yet."
 msgstr "No entries yet."
 
-#: src/components/ui/AppSettings.tsx:1062
+#: src/components/ui/AppSettings.tsx:1065
 msgid "No local models found. To write scripts on this PC, install Ollama and keep it running, then download a model below. Or pick an online provider above, which needs nothing installed."
 msgstr "No local models found. To write scripts on this PC, install Ollama and keep it running, then download a model below. Or pick an online provider above, which needs nothing installed."
 
@@ -2429,7 +2490,7 @@ msgstr "No local models found. To write scripts on this PC, install Ollama and k
 msgid "No locations found in document"
 msgstr "No locations found in document"
 
-#: src/components/ui/AppSettings.tsx:1091
+#: src/components/ui/AppSettings.tsx:1094
 msgid "No models installed"
 msgstr "No models installed"
 
@@ -2499,10 +2560,10 @@ msgid "None of these photos has a location. Photos saved from websites or chat a
 msgstr "None of these photos has a location. Photos saved from websites or chat apps usually don't."
 
 #: src/components/ui/ComponentsChecklist.tsx:117
-msgid "Not available yet"
-msgstr "Not available yet"
+#~ msgid "Not available yet"
+#~ msgstr "Not available yet"
 
-#: src/components/ui/ComponentsChecklist.tsx:83
+#: src/components/ui/ComponentsChecklist.tsx:124
 msgid "Not found. Install Ollama and keep it running, then download a model in Settings > AI models."
 msgstr "Not found. Install Ollama and keep it running, then download a model in Settings > AI models."
 
@@ -2523,8 +2584,12 @@ msgid "Nothing selected. Accept to export, or mark what to redo."
 msgstr "Nothing selected. Accept to export, or mark what to redo."
 
 #: src/components/ui/ComponentsChecklist.tsx:103
-msgid "Nothing to install: add your own API key in Settings > AI models (turn on AI features in General first)."
-msgstr "Nothing to install: add your own API key in Settings > AI models (turn on AI features in General first)."
+#~ msgid "Nothing to install: add your own API key in Settings > AI models (turn on AI features in General first)."
+#~ msgstr "Nothing to install: add your own API key in Settings > AI models (turn on AI features in General first)."
+
+#: src/components/ui/ComponentsChecklist.tsx:144
+msgid "Nothing to install. Add a key from OpenRouter, Anthropic, OpenAI, Google Gemini or another provider in Settings > AI models (turn on AI features in General first)."
+msgstr "Nothing to install. Add a key from OpenRouter, Anthropic, OpenAI, Google Gemini or another provider in Settings > AI models (turn on AI features in General first)."
 
 #: src/components/ui/ReviewStep.tsx:182
 msgid "Nothing to review yet."
@@ -2537,8 +2602,12 @@ msgid "Off"
 msgstr "Off"
 
 #: src/components/ui/ComponentsChecklist.tsx:77
-msgid "Ollama on this PC"
-msgstr "Ollama on this PC"
+#~ msgid "Ollama on this PC"
+#~ msgstr "Ollama on this PC"
+
+#: src/components/ui/ComponentsChecklist.tsx:118
+msgid "Ollama on this PC · open models such as Gemma 4"
+msgstr "Ollama on this PC · open models such as Gemma 4"
 
 #: src/components/ui/AppSettings.tsx:328
 msgid "Ollama or online AI"
@@ -2558,13 +2627,18 @@ msgid "One-time setup"
 msgstr "One-time setup"
 
 #: src/components/ui/ComponentsChecklist.tsx:97
-msgid "Online AI"
-msgstr "Online AI"
+#~ msgid "Online AI"
+#~ msgstr "Online AI"
 
-#: src/components/ui/AboutPanel.tsx:61
-#: src/components/ui/AboutPanel.tsx:64
-#: src/components/ui/AboutPanel.tsx:78
-#: src/components/ui/AboutPanel.tsx:81
+#: src/components/ui/ComponentsChecklist.tsx:138
+msgid "Online AI service · your own API key"
+msgstr "Online AI service · your own API key"
+
+#: src/components/ui/AboutPanel.tsx:62
+#: src/components/ui/AboutPanel.tsx:65
+#: src/components/ui/AboutPanel.tsx:79
+#: src/components/ui/AboutPanel.tsx:82
+#: src/components/ui/AboutPanel.tsx:89
 msgid "Open"
 msgstr "Open"
 
@@ -2620,6 +2694,18 @@ msgstr "Opening the timeline editor so you can change the clip by hand."
 #: src/components/ui/AppSettings.tsx:544
 msgid "OpenRouteService"
 msgstr "OpenRouteService"
+
+#: src/components/ui/ComponentsChecklist.tsx:155
+msgid "Optional"
+msgstr "Optional"
+
+#: src/components/ui/ComponentsChecklist.tsx:87
+msgid "Optional: a script writer, for the assistant and Auto-Write. You can type every script yourself without one."
+msgstr "Optional: a script writer, for the assistant and Auto-Write. You can type every script yourself without one."
+
+#: src/components/ui/ComponentsChecklist.tsx:88
+msgid "Optional: moving attraction videos. Without them, each clip pans across the photo."
+msgstr "Optional: moving attraction videos. Without them, each clip pans across the photo."
 
 #: src/features/assistant/AssistantChat.tsx:182
 #~ msgid "Or start from an example"
@@ -2713,7 +2799,7 @@ msgstr "Photos"
 msgid "Photos & Images"
 msgstr "Photos & Images"
 
-#: src/components/ui/ComponentsChecklist.tsx:69
+#: src/components/ui/ComponentsChecklist.tsx:110
 msgid "Pick at least one"
 msgstr "Pick at least one"
 
@@ -2793,7 +2879,7 @@ msgstr "Preview"
 msgid "Preview {0}"
 msgstr "Preview {0}"
 
-#: src/components/ui/AboutPanel.tsx:59
+#: src/components/ui/AboutPanel.tsx:60
 msgid "Project"
 msgstr "Project"
 
@@ -2935,10 +3021,10 @@ msgstr "Reading (Furigana)"
 msgid "Reading Project File..."
 msgstr "Reading Project File..."
 
-#: src/components/ui/AppSettings.tsx:1188
-#: src/components/ui/ComponentsChecklist.tsx:55
-#: src/components/ui/ComponentsChecklist.tsx:88
-#: src/components/ui/ComponentsChecklist.tsx:108
+#: src/components/ui/AppSettings.tsx:1191
+#: src/components/ui/ComponentsChecklist.tsx:66
+#: src/components/ui/ComponentsChecklist.tsx:129
+#: src/components/ui/ComponentsChecklist.tsx:149
 msgid "Ready"
 msgstr "Ready"
 
@@ -2951,7 +3037,7 @@ msgstr "Ready to build"
 msgid "Recent"
 msgstr "Recent"
 
-#: src/components/ui/AppSettings.tsx:1133
+#: src/components/ui/AppSettings.tsx:1136
 msgid "Recommended models"
 msgstr "Recommended models"
 
@@ -3120,7 +3206,7 @@ msgstr "Replace existing voice"
 msgid "Replace the stops in this project with the new ones?"
 msgstr "Replace the stops in this project with the new ones?"
 
-#: src/components/ui/AboutPanel.tsx:63
+#: src/components/ui/AboutPanel.tsx:64
 msgid "Report a problem"
 msgstr "Report a problem"
 
@@ -3210,7 +3296,7 @@ msgstr "Right-click the leg to clear via points"
 msgid "Rise"
 msgstr "Rise"
 
-#: src/components/ui/AboutPanel.tsx:80
+#: src/components/ui/AboutPanel.tsx:81
 msgid "Road and path data that drawn routes snap to in Japan."
 msgstr "Road and path data that drawn routes snap to in Japan."
 
@@ -3261,12 +3347,12 @@ msgstr "Route video"
 msgid "Route videos"
 msgstr "Route videos"
 
-#: src/components/ui/AboutPanel.tsx:77
+#: src/components/ui/AboutPanel.tsx:78
 msgid "Routes between stops, when you let the app find them."
 msgstr "Routes between stops, when you let the app find them."
 
 #. placeholder {0}: models.length
-#: src/components/ui/ComponentsChecklist.tsx:82
+#: src/components/ui/ComponentsChecklist.tsx:123
 msgid "Running, with {0} model(s). Download more in Settings > AI models."
 msgstr "Running, with {0} model(s). Download more in Settings > AI models."
 
@@ -3356,7 +3442,7 @@ msgstr "Scan script for all Kanji and add to Dictionary"
 msgid "Script"
 msgstr "Script"
 
-#: src/components/ui/ComponentsChecklist.tsx:75
+#: src/components/ui/ComponentsChecklist.tsx:116
 #: src/components/ui/OnlineAiSettings.tsx:32
 msgid "Script writer"
 msgstr "Script writer"
@@ -3395,7 +3481,7 @@ msgstr "Select a recent route or create a new workspace to begin"
 msgid "Select all"
 msgstr "Select all"
 
-#: src/components/ui/AppSettings.tsx:1079
+#: src/components/ui/AppSettings.tsx:1082
 msgid "Select which model to use for narration synthesis, only downloaded models are shown"
 msgstr "Select which model to use for narration synthesis, only downloaded models are shown"
 
@@ -3433,9 +3519,13 @@ msgstr "Sends a one-word request to check the key and the model."
 msgid "Services"
 msgstr "Services"
 
-#: src/components/ui/ComponentsChecklist.tsx:60
+#: src/components/ui/ComponentsChecklist.tsx:75
 msgid "Set up"
 msgstr "Set up"
+
+#: src/components/ui/ComponentsChecklist.tsx:86
+msgid "Set up at least one voice, or the video has no narration."
+msgstr "Set up at least one voice, or the video has no narration."
 
 #: src/components/ui/VoiceSettings.tsx:289
 msgid "Set up balanced voice"
@@ -3453,7 +3543,7 @@ msgstr "Set up natural voice"
 msgid "Set up Navivi"
 msgstr "Set up Navivi"
 
-#: src/components/ui/ComponentsChecklist.tsx:60
+#: src/components/ui/ComponentsChecklist.tsx:75
 #: src/components/ui/VoiceSettings.tsx:221
 #: src/components/ui/VoiceSettings.tsx:271
 #: src/components/ui/VoiceSettings.tsx:289
@@ -3579,7 +3669,7 @@ msgstr "Some photos could not be converted and were skipped."
 msgid "something-went-wrong"
 msgstr "Something went wrong"
 
-#: src/components/ui/AboutPanel.tsx:60
+#: src/components/ui/AboutPanel.tsx:61
 msgid "Source code"
 msgstr "Source code"
 
@@ -3840,8 +3930,8 @@ msgstr "The first sunlight reaches the harbour, and the town slowly wakes up."
 #~ msgstr "The map you edit on"
 
 #: src/components/ui/ComponentsChecklist.tsx:72
-msgid "The most natural, and it clones a voice. Slowest on a PC without a graphics card."
-msgstr "The most natural, and it clones a voice. Slowest on a PC without a graphics card."
+#~ msgid "The most natural, and it clones a voice. Slowest on a PC without a graphics card."
+#~ msgstr "The most natural, and it clones a voice. Slowest on a PC without a graphics card."
 
 #: src/components/ui/VoiceSettings.tsx:264
 msgid "The natural voice needs a one-time setup: a separate Python environment and the model files (about 3 GB, more with a graphics card). It takes several minutes and needs an internet connection. Keep this window open while it runs."
@@ -3891,17 +3981,21 @@ msgstr "Theme"
 msgid "Thinking…"
 msgstr "Thinking…"
 
-#: src/components/ui/AboutPanel.tsx:66
+#: src/components/ui/AboutPanel.tsx:67
 msgid "This copy"
 msgstr "This copy"
 
-#: src/components/ui/AppSettings.tsx:1122
+#: src/components/ui/ComponentsChecklist.tsx:167
+msgid "This downloads about 30 GB and can take an hour or more. Stay on this tab; a stopped download continues where it left off."
+msgstr "This downloads about 30 GB and can take an hour or more. Stay on this tab; a stopped download continues where it left off."
+
+#: src/components/ui/AppSettings.tsx:1125
 msgid "This model cannot read photos. Scripts for stops with photos are written from the place name and location facts only. A vision model such as Gemma 4 can use the photos."
 msgstr "This model cannot read photos. Scripts for stops with photos are written from the place name and location facts only. A vision model such as Gemma 4 can use the photos."
 
 #. placeholder {0}: fit.sizeGb.toFixed(0)
 #. placeholder {1}: fit.ramGb.toFixed(0)
-#: src/components/ui/AppSettings.tsx:1107
+#: src/components/ui/AppSettings.tsx:1110
 msgid "This model is about {0} GB and this PC has {1} GB of memory, so it loads slowly and writes only a word or two a second. A 3-4B model is much faster here."
 msgstr "This model is about {0} GB and this PC has {1} GB of memory, so it loads slowly and writes only a word or two a second. A 3-4B model is much faster here."
 
@@ -3939,7 +4033,7 @@ msgstr "This project is still an archive file. Open it once, then export."
 msgid "This subtitle has its own style."
 msgstr "This subtitle has its own style."
 
-#: src/components/ui/ComponentsChecklist.tsx:124
+#: src/components/ui/ComponentsChecklist.tsx:169
 msgid "This takes several minutes. Keep this window open while it runs."
 msgstr "This takes several minutes. Keep this window open while it runs."
 
@@ -4049,7 +4143,7 @@ msgstr "Turn the itinerary I attach into a 3 minute video with Japanese narratio
 msgid "Turn the photos of a stop into a moving clip. Off skips them, which renders faster."
 msgstr "Turn the photos of a stop into a moving clip. Off skips them, which renders faster."
 
-#: src/components/ui/AboutPanel.tsx:54
+#: src/components/ui/AboutPanel.tsx:55
 msgid "Turns waypoints and GPS tracks into narrated, cinematic map-route travel videos. Everything runs on your PC."
 msgstr "Turns waypoints and GPS tracks into narrated, cinematic map-route travel videos. Everything runs on your PC."
 
@@ -4148,8 +4242,8 @@ msgstr "Used by all projects."
 msgid "Uses the default subtitle style. Changes here apply to this subtitle only."
 msgstr "Uses the default subtitle style. Changes here apply to this subtitle only."
 
-#: src/components/ui/AboutPanel.tsx:51
-#: src/components/ui/AboutPanel.tsx:66
+#: src/components/ui/AboutPanel.tsx:52
+#: src/components/ui/AboutPanel.tsx:67
 msgid "Version {version}"
 msgstr "Version {version}"
 
@@ -4172,7 +4266,7 @@ msgid "Via point {0} of {count}"
 msgstr "Via point {0} of {count}"
 
 #: src/components/ui/AppSettings.tsx:196
-#: src/components/ui/ComponentsChecklist.tsx:114
+#: src/components/ui/ComponentsChecklist.tsx:155
 #: src/features/editor/EditorView.tsx:76
 msgid "Video"
 msgstr "Video"
@@ -4217,11 +4311,11 @@ msgstr "Voice name"
 msgid "Voiceover"
 msgstr "Voiceover"
 
-#: src/components/ui/ComponentsChecklist.tsx:69
+#: src/components/ui/ComponentsChecklist.tsx:110
 msgid "Voices"
 msgstr "Voices"
 
-#: src/components/ui/AboutPanel.tsx:86
+#: src/components/ui/AboutPanel.tsx:95
 msgid "Voices that come with Navivi"
 msgstr "Voices that come with Navivi"
 

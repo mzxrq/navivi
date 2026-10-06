@@ -5,6 +5,7 @@ import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 import { appConfig } from "../../config/constants";
 import stockVoices from "../../../scripts/stock-voices.json";
+import { MODEL_CREDITS } from "../../config/credits";
 import { Check, Copy, ExternalLink } from "./icons";
 import { Row, secondaryButton, Section } from "./SettingsParts";
 
@@ -80,6 +81,14 @@ export function AboutPanel() {
         <Row title="国土地理院 (GSI Japan)" description={t`Road and path data that drawn routes snap to in Japan.`}>
           <LinkButton url="https://maps.gsi.go.jp" label={t`Open`} />
         </Row>
+      </Section>
+
+      <Section title={t`Models and engines you can download`}>
+        {Object.values(MODEL_CREDITS).map((m) => (
+          <Row key={m.id} title={m.name} description={`${m.by} · ${m.license}`}>
+            <LinkButton url={m.url} label={t`Open`} />
+          </Row>
+        ))}
       </Section>
 
       {credits.length > 0 && (
