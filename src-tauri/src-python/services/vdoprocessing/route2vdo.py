@@ -33,7 +33,8 @@ logger = setup_logger("RouteAnimator")
 # fallback when neither the CLI flag nor the route JSON's settings supply
 # one. Named here so both use sites can't silently drift apart.
 DEFAULT_LINE_THICKNESS = 10
-DEFAULT_MARKER_RADIUS = 24
+# [NOTE] [Config] 16 is the GraphicsEngine floor (it draws max(16, r) + 3 px); a larger default was clamped to it anyway.
+DEFAULT_MARKER_RADIUS = 16
 DEFAULT_SUMMARY_HOLD_SECONDS = 4.0
 
 

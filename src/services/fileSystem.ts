@@ -207,7 +207,6 @@ export const saveProjectData = async (
         videoSound: relativeVideoPaths.map((_, i) => wp.videoSound?.[i] ?? false),
         imagePans: wp.imagePans || [],
         imageCredits: renameCredits(wp.imageCredits, renamed),
-        imageTransitions: wp.imageTransitions || [],
         narration: wp.narration || "",
         arrivingNarration: wp.arrivingNarration || "",
         attractionNarration: wp.attractionNarration || "",

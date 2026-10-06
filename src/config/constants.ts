@@ -41,7 +41,6 @@ export const defaultProjectSettings = {
     route_line_border_color: [255, 255, 255] as [number, number, number],
     route_line_border_thickness: 0,
     marker_color: [0, 0, 255] as [number, number, number],
-    marker_radius: 10,
     routeMarker: "",
     pause: 2.0,
     summary_hold: 4.0,

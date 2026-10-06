@@ -20,7 +20,6 @@ export interface Waypoint {
   imageCredits?: Record<string, PhotoCredit>; // who took a photo that was found online, keyed by the photo's path
   videos?: string[];
   videoSound?: boolean[];
-  imageTransitions?: string[];
   arrivingNarration?: string;
   attractionNarration?: string;
   isGeneratingAudio?: boolean;
@@ -85,7 +84,7 @@ export interface ProjectSettings {
   route_line_border_color?: [number, number, number];
   route_line_border_thickness?: number;
   marker_color: [number, number, number];
-  marker_radius: number;
+  marker_radius?: number; // unset = the renderer default
   routeMarker?: string;
   pause: number;
   summary_hold: number;
