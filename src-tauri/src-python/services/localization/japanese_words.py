@@ -8,7 +8,7 @@ Without the analyser installed everything falls back to pykakasi's word guesses.
 """
 
 from functools import lru_cache
-from typing import Dict, List, Optional
+from typing import Dict, Iterable, List, Optional
 
 _NOUNISH = {"名詞", "接頭辞", "接尾辞"}
 _CONTENT = {"動詞", "形容詞", "形状詞", "副詞", "連体詞", "接続詞", "感動詞", "代名詞"}
@@ -111,6 +111,39 @@ def analyze_words(text: str) -> List[Dict[str, str]]:
         seen.add(surface)
         words.append({"word": surface, "reading": _group_reading(group)})
     return words
+
+
+_PLACE_KINDS = {"地名", "一般"}  # proper nouns that aren't people's names
+
+
+def _is_place(token) -> bool:
+    return getattr(token.feature, "pos2", "") == "固有名詞" and getattr(token.feature, "pos3", "") in _PLACE_KINDS
+
+
+def analyze_place_words(text: str, names: Iterable[str] = ()) -> List[Dict[str, str]]:
+    """Place names in `text`, each as {"word", "reading"}: the project's own place `names` that it mentions,
+    then any word the analyser tags as a proper noun (not a person's name). Readings come from JMnedict first."""
+    words: List[Dict[str, str]] = []
+    seen = set()
+    for name in sorted({n.strip() for n in names if n and n.strip()}, key=text.find):
+        if name in text and has_kanji(name) and name not in seen:
+            seen.add(name)
+            words.append({"word": name, "reading": _place_reading(name, reading_of(name))})
+    tagger = _tagger()
+    if text and tagger is not None:
+        proper = {t.surface for t in tagger(text) if _is_place(t)}
+        for entry in analyze_words(text):
+            if entry["word"] not in seen and any(p in entry["word"] for p in proper):
+                seen.add(entry["word"])
+                words.append({"word": entry["word"], "reading": _place_reading(entry["word"], entry["reading"])})
+    return words
+
+
+def _place_reading(name: str, guess: Optional[str]) -> str:
+    """JMnedict's reading of a place (札立山 -> ふだたてやま where MeCab says さつたてやま), else the analyser's."""
+    from services.localization import jmnedict
+
+    return jmnedict.place_reading(name, guess, reading_of) or guess or ""
 
 
 def _fallback_words(text: str) -> List[Dict[str, str]]:

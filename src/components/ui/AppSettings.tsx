@@ -694,6 +694,7 @@ export function AppSettings() {
 interface DictionaryEntry {
   word: string;
   reading: string;
+  auto?: boolean;
 }
 
 function PronunciationEditor({
@@ -729,7 +730,7 @@ function PronunciationEditor({
                     value={entry.word}
                     onChange={(e) => {
                       const next = [...entries];
-                      next[idx] = { ...next[idx], word: e.target.value };
+                      next[idx] = { word: e.target.value, reading: next[idx].reading };
                       onChange(next);
                     }}
                     className={`${inputClass} flex-1 border-transparent dark:border-transparent bg-transparent dark:bg-transparent hover:border-zinc-200 dark:hover:border-white/10`}
@@ -740,18 +741,31 @@ function PronunciationEditor({
                     value={entry.reading}
                     onChange={(e) => {
                       const next = [...entries];
-                      next[idx] = { ...next[idx], reading: e.target.value };
+                      next[idx] = { word: next[idx].word, reading: e.target.value };
                       onChange(next);
                     }}
                     className={`${inputClass} flex-1 border-transparent dark:border-transparent bg-transparent dark:bg-transparent hover:border-zinc-200 dark:hover:border-white/10`}
                   />
+                  {entry.auto && (
+                    <span
+                      title={t`Reading guessed automatically from the scripts. Edit it to keep your own.`}
+                      className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium bg-sky-500/10 text-sky-600 dark:text-sky-400"
+                    >
+                      <Trans>auto</Trans>
+                    </span>
+                  )}
                   <button
                     type="button"
                     onClick={() =>
-                      onChange(entries.filter((_, i) => i !== idx))
+                      // An auto word would come back on the next scan, so removing one keeps it as written instead.
+                      onChange(
+                        entry.auto
+                          ? entries.map((e, i) => (i === idx ? { word: e.word, reading: e.word } : e))
+                          : entries.filter((_, i) => i !== idx),
+                      )
                     }
-                    aria-label={t`Remove`}
-                    title={t`Remove`}
+                    aria-label={entry.auto ? t`Keep as written` : t`Remove`}
+                    title={entry.auto ? t`Keep as written` : t`Remove`}
                     className="flex items-center justify-center w-7 h-7 rounded-lg text-zinc-400 opacity-0 group-hover:opacity-100 focus:opacity-100 hover:text-red-500 hover:bg-red-500/10 transition"
                   >
                     <Trash2 className="w-3.5 h-3.5" />

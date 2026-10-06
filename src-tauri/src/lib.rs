@@ -154,6 +154,29 @@ async fn run_python_blueprint(
     // The slot was taken: a cancel or a newer call already killed and reaped this one.
     Err("Process was cancelled".to_string())
 }
+// Quick read-only modes that run beside the tracked process instead of replacing it,
+// so a background scan can't kill a TTS stage or an assistant call.
+const UTILITY_MODES: &[&str] = &["extract_words", "extract_place_words", "get_furigana"];
+
+#[tauri::command]
+async fn run_python_utility(action: String, payload: String) -> Result<String, String> {
+    if !UTILITY_MODES.contains(&action.as_str()) {
+        return Err(format!("Not a utility mode: {action}"));
+    }
+    let mut cmd = python_command()?;
+    cmd.arg(&action).arg(&payload);
+    let out = tauri::async_runtime::spawn_blocking(move || cmd.output())
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|e| e.to_string())?;
+    if out.status.success() {
+        Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+    } else {
+        let err = String::from_utf8_lossy(&out.stderr).into_owned();
+        Err(if err.is_empty() { "Process terminated".to_string() } else { err })
+    }
+}
+
 #[tauri::command]
 fn cancel_python_blueprint(state: State<'_, BlueprintState>) -> Result<String, String>{
     let mut lock = state.process.lock().map_err(|e| e.to_string())?;
@@ -489,6 +512,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             run_python_blueprint,
+            run_python_utility,
             cancel_python_blueprint,
             cancel_render,
             start_render,

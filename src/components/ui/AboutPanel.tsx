@@ -83,6 +83,19 @@ export function AboutPanel() {
         </Row>
       </Section>
 
+      <Section title={t`Dictionaries`}>
+        {/* EDRDG's licence asks for this sentence as written, so it stays in English. */}
+        <Row
+          title="JMnedict (EDRDG)"
+          description={`${t`Readings of place names for the voice.`} This application uses the JMnedict dictionary file. This file is the property of the Electronic Dictionary Research and Development Group, and is used in conformance with the Group's licence (CC BY-SA 4.0).`}
+        >
+          <LinkButton url="https://www.edrdg.org/edrdg/licence.html" label={t`Details`} />
+        </Row>
+        <Row title="UniDic (unidic-lite) · MeCab" description={t`Splits the scripts into words and reads them for the voice.`}>
+          <LinkButton url="https://clrd.ninjal.ac.jp/unidic/" label={t`Open`} />
+        </Row>
+      </Section>
+
       <Section title={t`Models and engines you can download`}>
         {Object.values(MODEL_CREDITS).map((m) => (
           <Row key={m.id} title={m.name} description={`${m.by} · ${m.license}`}>

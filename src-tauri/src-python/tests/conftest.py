@@ -38,3 +38,20 @@ def _isolated_job_config_singleton():
     JobConfigManager._instance = None
     yield
     JobConfigManager._instance = None
+
+
+@pytest.fixture(autouse=True)
+def _no_dictionary_downloads(tmp_path, monkeypatch):
+    """Tests never download JMnedict or read the real shared cache; test_jmnedict builds its own sample."""
+    from services.localization import jmnedict
+
+    if "NAVIVI_CACHE_DIR" not in os.environ:
+        monkeypatch.setenv("NAVIVI_CACHE_DIR", str(tmp_path / "navivi-cache"))
+
+    def offline(url, target):
+        raise OSError("tests do not download dictionaries")
+
+    monkeypatch.setattr(jmnedict, "_download", offline)
+    jmnedict._index.cache_clear()
+    yield
+    jmnedict._index.cache_clear()

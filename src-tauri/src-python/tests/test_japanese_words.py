@@ -61,3 +61,18 @@ def test_longer_words_are_replaced_first():
 
     entries = [{"word": "三段", "reading": "さんだん"}, {"word": "三段壁", "reading": "さんだんべき"}]
     assert apply_pronunciation_dictionary("三段壁と三段", entries) == "さんだんべきとさんだん"
+
+
+def test_several_scripts_in_one_scan_list_each_word_once():
+    result = jw.analyze_words("三段壁へ向かいます。\n三段壁の洞窟です。\n白良浜に着きました。")
+    names = [w["word"] for w in result]
+    assert names.count("三段壁") == 1
+    assert names.index("三段壁") < names.index("白良浜")
+
+
+def test_auto_flagged_entries_are_applied_like_any_other():
+    from services.vdoprocessing.videopipeline.audio_step import apply_pronunciation_dictionary, merge_pronunciation
+
+    entries = merge_pronunciation([], [{"word": "三段壁", "reading": "さんだんべき", "auto": True}])
+    assert entries == [{"word": "三段壁", "reading": "さんだんべき"}]
+    assert apply_pronunciation_dictionary("三段壁へ", entries) == "さんだんべきへ"
