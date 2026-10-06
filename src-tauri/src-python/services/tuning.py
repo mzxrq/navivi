@@ -1125,16 +1125,25 @@ ATTRACTION_LTX_PRESETS: Tuple[str, ...] = ("panright", "panleft", "panup", "pand
 # dissolve - like the Tomogashima reference (one photo, several angles).
 # "random": a move from ATTRACTION_SECOND_SHOT_MOVES, picked per photo (seeded
 # by its content, so a rerun picks the same) and never the first shot's
-# direction. A move name fixes it; None = the chosen move only.
-ATTRACTION_SECOND_SHOT: Optional[str] = "random"
+# direction. "auto": picked from the same list by what the photo shows
+# (move_picker: depth + saliency on the CPU; seascape -> pan along the
+# horizon, path/gate -> walk in, central subject -> close in), random if the
+# photo can't be measured. A move name fixes it; None = the chosen move only.
+ATTRACTION_SECOND_SHOT: Optional[str] = "auto"
+# No walkthrough: unpinned, it invented a whole plaza at 札立山 (2026-10-06).
 ATTRACTION_SECOND_SHOT_MOVES: Tuple[str, ...] = (
     "closein", "closeout", "closepanleft", "closepanright", "closepanup", "closepandown",
-    "walkthrough", "walkthroughleft", "walkthroughright",
 )
+# The second shot is skipped when its close crop spans fewer real pixels of the
+# original (pre-upscale) photo than this: 2026-10-06, 485 px was sharp, <=352 smeared.
+ATTRACTION_SECOND_SHOT_MIN_SOURCE_PX = 400
 # Moves with no pinned last frame: LTXV starts from the whole photo and
 # generates the walk into the place itself (it may show what the photo doesn't).
 # The editor's "Walk In" preset is one of them.
 LTXV_FREE_MOVES: Tuple[str, ...] = ("walkthrough", "walkthroughleft", "walkthroughright", "walkin")
+# A free move chosen in the editor is rendered as this pinned move instead
+# (2026-10-06: unpinned walks invented scenery). None = the free walk.
+LTXV_FREE_MOVE_FALLBACK: Optional[str] = "zoomin"
 LTXV_CROSSFADE_SECONDS = 0.5
 # Files (downloaded on first use into bin/ComfyUI/models/<folder>, sha256-checked).
 LTXV_FILES: Dict[str, Dict[str, str]] = {
@@ -1280,7 +1289,8 @@ LTXV_PROMPTS: Dict[str, str] = {
 LTXV_PROMPTS["walkin"] = LTXV_PROMPTS["walkthrough"]
 # Second shot as a walk inside the place: "walk" = a prompt from
 # LTXV_WALK_PROMPTS (picked per photo, seeded like the move); None = LTXV_PROMPTS.
-ATTRACTION_SECOND_SHOT_STYLE: Optional[str] = "walk"
+# None since 2026-10-06: the walk prompts zoomed during pans and added a visitor at 高仙寺.
+ATTRACTION_SECOND_SHOT_STYLE: Optional[str] = None
 LTXV_WALK_PROMPTS: Dict[str, Tuple[str, ...]] = {
     "walkfwd": (
         "A smooth gimbal shot carried at eye height walks slowly forward into {place}, several unhurried steps "
@@ -1675,6 +1685,10 @@ TTS_MIN_CHUNK_CHARS = 20
 # rushed/robotic; a real speaker breathes between them. Randomized per gap
 # (uniform in this range) rather than fixed, so a long narration doesn't
 # have a metronome-regular click between every sentence.
+# A take whose end is louder than this against its speech (artifacts.cut_off_ratio)
+# stopped mid-word: it is retaken, then spoken in halves.
+TTS_CUTOFF_RATIO = 0.25
+TTS_CUTOFF_RETAKES = 2
 TTS_SENTENCE_GAP_MIN_SECONDS = 0.25
 TTS_SENTENCE_GAP_MAX_SECONDS = 0.5
 TTS_VOICE = "jvs004"  # Irodori's only bundled voice preset as of writing

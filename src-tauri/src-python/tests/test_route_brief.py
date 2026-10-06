@@ -190,7 +190,7 @@ class TestTourScript:
         assert {r["used"] for r in report} == {"template"}
         assert "{start}次は" not in script  # setting off: never "next"
         # the stop's own "5分" route claim is left to the way lines
-        assert "古い寺は四百年の歴史があります。" in script and "駅から歩いて5分" not in script
+        assert "ここは四百年の歴史があります。" in script and "駅から歩いて5分" not in script
 
     def test_model_text_is_used_only_when_it_checks_out(self):
         def fake(prompt, limit):
@@ -230,14 +230,14 @@ class TestTourScript:
         for gen in (None, fake):
             script, report = build_tour_script(project, cache, generate=gen)
             assert "こんにちは" not in script
-            assert "古い寺は四百年の歴史があります。" in script
+            assert "ここは四百年の歴史があります。" in script
 
     def test_two_lines_in_a_row_never_open_the_same_way(self):
         def fake(prompt, limit):
             if "道順を案内" in prompt:
                 return None
             if "オープニング" in prompt:
-                return "さあ、ようこそ、川の町の旅へ。"
+                return "さあ、ようこそ、中央駅からの旅へ。"
             return "さあ、古い寺は四百年続く古いお寺です。" if "■ 場所: 古い寺" in prompt else None
 
         project, cache = _tour_project()
@@ -249,6 +249,35 @@ class TestTourScript:
         assert report[kinds.index("stop1")]["used"] == "model"
         texts = [r["text"] for r in report]
         assert all(a.split("、")[0] != b.split("、")[0] for a, b in zip(texts, texts[1:]))
+
+
+    def test_an_intro_that_names_no_place_is_not_taken(self):
+        def fake(prompt, limit):
+            return "皆さん、こんにちは！美しい山々を巡る旅に出かけましょう！" if "オープニング" in prompt else None
+
+        project, cache = _tour_project()
+        project["settings"]["intro_location"] = "川の町"
+        script, report = build_tour_script(project, cache, generate=fake, intro_text=None)
+        assert {r["kind"]: r["used"] for r in report}["intro"] == "template"
+        assert clean_text(script).startswith("ようこそ。")
+        assert "中央駅" in report[0]["text"]
+
+    def test_way_lines_do_not_all_open_the_same_way(self):
+        script, report = build_tour_script(*_tour_project())
+        ways = [r["text"] for r in report if r["kind"].startswith("way")]
+        assert all(a.split("。")[0][:2] != b.split("。")[0][:2] for a, b in zip(ways, ways[1:]))
+
+
+class TestWayWording:
+    def test_a_line_that_tells_no_way_fails(self):
+        trip = journeys(build_brief(*_project()))[0]
+        assert not check_transition(f"さあ、この道で、{trip['to']}を満喫しましょう。", trip)
+
+    def test_wordings_rotate_and_the_longest_leg_is_called_out(self):
+        leg = {"from": "A", "to": "B", "mode": "walking", "minutes": 52, "km": 3.0, "heading": "南東",
+               "winding": False, "passes": [], "is_return": False}
+        assert transition_text(leg, variant=1) == "続いて南東へ。52分ほど進むと、Bに着きます。"
+        assert transition_text({**leg, "longest": True}).startswith("ここからが一番長い区間です。次は南東へ。")
 
 
 class TestBudget:

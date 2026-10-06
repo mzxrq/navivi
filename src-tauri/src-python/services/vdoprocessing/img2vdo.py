@@ -148,8 +148,10 @@ class AttractionVideoGenerator:
         # Switching generator rebuilds the kept clips.
         if pan in tuning.ATTRACTION_LTX_PRESETS:
             digest.update(f"|ltxv13b-crops|{tuning.ATTRACTION_SECOND_SHOT}".encode("utf-8"))
-            if tuning.ATTRACTION_SECOND_SHOT_STYLE:
-                digest.update(f"|{tuning.ATTRACTION_SECOND_SHOT_STYLE}|{','.join(tuning.ATTRACTION_SECOND_SHOT_MOVES)}".encode("utf-8"))
+            digest.update(
+                f"|{tuning.ATTRACTION_SECOND_SHOT_STYLE}|{','.join(tuning.ATTRACTION_SECOND_SHOT_MOVES)}"
+                f"|{tuning.ATTRACTION_SECOND_SHOT_MIN_SOURCE_PX}|{tuning.LTXV_FREE_MOVE_FALLBACK}".encode("utf-8")
+            )
         elif tuning.ATTRACTION_GENERATOR != "chain":
             digest.update(b"|" + tuning.ATTRACTION_GENERATOR.encode("utf-8"))
         return digest.hexdigest()[:12]

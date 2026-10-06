@@ -426,10 +426,22 @@ def _minutes_phrase(minutes: int) -> str:
     return f"{minutes}分ほど" if minutes < 60 else f"{minutes // 60}時間{minutes % 60}分ほど" if minutes % 60 else f"{minutes // 60}時間ほど"
 
 
-def transition_texts(leg: dict) -> List[str]:
+# (lead, how the walk ends) for a walking leg, rotated per leg so five legs
+# in a row don't all say "次は…へ。…歩くと、…です。"
+_WALK_WORDINGS = [
+    ("次は{h}へ。", "{time}歩くと、{to}です。"),
+    ("続いて{h}へ。", "{time}進むと、{to}に着きます。"),
+    ("ここから{h}へ。", "{time}歩いて、{to}を目指します。"),
+    ("道は{h}へと続きます。", "{time}で、{to}です。"),
+]
+LONGEST_LEG_MIN_MINUTES = 30
+
+
+def transition_texts(leg: dict, variant: int = 0) -> List[str]:
     """Ways to tell one leg from its facts only, longest first: the fallback
     when no model is used or its text fails the checks. The long form names
-    what is passed on the way; the shortest only where it goes."""
+    what is passed on the way; the shortest only where it goes. `variant`
+    picks the walking wording; leg["longest"] adds a "longest stretch" lead."""
     to = leg["to"]
     arrive = "へ戻ります" if leg["is_return"] else "へ向かいます"
     via = leg.get("via") or []
@@ -472,12 +484,16 @@ def transition_texts(leg: dict) -> List[str]:
     # its budget, dropping straight to the much shorter "heading+time+へ"
     # one below and leaving most of that budget unused - this middle tier
     # (same sentence, no road phrase) catches that case.
-    plain = [f"次は{leg['heading']}へ。{passes}{time}歩くと、{to}です。"] if road else []
-    return [f"次は{leg['heading']}へ。{passes}{road}{time}歩くと、{to}です。",
-            *plain, *through, f"{leg['heading']}へ{time}、{to}へ。", f"{to}へ。"]
+    lead, walk = _WALK_WORDINGS[variant % len(_WALK_WORDINGS)]
+    lead = lead.format(h=leg["heading"])
+    walk = walk.format(time=time, to=to)
+    full = f"{lead}{passes}{road}{walk}"
+    longest = [f"ここからが一番長い区間です。{full}"] if leg.get("longest") else []
+    plain = [f"{lead}{passes}{walk}"] if road else []
+    return [*longest, full, *plain, *through, f"{leg['heading']}へ{time}、{to}へ。", f"{to}へ。"]
 
 
-def transition_text(leg: dict, limit: Optional[int] = None) -> str:
+def transition_text(leg: dict, limit: Optional[int] = None, variant: int = 0) -> str:
     """The longest of `transition_texts` that fits in about `limit` characters
     (the shortest when none does) - but never one that drops a via/passes
     name the longer candidates named: some of transition_texts's own
@@ -488,7 +504,7 @@ def transition_text(leg: dict, limit: Optional[int] = None) -> str:
     to only the candidates that still name everyone first; only falls back
     to the unfiltered list if somehow none do (shouldn't happen -
     transition_texts's own longest candidate always includes them)."""
-    texts = transition_texts(leg)
+    texts = transition_texts(leg, variant)
     required = list(leg.get("via") or []) + list(leg.get("passes") or [])
     if required:
         named = [t for t in texts if all(name in t for name in required)]

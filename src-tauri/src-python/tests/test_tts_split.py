@@ -1,6 +1,7 @@
 import asyncio
 import wave
 
+from services.tts import ttsengine
 from services.tts.ttsengine import IrodoriTTSClient, split_text_for_tts
 
 
@@ -49,6 +50,7 @@ def test_long_text_is_spoken_in_chunks_and_joined(tmp_path, monkeypatch):
         return _wav_bytes(tmp_path / "src.wav", 1.0)
 
     monkeypatch.setattr(client, "call_api", fake_call)
+    monkeypatch.setattr(ttsengine, "cut_off_ratio", lambda wav: 0.0)  # the flat fake never fades out
     text = "これは長い文章です。" * 12  # 12 identical 10-char sentences, 120 characters
     out = asyncio.run(client.generate_speech(text, "long.wav"))
     # Sentences packed up to TTS_MAX_CHUNK_CHARS per request (not one

@@ -189,26 +189,68 @@ _SAME_WAY = {
 }
 
 
-def second_shot(preset: str, seed: str = "") -> Optional[str]:
+def second_shot(preset: str, seed: str = "", photo_path: Optional[str] = None) -> Optional[str]:
     """ATTRACTION_SECOND_SHOT for this photo: a fixed move, or with "random" a
     pick from ATTRACTION_SECOND_SHOT_MOVES seeded by `seed` (the photo's
-    content), never the first shot's direction."""
+    content), never the first shot's direction. "auto" picks from the same
+    list by what the photo shows (move_picker), random when it can't."""
     import random
 
     second = tuning.ATTRACTION_SECOND_SHOT
-    if second == "random":
+    if second in ("random", "auto"):
         # A walk-in first shot is followed by a close shot, not another walk.
         free_first = preset in tuning.LTXV_FREE_MOVES
         choices = [m for m in tuning.ATTRACTION_SECOND_SHOT_MOVES
                    if m != _SAME_WAY.get(preset) and m in tuning.LTXV_PROMPTS
                    and not (free_first and m in tuning.LTXV_FREE_MOVES)]
+        if second == "auto" and photo_path and choices:
+            from services.vdoprocessing.move_picker import pick_for_photo
+
+            picked = pick_for_photo(photo_path, choices, seed)
+            if picked:
+                return picked
         return random.Random(f"{seed}|{preset}").choice(choices) if choices else None
     return second if second and second != preset and second in tuning.LTXV_PROMPTS else None
 
 
-def shot_list(preset: str, seed: str = "") -> List[str]:
-    """The chosen move, then the second shot."""
-    second = second_shot(preset, seed)
+def source_size(photo_path: str) -> Tuple[int, int]:
+    """(w, h) of the photo before upscale_step enlarged it (looked up in its
+    upscaled/map.json), turned to the upscaled photo's orientation."""
+    import json
+
+    from PIL import Image
+
+    path = Path(photo_path)
+    original = path
+    try:
+        mapping = json.loads((path.parent / "map.json").read_text(encoding="utf-8"))
+        original = next((Path(s) for s, u in mapping.items() if Path(u).name == path.name and Path(s).exists()), path)
+    except (OSError, ValueError):
+        pass
+    with Image.open(path) as up, Image.open(original) as src:
+        (uw, uh), (sw, sh) = up.size, src.size
+    return (sh, sw) if (uw > uh) != (sw > sh) and sw != sh else (sw, sh)
+
+
+def close_crop_source_px(photo_path: str) -> float:
+    """Original-photo pixels across the second shot's close crop."""
+    w, h = source_size(photo_path)
+    return tuning.LTXV_CLOSE_WIDE * min(w, h * tuning.LTXV_WIDTH / tuning.LTXV_HEIGHT)
+
+
+def shot_list(preset: str, seed: str = "", photo_path: Optional[str] = None) -> List[str]:
+    """The chosen move, then the second shot - unless the photo is too small
+    for a close crop to stay sharp."""
+    if tuning.ATTRACTION_SECOND_SHOT and photo_path:
+        try:
+            px = close_crop_source_px(photo_path)
+        except OSError:
+            px = None
+        if px is not None and px < tuning.ATTRACTION_SECOND_SHOT_MIN_SOURCE_PX:
+            logger.info("No second shot for %s: its close crop is only %.0f px of the original photo.",
+                        Path(photo_path).name, px)
+            return [preset]
+    second = second_shot(preset, seed, photo_path)
     return [preset, second] if second else [preset]
 
 
@@ -291,10 +333,19 @@ def crossfade(paths: List[str], output_path: str) -> str:
     return output_path
 
 
+def pinned_preset(preset: str) -> str:
+    """The editor's move, with a free walk swapped for LTXV_FREE_MOVE_FALLBACK."""
+    fallback = tuning.LTXV_FREE_MOVE_FALLBACK
+    if preset in tuning.LTXV_FREE_MOVES and fallback:
+        logger.info("LTXV %s rendered as pinned %s.", preset, fallback)
+        return fallback
+    return preset
+
+
 def generate_ltx_move(photo_path: str, output_path: str, camera_pan_hint) -> str:
     """The chosen move, then the second shot, dissolved together. A failed
     second shot leaves the first alone; a failed first raises."""
-    preset = normalize_camera_pan(camera_pan_hint)
+    preset = pinned_preset(normalize_camera_pan(camera_pan_hint))
     if preset not in tuning.LTXV_PROMPTS:
         raise ValueError(f"No LTXV recipe for preset {preset!r}")
     ensure_files()
@@ -303,7 +354,7 @@ def generate_ltx_move(photo_path: str, output_path: str, camera_pan_hint) -> str
     try:
         shots = []
         seed = _photo_seed(photo_path)
-        for i, move in enumerate(shot_list(preset, seed)):
+        for i, move in enumerate(shot_list(preset, seed, photo_path)):
             path = str(work / f"shot{i}.mp4")
             try:
                 shots.append(render_shot(photo_path, move, path, work, prompt_for(move, seed, second=i > 0)))

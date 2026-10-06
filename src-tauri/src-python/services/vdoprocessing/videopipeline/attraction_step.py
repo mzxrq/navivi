@@ -14,12 +14,16 @@ from .helpers import attraction_output_filename, has_attraction_media, logger
 
 
 def _resolve_attraction_prompt(waypoint: dict) -> list:
-    """Passes the full camera_pans list (not just one) so the generator can
-    chain multiple pans per attraction, falling back to a label-based
-    prompt when none are configured."""
-    camera_pans = waypoint.get("camera_pans", [])
-    if isinstance(camera_pans, list) and camera_pans:
-        return camera_pans
+    """The editor's pan per photo (imagePans, one per image, "panright" where
+    unset; camera_pans in projects saved before it), else a label prompt."""
+    pans = waypoint.get("imagePans")
+    if not isinstance(pans, list) or not pans:
+        pans = waypoint.get("camera_pans") if isinstance(waypoint.get("camera_pans"), list) else []
+    photos = len(waypoint.get("images") or waypoint.get("popup_image") or [])
+    if photos:
+        pans = [pans[i] if i < len(pans) and pans[i] else "panright" for i in range(photos)]
+    if pans:
+        return pans
     return [waypoint.get("label", "Beautiful Japanese scenery, high quality")]
 
 
