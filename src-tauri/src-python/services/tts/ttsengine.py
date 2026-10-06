@@ -30,7 +30,7 @@ from typing import Any, ClassVar, Dict, Final, List, Optional, Tuple
 
 from services import runtime_paths, tuning
 from services.tts import phrase_cache
-from services.tts.artifacts import remove_stray_bursts
+from services.tts.artifacts import cut_off_ratio, remove_stray_bursts
 from services.localization.subtitle import SubtitleStyle
 from services.logger.logger import setup_logger
 
@@ -670,6 +670,34 @@ class IrodoriTTSClient:
         return {**payload, "irodori": {**payload.get("irodori", {}), "ref_latent": str(latent)}}
 
     # [TTS] Generates speech audio for the given text and saves it to a local WAV file, returning the file path
+    async def _speak_chunk(self, text: str, split: bool = True) -> List[bytes]:
+        """A chunk's audio. A take that stops mid-word (cached or new) is retaken; if every take
+        does, the chunk is spoken in halves, and only then is the least-cut take kept."""
+        best: Optional[Tuple[float, bytes]] = None
+        bypass = self.bypass_cache
+        try:
+            for attempt in range(tuning.TTS_CUTOFF_RETAKES + 1):
+                self.bypass_cache = bypass or attempt > 0
+                audio = await self.call_api(text)
+                ratio = cut_off_ratio(audio)
+                if ratio <= tuning.TTS_CUTOFF_RATIO:
+                    return [audio]
+                logger.warning("TTS take %d ends mid-word (%.2f): %s", attempt + 1, ratio, text)
+                if best is None or ratio < best[0]:
+                    best = (ratio, audio)
+        finally:
+            self.bypass_cache = bypass
+        if split:
+            halves = split_text_for_tts(text, max(tuning.TTS_MIN_CHUNK_CHARS, len(text) // 2), tuning.TTS_MIN_CHUNK_CHARS)
+            if len(halves) > 1:
+                logger.warning("TTS speaking the chunk in %d parts instead.", len(halves))
+                takes: List[bytes] = []
+                for half in halves:
+                    takes += await self._speak_chunk(half, split=False)
+                return takes
+        logger.warning("TTS kept a take that still ends mid-word (%.2f): %s", best[0], text)
+        return [best[1]]
+
     async def generate_speech(
         self, text: str, output_filename: Optional[str] = None
     ) -> str:
@@ -690,24 +718,27 @@ class IrodoriTTSClient:
         # sentence, but still nowhere near as rushed/robotic as one
         # continuous zero-gap synthesis of the whole text.
         chunks = split_text_for_tts(text, tuning.TTS_MAX_CHUNK_CHARS, tuning.TTS_MIN_CHUNK_CHARS)
-        if len(chunks) <= 1:
-            audio_content = await self.call_api(text)
+        if len(chunks) > 1:
+            logger.info("TTS text of %d characters split into %d chunk(s).", len(text), len(chunks))
+        takes: List[bytes] = []
+        for chunk in chunks or [text]:
+            takes += await self._speak_chunk(chunk)
+        if len(takes) == 1:
             with open(file_path, "wb") as f:
-                f.write(audio_content)
+                f.write(takes[0])
             remove_stray_bursts(str(file_path))
             return str(file_path)
 
-        logger.info("TTS text of %d characters split into %d chunk(s).", len(text), len(chunks))
         processor = AudioProcessor(output_dir=self.output_dir)
         parts: List[str] = []
         gaps: List[str] = []
         try:
             sample_rate: Optional[int] = None
             channels: Optional[int] = None
-            for i, chunk in enumerate(chunks):
+            for i, take in enumerate(takes):
                 part = file_path.with_name(f"{file_path.stem}.part{i:02d}.wav")
                 with open(part, "wb") as f:
-                    f.write(await self.call_api(chunk))
+                    f.write(take)
                 parts.append(str(part))
                 if sample_rate is None:  # once is enough, every part shares the server's format
                     sample_rate, channels = FFmpegManager.get_audio_format(str(part))

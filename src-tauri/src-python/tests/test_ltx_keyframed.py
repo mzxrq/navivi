@@ -133,6 +133,46 @@ class TestTwoShots:
         assert graph["lat"]["inputs"]["samples"] == ["sample", 0]
         assert "guide" in ltx_keyframed.sample_graph("a.png", "b.png", "p", 1, "x")
 
+    def test_second_shot_pushes_in_with_the_camera_prompt_by_default(self):
+        assert ltx_keyframed.prompt_for("closein", "abc", second=True) == \
+            tuning.LTXV_PROMPTS["closein"].format(place="the scene")
+        assert not set(tuning.ATTRACTION_SECOND_SHOT_MOVES) & set(tuning.LTXV_FREE_MOVES)
+
+    def test_walk_in_is_rendered_as_a_pinned_push_in(self, monkeypatch):
+        assert ltx_keyframed.pinned_preset("walkin") == "zoomin"
+        assert ltx_keyframed.pinned_preset("panright") == "panright"
+        monkeypatch.setattr(tuning, "LTXV_FREE_MOVE_FALLBACK", None)
+        assert ltx_keyframed.pinned_preset("walkin") == "walkin"
+
+    def _upscaled(self, tmp_path, src_size, up_size=(1920, 1080)):
+        from PIL import Image
+
+        src, up_dir = tmp_path / "photo.jpg", tmp_path / "upscaled"
+        up_dir.mkdir()
+        up = up_dir / "photo.abc.png"
+        Image.new("RGB", src_size).save(src)
+        Image.new("RGB", up_size).save(up)
+        (up_dir / "map.json").write_text(json.dumps({str(src): str(up)}), encoding="utf-8")
+        return str(up)
+
+    def test_a_small_original_photo_gets_no_second_shot(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(tuning, "ATTRACTION_SECOND_SHOT", "closein")
+        small = self._upscaled(tmp_path, (250, 187), (1920, 1436))
+        assert ltx_keyframed.source_size(small) == (250, 187)
+        assert ltx_keyframed.shot_list("panright", "s", small) == ["panright"]
+
+    def test_a_large_enough_original_keeps_its_second_shot(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(tuning, "ATTRACTION_SECOND_SHOT", "closein")
+        big = self._upscaled(tmp_path, (1000, 500))
+        assert ltx_keyframed.shot_list("panright", "s", big) == ["panright", "closein"]
+
+    def test_a_photo_with_no_upscale_record_is_measured_itself(self, tmp_path):
+        from PIL import Image
+
+        path = tmp_path / "p.png"
+        Image.new("RGB", (640, 480)).save(path)
+        assert ltx_keyframed.source_size(str(path)) == (640, 480)
+
     def test_second_shot_walks_inside(self, monkeypatch):
         monkeypatch.setattr(tuning, "ATTRACTION_SECOND_SHOT_STYLE", "walk")
         walk = ltx_keyframed.prompt_for("closein", "abc", second=True)

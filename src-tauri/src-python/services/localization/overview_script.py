@@ -134,9 +134,11 @@ _HERE_FALLBACK_PHRASES = [
 ]
 
 
-def _arrival_fallback(label: str, n: int, already_named: bool = False) -> str:
+def _arrival_fallback(label: str, n: int, already_named: bool = False, said: str = "") -> str:
     phrases = _HERE_FALLBACK_PHRASES if already_named else _ARRIVAL_FALLBACK_PHRASES
-    return phrases[n % len(phrases)].format(label=label)
+    order = phrases[n % len(phrases):] + phrases[:n % len(phrases)]
+    fresh = [p for p in order if p.format(label=label) not in said]
+    return (fresh or order)[0].format(label=label)
 
 
 def _template(labels: List[str], kind: str = "") -> str:
@@ -332,7 +334,7 @@ _MIN_WAY_CHARS = 6
 _ROUTE_CLAIM = re.compile(r"[0-9０-９]+\s*(分|時間|km|キロ|メートル|ｍ|m(?![a-z]))|歩くこと|歩いて")
 # A description talks about the place the walker is standing at, not about
 # heading there ("さあ、次は…へ", "今回の目的地は…").
-_MOVING_ON = re.compile(r"次は|次に|今回の目的地|へと?向か|を目指|へと?進|に向けて")
+_MOVING_ON = re.compile(r"次は|次に|今回の目的地|へと?向か|を目指|へと?進|に向けて|足を延ば|から続く|から少し")
 # Attraction narrations often open with their own greeting; the overview greets once.
 _GREETING_SENTENCE = re.compile(r"こんにちは|こんばんは|おはよう|ようこそ|はじめまして")
 _DIRECTION_WORD = re.compile(r"(北東|北西|南東|南西|北|南|東|西)(?=へ|の方|に向|に進)")
@@ -388,9 +390,13 @@ def _drop_named_opening(text: str, label: str) -> str:
     from services.localization.overview_cues import name_variants
 
     sentences = [s for s in _SENTENCE_END.split(text or "") if s.strip()]
+    first = sentences[0].strip() if sentences else ""
+    # "Xは、静かな寺院です。" keeps its fact as "ここは、静かな寺院です。"
+    for variant in sorted(name_variants(label), key=len, reverse=True):
+        if first.startswith(variant) and first[len(variant):len(variant) + 1] == "は":
+            return "ここは" + first[len(variant) + 1:] + "".join(sentences[1:])
     if len(sentences) < 2:
         return text  # nothing left to say if the only sentence is dropped
-    first = sentences[0].strip()
     if _NAME_QUOTE_OPENING.search(first):
         return "".join(sentences[1:])
     bare = re.sub(r"[『』「」]", "", first)
@@ -415,6 +421,8 @@ def check_transition(text: str, journey: dict, limit: int = TRANSITION_CHARS) ->
     minutes = [journey["minutes"], *(p["minutes"] for p in journey["pieces"])]
     allowed = set(minutes) | {m // 60 for m in minutes} | {m % 60 for m in minutes}
     allowed |= {round(journey["km"], 1)} | {round(p["km"], 1) for p in journey["pieces"]}
+    if not _DIRECTION_WORD.search(text) and not _NUMBER.search(bare):
+        return False  # tells no way at all ("さあ、この道で…を満喫しましょう")
     for raw in _NUMBER.findall(bare):
         value = float(raw.translate(str.maketrans("０１２３４５６７８９", "0123456789")))
         if not any(abs(value - a) <= max(1.0, 0.2 * a) for a in allowed):
@@ -502,13 +510,30 @@ def _describe_prompt(label: str, facts: str, previous: str, limit: int) -> str:
     )
 
 
-def _intro_prompt(brief: dict, stops: List[str], limit: int) -> str:
+def _intro_prompt(brief: dict, stops: List[str], limit: int, area: str = "", end: str = "", km: float = 0) -> str:
     return (
         "あなたは旅番組のナレーターです。地図でこれから巡るルート全体を見せる、旅のオープニングのナレーションを書きます。\n"
-        f"■ 出発地: {brief['start']}\n■ 巡る場所: {'、'.join(stops)}\n"
-        f"■ 条件: 日本語の話し言葉で2文、{limit}文字以内。歓迎の挨拶から始める。"
+        + (f"■ 地域: {area}\n" if area else "")
+        + f"■ 出発地: {brief['start']}\n"
+        + (f"■ 到着地: {end}\n" if end else "")
+        + f"■ 巡る場所: {'、'.join(stops)}\n"
+        + (f"■ 距離: およそ{km}キロ\n" if km else "")
+        + f"■ 条件: 日本語の話し言葉で2文、{limit}文字以内。歓迎の挨拶から始め、どこからどこへ向かう旅かを伝える。"
         "上の情報にない地名・数字は書かない。記号・括弧・英語は使わず、本文のみを出力。"
     )
+
+
+def _intro_fallback(start: str, end: str, area: str, places: int, km, limit: int) -> str:
+    """The longest factual opening that fits about `limit` characters."""
+    where = f"{area}の{start}" if area and area not in start else start
+    texts = [
+        f"ようこそ。{where}から{end}まで、{places}か所を巡る、およそ{km}キロの旅に出かけましょう。",
+        f"ようこそ。{start}から{end}まで、{places}か所を巡る旅に出かけましょう。",
+        f"ようこそ。{start}から、{places}か所を巡る旅に出かけましょう。",
+    ]
+    if not end or end == start:
+        texts = texts[2:]
+    return next((t for t in texts if len(t) <= limit * 1.3), texts[-1])
 
 
 def in_overview_range(seconds: float, tolerance: float = 3.0) -> bool:
@@ -674,7 +699,7 @@ def build_tour_script(
     piece is sized by `plan_budget` so the voice lasts the overview's target
     length. Without `generate` (or when its text fails the checks) every piece
     is built from the facts."""
-    from services.localization.route_brief import build_brief, journeys, transition_text
+    from services.localization.route_brief import LONGEST_LEG_MIN_MINUTES, build_brief, transition_text
 
     brief = build_brief(project, routing_cache)
     budget = plan_budget(project, brief)
@@ -702,18 +727,31 @@ def build_tour_script(
     stop_names = [t["to"] for t in trips if t["to_number"] is not None]
     place_count = len(places)  # every place on the route, stopped at or passed
     intro_chars = chars(budget["intro"])
+    km = round(brief["total_km"]) if brief["total_km"] >= 1 else brief["total_km"]
+    area = (project.get("settings", {}).get("intro_location") or "").strip()
+    end = trips[-1]["to"] if trips else ""
     if intro_text is not None:
         intro = re.sub(r"\{[^}]*\}", "", intro_text).strip()
     else:
-        fallback = f"ようこそ。{brief['start']}から、{place_count}か所を巡る旅に出かけましょう。"
-        intro = ask("intro", _intro_prompt(brief, stop_names, intro_chars), intro_chars,
-                    lambda t: _looks_ok(t, intro_chars, over=1.2), fallback)
+        fallback = _intro_fallback(brief["start"], end, area, place_count, km, intro_chars)
+        # A model opening must say where the trip is, not just "美しい山々を巡る旅".
+        anchors = [brief["start"], end, *stop_names, *re.split(r"[・\s]+", area)]
+        intro = ask("intro", _intro_prompt(brief, stop_names, intro_chars, area, end, km), intro_chars,
+                    lambda t: _looks_ok(t, intro_chars, over=1.2)
+                    and any(a and _names_in(t, a) for a in anchors), fallback)
+
+    # The longest walk gets called out ("ここからが一番長い区間です"), past the first leg.
+    walks = [t["minutes"] for t in trips[1:] if t["mode"] == "walking" and not t["is_return"]]
+    longest = max(walks) if len(walks) >= 2 and walks.count(max(walks)) == 1 else None
 
     parts = [intro, "{start}"]
     previous = intro
     for i, trip in enumerate(trips):
         way_chars = chars(budget["ways"][i])
-        told = transition_text(trip, way_chars)
+        if (i > 0 and longest is not None and longest >= LONGEST_LEG_MIN_MINUTES
+                and trip["minutes"] == longest and trip["mode"] == "walking"):
+            trip = {**trip, "longest": True}
+        told = transition_text(trip, way_chars, variant=i)
         if i == 0 and told.startswith("次は"):
             told = "まずは" + told[len("次は"):]  # setting off: nothing came before
         # The map freezes on the way to show stop-by cards: tell what they are
@@ -810,7 +848,7 @@ def build_tour_script(
             about = _drop_named_opening(about, label)
         fallback = _fill_sentences(about, describe_chars) if about else ""
         if not _looks_ok(fallback, describe_chars, over=1.6):
-            fallback = _arrival_fallback(label, n, already_named)
+            fallback = _arrival_fallback(label, n, already_named, "".join(parts))
         describe = ask(
             f"stop{n}", _describe_prompt(label, facts, previous, describe_chars), describe_chars,
             lambda t, label=label, already_named=already_named: (
@@ -826,7 +864,6 @@ def build_tour_script(
     # The closing line plays over the ending, so it lasts at least as long as
     # the ending can shrink to: the shortest of these that does (else the longest).
     closing_chars = chars(budget["closing"])
-    km = round(brief["total_km"]) if brief["total_km"] >= 1 else brief["total_km"]
     endings = [
         closing_text,
         f"{place_count}か所を巡る、およそ{km}キロの旅でした。{{distance}}{closing_text}",

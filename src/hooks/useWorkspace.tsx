@@ -516,7 +516,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           images: wp.popup_image || wp.images || [],
           videos: wp.videos || [],
           videoSound: wp.videoSound || [],
-          imagePans: wp.imagePans || [],
+          imagePans: wp.imagePans || wp.camera_pans || [],
           imageTransitions: wp.imageTransitions || [],
           imageDisplay: wp.image_display || "pip",
           narration: wp.narration || "",
