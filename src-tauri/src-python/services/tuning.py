@@ -1120,7 +1120,20 @@ COMFYUI_DEFAULT_MOTION_PROMPT = COMFYUI_CAMERA_PAN_PROMPTS["none"]
 # two real crops of the photo - first and last frame pinned, so it can't wander
 # or invent - instead of ATTRACTION_GENERATOR. "panright" is the user's approved
 # test 13 on 西ノ庄駅 (2026-10-02): smooth level pan, sign readable, ~2 min.
-ATTRACTION_LTX_PRESETS: Tuple[str, ...] = ("panright", "panleft", "panup", "pandown", "zoomin", "zoomout", "walkin")
+ATTRACTION_LTX_PRESETS: Tuple[str, ...] = ("panright", "panleft", "panup", "pandown", "walkin")
+# Zoom In / Zoom Out are a jump cut (vdoprocessing/jump_cut.py) since 2026-10-06:
+# wide, then a hard cut to a centred punch-in showing JUMP_CUT_TIGHT of the
+# frame, at JUMP_CUT_AT of the clip (reversed for zoomout). Held, never drifted.
+ATTRACTION_JUMP_CUT_PRESETS: Tuple[str, ...] = ("zoomin", "zoomout")
+ATTRACTION_JUMP_CUT_TIGHT = 0.65
+ATTRACTION_JUMP_CUT_AT = 0.5
+# Wide shot = the real photo at JUMP_CUT_TIGHT in the middle, the ring around it
+# outpainted by SDXL (GPU); the cut goes to the real photo full frame. False, or
+# any outpaint failure = a crop of the photo itself.
+ATTRACTION_JUMP_CUT_AI = True
+ATTRACTION_JUMP_CUT_AI_SIZE = (1344, 768)
+ATTRACTION_JUMP_CUT_AI_STRENGTH = 0.9
+ATTRACTION_JUMP_CUT_AI_FEATHER = 16
 # After the chosen move, a second, closer shot of the same photo joined by a
 # dissolve - like the Tomogashima reference (one photo, several angles).
 # "random": a move from ATTRACTION_SECOND_SHOT_MOVES, picked per photo (seeded
@@ -1142,8 +1155,13 @@ ATTRACTION_SECOND_SHOT_MIN_SOURCE_PX = 400
 # The editor's "Walk In" preset is one of them.
 LTXV_FREE_MOVES: Tuple[str, ...] = ("walkthrough", "walkthroughleft", "walkthroughright", "walkin")
 # A free move chosen in the editor is rendered as this pinned move instead
-# (2026-10-06: unpinned walks invented scenery). None = the free walk.
-LTXV_FREE_MOVE_FALLBACK: Optional[str] = "zoomin"
+# (2026-10-06: unpinned walks invented scenery; "zoomin" read as no walk at all).
+# None = the free walk.
+LTXV_FREE_MOVE_FALLBACK: Optional[str] = "walkfwd"
+# The pinned walk becomes this when its tight crop spans fewer original-photo
+# pixels than ATTRACTION_SECOND_SHOT_MIN_SOURCE_PX. "walkshort" = zoomin's crops
+# with the walking prompt (no softer than the zoom).
+LTXV_SMALL_PHOTO_WALK_FALLBACK = "walkshort"
 LTXV_CROSSFADE_SECONDS = 0.5
 # Files (downloaded on first use into bin/ComfyUI/models/<folder>, sha256-checked).
 LTXV_FILES: Dict[str, Dict[str, str]] = {
@@ -1287,6 +1305,7 @@ LTXV_PROMPTS: Dict[str, str] = {
     ),
 }
 LTXV_PROMPTS["walkin"] = LTXV_PROMPTS["walkthrough"]
+LTXV_PROMPTS["walkshort"] = LTXV_PROMPTS["walkfwd"]
 # Second shot as a walk inside the place: "walk" = a prompt from
 # LTXV_WALK_PROMPTS (picked per photo, seeded like the move); None = LTXV_PROMPTS.
 # None since 2026-10-06: the walk prompts zoomed during pans and added a visitor at 高仙寺.
@@ -1689,6 +1708,9 @@ TTS_MIN_CHUNK_CHARS = 20
 # stopped mid-word: it is retaken, then spoken in halves.
 TTS_CUTOFF_RATIO = 0.25
 TTS_CUTOFF_RETAKES = 2
+# Engines whose new narration goes through artifacts.remove_stray_bursts, once, when it is made.
+# Written for Irodori's stray "あ"; on Qwen3 it silenced real syllables (じゅ in じゅっぷん, と in あるくと).
+TTS_STRAY_BURST_ENGINES = ("irodori",)
 TTS_SENTENCE_GAP_MIN_SECONDS = 0.25
 TTS_SENTENCE_GAP_MAX_SECONDS = 0.5
 TTS_VOICE = "jvs004"  # Irodori's only bundled voice preset as of writing
@@ -1787,4 +1809,9 @@ KOKORO_COST = {"request": 1.0, "char": 0.09, "startup": 35.0}
 # 6/14/31 characters, a fit of ~5 s per request + 0.85 s per character, and ~40 s to import and load once per process.
 QWEN3_PORT = 8090
 QWEN3_MODEL = "Qwen/Qwen3-TTS-12Hz-0.6B-Base"
+# "cuda" or "cpu"; NAVIVI_TTS_DEVICE overrides. On cuda the model loads in bfloat16 (~2 GB), capped to
+# QWEN3_VRAM_FRACTION of the card, and the server falls back to the CPU when CUDA is missing or fails.
+# Each request first waits out a hot GPU (gpu_cooldown). This PC has hard-crashed during GPU work.
+QWEN3_DEVICE = "cuda"
+QWEN3_VRAM_FRACTION = 0.4
 QWEN3_COST = {"request": 5.0, "char": 0.85, "startup": 40.0}

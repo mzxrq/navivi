@@ -104,7 +104,6 @@ def stop_targets(
         return {}
     last = max(1, total - 1)
     targets: Dict[int, float] = {}
-    previous_n, previous_target, previous_natural = None, 0.0, 0.0
     for idx, n in enumerate(order):
         if n in pinned:
             targets[n] = pinned[n]

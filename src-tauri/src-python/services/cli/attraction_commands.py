@@ -16,7 +16,6 @@ from services.vdoprocessing.videopipeline.audio_step import is_passed_only, pass
 from services.vdoprocessing.videopipeline.helpers import (
     attraction_audio_filename,
     attraction_output_filename,
-    has_attraction_media,
     output_is_valid,
     project_attraction_video_dir,
     project_audio_dir,
@@ -92,13 +91,20 @@ def _generate_attraction_video(
     from services.vdoprocessing.comfyui_i2v_client import ComfyUII2VClient
     from services.vdoprocessing.img2vdo import AttractionVideoGenerator
 
+    from services.vdoprocessing.videopipeline.upscale_step import upscale_waypoint_images
+
     output_dir = Path(output_video_dir) if output_video_dir else project_attraction_video_dir(config_path.parent)
     output_dir.mkdir(parents=True, exist_ok=True)
     label = waypoint.get("label", f"Waypoint {waypoint_index + 1}")
     audio_info = _resolve_attraction_audio(config_path, waypoint_index, label)
+
+    # Same upscaled/sharpened photos as the full pipeline (cached per photo).
+    upscale_waypoint_images(str(config_path))
+    job_config = JobConfigManager(config_path)
+    waypoint = job_config.get("waypoints", [])[waypoint_index]
     tuning.ensure_free_ram(f"attraction video {waypoint_index + 1}", relief=ComfyUII2VClient.stop_server)
 
-    generator = AttractionVideoGenerator(JobConfigManager(config_path))
+    generator = AttractionVideoGenerator(job_config)
     generator.output_dir = output_dir
 
     result = generate_waypoint_attraction_video(

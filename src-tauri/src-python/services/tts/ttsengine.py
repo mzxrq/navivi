@@ -25,11 +25,11 @@ import os
 import shutil
 import tempfile
 
-import logging
 from typing import Any, ClassVar, Dict, Final, List, Optional, Tuple
 
 from services import runtime_paths, tuning
 from services.tts import phrase_cache
+from services.gpu_cooldown import wait_for_gpu_cooldown
 from services.tts.artifacts import cut_off_ratio, remove_stray_bursts
 from services.localization.subtitle import SubtitleStyle
 from services.logger.logger import setup_logger
@@ -283,6 +283,8 @@ def ensure_reference_latent(voice: str) -> Optional[Path]:
 
 class IrodoriTTSClient:
     """Handles communication with the local Irodori TTS service."""
+
+    _ENGINE: ClassVar[str] = "irodori"
 
     # The server this client talks to is a separate, bundled process (see
     # bin/Irodori-TTS-Server/README.md) that has to be started by hand
@@ -698,6 +700,10 @@ class IrodoriTTSClient:
         logger.warning("TTS kept a take that still ends mid-word (%.2f): %s", best[0], text)
         return [best[1]]
 
+    def _remove_stray_bursts(self, path: Path) -> None:
+        if self._ENGINE in tuning.TTS_STRAY_BURST_ENGINES:
+            remove_stray_bursts(str(path))
+
     async def generate_speech(
         self, text: str, output_filename: Optional[str] = None
     ) -> str:
@@ -726,7 +732,7 @@ class IrodoriTTSClient:
         if len(takes) == 1:
             with open(file_path, "wb") as f:
                 f.write(takes[0])
-            remove_stray_bursts(str(file_path))
+            self._remove_stray_bursts(file_path)
             return str(file_path)
 
         processor = AudioProcessor(output_dir=self.output_dir)
@@ -762,7 +768,7 @@ class IrodoriTTSClient:
                     interleaved.append(gap_path)
 
             processor.concatenate_files(interleaved, str(file_path))
-            remove_stray_bursts(str(file_path))
+            self._remove_stray_bursts(file_path)
         finally:
             for p in parts + gaps:
                 Path(p).unlink(missing_ok=True)
@@ -794,11 +800,14 @@ class _VenvEngineClient(IrodoriTTSClient):
                 "--host", "127.0.0.1", "--port", str(port), "--idle-seconds", str(int(self._IDLE_TIMEOUT_SECONDS)),
             ],
             cwd=str(self._SERVER_DIR),
-            env={**os.environ, "PYTHONIOENCODING": "utf-8", "HF_HUB_DISABLE_SYMLINKS_WARNING": "1"},
+            env={**os.environ, "PYTHONIOENCODING": "utf-8", "HF_HUB_DISABLE_SYMLINKS_WARNING": "1", **self._server_env()},
             stdout=log_file,
             stderr=subprocess.STDOUT,
             **popen_kwargs,
         )
+
+    def _server_env(self) -> Dict[str, str]:
+        return {}
 
     def _start_idle_watchdog(self, server_pid: int) -> None:
         pass  # the server stops itself after --idle-seconds without a request
@@ -821,6 +830,7 @@ class KokoroTTSClient(_VenvEngineClient):
     _PROCESS_MARKER: ClassVar[str] = "kokoro_server"
     _SERVER_NAME: ClassVar[str] = "Kokoro TTS"
     _SERVER_SCRIPT: ClassVar[str] = "kokoro_server.py"
+    _ENGINE: ClassVar[str] = "kokoro"
     _SERVER_PORT: ClassVar[int] = tuning.KOKORO_PORT
     _SETUP_HINT: ClassVar[str] = "The fast voice (Kokoro) is not set up yet. Open Settings > Voice and press Set up fast voice."
     _server_process: Optional[subprocess.Popen] = None
@@ -861,6 +871,12 @@ def _atempo_filter(speed: float) -> str:
     return ",".join(stages)
 
 
+def qwen3_device() -> str:
+    """Where the Qwen3 server runs its model: NAVIVI_TTS_DEVICE, else tuning.QWEN3_DEVICE ("auto" means the GPU)."""
+    device = (os.environ.get("NAVIVI_TTS_DEVICE") or tuning.QWEN3_DEVICE).strip().lower()
+    return "cpu" if device == "cpu" else "cuda"
+
+
 # [TTS] Qwen3-TTS has no speed control, so the narration speed is applied to the finished line.
 def apply_speed(wav: bytes, speed: float) -> bytes:
     if abs(speed - 1.0) < 0.01:
@@ -889,6 +905,7 @@ class Qwen3TTSClient(_VenvEngineClient):
     _PROCESS_MARKER: ClassVar[str] = "qwen3_server"
     _SERVER_NAME: ClassVar[str] = "Qwen3 TTS"
     _SERVER_SCRIPT: ClassVar[str] = "qwen3_server.py"
+    _ENGINE: ClassVar[str] = "qwen3"
     _SERVER_PORT: ClassVar[int] = tuning.QWEN3_PORT
     _SETUP_HINT: ClassVar[str] = "The balanced voice (Qwen3-TTS) is not set up yet. Open Settings > Voice and press Set up balanced voice."
     _server_process: Optional[subprocess.Popen] = None
@@ -911,6 +928,9 @@ class Qwen3TTSClient(_VenvEngineClient):
             )
         return path
 
+    def _server_env(self) -> Dict[str, str]:
+        return {"QWEN3_DEVICE": qwen3_device(), "QWEN3_VRAM_FRACTION": str(tuning.QWEN3_VRAM_FRACTION)}
+
     async def call_api(self, text: str) -> bytes:
         reference = self._reference()
         key = phrase_cache.cache_key({"engine": "qwen3", "input": text, "speed": self.config.speed}, self._voice_sha256())
@@ -918,6 +938,8 @@ class Qwen3TTSClient(_VenvEngineClient):
         if cached is not None:
             logger.info("TTS line served from the cache (%d characters).", len(text))
             return cached
+        if qwen3_device() == "cuda":
+            await asyncio.to_thread(wait_for_gpu_cooldown, "the next TTS line")
         audio = await self._post_starting_the_server({"input": text, "ref_audio": str(reference)})
         audio = await asyncio.to_thread(apply_speed, audio, self.config.speed)
         phrase_cache.put(key, audio)
@@ -1129,7 +1151,7 @@ class AudioProcessor:
             str(out_path_obj.resolve()),
         ]
 
-        logger.info(f"Merging audio segments...")
+        logger.info("Merging audio segments...")
         subprocess.run(cmd, check=True)
 
         if concat_list_path.exists():

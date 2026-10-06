@@ -146,11 +146,17 @@ class AttractionVideoGenerator:
                 digest.update(chunk)
         digest.update(b"|" + pan.encode("utf-8"))
         # Switching generator rebuilds the kept clips.
-        if pan in tuning.ATTRACTION_LTX_PRESETS:
+        if pan in tuning.ATTRACTION_JUMP_CUT_PRESETS:
+            digest.update(
+                f"|jumpcut|{tuning.ATTRACTION_JUMP_CUT_TIGHT}|{tuning.ATTRACTION_JUMP_CUT_AT}"
+                f"|{tuning.ATTRACTION_JUMP_CUT_AI}|{tuning.ATTRACTION_JUMP_CUT_AI_STRENGTH}".encode("utf-8")
+            )
+        elif pan in tuning.ATTRACTION_LTX_PRESETS:
             digest.update(f"|ltxv13b-crops|{tuning.ATTRACTION_SECOND_SHOT}".encode("utf-8"))
             digest.update(
                 f"|{tuning.ATTRACTION_SECOND_SHOT_STYLE}|{','.join(tuning.ATTRACTION_SECOND_SHOT_MOVES)}"
-                f"|{tuning.ATTRACTION_SECOND_SHOT_MIN_SOURCE_PX}|{tuning.LTXV_FREE_MOVE_FALLBACK}".encode("utf-8")
+                f"|{tuning.ATTRACTION_SECOND_SHOT_MIN_SOURCE_PX}|{tuning.LTXV_FREE_MOVE_FALLBACK}"
+                f"|{tuning.LTXV_SMALL_PHOTO_WALK_FALLBACK}".encode("utf-8")
             )
         elif tuning.ATTRACTION_GENERATOR != "chain":
             digest.update(b"|" + tuning.ATTRACTION_GENERATOR.encode("utf-8"))
@@ -258,6 +264,12 @@ class AttractionVideoGenerator:
         # duration fit then holds it until the narration ends) - no ComfyUI.
         if normalize_camera_pan(prompt_text) == STILL_PRESET:
             return self._still_clip(local_image_path, str(save_path), duration_sec)
+
+        if normalize_camera_pan(prompt_text) in tuning.ATTRACTION_JUMP_CUT_PRESETS:
+            from services.vdoprocessing.jump_cut import generate_jump_cut, upscaled_photo
+
+            photo = upscaled_photo(local_image_path, getattr(self.config, "config_path", None))
+            return generate_jump_cut(photo, str(save_path), duration_sec, normalize_camera_pan(prompt_text))
 
         if normalize_camera_pan(prompt_text) in tuning.ATTRACTION_LTX_PRESETS:
             from services.vdoprocessing.ltx_keyframed import generate_ltx_move
@@ -419,7 +431,7 @@ class AttractionVideoGenerator:
 
         # A still photo ("none") is simply held to the narration length - the
         # raw-clip cap is for generated motion, and made a still stop at ~8s.
-        if normalize_camera_pan(camera_pan) == STILL_PRESET:
+        if normalize_camera_pan(camera_pan) in (STILL_PRESET, *tuning.ATTRACTION_JUMP_CUT_PRESETS):
             generation_cap = False
         trim_to, hold_to = self._resolve_duration_fit(
             video_path, target_audio_duration, overshoot_tolerance, generation_cap
@@ -980,7 +992,8 @@ class AttractionVideoGenerator:
         from services.vdoprocessing.camera_pan import STILL_PRESET
 
         marker = Path(clip_path + ".signlock")
-        if not tuning.SIGN_LOCK or pan == STILL_PRESET or marker.exists():
+        if (not tuning.SIGN_LOCK or pan in (STILL_PRESET, *tuning.ATTRACTION_JUMP_CUT_PRESETS)
+                or marker.exists()):
             return
         from services.vdoprocessing.sign_lock import lock_signs
 

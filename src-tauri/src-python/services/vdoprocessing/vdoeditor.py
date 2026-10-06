@@ -9,7 +9,6 @@ correct centralized assets directories.
 
 from __future__ import annotations
 
-import logging
 import shutil
 import subprocess
 import tempfile

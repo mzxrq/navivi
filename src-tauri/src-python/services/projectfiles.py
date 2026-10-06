@@ -53,6 +53,11 @@ def tts_cache_dir() -> Path:
     return _shared_cache_base() / "tts"
 
 
+def dictionary_cache_dir() -> Path:
+    """Downloaded dictionaries (JMnedict), shared by every project."""
+    return _shared_cache_base() / "dictionaries"
+
+
 def tile_cache_dir() -> Path:
     """Map tiles are shared by every project (and never archived with one)."""
     return _shared_cache_base() / "tiles"

@@ -379,7 +379,6 @@ class _OverviewAnimationMixin:
         # together on the map" apart from "these two just happen to be
         # queued back to back" (see the cluster-gap override further
         # down).
-        last_triggered_pin: Optional[Tuple[float, float]] = None
         pending_popups: List[Dict] = []
 
         # Real (non-stop-by) waypoints must pop up STRICTLY in route order —

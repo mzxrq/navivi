@@ -15,7 +15,6 @@ from services import tuning
 from services.localization.cues import clean_text, cue_times, strip_cues
 from services.logger.progress import tracker
 
-from services.tts.artifacts import remove_stray_bursts
 from .helpers import (
     attraction_audio_filename,
     has_attraction_media,
@@ -207,8 +206,26 @@ def merge_pronunciation(shared: Optional[list], project: Optional[list]) -> list
     merged = {}
     for entry in list(shared or []) + list(project or []):
         if isinstance(entry, dict) and entry.get("word") and entry.get("reading"):
-            merged[entry["word"]] = entry["reading"]
-    return [{"word": word, "reading": reading} for word, reading in merged.items()]
+            merged[entry["word"]] = {"word": entry["word"], "reading": entry["reading"], **({"auto": True} if entry.get("auto") else {})}
+    return list(merged.values())
+
+
+def _all_hiragana(text: str) -> bool:
+    return all("ぁ" <= c <= "ゖ" or c == "ー" for c in text)
+
+
+def _spoken_form(entry: dict) -> Optional[str]:
+    """What the voice is given for a dictionary word, or None to leave the word as written.
+    An auto word the analyser already reads the same way keeps its kanji, which the engines accent better than kana.
+    A hiragana reading is spoken in katakana, so the engines take it as one word instead of splitting it."""
+    from services.localization import japanese_words
+
+    word, reading = entry.get("word"), entry.get("reading")
+    if not word or not reading:
+        return None
+    if entry.get("auto") and japanese_words.reading_of(word) == japanese_words.to_hiragana(reading):
+        return None
+    return japanese_words.to_katakana(reading) if _all_hiragana(reading) else reading
 
 
 def apply_pronunciation_dictionary(text: str, dictionary: list) -> str:
@@ -216,10 +233,9 @@ def apply_pronunciation_dictionary(text: str, dictionary: list) -> str:
         return text
     # Longest words first, so 三段壁 is replaced before a shorter entry such as 三段 can cut into it.
     for entry in sorted(dictionary, key=lambda e: len(e.get("word") or ""), reverse=True):
-        word = entry.get("word")
-        reading = entry.get("reading")
-        if word and reading:
-            text = text.replace(word, reading)
+        spoken = _spoken_form(entry)
+        if spoken:
+            text = text.replace(entry["word"], spoken)
     return text
 
 async def generate_attraction_audio_for_waypoint(
@@ -259,7 +275,6 @@ async def generate_attraction_audio_for_waypoint(
             "Step 2: [%d] '%s' attraction narration already exists — skipping TTS.",
             idx + 1, label,
         )
-        remove_stray_bursts(str(existing_path))
         audio_path = str(existing_path)
     else:
         logger.info("Step 2: [%d] Generating attraction narration for: '%s'", idx + 1, label)
@@ -311,7 +326,6 @@ async def generate_overview_audio(
         same_text = False
     if not force and output_is_valid(existing_path) and same_text and _voice_matches(existing_path, client):
         logger.info("Step 2: Overview narration audio already exists — skipping TTS.")
-        remove_stray_bursts(str(existing_path))
         audio_path = str(existing_path)
     else:
         logger.info("Step 2: Generating overview narration audio.")
@@ -408,7 +422,6 @@ async def generate_waypoint_audio(
         logger.info(
             "Step 2: [%d] '%s' already exists — skipping TTS.", idx + 1, label
         )
-        remove_stray_bursts(str(existing_path))
         audio_path = str(existing_path)
     else:
         logger.info("Step 2: [%d] Generating audio for: '%s'", idx + 1, label)

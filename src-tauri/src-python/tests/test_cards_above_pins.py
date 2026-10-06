@@ -65,7 +65,6 @@ def test_walk_card_goes_above_its_pin_even_over_the_route_line():
 
 
 def test_walk_card_does_not_cover_another_pin():
-    import numpy as np
 
     layout = _beside_layout()
     pins = [{"x": 900, "y": 700}, {"x": 900, "y": 560}]  # a neighbour right above

@@ -6,8 +6,6 @@ huggingface_hub pins uv resolves transformers 4.12.2, which cannot work).
 
 Needs `uv` (https://docs.astral.sh/uv/). Idempotent: steps that are already done are skipped, so it can also repair a half-finished setup."""
 
-import os
-import shutil
 import subprocess
 from pathlib import Path
 from typing import Any, Dict, List, Optional
