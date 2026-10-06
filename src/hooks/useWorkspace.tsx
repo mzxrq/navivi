@@ -33,6 +33,7 @@ import {
   tidyProjectFolder,
   saveTimelineManifest,
 } from "../services/fileSystem";
+import { savedImages } from "../utils/waypointImages";
 import {
   deleteProjectVersion,
   listProjectVersions,
@@ -513,7 +514,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           connectToRoute: wp.connectToRoute || false,
           skipAssetGeneration: wp.skipAssetGeneration ?? undefined,
           pauseAtWaypoint: wp.pauseAtWaypoint ?? undefined,
-          images: wp.popup_image || wp.images || [],
+          images: savedImages(wp),
           videos: wp.videos || [],
           videoSound: wp.videoSound || [],
           imagePans: wp.imagePans || [],

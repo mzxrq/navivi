@@ -191,7 +191,7 @@ export const saveProjectData = async (
         name: wp.name,
         customMarker: finalCustomMarker || undefined,
 
-        popup_image: relativeImagePaths.length > 0 ? [relativeImagePaths[0]] : [],
+        popup_image: relativeImagePaths,
         camera_pans: relativeImagePaths.length > 0
           ? relativeImagePaths.map((_, i) => (wp.imagePans && wp.imagePans[i] ? wp.imagePans[i] : "panright"))
           : [],
