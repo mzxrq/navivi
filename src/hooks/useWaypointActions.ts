@@ -78,7 +78,6 @@ export function useWaypointActions() {
       attractionNarration: "",
       images: [],
       imagePans: [],
-      imageTransitions: [],
       videos: [],
       videoSound: [],
       isStopBy: false,
