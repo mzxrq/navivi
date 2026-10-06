@@ -25,7 +25,6 @@ import os
 import shutil
 import tempfile
 
-import logging
 from typing import Any, ClassVar, Dict, Final, List, Optional, Tuple
 
 from services import runtime_paths, tuning
@@ -1129,7 +1128,7 @@ class AudioProcessor:
             str(out_path_obj.resolve()),
         ]
 
-        logger.info(f"Merging audio segments...")
+        logger.info("Merging audio segments...")
         subprocess.run(cmd, check=True)
 
         if concat_list_path.exists():

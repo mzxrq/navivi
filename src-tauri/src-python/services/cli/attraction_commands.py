@@ -16,7 +16,6 @@ from services.vdoprocessing.videopipeline.audio_step import is_passed_only, pass
 from services.vdoprocessing.videopipeline.helpers import (
     attraction_audio_filename,
     attraction_output_filename,
-    has_attraction_media,
     output_is_valid,
     project_attraction_video_dir,
     project_audio_dir,

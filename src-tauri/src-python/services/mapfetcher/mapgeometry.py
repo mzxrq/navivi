@@ -15,7 +15,6 @@ import math
 
 # [I/O] Import service dependencies for Integration
 from services.logger.logger import setup_logger
-from services.config.job_config import JobConfigManager
 
 # [Utility] Log setup for debugging and monitoring
 logger = setup_logger("MapEngine")

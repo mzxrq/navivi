@@ -14,7 +14,7 @@ import statistics
 import subprocess
 import time
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Optional
 
 from services import runtime_paths
 

@@ -10,7 +10,6 @@ from typing import Final
 
 # [I/O] Import service dependencies for Integration
 from services.logger.logger import setup_logger
-from services.config.job_config import JobConfigManager
 from services.mapfetcher.mapgeometry import RouteGeometryProcessor as RouteGeometry
 from services.mapfetcher.mappacing import RoutePacingProcessor as RoutePacing
 from services.mapfetcher.maptile import TileDownloader

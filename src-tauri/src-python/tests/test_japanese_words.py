@@ -46,7 +46,7 @@ def test_to_hiragana_keeps_everything_else():
 
 
 def test_dictionaries_merge_with_the_project_winning():
-    from services.vdoprocessing.videopipeline.audio_step import apply_pronunciation_dictionary, merge_pronunciation
+    from services.vdoprocessing.videopipeline.audio_step import merge_pronunciation
 
     merged = merge_pronunciation(
         [{"word": "三段壁", "reading": "さんだんへき"}, {"word": "白良浜", "reading": "しららはま"}],

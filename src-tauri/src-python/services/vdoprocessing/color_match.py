@@ -11,7 +11,7 @@ doesn't make it flicker.
 
 import subprocess
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 import cv2
 import numpy as np

@@ -1,7 +1,6 @@
 """The narration engine switch: Irodori (clones a voice, slow) or Kokoro (fixed Japanese voices, fast)."""
 
 import asyncio
-import io
 import wave
 
 import pytest
@@ -330,7 +329,6 @@ class TestSpeed:
             assert wf.getnframes() == pytest.approx(24000, abs=1200)
 
     def test_the_phrase_cache_drops_a_line_with_an_unfinished_header(self, cache_dir):
-        from services.tts import phrase_cache
 
         bad = b"RIFF\xff\xff\xff\xffWAVEdata"
         phrase_cache.put("k", bad)

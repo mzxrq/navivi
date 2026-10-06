@@ -17,6 +17,17 @@ if str(ROOT) not in sys.path:
 import pytest
 
 
+def pytest_sessionfinish(session, exitstatus):
+    """CI installs every test dependency, so a skip there means one went missing."""
+    if not os.environ.get("CI") or exitstatus != 0:
+        return
+    reporter = session.config.pluginmanager.get_plugin("terminalreporter")
+    skipped = reporter.stats.get("skipped", []) if reporter else []
+    if skipped:
+        reporter.write_line(f"CI: {len(skipped)} test(s) skipped; every test must run in CI.", red=True)
+        session.exitstatus = pytest.ExitCode.TESTS_FAILED
+
+
 @pytest.fixture(autouse=True)
 def _isolated_job_config_singleton():
     """JobConfigManager is a process-wide singleton (see services/config/job_config.py).
