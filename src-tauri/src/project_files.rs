@@ -6,7 +6,7 @@
 
 use serde::Serialize;
 use std::fs;
-use std::io;
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 use zip::write::SimpleFileOptions;
@@ -48,6 +48,34 @@ pub fn archive_includes(rel: &str, include_rendered: bool) -> bool {
     true
 }
 
+/// The Mapbox token and the OpenRouteService key are app-wide now, but a project saved by an earlier version still has
+/// them in `settings`. An archive made for sharing must never carry them.
+const MAP_KEY_FIELDS: [&str; 2] = ["mapbox_api_key", "ors_api_key"];
+
+/// `job_config.json`, and the old copies of it that `tidy` moved into `.navivi/legacy`.
+fn may_hold_map_keys(rel: &str) -> bool {
+    rel == "job_config.json" || (rel.starts_with(".navivi/legacy/") && rel.ends_with(".json"))
+}
+
+/// The file's bytes with `settings.mapbox_api_key` / `settings.ors_api_key` removed. Anything that is not a JSON
+/// object, or has nothing to remove, comes back byte for byte (so a file is only rewritten when it has to be).
+fn scrub_map_keys(bytes: &[u8]) -> Vec<u8> {
+    let Ok(mut value) = serde_json::from_slice::<serde_json::Value>(bytes) else {
+        return bytes.to_vec();
+    };
+    let Some(settings) = value.get_mut("settings").and_then(|s| s.as_object_mut()) else {
+        return bytes.to_vec();
+    };
+    let mut removed = false;
+    for field in MAP_KEY_FIELDS {
+        removed |= settings.remove(field).is_some();
+    }
+    if !removed {
+        return bytes.to_vec();
+    }
+    serde_json::to_vec_pretty(&value).unwrap_or_else(|_| bytes.to_vec())
+}
+
 pub fn write_archive(source: &Path, dest: &Path, include_rendered: bool) -> Result<u64, String> {
     let partial = PathBuf::from(format!("{}.partial", dest.display()));
     let result = write_archive_to(source, &partial, include_rendered);
@@ -85,8 +113,13 @@ fn write_archive_to(source: &Path, partial: &Path, include_rendered: bool) -> Re
         let ext = Path::new(&rel).extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
         let method = if ALREADY_COMPRESSED.contains(&ext.as_str()) { CompressionMethod::Stored } else { CompressionMethod::Deflated };
         zip.start_file(&rel, SimpleFileOptions::default().compression_method(method)).map_err(|e| e.to_string())?;
-        let mut input = fs::File::open(entry.path()).map_err(|e| e.to_string())?;
-        io::copy(&mut input, &mut zip).map_err(|e| e.to_string())?;
+        if may_hold_map_keys(&rel) {
+            let bytes = fs::read(entry.path()).map_err(|e| e.to_string())?;
+            zip.write_all(&scrub_map_keys(&bytes)).map_err(|e| e.to_string())?;
+        } else {
+            let mut input = fs::File::open(entry.path()).map_err(|e| e.to_string())?;
+            io::copy(&mut input, &mut zip).map_err(|e| e.to_string())?;
+        }
     }
     zip.finish().map_err(|e| e.to_string())?;
     Ok(())
@@ -305,6 +338,47 @@ mod tests {
         assert!(names.contains(&"assets/audio/a.wav".to_string()));
         assert!(!names.iter().any(|n| n.contains("route") || n.contains("cache")));
         assert!(!out.with_extension("nvv.partial").exists());
+    }
+
+    fn read_entry(archive: &Path, name: &str) -> String {
+        let mut zip = zip::ZipArchive::new(fs::File::open(archive).unwrap()).unwrap();
+        let mut text = String::new();
+        io::Read::read_to_string(&mut zip.by_name(name).unwrap(), &mut text).unwrap();
+        text
+    }
+
+    #[test]
+    fn a_shared_archive_never_carries_the_map_keys() {
+        let src = scratch();
+        let config = r#"{"project_id":"p","project_name":"京都","settings":{"fps":30,"mapbox_api_key":"pk.secret","ors_api_key":"ors-secret","line_color":"#fff"},"waypoints":[]}"#;
+        write(&src.join("job_config.json"), config);
+        write(&src.join(".navivi/legacy/Old.nvv.json"), r#"{"settings":{"mapbox_api_key":"pk.old"}}"#);
+        write(&src.join(".navivi/routecache.json"), r#"{"settings":{"mapbox_api_key":"not-a-config"}}"#);
+        let out = scratch().join("p.nvv");
+
+        write_archive(&src, &out, false).unwrap();
+
+        let shared: serde_json::Value = serde_json::from_str(&read_entry(&out, "job_config.json")).unwrap();
+        assert_eq!(shared["settings"]["fps"], 30);
+        assert_eq!(shared["settings"]["line_color"], "#fff");
+        assert_eq!(shared["project_name"], "京都");
+        assert!(shared["settings"].get("mapbox_api_key").is_none());
+        assert!(shared["settings"].get("ors_api_key").is_none());
+        assert!(!read_entry(&out, ".navivi/legacy/Old.nvv.json").contains("pk.old"));
+        // Only the project file and its old copies are rewritten.
+        assert!(read_entry(&out, ".navivi/routecache.json").contains("not-a-config"));
+        // The project on disk is left as it was.
+        assert_eq!(fs::read_to_string(src.join("job_config.json")).unwrap(), config);
+    }
+
+    #[test]
+    fn scrubbing_leaves_a_clean_or_unreadable_file_byte_for_byte() {
+        let clean = br#"{"settings":{"fps":30}}"#;
+        assert_eq!(scrub_map_keys(clean), clean.to_vec());
+        let no_settings = br#"{"a":1}"#;
+        assert_eq!(scrub_map_keys(no_settings), no_settings.to_vec());
+        let broken = b"{not json";
+        assert_eq!(scrub_map_keys(broken), broken.to_vec());
     }
 
     #[test]

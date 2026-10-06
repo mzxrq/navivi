@@ -19,6 +19,7 @@ from services.mapfetcher.graphicengine import GraphicsEngine
 from services.logger.logger import setup_logger
 from services.logger.progress import tracker
 from services import tuning
+from services.mapbox_token import resolve_mapbox_token
 from services.vdoprocessing.spatial_renderer import SpatialRenderer
 from services.vdoprocessing.pydeckrecorder import record_headless_video
 from services.vdoprocessing.route_inputs import photo_inputs_hash
@@ -273,6 +274,15 @@ class RouteAnimator:
         else:
             logger.warning("Failed to freeze video end. Skipping freeze frame.")
 
+    def _mapbox_token(self) -> Optional[str]:
+        """The app's token (NAVIVI_MAPBOX_TOKEN), else what a project saved by an older version still carries in its
+        job_config.json settings (this animator's own config is a curated subset without it), else the old env names."""
+        try:
+            settings = (self.spatial_renderer._get_job_config() or {}).get("settings")
+        except Exception:
+            settings = None
+        return resolve_mapbox_token(settings if isinstance(settings, dict) else None)
+
     def _render_overview_pydeck(
         self, img_path: str, points: List, labels: List, popups: List,
         extent: Optional[Tuple[float, float, float, float]], fps: int,
@@ -348,6 +358,7 @@ class RouteAnimator:
         duration = self.config.get("duration", 30.0)
         return render_overview_video_pydeck(
             route_latlon, waypoints, output_path, duration=duration, fps=fps, title_text=title_text,
+            mapbox_key=self._mapbox_token(),
         )
 
     def _leg_hud_card_png(self, mode: str):
@@ -732,7 +743,9 @@ class RouteAnimator:
             # narration restarting on every piece.
             leg_paths = render_residential_leg_pydeck(
                 leg_latlon, dest_label, output_path,
-                hud_card_png=self._leg_hud_card_png(leg_mode), **leg_kwargs,
+                hud_card_png=self._leg_hud_card_png(leg_mode),
+                # Not in leg_kwargs: a token change must not re-render finished legs (see the fingerprint above).
+                mapbox_key=self._mapbox_token(), **leg_kwargs,
             )
             if leg_paths:
                 keep = {Path(p).resolve() for p in leg_paths}

@@ -91,7 +91,8 @@ export interface ProjectSettings {
   summary_hold: number;
   summary_fade: number;
   start_coords?: [number, number];
-  mapbox_api_key: string;
+  /** App-wide, never saved in a project: the workspace merges them in from the `api_keys` app setting (utils/apiKeys.ts). */
+  mapbox_api_key?: string;
   ors_api_key?: string;
   auto_save_interval: number;
   skip_rich_media?: boolean;

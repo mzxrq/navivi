@@ -20,6 +20,7 @@ from services.config.job_config import JobConfigManager
 from services.logger.logger import setup_logger
 from services.logger.progress import tracker
 from services import tuning
+from services.mapbox_token import resolve_mapbox_token
 
 # Logging configuration
 logger = setup_logger("MapFetcher")
@@ -72,7 +73,7 @@ class MapFetcher:
             )
             result = fetch_overview_image_pydeck(
                 bounding_box, final_filename, output_size,
-                mapbox_key=settings.get("mapbox_api_key"),
+                mapbox_key=resolve_mapbox_token(settings),
                 map_style=map_style,
             )
             logger.info("Overview map background saved -> %s", result[0])

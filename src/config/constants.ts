@@ -46,7 +46,6 @@ export const defaultProjectSettings = {
     pause: 2.0,
     summary_hold: 4.0,
     summary_fade: 0.5,
-    mapbox_api_key: "",
     auto_save_interval: 3,
     show_route_heatmap: false,
     quick_export: false,

@@ -10,6 +10,7 @@ import numpy as np
 from services.mapfetcher.mapgeometry import RouteGeometryProcessor
 from services.vdoprocessing.vdoexporter import VideoExporter
 from services import tuning
+from services.mapbox_token import resolve_mapbox_token
 
 from .base import logger
 
@@ -517,7 +518,7 @@ class _TransitionMixin:
                 dynamic_frames = capture_pydeck_zoom_sequence(
                     bounding_box, (w, h), lat, lng, zoom_n,
                     zoom_boost=tuning.ENDING_HIGHLIGHT_PYDECK_ZOOM_BOOST,
-                    mapbox_key=settings.get("mapbox_api_key"),
+                    mapbox_key=resolve_mapbox_token(settings),
                     map_style=map_style,
                     # The route this video actually drew (stashed by
                     # render_overview — the same geometry
