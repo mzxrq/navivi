@@ -46,7 +46,7 @@ cp .env.example .env
 npm run tauri dev
 ```
 
-More detail: [Getting started](./docs/GETTING_STARTED.md) and [Features](./docs/FEATURES.md).
+More detail: [Getting started](./docs/GETTING_STARTED.md), [Features](./docs/FEATURES.md), and the [Developer guide](./docs/DEVELOPER_GUIDE.md) (every part, how to fix, run and build the installer). Backend features without a screen yet: [Backend gaps](./docs/BACKEND_GAPS.md).
 
 ## Checks
 
