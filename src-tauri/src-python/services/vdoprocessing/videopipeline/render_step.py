@@ -1354,7 +1354,7 @@ def render_route_video(
             for k, default in [
                 ("fps", 30),
                 ("line_thickness", 10),
-                ("marker_radius", 24),
+                ("marker_radius", 16),
                 ("map_font_size", 24),
                 ("card_border_thickness", tuning.DEFAULT_CARD_BORDER_THICKNESS),
                 ("route_line_border_thickness", tuning.DEFAULT_LINE_BORDER_THICKNESS),
