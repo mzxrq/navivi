@@ -3,6 +3,9 @@ import type { PhotoCredit } from "../services/placePhotos";
 
 export const MAX_PHOTOS_PER_STOP = 3;
 
+// The short form for under a photo; the file name goes in the tooltip.
+export const shortCredit = (c: PhotoCredit) => [c.author || undefined, c.license].filter(Boolean).join(" · ");
+
 export const creditLine = (c: PhotoCredit) => [c.author || undefined, c.license, c.title.replace(/^File:/i, "")].filter(Boolean).join(" · ");
 
 // Photos found online go into the empty slots of a stop and never replace one the user chose. `null` when the stop is full.

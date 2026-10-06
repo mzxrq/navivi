@@ -39,7 +39,7 @@ import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 import { placeNameOf } from "../../../utils/placeName";
 import { downloadPhotos, findPlacePhotos } from "../../../services/placePhotos";
-import { MAX_PHOTOS_PER_STOP, creditLine, withFoundPhotos } from "../../../utils/photoCredits";
+import { MAX_PHOTOS_PER_STOP, creditLine, shortCredit, withFoundPhotos } from "../../../utils/photoCredits";
 
 const MAX_IMAGES = MAX_PHOTOS_PER_STOP;
 
@@ -586,10 +586,11 @@ export function WaypointEditor({
                                 <button
                                   type="button"
                                   onClick={() => void invoke("plugin:opener|open_url", { url: wp.imageCredits![img].url }).catch(console.error)}
-                                  title={t`Open the photo's page on Wikimedia Commons`}
+                                  title={`${creditLine(wp.imageCredits[img])}
+${t`Open the photo's page on Wikimedia Commons`}`}
                                   className="block w-full text-left text-[10px] text-zinc-400 hover:text-navi truncate transition-colors"
                                 >
-                                  {creditLine(wp.imageCredits[img])}
+                                  {shortCredit(wp.imageCredits[img])}
                                 </button>
                               )}
                               <div>
