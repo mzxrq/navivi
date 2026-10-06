@@ -29,6 +29,7 @@ from typing import Any, ClassVar, Dict, Final, List, Optional, Tuple
 
 from services import runtime_paths, tuning
 from services.tts import phrase_cache
+from services.gpu_cooldown import wait_for_gpu_cooldown
 from services.tts.artifacts import cut_off_ratio, remove_stray_bursts
 from services.localization.subtitle import SubtitleStyle
 from services.logger.logger import setup_logger
@@ -799,11 +800,14 @@ class _VenvEngineClient(IrodoriTTSClient):
                 "--host", "127.0.0.1", "--port", str(port), "--idle-seconds", str(int(self._IDLE_TIMEOUT_SECONDS)),
             ],
             cwd=str(self._SERVER_DIR),
-            env={**os.environ, "PYTHONIOENCODING": "utf-8", "HF_HUB_DISABLE_SYMLINKS_WARNING": "1"},
+            env={**os.environ, "PYTHONIOENCODING": "utf-8", "HF_HUB_DISABLE_SYMLINKS_WARNING": "1", **self._server_env()},
             stdout=log_file,
             stderr=subprocess.STDOUT,
             **popen_kwargs,
         )
+
+    def _server_env(self) -> Dict[str, str]:
+        return {}
 
     def _start_idle_watchdog(self, server_pid: int) -> None:
         pass  # the server stops itself after --idle-seconds without a request
@@ -867,6 +871,12 @@ def _atempo_filter(speed: float) -> str:
     return ",".join(stages)
 
 
+def qwen3_device() -> str:
+    """Where the Qwen3 server runs its model: NAVIVI_TTS_DEVICE, else tuning.QWEN3_DEVICE ("auto" means the GPU)."""
+    device = (os.environ.get("NAVIVI_TTS_DEVICE") or tuning.QWEN3_DEVICE).strip().lower()
+    return "cpu" if device == "cpu" else "cuda"
+
+
 # [TTS] Qwen3-TTS has no speed control, so the narration speed is applied to the finished line.
 def apply_speed(wav: bytes, speed: float) -> bytes:
     if abs(speed - 1.0) < 0.01:
@@ -918,6 +928,9 @@ class Qwen3TTSClient(_VenvEngineClient):
             )
         return path
 
+    def _server_env(self) -> Dict[str, str]:
+        return {"QWEN3_DEVICE": qwen3_device(), "QWEN3_VRAM_FRACTION": str(tuning.QWEN3_VRAM_FRACTION)}
+
     async def call_api(self, text: str) -> bytes:
         reference = self._reference()
         key = phrase_cache.cache_key({"engine": "qwen3", "input": text, "speed": self.config.speed}, self._voice_sha256())
@@ -925,6 +938,8 @@ class Qwen3TTSClient(_VenvEngineClient):
         if cached is not None:
             logger.info("TTS line served from the cache (%d characters).", len(text))
             return cached
+        if qwen3_device() == "cuda":
+            await asyncio.to_thread(wait_for_gpu_cooldown, "the next TTS line")
         audio = await self._post_starting_the_server({"input": text, "ref_audio": str(reference)})
         audio = await asyncio.to_thread(apply_speed, audio, self.config.speed)
         phrase_cache.put(key, audio)

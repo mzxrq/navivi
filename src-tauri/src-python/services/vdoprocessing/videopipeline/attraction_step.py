@@ -55,7 +55,8 @@ def generate_waypoint_attraction_video(
     one waypoint's attraction video. Returns a dict with a `status` of
     "generated" / "pending" / "failed" / "skipped_no_image", plus whatever
     path/clip data is relevant to that status."""
-    popup_image_entry = waypoint.get("popup_image")
+    # `images` holds every photo; the editor saves only the first into `popup_image`.
+    popup_image_entry = waypoint.get("images") or waypoint.get("popup_image")
     label = waypoint.get("label", f"waypoint_{idx}")
 
     if waypoint.get("videos"):

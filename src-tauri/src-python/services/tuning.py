@@ -1790,4 +1790,9 @@ KOKORO_COST = {"request": 1.0, "char": 0.09, "startup": 35.0}
 # 6/14/31 characters, a fit of ~5 s per request + 0.85 s per character, and ~40 s to import and load once per process.
 QWEN3_PORT = 8090
 QWEN3_MODEL = "Qwen/Qwen3-TTS-12Hz-0.6B-Base"
+# "cuda" or "cpu"; NAVIVI_TTS_DEVICE overrides. On cuda the model loads in bfloat16 (~2 GB), capped to
+# QWEN3_VRAM_FRACTION of the card, and the server falls back to the CPU when CUDA is missing or fails.
+# Each request first waits out a hot GPU (gpu_cooldown). This PC has hard-crashed during GPU work.
+QWEN3_DEVICE = "cuda"
+QWEN3_VRAM_FRACTION = 0.4
 QWEN3_COST = {"request": 5.0, "char": 0.85, "startup": 40.0}
