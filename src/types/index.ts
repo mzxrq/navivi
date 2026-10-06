@@ -109,6 +109,14 @@ export interface ProjectSettings {
   caption_style?: TextStyle;
   intro_title_style?: TextStyle;
   intro_subtitle_style?: TextStyle;
+  intro_kicker_style?: TextStyle;
+  // Small line above the intro/outro title, e.g. "和歌山県 和歌山市". Undefined = not detected yet.
+  intro_location?: string;
+  intro_location_manual?: boolean; // typed by the user: stop following the first waypoint
+  intro_location_at?: string; // first waypoint "lat,lng" (3 dp) intro_location was detected for
+
+  // Append "· N か所" to the intro/outro subtitle (default on).
+  intro_place_count?: boolean;
   // Look for attraction place names on the text track (editor's "Apply to all").
   place_label_look?: {
     position?: "top" | "middle" | "bottom";

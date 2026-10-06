@@ -67,6 +67,14 @@ DEFAULT_SUBTITLE_STYLE = TextStyle(
     bold=tuning.INTRO_SUBTITLE_BOLD,
     outline_width=tuning.INTRO_SUBTITLE_OUTLINE,
 )
+DEFAULT_KICKER_STYLE = TextStyle(
+    font_family=tuning.INTRO_KICKER_FONT_FAMILY,
+    font_size=tuning.INTRO_KICKER_FONT_SIZE,
+    color=tuning.INTRO_KICKER_COLOR,
+    bold=tuning.INTRO_KICKER_BOLD,
+    outline_width=tuning.INTRO_KICKER_OUTLINE,
+    letter_spacing=tuning.INTRO_KICKER_LETTER_SPACING,
+)
 
 
 def _read_image_safe(path: str) -> Optional[np.ndarray]:
@@ -195,19 +203,44 @@ TEXT_POSITIONS = ("top", "middle", "bottom")
 TEXT_DEFAULT_MARGIN_PX = 100
 
 
+def stacked_line_ys(
+    cy: int, kicker_size: int, title_size: int, subtitle_size: int,
+    has_kicker: bool, has_title: bool, has_subtitle: bool,
+) -> Tuple[int, int, int]:
+    """(kicker_y, title_y, subtitle_y) centres. Title + subtitle sit as they always
+    have; a kicker goes above the top line and the whole block shifts down by half
+    that gap. Mirrors stackedLineYs in src/utils/textStyle.ts."""
+    if has_title and has_subtitle:
+        title_y, sub_y = cy - int(subtitle_size * 0.6), cy + int(title_size * 0.6)
+    else:
+        title_y = sub_y = cy
+    if not has_kicker or not (has_title or has_subtitle):
+        return cy, title_y, sub_y
+    top_y, top_size = (title_y, title_size) if has_title else (sub_y, subtitle_size)
+    gap = int(0.6 * (kicker_size + top_size))
+    shift = gap // 2
+    return top_y - gap + shift, title_y + shift, sub_y + shift
+
+
 def text_block_center_y(
     position: str, margin_px: float, title_size: int, subtitle_size: int,
     has_title: bool, has_subtitle: bool, frame_h: int = 1080,
+    kicker_size: int = 0,
 ) -> int:
     """Vertical centre of a title + subtitle block placed at the top, middle or
     bottom of the frame, `margin_px` from that edge. The block's height follows
-    title_events' stacking. Mirrors textBlockCenterY in src/utils/textStyle.ts."""
+    title_events' stacking; kicker_size > 0 adds a kicker line above.
+    Mirrors textBlockCenterY in src/utils/textStyle.ts."""
     if position not in ("top", "bottom"):
         return frame_h // 2
     if has_title and has_subtitle:
         half = 0.55 * (title_size + subtitle_size)
-    else:
+    elif has_title or has_subtitle:
         half = (title_size if has_title else subtitle_size) / 2
+    else:
+        half = kicker_size / 2
+    if kicker_size > 0 and (has_title or has_subtitle):
+        half += 0.3 * (kicker_size + (title_size if has_title else subtitle_size))
     margin = max(0.0, float(margin_px))
     # Halves round up, like Math.round in the preview.
     return int(math.floor((margin + half if position == "top" else frame_h - margin - half) + 0.5))
@@ -225,14 +258,15 @@ def line_motion(
 ) -> Tuple[str, float]:
     """(animation, delay) for the title or subtitle line. A line's own setting
     wins; else the item-wide "fade"/"none"; else the intro's: the title pops in
-    at once, the subtitle rises in INTRO_SUBTITLE_DELAY_SECONDS later (at once
-    when it's shown alone).
+    at once, the kicker fades in with it, the subtitle rises in
+    INTRO_SUBTITLE_DELAY_SECONDS later (at once when it's shown alone).
     Mirrors lineMotion in src/utils/textStyle.ts."""
     if animation not in TEXT_ANIMATIONS:
-        animation = group_animation if group_animation in ("fade", "none") else ("pop" if which == "title" else "rise")
+        default = {"title": "pop", "kicker": "fade"}.get(which, "rise")
+        animation = group_animation if group_animation in ("fade", "none") else default
     if isinstance(delay, (int, float)) and not isinstance(delay, bool):
         delay = max(0.0, float(delay))
-    elif group_animation in ("fade", "none") or which == "title" or not paired:
+    elif group_animation in ("fade", "none") or which != "subtitle" or not paired:
         delay = 0.0
     else:
         delay = min(tuning.INTRO_SUBTITLE_DELAY_SECONDS, duration_sec / 4)
@@ -272,29 +306,32 @@ def title_events(
     animation: Optional[str] = None,
     title_motion: Optional[dict] = None,
     subtitle_motion: Optional[dict] = None,
+    kicker: str = "",
+    kicker_style: TextStyle = DEFAULT_KICKER_STYLE,
+    kicker_motion: Optional[dict] = None,
 ) -> List[Tuple[float, float, str]]:
-    """(start, end, text with override tags) for a title + subtitle block whose
-    `align` edge (left/center/right) sits at cx, centred vertically on cy.
+    """(start, end, text with override tags) for a title + subtitle block (plus
+    an optional small kicker line above) whose `align` edge (left/center/right)
+    sits at cx, centred vertically on cy.
     Each line has its own animation ("pop", "rise", "fade", "none") and enters
     `delay` seconds after the item starts, leaving as long before it ends
-    (title_motion / subtitle_motion: {"animation", "delay"}; see line_motion).
+    (title_motion / subtitle_motion / kicker_motion: {"animation", "delay"}; see line_motion).
     Used by the intro and by text items on the editor's text track."""
     duration_sec = max(0.0, end_sec - start_sec)
     an = _ALIGN_AN.get(align, 5)
     # Braces open override tags and backslashes start escapes — strip them
     # from arbitrary project-name text rather than escaping.
     clean = lambda t: (t or "").replace("{", "").replace("}", "").replace("\\", "")  # noqa: E731
-    safe_title, safe_subtitle = clean(title), clean(subtitle)
+    safe_title, safe_subtitle, safe_kicker = clean(title), clean(subtitle), clean(kicker)
 
-    # Stacked where the old single "title\Nsubtitle" line sat.
-    if safe_title and safe_subtitle:
-        title_y = cy - int(subtitle_style.font_size * 0.6)
-        sub_y = cy + int(title_style.font_size * 0.6)
-    else:
-        title_y = sub_y = cy
+    kicker_y, title_y, sub_y = stacked_line_ys(
+        cy, kicker_style.font_size, title_style.font_size, subtitle_style.font_size,
+        bool(safe_kicker), bool(safe_title), bool(safe_subtitle),
+    )
 
     events: List[Tuple[float, float, str]] = []
     for which, text, y, style, motion in (
+        ("kicker", safe_kicker, kicker_y, kicker_style, kicker_motion or {}),
         ("title", safe_title, title_y, title_style, title_motion or {}),
         ("subtitle", safe_subtitle, sub_y, subtitle_style, subtitle_motion or {}),
     ):

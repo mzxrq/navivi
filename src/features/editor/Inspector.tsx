@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useMemo, useState } from "react";
+import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 import {
@@ -23,6 +23,7 @@ import { useWorkspace } from "../../hooks/useWorkspace";
 import type { TextStyle } from "../../types";
 import { formatTimeValue, parseTime } from "../../utils/timeInput";
 import {
+  DEFAULT_TEXT_KICKER_STYLE,
   DEFAULT_TEXT_SUBTITLE_STYLE,
   DEFAULT_TEXT_TITLE_STYLE,
   LineAnimation,
@@ -33,9 +34,12 @@ import {
 import {
   anchorCue,
   DEFAULT_EXTRA_VOLUME,
+  isUnlinked,
   layout,
+  linkAudio,
   MIN_CUE,
   MIN_SEGMENT,
+  PlacedCue,
   placedCues,
   placedTexts,
   Segment,
@@ -44,8 +48,9 @@ import {
   TextClip,
   TextLine,
   TimelineData,
+  unlinkAudio,
 } from "./model";
-import { formatTime, player } from "./player";
+import { formatTime, player, usePlayerTime } from "./player";
 import { selectedCueIds, type Selection } from "./TimelinePane";
 
 const percent = (v: number) => `${Math.round(v * 100)}%`;
@@ -142,6 +147,54 @@ function TextBlock({ value, onCommit }: { value: string; onCommit: (v: string) =
   );
 }
 
+/** Every subtitle, with the one under the playhead highlighted and kept in view. */
+function CueList({ cues, onPick }: { cues: PlacedCue[]; onPick: (id: string) => void }) {
+  const time = usePlayerTime();
+  const listRef = useRef<HTMLUListElement>(null);
+  const current = cues.find((c) => time >= c.globalStart && time < c.globalEnd)?.id;
+
+  useEffect(() => {
+    const list = listRef.current;
+    const row = current ? list?.querySelector<HTMLElement>(`[data-cue="${current}"]`) : null;
+    if (!list || !row) return;
+    // Scrolls only the list, never the panel around it.
+    if (row.offsetTop < list.scrollTop) list.scrollTop = row.offsetTop;
+    else if (row.offsetTop + row.offsetHeight > list.scrollTop + list.clientHeight)
+      list.scrollTop = row.offsetTop + row.offsetHeight - list.clientHeight;
+  }, [current]);
+
+  return (
+    <ul ref={listRef} className="relative max-h-64 overflow-y-auto custom-scrollbar -mx-2">
+      {cues.map((c) => {
+        const on = c.id === current;
+        return (
+          <li key={c.id} data-cue={c.id}>
+            <button
+              type="button"
+              onClick={() => {
+                onPick(c.id);
+                player.set({ playing: false, time: c.globalStart });
+              }}
+              aria-current={on || undefined}
+              className={`w-full flex gap-2 px-2 py-1.5 rounded-md text-left transition-colors ${
+                on ? "bg-navi/10" : "hover:bg-zinc-100 dark:hover:bg-white/5"
+              }`}
+            >
+              <span className={`shrink-0 w-11 text-[11px] tabular-nums pt-px ${on ? "text-navi" : "text-zinc-400"}`}>
+                {formatTime(c.globalStart, false)}
+              </span>
+              <span className={`text-[12px] leading-snug line-clamp-2 ${on ? "text-zinc-900 dark:text-white" : "text-zinc-700 dark:text-zinc-300"}`}>
+                {c.text}
+              </span>
+            </button>
+          </li>
+        );
+      })}
+      {!cues.length && <li className="px-2 text-[12px] text-zinc-400">{t`No subtitles yet. Use Subtitles in the toolbar.`}</li>}
+    </ul>
+  );
+}
+
 // The panel is narrow, so a style control gets the full width under its label (a switch stays beside it).
 const styleRow: CaptionRow = (key, label, control, hint) =>
   key === "box" ? (
@@ -156,30 +209,6 @@ const styleRow: CaptionRow = (key, label, control, hint) =>
       {hint && <p className="mt-1 text-[11px] text-zinc-400">{hint}</p>}
     </div>
   );
-
-/** The shared look (project caption_style, also in Settings) every subtitle starts from. */
-function DefaultSubtitleStyleSection() {
-  const { settings, updateSettings, setIsDirty } = useWorkspace();
-  const save = (caption_style: TextStyle | undefined) => {
-    updateSettings({ caption_style });
-    setIsDirty(true);
-  };
-  return (
-    <Section title={t`Default subtitle style`}>
-      <p className="text-[11px] text-zinc-400">{t`Subtitles you have styled one by one keep their own style.`}</p>
-      <CaptionStyleFields
-        style={resolveCaptionStyle(settings)}
-        onChange={(patch) => save({ ...(settings.caption_style ?? {}), ...patch })}
-        row={styleRow}
-      />
-      {settings.caption_style && (
-        <button type="button" className={iconButton} onClick={() => save(undefined)}>
-          <Trans>Reset to default</Trans>
-        </button>
-      )}
-    </Section>
-  );
-}
 
 /** One subtitle's own style: overrides on top of the default, or pushed to every subtitle. */
 function CueStyleSection({ cue, timeline, commit }: { cue: SubtitleCue; timeline: TimelineData; commit: (t: TimelineData) => void }) {
@@ -439,16 +468,29 @@ export function Inspector(p: InspectorProps) {
         </Section>
         {seg.audio && (
           <Section title={t`Narration`}>
-            <Row label={t`Starts after`}>
-              <TimeField value={seg.audioOffset} min={0} max={60} onCommit={(v) => patchSegment({ audioOffset: v })} />
+            <Row label={t`Linked to clip`}>
+              <Switch
+                checked={!isUnlinked(seg)}
+                onChange={(on) => commit(on ? linkAudio(timeline, seg.id) : unlinkAudio(timeline, seg.id))}
+                label={t`Linked to clip`}
+              />
             </Row>
+            {isUnlinked(seg) ? (
+              <Row label={t`Starts at`}>
+                <TimeField value={seg.audioStart!} min={0} onCommit={(v) => patchSegment({ audioStart: v })} />
+              </Row>
+            ) : (
+              <Row label={t`Starts after`}>
+                <TimeField value={seg.audioOffset} min={0} max={60} onCommit={(v) => patchSegment({ audioOffset: v })} />
+              </Row>
+            )}
             <Row label={t`Volume`}>
               <Slider label={t`Volume`} format={percent} value={seg.volume} min={0} max={1.5} step={0.05} onCommit={(v) => patchSegment({ volume: v })} />
             </Row>
             <Row label={t`Mute`}>
               <Switch checked={seg.muted} onChange={(v) => patchSegment({ muted: v })} label={t`Mute narration`} />
             </Row>
-            <button type="button" className={iconButton} onClick={() => patchSegment({ audio: undefined, audioDuration: undefined, audioOffset: 0 })}>
+            <button type="button" className={iconButton} onClick={() => patchSegment({ audio: undefined, audioDuration: undefined, audioOffset: 0, audioStart: undefined })}>
               <Trans>Remove narration</Trans>
             </button>
           </Section>
@@ -498,6 +540,15 @@ export function Inspector(p: InspectorProps) {
           </Row>
         </Section>
         <TextLookSection text={text} timeline={timeline} commit={commit} />
+        {(text.kind === "intro" || text.kicker) && (
+          <TextLineSection
+            title={t`Location line`}
+            line={text.kicker ?? { text: "" }}
+            defaults={DEFAULT_TEXT_KICKER_STYLE}
+            motion={lineMotion("kicker", text.kicker?.animation, text.kicker?.delay, text.animation, text.globalEnd - text.globalStart, paired)}
+            onChange={(kicker) => patchText({ kicker })}
+          />
+        )}
         <TextLineSection
           title={t`Title`}
           line={text.title}
@@ -575,26 +626,8 @@ export function Inspector(p: InspectorProps) {
             </button>
           </div>
         )}
-        <ul className="max-h-64 overflow-y-auto custom-scrollbar -mx-2">
-          {cues.map((c) => (
-            <li key={c.id}>
-              <button
-                type="button"
-                onClick={() => {
-                  p.onSelect({ type: "cue", id: c.id });
-                  player.set({ playing: false, time: c.globalStart });
-                }}
-                className="w-full flex gap-2 px-2 py-1.5 rounded-md text-left hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors"
-              >
-                <span className="shrink-0 w-11 text-[11px] tabular-nums text-zinc-400 pt-px">{formatTime(c.globalStart, false)}</span>
-                <span className="text-[12px] leading-snug text-zinc-700 dark:text-zinc-300 line-clamp-2">{c.text}</span>
-              </button>
-            </li>
-          ))}
-          {!cues.length && <li className="px-2 text-[12px] text-zinc-400">{t`No subtitles yet. Use Subtitles in the toolbar.`}</li>}
-        </ul>
+        <CueList cues={cues} onPick={(id) => p.onSelect({ type: "cue", id })} />
       </Section>
-      <DefaultSubtitleStyleSection />
       <Section title={t`Music`}>
         {timeline.music ? (
           <>

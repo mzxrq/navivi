@@ -1,10 +1,11 @@
 import { ReactNode, useEffect, useState } from "react";
 import { t } from "@lingui/core/macro";
-import { useInstalledFonts } from "../../hooks/useInstalledFonts";
+import { BUILT_IN_FONTS, FONT_LANGUAGES, FontLanguage, useInstalledFonts } from "../../hooks/useInstalledFonts";
 import type { TextStyle } from "../../types";
 import { DEFAULT_CAPTION_STYLE } from "../../utils/textStyle";
 import { ColorPicker } from "./ColorPicker";
 import { ComboBox } from "./ComboBox";
+import { FontDownloadDialog } from "./FontDownloadDialog";
 import { AlignVerticalJustifyCenter, AlignVerticalJustifyEnd, AlignVerticalJustifyStart, Bold, Italic, Underline } from "./icons";
 import { Segmented } from "./Segmented";
 import { StepButtons } from "./StepButtons";
@@ -50,13 +51,6 @@ export function IntInput({ value, min, max, onCommit }: { value: number; min: nu
 
 export type CaptionRow = (key: string, label: string, control: ReactNode, hint?: string) => ReactNode;
 
-/** The installed fonts as a list that shows each name in its own face; any other name can still be typed. */
-function FontField({ value, onChange }: { value: string; onChange: (font: string) => void }) {
-  const fonts = useInstalledFonts();
-  const options = fonts.some((f) => f.toLowerCase() === value.toLowerCase()) ? fonts : [value, ...fonts];
-  return <ComboBox label={t`Font`} value={value} options={options} allowCustom previewFont onChange={onChange} className="w-full" />;
-}
-
 /** Look (+ placement, for captions) controls; `row` lays each one out in the host panel's own style.
  * kind "text" is a text-track line: no box, position or line limit, and its own fallback font. */
 export function CaptionStyleFields({
@@ -74,7 +68,15 @@ export function CaptionStyleFields({
 }) {
   const caption = kind === "caption";
   const fonts = useInstalledFonts();
-  const missing = fonts.length > 0 && !fonts.some((f) => f.toLowerCase() === style.font_family.toLowerCase());
+  const missing = fonts.all.length > 0 && !fonts.all.some((f) => f.toLowerCase() === style.font_family.toLowerCase());
+  const groupLabel: Record<FontLanguage, string> = { ja: t`Japanese`, en: t`English` };
+  const [download, setDownload] = useState<FontLanguage | null>(null);
+  // Only fonts the user downloaded, the app's defaults and the one in use; Japanese first, then English.
+  // A font in neither group (or not installed) is listed on top when it is the one in use.
+  const current = fonts.all.find((f) => f.toLowerCase() === style.font_family.toLowerCase());
+  const offered = new Set([...fonts.downloaded, ...BUILT_IN_FONTS, fallbackFont, ...(current ? [current] : [])]);
+  const pickable = FONT_LANGUAGES.flatMap((lang) => fonts.all.filter((f) => fonts.language[f] === lang && offered.has(f)));
+  const fontOptions = missing || (current && !fonts.language[current]) ? [current ?? style.font_family, ...pickable] : pickable;
   const icon = "w-3.5 h-3.5";
 
   return (
@@ -82,7 +84,28 @@ export function CaptionStyleFields({
       {row(
         "font",
         t`Font`,
-        <FontField value={style.font_family} onChange={(font_family) => onChange({ font_family })} />,
+        <>
+        <ComboBox
+          label={t`Font`}
+          value={style.font_family}
+          onChange={(v) => v !== style.font_family && onChange({ font_family: v })}
+          options={fontOptions}
+          groupOf={(f) => (fonts.language[f] ? groupLabel[fonts.language[f]] : undefined)}
+          groups={FONT_LANGUAGES.map((l) => groupLabel[l])}
+          groupAction={(group) => {
+            const lang = FONT_LANGUAGES.find((l) => groupLabel[l] === group);
+            return lang ? (
+              <button type="button" onClick={() => setDownload(lang)} className="text-navi hover:underline">
+                {t`Get more fonts`}
+              </button>
+            ) : null;
+          }}
+          allowCustom
+          previewFont
+          className="w-full"
+        />
+          {download && <FontDownloadDialog language={download} onClose={() => setDownload(null)} />}
+        </>,
         missing ? t`Not installed on this PC, so the export uses ${fallbackFont}` : undefined,
       )}
       {row(

@@ -79,6 +79,15 @@ class TestTextSegmenter:
         assert len(lines) == 2
         assert lines[0] == "あ" * 10
 
+    def test_wrap_never_starts_a_line_with_closing_punctuation(self):
+        text = "曲がりくねった道を2時間21分ほど歩くと、"
+        assert TextSegmenter.wrap(text, max_chars_per_line=20) == text
+        assert TextSegmenter.wrap("「" + "あ" * 9 + "」です", max_chars_per_line=10).split("\n")[1][0] != "」"
+
+    def test_wrap_balances_lines_at_a_phrase_end(self):
+        wrapped = TextSegmenter.wrap("昔の修験者たちが歩いた古い道に入っていきます", max_chars_per_line=20)
+        assert wrapped == "昔の修験者たちが歩いた\n古い道に入っていきます"
+
     def test_wrap_overflow_past_max_lines_truncates_with_ellipsis(self):
         text = " ".join(["word"] * 20)
         wrapped = TextSegmenter.wrap(text, max_chars_per_line=8, max_lines=2)

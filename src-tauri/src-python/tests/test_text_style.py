@@ -110,20 +110,25 @@ class TestWrap:
             "We walk through", "the old town toward", "the temple gate"]
 
     def test_japanese_lines_are_balanced(self):
-        lines = wrap_line("この寺は千年以上の歴史があり今も多くの人が訪れます", 14)
-        assert all(len(l) <= 14 for l in lines)
+        lines = wrap_line("あ" * 20, 14)
         assert abs(len(lines[0]) - len(lines[1])) <= 1
+
+    def test_japanese_breaks_at_a_phrase_end_near_the_middle(self):
+        assert wrap_line("この寺は千年以上の歴史があり今も多くの人が訪れます", 14) == [
+            "この寺は千年以上の歴史があり", "今も多くの人が訪れます"]
+        assert wrap_line("昔の修験者たちが歩いた古い道に入っていきます", 20) == [
+            "昔の修験者たちが歩いた", "古い道に入っていきます"]
 
     def test_prefers_breaking_after_a_comma(self):
         assert wrap_line("京都の古い町並みを歩いて、清水寺へ向かいます。", 14) == [
             "京都の古い町並みを歩いて、", "清水寺へ向かいます。"]
 
     def test_kinsoku_and_latin_words(self):
-        assert wrap_line("「こんにちは」と言いました。", 6) == ["「こんにち", "は」と言い", "ました。"]
+        assert wrap_line("「こんにちは」と言いました。", 6) == ["「こんにち", "は」と", "言いました。"]
         assert wrap_line("ここはBangkokの旧市街です", 8) == ["ここは", "Bangkokの", "旧市街です"]
 
     def test_keeps_existing_line_breaks(self):
-        assert wrap_text("一行目\n二行目はとても長いです", 5) == "一行目\n二行目は\nとても長\nいです"
+        assert wrap_text("一行目\n二行目はとても長いです", 5) == "一行目\n二行目は\nとても\n長いです"
 
 
 def test_display_text_wraps_then_trims_closing_marks():

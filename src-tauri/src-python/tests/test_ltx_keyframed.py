@@ -60,6 +60,8 @@ class TestRects:
         a, b = rects("zoomin"); assert b[2] < a[2]
         a, b = rects("zoomout"); assert b[2] > a[2]
         a, b = rects("closein"); assert b[2] < a[2] < rects("zoomin")[1][2]
+        a, b = rects("walkfwd"); assert b[2] < rects("closein")[1][2] < a[2]
+        assert rects("walkfwdleft")[1][0] < b[0] < rects("walkfwdright")[1][0]
 
     def test_a_fixed_second_shot_follows_the_chosen_move(self, monkeypatch):
         monkeypatch.setattr(tuning, "ATTRACTION_SECOND_SHOT", "closein")
@@ -69,6 +71,8 @@ class TestRects:
 
     def test_random_second_shot_is_repeatable_varied_and_never_the_same_way(self, monkeypatch):
         monkeypatch.setattr(tuning, "ATTRACTION_SECOND_SHOT", "random")
+        monkeypatch.setattr(tuning, "ATTRACTION_SECOND_SHOT_MOVES", (
+            "closein", "closeout", "closepanleft", "closepanright", "closepanup", "closepandown"))
         assert ltx_keyframed.second_shot("panright", "photo-a") == ltx_keyframed.second_shot("panright", "photo-a")
         picks = {ltx_keyframed.second_shot("panright", f"photo-{i}") for i in range(60)}
         assert len(picks) >= 4 and "closepanright" not in picks
@@ -109,7 +113,7 @@ class TestTwoShots:
         photo.write_bytes(b"photo")
         made = []
 
-        def render(photo, move, out, work):
+        def render(photo, move, out, work, prompt=None):
             made.append(move)
             if move == "closein":
                 raise RuntimeError("OOM")
@@ -121,6 +125,20 @@ class TestTwoShots:
 
         assert made == ["zoomin", "closein"]
         assert abs(FFmpegManager.get_media_duration(out) - 4) < 0.1
+
+    def test_free_walk_has_no_pinned_last_frame(self):
+        graph = ltx_keyframed.sample_graph("a.png", None, "p", 1, "x")
+        assert not {"end", "guide", "crop"} & graph.keys()
+        assert graph["cond"]["inputs"]["positive"] == ["i2v", 0]
+        assert graph["lat"]["inputs"]["samples"] == ["sample", 0]
+        assert "guide" in ltx_keyframed.sample_graph("a.png", "b.png", "p", 1, "x")
+
+    def test_second_shot_walks_inside(self, monkeypatch):
+        monkeypatch.setattr(tuning, "ATTRACTION_SECOND_SHOT_STYLE", "walk")
+        walk = ltx_keyframed.prompt_for("closein", "abc", second=True)
+        assert walk in [p.format(place="the place") for p in tuning.LTXV_WALK_PROMPTS["closein"]]
+        assert walk == ltx_keyframed.prompt_for("closein", "abc", second=True)
+        assert ltx_keyframed.prompt_for("closein", "abc") == tuning.LTXV_PROMPTS["closein"].format(place="the scene")
 
 
 class TestGraph:

@@ -144,42 +144,17 @@ class TextSegmenter:
         if not text:
             return text
 
-        # Case 1: fits on one line — the common case, and the actual fix.
-        if len(text) <= max_chars_per_line:
+        # Case 1: fits on one line (a closing 、。 is dropped on display, so it doesn't count).
+        if len(text.rstrip("、。")) <= max_chars_per_line:
             return text
 
-        # Case 2: needs wrapping — find the best break point for line 1.
-        ideal_break = max_chars_per_line
-        # Search backward from the width limit for a natural boundary
-        # (space, or Japanese-friendly punctuation already stripped by
-        # split_clauses, so a plain space search covers mixed-language text).
-        break_at = text.rfind(" ", 0, ideal_break + 1)
-        if break_at == -1 or break_at < ideal_break * 0.4:
-            # No good natural break nearby (common for Japanese, which has
-            # no spaces) — fall back to a straight character cut at budget.
-            break_at = ideal_break
+        # Case 2: balanced lines broken at a space, punctuation or phrase end, with kinsoku.
+        from services.localization.text_style import wrap_line
 
-        lines = [text[:break_at].strip()]
-        remainder = text[break_at:].strip()
-
-        for _ in range(max_lines - 1):
-            if not remainder:
-                break
-            if len(remainder) <= max_chars_per_line:
-                lines.append(remainder)
-                remainder = ""
-            else:
-                cut = remainder.rfind(" ", 0, max_chars_per_line + 1)
-                if cut == -1 or cut < max_chars_per_line * 0.4:
-                    cut = max_chars_per_line
-                lines.append(remainder[:cut].strip())
-                remainder = remainder[cut:].strip()
-
-        if remainder:
-            # Still overflow after max_lines — truncate the last line, same
-            # ellipsis fallback behavior as before.
+        lines = wrap_line(text, max_chars_per_line)
+        if len(lines) > max_lines:
+            lines = lines[:max_lines]
             lines[-1] = lines[-1][: max_chars_per_line - 1] + "…"
-
         return "\n".join(lines)
 
 

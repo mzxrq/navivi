@@ -148,6 +148,8 @@ class AttractionVideoGenerator:
         # Switching generator rebuilds the kept clips.
         if pan in tuning.ATTRACTION_LTX_PRESETS:
             digest.update(f"|ltxv13b-crops|{tuning.ATTRACTION_SECOND_SHOT}".encode("utf-8"))
+            if tuning.ATTRACTION_SECOND_SHOT_STYLE:
+                digest.update(f"|{tuning.ATTRACTION_SECOND_SHOT_STYLE}|{','.join(tuning.ATTRACTION_SECOND_SHOT_MOVES)}".encode("utf-8"))
         elif tuning.ATTRACTION_GENERATOR != "chain":
             digest.update(b"|" + tuning.ATTRACTION_GENERATOR.encode("utf-8"))
         return digest.hexdigest()[:12]
@@ -833,6 +835,7 @@ class AttractionVideoGenerator:
             for stale_raw in self.output_dir.glob(f"raw_{stem}_*.mp4"):
                 try:
                     stale_raw.unlink()
+                    Path(str(stale_raw) + ".signlock").unlink(missing_ok=True)
                 except OSError:
                     pass
         else:
@@ -875,12 +878,14 @@ class AttractionVideoGenerator:
                     "   -> Image %d/%d already rendered — reusing %s",
                     idx + 1, len(image_list), raw_clip_path,
                 )
+                self._lock_signs(str(raw_clip_path), img_path, pans[idx])
                 generated_clips.append(str(raw_clip_path))
                 clip_presets.append(current_prompt)
                 built_keys.append(keys[idx])
                 continue
 
             raw_clip_path.unlink(missing_ok=True)
+            Path(str(raw_clip_path) + ".signlock").unlink(missing_ok=True)
             logger.info(
                 f"   -> Rendering image {idx + 1}/{len(image_list)}: {img_path} with prompt: '{current_prompt}'"
             )
@@ -888,6 +893,7 @@ class AttractionVideoGenerator:
                 img_path, current_prompt, per_clip_duration, save_path=str(raw_clip_path)
             )
             if clip:
+                self._lock_signs(clip, img_path, pans[idx])
                 generated_clips.append(clip)
                 clip_presets.append(current_prompt)
                 built_keys.append(keys[idx])
@@ -964,6 +970,24 @@ class AttractionVideoGenerator:
             except OSError as exc:
                 logger.warning("Could not rename %s: %s", old.name, exc)
 
+    @staticmethod
+    def _lock_signs(clip_path: str, photo_path: str, pan: str) -> None:
+        """Pastes the photo's real signs over the generated ones, once per raw
+        clip (a .signlock marker beside it; reused clips get it on their next
+        build). Still clips are the photo itself and are skipped."""
+        from services.vdoprocessing.camera_pan import STILL_PRESET
+
+        marker = Path(clip_path + ".signlock")
+        if not tuning.SIGN_LOCK or pan == STILL_PRESET or marker.exists():
+            return
+        from services.vdoprocessing.sign_lock import lock_signs
+
+        lock_signs(clip_path, photo_path)
+        try:
+            marker.touch()
+        except OSError:
+            pass
+
     def _remove_orphan_raws(self, stem: str, keys: List[str]) -> None:
         """Deletes kept photo clips no current photo/preset uses."""
         import re
@@ -974,3 +998,4 @@ class AttractionVideoGenerator:
             m = pattern.fullmatch(raw.stem)
             if m and m.group(1) not in wanted:
                 raw.unlink(missing_ok=True)
+                Path(str(raw) + ".signlock").unlink(missing_ok=True)

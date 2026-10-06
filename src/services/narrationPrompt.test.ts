@@ -1,0 +1,54 @@
+import { describe, expect, it } from "vitest";
+import { buildWaypointPrompt, dropRepeatedSentences } from "./narrationPrompt";
+
+const base = { place: "高仙寺", theme: "", userPrompt: "", facts: "", isFirstWaypoint: false };
+const arriving = "孝子駅から歩いて高仙寺に着きました。";
+
+describe("buildWaypointPrompt", () => {
+  it("shows the attraction prompt what the arriving script already said", () => {
+    const prompt = buildWaypointPrompt({ ...base, scriptType: "attraction", route: { otherScript: arriving } });
+    expect(prompt).toContain(`【直前に読み上げるナレーション(内容を重ねないこと)】\n${arriving}\n`);
+    expect(prompt).toContain("6. 【直前に読み上げるナレーション】と同じ事実");
+  });
+
+  it("shows the arriving prompt the attraction script it leads into", () => {
+    const prompt = buildWaypointPrompt({ ...base, scriptType: "arriving", route: { otherScript: "本堂は静かです。" } });
+    expect(prompt).toContain("【到着後に読み上げるナレーション(内容を重ねないこと)】\n本堂は静かです。");
+  });
+
+  it("adds nothing when the other script is empty", () => {
+    const prompt = buildWaypointPrompt({ ...base, scriptType: "attraction", route: { otherScript: "  " } });
+    expect(prompt).not.toContain("内容を重ねないこと");
+    expect(prompt).not.toContain("\n6. ");
+  });
+
+  it("never asks the attraction script about arriving", () => {
+    const prompt = buildWaypointPrompt({ ...base, scriptType: "attraction", route: {} });
+    expect(prompt.split("例(書き方の参考")[0]).not.toMatch(/到着/);
+    expect(prompt).not.toContain("着きました");
+  });
+});
+
+describe("dropRepeatedSentences", () => {
+  // The 孝子駅 stop from the kyoushitofudatateyama project: the attraction script copied the arriving one.
+  const arrivingScript =
+    "南海本線孝子駅に到着しました。山間にあるこの駅は、静かで穏やかな雰囲気が感じられる場所です。駅周辺には自然豊かな風景が広がり、新鮮な空気を吸いながら散策を楽しむことができます。これから訪れる高仙寺への道のりは、自然と一体になれるような旅に満ちており、期待が高まります。";
+
+  it("empties a copy of the other script", () => {
+    const copied = "南海本線孝子駅に到着しました。山間にあるこの駅は、静かで穏やかな雰囲気が感じられる場所です。駅周辺には自然豊かな風景が広がり、新鮮な空気を吸いながら散策を楽しむことができます。";
+    expect(dropRepeatedSentences(copied, arrivingScript, "attraction")).toBe("");
+  });
+
+  it("keeps the new sentences and drops the repeated ones", () => {
+    const mixed = "南海本線孝子駅に到着しました。小さな木造の駅舎が、ホームの端に建っています。駅周辺には自然豊かな風景が広がり、散策を楽しむことができます。";
+    expect(dropRepeatedSentences(mixed, arrivingScript, "attraction")).toBe("小さな木造の駅舎が、ホームの端に建っています。");
+  });
+
+  it("drops an arrival from the attraction script but keeps 落ち着いた", () => {
+    expect(dropRepeatedSentences("高仙寺に着きました。落ち着いた本堂が見えます。", undefined, "attraction")).toBe("落ち着いた本堂が見えます。");
+  });
+
+  it("leaves the arriving script's own arrival alone", () => {
+    expect(dropRepeatedSentences("高仙寺に着きました。", undefined, "arriving")).toBe("高仙寺に着きました。");
+  });
+});

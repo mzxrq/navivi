@@ -51,6 +51,7 @@ class GPSParser:
         self.fallback_speed_m_s = 1.4  # ~5 km/h walking speed fallback
         self.precision = 5             # Coordinate rounding precision
         self.min_stop_sec = 180        # Min duration (seconds) to flag a stop as a landmark
+        self.has_real_time = False     # Set by clean_data: False when the timeline was synthesized
 
     def _config_anchors(self) -> List[Path]:
         """Directories a RELATIVE path in job_config.json is resolved
@@ -218,7 +219,8 @@ class GPSParser:
 
             # [HACK] [GPS] Timestamps & Time-by-Distance Fallbacks: when a GPS log has no usable timestamps,
             # a synthetic timeline is derived from point-to-point distance and a fixed walking speed.
-            if "timestamp" not in route_df.columns or route_df["timestamp"].isnull().all():
+            self.has_real_time = "timestamp" in route_df.columns and not route_df["timestamp"].isnull().all()
+            if not self.has_real_time:
                 logger.warning("No timestamps found! Generating timeline based on physical distance...")
                 lat1, lon1 = route_df["latitude"].shift().fillna(route_df["latitude"]).to_numpy(), route_df["longitude"].shift().fillna(route_df["longitude"]).to_numpy()
                 lat2, lon2 = route_df["latitude"].to_numpy(), route_df["longitude"].to_numpy()
@@ -267,7 +269,9 @@ class GPSParser:
                 route_df.loc[long_stops, "img_url"] = ""
                 route_df.loc[long_stops, "is_landmarked"] = True
 
-                route_df = route_df.drop(columns=["lat_round", "lon_round", "stop_block", "stop_duration_sec"])
+                # dwell_sec: how long the GPS sat on this point before the duplicates were dropped.
+                route_df = route_df.rename(columns={"stop_duration_sec": "dwell_sec"})
+                route_df = route_df.drop(columns=["lat_round", "lon_round", "stop_block"])
 
             # Summarize Route
             summary = GPSMath.compute_route_summary(route_df, waypoints_df)

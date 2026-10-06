@@ -54,6 +54,13 @@ def keyframe_rects(w: int, h: int, move: str) -> Tuple[Rect, Rect]:
     if move in ("closein", "closeout"):
         wide, tight = window(tuning.LTXV_CLOSE_WIDE, mid_x, mid_y), window(tuning.LTXV_CLOSE_TIGHT, mid_x, mid_y)
         return (wide, tight) if move == "closein" else (tight, wide)
+    if move in tuning.LTXV_FREE_MOVES:
+        whole = window(1.0, mid_x, mid_y)
+        return whole, whole
+    if move.startswith("walkfwd"):
+        turn = {"walkfwdleft": -1, "walkfwdright": 1}.get(move, 0) * tuning.LTXV_WALK_TURN * full_w
+        return (window(tuning.LTXV_CLOSE_WIDE, mid_x, mid_y),
+                window(tuning.LTXV_WALK_TIGHT, mid_x + turn, mid_y))
     if move.startswith("closepan"):
         c = tuning.LTXV_CLOSE_WIDE
         dx = tuning.LTXV_CLOSE_PAN * full_w / 2
@@ -106,16 +113,24 @@ def ensure_files() -> None:
         part.replace(path)
 
 
-def prompt_for(preset: str) -> str:
-    return tuning.LTXV_PROMPTS[preset].format(place="the scene")
+def prompt_for(preset: str, seed: str = "", second: bool = False) -> str:
+    """The second shot with ATTRACTION_SECOND_SHOT_STYLE "walk" gets a walk-inside
+    prompt, picked per photo by `seed`."""
+    import random
+
+    walks = tuning.LTXV_WALK_PROMPTS.get(preset)
+    if second and walks and tuning.ATTRACTION_SECOND_SHOT_STYLE == "walk":
+        return random.Random(f"{seed}|{preset}|walk").choice(walks).format(place="the place")
+    place = "the place" if preset in tuning.LTXV_FREE_MOVES else "the scene"
+    return tuning.LTXV_PROMPTS[preset].format(place=place)
 
 
-def sample_graph(start_name: str, end_name: str, prompt: str, seed: int, prefix: str) -> Dict:
+def sample_graph(start_name: str, end_name: Optional[str], prompt: str, seed: int, prefix: str) -> Dict:
     """Mirrors ComfyUI's ltxv_image_to_video template, loaders swapped for the
-    GGUF model + separate VAE/T5, last frame pinned by LTXVAddGuide; stops at
-    a saved latent."""
+    GGUF model + separate VAE/T5, last frame pinned by LTXVAddGuide (none when
+    end_name is None); stops at a saved latent."""
     files = tuning.LTXV_FILES
-    return {
+    graph = {
         "unet": {"class_type": "UnetLoaderGGUF", "inputs": {"unet_name": files["unet"]["file"]}},
         "vae": {"class_type": "VAELoader", "inputs": {"vae_name": files["vae"]["file"]}},
         "clip": {"class_type": "CLIPLoader", "inputs": {
@@ -143,6 +158,13 @@ def sample_graph(start_name: str, end_name: str, prompt: str, seed: int, prefix:
             "positive": ["cond", 0], "negative": ["cond", 1], "latent": ["sample", 0]}},
         "lat": {"class_type": "SaveLatent", "inputs": {"samples": ["crop", 2], "filename_prefix": prefix}},
     }
+    if end_name is None:
+        for node in ("end", "guide", "crop"):
+            del graph[node]
+        graph["cond"]["inputs"].update(positive=["i2v", 0], negative=["i2v", 1])
+        graph["sample"]["inputs"]["latent_image"] = ["i2v", 2]
+        graph["lat"]["inputs"]["samples"] = ["sample", 0]
+    return graph
 
 
 def decode_graph(latent_name: str, prefix: str) -> Dict:
@@ -175,8 +197,11 @@ def second_shot(preset: str, seed: str = "") -> Optional[str]:
 
     second = tuning.ATTRACTION_SECOND_SHOT
     if second == "random":
+        # A walk-in first shot is followed by a close shot, not another walk.
+        free_first = preset in tuning.LTXV_FREE_MOVES
         choices = [m for m in tuning.ATTRACTION_SECOND_SHOT_MOVES
-                   if m != _SAME_WAY.get(preset) and m in tuning.LTXV_PROMPTS]
+                   if m != _SAME_WAY.get(preset) and m in tuning.LTXV_PROMPTS
+                   and not (free_first and m in tuning.LTXV_FREE_MOVES)]
         return random.Random(f"{seed}|{preset}").choice(choices) if choices else None
     return second if second and second != preset and second in tuning.LTXV_PROMPTS else None
 
@@ -195,7 +220,7 @@ def _photo_seed(photo_path: str) -> str:
     return digest.hexdigest()
 
 
-def render_shot(photo_path: str, move: str, output_path: str, work: Path) -> str:
+def render_shot(photo_path: str, move: str, output_path: str, work: Path, prompt: Optional[str] = None) -> str:
     """One LTXV clip (LTXV_FRAMES at LTXV_FPS) of `move` between its two crops,
     colour-matched to its own first crop. Raises on any failure."""
     import httpx
@@ -214,8 +239,9 @@ def render_shot(photo_path: str, move: str, output_path: str, work: Path) -> str
         client._ensure_server_running()
         with httpx.Client() as http:
             graph = sample_graph(
-                client._upload_image(http, first), client._upload_image(http, last),
-                prompt_for(move), uuid.uuid4().int & 0xFFFFFFFF, prefix,
+                client._upload_image(http, first),
+                None if move in tuning.LTXV_FREE_MOVES else client._upload_image(http, last),
+                prompt or prompt_for(move), uuid.uuid4().int & 0xFFFFFFFF, prefix,
             )
             prompt_id = client._submit(http, graph)
             info = client._wait_for_result(http, prompt_id, output_node="lat", label=f"LTXV {move}")["latents"][0]
@@ -276,10 +302,11 @@ def generate_ltx_move(photo_path: str, output_path: str, camera_pan_hint) -> str
     work.mkdir(parents=True, exist_ok=True)
     try:
         shots = []
-        for i, move in enumerate(shot_list(preset, _photo_seed(photo_path))):
+        seed = _photo_seed(photo_path)
+        for i, move in enumerate(shot_list(preset, seed)):
             path = str(work / f"shot{i}.mp4")
             try:
-                shots.append(render_shot(photo_path, move, path, work))
+                shots.append(render_shot(photo_path, move, path, work, prompt_for(move, seed, second=i > 0)))
             except Exception as exc:
                 if i == 0:
                     raise

@@ -423,6 +423,13 @@ RESIDENTIAL_MAP_BOTTOM_BAR_FRACTION = 0.16
 # to stay well clear of the tile provider's own rate limiting; raise with
 # caution, and only alongside TileDownloader's wait/retry backoff settings.
 RESIDENTIAL_TILE_FETCH_WORKERS = 4
+# Leg HUD compass under the top-right destination pill. The dial stays north-up (the
+# map is always north-up); the needle turns to the walker's heading, taken
+# across +/- RESIDENTIAL_COMPASS_HEADING_WINDOW_M of path so GPS wiggles
+# don't make it twitch.
+RESIDENTIAL_SHOW_COMPASS = True
+RESIDENTIAL_COMPASS_SIZE_PX = 104
+RESIDENTIAL_COMPASS_HEADING_WINDOW_M = 20.0
 # Whether a stop-by waypoint (job_config.json's "isStopBy": true) merges
 # into the surrounding real-to-real leg (True — just shows its pin as the
 # traveler passes, no popup, no new map tile) instead of forcing its own
@@ -816,6 +823,7 @@ COMFYUI_FUN_CAMERA_POSES: Dict[str, str] = {
     "pandown": "Pan Down",
     "zoomin": "Zoom In",
     "zoomout": "Zoom Out",
+    "walkin": "Zoom In",
     "none": "Static",
 }
 # How far the camera travels per segment (1.0 = the node's default).
@@ -1112,7 +1120,7 @@ COMFYUI_DEFAULT_MOTION_PROMPT = COMFYUI_CAMERA_PAN_PROMPTS["none"]
 # two real crops of the photo - first and last frame pinned, so it can't wander
 # or invent - instead of ATTRACTION_GENERATOR. "panright" is the user's approved
 # test 13 on 西ノ庄駅 (2026-10-02): smooth level pan, sign readable, ~2 min.
-ATTRACTION_LTX_PRESETS: Tuple[str, ...] = ("panright", "panleft", "panup", "pandown", "zoomin", "zoomout")
+ATTRACTION_LTX_PRESETS: Tuple[str, ...] = ("panright", "panleft", "panup", "pandown", "zoomin", "zoomout", "walkin")
 # After the chosen move, a second, closer shot of the same photo joined by a
 # dissolve - like the Tomogashima reference (one photo, several angles).
 # "random": a move from ATTRACTION_SECOND_SHOT_MOVES, picked per photo (seeded
@@ -1121,7 +1129,12 @@ ATTRACTION_LTX_PRESETS: Tuple[str, ...] = ("panright", "panleft", "panup", "pand
 ATTRACTION_SECOND_SHOT: Optional[str] = "random"
 ATTRACTION_SECOND_SHOT_MOVES: Tuple[str, ...] = (
     "closein", "closeout", "closepanleft", "closepanright", "closepanup", "closepandown",
+    "walkthrough", "walkthroughleft", "walkthroughright",
 )
+# Moves with no pinned last frame: LTXV starts from the whole photo and
+# generates the walk into the place itself (it may show what the photo doesn't).
+# The editor's "Walk In" preset is one of them.
+LTXV_FREE_MOVES: Tuple[str, ...] = ("walkthrough", "walkthroughleft", "walkthroughright", "walkin")
 LTXV_CROSSFADE_SECONDS = 0.5
 # Files (downloaded on first use into bin/ComfyUI/models/<folder>, sha256-checked).
 LTXV_FILES: Dict[str, Dict[str, str]] = {
@@ -1164,6 +1177,10 @@ LTXV_CLOSE_TIGHT = 0.46
 # Close pans: a CLOSE_WIDE window moved this share of the widest window's
 # width (or height, for tilts) across the middle.
 LTXV_CLOSE_PAN = 0.18
+# Walk-in second shots: CLOSE_WIDE at the middle -> WALK_TIGHT, its end moved
+# WALK_TURN of the widest window's width sideways for walkfwdleft/right.
+LTXV_WALK_TIGHT = 0.38
+LTXV_WALK_TURN = 0.12
 # A job takes ~15 GB of RAM on top of what's in use: below this much free it
 # waits (tuning.ensure_free_ram), then falls back to the 3D photo.
 LTXV_MIN_FREE_RAM_GB = 15.0
@@ -1171,6 +1188,17 @@ LTXV_MIN_FREE_RAM_GB = 15.0
 _LTXV_STILL = (
     "The scene is still and solid and only the camera moves, steadily and slowly. Natural daylight, "
     "realistic travel documentary footage, sharp detail."
+)
+# "Gimbal carried", never "first-person": that invites the walker's feet/hands.
+_LTXV_WALK_END = (
+    " The place is quiet and empty of people; the scene is still and solid and only the camera moves, with a "
+    "very subtle natural walking sway. Natural daylight, realistic travel documentary footage, sharp detail."
+)
+# CFG 1 ignores the negative, so the empty, unobstructed view is said positively.
+_LTXV_POV_END = (
+    " The view bobs gently up and down with each footstep, like the eyes of someone walking in. The place is "
+    "completely deserted and still; the view is clean and unobstructed, only the place itself fills the "
+    "frame. Natural daylight, realistic travel documentary footage, sharp detail."
 )
 LTXV_PROMPTS: Dict[str, str] = {
     "panright": (
@@ -1223,7 +1251,110 @@ LTXV_PROMPTS: Dict[str, str] = {
         "A slow, calm close-up gimbal shot tilts smoothly downward across the main subject of {place} on a quiet "
         "sunny afternoon. " + _LTXV_STILL
     ),
+    # Camera-only words: "walks" drew a person into frame (test 22, 2026-10-05).
+    "walkthrough": (
+        "Point-of-view camera at eye height moving continuously straight forward into {place}, toward the "
+        "entrance, getting closer and closer until it passes inside." + _LTXV_POV_END
+    ),
+    "walkthroughleft": (
+        "Point-of-view camera at eye height moving continuously straight forward into {place}, toward the "
+        "entrance, getting closer and closer, then slowly turning its view to the left." + _LTXV_POV_END
+    ),
+    "walkthroughright": (
+        "Point-of-view camera at eye height moving continuously straight forward into {place}, toward the "
+        "entrance, getting closer and closer, then slowly turning its view to the right." + _LTXV_POV_END
+    ),
+    "walkfwd": (
+        "A smooth gimbal shot carried at eye height walks slowly forward into {place}. The camera stays "
+        "perfectly level. " + _LTXV_STILL
+    ),
+    "walkfwdleft": (
+        "A smooth gimbal shot carried at eye height walks slowly forward into {place}, turning gently to the "
+        "left. " + _LTXV_STILL
+    ),
+    "walkfwdright": (
+        "A smooth gimbal shot carried at eye height walks slowly forward into {place}, turning gently to the "
+        "right. " + _LTXV_STILL
+    ),
 }
+LTXV_PROMPTS["walkin"] = LTXV_PROMPTS["walkthrough"]
+# Second shot as a walk inside the place: "walk" = a prompt from
+# LTXV_WALK_PROMPTS (picked per photo, seeded like the move); None = LTXV_PROMPTS.
+ATTRACTION_SECOND_SHOT_STYLE: Optional[str] = "walk"
+LTXV_WALK_PROMPTS: Dict[str, Tuple[str, ...]] = {
+    "walkfwd": (
+        "A smooth gimbal shot carried at eye height walks slowly forward into {place}, several unhurried steps "
+        "drawing closer to its main subject." + _LTXV_WALK_END,
+        "A calm walking shot at eye height strolls slowly deeper into {place}, as if a visitor has just "
+        "arrived and is walking up to the heart of it." + _LTXV_WALK_END,
+    ),
+    "walkfwdleft": (
+        "A smooth gimbal shot carried at eye height walks slowly forward into {place} while turning gently to "
+        "the left to look around." + _LTXV_WALK_END,
+        "A calm walking shot at eye height strolls slowly deeper into {place}, the gaze drifting to the left "
+        "as it goes." + _LTXV_WALK_END,
+    ),
+    "walkfwdright": (
+        "A smooth gimbal shot carried at eye height walks slowly forward into {place} while turning gently to "
+        "the right to look around." + _LTXV_WALK_END,
+        "A calm walking shot at eye height strolls slowly deeper into {place}, the gaze drifting to the right "
+        "as it goes." + _LTXV_WALK_END,
+    ),
+    "closein": (
+        "A smooth gimbal shot carried at eye height walks slowly forward inside {place}, drawing closer to its "
+        "main subject step by step." + _LTXV_WALK_END,
+        "A calm walking shot at eye height moves slowly deeper into {place}, as if a visitor has just stepped "
+        "inside and is strolling toward the heart of it." + _LTXV_WALK_END,
+    ),
+    "closeout": (
+        "A smooth gimbal shot carried at eye height walks slowly backward through {place}, the view opening up "
+        "around the main subject." + _LTXV_WALK_END,
+        "A calm walking shot at eye height eases slowly back through {place}, taking in more of it with each "
+        "step." + _LTXV_WALK_END,
+    ),
+    "closepanleft": (
+        "A smooth gimbal shot carried at eye height strolls slowly through {place} while turning gently to the "
+        "left to look around." + _LTXV_WALK_END,
+        "A calm walking shot at eye height wanders slowly inside {place}, the gaze drifting to the left across "
+        "the main subject." + _LTXV_WALK_END,
+    ),
+    "closepanright": (
+        "A smooth gimbal shot carried at eye height strolls slowly through {place} while turning gently to the "
+        "right to look around." + _LTXV_WALK_END,
+        "A calm walking shot at eye height wanders slowly inside {place}, the gaze drifting to the right across "
+        "the main subject." + _LTXV_WALK_END,
+    ),
+    "closepanup": (
+        "A smooth gimbal shot carried at eye height walks slowly inside {place} and looks gently upward, "
+        "taking in its height." + _LTXV_WALK_END,
+        "A calm walking shot at eye height stops beneath the main subject of {place} and tilts slowly up to "
+        "admire it." + _LTXV_WALK_END,
+    ),
+    "closepandown": (
+        "A smooth gimbal shot carried at eye height walks slowly inside {place} and looks gently downward "
+        "across the main subject." + _LTXV_WALK_END,
+        "A calm walking shot at eye height moves slowly through {place}, the view tilting gently down over "
+        "its details." + _LTXV_WALK_END,
+    ),
+}
+# --- Sign lock (vdoprocessing/sign_lock.py) ---------------------------------
+# Video models redraw kanji as kanji-like shapes, so the photo's own sign
+# pixels are tracked into every LTXV frame and pasted back.
+SIGN_LOCK = True
+SIGN_LOCK_MIN_TEXT_PX = 12  # text lines shorter than this (photo px) are left alone
+SIGN_LOCK_MAX_SIGNS = 6  # largest signs per photo (each costs ~10 s of CPU per clip)
+SIGN_LOCK_PAD = 0.35  # padding around each text line, in line heights
+SIGN_LOCK_CONTEXT = 1.5  # SIFT area around the sign, in sign sizes each side
+SIGN_LOCK_MIN_INLIERS = 15
+SIGN_LOCK_FOLLOW_MIN_POINTS = 6  # frame-to-frame fallback once the photo match fails
+SIGN_LOCK_MIN_CORR = 0.6  # ECC fit of the photo's sign to the frame, else no paste
+SIGN_LOCK_FADE_FRAMES = 6  # paste fades in/out where tracking starts or stops
+SIGN_LOCK_MIN_SCALE, SIGN_LOCK_MAX_SCALE = 0.1, 8.0  # sanity bounds on the tracked size
+SIGN_LOCK_MAX_GAP = 4  # untracked frames bridged between tracked ones
+SIGN_LOCK_SMOOTH = 2  # corner averaging radius, frames
+SIGN_LOCK_FEATHER = 0.12  # soft edge, share of the padded box's short side
+SIGN_LOCK_COLOR_STRENGTH = 0.8
+
 LTXV_NEGATIVE = "low quality, worst quality, deformed, distorted, motion smear, motion artifacts, morphing, people, hands, feet"
 
 # --- Attraction clips: multi-shot + QC + parallax fill ------------------------
@@ -1356,6 +1487,17 @@ INTRO_SUBTITLE_FONT_SIZE = 36
 INTRO_SUBTITLE_OUTLINE = 0
 INTRO_SUBTITLE_BOLD = True
 INTRO_SUBTITLE_COLOR: Tuple[int, int, int] = (255, 255, 255)
+# Small line above the title: where the walk is (settings.intro_location, e.g. "和歌山県 和歌山市").
+INTRO_KICKER_FONT_FAMILY = "Yu Gothic UI"
+INTRO_KICKER_FONT_SIZE = 30
+INTRO_KICKER_OUTLINE = 0
+INTRO_KICKER_BOLD = False
+INTRO_KICKER_COLOR: Tuple[int, int, int] = (205, 210, 220)
+INTRO_KICKER_LETTER_SPACING = 4
+# Appended to the intro subtitle as "<subtitle> · 18 か所" (settings.intro_place_count turns it off).
+INTRO_PLACE_COUNT_FORMAT = "{n} か所"
+INTRO_PLACE_COUNT_SEPARATOR = " · "
+DEFAULT_INTRO_PLACE_COUNT = True
 INTRO_OUTPUT_FILENAME = "00_intro.mp4"
 # Same frame size as every other clip, or the timeline preview draws it smaller.
 INTRO_WIDTH = 1920
@@ -1444,6 +1586,49 @@ OUTRO_SCROLL_MAX_SECONDS = 30.0
 # Height of the soft fade at the top and bottom screen edges, so cards ease
 # in and out of view instead of being cut by the frame edge.
 OUTRO_SCROLL_EDGE_FADE_PX = 56
+# With route info the scroll is a timeline instead of the photo grid: the
+# title and a trip summary (held OUTRO_SUMMARY_HOLD_SECONDS to be read), then
+# one card per leg (the destination's photo, its name, where the leg started,
+# and mode/distance/time chips; route_brief's numbers, the same ones the
+# narration speaks), ending on the last card.
+# Off per project via settings.outro_route_info: false (back to the grid).
+DEFAULT_OUTRO_ROUTE_INFO = True
+OUTRO_ROUTE_FROM_TEMPLATE = "{name} から"
+OUTRO_ROUTE_ROW_HEIGHT = 128
+OUTRO_ROUTE_ROW_GAP = 16
+OUTRO_ROUTE_NAME_FONT_SIZE = 24
+OUTRO_ROUTE_FROM_FONT_SIZE = 15
+OUTRO_ROUTE_DISTANCE_FONT_SIZE = 22
+# Leg cards per row (together as wide as the summary), the gap between them,
+# and the photo's width:height.
+# The route page's title + subtitle use the intro's text and styles, at this
+# fraction of the intro's size (the intro's title fills a whole screen).
+OUTRO_HEADING_SCALE = 0.7
+OUTRO_HEADING_LINE_GAP = 10  # px between title and subtitle
+OUTRO_ROUTE_COLS = 2
+OUTRO_ROUTE_COL_GAP = 16
+OUTRO_ROUTE_THUMB_ASPECT = 1.0
+OUTRO_LEG_FONT_SIZE = 16
+OUTRO_SUMMARY_VALUE_FONT_SIZE = 30
+OUTRO_PANEL_COLOR: Tuple[int, int, int] = (31, 42, 64)
+OUTRO_CHIP_COLOR: Tuple[int, int, int] = (45, 58, 86)
+OUTRO_ARROW_COLOR: Tuple[int, int, int] = (110, 120, 140)
+OUTRO_SUMMARY_HOLD_SECONDS = 4.0
+OUTRO_ROUTE_END_HOLD_SECONDS = 2.0
+OUTRO_SUMMARY_LABELS: Dict[str, str] = {
+    "distance": "総距離",
+    "legs": "{count}区間",
+    "time": "移動時間",
+    "time_note": "目安",
+    "places": "訪れた場所",
+    "places_value": "{count}か所",
+    "longest": "最長区間",
+}
+# The number on each leg card's photo: a white pill with a soft shadow and a
+# dark number, readable on light and dark photos alike.
+OUTRO_PHOTO_BADGE_HEIGHT = 26
+OUTRO_PHOTO_BADGE_FILL: Tuple[int, int, int, int] = (255, 255, 255, 240)
+OUTRO_PHOTO_BADGE_TEXT: Tuple[int, int, int, int] = (19, 28, 46, 255)
 
 # When a clip's narration outlasts its video, the export holds the video's last
 # frame until the narration ends plus this many seconds (so the picture never

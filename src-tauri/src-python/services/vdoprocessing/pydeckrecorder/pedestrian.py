@@ -874,6 +874,25 @@ _HUD_CSS_TEMPLATE = string.Template("""
 #hud-card .icon svg { display: block; width: 100%; height: 100%; }
 #hud-card.hidden { display: none; }
 #hud-card-img { position: fixed; bottom: 20px; right: 20px; z-index: 1000; }
+/* Destination pill + compass stacked in the top-right corner, compass underneath. */
+#hud-top-right {
+    position: fixed; top: 24px; right: 24px; z-index: 1000;
+    display: flex; flex-direction: column; align-items: flex-end; gap: 12px;
+}
+#hud-top-right #hud-banner { position: static; }
+#hud-compass { display: block; filter: drop-shadow(0 4px 10px rgba(0,0,0,0.35)); }
+#hud-compass .dial { fill: $card_bg; stroke: $card_text; stroke-width: 3; }
+#hud-compass .tick { stroke: $card_label; stroke-width: 2; stroke-linecap: round; }
+#hud-compass .tick.n { stroke: $card_text; stroke-width: 3; }
+#hud-compass .letter { fill: $card_text; font: 700 15px "Noto Sans JP", sans-serif; }
+#hud-compass .tail { fill: $card_label; }
+#hud-compass-label {
+    margin-top: -4px; min-width: 104px; box-sizing: border-box; text-align: center;
+    background: $pill_bg; color: $pill_text;
+    font-family: "Noto Sans JP", sans-serif; font-weight: 700; font-size: 16px;
+    padding: 4px 12px; border-radius: 999px; box-shadow: 0 3px 10px rgba(0,0,0,0.3);
+    white-space: nowrap; font-variant-numeric: tabular-nums;
+}
 #hud-banner .icon { font-size: 20px; line-height: 1; }
 /* Sized to match #hud-banner, the pill it sits opposite in the other top
    corner -- at its old 16px against the banner's 22px the two read as
@@ -967,6 +986,68 @@ _MODE_HUD = {
     "airplane": {"mode": "airplane", "icon": _MODE_ICON_SVG["airplane"], "banner_icon": "✈", "time_label": "飛行時間", "en_route_suffix": " 搭乗中", "default_speed_kmh": 500.0},
 }
 _DEFAULT_MODE_HUD = _MODE_HUD["walking"]
+
+
+# 100x100 viewBox; only #hud-compass-needle rotates (about the centre).
+_COMPASS_SVG = """<svg id="hud-compass" width="{size}" height="{size}" viewBox="0 0 100 100">
+<circle class="dial" cx="50" cy="50" r="46"/>
+<line class="tick n" x1="50" y1="7" x2="50" y2="15"/>
+<line class="tick" x1="93" y1="50" x2="87" y2="50"/>
+<line class="tick" x1="50" y1="93" x2="50" y2="87"/>
+<line class="tick" x1="7" y1="50" x2="13" y2="50"/>
+<text class="letter" x="50" y="31" text-anchor="middle">N</text>
+<g id="hud-compass-needle">
+<polygon class="tail" points="50,82 57,50 43,50"/>
+<polygon fill="#d93a32" points="50,18 57,50 43,50"/>
+</g>
+<circle cx="50" cy="50" r="4" fill="#ffffff" stroke="#555" stroke-width="1.5"/>
+</svg>"""
+
+
+_COMPASS_POINTS = ("N", "NE", "E", "SE", "S", "SW", "W", "NW")
+
+
+def _heading_label(deg: float) -> str:
+    """e.g. 47.3 -> "NE 47°"."""
+    deg = round(deg) % 360
+    return f"{_COMPASS_POINTS[int((deg + 22.5) // 45) % 8]} {deg}°"
+
+
+def _walk_headings(lons, lats, window_m: float) -> List[float]:
+    """Per-frame compass heading (degrees clockwise from north) of the
+    path, measured between the points `window_m` behind and ahead along it.
+    Frames where the walker is standing still keep the heading around them."""
+    n = len(lons)
+    if n == 0:
+        return []
+    lat0 = math.radians(float(sum(lats)) / n)
+    xs = [float(lon) * 111320.0 * math.cos(lat0) for lon in lons]
+    ys = [float(lat) * 110540.0 for lat in lats]
+    dist = [0.0]
+    for i in range(1, n):
+        dist.append(dist[-1] + math.hypot(xs[i] - xs[i - 1], ys[i] - ys[i - 1]))
+
+    def at(d: float) -> Tuple[float, float]:
+        d = min(max(d, 0.0), dist[-1])
+        j = min(max(bisect.bisect_left(dist, d), 1), n - 1) if n > 1 else 0
+        if n == 1 or dist[j] == dist[j - 1]:
+            return xs[j], ys[j]
+        t = (d - dist[j - 1]) / (dist[j] - dist[j - 1])
+        return xs[j - 1] + (xs[j] - xs[j - 1]) * t, ys[j - 1] + (ys[j] - ys[j - 1]) * t
+
+    headings: List[Optional[float]] = []
+    for d in dist:
+        (ax, ay), (bx, by) = at(d - window_m), at(d + window_m)
+        if math.hypot(bx - ax, by - ay) < 0.5:
+            headings.append(None)
+        else:
+            headings.append(math.degrees(math.atan2(bx - ax, by - ay)) % 360.0)
+    first = next((h for h in headings if h is not None), 0.0)
+    out, last = [], first
+    for h in headings:
+        last = h if h is not None else last
+        out.append(last)
+    return out
 
 
 def _remaining_minutes(remaining_m: float, remaining_km: float, travel_speed_kmh: float) -> int:
@@ -2217,14 +2298,23 @@ async def _record_leg(
                 await page.wait_for_timeout(2500)
 
                 await page.evaluate(
-                    """([css, bannerIcon, timeLabel, cardIcon, chainPlaces, useImgCard]) => {
+                    """([css, bannerIcon, timeLabel, cardIcon, chainPlaces, useImgCard, compassSvg]) => {
                         const style = document.createElement('style');
                         style.textContent = css;
                         document.head.appendChild(style);
+                        const topRight = document.createElement('div');
+                        topRight.id = 'hud-top-right';
+                        document.body.appendChild(topRight);
                         const banner = document.createElement('div');
                         banner.id = 'hud-banner';
                         banner.innerHTML = `<span class="icon">${bannerIcon}</span> <span id="hud-banner-text"></span>`;
-                        document.body.appendChild(banner);
+                        topRight.appendChild(banner);
+                        if (compassSvg) {
+                            topRight.insertAdjacentHTML('beforeend', compassSvg);
+                            const lbl = document.createElement('div');
+                            lbl.id = 'hud-compass-label';
+                            topRight.appendChild(lbl);
+                        }
                         const card = document.createElement('div');
                         card.id = 'hud-card';
                         card.innerHTML = `
@@ -2258,7 +2348,9 @@ async def _record_leg(
                         }
                     }""",
                     [_hud_css(theme), mode_hud["banner_icon"], mode_hud["time_label"], mode_hud["icon"], route_chain,
-                     hud_card_png is not None],
+                     hud_card_png is not None,
+                     _COMPASS_SVG.format(size=int(tuning.RESIDENTIAL_COMPASS_SIZE_PX))
+                     if tuning.RESIDENTIAL_SHOW_COMPASS else ""],
                 )
 
                 hud_card_cache: Dict[Tuple[int, int], str] = {}
@@ -2289,6 +2381,22 @@ async def _record_leg(
                     )
 
                 all_trail_points = df_raw[["lon", "lat"]].values.tolist()
+                headings = _walk_headings(
+                    smooth_df["lon"].tolist(), smooth_df["lat"].tolist(),
+                    float(tuning.RESIDENTIAL_COMPASS_HEADING_WINDOW_M),
+                )
+
+                def _needle_js(index: int) -> str:
+                    deg = headings[min(index, len(headings) - 1)] if headings else 0.0
+                    return (
+                        "const nd = document.getElementById('hud-compass-needle');"
+                        f" if (nd) nd.setAttribute('transform', 'rotate({deg:.1f} 50 50)');"
+                        " const nl = document.getElementById('hud-compass-label');"
+                        f" if (nl) nl.textContent = {json.dumps(_heading_label(deg))};"
+                    )
+
+                await page.evaluate(f"() => {{ {_needle_js(0)} }}")
+
                 c_trail = json.dumps(walker_color)
                 c_glow = json.dumps(walker_color + [90])
 
@@ -2423,6 +2531,7 @@ async def _record_leg(
                             document.getElementById('hud-banner-text').textContent = {json.dumps(banner_text0)};
                             document.getElementById('hud-time').textContent = {json.dumps(f"{rem_min0} 分")};
                             document.getElementById('hud-dist').textContent = {json.dumps(dist_text0)};
+                            {_needle_js(0)}
                         }}
                         """
                         await page.evaluate(js)
@@ -2599,6 +2708,7 @@ async def _record_leg(
                         document.getElementById('hud-banner-text').textContent = {json.dumps(banner_text)};
                         document.getElementById('hud-time').textContent = {json.dumps(f"{rem_min} 分")};
                         document.getElementById('hud-dist').textContent = {json.dumps(dist_text)};
+                        {_needle_js(index)}
                     }}
                     """
                     await page.evaluate(js)
