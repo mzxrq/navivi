@@ -165,11 +165,29 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   globalAiRef.current = globalAi;
   const settings = useMemo<ProjectSettings>(() => ({ ...projectSettings, ...globalAi }), [projectSettings, globalAi]);
 
+  // Until the saved choice has been read, a change made by the user is held back from the database (it would replace the whole
+  // saved record with the defaults) and wins over the saved value once that arrives.
+  const aiLoadedRef = useRef(false);
+  const aiEarlyRef = useRef<Partial<ProjectSettings>>({});
   useEffect(() => {
-    db.appSettings
-      .get<Partial<ProjectSettings>>(GLOBAL_AI_KEY)
-      .then((saved) => saved && setGlobalAi((prev) => ({ ...prev, ...pickAiSettings(saved) })))
-      .catch((err) => console.error("Could not load the AI settings:", err));
+    let attempts = 0;
+    const load = () =>
+      db.appSettings
+        .get<Partial<ProjectSettings>>(GLOBAL_AI_KEY)
+        .then((saved) => {
+          const merged = { ...globalAiRef.current, ...pickAiSettings(saved ?? {}), ...aiEarlyRef.current };
+          aiLoadedRef.current = true;
+          globalAiRef.current = merged;
+          setGlobalAi(merged);
+          if (Object.keys(aiEarlyRef.current).length > 0) {
+            db.appSettings.set(GLOBAL_AI_KEY, merged).catch((err) => console.error("Could not save the AI settings:", err));
+          }
+        })
+        .catch((err) => {
+          console.error("Could not load the AI settings:", err);
+          if (++attempts < 3) setTimeout(load, 1000 * attempts);
+        });
+    load();
   }, []);
   const [routingCache, setRoutingCache] = useState<
     Record<string, [number, number][]>
@@ -354,7 +372,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       const next = { ...globalAiRef.current, ...ai };
       globalAiRef.current = next;
       setGlobalAi(next);
-      db.appSettings.set(GLOBAL_AI_KEY, next).catch((err) => console.error("Could not save the AI settings:", err));
+      if (aiLoadedRef.current) {
+        db.appSettings.set(GLOBAL_AI_KEY, next).catch((err) => console.error("Could not save the AI settings:", err));
+      } else {
+        aiEarlyRef.current = { ...aiEarlyRef.current, ...ai };
+      }
     }
     setSettings((prev) => ({ ...prev, ...data }));
     setIsDirty(true);
