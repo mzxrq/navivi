@@ -38,7 +38,8 @@ def needs_wan(waypoints: list) -> bool:
     for wp in waypoints:
         if not isinstance(wp, dict) or wp.get("videos") or not wp.get("popup_image") or is_passed_only(wp):
             continue
-        if any(normalize_camera_pan(p) != STILL_PRESET for p in _resolve_attraction_prompt(wp)):
+        if any(normalize_camera_pan(p) not in (STILL_PRESET, *tuning.ATTRACTION_JUMP_CUT_PRESETS)
+               for p in _resolve_attraction_prompt(wp)):
             return True
     return False
 

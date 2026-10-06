@@ -106,6 +106,19 @@ def _get_pipe():
     return _pipe
 
 
+def release_models() -> None:
+    """Drops the SDXL pipe and BLIP so another GPU job gets the memory."""
+    global _pipe, _blip_model, _blip_processor
+    if _pipe is None and _blip_model is None:
+        return
+    import gc
+
+    _pipe = _blip_model = _blip_processor = None
+    gc.collect()
+    _free_gpu_memory()
+    logger.info("Released the SDXL inpainting and BLIP models.")
+
+
 def _get_blip():
     global _blip_model, _blip_processor
     if _blip_model is None:

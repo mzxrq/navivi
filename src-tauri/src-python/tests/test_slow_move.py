@@ -40,15 +40,19 @@ class TestPresets:
         assert not slow_move.is_moving_preset(None)
 
     def test_editor_moves_do(self):
-        for preset in ("pan-left", "pan-right", "pan-up", "pan-down", "zoom-in", "zoom-out"):
+        for preset in ("pan-left", "pan-right", "pan-up", "pan-down", "walk-in"):
             assert slow_move.is_moving_preset(preset)
+
+    def test_jump_cuts_hold_instead(self):
+        assert not slow_move.is_moving_preset("zoom-in")
+        assert not slow_move.is_moving_preset("zoom-out")
 
 
 class TestExtend:
     def test_fills_the_gap_with_moving_frames(self, tmp_path):
         src, out = tmp_path / "in.mp4", tmp_path / "out.mp4"
         _clip(src, 1.0)
-        assert slow_move.extend_with_slow_move(str(src), 3.0, "zoom-in", str(out)) == str(out)
+        assert slow_move.extend_with_slow_move(str(src), 3.0, "pan-right", str(out)) == str(out)
         assert FFmpegManager.get_media_duration(str(out)) == pytest.approx(3.0, abs=0.1)
         import cv2
         cap = cv2.VideoCapture(str(out))
@@ -71,7 +75,7 @@ class TestExtend:
     def test_no_gap_adds_nothing(self, tmp_path):
         src = tmp_path / "in.mp4"
         _clip(src, 2.0)
-        assert slow_move.extend_with_slow_move(str(src), 2.0, "zoom-in", str(tmp_path / "o.mp4")) is None
+        assert slow_move.extend_with_slow_move(str(src), 2.0, "pan-right", str(tmp_path / "o.mp4")) is None
 
 
 class TestRandomDrift:

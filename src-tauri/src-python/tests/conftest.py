@@ -55,3 +55,11 @@ def _no_dictionary_downloads(tmp_path, monkeypatch):
     jmnedict._index.cache_clear()
     yield
     jmnedict._index.cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def _no_sdxl_outpaint(monkeypatch):
+    """Tests never load SDXL on the GPU; test_jump_cut fakes the pipe itself."""
+    from services import tuning
+
+    monkeypatch.setattr(tuning, "ATTRACTION_JUMP_CUT_AI", False)
