@@ -64,6 +64,36 @@ def test_intro_text_item_reads_project_title_and_styles(tmp_path):
     }
 
 
+def test_intro_text_item_adds_location_and_place_count(tmp_path):
+    config = tmp_path / "job_config.json"
+    config.write_text(json.dumps({
+        "video_title": "友ヶ島・加太をめぐる道", "video_subtitle": "葛城修験 ゆかりの地",
+        "waypoints": [{"id": "s"}, {"id": "a"}, {"id": "b", "isStopBy": True}, {"id": "c", "isStopBy": True, "connectToRoute": True}],
+        "settings": {"intro_location": "和歌山県 和歌山市"},
+    }), encoding="utf-8")
+    item = intro_text_item(str(config))
+    assert item["kicker"] == {"text": "和歌山県 和歌山市"}
+    assert item["subtitle"] == {"text": "葛城修験 ゆかりの地 · 3 か所"}
+
+
+def test_place_count_can_be_turned_off(tmp_path):
+    config = tmp_path / "job_config.json"
+    config.write_text(json.dumps({
+        "video_title": "T", "waypoints": [{"id": "a"}], "settings": {"intro_place_count": False},
+    }), encoding="utf-8")
+    item = intro_text_item(str(config))
+    assert item["subtitle"] == {"text": ""} and "kicker" not in item
+
+
+def test_kicker_burns_above_the_title(tmp_path):
+    item = {"start": 0, "end": 4, **ITEM, "kicker": {"text": "和歌山県"}}
+    text = write_caption_ass([], None, (1920, 1080), tmp_path / "t.ass", check_font=False, texts=[item]).read_text(encoding="utf-8")
+    kicker, title, sub = _events(text)
+    # Gap 0.6 * (30 + 74) = 62, block shifted down 31: kicker 540-21-31, title 540-21+31.
+    assert r"\pos(960,488)" in kicker and kicker.endswith("}和歌山県") and r"\fad(500,500)" in kicker
+    assert r"\pos(960,550)" in title
+
+
 def test_text_items_burn_with_their_own_styles(tmp_path):
     text = write_caption_ass([], None, (1920, 1080), tmp_path / "t.ass", check_font=False,
                              texts=[{"start": 1.0, "end": 7.0, **ITEM}]).read_text(encoding="utf-8")

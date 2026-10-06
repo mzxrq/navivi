@@ -59,7 +59,7 @@ def test_three_photos_are_combined_to_the_narration_length(generator, tmp_path):
     assert out and FFmpegManager.get_media_duration(out) == pytest.approx(12.0, abs=0.3)
     # Nothing left parked for an approval step, and no temp pieces left over;
     # each photo's raw clip is kept for reuse.
-    leftovers = {p.name for p in generator.output_dir.iterdir() if p.is_file()}
+    leftovers = {p.name for p in generator.output_dir.iterdir() if p.is_file() and p.suffix != ".signlock"}
     assert "04_attraction_05_test.mp4" in leftovers
     others = leftovers - {"04_attraction_05_test.mp4"}
     assert len(others) == 3 and all(n.startswith("raw_04_attraction_05_test_") for n in others)

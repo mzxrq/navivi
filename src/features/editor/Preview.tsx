@@ -3,10 +3,11 @@ import { t } from "@lingui/core/macro";
 import { Pause, Play, SkipBack } from "../../components/ui/icons";
 import { Caption } from "../../components/ui/Caption";
 import { Tip } from "../../components/ui/Tip";
-import { DEFAULT_EXTRA_VOLUME, layout, placedCues, placedTexts, PlacedText, segmentAt, trimmedLength, TimelineData } from "./model";
+import { DEFAULT_EXTRA_VOLUME, fadeIns, isUnlinked, layout, placedCues, placedTexts, PlacedText, segmentAt, trimmedLength, TimelineData } from "./model";
 import { formatTime, mediaUrl, player, usePlayerTime, usePlaying } from "./player";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import {
+  DEFAULT_TEXT_KICKER_STYLE,
   DEFAULT_TEXT_SUBTITLE_STYLE,
   DEFAULT_TEXT_TITLE_STYLE,
   resolveCaptionStyle,
@@ -14,6 +15,7 @@ import {
   textBlockCenterY,
   lineFrame,
   lineMotion,
+  stackedLineYs,
   textStyleToCss,
   wrapText,
 } from "../../utils/textStyle";
@@ -95,12 +97,23 @@ function TextOverlay({ texts }: { texts: PlacedText[] }) {
               ? { right: side, transformOrigin: "right center" }
               : { left: "50%", transformOrigin: "center" };
         const shift = x.align === "left" ? "translate(0, -50%)" : x.align === "right" ? "translate(0, -50%)" : "translate(-50%, -50%)";
-        const cy = textBlockCenterY(x.position, x.margin_v, title.font_size, sub.font_size, hasTitle, hasSub);
-        const titleY = hasTitle && hasSub ? cy - Math.trunc(sub.font_size * 0.6) : cy;
-        const subY = hasTitle && hasSub ? cy + Math.trunc(title.font_size * 0.6) : cy;
+        const kicker = { ...DEFAULT_TEXT_KICKER_STYLE, ...(x.kicker?.style ?? {}) };
+        const hasKicker = !!x.kicker?.text.trim();
+        const km = lineMotion("kicker", x.kicker?.animation, x.kicker?.delay, x.animation, dur, paired);
+        const kf = lineFrame(t, dur, km.animation, km.delay);
+        const cy = textBlockCenterY(x.position, x.margin_v, title.font_size, sub.font_size, hasTitle, hasSub, hasKicker ? kicker.font_size : 0);
+        const { kickerY, titleY, subY } = stackedLineYs(cy, kicker.font_size, title.font_size, sub.font_size, hasKicker, hasTitle, hasSub);
         const line = "absolute whitespace-nowrap leading-none";
         return (
           <div key={x.id}>
+            {hasKicker && kf.opacity > 0 && (
+              <span
+                className={line}
+                style={{ ...textStyleToCss(kicker), ...place, top: cq(kickerY + kf.rise), opacity: kf.opacity * kicker.opacity, transform: `${shift} scale(${kf.scale})` }}
+              >
+                {x.kicker!.text}
+              </span>
+            )}
             {hasTitle && tf.opacity > 0 && (
               <span
                 className={line}
@@ -135,29 +148,86 @@ function Timecode({ total }: { total: number }) {
 
 export function Preview({ timeline, projectDir }: PreviewProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const fadeRef = useRef<HTMLVideoElement>(null);
   const voiceRef = useRef<HTMLAudioElement>(null);
   const musicRef = useRef<HTMLAudioElement>(null);
   const extraRef = useRef<HTMLAudioElement>(null);
-  const loaded = useRef({ video: "", voice: "", music: "", extra: "" });
+  const loaded = useRef({ video: "", fade: "", voice: "", music: "", extra: "" });
+  // Narration goes through a gain node once it's set above 100%: an <audio> element can't
+  // play louder, the export can.
+  const audioCtx = useRef<AudioContext | null>(null);
+  const gains = useRef(new WeakMap<HTMLAudioElement, GainNode>());
+  const setLevel = (el: HTMLAudioElement, level: number) => {
+    let gain = gains.current.get(el);
+    if (!gain && level > 1) {
+      try {
+        audioCtx.current ??= new AudioContext();
+        gain = audioCtx.current.createGain();
+        audioCtx.current.createMediaElementSource(el).connect(gain).connect(audioCtx.current.destination);
+        gains.current.set(el, gain);
+      } catch {
+        // Falls back to the element's own volume, capped at 100%.
+      }
+    }
+    if (gain) {
+      el.volume = 1;
+      gain.gain.value = level;
+      if (audioCtx.current?.state === "suspended") audioCtx.current.resume().catch(() => undefined);
+    } else el.volume = Math.min(1, level);
+  };
+  // Unlinked narration plays at its own timeline time, one element per clip, alongside the rest.
+  const freeVoices = useRef(new Map<string, HTMLAudioElement>());
+  const syncFree = (time: number, isPlaying: boolean) => {
+    const { placed, projectDir } = stateRef.current;
+    const active = new Set<string>();
+    for (const p of placed) {
+      const seg = p.seg;
+      if (!isUnlinked(seg)) continue;
+      const want = time - seg.audioStart!;
+      if (want < 0 || want >= (seg.audioDuration ?? 0)) continue;
+      active.add(seg.id);
+      let el = freeVoices.current.get(seg.id);
+      if (!el) {
+        el = new Audio();
+        el.crossOrigin = "anonymous";
+        el.preload = "auto";
+        freeVoices.current.set(seg.id, el);
+      }
+      const src = mediaUrl(projectDir, seg.audio);
+      if (el.dataset.src !== src) {
+        el.src = src;
+        el.dataset.src = src;
+      }
+      setLevel(el, seg.muted ? 0 : Math.max(0, seg.volume));
+      if (Math.abs(el.currentTime - want) > (isPlaying ? 0.35 : 0.03)) el.currentTime = want;
+      if (isPlaying) el.play().catch(() => undefined);
+      else el.pause();
+    }
+    for (const [id, el] of freeVoices.current) if (!active.has(id)) el.pause();
+  };
   const playing = usePlaying();
 
   const { placed, total } = useMemo(() => layout(timeline), [timeline]);
   const cues = useMemo(() => placedCues(timeline, placed), [timeline, placed]);
   const texts = useMemo(() => placedTexts(timeline, placed), [timeline, placed]);
+  const fades = useMemo(() => fadeIns(placed), [placed]);
 
-  const stateRef = useRef({ placed, total, timeline, projectDir });
-  stateRef.current = { placed, total, timeline, projectDir };
+  const stateRef = useRef({ placed, total, timeline, projectDir, fades });
+  stateRef.current = { placed, total, timeline, projectDir, fades };
 
   const sync = (time: number, isPlaying: boolean) => {
-    const { placed, timeline, projectDir } = stateRef.current;
+    const { placed, timeline, projectDir, fades } = stateRef.current;
     const video = videoRef.current;
+    const fadeVideo = fadeRef.current;
     const voice = voiceRef.current;
     const music = musicRef.current;
     const extra = extraRef.current;
     if (!video || !voice || !music || !extra) return;
 
+    syncFree(time, isPlaying);
     const p = segmentAt(placed, time);
     if (!p) {
+      if (fadeVideo) fadeVideo.style.opacity = "0";
       video.pause();
       voice.pause();
       music.pause();
@@ -166,6 +236,27 @@ export function Preview({ timeline, projectDir }: PreviewProps) {
     }
     const seg = p.seg;
     const local = Math.max(0, time - p.start);
+    // Dissolving in from the clip before, as the export does: its last frame fades out over this
+    // clip's opening, and this clip's sound fades in.
+    const index = placed.indexOf(p);
+    const fade = fades[index] ?? 0;
+    const fading = fade > 0 && local < fade;
+    const fadeIn = fading ? local / fade : 1;
+    if (fadeVideo) {
+      const prev = placed[index - 1]?.seg;
+      if (fading && prev) {
+        const src = mediaUrl(projectDir, prev.video);
+        if (loaded.current.fade !== src) {
+          fadeVideo.src = src;
+          loaded.current.fade = src;
+        }
+        const last = Math.max(0, prev.trimIn + trimmedLength(prev) - 0.04);
+        if (Math.abs(fadeVideo.currentTime - last) > 0.05) fadeVideo.currentTime = last;
+        fadeVideo.style.opacity = String(1 - fadeIn);
+      } else {
+        fadeVideo.style.opacity = "0";
+      }
+    }
 
     const videoSrc = mediaUrl(projectDir, seg.video);
     if (loaded.current.video !== videoSrc) {
@@ -180,12 +271,12 @@ export function Preview({ timeline, projectDir }: PreviewProps) {
 
     const audioSrc = mediaUrl(projectDir, seg.audio);
     const wantVoice = local - seg.audioOffset;
-    const voiceActive = !!seg.audio && wantVoice >= 0 && wantVoice < (seg.audioDuration ?? 0);
+    const voiceActive = !!seg.audio && !isUnlinked(seg) && wantVoice >= 0 && wantVoice < (seg.audioDuration ?? 0);
     if (audioSrc && loaded.current.voice !== audioSrc) {
       voice.src = audioSrc;
       loaded.current.voice = audioSrc;
     }
-    voice.volume = seg.muted ? 0 : Math.min(1, Math.max(0, seg.volume));
+    setLevel(voice, seg.muted ? 0 : Math.max(0, seg.volume) * fadeIn);
     if (voiceActive) {
       if (Math.abs(voice.currentTime - wantVoice) > (isPlaying ? 0.35 : 0.03)) voice.currentTime = wantVoice;
       if (isPlaying) voice.play().catch(() => undefined);
@@ -194,15 +285,16 @@ export function Preview({ timeline, projectDir }: PreviewProps) {
       voice.pause();
     }
 
-    // The footage's own sound (set up by the pipeline when "keep its sound" was on) plays with the clip.
+    // The footage's own sound (set up by the pipeline when "keep its sound" was on) follows the
+    // trimmed picture and stops while its last frame is held.
     const extraSrc = mediaUrl(projectDir, seg.extraAudio);
-    if (extraSrc) {
+    if (extraSrc && !holding) {
       if (loaded.current.extra !== extraSrc) {
         extra.src = extraSrc;
         loaded.current.extra = extraSrc;
       }
-      extra.volume = Math.min(1, Math.max(0, seg.extraVolume ?? DEFAULT_EXTRA_VOLUME));
-      if (Math.abs(extra.currentTime - local) > (isPlaying ? 0.35 : 0.03)) extra.currentTime = local;
+      extra.volume = Math.min(1, Math.max(0, seg.extraVolume ?? DEFAULT_EXTRA_VOLUME)) * fadeIn;
+      if (Math.abs(extra.currentTime - wantVideo) > (isPlaying ? 0.35 : 0.03)) extra.currentTime = wantVideo;
       if (isPlaying) extra.play().catch(() => undefined);
       else extra.pause();
     } else {
@@ -266,6 +358,18 @@ export function Preview({ timeline, projectDir }: PreviewProps) {
     if (player.time > total) player.set({ time: total });
   }, [total]);
 
+  useEffect(() => {
+    const voices = freeVoices.current;
+    return () => {
+      for (const el of voices.values()) {
+        el.pause();
+        el.removeAttribute("src");
+      }
+      voices.clear();
+      audioCtx.current?.close().catch(() => undefined);
+    };
+  }, []);
+
   const toggle = () => {
     if (!placed.length) return;
     if (player.playing) player.set({ playing: false });
@@ -286,7 +390,8 @@ export function Preview({ timeline, projectDir }: PreviewProps) {
           style={{ containerType: "size" }}
         >
           <video ref={videoRef} muted playsInline preload="auto" className="absolute inset-0 w-full h-full object-contain" />
-          <audio ref={voiceRef} preload="auto" />
+          <video ref={fadeRef} muted playsInline preload="auto" className="absolute inset-0 w-full h-full object-contain pointer-events-none" style={{ opacity: 0 }} />
+          <audio ref={voiceRef} preload="auto" crossOrigin="anonymous" />
           <audio ref={musicRef} preload="auto" />
           <audio ref={extraRef} preload="auto" />
           {!placed.length && (

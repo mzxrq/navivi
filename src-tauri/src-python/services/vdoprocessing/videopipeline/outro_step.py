@@ -40,15 +40,28 @@ def render_outro_clip(project_config_path: str) -> Optional[str]:
     waypoints = job_config.get("waypoints", [])
     video_dir = project_video_dir(job_config.get("directory_path", config_path.parent))
 
+    settings = job_config.get("settings", {}) or {}
     # settings.outro_style: "scroll" (default, tuning.DEFAULT_OUTRO_STYLE) or "grid".
-    style = str(
-        (job_config.get("settings", {}) or {}).get("outro_style", tuning.DEFAULT_OUTRO_STYLE)
-    ).lower()
+    style = str(settings.get("outro_style", tuning.DEFAULT_OUTRO_STYLE)).lower()
+
+    brief = None
+    if settings.get("outro_route_info", tuning.DEFAULT_OUTRO_ROUTE_INFO):
+        try:
+            from services.localization.route_brief import load_brief
+
+            brief = load_brief(str(config_path))
+        except Exception as exc:
+            logger.warning("Outro step: no route info (%s) — cards only.", exc)
+
+    from .intro_step import intro_heading
+
+    heading = intro_heading(job_config)
+    title = heading["title"]
 
     logger.info("Outro step: building %s outro clip for project '%s'.", style, project_name)
     outro_path = generate_outro_clip(
-        video_dir=str(video_dir), project_name=project_name, waypoints=waypoints, style=style,
-        size=_route_frame_size(Path(video_dir)),
+        video_dir=str(video_dir), project_name=title, waypoints=waypoints, style=style,
+        size=_route_frame_size(Path(video_dir)), brief=brief, heading=heading,
     )
 
     if outro_path:

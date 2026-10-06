@@ -66,6 +66,8 @@ const NO_LINE_START = new Set([..."、。，．・：；？！ー）」』】〕
 const NO_LINE_END = new Set([..."（「『【〔〈《｛([{"]);
 const BREAK_AFTER = new Set([..."、。，！？"]);
 const isWordChar = (ch: string) => /^[A-Za-z0-9]$/.test(ch);
+const isKana = (ch: string) => /^[ぁ-ゟ]$/.test(ch);
+const isPhraseStart = (ch: string) => /^[一-鿿ァ-ヺ]$/.test(ch) || isWordChar(ch) || NO_LINE_END.has(ch);
 
 function breakIndex(rest: string[], max: number, target: number): [number, number] {
   const spaces: number[] = [];
@@ -77,6 +79,12 @@ function breakIndex(rest: string[], max: number, target: number): [number, numbe
     if (BREAK_AFTER.has(rest[i - 1])) marks.push(i);
   }
   if (marks.length) return [nearest(marks), 0];
+  // Rough bunsetsu ends: hiragana (particles, okurigana) followed by kanji/katakana/Latin.
+  const phrases: number[] = [];
+  for (let i = Math.max(1, target - Math.floor(max / 3)); i <= Math.min(rest.length - 1, max); i++) {
+    if (isKana(rest[i - 1]) && isPhraseStart(rest[i])) phrases.push(i);
+  }
+  if (phrases.length) return [nearest(phrases), 0];
   let cut = Math.min(target, max);
   while (cut < max && NO_LINE_START.has(rest[cut])) cut++;
   while (cut > 1 && (NO_LINE_START.has(rest[cut]) || NO_LINE_END.has(rest[cut - 1]))) cut--;
@@ -140,6 +148,16 @@ export const DEFAULT_TEXT_SUBTITLE_STYLE: Required<TextStyle> = {
   outline_width: 0,
 };
 
+export const DEFAULT_TEXT_KICKER_STYLE: Required<TextStyle> = {
+  ...TEXT_LINE_DEFAULTS,
+  font_family: "Yu Gothic UI",
+  font_size: 30,
+  color: "#CDD2DC",
+  bold: false,
+  outline_width: 0,
+  letter_spacing: 4,
+};
+
 // tuning.py INTRO_LABEL_* / INTRO_SUBTITLE_*.
 const LABEL_FADE = 1.1;
 const LABEL_SCALE_START = 0.65;
@@ -150,7 +168,31 @@ const TEXT_FADE = 0.5;
 
 export const TEXT_DEFAULT_MARGIN = 100;
 
-/** Vertical centre (1080p px) of a title + subtitle block; mirrors text_block_center_y in introclip.py. */
+/** Centres (1080p px) of the kicker, title and subtitle lines; mirrors stacked_line_ys in introclip.py. */
+export function stackedLineYs(
+  cy: number,
+  kickerSize: number,
+  titleSize: number,
+  subSize: number,
+  hasKicker: boolean,
+  hasTitle: boolean,
+  hasSub: boolean,
+): { kickerY: number; titleY: number; subY: number } {
+  let titleY = cy;
+  let subY = cy;
+  if (hasTitle && hasSub) {
+    titleY = cy - Math.trunc(subSize * 0.6);
+    subY = cy + Math.trunc(titleSize * 0.6);
+  }
+  if (!hasKicker || !(hasTitle || hasSub)) return { kickerY: cy, titleY, subY };
+  const [topY, topSize] = hasTitle ? [titleY, titleSize] : [subY, subSize];
+  const gap = Math.trunc(0.6 * (kickerSize + topSize));
+  const shift = Math.floor(gap / 2);
+  return { kickerY: topY - gap + shift, titleY: titleY + shift, subY: subY + shift };
+}
+
+/** Vertical centre (1080p px) of a title + subtitle block (kickerSize > 0 adds a kicker above);
+ * mirrors text_block_center_y in introclip.py. */
 export function textBlockCenterY(
   position: "top" | "middle" | "bottom" | undefined,
   margin: number | undefined,
@@ -158,9 +200,12 @@ export function textBlockCenterY(
   subSize: number,
   hasTitle: boolean,
   hasSub: boolean,
+  kickerSize = 0,
 ): number {
   if (position !== "top" && position !== "bottom") return 540;
-  const half = hasTitle && hasSub ? 0.55 * (titleSize + subSize) : (hasTitle ? titleSize : subSize) / 2;
+  let half =
+    hasTitle && hasSub ? 0.55 * (titleSize + subSize) : hasTitle || hasSub ? (hasTitle ? titleSize : subSize) / 2 : kickerSize / 2;
+  if (kickerSize > 0 && (hasTitle || hasSub)) half += 0.3 * (kickerSize + (hasTitle ? titleSize : subSize));
   const m = Math.max(0, margin ?? TEXT_DEFAULT_MARGIN);
   return Math.round(position === "top" ? m + half : 1080 - m - half);
 }
@@ -170,7 +215,7 @@ const LINE_ANIMATIONS: LineAnimation[] = ["pop", "rise", "fade", "none"];
 
 /** A line's (animation, delay); mirrors line_motion in introclip.py. */
 export function lineMotion(
-  which: "title" | "subtitle",
+  which: "title" | "subtitle" | "kicker",
   animation: string | undefined,
   delay: number | undefined,
   groupAnimation: string | undefined,
@@ -180,10 +225,10 @@ export function lineMotion(
   const group = groupAnimation === "fade" || groupAnimation === "none" ? groupAnimation : undefined;
   const anim = LINE_ANIMATIONS.includes(animation as LineAnimation)
     ? (animation as LineAnimation)
-    : (group ?? (which === "title" ? "pop" : "rise"));
+    : (group ?? (which === "title" ? "pop" : which === "kicker" ? "fade" : "rise"));
   let d: number;
   if (typeof delay === "number" && Number.isFinite(delay)) d = Math.max(0, delay);
-  else if (group || which === "title" || !paired) d = 0;
+  else if (group || which !== "subtitle" || !paired) d = 0;
   else d = Math.min(SUB_DELAY, duration / 4);
   return { animation: anim, delay: Math.min(d, Math.max(0, duration * 0.45)) };
 }

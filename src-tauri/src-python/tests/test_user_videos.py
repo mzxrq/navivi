@@ -70,3 +70,46 @@ def test_two_clips_are_combined(project):
     out = process_user_videos(generator, [str(clip), str(clip)], [False, True], 6.0, "04_attraction_03_x.mp4")
     assert out and 5.5 < FFmpegManager.get_media_duration(out) < 6.5
     assert original_sound_path(out).exists()
+
+
+def _mean_db(path, start, length):
+    err = subprocess.run(
+        [FFMPEG, "-ss", str(start), "-t", str(length), "-i", str(path), "-af", "volumedetect", "-f", "null", "-"],
+        capture_output=True, text=True,
+    ).stderr
+    return float(err.split("mean_volume:")[1].split("dB")[0])
+
+
+def test_footage_sound_follows_the_trim(tmp_path):
+    video, sound = tmp_path / "v.mp4", tmp_path / "v.original.m4a"
+    _run("-f", "lavfi", "-i", "testsrc=s=320x180:r=25:d=4", "-c:v", "libx264", "-pix_fmt", "yuv420p", str(video))
+    # Silent for 2s, then a tone: trimming the first 2s off must start on the tone.
+    _run("-f", "lavfi", "-i", r"aevalsrc=if(lt(t\,2)\,0\,0.5*sin(2*PI*440*t)):d=4", "-c:a", "aac", str(sound))
+    exported = tmp_path / "out.mp4"
+    VideoExporter.concat_from_timeline(
+        {"video_tracks": [{
+            "file_path": str(video), "extra_audio_path": str(sound), "extra_audio_volume": 1.0,
+            "trim_in": 2.0, "trim_out": 4.0, "duration": 3.0,
+        }]},
+        str(exported),
+    )
+    assert _mean_db(exported, 0.2, 1.5) > -30
+    # The held last frame is silent, like the preview.
+    assert _mean_db(exported, 2.3, 0.6) < -60
+
+
+def test_unlinked_narration_is_mixed_at_its_time(tmp_path):
+    video, voice = tmp_path / "v.mp4", tmp_path / "voice.wav"
+    _run("-f", "lavfi", "-i", "testsrc=s=320x180:r=25:d=4", "-c:v", "libx264", "-pix_fmt", "yuv420p", str(video))
+    _run("-f", "lavfi", "-i", "sine=frequency=440:duration=1", str(voice))
+    exported = tmp_path / "out.mp4"
+    VideoExporter.concat_from_timeline(
+        {
+            "video_tracks": [{"file_path": str(video), "duration": 4.0}],
+            "unlinked_audio": [{"path": str(voice), "start": 2.0, "volume": 1.0}],
+        },
+        str(exported),
+    )
+    assert _mean_db(exported, 0.2, 1.5) < -60
+    assert _mean_db(exported, 2.2, 0.6) > -30
+    assert 3.8 < FFmpegManager.get_media_duration(str(exported)) < 4.3

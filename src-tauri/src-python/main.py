@@ -94,6 +94,16 @@ if __name__ == "__main__":
             print(json.dumps({"success": True, "readings": readings}, ensure_ascii=False))
             sys.exit(0)
 
+        # Reads a GPS file for the import dialog: track points, named waypoints, and the places it stayed at.
+        # argv[2] is JSON: {"path", "radius_m"?, "min_stay_sec"?}.
+        if command_arg == "import_gps_track":
+            from services.gpsparser.stays import DEFAULT_MIN_STAY_SEC, DEFAULT_RADIUS_M, import_track
+            args = json.loads(sys.argv[2]) if len(sys.argv) > 2 else {}
+            track = import_track(args["path"], float(args.get("radius_m", DEFAULT_RADIUS_M)),
+                                 float(args.get("min_stay_sec", DEFAULT_MIN_STAY_SEC)))
+            print(json.dumps({"success": True, **track}, ensure_ascii=False))
+            sys.exit(0)
+
         # Words with kanji in a script (whole words, not single kanji), each with its reading.
         # argv[2] is the script text itself.
         if command_arg == "extract_words":
@@ -108,11 +118,30 @@ if __name__ == "__main__":
             result = read_document(sys.argv[2] if len(sys.argv) > 2 else "")
             print(json.dumps(result, ensure_ascii=False))
             sys.exit(0)  # a failure is still a normal reply the chat shows, not a crashed run
+        # Google Fonts for one picker language (argv[2]: "ja"/"en"), and installing one (argv[2]: family).
+        if command_arg in ("google_fonts_catalog", "install_google_font"):
+            from services.localization import google_fonts
+            arg = sys.argv[2] if len(sys.argv) > 2 else ""
+            try:
+                if command_arg == "google_fonts_catalog":
+                    reply = {"success": True, "fonts": google_fonts.catalog(arg)}
+                else:
+                    reply = {"success": True, "files": google_fonts.install(arg)}
+            except Exception as exc:
+                reply = {"success": False, "error": str(exc)}
+            print(json.dumps(reply, ensure_ascii=False))
+            sys.exit(0)
 
         # Installed font families for the font editor's picker.
         if command_arg == "list_fonts":
-            from services.localization.fonts import installed_font_families
-            print(json.dumps({"success": True, "fonts": installed_font_families()}, ensure_ascii=False))
+            from services.localization.fonts import downloaded_font_families, font_languages, installed_font_families
+            print(json.dumps(
+                {
+                    "success": True, "fonts": installed_font_families(), "languages": font_languages(),
+                    "downloaded": downloaded_font_families(),
+                },
+                ensure_ascii=False,
+            ))
             sys.exit(0)
 
         # Voice library (list/add/delete/preview): argv[2] is a JSON payload,

@@ -374,6 +374,9 @@ def render_from_timeline(
     music = timeline_data.get("music") or {}
     if music.get("path") and not Path(music["path"]).is_absolute():
         music["path"] = str(project_dir / music["path"])
+    for item in timeline_data.get("unlinked_audio") or []:
+        if item.get("path") and not Path(item["path"]).is_absolute():
+            item["path"] = str(project_dir / item["path"])
 
     if not output_video_path:
         output_video_path = str(project_video_dir(project_dir) / "01_overview_rerendered.mp4")

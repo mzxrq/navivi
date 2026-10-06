@@ -8,6 +8,10 @@ import {
   cuesFromTimed,
   cuesToSrt,
   emptyTimeline,
+  fadeIns,
+  isUnlinked,
+  linkAudio,
+  unlinkAudio,
   formatSrtTime,
   kindFromName,
   layout,
@@ -48,6 +52,51 @@ describe("layout", () => {
 
   it("never lets a trimmed clip get shorter than the minimum", () => {
     expect(trimmedLength(seg("a", { trimIn: 4, trimOut: 4.1 }))).toBe(0.5);
+  });
+});
+
+describe("fadeIns", () => {
+  const fadesOf = (segments: Segment[]) => fadeIns(layout(timeline(segments)).placed);
+
+  it("dissolves into the next clip, at most half its length", () => {
+    expect(fadesOf([seg("a", { fadeIntoNext: 0.8 }), seg("b")])).toEqual([0, 0.8]);
+    expect(fadesOf([seg("a", { fadeIntoNext: 0.8 }), seg("b", { trimOut: 1 })])).toEqual([0, 0.5]);
+  });
+
+  it("skips what the export skips: a last clip, tiny fades, a clip already joined by a fade", () => {
+    expect(fadesOf([seg("a"), seg("b", { fadeIntoNext: 0.8 })])).toEqual([0, 0]);
+    expect(fadesOf([seg("a", { fadeIntoNext: 0.05 }), seg("b")])).toEqual([0, 0]);
+    expect(fadesOf([seg("a", { fadeIntoNext: 0.8 }), seg("b", { fadeIntoNext: 0.8 }), seg("c")])).toEqual([0, 0.8, 0]);
+  });
+});
+
+describe("unlinking narration", () => {
+  // a: 4s of video with a 6s narration starting 1s in, so the clip lasts 7s; b follows.
+  const base = timeline([seg("a", { trimOut: 4, audio: "a.wav", audioDuration: 6, audioOffset: 1 }), seg("b", { audio: "b.wav", audioDuration: 2 })]);
+
+  it("keeps the narration where it plays and the clip as long as it was", () => {
+    const free = unlinkAudio(base, "a");
+    expect(isUnlinked(free.segments[0])).toBe(true);
+    expect(free.segments[0].audioStart).toBe(1);
+    expect(layout(free).total).toBe(layout(base).total);
+  });
+
+  it("stays at its time when the clips move, and the export mixes it there", () => {
+    const free = unlinkAudio(base, "a");
+    const swapped = { ...free, segments: [free.segments[1], free.segments[0]] };
+    const manifest = toManifest("Trip", swapped);
+    expect(manifest.unlinked_audio).toEqual([{ path: "a.wav", start: 1, volume: 1 }]);
+    expect(manifest.video_tracks[1].audio_path).toBeNull();
+    expect(manifest.video_tracks[0].audio_path).toBe("b.wav");
+  });
+
+  it("links back at the same place in its clip", () => {
+    const free = unlinkAudio(base, "a");
+    const moved = { ...free, segments: free.segments.map((s) => (s.id === "a" ? { ...s, audioStart: 2.5 } : s)) };
+    const linked = linkAudio(moved, "a").segments[0];
+    expect(isUnlinked(linked)).toBe(false);
+    expect(linked.audioOffset).toBe(2.5);
+    expect(linked.heldLength).toBeUndefined();
   });
 });
 

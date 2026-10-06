@@ -112,6 +112,7 @@ def write_caption_ass(
     with its own `style` overrides on top, so lines can differ in font, colour and place.
     `texts` are text-track items (an animated title + subtitle, centred), drawn on top."""
     from services.vdoprocessing.introclip import (
+        DEFAULT_KICKER_STYLE,
         DEFAULT_SUBTITLE_STYLE,
         DEFAULT_TITLE_STYLE,
         TEXT_DEFAULT_MARGIN_PX,
@@ -143,10 +144,12 @@ def write_caption_ass(
             events.append(f"Dialogue: 0,{when},{name},,0,0,0,,{box_event_text(style, box)}")
         events.append(f"Dialogue: 1,{when},{name},,0,0,0,,{text_position_tag(box) if box else ''}{_ass_text(shown)}")
     for item in sorted(texts or [], key=lambda x: float(x["start"])):
-        title, subtitle = item.get("title") or {}, item.get("subtitle") or {}
+        title, subtitle, kicker = item.get("title") or {}, item.get("subtitle") or {}, item.get("kicker") or {}
         title_text, sub_text = str(title.get("text") or ""), str(subtitle.get("text") or "")
+        kicker_text = str(kicker.get("text") or "")
         title_style = installed(DEFAULT_TITLE_STYLE.merged(title.get("style")), DEFAULT_TITLE_STYLE.font_family)
         sub_style = installed(DEFAULT_SUBTITLE_STYLE.merged(subtitle.get("style")), DEFAULT_SUBTITLE_STYLE.font_family)
+        kicker_style = installed(DEFAULT_KICKER_STYLE.merged(kicker.get("style")), DEFAULT_KICKER_STYLE.font_family)
         def px(key: str) -> float:
             v = item.get(key)
             return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else TEXT_DEFAULT_MARGIN_PX
@@ -154,6 +157,7 @@ def write_caption_ass(
         cy = text_block_center_y(
             str(item.get("position") or "middle"), px("margin_v"),
             title_style.font_size, sub_style.font_size, bool(title_text.strip()), bool(sub_text.strip()),
+            kicker_size=kicker_style.font_size if kicker_text.strip() else 0,
         )
         align = item.get("align") if item.get("align") in ("left", "right") else "center"
         cx = {"left": px("margin_h"), "right": play_w - px("margin_h")}.get(align, play_w / 2)
@@ -163,6 +167,8 @@ def write_caption_ass(
             animation=item.get("animation"),
             title_motion={"animation": title.get("animation"), "delay": title.get("delay")},
             subtitle_motion={"animation": subtitle.get("animation"), "delay": subtitle.get("delay")},
+            kicker=kicker_text, kicker_style=kicker_style,
+            kicker_motion={"animation": kicker.get("animation"), "delay": kicker.get("delay")},
         ):
             # Layer 1: above captions. Every look is in the event's own tags.
             events.append(f"Dialogue: 1,{_ass_timestamp(a)},{_ass_timestamp(b)},Text,,0,0,0,,{text}")
@@ -669,6 +675,11 @@ class VideoExporter:
             cmd += ["-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100"]
         extra = bool(extra_audio and Path(extra_audio).exists() and extra_volume > 0.001)
         if extra:
+            # The footage's sound is cut like its picture, so it stays in sync and stops on a held frame.
+            if trim_in > 0.01:
+                cmd += ["-ss", f"{trim_in:.3f}"]
+            if trim_out is not None:
+                cmd += ["-t", f"{max(0.1, trim_out - trim_in):.3f}"]
             cmd += ["-i", str(Path(extra_audio).resolve())]
             cmd += ["-map", "0:v:0"]
         else:
@@ -955,11 +966,40 @@ class VideoExporter:
         return [c for c in timeline_data.get("subtitles") or [] if str(c.get("text", "")).strip()]
 
     @staticmethod
+    def _mix_unlinked_audio(ffmpeg_cmd: str, timeline_data: dict, output_path: str, tmp_dir: Path) -> None:
+        """Narration the editor unlinked from its clip, each mixed in at its own timeline time."""
+        items = [
+            x for x in timeline_data.get("unlinked_audio") or []
+            if x.get("path") and Path(x["path"]).exists() and float(x.get("volume", 1.0)) > 0.001
+        ]
+        if not items:
+            return
+        cmd = [ffmpeg_cmd, "-y", *tuning.ffmpeg_log_args(), "-i", str(output_path)]
+        chains = []
+        for i, item in enumerate(items, start=1):
+            cmd += ["-i", str(Path(item["path"]).resolve())]
+            delay = int(round(max(0.0, float(item.get("start") or 0.0)) * 1000))
+            chains.append(f"[{i}:a]adelay={delay}|{delay},volume={max(0.0, float(item.get('volume', 1.0))):.3f}[n{i}]")
+        labels = "".join(f"[n{i}]" for i in range(1, len(items) + 1))
+        graph = ";".join(chains) + f";[0:a]{labels}amix=inputs={len(items) + 1}:duration=first:normalize=0[a]"
+        mixed = tmp_dir / "with_unlinked_audio.mp4"
+        cmd += [
+            "-filter_complex", graph, "-map", "0:v", "-map", "[a]",
+            "-c:v", "copy", "-c:a", "aac", "-ar", "44100", "-ac", "2", str(mixed),
+        ]
+        result = subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace")
+        if result.returncode == 0 and mixed.exists():
+            _replace_with_retry(str(mixed), str(output_path))
+        else:
+            logger.warning("unlinked narration skipped: %s", result.stderr[-400:])
+
+    @staticmethod
     def _finish_timeline_output(
         ffmpeg_cmd: str, timeline_data: dict, output_path: str, tmp_dir: Path,
         on_progress: Optional[Callable[[float], None]] = None,
     ) -> None:
-        """Music bed and burned subtitles, applied to the joined video in place."""
+        """Unlinked narration, music bed and burned subtitles, applied to the joined video in place."""
+        VideoExporter._mix_unlinked_audio(ffmpeg_cmd, timeline_data, output_path, tmp_dir)
         music = timeline_data.get("music") or {}
         music_path = music.get("path")
         if music_path and Path(music_path).exists():

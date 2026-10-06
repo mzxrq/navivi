@@ -30,3 +30,4 @@ accelerate
 psutil
 fugashi
 unidic-lite
+rapidocr-onnxruntime
