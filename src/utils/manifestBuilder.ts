@@ -40,7 +40,7 @@ export function buildAssetManifest(
           type: imgPath.endsWith(".mp4") ? "video" : "image",
           file_path: imgPath,
           pan_zoom_effect: wp.imagePans?.[idx] || "none",
-          transition_to_next: wp.imageTransitions?.[idx] || "fade"
+          transition_to_next: "fade"
         });
       });
     }
