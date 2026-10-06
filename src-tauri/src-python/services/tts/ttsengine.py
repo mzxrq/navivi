@@ -283,6 +283,8 @@ def ensure_reference_latent(voice: str) -> Optional[Path]:
 class IrodoriTTSClient:
     """Handles communication with the local Irodori TTS service."""
 
+    _ENGINE: ClassVar[str] = "irodori"
+
     # The server this client talks to is a separate, bundled process (see
     # bin/Irodori-TTS-Server/README.md) that has to be started by hand
     # before any TTS call would work — normally `uv run python -m
@@ -697,6 +699,10 @@ class IrodoriTTSClient:
         logger.warning("TTS kept a take that still ends mid-word (%.2f): %s", best[0], text)
         return [best[1]]
 
+    def _remove_stray_bursts(self, path: Path) -> None:
+        if self._ENGINE in tuning.TTS_STRAY_BURST_ENGINES:
+            remove_stray_bursts(str(path))
+
     async def generate_speech(
         self, text: str, output_filename: Optional[str] = None
     ) -> str:
@@ -725,7 +731,7 @@ class IrodoriTTSClient:
         if len(takes) == 1:
             with open(file_path, "wb") as f:
                 f.write(takes[0])
-            remove_stray_bursts(str(file_path))
+            self._remove_stray_bursts(file_path)
             return str(file_path)
 
         processor = AudioProcessor(output_dir=self.output_dir)
@@ -761,7 +767,7 @@ class IrodoriTTSClient:
                     interleaved.append(gap_path)
 
             processor.concatenate_files(interleaved, str(file_path))
-            remove_stray_bursts(str(file_path))
+            self._remove_stray_bursts(file_path)
         finally:
             for p in parts + gaps:
                 Path(p).unlink(missing_ok=True)
@@ -820,6 +826,7 @@ class KokoroTTSClient(_VenvEngineClient):
     _PROCESS_MARKER: ClassVar[str] = "kokoro_server"
     _SERVER_NAME: ClassVar[str] = "Kokoro TTS"
     _SERVER_SCRIPT: ClassVar[str] = "kokoro_server.py"
+    _ENGINE: ClassVar[str] = "kokoro"
     _SERVER_PORT: ClassVar[int] = tuning.KOKORO_PORT
     _SETUP_HINT: ClassVar[str] = "The fast voice (Kokoro) is not set up yet. Open Settings > Voice and press Set up fast voice."
     _server_process: Optional[subprocess.Popen] = None
@@ -888,6 +895,7 @@ class Qwen3TTSClient(_VenvEngineClient):
     _PROCESS_MARKER: ClassVar[str] = "qwen3_server"
     _SERVER_NAME: ClassVar[str] = "Qwen3 TTS"
     _SERVER_SCRIPT: ClassVar[str] = "qwen3_server.py"
+    _ENGINE: ClassVar[str] = "qwen3"
     _SERVER_PORT: ClassVar[int] = tuning.QWEN3_PORT
     _SETUP_HINT: ClassVar[str] = "The balanced voice (Qwen3-TTS) is not set up yet. Open Settings > Voice and press Set up balanced voice."
     _server_process: Optional[subprocess.Popen] = None

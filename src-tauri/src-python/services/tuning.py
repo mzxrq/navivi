@@ -1689,6 +1689,9 @@ TTS_MIN_CHUNK_CHARS = 20
 # stopped mid-word: it is retaken, then spoken in halves.
 TTS_CUTOFF_RATIO = 0.25
 TTS_CUTOFF_RETAKES = 2
+# Engines whose new narration goes through artifacts.remove_stray_bursts, once, when it is made.
+# Written for Irodori's stray "あ"; on Qwen3 it silenced real syllables (じゅ in じゅっぷん, と in あるくと).
+TTS_STRAY_BURST_ENGINES = ("irodori",)
 TTS_SENTENCE_GAP_MIN_SECONDS = 0.25
 TTS_SENTENCE_GAP_MAX_SECONDS = 0.5
 TTS_VOICE = "jvs004"  # Irodori's only bundled voice preset as of writing

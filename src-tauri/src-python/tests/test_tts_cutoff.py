@@ -86,3 +86,20 @@ def test_generate_speech_writes_the_retaken_audio(client, monkeypatch, tmp_path)
     _serve(monkeypatch, client, lambda text, n: CUT if n == 1 else GOOD)
     path = asyncio.run(client.generate_speech("今日の旅は、ここまでです。", "a.wav"))
     assert cut_off_ratio(open(path, "rb").read()) <= tuning.TTS_CUTOFF_RATIO
+
+
+@pytest.mark.parametrize("engine, cleaned", [("irodori", True), ("qwen3", False), ("kokoro", False)])
+def test_only_the_listed_engines_remove_stray_bursts(tmp_path, monkeypatch, engine, cleaned):
+    from services.tts import ttsengine
+
+    monkeypatch.setenv("NAVIVI_CACHE_DIR", str(tmp_path / "cache"))
+    c = make_tts_client({"tts": {"engine": engine}}, tmp_path / "out")
+    seen = []
+    monkeypatch.setattr(ttsengine, "remove_stray_bursts", lambda path: seen.append(path) or [])
+
+    async def call_api(self, text):
+        return GOOD
+
+    monkeypatch.setattr(type(c), "call_api", call_api)
+    asyncio.run(c.generate_speech("今日の旅は、ここまでです。", "a.wav"))
+    assert bool(seen) is cleaned

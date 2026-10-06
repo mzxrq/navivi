@@ -15,7 +15,6 @@ from services import tuning
 from services.localization.cues import clean_text, cue_times, strip_cues
 from services.logger.progress import tracker
 
-from services.tts.artifacts import remove_stray_bursts
 from .helpers import (
     attraction_audio_filename,
     has_attraction_media,
@@ -259,7 +258,6 @@ async def generate_attraction_audio_for_waypoint(
             "Step 2: [%d] '%s' attraction narration already exists — skipping TTS.",
             idx + 1, label,
         )
-        remove_stray_bursts(str(existing_path))
         audio_path = str(existing_path)
     else:
         logger.info("Step 2: [%d] Generating attraction narration for: '%s'", idx + 1, label)
@@ -311,7 +309,6 @@ async def generate_overview_audio(
         same_text = False
     if not force and output_is_valid(existing_path) and same_text and _voice_matches(existing_path, client):
         logger.info("Step 2: Overview narration audio already exists — skipping TTS.")
-        remove_stray_bursts(str(existing_path))
         audio_path = str(existing_path)
     else:
         logger.info("Step 2: Generating overview narration audio.")
@@ -408,7 +405,6 @@ async def generate_waypoint_audio(
         logger.info(
             "Step 2: [%d] '%s' already exists — skipping TTS.", idx + 1, label
         )
-        remove_stray_bursts(str(existing_path))
         audio_path = str(existing_path)
     else:
         logger.info("Step 2: [%d] Generating audio for: '%s'", idx + 1, label)

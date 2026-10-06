@@ -19,7 +19,7 @@ logger = setup_logger(__name__)
 _WINDOW_SECONDS = 0.01
 _SPEECH_RMS = 0.03          # a window above this counts as sound
 _MAX_BURST_SECONDS = 0.09   # longer than this is a real sound
-_MIN_SILENCE_SECONDS = 0.15  # silence needed on both sides of a burst
+_MIN_SILENCE_SECONDS = 0.25  # silence needed on both sides; real syllables beside っ or a devoiced vowel had 0.15-0.20 on one side
 _PAD_SECONDS = 0.015        # also cleared around the burst, covers its tails
 _FADE_SECONDS = 0.004
 
