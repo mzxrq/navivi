@@ -206,8 +206,26 @@ def merge_pronunciation(shared: Optional[list], project: Optional[list]) -> list
     merged = {}
     for entry in list(shared or []) + list(project or []):
         if isinstance(entry, dict) and entry.get("word") and entry.get("reading"):
-            merged[entry["word"]] = entry["reading"]
-    return [{"word": word, "reading": reading} for word, reading in merged.items()]
+            merged[entry["word"]] = {"word": entry["word"], "reading": entry["reading"], **({"auto": True} if entry.get("auto") else {})}
+    return list(merged.values())
+
+
+def _all_hiragana(text: str) -> bool:
+    return all("ぁ" <= c <= "ゖ" or c == "ー" for c in text)
+
+
+def _spoken_form(entry: dict) -> Optional[str]:
+    """What the voice is given for a dictionary word, or None to leave the word as written.
+    An auto word the analyser already reads the same way keeps its kanji, which the engines accent better than kana.
+    A hiragana reading is spoken in katakana, so the engines take it as one word instead of splitting it."""
+    from services.localization import japanese_words
+
+    word, reading = entry.get("word"), entry.get("reading")
+    if not word or not reading:
+        return None
+    if entry.get("auto") and japanese_words.reading_of(word) == japanese_words.to_hiragana(reading):
+        return None
+    return japanese_words.to_katakana(reading) if _all_hiragana(reading) else reading
 
 
 def apply_pronunciation_dictionary(text: str, dictionary: list) -> str:
@@ -215,10 +233,9 @@ def apply_pronunciation_dictionary(text: str, dictionary: list) -> str:
         return text
     # Longest words first, so 三段壁 is replaced before a shorter entry such as 三段 can cut into it.
     for entry in sorted(dictionary, key=lambda e: len(e.get("word") or ""), reverse=True):
-        word = entry.get("word")
-        reading = entry.get("reading")
-        if word and reading:
-            text = text.replace(word, reading)
+        spoken = _spoken_form(entry)
+        if spoken:
+            text = text.replace(entry["word"], spoken)
     return text
 
 async def generate_attraction_audio_for_waypoint(

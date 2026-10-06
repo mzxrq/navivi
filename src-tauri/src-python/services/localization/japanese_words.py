@@ -27,6 +27,10 @@ def to_hiragana(text: str) -> str:
     return "".join(chr(ord(c) - 0x60) if "ァ" <= c <= "ヶ" else c for c in text)
 
 
+def to_katakana(text: str) -> str:
+    return "".join(chr(ord(c) + 0x60) if "ぁ" <= c <= "ゖ" else c for c in text)
+
+
 @lru_cache(maxsize=1)
 def _tagger():
     try:
