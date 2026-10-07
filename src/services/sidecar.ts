@@ -50,6 +50,17 @@ export async function callSidecar<T>(mode: string, input: string | object = {}):
   }
 }
 
+// Read-only modes (`extract_words`, `get_furigana`) run beside the tracked process, so they never kill another job.
+export async function callSidecarUtility<T>(mode: string, input: string | object = {}): Promise<SidecarReply<T>> {
+  const payload = typeof input === "string" ? input : JSON.stringify(input);
+  try {
+    return parseReply<T>(await invoke<string>("run_python_utility", { action: mode, payload }));
+  } catch (e) {
+    if (isSetupRequired(e)) announceSetupRequired();
+    return { success: false, error: messageOf(e) };
+  }
+}
+
 const running = new Map<string, Promise<SidecarReply<never>>>();
 
 // Like callSidecar, but a request identical to one still running waits for that run instead of starting another

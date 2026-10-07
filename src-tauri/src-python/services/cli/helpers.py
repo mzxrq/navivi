@@ -3,9 +3,9 @@ filename sanitization, and job_config.json waypoint loading."""
 
 import json
 from pathlib import Path
-from typing import Any
 
-from services.vdoprocessing.videopipeline.helpers import project_video_dir, safe_label as _video_safe_label
+from services.vdoprocessing.videopipeline.helpers import project_video_dir
+from services.vdoprocessing.videopipeline.helpers import safe_label as _video_safe_label  # noqa: F401  (re-exported by services/cli)
 
 
 def _output_dir_from_config(job_config_path: str) -> str:

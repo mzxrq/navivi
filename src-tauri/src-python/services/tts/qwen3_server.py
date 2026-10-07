@@ -37,14 +37,50 @@ _synth_lock = threading.Lock()
 _last_request = time.monotonic()
 
 
-def load_model():
-    global _model
+_device = "cpu"
+
+
+def _load(device: str):
+    global _model, _device
     import torch
     from qwen_tts import Qwen3TTSModel
 
+    if device == "cuda":
+        torch.cuda.set_per_process_memory_fraction(float(os.environ.get("QWEN3_VRAM_FRACTION") or 0.4))
+        _model = Qwen3TTSModel.from_pretrained(MODEL_ID, device_map="cuda:0", dtype=torch.bfloat16)
+    else:
+        _model = Qwen3TTSModel.from_pretrained(MODEL_ID, device_map="cpu", dtype=torch.float32)
+    _device = device
+    _prompts.clear()
+    print("Qwen3-TTS model on %s" % device, flush=True)
+
+
+def load_model():
+    import torch
+
     torch.set_num_threads(int(os.environ.get("QWEN3_THREADS") or max(2, (os.cpu_count() or 8) // 2)))
-    _model = Qwen3TTSModel.from_pretrained(MODEL_ID, device_map="cpu", dtype=torch.float32)
+    wanted = os.environ.get("QWEN3_DEVICE") or "cpu"
+    if wanted == "cuda" and not torch.cuda.is_available():
+        print("CUDA is not available to this torch build, using the CPU", flush=True)
+        wanted = "cpu"
+    try:
+        _load(wanted)
+    except Exception as exc:
+        if wanted == "cpu":
+            raise
+        print("Loading on the GPU failed (%s), using the CPU" % exc, flush=True)
+        _load("cpu")
     _ready.set()
+
+
+def _fall_back_to_cpu(exc: Exception) -> None:
+    import torch
+
+    print("GPU synthesis failed (%s), moving to the CPU for the rest of this run" % exc, flush=True)
+    global _model
+    _model = None
+    torch.cuda.empty_cache()
+    _load("cpu")
 
 
 def reference_audio(ref_audio: str):
@@ -83,8 +119,9 @@ def synthesize(text: str, ref_audio: str) -> bytes:
     import torch
 
     spoken = text + "。" if ADD_FULL_STOP and text and text[-1] not in LINE_ENDS else text
-    best = None
-    with _synth_lock:
+
+    def takes():
+        best = None
         prompt = clone_prompt(ref_audio)
         base_seed = int(time.time()) % 100000
         for attempt in range(MAX_ATTEMPTS):
@@ -99,6 +136,19 @@ def synthesize(text: str, ref_audio: str) -> bytes:
             if ratio <= TAIL_OK:
                 break
             print("attempt %d ended while still loud (%.2f), trying another take" % (attempt + 1, ratio), flush=True)
+        return best
+
+    with _synth_lock:
+        try:
+            best = takes()
+        except Exception as exc:
+            if _device != "cuda":
+                raise
+            _fall_back_to_cpu(exc)
+            best = takes()
+        finally:
+            if _device == "cuda":
+                torch.cuda.empty_cache()
     _, audio, sample_rate = best
     audio = np.concatenate([audio, np.zeros(int(sample_rate * END_PAUSE_SECONDS), dtype=np.float32)])
     out = io.BytesIO()

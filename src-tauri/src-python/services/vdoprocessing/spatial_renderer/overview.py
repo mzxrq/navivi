@@ -1068,7 +1068,6 @@ class _OverviewRenderMixin:
 
         if preview_recap_only:
             # Just render the final recap frame and save it as an image
-            import cv2
             out_img = str(self.out_dir / "01_overview_recap_preview.png")
             final_frame = self._render_recap_frame(pre_popup_frame, active_popups, group_popups=None)
             cv2.imwrite(out_img, final_frame)

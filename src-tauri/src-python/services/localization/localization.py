@@ -1,7 +1,6 @@
 import re
 from typing import Any
 from services.localization.romaji import RomajiConverter
-from services.config.job_config import JobConfigManager
 from services.logger.logger import setup_logger
 
 logger = setup_logger("Localization Service")

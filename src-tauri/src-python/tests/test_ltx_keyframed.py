@@ -138,11 +138,34 @@ class TestTwoShots:
             tuning.LTXV_PROMPTS["closein"].format(place="the scene")
         assert not set(tuning.ATTRACTION_SECOND_SHOT_MOVES) & set(tuning.LTXV_FREE_MOVES)
 
-    def test_walk_in_is_rendered_as_a_pinned_push_in(self, monkeypatch):
-        assert ltx_keyframed.pinned_preset("walkin") == "zoomin"
+    def test_walk_in_is_rendered_as_a_pinned_walk(self, monkeypatch):
+        assert ltx_keyframed.pinned_preset("walkin") == "walkfwd"
         assert ltx_keyframed.pinned_preset("panright") == "panright"
         monkeypatch.setattr(tuning, "LTXV_FREE_MOVE_FALLBACK", None)
         assert ltx_keyframed.pinned_preset("walkin") == "walkin"
+
+    def test_pinned_walk_has_both_ends_pinned_and_goes_deeper_than_zoom(self):
+        (fx, fy, fw, fh), (lx, ly, lw, lh) = ltx_keyframed.keyframe_rects(1920, 1080, "walkfwd")
+        _, (_, _, zw, _) = ltx_keyframed.keyframe_rects(1920, 1080, "zoomin")
+        assert lw < fw and lw < zw
+        assert "walkfwd" not in tuning.LTXV_FREE_MOVES
+
+    def test_pinned_walk_is_not_followed_by_another_push_in(self, monkeypatch):
+        monkeypatch.setattr(tuning, "ATTRACTION_SECOND_SHOT", "random")
+        for seed in "abcdefgh":
+            assert ltx_keyframed.second_shot("walkfwd", seed) != "closein"
+
+    def test_a_small_photo_takes_a_short_walk_with_zoom_crops(self, tmp_path):
+        (tmp_path / "s").mkdir()
+        (tmp_path / "b").mkdir()
+        small = self._upscaled(tmp_path / "s", (800, 450))
+        assert ltx_keyframed.sharp_enough_preset("walkfwd", small) == "walkshort"
+        assert ltx_keyframed.keyframe_rects(1920, 1080, "walkshort") == ltx_keyframed.keyframe_rects(1920, 1080, "zoomin")
+        assert ltx_keyframed.prompt_for("walkshort") == ltx_keyframed.prompt_for("walkfwd")
+        assert ltx_keyframed.pinned_preset("zoomin") == "zoomin"
+        big = self._upscaled(tmp_path / "b", (1920, 1080))
+        assert ltx_keyframed.sharp_enough_preset("walkfwd", big) == "walkfwd"
+        assert ltx_keyframed.sharp_enough_preset("panright", small) == "panright"
 
     def _upscaled(self, tmp_path, src_size, up_size=(1920, 1080)):
         from PIL import Image

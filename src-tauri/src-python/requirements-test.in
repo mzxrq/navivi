@@ -1,0 +1,6 @@
+# What CI installs: exactly the app's runtime set (same pins) plus the test tools.
+-c requirements-runtime.txt
+-r requirements-runtime.in
+pytest
+ruff
+soundfile

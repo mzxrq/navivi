@@ -351,6 +351,7 @@ def record_headless_video(
             # each feature's own "properties" instead of being passed as
             # layer-level constants, since that's how GeoJsonLayer expects
             # per-feature styling to be supplied.
+            route_preview_path = df_raw[["lon", "lat"]].values.tolist()
             base_layers = [
                 pdk.Layer(
                     "GeoJsonLayer",

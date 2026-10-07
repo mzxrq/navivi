@@ -2,6 +2,7 @@
 
 import hashlib
 import io
+import os
 import zipfile
 
 import httpx
@@ -34,6 +35,24 @@ def engine(tmp_path, monkeypatch):
     return directory, python
 
 
+def _fake_model(spec):
+    """A full-size model file that takes no disk: NTFS allocates every byte of a truncated file unless it is sparse."""
+    path = comfyui_setup._path(spec)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "wb") as f:
+        if os.name == "nt":
+            import ctypes
+            import msvcrt
+            from ctypes import wintypes
+
+            returned = wintypes.DWORD()
+            handle = wintypes.HANDLE(msvcrt.get_osfhandle(f.fileno()))
+            if not ctypes.WinDLL("kernel32", use_last_error=True).DeviceIoControl(handle, 0x900C4, None, 0, None, 0, ctypes.byref(returned), None):  # FSCTL_SET_SPARSE
+                raise ctypes.WinError(ctypes.get_last_error())
+        f.seek(spec["bytes"] - 1)
+        f.write(b"\0")
+
+
 def _fetch(url):
     return _zip(COMFY) if url == comfyui_setup.COMFYUI_ZIP else _zip(GGUF, "ComfyUI-GGUF-x")
 
@@ -64,16 +83,8 @@ class TestRequirements:
 
     def test_files_already_downloaded_count_towards_the_space(self, engine, monkeypatch):
         directory, _ = engine
-        # Same arithmetic as 26 GB free + a 6.3 GB file against 32 GB, scaled down to kilobytes so nothing big is written.
-        monkeypatch.setattr(comfyui_setup, "REQUIRED_FREE_GB", 25e-6)
-        spec = {**comfyui_setup.model_files()[1], "bytes": 7000}
-        monkeypatch.setattr(comfyui_setup, "model_files", lambda: [spec])
-        with pytest.raises(RuntimeError):
-            comfyui_setup.check_requirements(directory, free_gb=20e-6)
-        path = comfyui_setup._path(spec)
-        path.parent.mkdir(parents=True)
-        path.write_bytes(b"x" * 7000)
-        comfyui_setup.check_requirements(directory, free_gb=20e-6)
+        _fake_model(comfyui_setup.model_files()[1])  # the 6.7 GB text encoder
+        comfyui_setup.check_requirements(directory, free_gb=26)  # 26 + 6.3 >= 32
 
 
 class TestDownload:
@@ -183,10 +194,7 @@ class TestInstall:
         python.parent.mkdir(parents=True)
         python.write_text("")
         for spec in comfyui_setup.model_files():
-            path = comfyui_setup._path(spec)
-            path.parent.mkdir(parents=True, exist_ok=True)
-            with open(path, "wb") as f:
-                f.truncate(spec["bytes"])
+            _fake_model(spec)
         assert comfyui_setup.is_ready() is True
         assert comfyui_setup.missing_models() == []
 

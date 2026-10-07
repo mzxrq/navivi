@@ -174,7 +174,7 @@ def test_all_narration_speaks_the_pronunciation_dictionary(lib, tmp_path):
     att = lambda p: asyncio.run(audio_step.generate_attraction_audio_for_waypoint(wp, 0, c, FakeProcessor(), out, pronunciation_dict=p))
     leg([]), att([])
     leg(d), att(d)
-    assert all("孝子" not in s and "きょうし" in s for s in spoken[-2:])
+    assert all("孝子" not in s and "キョウシ" in s for s in spoken[-2:])
     leg(d), att(d)
     assert len(spoken) == 4  # unchanged dictionary reuses the audio
     assert "孝子" in leg(d)["text"]  # subtitles keep the kanji

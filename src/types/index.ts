@@ -185,7 +185,7 @@ export interface ProjectSettings {
   show_render_terminal?: boolean;
   marked_regeneration_waypoints?: string[];
   ai_features_enabled?: boolean;
-  pronunciation_dictionary?: Array<{ word: string; reading: string }>;
+  pronunciation_dictionary?: Array<{ word: string; reading: string; auto?: boolean }>; // auto: added by the MeCab scan
   tts?: { engine?: "irodori" | "qwen3" | "kokoro"; voice?: string; kokoro_voice?: string; speed?: number; quality?: "fast" | "balanced" | "best"; caption?: string };
   auto_overview_cues?: boolean;
   auto_narration_cues?: boolean;

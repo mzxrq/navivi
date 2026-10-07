@@ -38,7 +38,8 @@ def needs_wan(waypoints: list) -> bool:
     for wp in waypoints:
         if not isinstance(wp, dict) or wp.get("videos") or not wp.get("popup_image") or is_passed_only(wp):
             continue
-        if any(normalize_camera_pan(p) != STILL_PRESET for p in _resolve_attraction_prompt(wp)):
+        if any(normalize_camera_pan(p) not in (STILL_PRESET, *tuning.ATTRACTION_JUMP_CUT_PRESETS)
+               for p in _resolve_attraction_prompt(wp)):
             return True
     return False
 
@@ -55,7 +56,8 @@ def generate_waypoint_attraction_video(
     one waypoint's attraction video. Returns a dict with a `status` of
     "generated" / "pending" / "failed" / "skipped_no_image", plus whatever
     path/clip data is relevant to that status."""
-    popup_image_entry = waypoint.get("popup_image")
+    # `images` holds every photo; the editor saves only the first into `popup_image`.
+    popup_image_entry = waypoint.get("images") or waypoint.get("popup_image")
     label = waypoint.get("label", f"waypoint_{idx}")
 
     if waypoint.get("videos"):

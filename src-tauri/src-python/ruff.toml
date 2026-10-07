@@ -1,0 +1,6 @@
+target-version = "py312"
+extend-exclude = ["services/model", "bin", "data", "logs", "assets"]
+
+[lint]
+# Real bugs only: syntax errors, undefined names, unused imports/variables.
+select = ["E9", "F"]

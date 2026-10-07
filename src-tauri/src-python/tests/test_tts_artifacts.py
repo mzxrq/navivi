@@ -69,3 +69,11 @@ def test_non_wav_input_is_ignored(tmp_path):
     path = tmp_path / "d.wav"
     path.write_bytes(b"not a wav")
     assert remove_stray_bursts(str(path)) == []
+
+
+def test_a_syllable_beside_a_geminate_gap_is_kept(tmp_path):
+    # じゅ of じゅっぷん: 70 ms of sound, a long pause before it, only the っ gap (150 ms) after it
+    signal = np.concatenate([_tone(0.6), _silence(0.6), _tone(0.07, 0.4), _silence(0.15), _tone(0.5)])
+    path = tmp_path / "e.wav"
+    _write(path, signal)
+    assert remove_stray_bursts(str(path)) == []

@@ -401,7 +401,6 @@ class _CardMixin:
             # reversed here since the canvas is RGBA->BGR swapped as a
             # whole at the end (see _mode_accent's own comment).
             border_rgba = tuple(reversed(self.card_border_color)) + (255,)
-            accent = tuple(reversed(self.line_color)) + (255,)
 
             # Mode header ("Draw"/"Walking"/"Driving"/"Total") is Regular —
             # LINE Seed JP's regular weight reads fine at this size, unlike
@@ -861,8 +860,6 @@ class _CardMixin:
         # the dark mica look this template first shipped with.
         bg_color = self.ui["card_bg"]
         header_color = self.ui["card_text"]
-        label_color = self.ui["card_label"]
-        value_color = self.ui["card_text"]
         divider_color = self.ui["divider"]
         border_rgba = tuple(reversed(self.card_border_color)) + (255,)
         # BGR, like every other color in job_config.json's settings —

@@ -26,8 +26,8 @@ logger = setup_logger("SlowMove")
 # The presets that get a slow tail (every editor move; "none" is a still).
 # The tail itself doesn't follow the preset: each clip picks a random gentle
 # drift (see _random_drift), always on a slow push-in, which keeps the frame
-# edges out of view while drifting.
-_MOVING = {"panright", "panleft", "panup", "pandown", "zoomin", "zoomout", "walkin"}
+# edges out of view while drifting. Zoom In/Out are jump cuts and hold instead.
+_MOVING = {"panright", "panleft", "panup", "pandown", "walkin"}
 
 
 def _random_drift(rng: random.Random) -> tuple:

@@ -107,9 +107,9 @@ export function ScriptInput({
       const kanji = match[1];
       const kana = match[2];
 
-      const exists = newDict.find((entry) => entry.word === kanji);
-      if (exists) {
-        exists.reading = kana;
+      const idx = newDict.findIndex((entry) => entry.word === kanji);
+      if (idx >= 0) {
+        newDict[idx] = { word: kanji, reading: kana };
       } else {
         newDict.push({ word: kanji, reading: kana });
       }

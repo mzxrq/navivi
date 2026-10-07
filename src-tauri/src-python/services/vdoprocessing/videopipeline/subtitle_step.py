@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from services.localization.cues import clean_text
-from services.localization.subtitle import SubtitleStyle, caption_style
+from services.localization.subtitle import SubtitleStyle
 from services.logger.progress import tracker
 from services.vdoprocessing.cliptiming import read_audio_offset
 from services.vdoprocessing.vdoexporter import VideoExporter

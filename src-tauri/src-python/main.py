@@ -124,6 +124,15 @@ if __name__ == "__main__":
             print(json.dumps({"success": True, "words": analyze_words(text)}, ensure_ascii=False))
             sys.exit(0)
 
+        # Place names in the scripts with their readings, for the automatic furigana.
+        # argv[2] is JSON: {"text": all scripts, "names": the project's place names}.
+        if command_arg == "extract_place_words":
+            from services.localization.japanese_words import analyze_place_words
+            args = json.loads(sys.argv[2]) if len(sys.argv) > 2 else {}
+            words = analyze_place_words(args.get("text") or "", args.get("names") or [])
+            print(json.dumps({"success": True, "words": words}, ensure_ascii=False))
+            sys.exit(0)
+
         # Plain text of a PDF / Word / text file the user gave the assistant. argv[2] is the file path.
         if command_arg == "read_document":
             from services.documents import read_document

@@ -51,7 +51,7 @@ def _photos(tmp_path, n):
 def test_three_photos_are_combined_to_the_narration_length(generator, tmp_path):
     out = generator.process_attraction_video(
         popup_image_entry=_photos(tmp_path, 3),
-        prompt_text=["zoom-in", "none", "pan-right"],
+        prompt_text=["pan-down", "none", "pan-right"],
         target_audio_duration=12.0,
         output_filename="04_attraction_05_test.mp4",
         force=True,
@@ -68,7 +68,7 @@ def test_three_photos_are_combined_to_the_narration_length(generator, tmp_path):
 def test_single_moving_photo_keeps_moving_to_the_narration_end(generator, tmp_path):
     out = generator.process_attraction_video(
         popup_image_entry=_photos(tmp_path, 1),
-        prompt_text=["zoom-in"],
+        prompt_text=["pan-down"],
         target_audio_duration=15.0,
         output_filename="04_attraction_06_single.mp4",
         force=True,
@@ -81,7 +81,7 @@ def test_changed_camera_preset_regenerates_the_clip(generator, tmp_path, monkeyp
     photos = _photos(tmp_path, 1)
     kwargs = dict(popup_image_entry=photos, target_audio_duration=4.0,
                   output_filename="04_attraction_08_pan.mp4")
-    generator.process_attraction_video(prompt_text=["zoom-in"], **kwargs)
+    generator.process_attraction_video(prompt_text=["pan-down"], **kwargs)
 
     calls = []
     real = AttractionVideoGenerator._generate_single_clip
@@ -89,7 +89,7 @@ def test_changed_camera_preset_regenerates_the_clip(generator, tmp_path, monkeyp
         AttractionVideoGenerator, "_generate_single_clip",
         lambda self, *a, **k: calls.append(a[1]) or real(self, *a, **k),
     )
-    generator.process_attraction_video(prompt_text=["Zoom In"], **kwargs)
+    generator.process_attraction_video(prompt_text=["Pan Down"], **kwargs)
     assert calls == []  # same preset, other spelling: reused
     generator.process_attraction_video(prompt_text=["pan-left"], **kwargs)
     assert calls == ["pan-left"]
@@ -113,11 +113,11 @@ def _raws(generator, stem):
 def test_added_photo_only_generates_the_new_one(generator, tmp_path, calls):
     photos = _photos(tmp_path, 2)
     kwargs = dict(target_audio_duration=10.0, output_filename="04_attraction_09_add.mp4")
-    generator.process_attraction_video(popup_image_entry=photos[:1], prompt_text=["zoom-in"], **kwargs)
+    generator.process_attraction_video(popup_image_entry=photos[:1], prompt_text=["pan-down"], **kwargs)
     calls.clear()
 
     out = generator.process_attraction_video(
-        popup_image_entry=photos, prompt_text=["zoom-in", "pan-left"], **kwargs
+        popup_image_entry=photos, prompt_text=["pan-down", "pan-left"], **kwargs
     )
     assert [(img, pan) for img, pan, _ in calls] == [(photos[1], "pan-left")]
     assert calls[0][2] == pytest.approx(5.0)
@@ -129,7 +129,7 @@ def test_changed_preset_regenerates_only_that_photo(generator, tmp_path, calls):
     photos = _photos(tmp_path, 2)
     kwargs = dict(popup_image_entry=photos, target_audio_duration=8.0,
                   output_filename="04_attraction_10_change.mp4")
-    generator.process_attraction_video(prompt_text=["zoom-in", "pan-left"], **kwargs)
+    generator.process_attraction_video(prompt_text=["pan-down", "pan-left"], **kwargs)
     before = _raws(generator, "04_attraction_10_change")
     calls.clear()
 
@@ -143,12 +143,12 @@ def test_removed_photo_regenerates_a_clip_made_for_a_shorter_share(generator, tm
     photos = _photos(tmp_path, 2)
     kwargs = dict(target_audio_duration=8.0, output_filename="04_attraction_11_remove.mp4")
     generator.process_attraction_video(
-        popup_image_entry=photos, prompt_text=["zoom-in", "pan-left"], **kwargs
+        popup_image_entry=photos, prompt_text=["pan-down", "pan-left"], **kwargs
     )
     calls.clear()
 
-    generator.process_attraction_video(popup_image_entry=photos[:1], prompt_text=["zoom-in"], **kwargs)
-    assert [(img, pan, d) for img, pan, d in calls] == [(photos[0], "zoom-in", pytest.approx(8.0))]
+    generator.process_attraction_video(popup_image_entry=photos[:1], prompt_text=["pan-down"], **kwargs)
+    assert [(img, pan, d) for img, pan, d in calls] == [(photos[0], "pan-down", pytest.approx(8.0))]
     assert len(_raws(generator, "04_attraction_11_remove")) == 1
 
 
@@ -183,7 +183,7 @@ def slow_moves(monkeypatch):
 
 def test_capped_wan_clip_is_finished_with_the_slow_zoom_out(generator, tmp_path, slow_moves):
     out = generator.process_attraction_video(
-        popup_image_entry=_photos(tmp_path, 1), prompt_text=["zoom-in"],
+        popup_image_entry=_photos(tmp_path, 1), prompt_text=["pan-down"],
         target_audio_duration=15.0, output_filename="04_attraction_13_cap.mp4",
     )
     assert slow_moves == [15.0]
@@ -192,7 +192,7 @@ def test_capped_wan_clip_is_finished_with_the_slow_zoom_out(generator, tmp_path,
 
 def test_small_gap_is_held_not_zoomed(generator, tmp_path, slow_moves):
     out = generator.process_attraction_video(
-        popup_image_entry=_photos(tmp_path, 1), prompt_text=["zoom-in"],
+        popup_image_entry=_photos(tmp_path, 1), prompt_text=["pan-down"],
         target_audio_duration=2.6, output_filename="04_attraction_14_gap.mp4",
     )
     assert slow_moves == []
@@ -212,7 +212,7 @@ def test_still_photo_is_held_for_the_whole_narration(generator, tmp_path):
 
 def test_clip_is_remade_when_its_photos_change(generator, tmp_path, monkeypatch):
     first, second = _photos(tmp_path, 2)
-    kwargs = dict(prompt_text=["zoom-in"], target_audio_duration=0, output_filename="04_attraction_07_swap.mp4")
+    kwargs = dict(prompt_text=["pan-down"], target_audio_duration=0, output_filename="04_attraction_07_swap.mp4")
     out = generator.process_attraction_video(popup_image_entry=[first], **kwargs)
 
     calls = []

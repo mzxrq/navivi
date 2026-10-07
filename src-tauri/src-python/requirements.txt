@@ -1,23 +1,5 @@
-numpy
-pandas
-pyproj
-contextily
-scipy
-Pillow
-pillow-heif
-pypdf
-opencv-python
-httpx
-requests
-websocket-client
-ollama
-pydantic
-deep-translator
-pykakasi
-tqdm 
-pydeck
-playwright
-python-dotenv
+# Developer set: the app's pinned runtime list plus the optional extras below.
+-r requirements-runtime.txt
 
 # Depth-parallax fallback (services/vdoprocessing/parallax_generator.py) —
 # only used when the bundled ComfyUI attraction-video generator can't be
@@ -27,7 +9,3 @@ python-dotenv
 diffusers
 transformers
 accelerate
-psutil
-fugashi
-unidic-lite
-rapidocr-onnxruntime

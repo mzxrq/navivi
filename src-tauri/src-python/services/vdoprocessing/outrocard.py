@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 from PIL.ImageFont import FreeTypeFont, load_default, truetype
 
 from services.mapfetcher.graphicengine.base import _GraphicsEngineBase
@@ -634,7 +634,7 @@ def _draw_summary(
     value_font = _load_font(
         _GraphicsEngineBase.FONT_CANDIDATES_EXTRABOLD, px(tuning.OUTRO_SUMMARY_VALUE_FONT_SIZE)
     )
-    muted, text, chip_bg = tuning.OUTRO_SUBTITLE_COLOR, tuning.OUTRO_LABEL_COLOR, tuning.OUTRO_CHIP_COLOR
+    muted, text = tuning.OUTRO_SUBTITLE_COLOR, tuning.OUTRO_LABEL_COLOR
 
     legs = brief["legs"]
     longest = max(legs, key=lambda leg: leg["km"])

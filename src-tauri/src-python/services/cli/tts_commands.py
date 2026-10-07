@@ -21,7 +21,6 @@ from services.vdoprocessing.videopipeline.audio_step import (
     generate_waypoint_audio,
     is_passed_only,
     passed_only_reason,
-    is_unvisited_stopby,
     merge_pronunciation,
     stop_tts_server,
 )

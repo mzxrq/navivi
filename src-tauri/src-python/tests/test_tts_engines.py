@@ -1,7 +1,6 @@
 """The narration engine switch: Irodori (clones a voice, slow) or Kokoro (fixed Japanese voices, fast)."""
 
 import asyncio
-import io
 import wave
 
 import pytest
@@ -228,11 +227,31 @@ class TestQwen3Client:
             sent.append(payload)
             return b"WAV-" + payload["input"].encode("utf-8")
 
+        cooldowns = []
         monkeypatch.setattr(Qwen3TTSClient, "_post_speech", post)
         monkeypatch.setattr(ttsengine, "apply_speed", lambda audio, speed: audio + f"@{speed}".encode())
+        monkeypatch.setattr(ttsengine, "wait_for_gpu_cooldown", lambda reason="": cooldowns.append(reason) or 0.0)
         c = make_tts_client({"tts": {"engine": "qwen3", "voice": "alice", "speed": 1.25}}, tmp_path / "out")
         c.sent = sent
+        c.cooldowns = cooldowns
         return c
+
+    def test_on_the_gpu_each_new_line_waits_for_a_cool_gpu_but_a_cached_one_does_not(self, client, monkeypatch):
+        monkeypatch.setenv("NAVIVI_TTS_DEVICE", "cuda")
+        asyncio.run(client.call_api("こんにちは"))
+        asyncio.run(client.call_api("こんにちは"))
+        assert len(client.cooldowns) == 1
+
+    def test_on_the_cpu_there_is_no_gpu_wait(self, client, monkeypatch):
+        monkeypatch.setenv("NAVIVI_TTS_DEVICE", "cpu")
+        asyncio.run(client.call_api("こんにちは"))
+        assert client.cooldowns == []
+
+    def test_the_server_is_told_its_device_and_vram_cap(self, client, monkeypatch):
+        monkeypatch.setenv("NAVIVI_TTS_DEVICE", "cpu")
+        assert client._server_env() == {"QWEN3_DEVICE": "cpu", "QWEN3_VRAM_FRACTION": str(tuning.QWEN3_VRAM_FRACTION)}
+        monkeypatch.setenv("NAVIVI_TTS_DEVICE", "auto")
+        assert client._server_env()["QWEN3_DEVICE"] == "cuda"
 
     def test_it_sends_the_text_and_the_path_of_the_recording_and_applies_the_speed_after(self, client, voice_lib):
         audio = asyncio.run(client.call_api("こんにちは"))
@@ -330,7 +349,6 @@ class TestSpeed:
             assert wf.getnframes() == pytest.approx(24000, abs=1200)
 
     def test_the_phrase_cache_drops_a_line_with_an_unfinished_header(self, cache_dir):
-        from services.tts import phrase_cache
 
         bad = b"RIFF\xff\xff\xff\xffWAVEdata"
         phrase_cache.put("k", bad)

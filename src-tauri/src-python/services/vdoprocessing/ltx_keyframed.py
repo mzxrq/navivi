@@ -69,6 +69,7 @@ def keyframe_rects(w: int, h: int, move: str) -> Tuple[Rect, Rect]:
                  "closepanup": (0, dy, 0, -dy), "closepandown": (0, -dy, 0, dy)}
         ax, ay, bx, by = steps[move]
         return window(c, mid_x + ax, mid_y + ay), window(c, mid_x + bx, mid_y + by)
+    # zoomin, zoomout and walkshort.
     wide, tight = window(tuning.LTXV_ZOOM_WIDE, mid_x, mid_y), window(tuning.LTXV_ZOOM_TIGHT, mid_x, mid_y)
     return (tight, wide) if move == "zoomout" else (wide, tight)
 
@@ -186,6 +187,7 @@ def decode_graph(latent_name: str, prefix: str) -> Dict:
 _SAME_WAY = {
     "panright": "closepanright", "panleft": "closepanleft", "panup": "closepanup",
     "pandown": "closepandown", "zoomin": "closein", "zoomout": "closeout",
+    "walkfwd": "closein", "walkfwdleft": "closein", "walkfwdright": "closein", "walkshort": "closein",
 }
 
 
@@ -232,10 +234,30 @@ def source_size(photo_path: str) -> Tuple[int, int]:
     return (sh, sw) if (uw > uh) != (sw > sh) and sw != sh else (sw, sh)
 
 
+def crop_source_px(photo_path: str, share: float) -> float:
+    """Original-photo pixels across a crop of `share` of the widest window."""
+    w, h = source_size(photo_path)
+    return share * min(w, h * tuning.LTXV_WIDTH / tuning.LTXV_HEIGHT)
+
+
 def close_crop_source_px(photo_path: str) -> float:
     """Original-photo pixels across the second shot's close crop."""
-    w, h = source_size(photo_path)
-    return tuning.LTXV_CLOSE_WIDE * min(w, h * tuning.LTXV_WIDTH / tuning.LTXV_HEIGHT)
+    return crop_source_px(photo_path, tuning.LTXV_CLOSE_WIDE)
+
+
+def sharp_enough_preset(preset: str, photo_path: str) -> str:
+    """A pinned walk on a photo too small for its tight crop becomes a zoom."""
+    if not preset.startswith("walkfwd"):
+        return preset
+    try:
+        px = crop_source_px(photo_path, tuning.LTXV_WALK_TIGHT)
+    except OSError:
+        return preset
+    if px < tuning.ATTRACTION_SECOND_SHOT_MIN_SOURCE_PX:
+        logger.info("LTXV %s on %s would be only %.0f px of the original - %s instead.",
+                    preset, Path(photo_path).name, px, tuning.LTXV_SMALL_PHOTO_WALK_FALLBACK)
+        return tuning.LTXV_SMALL_PHOTO_WALK_FALLBACK
+    return preset
 
 
 def shot_list(preset: str, seed: str = "", photo_path: Optional[str] = None) -> List[str]:
@@ -271,6 +293,9 @@ def render_shot(photo_path: str, move: str, output_path: str, work: Path, prompt
     from services.vdoprocessing.color_match import match_clip_to_photo
     from services.vdoprocessing.comfyui_i2v_client import ComfyUII2VClient
 
+    from services.vdoprocessing.local_pan_generator import release_models
+
+    release_models()
     tuning.ensure_free_ram("LTXV clip", min_free_gb=tuning.LTXV_MIN_FREE_RAM_GB, relief=ComfyUII2VClient.stop_server)
     first, last = crop_keyframes(photo_path, move, work)
     prefix = f"attraction_ltx/{uuid.uuid4().hex[:8]}"
@@ -345,7 +370,7 @@ def pinned_preset(preset: str) -> str:
 def generate_ltx_move(photo_path: str, output_path: str, camera_pan_hint) -> str:
     """The chosen move, then the second shot, dissolved together. A failed
     second shot leaves the first alone; a failed first raises."""
-    preset = pinned_preset(normalize_camera_pan(camera_pan_hint))
+    preset = sharp_enough_preset(pinned_preset(normalize_camera_pan(camera_pan_hint)), photo_path)
     if preset not in tuning.LTXV_PROMPTS:
         raise ValueError(f"No LTXV recipe for preset {preset!r}")
     ensure_files()

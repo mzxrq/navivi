@@ -2,7 +2,7 @@
 
 import math
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import cv2
 import numpy as np
@@ -319,7 +319,6 @@ class _WaypointRenderMixin:
                     video_text.strip_waypoint_prefixes(raw)
                 )
 
-            leg_from_label = _clean_leg_label(res_labels[0] if res_labels else None)
             leg_to_label = _clean_leg_label(res_labels[-1] if res_labels else None)
 
             total_duration = res_data.get(

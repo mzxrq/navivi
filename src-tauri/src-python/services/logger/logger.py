@@ -15,9 +15,6 @@ from pathlib import Path
 LOG_FILE =  "app.log"
 
 
-import logging
-import sys
-from pathlib import Path
 
 # [Utility] Setup a logger with both file and console handlers
 def setup_logger(name: str):

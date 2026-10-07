@@ -19,7 +19,6 @@ import bisect
 import json
 import math
 import os
-import random
 import shutil
 import string
 import tempfile
@@ -33,7 +32,7 @@ import pydeck as pdk
 from services import tuning, video_text
 from services.logger.progress import tracker
 from services.mapfetcher.graphicengine.pinimage import deck_icon
-from services.vdoprocessing.cliptiming import timing_sidecar_path, write_audio_offset
+from services.vdoprocessing.cliptiming import write_audio_offset
 
 from .common import MAPBOX_API_KEY, logger
 from .geomath import cumulative_distance_km, haversine_km
