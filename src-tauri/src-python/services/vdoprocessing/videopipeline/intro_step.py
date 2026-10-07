@@ -6,7 +6,7 @@ dependency on any other step's rendered output.
 from pathlib import Path
 from typing import Optional
 
-from services import tuning
+from services import tuning, video_text
 from services.config.job_config import JobConfigManager
 
 from .helpers import logger, project_video_dir
@@ -65,14 +65,14 @@ def place_count(waypoints) -> int:
 
 def intro_heading(job_config: JobConfigManager) -> dict:
     """Kicker (settings.intro_location), title and subtitle shared by the intro
-    and the outro. The subtitle gets " · N か所" unless settings.intro_place_count
+    and the outro. The subtitle gets " · N places" (か所 in Japanese) unless settings.intro_place_count
     is false."""
     settings = job_config.get_settings() or {}
     title = job_config.get("video_title") or job_config.get("project_name", "") or ""
     subtitle = (job_config.get("video_subtitle", "") or "").strip()
     n = place_count(job_config.get("waypoints", []))
     if n and settings.get("intro_place_count", tuning.DEFAULT_INTRO_PLACE_COUNT) is not False:
-        count = tuning.INTRO_PLACE_COUNT_FORMAT.format(n=n)
+        count = video_text.plural(video_text.current_labels(), "place_count", n, n=n)
         subtitle = tuning.INTRO_PLACE_COUNT_SEPARATOR.join(p for p in (subtitle, count) if p)
     return {
         "kicker": str(settings.get("intro_location") or "").strip(),

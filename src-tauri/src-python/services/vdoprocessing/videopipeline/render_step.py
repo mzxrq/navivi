@@ -21,7 +21,7 @@ from services.vdoprocessing.spatial_renderer import SpatialRenderer
 from services.localization.localization import format_waypoint_label
 from services.config.job_config import JobConfigManager
 from services.config.upscaled_images import IMAGE_KEYS, apply_upscaled_images
-from services import tuning
+from services import tuning, video_text
 from services.mapfetcher.graphicengine.pinimage import marker_for, marker_inputs_hash
 
 from .audio_step import overview_tagged_script
@@ -30,7 +30,6 @@ from .helpers import (
     BASE_DIR,
     DEFAULT_FRONTEND_CONFIG,
     DEFAULT_MAP_BACKGROUND,
-    PIPELINE_LABELS,
     _build_point_colors,
     _build_point_modes,
     leg_line_color_rgb,
@@ -761,11 +760,12 @@ def render_route_video(
         logger.info("Step 4: Injecting %d custom waypoints.", len(waypoints))
         start_label = project_config.get("start_point", {}).get("label")
         end_label = project_config.get("end_point", {}).get("label")
+        text_labels = video_text.current_labels()
 
         for idx, wp in enumerate(waypoints):
             route_point_idx = wp_indices[idx]
             _pin_image = marker_for(wp, settings, marker_base_dir)
-            raw_label = wp.get("label", PIPELINE_LABELS["waypoint_fallback"])
+            raw_label = wp.get("label", text_labels["waypoint_fallback"])
 
             if idx == 0 and start_label:
                 raw_label = start_label
@@ -774,8 +774,8 @@ def render_route_video(
 
             formatted = format_waypoint_label(raw_label, subtitle_lang)
             prefix = (
-                PIPELINE_LABELS["start_prefix"] if idx == 0
-                else PIPELINE_LABELS["stop_prefix"] if idx == len(waypoints) - 1
+                text_labels["start_prefix"] if idx == 0
+                else text_labels["stop_prefix"] if idx == len(waypoints) - 1
                 else ""
             )
             route_labels[route_point_idx] = (

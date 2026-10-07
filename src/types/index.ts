@@ -81,6 +81,7 @@ export interface TextStyle {
 // start dev 1 settings
 export type SummaryCardStyle = "glass" | "taskbar" | "stacked" | "columns";
 export type LookMode = "walking" | "driving" | "car" | "ferry" | "airplane";
+export type VideoTextLanguage = "auto" | "en" | "ja";
 
 export interface ProjectSettings {
   fps: number;
@@ -172,6 +173,8 @@ export interface ProjectSettings {
   ai_online_base_url?: string; // only the "Other (OpenAI-compatible)" provider asks for one
   ai_online_send_photos?: boolean; // true unless switched off
   quick_export?: boolean;
+  /** Language of the text drawn into the video (HUD, cards, intro/outro labels). "auto" (or unset) follows the language the project was saved in. */
+  video_text_language?: VideoTextLanguage;
   hardware_spec_override?: "auto" | "high" | "low";
   show_render_terminal?: boolean;
   marked_regeneration_waypoints?: string[];

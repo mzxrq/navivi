@@ -48,6 +48,7 @@ export const defaultProjectSettings = {
     auto_save_interval: 3,
     show_route_heatmap: false,
     quick_export: false,
+    video_text_language: "auto" as "auto" | "en" | "ja",
     hardware_spec_override: "auto" as "auto" | "high" | "low",
     ai_features_enabled: true,
 };

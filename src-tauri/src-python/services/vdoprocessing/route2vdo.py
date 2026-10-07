@@ -18,7 +18,7 @@ from typing import Dict, Any, List, Optional, Tuple
 from services.mapfetcher.graphicengine import GraphicsEngine
 from services.logger.logger import setup_logger
 from services.logger.progress import tracker
-from services import tuning
+from services import tuning, video_text
 from services.mapbox_token import resolve_mapbox_token
 from services.vdoprocessing.spatial_renderer import SpatialRenderer
 from services.vdoprocessing.pydeckrecorder import record_headless_video
@@ -57,7 +57,7 @@ LEG_RENDER_VERSION = 5
 # A leg is reused unless its waypoints' route inputs (see route_inputs.py) or
 # the render version changed, or its files are missing. Not "latlon": the app
 # can save a different line for the same waypoints.
-_LEG_CHECKPOINT_PARTS = ("route_inputs", "render_version", "photos")
+_LEG_CHECKPOINT_PARTS = ("route_inputs", "render_version", "photos", "video_text")
 
 
 def _leg_fingerprint(leg_latlon, dest_label, leg_kwargs: Dict[str, Any]) -> str:
@@ -71,11 +71,10 @@ def _leg_fingerprint(leg_latlon, dest_label, leg_kwargs: Dict[str, Any]) -> str:
             return obj.tolist()
         return str(obj)
 
-    payload = json.dumps(
-        {"latlon": leg_latlon, "dest": dest_label, "kwargs": leg_kwargs,
-         "render_version": LEG_RENDER_VERSION},
-        sort_keys=True, default=plain, ensure_ascii=False,
-    )
+    fields = {"latlon": leg_latlon, "dest": dest_label, "kwargs": leg_kwargs, "render_version": LEG_RENDER_VERSION}
+    if video_text.current_language() != video_text.DEFAULT_LANGUAGE:
+        fields["video_text"] = video_text.current_language()  # [NOTE] absent for Japanese: old clips stay valid
+    payload = json.dumps(fields, sort_keys=True, default=plain, ensure_ascii=False)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
@@ -98,6 +97,8 @@ def _leg_fingerprint_parts(
         parts["route_inputs"] = route_inputs
     parts.update({f"kw.{k}": h(v) for k, v in leg_kwargs.items()})
     parts["photos"] = photo_inputs_hash(leg_kwargs)
+    if video_text.current_language() != video_text.DEFAULT_LANGUAGE:
+        parts["video_text"] = video_text.current_language()  # absent for Japanese: old clips stay valid
     return parts
 
 
@@ -467,7 +468,7 @@ class RouteAnimator:
                 continue
 
             leg_labels = [l for l in res_data.get("labels", []) if l]
-            dest_label = leg_labels[-1] if leg_labels else "目的地"
+            dest_label = leg_labels[-1] if leg_labels else video_text.current_labels()["destination_fallback"]
             tracker.show_item(i + 1, f"Rendering residential leg {i + 1}/{len(res_sequence)} -> {dest_label}")
             leg_mode = res_data.get("mode") or "walking"
             leg_mode = tuning.MODE_ALIASES.get(str(leg_mode).lower(), str(leg_mode).lower())

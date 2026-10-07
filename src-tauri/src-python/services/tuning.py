@@ -130,56 +130,17 @@ def ensure_free_ram(
         gc.collect()
 
 
-# --- On-video text labels (Japanese) -----------------------------------------
-# services/ -> up to src-python/ -> assets/config/ — same bundled-relative-
-# to-module convention graphicengine/base.py's _BUNDLED_FONTS_DIR uses. Every
-# piece of Japanese text drawn onto the rendered video lives in this one file
-# (assets/config/labels_ja.json) instead of scattered across modules:
-# - waypoint_fallback/start_prefix/stop_prefix: render_step.py's on-screen
-#   waypoint label chip (also outrocard.py's end-card grid fallback).
-# - mode_name/mode_duration_label/total_label/distance_label/
-#   taskbar_card_title: cards.py's summary cards (create_summary_card /
-#   create_summary_card_taskbar) — see cards.py's merge_summary_card_labels
-#   for how a project's job_config.json settings.summary_card_labels can
-#   still override a subset of just those keys.
-# A project can override any of these via job_config.json's
-# settings.pipeline_labels / settings.summary_card_labels without touching
-# this bundled file at all.
-_LABELS_JA_PATH = os.path.join(
-    os.path.dirname(__file__), "..", "assets", "config", "labels_ja.json",
-)
-_DEFAULT_LABELS_JA: Dict = {
-    "waypoint_fallback": "ウェイポイント",
-    "start_prefix": "出発: ",
-    "stop_prefix": "到着: ",
-    "mode_name": {
-        "walking": "歩く", "driving": "運転", "car": "運転",
-        "ferry": "乗船", "airplane": "飛行機",
-    },
-    "mode_duration_label": {
-        "walking": "歩く時間", "driving": "運転時間", "car": "運転時間",
-        "ferry": "乗船時間", "airplane": "飛行時間",
-    },
-    "total_label": "合計",
-    "distance_label": "距離",
-    "taskbar_card_title": "旅の概要",
-}
+# --- On-video text labels ----------------------------------------------------
+# Every string drawn into the video lives in a per-language catalog,
+# assets/config/labels_<lang>.json, resolved by services/video_text.py
+# (labels_for / current_labels; project setting video_text_language). A
+# project can still override a subset via job_config.json's
+# settings.pipeline_labels / settings.summary_card_labels (see cards.py's
+# merge_summary_card_labels). LABELS_JA / PIPELINE_LABELS stay as the
+# Japanese catalog for callers that predate the language setting.
+from services.video_text import labels_for as _labels_for  # noqa: E402
 
-
-def _load_labels_ja() -> Dict:
-    try:
-        with open(_LABELS_JA_PATH, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except (OSError, json.JSONDecodeError):
-        return _DEFAULT_LABELS_JA
-
-
-# Loaded once at import time — these are static display strings, not
-# something a render needs to re-read per frame/per card.
-LABELS_JA: Dict = _load_labels_ja()
-# Alias kept for the pipeline-label (waypoint_fallback/start_prefix/
-# stop_prefix) call sites that only ever needed those three keys —
-# render_step.py, overview.py, outrocard.py, and helpers.py's re-export.
+LABELS_JA: Dict = _labels_for("ja")
 PIPELINE_LABELS: Dict = LABELS_JA
 
 # --- Mode aliases ------------------------------------------------------------
@@ -325,7 +286,7 @@ DEFAULT_SUMMARY_CARD_STYLE = "columns"  # the user's choice (2026-09-30)
 # "columns" card: every column's text area is at least as wide as these
 # sample strings, so the card keeps one width whatever the values are.
 SUMMARY_CARD_FIXED_DISTANCE_SAMPLE = "88.8 km"
-SUMMARY_CARD_FIXED_DURATION_SAMPLE = "8時間88分"
+SUMMARY_CARD_FIXED_DURATION_SAMPLE = LABELS_JA["duration_sample"]
 
 # --- HUD/card theme (light | dark) ------------------------------------------
 # Summary card, top banner, corner HUD labels and popup caption cards.
@@ -749,14 +710,10 @@ POPUP_NEAR_MAX_LEADER_PX = 200
 POPUP_NEAR_OFF_SIDE_PX = 40
 # Shown in the overview's bottom-left while the FIRST stop-by cards play: a
 # ribbon title and a card saying those round markers are optional extras.
-STOPBY_NOTICE_TITLE = "追加の見どころ（まるのマーカー）"
+# Wording per language: assets/config/labels_<lang>.json (these are the Japanese ones).
+STOPBY_NOTICE_TITLE = LABELS_JA["stopby_notice_title"]
 # Line breaks are kept (a long line still wraps to the card).
-STOPBY_NOTICE_BODY = (
-    "まるのマーカーは、ルートの近くにある\n"
-    "追加の見どころです。"
-    "立ち寄るかどうかは自由。\n"
-    "時間や体力に合わせて決めてください。"
-)
+STOPBY_NOTICE_BODY = LABELS_JA["stopby_notice_body"]
 STOPBY_NOTICE_RIBBON_COLOR: Tuple[int, int, int] = (40, 110, 220)  # BGR, warm orange ribbon
 STOPBY_NOTICE_FADE_SECONDS = 0.6
 # How long the notice stays up when the first stop-by reached isn't a batch
@@ -1507,7 +1464,7 @@ INTRO_KICKER_BOLD = False
 INTRO_KICKER_COLOR: Tuple[int, int, int] = (205, 210, 220)
 INTRO_KICKER_LETTER_SPACING = 4
 # Appended to the intro subtitle as "<subtitle> · 18 か所" (settings.intro_place_count turns it off).
-INTRO_PLACE_COUNT_FORMAT = "{n} か所"
+INTRO_PLACE_COUNT_FORMAT = LABELS_JA["place_count"]  # Japanese; other languages: video_text catalogs
 INTRO_PLACE_COUNT_SEPARATOR = " · "
 DEFAULT_INTRO_PLACE_COUNT = True
 INTRO_OUTPUT_FILENAME = "00_intro.mp4"
@@ -1551,7 +1508,7 @@ INTRO_SUBTITLE_RISE_PX = 28
 OUTRO_DURATION_SECONDS = 5.0
 OUTRO_OUTPUT_FILENAME = "99_outro.mp4"
 # {count} is substituted with the number of waypoint cards shown.
-OUTRO_SUBTITLE_TEMPLATE = "訪れた{count}か所"
+OUTRO_SUBTITLE_TEMPLATE = LABELS_JA["outro_subtitle"]
 OUTRO_BG_COLOR: Tuple[int, int, int] = (19, 28, 46)  # RGB dark navy
 OUTRO_TITLE_COLOR: Tuple[int, int, int] = (255, 255, 255)
 OUTRO_SUBTITLE_COLOR: Tuple[int, int, int] = (150, 158, 173)
@@ -1607,7 +1564,7 @@ OUTRO_SCROLL_EDGE_FADE_PX = 56
 # narration speaks), ending on the last card.
 # Off per project via settings.outro_route_info: false (back to the grid).
 DEFAULT_OUTRO_ROUTE_INFO = True
-OUTRO_ROUTE_FROM_TEMPLATE = "{name} から"
+OUTRO_ROUTE_FROM_TEMPLATE = LABELS_JA["outro_route_from"]
 OUTRO_ROUTE_ROW_HEIGHT = 128
 OUTRO_ROUTE_ROW_GAP = 16
 OUTRO_ROUTE_NAME_FONT_SIZE = 24
@@ -1629,15 +1586,7 @@ OUTRO_CHIP_COLOR: Tuple[int, int, int] = (45, 58, 86)
 OUTRO_ARROW_COLOR: Tuple[int, int, int] = (110, 120, 140)
 OUTRO_SUMMARY_HOLD_SECONDS = 4.0
 OUTRO_ROUTE_END_HOLD_SECONDS = 2.0
-OUTRO_SUMMARY_LABELS: Dict[str, str] = {
-    "distance": "総距離",
-    "legs": "{count}区間",
-    "time": "移動時間",
-    "time_note": "目安",
-    "places": "訪れた場所",
-    "places_value": "{count}か所",
-    "longest": "最長区間",
-}
+OUTRO_SUMMARY_LABELS: Dict[str, str] = LABELS_JA["outro_summary"]
 # The number on each leg card's photo: a white pill with a soft shadow and a
 # dark number, readable on light and dark photos alike.
 OUTRO_PHOTO_BADGE_HEIGHT = 26
