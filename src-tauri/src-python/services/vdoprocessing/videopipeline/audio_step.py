@@ -214,28 +214,50 @@ def _all_hiragana(text: str) -> bool:
     return all("ぁ" <= c <= "ゖ" or c == "ー" for c in text)
 
 
+def _kanji_first(entry: dict) -> bool:
+    """An auto word the analyser already reads the same way goes to the voice in kanji, which keeps its intonation; the place-name
+    check hears it back and only a misread one is retaken spelled out (三輪神社 said みらじんじゃ). A ruins name is always spelled
+    out: in a sentence the analyser reads its 寺跡 じせき even when it reads the name alone right."""
+    from services.localization import japanese_words
+
+    word, reading = entry.get("word") or "", entry.get("reading") or ""
+    if not entry.get("auto") or japanese_words.ruins_reading(word, "せき") != "せき":
+        return False
+    return japanese_words.reading_of(word) == japanese_words.to_hiragana(reading)
+
+
 def _spoken_form(entry: dict) -> Optional[str]:
-    """What the voice is given for a dictionary word, or None to leave the word as written.
-    An auto word the analyser already reads the same way keeps its kanji, which the engines accent better than kana.
+    """How a dictionary word is spelled out for the voice, or None when it has no reading.
     A hiragana reading is spoken in katakana, so the engines take it as one word instead of splitting it."""
     from services.localization import japanese_words
 
     word, reading = entry.get("word"), entry.get("reading")
     if not word or not reading:
         return None
-    if entry.get("auto") and japanese_words.reading_of(word) == japanese_words.to_hiragana(reading):
-        return None
-    return japanese_words.to_katakana(reading) if _all_hiragana(reading) else reading
+    if not _all_hiragana(reading):
+        return reading
+    for suffix, suffix_reading in japanese_words.PLAIN_SUFFIXES.items():
+        head = reading[: -len(suffix_reading)]
+        if word.endswith(suffix) and len(word) > len(suffix) and reading.endswith(suffix_reading) and head:
+            return japanese_words.to_katakana(head) + suffix
+    return japanese_words.to_katakana(reading)
 
 
 def apply_pronunciation_dictionary(text: str, dictionary: list) -> str:
+    from services.tts import name_check
+
     if not text or not dictionary:
         return text
     # Longest words first, so 三段壁 is replaced before a shorter entry such as 三段 can cut into it.
     for entry in sorted(dictionary, key=lambda e: len(e.get("word") or ""), reverse=True):
         spoken = _spoken_form(entry)
-        if spoken:
-            text = text.replace(entry["word"], spoken)
+        if not spoken:
+            continue
+        if _kanji_first(entry):
+            name_check.remember_kanji(entry["word"], entry["reading"], spoken)
+            continue
+        name_check.remember(spoken, entry["word"])
+        text = text.replace(entry["word"], spoken)
     return text
 
 async def generate_attraction_audio_for_waypoint(

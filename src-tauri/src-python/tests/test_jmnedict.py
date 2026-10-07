@@ -20,6 +20,8 @@ SAMPLE = """<?xml version="1.0" encoding="UTF-8"?>
 <entry><k_ele><keb>鳴滝不動</keb></k_ele><r_ele><reb>なるたきふどう</reb></r_ele><trans><name_type>&place;</name_type></trans></entry>
 <entry><k_ele><keb>南海本線</keb></k_ele><r_ele><reb>なんかいほんせん</reb></r_ele><trans><name_type>&company;</name_type><name_type>&unclass;</name_type></trans></entry>
 <entry><k_ele><keb>不動山</keb></k_ele><r_ele><reb>ふどうさん</reb></r_ele><r_ele><reb>ふどうやま</reb></r_ele><trans><name_type>&place;</name_type></trans></entry>
+<entry><k_ele><keb>神福</keb></k_ele><r_ele><reb>かみふく</reb></r_ele><trans><name_type>&place;</name_type></trans></entry>
+<entry><k_ele><keb>葛城</keb></k_ele><r_ele><reb>かつらぎ</reb></r_ele><r_ele><reb>かつらぎの</reb></r_ele><trans><name_type>&place;</name_type></trans></entry>
 <entry><k_ele><keb>甲</keb><keb>乙</keb></k_ele><r_ele><reb>こう</reb><re_restr>甲</re_restr></r_ele><trans><name_type>&place;</name_type></trans></entry>
 </JMnedict>
 """
@@ -63,6 +65,15 @@ def test_a_longer_name_is_built_from_names_it_knows(index):
 
 def test_a_one_kanji_rest_takes_its_part_of_the_whole_guess(index):
     assert jmnedict.place_reading("鳴滝不動尊", "なるたきふどうそん", MECAB.get) == "なるたきふどうそん"
+
+
+def test_a_start_the_analyser_disagrees_with_is_not_forced_on_the_name(index):
+    assert jmnedict.place_reading("神福寺跡", "しんぷくじあと", MECAB.get) is None
+
+
+def test_a_kana_the_analyser_glued_onto_a_known_start_is_dropped(index):
+    read = {"第二経塚": "だいにきょうづか"}.get
+    assert jmnedict.place_reading("葛城第二経塚", "かつらぎのだいにきょうづか", read) == "かつらぎだいにきょうづか"
 
 
 def test_an_unknown_name_is_left_to_the_analyser(index):

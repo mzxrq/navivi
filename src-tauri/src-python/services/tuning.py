@@ -1724,7 +1724,7 @@ TTS_MODEL = "irodori-tts"
 # every other real one - NAVIVI_TTS_DEVICE=cuda opts back into GPU when
 # that tradeoff is wanted (the server reads its device at spawn time only;
 # an already-running server needs restarting to pick up a changed value).
-TTS_DEVICE = "cuda"
+TTS_DEVICE = "cpu"
 # Longest text sent to the TTS server in one request, in characters: about 15
 # seconds of speech at the project's measured ~4.4 characters per second.
 TTS_MAX_CHUNK_CHARS = 60
@@ -1754,6 +1754,12 @@ TTS_CUTOFF_RETAKES = 2
 # Engines whose new narration goes through artifacts.remove_stray_bursts, once, when it is made.
 # Written for Irodori's stray "あ"; on Qwen3 it silenced real syllables (じゅ in じゅっぷん, と in あるくと).
 TTS_STRAY_BURST_ENGINES = ("irodori",)
+# Each take is heard back (services/tts/name_check.py) and retaken when a spelled-out place name isn't in it (サルサカ峠 spoken as
+# さらさか). Off, or without faster-whisper installed, takes are not checked. The fewest-misses take is kept after the retakes.
+TTS_NAME_CHECK = True
+TTS_NAME_RETAKES = 2
+TTS_NAME_CHECK_MIN_CHARS = 3  # kana, not counting ー: shorter runs (ゴール) are left alone unless a plain ending follows (ミワ神社)
+TTS_NAME_CHECK_MODEL = "kotoba-tech/kotoba-whisper-v2.0-faster"  # Japanese Whisper for faster-whisper, ~1.5 GB, downloaded on first use
 TTS_SENTENCE_GAP_MIN_SECONDS = 0.25
 TTS_SENTENCE_GAP_MAX_SECONDS = 0.5
 TTS_VOICE = "jvs004"  # Irodori's only bundled voice preset as of writing
@@ -1767,7 +1773,7 @@ TTS_MAX_SPEED = 4.0
 TTS_RESPONSE_FORMAT = None  # None = let the server use its own default (wav)
 # Speaking-style caption sent as the request's "caption"; None/"" = omit.
 # Per-project override: settings.tts.caption.
-TTS_CAPTION = "明るく元気で、楽しそうな話し方。"
+TTS_CAPTION = "落ち着いた、親しみやすい語り口。"
 
 # --- Attraction clip place-name label (top-left, for the whole clip) -------
 # See services/vdoprocessing/img2vdo.py's AttractionVideoGenerator._fit_and_finalize.
@@ -1851,10 +1857,12 @@ KOKORO_COST = {"request": 1.0, "char": 0.09, "startup": 35.0}
 # 40 steps: ~15-25). Uses the same voice library as Irodori; ~3 GB of RAM while loaded. Measured (Ryzen 5 5600GE): 10/13/31 s for lines of
 # 6/14/31 characters, a fit of ~5 s per request + 0.85 s per character, and ~40 s to import and load once per process.
 QWEN3_PORT = 8090
+# Qwen3 guesses kanji readings and slurs some (漂う as "tadao"): send each kanji word as its UniDic pronunciation in katakana instead.
+QWEN3_SPELL_OUT_KANJI = True
 QWEN3_MODEL = "Qwen/Qwen3-TTS-12Hz-0.6B-Base"
 # "cuda" or "cpu"; NAVIVI_TTS_DEVICE overrides. On cuda the model loads in bfloat16 (~2 GB), capped to
 # QWEN3_VRAM_FRACTION of the card, and the server falls back to the CPU when CUDA is missing or fails.
 # Each request first waits out a hot GPU (gpu_cooldown). This PC has hard-crashed during GPU work.
-QWEN3_DEVICE = "cuda"
+QWEN3_DEVICE = "cpu"
 QWEN3_VRAM_FRACTION = 0.4
 QWEN3_COST = {"request": 5.0, "char": 0.85, "startup": 40.0}

@@ -13,6 +13,13 @@ describe("mergeAutoReadings", () => {
     expect(mergeAutoReadings(manual, [{ word: "三段壁", reading: "さんだんへき" }], [])).toBeNull();
   });
 
+  it("updates an auto word's reading when the scan reads it differently", () => {
+    const current = [{ word: "神福寺跡", reading: "かみふくてらあと", auto: true }];
+    expect(mergeAutoReadings(current, [{ word: "神福寺跡", reading: "しんぷくじせき" }], [])).toEqual([
+      { word: "神福寺跡", reading: "しんぷくじせき", auto: true },
+    ]);
+  });
+
   it("drops auto words no script uses, keeps manual ones", () => {
     const current = [
       { word: "海", reading: "うみ", auto: true },
