@@ -119,9 +119,9 @@ def current_labels() -> Dict[str, Any]:
     return labels_for(current_language())
 
 
-def plural(labels: Dict[str, Any], key: str, n: int, **fields: Any) -> str:
+def plural(labels: Dict[str, Any], key: str, number: int, **fields: Any) -> str:
     """labels[key] formatted with fields; exactly one uses labels[key + "_one"] when the catalog has it."""
-    template = labels.get(f"{key}_one") if n == 1 else None
+    template = labels.get(f"{key}_one") if number == 1 else None
     return (template or labels[key]).format(**fields)
 
 
