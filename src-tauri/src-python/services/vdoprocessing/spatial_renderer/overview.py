@@ -14,7 +14,7 @@ from typing import Dict, List, Optional, Tuple
 import cv2
 import numpy as np
 
-from services import tuning
+from services import tuning, video_text
 from services.mapfetcher.mapgeometry import RouteGeometryProcessor
 from services.vdoprocessing.route_inputs import photo_inputs_hash, route_inputs_hash
 from services.vdoprocessing.vdoexporter import VideoExporter
@@ -266,7 +266,8 @@ class _OverviewRenderMixin:
                 sorted(audio_cues), walk_start_frames / fps, num_frames / fps,
             )
 
-        start_label, end_label = "開始", "終点"
+        _vt = video_text.current_labels()
+        start_label, end_label = _vt["overview_start"], _vt["overview_end"]
         for ancestor_dir in [self.out_dir] + list(self.out_dir.parents):
             potential_path = ancestor_dir / "job_config.json"
             if potential_path.exists():
@@ -291,11 +292,7 @@ class _OverviewRenderMixin:
                 cleaned_labels.append(end_label)
             else:
                 cleaned_labels.append(
-                    lbl.replace(tuning.PIPELINE_LABELS["start_prefix"], "")
-                    .replace(tuning.PIPELINE_LABELS["stop_prefix"], "")
-                    .replace(tuning.PIPELINE_LABELS["start_prefix"].strip(": "), "")
-                    .replace(tuning.PIPELINE_LABELS["stop_prefix"].strip(": "), "")
-                    .strip()
+                    video_text.strip_waypoint_prefixes(lbl)
                     if lbl
                     else None
                 )

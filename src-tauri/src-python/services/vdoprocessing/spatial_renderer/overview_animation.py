@@ -14,7 +14,7 @@ import numpy as np
 from services.mapfetcher.mapgeometry import RouteGeometryProcessor
 from services.vdoprocessing.vdoexporter import VideoExporter
 from services.logger.progress import tracker
-from services import tuning
+from services import tuning, video_text
 from .base import logger
 from .overview_timing import warp_path
 
@@ -1106,7 +1106,7 @@ class _OverviewAnimationMixin:
                     # just triggered rather than sequential_popups[seq_ptr]
                     # (already advanced past it by this point in the loop).
                     frame = self.graphics.render_top_banner(
-                        frame, f"まもなく {triggered_popup.get('label') or ''}"
+                        frame, video_text.current_labels()["soon_banner"].format(dest=triggered_popup.get("label") or "")
                     )
                     self.last_frame = frame
                     video.write(frame)
@@ -1337,7 +1337,11 @@ class _OverviewAnimationMixin:
                         expected_frame is not None
                         and (expected_frame - current_frame) <= int(fps * tuning.OVERVIEW_BANNER_NEAR_SECONDS)
                     )
-                    banner_text = f"まもなく {label}" if near else f"{label} へ"
+                    _vt = video_text.current_labels()
+                    banner_text = (
+                        _vt["soon_banner"].format(dest=label) if near
+                        else _vt["en_route_banner"].format(dest=label, suffix="")
+                    )
                     frame = self.graphics.render_top_banner(frame, banner_text)
 
                 self.last_frame = frame

@@ -1,0 +1,54 @@
+{
+  "mode_name": {
+    "walking": "Walk",
+    "driving": "Drive",
+    "car": "Drive",
+    "ferry": "Ferry",
+    "airplane": "Flight"
+  },
+  "mode_duration_label": {
+    "walking": "Walking time",
+    "driving": "Driving time",
+    "car": "Driving time",
+    "ferry": "Ferry time",
+    "airplane": "Flight time"
+  },
+  "en_route_suffix": {
+    "ferry": " by ferry",
+    "airplane": " by air"
+  },
+  "separator": " · ",
+  "mode_join": " / ",
+  "total_label": "Total",
+  "distance_label": "Distance",
+  "taskbar_card_title": "Trip overview",
+  "waypoint_fallback": "Stop",
+  "start_prefix": "Departure: ",
+  "stop_prefix": "Arrival: ",
+  "soon_banner": "Arriving soon: {dest}",
+  "en_route_banner": "Heading to {dest}{suffix}",
+  "hud_minutes": "{n} min",
+  "duration_seconds": "{n} sec",
+  "duration_hours_minutes": "{h} h {m:02d} min",
+  "duration_minutes": "{m} min",
+  "duration_fallback": "Time",
+  "destination_fallback": "Destination",
+  "overview_start": "Start",
+  "overview_end": "End",
+  "place_count": "{n} places",
+  "place_count_one": "{n} place",
+  "outro_subtitle": "{count} places visited",
+  "outro_subtitle_one": "{count} place visited",
+  "outro_route_from": "From {name}",
+  "outro_summary": {
+    "distance": "Total distance",
+    "legs": "{count} legs",
+    "legs_one": "{count} leg",
+    "time": "Travel time",
+    "time_note": "estimate",
+    "places": "Places visited",
+    "places_value": "{count} places",
+    "places_value_one": "{count} place",
+    "longest": "Longest leg"
+  }
+}

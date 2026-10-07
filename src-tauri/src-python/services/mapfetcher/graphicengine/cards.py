@@ -6,7 +6,7 @@ import cv2
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
 
-from services import tuning
+from services import tuning, video_text
 
 # The card-relevant labels (mode names, "distance"/"total", the taskbar
 # card's title) are a subset of tuning.LABELS_JA — the single combined
@@ -33,9 +33,9 @@ _TOTAL_ACCENT_COLOR: Tuple[int, int, int, int] = _CARD_TEXT_COLOR
 def merge_summary_card_labels(overrides: Optional[Dict]) -> Dict:
     """Merges a job_config.json settings.summary_card_labels override (any
     subset of keys, including a partial mode_name/mode_duration_label) over
-    tuning.LABELS_JA's bundled/shared defaults — never mutates either
-    input."""
-    merged = dict(tuning.LABELS_JA)
+    the current project's language catalog (services/video_text.py) —
+    never mutates either input."""
+    merged = video_text.current_labels()
     if not overrides:
         return merged
     for key, value in overrides.items():
@@ -99,19 +99,22 @@ class _CardMixin:
     # set in GraphicsEngineBase.__init__) — instance methods, not static, so
     # they can actually see that per-project override.
     def _mode_duration_label(self, mode: str) -> str:
-        labels = getattr(self, "summary_card_labels", tuning.LABELS_JA)
-        return labels["mode_duration_label"].get((mode or "").lower(), "時間")
+        labels = getattr(self, "summary_card_labels", None) or video_text.current_labels()
+        return labels["mode_duration_label"].get((mode or "").lower(), labels["duration_fallback"])
 
     def _mode_name_ja(self, mode: str) -> str:
-        labels = getattr(self, "summary_card_labels", tuning.LABELS_JA)
+        labels = getattr(self, "summary_card_labels", None) or video_text.current_labels()
         return labels["mode_name"].get((mode or "").lower(), (mode or "").capitalize())
 
-    @staticmethod
-    def _format_duration_ja(seconds: float) -> str:
+    def _format_duration_ja(self, seconds: float) -> str:
+        """Name kept from when the text was Japanese only; the wording is the project's language."""
+        labels = getattr(self, "summary_card_labels", None) or video_text.current_labels()
         if seconds < 60:
-            return f"{max(1, int(round(seconds)))}秒"
+            return labels["duration_seconds"].format(n=max(1, int(round(seconds))))
         hrs, mins = divmod(int(round(seconds / 60)), 60)
-        return f"{hrs}時間{mins:02d}分" if hrs else f"{mins}分"
+        if hrs:
+            return labels["duration_hours_minutes"].format(h=hrs, m=mins)
+        return labels["duration_minutes"].format(m=mins)
 
     def _mode_accent(self, mode: str) -> Tuple:
         """Same color the route line itself uses for this mode

@@ -18,7 +18,7 @@ from typing import Dict, Any, List, Optional, Tuple
 from services.mapfetcher.graphicengine import GraphicsEngine
 from services.logger.logger import setup_logger
 from services.logger.progress import tracker
-from services import tuning
+from services import tuning, video_text
 from services.mapbox_token import resolve_mapbox_token
 from services.vdoprocessing.spatial_renderer import SpatialRenderer
 from services.vdoprocessing.pydeckrecorder import record_headless_video
@@ -465,7 +465,7 @@ class RouteAnimator:
                 continue
 
             leg_labels = [l for l in res_data.get("labels", []) if l]
-            dest_label = leg_labels[-1] if leg_labels else "目的地"
+            dest_label = leg_labels[-1] if leg_labels else video_text.current_labels()["destination_fallback"]
             tracker.show_item(i + 1, f"Rendering residential leg {i + 1}/{len(res_sequence)} -> {dest_label}")
             leg_mode = res_data.get("mode") or "walking"
             leg_mode = tuning.MODE_ALIASES.get(str(leg_mode).lower(), str(leg_mode).lower())

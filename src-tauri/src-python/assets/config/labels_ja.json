@@ -13,10 +13,38 @@
     "ferry": "乗船時間",
     "airplane": "飛行時間"
   },
+  "en_route_suffix": {
+    "ferry": " 乗船中",
+    "airplane": " 搭乗中"
+  },
+  "separator": " ・ ",
+  "mode_join": "・",
   "total_label": "合計",
   "distance_label": "距離",
   "taskbar_card_title": "旅の概要",
   "waypoint_fallback": "ウェイポイント",
   "start_prefix": "出発: ",
-  "stop_prefix": "到着: "
+  "stop_prefix": "到着: ",
+  "soon_banner": "まもなく {dest}",
+  "en_route_banner": "{dest} へ{suffix}",
+  "hud_minutes": "{n} 分",
+  "duration_seconds": "{n}秒",
+  "duration_hours_minutes": "{h}時間{m:02d}分",
+  "duration_minutes": "{m}分",
+  "duration_fallback": "時間",
+  "destination_fallback": "目的地",
+  "overview_start": "開始",
+  "overview_end": "終点",
+  "place_count": "{n} か所",
+  "outro_subtitle": "訪れた{count}か所",
+  "outro_route_from": "{name} から",
+  "outro_summary": {
+    "distance": "総距離",
+    "legs": "{count}区間",
+    "time": "移動時間",
+    "time_note": "目安",
+    "places": "訪れた場所",
+    "places_value": "{count}か所",
+    "longest": "最長区間"
+  }
 }
