@@ -18,6 +18,10 @@ import {
   Plus,
   Search,
   Loader2,
+  RotateCcw,
+  Mic,
+  Film,
+  Subtitles,
 } from "../../../components/ui/icons";
 import { useWorkspace } from "../../../hooks/useWorkspace";
 import { useUI } from "../../../hooks/useUI";
@@ -36,6 +40,9 @@ import {
 import { aiEngine, isOnlineEngine } from "../../../services/ai/engine";
 import { PROVIDERS } from "../../../services/ai/providers";
 import { stopLabel } from "../../../utils/stopLabel";
+import { readTextFile } from "@tauri-apps/plugin-fs";
+import { probeDuration, toAbsoluteProjectPath } from "../../../services/fileSystem";
+import { RegenKind, refreshStopMedia, regenModes, runRegen } from "../../../services/stopRegen";
 import { PHOTO_EXTENSIONS, isHeic, preparePhotos } from "../../../services/imageImport";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
@@ -92,6 +99,9 @@ export function WaypointEditor({
     setActiveWaypointId,
     metadata,
     settings,
+    saveProject,
+    timeline,
+    setTimeline,
   } = useWorkspace();
   const { showToast, markedWaypointIds, isRendering, setShowAppSettings } = useUI();
   const isMarkedForRegen = markedWaypointIds?.includes(wpId);
@@ -108,6 +118,9 @@ export function WaypointEditor({
   const latestWp = useRef(wp);
   latestWp.current = wp;
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [regenBusy, setRegenBusy] = useState<RegenKind | null>(null);
+  const liveTimeline = useRef(timeline);
+  liveTimeline.current = timeline;
   const [thoughtProcess, setThoughtProcess] = useState("");
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -127,6 +140,50 @@ export function WaypointEditor({
   const isStopBy = !!wp.isStopBy && !isEndpoint;
   const isLinked = wp.connectToRoute !== false;
   const label = stopLabel(waypoints, wpIndex);
+
+  const hasArrivalVoice = !!wp.arrivingNarration?.trim();
+  const hasAttractionVoice = !!wp.attractionNarration?.trim() && !(isStopBy && !isLinked);
+  const canRegen = !!metadata.directory_path && !wp.skipAssetGeneration && !wp.isStub;
+
+  // Redo one stop's files through the single-stop CLI modes (one sidecar call at a time), then re-read them in the timeline.
+  const regenerate = async (kind: RegenKind) => {
+    const dir = metadata.directory_path;
+    if (!dir || regenBusy || isRendering) return;
+    const index = wpIndex;
+    setRegenBusy(kind);
+    showToast(
+      kind === "voice" ? t`Making the new voice for this stop. The first one can take a while.` : kind === "subtitles" ? t`Making the subtitles for this stop.` : t`Making the photo clip for this stop. This can take a few minutes.`,
+      "info",
+    );
+    try {
+      await saveProject();
+      const { skipped } = await runRegen(`${dir}/job_config.json`, regenModes(kind, index, { hasArrivalVoice, hasAttractionVoice }));
+      const next = await refreshStopMedia(liveTimeline.current, index, kind, {
+        probe: async (rel, mediaKind) => probeDuration(convertFileSrc(await toAbsoluteProjectPath(rel, dir)), mediaKind, 0),
+        readText: async (rel) => readTextFile(await toAbsoluteProjectPath(rel, dir)),
+      });
+      if (next) setTimeline(next);
+      if (skipped) showToast(t`Nothing was made: ${skipped}`, "warning");
+      else if (kind === "voice") showToast(hasAttractionVoice ? t`The voice is ready. If its length changed, redo the photo clip so it fits.` : t`The voice is ready.`, "success");
+      else showToast(kind === "subtitles" ? t`The subtitles are ready.` : t`The photo clip is ready.`, "success");
+    } catch (err: any) {
+      const message = String(err?.message ?? err);
+      if (/process was cancelled/i.test(message)) showToast(t`Stopped before it finished.`, "info");
+      else showToast(t`Could not make that again: ${message}`, "error");
+    } finally {
+      setRegenBusy(null);
+    }
+  };
+
+  const openRegenMenu = (e: React.MouseEvent<HTMLButtonElement>) => {
+    const box = e.currentTarget.getBoundingClientRect();
+    openContextMenu({ clientX: box.right - 170, clientY: box.bottom + 4 }, [
+      { type: "label", label: t`Make again for this stop` },
+      { label: t`Voice`, icon: Mic, disabled: !hasArrivalVoice && !hasAttractionVoice, onSelect: () => regenerate("voice") },
+      { label: t`Subtitles`, icon: Subtitles, disabled: !hasArrivalVoice, onSelect: () => regenerate("subtitles") },
+      { label: t`Photo clip`, icon: Film, disabled: wpImages.length === 0, onSelect: () => regenerate("photo") },
+    ]);
+  };
 
   const removeWaypoint = () => {
     setWaypoints(waypoints.filter((w) => w.id !== wp.id));
@@ -411,6 +468,18 @@ export function WaypointEditor({
           )}
 
           <div className="flex items-center shrink-0 ml-1">
+            {!isCollapsed && canRegen && (
+              <button
+                type="button"
+                onClick={openRegenMenu}
+                disabled={!!regenBusy || isRendering}
+                title={regenBusy ? t`Making this stop again...` : t`Make this stop's files again`}
+                aria-label={t`Make this stop's files again`}
+                className="p-1.5 rounded-md text-zinc-400 hover:text-zinc-800 hover:bg-zinc-100 dark:hover:text-zinc-100 dark:hover:bg-white/5 transition-colors disabled:opacity-60"
+              >
+                {regenBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
+              </button>
+            )}
             <button
               type="button"
               onClick={() => setIsCollapsed(!isCollapsed)}
