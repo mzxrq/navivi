@@ -52,6 +52,46 @@ export const defaultProjectSettings = {
     ai_features_enabled: true,
 };
 
+type Rgb = [number, number, number];
+
+// What the Python renderer does when a "Look of the video" key is missing (tuning.py and the readers' own fallbacks, colors
+// as RGB). The Project settings dialog shows these for unset keys and never writes one until the user changes it, so a
+// project saved before the controls existed renders exactly as before. src-python/tests/test_look_options.py keeps the
+// forwarded keys honest; change both sides together.
+export const videoLookDefaults = {
+    summary_card_style: "columns" as "glass" | "taskbar" | "stacked" | "columns",
+    theme: "dark" as "light" | "dark",
+    card_border_color: [230, 230, 230] as Rgb,
+    card_border_thickness: 1,
+    map_font_size: 24,
+    show_compass: true,
+    waypoint_map_border: true,
+    waypoint_intro_freeze: 2.0,
+    show_leg_wide_intro: false,
+    res_follow_pitch: 0,
+    overview_title: "",
+    overview_max_leg_seconds: 10,
+    overview_intro_card_scale: 1.3,
+    overview_intro_clean_hold_seconds: 1.5,
+    enable_ending_highlight: true,
+    enable_outro: true,
+    outro_style: "scroll" as "scroll" | "grid",
+    outro_route_info: true,
+    start_pin_color: [19, 136, 3] as Rgb,
+    end_pin_color: [217, 15, 81] as Rgb,
+    stopby_pin_color: [51, 38, 28] as Rgb,
+    drawn_pin_color: [255, 121, 12] as Rgb,
+    // arrived_marker_color has no fixed default: it is the project's marker color, darkened (see utils/videoLook.ts).
+    overview_speed_multiplier: 4,
+    res_target_avg_seconds: 14,
+    res_max_segment_seconds: 16,
+    camera_follow_distance_m: 14,
+    bearing_smoothing: 0.15,
+    enable_fullscreen_popups: true,
+    hide_route_on_popup: false,
+    upscale_popup_images: true,
+};
+
 export interface MapStyleOption {
     id: string;
     label: string;
