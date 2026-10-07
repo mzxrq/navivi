@@ -1354,7 +1354,7 @@ def render_route_video(
             for k, default in [
                 ("fps", 30),
                 ("line_thickness", 10),
-                ("marker_radius", 24),
+                ("marker_radius", 16),
                 ("map_font_size", 24),
                 ("card_border_thickness", tuning.DEFAULT_CARD_BORDER_THICKNESS),
                 ("route_line_border_thickness", tuning.DEFAULT_LINE_BORDER_THICKNESS),
@@ -1365,7 +1365,6 @@ def render_route_video(
                 ("show_segment_summary", True),
                 ("res_duration", 12.0),
                 ("post_arrival_hold_seconds", 1.0),
-                ("use_leg_storyboard", False),
                 ("default_transition_hold_seconds", 1.5),
                 ("hide_route_on_popup", False),
                 ("enable_fullscreen_popups", True),

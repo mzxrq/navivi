@@ -169,6 +169,33 @@ export function CaptionStyleFields({
           t`Colour, and width in pixels (0 = none)`,
         )
       )}
+      {row(
+        "shadow",
+        t`Shadow`,
+        <div className="flex items-center gap-2 w-full">
+          <ColorPicker label={t`Shadow color`} value={style.shadow_color} onChange={(shadow_color) => onChange({ shadow_color })} className="flex-1 min-w-0" />
+          <div className="w-20 shrink-0">
+            <IntInput value={style.shadow} min={0} max={20} onCommit={(v) => onChange({ shadow: v })} />
+          </div>
+        </div>,
+        t`Color, and distance in pixels (0 = none)`,
+      )}
+      {row(
+        "spacing",
+        t`Letter spacing`,
+        <div className="w-24">
+          <IntInput value={style.letter_spacing} min={-20} max={50} onCommit={(v) => onChange({ letter_spacing: v })} />
+        </div>,
+        t`Pixels on a 1080p frame`,
+      )}
+      {row(
+        "opacity",
+        t`Text opacity`,
+        <div className="w-24">
+          <IntInput value={style.opacity * 100} min={0} max={100} onCommit={(v) => onChange({ opacity: v / 100 })} />
+        </div>,
+        t`Percent`,
+      )}
       {caption &&
         row(
           "position",

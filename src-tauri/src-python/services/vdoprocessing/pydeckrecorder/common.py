@@ -25,6 +25,7 @@ while project_root.name != "src-python" and project_root.parent != project_root:
 sys.path.append(str(project_root))
 
 from services.logger.logger import setup_logger
+from services.mapbox_token import resolve_mapbox_token  # noqa: F401  (re-exported for the recorder modules)
 
 logger = setup_logger("3D Video Recorder")
 
@@ -38,7 +39,8 @@ logger = setup_logger("3D Video Recorder")
 load_dotenv(project_root / ".env")
 load_dotenv(project_root.parent.parent / ".env")
 
-# Set your Mapbox Access Token here, or load it from src-python/.env
-# (MAPBOX_API_KEY) or the frontend's own repo-root .env (VITE_MAPBOX_TOKEN)
-# — checked last so an explicit backend-only override still wins.
-MAPBOX_API_KEY = os.getenv("MAPBOX_API_KEY") or os.getenv("VITE_MAPBOX_TOKEN") or "YOUR_MAPBOX_ACCESS_TOKEN_HERE"
+# The token the desktop app hands over (NAVIVI_MAPBOX_TOKEN) wins, then the old
+# src-python/.env (MAPBOX_API_KEY) and repo-root .env (VITE_MAPBOX_TOKEN) names;
+# see services/mapbox_token.py. Callers with a job's settings use
+# resolve_mapbox_token(settings) first and fall back to this.
+MAPBOX_API_KEY = resolve_mapbox_token() or "YOUR_MAPBOX_ACCESS_TOKEN_HERE"

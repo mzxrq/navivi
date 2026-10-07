@@ -8,6 +8,8 @@ import { callSidecar, callSidecarShared } from "../../services/sidecar";
 import { Loader2, Play, Plus, Trash2, Volume2 } from "./icons";
 import { Segmented } from "./Segmented";
 import { Slider } from "./Slider";
+import { Switch } from "./Switch";
+import { DEFAULT_TTS_CAPTION, TTS_SPEED_RANGE, formatBytes, ttsCaptionPresets } from "./voiceOptions";
 
 interface Voice {
   id: string;
@@ -15,6 +17,12 @@ interface Voice {
   bytes: number;
   duration_seconds: number | null;
   builtin: boolean;
+}
+
+interface CacheInfo {
+  files: number;
+  bytes: number;
+  max_bytes: number;
 }
 
 interface KokoroInfo {
@@ -47,7 +55,10 @@ const iconButton =
 export function VoiceTab() {
   const { settings, updateSettings, setIsDirty } = useWorkspace();
   const [voices, setVoices] = useState<Voice[] | null>(null);
-  const [busy, setBusy] = useState<null | "list" | "add" | "delete" | "preview" | "install">(null);
+  const [busy, setBusy] = useState<null | "list" | "add" | "delete" | "preview" | "install" | "cache">(null);
+  const [cache, setCache] = useState<CacheInfo | null>(null);
+  const [confirmClear, setConfirmClear] = useState(false);
+  const [styleText, setStyleText] = useState<string | null>(null);
   const [kokoro, setKokoro] = useState<KokoroInfo | null>(null);
   const [qwen3Ready, setQwen3Ready] = useState<boolean | null>(null);
   const [irodoriReady, setIrodoriReady] = useState<boolean | null>(null);
@@ -62,6 +73,9 @@ export function VoiceTab() {
   const selected = settings.tts?.voice ?? DEFAULT_VOICE;
   const speed = settings.tts?.speed ?? DEFAULT_SPEED;
   const quality = settings.tts?.quality ?? DEFAULT_QUALITY;
+  const savedStyle = settings.tts?.caption ?? DEFAULT_TTS_CAPTION;
+  const autoOverviewCues = settings.auto_overview_cues ?? true;
+  const autoNarrationCues = settings.auto_narration_cues ?? true;
   const missing = !!voices && !voices.some((v) => v.id === selected);
   const disabled = busy !== null;
 
@@ -72,7 +86,9 @@ export function VoiceTab() {
     const engines = res.success
       ? await callSidecarShared<{ kokoro: KokoroInfo; qwen3: { ready: boolean }; irodori: { ready: boolean } }>("tts_engines")
       : null;
+    const cacheInfo = engines?.success ? await callSidecarShared<CacheInfo>("tts_cache_info") : null;
     setBusy(null);
+    if (cacheInfo?.success) setCache({ files: cacheInfo.files, bytes: cacheInfo.bytes, max_bytes: cacheInfo.max_bytes });
     if (engines?.success) {
       setKokoro(engines.kokoro);
       setQwen3Ready(engines.qwen3.ready);
@@ -94,6 +110,33 @@ export function VoiceTab() {
   const save = (patch: NonNullable<typeof settings.tts>) => {
     updateSettings({ tts: { ...settings.tts, ...patch } });
     setIsDirty(true);
+  };
+
+  // undefined drops the key, so the project goes back to the engine's default style.
+  const saveStyle = (caption: string | undefined) => {
+    setStyleText(null);
+    if (caption === settings.tts?.caption) return;
+    updateSettings({ tts: { ...settings.tts, caption } });
+    setIsDirty(true);
+  };
+
+  const saveCues = (patch: { auto_overview_cues?: boolean; auto_narration_cues?: boolean }) => {
+    updateSettings(patch);
+    setIsDirty(true);
+  };
+
+  const clearCache = async () => {
+    setBusy("cache");
+    setMessage(null);
+    const res = await callSidecar<{ files: number; bytes: number }>("tts_cache_clear", {});
+    setConfirmClear(false);
+    if (!res.success) {
+      setBusy(null);
+      return res.cancelled ? undefined : setMessage({ tone: "error", text: res.error });
+    }
+    const info = await callSidecar<CacheInfo>("tts_cache_info", {});
+    setBusy(null);
+    if (info.success) setCache({ files: info.files, bytes: info.bytes, max_bytes: info.max_bytes });
   };
 
   const preview = async (id: string) => {
@@ -374,9 +417,9 @@ export function VoiceTab() {
         </div>
         <div className="rounded-xl border border-zinc-200 dark:border-white/10 px-3 py-3 flex items-center gap-3">
           <Slider
-            min={0.5}
-            max={2}
-            step={0.05}
+            min={TTS_SPEED_RANGE.min}
+            max={TTS_SPEED_RANGE.max}
+            step={TTS_SPEED_RANGE.step}
             value={speed}
             onChange={(v) => save({ speed: v })}
             label={t`Narration speed`}
@@ -386,6 +429,105 @@ export function VoiceTab() {
           <button type="button" className={secondaryButton} disabled={speed === DEFAULT_SPEED} onClick={() => save({ speed: DEFAULT_SPEED })}>
             <Trans>Reset</Trans>
           </button>
+        </div>
+      </section>
+
+      {engine === "irodori" && (
+        <section>
+          <div className="flex items-baseline justify-between mb-2 px-0.5">
+            <h4 className="text-[12px] font-semibold text-zinc-500 dark:text-zinc-400"><Trans>Speaking style</Trans></h4>
+            <button
+              type="button"
+              className="text-[11px] text-navi hover:underline disabled:opacity-40 disabled:pointer-events-none"
+              disabled={settings.tts?.caption === undefined}
+              aria-label={t`Reset speaking style`}
+              onClick={() => saveStyle(undefined)}
+            >
+              <Trans>Reset</Trans>
+            </button>
+          </div>
+          <div className="rounded-xl border border-zinc-200 dark:border-white/10 p-3 space-y-2.5">
+            <div className="flex flex-wrap gap-1.5">
+              {ttsCaptionPresets().map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  aria-pressed={savedStyle === p.text}
+                  onClick={() => saveStyle(p.text === DEFAULT_TTS_CAPTION ? undefined : p.text)}
+                  className={`h-7 px-2.5 rounded-lg border text-[12px] font-medium transition-colors ${
+                    savedStyle === p.text
+                      ? "border-navi bg-navi/10 text-navi"
+                      : "border-zinc-200 dark:border-white/10 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-white/5"
+                  }`}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+            <input
+              value={styleText ?? savedStyle}
+              onChange={(e) => setStyleText(e.target.value)}
+              onBlur={() => styleText !== null && saveStyle(styleText.trim() === DEFAULT_TTS_CAPTION ? undefined : styleText.trim())}
+              onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+              placeholder={t`Describe how the voice should speak`}
+              aria-label={t`Speaking style`}
+              className={`${inputClass} w-full`}
+            />
+            <p className="text-[12px] leading-relaxed text-zinc-500 dark:text-zinc-400">
+              <Trans>
+                A short description of the way the natural voice speaks, written in Japanese. Leave it empty for no style. Changing it
+                regenerates the narration the next time you generate.
+              </Trans>
+            </p>
+          </div>
+        </section>
+      )}
+
+      <section>
+        <h4 className="mb-2 px-0.5 text-[12px] font-semibold text-zinc-500 dark:text-zinc-400"><Trans>Timing cues</Trans></h4>
+        <div className="rounded-xl border border-zinc-200 dark:border-white/10 divide-y divide-zinc-100 dark:divide-white/5">
+          <div className="flex items-center gap-3 px-3 py-2.5">
+            <div className="flex-1 min-w-0">
+              <div className="text-[13px] font-medium text-zinc-900 dark:text-zinc-100"><Trans>Place cues in the overview narration</Trans></div>
+              <p className="text-[11px] text-zinc-500 dark:text-zinc-400"><Trans>The overview stops at each stop while the voice describes it, then moves on.</Trans></p>
+            </div>
+            <Switch checked={autoOverviewCues} onChange={(v) => saveCues({ auto_overview_cues: v })} label={t`Place cues in the overview narration`} />
+          </div>
+          <div className="flex items-center gap-3 px-3 py-2.5">
+            <div className="flex-1 min-w-0">
+              <div className="text-[13px] font-medium text-zinc-900 dark:text-zinc-100"><Trans>Place cues in each stop's narration</Trans></div>
+              <p className="text-[11px] text-zinc-500 dark:text-zinc-400"><Trans>The walk reaches the stop by the time its name is spoken. Cues you type yourself always win.</Trans></p>
+            </div>
+            <Switch checked={autoNarrationCues} onChange={(v) => saveCues({ auto_narration_cues: v })} label={t`Place cues in each stop's narration`} />
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h4 className="mb-2 px-0.5 text-[12px] font-semibold text-zinc-500 dark:text-zinc-400"><Trans>Voice cache</Trans></h4>
+        <div className="rounded-xl border border-zinc-200 dark:border-white/10 px-3 py-2.5 flex items-center gap-3">
+          <div className="flex-1 min-w-0">
+            <div className="text-[13px] font-medium text-zinc-900 dark:text-zinc-100 tabular-nums">
+              {cache ? t`${formatBytes(cache.bytes)} of ${formatBytes(cache.max_bytes)}` : t`Checking…`}
+            </div>
+            <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+              <Trans>Spoken lines are kept so a repeated line is not spoken again. Narration already in your projects is not touched.</Trans>
+            </p>
+          </div>
+          {confirmClear ? (
+            <div className="flex items-center gap-1.5 text-[11px]">
+              <button type="button" disabled={disabled} onClick={clearCache} className="h-7 px-2 rounded-lg bg-red-500 text-white font-medium hover:bg-red-600 disabled:opacity-40 transition-colors">
+                <Trans>Clear</Trans>
+              </button>
+              <button type="button" disabled={disabled} onClick={() => setConfirmClear(false)} className={`${iconButton} w-auto px-2 text-[11px]`}>
+                <Trans>Cancel</Trans>
+              </button>
+            </div>
+          ) : (
+            <button type="button" className={secondaryButton} disabled={disabled || !cache || cache.files === 0} onClick={() => setConfirmClear(true)}>
+              {busy === "cache" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />} <Trans>Clear cache</Trans>
+            </button>
+          )}
         </div>
       </section>
 

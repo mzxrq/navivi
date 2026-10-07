@@ -523,7 +523,7 @@ export function AppSettings() {
             )}
 
             {activeTab === "api" && (
-              <Section title={t`Services`}>
+              <Section title={t`Services`} hint={t`Saved on this PC only, never inside projects or shared files`}>
                 <Row
                   title={t`Mapbox`}
                   description={t`Required for map rendering and 3D terrain`}
@@ -533,7 +533,7 @@ export function AppSettings() {
                     type="text"
                     value={settings.mapbox_api_key || ""}
                     onChange={(e) =>
-                      updateProject({ mapbox_api_key: e.target.value })
+                      updateSettings({ mapbox_api_key: e.target.value })
                     }
                     placeholder="pk.eyJ1..."
                     spellCheck={false}
@@ -549,7 +549,7 @@ export function AppSettings() {
                     type="text"
                     value={settings.ors_api_key || ""}
                     onChange={(e) =>
-                      updateProject({ ors_api_key: e.target.value })
+                      updateSettings({ ors_api_key: e.target.value })
                     }
                     placeholder={t`API key`}
                     spellCheck={false}

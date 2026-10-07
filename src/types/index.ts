@@ -20,7 +20,6 @@ export interface Waypoint {
   imageCredits?: Record<string, PhotoCredit>; // who took a photo that was found online, keyed by the photo's path
   videos?: string[];
   videoSound?: boolean[];
-  imageTransitions?: string[];
   arrivingNarration?: string;
   attractionNarration?: string;
   isGeneratingAudio?: boolean;
@@ -85,13 +84,14 @@ export interface ProjectSettings {
   route_line_border_color?: [number, number, number];
   route_line_border_thickness?: number;
   marker_color: [number, number, number];
-  marker_radius: number;
+  marker_radius?: number; // unset = the renderer default
   routeMarker?: string;
   pause: number;
   summary_hold: number;
   summary_fade: number;
   start_coords?: [number, number];
-  mapbox_api_key: string;
+  /** App-wide, never saved in a project: the workspace merges them in from the `api_keys` app setting (utils/apiKeys.ts). */
+  mapbox_api_key?: string;
   ors_api_key?: string;
   auto_save_interval: number;
   skip_rich_media?: boolean;
@@ -139,7 +139,9 @@ export interface ProjectSettings {
   marked_regeneration_waypoints?: string[];
   ai_features_enabled?: boolean;
   pronunciation_dictionary?: Array<{ word: string; reading: string }>;
-  tts?: { engine?: "irodori" | "qwen3" | "kokoro"; voice?: string; kokoro_voice?: string; speed?: number; quality?: "fast" | "balanced" | "best" };
+  tts?: { engine?: "irodori" | "qwen3" | "kokoro"; voice?: string; kokoro_voice?: string; speed?: number; quality?: "fast" | "balanced" | "best"; caption?: string };
+  auto_overview_cues?: boolean;
+  auto_narration_cues?: boolean;
   global_pronunciation_dictionary?: Array<{ word: string; reading: string }>;
   enable_attraction_videos?: boolean;
   use_narration_cues?: boolean;
