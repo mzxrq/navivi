@@ -47,11 +47,23 @@ def resolve_map_style(settings: Optional[dict], default_id: str, lang: Optional[
     return "mapbox://styles/owner/id" and use the base id only (the page's own script relabels them)."""
     settings = settings or {}
     chosen = raster_style_id(settings, lang, default_id) if raster else settings.get("mapbox_style_id")
-    path = str(chosen or default_id).strip()
+    path = str(chosen or "").strip()
     if path.startswith(_STYLE_URL_PREFIX):
         path = path[len(_STYLE_URL_PREFIX):]
-    path = path.strip("/") or default_id
+    path = path.strip("/")
+    owner, _, name = path.partition("/")
+    if not owner or not name or "/" in name or " " in path:
+        path = default_id  # not an "owner/id" style: keep the step's own
     return path if raster else _STYLE_URL_PREFIX + path
+
+
+def map_style_inputs(settings: Optional[dict]) -> str:
+    """What decides the map look, for the render checkpoint. Empty when the project sets nothing, so a project
+    from before these settings existed hashes as it did."""
+    settings = settings or {}
+    style = str(settings.get("mapbox_style_id") or "").strip()
+    sharp = "" if settings.get("mapbox_retina", True) else "no-retina"
+    return f"{style}|{sharp}" if style or sharp else ""
 
 
 # Runs before mapbox-gl loads: rewrites name_xx lookups in fetched style JSON to the target language

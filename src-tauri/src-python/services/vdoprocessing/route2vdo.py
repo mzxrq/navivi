@@ -20,6 +20,7 @@ from services.logger.logger import setup_logger
 from services.logger.progress import tracker
 from services import tuning
 from services.mapbox_token import resolve_mapbox_token
+from services.mapfetcher.maplanguage import resolve_map_style
 from services.vdoprocessing.spatial_renderer import SpatialRenderer
 from services.vdoprocessing.pydeckrecorder import record_headless_video
 from services.vdoprocessing.route_inputs import photo_inputs_hash
@@ -362,6 +363,7 @@ class RouteAnimator:
         return render_overview_video_pydeck(
             route_latlon, waypoints, output_path, duration=duration, fps=fps, title_text=title_text,
             mapbox_key=self._mapbox_token(),
+            map_style=resolve_map_style(self.config, "mapbox/streets-v12"),
         )
 
     def _leg_hud_card_png(self, mode: str):
@@ -677,6 +679,8 @@ class RouteAnimator:
                 dest_pin=res_data.get("dest_pin"),
                 theme=self.graphics.theme,
             )
+            if self.config.get("mapbox_style_id"):  # only a chosen style, so a finished leg's fingerprint stays as it was
+                leg_kwargs["map_style"] = resolve_map_style(self.config, "mapbox/outdoors-v12")
             # Everything this leg's clip is made from. Existing files are
             # only reused when it matches what they were rendered from: a
             # bare existence check kept legs rendered with an old walk

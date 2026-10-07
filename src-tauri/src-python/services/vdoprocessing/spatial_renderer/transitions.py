@@ -11,6 +11,7 @@ from services.mapfetcher.mapgeometry import RouteGeometryProcessor
 from services.vdoprocessing.vdoexporter import VideoExporter
 from services import tuning
 from services.mapbox_token import resolve_mapbox_token
+from services.mapfetcher.maplanguage import resolve_map_style
 from services.mapfetcher.graphicengine.pinimage import marker_for
 
 from .base import logger

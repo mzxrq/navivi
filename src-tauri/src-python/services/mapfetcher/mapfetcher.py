@@ -21,6 +21,7 @@ from services.logger.logger import setup_logger
 from services.logger.progress import tracker
 from services import tuning
 from services.mapbox_token import resolve_mapbox_token
+from services.mapfetcher.maplanguage import resolve_map_style
 
 # Logging configuration
 logger = setup_logger("MapFetcher")
