@@ -2,7 +2,7 @@
 Route to Video Animator (route2vdo.py)
 ---------------------------------------------------------------------------
 Main Orchestrator. Parses CLI arguments and JSON data, then routes
-the drawing commands to either the Spatial or Storyboard renderers.
+the drawing commands to the Spatial renderer.
 ---------------------------------------------------------------------------
 """
 
@@ -780,13 +780,6 @@ class RouteAnimator:
 
         output_paths = []
 
-        # [HACK] [Core] No StoryboardRenderer implementation exists anywhere in this codebase, so use_leg_storyboard can never actually run — fail loudly here instead of an opaque AttributeError deep in a dead branch.
-        if self.config.get("use_leg_storyboard", False) and wp_indices:
-            raise NotImplementedError(
-                "use_leg_storyboard is enabled but no StoryboardRenderer is "
-                "implemented — use the default spatial renderer instead."
-            )
-
         if render_mode == "recap_frame":
             overview_path = self.spatial_renderer.render_overview(
                 img_path, points, labels, popups, fps, summary=summary, point_modes=point_modes,
@@ -902,9 +895,6 @@ def main():
     parser.add_argument("--summary-json", default=None)
     parser.add_argument("--summary-hold", type=float, default=4.0)
     parser.add_argument("--summary-fade", type=float, default=0.5)
-    parser.add_argument(
-        "--use-storyboard", action="store_true", help="Slice the overview video"
-    )
 
     args = parser.parse_args()
 
@@ -914,7 +904,6 @@ def main():
         "summary_hold": args.summary_hold,
         "summary_fade": args.summary_fade,
         "res_duration": args.res_duration,
-        "use_leg_storyboard": args.use_storyboard,
     }
 
     animator = RouteAnimator(config)

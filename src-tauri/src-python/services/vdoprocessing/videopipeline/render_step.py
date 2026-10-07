@@ -1365,7 +1365,6 @@ def render_route_video(
                 ("show_segment_summary", True),
                 ("res_duration", 12.0),
                 ("post_arrival_hold_seconds", 1.0),
-                ("use_leg_storyboard", False),
                 ("default_transition_hold_seconds", 1.5),
                 ("hide_route_on_popup", False),
                 ("enable_fullscreen_popups", True),
