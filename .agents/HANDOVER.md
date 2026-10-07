@@ -1,90 +1,36 @@
-# Handover: state of the wrap2 push (written 2026-10-06, session limit hit)
+# Handover: state of the wrap2 push (updated 2026-10-07)
 
-Read this first when you (or Claude) pick the work up on another PC. It says what is finished, what is half done, where every
-piece of half-done work lives, and what to do next. Everything referenced here is either in git (branch `wrap2` on GitHub) or in
-the handover zip (`navivi-handover-*.zip`: it contains `wip-branches.bundle` for the unfinished branches).
+Read this first when you (or Claude) pick the work up. Everything below is in git on branch `wrap2` (GitHub) unless noted.
 
 ## 1. Where things stand
 
-| Item | State |
-|---|---|
-| Branch `wrap2` (origin) | = `main` at `c48fc07` + one commit `e4bc4b6`: the developer guide, the backend-gaps report, the agent notes in `.agents/` and `.claude/CLAUDE.md`. Pushed. The commit after it adds this handover and `.gitignore` tweaks |
-| Tests at `e4bc4b6` | frontend: tsc clean, 33 files / 289 tests pass. Python: the baseline run was still going when the session ended (it passed on the earlier branch; run `python -m pytest -q` in `src-tauri/src-python` to confirm) |
-| User-visible work done earlier this session (already on `main`) | assistant chat saved per project; photo finder (Wikimedia) with credits; Gemma 4 in the Ollama list; Setup tab with model names, credits and the ComfyUI installer; static C runtime + VC++ check in the setup program; the `popup_image` fix; AI-choice load retry; PR template |
-| The ten engineers (see section 3) | all ten stopped when the session limit hit. Seven left partial work, saved as one WIP commit per branch. **Nothing from them is merged into `wrap2` yet** |
+All ten first-wave workstreams are **merged into `wrap2`** and pushed: cleanup, keys, voice, heatmap, overview, pins, look, regen, hudlang, render-output.
+What each did, and the non-obvious behaviour, is in `.agents/CODEMAP.md` ("wrap2 additions (2026-10-07)"). The audit status is at the top of `docs/BACKEND_GAPS.md`.
+Dead code from the audit is removed. Japanese strings are filled (`npm run extract` shows ja Missing = 0). Decisions taken: pin icons are built into the video; on-video text defaults to English for English-UI projects ("auto").
 
-## 2. What was decided this session (keep these)
+Test state at the last full runs: `npx tsc --noEmit` clean, `npm test` 54 files / 389 tests pass. Python: 909 passed and 1 failed (the ComfyUI setup test, which ran out of disk; since rewritten to write kilobytes: 16 passed).
+A full `python -m pytest -q` after the very last merges was started but its result was not seen: run it once (`cd src-tauri/src-python`; about 9 minutes). `cargo test` last passed (46) on the keys branch before the other merges.
 
-- **Keys** (answer to "why are the Mapbox/OpenRouteService tokens stored in the project settings?"): it is a design flaw. They were put in
-  `ProjectSettings` before the AI keys got proper handling. Decision: make both **app-wide** (DB app setting `api_keys`, merged into `settings`
-  like `ai_settings`), never written into `job_config.json`, the project DB row, version snapshots or a `.nvv`; adopt a key found in an old project
-  once; scrub archives; Rust hands the Mapbox token to Python as `NAVIVI_MAPBOX_TOKEN`. Work in progress on branch `wrap2-keys`.
-  After it lands, **change the manual sentence** in chapters 3 and 14 ("Remove your Mapbox and OpenRouteService tokens ... before sharing"): it will no longer be true.
-- **Agent notes** live in git, inside folders only: `.agents/` (CLAUDE.md, CODEMAP.md, TECH_STACK.md, handover/, scratch/overlay-check) and
-  `.claude/CLAUDE.md` (one line importing `../.agents/CLAUDE.md`). No `CLAUDE.md` in the repository root.
-- Git rules (user's): never commit to `main`; work and push on the branch the user made for you (now `wrap2`); no `Co-Authored-By` or
-  "Generated with" lines; commit subjects `feat:` / `fix:` / `chore:` / `docs:`.
-- The elevation heatmap is reported "not working properly" by the user, with no more detail. Engineer `heatmap` was to find out.
-- Decisions still open for the user: pin icons (build in the video renderer or hide the controls; engineer `pins` was to decide with evidence);
-  English on-video text becomes the default for English-UI projects ("auto"; Japanese projects stay unchanged).
+## 2. What is left
 
-## 3. The ten workstreams and where their unfinished work is
+1. Run the three suites on `wrap2` (frontend, `python -m pytest -q`, `cargo test --manifest-path src-tauri/Cargo.toml`). If a test fails with "No space left on device", clear `%TEMP%\pytest-of-*`.
+2. Manuals: an agent was writing `Documents\Navivi-Manual\Navivi_User_Manual_EN_wrap2.docx` and `_JA_wrap2.docx` (new copies of the `*_updated.docx` files; text only, no new screenshots). Check they exist and open; otherwise redo with the list in section 3.
+3. Second wave, **not started** (the two engineers were stopped before writing any code to save quota): GPS stay detection on import (controls for radius and minimum stay; `gpsparser/stays.py` and `import_gps_track` exist) and translated subtitles (use the chosen local Ollama model or online provider, off by default, with the disclosure; not `deep-translator`). Worktrees `.claude/worktrees/wave2-stays` and `wave2-subs` (branches `wrap2-stays`, `wrap2-subs`, same as `wrap2` at that time) can be reused or deleted.
+4. Real-app checks nobody has done (everything was verified by tests, the headless harness or jsdom only): the heatmap with terrain, API keys with a real Mapbox key (and the Rust handoff of `NAVIVI_MAPBOX_TOKEN`), pin images in a real pydeck render, a photo clip (the parallax fallback raised OSError 22 on this PC), the new Look and Export dialogs, the overview editor, Voice tab cache, regeneration buttons.
+5. Open points from the engineers: overview "Hear it" on a stale auto script rewrites the script on disk while the app keeps the old text; no cancel for Auto-write; `ollamaApi.generateOverviewScriptStream` is dead; `raw_track.gpx` still writes a fake `<ele>35.0`; a frame rate other than 30 in `fps` now exports at that rate; voice style names (まじめ, あたたかい, 元気) and a few other Japanese strings are guesses; British spelling in "Text colour" and "Outline colour" strings.
+6. Open the PR: base `main`, head `wrap2`, text from `docs/pull_request_template.md`. Never commit to `main`; no Co-Authored-By or "Generated with" lines.
 
-Task text for each: `.agents/handover/tasks.md`. Shared rules: `.agents/handover/agent_rules.md`.
-Branches are named `wrap2-<name>` (git cannot have both `wrap2` and `wrap2/x`). Restore them from the bundle (section 5) or find them in the
-original checkout. Every branch starts at `wrap2` `e4bc4b6` (cleanup has two real commits first).
+## 3. Manual changes to cover (if redoing)
 
-| Branch | What it should deliver | What is on the branch now | Verdict |
-|---|---|---|---|
-| `wrap2-cleanup` | small bug fixes + dead-code removal | **Two finished commits**: `ba078b4` Fly legs behave as airplane legs (`tuning.py` `MODE_ALIASES`, test), `5d2a5a8` overview narration uses the chosen local model (`script_engine.py`, test). Then a WIP commit `269846b` (19 files): `marker_radius` default (`constants.ts`, `base.py`, test), `imageTransitions` removal (types, saver, loader, `manifestBuilder.ts`), `main.py` payload split + test, `test_online_llm.py` edits. No dead-code deletions yet (verify before doing them: see the task) | review, run tests, merge the two good commits first |
-| `wrap2-keys` | app-wide Mapbox/ORS keys | WIP commit (21 files): `src/utils/apiKeys.ts`, `src/hooks/useAppApiKeys.ts`, edits in `AppSettings.tsx`, `useWorkspace.tsx`, `fileSystem.ts`, `projectStore.ts`, `versionHistory.ts`, Rust `lib.rs`, `db/app_settings.rs`, `project_files.rs`; Python `services/mapbox_token.py` + `test_mapbox_token.py`, token plumbing in `maptile.py`, `pydeckrecorder/*`, `route2vdo.py`, `transitions.py`. It was in the middle of "the hook". Not compiled/tested to completion | most advanced big item: finish, `cargo test`, `npm test`, pytest |
-| `wrap2-voice` | speaking style, caption extras, cue helpers, voice cache, speed range | WIP (4 files): Python side only: `voice_commands.py` + `phrase_cache.py` (cache info/clear), `test_voice_extras.py`, `test_caption_look_burn.py`. No UI yet | Python half done; the Voice-tab UI, caption fields and cue buttons are still to do |
-| `wrap2-overview` | overview narration editor | WIP (4 files): Python only: `main.py`, `script_commands.py`, `narration_step.py`, `test_overview_script_mode.py`. No panel yet | UI (`OverviewPanel.tsx`), persistence and the ReviewStep sentence still to do |
-| `wrap2-pins` | custom pin icons in the video | WIP: new `graphicengine/pinimage.py` (225 lines, image pin drawing helper). Not wired into the renderers, no test | started |
-| `wrap2-render-output` | export options + video map style | WIP (3 files): small edits in `mapfetcher.py`, `maplanguage.py`, `transitions.py` (style plumbing start). Nothing for the export dialog yet | barely started |
-| `wrap2-heatmap` | fix the elevation heatmap | only a stray `hm-shoot.mjs` harness script. The investigation findings were lost | start again |
-| `wrap2-hudlang` | English text in the video | nothing saved | start again |
-| `wrap2-regen` | force option + per-stop regeneration | nothing saved (it had been timing the single-stop CLI modes) | start again |
-| `wrap2-look` | video look settings | nothing saved (it had only read code) | start again |
+Rewrite the Mapbox/OpenRouteService sharing warning in chapters 3 and 14 (keys are app-wide and never in projects). Add: elevation heatmap, Voice tab (speaking style, 0.25-4x speed, cues, cache), overview narration editor, pin images in the video,
+Look of the video (+ per-stop options), Make everything again and per-stop regeneration, on-video text language, export options, map style in the video.
 
-Merge order that limits conflicts: cleanup, keys, then the others one by one (each touches `types/index.ts`, `constants.ts`, `render_step.py`,
-`tuning.py`, `ProjectSettingsModal.tsx`, `WaypointEditor.tsx`; expect small conflicts, resolve by keeping both sides). After each merge run
-`npm run typecheck && npm test`, and the pytest files for the area.
+## 4. Environment notes
 
-## 4. What the lead still has to do (not delegated)
-
-1. Merge the branches into `wrap2`, resolve conflicts, run all three suites (frontend, `python -m pytest -q`, `cargo test --manifest-path src-tauri/Cargo.toml`).
-2. `npm run extract`, then fill the Japanese `msgstr` entries in `src/locales/ja/messages.po` (helper scripts used before: `list_missing.py` / `ja_fill2.py` pattern: find empty msgstr, map msgid -> Japanese, rewrite), `npm run compile`.
-3. Update `.agents/CODEMAP.md` with the notes from each engineer, and `docs/DEVELOPER_GUIDE.md` / `docs/BACKEND_GAPS.md` (mark fixed items).
-4. Update the user manuals (`Documents\Navivi-Manual\Navivi_User_Manual_EN.docx` / `_JA.docx`; the newest text is in the `*_updated.docx` copies because the originals were open in LibreOffice). Edit the XML with lxml like the earlier scripts (single-run replacements; keep image paragraphs by cloning); validate with the docx skill's `validate.py`; render through Word COM for a visual check. New things to cover: app-wide keys (rewrite the sharing warning), new settings, regenerate options, overview editor, export options, English on-video text, heatmap.
-5. Second wave: GPS stay detection, translated subtitles (see the end of `tasks.md`).
-6. Open a PR `wrap2` -> `main` (base `main`, head `wrap2`; the template is `docs/pull_request_template.md`).
-
-## 5. Getting the unfinished branches on another PC
-
-The zip contains `wip-branches.bundle` (only the new commits, small). After cloning the repository and checking out `wrap2`:
-
-```bash
-git clone https://github.com/mzxrq/navivi && cd navivi && git checkout wrap2
-git fetch ../wip-branches.bundle "refs/heads/wrap2-*:refs/heads/wrap2-*"      # path to the bundle from the zip
-git branch --list "wrap2-*"
-git log --oneline wrap2..wrap2-keys                                           # look at one
-git merge wrap2-cleanup                                                       # etc.
-```
-
-The bundle also holds the salvaged WIP commits; each WIP commit message says it is unreviewed. Treat them as drafts.
-
-## 6. Environment notes for whoever continues
-
-- Windows + Git Bash. The Bash tool mangles backslashes in inline `python - <<EOF` and `sed` programs: write scripts that contain a backslash to a file (Write tool) and run it; use `chr(92)`.
-- Run Python tests with the system `python` (the repository `.venv` has no packages). `npm test` needs `node_modules`; Lingui CLI needs Node 24.
-- One Python sidecar call at a time (Rust kills the previous one): never start a second `callSidecar` while another runs.
-- Sub-agents in worktrees need a junction for `node_modules` (see `agent_rules.md`) and a separate `CARGO_TARGET_DIR`.
-- Screens are checked with the headless harness `.agents/scratch/overlay-check/index.html` (see the developer guide, section 3). Do not start the real app from an agent.
-- Session memory (preferences and what the user has confirmed) lives outside the repository in Claude's project memory folder; the zip contains a copy
-  under `claude-memory/`. Copy it back to `%USERPROFILE%\.claude\projects\<project folder name>\memory\` if you want Claude to remember it on the other PC.
-
-## 7. Not yet tried by a human in the real app
-
-Assistant chat history, the photo finder, the Setup tab rewrite, the ComfyUI installer (never run: 26 GB, needs a GPU), the VC++ runtime check in the setup
-program (needs a clean Windows Sandbox), the `popup_image` save fix (existing projects need one resave), and everything on the WIP branches.
+- Windows + Git Bash. The Bash tool mangles backslashes in inline `python - <<EOF` and `sed` programs: write such scripts to a file and run them.
+- Run Python tests with the system `python`. `npm test` needs `node_modules`; Lingui CLI needs Node 24.
+- One Python sidecar call at a time (Rust kills the previous one).
+- Sub-agents: use existing git worktrees by absolute path (the `isolation: worktree` default branches from `origin/main`, not `wrap2`); a junction for `node_modules`; separate `CARGO_TARGET_DIR` under `src-tauri/target-agents/`. Keep at most 3 to 4 running; ten at once hit the rate limit.
+- Task prompts and engineer rules from the first wave: `.agents/handover/tasks.md`, `.agents/handover/agent_rules.md`.
+- Screens are checked with the headless harness `.agents/scratch/overlay-check/index.html`. Do not start the real app from an agent.
+- Memory (preferences, what the user has confirmed) lives outside the repository in Claude's project memory folder.
