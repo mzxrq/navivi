@@ -113,7 +113,7 @@ class TestTwoShots:
         photo.write_bytes(b"photo")
         made = []
 
-        def render(photo, move, out, work, prompt=None):
+        def render(photo, move, out, work, prompt=None, place=None):
             made.append(move)
             if move == "closein":
                 raise RuntimeError("OOM")

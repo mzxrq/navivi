@@ -105,9 +105,11 @@ def waypoint_cue_key(waypoint: dict, pos: int) -> str:
 
 def apply_cued_scripts(waypoints: list, project_dir) -> int:
     """Attaches each waypoint's stored cued script to the in-memory waypoint as
-    `_cued_script`. job_config.json itself is never touched. Returns how many."""
+    `_cued_script`, and marks the closing waypoint (mark_closing_waypoint).
+    job_config.json itself is never touched. Returns how many cued scripts."""
     from .narration_step import CueStore
 
+    mark_closing_waypoint(waypoints)
     store = CueStore(project_dir)
     attached = 0
     for pos, wp in enumerate(waypoints):
@@ -154,7 +156,24 @@ def _resolve_attraction_narration_script(waypoint: dict) -> Optional[str]:
     it's blank — the combined script is then 100% arrival narration, with
     nothing about the attraction at all."""
     text = clean_text(waypoint.get("attractionNarration") or waypoint.get("narration") or "").strip()
+    closing = waypoint.get("_closing_line")
+    if text and closing and not text.rstrip("。！!").endswith(closing.rstrip("。！!")):
+        text += ("" if text[-1] in "。！？!?." else "。") + closing
     return text or None
+
+
+def mark_closing_waypoint(waypoints: list) -> None:
+    """The last visited waypoint's attraction clip plays right before the
+    outro: marks it (in memory, `_closing_line`) to end on
+    tuning.CLOSING_NARRATION. Never on its own: too short for TTS alone."""
+    visited = []
+    for wp in waypoints:
+        if isinstance(wp, dict):
+            wp.pop("_closing_line", None)
+            if not is_passed_only(wp):
+                visited.append(wp)
+    if visited and tuning.CLOSING_NARRATION and has_own_attraction_clip(visited[-1]):
+        visited[-1]["_closing_line"] = tuning.CLOSING_NARRATION
 
 
 def _voice_note_path(audio_path) -> Path:
