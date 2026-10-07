@@ -78,11 +78,15 @@ def test_auto_flagged_entries_are_applied_like_any_other():
     assert apply_pronunciation_dictionary("三段壁へ", entries) == "サンダンベキへ"
 
 
-def test_an_auto_place_name_is_replaced_even_when_the_analyser_reads_it_right():
+def test_an_auto_place_name_the_analyser_reads_right_keeps_its_kanji_and_is_checked():
+    from services.tts import name_check
     from services.vdoprocessing.videopipeline.audio_step import apply_pronunciation_dictionary
 
     entries = [{"word": "三輪神社", "reading": "みわじんじゃ", "auto": True}, {"word": "札立山", "reading": "ふだたてやま", "auto": True}]
-    assert apply_pronunciation_dictionary("三輪神社から札立山へ", entries) == "ミワ神社からフダタテヤマへ"
+    text = apply_pronunciation_dictionary("三輪神社から札立山へ", entries)
+    assert text == "三輪神社からフダタテヤマへ"
+    assert ("三輪神社", "みわじんじゃ") in name_check.expected_names(text)
+    assert name_check.spell_out(text, ["三輪神社"]) == "ミワ神社からフダタテヤマへ"
 
 
 def test_a_manual_word_is_always_replaced_and_katakana_or_mixed_readings_pass_through():
@@ -142,5 +146,5 @@ def test_spoken_kana_reads_ho_for_a_step():
 def test_an_ending_with_one_reading_stays_in_kanji():
     from services.vdoprocessing.videopipeline.audio_step import apply_pronunciation_dictionary
 
-    entries = [{"word": "猿坂峠", "reading": "さるさかとうげ", "auto": True}, {"word": "三輪神社", "reading": "みわじんじゃ", "auto": True}]
+    entries = [{"word": "猿坂峠", "reading": "さるさかとうげ"}, {"word": "三輪神社", "reading": "みわじんじゃ"}]
     assert apply_pronunciation_dictionary("猿坂峠から三輪神社へ", entries) == "サルサカ峠からミワ神社へ"

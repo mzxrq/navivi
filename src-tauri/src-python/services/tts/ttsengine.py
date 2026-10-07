@@ -701,7 +701,8 @@ class IrodoriTTSClient:
         return [best[1]]
 
     async def _with_names_heard(self, text: str, audio: bytes) -> bytes:
-        """`audio`, or a retake when the voice misread a place name in it; the take with the fewest misses is kept."""
+        """`audio`, or a retake when the voice misread a place name in it; the take with the fewest misses is kept.
+        A misread name left in kanji is spelled out for the retakes."""
         from services.tts import name_check
 
         missing = await asyncio.to_thread(name_check.misheard_names, audio, text)
@@ -713,6 +714,7 @@ class IrodoriTTSClient:
                     break
                 logger.warning("TTS retake %d for misread place names: %s", attempt + 1, ", ".join(missing))
                 self.bypass_cache = True
+                text = name_check.spell_out(text, missing)
                 take = await self.call_api(text)
                 if cut_off_ratio(take) > tuning.TTS_CUTOFF_RATIO:
                     continue

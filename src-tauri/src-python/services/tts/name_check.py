@@ -12,7 +12,7 @@ import io
 import re
 import unicodedata
 from functools import lru_cache
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 from services import tuning
 from services.localization import japanese_words
@@ -23,8 +23,25 @@ logger = setup_logger("NameCheck")
 _originals: Dict[str, str] = {}  # spelled-out name -> how the script writes it, filled by apply_pronunciation_dictionary
 
 
+_kanji_names: Dict[str, Tuple[str, str]] = {}  # name left in kanji -> (its reading, how a retake spells it out)
+
+
 def remember(spoken: str, word: str) -> None:
     _originals[spoken] = word
+
+
+def remember_kanji(word: str, reading: str, spoken: str) -> None:
+    _kanji_names[word] = (reading, spoken)
+
+
+def spell_out(text: str, names: List[str]) -> str:
+    """`text` with the kanji names among `names` spelled out, for a retake after the voice misread them."""
+    for name in sorted(names, key=len, reverse=True):
+        if name in _kanji_names:
+            spoken = _kanji_names[name][1]
+            remember(spoken, name)
+            text = text.replace(name, spoken)
+    return text
 
 
 def _kanji_form(text: str) -> str:
@@ -36,7 +53,7 @@ _NAME = re.compile(r"([ァ-ヺー]{2,})(%s)?" % _SUFFIXES)
 
 
 def expected_names(text: str) -> List[tuple]:
-    """(name as written, its reading) for each spelled-out name in `text`."""
+    """(name as written, its reading) for each place name in `text`: the spelled-out ones, then those left in kanji."""
     names = []
     for m in _NAME.finditer(text):
         if not m.group(2) and len(m.group(1).replace("ー", "")) < tuning.TTS_NAME_CHECK_MIN_CHARS:
@@ -44,6 +61,9 @@ def expected_names(text: str) -> List[tuple]:
         reading = japanese_words.to_hiragana(m.group(1)) + japanese_words.PLAIN_SUFFIXES.get(m.group(2) or "", "")
         if (m.group(0), reading) not in names:
             names.append((m.group(0), reading))
+    for word, (reading, _) in sorted(_kanji_names.items(), key=lambda item: -len(item[0])):
+        if word in text and not any(word in name for name, _ in names):
+            names.append((word, reading))
     return names
 
 
@@ -99,7 +119,7 @@ def misheard_names(audio: bytes, text: str) -> List[str]:
     written = _kanji_form(heard_text)
     missing = []
     for name, reading in names:
-        original = _kanji_form(_originals.get(name, ""))
+        original = _kanji_form(_originals.get(name) or (name if name in _kanji_names else ""))
         times_heard = max([r.count(_plain(reading)) for r in readings] + [written.count(original) if original else 0])
         if times_heard < text.count(name):
             missing.append(name)

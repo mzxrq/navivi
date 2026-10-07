@@ -59,3 +59,19 @@ def test_the_first_take_is_kept_when_no_retake_says_it_better(client, monkeypatc
     monkeypatch.setattr(name_check, "transcribe", lambda audio: "さらさか峠へ。")
     assert asyncio.run(client._speak_chunk("サルサカ峠へ。")) == [GOOD]
     assert len(client.calls) == 1 + tuning.TTS_NAME_RETAKES
+
+
+def test_a_misread_kanji_name_is_spelled_out_for_the_retake(tmp_path, monkeypatch):
+    monkeypatch.setenv("NAVIVI_CACHE_DIR", str(tmp_path / "cache"))
+    name_check.remember_kanji("三輪神社", "みわじんじゃ", "ミワ神社")
+    c = make_tts_client({"tts": {"engine": "kokoro"}}, tmp_path / "out")
+    sent = []
+
+    async def call_api(self, text):
+        sent.append(text)
+        return GOOD if len(sent) == 1 else OTHER
+
+    monkeypatch.setattr(KokoroTTSClient, "call_api", call_api)
+    monkeypatch.setattr(name_check, "transcribe", lambda audio: "三輪神社へ。" if audio == OTHER else "みら神社へ。")
+    assert asyncio.run(c._speak_chunk("三輪神社へ。")) == [OTHER]
+    assert sent == ["三輪神社へ。", "ミワ神社へ。"]

@@ -1681,7 +1681,7 @@ TTS_MODEL = "irodori-tts"
 # every other real one - NAVIVI_TTS_DEVICE=cuda opts back into GPU when
 # that tradeoff is wanted (the server reads its device at spawn time only;
 # an already-running server needs restarting to pick up a changed value).
-TTS_DEVICE = "cuda"
+TTS_DEVICE = "cpu"
 # Longest text sent to the TTS server in one request, in characters: about 15
 # seconds of speech at the project's measured ~4.4 characters per second.
 TTS_MAX_CHUNK_CHARS = 60
@@ -1820,6 +1820,6 @@ QWEN3_MODEL = "Qwen/Qwen3-TTS-12Hz-0.6B-Base"
 # "cuda" or "cpu"; NAVIVI_TTS_DEVICE overrides. On cuda the model loads in bfloat16 (~2 GB), capped to
 # QWEN3_VRAM_FRACTION of the card, and the server falls back to the CPU when CUDA is missing or fails.
 # Each request first waits out a hot GPU (gpu_cooldown). This PC has hard-crashed during GPU work.
-QWEN3_DEVICE = "cuda"
+QWEN3_DEVICE = "cpu"
 QWEN3_VRAM_FRACTION = 0.4
 QWEN3_COST = {"request": 5.0, "char": 0.85, "startup": 40.0}

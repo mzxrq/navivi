@@ -16,6 +16,7 @@ import urllib.parse
 from pydantic import BaseModel
 from typing import Literal, Dict, Any
 
+from services.localization.spoken_style import SPOKEN_STYLE_JA
 from services.logger.logger import setup_logger
 
 logger = setup_logger("AI Recommender")
@@ -238,8 +239,9 @@ def generate_voiceover_script(
         【重要指示】
         1. スポット名が数字や不完全な場合でも、決して2や座標といった番号をそのまま発音しないでください。
         2. ユーザー指定テーマがある場合はそれを中心に、移動中の背景や次の目的地へ向かうワクワク感と共にプロフェッショナル感を表現してください。
-        3. 参考情報がある場合は活用し、自然な話言葉 (4~5分程度) で出力してください。
+        3. 参考情報がある場合は活用し、自然な話し言葉の4〜5文で出力してください。
         4. トーン書きやBGMなどの記号は一切出力せず、ナレーション本文のみを出力してください。
+        {SPOKEN_STYLE_JA}
         """
         user_msg = (
             "このスポットの魅力や移動の楽しさを伝えるナレーションを作成してください。"
@@ -340,7 +342,8 @@ def generate_overview_script(waypoints: list[str], engine: str = "ollama") -> st
             f"【作成ルール】\n"
             f"1. このルート全体を紹介する、ワクワクするようなオープニングナレーション（5〜6文程度）を作成してください。\n"
             f"2. （BGM）などのト書きやカッコ書きは絶対に含めないでください。\n"
-            f"3. 訪れる場所の魅力を簡潔にまとめ、出発への期待を高めてください。"
+            f"3. 訪れる場所の魅力を簡潔にまとめ、出発への期待を高めてください。\n"
+            + SPOKEN_STYLE_JA
         )
         user_msg = "このルートのオープニングナレーションを作成してください。"
         fallback = "素晴らしい旅の始まりです。さあ、出発しましょう！"
