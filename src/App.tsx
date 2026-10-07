@@ -6,7 +6,6 @@ import { RenderOverlay } from "./components/ui/RenderOverlay";
 import { ProjectManager } from "./components/view/ProjectManager";
 import { NewProject } from "./components/ui/NewProject";
 import { AppSettings } from "./components/ui/AppSettings";
-import { OpenProjectSettings } from "./components/view/ProjectSettingsModal";
 import { AssistantPanel } from "./features/assistant/AssistantPanel";
 import { SetupGate } from "./components/ui/SetupGate";
 import { VcRuntimeGate } from "./components/ui/VcRuntimeGate";
@@ -36,7 +35,6 @@ export default function App() {
       <TitleBar />
       <RenderOverlay />
       <AppSettings />
-      <OpenProjectSettings />
       <SetupGate />
       <VcRuntimeGate />
 

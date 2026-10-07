@@ -137,34 +137,16 @@ export function ProjectSettingsModal({
   );
 }
 
-/** Editor: the open project's settings live in the workspace, so changes apply at once and save with the project. */
+/** Editor: the open project's settings live in the workspace, so changes apply at once and save with the project (the Project tab of App Settings). */
 export function OpenProjectSettings() {
-  const { showProjectSettings, setShowProjectSettings, currentView } = useUI();
-  const { settings, updateSettings, setIsDirty, metadata } = useWorkspace();
-  const close = () => setShowProjectSettings(false);
-
-  if (!showProjectSettings || currentView !== "editor") return null;
+  const { settings, updateSettings, setIsDirty } = useWorkspace();
 
   const setOption = (patch: Record<string, unknown>) => {
     updateSettings(patch as Parameters<typeof updateSettings>[0]);
     setIsDirty(true);
   };
 
-  return (
-    <Dialog
-      title={<Trans>Project Settings</Trans>}
-      subtitle={metadata.project_name}
-      onClose={close}
-      width={dialogWidth}
-      footer={
-        <button type="button" onClick={close} className={dialogButton.primary}>
-          <Trans>Done</Trans>
-        </button>
-      }
-    >
-      <ProjectSettingsForm options={settings as Record<string, any>} setOption={setOption} onLeave={close} inProject />
-    </Dialog>
-  );
+  return <ProjectSettingsForm options={settings as Record<string, any>} setOption={setOption} inProject />;
 }
 
 function ProjectSettingsForm({
@@ -175,7 +157,7 @@ function ProjectSettingsForm({
 }: {
   options: Record<string, any>;
   setOption: (patch: Record<string, unknown>) => void;
-  onLeave: () => void;
+  onLeave?: () => void;
   inProject?: boolean;
 }) {
   const { setShowAppSettings } = useUI();
@@ -212,11 +194,12 @@ function ProjectSettingsForm({
   const openAppSettings = (tab: string) => {
     setShowAppSettings(true);
     setTimeout(() => window.dispatchEvent(new CustomEvent("open-app-settings-tab", { detail: tab })), 0);
-    onLeave();
+    onLeave?.();
   };
 
   return (
     <div className="space-y-5">
+      {!inProject && (
       <div className="space-y-2.5">
         <div>
           <p className="text-[13px] font-medium text-zinc-900 dark:text-zinc-100">
@@ -264,8 +247,9 @@ function ProjectSettingsForm({
           )}
         </div>
       </div>
+      )}
 
-      <div className="space-y-3 pt-4 border-t border-zinc-100 dark:border-white/5">
+      <div className={`space-y-3 ${inProject ? "" : "pt-4 border-t border-zinc-100 dark:border-white/5"}`}>
         <p className="text-[13px] font-medium text-zinc-900 dark:text-zinc-100">
           <Trans>Rendering</Trans>
         </p>
@@ -360,27 +344,14 @@ function ProjectSettingsForm({
         </OptionRow>
       </div>
 
-      <div className="pt-4 border-t border-zinc-100 dark:border-white/5">
-        <p className="text-[13px] font-medium text-zinc-900 dark:text-zinc-100">
-          {inProject ? <Trans>More settings</Trans> : <Trans>Pronunciation dictionary</Trans>}
-        </p>
-        <p className="mt-0.5 mb-2 text-[12px] text-zinc-500 dark:text-zinc-400">
-          {inProject ? (
-            <Trans>Frame rate, captions, voice and the pronunciation dictionary are in App Settings.</Trans>
-          ) : (
+      {!inProject && (
+        <div className="pt-4 border-t border-zinc-100 dark:border-white/5">
+          <p className="text-[13px] font-medium text-zinc-900 dark:text-zinc-100">
+            <Trans>Pronunciation dictionary</Trans>
+          </p>
+          <p className="mt-0.5 mb-2 text-[12px] text-zinc-500 dark:text-zinc-400">
             <Trans>Words every project shares live in App Settings, which you can open from here without opening a project.</Trans>
-          )}
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {inProject && (
-            <button
-              type="button"
-              onClick={() => openAppSettings("video")}
-              className="h-8 px-3 rounded-lg border border-zinc-200 dark:border-white/10 bg-white dark:bg-white/5 text-[12px] font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-white/10 transition-colors"
-            >
-              <Trans>More video options…</Trans>
-            </button>
-          )}
+          </p>
           <button
             type="button"
             onClick={() => openAppSettings("tts_dictionary")}
@@ -389,7 +360,7 @@ function ProjectSettingsForm({
             <Trans>Open dictionary…</Trans>
           </button>
         </div>
-      </div>
+      )}
     </div>
   );
 }

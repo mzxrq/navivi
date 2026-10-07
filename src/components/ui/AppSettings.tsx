@@ -29,6 +29,7 @@ import {
   Check,
   CheckCircle2,
   Film,
+  SlidersHorizontal,
   Key,
   MapPin,
   Download,
@@ -62,12 +63,14 @@ import { AboutPanel } from "./AboutPanel";
 import { CaptionPreview } from "./CaptionPreview";
 import { inputClass, Row, secondaryButton, Section } from "./SettingsParts";
 import { Select } from "./Select";
+import { OpenProjectSettings } from "../view/ProjectSettingsModal";
 import { isOnlineProvider, type OnlineProvider } from "../../services/ai/providers";
 
 type SettingsTab =
   | "general"
   | "appearance"
   | "api"
+  | "project"
   | "video"
   | "ai"
   | "voice"
@@ -142,7 +145,7 @@ export function AppSettings() {
   useEffect(() => {
     if (activeTab === "ai" && !settings.ai_features_enabled)
       setActiveTab("general");
-    if (!inEditor && (activeTab === "video" || activeTab === "voice"))
+    if (!inEditor && (activeTab === "project" || activeTab === "video" || activeTab === "voice"))
       setActiveTab("general");
   }, [activeTab, settings.ai_features_enabled, inEditor]);
 
@@ -195,6 +198,7 @@ export function AppSettings() {
     { id: "api", icon: Key, label: t`API keys` },
     ...(inEditor
       ? [
+          { id: "project" as const, icon: SlidersHorizontal, label: t`Project` },
           { id: "video" as const, icon: Film, label: t`Video` },
           { id: "voice" as const, icon: Volume2, label: t`Voice` },
         ]
@@ -560,6 +564,8 @@ export function AppSettings() {
                 </Row>
               </Section>
             )}
+
+            {activeTab === "project" && <OpenProjectSettings />}
 
             {activeTab === "video" && (
               <>

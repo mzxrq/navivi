@@ -33,8 +33,6 @@ interface UIState {
   ) => void;
   showAppSettings: boolean;
   setShowAppSettings: (show: boolean) => void;
-  showProjectSettings: boolean;
-  setShowProjectSettings: (show: boolean) => void;
   notifications: AppNotification[];
   clearNotifications: () => void;
   hideToast: (id: string) => void;
@@ -69,7 +67,6 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({
   const [activeToasts, setActiveToasts] = useState<AppNotification[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [showAppSettings, setShowAppSettings] = useState(false);
-  const [showProjectSettings, setShowProjectSettings] = useState(false);
   const [isRendering, setIsRendering] = useState(false);
   const [renderLogs, setRenderLogs] = useState("");
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -125,8 +122,6 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({
         hideToast,
         showAppSettings,
         setShowAppSettings,
-        showProjectSettings,
-        setShowProjectSettings,
         notifications,
         clearNotifications,
         isRenderCollapsed,
