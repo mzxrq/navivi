@@ -1248,6 +1248,12 @@ LTXV_MID_GUIDE_STRENGTH = 0.6
 # A job takes ~15 GB of RAM on top of what's in use: below this much free it
 # waits (tuning.ensure_free_ram), then falls back to the 3D photo.
 LTXV_MIN_FREE_RAM_GB = 15.0
+# How long a shot waits for that RAM (the server is stopped first) before
+# giving up; generous, since giving up means a non-LTX clip.
+LTXV_RAM_WAIT_SECONDS = 900.0
+# A failed LTXV clip is tried this many times (fresh server each) before the
+# CPU 3D photo, the last resort so a stop is never left without a clip.
+LTXV_CLIP_ATTEMPTS = 2
 # CFG 1: the negative is ignored, so everything is said positively.
 _LTXV_STILL = (
     "The scene is still and solid and only the camera moves, steadily and slowly. The light, weather and colours stay "
@@ -1352,7 +1358,8 @@ LTXV_PROMPTS["walkin"] = (
     "Point-of-view camera at eye height moving continuously straight forward through {place}, "
     "steadily ahead along the way in front, getting closer and closer to what lies ahead." + _LTXV_POV_END
 )
-# The free walk is played this many times slower, frames in between made by
+# The free walk is played up to this many times slower (only as much as its
+# narration share needs), frames in between made by
 # motion interpolation: test23 (the user's reference) pushed in ~29% scale a
 # second, 1.6x gives ~20%. A "slowly" prompt instead barely moved (2026-10-07).
 LTXV_WALK_SLOWDOWN = 1.6
@@ -1362,8 +1369,17 @@ LTXV_WALK_SLOWDOWN = 1.6
 # then the 3D-photo move.
 LTXV_WALK_QC_MIN_INLIERS = 10
 LTXV_WALK_QC_MIN_SHARE = 0.03
+# ... or where over this share of the frame lies past the photo's edge on two
+# checks running (a walk only ever sees less of the photo).
+LTXV_WALK_QC_MAX_OUTSIDE = 0.20
+# ... and a walk that pushes forward less than this (clip_qc.forward_push, %)
+# is rendered again: unpinned, LTXV sometimes just stands still (猿坂峠 ~2).
+LTXV_WALK_MIN_PUSH = 20.0
 LTXV_WALK_MIN_SECONDS = 2.0
 LTXV_WALK_ATTEMPTS = 2
+# After every attempt fails: this LTXV move instead (3D keyframes, stays in the
+# photo), never the CPU 3D photo - the user wants every picture made by LTX.
+LTXV_WALK_FAILED_FALLBACK = "zoomin"
 LTXV_PROMPTS["walkshort"] = LTXV_PROMPTS["walkfwd"]
 # Unpinned, the gentle walkfwd wording only drifted (2026-10-06, 孝子駅).
 LTXV_PROMPTS["walkai"] = (

@@ -350,6 +350,24 @@ def render_views(
     return [np.clip(_render(layers, proj, cam)[0], 0, 255).astype(np.uint8) for cam in cams]
 
 
+def render_views_to_files(image_path: str, cams: List[Tuple[float, ...]], margin: float, out_paths: List[str]) -> None:
+    """render_views in a child process, each view saved as a PNG: depth and LaMa
+    RAM only goes back to Windows when the process exits (in the pipeline it
+    stayed held, 7.6 GB, and starved the next LTXV shot - 2026-10-07)."""
+    import json
+    import sys
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[2]
+    result = subprocess.run(
+        [sys.executable, "-m", "services.vdoprocessing.parallax_generator",
+         json.dumps({"image": image_path, "cams": cams, "margin": margin, "out": out_paths})],
+        cwd=root, capture_output=True, encoding="utf-8", errors="replace", timeout=1800,
+    )
+    if result.returncode != 0:
+        raise RuntimeError((result.stderr or "").strip()[-800:] or f"exit {result.returncode}")
+
+
 def generate_parallax_clip(
     image_path: str,
     output_path: str,
@@ -415,3 +433,12 @@ def generate_parallax_clip(
         raise
     logger.info("3D photo %s %.1fs over %s -> %s", preset, duration_sec, image_path, output_path)
     return output_path
+
+
+if __name__ == "__main__":
+    import json
+    import sys
+
+    job = json.loads(sys.argv[1])
+    for path, view in zip(job["out"], render_views(job["image"], [tuple(c) for c in job["cams"]], job["margin"])):
+        cv2.imencode(".png", view)[1].tofile(path)

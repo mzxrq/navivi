@@ -10,6 +10,7 @@ them: in one job the text encoder, model and VAE together pushed RAM past 30 GB.
 """
 
 import hashlib
+import os
 import shutil
 import time
 import uuid
@@ -125,21 +126,18 @@ def walk_target(image, place: Optional[str] = None) -> Optional[Tuple[float, flo
 
 
 def _depth_keyframes(photo_path: str, move: str, work_dir: Path) -> Tuple[str, str]:
-    from services.vdoprocessing.parallax_generator import release_models, render_views
+    from services.vdoprocessing.parallax_generator import render_views_to_files
 
     first, last, margin = depth_cams(move)
     n = 0 if move in tuning.LTXV_FREE_MOVES else tuning.LTXV_DEPTH_MID_GUIDES
     mids = [tuple(a + (b - a) * k / (n + 1) for a, b in zip(first, last)) for k in range(1, n + 1)]
-    try:
-        views = render_views(photo_path, [first, last, *mids], margin)
-    finally:
-        release_models()  # LTXV needs the RAM next
-    paths = []
-    for name, frame in zip(("first", "last", *(f"mid{k}" for k in range(1, n + 1))), views):
-        path = work_dir / f"{move}_{name}.png"
+    names = ["first", "last", *(f"mid{k}" for k in range(1, n + 1))]
+    paths = [str(work_dir / f"{move}_{name}.png") for name in names]
+    render_views_to_files(photo_path, [first, last, *mids], margin, paths)  # child process: RAM comes back
+    for path in paths:
+        frame = read_image(path)
         frame = cv2.resize(frame, (tuning.LTXV_WIDTH, tuning.LTXV_HEIGHT), interpolation=cv2.INTER_AREA)
-        cv2.imencode(".png", frame)[1].tofile(str(path))
-        paths.append(str(path))
+        cv2.imencode(".png", frame)[1].tofile(path)
     return paths[0], paths[1]
 
 
@@ -416,7 +414,8 @@ def render_shot(
 
     first, last = crop_keyframes(photo_path, move, work, place)
     release_models()
-    tuning.ensure_free_ram("LTXV clip", min_free_gb=tuning.LTXV_MIN_FREE_RAM_GB, relief=ComfyUII2VClient.stop_server)
+    tuning.ensure_free_ram("LTXV clip", min_free_gb=tuning.LTXV_MIN_FREE_RAM_GB, relief=ComfyUII2VClient.stop_server,
+                           timeout=tuning.LTXV_RAM_WAIT_SECONDS)
     prefix = f"attraction_ltx/{uuid.uuid4().hex[:8]}"
     client = ComfyUII2VClient()
     copied: Optional[Path] = None
@@ -465,15 +464,25 @@ def _trim_frames(path: str, frames: int) -> None:
         Path(tmp).replace(path)
 
 
+class WalkFailed(RuntimeError):
+    """Every free-walk attempt left the photo or stood still."""
+
+
 def render_walk(photo_path: str, move: str, path: str, work: Path, prompt: str, place: Optional[str]) -> str:
     """A free walk, cut where it leaves the photo; rendered again (new seed) when
     too little is left. Raises when every attempt leaves the photo too soon."""
-    from services.vdoprocessing.clip_qc import read_frames, scene_lost_frame
+    from services.vdoprocessing.clip_qc import forward_push, read_frames, scene_lost_frame
 
     photo = read_image(photo_path)
     for attempt in range(1, tuning.LTXV_WALK_ATTEMPTS + 1):
         render_shot(photo_path, move, path, work, prompt, place)
-        lost = scene_lost_frame(read_frames(path), photo) if photo is not None else None
+        frames = read_frames(path)
+        lost = scene_lost_frame(frames, photo) if photo is not None else None
+        push = forward_push(frames[:lost])
+        if push < tuning.LTXV_WALK_MIN_PUSH:
+            logger.warning("LTXV %s on %s barely walked (%.0f%% forward; attempt %d/%d).",
+                           move, Path(photo_path).name, push, attempt, tuning.LTXV_WALK_ATTEMPTS)
+            continue
         if lost is None:
             return path
         keep = max(0, lost - 3)
@@ -484,7 +493,7 @@ def render_walk(photo_path: str, move: str, path: str, work: Path, prompt: str, 
             return path
         logger.warning("LTXV %s on %s left the photo at frame %d (attempt %d/%d).",
                        move, Path(photo_path).name, lost, attempt, tuning.LTXV_WALK_ATTEMPTS)
-    raise RuntimeError(f"LTXV {move} left the photo on every attempt")
+    raise WalkFailed(f"LTXV {move} left the photo or stood still on every attempt")
 
 
 def slow_down(path: str, factor: float) -> str:
@@ -567,6 +576,21 @@ def walkai_parallax(photo_path: str, output_path: str, duration_sec: float) -> s
             Path(src).unlink(missing_ok=True)
 
 
+def _shot_cache(output_path: str, seed: str, move: str, prompt: str) -> Path:
+    """Where a finished shot is kept until its photo clip is done, so a cancel
+    mid-photo resumes from the last finished shot (2026-10-07: each LTXV shot
+    is 2-5 min and a cancelled photo used to lose them all)."""
+    settings = (
+        prompt, tuning.LTXV_FRAMES, tuning.LTXV_WIDTH, tuning.LTXV_HEIGHT, tuning.LTXV_GUIDE_STRENGTH,
+        tuning.LTXV_DEPTH_KEYFRAMES, tuning.LTXV_DEPTH_TRUCK, tuning.LTXV_DEPTH_PAN, tuning.LTXV_DEPTH_DOLLY,
+        tuning.LTXV_DEPTH_MID_GUIDES, tuning.LTXV_MID_GUIDE_STRENGTH, tuning.LTXV_FILES["unet"]["file"],
+    )
+    digest = hashlib.sha1(f"{seed}|{move}|{settings!r}".encode("utf-8")).hexdigest()[:12]
+    cache = Path(output_path).parent / "shots"
+    cache.mkdir(parents=True, exist_ok=True)
+    return cache / f"{move}_{digest}.mp4"
+
+
 def generate_ltx_move(
     photo_path: str, output_path: str, camera_pan_hint, duration_sec: float = 0.0, place: Optional[str] = None,
 ) -> str:
@@ -581,21 +605,52 @@ def generate_ltx_move(
     work = Path(output_path).parent / f".ltx_{uuid.uuid4().hex[:8]}"
     work.mkdir(parents=True, exist_ok=True)
     try:
-        shots = []
+        shots, cached = [], []
         seed = _photo_seed(photo_path)
         for i, move in enumerate(shot_list(preset, seed, photo_path)):
             path = str(work / f"shot{i}.mp4")
+            free = move in tuning.LTXV_FREE_MOVES
+            prompt = prompt_for(move, seed) if free else prompt_for(move, seed, second=i > 0)
+            keep = _shot_cache(output_path, seed, move, prompt)
+            cached.append(keep)
             try:
-                if move in tuning.LTXV_FREE_MOVES:
-                    shots.append(render_walk(photo_path, move, path, work, prompt_for(move, seed), place))
-                    slow_down(shots[-1], tuning.LTXV_WALK_SLOWDOWN)
+                if keep.is_file():
+                    logger.info("LTXV %s shot for %s already rendered - reusing %s.",
+                                move, Path(photo_path).name, keep.name)
+                    shutil.copy2(keep, path)
                 else:
-                    shots.append(render_shot(photo_path, move, path, work, prompt_for(move, seed, second=i > 0), place))
+                    try:
+                        if free:
+                            render_walk(photo_path, move, path, work, prompt, place)
+                        else:
+                            render_shot(photo_path, move, path, work, prompt, place)
+                    except WalkFailed as exc:
+                        # Still LTX and still inside the photo: a dolly in instead of the walk.
+                        fallback = tuning.LTXV_WALK_FAILED_FALLBACK
+                        logger.warning("%s - LTXV %s instead.", exc, fallback)
+                        move, free = fallback, False
+                        prompt = prompt_for(move, seed)
+                        keep = _shot_cache(output_path, seed, move, prompt)
+                        cached[-1] = keep
+                        render_shot(photo_path, move, path, work, prompt, place)
+                    tmp = keep.with_name(keep.stem + ".tmp.mp4")
+                    shutil.copy2(path, tmp)
+                    os.replace(tmp, keep)
+                shots.append(path)
+                if free:
+                    # Only as slow as the narration needs: a short share keeps the walk's movement.
+                    from services.tts.ttsengine import FFmpegManager
+
+                    walk = FFmpegManager.get_media_duration(path) or 1.0
+                    slow_down(path, min(tuning.LTXV_WALK_SLOWDOWN, max(1.0, duration_sec / walk)))
             except Exception as exc:
                 if i == 0:
                     raise
                 logger.warning("LTXV %s shot failed (%s: %s) - keeping the first shot only.",
                                move, type(exc).__name__, exc)
-        return crossfade(shots, output_path)
+        result = crossfade(shots, output_path)
+        for keep in cached:  # the photo clip is the checkpoint now
+            keep.unlink(missing_ok=True)
+        return result
     finally:
         shutil.rmtree(work, ignore_errors=True)
