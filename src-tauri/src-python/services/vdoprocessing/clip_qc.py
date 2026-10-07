@@ -150,3 +150,65 @@ def first_bad_frame(
             )
             return i
     return None
+
+
+def scene_lost_frame(frames: List[np.ndarray], photo: np.ndarray, step: int = 3) -> Optional[int]:
+    """First frame (checked every `step`) sharing too few features with the photo
+    to still be the same place, or looking past its edge, None if all is well.
+    Epipolar inliers, not a homography: a real walk changes perspective.
+    Calibrated 2026-10-07: test23's station walk kept >= 15 of 254 inliers and
+    <= 4% of the frame outside the photo, 西ノ庄駅's <= 13%; the invented
+    forest corridor fell to 8 of 647 at 1.0 s; the 葛城第二経塚 walk turned onto an
+    invented road, 21% outside at 1.5 s and climbing."""
+    if not frames:
+        return None
+    h, w = frames[0].shape[:2]
+    ref = _Reference(photo, w, h)
+    if ref.descriptors is None:
+        return None
+    floor = None
+    outside_run = 0
+    for i in range(0, len(frames), step):
+        outside = frame_problems(frames[i], ref)[2]
+        outside_run = outside_run + 1 if outside > tuning.LTXV_WALK_QC_MAX_OUTSIDE else 0
+        if outside_run >= 2:
+            first = i - step
+            logger.info("QC: frame %d/%d looks past the photo's edge (%.0f%% outside).", first, len(frames), outside * 100)
+            return first
+        gray = cv2.cvtColor(_small(frames[i]), cv2.COLOR_BGR2GRAY)
+        keypoints, descriptors = ref.sift.detectAndCompute(gray, None)
+        inliers = 0
+        if descriptors is not None and len(keypoints) >= 8:
+            good = [
+                m for m, n in (p for p in ref.matcher.knnMatch(descriptors, ref.descriptors, k=2) if len(p) == 2)
+                if m.distance < 0.75 * n.distance
+            ]
+            if len(good) >= 8:
+                _, mask = cv2.findFundamentalMat(
+                    np.float32([keypoints[m.queryIdx].pt for m in good]),
+                    np.float32([ref.keypoints[m.trainIdx].pt for m in good]), cv2.FM_RANSAC, 3.0,
+                )
+                inliers = int(mask.sum()) if mask is not None else 0
+        if floor is None:
+            floor = max(tuning.LTXV_WALK_QC_MIN_INLIERS, tuning.LTXV_WALK_QC_MIN_SHARE * inliers)
+        elif inliers < floor:
+            logger.info("QC: frame %d/%d left the photo (%d inliers, need %.0f).", i, len(frames), inliers, floor)
+            return i
+    return None
+
+
+def forward_push(frames: List[np.ndarray]) -> float:
+    """How far a clip moves forward: summed frame-to-frame zoom, in percent.
+    2026-10-07: test23's walk ~103, 西ノ庄駅's ~83; 猿坂峠's (stood still) ~2,
+    葛城第二経塚's (turned sideways) ~7."""
+    small = [cv2.cvtColor(cv2.resize(f, (320, 180), interpolation=cv2.INTER_AREA), cv2.COLOR_BGR2GRAY) for f in frames]
+    ys, xs = np.mgrid[0:180:8, 0:320:8]
+    pts = np.stack([xs.ravel(), ys.ravel()], 1).astype(np.float32)
+    total = 0.0
+    for a, b in zip(small, small[1:]):
+        flow = cv2.calcOpticalFlowFarneback(a, b, None, 0.5, 3, 21, 3, 5, 1.1, 0)
+        d = flow[pts[:, 1].astype(int), pts[:, 0].astype(int)]
+        m, _ = cv2.estimateAffinePartial2D(pts, pts + d, method=cv2.RANSAC, ransacReprojThreshold=1.5)
+        if m is not None:
+            total += (float(np.hypot(m[0, 0], m[1, 0])) - 1.0) * 100
+    return total

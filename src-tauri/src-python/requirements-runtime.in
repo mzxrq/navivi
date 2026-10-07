@@ -29,3 +29,5 @@ fugashi
 unidic-lite
 pypdf
 rapidocr-onnxruntime
+# Hears each narration line back to check place names (services/tts/name_check.py); CPU, int8.
+faster-whisper

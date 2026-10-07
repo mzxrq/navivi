@@ -17,6 +17,7 @@ from __future__ import annotations
 import re
 from typing import Callable, Dict, List, Optional, Tuple
 
+from services.localization.spoken_style import SPOKEN_STYLE_JA
 from services.logger.logger import setup_logger
 
 logger = setup_logger("OverviewScript")
@@ -230,6 +231,7 @@ def _prompt(passage: dict, previous: str) -> str:
         + (f"■ 直前のナレーション: {previous}\n" if previous else "")
         + f"■ 条件: 日本語の話し言葉。{passage['chars']}文字以内。参考情報にない事実は書かない。"
           "場所の名前を必ず含める。記号・括弧・番号・英語は使わず、本文のみを出力。"
+        + SPOKEN_STYLE_JA
     )
 
 
@@ -479,6 +481,7 @@ def _transition_prompt(journey: dict, previous: str, limit: int, first: bool = F
         + f"■ 条件: 日本語の話し言葉で1〜2文、{limit}文字以内。上の情報にない地名・数字・方角は書かない。"
           "到着地の名前を必ず含める。記号・括弧・番号・英語は使わず、本文のみを出力。"
           "「到着しました」は使わず、別の言い回しにする。"
+        + SPOKEN_STYLE_JA
         # This is the FIRST transition, right after the opening greeting
         # (■ 直前のナレーション above IS that greeting) — without this the
         # model routinely re-greets/re-welcomes here too, duplicating the
@@ -507,6 +510,7 @@ def _describe_prompt(label: str, facts: str, previous: str, limit: int) -> str:
         + f"■ 条件: 日本語の話し言葉で2〜3文、{limit}文字以内。参考情報にない事実は書かない。"
           f"{name_rule}道順や移動の話はしない。記号・括弧・番号・英語は使わず、本文のみを出力。"
           "「到着しました」は使わず、別の言い回しで場所を紹介する。"
+        + SPOKEN_STYLE_JA
     )
 
 
@@ -520,6 +524,7 @@ def _intro_prompt(brief: dict, stops: List[str], limit: int, area: str = "", end
         + (f"■ 距離: およそ{km}キロ\n" if km else "")
         + f"■ 条件: 日本語の話し言葉で2文、{limit}文字以内。歓迎の挨拶から始め、どこからどこへ向かう旅かを伝える。"
         "上の情報にない地名・数字は書かない。記号・括弧・英語は使わず、本文のみを出力。"
+        + SPOKEN_STYLE_JA
     )
 
 

@@ -14,7 +14,14 @@ export function mergeAutoReadings(
 ): ReadingEntry[] | null {
   const sharedWords = new Set(shared.map((e) => e.word));
   const scannedWords = new Set(scanned.map((e) => e.word));
-  const next = current.filter((e) => !e.auto || (scannedWords.has(e.word) && !sharedWords.has(e.word)));
+  const scannedReading = new Map(scanned.map((e) => [e.word, e.reading]));
+  // An auto word takes the scan's latest reading, so a fix in the reading lookup reaches projects scanned before it.
+  const next = current
+    .filter((e) => !e.auto || (scannedWords.has(e.word) && !sharedWords.has(e.word)))
+    .map((e) => {
+      const reading = e.auto ? scannedReading.get(e.word) : undefined;
+      return reading && reading !== e.reading ? { ...e, reading } : e;
+    });
   const known = new Set(next.map((e) => e.word));
   for (const { word, reading } of scanned) {
     if (!word || !reading || known.has(word) || sharedWords.has(word)) continue;

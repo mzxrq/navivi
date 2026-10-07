@@ -59,11 +59,12 @@ def _fake_sdxl(monkeypatch):
     from services.vdoprocessing import local_pan_generator as lpg
 
     pipe = _FakePipe()
-    monkeypatch.setattr(tuning, "ATTRACTION_JUMP_CUT_AI", True)
+    monkeypatch.setattr(tuning, "ATTRACTION_AI_SURROUNDINGS", True)
     monkeypatch.setattr(lpg, "_cuda_available", lambda: True)
     monkeypatch.setattr(lpg, "_describe_scene", lambda img: "a station")
     monkeypatch.setattr(lpg, "_get_pipe", lambda: pipe)
     monkeypatch.setattr(lpg, "_free_gpu_memory", lambda: None)  # would import torch, which CI does not have
+    monkeypatch.setattr(jump_cut, "_run_outpaint", jump_cut._outpaint_file)
     return pipe
 
 
@@ -87,6 +88,15 @@ def test_ai_zoom_in_cuts_from_the_outpainted_wide_to_the_photo(tmp_path, monkeyp
     red = lambda f: float(((f[..., 2] > 200) & (f[..., 1] < 60)).mean())
     assert red(frames[0]) > 0.3 and red(frames[-1]) < 0.01
     assert (tmp_path / "z.wide.png").exists()
+
+
+def test_the_ai_wide_frame_is_kept_and_reused(tmp_path, monkeypatch):
+    pipe = _fake_sdxl(monkeypatch)
+    photo = _photo(tmp_path / "p.png")
+    first = jump_cut.ai_wide(photo, 640, 352)
+    assert first is not None and jump_cut.ai_wide_path(photo, tuning.LTXV_WIDTH, tuning.LTXV_HEIGHT).is_file()
+    assert jump_cut.ai_wide(photo, 640, 352) is not None
+    assert len(pipe.calls) == 1
 
 
 def test_failed_outpaint_falls_back_to_the_crop(tmp_path, monkeypatch):
