@@ -30,7 +30,7 @@ export function nearestIndex(points: LatLon[], lat: number, lon: number): number
 }
 
 // Douglas-Peucker on a local flat projection; keeps the first and last point.
-export function simplifyTrack(points: LatLon[], toleranceMeters: number): LatLon[] {
+export function simplifyTrack<T extends number[]>(points: T[], toleranceMeters: number): T[] {
   if (points.length <= 2) return points;
   const lat0 = points[0][0] * toRad;
   const xy = points.map(([lat, lon]) => [lon * toRad * Math.cos(lat0) * 6371000, lat * toRad * 6371000]);
@@ -87,8 +87,15 @@ export function stopsAlongTrack(points: LatLon[], named: { lat: number; lon: num
 }
 
 // The leg leaving stop `from` toward `to`, as the inner points of the recorded track between them.
-export function legAlongTrack(points: LatLon[], from: TrackStop, to: TrackStop, toleranceMeters = 4): LatLon[] | null {
+export function legAlongTrack<T extends number[]>(points: T[], from: TrackStop, to: TrackStop, toleranceMeters = 4): T[] | null {
   if (to.index <= from.index + 1) return null;
   const slice = simplifyTrack(points.slice(from.index, to.index + 1), toleranceMeters);
   return slice.length > 2 ? slice.slice(1, -1) : null;
+}
+
+// Elevation of a leg as [stop, ...inner points, next stop], parallel to Waypoint.customRoute. Null when the track has none.
+export function legElevations(inner: number[][], startEle?: number, endEle?: number): (number | null)[] | null {
+  const round = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? Math.round(v * 10) / 10 : null);
+  const ele = [round(startEle), ...inner.map((p) => round(p[2])), round(endEle)];
+  return ele.some((v) => v !== null) ? ele : null;
 }

@@ -501,6 +501,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         if (data.directory_path) recoveredCache = await loadRouteCache(data.directory_path);
       }
       setRoutingCache(recoveredCache);
+      setRoutePoints([]); // the previous project's imported track must not leak into this one
       console.log(`Recovered ${Object.keys(recoveredCache).length} routes from cache!`);
 
       setMetadata({
@@ -527,6 +528,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           name: wp.label || wp.name,
           routeMode: wp.routeMode || "walking",
           customRoute: wp.customRoute || [],
+          customRouteEle: wp.customRouteEle?.length ? wp.customRouteEle : undefined,
           drawStyle: wp.drawStyle || "linear",
           lineColor: wp.lineColor || undefined,
           viaPoints: wp.viaPoints?.length ? wp.viaPoints : undefined,
@@ -580,6 +582,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     resetWaypointHistory([]);
     resetTimelineHistory(getDefaultTimeline());
     setRouteSegments([]);
+    setRoutePoints([]);
     setMetadata({
       ...DefaultMetadata,
       created_at: new Date().toISOString(),

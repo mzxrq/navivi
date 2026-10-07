@@ -84,6 +84,7 @@ export function useWaypointActions() {
       connectToRoute: undefined,
       // Belongs to the original stop's outgoing leg or generated clips, not to a new final stop.
       customRoute: undefined,
+      customRouteEle: undefined,
       viaPoints: undefined,
       curveOffset: undefined,
       lineColor: undefined,
