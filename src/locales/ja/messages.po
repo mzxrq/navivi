@@ -105,7 +105,7 @@ msgstr "{0}行(映像に焼き込み)"
 #. placeholder {0}: timeline.subtitles.length
 #: src/features/editor/ExportDialog.tsx:73
 msgid "{0} lines, not burned in"
-msgstr ""
+msgstr "{0}行(動画には焼き込まれません)"
 
 #. placeholder {0}: brief.durationMin
 #: src/features/assistant/AssistantChat.tsx:19
@@ -116,7 +116,7 @@ msgstr "{0} 分"
 #. placeholder {1}: formatBytes(cache.max_bytes)
 #: src/components/ui/VoiceSettings.tsx:511
 msgid "{0} of {1}"
-msgstr ""
+msgstr "{0} / {1}"
 
 #. placeholder {0}: voiced.length
 #. placeholder {1}: active.length
@@ -328,7 +328,7 @@ msgstr "添付する GPX トラックをたどる、のんびりとした散策�
 
 #: src/components/ui/VoiceSettings.tsx:477
 msgid "A short description of the way the natural voice speaks, written in Japanese. Leave it empty for no style. Changing it regenerates the narration the next time you generate."
-msgstr ""
+msgstr "自然な声の話し方を日本語で短く書きます。空欄の場合は話し方の指定なしになります。変更すると、次回の生成時にナレーションが作り直されます。"
 
 #: src/components/ui/VoiceSettings.tsx:590
 msgid "A voice with this name already exists."
@@ -351,7 +351,7 @@ msgstr "残り{0}"
 #. placeholder {0}: limits.target_seconds
 #: src/features/map/components/OverviewNarration.tsx:138
 msgid "About {seconds} s spoken (aim {0} s, allowed {range} s)"
-msgstr ""
+msgstr "読み上げは約{seconds}秒(目標{0}秒、許容{range}秒)"
 
 #. placeholder {0}: MODEL_CREDITS.kokoro.by
 #. placeholder {1}: MODEL_CREDITS.kokoro.license
@@ -422,7 +422,7 @@ msgstr "ボイスを追加"
 #: src/components/ui/VideoLookSettings.tsx:200
 #: src/components/ui/VideoLookSettings.tsx:201
 msgid "Add an outro"
-msgstr ""
+msgstr "アウトロを追加"
 
 #: src/features/map/hooks/useStopMenus.ts:314
 msgid "Add as destination"
@@ -464,7 +464,7 @@ msgstr "戻りの地点を追加"
 
 #: src/features/map/components/OverviewNarration.tsx:78
 msgid "Add some stops first; there is nothing to describe yet."
-msgstr ""
+msgstr "先に地点を追加してください。まだ説明する内容がありません。"
 
 #: src/features/map/components/MapToolbar.tsx:83
 msgid "Add stop"
@@ -572,7 +572,7 @@ msgstr "AIナレーション"
 
 #: src/components/ui/VideoLookSettings.tsx:147
 msgid "Aimed-for seconds per leg in the street-level view."
-msgstr ""
+msgstr "ストリートレベル表示での、1区間あたりの目標秒数です。"
 
 #: src/features/editor/Inspector.tsx:395
 msgid "Align"
@@ -610,7 +610,7 @@ msgstr "すべての音声"
 #: src/features/editor/ExportDialog.tsx:156
 #: src/features/editor/ExportDialog.tsx:160
 msgid "Also save subtitles as .srt"
-msgstr ""
+msgstr "字幕を .srt としても保存する"
 
 #: src/components/ui/RenderOverlay.tsx:766
 #: src/components/ui/RenderOverlay.tsx:1131
@@ -634,7 +634,7 @@ msgstr "アニメーション"
 
 #: src/components/view/ProjectSettingsModal.tsx:270
 msgid "Anything you leave alone renders the way it always has."
-msgstr ""
+msgstr "そのままにした項目は、これまでどおりにレンダリングされます。"
 
 #: src/components/ui/ReviewStep.tsx:154
 msgid "Anything you redo is made in the background while you work in the timeline editor. Turn that off below to change a clip's photo, script or route first."
@@ -733,7 +733,7 @@ msgstr "音声"
 
 #: src/components/ui/AppSettings.tsx:580
 msgid "Auto"
-msgstr ""
+msgstr "自動"
 
 #: src/features/editor/EditorView.tsx:378
 msgid "Auto edit"
@@ -777,7 +777,7 @@ msgstr "自動結合された動画"
 
 #: src/features/map/components/OverviewNarration.tsx:204
 msgid "Auto-write"
-msgstr ""
+msgstr "自動作成"
 
 #: src/components/ui/ScriptInput.tsx:242
 msgid "Auto-Write"
@@ -797,7 +797,7 @@ msgstr "自動作成では、プロンプト、地点名、位置情報、地点
 
 #: src/features/map/components/GenerateDialog.tsx:113
 msgid "Back"
-msgstr ""
+msgstr "戻る"
 
 #: src/features/editor/Preview.tsx:407
 #: src/features/editor/Preview.tsx:409
@@ -876,7 +876,7 @@ msgstr "枠線"
 #: src/components/ui/VideoLookSettings.tsx:105
 #: src/components/ui/VideoLookSettings.tsx:106
 msgid "Border around stop maps"
-msgstr ""
+msgstr "地点マップの枠線"
 
 #: src/features/map/components/MapLayers/RouteStyling.tsx:130
 msgid "Border Width"
@@ -898,11 +898,11 @@ msgstr "ボックスの不透明度"
 
 #: src/features/map/components/WaypointEditor.tsx:774
 msgid "Boxed"
-msgstr ""
+msgstr "カード型"
 
 #: src/features/map/components/WaypointEditor.tsx:768
 msgid "Boxed keeps the photo in a card with its caption; full photo fills the frame."
-msgstr ""
+msgstr "カード型は写真をキャプション付きのカードに収めます。全面表示は写真を画面いっぱいに表示します。"
 
 #: src/components/ui/RenderOverlay.tsx:977
 msgid "Build Assets"
@@ -910,7 +910,7 @@ msgstr "アセットを構築"
 
 #: src/features/map/components/OverviewNarration.tsx:211
 msgid "Built from the route facts alone, with no AI model"
-msgstr ""
+msgstr "AIモデルを使わず、ルートの情報だけから作成します"
 
 #: src/components/ui/AboutPanel.tsx:87
 #~ msgid "Built with"
@@ -919,11 +919,11 @@ msgstr ""
 #: src/features/editor/ExportDialog.tsx:153
 #: src/features/editor/ExportDialog.tsx:154
 msgid "Burn subtitles into the video"
-msgstr ""
+msgstr "字幕を動画に焼き込む"
 
 #: src/components/ui/voiceOptions.ts:12
 msgid "Calm"
-msgstr ""
+msgstr "穏やか"
 
 #: src/features/map/components/WaypointEditor.tsx:604
 #: src/features/map/components/WaypointEditor.tsx:671
@@ -933,12 +933,12 @@ msgstr "カメラアングル"
 #: src/components/ui/VideoLookSettings.tsx:153
 #: src/components/ui/VideoLookSettings.tsx:154
 msgid "Camera distance"
-msgstr ""
+msgstr "カメラの距離"
 
 #: src/components/ui/VideoLookSettings.tsx:156
 #: src/components/ui/VideoLookSettings.tsx:157
 msgid "Camera tilt"
-msgstr ""
+msgstr "カメラの傾き"
 
 #: src/components/ui/ScriptInput.tsx:232
 msgid "cancel"
@@ -994,16 +994,16 @@ msgstr "生成できません: 少なくとも1つの地点を追加してくだ
 
 #: src/components/ui/VideoLookSettings.tsx:93
 msgid "Card border color"
-msgstr ""
+msgstr "カードの枠線の色"
 
 #: src/components/ui/VideoLookSettings.tsx:96
 #: src/components/ui/VideoLookSettings.tsx:97
 msgid "Card border width"
-msgstr ""
+msgstr "カードの枠線の太さ"
 
 #: src/components/ui/VideoLookSettings.tsx:68
 msgid "Cards and overlays"
-msgstr ""
+msgstr "カードとオーバーレイ"
 
 #: src/features/editor/Inspector.tsx:403
 msgid "Centre"
@@ -1055,7 +1055,7 @@ msgstr "選択…"
 #: src/components/ui/VideoLookSettings.tsx:191
 #: src/components/ui/VideoLookSettings.tsx:192
 msgid "Clean map before the card"
-msgstr ""
+msgstr "カードの前にきれいな地図を表示"
 
 #: src/components/ui/AppSettings.tsx:1196
 #: src/components/ui/AppSettings.tsx:1198
@@ -1077,7 +1077,7 @@ msgstr "すべての通知を消去"
 
 #: src/components/ui/VoiceSettings.tsx:528
 msgid "Clear cache"
-msgstr ""
+msgstr "キャッシュをクリア"
 
 #: src/features/map/components/DrawBar.tsx:306
 msgid "Clear path"
@@ -1164,11 +1164,11 @@ msgstr "勾配グラデーションでルート線を色付けする"
 
 #: src/components/ui/AppSettings.tsx:514
 msgid "Color the route by steepness, using the GPX elevation or 3D terrain"
-msgstr ""
+msgstr "GPX の標高または3D地形をもとに、勾配に応じてルートを色付けします"
 
 #: src/components/ui/CaptionStyleFields.tsx:181
 msgid "Color, and distance in pixels (0 = none)"
-msgstr ""
+msgstr "色と距離(ピクセル単位、0 = なし)"
 
 #: src/components/ui/CaptionStyleFields.tsx:169
 msgid "Colour, and width in pixels (0 = none)"
@@ -1176,7 +1176,7 @@ msgstr "色と、幅（ピクセル、0 = なし）"
 
 #: src/components/ui/VideoLookSettings.tsx:78
 msgid "Columns"
-msgstr ""
+msgstr "列数"
 
 #: src/components/ui/RenderOverlay.tsx:1162
 msgid "Combining all route segments, narration voiceovers, and transitions into your completed master navigation video."
@@ -1185,7 +1185,7 @@ msgstr "すべてのルートセグメント、ナレーション音声、トラ
 #: src/components/ui/VideoLookSettings.tsx:102
 #: src/components/ui/VideoLookSettings.tsx:103
 msgid "Compass on stop maps"
-msgstr ""
+msgstr "地点マップのコンパス"
 
 #: src/components/view/ProjectManager.tsx:671
 msgid "Confirm"
@@ -1300,7 +1300,7 @@ msgstr "写真を探せませんでした: {0}"
 
 #: src/features/map/components/WaypointEditor.tsx:172
 msgid "Could not make that again: {message}"
-msgstr ""
+msgstr "作り直せませんでした: {message}"
 
 #: src/components/ui/TitleBar.tsx:271
 #: src/components/view/ProjectManager.tsx:266
@@ -1406,7 +1406,7 @@ msgstr "次のクリップへカット"
 #: src/components/ui/VideoLookSettings.tsx:89
 #: src/components/view/ProjectSettingsModal.tsx:128
 msgid "Dark"
-msgstr ""
+msgstr "ダーク"
 
 #: src/features/assistant/AssistantChat.tsx:59
 msgid "Day trip"
@@ -1418,7 +1418,7 @@ msgstr "減らす"
 
 #: src/components/view/ProjectSettingsModal.tsx:133
 msgid "Default"
-msgstr ""
+msgstr "標準"
 
 #: src/components/ui/AppSettings.tsx:447
 #: src/components/view/ProjectSettingsModal.tsx:174
@@ -1514,12 +1514,12 @@ msgstr "旅の内容を伝えてください。立ち寄り先と台本を用意
 
 #: src/components/ui/VoiceSettings.tsx:472
 msgid "Describe how the voice should speak"
-msgstr ""
+msgstr "声の話し方を指定してください"
 
 #: src/features/map/components/WaypointEditor.tsx:781
 #: src/features/map/components/WaypointEditor.tsx:785
 msgid "Describe in the overview"
-msgstr ""
+msgstr "全体ナレーションで紹介する"
 
 #: src/features/assistant/AssistantChat.tsx:152
 #~ msgid "Describe the video you want, or attach an itinerary…"
@@ -1590,7 +1590,7 @@ msgstr "上端からの距離"
 
 #: src/components/ui/VideoLookSettings.tsx:216
 msgid "Distance, time and mode on each card."
-msgstr ""
+msgstr "各カードに距離、時間、移動手段を表示します。"
 
 #: src/components/ui/UnsavedChanges.tsx:44
 msgid "Do you want to save the changes you made to "
@@ -1641,7 +1641,7 @@ msgstr "ダブルクリックでタイトルを追加"
 
 #: src/features/map/components/MapLayers/HeatmapLegend.tsx:26
 msgid "Downhill"
-msgstr ""
+msgstr "下り"
 
 #: src/components/ui/AppSettings.tsx:1215
 msgid "Download"
@@ -1673,7 +1673,7 @@ msgstr "描画済み"
 
 #: src/components/ui/VideoLookSettings.tsx:123
 msgid "Drawn route pin"
-msgstr ""
+msgstr "描いたルートのピン"
 
 #: src/components/ui/NewProject.tsx:181
 #: src/features/map/hooks/useStopMenus.ts:39
@@ -1682,7 +1682,7 @@ msgstr "車"
 
 #: src/components/ui/VideoLookSettings.tsx:61
 msgid "Driving"
-msgstr ""
+msgstr "車"
 
 #: src/features/map/components/MapArea.tsx:1190
 msgid "Drop photos or GPS files to plot route"
@@ -1756,7 +1756,7 @@ msgstr "標高ヒートマップ"
 
 #: src/features/map/components/ElevationProfile.tsx:36
 msgid "Elevation profile"
-msgstr ""
+msgstr "標高プロファイル"
 
 #: src/features/map/components/MapLayers/LayerManager.tsx:123
 #: src/features/map/components/MapLayers/LayerManager.tsx:129
@@ -1776,7 +1776,7 @@ msgstr "終了"
 
 #: src/components/ui/VideoLookSettings.tsx:117
 msgid "End pin"
-msgstr ""
+msgstr "終点のピン"
 
 #: src/components/ui/RenderOverlay.tsx:388
 msgid "Ending card"
@@ -1784,7 +1784,7 @@ msgstr "エンディングカード"
 
 #: src/components/ui/voiceOptions.ts:11
 msgid "Energetic"
-msgstr ""
+msgstr "元気"
 
 #: src/components/ui/CaptionStyleFields.tsx:72
 #: src/components/ui/FontDownloadDialog.tsx:36
@@ -1839,7 +1839,7 @@ msgstr "すべての字幕の基本の見た目になります"
 
 #: src/features/map/components/GenerateDialog.tsx:135
 msgid "Every voice, subtitle and clip in this project is made again, even the ones you are happy with, and replaces the files you have now. This can take as long as your first render. Your own photos, videos and music are not touched."
-msgstr ""
+msgstr "このプロジェクトの音声、字幕、クリップをすべて作り直します。気に入っているものも含まれ、現在のファイルは置き換えられます。最初のレンダリングと同じくらい時間がかかることがあります。ご自身の写真、動画、音楽には手を加えません。"
 
 #: src/components/ui/ComponentsChecklist.tsx:99
 msgid "Everything you need is set up."
@@ -2034,11 +2034,11 @@ msgstr "フェリー"
 
 #: src/features/map/components/OverviewNarration.tsx:224
 msgid "Fetch the overview map image to check how the route is framed"
-msgstr ""
+msgstr "全体マップの画像を取得して、ルートの収まり方を確認します"
 
 #: src/features/map/components/OverviewNarration.tsx:226
 msgid "Fetching..."
-msgstr ""
+msgstr "取得しています..."
 
 #: src/components/view/ProjectManager.tsx:525
 msgid "File Path"
@@ -2084,15 +2084,15 @@ msgstr "飛行"
 
 #: src/components/ui/VideoLookSettings.tsx:63
 msgid "Flying"
-msgstr ""
+msgstr "飛行"
 
 #: src/features/assistant/AssistantChat.tsx:61
 msgid "Follow my GPS track"
-msgstr ""
+msgstr "GPS の記録に合わせる"
 
 #: src/features/map/components/OverviewPanel.tsx:156
 msgid "Follow the first waypoint again"
-msgstr ""
+msgstr "最初のポイントに再び合わせる"
 
 #: src/components/view/ProjectSettingsModal.tsx:231
 #: src/components/view/ProjectSettingsModal.tsx:237
@@ -2111,15 +2111,15 @@ msgstr "フォント"
 
 #: src/features/editor/ExportDialog.tsx:144
 msgid "Frame rate"
-msgstr ""
+msgstr "フレームレート"
 
 #: src/components/ui/FontDownloadDialog.tsx:75
 msgid "Free fonts from Google Fonts, installed for your Windows account"
-msgstr ""
+msgstr "Google Fonts の無料フォントを、お使いの Windows アカウントにインストールします"
 
 #: src/features/assistant/AssistantChat.tsx:141
 msgid "Free photos with credits. This sends the place names and positions to Wikimedia."
-msgstr ""
+msgstr "クレジット付きの自由に使える写真です。場所の名前と位置が Wikimedia に送信されます。"
 
 #: src/features/editor/EditorView.tsx:343
 #: src/features/editor/EditorView.tsx:352
@@ -2137,12 +2137,12 @@ msgstr "ナレーションから"
 
 #: src/features/map/components/WaypointEditor.tsx:775
 msgid "Full photo"
-msgstr ""
+msgstr "全面表示"
 
 #: src/components/ui/VideoLookSettings.tsx:165
 #: src/components/ui/VideoLookSettings.tsx:166
 msgid "Full-screen photos"
-msgstr ""
+msgstr "全画面の写真"
 
 #: src/components/ui/AppSettings.tsx:192
 msgid "General"
@@ -2212,7 +2212,7 @@ msgstr "キーを取得"
 
 #: src/components/ui/CaptionStyleFields.tsx:99
 msgid "Get more fonts"
-msgstr ""
+msgstr "フォントを追加"
 
 #: src/features/map/components/WaypointEditor.tsx:419
 #: src/features/map/components/WaypointEditor.tsx:420
@@ -2226,7 +2226,7 @@ msgstr "Ollama を入手"
 
 #: src/components/ui/VideoLookSettings.tsx:75
 msgid "Glass"
-msgstr ""
+msgstr "ガラス"
 
 #: src/features/map/components/GenerateDialog.tsx:231
 msgid "Goes with the voice"
@@ -2257,7 +2257,7 @@ msgstr "緑"
 
 #: src/components/ui/VideoLookSettings.tsx:212
 msgid "Grid"
-msgstr ""
+msgstr "グリッド"
 
 #: src/components/view/ProjectManager.tsx:420
 msgid "Grid View"
@@ -2277,7 +2277,7 @@ msgstr "個別のスタイルあり"
 
 #: src/features/map/components/OverviewNarration.tsx:217
 msgid "Hear it"
-msgstr ""
+msgstr "聞いてみる"
 
 #: src/components/ui/ColorPicker.tsx:277
 msgid "Hex colour"
@@ -2295,7 +2295,7 @@ msgstr "ログを隠す"
 #: src/components/ui/VideoLookSettings.tsx:168
 #: src/components/ui/VideoLookSettings.tsx:169
 msgid "Hide the route behind photos"
-msgstr ""
+msgstr "写真の背後でルートを隠す"
 
 #: src/components/ui/AppSettings.tsx:615
 msgid "High-spec Mode"
@@ -2311,15 +2311,15 @@ msgstr "履歴"
 
 #: src/components/ui/VideoLookSettings.tsx:153
 msgid "How far behind the traveler the street-level camera sits."
-msgstr ""
+msgstr "ストリートレベルのカメラを、旅行者の後方どのくらいの距離に置くかを指定します。"
 
 #: src/components/ui/VideoLookSettings.tsx:141
 msgid "How much faster the overview plays than the paced route."
-msgstr ""
+msgstr "全体表示を、通常のペースのルートより何倍速く再生するかを指定します。"
 
 #: src/components/ui/VideoLookSettings.tsx:69
 msgid "How the card after each leg and the overview is laid out."
-msgstr ""
+msgstr "各区間のあとと全体表示のカードのレイアウトです。"
 
 #: src/components/ui/SubtitleSample.tsx:19
 msgid "How your subtitles will look"
@@ -2341,7 +2341,7 @@ msgstr "AI に接続できませんでした: {0}。設定の「AI モデル」�
 
 #: src/features/map/components/GenerateDialog.tsx:243
 msgid "Ignores what already exists and makes every voice, subtitle and clip from scratch, even if nothing changed. Takes the longest."
-msgstr ""
+msgstr "既存のものを無視して、変更がなくてもすべての音声、字幕、クリップを最初から作り直します。最も時間がかかります。"
 
 #: src/components/ui/TitleBar.tsx:332
 msgid "Import GPX..."
@@ -2363,7 +2363,7 @@ msgstr "{0}個のポイントを正常にインポートしました"
 
 #: src/features/map/components/OverviewNarration.tsx:139
 msgid "In range"
-msgstr ""
+msgstr "範囲内"
 
 #: src/components/ui/ExportProjectDialog.tsx:114
 #: src/components/ui/ExportProjectDialog.tsx:120
@@ -2388,23 +2388,23 @@ msgstr "パイプラインを初期化しています..."
 
 #: src/components/ui/ScriptInput.tsx:33
 msgid "Insert a cue: the description of that stop ends here and the overview moves on"
-msgstr ""
+msgstr "キューを挿入: ここでその地点の説明が終わり、全体表示が次へ進みます"
 
 #: src/components/ui/ScriptInput.tsx:32
 msgid "Insert a cue: the overview stops at the next numbered stop here, while the voice describes it"
-msgstr ""
+msgstr "キューを挿入: 音声が説明している間、全体表示がここで次の番号の地点に止まります"
 
 #: src/components/ui/ScriptInput.tsx:31
 msgid "Insert a cue: the stop is reached at this point"
-msgstr ""
+msgstr "キューを挿入: この位置で地点に到着します"
 
 #: src/components/ui/ScriptInput.tsx:30
 msgid "Insert a cue: the walk is nearly at the stop at this point"
-msgstr ""
+msgstr "キューを挿入: この位置で地点の手前まで来ます"
 
 #: src/components/ui/ScriptInput.tsx:29
 msgid "Insert a cue: the walk starts moving at this point"
-msgstr ""
+msgstr "キューを挿入: この位置で歩き始めます"
 
 #: src/components/ui/FontDownloadDialog.tsx:125
 #: src/components/ui/SetupGate.tsx:107
@@ -2435,7 +2435,7 @@ msgstr "イントロとアウトロ"
 #: src/components/ui/VideoLookSettings.tsx:188
 #: src/components/ui/VideoLookSettings.tsx:189
 msgid "Intro card size"
-msgstr ""
+msgstr "イントロカードのサイズ"
 
 #: src/components/ui/CaptionStyleFields.tsx:121
 msgid "Italic"
@@ -2482,7 +2482,7 @@ msgstr "京都デモルート"
 
 #: src/components/ui/AppSettings.tsx:574
 msgid "Labels, route banners and cards drawn into the video. Auto follows the language the app was in when the project was last saved."
-msgstr ""
+msgstr "動画に描画されるラベル、ルートバナー、カードの言語です。「自動」では、プロジェクトを最後に保存したときのアプリの言語になります。"
 
 #: src/components/ui/NewProject.tsx:362
 #~ msgid "Landscape 16:9"
@@ -2494,11 +2494,11 @@ msgstr "言語"
 
 #: src/components/ui/AppSettings.tsx:573
 msgid "Language of the text in the video"
-msgstr ""
+msgstr "動画内の文字の言語"
 
 #: src/components/view/ProjectSettingsModal.tsx:301
 msgid "Larger map tiles for a crisper picture. They take longer to download."
-msgstr ""
+msgstr "より大きな地図タイルで、画像が鮮明になります。ダウンロードに時間がかかります。"
 
 #: src/components/view/ProjectManager.tsx:528
 msgid "Last Opened"
@@ -2539,12 +2539,12 @@ msgstr "スクリプトを書くときに、モデルが地点の写真（最大
 
 #: src/components/ui/CaptionStyleFields.tsx:185
 msgid "Letter spacing"
-msgstr ""
+msgstr "文字間隔"
 
 #: src/components/ui/VideoLookSettings.tsx:88
 #: src/components/view/ProjectSettingsModal.tsx:129
 msgid "Light"
-msgstr ""
+msgstr "ライト"
 
 #: src/features/map/components/LegColorButton.tsx:49
 #: src/features/map/components/LegColorButton.tsx:50
@@ -2555,7 +2555,7 @@ msgstr "線の色"
 
 #: src/components/ui/VideoLookSettings.tsx:130
 msgid "Line color: {label}"
-msgstr ""
+msgstr "線の色: {label}"
 
 #: src/features/map/components/LegColorButton.tsx:49
 msgid "Line color: route color"
@@ -2619,11 +2619,11 @@ msgstr "位置情報を取得中..."
 
 #: src/features/map/components/OverviewPanel.tsx:142
 msgid "Location"
-msgstr ""
+msgstr "場所"
 
 #: src/features/editor/Inspector.tsx:545
 msgid "Location line"
-msgstr ""
+msgstr "場所の行"
 
 #: src/features/map/components/WaypointEditor.tsx:411
 #: src/features/map/components/WaypointEditor.tsx:412
@@ -2641,16 +2641,16 @@ msgstr "ログ表示"
 #: src/components/ui/VideoLookSettings.tsx:150
 #: src/components/ui/VideoLookSettings.tsx:151
 msgid "Longest leg"
-msgstr ""
+msgstr "最長の区間"
 
 #: src/components/ui/VideoLookSettings.tsx:144
 #: src/components/ui/VideoLookSettings.tsx:145
 msgid "Longest leg in the overview"
-msgstr ""
+msgstr "全体表示での最長の区間"
 
 #: src/components/view/ProjectSettingsModal.tsx:267
 msgid "Look of the video"
-msgstr ""
+msgstr "動画の見た目"
 
 #: src/features/map/components/WaypointEditor.tsx:591
 msgid "Looking…"
@@ -2674,7 +2674,7 @@ msgstr "ロースペックシステムが検出されました: {gpuRenderer} (�
 
 #: src/components/ui/VideoLookSettings.tsx:159
 msgid "Lower turns the camera more gently."
-msgstr ""
+msgstr "小さくすると、カメラの向きがよりゆるやかに変わります。"
 
 #: src/components/ui/RenderOverlay.tsx:525
 msgid "lowSpecGenSessionMessage"
@@ -2682,21 +2682,21 @@ msgstr "ロースペックモードで実行中です。再生成する前に、
 
 #: src/features/map/components/GenerateDialog.tsx:231
 msgid "Made again"
-msgstr ""
+msgstr "作り直し済み"
 
 #: src/features/map/components/WaypointEditor.tsx:181
 msgid "Make again for this stop"
-msgstr ""
+msgstr "この地点を作り直す"
 
 #: src/features/map/components/GenerateDialog.tsx:125
 #: src/features/map/components/GenerateDialog.tsx:242
 msgid "Make everything again"
-msgstr ""
+msgstr "すべて作り直す"
 
 #: src/features/map/components/WaypointEditor.tsx:476
 #: src/features/map/components/WaypointEditor.tsx:477
 msgid "Make this stop's files again"
-msgstr ""
+msgstr "この地点のファイルを作り直す"
 
 #: src/components/ui/ExportProjectDialog.tsx:117
 msgid "Makes the file much larger. Without them the other person renders the clips again."
@@ -2704,7 +2704,7 @@ msgstr "ファイルがかなり大きくなります。含めない場合、受
 
 #: src/features/map/components/WaypointEditor.tsx:155
 msgid "Making the new voice for this stop. The first one can take a while."
-msgstr ""
+msgstr "この地点の新しい音声を作成しています。最初の1件は時間がかかることがあります。"
 
 #: src/components/ui/RenderOverlay.tsx:587
 msgid "Making the new voice. The first one can take a while."
@@ -2712,15 +2712,15 @@ msgstr "新しい音声を作成しています。最初の1件は時間がか�
 
 #: src/features/map/components/WaypointEditor.tsx:155
 msgid "Making the photo clip for this stop. This can take a few minutes."
-msgstr ""
+msgstr "この地点の写真クリップを作成しています。数分かかることがあります。"
 
 #: src/features/map/components/WaypointEditor.tsx:155
 msgid "Making the subtitles for this stop."
-msgstr ""
+msgstr "この地点の字幕を作成しています。"
 
 #: src/features/map/components/WaypointEditor.tsx:476
 msgid "Making this stop again..."
-msgstr ""
+msgstr "この地点を作り直しています..."
 
 #: src/components/ui/AppSettings.tsx:444
 #: src/components/ui/TitleBar.tsx:394
@@ -2738,16 +2738,16 @@ msgstr "地図データ"
 #: src/components/ui/VideoLookSettings.tsx:99
 #: src/components/ui/VideoLookSettings.tsx:100
 msgid "Map label size"
-msgstr ""
+msgstr "地図ラベルのサイズ"
 
 #: src/components/view/ProjectSettingsModal.tsx:288
 #: src/components/view/ProjectSettingsModal.tsx:293
 msgid "Map style"
-msgstr ""
+msgstr "地図スタイル"
 
 #: src/components/view/ProjectSettingsModal.tsx:285
 msgid "Map style in the video"
-msgstr ""
+msgstr "動画内の地図スタイル"
 
 #: src/features/map/components/MapToolbar.tsx:98
 msgid "Map tools"
@@ -3069,7 +3069,7 @@ msgstr "確認できるものがまだありません。"
 
 #: src/features/map/components/WaypointEditor.tsx:166
 msgid "Nothing was made: {skipped}"
-msgstr ""
+msgstr "何も作成されませんでした: {skipped}"
 
 #: src/components/ui/AppSettings.tsx:320
 #: src/features/map/components/GenerateDialog.tsx:98
@@ -3079,7 +3079,7 @@ msgstr "オフ"
 
 #: src/features/map/components/WaypointEditor.tsx:781
 msgid "Off keeps this stop out of the overview narration."
-msgstr ""
+msgstr "オフにすると、この地点は全体ナレーションに含まれません。"
 
 #: src/components/ui/ComponentsChecklist.tsx:77
 #~ msgid "Ollama on this PC"
@@ -3176,7 +3176,7 @@ msgstr "OpenRouteService"
 
 #: src/components/ui/VideoLookSettings.tsx:108
 msgid "Opens a leg zoomed out before the camera moves in."
-msgstr ""
+msgstr "各区間を引いた状態から始め、そのあとカメラが寄っていきます。"
 
 #: src/components/ui/ComponentsChecklist.tsx:155
 msgid "Optional"
@@ -3212,7 +3212,7 @@ msgstr "個別のスタイルを持つ字幕があります。このスタイル
 
 #: src/components/view/ProjectSettingsModal.tsx:125
 msgid "Outdoors"
-msgstr ""
+msgstr "アウトドア"
 
 #: src/components/ui/CaptionStyleFields.tsx:157
 msgid "Outline"
@@ -3232,36 +3232,36 @@ msgstr "出力"
 
 #: src/components/ui/VideoLookSettings.tsx:199
 msgid "Outro"
-msgstr ""
+msgstr "アウトロ"
 
 #: src/components/ui/VideoLookSettings.tsx:205
 msgid "Outro style"
-msgstr ""
+msgstr "アウトロのスタイル"
 
 #: src/components/ui/VideoLookSettings.tsx:82
 msgid "Overlay theme"
-msgstr ""
+msgstr "オーバーレイのテーマ"
 
 #: src/components/ui/VideoLookSettings.tsx:179
 msgid "Overview"
-msgstr ""
+msgstr "全体"
 
 #: src/features/map/components/OverviewNarration.tsx:260
 msgid "Overview map framing"
-msgstr ""
+msgstr "全体マップの表示範囲"
 
 #: src/features/map/components/OverviewNarration.tsx:156
 msgid "Overview narration"
-msgstr ""
+msgstr "全体ナレーション"
 
 #: src/components/ui/VideoLookSettings.tsx:141
 #: src/components/ui/VideoLookSettings.tsx:142
 msgid "Overview speed"
-msgstr ""
+msgstr "全体表示の速度"
 
 #: src/components/ui/VideoLookSettings.tsx:140
 msgid "Pace and camera"
-msgstr ""
+msgstr "ペースとカメラ"
 
 #: src/features/map/components/WaypointEditor.tsx:60
 msgid "Pan Down"
@@ -3309,7 +3309,7 @@ msgstr "この場所で一時停止"
 #: src/components/ui/VideoLookSettings.tsx:174
 #: src/components/ui/VideoLookSettings.tsx:175
 msgid "Pause on the stop map"
-msgstr ""
+msgstr "地点マップで一時停止"
 
 #: src/components/ui/CaptionStyleFields.tsx:143
 #: src/components/ui/CaptionStyleFields.tsx:197
@@ -3318,11 +3318,11 @@ msgstr "パーセント"
 
 #: src/features/map/components/WaypointEditor.tsx:768
 msgid "Photo card"
-msgstr ""
+msgstr "写真カード"
 
 #: src/features/map/components/WaypointEditor.tsx:184
 msgid "Photo clip"
-msgstr ""
+msgstr "写真クリップ"
 
 #: src/features/map/components/GenerateDialog.tsx:58
 #: src/features/map/components/GenerateDialog.tsx:90
@@ -3331,7 +3331,7 @@ msgstr "写真クリップ"
 
 #: src/features/editor/ExportDialog.tsx:173
 msgid "Photo credits (Wikimedia Commons), to include where you publish the video:"
-msgstr ""
+msgstr "写真のクレジット(Wikimedia Commons)。動画の公開先に記載してください:"
 
 #: src/features/map/components/WaypointEditor.tsx:511
 msgid "Photos"
@@ -3343,11 +3343,11 @@ msgstr "写真と画像"
 
 #: src/components/ui/VideoLookSettings.tsx:164
 msgid "Photos at stops"
-msgstr ""
+msgstr "地点の写真"
 
 #: src/components/ui/VideoLookSettings.tsx:165
 msgid "Photos grow to fill the frame when the traveler arrives."
-msgstr ""
+msgstr "旅行者が到着すると、写真が拡大して画面いっぱいになります。"
 
 #: src/components/ui/ComponentsChecklist.tsx:110
 msgid "Pick at least one"
@@ -3371,7 +3371,7 @@ msgstr "ピンク"
 
 #: src/components/ui/VideoLookSettings.tsx:113
 msgid "Pins and lines"
-msgstr ""
+msgstr "ピンと線"
 
 #: src/components/ui/PipelineLogPanel.tsx:105
 msgid "Pipeline Log"
@@ -3389,12 +3389,12 @@ msgstr "配置"
 #: src/components/ui/VoiceSettings.tsx:498
 #: src/components/ui/VoiceSettings.tsx:501
 msgid "Place cues in each stop's narration"
-msgstr ""
+msgstr "各地点のナレーションにキューを入れる"
 
 #: src/components/ui/VoiceSettings.tsx:491
 #: src/components/ui/VoiceSettings.tsx:494
 msgid "Place cues in the overview narration"
-msgstr ""
+msgstr "全体ナレーションにキューを入れる"
 
 #: src/features/editor/MusicPicker.tsx:148
 #: src/features/editor/Preview.tsx:413
@@ -3446,7 +3446,7 @@ msgstr "{0}を試聴"
 
 #: src/features/map/components/OverviewNarration.tsx:226
 msgid "Preview framing"
-msgstr ""
+msgstr "プレビューの表示範囲"
 
 #: src/components/ui/AboutPanel.tsx:60
 msgid "Project"
@@ -3592,7 +3592,7 @@ msgstr "プロジェクトファイルを読み込み中..."
 
 #: src/features/map/components/OverviewNarration.tsx:217
 msgid "Reading..."
-msgstr ""
+msgstr "読み上げています..."
 
 #: src/components/ui/AppSettings.tsx:1207
 #: src/components/ui/ComponentsChecklist.tsx:66
@@ -3769,7 +3769,7 @@ msgstr "Python生成パイプラインを開始しています..."
 
 #: src/features/map/components/OverviewNarration.tsx:251
 msgid "Replace"
-msgstr ""
+msgstr "置き換える"
 
 #: src/components/ui/VoiceSettings.tsx:580
 msgid "Replace existing voice"
@@ -3805,7 +3805,7 @@ msgstr "リセット"
 
 #: src/components/ui/VoiceSettings.tsx:443
 msgid "Reset speaking style"
-msgstr ""
+msgstr "話し方をリセット"
 
 #: src/features/editor/Inspector.tsx:335
 msgid "Reset style"
@@ -3813,7 +3813,7 @@ msgstr "スタイルをリセット"
 
 #: src/components/view/ProjectSettingsModal.tsx:278
 msgid "Reset the look"
-msgstr ""
+msgstr "見た目をリセット"
 
 #: src/features/editor/Inspector.tsx:177
 #~ msgid "Reset to default"
@@ -3906,7 +3906,7 @@ msgstr "ルートの色"
 #: src/components/ui/VideoLookSettings.tsx:216
 #: src/components/ui/VideoLookSettings.tsx:217
 msgid "Route facts"
-msgstr ""
+msgstr "ルートの情報"
 
 #: src/features/map/components/MapLayers/RouteStyling.tsx:105
 msgid "Route Line"
@@ -3958,11 +3958,11 @@ msgstr "始"
 
 #: src/components/view/ProjectSettingsModal.tsx:136
 msgid "Same as the editor"
-msgstr ""
+msgstr "エディタと同じ"
 
 #: src/components/view/ProjectSettingsModal.tsx:127
 msgid "Satellite Streets"
-msgstr ""
+msgstr "衛星写真+道路"
 
 #: src/components/ui/ColorPicker.tsx:238
 msgid "Saturation and brightness"
@@ -4022,7 +4022,7 @@ msgstr "先にプロジェクトを保存してください"
 
 #: src/features/map/components/OverviewNarration.tsx:197
 msgid "Save the project first to write or hear the narration."
-msgstr ""
+msgstr "ナレーションを作成または再生するには、先にプロジェクトを保存してください。"
 
 #: src/components/ui/StatusBar.tsx:338
 msgid "Save the project to enable version history"
@@ -4039,7 +4039,7 @@ msgstr "このPCの資格情報ストアに保存されています（プロジ�
 
 #: src/components/ui/AppSettings.tsx:527
 msgid "Saved on this PC only, never inside projects or shared files"
-msgstr ""
+msgstr "この PC にのみ保存され、プロジェクトや共有ファイルには含まれません"
 
 #: src/components/ui/AppSettings.tsx:343
 msgid "Saved with the project"
@@ -4061,7 +4061,7 @@ msgstr "スクリプトの作成元"
 
 #: src/components/ui/VideoLookSettings.tsx:211
 msgid "Scrolling"
-msgstr ""
+msgstr "スクロール"
 
 #: src/components/ui/FontDownloadDialog.tsx:89
 msgid "Search fonts"
@@ -4090,7 +4090,7 @@ msgstr "タイトル項目の開始からの秒数です。終了の同じ秒数
 
 #: src/components/ui/VideoLookSettings.tsx:191
 msgid "Seconds the overview shows the bare map first."
-msgstr ""
+msgstr "全体表示で最初に地図だけを見せる秒数です。"
 
 #: src/features/map/components/MapToolbar.tsx:82
 msgid "Select"
@@ -4141,7 +4141,7 @@ msgstr "1語だけのリクエストを送って、キーとモデルを確認�
 
 #: src/components/ui/voiceOptions.ts:14
 msgid "Serious"
-msgstr ""
+msgstr "まじめ"
 
 #: src/components/ui/AppSettings.tsx:527
 msgid "Services"
@@ -4190,21 +4190,21 @@ msgstr "セットアップ"
 
 #: src/components/ui/CaptionStyleFields.tsx:174
 msgid "Shadow"
-msgstr ""
+msgstr "影"
 
 #: src/components/ui/CaptionStyleFields.tsx:176
 msgid "Shadow color"
-msgstr ""
+msgstr "影の色"
 
 #: src/components/ui/VideoLookSettings.tsx:171
 #: src/components/ui/VideoLookSettings.tsx:172
 msgid "Sharpen photos"
-msgstr ""
+msgstr "写真をシャープにする"
 
 #: src/components/view/ProjectSettingsModal.tsx:300
 #: src/components/view/ProjectSettingsModal.tsx:306
 msgid "Sharper map tiles"
-msgstr ""
+msgstr "より鮮明な地図タイル"
 
 #: src/components/ui/AppSettings.tsx:292
 #~ msgid "Show Auto-Write script buttons and overview narration. Requires Ollama to be installed and running locally."
@@ -4261,7 +4261,7 @@ msgstr "シンプル"
 
 #: src/features/editor/ExportDialog.tsx:125
 msgid "Size"
-msgstr ""
+msgstr "サイズ"
 
 #: src/components/ui/CaptionStyleFields.tsx:113
 msgid "Size and style"
@@ -4313,7 +4313,7 @@ msgstr "点を通る経路をなめらかにする"
 
 #: src/features/map/components/MapLayers/HeatmapLegend.tsx:42
 msgid "Some legs are still waiting for terrain data. Move the map over them."
-msgstr ""
+msgstr "一部の区間は地形データを待っています。地図をその区間の上に移動してください。"
 
 #: src/features/map/components/WaypointEditor.tsx:224
 msgid "Some photos could not be converted and were skipped."
@@ -4330,7 +4330,7 @@ msgstr "ソースコード"
 #: src/components/ui/VoiceSettings.tsx:438
 #: src/components/ui/VoiceSettings.tsx:473
 msgid "Speaking style"
-msgstr ""
+msgstr "話し方"
 
 #: src/components/ui/VoiceSettings.tsx:415
 msgid "Speed"
@@ -4338,7 +4338,7 @@ msgstr "速度"
 
 #: src/components/ui/VoiceSettings.tsx:514
 msgid "Spoken lines are kept so a repeated line is not spoken again. Narration already in your projects is not touched."
-msgstr ""
+msgstr "読み上げた行は保存され、同じ行を再び読み上げることはありません。すでにプロジェクトにあるナレーションには影響しません。"
 
 #: src/features/map/components/WaypointEditor.tsx:366
 msgid "Spoken over this stop's photos once you arrive."
@@ -4350,7 +4350,7 @@ msgstr "この地点へ向かう間に読み上げます。"
 
 #: src/components/ui/VideoLookSettings.tsx:77
 msgid "Stacked"
-msgstr ""
+msgstr "縦並び"
 
 #: src/components/ui/RenderOverlay.tsx:363
 #: src/features/map/components/MapToolbar.tsx:90
@@ -4375,7 +4375,7 @@ msgstr "最初からやり直す"
 
 #: src/components/ui/VideoLookSettings.tsx:114
 msgid "Start pin"
-msgstr ""
+msgstr "始点のピン"
 
 #: src/components/ui/NewProject.tsx:408
 msgid "start-editing"
@@ -4448,11 +4448,11 @@ msgstr "経由地"
 
 #: src/components/ui/VideoLookSettings.tsx:120
 msgid "Stop-by pin"
-msgstr ""
+msgstr "立ち寄りのピン"
 
 #: src/features/map/components/WaypointEditor.tsx:171
 msgid "Stopped before it finished."
-msgstr ""
+msgstr "完了する前に停止しました。"
 
 #: src/hooks/useAssistant.tsx:221
 #: src/hooks/useAssistant.tsx:291
@@ -4473,7 +4473,7 @@ msgstr "カスタム画像またはスクリプトを含む地点"
 
 #: src/components/view/ProjectSettingsModal.tsx:126
 msgid "Streets"
-msgstr ""
+msgstr "ストリート"
 
 #: src/features/editor/Inspector.tsx:227
 #: src/features/editor/Inspector.tsx:260
@@ -4517,7 +4517,7 @@ msgstr "ドキュメントの処理に成功しました。以下が提案され
 
 #: src/components/ui/VideoLookSettings.tsx:69
 msgid "Summary card"
-msgstr ""
+msgstr "サマリーカード"
 
 #: src/components/ui/RenderOverlay.tsx:292
 msgid "Synthesizing AI Voiceovers{prog}..."
@@ -4542,7 +4542,7 @@ msgstr "ターゲットフレームレート"
 
 #: src/components/ui/VideoLookSettings.tsx:76
 msgid "Taskbar"
-msgstr ""
+msgstr "タスクバー"
 
 #: src/components/ui/TitleBar.tsx:128
 msgid "Tauri Window API error:"
@@ -4575,7 +4575,7 @@ msgstr "文字の色"
 
 #: src/components/ui/CaptionStyleFields.tsx:193
 msgid "Text opacity"
-msgstr ""
+msgstr "文字の不透明度"
 
 #: src/hooks/useAssistant.tsx:294
 msgid "The assistant could not build the project"
@@ -4603,15 +4603,15 @@ msgstr "OpenAI API に対応したサーバーのベースアドレス（例: ht
 
 #: src/features/editor/ExportDialog.tsx:141
 msgid "The clips are drawn at 1080p, so a larger size enlarges them: the file is bigger, not sharper."
-msgstr ""
+msgstr "クリップは1080pで描画されるため、サイズを大きくすると拡大されます。ファイルは大きくなりますが、鮮明にはなりません。"
 
 #: src/components/ui/VideoLookSettings.tsx:194
 msgid "The closing close-up of the first stop."
-msgstr ""
+msgstr "最初の地点の最後のクローズアップです。"
 
 #: src/components/view/ProjectSettingsModal.tsx:289
 msgid "The editor shows {editorLabel}, which is not a Mapbox style, so the video cannot use it."
-msgstr ""
+msgstr "エディタでは {editorLabel} を表示していますが、Mapbox のスタイルではないため動画には使えません。"
 
 #: src/components/ui/VoiceSettings.tsx:257
 msgid "The fast voice needs a one-time setup: a small separate Python environment and the model files (about 2 GB in all). It takes a few minutes and needs an internet connection. Keep this window open while it runs."
@@ -4627,7 +4627,7 @@ msgstr "朝の光が港に差し込み、街がゆっくりと目を覚ましま
 
 #: src/components/ui/VideoLookSettings.tsx:82
 msgid "The map overlays and cards in the video, not the app."
-msgstr ""
+msgstr "アプリではなく、動画内の地図オーバーレイとカードに適用されます。"
 
 #: src/components/ui/ComponentsChecklist.tsx:72
 #~ msgid "The most natural, and it clones a voice. Slowest on a PC without a graphics card."
@@ -4643,19 +4643,19 @@ msgstr "自然な声には初回のみのセットアップが必要です。専
 
 #: src/components/ui/ReviewStep.tsx:250
 msgid "The overview script is edited in the Overview narration section at the top of the map sidebar. You can still fix pronunciations here."
-msgstr ""
+msgstr "全体の台本は、マップサイドバー上部の「全体ナレーション」で編集します。読み方の修正はここでもできます。"
 
 #: src/components/ui/VoiceSettings.tsx:492
 msgid "The overview stops at each stop while the voice describes it, then moves on."
-msgstr ""
+msgstr "音声が各地点を説明している間、全体表示はその地点で止まり、そのあと次へ進みます。"
 
 #: src/features/map/components/WaypointEditor.tsx:168
 msgid "The photo clip is ready."
-msgstr ""
+msgstr "写真クリップができました。"
 
 #: src/components/ui/VideoLookSettings.tsx:200
 msgid "The places-visited clip at the end of the video."
-msgstr ""
+msgstr "動画の最後に表示される、訪れた場所のクリップです。"
 
 #: src/components/ui/RenderOverlay.tsx:762
 msgid "The redo failed"
@@ -4679,7 +4679,7 @@ msgstr "出発地と目的地は常に含まれます。"
 
 #: src/features/map/components/WaypointEditor.tsx:168
 msgid "The subtitles are ready."
-msgstr ""
+msgstr "字幕ができました。"
 
 #: src/features/map/components/OverviewPanel.tsx:223
 msgid "The video starts directly on the route. Turn the intro on to add a title card."
@@ -4687,11 +4687,11 @@ msgstr "動画はルートから直接始まります。タイトルカードを
 
 #: src/features/map/components/WaypointEditor.tsx:167
 msgid "The voice is ready."
-msgstr ""
+msgstr "音声ができました。"
 
 #: src/features/map/components/WaypointEditor.tsx:167
 msgid "The voice is ready. If its length changed, redo the photo clip so it fits."
-msgstr ""
+msgstr "音声ができました。長さが変わった場合は、写真クリップをやり直して合わせてください。"
 
 #: src/components/ui/RenderOverlay.tsx:589
 msgid "The voice is ready. Listen to check it."
@@ -4703,11 +4703,11 @@ msgstr "このプロジェクトのすべてのナレーションをこのボイ
 
 #: src/features/map/components/OverviewNarration.tsx:168
 msgid "The voice-over of the whole-route map shot at the start. Leave it blank and it is written for you when you make the video; once you edit it, it is never replaced."
-msgstr ""
+msgstr "冒頭のルート全体の地図ショットのナレーションです。空欄のままにすると、動画を作るときに自動で作成されます。一度編集すると、置き換えられることはありません。"
 
 #: src/components/ui/VoiceSettings.tsx:499
 msgid "The walk reaches the stop by the time its name is spoken. Cues you type yourself always win."
-msgstr ""
+msgstr "地点の名前が読み上げられるころに、歩きがその地点に到着します。ご自身で入力したキューが常に優先されます。"
 
 #: src/components/ui/AppSettings.tsx:363
 msgid "Theme"
@@ -4715,11 +4715,11 @@ msgstr "テーマ"
 
 #: src/features/map/components/OverviewNarration.tsx:102
 msgid "There is no overview narration to read yet."
-msgstr ""
+msgstr "読み上げる全体ナレーションはまだありません。"
 
 #: src/features/map/components/MapLayers/HeatmapLegend.tsx:40
 msgid "These legs have no recorded elevation. 3D terrain can supply it."
-msgstr ""
+msgstr "これらの区間には標高の記録がありません。3D地形で補えます。"
 
 #: src/features/assistant/AssistantChat.tsx:97
 msgid "Thinking…"
@@ -4775,7 +4775,7 @@ msgstr "このプロジェクトはまだアーカイブファイルのままで
 
 #: src/features/map/components/OverviewNarration.tsx:242
 msgid "This replaces the script you wrote."
-msgstr ""
+msgstr "ご自身で書いた台本が置き換えられます。"
 
 #: src/features/editor/Inspector.tsx:229
 msgid "This subtitle has its own style."
@@ -4795,7 +4795,7 @@ msgstr "このバージョンはもう利用できません"
 
 #: src/features/map/components/OverviewNarration.tsx:240
 msgid "Throw away your script? The video will write its own when you make it."
-msgstr ""
+msgstr "台本を破棄しますか？ 動画を作るときに、新しい台本が自動で作成されます。"
 
 #: src/features/map/components/GenerateDialog.tsx:150
 msgid "Time unavailable"
@@ -4812,7 +4812,7 @@ msgstr "タイミング"
 
 #: src/components/ui/VoiceSettings.tsx:487
 msgid "Timing cues"
-msgstr ""
+msgstr "タイミングのキュー"
 
 #: src/components/view/ProjectSettingsModal.tsx:232
 msgid "Timing cues written in a narration decide when the walker reaches the stop."
@@ -4843,7 +4843,7 @@ msgstr "動画の冒頭に表示するタイトルカード"
 
 #: src/components/ui/VideoLookSettings.tsx:180
 msgid "Title on the overview"
-msgstr ""
+msgstr "全体表示のタイトル"
 
 #: src/features/assistant/AssistantChat.tsx:21
 msgid "Tone"
@@ -4851,11 +4851,11 @@ msgstr "トーン"
 
 #: src/features/map/components/OverviewNarration.tsx:139
 msgid "Too long"
-msgstr ""
+msgstr "長すぎます"
 
 #: src/features/map/components/OverviewNarration.tsx:139
 msgid "Too short"
-msgstr ""
+msgstr "短すぎます"
 
 #: src/components/ui/CaptionStyleFields.tsx:210
 #: src/features/editor/Inspector.tsx:384
@@ -4905,12 +4905,12 @@ msgstr "TTS 発音辞書"
 
 #: src/features/map/components/MapLayers/HeatmapLegend.tsx:52
 msgid "Turn on 3D terrain"
-msgstr ""
+msgstr "3D地形をオンにする"
 
 #: src/components/ui/VideoLookSettings.tsx:159
 #: src/components/ui/VideoLookSettings.tsx:160
 msgid "Turn smoothing"
-msgstr ""
+msgstr "方向転換のなめらかさ"
 
 #: src/features/assistant/AssistantChat.tsx:62
 msgid "Turn the itinerary I attach into a 3 minute video with Japanese narration"
@@ -4939,7 +4939,7 @@ msgstr "ここに文字を入力"
 #: src/components/ui/VideoLookSettings.tsx:147
 #: src/components/ui/VideoLookSettings.tsx:148
 msgid "Typical leg length"
-msgstr ""
+msgstr "標準的な区間の長さ"
 
 #: src/components/ui/CaptionStyleFields.tsx:122
 msgid "Underline"
@@ -4986,11 +4986,11 @@ msgstr "未保存の変更 - 保存するにはCtrl+Sを押してください"
 
 #: src/components/ui/VideoLookSettings.tsx:126
 msgid "Unset, it is the marker color, darker."
-msgstr ""
+msgstr "未設定の場合は、マーカーの色を暗くした色になります。"
 
 #: src/components/ui/VideoLookSettings.tsx:180
 msgid "Unset, the project name."
-msgstr ""
+msgstr "未設定の場合は、プロジェクト名になります。"
 
 #: src/features/map/components/GenerateDialog.tsx:182
 msgid "Untitled"
@@ -5013,7 +5013,7 @@ msgstr "{0}回更新"
 
 #: src/features/map/components/MapLayers/HeatmapLegend.tsx:27
 msgid "Uphill"
-msgstr ""
+msgstr "上り"
 
 #: src/components/ui/VoiceSettings.tsx:563
 msgid "Upload 5–20 seconds of clear speech from one person, with no music or background noise."
@@ -5021,12 +5021,12 @@ msgstr "1人の話し声を5〜20秒、音楽や雑音なしでアップロー�
 
 #: src/components/ui/VideoLookSettings.tsx:171
 msgid "Upscales photos before they are shown. Needs a GPU and takes longer."
-msgstr ""
+msgstr "表示する前に写真を高解像度化します。GPU が必要で、時間がかかります。"
 
 #: src/features/map/components/OverviewNarration.tsx:231
 #: src/features/map/components/OverviewNarration.tsx:251
 msgid "Use automatic"
-msgstr ""
+msgstr "自動を使う"
 
 #: src/features/editor/Inspector.tsx:238
 #: src/features/editor/Inspector.tsx:264
@@ -5113,7 +5113,7 @@ msgstr "タイムラインで表示"
 
 #: src/components/ui/VideoLookSettings.tsx:126
 msgid "Visited pin"
-msgstr ""
+msgstr "訪問済みのピン"
 
 #: src/components/ui/AppSettings.tsx:198
 #: src/components/ui/VoiceSettings.tsx:253
@@ -5128,7 +5128,7 @@ msgstr "ボイス「{selected}」が見つからないため{fallback}を使用�
 
 #: src/components/ui/VoiceSettings.tsx:507
 msgid "Voice cache"
-msgstr ""
+msgstr "音声キャッシュ"
 
 #: src/components/ui/VoiceSettings.tsx:218
 msgid "Voice engine"
@@ -5142,7 +5142,7 @@ msgstr "ボイス名"
 #: src/features/map/components/OverviewNarration.tsx:136
 #: src/features/map/components/OverviewNarration.tsx:191
 msgid "Voice: {voiceSeconds} s"
-msgstr ""
+msgstr "音声: {voiceSeconds}秒"
 
 #: src/features/map/components/GenerateDialog.tsx:55
 msgid "Voiceover"
@@ -5183,11 +5183,11 @@ msgstr "ウォークイン"
 
 #: src/components/ui/VideoLookSettings.tsx:60
 msgid "Walking"
-msgstr ""
+msgstr "徒歩"
 
 #: src/components/ui/voiceOptions.ts:13
 msgid "Warm"
-msgstr ""
+msgstr "あたたかい"
 
 #: src/features/map/components/DrawBar.tsx:285
 #: src/features/map/components/MapArea.tsx:477
@@ -5213,7 +5213,7 @@ msgstr "ほかに何をセットアップしますか？"
 
 #: src/components/view/ProjectSettingsModal.tsx:289
 msgid "What the video's map looks like. Default keeps the look the video always had."
-msgstr ""
+msgstr "動画の地図の見た目です。「標準」では、これまでの動画と同じ見た目になります。"
 
 #: src/components/view/ProjectManager.tsx:369
 #~ msgid "Where are we going today?"
@@ -5250,7 +5250,7 @@ msgstr "白"
 #: src/components/ui/VideoLookSettings.tsx:108
 #: src/components/ui/VideoLookSettings.tsx:109
 msgid "Wide view before each leg"
-msgstr ""
+msgstr "各区間の前に広い視点を表示"
 
 #: src/components/ui/ReviewStep.tsx:79
 msgid "Word"
@@ -5282,7 +5282,7 @@ msgstr "動作しています"
 
 #: src/features/map/components/OverviewNarration.tsx:213
 msgid "Write without AI"
-msgstr ""
+msgstr "AIなしで作成"
 
 #: src/components/ui/AboutPanel.tsx:49
 #~ msgid "Writes narration scripts on your PC"
@@ -5290,7 +5290,7 @@ msgstr ""
 
 #: src/features/assistant/AssistantChat.tsx:64
 msgid "Writing scripts"
-msgstr ""
+msgstr "台本を作成しています"
 
 #: src/components/ui/AutoDirectorModal.tsx:29
 msgid "Writing scripts ({done} of {total}) {label}"
@@ -5303,19 +5303,19 @@ msgstr "台本を作成中（{done} / {total}）{label}"
 #: src/features/map/components/OverviewNarration.tsx:204
 #: src/features/map/components/OverviewNarration.tsx:213
 msgid "Writing..."
-msgstr ""
+msgstr "作成しています..."
 
 #: src/features/map/components/OverviewNarration.tsx:131
 msgid "Written automatically"
-msgstr ""
+msgstr "自動で作成されます"
 
 #: src/features/map/components/OverviewNarration.tsx:129
 msgid "Written automatically when you make the video"
-msgstr ""
+msgstr "動画を作るときに自動で作成されます"
 
 #: src/features/map/components/GenerateDialog.tsx:116
 msgid "Yes, make everything again"
-msgstr ""
+msgstr "はい、すべて作り直す"
 
 #: src/components/ui/SetupGate.tsx:60
 msgid "You can do this later in Settings > Setup"
@@ -5328,11 +5328,11 @@ msgstr "最近のワークスペースはありませんね。新しいプロジ
 #: src/components/ui/AppSettings.tsx:447
 #: src/components/view/ProjectSettingsModal.tsx:175
 msgid "Your own image is also drawn as the pin in the video; the built-in icons show on the map only."
-msgstr ""
+msgstr "ご自身の画像は動画内のピンとしても描画されます。内蔵のアイコンは地図上にのみ表示されます。"
 
 #: src/features/map/components/OverviewNarration.tsx:132
 msgid "Your own script"
-msgstr ""
+msgstr "ご自身の台本"
 
 #: src/components/ui/SaveAs.tsx:134
 msgid "Your Project Name Here"
@@ -5368,4 +5368,4 @@ msgstr "経路に合わせて拡大"
 #: src/components/ui/VideoLookSettings.tsx:194
 #: src/components/ui/VideoLookSettings.tsx:195
 msgid "Zoom to the start at the end"
-msgstr ""
+msgstr "最後に始点へズームする"

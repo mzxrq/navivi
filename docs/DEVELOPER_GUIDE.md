@@ -494,7 +494,6 @@ If you add or rename a stage, update `STAGE_MATCHERS` in `src/utils/pipelineLog.
 | `services/gpsparser/` | GPX/FIT/TCX/KML reading, distance maths, stay detection |
 | `services/mapfetcher/` | map tiles, geometry, pacing (how fast the camera moves), languages, and `graphicengine/` (popups, cards, icons, sprites drawn onto frames) |
 | `services/vdoprocessing/` | everything video: route renderers (`route2vdo.py`, `pydeckrecorder/`, `spatial_renderer/`), photo-clip generators, intro/outro cards, the exporter and editor (FFmpeg), the step modules |
-| `services/model/` | legacy image-to-motion models (classic pan, depth parallax, outpainting). Nothing imports this package any more; see BACKEND_GAPS.md section 5 |
 | `services/tts/` | voice engines (`ttsengine.py`), the three servers, setup modules, voice library, spoken-line cache, artifact cleaning |
 | `services/localization/` | script writing (local and online), overview narration, subtitles, fonts, Japanese readings, text styles |
 | `services/logger/` | the logger and `progress.py`, the shared `tracker` that prints the live "[mm:ss] [n/N] ..." line. Use it instead of `print()` |
