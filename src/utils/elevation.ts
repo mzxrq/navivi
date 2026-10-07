@@ -211,3 +211,18 @@ export function sampleIndexes(positions: number[][], stepM = 20, maxCount = 400)
   if (positions.length > 1) idx.push(positions.length - 1);
   return idx;
 }
+
+/** Recorded elevation for a drawn leg whose geometry is `positions`; null when it was not recorded or the
+ *  drawn path was edited since (the saved list only fits [stop, ...customRoute, next stop]). */
+export function recordedLegElevation(
+  positions: number[][],
+  from: { lat: number; lng: number },
+  to: { lat: number; lng: number },
+  customRoute: number[][] | undefined,
+  customRouteEle: MaybeEle[] | undefined,
+): number[] | null {
+  if (!customRoute || !customRouteEle || customRouteEle.length !== customRoute.length + 2) return null;
+  const filled = fillGaps(customRouteEle);
+  if (!filled) return null;
+  return elevationAlongPath(positions, [[from.lat, from.lng], ...customRoute, [to.lat, to.lng]], filled);
+}
