@@ -13,7 +13,8 @@ import { MODEL_CREDITS } from "../../config/credits";
 import { CheckCircle2, ExternalLink, Loader2 } from "./icons";
 import { Dialog, dialogButton } from "./Dialog";
 import { OnlineProviderSettings, ProviderPicker } from "./OnlineAiSettings";
-import { primaryButton, Row, secondaryButton, Section, selectClass } from "./SettingsParts";
+import { primaryButton, Row, secondaryButton, Section } from "./SettingsParts";
+import { Select } from "./Select";
 
 type Engine = "irodori" | "qwen3" | "kokoro" | "comfyui";
 type EngineStatus = Record<Engine, boolean | null>;
@@ -218,23 +219,17 @@ export function ComponentsChecklist() {
           </Row>
           {ollamaReady && !ollama.models.includes(settings.ai_model ?? "") && (
             <Row title={t`Model to write scripts`} description={t`The model the assistant and Auto-Write use.`}>
-              <select
+              <Select
+                label={t`Model to write scripts`}
                 value={settings.ai_model ?? ""}
-                onChange={(e) => {
-                  updateSettings({ ai_model: e.target.value });
+                placeholder={t`Choose a model`}
+                onChange={(model) => {
+                  updateSettings({ ai_model: model });
                   setIsDirty(true);
                 }}
-                className={`${selectClass} w-64`}
-              >
-                <option value="" disabled>
-                  {t`Choose a model`}
-                </option>
-                {ollama.models.map((m) => (
-                  <option key={m} value={m}>
-                    {m}
-                  </option>
-                ))}
-              </select>
+                options={ollama.models.map((m: string) => ({ value: m, label: m }))}
+                className="w-64"
+              />
             </Row>
           )}
         </Section>

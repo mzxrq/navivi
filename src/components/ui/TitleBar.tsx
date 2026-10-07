@@ -10,6 +10,7 @@ import {
   Square,
   Map,
   Settings2,
+  SlidersHorizontal,
   Sparkles,
   Undo2,
   Redo2,
@@ -32,6 +33,7 @@ export function TitleBar() {
     setEditorMode,
     showToast,
     setShowAppSettings,
+    setShowProjectSettings,
     isRendering,
     isBackgroundRender,
   } = useUI();
@@ -251,6 +253,14 @@ export function TitleBar() {
                     >
                       <Trans>Export for sharing...</Trans>
                     </MenuItem>
+                    <MenuItem
+                      onClick={() => {
+                        setIsMenuOpen(false);
+                        setShowProjectSettings(true);
+                      }}
+                    >
+                      <Trans>Project settings...</Trans>
+                    </MenuItem>
                     <MenuSeparator />
                     <MenuItem onClick={() => handleSafeNavigation("title_screen")}>
                       <Trans>Project Manager</Trans>
@@ -429,6 +439,18 @@ export function TitleBar() {
             >
               <Sparkles className="w-4 h-4" />
               <Tip label={t`Assistant`} align="end" />
+            </button>
+          )}
+
+          {currentView === "editor" && (
+            <button
+              type="button"
+              onClick={() => setShowProjectSettings(true)}
+              aria-label={t`Project settings`}
+              className={barButton}
+            >
+              <SlidersHorizontal className="w-4 h-4" />
+              <Tip label={t`Project settings`} align="end" />
             </button>
           )}
 

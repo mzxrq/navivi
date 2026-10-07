@@ -22,6 +22,7 @@ export {
   Mic,
   Sparkles,
   Settings2,
+  SlidersHorizontal, // TitleBar project settings
   Loader, //ScriptInput
   //Info, //ScrubInput
   Menu,
