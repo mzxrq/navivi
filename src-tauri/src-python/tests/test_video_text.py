@@ -145,7 +145,7 @@ class TestCards:
         eng = _card_engine(tmp_path, "en")
         assert eng._format_duration_ja(30) == "30 sec"
         assert eng._format_duration_ja(25 * 60) == "25 min"
-        assert eng._format_duration_ja(95 * 60) == "1 h 35 min"
+        assert eng._format_duration_ja(95 * 60) == "1h 35m"
         assert eng._mode_name_ja("ferry") == "Ferry"
         assert eng._mode_duration_label("airplane") == "Flight time"
         ja = _card_engine(tmp_path, "ja")
@@ -200,3 +200,17 @@ class TestOutro:
     def test_japanese_subtitle_unchanged(self, tmp_path):
         _config(tmp_path, map_language="ja")
         assert outrocard._outro_subtitle(5) == "訪れた5か所"
+
+    def test_route_page_renders_in_english(self, tmp_path):
+        _config(tmp_path, settings={"video_text_language": "en"})
+        brief = {
+            "total_km": 12.3, "total_minutes": 725,
+            "legs": [
+                {"from": "A", "to": "B", "km": 12.3, "minutes": 725, "mode": "walking",
+                 "pieces": [{"mode": "walking", "km": 12.3, "minutes": 725}]},
+            ],
+        }
+        heading = {"kicker": "", "title": "Trip", "subtitle": "1 place", "kicker_style": None,
+                   "title_style": None, "subtitle_style": None}
+        page = outrocard._build_route_page("Trip", [{"label": "B"}], (1280, 704), brief, heading)
+        assert page.size[0] == 1280 and page.getbbox() is not None

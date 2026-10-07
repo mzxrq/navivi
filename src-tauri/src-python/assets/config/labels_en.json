@@ -29,7 +29,7 @@
   "en_route_banner": "Heading to {dest}{suffix}",
   "hud_minutes": "{n} min",
   "duration_seconds": "{n} sec",
-  "duration_hours_minutes": "{h} h {m:02d} min",
+  "duration_hours_minutes": "{h}h {m:02d}m",
   "duration_minutes": "{m} min",
   "duration_fallback": "Time",
   "destination_fallback": "Destination",
