@@ -178,7 +178,9 @@ def run_full_pipeline(
         tuning.ensure_free_ram("photo upscale", min_free_ram, relief=stop_tts_server)
         upscale_waypoint_images(str(config_file_path), force=force_regenerate)
         job_config = JobConfigManager(config_file_path)
-        if not attractions_on:
+        # Clip workers start their own server: one owned here couldn't be
+        # restarted by them between LTXV sampling and decoding.
+        if not attractions_on or tuning.ATTRACTION_CLIP_IN_CHILD:
             from services.vdoprocessing.comfyui_i2v_client import ComfyUII2VClient
             ComfyUII2VClient.stop_server()
     else:

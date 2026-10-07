@@ -265,6 +265,31 @@ class AttractionVideoGenerator:
         save_path: Optional[str] = None,
         place: Optional[str] = None,
     ) -> Optional[str]:
+        """_generate_single_clip_here, in its own process (ATTRACTION_CLIP_IN_CHILD)
+        so the photo's RAM is all handed back when it's done; in this process if
+        the child can't run."""
+        if tuning.ATTRACTION_CLIP_IN_CHILD and save_path:
+            from services.vdoprocessing import clip_worker
+
+            try:
+                return clip_worker.run(
+                    {"kind": "clip", "config_path": str(self.config.config_path), "image": local_image_path,
+                     "prompt": prompt_text, "duration": duration_sec, "save_path": str(save_path), "place": place},
+                    self.output_dir / ".partial",
+                ).get("clip")
+            except Exception as exc:
+                logger.warning("Clip worker failed for %s (%s: %s) - making it in this process.",
+                               local_image_path, type(exc).__name__, exc)
+        return self._generate_single_clip_here(local_image_path, prompt_text, duration_sec, save_path, place)
+
+    def _generate_single_clip_here(
+        self,
+        local_image_path: str,
+        prompt_text: str,
+        duration_sec: float = 6.0,
+        save_path: Optional[str] = None,
+        place: Optional[str] = None,
+    ) -> Optional[str]:
         """Generates a clip via ComfyUI (Wan2.2 I2V), falling back to the
         local pan/zoom generator on failure. Returns the raw clip path.
 
@@ -1053,9 +1078,21 @@ class AttractionVideoGenerator:
         if (not tuning.SIGN_LOCK or pan in (STILL_PRESET, *tuning.ATTRACTION_JUMP_CUT_PRESETS)
                 or marker.exists()):
             return
-        from services.vdoprocessing.sign_lock import lock_signs
+        if tuning.ATTRACTION_CLIP_IN_CHILD:
+            from services.vdoprocessing import clip_worker
 
-        lock_signs(clip_path, photo_path)
+            try:  # RapidOCR and every frame of the clip: in a child, like the clip itself
+                clip_worker.run({"kind": "signlock", "clip": clip_path, "image": photo_path},
+                                Path(clip_path).parent / ".partial")
+            except Exception as exc:
+                logger.warning("Sign lock worker failed for %s (%s) - locking here.", clip_path, exc)
+                from services.vdoprocessing.sign_lock import lock_signs
+
+                lock_signs(clip_path, photo_path)
+        else:
+            from services.vdoprocessing.sign_lock import lock_signs
+
+            lock_signs(clip_path, photo_path)
         try:
             marker.touch()
         except OSError:

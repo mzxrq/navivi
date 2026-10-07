@@ -1248,6 +1248,9 @@ LTXV_MID_GUIDE_STRENGTH = 0.6
 # A job takes ~15 GB of RAM on top of what's in use: below this much free it
 # waits (tuning.ensure_free_ram), then falls back to the 3D photo.
 LTXV_MIN_FREE_RAM_GB = 15.0
+# Each attraction photo (and its sign lock) is made in its own child process
+# (vdoprocessing/clip_worker.py): all it loaded goes back to Windows when it ends.
+ATTRACTION_CLIP_IN_CHILD = True
 # How long a shot waits for that RAM (the server is stopped first) before
 # giving up; generous, since giving up means a non-LTX clip.
 LTXV_RAM_WAIT_SECONDS = 900.0

@@ -63,3 +63,11 @@ def _no_sdxl_outpaint(monkeypatch):
     from services import tuning
 
     monkeypatch.setattr(tuning, "ATTRACTION_AI_SURROUNDINGS", False)
+
+
+@pytest.fixture(autouse=True)
+def _clips_in_process(monkeypatch):
+    """Tests fake the generators in-process; a child process wouldn't see the fakes."""
+    from services import tuning
+
+    monkeypatch.setattr(tuning, "ATTRACTION_CLIP_IN_CHILD", False)
