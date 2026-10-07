@@ -156,8 +156,9 @@ def ensure_overview_narration(project_config_path: str) -> bool:
     LLM, with {start}/{n}/{go}/{end} cues already placed in the output --
     the exact same logic services/cli/script_commands.test_overview_script's
     CLI mode uses) whenever it's missing or stale for the project's current
-    waypoints. There is no manual-edit UI for this field anymore -- this is
-    now the only thing that ever sets it, so it always runs ahead of
+    waypoints. The map editor's overview panel can also write the field (the
+    user's own text with overview_narration_is_auto false, or a draft taken
+    from the overview-script mode with it true), so this always runs ahead of
     add_overview_cues below (which tags a HUMAN-written overview_narration
     that has none yet; here the generated text already carries its own
     cues, so add_overview_cues's own `store.cued_text(...)` check then
@@ -187,22 +188,23 @@ def ensure_overview_narration(project_config_path: str) -> bool:
     if existing and (not was_auto or project.get("overview_narration_source_ids") == current_ids):
         return False  # hand-written, or auto-generated and still fresh
 
-    # The app's save blanks overview_narration, so the generated script is
-    # kept beside the config and restored while the waypoints are the same.
+    # The generated script is kept beside the config and restored while the
+    # waypoints are the same. That covers a blank field (older saves blanked
+    # it) and an auto script the editor still holds from before a render
+    # wrote a newer one: the app saves what it loaded, which then looks stale.
     saved_path = meta_path(config_path.parent, OVERVIEW_NARRATION)
     saved_source = meta_file(config_path.parent, OVERVIEW_NARRATION)
-    if not existing:
-        try:
-            saved = json.loads(saved_source.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            saved = {}
-        if saved.get("source_ids") == current_ids and (saved.get("script") or "").strip():
-            project["overview_narration"] = saved["script"]
-            project["overview_narration_is_auto"] = True
-            project["overview_narration_source_ids"] = current_ids
-            config_path.write_text(json.dumps(project, ensure_ascii=False, indent=2), encoding="utf-8")
-            logger.info("Step 2: reused the saved overview_narration (waypoints unchanged).")
-            return False
+    try:
+        saved = json.loads(saved_source.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        saved = {}
+    if saved.get("source_ids") == current_ids and (saved.get("script") or "").strip():
+        project["overview_narration"] = saved["script"]
+        project["overview_narration_is_auto"] = True
+        project["overview_narration_source_ids"] = current_ids
+        config_path.write_text(json.dumps(project, ensure_ascii=False, indent=2), encoding="utf-8")
+        logger.info("Step 2: reused the saved overview_narration (waypoints unchanged).")
+        return False
 
     from services.localization.overview_script import build_tour_script
     from services.localization.script_engine import script_generator

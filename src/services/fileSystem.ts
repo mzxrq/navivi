@@ -4,7 +4,7 @@ import { open as dialogOpen } from "@tauri-apps/plugin-dialog";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { appConfig, fileSystem, GLOBAL_DICTIONARY_KEY } from "../config/constants";
 import { buildAssetManifest } from "../utils/manifestBuilder";
-import { TimelineData, RecentProjects, TextStyle } from "../types";
+import { TimelineData, RecentProjects, TextStyle, ProjectMetadata } from "../types";
 import { routeCacheKey } from "../utils/routeCacheKey";
 import { stripApiKeys } from "../utils/apiKeys";
 import { planFileNames } from "../utils/fileNames";
@@ -39,6 +39,20 @@ function calculateDistance(pos1: [number, number], pos2: [number, number]) {
 
 // A path that is already absolute (a drive letter or a leading slash) is left alone when a project is opened.
 const isAbsolutePath = (p: string) => /^[a-zA-Z]:/.test(p) || p.startsWith("/") || p.startsWith(String.fromCharCode(92));
+
+// A blank overview narration is left to the pipeline (it restores or writes one); a filled one is kept with its
+// auto flag, so a script the user wrote is never replaced and an auto one stays replaceable.
+export function overviewNarrationFields(metadata: ProjectMetadata) {
+  const text = metadata.overview_narration || "";
+  if (!text.trim()) return { overview_narration: "" };
+  return {
+    overview_narration: text,
+    overview_narration_is_auto: metadata.overview_narration_is_auto === true,
+    ...(metadata.overview_narration_source_ids !== undefined
+      ? { overview_narration_source_ids: metadata.overview_narration_source_ids }
+      : {}),
+  };
+}
 
 export const saveProjectData = async (
   waypoints: any[],
@@ -267,6 +281,7 @@ export const saveProjectData = async (
     videoSubtitle: metadata.video_subtitle || "",
     enableIntro: metadata.enable_intro ?? true,
     overviewNarration: metadata.overview_narration || "",
+    overviewNarrationIsAuto: metadata.overview_narration_is_auto === true,
     createdAt: metadata.created_at || undefined,
   });
   // The map keys are app-wide; neither the database row nor job_config.json (and so no shared archive) gets them.
@@ -284,7 +299,7 @@ export const saveProjectData = async (
     source_files: { gps_route: "raw_track.gpx" },
     settings: { ...savedSettings, global_pronunciation_dictionary: (await db.appSettings.get(GLOBAL_DICTIONARY_KEY)) ?? [] },
     map_language: i18n.locale || "en",
-    overview_narration: "",
+    ...overviewNarrationFields(metadata),
     video_title: row.videoTitle,
     video_subtitle: row.videoSubtitle,
     enable_intro: row.enableIntro,

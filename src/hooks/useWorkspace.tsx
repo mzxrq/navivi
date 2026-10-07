@@ -531,6 +531,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         directory_path: data.directory_path || "",
         thumbnail_path: data.thumbnail_path || "",
         overview_narration: data.overview_narration || "",
+        overview_narration_is_auto: data.overview_narration_is_auto === true,
+        overview_narration_source_ids: data.overview_narration_source_ids,
         video_title: data.video_title || "",
         video_subtitle: data.video_subtitle || "",
         enable_intro: data.enable_intro ?? true,

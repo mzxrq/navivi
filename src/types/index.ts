@@ -160,6 +160,10 @@ export interface ProjectMetadata {
   archive_path?: string;
   thumbnail_path?: string;
   overview_narration?: string;
+  /** False once the user wrote or edited it: the pipeline then never replaces it. */
+  overview_narration_is_auto?: boolean;
+  /** Which stops an auto script was written for (a string from Python); a different set makes it stale. */
+  overview_narration_source_ids?: unknown;
   video_title?: string;
   video_subtitle?: string;
   enable_intro?: boolean;

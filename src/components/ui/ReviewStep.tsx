@@ -247,7 +247,7 @@ export function ReviewStep({ rows, selection, onSelection, edits, onEdits, playi
                           />
                           {row.kind === "overview" && (
                             <p className="text-[11px] text-zinc-400">
-                              <Trans>The overview script is edited in the Intro panel on the map. You can still fix pronunciations here.</Trans>
+                              <Trans>The overview script is edited in the Overview narration section at the top of the map sidebar. You can still fix pronunciations here.</Trans>
                             </p>
                           )}
                           <PronunciationFixer
