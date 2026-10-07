@@ -56,6 +56,33 @@ def put(key: str, data: bytes) -> None:
         logger.warning("Could not cache a narration line: %s", exc)
 
 
+def info() -> Dict[str, int]:
+    """How much the cache holds now: {"files", "bytes", "max_bytes"}."""
+    files = total = 0
+    for p in tts_cache_dir().glob("*.wav"):
+        try:
+            total += p.stat().st_size
+            files += 1
+        except OSError:
+            pass
+    return {"files": files, "bytes": total, "max_bytes": tuning.TTS_CACHE_MAX_MB * 1024 * 1024}
+
+
+def clear() -> Dict[str, int]:
+    """Removes every cached line (and any half-written one); returns what was removed as {"files", "bytes"}."""
+    files = freed = 0
+    for pattern in ("*.wav", "*.part"):
+        for p in tts_cache_dir().glob(pattern):
+            try:
+                size = p.stat().st_size
+                p.unlink()
+            except OSError:
+                continue
+            files += 1
+            freed += size
+    return {"files": files, "bytes": freed}
+
+
 def prune(max_mb: int = tuning.TTS_CACHE_MAX_MB) -> None:
     entries = []
     for p in tts_cache_dir().glob("*.wav"):

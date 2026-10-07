@@ -139,7 +139,9 @@ export interface ProjectSettings {
   marked_regeneration_waypoints?: string[];
   ai_features_enabled?: boolean;
   pronunciation_dictionary?: Array<{ word: string; reading: string }>;
-  tts?: { engine?: "irodori" | "qwen3" | "kokoro"; voice?: string; kokoro_voice?: string; speed?: number; quality?: "fast" | "balanced" | "best" };
+  tts?: { engine?: "irodori" | "qwen3" | "kokoro"; voice?: string; kokoro_voice?: string; speed?: number; quality?: "fast" | "balanced" | "best"; caption?: string };
+  auto_overview_cues?: boolean;
+  auto_narration_cues?: boolean;
   global_pronunciation_dictionary?: Array<{ word: string; reading: string }>;
   enable_attraction_videos?: boolean;
   use_narration_cues?: boolean;
