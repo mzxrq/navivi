@@ -62,14 +62,18 @@ class TestRequirements:
         result = comfyui_setup.install_comfyui(fetch=lambda url: pytest.fail("nothing should be fetched"), free_gb=10)
         assert result["success"] is False and "32 GB" in result["error"] and "10 GB" in result["error"]
 
-    def test_files_already_downloaded_count_towards_the_space(self, engine):
+    def test_files_already_downloaded_count_towards_the_space(self, engine, monkeypatch):
         directory, _ = engine
-        spec = comfyui_setup.model_files()[1]  # the 6.7 GB text encoder
+        # Same arithmetic as 26 GB free + a 6.3 GB file against 32 GB, scaled down to kilobytes so nothing big is written.
+        monkeypatch.setattr(comfyui_setup, "REQUIRED_FREE_GB", 25e-6)
+        spec = {**comfyui_setup.model_files()[1], "bytes": 7000}
+        monkeypatch.setattr(comfyui_setup, "model_files", lambda: [spec])
+        with pytest.raises(RuntimeError):
+            comfyui_setup.check_requirements(directory, free_gb=20e-6)
         path = comfyui_setup._path(spec)
         path.parent.mkdir(parents=True)
-        with open(path, "wb") as f:
-            f.truncate(spec["bytes"])
-        comfyui_setup.check_requirements(directory, free_gb=26)  # 26 + 6.3 >= 32
+        path.write_bytes(b"x" * 7000)
+        comfyui_setup.check_requirements(directory, free_gb=20e-6)
 
 
 class TestDownload:
