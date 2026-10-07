@@ -718,6 +718,8 @@ STOPBY_NOTICE_FADE_SECONDS = 0.6
 # How long the notice stays up when the first stop-by reached isn't a batch
 # (a connected / skipped one); a batch keeps it for the batch's own length.
 STOPBY_NOTICE_SECONDS = 5.0
+# Shortest time the notice is fully shown, fades excluded (a 0.5s batch was unreadable).
+STOPBY_NOTICE_MIN_READ_SECONDS = 2.5
 # Hard ceiling on a waypoint's own "freeze_seconds" (job_config's per-stop
 # override for how long its popup photo is held/displayed) — applied
 # wherever that raw job_config value is first read, so every downstream
@@ -1609,6 +1611,11 @@ INTRO_LABEL_SCALE_START_PCT = 65
 INTRO_SUBTITLE_DELAY_SECONDS = 0.8
 INTRO_SUBTITLE_FADE_SECONDS = 0.7
 INTRO_SUBTITLE_RISE_PX = 28
+
+# Spoken (and subtitled) after the last visited waypoint's attraction
+# narration, so the video winds down before the outro instead of cutting
+# off mid-thought. "" turns it off.
+CLOSING_NARRATION = "お疲れ様でした。"
 
 # --- Outro card grid (end-of-video "places visited" summary) ---------------
 # A single composited frame (project title + a thumbnail grid of every

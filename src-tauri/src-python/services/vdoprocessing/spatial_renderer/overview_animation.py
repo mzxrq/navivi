@@ -6,6 +6,7 @@ Behavior-identical extraction: this is the same loop body render_overview
 used to run inline, now parameterized instead of closing over render_overview's
 locals directly."""
 
+import math
 from typing import Dict, List, Optional, Tuple
 
 import cv2
@@ -50,10 +51,12 @@ class _OverviewAnimationMixin:
         if getattr(self, "_stopby_notice_shown", False):
             return
         self._stopby_notice_shown = True
+        fade = max(1, int(tuning.STOPBY_NOTICE_FADE_SECONDS * fps))
+        min_total = math.ceil(tuning.STOPBY_NOTICE_MIN_READ_SECONDS * fps) + 2 * fade
         self._stopby_notice = {
             "i": 0,
-            "total": max(1, int(seconds * fps)),
-            "fade": max(1, int(tuning.STOPBY_NOTICE_FADE_SECONDS * fps)),
+            "total": max(min_total, int(seconds * fps)),
+            "fade": fade,
         }
 
     def _stopby_notice_reserved(self, w: int, h: int) -> List[Tuple[int, int, int, int]]:

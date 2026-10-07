@@ -8,6 +8,7 @@ def _setup(monkeypatch, tmp_path, backend, imports_work, cuda_torch):
     monkeypatch.setattr(qwen3_setup.Qwen3TTSClient, "_SERVER_DIR", tmp_path)
     monkeypatch.setattr(qwen3_setup.Qwen3TTSClient, "_SERVER_VENV_PYTHON", python)
     monkeypatch.setattr(qwen3_setup.Qwen3TTSClient, "_READY_FILE", tmp_path / ".ready")
+    monkeypatch.setattr(qwen3_setup.tuning, "QWEN3_DEVICE", "cuda")
     monkeypatch.setattr(qwen3_setup, "pick_backend", lambda: backend)
     monkeypatch.setattr(qwen3_setup, "find_uv", lambda: "uv")
     monkeypatch.setattr(qwen3_setup, "_imports_work", lambda p: imports_work)

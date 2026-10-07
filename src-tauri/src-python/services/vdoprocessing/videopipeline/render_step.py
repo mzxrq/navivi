@@ -402,6 +402,36 @@ def _adaptive_overview_padding(route_df: pd.DataFrame) -> float:
     return tuning.OVERVIEW_PADDING_MAX_SPAN
 
 
+def _reserve_overview_bands(
+    bbox: dict, frame_size: tuple[int, int], top_px: float, bottom_px: float
+) -> dict:
+    """Grows `bbox` to the frame's aspect (Web Mercator) so the route fits between
+    a top band of `top_px` and a bottom band of `bottom_px`, centered in that gap."""
+    R = 6378137.0
+    w, h = frame_size
+    usable_h = max(1.0, h - top_px - bottom_px)
+
+    def merc_y(lat):
+        return math.log(math.tan(math.pi / 4 + math.radians(lat) / 2)) * R
+
+    def merc_lat(y):
+        return math.degrees(2 * math.atan(math.exp(y / R)) - math.pi / 2)
+
+    y_min, y_max = merc_y(bbox["min_lat"]), merc_y(bbox["max_lat"])
+    x_span = math.radians(bbox["max_lon"] - bbox["min_lon"]) * R
+    scale = max(x_span / w, (y_max - y_min) / usable_h)
+
+    top_y = y_max + top_px * scale + (usable_h * scale - (y_max - y_min)) / 2
+    half_lon = math.degrees(w * scale / R) / 2
+    mid_lon = (bbox["min_lon"] + bbox["max_lon"]) / 2
+    return {
+        "min_lat": merc_lat(top_y - h * scale),
+        "max_lat": merc_lat(top_y),
+        "min_lon": mid_lon - half_lon,
+        "max_lon": mid_lon + half_lon,
+    }
+
+
 def render_route_video(
     cleaned_route: dict,
     project_config_path: str = str(DEFAULT_FRONTEND_CONFIG),
