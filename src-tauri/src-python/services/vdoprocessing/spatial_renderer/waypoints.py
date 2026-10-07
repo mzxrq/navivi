@@ -11,7 +11,7 @@ from services.logger.progress import tracker
 from services.mapfetcher.mapfetcher import MapFetcher
 from services.mapfetcher.mapgeometry import RouteGeometryProcessor
 from services.vdoprocessing.vdoexporter import VideoExporter
-from services import tuning
+from services import tuning, video_text
 
 
 def _output_is_valid(path, min_bytes: int = 1024) -> bool:
@@ -316,11 +316,7 @@ class _WaypointRenderMixin:
                 if not raw:
                     return ""
                 return (
-                    raw.replace(tuning.PIPELINE_LABELS["start_prefix"], "")
-                    .replace(tuning.PIPELINE_LABELS["stop_prefix"], "")
-                    .replace(tuning.PIPELINE_LABELS["start_prefix"].strip(": "), "")
-                    .replace(tuning.PIPELINE_LABELS["stop_prefix"].strip(": "), "")
-                    .strip()
+                    video_text.strip_waypoint_prefixes(raw)
                 )
 
             leg_to_label = _clean_leg_label(res_labels[-1] if res_labels else None)

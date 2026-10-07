@@ -63,6 +63,7 @@ def _fake_sdxl(monkeypatch):
     monkeypatch.setattr(lpg, "_cuda_available", lambda: True)
     monkeypatch.setattr(lpg, "_describe_scene", lambda img: "a station")
     monkeypatch.setattr(lpg, "_get_pipe", lambda: pipe)
+    monkeypatch.setattr(lpg, "_free_gpu_memory", lambda: None)  # would import torch, which CI does not have
     return pipe
 
 

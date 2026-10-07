@@ -81,7 +81,7 @@ class TestRequirements:
         result = comfyui_setup.install_comfyui(fetch=lambda url: pytest.fail("nothing should be fetched"), free_gb=10)
         assert result["success"] is False and "32 GB" in result["error"] and "10 GB" in result["error"]
 
-    def test_files_already_downloaded_count_towards_the_space(self, engine):
+    def test_files_already_downloaded_count_towards_the_space(self, engine, monkeypatch):
         directory, _ = engine
         _fake_model(comfyui_setup.model_files()[1])  # the 6.7 GB text encoder
         comfyui_setup.check_requirements(directory, free_gb=26)  # 26 + 6.3 >= 32
@@ -184,7 +184,9 @@ class TestInstall:
         result = comfyui_setup.install_comfyui(fetch=lambda url: b"not a zip", free_gb=100)
         assert result["success"] is False
 
-    def test_ready_means_source_node_environment_and_all_models(self, engine):
+    def test_ready_means_source_node_environment_and_all_models(self, engine, monkeypatch):
+        real_files = comfyui_setup.model_files()
+        monkeypatch.setattr(comfyui_setup, "model_files", lambda: [{**spec, "bytes": 64} for spec in real_files])
         directory, python = engine
         assert comfyui_setup.is_ready() is False
         comfyui_setup.unpack_source(_zip(COMFY), directory)

@@ -42,7 +42,9 @@ import {
 } from "../services/versionHistory";
 import { listRecents, syncProjectOnOpen } from "../services/projectStore";
 import { db } from "../services/db";
-import { emptyTimeline } from "../features/editor/model";
+import { apiKeySettings, legacyApiKeys, patchedApiKeys, stripApiKeys } from "../utils/apiKeys";
+import { useAppApiKeys } from "./useAppApiKeys";
+import { emptyTimeline, exportOptionsFrom } from "../features/editor/model";
 import { useHistory } from "./useHistory";
 import { useUI } from "./useUI";
 import { UnsavedChanges } from "../components/ui/UnsavedChanges";
@@ -158,12 +160,20 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     created_at: new Date().toISOString(),
   }));
 
-  const [projectSettings, setSettings] = useState<ProjectSettings>(DefaultSettings);
+  const [projectSettings, setProjectSettings] = useState<ProjectSettings>(DefaultSettings);
+  // The map keys are the app's, never a project's: whatever is set here loses them.
+  const setSettings = useCallback((action: React.SetStateAction<ProjectSettings>) => {
+    setProjectSettings((prev) => stripApiKeys(typeof action === "function" ? action(prev) : action));
+  }, []);
   // The AI choices belong to the app, not to a project: they survive new and opened projects, and AI features start on.
   const [globalAi, setGlobalAi] = useState<Partial<ProjectSettings>>({ ai_features_enabled: true });
   const globalAiRef = useRef(globalAi);
   globalAiRef.current = globalAi;
-  const settings = useMemo<ProjectSettings>(() => ({ ...projectSettings, ...globalAi }), [projectSettings, globalAi]);
+  const { keys: apiKeys, update: updateApiKeys, adoptLegacy: adoptLegacyApiKeys } = useAppApiKeys();
+  const settings = useMemo<ProjectSettings>(
+    () => ({ ...projectSettings, ...globalAi, ...apiKeySettings(apiKeys) }),
+    [projectSettings, globalAi, apiKeys],
+  );
 
   // Until the saved choice has been read, a change made by the user is held back from the database (it would replace the whole
   // saved record with the defaults) and wins over the saved value once that arrives.
@@ -378,7 +388,12 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         aiEarlyRef.current = { ...aiEarlyRef.current, ...ai };
       }
     }
-    setSettings((prev) => ({ ...prev, ...data }));
+    const keys = patchedApiKeys(data);
+    if (Object.keys(keys).length > 0) updateApiKeys(keys);
+    const rest = stripApiKeys(data);
+    // Changing only a map key is not an edit of the project.
+    if (Object.keys(rest).length === 0) return;
+    setSettings((prev) => ({ ...prev, ...rest }));
     setIsDirty(true);
   }, []);
 
@@ -416,7 +431,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         freshThumbnail,
       );
 
-      await saveTimelineManifest(result.projectDir, result.projName, timeline, settings.caption_style);
+      await saveTimelineManifest(result.projectDir, result.projName, timeline, settings.caption_style, exportOptionsFrom(settings));
       // The assistant keeps its chat in the project folder: a first save or a Save As tells it where the chat now lives.
       window.dispatchEvent(new CustomEvent("project-saved", { detail: { dir: result.projectDir, saveAs: !!asDuplicate } }));
 
@@ -488,12 +503,15 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       if (!data.project_id || !data.waypoints) {
         throw new Error("Invalid Navivi project file format.");
       }
+      // A project saved by an earlier version carries the map keys; they move to the app below.
+      let legacyKeys = legacyApiKeys(data.settings);
 
       // DB metadata/settings win; if the DB fails, open from the files alone.
       let recoveredCache: Record<string, [number, number][]> = {};
       try {
         const synced = await syncProjectOnOpen(data, selectedPath);
         data = synced.data;
+        legacyKeys = { ...legacyKeys, ...synced.legacyApiKeys };
         recoveredCache = synced.routingCache;
         await tidyProjectFolder(data.directory_path);
       } catch (error) {
@@ -501,6 +519,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         if (data.directory_path) recoveredCache = await loadRouteCache(data.directory_path);
       }
       setRoutingCache(recoveredCache);
+      setRoutePoints([]); // the previous project's imported track must not leak into this one
       console.log(`Recovered ${Object.keys(recoveredCache).length} routes from cache!`);
 
       setMetadata({
@@ -512,11 +531,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         directory_path: data.directory_path || "",
         thumbnail_path: data.thumbnail_path || "",
         overview_narration: data.overview_narration || "",
+        overview_narration_is_auto: data.overview_narration_is_auto === true,
+        overview_narration_source_ids: data.overview_narration_source_ids,
         video_title: data.video_title || "",
         video_subtitle: data.video_subtitle || "",
         enable_intro: data.enable_intro ?? true,
       });
 
+      adoptLegacyApiKeys(legacyKeys);
       if (data.settings) setSettings(data.settings);
 
       resetWaypointHistory(
@@ -527,6 +549,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           name: wp.label || wp.name,
           routeMode: wp.routeMode || "walking",
           customRoute: wp.customRoute || [],
+          customRouteEle: wp.customRouteEle?.length ? wp.customRouteEle : undefined,
           drawStyle: wp.drawStyle || "linear",
           lineColor: wp.lineColor || undefined,
           viaPoints: wp.viaPoints?.length ? wp.viaPoints : undefined,
@@ -542,8 +565,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           videos: wp.videos || [],
           videoSound: wp.videoSound || [],
           imagePans: wp.imagePans || wp.camera_pans || [],
-          imageTransitions: wp.imageTransitions || [],
           imageDisplay: wp.image_display || "pip",
+          overviewHighlight: typeof wp.overviewHighlight === "boolean" ? wp.overviewHighlight : undefined,
           narration: wp.narration || "",
           arrivingNarration: wp.arrivingNarration || "",
           attractionNarration: wp.attractionNarration || "",
@@ -581,6 +604,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     resetWaypointHistory([]);
     resetTimelineHistory(getDefaultTimeline());
     setRouteSegments([]);
+    setRoutePoints([]);
     setMetadata({
       ...DefaultMetadata,
       created_at: new Date().toISOString(),

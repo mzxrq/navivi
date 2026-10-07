@@ -20,6 +20,7 @@ import {
   timelineFromEditorState,
   timelineFromPipeline,
   toManifest,
+  exportOptionsFrom,
   trimmedLength,
 } from "./model";
 
@@ -234,6 +235,29 @@ describe("timeline.json", () => {
     expect(manifest.subtitles).toEqual([{ start: 1, end: 3, text: "hello" }]);
     expect(manifest.burn_subtitles).toBe(true);
     expect(manifest.music).toEqual({ path: "assets/audio/music/bed.mp3", volume: 0.3 });
+  });
+
+  it("writes the export exactly as before when no option is set", () => {
+    const manifest: any = toManifest("Trip", timeline([seg("a")]), undefined, exportOptionsFrom({}));
+    expect(manifest.burn_subtitles).toBe(true);
+    for (const key of ["resolution", "export_height", "fps", "save_srt"]) expect(key in manifest).toBe(false);
+    expect(Object.keys(toManifest("Trip", timeline([seg("a")])))).toEqual(Object.keys(manifest));
+  });
+
+  it("writes the Export dialog's choices", () => {
+    const options = exportOptionsFrom({
+      default_export_resolution: "4k", export_fps: 24, export_burn_subtitles: false, export_save_srt: true,
+    });
+    const manifest: any = toManifest("Trip", timeline([seg("a")]), undefined, options);
+    expect(manifest).toMatchObject({ export_height: 2160, fps: 24, burn_subtitles: false, save_srt: true });
+  });
+
+  it("takes the project's fps unless the export has its own, and 1080p writes no height", () => {
+    expect(exportOptionsFrom({ fps: 60 })).toMatchObject({ fps: 60, height: 1080 });
+    expect(exportOptionsFrom({ fps: 60, export_fps: 24 }).fps).toBe(24);
+    expect(exportOptionsFrom({ fps: 0 }).fps).toBeUndefined();
+    const manifest: any = toManifest("Trip", timeline([seg("a")]), undefined, exportOptionsFrom({ default_export_resolution: "720p" }));
+    expect(manifest.export_height).toBe(720);
   });
 
   it("leaves trim_out empty when the clip is not cut at the end", () => {

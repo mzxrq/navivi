@@ -4,11 +4,12 @@ import { open as dialogOpen } from "@tauri-apps/plugin-dialog";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { appConfig, fileSystem, GLOBAL_DICTIONARY_KEY } from "../config/constants";
 import { buildAssetManifest } from "../utils/manifestBuilder";
-import { TimelineData, RecentProjects, TextStyle } from "../types";
+import { TimelineData, RecentProjects, TextStyle, ProjectMetadata } from "../types";
 import { routeCacheKey } from "../utils/routeCacheKey";
+import { stripApiKeys } from "../utils/apiKeys";
 import { planFileNames } from "../utils/fileNames";
 import { renameCredits } from "../utils/photoCredits";
-import { emptyTimeline, timelineFromEditorState, timelineFromPipeline, toManifest } from "../features/editor/model";
+import { emptyTimeline, type ExportOptions, timelineFromEditorState, timelineFromPipeline, toManifest } from "../features/editor/model";
 import { i18n } from "@lingui/core";
 import { db } from "./db";
 
@@ -38,6 +39,20 @@ function calculateDistance(pos1: [number, number], pos2: [number, number]) {
 
 // A path that is already absolute (a drive letter or a leading slash) is left alone when a project is opened.
 const isAbsolutePath = (p: string) => /^[a-zA-Z]:/.test(p) || p.startsWith("/") || p.startsWith(String.fromCharCode(92));
+
+// A blank overview narration is left to the pipeline (it restores or writes one); a filled one is kept with its
+// auto flag, so a script the user wrote is never replaced and an auto one stays replaceable.
+export function overviewNarrationFields(metadata: ProjectMetadata) {
+  const text = metadata.overview_narration || "";
+  if (!text.trim()) return { overview_narration: "" };
+  return {
+    overview_narration: text,
+    overview_narration_is_auto: metadata.overview_narration_is_auto === true,
+    ...(metadata.overview_narration_source_ids !== undefined
+      ? { overview_narration_source_ids: metadata.overview_narration_source_ids }
+      : {}),
+  };
+}
 
 export const saveProjectData = async (
   waypoints: any[],
@@ -200,13 +215,13 @@ export const saveProjectData = async (
 
         popup_image: relativeImagePaths.length > 0 ? [relativeImagePaths[0]] : [],
         image_display: wp.imageDisplay || "pip",
+        overviewHighlight: wp.overviewHighlight,
 
         images: relativeImagePaths,
         videos: relativeVideoPaths,
         videoSound: relativeVideoPaths.map((_, i) => wp.videoSound?.[i] ?? false),
         imagePans: wp.imagePans || [],
         imageCredits: renameCredits(wp.imageCredits, renamed),
-        imageTransitions: wp.imageTransitions || [],
         narration: wp.narration || "",
         arrivingNarration: wp.arrivingNarration || "",
         attractionNarration: wp.attractionNarration || "",
@@ -216,6 +231,7 @@ export const saveProjectData = async (
 
         routeMode: wp.routeMode || "driving",
         customRoute: wp.customRoute || [],
+        customRouteEle: wp.customRouteEle?.length ? wp.customRouteEle : undefined,
         drawStyle: wp.drawStyle || "linear",
         lineColor: wp.lineColor || undefined,
         viaPoints: wp.viaPoints?.length ? wp.viaPoints : undefined,
@@ -266,9 +282,11 @@ export const saveProjectData = async (
     videoSubtitle: metadata.video_subtitle || "",
     enableIntro: metadata.enable_intro ?? true,
     overviewNarration: metadata.overview_narration || "",
+    overviewNarrationIsAuto: metadata.overview_narration_is_auto === true,
     createdAt: metadata.created_at || undefined,
   });
-  const savedSettings = await db.settings.put(row.id, settings);
+  // The map keys are app-wide; neither the database row nor job_config.json (and so no shared archive) gets them.
+  const savedSettings = stripApiKeys(await db.settings.put(row.id, stripApiKeys(settings)));
 
   const jobConfig = {
     project_id: row.id,
@@ -282,7 +300,7 @@ export const saveProjectData = async (
     source_files: { gps_route: "raw_track.gpx" },
     settings: { ...savedSettings, global_pronunciation_dictionary: (await db.appSettings.get(GLOBAL_DICTIONARY_KEY)) ?? [] },
     map_language: i18n.locale || "en",
-    overview_narration: "",
+    ...overviewNarrationFields(metadata),
     video_title: row.videoTitle,
     video_subtitle: row.videoSubtitle,
     enable_intro: row.enableIntro,
@@ -375,6 +393,7 @@ export async function duplicateProjectFolder(sourceDir: string, name: string): P
   if (await isProjectIdTaken(id, destDir)) id = `${id}_${Date.now()}`;
   config.project_id = id;
   config.project_name = name;
+  if (config.settings) config.settings = stripApiKeys(config.settings);
   await writeTextFile(await join(destDir, fileSystem.configFile), JSON.stringify(config, null, 2));
   return destDir;
 }
@@ -643,12 +662,13 @@ export async function saveTimelineManifest(
   projectName: string,
   timeline: TimelineData,
   captionStyle?: TextStyle,
+  exportOptions?: ExportOptions,
 ): Promise<boolean> {
   try {
     const manifestPath = await join(projectDir, "timeline.json");
     // An empty timeline (editor never opened) must not wipe what the pipeline wrote.
     if (timeline.segments.length === 0 && (await exists(manifestPath))) return true;
-    await writeTextFile(manifestPath, JSON.stringify(toManifest(projectName, timeline, captionStyle), null, 2));
+    await writeTextFile(manifestPath, JSON.stringify(toManifest(projectName, timeline, captionStyle, exportOptions), null, 2));
     return true;
   } catch (error) {
     console.error("Failed to save timeline.json:", error);

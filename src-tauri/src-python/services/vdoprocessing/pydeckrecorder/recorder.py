@@ -11,8 +11,9 @@ import pandas as pd
 import pydeck as pdk
 
 from services import tuning
+from services.mapfetcher.maplanguage import resolve_map_style
 
-from .common import MAPBOX_API_KEY, logger, project_root
+from .common import MAPBOX_API_KEY, logger, project_root, resolve_mapbox_token
 from .geomath import calculate_bearing, cumulative_distance_km, offset_point, smooth_bearings
 from .httpserver import start_local_server
 from .legresolve import _MODE_ALIASES, _resolve_leg
@@ -323,7 +324,7 @@ def record_headless_video(
                 bearing=30,
             )
 
-            mapbox_key = settings.get("mapbox_api_key") or MAPBOX_API_KEY
+            mapbox_key = resolve_mapbox_token(settings) or MAPBOX_API_KEY
 
             # [HACK] [Animation] Reverted the deck.gl TerrainLayer 3D-elevation experiment --
             # across several fix attempts (zoom/strategy mismatch, texture
@@ -404,7 +405,7 @@ def record_headless_video(
                 layers=base_layers,
                 initial_view_state=view_state,
                 map_provider="mapbox",
-                map_style="mapbox://styles/mapbox/outdoors-v12",
+                map_style=resolve_map_style(settings, "mapbox/outdoors-v12"),
                 api_keys={"mapbox": mapbox_key},
                 views=[pdk.View(type="MapView", controller=False)],
             ).to_html(base_html_path)

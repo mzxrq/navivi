@@ -1,4 +1,4 @@
-import type { TextStyle } from "../../types";
+import type { ProjectSettings, TextStyle } from "../../types";
 
 export type SegmentKind = "intro" | "overview" | "route" | "attraction" | "outro" | "custom";
 
@@ -392,7 +392,33 @@ export function cuesFromSegmentFile(seg: Segment, timed: TimedText[]): SubtitleC
 
 // ── Timeline manifest (timeline.json) ────────────────────────────────────────
 
-export function toManifest(projectName: string, timeline: TimelineData, captionStyle?: TextStyle) {
+export interface ExportOptions {
+  /** Output height in px. Unset (or 1080) keeps the size the clips already have. */
+  height?: number;
+  fps?: number;
+  /** Burn the subtitles into the picture; unset burns them. */
+  burnSubtitles?: boolean;
+  saveSrt?: boolean;
+}
+
+export const EXPORT_HEIGHTS: Record<NonNullable<ProjectSettings["default_export_resolution"]>, number> = {
+  "720p": 720,
+  "1080p": 1080,
+  "1440p": 1440,
+  "4k": 2160,
+};
+
+export function exportOptionsFrom(settings: Partial<ProjectSettings>): ExportOptions {
+  const fps = settings.export_fps ?? settings.fps;
+  return {
+    height: EXPORT_HEIGHTS[settings.default_export_resolution ?? "1080p"],
+    fps: fps && fps >= 1 && fps <= 120 ? fps : undefined,
+    burnSubtitles: settings.export_burn_subtitles,
+    saveSrt: settings.export_save_srt,
+  };
+}
+
+export function toManifest(projectName: string, timeline: TimelineData, captionStyle?: TextStyle, options: ExportOptions = {}) {
   const { placed, total } = layout(timeline);
   const cues = placedCues(timeline, placed).map((c) => ({
     start: c.globalStart,
@@ -438,7 +464,11 @@ export function toManifest(projectName: string, timeline: TimelineData, captionS
       ...(x.animation ? { animation: x.animation } : {}),
       ...(x.kind ? { kind: x.kind } : {}),
     })),
-    burn_subtitles: true,
+    burn_subtitles: options.burnSubtitles ?? true,
+    // Absent keys keep the export as it was: the clips' own size and 30 fps.
+    ...(options.height && options.height !== 1080 ? { export_height: options.height } : {}),
+    ...(options.fps ? { fps: options.fps } : {}),
+    ...(options.saveSrt ? { save_srt: true } : {}),
     // Omitted: the export falls back to the project's saved settings.
     ...(captionStyle ? { caption_style: captionStyle } : {}),
     music: timeline.music ? { path: timeline.music.path, volume: timeline.music.volume } : null,

@@ -1,0 +1,81 @@
+<!doctype html>
+<html><head><meta charset="UTF-8" /></head>
+<body><div id="root"></div>
+<script>
+  // Minimal Tauri mock: records event listeners so the test can emit render events.
+  window.__listeners = {};
+  let cbId = 0;
+  window.__TAURI_INTERNALS__ = {
+    convertFileSrc: (p) => "data:image/svg+xml;utf8," + encodeURIComponent(`<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"400\" height=\"300\"><rect width=\"400\" height=\"300\" fill=\"%237aa6c2\"/><text x=\"20\" y=\"160\" font-size=\"28\" fill=\"white\">${p}</text></svg>`),
+    transformCallback(cb) { const id = ++cbId; window["_cb" + id] = cb; return id; },
+    invoke: async (cmd, args) => {
+      if (location.search.includes("assets=demo")) {
+        const dirs = {
+          "assets/audio": ["02_waypoint_01_a.wav", "02_waypoint_02_b.wav", "04_attraction_01_a.wav"],
+          "assets/subtitles": ["02_waypoint_01_a.srt", "02_waypoint_02_b.srt"],
+          "assets/video/route": ["01_overview.mp4", "02_waypoint_01_a.mp4", "02_waypoint_02_b.mp4", ".render_manifest.json"],
+          "assets/video/attraction": ["04_attraction_01_a.mp4"],
+          "assets/video": ["00_intro.mp4", "route", "attraction", "user"],
+        };
+        const key = Object.keys(dirs).find((k) => args.path && args.path.replace(/\\/g, "/").endsWith("/" + k));
+        if (cmd === "plugin:fs|exists" && key) return true;
+        if (cmd === "plugin:fs|read_dir" && key) return dirs[key].map((name) => ({ name, isDirectory: !name.includes("."), isFile: name.includes("."), isSymlink: false }));
+      }
+      if (location.search.includes("review=demo")) {
+        const enc = (txt) => Array.from(new TextEncoder().encode(txt));
+        if (cmd === "plugin:fs|exists") return /timeline\.json$|assets\/audio$/.test(args.path) || /\.wav(\.txt)?$/.test(args.path);
+        if (cmd === "plugin:fs|read_dir" && /assets\/audio$/.test(args.path)) return ["00_overview_narration.wav","02_waypoint_01_三段壁.wav","02_waypoint_02_白良浜.wav","04_attraction_01_三段壁.wav"].map((name) => ({ name, isDirectory: false, isFile: true, isSymlink: false }));
+        if (cmd === "plugin:fs|read_text_file") {
+          if (/timeline\.json$/.test(args.path)) return enc(JSON.stringify({ video_tracks: [
+            { file_path: "C:/p/assets/video/00_intro.mp4" }, { file_path: "C:/p/assets/video/route/01_overview.mp4" },
+            { file_path: "C:/p/assets/video/route/02_waypoint_01_三段壁.mp4" }, { file_path: "C:/p/assets/video/attraction/04_attraction_01_三段壁.mp4" },
+            { file_path: "C:/p/assets/video/route/02_waypoint_02_白良浜.mp4" } ] }));
+          return enc("三段壁に着きました。");
+        }
+      }
+      if (location.search.includes("projcfg=1") && cmd === "plugin:fs|read_text_file" && /job_config\.json$/.test(args.path)) {
+        return Array.from(new TextEncoder().encode(JSON.stringify({ settings: { routeMarker: "", enable_attraction_videos: true, burn_subtitles: false, use_narration_cues: true, attraction_fade_seconds: 0.5 } })));
+      }
+      if (cmd === "project_upsert") return { ...args.input, updatedAt: "x" };
+      if (cmd === "settings_put") return args.settings;
+      if (cmd === "plugin:event|listen") { (window.__listeners[args.event] ||= []).push(args.handler); return args.handler; }
+      if (cmd === "plugin:fs|read_dir") { if (/[.](jpg|jpeg|png|heic|heif|gpx)$/i.test(args.path || "")) throw new Error("not a directory"); return []; }
+      if (cmd === "plugin:fs|exists") return false;
+      if (cmd === "plugin:path|join") return args.paths.join("/");
+      if (cmd.startsWith("plugin:path|")) return "C:/mock";
+      if (cmd === "run_python_blueprint" && args.action === "convert_images") {
+        const { paths, out_dir } = JSON.parse(args.payload);
+        window.__converted = paths;
+        return JSON.stringify({ success: true, images: Object.fromEntries(paths.map((p) => [p, out_dir + "/" + p.split("/").pop().replace(/[.]heic$/i, ".jpg")])), failed: {} });
+      }
+      if (cmd === "run_python_blueprint" && args.action === "tts_voices_list") {
+        // Like the Rust command: a newer blueprint call kills the one still running.
+        if (window.__killPrev) window.__killPrev("Process was cancelled");
+        window.__blueprintCalls = (window.__blueprintCalls || 0) + 1;
+        return await new Promise((resolve, reject) => {
+          window.__killPrev = reject;
+          setTimeout(() => { window.__killPrev = null; resolve(JSON.stringify({ success: true, voices: [
+            { id: "none", filename: null, bytes: 0, duration_seconds: null, builtin: true },
+            { id: "jvs004", filename: "jvs004.wav", bytes: 335768, duration_seconds: 6.99, builtin: false },
+            { id: "test1", filename: "test1.wav", bytes: 11595974, duration_seconds: 60.39, builtin: false } ] })); }, 500);
+        });
+      }
+      if (cmd === "run_python_blueprint" && args.action === "tts_engines") {
+        if (window.__killPrev) window.__killPrev("Process was cancelled");
+        return await new Promise((resolve, reject) => {
+          window.__killPrev = reject;
+          setTimeout(() => { window.__killPrev = null; resolve(JSON.stringify({ success: true, comfyui: { ready: false, nvidia: true }, irodori: { ready: false }, qwen3: { ready: new URLSearchParams(location.search).get("qwen3") !== "setup" }, kokoro: { ready: new URLSearchParams(location.search).get("kokoro") !== "setup", default_voice: "jf_tebukuro", voices: [
+            { id: "jf_tebukuro", label: "Tebukuro (female)" }, { id: "jf_alpha", label: "Alpha (female)" }, { id: "jf_gongitsune", label: "Gongitsune (female)" },
+            { id: "jf_nezumi", label: "Nezumi (female)" }, { id: "jm_kumo", label: "Kumo (male)" } ] } })); }, 300);
+        });
+      }
+      if (cmd === "run_python_blueprint" && args.action === "tts_voice_preview") { await new Promise((r) => setTimeout(r, 1500)); return JSON.stringify({ success: true, path: "C:/x/p.wav" }); }
+      return null;
+    },
+    metadata: { currentWindow: { label: "main" }, currentWebview: { label: "main" } },
+  };
+  window.__TAURI_EVENT_PLUGIN_INTERNALS__ = { unregisterListener() {} };
+  window.__emit = (event, payload) => (window.__listeners[event] || []).forEach((id) => window["_cb" + id]({ event, payload, id }));
+</script>
+<script type="module" src="./main.tsx"></script>
+</body></html>

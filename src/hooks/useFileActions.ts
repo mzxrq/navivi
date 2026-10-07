@@ -1,4 +1,4 @@
-import { LatLon, legAlongTrack, stopsAlongTrack, tidyPlaceName, TrackStop } from "../utils/gpxTrack";
+import { LatLon, legAlongTrack, legElevations, stopsAlongTrack, tidyPlaceName, TrackStop } from "../utils/gpxTrack";
 import { invoke } from "@tauri-apps/api/core";
 import { useWorkspace } from "./useWorkspace";
 import { useUI } from "./useUI";
@@ -108,7 +108,6 @@ export function useFileActions() {
             name: placeName,
             images: [pt.path],
             imagePans: ["none"],
-            imageTransitions: [],
             arrivingNarration: "",
             routeMode: "driving",
             timestamp: pt.date.toISOString(),
@@ -265,7 +264,8 @@ export function useFileActions() {
       }
 
       const newNaviviWaypoints: any[] = stops.map((stop, i) => {
-        const inner = stops[i + 1] ? legAlongTrack(track, stop, stops[i + 1]) : null;
+        const inner = stops[i + 1] ? legAlongTrack(points, stop, stops[i + 1]) : null;
+        const ele = inner ? legElevations(inner, points[stop.index]?.[2], points[stops[i + 1].index]?.[2]) : null;
         return {
           id: crypto.randomUUID(),
           lat: stop.lat,
@@ -273,10 +273,10 @@ export function useFileActions() {
           name: stop.name,
           images: [],
           imagePans: [],
-          imageTransitions: [],
           arrivingNarration: "",
           routeMode: inner ? "draw" : "driving",
-          customRoute: inner ?? undefined,
+          customRoute: inner ? inner.map((p): LatLon => [p[0], p[1]]) : undefined,
+          customRouteEle: ele ?? undefined,
         };
       });
 

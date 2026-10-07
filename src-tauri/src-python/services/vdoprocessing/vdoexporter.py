@@ -755,11 +755,33 @@ class VideoExporter:
         """The size the finished video has: the timeline's own resolution when
         it states one, else the size most of its clips already have."""
         res = timeline_data.get("resolution")
+        size = None
         if isinstance(res, dict) and int(res.get("width") or 0) > 0 and int(res.get("height") or 0) > 0:
-            return int(res["width"]), int(res["height"])
-        sizes = [VideoExporter._video_size(Path(t["file_path"])) for t in tracks]
-        sizes = [sz for sz in sizes if sz]
-        return max(set(sizes), key=sizes.count) if sizes else None
+            size = int(res["width"]), int(res["height"])
+        else:
+            sizes = [VideoExporter._video_size(Path(t["file_path"])) for t in tracks]
+            sizes = [sz for sz in sizes if sz]
+            size = max(set(sizes), key=sizes.count) if sizes else None
+        # export_height (the Export dialog's 720p/1440p/4K): that height at the clips' own aspect ratio.
+        # x264 with yuv420p needs even sizes, so an odd result is rounded up to the next even number.
+        try:
+            height = int(timeline_data.get("export_height") or 0)
+        except (TypeError, ValueError):
+            height = 0
+        if 0 < height <= 4320:
+            base_w, base_h = size or (16, 9)
+            width = round(height * base_w / base_h)
+            return width + width % 2, height + height % 2
+        return size
+
+    @staticmethod
+    def _timeline_fps(timeline_data: dict) -> float:
+        """The frame rate of the finished video: the timeline's own, 30 when it says none (or nonsense)."""
+        try:
+            fps = float(timeline_data.get("fps") or 30)
+        except (TypeError, ValueError):
+            return 30.0
+        return fps if 1.0 <= fps <= 120.0 else 30.0
 
     @staticmethod
     def _crossfade_pair(
@@ -860,7 +882,7 @@ class VideoExporter:
 
         tmp_dir = Path(tempfile.mkdtemp(prefix="navivi_concat_"))
         target_size = VideoExporter._timeline_size(timeline_data, tracks)
-        target_fps = float(timeline_data.get("fps") or 30)
+        target_fps = VideoExporter._timeline_fps(timeline_data)
 
         # Percent of the export each step takes, from a timed real export (clips ~25%,
         # crossfades ~22%, music ~1%, subtitle burn ~50%), so the bar moves at an even pace.
@@ -954,6 +976,7 @@ class VideoExporter:
                 ffmpeg_cmd, timeline_data, output_path, tmp_dir,
                 on_progress=lambda f: report(music_end + (100.0 - music_end) * f),
             )
+            VideoExporter._write_srt_beside(timeline_data, output_path)
             report(100.0)
             return output_path
         finally:
@@ -964,6 +987,19 @@ class VideoExporter:
         if not timeline_data.get("burn_subtitles", True):
             return []
         return [c for c in timeline_data.get("subtitles") or [] if str(c.get("text", "")).strip()]
+
+    @staticmethod
+    def _write_srt_beside(timeline_data: dict, output_path: str) -> None:
+        """timeline_data["save_srt"]: the subtitles as <video>.srt, whether or not they are burned into the picture."""
+        if not timeline_data.get("save_srt"):
+            return
+        cues = [c for c in timeline_data.get("subtitles") or [] if str(c.get("text", "")).strip()]
+        if not cues:
+            return
+        try:
+            Path(output_path).with_suffix(".srt").write_text(VideoExporter.cues_to_srt(cues), encoding="utf-8")
+        except OSError as exc:  # the video is finished; a missing .srt must not fail the export
+            logger.warning("could not write the .srt: %s", exc)
 
     @staticmethod
     def _mix_unlinked_audio(ffmpeg_cmd: str, timeline_data: dict, output_path: str, tmp_dir: Path) -> None:

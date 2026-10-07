@@ -29,8 +29,9 @@ from typing import Callable, Dict, List, Optional, Tuple
 import pandas as pd
 import pydeck as pdk
 
-from services import tuning
+from services import tuning, video_text
 from services.logger.progress import tracker
+from services.mapfetcher.graphicengine.pinimage import deck_icon
 from services.vdoprocessing.cliptiming import write_audio_offset
 
 from .common import MAPBOX_API_KEY, logger
@@ -276,7 +277,7 @@ def _overview_pin_icons(numbered: List[Dict]) -> List[Dict]:
     return [
         {
             "lon": wp["lon"], "lat": wp["lat"],
-            "icon": {
+            "icon": deck_icon(wp.get("pin_image")) or {
                 "url": _teardrop_pin_svg_url(
                     _bgr_to_hex(wp.get("pin_color") or _OVERVIEW_PIN_FALLBACK_BGR),
                     str(wp.get("pin_glyph") or wp.get("order", "")),
@@ -294,6 +295,10 @@ def _leg_pin_url(pin: Optional[Dict], fallback: str) -> str:
     as "pin 1 -> pin 2" of the overview; `fallback` when not given."""
     if not pin or not pin.get("glyph") or pin.get("color") is None:
         return fallback
+    # The user's own pin picture (same 384x512 canvas, so the layer code is unchanged).
+    icon = deck_icon(pin.get("image")) if pin.get("image") else None
+    if icon:
+        return icon["url"]
     return _teardrop_pin_svg_url(_bgr_to_hex(pin["color"]), str(pin["glyph"]))
 
 # Place-name label pill geometry, in SVG units (the icon is rendered at
@@ -978,13 +983,26 @@ c97 452 180 821 184 820 12 -6 1529 -1669 1529 -1677 0 -16 459 -2425 476
 # keys intentionally match that one). "en_route_suffix" is appended to the
 # non-arriving banner text for modes where the traveler is a passenger
 # rather than on foot (e.g. "〜へ 乗船中" for a ferry) -- walking has none.
+_JA = tuning.LABELS_JA
 _MODE_HUD = {
-    "walking": {"mode": "walking", "icon": _MODE_ICON_SVG["walking"], "banner_icon": "●", "time_label": "歩く時間", "en_route_suffix": "", "default_speed_kmh": 4.5},
-    "ferry": {"mode": "ferry", "icon": _MODE_ICON_SVG["ferry"], "banner_icon": "⛴", "time_label": "乗船時間", "en_route_suffix": " 乗船中", "default_speed_kmh": 30.0},
-    "driving": {"mode": "driving", "icon": _MODE_ICON_SVG["driving"], "banner_icon": "\U0001F697", "time_label": "運転時間", "en_route_suffix": "", "default_speed_kmh": 40.0},
-    "airplane": {"mode": "airplane", "icon": _MODE_ICON_SVG["airplane"], "banner_icon": "✈", "time_label": "飛行時間", "en_route_suffix": " 搭乗中", "default_speed_kmh": 500.0},
+    "walking": {"mode": "walking", "icon": _MODE_ICON_SVG["walking"], "banner_icon": "●", "time_label": _JA["mode_duration_label"]["walking"], "en_route_suffix": "", "default_speed_kmh": 4.5},
+    "ferry": {"mode": "ferry", "icon": _MODE_ICON_SVG["ferry"], "banner_icon": "⛴", "time_label": _JA["mode_duration_label"]["ferry"], "en_route_suffix": _JA["en_route_suffix"]["ferry"], "default_speed_kmh": 30.0},
+    "driving": {"mode": "driving", "icon": _MODE_ICON_SVG["driving"], "banner_icon": "\U0001F697", "time_label": _JA["mode_duration_label"]["driving"], "en_route_suffix": "", "default_speed_kmh": 40.0},
+    "airplane": {"mode": "airplane", "icon": _MODE_ICON_SVG["airplane"], "banner_icon": "✈", "time_label": _JA["mode_duration_label"]["airplane"], "en_route_suffix": _JA["en_route_suffix"]["airplane"], "default_speed_kmh": 500.0},
 }
 _DEFAULT_MODE_HUD = _MODE_HUD["walking"]
+
+
+def _localized_hud(mode_hud: Dict, labels: Optional[Dict] = None) -> Dict:
+    """mode_hud with the time label and en-route suffix in the project's on-video language
+    (the table above holds the Japanese ones)."""
+    labels = labels or video_text.current_labels()
+    mode = mode_hud["mode"]
+    return {
+        **mode_hud,
+        "time_label": labels["mode_duration_label"].get(mode, mode_hud["time_label"]),
+        "en_route_suffix": labels["en_route_suffix"].get(mode, ""),
+    }
 
 
 # 100x100 viewBox; only #hud-compass-needle rotates (about the centre).
@@ -1060,16 +1078,18 @@ def _remaining_minutes(remaining_m: float, remaining_km: float, travel_speed_kmh
 
 def _hud_text(
     dest_label: str, remaining_m: float, remaining_min: int, arrive_threshold_m: float, mode: str = "walking",
+    labels: Optional[Dict] = None,
 ) -> Tuple[str, str]:
     """Returns (banner_text, distance_text) for one frame's remaining
     distance -- split out from the render loop so the arrival-threshold,
     mode-suffix, and unit-formatting logic can be exercised by a plain unit
     test without spinning up a browser."""
-    mode_hud = _MODE_HUD.get(mode, _DEFAULT_MODE_HUD)
+    labels = labels or video_text.current_labels()
+    mode_hud = _localized_hud(_MODE_HUD.get(mode, _DEFAULT_MODE_HUD), labels)
     if remaining_m < arrive_threshold_m:
-        banner = f"まもなく {dest_label}"
+        banner = labels["soon_banner"].format(dest=dest_label)
     else:
-        banner = f"{dest_label} へ{mode_hud['en_route_suffix']}"
+        banner = labels["en_route_banner"].format(dest=dest_label, suffix=mode_hud["en_route_suffix"])
     dist_text = f"{remaining_m:.0f} m" if remaining_m < 1000 else f"{remaining_m / 1000.0:.1f} km"
     return banner, dist_text
 
@@ -1288,7 +1308,8 @@ def render_residential_leg_pydeck(
 
     walker_color = walker_color or [30, 136, 255]
     upcoming_color = upcoming_color or [170, 170, 170, 200]
-    mode_hud = _MODE_HUD.get(mode, _DEFAULT_MODE_HUD)
+    hud_labels = video_text.current_labels()
+    mode_hud = _localized_hud(_MODE_HUD.get(mode, _DEFAULT_MODE_HUD), hud_labels)
     if travel_speed_kmh is None:
         travel_speed_kmh = mode_hud["default_speed_kmh"]
 
@@ -1809,6 +1830,8 @@ async def _record_leg(
     from services.vdoprocessing.vdoexporter import VideoExporter, _replace_with_retry
 
     editor = FFmpegEngine()
+    hud_labels = video_text.current_labels()
+    hud_minutes = hud_labels["hud_minutes"]
 
     async def _spawn_ffmpeg(out_path: str):
         # Encodes into a private temp file in out_path's own directory
@@ -2297,7 +2320,7 @@ async def _record_leg(
                 await page.wait_for_timeout(2500)
 
                 await page.evaluate(
-                    """([css, bannerIcon, timeLabel, cardIcon, chainPlaces, useImgCard, compassSvg]) => {
+                    """([css, bannerIcon, timeLabel, cardIcon, chainPlaces, useImgCard, compassSvg, distLabel]) => {
                         const style = document.createElement('style');
                         style.textContent = css;
                         document.head.appendChild(style);
@@ -2319,7 +2342,7 @@ async def _record_leg(
                         card.innerHTML = `
                             <div class="metric"><div class="label"><span class="icon">${cardIcon}</span> ${timeLabel}</div><div class="value" id="hud-time">--</div></div>
                             <div class="divider"></div>
-                            <div class="metric"><div class="label">距離</div><div class="value" id="hud-dist">--</div></div>
+                            <div class="metric"><div class="label">${distLabel}</div><div class="value" id="hud-dist">--</div></div>
                         `;
                         document.body.appendChild(card);
                         if (useImgCard) {
@@ -2349,7 +2372,8 @@ async def _record_leg(
                     [_hud_css(theme), mode_hud["banner_icon"], mode_hud["time_label"], mode_hud["icon"], route_chain,
                      hud_card_png is not None,
                      _COMPASS_SVG.format(size=int(tuning.RESIDENTIAL_COMPASS_SIZE_PX))
-                     if tuning.RESIDENTIAL_SHOW_COMPASS else ""],
+                     if tuning.RESIDENTIAL_SHOW_COMPASS else "",
+                     hud_labels["distance_label"]],
                 )
 
                 hud_card_cache: Dict[Tuple[int, int], str] = {}
@@ -2427,7 +2451,7 @@ async def _record_leg(
                     rem_m0 = rem_km0 * 1000.0
                     rem_min0 = _remaining_minutes(rem_m0, rem_km0, travel_speed_kmh)
                     banner_text0, dist_text0 = _hud_text(
-                        dest_label, rem_m0, rem_min0, arrive_threshold_m, mode=mode_hud["mode"]
+                        dest_label, rem_m0, rem_min0, arrive_threshold_m, mode=mode_hud["mode"], labels=hud_labels
                     )
                     walker_json0 = json.dumps([{"lon": first_row["lon"], "lat": first_row["lat"]}])
 
@@ -2528,7 +2552,7 @@ async def _record_leg(
                                 layers: [...staticLayers, newHalo, newDot, ...pinLayers, ...labelLayers]
                             }});
                             document.getElementById('hud-banner-text').textContent = {json.dumps(banner_text0)};
-                            document.getElementById('hud-time').textContent = {json.dumps(f"{rem_min0} 分")};
+                            document.getElementById('hud-time').textContent = {json.dumps(hud_minutes.format(n=rem_min0))};
                             document.getElementById('hud-dist').textContent = {json.dumps(dist_text0)};
                             {_needle_js(0)}
                         }}
@@ -2668,7 +2692,7 @@ async def _record_leg(
                     rem_m = rem_km * 1000.0
                     rem_min = _remaining_minutes(rem_m, rem_km, travel_speed_kmh)
                     banner_text, dist_text = _hud_text(
-                        dest_label, rem_m, rem_min, arrive_threshold_m, mode=mode_hud["mode"]
+                        dest_label, rem_m, rem_min, arrive_threshold_m, mode=mode_hud["mode"], labels=hud_labels
                     )
                     js = f"""
                     if (window.deckgl) {{
@@ -2705,7 +2729,7 @@ async def _record_leg(
                             layers: [...staticLayers, newTrail, newHalo, newDot, ...pinLayers, ...labelLayers]
                         }});
                         document.getElementById('hud-banner-text').textContent = {json.dumps(banner_text)};
-                        document.getElementById('hud-time').textContent = {json.dumps(f"{rem_min} 分")};
+                        document.getElementById('hud-time').textContent = {json.dumps(hud_minutes.format(n=rem_min))};
                         document.getElementById('hud-dist').textContent = {json.dumps(dist_text)};
                         {_needle_js(index)}
                     }}
@@ -2886,7 +2910,7 @@ async def _record_leg(
                             const distEl = document.getElementById('hud-dist');
                             if (distEl) distEl.textContent = distText;
                         }""",
-                        [total_dist_text, f"{total_min} 分"],
+                        [total_dist_text, hud_minutes.format(n=total_min)],
                     )
                     await _set_hud_card(total_m, total_min)
                     await _wait_for_paint(page)

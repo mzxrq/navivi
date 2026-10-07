@@ -225,7 +225,7 @@ class _PinMixin:
         is_circle = bool(wp.get("data", {}).get("is_stopby"))
         self.graphics.draw_marker(
             frame, px, py, number=label, color=pin_color, split_color=split_color, is_circle=is_circle,
-            scale=scale,
+            scale=scale, image=wp.get("data", {}).get("pin_image"),
         )
 
     def _pin_label_and_color(self, wp: Dict, total_points: int):

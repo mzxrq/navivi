@@ -1,7 +1,7 @@
 # Developer set: the app's pinned runtime list plus the optional extras below.
 -r requirements-runtime.txt
 
-# Local pan/zoom fallback (services/vdoprocessing/local_pan_generator.py) —
+# Depth-parallax fallback (services/vdoprocessing/parallax_generator.py) —
 # only used when the bundled ComfyUI attraction-video generator can't be
 # reached or a generation fails. Install torch/torchvision matching your
 # CUDA version separately first, e.g.:

@@ -1,3 +1,4 @@
+import { takeForcedRender } from "../../services/renderOptions";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
@@ -32,6 +33,7 @@ import {
   saveTimelineManifest,
 } from "../../services/fileSystem";
 import { detectHardwareSpec } from "../../utils/hardwareDetection";
+import { exportOptionsFrom } from "../../features/editor/model";
 import {
   appendPipelineOutput,
   appendSystemMessage,
@@ -238,7 +240,7 @@ export function RenderOverlay() {
 
       // Never start a render from an effect run that has already been torn down.
       if (disposed) return;
-      invoke("start_render", { configPath }).catch((err) => {
+      invoke("start_render", { configPath, force: takeForcedRender() || undefined }).catch((err) => {
         if (isSetupRequired(err)) announceSetupRequired();
         setStatus("error");
         pushSystemLog(t`Failed to invoke Python render: ${err}`, "error");
@@ -546,7 +548,7 @@ export function RenderOverlay() {
     if (dir) {
       // The pipeline rewrote timeline.json. Edits made meanwhile live only in the editor, so they are written back.
       if (now.canUndoTimeline && now.timeline.segments.length > 0) {
-        kept = await saveTimelineManifest(dir, metadata.project_name, now.timeline, now.settings.caption_style);
+        kept = await saveTimelineManifest(dir, metadata.project_name, now.timeline, now.settings.caption_style, exportOptionsFrom(now.settings));
       }
       if (!kept) await autoLoadTimeline(dir);
     }

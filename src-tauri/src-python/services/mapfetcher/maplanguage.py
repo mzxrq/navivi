@@ -37,6 +37,35 @@ def raster_style_id(settings: dict, lang: Optional[str], default: str) -> str:
     return settings.get("mapbox_style_id", default)
 
 
+_STYLE_URL_PREFIX = "mapbox://styles/"
+
+
+def resolve_map_style(settings: Optional[dict], default_id: str, lang: Optional[str] = None, raster: bool = False) -> str:
+    """The Mapbox style a render step draws on. `default_id` ("mapbox/outdoors-v12") is what that step used
+    before the setting existed, so a project without `mapbox_style_id` renders as it always did.
+    Raster tiles (`raster=True`) return "owner/id" and honor a per-language Studio style; the GL steps
+    return "mapbox://styles/owner/id" and use the base id only (the page's own script relabels them)."""
+    settings = settings or {}
+    chosen = raster_style_id(settings, lang, default_id) if raster else settings.get("mapbox_style_id")
+    path = str(chosen or "").strip()
+    if path.startswith(_STYLE_URL_PREFIX):
+        path = path[len(_STYLE_URL_PREFIX):]
+    path = path.strip("/")
+    owner, _, name = path.partition("/")
+    if not owner or not name or "/" in name or " " in path:
+        path = default_id  # not an "owner/id" style: keep the step's own
+    return path if raster else _STYLE_URL_PREFIX + path
+
+
+def map_style_inputs(settings: Optional[dict]) -> str:
+    """What decides the map look, for the render checkpoint. Empty when the project sets nothing, so a project
+    from before these settings existed hashes as it did."""
+    settings = settings or {}
+    style = str(settings.get("mapbox_style_id") or "").strip()
+    sharp = "" if settings.get("mapbox_retina", True) else "no-retina"
+    return f"{style}|{sharp}" if style or sharp else ""
+
+
 # Runs before mapbox-gl loads: rewrites name_xx lookups in fetched style JSON to the target language
 _LOCALIZER_JS = """<script>(function () {
   var FIELD = %s;

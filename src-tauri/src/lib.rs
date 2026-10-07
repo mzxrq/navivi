@@ -76,27 +76,35 @@ fn kill_tracked_children(state: &BlueprintState) {
 }
 
 
-/// `python main.py` for this build (the repo's, or the installed app's own), with the saved AI keys in its environment.
+/// `python main.py` for this build (the repo's, or the installed app's own), with the saved AI keys and the app-wide
+/// Mapbox token (`NAVIVI_MAPBOX_TOKEN`) in its environment.
 /// Fails with a `SETUP_REQUIRED` message the frontend turns into the setup screen when an installed app has no Python yet.
-fn python_command() -> Result<Command, String> {
+fn python_command(app: &AppHandle) -> Result<Command, String> {
     let rt = runtime::get();
     if !rt.python_ready() {
         return Err("SETUP_REQUIRED: the media tools are not installed yet.".into());
     }
     let mut cmd = rt.command();
     secrets::export_keys(&mut cmd);
+    let token = app
+        .try_state::<db::DbState>()
+        .and_then(|state| state.0.lock().ok().and_then(|conn| db::app_settings::api_key(&conn, "mapbox")));
+    if let Some(token) = token {
+        cmd.env("NAVIVI_MAPBOX_TOKEN", token);
+    }
     Ok(cmd)
 }
 
 #[tauri::command]
 async fn run_python_blueprint(
-    action: String, 
+    app: AppHandle,
+    action: String,
     payload: String,
     state: State<'_, BlueprintState>
 ) -> Result<String, String> {
-    
+
     // Spawn instead of output()
-    let mut cmd = python_command()?;
+    let mut cmd = python_command(&app)?;
     cmd.arg(&action)
         .arg(&payload)
         .stdout(Stdio::piped())
@@ -159,11 +167,11 @@ async fn run_python_blueprint(
 const UTILITY_MODES: &[&str] = &["extract_words", "extract_place_words", "get_furigana"];
 
 #[tauri::command]
-async fn run_python_utility(action: String, payload: String) -> Result<String, String> {
+async fn run_python_utility(app: AppHandle, action: String, payload: String) -> Result<String, String> {
     if !UTILITY_MODES.contains(&action.as_str()) {
         return Err(format!("Not a utility mode: {action}"));
     }
-    let mut cmd = python_command()?;
+    let mut cmd = python_command(&app)?;
     cmd.arg(&action).arg(&payload);
     let out = tauri::async_runtime::spawn_blocking(move || cmd.output())
         .await
@@ -211,7 +219,7 @@ fn start_render(
     force: Option<bool>,
     state: State<'_, BlueprintState>,
 ) -> Result<String, String> {
-    let mut command = python_command()?;
+    let mut command = python_command(&app)?;
     command.arg("full_pipeline").arg(&config_path);
     if force.unwrap_or(false) {
         // Bypasses the checkpoint/resume logic so every stage regenerates
@@ -351,7 +359,7 @@ async fn export_video(app: tauri::AppHandle, project_dir: String) -> Result<Stri
 
     let timeline_path = format!("{}/timeline.json", project_dir);
 
-    let mut child = python_command()?
+    let mut child = python_command(&app)?
         .arg("render_timeline")
         .arg(&timeline_path)
         .stdout(Stdio::piped())

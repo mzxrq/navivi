@@ -10,6 +10,9 @@ import numpy as np
 from services.mapfetcher.mapgeometry import RouteGeometryProcessor
 from services.vdoprocessing.vdoexporter import VideoExporter
 from services import tuning
+from services.mapbox_token import resolve_mapbox_token
+from services.mapfetcher.maplanguage import resolve_map_style
+from services.mapfetcher.graphicengine.pinimage import marker_for
 
 from .base import logger
 
@@ -329,7 +332,8 @@ class _TransitionMixin:
             label, color, split_color = self._pin_label_and_color(wp, total_points)
             self.graphics.draw_marker(
                 frame, px, py, number=label, color=color, split_color=split_color,
-                is_circle=bool(is_stopby)
+                is_circle=bool(is_stopby),
+                image=marker_for(jw, {"routeMarker": (self.config or {}).get("route_marker")}, (self.config or {}).get("marker_base_dir")),
             )
 
     def _gl_ending_zoom_enabled(self, bounding_box) -> bool:
@@ -509,15 +513,11 @@ class _TransitionMixin:
                 # threaded through here too so a project that sets it gets
                 # bigger labels on this GL path as well, not just the
                 # static one. Falls back to pydeck's own default style.
-                style_id = settings.get("mapbox_style_id")
-                map_style = (
-                    f"mapbox://styles/{style_id}" if style_id
-                    else "mapbox://styles/mapbox/streets-v12"
-                )
+                map_style = resolve_map_style(settings, "mapbox/streets-v12")
                 dynamic_frames = capture_pydeck_zoom_sequence(
                     bounding_box, (w, h), lat, lng, zoom_n,
                     zoom_boost=tuning.ENDING_HIGHLIGHT_PYDECK_ZOOM_BOOST,
-                    mapbox_key=settings.get("mapbox_api_key"),
+                    mapbox_key=resolve_mapbox_token(settings),
                     map_style=map_style,
                     # The route this video actually drew (stashed by
                     # render_overview — the same geometry
@@ -618,6 +618,7 @@ class _TransitionMixin:
                             frame_out, frame_px, frame_py,
                             number="S" if is_start else "E",
                             color=self._START_PIN_COLOR if is_start else self._END_PIN_COLOR,
+                            image=highlight_popup["data"].get("pin_image"),
                         )
                     if frame_idx >= lead_in_n:
                         # The "hard cut to arrived" moment — before this
@@ -638,6 +639,7 @@ class _TransitionMixin:
                             frame_out, frame_px, frame_py,
                             number="S" if is_start else "E",
                             color=self._START_PIN_COLOR if is_start else self._END_PIN_COLOR,
+                            image=highlight_popup["data"].get("pin_image"),
                         )
                         frame_out = self.graphics.render_popup_box(
                             frame_out, highlight_popup, skip_line=True
@@ -752,6 +754,7 @@ class _TransitionMixin:
                 highlight_bg, px, py,
                 number="S" if is_start else "E",
                 color=self._START_PIN_COLOR if is_start else self._END_PIN_COLOR,
+                image=highlight_popup["data"].get("pin_image"),
             )
             highlight_frame = self.graphics.render_popup_box(
                 highlight_bg, highlight_popup, skip_line=True

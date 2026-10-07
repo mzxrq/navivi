@@ -11,6 +11,7 @@ import { useUI } from "../../../hooks/useUI";
 import { WaypointItem } from "./WaypointItem";
 import { LocationSearch } from "../../../components/ui/LocationSearch";
 import { OverviewPanel } from "./OverviewPanel";
+import { requestForcedRender } from "../../../services/renderOptions";
 import { GenerateDialog } from "./GenerateDialog";
 import { AssetGroup, clearAssets } from "../../../services/assetCleanup";
 import { t } from "@lingui/core/macro";
@@ -95,8 +96,9 @@ export function Sidebar() {
     setShowGenerateConfirm(true);
   };
 
-  const executeGenerate = async (clear: AssetGroup[]) => {
+  const executeGenerate = async (clear: AssetGroup[], force = false) => {
     setShowGenerateConfirm(false);
+    requestForcedRender(force);
     if (clear.length > 0 && metadata.directory_path) {
       const removed = await clearAssets(metadata.directory_path, clear);
       showToast(removed === 1 ? t`Deleted 1 old file. It will be made again.` : t`Deleted ${removed} old files. They will be made again.`, "info");

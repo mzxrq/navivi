@@ -5,10 +5,12 @@ import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 import { CheckCircle, Folder, Loader2 } from "../../components/ui/icons";
 import { Dialog, dialogButton } from "../../components/ui/Dialog";
+import { Segmented } from "../../components/ui/Segmented";
+import { Switch } from "../../components/ui/Switch";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { saveTimelineManifest } from "../../services/fileSystem";
 import { collectCredits } from "../../utils/photoCredits";
-import { layout, TimelineData } from "./model";
+import { exportOptionsFrom, layout, TimelineData } from "./model";
 import { formatTime } from "./player";
 
 interface ExportDialogProps {
@@ -19,7 +21,7 @@ interface ExportDialogProps {
 }
 
 export function ExportDialog({ timeline, projectDir, projectName, onClose }: ExportDialogProps) {
-  const { settings, waypoints } = useWorkspace();
+  const { settings, waypoints, updateSettings } = useWorkspace();
   const photoCredits = collectCredits(waypoints);
   const [phase, setPhase] = useState<"ready" | "working" | "done" | "error">("ready");
   const [output, setOutput] = useState("");
@@ -28,6 +30,10 @@ export function ExportDialog({ timeline, projectDir, projectName, onClose }: Exp
   const startedAt = useRef(0);
   const [now, setNow] = useState(0);
   const { total } = layout(timeline);
+  const resolution = settings.default_export_resolution ?? "1080p";
+  const options = exportOptionsFrom(settings);
+  const burn = settings.export_burn_subtitles ?? true;
+  const fpsChoices = [...new Set([24, 30, 60, options.fps ?? 30])].sort((a, b) => a - b);
   const narrated = timeline.segments.filter((s) => s.audio && !s.muted).length;
 
   const run = async () => {
@@ -37,7 +43,7 @@ export function ExportDialog({ timeline, projectDir, projectName, onClose }: Exp
     setNow(startedAt.current);
     const unlisten = await listen<number>("export-progress", (e) => setProgress((p) => Math.max(p, e.payload)));
     try {
-      if (!(await saveTimelineManifest(projectDir, projectName, timeline, settings.caption_style ?? {}))) throw new Error(t`Could not save the timeline`);
+      if (!(await saveTimelineManifest(projectDir, projectName, timeline, settings.caption_style ?? {}, options))) throw new Error(t`Could not save the timeline`);
       setOutput(await invoke<string>("export_video", { projectDir }));
       setPhase("done");
     } catch (e: any) {
@@ -64,7 +70,7 @@ export function ExportDialog({ timeline, projectDir, projectName, onClose }: Exp
     [t`Length`, formatTime(total, false)],
     [t`Clips`, String(timeline.segments.length)],
     [t`Narration`, narrated ? t`${narrated} clips` : t`None`],
-    [t`Subtitles`, timeline.subtitles.length ? t`${timeline.subtitles.length} lines, burned in` : t`None`],
+    [t`Subtitles`, timeline.subtitles.length ? burn ? t`${timeline.subtitles.length} lines, burned in` : t`${timeline.subtitles.length} lines, not burned in` : t`None`],
     [t`Music`, timeline.music ? timeline.music.label : t`None`],
   ];
 
@@ -114,6 +120,48 @@ export function ExportDialog({ timeline, projectDir, projectName, onClose }: Exp
               </div>
             ))}
           </dl>
+          {phase !== "working" && (
+          <div className="mt-3 space-y-2.5">
+            <OptionRow label={t`Size`}>
+              <Segmented
+                compact
+                className="w-52"
+                value={resolution}
+                onChange={(v) => updateSettings({ default_export_resolution: v })}
+                options={[
+                  { id: "720p", label: "720p" },
+                  { id: "1080p", label: "1080p" },
+                  { id: "1440p", label: "1440p" },
+                  { id: "4k", label: "4K" },
+                ]}
+              />
+            </OptionRow>
+            {(resolution === "1440p" || resolution === "4k") && (
+              <p className="text-[11px] leading-snug text-zinc-400">
+                <Trans>The clips are drawn at 1080p, so a larger size enlarges them: the file is bigger, not sharper.</Trans>
+              </p>
+            )}
+            <OptionRow label={t`Frame rate`}>
+              <Segmented
+                compact
+                className="w-40"
+                value={String(options.fps ?? 30)}
+                onChange={(v) => updateSettings({ export_fps: Number(v) })}
+                options={fpsChoices.map((n) => ({ id: String(n), label: String(n) }))}
+              />
+            </OptionRow>
+            <OptionRow label={t`Burn subtitles into the video`}>
+              <Switch checked={burn} onChange={(v) => updateSettings({ export_burn_subtitles: v })} label={t`Burn subtitles into the video`} />
+            </OptionRow>
+            <OptionRow label={t`Also save subtitles as .srt`}>
+              <Switch
+                checked={!!settings.export_save_srt}
+                onChange={(v) => updateSettings({ export_save_srt: v })}
+                label={t`Also save subtitles as .srt`}
+              />
+            </OptionRow>
+          </div>
+          )}
           {timeline.music?.credit && (
             <p className="mt-3 text-[11px] leading-snug text-zinc-400 select-text">
               <Trans>Music credit, to include where you publish the video:</Trans> {timeline.music.credit}
@@ -158,5 +206,14 @@ export function ExportDialog({ timeline, projectDir, projectName, onClose }: Exp
         </>
       )}
     </Dialog>
+  );
+}
+
+function OptionRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-3 text-[13px]">
+      <span className="text-zinc-700 dark:text-zinc-300">{label}</span>
+      {children}
+    </div>
   );
 }

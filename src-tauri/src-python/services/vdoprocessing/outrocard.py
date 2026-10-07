@@ -26,7 +26,7 @@ from PIL.ImageFont import FreeTypeFont, load_default, truetype
 from services.mapfetcher.graphicengine.base import _GraphicsEngineBase
 from services.logger.logger import setup_logger
 from services.tts.ttsengine import FFmpegManager
-from services import tuning
+from services import tuning, video_text
 
 logger = setup_logger("OutroCard")
 
@@ -180,8 +180,13 @@ def _mode_totals(brief: Dict[str, Any]) -> List[Tuple[str, float, int]]:
     return sorted(((m, km[m], minutes[m]) for m in km), key=lambda r: -r[1])
 
 
+def _outro_subtitle(count: int) -> str:
+    return video_text.plural(video_text.current_labels(), "outro_subtitle", count, count=count)
+
+
 def _totals_line(engine, brief: Dict[str, Any]) -> str:
-    return f"{_fmt_km(brief['total_km'])} ・ {engine._format_duration_ja(brief['total_minutes'] * 60)}"
+    sep = video_text.current_labels()["separator"]
+    return f"{_fmt_km(brief['total_km'])}{sep}{engine._format_duration_ja(brief['total_minutes'] * 60)}"
 
 
 def _build_frame(
@@ -201,9 +206,9 @@ def _build_frame(
         _GraphicsEngineBase.FONT_CANDIDATES_BOLD, tuning.OUTRO_BADGE_FONT_SIZE
     )
 
-    subtitle = tuning.OUTRO_SUBTITLE_TEMPLATE.format(count=len(waypoints))
+    subtitle = _outro_subtitle(len(waypoints))
     if brief and brief.get("legs"):
-        subtitle += f" ・ {_totals_line(_engine(), brief)}"
+        subtitle += f"{video_text.current_labels()['separator']}{_totals_line(_engine(), brief)}"
     _center_text(draw, project_name, title_font, _CANVAS_W / 2, 34, tuning.OUTRO_TITLE_COLOR)
     _center_text(
         draw,
@@ -258,7 +263,7 @@ def _build_frame(
 
         label = _truncate_to_width(
             draw,
-            str(wp.get("label", f"{tuning.PIPELINE_LABELS['waypoint_fallback']} {idx + 1}")),
+            str(wp.get("label", f"{video_text.current_labels()['waypoint_fallback']} {idx + 1}")),
             label_font, thumb_w,
         )
         _center_text(
@@ -323,7 +328,7 @@ def _build_scroll_page(
     _center_text(draw, project_name, title_font, width / 2, px(34), tuning.OUTRO_TITLE_COLOR)
     _center_text(
         draw,
-        tuning.OUTRO_SUBTITLE_TEMPLATE.format(count=len(waypoints)),
+        _outro_subtitle(len(waypoints)),
         subtitle_font,
         width / 2,
         px(34 + tuning.OUTRO_TITLE_FONT_SIZE + 10),
@@ -354,7 +359,7 @@ def _build_scroll_page(
 
         # A long name first shrinks (down to OUTRO_SCROLL_LABEL_MIN_FONT_SIZE)
         # to fit the card's width, and is only cut with "…" past that.
-        text = str(wp.get("label", f"{tuning.PIPELINE_LABELS['waypoint_fallback']} {idx + 1}"))
+        text = str(wp.get("label", f"{video_text.current_labels()['waypoint_fallback']} {idx + 1}"))
         font = label_font
         font_size = label_size
         while draw.textlength(text, font=font) > thumb_w and font_size > label_min_size:
@@ -507,7 +512,7 @@ def _build_route_page(
     stats = [
         (
             _leg_modes(leg),
-            "・".join(engine._mode_name_ja(m) for m in _leg_modes(leg)),
+            video_text.current_labels()["mode_join"].join(engine._mode_name_ja(m) for m in _leg_modes(leg)),
             _fmt_km(leg["km"]),
             engine._format_duration_ja(leg["minutes"] * 60),
         )
@@ -570,7 +575,7 @@ def _build_route_page(
             font=font, fill=tuning.OUTRO_TITLE_COLOR,
         )
         origin = _truncate_to_width(
-            draw, tuning.OUTRO_ROUTE_FROM_TEMPLATE.format(name=leg["from"]), from_font, text_w,
+            draw, video_text.current_labels()["outro_route_from"].format(name=leg["from"]), from_font, text_w,
         )
         draw.text(
             (text_x, name_y + size + px(10)), origin, font=from_font, fill=tuning.OUTRO_SUBTITLE_COLOR,
@@ -623,7 +628,7 @@ def _draw_summary(
     trip with more than one travel mode, each mode's distance, time and share."""
     draw = ImageDraw.Draw(page)
     bold = _GraphicsEngineBase.FONT_CANDIDATES_BOLD
-    labels = tuning.OUTRO_SUMMARY_LABELS
+    labels = video_text.current_labels()["outro_summary"]
     small_font = _load_font(_GraphicsEngineBase.FONT_CANDIDATES_REGULAR, px(14))
     legend_font = _load_font(bold, px(tuning.OUTRO_LEG_FONT_SIZE))
     value_font = _load_font(
@@ -638,11 +643,11 @@ def _draw_summary(
     stops = len({leg["to"] for leg in legs if not leg.get("is_return")})
     tiles = [
         (lambda d, cx, cy, s: engine._draw_total_icon(d, cx, cy, s, tuning.OUTRO_TITLE_COLOR),
-         labels["distance"], _fmt_km(brief["total_km"]), labels["legs"].format(count=len(legs))),
+         labels["distance"], _fmt_km(brief["total_km"]), video_text.plural(labels, "legs", len(legs), count=len(legs))),
         (lambda d, cx, cy, s: engine._draw_clock_icon(d, cx, cy, s, tuning.OUTRO_TITLE_COLOR),
          labels["time"], engine._format_duration_ja(brief["total_minutes"] * 60), labels["time_note"]),
         (lambda d, cx, cy, s: _draw_pin_icon(d, cx, cy, s, accent, tuning.OUTRO_PANEL_COLOR),
-         labels["places"], labels["places_value"].format(count=stops), ""),
+         labels["places"], video_text.plural(labels, "places_value", stops, count=stops), ""),
         (lambda d, cx, cy, s: engine._draw_mode_icon(d, longest_mode, cx, cy, s, _mode_rgb(engine, longest_mode)),
          labels["longest"], _fmt_km(longest["km"]), f"→ {longest['to']}"),
     ]
@@ -692,8 +697,9 @@ def _draw_summary(
         name = engine._mode_name_ja(mode)
         draw.text((x, y), name, font=legend_font, fill=color)
         x += draw.textlength(name, font=legend_font) + px(10)
+        sep = video_text.current_labels()["separator"]
         detail = (
-            f"{_fmt_km(km)} ・ {engine._format_duration_ja(minutes * 60)} ・ "
+            f"{_fmt_km(km)}{sep}{engine._format_duration_ja(minutes * 60)}{sep}"
             f"{round(100 * km / total_km)}%"
         )
         draw.text((x, y), detail, font=legend_font, fill=text)

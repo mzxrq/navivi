@@ -23,6 +23,16 @@ from services.vdoprocessing.videopipeline.helpers import (
 from .helpers import _load_tts_waypoints
 
 
+def _load_waypoints(job_config_path: str) -> tuple[Path, list]:
+    """The waypoints the way the pipeline sees them: JobConfigManager makes every photo and video path absolute.
+    Read raw, a project saved by the app (relative `assets/image/...` paths) found no photo and the clip failed."""
+    from services.config.job_config import JobConfigManager
+
+    config_path, raw = _load_tts_waypoints(job_config_path)
+    waypoints = JobConfigManager(config_path).get("waypoints", raw)
+    return config_path, waypoints if isinstance(waypoints, list) else raw
+
+
 def _resolve_attraction_audio(
     config_path: Path, waypoint_index: int, label: Any
 ) -> Dict[str, Any]:
@@ -56,7 +66,7 @@ def test_attraction_video(
     # See attraction_step.render_attraction_videos's identical call for why:
     # a killed/restarted invocation otherwise leaves its job running
     # server-side, queuing every retry further behind instead of starting fresh.
-    _, waypoints = _load_tts_waypoints(job_config_path)
+    _, waypoints = _load_waypoints(job_config_path)
     if needs_wan(waypoints[waypoint_index:waypoint_index + 1] if waypoint_index >= 0 else []):
         ComfyUII2VClient().clear_queue()
     try:
@@ -71,7 +81,7 @@ def _generate_attraction_video(
     waypoint_index: int,
     force: bool,
 ) -> Dict[str, Any]:
-    config_path, waypoints = _load_tts_waypoints(job_config_path)
+    config_path, waypoints = _load_waypoints(job_config_path)
     if waypoint_index < 0 or waypoint_index >= len(waypoints):
         raise IndexError(
             f"waypoint_index must be between 0 and {len(waypoints) - 1}, "
@@ -129,8 +139,8 @@ def _generate_attraction_video(
             "output_filename": result["output_filename"],
             "audio_path": result["audio_path"],
             "message": (
-                "Multiple clips generated but not yet combined — call "
-                "attraction-finalize once approved."
+                "The clips were made but could not be combined; "
+                "attraction-finalize retries the combine."
             ),
         }
     raise RuntimeError(f"Attraction video generation failed for waypoint {waypoint_index}")
@@ -144,7 +154,7 @@ def test_attraction_videos(
     """Generate attraction videos for every waypoint with a popup image."""
     from services.vdoprocessing.comfyui_i2v_client import ComfyUII2VClient
 
-    config_path, waypoints = _load_tts_waypoints(job_config_path)
+    config_path, waypoints = _load_waypoints(job_config_path)
     candidates = [
         (index, waypoint)
         for index, waypoint in enumerate(waypoints)
@@ -183,12 +193,12 @@ def test_attraction_finalize(
     output_video_dir: str = None,
     waypoint_index: int = 0,
 ) -> Dict[str, Any]:
-    """Combines a waypoint's pending (already-generated but not yet
-    combined) attraction clips into the final deliverable. Call this once
-    the frontend has reviewed the individual clips and approved combining
-    them — the automatic pipeline / test_attraction_video no longer does
-    this on its own for multi-image waypoints."""
-    config_path, waypoints = _load_tts_waypoints(job_config_path)
+    """Retries the combine for a waypoint whose photo clips were made but
+    not joined (a failed combine leaves a pending manifest). Several photos
+    are combined automatically by the pipeline and by test_attraction_video
+    (no approval step; tests/test_attraction_multi_image.py), so this is a
+    recovery tool and nothing in the app needs to call it."""
+    config_path, waypoints = _load_waypoints(job_config_path)
     if waypoint_index < 0 or waypoint_index >= len(waypoints):
         raise IndexError(
             f"waypoint_index must be between 0 and {len(waypoints) - 1}, "

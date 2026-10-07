@@ -13,6 +13,7 @@ import { callSidecar } from "../../services/sidecar";
 import { warmUpModel } from "../../services/ollamaApi";
 import { aiEngine } from "../../services/ai/engine";
 import { useWorkspace } from "../../hooks/useWorkspace";
+import { nextStopNumber } from "../../utils/overviewScript";
 
 const getThinkingSteps = () => [
   t`Detecting context...`,
@@ -21,6 +22,24 @@ const getThinkingSteps = () => [
   t`Drafting narration...`,
   t`Polishing voiceover tone...`,
 ];
+
+export type CueTag = "start" | "arrive" | "end" | "n" | "go";
+
+const getCueHints = (): Record<CueTag, string> => ({
+  start: t`Insert a cue: the walk starts moving at this point`,
+  arrive: t`Insert a cue: the walk is nearly at the stop at this point`,
+  end: t`Insert a cue: the stop is reached at this point`,
+  n: t`Insert a cue: the overview stops at the next numbered stop here, while the voice describes it`,
+  go: t`Insert a cue: the description of that stop ends here and the overview moves on`,
+});
+
+/** The text with {tag} put at the caret (or over the selection), plus where the caret goes afterwards. */
+export function insertCue(text: string, tag: string, from: number, to: number): { text: string; caret: number } {
+  const start = Math.max(0, Math.min(from, text.length));
+  const end = Math.max(start, Math.min(to, text.length));
+  const marker = `{${tag}}`;
+  return { text: text.slice(0, start) + marker + text.slice(end), caret: start + marker.length };
+}
 
 interface ScriptInputProps {
   value: string;
@@ -31,6 +50,7 @@ interface ScriptInputProps {
   aiEnabled?: boolean;
   thoughtProcess?: string;
   showLabel?: boolean;
+  cues?: CueTag[];
 }
 
 export function ScriptInput({
@@ -42,6 +62,7 @@ export function ScriptInput({
   aiEnabled = false,
   thoughtProcess = "",
   showLabel = true,
+  cues = ["start", "arrive", "end"],
 }: ScriptInputProps) {
   const [localPrompt, setLocalPrompt] = useState(value);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
@@ -155,6 +176,16 @@ export function ScriptInput({
     setLocalPrompt(cleaned);
   };
 
+  const addCue = (tag: CueTag) => {
+    const el = textareaRef.current;
+    const next = insertCue(localPrompt, tag === "n" ? String(nextStopNumber(localPrompt)) : tag, el?.selectionStart ?? localPrompt.length, el?.selectionEnd ?? localPrompt.length);
+    setLocalPrompt(next.text);
+    requestAnimationFrame(() => {
+      el?.focus();
+      el?.setSelectionRange(next.caret, next.caret);
+    });
+  };
+
   const handleSaveClick = (e: React.MouseEvent) => {
     e.preventDefault();
     commit();
@@ -234,9 +265,25 @@ export function ScriptInput({
         />
 
         <div className="shrink-0 flex h-9 items-center justify-between gap-2 px-2.5 border-t border-zinc-100 dark:border-white/5">
-          <span className="text-[11px] text-zinc-400 dark:text-zinc-500 tabular-nums">
-            {localPrompt.length > 0 ? t`${localPrompt.length} characters` : ""}
-          </span>
+          <div className="flex items-center gap-1 min-w-0">
+            <span className="text-[11px] text-zinc-400 dark:text-zinc-500 tabular-nums mr-1 shrink-0">
+              {localPrompt.length > 0 ? t`${localPrompt.length} characters` : ""}
+            </span>
+            {!isGenerating &&
+              cues.map((tag) => (
+                <button
+                  key={tag}
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => addCue(tag)}
+                  title={getCueHints()[tag]}
+                  aria-label={getCueHints()[tag]}
+                  className="h-5 px-1.5 rounded-md text-[10px] text-zinc-500 hover:text-navi hover:bg-navi/10 transition-colors"
+                >
+                  {`{${tag}}`}
+                </button>
+              ))}
+          </div>
 
           {!isGenerating && (
             <div className="flex items-center gap-1">

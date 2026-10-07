@@ -368,7 +368,7 @@ def render_from_timeline(
         for key in ("file_path", "audio_path", "extra_audio_path"):
             if track.get(key) and not Path(track[key]).is_absolute():
                 track[key] = str(project_dir / track[key])
-    timeline_data["burn_subtitles"] = True
+    timeline_data.setdefault("burn_subtitles", True)  # the Export dialog may turn it off
     if "caption_style" not in timeline_data:
         timeline_data["caption_style"] = _project_caption_style(project_dir)
     music = timeline_data.get("music") or {}

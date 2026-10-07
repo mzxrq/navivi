@@ -6,7 +6,6 @@ Handles downloading map tiles and fetching map images for route visualization.
 """
 
 # [I/O] Import libraries for map tile downloading and fetching
-import os
 import time
 from pathlib import Path
 import contextily as cx  # type: ignore
@@ -21,7 +20,8 @@ import numpy as np
 # [I/O] Import service dependencies for Integration
 from services.logger.logger import setup_logger
 from services import tuning
-from services.mapfetcher.maplanguage import raster_style_id, streets_lang
+from services.mapfetcher.maplanguage import resolve_map_style, streets_lang
+from services.mapbox_token import resolve_mapbox_token
 
 # [Utility] Log setup for debugging and monitoring
 logger = setup_logger("MapTile")
@@ -124,26 +124,18 @@ class TileDownloader:
 
     # [Map/Util] Picks Mapbox (higher-resolution, retina-capable tiles) when
     # an access token is configured, falling back to the free Esri tiles
-    # otherwise. Mapbox token can come from job_config settings, from
-    # src-python/.env (MAPBOX_API_KEY / MAPBOX_ACCESS_TOKEN), or from the
-    # frontend's own repo-root .env (VITE_MAPBOX_TOKEN) — checked last so an
-    # explicit backend-only override still wins, but a project with no
-    # separate src-python/.env setup still picks up the same token the
-    # frontend map already uses.
+    # otherwise. The token is the app's own (NAVIVI_MAPBOX_TOKEN, set by the
+    # desktop app), then a legacy project setting, then the old env/.env names;
+    # see services/mapbox_token.py.
     def _build_provider(self, settings: Dict):
-        token = (
-            settings.get("mapbox_access_token")
-            or os.environ.get("MAPBOX_API_KEY")
-            or os.environ.get("MAPBOX_ACCESS_TOKEN")
-            or os.environ.get("VITE_MAPBOX_TOKEN")
-        )
+        token = resolve_mapbox_token(settings)
         if not token:
             return self.PROVIDER
 
         provider = cx.providers.MapBox.copy()  # type: ignore
         provider["accessToken"] = token
         lang = streets_lang(self.job_config.get("map_language") if self.job_config else None)
-        provider["id"] = raster_style_id(settings, lang, self.MAPBOX_DEFAULT_STYLE)
+        provider["id"] = resolve_map_style(settings, self.MAPBOX_DEFAULT_STYLE, lang, raster=True)
         # @2x pulls double-density (retina) tiles — same geographic coverage
         # per tile, roughly 4x the pixels — for a visibly sharper map at the
         # same zoom level. Off by default only if explicitly disabled.
