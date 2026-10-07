@@ -47,7 +47,7 @@ describe("the Mapbox and OpenRouteService keys live in the app settings", () => 
     const { result } = renderHook(() => useWorkspace(), { wrapper });
     await act(async () => {});
     act(() => result.current.updateSettings({ mapbox_api_key: "pk.typed" }));
-    expect(keyWrites().at(-1)).toEqual({ mapbox: "pk.typed" });
+    expect(keyWrites()[keyWrites().length - 1]).toEqual({ mapbox: "pk.typed" });
     expect(result.current.settings.mapbox_api_key).toBe("pk.typed");
     expect(result.current.isDirty).toBe(false);
   });
@@ -68,7 +68,7 @@ describe("the Mapbox and OpenRouteService keys live in the app settings", () => 
     act(() => result.current.updateSettings({ mapbox_api_key: "pk.early" }));
     expect(keyWrites()).toHaveLength(0);
     await act(async () => finish({ mapbox: "pk.old", ors: "ors-saved" }));
-    await waitFor(() => expect(keyWrites().at(-1)).toEqual({ mapbox: "pk.early", ors: "ors-saved" }));
+    await waitFor(() => expect(keyWrites()[keyWrites().length - 1]).toEqual({ mapbox: "pk.early", ors: "ors-saved" }));
     expect(result.current.settings.mapbox_api_key).toBe("pk.early");
   });
 });
