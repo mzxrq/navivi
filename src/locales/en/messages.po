@@ -1774,7 +1774,8 @@ msgstr "Editor view"
 msgid "Elevation heatmap"
 msgstr "Elevation heatmap"
 
-#: src/features/map/components/ElevationProfile.tsx:36
+#: src/features/map/components/ElevationProfile.tsx:62
+#: src/features/map/components/ElevationProfile.tsx:71
 msgid "Elevation profile"
 msgstr "Elevation profile"
 
@@ -2312,6 +2313,11 @@ msgstr "Hex colour"
 #: src/components/ui/SetupGate.tsx:149
 msgid "Hide details"
 msgstr "Hide details"
+
+#: src/features/map/components/ElevationProfile.tsx:79
+#: src/features/map/components/ElevationProfile.tsx:80
+msgid "Hide elevation profile"
+msgstr "Hide elevation profile"
 
 #: src/components/ui/PipelineLogPanel.tsx:156
 msgid "Hide log"
@@ -4337,6 +4343,10 @@ msgstr "Show details"
 #: src/features/map/components/MapLayers/LayerManager.tsx:126
 msgid "Show elevation and 3D buildings"
 msgstr "Show elevation and 3D buildings"
+
+#: src/features/map/components/ElevationProfile.tsx:58
+msgid "Show elevation profile"
+msgstr "Show elevation profile"
 
 #: src/components/ui/ExportProjectDialog.tsx:79
 msgid "Show file"

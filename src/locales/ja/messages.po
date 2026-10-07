@@ -1774,7 +1774,8 @@ msgstr "エディター表示"
 msgid "Elevation heatmap"
 msgstr "標高ヒートマップ"
 
-#: src/features/map/components/ElevationProfile.tsx:36
+#: src/features/map/components/ElevationProfile.tsx:62
+#: src/features/map/components/ElevationProfile.tsx:71
 msgid "Elevation profile"
 msgstr "標高プロファイル"
 
@@ -2312,6 +2313,11 @@ msgstr "16進カラーコード"
 #: src/components/ui/SetupGate.tsx:149
 msgid "Hide details"
 msgstr "詳細を隠す"
+
+#: src/features/map/components/ElevationProfile.tsx:79
+#: src/features/map/components/ElevationProfile.tsx:80
+msgid "Hide elevation profile"
+msgstr "標高グラフを隠す"
 
 #: src/components/ui/PipelineLogPanel.tsx:156
 msgid "Hide log"
@@ -4337,6 +4343,10 @@ msgstr "詳細を表示"
 #: src/features/map/components/MapLayers/LayerManager.tsx:126
 msgid "Show elevation and 3D buildings"
 msgstr "標高と3D建物を表示する"
+
+#: src/features/map/components/ElevationProfile.tsx:58
+msgid "Show elevation profile"
+msgstr "標高グラフを表示"
 
 #: src/components/ui/ExportProjectDialog.tsx:79
 msgid "Show file"

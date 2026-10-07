@@ -117,6 +117,7 @@ export {
   Navigation,
   Globe,
   ChevronUp,
+  Mountain, // ElevationProfile
   ChevronLeftCircle,
   Box,
   SwitchCamera,
