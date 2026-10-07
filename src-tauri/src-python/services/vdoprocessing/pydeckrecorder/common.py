@@ -5,7 +5,6 @@ package — recorder.py, routedata.py, renderer.py — can import from here
 without risking a circular import.
 """
 
-import os
 import sys
 from pathlib import Path
 

@@ -167,11 +167,11 @@ async fn run_python_blueprint(
 const UTILITY_MODES: &[&str] = &["extract_words", "extract_place_words", "get_furigana"];
 
 #[tauri::command]
-async fn run_python_utility(action: String, payload: String) -> Result<String, String> {
+async fn run_python_utility(app: AppHandle, action: String, payload: String) -> Result<String, String> {
     if !UTILITY_MODES.contains(&action.as_str()) {
         return Err(format!("Not a utility mode: {action}"));
     }
-    let mut cmd = python_command()?;
+    let mut cmd = python_command(&app)?;
     cmd.arg(&action).arg(&payload);
     let out = tauri::async_runtime::spawn_blocking(move || cmd.output())
         .await

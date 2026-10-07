@@ -2,7 +2,6 @@
 import json
 from pathlib import Path
 
-import pytest
 
 from services import tuning
 from services.vdoprocessing.videopipeline import outro_step

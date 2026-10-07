@@ -6,7 +6,6 @@ Handles downloading map tiles and fetching map images for route visualization.
 """
 
 # [I/O] Import libraries for map tile downloading and fetching
-import os
 import time
 from pathlib import Path
 import contextily as cx  # type: ignore
