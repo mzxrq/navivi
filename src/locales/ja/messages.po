@@ -1609,6 +1609,14 @@ msgstr "次のプロジェクトへの変更を保存しますか: "
 msgid "Documents, GPS tracks and photos"
 msgstr "ドキュメント、GPS の記録、写真"
 
+#: src/features/map/components/WaypointEditor.tsx:61
+msgid "Dolly In"
+msgstr "ドリーイン"
+
+#: src/features/map/components/WaypointEditor.tsx:62
+msgid "Dolly Out"
+msgstr "ドリーアウト"
+
 #: src/components/ui/ReviewStep.tsx:268
 msgid "Don't redo this voice"
 msgstr "この音声はやり直さない"
@@ -5374,18 +5382,10 @@ msgstr "あなたの旅"
 msgid "Zoom in"
 msgstr "拡大"
 
-#: src/features/map/components/WaypointEditor.tsx:61
-msgid "Zoom In"
-msgstr "ズームイン"
-
 #: src/features/editor/EditorView.tsx:383
 #: src/features/editor/EditorView.tsx:385
 msgid "Zoom out"
 msgstr "縮小"
-
-#: src/features/map/components/WaypointEditor.tsx:62
-msgid "Zoom Out"
-msgstr "ズームアウト"
 
 #: src/features/map/components/DrawBar.tsx:240
 #: src/features/map/components/DrawBar.tsx:241

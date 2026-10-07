@@ -27,7 +27,9 @@ logger = setup_logger("SlowMove")
 # The tail itself doesn't follow the preset: each clip picks a random gentle
 # drift (see _random_drift), always on a slow push-in, which keeps the frame
 # edges out of view while drifting. Zoom In/Out are jump cuts and hold instead.
-_MOVING = {"panright", "panleft", "panup", "pandown", "walkin"}
+# Dollies too since they became LTXV (2026-10-07): a 4 s dolly-out then sat
+# frozen for 6.4 s of 西ノ庄駅's narration.
+_MOVING = {"panright", "panleft", "panup", "pandown", "walkin", "zoomin", "zoomout"}
 
 
 def _random_drift(rng: random.Random) -> tuple:
@@ -173,7 +175,8 @@ def extend_with_slow_move(
         gap = target_duration - current
         if gap <= 0.05:
             return None
-        if tuning.ATTRACTION_SLOW_MOVE_STYLE == "zoomout":
+        # A dolly-in or walk keeps pushing in; a zoom-out tail would reverse it.
+        if tuning.ATTRACTION_SLOW_MOVE_STYLE == "zoomout" and key not in ("zoomin", "walkin"):
             return _extend_with_zoom_out(video_path, gap, output_path)
         frame = _last_frame(video_path)
         if frame is None:
@@ -181,6 +184,8 @@ def extend_with_slow_move(
         fps = _fps(video_path)
         h, w = frame.shape[:2]
         dx, dy, rate = _random_drift(rng or random.Random())
+        if key in ("zoomin", "walkin"):
+            dx = dy = 0.0
         frames = max(1, int(round(gap * fps)))
 
         tail_path = str(Path(output_path).with_suffix(".tail.mp4"))

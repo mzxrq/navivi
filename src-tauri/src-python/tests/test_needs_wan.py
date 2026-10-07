@@ -19,8 +19,8 @@ def test_a_moving_preset_needs_wan():
     assert needs_wan([_wp(imagePans=["none"]), _wp(imagePans=["pan-right"])])
 
 
-def test_jump_cuts_need_no_wan():
-    assert not needs_wan([_wp(imagePans=["zoom-in"]), _wp(imagePans=["zoom-out"])])
+def test_dollies_need_comfyui():
+    assert needs_wan([_wp(imagePans=["zoom-in"])]) and needs_wan([_wp(imagePans=["zoom-out"])])
 
 
 def test_no_preset_falls_back_to_a_wan_prompt():

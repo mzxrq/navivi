@@ -1,6 +1,6 @@
 """Zoom In / Zoom Out as a jump cut: a wide shot, then a hard cut to the photo
 full frame (reversed for Zoom Out). The wide shot is the photo in the middle
-with SDXL-outpainted surroundings (ATTRACTION_JUMP_CUT_AI), else a crop."""
+with SDXL-outpainted surroundings (ATTRACTION_AI_SURROUNDINGS), else a crop."""
 
 import subprocess
 from pathlib import Path
@@ -89,17 +89,71 @@ def outpaint_wide(photo: Image.Image, out_w: int, out_h: int) -> Image.Image:
     return Image.composite(sharp, wide, keep)
 
 
-def _ai_wide_png(photo_path: str, output_path: str) -> Optional[str]:
-    """The outpainted wide frame saved beside the clip, None on failure."""
-    if not tuning.ATTRACTION_JUMP_CUT_AI:
+def _outpaint_file(photo_path: str, out_w: int, out_h: int, out_path: str) -> None:
+    with Image.open(photo_path) as im:
+        photo = ImageOps.exif_transpose(im).convert("RGB")
+    outpaint_wide(photo, out_w, out_h).save(out_path)
+
+
+def _run_outpaint(photo_path: str, out_w: int, out_h: int, out_path: str) -> None:
+    """In a child process: SDXL's RAM only comes back to Windows when it exits
+    (in-process, 7.5 GB stayed held and starved the LTXV walk after it)."""
+    import sys
+
+    root = Path(__file__).resolve().parents[2]
+    result = subprocess.run(
+        [sys.executable, "-m", "services.vdoprocessing.jump_cut", photo_path, str(out_w), str(out_h), out_path],
+        cwd=root, capture_output=True, encoding="utf-8", errors="replace", timeout=1800,
+    )
+    if result.returncode != 0:
+        raise RuntimeError((result.stderr or "").strip()[-800:] or f"exit {result.returncode}")
+
+
+def ai_wide_path(photo_path: str, out_w: int, out_h: int) -> Path:
+    """Where the photo's AI wide frame is kept (one per photo, size and settings)."""
+    import hashlib
+
+    digest = hashlib.sha1(Path(photo_path).read_bytes())
+    digest.update(f"{out_w}x{out_h}|{tuning.ATTRACTION_JUMP_CUT_TIGHT}|{tuning.ATTRACTION_JUMP_CUT_AI_SIZE}"
+                  f"|{tuning.ATTRACTION_JUMP_CUT_AI_STRENGTH}".encode("utf-8"))
+    return Path(photo_path).parent / "ai_wide" / f"{Path(photo_path).stem}.{digest.hexdigest()[:10]}.png"
+
+
+def ai_wide(photo_path: str, out_w: int, out_h: int) -> Optional[Image.Image]:
+    """The photo's outpainted wide frame at out_w x out_h, None when off or on
+    any failure. Kept once per photo at LTXV size (a rerun skips SDXL); other
+    sizes are scaled from it with the real photo pasted back sharp."""
+    if not tuning.ATTRACTION_AI_SURROUNDINGS:
         return None
     try:
+        kw, kh = tuning.LTXV_WIDTH, tuning.LTXV_HEIGHT
+        path = ai_wide_path(photo_path, kw, kh)
+        if not path.is_file():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            part = path.with_name(f"_part_{path.name}")
+            _run_outpaint(photo_path, kw, kh, str(part))
+            part.replace(path)
+        with Image.open(path) as im:
+            wide = im.convert("RGB")
+        if (out_w, out_h) == (kw, kh):
+            return wide
+        wide = wide.resize((out_w, out_h), Image.LANCZOS)
         with Image.open(photo_path) as im:
             photo = ImageOps.exif_transpose(im).convert("RGB")
-        wide = outpaint_wide(photo, tuning.COMFYUI_WIDTH, tuning.COMFYUI_HEIGHT)
+        x, y, iw, ih = _inner_box(out_w, out_h)
+        sharp = Image.new("RGB", (out_w, out_h))
+        sharp.paste(_cover(photo, iw, ih), (x, y))
+        feather = round(tuning.ATTRACTION_JUMP_CUT_AI_FEATHER * out_w / tuning.ATTRACTION_JUMP_CUT_AI_SIZE[0])
+        return Image.composite(sharp, wide, ImageOps.invert(_ring_mask(out_w, out_h, feather)))
     except Exception as exc:
-        logger.warning("Jump cut outpaint failed for %s (%s: %s) - cropping instead.",
-                       photo_path, type(exc).__name__, exc)
+        logger.warning("AI outpaint failed for %s (%s: %s).", photo_path, type(exc).__name__, exc)
+        return None
+
+
+def _ai_wide_png(photo_path: str, output_path: str) -> Optional[str]:
+    """The outpainted wide frame saved beside the clip, None on failure."""
+    wide = ai_wide(photo_path, tuning.COMFYUI_WIDTH, tuning.COMFYUI_HEIGHT)
+    if wide is None:
         return None
     path = str(Path(output_path).with_suffix(".wide.png"))
     wide.save(path)
@@ -145,3 +199,9 @@ def generate_jump_cut(image_path: str, output_path: str, duration_sec: float, pr
     logger.info("Jump cut (%s%s) for %s -> %s", preset, ", AI wide" if wide_png else "",
                 Path(image_path).name, output_path)
     return output_path
+
+
+if __name__ == "__main__":
+    import sys
+
+    _outpaint_file(sys.argv[1], int(sys.argv[2]), int(sys.argv[3]), sys.argv[4])

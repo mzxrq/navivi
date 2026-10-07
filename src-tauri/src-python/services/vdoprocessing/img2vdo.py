@@ -146,18 +146,34 @@ class AttractionVideoGenerator:
                 digest.update(chunk)
         digest.update(b"|" + pan.encode("utf-8"))
         # Switching generator rebuilds the kept clips.
-        if pan in tuning.ATTRACTION_JUMP_CUT_PRESETS:
+        if pan in tuning.ATTRACTION_JUMP_CUT_PRESETS and tuning.ATTRACTION_ZOOM_STYLE == "dolly":
+            digest.update(
+                f"|dolly|{tuning.PARALLAX_ZOOM}|{tuning.PARALLAX_ARC}|{tuning.PARALLAX_FAR_WEIGHT}"
+                f"|{tuning.PARALLAX_LAYERS}".encode("utf-8")
+            )
+        elif pan in tuning.ATTRACTION_JUMP_CUT_PRESETS:
             digest.update(
                 f"|jumpcut|{tuning.ATTRACTION_JUMP_CUT_TIGHT}|{tuning.ATTRACTION_JUMP_CUT_AT}"
-                f"|{tuning.ATTRACTION_JUMP_CUT_AI}|{tuning.ATTRACTION_JUMP_CUT_AI_STRENGTH}".encode("utf-8")
+                f"|{tuning.ATTRACTION_AI_SURROUNDINGS}|{tuning.ATTRACTION_JUMP_CUT_AI_STRENGTH}".encode("utf-8")
             )
         elif pan in tuning.ATTRACTION_LTX_PRESETS:
             digest.update(f"|ltxv13b-crops|{tuning.ATTRACTION_SECOND_SHOT}".encode("utf-8"))
+            digest.update(f"|{tuning.LTXV_PROMPTS.get(pan, '')}".encode("utf-8"))
+            if pan in tuning.LTXV_DEPTH_KEYFRAMES:
+                digest.update(
+                    f"|depthkf|{tuning.LTXV_DEPTH_TRUCK}|{tuning.LTXV_DEPTH_PAN}|{tuning.LTXV_DEPTH_DOLLY}"
+                    f"|{tuning.PARALLAX_FAR_WEIGHT}|{tuning.LTXV_DEPTH_MID_GUIDES}|{tuning.LTXV_MID_GUIDE_STRENGTH}".encode("utf-8")
+                )
             digest.update(
                 f"|{tuning.ATTRACTION_SECOND_SHOT_STYLE}|{','.join(tuning.ATTRACTION_SECOND_SHOT_MOVES)}"
                 f"|{tuning.ATTRACTION_SECOND_SHOT_MIN_SOURCE_PX}|{tuning.LTXV_FREE_MOVE_FALLBACK}"
-                f"|{tuning.LTXV_SMALL_PHOTO_WALK_FALLBACK}".encode("utf-8")
+                f"|{tuning.LTXV_SMALL_PHOTO_WALK_FALLBACK}|{tuning.ATTRACTION_AI_SURROUNDINGS}".encode("utf-8")
             )
+            if pan == "walkin":
+                # Frozen at the 2026-10-07 walk-in settings: the free walk's QC thresholds,
+                # retries and unused walk variants must not throw away clips already made
+                # (every tweak rebuilt all 7 walks). Add only settings that change the render.
+                digest.update('|walkthrough,walkthroughleft,walkthroughright,walkin,walkai|parallax|0.6|1.8|0.008|0.006|0.5|True|1.6|0.5|0.5|0.03|2|0.2|20.0|walkqc3'.encode("utf-8"))
         elif tuning.ATTRACTION_GENERATOR != "chain":
             digest.update(b"|" + tuning.ATTRACTION_GENERATOR.encode("utf-8"))
         return digest.hexdigest()[:12]
@@ -168,16 +184,8 @@ class AttractionVideoGenerator:
     # pending manifest + its now-superseded raw clips — so regenerating
     # doesn't silently leak old files that nothing else will ever clean up.
     def _clear_stale_outputs(self, output_filename: str) -> None:
-        final_path = self.output_dir / output_filename
-        if final_path.exists():
-            try:
-                final_path.unlink()
-                logger.info(
-                    "Removed previous deliverable before regenerating: %s", final_path
-                )
-            except OSError as exc:
-                logger.warning("Could not remove old deliverable %s: %s", final_path, exc)
-
+        # The old deliverable stays until the new one replaces it (_partial_path):
+        # a cancelled rebuild used to leave the waypoint with no clip at all.
         manifest_path = self._pending_manifest_path(output_filename)
         if not manifest_path.exists():
             return
@@ -203,6 +211,13 @@ class AttractionVideoGenerator:
             "Cleared stale pending manifest/clips for %s before regenerating.",
             output_filename,
         )
+
+    def _partial_path(self, path: Path) -> Path:
+        """Where `path` is written until it's complete, then os.replace'd over
+        the old one - a cancel never leaves a missing or half-written file."""
+        partial = self.output_dir / ".partial"
+        partial.mkdir(parents=True, exist_ok=True)
+        return partial / path.name
 
     # [NOTE] [Animation] Generates a single video clip from an image and prompt.
     #
@@ -248,6 +263,32 @@ class AttractionVideoGenerator:
         prompt_text: str,
         duration_sec: float = 6.0,
         save_path: Optional[str] = None,
+        place: Optional[str] = None,
+    ) -> Optional[str]:
+        """_generate_single_clip_here, in its own process (ATTRACTION_CLIP_IN_CHILD)
+        so the photo's RAM is all handed back when it's done; in this process if
+        the child can't run."""
+        if tuning.ATTRACTION_CLIP_IN_CHILD and save_path:
+            from services.vdoprocessing import clip_worker
+
+            try:
+                return clip_worker.run(
+                    {"kind": "clip", "config_path": str(self.config.config_path), "image": local_image_path,
+                     "prompt": prompt_text, "duration": duration_sec, "save_path": str(save_path), "place": place},
+                    self.output_dir / ".partial",
+                ).get("clip")
+            except Exception as exc:
+                logger.warning("Clip worker failed for %s (%s: %s) - making it in this process.",
+                               local_image_path, type(exc).__name__, exc)
+        return self._generate_single_clip_here(local_image_path, prompt_text, duration_sec, save_path, place)
+
+    def _generate_single_clip_here(
+        self,
+        local_image_path: str,
+        prompt_text: str,
+        duration_sec: float = 6.0,
+        save_path: Optional[str] = None,
+        place: Optional[str] = None,
     ) -> Optional[str]:
         """Generates a clip via ComfyUI (Wan2.2 I2V), falling back to the
         local pan/zoom generator on failure. Returns the raw clip path.
@@ -269,19 +310,27 @@ class AttractionVideoGenerator:
             from services.vdoprocessing.jump_cut import generate_jump_cut, upscaled_photo
 
             photo = upscaled_photo(local_image_path, getattr(self.config, "config_path", None))
+            if tuning.ATTRACTION_ZOOM_STYLE == "dolly":
+                return self._parallax_clip(photo, str(save_path), duration_sec, prompt_text)
             return generate_jump_cut(photo, str(save_path), duration_sec, normalize_camera_pan(prompt_text))
 
         if normalize_camera_pan(prompt_text) in tuning.ATTRACTION_LTX_PRESETS:
+            from services.vdoprocessing.comfyui_i2v_client import ComfyUII2VClient
             from services.vdoprocessing.ltx_keyframed import generate_ltx_move
 
-            try:
-                return generate_ltx_move(local_image_path, str(save_path), prompt_text)
-            except Exception as exc:
-                logger.warning(
-                    "LTXV clip failed for %s (%s: %s) - 3D photo instead.",
-                    local_image_path, type(exc).__name__, exc,
-                )
-                return self._parallax_clip(local_image_path, str(save_path), duration_sec, prompt_text)
+            for attempt in range(1, tuning.LTXV_CLIP_ATTEMPTS + 1):
+                try:
+                    return generate_ltx_move(local_image_path, str(save_path), prompt_text, duration_sec, place)
+                except Exception as exc:
+                    last = attempt == tuning.LTXV_CLIP_ATTEMPTS
+                    logger.warning(
+                        "LTXV clip failed for %s (%s: %s) - %s.", local_image_path, type(exc).__name__, exc,
+                        "3D photo instead" if last else f"trying again on a fresh server ({attempt}/{tuning.LTXV_CLIP_ATTEMPTS})",
+                        exc_info=last,
+                    )
+                    if not last:
+                        ComfyUII2VClient.stop_server()
+            return self._parallax_clip(local_image_path, str(save_path), duration_sec, prompt_text)
 
         if tuning.ATTRACTION_GENERATOR in ("shots", "parallax"):
             if tuning.ATTRACTION_GENERATOR == "shots":
@@ -458,8 +507,8 @@ class AttractionVideoGenerator:
                 )
 
         final_path = self.output_dir / output_filename
-        if final_path.exists():
-            final_path.unlink()
+        work_path = self._partial_path(final_path)
+        work_path.unlink(missing_ok=True)
 
         # [NOTE] [Editor] Duration-fit + upscale + label burn used to be three
         # sequential ffmpeg re-encodes (trim/adjust, then a separate upscale
@@ -475,13 +524,14 @@ class AttractionVideoGenerator:
             try:
                 VideoExporter.finalize_clip(
                     input_video_path=video_path,
-                    output_video_path=str(final_path),
+                    output_video_path=str(work_path),
                     trim_to=trim_to,
                     hold_to=hold_to,
                     scale_to=(self._TARGET_WIDTH, self._TARGET_HEIGHT),
                     sharpen=tuning.ATTRACTION_UPSCALE_SHARPEN,
                     label_text=burned_label,
                 )
+                os.replace(work_path, final_path)
                 record_place_label(final_path, place_label, burned=not on_track)
                 return str(final_path)
             except Exception as exc:
@@ -491,13 +541,15 @@ class AttractionVideoGenerator:
                     video_path, type(exc).__name__, exc,
                 )
 
-            result = self._fit_and_finalize_stagewise(
-                video_path, trim_to, hold_to, final_path, burned_label
+            self._fit_and_finalize_stagewise(
+                video_path, trim_to, hold_to, work_path, burned_label
             )
-            record_place_label(result, place_label, burned=not on_track)
-            return result
+            os.replace(work_path, final_path)
+            record_place_label(final_path, place_label, burned=not on_track)
+            return str(final_path)
         finally:
             moved_path.unlink(missing_ok=True)
+            work_path.unlink(missing_ok=True)
 
     # [Core] Slow-path fallback for _fit_and_finalize: the original
     # three-separate-ffmpeg-passes implementation, kept so a fused-pass
@@ -854,6 +906,7 @@ class AttractionVideoGenerator:
                     pass
         else:
             self._migrate_index_named_raws(stem, keys, pans, recorded.get("pans"))
+            self._adopt_raws_by_key(stem, keys)
 
         logger.info(f"Processing waypoint with {len(image_list)} image(s)...")
 
@@ -898,14 +951,22 @@ class AttractionVideoGenerator:
                 built_keys.append(keys[idx])
                 continue
 
-            raw_clip_path.unlink(missing_ok=True)
-            Path(str(raw_clip_path) + ".signlock").unlink(missing_ok=True)
+            # Rendered aside and swapped in only when done: a kept clip survives a cancel.
+            raw_work = self._partial_path(raw_clip_path)
+            raw_work.unlink(missing_ok=True)
             logger.info(
                 f"   -> Rendering image {idx + 1}/{len(image_list)}: {img_path} with prompt: '{current_prompt}'"
             )
             clip = self._generate_single_clip(
-                img_path, current_prompt, per_clip_duration, save_path=str(raw_clip_path)
+                img_path, current_prompt, per_clip_duration, save_path=str(raw_work), place=place_label,
             )
+            if clip and os.path.exists(clip):
+                Path(str(raw_clip_path) + ".signlock").unlink(missing_ok=True)
+                os.replace(clip, raw_clip_path)
+                clip = str(raw_clip_path)
+            else:
+                raw_work.unlink(missing_ok=True)
+                clip = None
             if clip:
                 self._lock_signs(clip, img_path, pans[idx])
                 generated_clips.append(clip)
@@ -984,6 +1045,28 @@ class AttractionVideoGenerator:
             except OSError as exc:
                 logger.warning("Could not rename %s: %s", old.name, exc)
 
+    def _adopt_raws_by_key(self, stem: str, keys: List[str]) -> None:
+        """Copies in a clip made under another name with the same content key
+        (photo + preset): renaming a stop (猿坂峠 -> 三輪神社, 2026-10-07) used to
+        re-render every photo it had."""
+        for key in keys:
+            new = self.output_dir / f"raw_{stem}_{key}.mp4"
+            if new.exists():
+                continue
+            old = next((p for p in self.output_dir.glob(f"raw_*_{key}.mp4") if p != new), None)
+            if old is None:
+                continue
+            try:
+                work = self._partial_path(new)
+                shutil.copy2(old, work)
+                os.replace(work, new)
+                marker = Path(str(old) + ".signlock")
+                if marker.exists():
+                    shutil.copy2(marker, str(new) + ".signlock")
+                logger.info("Reusing %s as %s (same photo and preset).", old.name, new.name)
+            except OSError as exc:
+                logger.warning("Could not reuse %s: %s", old.name, exc)
+
     @staticmethod
     def _lock_signs(clip_path: str, photo_path: str, pan: str) -> None:
         """Pastes the photo's real signs over the generated ones, once per raw
@@ -995,9 +1078,21 @@ class AttractionVideoGenerator:
         if (not tuning.SIGN_LOCK or pan in (STILL_PRESET, *tuning.ATTRACTION_JUMP_CUT_PRESETS)
                 or marker.exists()):
             return
-        from services.vdoprocessing.sign_lock import lock_signs
+        if tuning.ATTRACTION_CLIP_IN_CHILD:
+            from services.vdoprocessing import clip_worker
 
-        lock_signs(clip_path, photo_path)
+            try:  # RapidOCR and every frame of the clip: in a child, like the clip itself
+                clip_worker.run({"kind": "signlock", "clip": clip_path, "image": photo_path},
+                                Path(clip_path).parent / ".partial")
+            except Exception as exc:
+                logger.warning("Sign lock worker failed for %s (%s) - locking here.", clip_path, exc)
+                from services.vdoprocessing.sign_lock import lock_signs
+
+                lock_signs(clip_path, photo_path)
+        else:
+            from services.vdoprocessing.sign_lock import lock_signs
+
+            lock_signs(clip_path, photo_path)
         try:
             marker.touch()
         except OSError:

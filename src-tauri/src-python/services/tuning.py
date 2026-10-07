@@ -1011,16 +1011,15 @@ COMFYUI_NEGATIVE_PROMPT = (
 # "locked" or "same throughout" either - those read as "don't move".
 # Constant speed, no ease: chained segments would stutter at each seam.
 _COMFYUI_AMBIENT = (
-    "Gentle natural ambient motion: clouds drift slowly, leaves and grass sway softly in a light breeze, "
-    "sunlight shimmers subtly."
+    "Very gentle, subtle natural ambient motion in whatever the photo already shows; the light stays as it is."
 )
 _COMFYUI_LOOK = (
     "Smooth, steady cinematic camera move at a slow constant speed. Photorealistic travel documentary "
-    "footage, natural light, true-to-photo colors, crisp detail."
+    "footage, the photo's own light, true-to-photo colors, crisp detail."
 )
 # Said as a positive fact: Wan animated a vending machine (slid, turned to camera).
 _COMFYUI_RIGID = (
-    "Only the camera moves; every building, pole, sign and machine stays fixed in place, rooted to the ground."
+    "Only the camera moves; everything in the scene stays fixed in place, rooted where it stands."
 )
 
 
@@ -1051,7 +1050,7 @@ COMFYUI_CAMERA_PAN_PROMPTS: Dict[str, str] = {
     "zoomout": _motion_prompt(
         "The camera pulls back gently, straight back and centered, a small, subtle move."
     ),
-    "none": f"Static camera. {_COMFYUI_AMBIENT} Photorealistic travel documentary footage, natural light, "
+    "none": f"Static camera. {_COMFYUI_AMBIENT} Photorealistic travel documentary footage, the photo's own light, "
     "true-to-photo colors, crisp detail.",
     # Extra shots (ATTRACTION_SHOT_MOVES), not editor presets.
     "walkin": _motion_prompt(
@@ -1064,11 +1063,11 @@ COMFYUI_CAMERA_PAN_PROMPTS: Dict[str, str] = {
     # "gimbal", not "first-person", which invites the walker's feet and hands.
     "walkpanright": _motion_prompt(
         "Smooth gimbal shot carried forward at a slow walking pace at eye height, gently turning to the right "
-        "as it moves along the street, with a very subtle natural walking sway."
+        "as it moves through the scene, with a very subtle natural walking sway."
     ),
     "walkpanleft": _motion_prompt(
         "Smooth gimbal shot carried forward at a slow walking pace at eye height, gently turning to the left "
-        "as it moves along the street, with a very subtle natural walking sway."
+        "as it moves through the scene, with a very subtle natural walking sway."
     ),
 }
 COMFYUI_DEFAULT_MOTION_PROMPT = COMFYUI_CAMERA_PAN_PROMPTS["none"]
@@ -1078,17 +1077,25 @@ COMFYUI_DEFAULT_MOTION_PROMPT = COMFYUI_CAMERA_PAN_PROMPTS["none"]
 # two real crops of the photo - first and last frame pinned, so it can't wander
 # or invent - instead of ATTRACTION_GENERATOR. "panright" is the user's approved
 # test 13 on 西ノ庄駅 (2026-10-02): smooth level pan, sign readable, ~2 min.
-ATTRACTION_LTX_PRESETS: Tuple[str, ...] = ("panright", "panleft", "panup", "pandown", "walkin")
-# Zoom In / Zoom Out are a jump cut (vdoprocessing/jump_cut.py) since 2026-10-06:
-# wide, then a hard cut to a centred punch-in showing JUMP_CUT_TIGHT of the
-# frame, at JUMP_CUT_AT of the clip (reversed for zoomout). Held, never drifted.
-ATTRACTION_JUMP_CUT_PRESETS: Tuple[str, ...] = ("zoomin", "zoomout")
+# How the editor's Dolly In / Dolly Out (zoomin/zoomout) are made:
+# "ltxv" (2026-10-07, user's choice) = LTXV dolly between pinned crops like the pans;
+# "dolly" = 3D-photo dolly over the real photo (parallax_generator, CPU);
+# "jumpcut" = vdoprocessing/jump_cut.py (its AI wide invented a second vending
+# machine, a watermark and a gate roof, 2026-10-07).
+ATTRACTION_ZOOM_STYLE = "ltxv"
+_ZOOM_PRESETS: Tuple[str, ...] = ("zoomin", "zoomout")
+ATTRACTION_LTX_PRESETS: Tuple[str, ...] = ("panright", "panleft", "panup", "pandown", "walkin") + (
+    _ZOOM_PRESETS if ATTRACTION_ZOOM_STYLE == "ltxv" else ()
+)
+# Jump cut: wide, then a hard cut to a centred punch-in showing JUMP_CUT_TIGHT of
+# the frame, at JUMP_CUT_AT of the clip (reversed for zoomout). Held, never drifted.
+ATTRACTION_JUMP_CUT_PRESETS: Tuple[str, ...] = () if ATTRACTION_ZOOM_STYLE == "ltxv" else _ZOOM_PRESETS
 ATTRACTION_JUMP_CUT_TIGHT = 0.65
 ATTRACTION_JUMP_CUT_AT = 0.5
-# Wide shot = the real photo at JUMP_CUT_TIGHT in the middle, the ring around it
-# outpainted by SDXL (GPU); the cut goes to the real photo full frame. False, or
-# any outpaint failure = a crop of the photo itself.
-ATTRACTION_JUMP_CUT_AI = True
+# AI wide shot (jump cut, and the "walkai" walk's first frame): the real photo at
+# JUMP_CUT_TIGHT in the middle, the ring around it outpainted by SDXL (GPU).
+# False, or any outpaint failure = a crop of the photo itself.
+ATTRACTION_AI_SURROUNDINGS = True
 ATTRACTION_JUMP_CUT_AI_SIZE = (1344, 768)
 ATTRACTION_JUMP_CUT_AI_STRENGTH = 0.9
 ATTRACTION_JUMP_CUT_AI_FEATHER = 16
@@ -1110,16 +1117,24 @@ ATTRACTION_SECOND_SHOT_MOVES: Tuple[str, ...] = (
 ATTRACTION_SECOND_SHOT_MIN_SOURCE_PX = 400
 # Moves with no pinned last frame: LTXV starts from the whole photo and
 # generates the walk into the place itself (it may show what the photo doesn't).
-# The editor's "Walk In" preset is one of them.
-LTXV_FREE_MOVES: Tuple[str, ...] = ("walkthrough", "walkthroughleft", "walkthroughright", "walkin")
+# The editor's "Walk In" preset is one of them. "walkai" starts from the AI wide
+# shot instead (2026-10-06: pinned to the photo as last frame, it didn't walk).
+LTXV_FREE_MOVES: Tuple[str, ...] = ("walkthrough", "walkthroughleft", "walkthroughright", "walkin", "walkai")
 # A free move chosen in the editor is rendered as this pinned move instead
 # (2026-10-06: unpinned walks invented scenery; "zoomin" read as no walk at all).
-# None = the free walk.
-LTXV_FREE_MOVE_FALLBACK: Optional[str] = "walkfwd"
+# None = the free walk. None again 2026-10-07: the pinned walk only zoomed; the
+# user wants the free POV walk of test23 (0:04-0:07), slower.
+LTXV_FREE_MOVE_FALLBACK: Optional[str] = None
 # The pinned walk becomes this when its tight crop spans fewer original-photo
-# pixels than ATTRACTION_SECOND_SHOT_MIN_SOURCE_PX. "walkshort" = zoomin's crops
+# pixels than ATTRACTION_SECOND_SHOT_MIN_SOURCE_PX. "walkai" = from the AI wide
+# shot into the real photo full frame (free walk from the whole photo if the outpaint fails);
+# "walkshort" = zoomin's crops
 # with the walking prompt (no softer than the zoom).
-LTXV_SMALL_PHOTO_WALK_FALLBACK = "walkshort"
+LTXV_SMALL_PHOTO_WALK_FALLBACK = "walkai"
+# How "walkai" is rendered: "parallax" = a 3D-photo POV walk over the AI wide
+# shot (CPU, always moves forward); "ltxv" = LTXV unpinned (2026-10-06: it
+# only tilted and drifted, never really walked).
+WALKAI_STYLE = "parallax"
 LTXV_CROSSFADE_SECONDS = 0.5
 # Files (downloaded on first use into bin/ComfyUI/models/<folder>, sha256-checked).
 LTXV_FILES: Dict[str, Dict[str, str]] = {
@@ -1166,88 +1181,124 @@ LTXV_CLOSE_PAN = 0.18
 # WALK_TURN of the widest window's width sideways for walkfwdleft/right.
 LTXV_WALK_TIGHT = 0.38
 LTXV_WALK_TURN = 0.12
+# The pinned walk ends framed on the photo's largest sign (OCR) instead of the middle.
+LTXV_WALK_TO_SIGN = True
+# Moves whose two pinned keyframes are 3D-photo views (parallax_generator) rather
+# than flat crops: two crops of one photo are a flat slide, so LTXV made the
+# walk-and-pan prompts a flat slide too (depth score 0.01 vs 0.56, 2026-10-07).
+# Pans: the camera steps DEPTH_TRUCK sideways (nearest things; far ones
+# PARALLAX_FAR_WEIGHT of it) while turning DEPTH_PAN; dollies travel DEPTH_DOLLY.
+LTXV_DEPTH_KEYFRAMES: Tuple[str, ...] = ("panleft", "panright", "zoomin", "zoomout")
+# Walk In, if added to LTXV_DEPTH_KEYFRAMES: a free POV walk softly pinned
+# (ANCHOR_STRENGTH) to a 3D view ANCHOR_DOLLY forward. Tried 2026-10-07 after the
+# unanchored 八王子峠 walk invented a corridor: LTXV then held still ~3 s and
+# jumped to the anchor (西ノ庄駅) - no walk. Off; the corridor came from the
+# "entrance ... passes inside" wording, now gone from the walk prompt.
+LTXV_WALK_ANCHOR_DOLLY = 0.5
+LTXV_WALK_ANCHOR_STRENGTH = 0.5
+LTXV_DEPTH_TRUCK = 0.10
+LTXV_DEPTH_PAN = 0.06
+LTXV_DEPTH_DOLLY = 0.30
+# In-between 3D views pinned at even spacing: with only the two ends pinned
+# LTXV covered the whole pan in the first half, then stood still (2026-10-07).
+LTXV_DEPTH_MID_GUIDES = 2
+LTXV_MID_GUIDE_STRENGTH = 0.6
 # A job takes ~15 GB of RAM on top of what's in use: below this much free it
 # waits (tuning.ensure_free_ram), then falls back to the 3D photo.
 LTXV_MIN_FREE_RAM_GB = 15.0
+# Each attraction photo (and its sign lock) is made in its own child process
+# (vdoprocessing/clip_worker.py): all it loaded goes back to Windows when it ends.
+ATTRACTION_CLIP_IN_CHILD = True
+# How long a shot waits for that RAM (the server is stopped first) before
+# giving up; generous, since giving up means a non-LTX clip.
+LTXV_RAM_WAIT_SECONDS = 900.0
+# A failed LTXV clip is tried this many times (fresh server each) before the
+# CPU 3D photo, the last resort so a stop is never left without a clip.
+LTXV_CLIP_ATTEMPTS = 2
 # CFG 1: the negative is ignored, so everything is said positively.
 _LTXV_STILL = (
-    "The scene is still and solid and only the camera moves, steadily and slowly. Natural daylight, "
-    "realistic travel documentary footage, sharp detail."
+    "The scene is still and solid and only the camera moves, steadily and slowly. The light, weather and colours stay "
+    "exactly as in the photo; realistic travel documentary footage, sharp detail."
 )
 # "Gimbal carried", never "first-person": that invites the walker's feet/hands.
 _LTXV_WALK_END = (
     " The place is quiet and empty of people; the scene is still and solid and only the camera moves, with a "
-    "very subtle natural walking sway. Natural daylight, realistic travel documentary footage, sharp detail."
+    "very subtle natural walking sway. The light, weather and colours stay exactly as in the photo; realistic "
+    "travel documentary footage, sharp detail."
 )
 # CFG 1 ignores the negative, so the empty, unobstructed view is said positively.
 _LTXV_POV_END = (
     " The view bobs gently up and down with each footstep, like the eyes of someone walking in. The place is "
     "completely deserted and still; the view is clean and unobstructed, only the place itself fills the "
-    "frame. Natural daylight, realistic travel documentary footage, sharp detail."
+    "frame. The light, weather and colours stay exactly as in the photo; realistic travel documentary "
+    "footage, sharp detail."
 )
 LTXV_PROMPTS: Dict[str, str] = {
+    # 2026-10-07: walk-and-pan, the camera travelling the way it turns.
     "panright": (
-        "A slow, calm gimbal shot pans smoothly to the right at eye height across {place} on a quiet sunny "
-        "afternoon. The camera stays perfectly level; the scene is still and solid and only the camera turns, "
-        "steadily and slowly. Soft clouds drift in a blue sky. Natural daylight, realistic travel documentary "
-        "footage, sharp detail."
+        "A smooth gimbal shot carried at eye height moves at a slow walking pace to the right past {place}, "
+        "travelling sideways while the view pans to the right with it. Nearby things slide past faster than "
+        "the distant background. The camera stays level." + _LTXV_WALK_END
     ),
     "panleft": (
-        "A slow, calm gimbal shot pans smoothly to the left at eye height across {place} on a quiet sunny "
-        "afternoon. The camera stays perfectly level. " + _LTXV_STILL
+        "A smooth gimbal shot carried at eye height moves at a slow walking pace to the left past {place}, "
+        "travelling sideways while the view pans to the left with it. Nearby things slide past faster than "
+        "the distant background. The camera stays level." + _LTXV_WALK_END
     ),
     "panup": (
-        "A slow, calm gimbal shot tilts smoothly upward across {place} on a quiet sunny afternoon, rising "
-        "gently toward the sky. " + _LTXV_STILL
+        "A slow, calm gimbal shot tilts smoothly upward across {place}. " + _LTXV_STILL
     ),
     "pandown": (
-        "A slow, calm gimbal shot tilts smoothly downward across {place} on a quiet sunny afternoon. "
+        "A slow, calm gimbal shot tilts smoothly downward across {place}. "
         + _LTXV_STILL
     ),
+    # Dolly, not a lens zoom: the camera itself travels, so depth shifts.
     "zoomin": (
-        "A slow, calm gimbal shot pushes gently in toward the middle of {place} on a quiet sunny afternoon, "
-        "moving straight ahead at eye height. The camera stays perfectly level. " + _LTXV_STILL
+        "A slow, smooth dolly shot: the camera on a track glides straight forward at eye height toward the "
+        "middle of {place}. Nearby things grow and move outward faster than the "
+        "background, and the perspective shifts with the camera's travel. The camera stays perfectly level. "
+        + _LTXV_STILL
     ),
     "zoomout": (
-        "A slow, calm gimbal shot pulls gently back from the middle of {place} on a quiet sunny afternoon, "
-        "moving straight back at eye height. The camera stays perfectly level. " + _LTXV_STILL
+        "A slow, smooth dolly shot: the camera on a track glides straight backward at eye height away from the "
+        "middle of {place}, revealing more of it. Nearby things shrink and move "
+        "inward faster than the background, and the perspective shifts with the camera's travel. The camera "
+        "stays perfectly level. " + _LTXV_STILL
     ),
     "closein": (
-        "A slow, calm close-up gimbal shot pushes gently in toward the main subject of {place} on a quiet "
-        "sunny afternoon, moving straight ahead at eye height. The camera stays perfectly level. " + _LTXV_STILL
+        "A slow, calm close-up gimbal shot pushes gently in toward the main subject of {place}, moving "
+        "straight ahead at eye height. The camera stays perfectly level. " + _LTXV_STILL
     ),
     "closeout": (
-        "A slow, calm close-up gimbal shot pulls gently back from the main subject of {place} on a quiet "
-        "sunny afternoon, moving straight back at eye height. The camera stays perfectly level. " + _LTXV_STILL
+        "A slow, calm close-up gimbal shot pulls gently back from the main subject of {place}, moving "
+        "straight back at eye height. The camera stays perfectly level. " + _LTXV_STILL
     ),
     "closepanleft": (
-        "A slow, calm close-up gimbal shot pans smoothly to the left across the main subject of {place} on a "
-        "quiet sunny afternoon. The camera stays perfectly level. " + _LTXV_STILL
+        "A slow, calm close-up gimbal shot pans smoothly to the left across the main subject of {place}. "
+        "The camera stays perfectly level. " + _LTXV_STILL
     ),
     "closepanright": (
-        "A slow, calm close-up gimbal shot pans smoothly to the right across the main subject of {place} on a "
-        "quiet sunny afternoon. The camera stays perfectly level. " + _LTXV_STILL
+        "A slow, calm close-up gimbal shot pans smoothly to the right across the main subject of {place}. "
+        "The camera stays perfectly level. " + _LTXV_STILL
     ),
     "closepanup": (
-        "A slow, calm close-up gimbal shot tilts smoothly upward across the main subject of {place} on a quiet "
-        "sunny afternoon. " + _LTXV_STILL
+        "A slow, calm close-up gimbal shot tilts smoothly upward across the main subject of {place}. " + _LTXV_STILL
     ),
     "closepandown": (
-        "A slow, calm close-up gimbal shot tilts smoothly downward across the main subject of {place} on a quiet "
-        "sunny afternoon. " + _LTXV_STILL
+        "A slow, calm close-up gimbal shot tilts smoothly downward across the main subject of {place}. " + _LTXV_STILL
     ),
     # Camera-only words: "walks" drew a person into frame (test 22, 2026-10-05).
     "walkthrough": (
-        "Point-of-view camera at eye height moving continuously straight forward into {place}, toward the "
-        "entrance, getting closer and closer until it passes inside." + _LTXV_POV_END
+        "Point-of-view camera at eye height moving continuously straight forward into {place}, steadily "
+        "ahead, getting closer and closer to what lies in front." + _LTXV_POV_END
     ),
     "walkthroughleft": (
-        "Point-of-view camera at eye height moving continuously straight forward into {place}, toward the "
-        "entrance, getting closer and closer, then slowly turning its view to the left." + _LTXV_POV_END
+        "Point-of-view camera at eye height moving continuously straight forward into {place}, steadily "
+        "ahead, getting closer and closer, then slowly turning its view to the left." + _LTXV_POV_END
     ),
     "walkthroughright": (
-        "Point-of-view camera at eye height moving continuously straight forward into {place}, toward the "
-        "entrance, getting closer and closer, then slowly turning its view to the right." + _LTXV_POV_END
+        "Point-of-view camera at eye height moving continuously straight forward into {place}, steadily "
+        "ahead, getting closer and closer, then slowly turning its view to the right." + _LTXV_POV_END
     ),
     "walkfwd": (
         "A smooth gimbal shot carried at eye height walks slowly forward into {place}. The camera stays "
@@ -1262,8 +1313,40 @@ LTXV_PROMPTS: Dict[str, str] = {
         "right. " + _LTXV_STILL
     ),
 }
-LTXV_PROMPTS["walkin"] = LTXV_PROMPTS["walkthrough"]
+# test23's walkthrough said "toward the entrance ... passes inside": fine at a
+# station, an invented building in a forest.
+LTXV_PROMPTS["walkin"] = (
+    "Point-of-view camera at eye height moving continuously straight forward through {place}, "
+    "steadily ahead along the way in front, getting closer and closer to what lies ahead." + _LTXV_POV_END
+)
+# The free walk is played up to this many times slower (only as much as its
+# narration share needs), frames in between made by
+# motion interpolation: test23 (the user's reference) pushed in ~29% scale a
+# second, 1.6x gives ~20%. A "slowly" prompt instead barely moved (2026-10-07).
+LTXV_WALK_SLOWDOWN = 1.6
+# A free walk is cut where it leaves the photo (clip_qc.scene_lost_frame: fewer
+# epipolar inliers than max(MIN_INLIERS, MIN_SHARE of the first frame's)). Less
+# than MIN_SECONDS kept: rendered again with a new seed, up to ATTEMPTS times,
+# then the 3D-photo move.
+LTXV_WALK_QC_MIN_INLIERS = 10
+LTXV_WALK_QC_MIN_SHARE = 0.03
+# ... or where over this share of the frame lies past the photo's edge on two
+# checks running (a walk only ever sees less of the photo).
+LTXV_WALK_QC_MAX_OUTSIDE = 0.20
+# ... and a walk that pushes forward less than this (clip_qc.forward_push, %)
+# is rendered again: unpinned, LTXV sometimes just stands still (猿坂峠 ~2).
+LTXV_WALK_MIN_PUSH = 20.0
+LTXV_WALK_MIN_SECONDS = 2.0
+LTXV_WALK_ATTEMPTS = 2
+# After every attempt fails: this LTXV move instead (3D keyframes, stays in the
+# photo), never the CPU 3D photo - the user wants every picture made by LTX.
+LTXV_WALK_FAILED_FALLBACK = "zoomin"
 LTXV_PROMPTS["walkshort"] = LTXV_PROMPTS["walkfwd"]
+# Unpinned, the gentle walkfwd wording only drifted (2026-10-06, 孝子駅).
+LTXV_PROMPTS["walkai"] = (
+    "Point-of-view camera at eye height moving continuously straight forward through {place}, "
+    "walking steadily ahead and getting closer and closer to what lies in front." + _LTXV_POV_END
+)
 # Second shot as a walk inside the place: "walk" = a prompt from
 # LTXV_WALK_PROMPTS (picked per photo, seeded like the move); None = LTXV_PROMPTS.
 # None since 2026-10-06: the walk prompts zoomed during pans and added a visitor at 高仙寺.
@@ -1288,10 +1371,10 @@ LTXV_WALK_PROMPTS: Dict[str, Tuple[str, ...]] = {
         "as it goes." + _LTXV_WALK_END,
     ),
     "closein": (
-        "A smooth gimbal shot carried at eye height walks slowly forward inside {place}, drawing closer to its "
+        "A smooth gimbal shot carried at eye height walks slowly forward through {place}, drawing closer to its "
         "main subject step by step." + _LTXV_WALK_END,
-        "A calm walking shot at eye height moves slowly deeper into {place}, as if a visitor has just stepped "
-        "inside and is strolling toward the heart of it." + _LTXV_WALK_END,
+        "A calm walking shot at eye height moves slowly deeper into {place}, as if a visitor has just arrived "
+        "and is strolling toward the heart of it." + _LTXV_WALK_END,
     ),
     "closeout": (
         "A smooth gimbal shot carried at eye height walks slowly backward through {place}, the view opening up "
@@ -1302,23 +1385,23 @@ LTXV_WALK_PROMPTS: Dict[str, Tuple[str, ...]] = {
     "closepanleft": (
         "A smooth gimbal shot carried at eye height strolls slowly through {place} while turning gently to the "
         "left to look around." + _LTXV_WALK_END,
-        "A calm walking shot at eye height wanders slowly inside {place}, the gaze drifting to the left across "
+        "A calm walking shot at eye height wanders slowly through {place}, the gaze drifting to the left across "
         "the main subject." + _LTXV_WALK_END,
     ),
     "closepanright": (
         "A smooth gimbal shot carried at eye height strolls slowly through {place} while turning gently to the "
         "right to look around." + _LTXV_WALK_END,
-        "A calm walking shot at eye height wanders slowly inside {place}, the gaze drifting to the right across "
+        "A calm walking shot at eye height wanders slowly through {place}, the gaze drifting to the right across "
         "the main subject." + _LTXV_WALK_END,
     ),
     "closepanup": (
-        "A smooth gimbal shot carried at eye height walks slowly inside {place} and looks gently upward, "
+        "A smooth gimbal shot carried at eye height walks slowly through {place} and looks gently upward, "
         "taking in its height." + _LTXV_WALK_END,
         "A calm walking shot at eye height stops beneath the main subject of {place} and tilts slowly up to "
         "admire it." + _LTXV_WALK_END,
     ),
     "closepandown": (
-        "A smooth gimbal shot carried at eye height walks slowly inside {place} and looks gently downward "
+        "A smooth gimbal shot carried at eye height walks slowly through {place} and looks gently downward "
         "across the main subject." + _LTXV_WALK_END,
         "A calm walking shot at eye height moves slowly through {place}, the view tilting gently down over "
         "its details." + _LTXV_WALK_END,
@@ -1396,6 +1479,14 @@ PARALLAX_PAN = 0.08
 PARALLAX_PAN_PUSH = 0.04
 PARALLAX_ZOOM = 0.16
 PARALLAX_ARC = 0.015
+# POV walk ("walk"): dolly forward as extra scale for the nearest things, a
+# step dip (share of frame height), a sway every two steps (share of width),
+# and a head roll in degrees.
+PARALLAX_WALK_DOLLY = 0.6
+PARALLAX_WALK_STEPS_PER_SEC = 1.8
+PARALLAX_WALK_BOB = 0.008
+PARALLAX_WALK_SWAY = 0.006
+PARALLAX_WALK_ROLL_DEG = 0.5
 PARALLAX_FAR_WEIGHT = 0.3
 # Film finish: motion blur sub-frames per frame, focus-pull blur (px sigma at
 # 1080p for things far from focus; 0 = off - starting on the foreground left
