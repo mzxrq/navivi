@@ -569,6 +569,21 @@ export function AppSettings() {
                       onChange={(v) => updateProject({ fps: v })}
                     />
                   </Row>
+                  <Row
+                    title={t`Language of the text in the video`}
+                    description={t`Labels, route banners and cards drawn into the video. Auto follows the language the app was in when the project was last saved.`}
+                  >
+                    <Segmented<VideoTextLanguage>
+                      value={settings.video_text_language ?? "auto"}
+                      onChange={(v) => updateProject({ video_text_language: v })}
+                      options={[
+                        { id: "auto", label: t`Auto` },
+                        { id: "en", label: "English" },
+                        { id: "ja", label: "日本語" },
+                      ]}
+                      className="w-64"
+                    />
+                  </Row>
                 </Section>
 
                 <Section title={t`Generation`}>
@@ -599,24 +614,6 @@ export function AppSettings() {
                       <option value="low">{t`Low-spec Mode`}</option>
                       <option value="high">{t`High-spec Mode`}</option>
                     </select>
-                  </Row>
-                </Section>
-
-                <Section title={t`Text in the video`}>
-                  <Row
-                    title={t`Language of the text in the video`}
-                    description={t`Labels, route banners and cards drawn into the video. Auto follows the language the app was in when the project was last saved.`}
-                  >
-                    <Segmented<VideoTextLanguage>
-                      value={settings.video_text_language ?? "auto"}
-                      onChange={(v) => updateProject({ video_text_language: v })}
-                      options={[
-                        { id: "auto", label: t`Auto` },
-                        { id: "en", label: "English" },
-                        { id: "ja", label: "日本語" },
-                      ]}
-                      className="w-64"
-                    />
                   </Row>
                 </Section>
 

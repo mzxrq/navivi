@@ -172,28 +172,32 @@ class _CardMixin:
         text_x0 = int(22 * s) + icon_d + int(14 * s)
         # As wide as its longest line (so the given line breaks hold), within
         # a sensible range; anything longer still wraps.
+        notice = video_text.current_labels()
+        notice_title, notice_body = notice["stopby_notice_title"], notice["stopby_notice_body"]
         longest = max(
-            (probe.textlength(p, font=body_font) for p in tuning.STOPBY_NOTICE_BODY.split(chr(10))),
+            (probe.textlength(p, font=body_font) for p in notice_body.split(chr(10))),
             default=0,
         )
         body_w = int(min(0.45 * w, max(360 * s, text_x0 + longest + 24 * s)))
         text_w = body_w - text_x0 - int(20 * s)
         lines: List[str] = []
-        for paragraph in tuning.STOPBY_NOTICE_BODY.split(chr(10)):
+        for paragraph in notice_body.split(chr(10)):
             line = ""
-            for ch in paragraph:
-                if line and probe.textlength(line + ch, font=body_font) > text_w:
-                    lines.append(line)
+            # Words where the text has spaces, single characters for Japanese.
+            units = [w + " " for w in paragraph.split(" ")] if " " in paragraph else list(paragraph)
+            for ch in units:
+                if line and probe.textlength((line + ch).rstrip(), font=body_font) > text_w:
+                    lines.append(line.rstrip())
                     line = ""
                 line += ch
             if line:
-                lines.append(line)
+                lines.append(line.rstrip())
         line_h = int(body_font.size * 1.45)
         body_h = int(18 * s) * 2 + line_h * len(lines)
         body_x0 = margin
         body_y1 = h - margin
         body_y0 = body_y1 - body_h
-        title_w = int(probe.textlength(tuning.STOPBY_NOTICE_TITLE, font=title_font))
+        title_w = int(probe.textlength(notice_title, font=title_font))
         ribbon_h = int(50 * s)
         ribbon_x0 = body_x0 - int(10 * s)
         ribbon_y1 = body_y0 + int(12 * s)  # overlaps the body card's top edge
@@ -250,15 +254,16 @@ class _CardMixin:
             ty += int(body_font.size * 1.45)
 
         # ribbon: a banded title with a folded tail under its left end
+        notice_title = video_text.current_labels()["stopby_notice_title"]
         rgb = tuple(reversed(tuning.STOPBY_NOTICE_RIBBON_COLOR))
         dark = tuple(int(c * 0.6) for c in rgb)
         fold = int(10 * s)
         d.polygon([(ribbon[0], ribbon[3]), (ribbon[0] + fold, ribbon[3]),
                    (ribbon[0] + fold, ribbon[3] + fold)], fill=dark + (255,))
         d.rounded_rectangle(ribbon, radius=int(10 * s), fill=rgb + (255,))
-        tb = d.textbbox((0, 0), tuning.STOPBY_NOTICE_TITLE, font=title_font)
+        tb = d.textbbox((0, 0), notice_title, font=title_font)
         d.text((ribbon[0] + int(22 * s), (ribbon[1] + ribbon[3]) // 2 - (tb[1] + tb[3]) // 2),
-               tuning.STOPBY_NOTICE_TITLE, font=title_font, fill=(255, 255, 255, 255))
+               notice_title, font=title_font, fill=(255, 255, 255, 255))
 
         if alpha < 1.0:
             a = layer.getchannel("A").point(lambda v: int(v * alpha))
@@ -753,7 +758,7 @@ class _CardMixin:
         # Fixed width: pad to sample strings so the card doesn't resize with its values.
         fixed_text_w = max(
             probe_draw.textlength(tuning.SUMMARY_CARD_FIXED_DISTANCE_SAMPLE, font=font_value),
-            probe_draw.textlength(tuning.SUMMARY_CARD_FIXED_DURATION_SAMPLE, font=font_time),
+            probe_draw.textlength(video_text.current_labels()["duration_sample"], font=font_time),
         )
         col_w = icon_col_w + icon_col_gap + max(fixed_text_w, *(r[5] for r in rows)) + col_pad_x * 2
         card_w_px = int(col_w * len(rows))

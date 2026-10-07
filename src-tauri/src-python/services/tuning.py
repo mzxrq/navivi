@@ -286,7 +286,7 @@ DEFAULT_SUMMARY_CARD_STYLE = "columns"  # the user's choice (2026-09-30)
 # "columns" card: every column's text area is at least as wide as these
 # sample strings, so the card keeps one width whatever the values are.
 SUMMARY_CARD_FIXED_DISTANCE_SAMPLE = "88.8 km"
-SUMMARY_CARD_FIXED_DURATION_SAMPLE = "8時間88分"
+SUMMARY_CARD_FIXED_DURATION_SAMPLE = LABELS_JA["duration_sample"]
 
 # --- HUD/card theme (light | dark) ------------------------------------------
 # Summary card, top banner, corner HUD labels and popup caption cards.
@@ -710,14 +710,10 @@ POPUP_NEAR_MAX_LEADER_PX = 200
 POPUP_NEAR_OFF_SIDE_PX = 40
 # Shown in the overview's bottom-left while the FIRST stop-by cards play: a
 # ribbon title and a card saying those round markers are optional extras.
-STOPBY_NOTICE_TITLE = "追加の見どころ（まるのマーカー）"
+# Wording per language: assets/config/labels_<lang>.json (these are the Japanese ones).
+STOPBY_NOTICE_TITLE = LABELS_JA["stopby_notice_title"]
 # Line breaks are kept (a long line still wraps to the card).
-STOPBY_NOTICE_BODY = (
-    "まるのマーカーは、ルートの近くにある\n"
-    "追加の見どころです。"
-    "立ち寄るかどうかは自由。\n"
-    "時間や体力に合わせて決めてください。"
-)
+STOPBY_NOTICE_BODY = LABELS_JA["stopby_notice_body"]
 STOPBY_NOTICE_RIBBON_COLOR: Tuple[int, int, int] = (40, 110, 220)  # BGR, warm orange ribbon
 STOPBY_NOTICE_FADE_SECONDS = 0.6
 # How long the notice stays up when the first stop-by reached isn't a batch

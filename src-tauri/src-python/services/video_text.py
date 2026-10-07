@@ -30,6 +30,8 @@ _BUILTIN_JA: Dict[str, Any] = {
     "soon_banner": "まもなく {dest}", "en_route_banner": "{dest} へ{suffix}", "hud_minutes": "{n} 分",
     "duration_seconds": "{n}秒", "duration_hours_minutes": "{h}時間{m:02d}分", "duration_minutes": "{m}分",
     "duration_fallback": "時間", "destination_fallback": "目的地", "overview_start": "開始", "overview_end": "終点",
+    "duration_sample": "8時間88分", "stopby_notice_title": "追加の見どころ（まるのマーカー）",
+    "stopby_notice_body": "まるのマーカーは、ルートの近くにある\n追加の見どころです。立ち寄るかどうかは自由。\n時間や体力に合わせて決めてください。",
     "place_count": "{n} か所", "outro_subtitle": "訪れた{count}か所", "outro_route_from": "{name} から",
     "outro_summary": {
         "distance": "総距離", "legs": "{count}区間", "time": "移動時間", "time_note": "目安",

@@ -84,6 +84,8 @@ def _overview_fingerprint_parts(config: Dict, job_config: Optional[Dict], bg_pat
     for key, value in render_args.items():
         parts[f"arg.{key}"] = _fingerprint_hash(value)[:16]
     parts["photos"] = photo_inputs_hash(render_args.get("popups"))
+    if video_text.current_language() != video_text.DEFAULT_LANGUAGE:
+        parts["video_text"] = video_text.current_language()  # absent for Japanese: old overviews stay valid
     for key, value in (config or {}).items():
         if key not in _FINGERPRINT_SKIP_CONFIG:
             parts[f"config.{key}"] = _fingerprint_hash(value)[:16]

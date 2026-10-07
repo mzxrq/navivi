@@ -246,3 +246,50 @@ class TestNoBypass:
                     ):
                         offenders.append(f"{path.relative_to(root)}:{node.lineno}: {node.value[:30]!r}")
         assert not offenders, offenders
+
+
+class TestCacheKeys:
+    """A language switch must re-render cached clips; Japanese keeps its old keys."""
+
+    def _leg_parts(self):
+        from services.vdoprocessing.route2vdo import _leg_fingerprint, _leg_fingerprint_parts
+
+        args = ([(35.0, 135.0), (35.1, 135.1)], "Dest", {"a": 1})
+        return _leg_fingerprint(*args), _leg_fingerprint_parts(*args)
+
+    def test_leg_keys_unchanged_for_japanese_and_different_for_english(self, tmp_path):
+        no_config = self._leg_parts()
+        _config(tmp_path, map_language="ja")
+        ja = self._leg_parts()
+        assert ja == no_config and "video_text" not in ja[1]
+        JobConfigManager._instance = None
+        _config(tmp_path, map_language="en")
+        en = self._leg_parts()
+        assert en[0] != ja[0] and en[1]["video_text"] == "en"
+        assert "video_text" in __import__("services.vdoprocessing.route2vdo", fromlist=["x"])._LEG_CHECKPOINT_PARTS
+
+    def test_overview_parts_follow_the_language(self, tmp_path):
+        from services.vdoprocessing.spatial_renderer.overview import _overview_fingerprint_parts
+
+        _config(tmp_path, map_language="ja")
+        ja = _overview_fingerprint_parts({}, {}, tmp_path / "bg.png", {})
+        JobConfigManager._instance = None
+        _config(tmp_path, map_language="en")
+        en = _overview_fingerprint_parts({}, {}, tmp_path / "bg.png", {})
+        assert "video_text" not in ja and en["video_text"] == "en"
+
+
+class TestStopbyNotice:
+    def test_japanese_text_is_what_tuning_always_had(self):
+        assert tuning.STOPBY_NOTICE_TITLE == "追加の見どころ（まるのマーカー）"
+        assert tuning.STOPBY_NOTICE_BODY.split("\n")[1] == "追加の見どころです。立ち寄るかどうかは自由。"
+        assert tuning.SUMMARY_CARD_FIXED_DURATION_SAMPLE == "8時間88分"
+
+    def test_english_notice_wraps_on_words_and_renders(self, tmp_path):
+        eng = _card_engine(tmp_path, "en")
+        layout = eng._stopby_notice_layout(1280, 720)
+        words = set(video_text.labels_for("en")["stopby_notice_body"].replace("\n", " ").split())
+        for line in layout[3]:
+            assert set(line.split()) <= words, line
+        frame = np.zeros((720, 1280, 3), np.uint8)
+        assert eng.render_stopby_notice(frame).any()
