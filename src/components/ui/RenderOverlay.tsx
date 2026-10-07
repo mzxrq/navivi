@@ -1,3 +1,4 @@
+import { takeForcedRender } from "../../services/renderOptions";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
@@ -238,7 +239,7 @@ export function RenderOverlay() {
 
       // Never start a render from an effect run that has already been torn down.
       if (disposed) return;
-      invoke("start_render", { configPath }).catch((err) => {
+      invoke("start_render", { configPath, force: takeForcedRender() || undefined }).catch((err) => {
         if (isSetupRequired(err)) announceSetupRequired();
         setStatus("error");
         pushSystemLog(t`Failed to invoke Python render: ${err}`, "error");

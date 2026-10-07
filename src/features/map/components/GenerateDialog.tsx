@@ -11,12 +11,14 @@ import { useWorkspace } from "../../../hooks/useWorkspace";
 
 const hasText = (s?: string) => !!s && s.trim().length > 0;
 
-export function GenerateDialog({ onClose, onConfirm }: { onClose: () => void; onConfirm: (clear: AssetGroup[]) => void }) {
+export function GenerateDialog({ onClose, onConfirm }: { onClose: () => void; onConfirm: (clear: AssetGroup[], force: boolean) => void }) {
   const { waypoints, settings, metadata, updateSettings, setIsDirty, saveProject } = useWorkspace();
   const [estimate, setEstimate] = useState<RenderEstimate | null>(null);
   const [failed, setFailed] = useState(false);
   const [existing, setExisting] = useState<AssetCounts | null>(null);
   const [clear, setClear] = useState<AssetGroup[]>([]);
+  const [force, setForce] = useState(false);
+  const [confirming, setConfirming] = useState(false);
 
   useEffect(() => {
     if (metadata.directory_path) scanAssets(metadata.directory_path).then(setExisting, () => setExisting(null));
@@ -57,7 +59,9 @@ export function GenerateDialog({ onClose, onConfirm }: { onClose: () => void; on
     cards: t`Title and ending cards`,
   };
   const present = existing ? ASSET_GROUPS.filter((g) => existing[g] > 0) : [];
-  const effectiveClear = withDependents(clear).filter((g) => present.includes(g));
+  // Force makes every stage again over what is there, so nothing is deleted first and the ticks below no longer matter.
+  const makeAgain = force && present.length > 0;
+  const effectiveClear = makeAgain ? [] : withDependents(clear).filter((g) => present.includes(g));
   const toggleGroup = (group: AssetGroup) =>
     setClear((prev) => (prev.includes(group) ? prev.filter((g) => g !== group) : [...prev, group]));
 
@@ -103,16 +107,39 @@ export function GenerateDialog({ onClose, onConfirm }: { onClose: () => void; on
       title={<Trans>Generate assets</Trans>}
       subtitle={metadata.project_name}
       footer={
-        <>
-          <button onClick={onClose} className={dialogButton.secondary}>
-            <Trans>Cancel</Trans>
-          </button>
-          <button onClick={() => onConfirm(effectiveClear)} className={dialogButton.primary}>
-            {effectiveClear.length > 0 ? <Trans>Delete and generate</Trans> : <Trans>Generate assets</Trans>}
-          </button>
-        </>
+        confirming ? (
+          <>
+            <button onClick={() => setConfirming(false)} className={dialogButton.secondary}>
+              <Trans>Back</Trans>
+            </button>
+            <button onClick={() => onConfirm([], true)} className={dialogButton.primary}>
+              <Trans>Yes, make everything again</Trans>
+            </button>
+          </>
+        ) : (
+          <>
+            <button onClick={onClose} className={dialogButton.secondary}>
+              <Trans>Cancel</Trans>
+            </button>
+            <button onClick={() => (makeAgain ? setConfirming(true) : onConfirm(effectiveClear, false))} className={dialogButton.primary}>
+              {makeAgain ? <Trans>Make everything again</Trans> : effectiveClear.length > 0 ? <Trans>Delete and generate</Trans> : <Trans>Generate assets</Trans>}
+            </button>
+          </>
+        )
       }
     >
+      {confirming && (
+        <div className="mb-3 flex items-start gap-2 rounded-lg bg-amber-500/10 px-3 py-2 text-[12px] leading-snug text-amber-700 dark:text-amber-400">
+          <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+          <span>
+            <Trans>
+              Every voice, subtitle and clip in this project is made again, even the ones you are happy with, and replaces the files you have now. This can
+              take as long as your first render. Your own photos, videos and music are not touched.
+            </Trans>
+          </span>
+        </div>
+      )}
+
       <div className="flex items-center gap-4 text-[12px] text-zinc-500 dark:text-zinc-400">
         <span className="flex items-center gap-1.5">
           <MapPin className="w-3.5 h-3.5" />
@@ -175,14 +202,15 @@ export function GenerateDialog({ onClose, onConfirm }: { onClose: () => void; on
             <button
               type="button"
               onClick={() => setClear(clear.length ? [] : present)}
-              className="shrink-0 h-6 px-2 rounded-md text-[11px] text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors"
+              disabled={makeAgain}
+              className="shrink-0 h-6 px-2 rounded-md text-[11px] text-zinc-500 disabled:opacity-40 disabled:pointer-events-none hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors"
             >
               {clear.length ? <Trans>Keep all</Trans> : <Trans>Select all</Trans>}
             </button>
           </div>
           <ul className="mt-2 space-y-0.5">
             {present.map((group) => {
-              const dependent = group === "subtitles" && clear.includes("voice");
+              const dependent = makeAgain || (group === "subtitles" && clear.includes("voice"));
               const count = existing[group];
               return (
                 <li key={group}>
@@ -193,14 +221,14 @@ export function GenerateDialog({ onClose, onConfirm }: { onClose: () => void; on
                   >
                     <Checkbox
                       label={groupLabel[group]}
-                      checked={effectiveClear.includes(group)}
+                      checked={makeAgain || effectiveClear.includes(group)}
                       disabled={dependent}
                       onChange={() => toggleGroup(group)}
                     />
                     <span className="flex-1">{groupLabel[group]}</span>
                     {dependent && (
                       <span className="text-[11px] text-zinc-400">
-                        <Trans>Goes with the voice</Trans>
+                        {makeAgain ? <Trans>Made again</Trans> : <Trans>Goes with the voice</Trans>}
                       </span>
                     )}
                     <span className="text-[12px] tabular-nums text-zinc-500">{count === 1 ? t`1 file` : t`${count} files`}</span>
@@ -209,6 +237,14 @@ export function GenerateDialog({ onClose, onConfirm }: { onClose: () => void; on
               );
             })}
           </ul>
+          <div className="mt-2 pt-2 border-t border-zinc-100 dark:border-white/5">
+            <OptionRow
+              label={t`Make everything again`}
+              hint={t`Ignores what already exists and makes every voice, subtitle and clip from scratch, even if nothing changed. Takes the longest.`}
+              checked={force}
+              onChange={setForce}
+            />
+          </div>
         </div>
       )}
 
