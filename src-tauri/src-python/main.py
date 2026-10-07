@@ -285,14 +285,14 @@ if __name__ == "__main__":
             elif mode_arg == "outro":
                 result = test_outro_video(job_config_arg, output_dir_arg)
             elif mode_arg == "subtitle":
-                # [NOTE] [Subtitle] Generates the .srt for ONE waypoint from its matching TTS audio (index from argv[3], default 0).
+                # [NOTE] [Subtitle] Generates the .srt for ONE waypoint from its matching TTS audio (index from argv[3], default 0). None = the project's assets/subtitles (output_dir_arg is assets/video, which is where these used to land by mistake).
                 waypoint_index_arg = int(sys.argv[3]) if len(sys.argv) > 3 else 0
                 result = test_subtitle(
-                    job_config_arg, output_dir_arg, waypoint_index_arg, force=force_arg
+                    job_config_arg, None, waypoint_index_arg, force=force_arg
                 )
             elif mode_arg == "subtitle-all":
                 # [NOTE] [Subtitle] Generates every .srt the pipeline makes (legs, overview, attractions) from the audio on disk.
-                result = test_subtitles(job_config_arg, output_dir_arg, force=force_arg)
+                result = test_subtitles(job_config_arg, None, force=force_arg)
             elif mode_arg == "concat":
                 # [NOTE] [Editor] Joins explicit clip paths (argv[3:]) — or, with none given, every *.mp4 already in the output dir in filename order — into 03_concat.mp4.
                 clip_paths_arg = sys.argv[3:] if len(sys.argv) > 3 else None
