@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { LatLon, distanceMeters, legAlongTrack, nearestIndex, simplifyTrack, stopsAlongTrack, tidyPlaceName } from "./gpxTrack";
+import { LatLon, distanceMeters, legAlongTrack, legElevations, nearestIndex, simplifyTrack, stopsAlongTrack, tidyPlaceName } from "./gpxTrack";
 
 // A track going east along a line of latitude, one point every 0.001 degrees (about 92 m).
 const line = (n: number, lat = 34): LatLon[] => Array.from({ length: n }, (_, i) => [lat, 135 + i * 0.001]);
@@ -98,5 +98,26 @@ describe("legAlongTrack", () => {
   it("returns null when the stops are next to each other or the leg is straight", () => {
     expect(legAlongTrack(bend, stop(0), stop(1))).toBeNull();
     expect(legAlongTrack(line(10), stop(0), { lat: 34, lng: 135.009, name: "", index: 9 })).toBeNull();
+  });
+});
+
+describe("elevation along a leg", () => {
+  it("keeps the elevation of the points that survive simplification", () => {
+    const track = Array.from({ length: 12 }, (_, i) => [34 + (i % 2 ? 0.001 : 0), 135 + i * 0.001, 100 + i]);
+    const stops = [
+      { lat: 34, lng: 135, name: "", index: 0 },
+      { lat: 34, lng: 135.011, name: "", index: 11 },
+    ];
+    const inner = legAlongTrack(track, stops[0], stops[1], 4)!;
+    expect(inner.length).toBeGreaterThan(0);
+    for (const p of inner) expect(p[2]).toBe(100 + Math.round((p[1] - 135) / 0.001));
+    const ele = legElevations(inner, track[0][2], track[11][2])!;
+    expect(ele).toHaveLength(inner.length + 2);
+    expect(ele[0]).toBe(100);
+    expect(ele[ele.length - 1]).toBe(111);
+  });
+
+  it("is null when the track has no elevation", () => {
+    expect(legElevations([[34, 135], [34, 135.1]])).toBeNull();
   });
 });

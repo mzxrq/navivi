@@ -29,6 +29,7 @@ export interface Waypoint {
   videoUrl?: string;
   routeMode: RouteMode;
   customRoute?: [number, number][];
+  customRouteEle?: (number | null)[]; // recorded elevation (m) of [this stop, ...customRoute, next stop]; only valid while its length is customRoute.length + 2
   connectToRoute?: boolean;
   skipAssetGeneration?: boolean;
   isStub?: boolean;

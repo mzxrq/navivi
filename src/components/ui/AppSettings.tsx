@@ -510,7 +510,7 @@ export function AppSettings() {
                   </Row>
                   <Row
                     title={t`Elevation heatmap`}
-                    description={t`Color GPX routes dynamically based on steepness`}
+                    description={t`Color the route by steepness, using the GPX elevation or 3D terrain`}
                   >
                     <Switch
                       checked={!!settings.show_route_heatmap}
