@@ -219,7 +219,8 @@ class TestOutro:
 class TestNoBypass:
     """Drawing code must take Japanese wording from the catalogs, not from string literals."""
 
-    ALLOWED = {"・"}  # the stop-by pin's dot glyph is a symbol, not wording
+    # the stop-by pin's dot glyph is a symbol, not wording; the kana range ends are the katakana conversion of the narration (audio_step.py)
+    ALLOWED = {"・", "ぁ", "ゖ", "ー"}
 
     def test_no_japanese_literals_in_drawing_modules(self):
         import ast

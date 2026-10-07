@@ -31,7 +31,7 @@ The tables below are the audit as it was written. What has been done on branch `
 | T1 to T3, T5, T6 (voice) | done; T4 (romaji labels) not offered: it only reaches the waypoint chips |
 | G1, G2 (force, per-stop regeneration) | done for voice, subtitles and photo clip; no leg video; G3 obsolete (multi-photo clips combine automatically) |
 | T7, G4, G5 | second wave: translated subtitles and stay detection in progress; G5 previews are inside the overview panel |
-| Section 5 dead code | removed (all but the legacy 3D renderer, which is not dead) |
+| Section 5 dead code | removed (all but the legacy 3D renderer, which is not dead, and `local_pan_generator.py`, which `jump_cut.py` now uses) |
 | Elevation heatmap (reported by the user, not in this audit) | fixed: see CODEMAP |
 
 ## 1. Bugs and broken promises (fix these before building anything new)
