@@ -80,3 +80,12 @@ class TestCacheActions:
 
     def test_clear_with_no_cache_folder_is_fine(self, cache_dir):
         assert voice_commands.run_voice_action("tts_cache_clear", {}) == {"success": True, "files": 0, "bytes": 0}
+
+
+class TestFrontendMirror:
+    def test_the_voice_tab_default_style_and_speed_range_match_the_engine(self):
+        from pathlib import Path
+
+        src = (Path(__file__).resolve().parents[3] / "src" / "components" / "ui" / "voiceOptions.ts").read_text(encoding="utf-8")
+        assert f'DEFAULT_TTS_CAPTION = "{tuning.TTS_CAPTION}"' in src
+        assert f"min: {tuning.TTS_MIN_SPEED}, max: {int(tuning.TTS_MAX_SPEED)}," in src
