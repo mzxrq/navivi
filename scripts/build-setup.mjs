@@ -5,6 +5,7 @@
 //   4. the setup program (setup/, Rust + WebView2), with the payload and a footer appended (see setup/src/payload.rs)
 // Run with: npm run build:setup   (add -- --skip-app to repackage without rebuilding the app)
 import { needsVcRuntime } from "./pe-imports.mjs";
+import { signFile, signingConfigured } from "./sign.mjs";
 import { execFileSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -36,6 +37,7 @@ rmSync(stage, { recursive: true, force: true });
 mkdirSync(stage, { recursive: true });
 if (needsVcRuntime(appExe).length) throw new Error("navivi.exe imports the VC++ runtime; src-tauri/.cargo/config.toml must link it statically");
 cpSync(appExe, join(stage, "navivi.exe"));
+signFile(join(stage, "navivi.exe"));
 cpSync(join(tauriDir, "installer-staging", "src-python"), join(stage, "src-python"), { recursive: true });
 cpSync(join(tauriDir, "installer-staging", "tools"), join(stage, "tools"), { recursive: true });
 writeFileSync(join(stage, ".navivi-install.json"), JSON.stringify({ name: "Navivi", version, exe: "navivi.exe" }));
@@ -58,5 +60,7 @@ const footer = Buffer.alloc(16);
 footer.write("NAVIVIPL", 0, "latin1");
 footer.writeBigUInt64LE(BigInt(statSync(zip).size), 8);
 writeFileSync(out, Buffer.concat([readFileSync(plain), readFileSync(zip), footer]));
+signFile(out);
 rmSync(stage, { recursive: true, force: true });
 console.log(`\nBuilt ${out} (${mb(out)}; the setup program alone is ${mb(plain)})`);
+if (!signingConfigured()) console.log("Not code-signed (set NAVIVI_SIGN_PFX or NAVIVI_SIGN_COMMAND, see scripts/sign.mjs): Smart App Control blocks unsigned installers on some PCs.");
