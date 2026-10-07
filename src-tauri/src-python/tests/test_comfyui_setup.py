@@ -169,7 +169,9 @@ class TestInstall:
         result = comfyui_setup.install_comfyui(fetch=lambda url: b"not a zip", free_gb=100)
         assert result["success"] is False
 
-    def test_ready_means_source_node_environment_and_all_models(self, engine):
+    def test_ready_means_source_node_environment_and_all_models(self, engine, monkeypatch):
+        real_files = comfyui_setup.model_files()
+        monkeypatch.setattr(comfyui_setup, "model_files", lambda: [{**spec, "bytes": 64} for spec in real_files])
         directory, python = engine
         assert comfyui_setup.is_ready() is False
         comfyui_setup.unpack_source(_zip(COMFY), directory)
