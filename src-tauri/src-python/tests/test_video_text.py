@@ -214,3 +214,35 @@ class TestOutro:
                    "title_style": None, "subtitle_style": None}
         page = outrocard._build_route_page("Trip", [{"label": "B"}], (1280, 704), brief, heading)
         assert page.size[0] == 1280 and page.getbbox() is not None
+
+
+class TestNoBypass:
+    """Drawing code must take Japanese wording from the catalogs, not from string literals."""
+
+    ALLOWED = {"・"}  # the stop-by pin's dot glyph is a symbol, not wording
+
+    def test_no_japanese_literals_in_drawing_modules(self):
+        import ast
+        import pathlib
+        import re
+
+        root = pathlib.Path(__file__).resolve().parent.parent / "services"
+        cjk = re.compile("[぀-ヿ一-鿿]")
+        offenders = []
+        for sub in ("vdoprocessing", "mapfetcher"):
+            for path in (root / sub).rglob("*.py"):
+                tree = ast.parse(path.read_text(encoding="utf-8"))
+                docstrings = set()
+                for node in ast.walk(tree):
+                    if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+                        body = node.body
+                        if body and isinstance(body[0], ast.Expr) and isinstance(getattr(body[0], "value", None), ast.Constant):
+                            docstrings.add(id(body[0].value))
+                for node in ast.walk(tree):
+                    if (
+                        isinstance(node, ast.Constant) and isinstance(node.value, str)
+                        and id(node) not in docstrings and cjk.search(node.value)
+                        and node.value not in self.ALLOWED
+                    ):
+                        offenders.append(f"{path.relative_to(root)}:{node.lineno}: {node.value[:30]!r}")
+        assert not offenders, offenders
