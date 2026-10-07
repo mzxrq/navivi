@@ -443,7 +443,7 @@ export function AppSettings() {
                 <Section title={t`Map`}>
                   <Row
                     title={t`Route marker`}
-                    description={t`Default marker for all waypoints. Can be overridden per-stop.`}
+                    description={`${t`Default marker for all waypoints. Can be overridden per-stop.`} ${t`Your own image is also drawn as the pin in the video; the built-in icons show on the map only.`}`}
                     stacked
                   >
                     <div className="flex items-center gap-2 flex-wrap">
