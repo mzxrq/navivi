@@ -15,7 +15,8 @@ export interface Waypoint {
   name: string;
   customMarker?: string;
   images?: string[];
-  imageDisplay?: "pip" | "fullscreen";
+  imageDisplay?: "pip" | "fullscreen" | "cover"; // pip = boxed card (what the app has always written), cover = photo fills the frame
+  overviewHighlight?: boolean; // false = the overview narration skips this stop; unset = described like the rest
   imagePans?: string[];
   imageCredits?: Record<string, PhotoCredit>; // who took a photo that was found online, keyed by the photo's path
   videos?: string[];
@@ -78,6 +79,9 @@ export interface TextStyle {
 }
 
 // start dev 1 settings
+export type SummaryCardStyle = "glass" | "taskbar" | "stacked" | "columns";
+export type LookMode = "walking" | "driving" | "car" | "ferry" | "airplane";
+
 export interface ProjectSettings {
   fps: number;
   line_color: [number, number, number];
@@ -129,6 +133,39 @@ export interface ProjectSettings {
     subtitle_style?: TextStyle;
   };
   show_route_heatmap?: boolean;
+  // "Look of the video" (Project settings). Every key is optional: unset = what the renderer always did (videoLookDefaults).
+  summary_card_style?: SummaryCardStyle;
+  theme?: "light" | "dark"; // the video's HUD and card theme, not the app's
+  card_border_color?: [number, number, number];
+  card_border_thickness?: number;
+  map_font_size?: number;
+  show_compass?: boolean;
+  waypoint_map_border?: boolean;
+  waypoint_intro_freeze?: number;
+  show_leg_wide_intro?: boolean;
+  res_follow_pitch?: number;
+  overview_title?: string;
+  overview_max_leg_seconds?: number;
+  overview_intro_card_scale?: number;
+  overview_intro_clean_hold_seconds?: number;
+  enable_ending_highlight?: boolean;
+  enable_outro?: boolean;
+  outro_style?: "scroll" | "grid";
+  outro_route_info?: boolean;
+  start_pin_color?: [number, number, number];
+  end_pin_color?: [number, number, number];
+  stopby_pin_color?: [number, number, number];
+  arrived_marker_color?: [number, number, number];
+  drawn_pin_color?: [number, number, number];
+  mode_line_colors?: Partial<Record<LookMode, [number, number, number]>>;
+  overview_speed_multiplier?: number;
+  res_target_avg_seconds?: number;
+  res_max_segment_seconds?: number;
+  camera_follow_distance_m?: number;
+  bearing_smoothing?: number;
+  enable_fullscreen_popups?: boolean;
+  hide_route_on_popup?: boolean;
+  upscale_popup_images?: boolean;
   ai_model?: string;
   ai_provider?: AiProviderId; // who writes the scripts; unset = the local Ollama model in ai_model
   ai_online_models?: Partial<Record<OnlineProvider, string>>;

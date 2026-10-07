@@ -1577,6 +1577,8 @@ OUTRO_CARD_ASPECT = 4 / 3  # thumbnail width:height
 # the last row; "grid" is the single held frame above. Overridable per project
 # via job_config.json's settings.outro_style.
 DEFAULT_OUTRO_STYLE = "scroll"
+# settings.enable_outro: false drops the outro clip from the video.
+DEFAULT_ENABLE_OUTRO = True
 OUTRO_SCROLL_COLS = 3
 OUTRO_SCROLL_MARGIN = 40  # px between cards
 # Empty space left and right of the cards, like a centred container's padding.

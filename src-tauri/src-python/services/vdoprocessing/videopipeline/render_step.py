@@ -111,11 +111,11 @@ def _leg_pin(glyph, settings: dict, arrived: bool, image: Optional[str] = None) 
     if not glyph:
         return None
     if glyph == "S":
-        color = tuning.START_PIN_COLOR
+        color = _project_color(settings, "start_pin_color", tuning.START_PIN_COLOR)
     elif glyph == "E":
-        color = tuning.END_PIN_COLOR
+        color = _project_color(settings, "end_pin_color", tuning.END_PIN_COLOR)
     elif glyph == "・":
-        color = tuning.STOPBY_PIN_COLOR
+        color = _project_color(settings, "stopby_pin_color", tuning.STOPBY_PIN_COLOR)
     else:
         marker = _project_color(settings, "marker_color", (235, 150, 60))
         color = _arrived_marker_color(settings, marker) if arrived else marker
@@ -167,6 +167,29 @@ def _mode_line_color_overrides(settings: dict) -> dict:
                 {key: value}, key, tuning.MODE_LINE_COLORS.get(key, (110, 110, 110))
             )
     return overrides
+
+
+# [NOTE] [Config] Renderer options the "Look of the video" settings reach. Each default equals what the
+# reader downstream (spatial_renderer/*, route2vdo.py) falls back to, so a project that never sets one
+# renders as before. They used to be read downstream but never forwarded, so even a hand edit did nothing.
+_LOOK_OPTION_DEFAULTS = (
+    ("show_compass", True),
+    ("waypoint_map_border", True),
+    ("waypoint_intro_freeze", 2.0),
+    ("show_leg_wide_intro", False),
+    ("res_follow_pitch", 0.0),
+    ("overview_max_leg_seconds", 10.0),
+    ("overview_intro_card_scale", 1.3),
+    ("overview_intro_clean_hold_seconds", 1.5),
+    ("overview_title", None),
+    # overview_script.py reads the same key off the raw settings (default on): both now agree.
+    ("enable_ending_highlight", True),
+)
+
+
+def look_options(settings: dict) -> dict:
+    """The renderer options of _LOOK_OPTION_DEFAULTS, read off the project's settings."""
+    return {key: settings.get(key, default) for key, default in _LOOK_OPTION_DEFAULTS}
 
 
 _RENDER_MANIFEST_NAME = ".render_manifest.json"
@@ -1412,6 +1435,7 @@ def render_route_video(
         "trigger_radius_padding": settings.get("trigger_radius_padding", {}),
         "route_marker": route_marker,
         "marker_base_dir": marker_base_dir,
+        **look_options(settings),
         "fullscreen_transition": settings.get("fullscreen_transition", {}),
         # Real-world average speed (km/h) per travel mode — how much
         # faster a car/ferry/etc. leg animates on screen relative to a

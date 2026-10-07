@@ -215,6 +215,7 @@ export const saveProjectData = async (
 
         popup_image: relativeImagePaths.length > 0 ? [relativeImagePaths[0]] : [],
         image_display: wp.imageDisplay || "pip",
+        overviewHighlight: wp.overviewHighlight,
 
         images: relativeImagePaths,
         videos: relativeVideoPaths,
