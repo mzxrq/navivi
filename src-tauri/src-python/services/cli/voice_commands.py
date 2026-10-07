@@ -11,7 +11,7 @@ from services.tts import voices
 
 PREVIEW_TEXT = "こんにちは。この声で、旅の案内をお届けします。"
 
-VOICE_ACTIONS = ("tts_voices_list", "tts_voice_add", "tts_voice_delete", "tts_voice_preview", "tts_engines", "tts_install_kokoro", "tts_install_qwen3", "tts_install_irodori", "comfyui_install")
+VOICE_ACTIONS = ("tts_voices_list", "tts_voice_add", "tts_voice_delete", "tts_voice_preview", "tts_engines", "tts_cache_info", "tts_cache_clear", "tts_install_kokoro", "tts_install_qwen3", "tts_install_irodori", "comfyui_install")
 
 
 def voices_list(_payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -50,6 +50,19 @@ def engines(_payload: Dict[str, Any]) -> Dict[str, Any]:
             "voices": [{"id": vid, "label": label} for vid, label in tuning.KOKORO_VOICES.items()],
         },
     }
+
+
+def cache_info(_payload: Dict[str, Any]) -> Dict[str, Any]:
+    from services.tts import phrase_cache
+
+    return {"success": True, **phrase_cache.info()}
+
+
+def cache_clear(_payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Only the shared spoken-line cache: narration already in a project folder is untouched."""
+    from services.tts import phrase_cache
+
+    return {"success": True, **phrase_cache.clear()}
 
 
 def install_kokoro(_payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -104,6 +117,8 @@ _HANDLERS: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "tts_voice_delete": voice_delete,
     "tts_voice_preview": voice_preview,
     "tts_engines": engines,
+    "tts_cache_info": cache_info,
+    "tts_cache_clear": cache_clear,
     "tts_install_kokoro": install_kokoro,
     "tts_install_qwen3": install_qwen3,
     "tts_install_irodori": install_irodori,

@@ -41,11 +41,33 @@ pub fn list(conn: &Connection, prefix: Option<&str>) -> DbResult<Map<String, Val
     Ok(out)
 }
 
+/// The app-wide map keys (`{ mapbox?, ors? }`), saved by the frontend. They are never part of a project.
+pub const API_KEYS: &str = "api_keys";
+
+/// One non-empty key out of the `api_keys` setting, e.g. `api_key(conn, "mapbox")`.
+pub fn api_key(conn: &Connection, name: &str) -> Option<String> {
+    let value = get(conn, API_KEYS).ok().flatten()?;
+    let key = value.get(name)?.as_str()?.trim();
+    (!key.is_empty()).then(|| key.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::db::open_in_memory;
     use serde_json::json;
+
+    #[test]
+    fn api_key_reads_one_non_empty_entry() {
+        let conn = open_in_memory().unwrap();
+        assert_eq!(api_key(&conn, "mapbox"), None);
+        set(&conn, API_KEYS, &json!({ "mapbox": " pk.abc ", "ors": "" })).unwrap();
+        assert_eq!(api_key(&conn, "mapbox").as_deref(), Some("pk.abc"));
+        assert_eq!(api_key(&conn, "ors"), None);
+        assert_eq!(api_key(&conn, "other"), None);
+        set(&conn, API_KEYS, &json!("not an object")).unwrap();
+        assert_eq!(api_key(&conn, "mapbox"), None);
+    }
 
     #[test]
     fn crud() {

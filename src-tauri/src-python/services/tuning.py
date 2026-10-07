@@ -194,7 +194,9 @@ PIPELINE_LABELS: Dict = LABELS_JA
 # `MODE_ALIASES.get(mode, mode)` at the point a mode string is first read off
 # job_config.json (routeMode / routing_cache), so every downstream lookup
 # just sees "walking" and never has to special-case "draw" itself.
-MODE_ALIASES: Dict[str, str] = {"direct": "walking", "draw": "walking"}
+# [NOTE] [Routing] "curve" is what the editor's Fly choice saves (the leg's
+# line is a bezier arc the frontend computed); the pipeline calls it airplane.
+MODE_ALIASES: Dict[str, str] = {"direct": "walking", "draw": "walking", "curve": "airplane"}
 
 # Travel modes that fall back to the flat 2D renderer for their own leg even
 # when the project is otherwise on the pydeck pedestrian pipeline (see

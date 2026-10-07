@@ -43,6 +43,22 @@ from services.cli import (
 )
 
 
+def split_mode_payload(argv: list) -> list:
+    """run_python_blueprint hands over ONE payload argument, so the app sends "tts 3 --force" as a single
+    string: split it back into arguments. Only a stage call (argv[1] is a job_config.json path) is split;
+    every named command (get_furigana, import_gps_track, install_google_font, the voice and image actions,
+    full_pipeline, ...) keeps its payload whole, so a new command needs no entry here. A JSON payload is
+    never split either."""
+    if (
+        len(argv) == 3
+        and argv[1].lower().endswith(".json")
+        and " " in argv[2].strip()
+        and not argv[2].lstrip().startswith(("{", "["))
+    ):
+        return argv[:2] + argv[2].split()
+    return argv
+
+
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print(
@@ -50,24 +66,20 @@ if __name__ == "__main__":
             "[gps|map|overview|residential|tts|tts-all|overview-tts|attraction-tts|attraction-tts-all|"
             "attraction|attraction-all|attraction-finalize|intro|outro|subtitle|subtitle-all|concat|mux|"
             "transition|all|overview-script|upscale-images] [index] [--force] [--no-llm]\n"
-            "       (output dir is always <job_config's directory_path>/video)\n"
+            "       (output dir is always <job_config's directory_path>/video; no mode = the overview map video)\n"
             "       (--force bypasses checkpointing and regenerates everything)\n"
             "       python main.py full_pipeline <path/to/job_config.json> [output_dir] [--force]\n"
-            "       python main.py render_timeline <timeline.json> [output_video]",
+            "       python main.py render_timeline <timeline.json> [output_video]\n"
+            "       python main.py estimate <path/to/job_config.json>\n"
+            "       python main.py <command> <payload>, one of: get_furigana, extract_words, read_document,\n"
+            "           import_gps_track (JSON), list_fonts, google_fonts_catalog, install_google_font, system_info,\n"
+            "           convert_images (JSON), tts_voices_list, tts_voice_add, tts_voice_delete, tts_voice_preview,\n"
+            "           tts_engines, tts_install_kokoro, tts_install_qwen3, tts_install_irodori, comfyui_install",
             file=sys.stderr,
         )
         sys.exit(1)
 
-    # run_python_blueprint hands over ONE payload argument, so the app sends "tts 3 --force" as a single
-    # string: split it back into arguments. Payloads that are text or JSON for their command stay whole.
-    _WHOLE_PAYLOAD = {"get_furigana", "extract_words", "read_document", "estimate", "full_pipeline", "render_timeline"}
-    if (
-        len(sys.argv) == 3
-        and sys.argv[1] not in _WHOLE_PAYLOAD
-        and " " in sys.argv[2].strip()
-        and not sys.argv[2].lstrip().startswith(("{", "["))
-    ):
-        sys.argv[2:3] = sys.argv[2].split()
+    sys.argv = split_mode_payload(sys.argv)
 
     # [NOTE] [Core] --force can appear anywhere on the command line (it's a
     # flag, not a positional arg) — strip it out before any positional

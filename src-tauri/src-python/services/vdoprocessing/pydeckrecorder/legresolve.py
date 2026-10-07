@@ -2,10 +2,10 @@
 
 from typing import Dict, List, Optional, Tuple
 
-# "direct" (a straight-line routing choice) and "draw" (a hand-drawn
-# custom-route leg) are both rendered as walking, not their own distinct
-# travel mode (matches tuning.MODE_ALIASES).
-_MODE_ALIASES = {"direct": "walking", "draw": "walking"}
+from services import tuning
+
+# One alias table for every reader of a leg's routeMode (direct/draw -> walking, curve -> airplane).
+_MODE_ALIASES = tuning.MODE_ALIASES
 
 
 def _resolve_leg(

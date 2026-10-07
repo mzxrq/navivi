@@ -108,7 +108,7 @@ class _GraphicsEngineBase:
         line_thickness=10,
         marker_color=tuning.DEFAULT_MARKER_COLOR,  # blue (BGR) — every pin except S/E
         arrived_marker_color=tuning.DEFAULT_ARRIVED_MARKER_COLOR,  # deeper blue once visited
-        marker_radius=24,
+        marker_radius=16,
         font_size: int = 18,
         card_border_color=tuning.DEFAULT_CARD_BORDER_COLOR,
         card_border_thickness=tuning.DEFAULT_CARD_BORDER_THICKNESS,

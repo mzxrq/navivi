@@ -2,6 +2,7 @@ import { join } from "@tauri-apps/api/path";
 import { exists, readTextFile } from "@tauri-apps/plugin-fs";
 import { db } from "./db";
 import { emptyTimeline } from "../features/editor/model";
+import { stripApiKeys } from "../utils/apiKeys";
 import {
     DbVersion,
     ProjectVersion,
@@ -96,6 +97,8 @@ function normalizeSnapshot(value: unknown, projectId: string, versionId: string)
         !snapshot.settings || typeof snapshot.settings !== "object") return null;
     return {
         ...snapshot,
+        // Snapshots saved by earlier versions may still carry the map keys; they are not restored.
+        settings: stripApiKeys(snapshot.settings),
         timeline: readTimeline(snapshot.timeline),
         routePoints: Array.isArray(snapshot.routePoints) ? snapshot.routePoints : [],
         drawnRoute: Array.isArray(snapshot.drawnRoute) ? snapshot.drawnRoute : [],
@@ -132,7 +135,7 @@ export async function saveProjectVersion(input: VersionInput): Promise<ProjectVe
         waypoints: structuredClone(input.waypoints),
         routeSegments: structuredClone(input.routeSegments),
         metadata: structuredClone(input.metadata),
-        settings: structuredClone(input.settings),
+        settings: structuredClone(stripApiKeys(input.settings)),
         timeline: structuredClone(input.timeline),
         routePoints: structuredClone(input.routePoints),
         drawnRoute: structuredClone(input.drawnRoute),
