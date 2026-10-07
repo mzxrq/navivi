@@ -13,6 +13,7 @@ import { callSidecar } from "../../services/sidecar";
 import { warmUpModel } from "../../services/ollamaApi";
 import { aiEngine } from "../../services/ai/engine";
 import { useWorkspace } from "../../hooks/useWorkspace";
+import { nextStopNumber } from "../../utils/overviewScript";
 
 const getThinkingSteps = () => [
   t`Detecting context...`,
@@ -22,12 +23,14 @@ const getThinkingSteps = () => [
   t`Polishing voiceover tone...`,
 ];
 
-export type CueTag = "start" | "arrive" | "end";
+export type CueTag = "start" | "arrive" | "end" | "n" | "go";
 
 const getCueHints = (): Record<CueTag, string> => ({
   start: t`Insert a cue: the walk starts moving at this point`,
   arrive: t`Insert a cue: the walk is nearly at the stop at this point`,
   end: t`Insert a cue: the stop is reached at this point`,
+  n: t`Insert a cue: the overview stops at the next numbered stop here, while the voice describes it`,
+  go: t`Insert a cue: the description of that stop ends here and the overview moves on`,
 });
 
 /** The text with {tag} put at the caret (or over the selection), plus where the caret goes afterwards. */
@@ -175,7 +178,7 @@ export function ScriptInput({
 
   const addCue = (tag: CueTag) => {
     const el = textareaRef.current;
-    const next = insertCue(localPrompt, tag, el?.selectionStart ?? localPrompt.length, el?.selectionEnd ?? localPrompt.length);
+    const next = insertCue(localPrompt, tag === "n" ? String(nextStopNumber(localPrompt)) : tag, el?.selectionStart ?? localPrompt.length, el?.selectionEnd ?? localPrompt.length);
     setLocalPrompt(next.text);
     requestAnimationFrame(() => {
       el?.focus();
