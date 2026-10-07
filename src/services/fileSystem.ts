@@ -9,7 +9,7 @@ import { routeCacheKey } from "../utils/routeCacheKey";
 import { stripApiKeys } from "../utils/apiKeys";
 import { planFileNames } from "../utils/fileNames";
 import { renameCredits } from "../utils/photoCredits";
-import { emptyTimeline, timelineFromEditorState, timelineFromPipeline, toManifest } from "../features/editor/model";
+import { emptyTimeline, type ExportOptions, timelineFromEditorState, timelineFromPipeline, toManifest } from "../features/editor/model";
 import { i18n } from "@lingui/core";
 import { db } from "./db";
 
@@ -662,12 +662,13 @@ export async function saveTimelineManifest(
   projectName: string,
   timeline: TimelineData,
   captionStyle?: TextStyle,
+  exportOptions?: ExportOptions,
 ): Promise<boolean> {
   try {
     const manifestPath = await join(projectDir, "timeline.json");
     // An empty timeline (editor never opened) must not wipe what the pipeline wrote.
     if (timeline.segments.length === 0 && (await exists(manifestPath))) return true;
-    await writeTextFile(manifestPath, JSON.stringify(toManifest(projectName, timeline, captionStyle), null, 2));
+    await writeTextFile(manifestPath, JSON.stringify(toManifest(projectName, timeline, captionStyle, exportOptions), null, 2));
     return true;
   } catch (error) {
     console.error("Failed to save timeline.json:", error);

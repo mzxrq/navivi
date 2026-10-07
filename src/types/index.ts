@@ -102,7 +102,13 @@ export interface ProjectSettings {
   auto_save_interval: number;
   skip_rich_media?: boolean;
   default_route_mode?: RouteMode;
-  default_export_resolution?: "4k" | "1080p" | "720p";
+  default_export_resolution?: "4k" | "1440p" | "1080p" | "720p"; // 1080p = the clips' own size
+  export_fps?: number; // unset = the project's fps
+  export_burn_subtitles?: boolean; // unset = burned in
+  export_save_srt?: boolean;
+  /** "owner/id" of the Mapbox style the video is drawn on. Unset keeps each step's own (outdoors for legs, streets elsewhere). */
+  mapbox_style_id?: string;
+  mapbox_retina?: boolean; // unset = on
   default_ducking_level?: number;
   subtitle_font?: string; // default Meiryo
   subtitle_font_size?: number; // px on a 1080p frame, default 71

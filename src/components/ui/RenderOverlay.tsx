@@ -33,6 +33,7 @@ import {
   saveTimelineManifest,
 } from "../../services/fileSystem";
 import { detectHardwareSpec } from "../../utils/hardwareDetection";
+import { exportOptionsFrom } from "../../features/editor/model";
 import {
   appendPipelineOutput,
   appendSystemMessage,
@@ -547,7 +548,7 @@ export function RenderOverlay() {
     if (dir) {
       // The pipeline rewrote timeline.json. Edits made meanwhile live only in the editor, so they are written back.
       if (now.canUndoTimeline && now.timeline.segments.length > 0) {
-        kept = await saveTimelineManifest(dir, metadata.project_name, now.timeline, now.settings.caption_style);
+        kept = await saveTimelineManifest(dir, metadata.project_name, now.timeline, now.settings.caption_style, exportOptionsFrom(now.settings));
       }
       if (!kept) await autoLoadTimeline(dir);
     }

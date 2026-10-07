@@ -162,3 +162,31 @@ export const mapStyles: MapStyleOption[] = [
         maxZoom: 17,
     },
 ];
+
+// Mapbox styles the video can be drawn on, as "owner/id" (the render's pydeck maps load mapbox-gl 1.x, which cannot draw Standard).
+export const videoMapStyles = [
+    { id: "mapbox/outdoors-v12", label: "Outdoors" },
+    { id: "mapbox/streets-v12", label: "Streets" },
+    { id: "mapbox/satellite-streets-v12", label: "Satellite Streets" },
+    { id: "mapbox/dark-v11", label: "Dark" },
+    { id: "mapbox/light-v11", label: "Light" },
+];
+
+/** The editor's current map style as a video style id, or null when the video cannot use it (OSM, GSI, Standard). */
+export function editorStyleForVideo(): string | null {
+    let saved: string | null = null;
+    try {
+        saved = localStorage.getItem("map-style");
+    } catch {}
+    const style = mapStyles.find((s) => s.id === saved) ?? mapStyles[0];
+    const id = typeof style.url === "string" ? style.url.replace("mapbox://styles/", "") : "";
+    return videoMapStyles.some((s) => s.id === id) ? id : null;
+}
+
+export function editorStyleLabel(): string {
+    let saved: string | null = null;
+    try {
+        saved = localStorage.getItem("map-style");
+    } catch {}
+    return (mapStyles.find((s) => s.id === saved) ?? mapStyles[0]).label;
+}

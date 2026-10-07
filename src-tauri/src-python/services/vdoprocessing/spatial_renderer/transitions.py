@@ -11,6 +11,7 @@ from services.mapfetcher.mapgeometry import RouteGeometryProcessor
 from services.vdoprocessing.vdoexporter import VideoExporter
 from services import tuning
 from services.mapbox_token import resolve_mapbox_token
+from services.mapfetcher.maplanguage import resolve_map_style
 from services.mapfetcher.graphicengine.pinimage import marker_for
 
 from .base import logger
@@ -512,11 +513,7 @@ class _TransitionMixin:
                 # threaded through here too so a project that sets it gets
                 # bigger labels on this GL path as well, not just the
                 # static one. Falls back to pydeck's own default style.
-                style_id = settings.get("mapbox_style_id")
-                map_style = (
-                    f"mapbox://styles/{style_id}" if style_id
-                    else "mapbox://styles/mapbox/streets-v12"
-                )
+                map_style = resolve_map_style(settings, "mapbox/streets-v12")
                 dynamic_frames = capture_pydeck_zoom_sequence(
                     bounding_box, (w, h), lat, lng, zoom_n,
                     zoom_boost=tuning.ENDING_HIGHLIGHT_PYDECK_ZOOM_BOOST,

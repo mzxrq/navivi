@@ -44,7 +44,7 @@ import { listRecents, syncProjectOnOpen } from "../services/projectStore";
 import { db } from "../services/db";
 import { apiKeySettings, legacyApiKeys, patchedApiKeys, stripApiKeys } from "../utils/apiKeys";
 import { useAppApiKeys } from "./useAppApiKeys";
-import { emptyTimeline } from "../features/editor/model";
+import { emptyTimeline, exportOptionsFrom } from "../features/editor/model";
 import { useHistory } from "./useHistory";
 import { useUI } from "./useUI";
 import { UnsavedChanges } from "../components/ui/UnsavedChanges";
@@ -431,7 +431,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         freshThumbnail,
       );
 
-      await saveTimelineManifest(result.projectDir, result.projName, timeline, settings.caption_style);
+      await saveTimelineManifest(result.projectDir, result.projName, timeline, settings.caption_style, exportOptionsFrom(settings));
       // The assistant keeps its chat in the project folder: a first save or a Save As tells it where the chat now lives.
       window.dispatchEvent(new CustomEvent("project-saved", { detail: { dir: result.projectDir, saveAs: !!asDuplicate } }));
 

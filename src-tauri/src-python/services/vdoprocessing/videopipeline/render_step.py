@@ -15,6 +15,7 @@ from services.gpsparser.gpscalculator import GPSMath
 from services.logger.progress import tracker
 from services.projectfiles import NARRATION_CUES, ROUTE_CACHE, meta_file
 from services.mapfetcher.mapfetcher import MapFetcher
+from services.mapfetcher.maplanguage import map_style_inputs
 from services.vdoprocessing.route2vdo import RouteAnimator
 from services.vdoprocessing.route_inputs import overview_flags_hash, photo_inputs_hash, route_inputs_hash
 from services.vdoprocessing.spatial_renderer import SpatialRenderer
@@ -283,6 +284,9 @@ def _checkpoint_parts(
     parts["route.photos"] = photo_inputs_hash(
         [[wp.get(k) for k in IMAGE_KEYS] for wp in shown.get("waypoints") or [] if isinstance(wp, dict)]
     )
+    style_part = map_style_inputs(config_data.get("settings"))
+    if style_part:
+        parts["route.map_style"] = _short_hash(style_part)
     marker_part = marker_inputs_hash(shown, str(Path(project_config_path).parent))
     if marker_part:
         parts["route.markers"] = marker_part
@@ -328,7 +332,8 @@ def _checkpoint_parts(
 # GPX line for the same waypoints (see route_inputs.py).
 # route.photos: a new or upscaled pop-up photo has to reach the overview and legs.
 # route.markers: a new pin picture too (absent, so unchanged, for a project with none).
-ROUTE_CHECKPOINT_PARTS = ("route.waypoints", "route.overview_flags", "route.photos", "route.markers")
+# route.map_style: the video's map style or tile sharpness (absent, so unchanged, until a project sets one).
+ROUTE_CHECKPOINT_PARTS = ("route.waypoints", "route.overview_flags", "route.photos", "route.markers", "route.map_style")
 
 
 def _describe_changed_parts(old: dict, new: dict, limit: int = 25) -> str:
@@ -1375,6 +1380,7 @@ def render_route_video(
         "use_3d_res": use_3d_res,
         "use_pydeck_pedestrian": use_pydeck_pedestrian,
         "use_pydeck_overview": bool(settings.get("use_pydeck_overview", tuning.DEFAULT_USE_PYDECK_OVERVIEW)),
+        "mapbox_style_id": settings.get("mapbox_style_id"),
         # Where the narration's cues fall: the overview reaches each cued stop
         # then (spatial_renderer/overview.py).
         "overview_cue_seconds": dict(overview_cue_times or {}),

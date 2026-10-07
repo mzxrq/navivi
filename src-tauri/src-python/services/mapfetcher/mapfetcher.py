@@ -21,6 +21,7 @@ from services.logger.logger import setup_logger
 from services.logger.progress import tracker
 from services import tuning
 from services.mapbox_token import resolve_mapbox_token
+from services.mapfetcher.maplanguage import resolve_map_style
 
 # Logging configuration
 logger = setup_logger("MapFetcher")
@@ -66,11 +67,7 @@ class MapFetcher:
             from services.mapfetcher.pydeck_overview import fetch_overview_image_pydeck
 
             logger.info("Fetching overview map background via pydeck...")
-            style_id = settings.get("mapbox_style_id")
-            map_style = (
-                f"mapbox://styles/{style_id}" if style_id
-                else "mapbox://styles/mapbox/streets-v12"
-            )
+            map_style = resolve_map_style(settings, "mapbox/streets-v12")
             result = fetch_overview_image_pydeck(
                 bounding_box, final_filename, output_size,
                 mapbox_key=resolve_mapbox_token(settings),
