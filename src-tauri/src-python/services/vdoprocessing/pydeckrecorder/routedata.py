@@ -12,7 +12,7 @@ from scipy.interpolate import interp1d
 from services.config.upscaled_images import apply_upscaled_images
 from services.mapfetcher.maplanguage import current_map_language, style_localizer_script
 
-from .common import MAPBOX_API_KEY, logger
+from .common import MAPBOX_API_KEY, logger, resolve_mapbox_token
 
 
 def load_route_from_config(config_path: str):
@@ -42,7 +42,7 @@ def build_pydeck_map(
 ):
     os.makedirs(os.path.dirname(output_html_path), exist_ok=True)
 
-    mapbox_key = project_data.get("settings", {}).get("mapbox_api_key") or MAPBOX_API_KEY
+    mapbox_key = resolve_mapbox_token(project_data.get("settings", {})) or MAPBOX_API_KEY
 
     raw_coords = []
     for route_key, coords in project_data.get("routing_cache", {}).items():

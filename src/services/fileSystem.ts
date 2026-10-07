@@ -6,6 +6,7 @@ import { appConfig, fileSystem, GLOBAL_DICTIONARY_KEY } from "../config/constant
 import { buildAssetManifest } from "../utils/manifestBuilder";
 import { TimelineData, RecentProjects, TextStyle } from "../types";
 import { routeCacheKey } from "../utils/routeCacheKey";
+import { stripApiKeys } from "../utils/apiKeys";
 import { planFileNames } from "../utils/fileNames";
 import { renameCredits } from "../utils/photoCredits";
 import { emptyTimeline, timelineFromEditorState, timelineFromPipeline, toManifest } from "../features/editor/model";
@@ -267,7 +268,8 @@ export const saveProjectData = async (
     overviewNarration: metadata.overview_narration || "",
     createdAt: metadata.created_at || undefined,
   });
-  const savedSettings = await db.settings.put(row.id, settings);
+  // The map keys are app-wide; neither the database row nor job_config.json (and so no shared archive) gets them.
+  const savedSettings = stripApiKeys(await db.settings.put(row.id, stripApiKeys(settings)));
 
   const jobConfig = {
     project_id: row.id,
@@ -374,6 +376,7 @@ export async function duplicateProjectFolder(sourceDir: string, name: string): P
   if (await isProjectIdTaken(id, destDir)) id = `${id}_${Date.now()}`;
   config.project_id = id;
   config.project_name = name;
+  if (config.settings) config.settings = stripApiKeys(config.settings);
   await writeTextFile(await join(destDir, fileSystem.configFile), JSON.stringify(config, null, 2));
   return destDir;
 }

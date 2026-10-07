@@ -42,6 +42,8 @@ import {
 } from "../services/versionHistory";
 import { listRecents, syncProjectOnOpen } from "../services/projectStore";
 import { db } from "../services/db";
+import { apiKeySettings, legacyApiKeys, patchedApiKeys, stripApiKeys } from "../utils/apiKeys";
+import { useAppApiKeys } from "./useAppApiKeys";
 import { emptyTimeline } from "../features/editor/model";
 import { useHistory } from "./useHistory";
 import { useUI } from "./useUI";
@@ -158,12 +160,20 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     created_at: new Date().toISOString(),
   }));
 
-  const [projectSettings, setSettings] = useState<ProjectSettings>(DefaultSettings);
+  const [projectSettings, setProjectSettings] = useState<ProjectSettings>(DefaultSettings);
+  // The map keys are the app's, never a project's: whatever is set here loses them.
+  const setSettings = useCallback((action: React.SetStateAction<ProjectSettings>) => {
+    setProjectSettings((prev) => stripApiKeys(typeof action === "function" ? action(prev) : action));
+  }, []);
   // The AI choices belong to the app, not to a project: they survive new and opened projects, and AI features start on.
   const [globalAi, setGlobalAi] = useState<Partial<ProjectSettings>>({ ai_features_enabled: true });
   const globalAiRef = useRef(globalAi);
   globalAiRef.current = globalAi;
-  const settings = useMemo<ProjectSettings>(() => ({ ...projectSettings, ...globalAi }), [projectSettings, globalAi]);
+  const { keys: apiKeys, update: updateApiKeys, adoptLegacy: adoptLegacyApiKeys } = useAppApiKeys();
+  const settings = useMemo<ProjectSettings>(
+    () => ({ ...projectSettings, ...globalAi, ...apiKeySettings(apiKeys) }),
+    [projectSettings, globalAi, apiKeys],
+  );
 
   // Until the saved choice has been read, a change made by the user is held back from the database (it would replace the whole
   // saved record with the defaults) and wins over the saved value once that arrives.
@@ -378,7 +388,12 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         aiEarlyRef.current = { ...aiEarlyRef.current, ...ai };
       }
     }
-    setSettings((prev) => ({ ...prev, ...data }));
+    const keys = patchedApiKeys(data);
+    if (Object.keys(keys).length > 0) updateApiKeys(keys);
+    const rest = stripApiKeys(data);
+    // Changing only a map key is not an edit of the project.
+    if (Object.keys(rest).length === 0) return;
+    setSettings((prev) => ({ ...prev, ...rest }));
     setIsDirty(true);
   }, []);
 
@@ -488,12 +503,15 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       if (!data.project_id || !data.waypoints) {
         throw new Error("Invalid Navivi project file format.");
       }
+      // A project saved by an earlier version carries the map keys; they move to the app below.
+      let legacyKeys = legacyApiKeys(data.settings);
 
       // DB metadata/settings win; if the DB fails, open from the files alone.
       let recoveredCache: Record<string, [number, number][]> = {};
       try {
         const synced = await syncProjectOnOpen(data, selectedPath);
         data = synced.data;
+        legacyKeys = { ...legacyKeys, ...synced.legacyApiKeys };
         recoveredCache = synced.routingCache;
         await tidyProjectFolder(data.directory_path);
       } catch (error) {
@@ -517,6 +535,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         enable_intro: data.enable_intro ?? true,
       });
 
+      adoptLegacyApiKeys(legacyKeys);
       if (data.settings) setSettings(data.settings);
 
       resetWaypointHistory(
