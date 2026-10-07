@@ -350,7 +350,7 @@ mod tests {
     #[test]
     fn a_shared_archive_never_carries_the_map_keys() {
         let src = scratch();
-        let config = r#"{"project_id":"p","project_name":"京都","settings":{"fps":30,"mapbox_api_key":"pk.secret","ors_api_key":"ors-secret","line_color":"#fff"},"waypoints":[]}"#;
+        let config = r##"{"project_id":"p","project_name":"京都","settings":{"fps":30,"mapbox_api_key":"pk.secret","ors_api_key":"ors-secret","line_color":"#fff"},"waypoints":[]}"##;
         write(&src.join("job_config.json"), config);
         write(&src.join(".navivi/legacy/Old.nvv.json"), r#"{"settings":{"mapbox_api_key":"pk.old"}}"#);
         write(&src.join(".navivi/routecache.json"), r#"{"settings":{"mapbox_api_key":"not-a-config"}}"#);
