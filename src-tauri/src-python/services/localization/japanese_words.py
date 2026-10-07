@@ -7,8 +7,13 @@ follow (透き通った), because the pronunciation dictionary replaces text exa
 Without the analyser installed everything falls back to pykakasi's word guesses.
 """
 
+import re
 from functools import lru_cache
 from typing import Dict, Iterable, List, Optional
+
+# Endings with one reading, kept in kanji after a spelled-out name (サルサカ峠, not サルサカトウゲ): a shorter katakana run, which the
+# voice slurs less.
+PLAIN_SUFFIXES = {"展望台": "てんぼうだい", "神社": "じんじゃ", "公園": "こうえん", "海岸": "かいがん", "温泉": "おんせん", "峠": "とうげ", "駅": "えき"}
 
 _NOUNISH = {"名詞", "接頭辞", "接尾辞"}
 _CONTENT = {"動詞", "形容詞", "形状詞", "副詞", "連体詞", "接続詞", "感動詞", "代名詞"}
@@ -113,7 +118,7 @@ def analyze_words(text: str) -> List[Dict[str, str]]:
         if surface in seen or not has_kanji(surface):
             continue
         seen.add(surface)
-        words.append({"word": surface, "reading": _group_reading(group)})
+        words.append({"word": surface, "reading": ruins_reading(surface, _group_reading(group))})
     return words
 
 
@@ -132,7 +137,7 @@ def analyze_place_words(text: str, names: Iterable[str] = ()) -> List[Dict[str, 
     for name in sorted({n.strip() for n in names if n and n.strip()}, key=text.find):
         if name in text and has_kanji(name) and name not in seen:
             seen.add(name)
-            words.append({"word": name, "reading": _place_reading(name, reading_of(name))})
+            words.append({"word": name, "reading": _name_reading(name)})
     tagger = _tagger()
     if text and tagger is not None:
         proper = {t.surface for t in tagger(text) if _is_place(t)}
@@ -143,11 +148,61 @@ def analyze_place_words(text: str, names: Iterable[str] = ()) -> List[Dict[str, 
     return words
 
 
+_NAME_PARTS = re.compile(r"([\s（）()「」『』【】・]+)")
+
+
+def _name_reading(name: str) -> str:
+    """Each part of a name looked up on its own, so 西念寺（二ノ宿観音堂） and 孝子駅 (GOAL) still find 西念寺 and 孝子駅 in JMnedict.
+    A part's guess is the analyser's reading of it inside the whole name (alone, 葛城 reads かつらぎの)."""
+    in_context = _context_readings(name)
+    out, pos = [], 0
+    for part in _NAME_PARTS.split(name):
+        if has_kanji(part):
+            out.append(_place_reading(part, in_context.get((pos, pos + len(part))) or reading_of(part)))
+        else:
+            out.append(part)
+        pos += len(part)
+    return "".join(out)
+
+
+def _context_readings(text: str) -> Dict[tuple, str]:
+    """(start, end) -> reading for each run of whole tokens between separators, as the analyser read them in `text`."""
+    tagger = _tagger()
+    if tagger is None:
+        return {}
+    spans: Dict[tuple, str] = {}
+    start, kana, pos = None, [], 0
+    for token in tagger(text):
+        at = text.find(token.surface, pos)
+        reading = getattr(token.feature, "kana", None)
+        if at < 0 or _NAME_PARTS.fullmatch(token.surface) or not reading or reading == "*":
+            start, kana = None, []
+            pos = max(pos, at + len(token.surface)) if at >= 0 else pos
+            continue
+        if start is None or at != pos:
+            start, kana = at, []
+        kana.append(reading)
+        pos = at + len(token.surface)
+        spans[(start, pos)] = to_hiragana("".join(kana))
+    return spans
+
+
 def _place_reading(name: str, guess: Optional[str]) -> str:
     """JMnedict's reading of a place (札立山 -> ふだたてやま where MeCab says さつたてやま), else the analyser's."""
     from services.localization import jmnedict
 
-    return jmnedict.place_reading(name, guess, reading_of) or guess or ""
+    return ruins_reading(name, jmnedict.place_reading(name, guess, reading_of) or guess or "")
+
+
+# A building whose ruins are named "<name><building>跡": the 跡 reads あと (神福寺跡 = しんぷくじあと), unlike 遺跡 or 史跡.
+_RUINED_BUILDINGS = set("寺院城邸宮社庵坊堂館陣関駅宅塔門")
+
+
+def ruins_reading(word: str, reading: str) -> str:
+    """The analyser takes 寺跡 for one word and reads it じせき; after a building, 跡 is あと."""
+    if len(word) > 2 and word.endswith("跡") and word[-2] in _RUINED_BUILDINGS and reading.endswith("せき"):
+        return reading[: -len("せき")] + "あと"
+    return reading
 
 
 def _fallback_words(text: str) -> List[Dict[str, str]]:
@@ -160,6 +215,33 @@ def _fallback_words(text: str) -> List[Dict[str, str]]:
             seen.add(word)
             out.append({"word": word, "reading": item["hira"]})
     return out
+
+
+# Words the dictionary reads wrong in prose: 歩 alone is the shogi piece ふ to it, but 歩を進める is ほ.
+_PRON_FIXES = {"歩": "ホ"}
+
+
+def spoken_kana(text: str) -> str:
+    """`text` with every kanji word replaced by how it is said, in katakana (漂う -> タダヨウ, 空間 -> クーカン), so an engine that
+    guesses kanji readings speaks each syllable as written. A counter after a number keeps its kanji (1分 is いっぷん, not 1フン)."""
+    tagger = _tagger()
+    if not text or tagger is None:
+        return text
+    out, pos = [], 0
+    for token in tagger(text):
+        at = text.find(token.surface, pos)
+        if at < 0:
+            continue
+        out.append(text[pos:at])
+        pron = _PRON_FIXES.get(token.surface) or getattr(token.feature, "pron", None)
+        after_number = at > 0 and text[at - 1].isdigit()
+        if has_kanji(token.surface) and pron and pron != "*" and not after_number:
+            out.append(pron)
+        else:
+            out.append(token.surface)
+        pos = at + len(token.surface)
+    out.append(text[pos:])
+    return "".join(out)
 
 
 def reading_of(word: str) -> Optional[str]:

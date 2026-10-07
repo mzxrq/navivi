@@ -104,7 +104,9 @@ def readings(name: str) -> List[str]:
 def place_reading(name: str, guess: Optional[str], read_rest: Callable[[str], Optional[str]]) -> Optional[str]:
     """The reading of `name`: JMnedict's own (the one matching `guess` when it lists several), else the longest
     name it knows at the start (南海本線 + 孝子駅, 鳴滝不動 + 尊), the rest read the same way. `guess` is the analyser's
-    reading of the whole name; a one-kanji rest takes its part of it (尊 alone would read みこと). None when it knows nothing."""
+    reading of the whole name; a one-kanji rest takes its part of it (尊 alone would read みこと). A start the guess disagrees with is
+    skipped: it is often another name sharing the kanji (神福 = かみふく would make 神福寺跡 かみふくてらあと, not しんぷくじあと).
+    None when it knows nothing."""
     found = readings(name)
     if found:
         return guess if guess in found else found[0]
@@ -112,10 +114,16 @@ def place_reading(name: str, guess: Optional[str], read_rest: Callable[[str], Op
         head = readings(name[:end])
         if not head:
             continue
-        agreed = next((h for h in head if guess and guess.startswith(h)), None)
+        agreed = min((h for h in head if guess and guess.startswith(h)), key=len, default=None)
+        if guess and agreed is None:
+            continue
         rest_guess = guess[len(agreed):] if agreed else None
         rest_name = name[end:]
         if len(rest_name) >= MIN_PREFIX_CHARS:
+            # The analyser can glue a kana onto the start (葛城 = かつらぎの): the rest's own reading drops it.
+            own = read_rest(rest_name)
+            if rest_guess and own and rest_guess != own and rest_guess.endswith(own):
+                rest_guess = own
             rest = place_reading(rest_name, rest_guess, read_rest) or rest_guess or read_rest(rest_name)
         else:
             rest = rest_guess or read_rest(rest_name)

@@ -216,25 +216,32 @@ def _all_hiragana(text: str) -> bool:
 
 def _spoken_form(entry: dict) -> Optional[str]:
     """What the voice is given for a dictionary word, or None to leave the word as written.
-    An auto word the analyser already reads the same way keeps its kanji, which the engines accent better than kana.
+    Every entry is replaced, auto ones too: the engines misread place names the analyser reads right (三輪神社 as みらじんじゃ).
     A hiragana reading is spoken in katakana, so the engines take it as one word instead of splitting it."""
     from services.localization import japanese_words
 
     word, reading = entry.get("word"), entry.get("reading")
     if not word or not reading:
         return None
-    if entry.get("auto") and japanese_words.reading_of(word) == japanese_words.to_hiragana(reading):
-        return None
-    return japanese_words.to_katakana(reading) if _all_hiragana(reading) else reading
+    if not _all_hiragana(reading):
+        return reading
+    for suffix, suffix_reading in japanese_words.PLAIN_SUFFIXES.items():
+        head = reading[: -len(suffix_reading)]
+        if word.endswith(suffix) and len(word) > len(suffix) and reading.endswith(suffix_reading) and head:
+            return japanese_words.to_katakana(head) + suffix
+    return japanese_words.to_katakana(reading)
 
 
 def apply_pronunciation_dictionary(text: str, dictionary: list) -> str:
+    from services.tts import name_check
+
     if not text or not dictionary:
         return text
     # Longest words first, so 三段壁 is replaced before a shorter entry such as 三段 can cut into it.
     for entry in sorted(dictionary, key=lambda e: len(e.get("word") or ""), reverse=True):
         spoken = _spoken_form(entry)
         if spoken:
+            name_check.remember(spoken, entry["word"])
             text = text.replace(entry["word"], spoken)
     return text
 

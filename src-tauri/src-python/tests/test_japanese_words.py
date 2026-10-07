@@ -78,11 +78,11 @@ def test_auto_flagged_entries_are_applied_like_any_other():
     assert apply_pronunciation_dictionary("三段壁へ", entries) == "サンダンベキへ"
 
 
-def test_an_auto_word_the_analyser_already_reads_right_keeps_its_kanji():
+def test_an_auto_place_name_is_replaced_even_when_the_analyser_reads_it_right():
     from services.vdoprocessing.videopipeline.audio_step import apply_pronunciation_dictionary
 
-    entries = [{"word": "東京", "reading": "とうきょう", "auto": True}, {"word": "札立山", "reading": "ふだたてやま", "auto": True}]
-    assert apply_pronunciation_dictionary("東京から札立山へ", entries) == "東京からフダタテヤマへ"
+    entries = [{"word": "三輪神社", "reading": "みわじんじゃ", "auto": True}, {"word": "札立山", "reading": "ふだたてやま", "auto": True}]
+    assert apply_pronunciation_dictionary("三輪神社から札立山へ", entries) == "ミワ神社からフダタテヤマへ"
 
 
 def test_a_manual_word_is_always_replaced_and_katakana_or_mixed_readings_pass_through():
@@ -94,3 +94,53 @@ def test_a_manual_word_is_always_replaced_and_katakana_or_mixed_readings_pass_th
 
 def test_to_katakana_keeps_everything_else():
     assert jw.to_katakana("すきとおる、ABC") == "スキトオル、ABC"
+
+
+def test_each_part_of_a_bracketed_name_is_looked_up_on_its_own(monkeypatch):
+    from services.localization import jmnedict
+
+    known = {"西念寺": ["さいねんじ"], "孝子駅": ["きょうしえき"]}
+    monkeypatch.setattr(jmnedict, "readings", lambda name: list(known.get(name, [])))
+    words = jw.analyze_place_words("西念寺（二ノ宿観音堂）から孝子駅 (GOAL)へ。", ["西念寺（二ノ宿観音堂）", "孝子駅 (GOAL)"])
+    readings = {w["word"]: w["reading"] for w in words}
+    assert readings["西念寺（二ノ宿観音堂）"].startswith("さいねんじ（")
+    assert readings["孝子駅 (GOAL)"] == "きょうしえき (GOAL)"
+
+
+def test_ato_after_a_building_reads_ato_but_iseki_stays():
+    assert jw.ruins_reading("神福寺跡", "しんぷくじせき") == "しんぷくじあと"
+    assert jw.ruins_reading("大坂城跡", "おおさかじょうせき") == "おおさかじょうあと"
+    assert jw.ruins_reading("遺跡", "いせき") == "いせき"
+    assert jw.ruins_reading("古墳遺跡", "こふんいせき") == "こふんいせき"
+
+
+def test_a_ruins_name_in_a_sentence_reads_ato():
+    words = {w["word"]: w["reading"] for w in jw.analyze_place_words("葛城第二経塚（神福寺跡）へ。", ["葛城第二経塚（神福寺跡）"])}
+    assert words["葛城第二経塚（神福寺跡）"].endswith("（しんぷくじあと）")
+    assert words["神福寺跡"] == "しんぷくじあと"
+
+
+def test_an_auto_ruins_name_is_always_given_to_the_voice_as_its_reading():
+    from services.vdoprocessing.videopipeline.audio_step import apply_pronunciation_dictionary
+
+    entry = {"word": "神福寺跡", "reading": "しんぷくじあと", "auto": True}
+    assert apply_pronunciation_dictionary("神福寺跡へ。", [entry]) == "シンプクジアトへ。"
+
+
+def test_spoken_kana_spells_out_kanji_words_as_they_are_said():
+    assert jw.spoken_kana("雰囲気漂う空間です。") == "フンイキタダヨウクーカンです。"
+
+
+def test_spoken_kana_keeps_a_counter_after_a_number():
+    assert jw.spoken_kana("1分ほど") == "1分ほど"
+
+
+def test_spoken_kana_reads_ho_for_a_step():
+    assert jw.spoken_kana("歩を進める") == "ホをススメル"
+
+
+def test_an_ending_with_one_reading_stays_in_kanji():
+    from services.vdoprocessing.videopipeline.audio_step import apply_pronunciation_dictionary
+
+    entries = [{"word": "猿坂峠", "reading": "さるさかとうげ", "auto": True}, {"word": "三輪神社", "reading": "みわじんじゃ", "auto": True}]
+    assert apply_pronunciation_dictionary("猿坂峠から三輪神社へ", entries) == "サルサカ峠からミワ神社へ"

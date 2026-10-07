@@ -683,7 +683,7 @@ class IrodoriTTSClient:
                 audio = await self.call_api(text)
                 ratio = cut_off_ratio(audio)
                 if ratio <= tuning.TTS_CUTOFF_RATIO:
-                    return [audio]
+                    return [await self._with_names_heard(text, audio)]
                 logger.warning("TTS take %d ends mid-word (%.2f): %s", attempt + 1, ratio, text)
                 if best is None or ratio < best[0]:
                     best = (ratio, audio)
@@ -699,6 +699,29 @@ class IrodoriTTSClient:
                 return takes
         logger.warning("TTS kept a take that still ends mid-word (%.2f): %s", best[0], text)
         return [best[1]]
+
+    async def _with_names_heard(self, text: str, audio: bytes) -> bytes:
+        """`audio`, or a retake when the voice misread a place name in it; the take with the fewest misses is kept."""
+        from services.tts import name_check
+
+        missing = await asyncio.to_thread(name_check.misheard_names, audio, text)
+        best = (len(missing), audio)
+        bypass = self.bypass_cache
+        try:
+            for attempt in range(tuning.TTS_NAME_RETAKES):
+                if not best[0]:
+                    break
+                logger.warning("TTS retake %d for misread place names: %s", attempt + 1, ", ".join(missing))
+                self.bypass_cache = True
+                take = await self.call_api(text)
+                if cut_off_ratio(take) > tuning.TTS_CUTOFF_RATIO:
+                    continue
+                missing = await asyncio.to_thread(name_check.misheard_names, take, text)
+                if len(missing) < best[0]:
+                    best = (len(missing), take)
+        finally:
+            self.bypass_cache = bypass
+        return best[1]
 
     def _remove_stray_bursts(self, path: Path) -> None:
         if self._ENGINE in tuning.TTS_STRAY_BURST_ENGINES:
@@ -933,6 +956,10 @@ class Qwen3TTSClient(_VenvEngineClient):
 
     async def call_api(self, text: str) -> bytes:
         reference = self._reference()
+        if tuning.QWEN3_SPELL_OUT_KANJI:
+            from services.localization.japanese_words import spoken_kana
+
+            text = spoken_kana(text)
         key = phrase_cache.cache_key({"engine": "qwen3", "input": text, "speed": self.config.speed}, self._voice_sha256())
         cached = self._cached_line(key)
         if cached is not None:
