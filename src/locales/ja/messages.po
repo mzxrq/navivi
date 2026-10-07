@@ -114,7 +114,7 @@ msgstr "{0} 分"
 
 #. placeholder {0}: formatBytes(cache.bytes)
 #. placeholder {1}: formatBytes(cache.max_bytes)
-#: src/components/ui/VoiceSettings.tsx:511
+#: src/components/ui/VoiceSettings.tsx:523
 msgid "{0} of {1}"
 msgstr "{0} / {1}"
 
@@ -165,15 +165,15 @@ msgstr "字幕を{0}件読み込みました"
 msgid "{0} subtitles selected"
 msgstr "{0} 件の字幕を選択中"
 
-#: src/components/ui/RenderOverlay.tsx:768
+#: src/components/ui/RenderOverlay.tsx:769
 msgid "{backgroundLabel} ready to check"
 msgstr "{backgroundLabel}を確認できます"
 
-#: src/components/ui/RenderOverlay.tsx:568
+#: src/components/ui/RenderOverlay.tsx:569
 msgid "{clips} clips"
 msgstr "{clips}クリップ"
 
-#: src/components/ui/RenderOverlay.tsx:528
+#: src/components/ui/RenderOverlay.tsx:529
 msgid "{count} clips are ready to be redone. Change their photo, script or route, then choose Resume Generation."
 msgstr "{count}件のクリップを作り直す準備ができました。写真、台本、ルートを変更してから「生成を再開」を選んでください。"
 
@@ -181,7 +181,7 @@ msgstr "{count}件のクリップを作り直す準備ができました。写�
 msgid "{count} files"
 msgstr "{count}ファイル"
 
-#: src/hooks/useFileActions.ts:49
+#: src/hooks/useFileActions.ts:50
 msgid "{failed} photos could not be converted and were skipped."
 msgstr "{failed}枚の写真を変換できなかったため、スキップしました。"
 
@@ -213,11 +213,11 @@ msgstr "{narrated}クリップ"
 msgid "{populatedStops} with media"
 msgstr "メディアあり {populatedStops}"
 
-#: src/hooks/useFileActions.ts:135
+#: src/hooks/useFileActions.ts:136
 msgid "{skipped} files were skipped: only photos, GPX files and text files can be dropped here."
 msgstr "{skipped}個のファイルをスキップしました。ここにドロップできるのは写真、GPXファイル、テキストファイルだけです。"
 
-#: src/hooks/useFileActions.ts:120
+#: src/hooks/useFileActions.ts:121
 msgid "{skipped} photos without a location were skipped."
 msgstr "位置情報のない写真{skipped}枚をスキップしました。"
 
@@ -241,7 +241,7 @@ msgstr "残り{unnamedRemaining}ステップ"
 msgid "{viaCount} via"
 msgstr "経由点 {viaCount}"
 
-#: src/components/ui/RenderOverlay.tsx:568
+#: src/components/ui/RenderOverlay.tsx:569
 msgid "{voices} voices"
 msgstr "{voices}件の音声"
 
@@ -250,7 +250,7 @@ msgstr "{voices}件の音声"
 msgid "~{0} to render"
 msgstr "レンダリング約{0}"
 
-#: src/components/ui/RenderOverlay.tsx:1190
+#: src/components/ui/RenderOverlay.tsx:1191
 msgid "💡 <0>Quick Export Notice:</0> To customize individual video clips or fix TTS pronunciation, uncheck \"Quick Export\" in generation settings and re-run."
 msgstr "💡 <0>クイックエクスポートに関する注意:</0> 個別の動画クリップのカスタマイズや、音声の発音修正を行いたい場合は、生成設定の「クイックエクスポート」のチェックを外して再実行してください。"
 
@@ -258,7 +258,7 @@ msgstr "💡 <0>クイックエクスポートに関する注意:</0> 個別の�
 msgid "0 = no limit"
 msgstr "0 = 制限なし"
 
-#: src/components/ui/RenderOverlay.tsx:568
+#: src/components/ui/RenderOverlay.tsx:569
 msgid "1 clip"
 msgstr "1クリップ"
 
@@ -266,7 +266,7 @@ msgstr "1クリップ"
 msgid "1 file"
 msgstr "1ファイル"
 
-#: src/hooks/useFileActions.ts:135
+#: src/hooks/useFileActions.ts:136
 msgid "1 file was skipped: only photos, GPX files and text files can be dropped here."
 msgstr "1個のファイルをスキップしました。ここにドロップできるのは写真、GPXファイル、テキストファイルだけです。"
 
@@ -278,7 +278,7 @@ msgstr "1区間"
 msgid "1 minute"
 msgstr "1分"
 
-#: src/hooks/useFileActions.ts:49
+#: src/hooks/useFileActions.ts:50
 msgid "1 photo could not be converted and was skipped."
 msgstr "1枚の写真を変換できなかったため、スキップしました。"
 
@@ -290,7 +290,7 @@ msgstr "1か所"
 msgid "1 stop has no narration and will be silent"
 msgstr "1か所にナレーションがなく、無音になります"
 
-#: src/components/ui/RenderOverlay.tsx:568
+#: src/components/ui/RenderOverlay.tsx:569
 msgid "1 voice"
 msgstr "1件の音声"
 
@@ -314,7 +314,7 @@ msgstr "添付する PDF の巡礼ルートを、訪日外国人向けに落ち�
 msgid "A day trip around Shirahama in Wakayama, Japanese narration, about 3 minutes"
 msgstr "和歌山・白浜を巡る日帰り旅。日本語ナレーションで 3 分ほど"
 
-#: src/components/ui/VoiceSettings.tsx:550
+#: src/components/ui/VoiceSettings.tsx:562
 msgid "A fast draft takes about half the time per line and sounds a little rougher. Use it while you are checking a project and switch to Best for the final render. Narration you already have is kept; use Redo voice in the review step to remake it with this setting."
 msgstr "高速ドラフトは1行あたりの時間が約半分で、音は少し粗くなります。確認中に使い、最終レンダリングでは「最高」に切り替えてください。すでにあるナレーションはそのまま残ります。この設定で作り直すには、確認ステップの「音声をやり直す」を使ってください。"
 
@@ -326,13 +326,17 @@ msgstr "高速ドラフトは1行あたりの時間が約半分で、音は少�
 msgid "A relaxed walking video that follows the GPX track I attach, with English narration, about 4 minutes"
 msgstr "添付する GPX トラックをたどる、のんびりとした散策動画。英語ナレーションで約 4 分"
 
-#: src/components/ui/VoiceSettings.tsx:477
+#: src/components/ui/VoiceSettings.tsx:489
 msgid "A short description of the way the natural voice speaks, written in Japanese. Leave it empty for no style. Changing it regenerates the narration the next time you generate."
 msgstr "自然な声の話し方を日本語で短く書きます。空欄の場合は話し方の指定なしになります。変更すると、次回の生成時にナレーションが作り直されます。"
 
-#: src/components/ui/VoiceSettings.tsx:590
+#: src/components/ui/VoiceSettings.tsx:602
 msgid "A voice with this name already exists."
 msgstr "この名前のボイスはすでにあります。"
+
+#: src/components/ui/VcRuntimeGate.tsx:43
+msgid "A Windows component is missing"
+msgstr "Windows のコンポーネントが見つかりません"
 
 #: src/components/ui/AppSettings.tsx:206
 msgid "About"
@@ -355,13 +359,13 @@ msgstr "読み上げは約{seconds}秒(目標{0}秒、許容{range}秒)"
 
 #. placeholder {0}: MODEL_CREDITS.kokoro.by
 #. placeholder {1}: MODEL_CREDITS.kokoro.license
-#: src/components/ui/ComponentsChecklist.tsx:111
+#: src/components/ui/ComponentsChecklist.tsx:179
 msgid "About 2 GB. A few built-in Japanese voices, a few seconds per line. A little flatter, and it cannot clone a voice. By {0}, {1}."
 msgstr "約2GB。内蔵の日本語の声がいくつかあり、1行あたり数秒で作れます。やや平坦な響きになり、声の複製はできません。作者: {0}、{1}。"
 
 #. placeholder {0}: MODEL_CREDITS.irodori.by
 #. placeholder {1}: MODEL_CREDITS.irodori.license
-#: src/components/ui/ComponentsChecklist.tsx:113
+#: src/components/ui/ComponentsChecklist.tsx:181
 msgid "About 3 GB, more with a graphics card. The most natural, and it clones a voice. Slowest on a PC without a graphics card. By {0}, {1}."
 msgstr "約3GB（グラフィックスカードがある場合はそれ以上）。いちばん自然で、声の複製もできます。グラフィックスカードのないPCでは最も遅くなります。作者: {0}、{1}。"
 
@@ -372,13 +376,13 @@ msgstr "約3GB（グラフィックスカードがある場合はそれ以上）
 #. placeholder {4}: MODEL_CREDITS.wan.license
 #. placeholder {5}: MODEL_CREDITS.comfyui.name
 #. placeholder {6}: MODEL_CREDITS.comfyui.license
-#: src/components/ui/ComponentsChecklist.tsx:159
+#: src/components/ui/ComponentsChecklist.tsx:247
 msgid "About 30 GB and an NVIDIA graphics card. Turns each photo into a camera move with {0} ({1}) and {2} ({3}, {4}), run by {5} ({6}). Without it, clips pan across the photo."
 msgstr "約30GBとNVIDIAのグラフィックスカードが必要です。{0}（{1}）と{2}（{3}、{4}）で写真ごとにカメラの動きを作り、{5}（{6}）で実行します。なければ、クリップは写真の上をパンするだけになります。"
 
 #. placeholder {0}: MODEL_CREDITS.qwen3.by
 #. placeholder {1}: MODEL_CREDITS.qwen3.license
-#: src/components/ui/ComponentsChecklist.tsx:112
+#: src/components/ui/ComponentsChecklist.tsx:180
 msgid "About 4 GB. Clones a voice from a recording in about a third of the natural voice's time. By {0}, {1}."
 msgstr "約4GB。録音から声を複製します。自然な声の約3分の1の時間で作れます。作者: {0}、{1}。"
 
@@ -394,7 +398,7 @@ msgstr "アクセントカラー"
 msgid "Accept and apply to project"
 msgstr "承認してプロジェクトに反映"
 
-#: src/components/ui/RenderOverlay.tsx:1290
+#: src/components/ui/RenderOverlay.tsx:1291
 msgid "Accept and export"
 msgstr "承認して書き出す"
 
@@ -415,7 +419,7 @@ msgstr "先に動画を追加してから字幕を読み込んでください"
 msgid "Add a video to start"
 msgstr "動画を追加して開始"
 
-#: src/components/ui/VoiceSettings.tsx:560
+#: src/components/ui/VoiceSettings.tsx:572
 msgid "Add a voice"
 msgstr "ボイスを追加"
 
@@ -514,7 +518,7 @@ msgstr "ここに中継点を追加"
 msgid "Add video"
 msgstr "動画を追加"
 
-#: src/components/ui/VoiceSettings.tsx:584
+#: src/components/ui/VoiceSettings.tsx:596
 msgid "Add voice"
 msgstr "ボイスを追加"
 
@@ -586,7 +590,7 @@ msgstr "すべて"
 msgid "All changes safely stored to disk"
 msgstr "すべての変更が保存されました"
 
-#: src/components/ui/RenderOverlay.tsx:1183
+#: src/components/ui/RenderOverlay.tsx:1184
 msgid "All media was automatically generated, stitched, and exported to your project folder without stopping for manual review"
 msgstr "手動での確認を挟むことなく、すべてのメディアが自動的に生成・結合され、プロジェクトフォルダにエクスポートされました"
 
@@ -612,8 +616,8 @@ msgstr "すべての音声"
 msgid "Also save subtitles as .srt"
 msgstr "字幕を .srt としても保存する"
 
-#: src/components/ui/RenderOverlay.tsx:766
-#: src/components/ui/RenderOverlay.tsx:1131
+#: src/components/ui/RenderOverlay.tsx:767
+#: src/components/ui/RenderOverlay.tsx:1132
 msgid "An unknown error occurred during rendering."
 msgstr "レンダリング中に予期せぬエラーが発生しました"
 
@@ -650,8 +654,8 @@ msgstr "API キー"
 msgid "API keys"
 msgstr "API キー"
 
-#: src/components/ui/TitleBar.tsx:436
-#: src/components/ui/TitleBar.tsx:440
+#: src/components/ui/TitleBar.tsx:438
+#: src/components/ui/TitleBar.tsx:442
 msgid "App Settings"
 msgstr "アプリ設定"
 
@@ -680,7 +684,7 @@ msgid "Apply to all titles like this"
 msgstr "同じ種類のタイトルすべてに適用"
 
 #. placeholder {0}: modalState.project?.name
-#: src/components/view/ProjectManager.tsx:632
+#: src/components/view/ProjectManager.tsx:636
 msgid "Are you sure you want to remove <0>{0}</0> from your recent list? The original files will remain on your computer."
 msgstr "本当に <0>{0}</0> を最近のプロジェクトから削除しますか？元のファイルはコンピュータ上に残ります。"
 
@@ -692,17 +696,17 @@ msgstr "到着時のスクリプト"
 msgid "Ask or add details…"
 msgstr "質問や補足を入力…"
 
-#: src/components/ui/RenderOverlay.tsx:1184
+#: src/components/ui/RenderOverlay.tsx:1185
 msgid "Assets accepted and stitched into your final deliverable video"
 msgstr "アセットが承認され、最終的な動画として結合されました。"
 
-#: src/components/ui/TitleBar.tsx:424
-#: src/components/ui/TitleBar.tsx:429
-#: src/features/assistant/AssistantPanel.tsx:17
+#: src/components/ui/TitleBar.tsx:426
+#: src/components/ui/TitleBar.tsx:431
+#: src/features/assistant/AssistantPanel.tsx:19
 msgid "Assistant"
 msgstr "アシスタント"
 
-#: src/components/ui/RenderOverlay.tsx:382
+#: src/components/ui/RenderOverlay.tsx:383
 msgid "At {stopName}"
 msgstr "{stopName}"
 
@@ -726,7 +730,7 @@ msgstr "見どころスクリプト"
 msgid "Attraction videos"
 msgstr "観光地動画"
 
-#: src/components/ui/VoiceSettings.tsx:172
+#: src/components/ui/VoiceSettings.tsx:184
 #: src/features/editor/EditorView.tsx:79
 msgid "Audio"
 msgstr "音声"
@@ -771,11 +775,11 @@ msgstr "自動保存"
 msgid "Auto-save failed"
 msgstr "自動保存に失敗しました"
 
-#: src/components/ui/RenderOverlay.tsx:984
+#: src/components/ui/RenderOverlay.tsx:985
 msgid "Auto-skipped (Quick Export)"
 msgstr "自動スキップ (クイックエクスポート)"
 
-#: src/components/ui/RenderOverlay.tsx:990
+#: src/components/ui/RenderOverlay.tsx:991
 msgid "Auto-stitched Video"
 msgstr "自動結合された動画"
 
@@ -817,11 +821,11 @@ msgstr "背景ボックス"
 msgid "Background music"
 msgstr "BGM"
 
-#: src/components/ui/VoiceSettings.tsx:545
+#: src/components/ui/VoiceSettings.tsx:557
 msgid "Balanced"
 msgstr "標準"
 
-#: src/components/ui/VoiceSettings.tsx:227
+#: src/components/ui/VoiceSettings.tsx:239
 msgid "Balanced voice"
 msgstr "標準の声"
 
@@ -829,15 +833,15 @@ msgstr "標準の声"
 #~ msgid "Balanced voice · about 4 GB"
 #~ msgstr "バランス型の声 · 約4GB"
 
-#: src/components/ui/ComponentsChecklist.tsx:112
+#: src/components/ui/ComponentsChecklist.tsx:180
 msgid "Balanced voice · Qwen3-TTS"
 msgstr "標準の声 · Qwen3-TTS"
 
-#: src/components/ui/VoiceSettings.tsx:238
+#: src/components/ui/VoiceSettings.tsx:250
 msgid "Balanced voice also clones a voice from a recording, in less than half the time. It sounds a little less natural and can occasionally change the intonation of a short line. It uses about 3 GB of memory while it runs."
 msgstr "標準の声も録音した声を複製でき、半分以下の時間で作れます。自然さはやや劣り、短い行ではときどき抑揚が変わることがあります。動作中は約3GBのメモリを使います。"
 
-#: src/components/ui/VoiceSettings.tsx:322
+#: src/components/ui/VoiceSettings.tsx:334
 msgid "Balanced voice setup"
 msgstr "標準の声のセットアップ"
 
@@ -853,7 +857,7 @@ msgstr "ベースマップと地名。"
 msgid "Based on your earlier renders on this PC. Unchanged clips are reused, so it may finish sooner."
 msgstr "このPCでの過去のレンダリングに基づく目安です。変更のないクリップは再利用されるため、早く終わる場合があります。"
 
-#: src/components/ui/VoiceSettings.tsx:546
+#: src/components/ui/VoiceSettings.tsx:558
 msgid "Best"
 msgstr "最高"
 
@@ -908,7 +912,7 @@ msgstr "カード型"
 msgid "Boxed keeps the photo in a card with its caption; full photo fills the frame."
 msgstr "カード型は写真をキャプション付きのカードに収めます。全面表示は写真を画面いっぱいに表示します。"
 
-#: src/components/ui/RenderOverlay.tsx:977
+#: src/components/ui/RenderOverlay.tsx:978
 msgid "Build Assets"
 msgstr "アセットを構築"
 
@@ -950,18 +954,19 @@ msgstr "キャンセル"
 
 #: src/components/ui/AutoDirectorModal.tsx:94
 #: src/components/ui/AutoDirectorModal.tsx:120
+#: src/components/ui/ComponentsChecklist.tsx:269
 #: src/components/ui/ExportProjectDialog.tsx:88
 #: src/components/ui/NewProject.tsx:401
 #: src/components/ui/OnlineAiSettings.tsx:186
-#: src/components/ui/RenderOverlay.tsx:796
-#: src/components/ui/RenderOverlay.tsx:955
+#: src/components/ui/RenderOverlay.tsx:797
+#: src/components/ui/RenderOverlay.tsx:956
 #: src/components/ui/SaveAs.tsx:105
 #: src/components/ui/UnsavedChanges.tsx:35
-#: src/components/ui/VoiceSettings.tsx:386
-#: src/components/ui/VoiceSettings.tsx:523
-#: src/components/ui/VoiceSettings.tsx:588
-#: src/components/view/ProjectManager.tsx:618
-#: src/components/view/ProjectManager.tsx:663
+#: src/components/ui/VoiceSettings.tsx:398
+#: src/components/ui/VoiceSettings.tsx:535
+#: src/components/ui/VoiceSettings.tsx:600
+#: src/components/view/ProjectManager.tsx:622
+#: src/components/view/ProjectManager.tsx:667
 #: src/components/view/ProjectSettingsModal.tsx:159
 #: src/features/editor/ExportDialog.tsx:96
 #: src/features/map/components/GenerateDialog.tsx:122
@@ -976,15 +981,15 @@ msgstr "キャンセル"
 msgid "Cancel download"
 msgstr "ダウンロードをキャンセル"
 
-#: src/components/ui/RenderOverlay.tsx:1111
+#: src/components/ui/RenderOverlay.tsx:1112
 msgid "Cancelling process..."
 msgstr "処理をキャンセルしています..."
 
-#: src/components/ui/RenderOverlay.tsx:762
+#: src/components/ui/RenderOverlay.tsx:763
 msgid "Cancelling..."
 msgstr "キャンセル中..."
 
-#: src/components/ui/TitleBar.tsx:130
+#: src/components/ui/TitleBar.tsx:132
 msgid "Cannot close window. Check Tauri capabilities"
 msgstr "[アドミン] ウィンドウを閉じることができません。Tauriの権限を確認してください。"
 
@@ -1013,7 +1018,7 @@ msgstr "カードとオーバーレイ"
 msgid "Centre"
 msgstr "中央"
 
-#: src/components/ui/RenderOverlay.tsx:985
+#: src/components/ui/RenderOverlay.tsx:986
 msgid "Check Audio & Video"
 msgstr "オーディオとビデオを確認"
 
@@ -1021,13 +1026,12 @@ msgstr "オーディオとビデオを確認"
 msgid "Check the results"
 msgstr "結果を確認"
 
-#: src/components/ui/ComponentsChecklist.tsx:94
+#: src/components/ui/ComponentsChecklist.tsx:148
 msgid "Check what you need. Only one voice is required; everything else is optional and can be added later."
 msgstr "必要なものを確認してください。必須なのは声を1つだけで、ほかは任意です。あとから追加できます。"
 
-#: src/components/ui/ComponentsChecklist.tsx:121
-#: src/components/ui/ComponentsChecklist.tsx:141
-#: src/components/ui/VoiceSettings.tsx:511
+#: src/components/ui/ComponentsChecklist.tsx:193
+#: src/components/ui/VoiceSettings.tsx:523
 msgid "Checking…"
 msgstr "確認中…"
 
@@ -1039,7 +1043,11 @@ msgstr "ファイルを選択…"
 msgid "Choose a leg"
 msgstr "区間を選択"
 
-#: src/components/ui/VoiceSettings.tsx:595
+#: src/components/ui/ComponentsChecklist.tsx:230
+msgid "Choose a model"
+msgstr "モデルを選択"
+
+#: src/components/ui/VoiceSettings.tsx:607
 msgid "Choose a recording…"
 msgstr "録音ファイルを選択…"
 
@@ -1066,7 +1074,7 @@ msgstr "カードの前にきれいな地図を表示"
 #: src/components/ui/NewProject.tsx:317
 #: src/components/ui/ReviewStep.tsx:174
 #: src/components/ui/StatusBar.tsx:402
-#: src/components/ui/VoiceSettings.tsx:520
+#: src/components/ui/VoiceSettings.tsx:532
 #: src/features/map/components/Sidebar.tsx:256
 msgid "Clear"
 msgstr "クリア"
@@ -1079,7 +1087,7 @@ msgstr "すべて削除"
 msgid "Clear All Notifications"
 msgstr "すべての通知を消去"
 
-#: src/components/ui/VoiceSettings.tsx:528
+#: src/components/ui/VoiceSettings.tsx:540
 msgid "Clear cache"
 msgstr "キャッシュをクリア"
 
@@ -1140,10 +1148,10 @@ msgstr "クリップを並べ替え、フェードと字幕を追加しました
 #: src/components/ui/ErrorBoundary.tsx:85
 #: src/components/ui/FontDownloadDialog.tsx:80
 #: src/components/ui/NewProject.tsx:232
-#: src/components/ui/RenderOverlay.tsx:1303
+#: src/components/ui/RenderOverlay.tsx:1304
 #: src/components/ui/StatusBar.tsx:454
-#: src/components/ui/TitleBar.tsx:463
-#: src/features/assistant/AssistantPanel.tsx:19
+#: src/components/ui/TitleBar.tsx:465
+#: src/features/assistant/AssistantPanel.tsx:21
 #: src/features/map/components/MapLayers/LayerManager.tsx:75
 #: src/features/map/components/MapLayers/LayerManager.tsx:76
 #: src/features/map/components/MapLayers/RouteStyling.tsx:95
@@ -1182,7 +1190,7 @@ msgstr "色と、幅（ピクセル、0 = なし）"
 msgid "Columns"
 msgstr "列数"
 
-#: src/components/ui/RenderOverlay.tsx:1162
+#: src/components/ui/RenderOverlay.tsx:1163
 msgid "Combining all route segments, narration voiceovers, and transitions into your completed master navigation video."
 msgstr "すべてのルートセグメント、ナレーション音声、トランジションを結合し、最終的なマスターナビ動画を生成しています"
 
@@ -1191,7 +1199,7 @@ msgstr "すべてのルートセグメント、ナレーション音声、トラ
 msgid "Compass on stop maps"
 msgstr "地点マップのコンパス"
 
-#: src/components/view/ProjectManager.tsx:671
+#: src/components/view/ProjectManager.tsx:675
 msgid "Confirm"
 msgstr "確認"
 
@@ -1203,15 +1211,15 @@ msgstr "ルートに接続済み"
 msgid "Controls auto save of editors that have unsaved changes"
 msgstr "未保存の変更があるエディタの自動保存を制御します"
 
-#: src/hooks/useFileActions.ts:44
+#: src/hooks/useFileActions.ts:45
 msgid "Converting {heicCount} iPhone photos..."
 msgstr "iPhoneの写真{heicCount}枚を変換しています..."
 
-#: src/hooks/useFileActions.ts:44
+#: src/hooks/useFileActions.ts:45
 msgid "Converting 1 iPhone photo..."
 msgstr "iPhoneの写真1枚を変換しています..."
 
-#: src/hooks/useFileActions.ts:173
+#: src/hooks/useFileActions.ts:174
 msgid "Converting GPS file format..."
 msgstr "GPSファイル形式を変換しています..."
 
@@ -1284,7 +1292,7 @@ msgid "Could not add the video: {0}"
 msgstr "動画を追加できませんでした: {0}"
 
 #: src/features/map/components/WaypointEditor.tsx:226
-#: src/hooks/useFileActions.ts:51
+#: src/hooks/useFileActions.ts:52
 msgid "Could not convert the iPhone photos."
 msgstr "iPhoneの写真を変換できませんでした。"
 
@@ -1293,7 +1301,7 @@ msgid "Could not delete this version"
 msgstr "このバージョンを削除できませんでした。"
 
 #. placeholder {0}: row.title
-#: src/components/ui/RenderOverlay.tsx:407
+#: src/components/ui/RenderOverlay.tsx:408
 msgid "Could not load audio for {0}"
 msgstr "{0} の音声委を読み込めませんでした"
 
@@ -1306,8 +1314,8 @@ msgstr "写真を探せませんでした: {0}"
 msgid "Could not make that again: {message}"
 msgstr "作り直せませんでした: {message}"
 
-#: src/components/ui/TitleBar.tsx:271
-#: src/components/view/ProjectManager.tsx:266
+#: src/components/ui/TitleBar.tsx:273
+#: src/components/view/ProjectManager.tsx:268
 msgid "Could not open file location"
 msgstr "ファイルの場所を開けませんでした"
 
@@ -1325,11 +1333,11 @@ msgid "Could not read the file: {0}"
 msgstr "ファイルを読み込めませんでした: {0}"
 
 #. placeholder {0}: err?.message ?? err
-#: src/components/ui/RenderOverlay.tsx:600
+#: src/components/ui/RenderOverlay.tsx:601
 msgid "Could not redo that: {0}"
 msgstr "やり直せませんでした: {0}"
 
-#: src/components/view/ProjectManager.tsx:107
+#: src/components/view/ProjectManager.tsx:109
 msgid "Could not render project directly: "
 msgstr "プロジェクトを直接レンダリングできませんでした: "
 
@@ -1395,7 +1403,7 @@ msgstr "カスタムカラー"
 msgid "Custom Marker"
 msgstr "カスタムマーカー"
 
-#: src/components/ui/RenderOverlay.tsx:1270
+#: src/components/ui/RenderOverlay.tsx:1271
 msgid "Customize in Timeline"
 msgstr "タイムラインでカスタマイズ"
 
@@ -1446,8 +1454,8 @@ msgstr "デフォルトの移動手段"
 msgid "default-routing-mode-detail"
 msgstr "ポイントを配置する際のデフォルトの経路検索"
 
-#: src/components/ui/VoiceSettings.tsx:383
 #: src/components/ui/VoiceSettings.tsx:395
+#: src/components/ui/VoiceSettings.tsx:407
 #: src/features/editor/Inspector.tsx:575
 #: src/features/editor/Inspector.tsx:609
 #: src/features/map/components/WaypointEditor.tsx:854
@@ -1455,7 +1463,7 @@ msgid "Delete"
 msgstr "削除"
 
 #. placeholder {0}: v.id
-#: src/components/ui/VoiceSettings.tsx:395
+#: src/components/ui/VoiceSettings.tsx:407
 msgid "Delete {0}"
 msgstr "{0}を削除"
 
@@ -1516,7 +1524,7 @@ msgstr "古いファイルを1件削除しました。あらためて作成さ�
 msgid "Describe a trip and I will set up the stops and scripts for you. Attach an itinerary if you have one."
 msgstr "旅の内容を伝えてください。立ち寄り先と台本を用意します。旅程表があれば添付してください。"
 
-#: src/components/ui/VoiceSettings.tsx:472
+#: src/components/ui/VoiceSettings.tsx:484
 msgid "Describe how the voice should speak"
 msgstr "声の話し方を指定してください"
 
@@ -1545,7 +1553,7 @@ msgstr "目的地"
 #: src/components/ui/AboutPanel.tsx:76
 #: src/components/ui/AboutPanel.tsx:92
 #: src/components/ui/PipelineLogPanel.tsx:119
-#: src/components/ui/RenderOverlay.tsx:827
+#: src/components/ui/RenderOverlay.tsx:828
 msgid "Details"
 msgstr "詳細"
 
@@ -1569,11 +1577,11 @@ msgstr "辞書"
 msgid "Direct"
 msgstr "直線"
 
-#: src/components/ui/RenderOverlay.tsx:883
+#: src/components/ui/RenderOverlay.tsx:884
 msgid "Discard"
 msgstr "破棄"
 
-#: src/components/ui/RenderOverlay.tsx:801
+#: src/components/ui/RenderOverlay.tsx:802
 #: src/components/ui/Toast.tsx:68
 #: src/components/ui/Toast.tsx:69
 msgid "Dismiss"
@@ -1618,7 +1626,7 @@ msgid "Don't Save"
 msgstr "保存しない"
 
 #: src/components/ui/ExportProjectDialog.tsx:82
-#: src/components/ui/RenderOverlay.tsx:1234
+#: src/components/ui/RenderOverlay.tsx:1235
 #: src/components/ui/SetupGate.tsx:64
 #: src/features/editor/ExportDialog.tsx:90
 #: src/features/map/components/DrawBar.tsx:319
@@ -1697,18 +1705,18 @@ msgstr "車"
 msgid "Drop photos or GPS files to plot route"
 msgstr "写真またはGPSファイルをドロップしてルートを作成"
 
-#: src/components/view/ProjectManager.tsx:226
+#: src/components/view/ProjectManager.tsx:228
 #: src/features/editor/EditorView.tsx:293
 #: src/features/editor/Inspector.tsx:516
 #: src/features/map/hooks/useStopMenus.ts:239
 msgid "Duplicate"
 msgstr "複製"
 
-#: src/components/view/ProjectManager.tsx:651
+#: src/components/view/ProjectManager.tsx:655
 msgid "Duplicate Project"
 msgstr "プロジェクトを複製"
 
-#: src/components/view/ProjectManager.tsx:685
+#: src/components/view/ProjectManager.tsx:689
 msgid "Duplicate Project Name"
 msgstr "複製するプロジェクト名"
 
@@ -1746,15 +1754,15 @@ msgstr "立ち寄り地点を編集"
 msgid "Edit the drawn path on the map"
 msgstr "地図上で描いた経路を編集"
 
-#: src/components/ui/RenderOverlay.tsx:869
+#: src/components/ui/RenderOverlay.tsx:870
 msgid "Edit the image, script, or route mode in the Waypoint Editor. Click Resume when ready to re-render"
 msgstr "ポイントエディタで画像、スクリプト、ルートモードを編集します。準備ができたら「再開」ボタンをクリックして再レンダリングしてください"
 
-#: src/components/ui/RenderOverlay.tsx:855
+#: src/components/ui/RenderOverlay.tsx:856
 msgid "Editing Waypoint on Map"
 msgstr "マップ上のポイントを編集しています"
 
-#: src/components/ui/TitleBar.tsx:389
+#: src/components/ui/TitleBar.tsx:391
 msgid "Editor view"
 msgstr "エディター表示"
 
@@ -1772,9 +1780,9 @@ msgstr "標高プロファイル"
 msgid "Enable 3D Terrain"
 msgstr "3D地形を有効にする"
 
-#: src/components/ui/RenderOverlay.tsx:364
+#: src/components/ui/RenderOverlay.tsx:365
 #: src/features/map/components/MapToolbar.tsx:91
-#: src/hooks/useFileActions.ts:255
+#: src/hooks/useFileActions.ts:259
 msgid "End"
 msgstr "終了"
 
@@ -1787,7 +1795,7 @@ msgstr "終了"
 msgid "End pin"
 msgstr "終点のピン"
 
-#: src/components/ui/RenderOverlay.tsx:388
+#: src/components/ui/RenderOverlay.tsx:389
 msgid "Ending card"
 msgstr "エンディングカード"
 
@@ -1813,7 +1821,7 @@ msgstr "消去"
 msgid "Erase points (E)"
 msgstr "点を消去 (E)"
 
-#: src/components/ui/RenderOverlay.tsx:1127
+#: src/components/ui/RenderOverlay.tsx:1128
 msgid "Error Details:"
 msgstr "エラー詳細:"
 
@@ -1850,11 +1858,11 @@ msgstr "すべての字幕の基本の見た目になります"
 msgid "Every voice, subtitle and clip in this project is made again, even the ones you are happy with, and replaces the files you have now. This can take as long as your first render. Your own photos, videos and music are not touched."
 msgstr "このプロジェクトの音声、字幕、クリップをすべて作り直します。気に入っているものも含まれ、現在のファイルは置き換えられます。最初のレンダリングと同じくらい時間がかかることがあります。ご自身の写真、動画、音楽には手を加えません。"
 
-#: src/components/ui/ComponentsChecklist.tsx:99
+#: src/components/ui/ComponentsChecklist.tsx:153
 msgid "Everything you need is set up."
 msgstr "必要なものはすべてセットアップ済みです。"
 
-#: src/components/ui/TitleBar.tsx:337
+#: src/components/ui/TitleBar.tsx:339
 msgid "Exit"
 msgstr "終了"
 
@@ -1863,11 +1871,11 @@ msgstr "終了"
 msgid "Expand"
 msgstr "展開"
 
-#: src/components/ui/RenderOverlay.tsx:862
+#: src/components/ui/RenderOverlay.tsx:863
 msgid "Expand Review"
 msgstr "レビューを展開"
 
-#: src/components/ui/RenderOverlay.tsx:989
+#: src/components/ui/RenderOverlay.tsx:990
 #: src/features/editor/EditorView.tsx:401
 #: src/features/editor/ExportDialog.tsx:99
 msgid "Export"
@@ -1878,7 +1886,7 @@ msgid "Export automatically"
 msgstr "自動で書き出す"
 
 #. placeholder {0}: err?.message || err
-#: src/components/ui/RenderOverlay.tsx:659
+#: src/components/ui/RenderOverlay.tsx:660
 msgid "Export failed: {0}"
 msgstr "エクスポートに失敗しました: {0}"
 
@@ -1886,8 +1894,8 @@ msgstr "エクスポートに失敗しました: {0}"
 msgid "Export for sharing"
 msgstr "共有用に書き出し"
 
-#: src/components/ui/TitleBar.tsx:250
-#: src/components/view/ProjectManager.tsx:242
+#: src/components/ui/TitleBar.tsx:252
+#: src/components/view/ProjectManager.tsx:244
 msgid "Export for sharing..."
 msgstr "共有用に書き出し..."
 
@@ -1899,11 +1907,11 @@ msgstr "動画を書き出す"
 msgid "Export…"
 msgstr "書き出し…"
 
-#: src/components/ui/RenderOverlay.tsx:655
+#: src/components/ui/RenderOverlay.tsx:656
 msgid "exportSuccessToastMsg"
 msgstr "エクスポート処理が正常に完了しました！"
 
-#: src/hooks/useFileActions.ts:219
+#: src/hooks/useFileActions.ts:223
 msgid "Extracting waypoints from GPS data..."
 msgstr "GPSデータからポイントを抽出しています..."
 
@@ -1928,11 +1936,11 @@ msgstr "地点のクリップへのフェード"
 msgid "Fades into the next clip"
 msgstr "次のクリップへフェードします"
 
-#: src/components/ui/RenderOverlay.tsx:962
+#: src/components/ui/RenderOverlay.tsx:963
 msgid "Failed"
 msgstr "失敗"
 
-#: src/components/view/ProjectManager.tsx:202
+#: src/components/view/ProjectManager.tsx:204
 msgid "Failed to duplicate project"
 msgstr "プロジェクトの複製に失敗しました"
 
@@ -1944,27 +1952,27 @@ msgstr "スクリプトの生成に失敗しました"
 msgid "Failed to geocode any locations."
 msgstr "場所のジオコーディングに失敗しました"
 
-#: src/components/ui/RenderOverlay.tsx:246
+#: src/components/ui/RenderOverlay.tsx:247
 msgid "Failed to invoke Python render: {err}"
 msgstr "Pythonレンダリングの呼び出しに失敗しました: {err}"
 
-#: src/components/view/ProjectManager.tsx:146
+#: src/components/view/ProjectManager.tsx:148
 msgid "Failed to load demo route"
 msgstr "デモルートを読み込めませんでした"
 
-#: src/components/view/ProjectManager.tsx:121
+#: src/components/view/ProjectManager.tsx:123
 msgid "Failed to load project: "
 msgstr "プロジェクトの読み込みに失敗しました"
 
-#: src/hooks/useFileActions.ts:310
+#: src/hooks/useFileActions.ts:314
 msgid "Failed to open file dialog"
 msgstr "ファイルダイアログを開けませんでした"
 
-#: src/components/ui/TitleBar.tsx:270
+#: src/components/ui/TitleBar.tsx:272
 msgid "Failed to open file explorer:"
 msgstr "ファイルエクスプローラーを開けませんでした"
 
-#: src/hooks/useFileActions.ts:291
+#: src/hooks/useFileActions.ts:295
 msgid "Failed to parse file"
 msgstr "ファイルの解析に失敗しました"
 
@@ -1972,28 +1980,28 @@ msgstr "ファイルの解析に失敗しました"
 msgid "Failed to process document"
 msgstr "ドキュメントの処理に失敗しました"
 
-#: src/hooks/useFileActions.ts:125
-#: src/hooks/useFileActions.ts:149
+#: src/hooks/useFileActions.ts:126
+#: src/hooks/useFileActions.ts:150
 msgid "Failed to process dropped files"
 msgstr "ドロップされたファイルの処理に失敗しました"
 
-#: src/components/ui/TitleBar.tsx:294
+#: src/components/ui/TitleBar.tsx:296
 msgid "Failed to read project file"
 msgstr "プロジェクトファイルの読み込みに失敗しました"
 
-#: src/components/ui/TitleBar.tsx:310
+#: src/components/ui/TitleBar.tsx:312
 msgid "Failed to read project folder"
 msgstr "プロジェクトフォルダの読み込みに失敗しました"
 
-#: src/components/view/ProjectManager.tsx:204
+#: src/components/view/ProjectManager.tsx:206
 msgid "Failed to remove project"
 msgstr "プロジェクトの削除に失敗しました"
 
-#: src/components/view/ProjectManager.tsx:200
+#: src/components/view/ProjectManager.tsx:202
 msgid "Failed to rename project"
 msgstr "プロジェクト名の変更に失敗しました"
 
-#: src/components/ui/TitleBar.tsx:146
+#: src/components/ui/TitleBar.tsx:148
 msgid "Failed to save project."
 msgstr "プロジェクトの保存に失敗しました"
 
@@ -2001,11 +2009,11 @@ msgstr "プロジェクトの保存に失敗しました"
 msgid "Failed to save settings"
 msgstr "設定の保存に失敗しました"
 
-#: src/components/view/ProjectManager.tsx:206
+#: src/components/view/ProjectManager.tsx:208
 msgid "Failed to update project"
 msgstr "プロジェクトの更新に失敗しました"
 
-#: src/components/ui/VoiceSettings.tsx:544
+#: src/components/ui/VoiceSettings.tsx:556
 msgid "Fast draft"
 msgstr "高速ドラフト"
 
@@ -2019,7 +2027,7 @@ msgstr "高速レンダリング"
 msgid "Fast render mode"
 msgstr "高速レンダリングモード"
 
-#: src/components/ui/VoiceSettings.tsx:228
+#: src/components/ui/VoiceSettings.tsx:240
 msgid "Fast voice"
 msgstr "高速な声"
 
@@ -2027,11 +2035,11 @@ msgstr "高速な声"
 #~ msgid "Fast voice · about 2 GB"
 #~ msgstr "高速な声 · 約2GB"
 
-#: src/components/ui/ComponentsChecklist.tsx:111
+#: src/components/ui/ComponentsChecklist.tsx:179
 msgid "Fast voice · Kokoro-82M"
 msgstr "高速な声 · Kokoro-82M"
 
-#: src/components/ui/VoiceSettings.tsx:243
+#: src/components/ui/VoiceSettings.tsx:255
 msgid "Fast voice has a few built-in Japanese voices and takes a few seconds per line. It sounds a little flatter and cannot clone a voice."
 msgstr "高速な声は内蔵の日本語の声がいくつかあり、1行あたり数秒で作れます。やや平坦な響きになり、声の複製はできません。"
 
@@ -2049,11 +2057,11 @@ msgstr "全体マップの画像を取得して、ルートの収まり方を確
 msgid "Fetching..."
 msgstr "取得しています..."
 
-#: src/components/view/ProjectManager.tsx:525
+#: src/components/view/ProjectManager.tsx:529
 msgid "File Path"
 msgstr "ファイルパス"
 
-#: src/components/ui/RenderOverlay.tsx:300
+#: src/components/ui/RenderOverlay.tsx:301
 msgid "Finalizing Project Timeline..."
 msgstr "プロジェクトのタイムラインを確定しています..."
 
@@ -2175,23 +2183,23 @@ msgstr "イントロ動画を生成"
 msgid "Generate only makes what is missing and reuses the rest, so running it again will not change what you already have. To make something again, tick it here and it is deleted first."
 msgstr "生成は足りないものだけを作り、残りは再利用します。そのため、すでにあるものはもう一度実行しても変わりません。作り直したいものはここでチェックすると、先に削除されます。"
 
-#: src/components/ui/RenderOverlay.tsx:1090
+#: src/components/ui/RenderOverlay.tsx:1091
 msgid "Generating Assets (Quick Export Mode)..."
 msgstr "アセットを生成中..."
 
-#: src/components/ui/RenderOverlay.tsx:1091
+#: src/components/ui/RenderOverlay.tsx:1092
 msgid "Generating Assets..."
 msgstr "アセットを生成中..."
 
-#: src/components/ui/RenderOverlay.tsx:294
+#: src/components/ui/RenderOverlay.tsx:295
 msgid "Generating Subtitles{prog}..."
 msgstr "字幕を生成中{prog}..."
 
-#: src/components/ui/VoiceSettings.tsx:407
+#: src/components/ui/VoiceSettings.tsx:419
 msgid "Generating the sample. The first one can take a minute or more while the voice model loads."
 msgstr "サンプルを生成しています。初回は音声モデルの読み込みで1分以上かかることがあります。"
 
-#: src/components/ui/VoiceSettings.tsx:296
+#: src/components/ui/VoiceSettings.tsx:308
 msgid "Generating the sample. The first one takes about 20 seconds while the voice model loads."
 msgstr "サンプルを生成しています。最初の1回は音声モデルの読み込みのため約20秒かかります。"
 
@@ -2203,11 +2211,11 @@ msgstr "生成中..."
 msgid "Generation"
 msgstr "生成"
 
-#: src/components/ui/RenderOverlay.tsx:1123
+#: src/components/ui/RenderOverlay.tsx:1124
 msgid "Generation Failed"
 msgstr "生成に失敗しました"
 
-#: src/components/ui/RenderOverlay.tsx:848
+#: src/components/ui/RenderOverlay.tsx:849
 msgid "Generation On Hold"
 msgstr "生成を保留中"
 
@@ -2229,7 +2237,7 @@ msgid "Get name from coordinate"
 msgstr "座標から名前をと取得"
 
 #: src/components/ui/AppSettings.tsx:1105
-#: src/components/ui/ComponentsChecklist.tsx:133
+#: src/components/ui/ComponentsChecklist.tsx:214
 msgid "Get Ollama"
 msgstr "Ollama を入手"
 
@@ -2247,7 +2255,7 @@ msgid "GPS track"
 msgstr "GPSトラック"
 
 #: src/components/ui/NewProject.tsx:139
-#: src/hooks/useFileActions.ts:157
+#: src/hooks/useFileActions.ts:158
 msgid "GPS/Text Files"
 msgstr "GPS/テキストファイル"
 
@@ -2268,7 +2276,7 @@ msgstr "緑"
 msgid "Grid"
 msgstr "グリッド"
 
-#: src/components/view/ProjectManager.tsx:420
+#: src/components/view/ProjectManager.tsx:424
 msgid "Grid View"
 msgstr "グリッド表示"
 
@@ -2352,21 +2360,21 @@ msgstr "AI に接続できませんでした: {0}。設定の「AI モデル」�
 msgid "Ignores what already exists and makes every voice, subtitle and clip from scratch, even if nothing changed. Takes the longest."
 msgstr "既存のものを無視して、変更がなくてもすべての音声、字幕、クリップを最初から作り直します。最も時間がかかります。"
 
-#: src/components/ui/TitleBar.tsx:332
+#: src/components/ui/TitleBar.tsx:334
 msgid "Import GPX..."
 msgstr "GPXをインポート..."
 
-#: src/components/ui/TitleBar.tsx:324
+#: src/components/ui/TitleBar.tsx:326
 msgid "Import Photos..."
 msgstr "写真をインポート..."
 
 #. placeholder {0}: photoPoints.length
-#: src/hooks/useFileActions.ts:118
+#: src/hooks/useFileActions.ts:119
 msgid "Imported {0} photos and generated route."
 msgstr "{0}枚の写真をインポートし、ルートを生成しました。"
 
 #. placeholder {0}: newNaviviWaypoints.length
-#: src/hooks/useFileActions.ts:288
+#: src/hooks/useFileActions.ts:292
 msgid "Imported {0} waypoints successfully"
 msgstr "{0}個のポイントを正常にインポートしました"
 
@@ -2391,7 +2399,7 @@ msgstr "含む"
 msgid "Increase"
 msgstr "増やす"
 
-#: src/components/ui/RenderOverlay.tsx:281
+#: src/components/ui/RenderOverlay.tsx:282
 msgid "Initializing pipeline..."
 msgstr "パイプラインを初期化しています..."
 
@@ -2415,17 +2423,39 @@ msgstr "キューを挿入: この位置で地点の手前まで来ます"
 msgid "Insert a cue: the walk starts moving at this point"
 msgstr "キューを挿入: この位置で歩き始めます"
 
+#: src/components/ui/ComponentsChecklist.tsx:272
 #: src/components/ui/FontDownloadDialog.tsx:125
 #: src/components/ui/SetupGate.tsx:107
 msgid "Install"
 msgstr "インストール"
 
+#: src/components/ui/ComponentsChecklist.tsx:172
+#: src/components/ui/ComponentsChecklist.tsx:211
+#: src/components/ui/VcRuntimeGate.tsx:53
+msgid "Install now"
+msgstr "今すぐインストール"
+
+#: src/components/ui/ComponentsChecklist.tsx:263
+msgid "Install Ollama?"
+msgstr "Ollama をインストールしますか?"
+
+#: src/components/ui/ComponentsChecklist.tsx:139
+msgid "Install the Microsoft Visual C++ runtime, or GPS files, rendering and the voices will not start."
+msgstr "Microsoft Visual C++ ランタイムをインストールしてください。ないと、GPS ファイルの読み込み、レンダリング、音声が動作しません。"
+
 #: src/components/ui/FontDownloadDialog.tsx:115
 msgid "Installed"
 msgstr "インストール済み"
 
+#: src/components/ui/ComponentsChecklist.tsx:195
+msgid "Installing Ollama. This downloads a large file and takes a few minutes."
+msgstr "Ollama をインストールしています。大きなファイルをダウンロードするため、数分かかります。"
+
+#: src/components/ui/ComponentsChecklist.tsx:172
+#: src/components/ui/ComponentsChecklist.tsx:211
 #: src/components/ui/FontDownloadDialog.tsx:125
 #: src/components/ui/SetupGate.tsx:107
+#: src/components/ui/VcRuntimeGate.tsx:53
 msgid "Installing…"
 msgstr "インストール中…"
 
@@ -2445,6 +2475,10 @@ msgstr "イントロとアウトロ"
 #: src/components/ui/VideoLookSettings.tsx:189
 msgid "Intro card size"
 msgstr "イントロカードのサイズ"
+
+#: src/components/ui/ComponentsChecklist.tsx:283
+msgid "It downloads a large file (about 1 GB), installs Ollama for your account and starts it. You still need to download a model afterwards."
+msgstr "大きなファイル(約1GB)をダウンロードし、お使いのアカウントに Ollama をインストールして起動します。そのあとモデルのダウンロードが別途必要です。"
 
 #: src/components/ui/CaptionStyleFields.tsx:121
 msgid "Italic"
@@ -2473,11 +2507,11 @@ msgstr "音声を残す"
 msgid "Keep the sound of this video"
 msgstr "この動画の音声を残す"
 
-#: src/components/ui/RenderOverlay.tsx:947
+#: src/components/ui/RenderOverlay.tsx:948
 msgid "Keep working"
 msgstr "作業を続ける"
 
-#: src/components/ui/RenderOverlay.tsx:790
+#: src/components/ui/RenderOverlay.tsx:791
 msgid "Keep working in the timeline editor. Export is available when it finishes."
 msgstr "タイムラインエディタで作業を続けられます。書き出しは完了後に使えます。"
 
@@ -2487,10 +2521,10 @@ msgstr "キーを保存しました"
 
 #. placeholder {0}: keys.map((p) => PROVIDERS[p].label).join(", ")
 #: src/components/ui/ComponentsChecklist.tsx:143
-msgid "Key saved for {0}."
-msgstr "{0}のキーを保存済みです。"
+#~ msgid "Key saved for {0}."
+#~ msgstr "{0}のキーを保存済みです。"
 
-#: src/components/view/ProjectManager.tsx:395
+#: src/components/view/ProjectManager.tsx:399
 msgid "Kyoto Demo Route"
 msgstr "京都デモルート"
 
@@ -2514,7 +2548,7 @@ msgstr "動画内の文字の言語"
 msgid "Larger map tiles for a crisper picture. They take longer to download."
 msgstr "より大きな地図タイルで、画像が鮮明になります。ダウンロードに時間がかかります。"
 
-#: src/components/view/ProjectManager.tsx:528
+#: src/components/view/ProjectManager.tsx:532
 msgid "Last Opened"
 msgstr "最後に開いた日時"
 
@@ -2538,7 +2572,7 @@ msgstr "空欄にするとこの行を表示しません"
 msgid "Left"
 msgstr "左"
 
-#: src/components/ui/RenderOverlay.tsx:369
+#: src/components/ui/RenderOverlay.tsx:370
 msgid "Leg {n}: {fromName} → {toName}"
 msgstr "区間{n}: {fromName} → {toName}"
 
@@ -2607,7 +2641,7 @@ msgstr "ナレーションを聞く"
 msgid "Loading the font list…"
 msgstr "フォント一覧を読み込み中…"
 
-#: src/components/ui/VoiceSettings.tsx:351
+#: src/components/ui/VoiceSettings.tsx:363
 msgid "Loading voices…"
 msgstr "ボイスを読み込み中…"
 
@@ -2678,7 +2712,7 @@ msgstr "この場所の自由に使える写真を Wikimedia Commons から探�
 msgid "Low-spec Mode"
 msgstr "ロースペックモード"
 
-#: src/components/ui/RenderOverlay.tsx:850
+#: src/components/ui/RenderOverlay.tsx:851
 msgid "Low-Spec Mode"
 msgstr "ロースペックモード"
 
@@ -2690,7 +2724,7 @@ msgstr "ロースペックシステムが検出されました: {gpuRenderer} (�
 msgid "Lower turns the camera more gently."
 msgstr "小さくすると、カメラの向きがよりゆるやかに変わります。"
 
-#: src/components/ui/RenderOverlay.tsx:525
+#: src/components/ui/RenderOverlay.tsx:526
 msgid "lowSpecGenSessionMessage"
 msgstr "ロースペックモードで実行中です。再生成する前に、マップ上でポイントエディタを開き、画像、スクリプト、またはルートモードを調整してください"
 
@@ -2720,7 +2754,7 @@ msgstr "ファイルがかなり大きくなります。含めない場合、受
 msgid "Making the new voice for this stop. The first one can take a while."
 msgstr "この地点の新しい音声を作成しています。最初の1件は時間がかかることがあります。"
 
-#: src/components/ui/RenderOverlay.tsx:587
+#: src/components/ui/RenderOverlay.tsx:588
 msgid "Making the new voice. The first one can take a while."
 msgstr "新しい音声を作成しています。最初の1件は時間がかかることがあります。"
 
@@ -2737,7 +2771,7 @@ msgid "Making this stop again..."
 msgstr "この地点を作り直しています..."
 
 #: src/components/ui/AppSettings.tsx:444
-#: src/components/ui/TitleBar.tsx:394
+#: src/components/ui/TitleBar.tsx:396
 msgid "Map"
 msgstr "マップ"
 
@@ -2783,13 +2817,18 @@ msgstr "マーカー"
 msgid "Max characters per line"
 msgstr "1行の最大文字数"
 
-#: src/components/ui/TitleBar.tsx:455
+#: src/components/ui/TitleBar.tsx:457
 msgid "Maximize"
 msgstr "最大化"
 
-#: src/components/ui/TitleBar.tsx:204
+#: src/components/ui/TitleBar.tsx:206
 msgid "Menu"
 msgstr "メニュー"
+
+#: src/components/ui/ComponentsChecklist.tsx:167
+#: src/components/ui/VcRuntimeGate.tsx:44
+msgid "Microsoft Visual C++ runtime"
+msgstr "Microsoft Visual C++ ランタイム"
 
 #: src/components/ui/CaptionStyleFields.tsx:211
 #: src/features/editor/Inspector.tsx:385
@@ -2802,13 +2841,17 @@ msgid "min"
 msgstr "分"
 
 #: src/components/ui/ErrorBoundary.tsx:77
-#: src/components/ui/TitleBar.tsx:447
+#: src/components/ui/TitleBar.tsx:449
 msgid "Minimize"
 msgstr "最小化"
 
 #: src/components/ui/ReviewStep.tsx:76
 msgid "Misread a word? Say how it should sound. It goes into the pronunciation dictionary and the voice is made again."
 msgstr "読み間違いはありますか? 正しい読み方を入力すると発音辞書に追加され、音声が作り直されます。"
+
+#: src/components/ui/ComponentsChecklist.tsx:168
+msgid "Missing on this PC. GPS files, rendering and the voices need it. About 25 MB from Microsoft; Windows asks for permission first."
+msgstr "このPCにはありません。GPS ファイル、レンダリング、音声に必要です。Microsoft から約25MBをダウンロードします。先に Windows が許可を求めます。"
 
 #: src/components/ui/OnlineAiSettings.tsx:236
 #: src/components/ui/OnlineAiSettings.tsx:239
@@ -2819,6 +2862,10 @@ msgstr "モデル"
 msgid "Model \"{engine}\" not found. Please install it from the App Settings"
 msgstr "モデル {engine} が見つかりません。アプリ設定からインストールしてください"
 
+#: src/components/ui/ComponentsChecklist.tsx:220
+msgid "Model to write scripts"
+msgstr "台本を書くモデル"
+
 #: src/components/ui/AboutPanel.tsx:99
 msgid "Models and engines you can download"
 msgstr "ダウンロードできるモデルとエンジン"
@@ -2828,10 +2875,10 @@ msgstr "ダウンロードできるモデルとエンジン"
 msgid "More"
 msgstr "その他"
 
-#: src/components/view/ProjectManager.tsx:507
-#: src/components/view/ProjectManager.tsx:508
-#: src/components/view/ProjectManager.tsx:584
-#: src/components/view/ProjectManager.tsx:585
+#: src/components/view/ProjectManager.tsx:511
+#: src/components/view/ProjectManager.tsx:512
+#: src/components/view/ProjectManager.tsx:588
+#: src/components/view/ProjectManager.tsx:589
 msgid "More actions"
 msgstr "その他の操作"
 
@@ -2839,7 +2886,7 @@ msgstr "その他の操作"
 #~ msgid "Moving attraction videos"
 #~ msgstr "動くアトラクション動画"
 
-#: src/components/ui/ComponentsChecklist.tsx:158
+#: src/components/ui/ComponentsChecklist.tsx:246
 msgid "Moving attraction videos · ComfyUI"
 msgstr "動くアトラクション動画 · ComfyUI"
 
@@ -2881,11 +2928,11 @@ msgstr "ナレーション"
 msgid "Narration audio"
 msgstr "ナレーション音声"
 
-#: src/components/ui/VoiceSettings.tsx:538
+#: src/components/ui/VoiceSettings.tsx:550
 msgid "Narration quality"
 msgstr "ナレーションの品質"
 
-#: src/components/ui/VoiceSettings.tsx:425
+#: src/components/ui/VoiceSettings.tsx:437
 msgid "Narration speed"
 msgstr "ナレーションの速度"
 
@@ -2893,7 +2940,7 @@ msgstr "ナレーションの速度"
 msgid "Narration text"
 msgstr "ナレーションのテキスト"
 
-#: src/components/ui/VoiceSettings.tsx:226
+#: src/components/ui/VoiceSettings.tsx:238
 msgid "Natural voice"
 msgstr "自然な声"
 
@@ -2901,15 +2948,15 @@ msgstr "自然な声"
 #~ msgid "Natural voice · about 3 GB, more with a graphics card"
 #~ msgstr "自然な声 · 約3GB（グラフィックスカードがある場合はそれ以上）"
 
-#: src/components/ui/ComponentsChecklist.tsx:113
+#: src/components/ui/ComponentsChecklist.tsx:181
 msgid "Natural voice · Irodori-TTS"
 msgstr "自然な声 · Irodori-TTS"
 
-#: src/components/ui/VoiceSettings.tsx:233
+#: src/components/ui/VoiceSettings.tsx:245
 msgid "Natural voice can clone a voice from a recording and sounds the most natural, but takes about half a minute per line on a PC without a graphics card."
 msgstr "自然な声は録音した声を複製でき、いちばん自然に聞こえますが、グラフィックスカードのないPCでは1行あたり30秒ほどかかります。"
 
-#: src/components/ui/VoiceSettings.tsx:304
+#: src/components/ui/VoiceSettings.tsx:316
 msgid "Natural voice setup"
 msgstr "自然な声のセットアップ"
 
@@ -2917,11 +2964,15 @@ msgstr "自然な声のセットアップ"
 msgid "Navivi needs its media tools before it can make videos: a Python environment, the video and map libraries, and the browser that draws the route. That is about 800 MB. It needs an internet connection and takes a few minutes. Voices and AI models are set up later from Settings."
 msgstr "動画を作る前に、Navivi のメディアツール（Python 環境、動画・地図ライブラリ、ルートを描画するブラウザ）が必要です。サイズは約800MBで、インターネット接続が必要です。数分かかります。音声と AI モデルは、あとで設定から用意できます。"
 
+#: src/components/ui/ComponentsChecklist.tsx:279
+msgid "Navivi will run Ollama's official installer from ollama.com in PowerShell:"
+msgstr "Navivi は PowerShell で、ollama.com の公式インストーラーを実行します:"
+
 #: src/components/ui/ComponentsChecklist.tsx:115
 #~ msgid "Needs a powerful graphics card and is not part of the installer yet. Until then, attraction clips pan across the photo."
 #~ msgstr "高性能なグラフィックスカードが必要で、まだインストーラーには含まれていません。それまでは、アトラクションのクリップは写真の上をパンします。"
 
-#: src/components/ui/ComponentsChecklist.tsx:70
+#: src/components/ui/ComponentsChecklist.tsx:123
 msgid "Needs an NVIDIA graphics card"
 msgstr "NVIDIAのグラフィックスカードが必要です"
 
@@ -2930,12 +2981,12 @@ msgstr "NVIDIAのグラフィックスカードが必要です"
 msgid "New points go after point {0}. Click it again to add at the end."
 msgstr "新しい点は点{0}の後ろに追加されます。もう一度クリックすると末尾に追加します。"
 
-#: src/components/ui/TitleBar.tsx:282
-#: src/components/view/ProjectManager.tsx:362
+#: src/components/ui/TitleBar.tsx:284
+#: src/components/view/ProjectManager.tsx:364
 msgid "New Project"
 msgstr "新規プロジェクト"
 
-#: src/components/view/ProjectManager.tsx:684
+#: src/components/view/ProjectManager.tsx:688
 msgid "New Project Name"
 msgstr "新しいプロジェクト名"
 
@@ -2944,7 +2995,7 @@ msgstr "新しいプロジェクト名"
 msgid "New subtitle"
 msgstr "新しい字幕"
 
-#: src/components/ui/TitleBar.tsx:262
+#: src/components/ui/TitleBar.tsx:264
 msgid "No active project folder found"
 msgstr "アクティブなプロジェクトフォルダが見つかりません"
 
@@ -3004,11 +3055,11 @@ msgstr "まだ点がありません"
 msgid "No recent activity"
 msgstr "最近のアクティビティはありません"
 
-#: src/components/view/ProjectManager.tsx:450
+#: src/components/view/ProjectManager.tsx:454
 msgid "No recent projects"
 msgstr "最近のプロジェクトはありません"
 
-#: src/components/ui/VoiceSettings.tsx:206
+#: src/components/ui/VoiceSettings.tsx:218
 msgid "No reference (model default)"
 msgstr "参照なし(モデル標準)"
 
@@ -3041,7 +3092,7 @@ msgstr "インターネット接続がありません"
 msgid "None"
 msgstr "なし"
 
-#: src/hooks/useFileActions.ts:86
+#: src/hooks/useFileActions.ts:87
 msgid "None of these photos has a location. Photos saved from websites or chat apps usually don't."
 msgstr "これらの写真には位置情報がありません。Webサイトやチャットアプリから保存した写真には、通常ありません。"
 
@@ -3050,14 +3101,19 @@ msgstr "これらの写真には位置情報がありません。Webサイトや
 #~ msgstr "まだ利用できません"
 
 #: src/components/ui/ComponentsChecklist.tsx:124
-msgid "Not found. Install Ollama and keep it running, then download a model in Settings > AI models."
-msgstr "見つかりません。Ollama をインストールして起動したまま、設定 > AIモデルでモデルをダウンロードしてください。"
+#~ msgid "Not found. Install Ollama and keep it running, then download a model in Settings > AI models."
+#~ msgstr "見つかりません。Ollama をインストールして起動したまま、設定 > AIモデルでモデルをダウンロードしてください。"
+
+#: src/components/ui/ComponentsChecklist.tsx:200
+msgid "Not found. Install Ollama, then download a model in Settings > AI models."
+msgstr "見つかりません。Ollama をインストールしてから、設定 > AIモデルでモデルをダウンロードしてください。"
 
 #: src/components/ui/CaptionStyleFields.tsx:109
 msgid "Not installed on this PC, so the export uses {fallbackFont}"
 msgstr "このPCにインストールされていないため、書き出しでは{fallbackFont}を使用します"
 
 #: src/components/ui/SetupGate.tsx:103
+#: src/components/ui/VcRuntimeGate.tsx:49
 msgid "Not now"
 msgstr "あとで"
 
@@ -3065,7 +3121,7 @@ msgstr "あとで"
 msgid "Nothing is installed outside Navivi's own folder."
 msgstr "Navivi 専用のフォルダの外には何もインストールされません。"
 
-#: src/components/ui/RenderOverlay.tsx:1247
+#: src/components/ui/RenderOverlay.tsx:1248
 msgid "Nothing selected. Accept to export, or mark what to redo."
 msgstr "何も選択されていません。承認して書き出すか、やり直したいものを選んでください。"
 
@@ -3074,8 +3130,8 @@ msgstr "何も選択されていません。承認して書き出すか、やり
 #~ msgstr "インストールは不要です。設定 > AIモデルでご自身のAPIキーを追加してください（先に「一般」でAI機能をオンにします）。"
 
 #: src/components/ui/ComponentsChecklist.tsx:144
-msgid "Nothing to install. Add a key from OpenRouter, Anthropic, OpenAI, Google Gemini or another provider in Settings > AI models (turn on AI features in General first)."
-msgstr "インストールは不要です。設定 > AIモデルで、OpenRouter、Anthropic、OpenAI、Google Gemini などのキーを追加してください（先に「一般」でAI機能をオンにします）。"
+#~ msgid "Nothing to install. Add a key from OpenRouter, Anthropic, OpenAI, Google Gemini or another provider in Settings > AI models (turn on AI features in General first)."
+#~ msgstr "インストールは不要です。設定 > AIモデルで、OpenRouter、Anthropic、OpenAI、Google Gemini などのキーを追加してください（先に「一般」でAI機能をオンにします）。"
 
 #: src/components/ui/ReviewStep.tsx:182
 msgid "Nothing to review yet."
@@ -3095,11 +3151,15 @@ msgstr "オフ"
 msgid "Off keeps this stop out of the overview narration."
 msgstr "オフにすると、この地点は全体ナレーションに含まれません。"
 
+#: src/components/ui/ComponentsChecklist.tsx:188
+msgid "Ollama"
+msgstr "Ollama"
+
 #: src/components/ui/ComponentsChecklist.tsx:77
 #~ msgid "Ollama on this PC"
 #~ msgstr "このPCの Ollama"
 
-#: src/components/ui/ComponentsChecklist.tsx:118
+#: src/components/ui/ComponentsChecklist.tsx:190
 msgid "Ollama on this PC · open models such as Gemma 4"
 msgstr "このPCのOllama · Gemma 4 などのオープンモデル"
 
@@ -3125,8 +3185,8 @@ msgstr "初回のみのセットアップ"
 #~ msgstr "オンラインAI"
 
 #: src/components/ui/ComponentsChecklist.tsx:138
-msgid "Online AI service · your own API key"
-msgstr "オンラインAIサービス · 自分のAPIキー"
+#~ msgid "Online AI service · your own API key"
+#~ msgstr "オンラインAIサービス · 自分のAPIキー"
 
 #: src/components/ui/AboutPanel.tsx:62
 #: src/components/ui/AboutPanel.tsx:65
@@ -3137,7 +3197,7 @@ msgstr "オンラインAIサービス · 自分のAPIキー"
 msgid "Open"
 msgstr "開く"
 
-#: src/components/view/ProjectManager.tsx:352
+#: src/components/view/ProjectManager.tsx:354
 msgid "Open a single project file (.nvv or .zip archive)"
 msgstr "単一のプロジェクトファイル (.nvvまたは.zipアーカイブ)を開く"
 
@@ -3145,7 +3205,7 @@ msgstr "単一のプロジェクトファイル (.nvvまたは.zipアーカイ�
 msgid "Open dictionary…"
 msgstr "辞書を開く…"
 
-#: src/components/view/ProjectManager.tsx:355
+#: src/components/view/ProjectManager.tsx:357
 msgid "Open File..."
 msgstr "ファイルを開く..."
 
@@ -3157,19 +3217,19 @@ msgstr "フォルダを開く"
 msgid "Open music folder"
 msgstr "音楽フォルダを開く"
 
-#: src/components/view/ProjectManager.tsx:215
+#: src/components/view/ProjectManager.tsx:217
 msgid "Open Project"
 msgstr "プロジェクトを開く"
 
-#: src/components/ui/TitleBar.tsx:298
+#: src/components/ui/TitleBar.tsx:300
 msgid "Open Project File..."
 msgstr "ファイルを開く..."
 
-#: src/components/ui/RenderOverlay.tsx:1213
+#: src/components/ui/RenderOverlay.tsx:1214
 msgid "Open Project Folder"
 msgstr "プロジェクトフォルダを開く"
 
-#: src/components/ui/TitleBar.tsx:314
+#: src/components/ui/TitleBar.tsx:316
 msgid "Open Project Folder..."
 msgstr "フォルダを開く..."
 
@@ -3181,7 +3241,7 @@ msgstr "設定を開く"
 msgid "Open the photo's page on Wikimedia Commons"
 msgstr "Wikimedia Commons の写真のページを開く"
 
-#: src/components/ui/RenderOverlay.tsx:505
+#: src/components/ui/RenderOverlay.tsx:506
 msgid "Opening the timeline editor so you can change the clip by hand."
 msgstr "タイムラインエディタを開きます。クリップを手動で変更できます。"
 
@@ -3193,15 +3253,15 @@ msgstr "OpenRouteService"
 msgid "Opens a leg zoomed out before the camera moves in."
 msgstr "各区間を引いた状態から始め、そのあとカメラが寄っていきます。"
 
-#: src/components/ui/ComponentsChecklist.tsx:155
+#: src/components/ui/ComponentsChecklist.tsx:243
 msgid "Optional"
 msgstr "任意"
 
-#: src/components/ui/ComponentsChecklist.tsx:87
+#: src/components/ui/ComponentsChecklist.tsx:141
 msgid "Optional: a script writer, for the assistant and Auto-Write. You can type every script yourself without one."
 msgstr "任意: アシスタントと自動作成のためのスクリプト作成元。なくても、スクリプトはすべて自分で入力できます。"
 
-#: src/components/ui/ComponentsChecklist.tsx:88
+#: src/components/ui/ComponentsChecklist.tsx:142
 msgid "Optional: moving attraction videos. Without them, each clip pans across the photo."
 msgstr "任意: 動くアトラクション動画。なければ、各クリップは写真の上をパンするだけになります。"
 
@@ -3294,7 +3354,7 @@ msgstr "右へパン"
 msgid "Pan Up"
 msgstr "上へパン"
 
-#: src/components/ui/RenderOverlay.tsx:290
+#: src/components/ui/RenderOverlay.tsx:291
 msgid "Parsing Maps & GPS Data{prog}..."
 msgstr "マップとGPSデータを解析中{prog}..."
 
@@ -3352,7 +3412,7 @@ msgstr "写真のクレジット（Wikimedia Commons）。動画を公開する�
 msgid "Photos"
 msgstr "写真"
 
-#: src/hooks/useFileActions.ts:299
+#: src/hooks/useFileActions.ts:303
 msgid "Photos & Images"
 msgstr "写真と画像"
 
@@ -3364,7 +3424,7 @@ msgstr "地点の写真"
 msgid "Photos grow to fill the frame when the traveler arrives."
 msgstr "旅行者が到着すると、写真が拡大して画面いっぱいになります。"
 
-#: src/components/ui/ComponentsChecklist.tsx:110
+#: src/components/ui/ComponentsChecklist.tsx:178
 msgid "Pick at least one"
 msgstr "1つ以上選んでください"
 
@@ -3401,13 +3461,13 @@ msgstr "1080p フレーム上のピクセル"
 msgid "Place"
 msgstr "配置"
 
-#: src/components/ui/VoiceSettings.tsx:498
-#: src/components/ui/VoiceSettings.tsx:501
+#: src/components/ui/VoiceSettings.tsx:510
+#: src/components/ui/VoiceSettings.tsx:513
 msgid "Place cues in each stop's narration"
 msgstr "各地点のナレーションにキューを入れる"
 
-#: src/components/ui/VoiceSettings.tsx:491
-#: src/components/ui/VoiceSettings.tsx:494
+#: src/components/ui/VoiceSettings.tsx:503
+#: src/components/ui/VoiceSettings.tsx:506
 msgid "Place cues in the overview narration"
 msgstr "全体ナレーションにキューを入れる"
 
@@ -3420,6 +3480,10 @@ msgstr "再生"
 #: src/components/ui/ReviewStep.tsx:147
 msgid "Play anything you want to check. Mark what you want redone, then choose Redo selected. If it all looks right, accept and export. Turn on Fast render and Export automatically in the generate dialog to skip this check."
 msgstr "確認したいものを再生し、やり直したいものにチェックを付けて「選択をやり直す」を押してください。問題なければ承認して書き出します。生成ダイアログで「高速レンダリング」と「自動で書き出す」をオンにすると、この確認を省略できます。"
+
+#: src/components/ui/VoiceSettings.tsx:152
+msgid "Playing the original recording. Set up this voice engine to hear it read your text."
+msgstr "元の録音を再生しています。この音声エンジンをセットアップすると、入力した文章を読み上げる音声を聞けます。"
 
 #: src/components/ui/ReviewStep.tsx:231
 msgid "Playing..."
@@ -3443,19 +3507,19 @@ msgstr "ポップイン"
 msgid "Position"
 msgstr "位置"
 
-#: src/components/view/ProjectManager.tsx:398
+#: src/components/view/ProjectManager.tsx:402
 msgid "Pre-configured sample project"
 msgstr "事前構成済みのサンプルプロジェクト"
 
-#: src/components/ui/VoiceSettings.tsx:286
-#: src/components/ui/VoiceSettings.tsx:391
+#: src/components/ui/VoiceSettings.tsx:298
+#: src/components/ui/VoiceSettings.tsx:403
 msgid "Preview"
 msgstr "プレビュー"
 
 #. placeholder {0}: label(v)
 #. placeholder {0}: v.label
-#: src/components/ui/VoiceSettings.tsx:286
-#: src/components/ui/VoiceSettings.tsx:391
+#: src/components/ui/VoiceSettings.tsx:298
+#: src/components/ui/VoiceSettings.tsx:403
 msgid "Preview {0}"
 msgstr "{0}を試聴"
 
@@ -3467,11 +3531,11 @@ msgstr "プレビューの表示範囲"
 msgid "Project"
 msgstr "プロジェクト"
 
-#: src/components/view/ProjectManager.tsx:196
+#: src/components/view/ProjectManager.tsx:198
 msgid "Project duplicated"
 msgstr "プロジェクトを複製しました"
 
-#: src/components/ui/TitleBar.tsx:160
+#: src/components/ui/TitleBar.tsx:162
 msgid "Project duplicated successfully"
 msgstr "プロジェクトが正常に複製されました"
 
@@ -3479,15 +3543,15 @@ msgstr "プロジェクトが正常に複製されました"
 msgid "Project exported"
 msgstr "プロジェクトを書き出しました"
 
-#: src/components/ui/TitleBar.tsx:291
-#: src/components/ui/TitleBar.tsx:307
-#: src/components/view/ProjectManager.tsx:118
+#: src/components/ui/TitleBar.tsx:293
+#: src/components/ui/TitleBar.tsx:309
+#: src/components/view/ProjectManager.tsx:120
 msgid "Project loaded successfully"
 msgstr "プロジェクトが正常に読み込まれました"
 
-#: src/components/ui/TitleBar.tsx:254
-#: src/components/ui/TitleBar.tsx:376
-#: src/components/view/ProjectManager.tsx:338
+#: src/components/ui/TitleBar.tsx:256
+#: src/components/ui/TitleBar.tsx:378
+#: src/components/view/ProjectManager.tsx:340
 msgid "Project Manager"
 msgstr "プロジェクトマネージャー"
 
@@ -3496,27 +3560,27 @@ msgid "Project name"
 msgstr "プロジェクト名"
 
 #: src/components/ui/SaveAs.tsx:125
-#: src/components/view/ProjectManager.tsx:522
+#: src/components/view/ProjectManager.tsx:526
 msgid "Project Name"
 msgstr "プロジェクト名"
 
-#: src/components/view/ProjectManager.tsx:179
+#: src/components/view/ProjectManager.tsx:181
 msgid "Project removed from recent list"
 msgstr "最近のリストからプロジェクトが削除されました"
 
-#: src/components/view/ProjectManager.tsx:191
+#: src/components/view/ProjectManager.tsx:193
 msgid "Project renamed successfully"
 msgstr "プロジェクト名が正常に変更されました"
 
-#: src/components/ui/TitleBar.tsx:160
+#: src/components/ui/TitleBar.tsx:162
 msgid "Project saved"
 msgstr "プロジェクトが保存されました"
 
-#: src/components/ui/TitleBar.tsx:141
+#: src/components/ui/TitleBar.tsx:143
 msgid "Project saved to {fileName}"
 msgstr "プロジェクトを{fileName}に保存しました"
 
-#: src/components/view/ProjectManager.tsx:237
+#: src/components/view/ProjectManager.tsx:239
 msgid "Project settings"
 msgstr "プロジェクト設定"
 
@@ -3557,31 +3621,31 @@ msgstr "紫"
 msgid "Quick export"
 msgstr "クイック書き出し"
 
-#: src/components/ui/RenderOverlay.tsx:930
+#: src/components/ui/RenderOverlay.tsx:931
 msgid "Quick Export"
 msgstr "クイックエクスポート"
 
-#: src/components/ui/RenderOverlay.tsx:1178
+#: src/components/ui/RenderOverlay.tsx:1179
 msgid "Quick Export Complete!"
 msgstr "クイックエクスポート完了しました"
 
-#: src/components/view/ProjectManager.tsx:255
+#: src/components/view/ProjectManager.tsx:257
 msgid "Quick Render"
 msgstr "クイックレンダリング"
 
-#: src/components/view/ProjectManager.tsx:104
+#: src/components/view/ProjectManager.tsx:106
 msgid "Quick Render complete for "
 msgstr "クイックレンダリングが完了しました: "
 
-#: src/components/view/ProjectManager.tsx:102
+#: src/components/view/ProjectManager.tsx:104
 msgid "Quick Render started for "
 msgstr "クイックレンダリングが開始されました: "
 
-#: src/components/ui/RenderOverlay.tsx:614
+#: src/components/ui/RenderOverlay.tsx:615
 msgid "quickExportToastMsg1"
 msgstr "クイックエクスポート: 動画を自動的に結合してエクスポートしています..."
 
-#: src/components/ui/RenderOverlay.tsx:614
+#: src/components/ui/RenderOverlay.tsx:615
 msgid "quickExportToastMsg2"
 msgstr "動画を結合してエクスポートしています..."
 
@@ -3605,7 +3669,7 @@ msgstr "読み方（フリガナ）"
 msgid "Reading guessed automatically from the scripts. Edit it to keep your own."
 msgstr "台本から自動で推定した読みです。編集すると、あなたの読みとして固定されます。"
 
-#: src/components/view/ProjectManager.tsx:327
+#: src/components/view/ProjectManager.tsx:329
 msgid "Reading Project File..."
 msgstr "プロジェクトファイルを読み込み中..."
 
@@ -3618,9 +3682,8 @@ msgid "Readings of place names for the voice."
 msgstr "ナレーションでの地名の読みに使用しています。"
 
 #: src/components/ui/AppSettings.tsx:1221
-#: src/components/ui/ComponentsChecklist.tsx:66
-#: src/components/ui/ComponentsChecklist.tsx:129
-#: src/components/ui/ComponentsChecklist.tsx:149
+#: src/components/ui/ComponentsChecklist.tsx:119
+#: src/components/ui/ComponentsChecklist.tsx:205
 msgid "Ready"
 msgstr "準備完了"
 
@@ -3629,7 +3692,7 @@ msgid "Ready to build"
 msgstr "作成の準備ができました"
 
 #: src/components/ui/ColorPicker.tsx:300
-#: src/components/view/ProjectManager.tsx:409
+#: src/components/view/ProjectManager.tsx:413
 msgid "Recent"
 msgstr "最近のプロジェクト"
 
@@ -3641,8 +3704,8 @@ msgstr "おすすめのモデル"
 msgid "Red"
 msgstr "赤"
 
-#: src/components/ui/TitleBar.tsx:360
-#: src/components/ui/TitleBar.tsx:364
+#: src/components/ui/TitleBar.tsx:362
+#: src/components/ui/TitleBar.tsx:366
 msgid "Redo"
 msgstr "やり直す"
 
@@ -3650,16 +3713,16 @@ msgstr "やり直す"
 msgid "Redo clip"
 msgstr "クリップをやり直す"
 
-#: src/components/ui/RenderOverlay.tsx:762
+#: src/components/ui/RenderOverlay.tsx:763
 msgid "Redo finished"
 msgstr "やり直しが完了しました"
 
-#: src/components/ui/RenderOverlay.tsx:1252
 #: src/components/ui/RenderOverlay.tsx:1253
+#: src/components/ui/RenderOverlay.tsx:1254
 msgid "Redo in the background"
 msgstr "バックグラウンドでやり直す"
 
-#: src/components/ui/RenderOverlay.tsx:1278
+#: src/components/ui/RenderOverlay.tsx:1279
 msgid "Redo selected"
 msgstr "選択をやり直す"
 
@@ -3675,11 +3738,11 @@ msgstr "動画クリップをやり直すと、その地点を選択した状態
 msgid "Redoing a video clip opens the timeline editor on this computer."
 msgstr "このPCでは、動画クリップをやり直すとタイムラインエディタが開きます。"
 
-#: src/components/ui/RenderOverlay.tsx:762
+#: src/components/ui/RenderOverlay.tsx:763
 msgid "Redoing in the background"
 msgstr "バックグラウンドでやり直し中"
 
-#: src/components/ui/RenderOverlay.tsx:573
+#: src/components/ui/RenderOverlay.tsx:574
 msgid "Redoing in the background. You can keep working in the timeline editor."
 msgstr "バックグラウンドでやり直しています。タイムラインエディタで作業を続けられます。"
 
@@ -3696,7 +3759,7 @@ msgstr "アプリを再読み込み"
 #: src/components/ui/AppSettings.tsx:784
 #: src/components/ui/OnlineAiSettings.tsx:174
 #: src/components/ui/ReviewStep.tsx:103
-#: src/components/view/ProjectManager.tsx:626
+#: src/components/view/ProjectManager.tsx:630
 #: src/features/assistant/AssistantChat.tsx:179
 #: src/features/editor/EditorView.tsx:311
 #: src/features/editor/Inspector.tsx:519
@@ -3712,7 +3775,7 @@ msgstr "{0}地点をすべて削除しますか？"
 msgid "Remove all {count} via points"
 msgstr "中継点 {count} 個をすべて削除"
 
-#: src/components/view/ProjectManager.tsx:272
+#: src/components/view/ProjectManager.tsx:274
 msgid "Remove from List"
 msgstr "リストから削除"
 
@@ -3731,7 +3794,7 @@ msgstr "音楽を削除"
 msgid "Remove narration"
 msgstr "ナレーションを削除"
 
-#: src/components/view/ProjectManager.tsx:609
+#: src/components/view/ProjectManager.tsx:613
 msgid "Remove Project"
 msgstr "プロジェクトを削除"
 
@@ -3750,11 +3813,11 @@ msgstr "中継点を削除"
 msgid "Remove video"
 msgstr "動画を削除"
 
-#: src/components/view/ProjectManager.tsx:221
+#: src/components/view/ProjectManager.tsx:223
 msgid "Rename"
 msgstr "名前を変更"
 
-#: src/components/view/ProjectManager.tsx:649
+#: src/components/view/ProjectManager.tsx:653
 msgid "Rename Project"
 msgstr "プロジェクト名を変更"
 
@@ -3774,15 +3837,15 @@ msgstr "アセットの生成が正常に完了しました"
 msgid "Rendering"
 msgstr "レンダリング"
 
-#: src/components/ui/RenderOverlay.tsx:978
+#: src/components/ui/RenderOverlay.tsx:979
 msgid "Rendering & Synthesis"
 msgstr "レンダリングと音声合成"
 
-#: src/components/ui/RenderOverlay.tsx:296
+#: src/components/ui/RenderOverlay.tsx:297
 msgid "Rendering Media & Animations{prog}..."
 msgstr "メディアとアニメーションをレンダリング中..."
 
-#: src/components/ui/RenderOverlay.tsx:298
+#: src/components/ui/RenderOverlay.tsx:299
 msgid "Rendering Route Video{prog}..."
 msgstr "ルート動画をレンダリング中{prog}..."
 
@@ -3794,7 +3857,7 @@ msgstr "Python生成パイプラインを開始しています..."
 msgid "Replace"
 msgstr "置き換える"
 
-#: src/components/ui/VoiceSettings.tsx:580
+#: src/components/ui/VoiceSettings.tsx:592
 msgid "Replace existing voice"
 msgstr "既存のボイスを置き換える"
 
@@ -3819,14 +3882,14 @@ msgstr "マップのレンダリングや3D地形で必要です"
 #~ msgstr "Ollamaが必要"
 
 #: src/components/ui/VideoLookSettings.tsx:39
-#: src/components/ui/VoiceSettings.tsx:430
-#: src/components/ui/VoiceSettings.tsx:446
+#: src/components/ui/VoiceSettings.tsx:442
+#: src/components/ui/VoiceSettings.tsx:458
 #: src/components/view/ProjectSettingsModal.tsx:210
 #: src/features/map/components/WaypointEditor.tsx:827
 msgid "Reset"
 msgstr "リセット"
 
-#: src/components/ui/VoiceSettings.tsx:443
+#: src/components/ui/VoiceSettings.tsx:455
 msgid "Reset speaking style"
 msgstr "話し方をリセット"
 
@@ -3860,7 +3923,7 @@ msgstr "復元"
 msgid "Restore version"
 msgstr "バージョンを復元"
 
-#: src/components/ui/RenderOverlay.tsx:896
+#: src/components/ui/RenderOverlay.tsx:897
 #: src/features/map/components/Sidebar.tsx:296
 msgid "Resume Generation"
 msgstr "生成を再開"
@@ -3869,28 +3932,28 @@ msgstr "生成を再開"
 msgid "Retrace previous path"
 msgstr "前の経路を逆にたどる"
 
-#: src/components/ui/RenderOverlay.tsx:815
-#: src/components/ui/RenderOverlay.tsx:1320
+#: src/components/ui/RenderOverlay.tsx:816
+#: src/components/ui/RenderOverlay.tsx:1321
 msgid "Retry"
 msgstr "再試行"
 
-#: src/components/ui/TitleBar.tsx:275
-#: src/components/view/ProjectManager.tsx:260
+#: src/components/ui/TitleBar.tsx:277
+#: src/components/view/ProjectManager.tsx:262
 #: src/features/map/components/WaypointEditor.tsx:622
 #: src/features/map/components/WaypointVideos.tsx:58
 msgid "Reveal in File Explorer"
 msgstr "エクスプローラーで表示"
 
-#: src/components/ui/RenderOverlay.tsx:827
+#: src/components/ui/RenderOverlay.tsx:828
 msgid "Review"
 msgstr "確認"
 
-#: src/components/ui/RenderOverlay.tsx:889
-#: src/components/ui/RenderOverlay.tsx:982
+#: src/components/ui/RenderOverlay.tsx:890
+#: src/components/ui/RenderOverlay.tsx:983
 msgid "Review Assets"
 msgstr "アセットを確認"
 
-#: src/components/ui/RenderOverlay.tsx:787
+#: src/components/ui/RenderOverlay.tsx:788
 msgid "Review them, or carry on in the timeline editor."
 msgstr "確認するか、タイムラインエディタでそのまま作業を続けてください。"
 
@@ -3949,7 +4012,7 @@ msgstr "ルートマーカー"
 msgid "Route only. Skips voiceover and photo clips."
 msgstr "ルートのみ。ナレーションと写真クリップを省略します。"
 
-#: src/components/ui/RenderOverlay.tsx:357
+#: src/components/ui/RenderOverlay.tsx:358
 msgid "Route overview"
 msgstr "ルート全体"
 
@@ -3970,10 +4033,18 @@ msgstr "ルート動画"
 msgid "Routes between stops, when you let the app find them."
 msgstr "アプリにお任せしたときの、立ち寄り先どうしのルート。"
 
-#. placeholder {0}: models.length
-#: src/components/ui/ComponentsChecklist.tsx:123
+#: src/components/ui/ComponentsChecklist.tsx:199
+msgid "Running, but no model is downloaded yet. Download one in Settings > AI models."
+msgstr "起動していますが、モデルがまだありません。設定 > AIモデルでダウンロードしてください。"
+
+#. placeholder {0}: ollama.models.length
+#: src/components/ui/ComponentsChecklist.tsx:197
 msgid "Running, with {0} model(s). Download more in Settings > AI models."
 msgstr "起動中で、{0}個のモデルがあります。設定 > AIモデルでさらにダウンロードできます。"
+
+#: src/components/ui/ComponentsChecklist.tsx:264
+msgid "Runs Ollama's own installer"
+msgstr "Ollama 公式のインストーラーを実行します"
 
 #: src/features/map/components/MapArea.tsx:913
 msgid "S"
@@ -4011,7 +4082,7 @@ msgstr "保存 (Ctrl+Enter)"
 msgid "Save a version to create a restore point"
 msgstr "バージョンを保存して復元ポイントを作成"
 
-#: src/components/ui/TitleBar.tsx:242
+#: src/components/ui/TitleBar.tsx:244
 msgid "Save As..."
 msgstr "名前を付けて保存..."
 
@@ -4023,7 +4094,7 @@ msgstr "現在のばーしょんを保存"
 msgid "Save New Project"
 msgstr "新規プロジェクトを保存"
 
-#: src/components/ui/TitleBar.tsx:232
+#: src/components/ui/TitleBar.tsx:234
 msgid "Save Project"
 msgstr "プロジェクトを保存"
 
@@ -4077,7 +4148,6 @@ msgstr "スクリプト内にあるすべての漢字をスキャンし辞書に
 msgid "Script"
 msgstr "スクリプト"
 
-#: src/components/ui/ComponentsChecklist.tsx:116
 #: src/components/ui/OnlineAiSettings.tsx:32
 msgid "Script writer"
 msgstr "スクリプトの作成元"
@@ -4119,7 +4189,7 @@ msgstr "全体表示で最初に地図だけを見せる秒数です。"
 msgid "Select"
 msgstr "選択"
 
-#: src/components/view/ProjectManager.tsx:341
+#: src/components/view/ProjectManager.tsx:343
 msgid "Select a recent route or create a new workspace to begin"
 msgstr "最近のルートを選択するか、新しいワークスペースを作成して開始"
 
@@ -4136,7 +4206,7 @@ msgstr "ナレーション合成に使用するモデルを選択します。ダ
 msgid "Select:"
 msgstr "選択:"
 
-#: src/components/ui/RenderOverlay.tsx:1248
+#: src/components/ui/RenderOverlay.tsx:1249
 msgid "Selected to redo: clips {pickedClips}, voices {pickedVoices}"
 msgstr "やり直し対象: クリップ{pickedClips}件、音声{pickedVoices}件"
 
@@ -4150,11 +4220,11 @@ msgstr "送信"
 msgid "Send photos"
 msgstr "写真を送信"
 
-#: src/components/ui/RenderOverlay.tsx:726
+#: src/components/ui/RenderOverlay.tsx:727
 msgid "Sending cancellation signal to backend..."
 msgstr "バックエンドにキャンセル信号を送信しています..."
 
-#: src/components/ui/RenderOverlay.tsx:1114
+#: src/components/ui/RenderOverlay.tsx:1115
 msgid "Sending interrupt signal to renderer."
 msgstr "レンダラーに中断信号を送信しています"
 
@@ -4170,23 +4240,23 @@ msgstr "まじめ"
 msgid "Services"
 msgstr "サービス"
 
-#: src/components/ui/ComponentsChecklist.tsx:75
+#: src/components/ui/ComponentsChecklist.tsx:128
 msgid "Set up"
 msgstr "セットアップ"
 
-#: src/components/ui/ComponentsChecklist.tsx:86
+#: src/components/ui/ComponentsChecklist.tsx:140
 msgid "Set up at least one voice, or the video has no narration."
 msgstr "声を1つ以上セットアップしてください。ないと動画にナレーションが入りません。"
 
-#: src/components/ui/VoiceSettings.tsx:332
+#: src/components/ui/VoiceSettings.tsx:344
 msgid "Set up balanced voice"
 msgstr "標準の声をセットアップ"
 
-#: src/components/ui/VoiceSettings.tsx:264
+#: src/components/ui/VoiceSettings.tsx:276
 msgid "Set up fast voice"
 msgstr "高速な声をセットアップ"
 
-#: src/components/ui/VoiceSettings.tsx:314
+#: src/components/ui/VoiceSettings.tsx:326
 msgid "Set up natural voice"
 msgstr "自然な声をセットアップ"
 
@@ -4194,10 +4264,10 @@ msgstr "自然な声をセットアップ"
 msgid "Set up Navivi"
 msgstr "Navivi のセットアップ"
 
-#: src/components/ui/ComponentsChecklist.tsx:75
-#: src/components/ui/VoiceSettings.tsx:264
-#: src/components/ui/VoiceSettings.tsx:314
-#: src/components/ui/VoiceSettings.tsx:332
+#: src/components/ui/ComponentsChecklist.tsx:128
+#: src/components/ui/VoiceSettings.tsx:276
+#: src/components/ui/VoiceSettings.tsx:326
+#: src/components/ui/VoiceSettings.tsx:344
 msgid "Setting up…"
 msgstr "セットアップ中…"
 
@@ -4207,7 +4277,7 @@ msgid "Settings"
 msgstr "設定"
 
 #: src/components/ui/AppSettings.tsx:205
-#: src/components/ui/TitleBar.tsx:378
+#: src/components/ui/TitleBar.tsx:380
 msgid "Setup"
 msgstr "セットアップ"
 
@@ -4262,7 +4332,7 @@ msgstr "点の一覧を表示"
 msgid "Show video"
 msgstr "動画を表示"
 
-#: src/components/ui/RenderOverlay.tsx:1205
+#: src/components/ui/RenderOverlay.tsx:1206
 msgid "Show Video"
 msgstr "動画を表示"
 
@@ -4350,12 +4420,12 @@ msgstr "問題が発生しました"
 msgid "Source code"
 msgstr "ソースコード"
 
-#: src/components/ui/VoiceSettings.tsx:438
-#: src/components/ui/VoiceSettings.tsx:473
+#: src/components/ui/VoiceSettings.tsx:450
+#: src/components/ui/VoiceSettings.tsx:485
 msgid "Speaking style"
 msgstr "話し方"
 
-#: src/components/ui/VoiceSettings.tsx:415
+#: src/components/ui/VoiceSettings.tsx:427
 msgid "Speed"
 msgstr "速度"
 
@@ -4363,7 +4433,7 @@ msgstr "速度"
 msgid "Splits the scripts into words and reads them for the voice."
 msgstr "台本を単語に分け、ナレーション用の読みを付けます。"
 
-#: src/components/ui/VoiceSettings.tsx:514
+#: src/components/ui/VoiceSettings.tsx:526
 msgid "Spoken lines are kept so a repeated line is not spoken again. Narration already in your projects is not touched."
 msgstr "読み上げた行は保存され、同じ行を再び読み上げることはありません。すでにプロジェクトにあるナレーションには影響しません。"
 
@@ -4379,11 +4449,11 @@ msgstr "この地点へ向かう間に読み上げます。"
 msgid "Stacked"
 msgstr "縦並び"
 
-#: src/components/ui/RenderOverlay.tsx:363
+#: src/components/ui/RenderOverlay.tsx:364
 #: src/features/map/components/MapToolbar.tsx:90
 #: src/features/map/components/WaypointEditor.tsx:430
 #: src/features/map/hooks/useStopMenus.ts:220
-#: src/hooks/useFileActions.ts:255
+#: src/hooks/useFileActions.ts:259
 msgid "Start"
 msgstr "出発地"
 
@@ -4437,11 +4507,11 @@ msgstr "完了後、確認で止まらずにクリップを結合して書き出
 msgid "Stitching clips, narration and subtitles."
 msgstr "クリップのつなぎ合わせ、ナレーション、字幕"
 
-#: src/components/ui/RenderOverlay.tsx:1159
+#: src/components/ui/RenderOverlay.tsx:1160
 msgid "Stitching Videos & Finalizing Export..."
 msgstr "動画を結合し、エクスポートを確定しています．．．"
 
-#: src/components/ui/RenderOverlay.tsx:377
+#: src/components/ui/RenderOverlay.tsx:378
 #: src/features/map/components/MapToolbar.tsx:88
 #: src/features/map/components/WaypointEditor.tsx:435
 #: src/features/map/hooks/useStopMenus.ts:221
@@ -4454,7 +4524,7 @@ msgid "Stop"
 msgstr "停止"
 
 #. placeholder {0}: i + 1
-#: src/hooks/useFileActions.ts:255
+#: src/hooks/useFileActions.ts:259
 msgid "Stop {0}"
 msgstr "地点 {0}"
 
@@ -4546,7 +4616,7 @@ msgstr "ドキュメントの処理に成功しました。以下が提案され
 msgid "Summary card"
 msgstr "サマリーカード"
 
-#: src/components/ui/RenderOverlay.tsx:292
+#: src/components/ui/RenderOverlay.tsx:293
 msgid "Synthesizing AI Voiceovers{prog}..."
 msgstr "AI音声を合成しています{prog}..."
 
@@ -4559,7 +4629,7 @@ msgstr "システムログ"
 msgid "System Logs & Notifications"
 msgstr "システムログと通知"
 
-#: src/components/view/ProjectManager.tsx:421
+#: src/components/view/ProjectManager.tsx:425
 msgid "Table View"
 msgstr "テーブル表示"
 
@@ -4571,7 +4641,7 @@ msgstr "ターゲットフレームレート"
 msgid "Taskbar"
 msgstr "タスクバー"
 
-#: src/components/ui/TitleBar.tsx:128
+#: src/components/ui/TitleBar.tsx:130
 msgid "Tauri Window API error:"
 msgstr "Tauri Window APIエラー"
 
@@ -4579,7 +4649,7 @@ msgstr "Tauri Window APIエラー"
 #~ msgid "Tell me about the trip and I will find the places, put them on the map and write a script for each stop."
 #~ msgstr "旅の内容を教えてください。場所を見つけて地図に置き、各地点のスクリプトを書きます。"
 
-#: src/components/view/ProjectManager.tsx:381
+#: src/components/view/ProjectManager.tsx:385
 msgid "Templates"
 msgstr "テンプレート"
 
@@ -4620,7 +4690,7 @@ msgstr "アシスタントには AI モデルが必要です。AI 機能をオ�
 msgid "The assistant, Auto-Write script buttons and overview narration, in every project. Needs Ollama running locally, or an online provider set up in AI models."
 msgstr "アシスタント、台本の自動作成ボタン、全体ナレーションを、すべてのプロジェクトで使えるようにします。ローカルで Ollama を起動しておくか、「AI モデル」でオンラインのプロバイダーを設定してください。"
 
-#: src/components/ui/VoiceSettings.tsx:325
+#: src/components/ui/VoiceSettings.tsx:337
 msgid "The balanced voice needs a one-time setup: a separate Python environment and the model files (about 4 GB in all). It takes several minutes and needs an internet connection. Keep this window open while it runs."
 msgstr "標準の声には一度だけセットアップが必要です。独立したPython環境とモデルファイル（合計約4GB）を用意します。数分かかり、インターネット接続が必要です。実行中はこのウィンドウを開いたままにしてください。"
 
@@ -4640,11 +4710,11 @@ msgstr "最初の地点の最後のクローズアップです。"
 msgid "The editor shows {editorLabel}, which is not a Mapbox style, so the video cannot use it."
 msgstr "エディタでは {editorLabel} を表示していますが、Mapbox のスタイルではないため動画には使えません。"
 
-#: src/components/ui/VoiceSettings.tsx:257
+#: src/components/ui/VoiceSettings.tsx:269
 msgid "The fast voice needs a one-time setup: a small separate Python environment and the model files (about 2 GB in all). It takes a few minutes and needs an internet connection. Keep this window open while it runs."
 msgstr "高速な声には一度だけセットアップが必要です。独立した小さなPython環境とモデルファイル（合計約2GB）を用意します。数分かかり、インターネット接続が必要です。実行中はこのウィンドウを開いたままにしてください。"
 
-#: src/components/ui/RenderOverlay.tsx:789
+#: src/components/ui/RenderOverlay.tsx:790
 msgid "The files that were removed will be made again the next time you generate."
 msgstr "削除したファイルは、次回の生成時にあらためて作られます。"
 
@@ -4656,11 +4726,15 @@ msgstr "朝の光が港に差し込み、街がゆっくりと目を覚ましま
 msgid "The map overlays and cards in the video, not the app."
 msgstr "アプリではなく、動画内の地図オーバーレイとカードに適用されます。"
 
+#: src/components/ui/ComponentsChecklist.tsx:220
+msgid "The model the assistant and Auto-Write use."
+msgstr "アシスタントと自動作成が使うモデルです。"
+
 #: src/components/ui/ComponentsChecklist.tsx:72
 #~ msgid "The most natural, and it clones a voice. Slowest on a PC without a graphics card."
 #~ msgstr "最も自然な声で、声のクローンもできます。グラフィックスカードのないPCでは最も時間がかかります。"
 
-#: src/components/ui/VoiceSettings.tsx:307
+#: src/components/ui/VoiceSettings.tsx:319
 msgid "The natural voice needs a one-time setup: a separate Python environment and the model files (about 3 GB, more with a graphics card). It takes several minutes and needs an internet connection. Keep this window open while it runs."
 msgstr "自然な声には初回のみのセットアップが必要です。専用の Python 環境とモデルファイル（約3GB、グラフィックスカードがある場合はそれ以上）を用意します。数分かかり、インターネット接続が必要です。完了するまでこのウィンドウを開いたままにしてください。"
 
@@ -4672,7 +4746,7 @@ msgstr "自然な声には初回のみのセットアップが必要です。専
 msgid "The overview script is edited in the Overview narration section at the top of the map sidebar. You can still fix pronunciations here."
 msgstr "全体の台本は、マップサイドバー上部の「全体ナレーション」で編集します。読み方の修正はここでもできます。"
 
-#: src/components/ui/VoiceSettings.tsx:492
+#: src/components/ui/VoiceSettings.tsx:504
 msgid "The overview stops at each stop while the voice describes it, then moves on."
 msgstr "音声が各地点を説明している間、全体表示はその地点で止まり、そのあと次へ進みます。"
 
@@ -4684,15 +4758,15 @@ msgstr "写真クリップができました。"
 msgid "The places-visited clip at the end of the video."
 msgstr "動画の最後に表示される、訪れた場所のクリップです。"
 
-#: src/components/ui/RenderOverlay.tsx:762
+#: src/components/ui/RenderOverlay.tsx:763
 msgid "The redo failed"
 msgstr "やり直しに失敗しました"
 
-#: src/components/ui/RenderOverlay.tsx:559
+#: src/components/ui/RenderOverlay.tsx:560
 msgid "The redone clips are ready to check."
 msgstr "やり直したクリップを確認できます。"
 
-#: src/components/ui/RenderOverlay.tsx:559
+#: src/components/ui/RenderOverlay.tsx:560
 msgid "The redone clips are ready. Your timeline edits were kept."
 msgstr "やり直したクリップの準備ができました。タイムラインの編集内容はそのまま残っています。"
 
@@ -4720,11 +4794,11 @@ msgstr "音声ができました。"
 msgid "The voice is ready. If its length changed, redo the photo clip so it fits."
 msgstr "音声ができました。長さが変わった場合は、写真クリップをやり直して合わせてください。"
 
-#: src/components/ui/RenderOverlay.tsx:589
+#: src/components/ui/RenderOverlay.tsx:590
 msgid "The voice is ready. Listen to check it."
 msgstr "音声ができました。聞いて確認してください。"
 
-#: src/components/ui/VoiceSettings.tsx:211
+#: src/components/ui/VoiceSettings.tsx:223
 msgid "The voice reads every narration in this project. Changing the voice or the speed regenerates the narration the next time you generate. The voice library is shared by all projects."
 msgstr "このプロジェクトのすべてのナレーションをこのボイスが読み上げます。ボイスや速度を変更すると、次回の生成時にナレーションが作り直されます。ボイスライブラリはすべてのプロジェクトで共有されます。"
 
@@ -4732,7 +4806,7 @@ msgstr "このプロジェクトのすべてのナレーションをこのボイ
 msgid "The voice-over of the whole-route map shot at the start. Leave it blank and it is written for you when you make the video; once you edit it, it is never replaced."
 msgstr "冒頭のルート全体の地図ショットのナレーションです。空欄のままにすると、動画を作るときに自動で作成されます。一度編集すると、置き換えられることはありません。"
 
-#: src/components/ui/VoiceSettings.tsx:499
+#: src/components/ui/VoiceSettings.tsx:511
 msgid "The walk reaches the stop by the time its name is spoken. Cues you type yourself always win."
 msgstr "地点の名前が読み上げられるころに、歩きがその地点に到着します。ご自身で入力したキューが常に優先されます。"
 
@@ -4756,7 +4830,7 @@ msgstr "考え中…"
 msgid "This copy"
 msgstr "このバージョン"
 
-#: src/components/ui/ComponentsChecklist.tsx:167
+#: src/components/ui/ComponentsChecklist.tsx:255
 msgid "This downloads about 30 GB and can take an hour or more. Stay on this tab; a stopped download continues where it left off."
 msgstr "約30GBをダウンロードするため、1時間以上かかることがあります。このタブを開いたままにしてください。中断してもダウンロードは続きから再開します。"
 
@@ -4774,6 +4848,10 @@ msgstr "このモデルは約 {0} GB で、このPCのメモリは {1} GB です
 msgid "This PC (Ollama)"
 msgstr "このPC（Ollama）"
 
+#: src/components/ui/VcRuntimeGate.tsx:60
+msgid "This PC does not have Microsoft's Visual C++ runtime. Without it, Navivi cannot read GPS files, render videos or run the voice engines, and Windows shows a \"VCRUNTIME140.dll not found\" message. Installing it downloads about 25 MB from Microsoft, and Windows asks for permission first."
+msgstr "このPCには Microsoft の Visual C++ ランタイムがありません。ないと、Navivi は GPS ファイルの読み込み、動画のレンダリング、音声エンジンの実行ができず、Windows に「VCRUNTIME140.dll が見つかりません」と表示されます。インストールすると Microsoft から約25MBをダウンロードし、先に Windows が許可を求めます。"
+
 #: src/components/ui/ReviewStep.tsx:102
 msgid "this project"
 msgstr "このプロジェクト"
@@ -4788,15 +4866,15 @@ msgstr "このプロジェクト"
 msgid "This project already has assets"
 msgstr "このプロジェクトにはすでに素材があります"
 
-#: src/components/view/ProjectManager.tsx:93
+#: src/components/view/ProjectManager.tsx:95
 msgid "This project is archived. Please open it first to render"
 msgstr "このプロジェクトはアーカイブされています。レンダリングするにはまずプロジェクトを開いてください"
 
-#: src/components/view/ProjectManager.tsx:230
+#: src/components/view/ProjectManager.tsx:232
 msgid "This project is still an archive file. Open it once, then duplicate it."
 msgstr "このプロジェクトはまだアーカイブファイルのままです。一度開いてから複製してください。"
 
-#: src/components/view/ProjectManager.tsx:247
+#: src/components/view/ProjectManager.tsx:249
 msgid "This project is still an archive file. Open it once, then export."
 msgstr "このプロジェクトはまだアーカイブファイルのままです。一度開いてから書き出してください。"
 
@@ -4808,7 +4886,7 @@ msgstr "ご自身で書いた台本が置き換えられます。"
 msgid "This subtitle has its own style."
 msgstr "この字幕には個別のスタイルがあります。"
 
-#: src/components/ui/ComponentsChecklist.tsx:169
+#: src/components/ui/ComponentsChecklist.tsx:257
 msgid "This takes several minutes. Keep this window open while it runs."
 msgstr "数分かかります。完了するまでこのウィンドウを開いたままにしてください。"
 
@@ -4828,7 +4906,7 @@ msgstr "台本を破棄しますか？ 動画を作るときに、新しい台�
 msgid "Time unavailable"
 msgstr "時間を取得できません"
 
-#: src/components/ui/TitleBar.tsx:395
+#: src/components/ui/TitleBar.tsx:397
 msgid "Timeline"
 msgstr "タイムライン"
 
@@ -4837,7 +4915,7 @@ msgstr "タイムライン"
 msgid "Timing"
 msgstr "タイミング"
 
-#: src/components/ui/VoiceSettings.tsx:487
+#: src/components/ui/VoiceSettings.tsx:499
 msgid "Timing cues"
 msgstr "タイミングのキュー"
 
@@ -4859,7 +4937,7 @@ msgid "Title and ending cards"
 msgstr "タイトルカードとエンディングカード"
 
 #: src/components/ui/NewProject.tsx:362
-#: src/components/ui/RenderOverlay.tsx:388
+#: src/components/ui/RenderOverlay.tsx:389
 #: src/features/map/components/GenerateDialog.tsx:97
 msgid "Title card"
 msgstr "タイトルカード"
@@ -4972,8 +5050,8 @@ msgstr "標準的な区間の長さ"
 msgid "Underline"
 msgstr "下線"
 
-#: src/components/ui/TitleBar.tsx:350
-#: src/components/ui/TitleBar.tsx:354
+#: src/components/ui/TitleBar.tsx:352
+#: src/components/ui/TitleBar.tsx:356
 msgid "Undo"
 msgstr "元に戻す"
 
@@ -5025,9 +5103,9 @@ msgstr "無題"
 
 #: src/components/ui/NewProject.tsx:61
 #: src/components/ui/NewProject.tsx:151
-#: src/components/ui/TitleBar.tsx:90
-#: src/components/ui/TitleBar.tsx:223
-#: src/components/ui/TitleBar.tsx:503
+#: src/components/ui/TitleBar.tsx:92
+#: src/components/ui/TitleBar.tsx:225
+#: src/components/ui/TitleBar.tsx:505
 #: src/hooks/useAssistant.tsx:236
 #: src/hooks/useAssistant.tsx:243
 msgid "Untitled Project"
@@ -5042,7 +5120,7 @@ msgstr "{0}回更新"
 msgid "Uphill"
 msgstr "上り"
 
-#: src/components/ui/VoiceSettings.tsx:563
+#: src/components/ui/VoiceSettings.tsx:575
 msgid "Upload 5–20 seconds of clear speech from one person, with no music or background noise."
 msgstr "1人の話し声を5〜20秒、音楽や雑音なしでアップロードしてください。"
 
@@ -5080,7 +5158,7 @@ msgstr "この地点にご自身の映像を使います。アニメーション
 #~ msgid "Used as the default when exporting"
 #~ msgstr "書き出し時の初期設定になります"
 
-#: src/components/ui/VoiceSettings.tsx:381
+#: src/components/ui/VoiceSettings.tsx:393
 msgid "Used by all projects."
 msgstr "すべてのプロジェクトで使われます。"
 
@@ -5116,7 +5194,7 @@ msgid "Via point {0} of {count}"
 msgstr "中継点 {0} / {count}"
 
 #: src/components/ui/AppSettings.tsx:197
-#: src/components/ui/ComponentsChecklist.tsx:155
+#: src/components/ui/ComponentsChecklist.tsx:243
 #: src/features/editor/EditorView.tsx:79
 msgid "Video"
 msgstr "動画"
@@ -5125,7 +5203,7 @@ msgstr "動画"
 msgid "Video exported"
 msgstr "動画を書き出しました"
 
-#: src/components/ui/RenderOverlay.tsx:1179
+#: src/components/ui/RenderOverlay.tsx:1180
 msgid "Video Exported Successfully!"
 msgstr "動画のエクスポートに成功しました"
 
@@ -5134,7 +5212,7 @@ msgstr "動画のエクスポートに成功しました"
 msgid "Videos"
 msgstr "動画"
 
-#: src/components/ui/RenderOverlay.tsx:1227
+#: src/components/ui/RenderOverlay.tsx:1228
 msgid "View in Timeline"
 msgstr "タイムラインで表示"
 
@@ -5143,26 +5221,26 @@ msgid "Visited pin"
 msgstr "訪問済みのピン"
 
 #: src/components/ui/AppSettings.tsx:198
-#: src/components/ui/VoiceSettings.tsx:253
-#: src/components/ui/VoiceSettings.tsx:342
+#: src/components/ui/VoiceSettings.tsx:265
+#: src/components/ui/VoiceSettings.tsx:354
 #: src/features/map/components/WaypointEditor.tsx:182
 msgid "Voice"
 msgstr "ボイス"
 
-#: src/components/ui/VoiceSettings.tsx:346
+#: src/components/ui/VoiceSettings.tsx:358
 msgid "Voice \"{selected}\" is missing, using {fallback}"
 msgstr "ボイス「{selected}」が見つからないため{fallback}を使用します"
 
-#: src/components/ui/VoiceSettings.tsx:507
+#: src/components/ui/VoiceSettings.tsx:519
 msgid "Voice cache"
 msgstr "音声キャッシュ"
 
-#: src/components/ui/VoiceSettings.tsx:218
+#: src/components/ui/VoiceSettings.tsx:230
 msgid "Voice engine"
 msgstr "音声エンジン"
 
-#: src/components/ui/VoiceSettings.tsx:572
-#: src/components/ui/VoiceSettings.tsx:573
+#: src/components/ui/VoiceSettings.tsx:584
+#: src/components/ui/VoiceSettings.tsx:585
 msgid "Voice name"
 msgstr "ボイス名"
 
@@ -5175,7 +5253,7 @@ msgstr "音声: {voiceSeconds}秒"
 msgid "Voiceover"
 msgstr "ナレーション"
 
-#: src/components/ui/ComponentsChecklist.tsx:110
+#: src/components/ui/ComponentsChecklist.tsx:178
 msgid "Voices"
 msgstr "音声"
 
@@ -5279,6 +5357,10 @@ msgstr "白"
 msgid "Wide view before each leg"
 msgstr "各区間の前に広い視点を表示"
 
+#: src/components/ui/ComponentsChecklist.tsx:165
+msgid "Windows"
+msgstr "Windows"
+
 #: src/components/ui/ReviewStep.tsx:79
 msgid "Word"
 msgstr "単語"
@@ -5348,7 +5430,7 @@ msgstr "はい、すべて作り直す"
 msgid "You can do this later in Settings > Setup"
 msgstr "あとから 設定 > セットアップ でも行えます"
 
-#: src/components/view/ProjectManager.tsx:453
+#: src/components/view/ProjectManager.tsx:457
 msgid "You don't have any recent workspaces. Create a new project or open an existing .nvv file to get started."
 msgstr "最近のワークスペースはありませんね。新しいプロジェクトを作成するか、既存の.nvvファイルを開いて開始してください"
 

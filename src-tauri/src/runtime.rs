@@ -181,9 +181,20 @@ pub struct RuntimeStatus {
     pub python_ready: bool,
     pub uv_found: bool,
     pub venv_dir: Option<String>,
+    /// The Visual C++ runtime that GPSBabel and PyTorch load (a clean Windows PC lacks it).
+    pub vc_runtime: bool,
 }
 
-#[tauri::command]
+/// True when the three runtime DLLs are in System32; always true off Windows.
+pub fn vc_runtime_present() -> bool {
+    if !cfg!(windows) {
+        return true;
+    }
+    let dir = std::path::PathBuf::from(std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".into())).join("System32");
+    ["vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll"].iter().all(|name| dir.join(name).exists())
+}
+
+#[tauri::command(async)]
 pub fn runtime_status() -> RuntimeStatus {
     let rt = get();
     let uv = rt.uv();
@@ -192,6 +203,7 @@ pub fn runtime_status() -> RuntimeStatus {
         python_ready: rt.python_ready(),
         uv_found: uv.exists() || Command::new(&uv).arg("--version").output().is_ok(),
         venv_dir: rt.venv_dir.as_ref().map(|p| p.display().to_string()),
+        vc_runtime: vc_runtime_present(),
     }
 }
 

@@ -80,6 +80,18 @@ export async function getLocalModels(): Promise<string[]> {
     }
 }
 
+// Not running (not installed, or not started) is told apart from running with no model downloaded yet.
+export async function getOllamaState(): Promise<{ running: boolean; models: string[] }> {
+    try {
+        const res = await ollamaFetch(`${OLLAMA_URL}/api/tags`);
+        if (!res.ok) return { running: false, models: [] };
+        const data = await res.json();
+        return { running: true, models: (data.models ?? []).map((m: any) => m.name) };
+    } catch {
+        return { running: false, models: [] };
+    }
+}
+
 // Disk size of each installed model in bytes; its weights take about as much memory when it runs.
 export async function getModelSizes(): Promise<Record<string, number>> {
     try {

@@ -41,7 +41,7 @@ pub fn export_keys(cmd: &mut std::process::Command) {
     }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn secret_set(name: String, value: String) -> Result<(), String> {
     if value.is_empty() || value.len() > MAX_VALUE_BYTES {
         return Err("The key is empty or too long.".into());
@@ -49,7 +49,7 @@ pub fn secret_set(name: String, value: String) -> Result<(), String> {
     entry(&name)?.set_password(&value).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn secret_get(name: String) -> Result<Option<String>, String> {
     match entry(&name)?.get_password() {
         Ok(value) => Ok(Some(value)),
@@ -58,7 +58,7 @@ pub fn secret_get(name: String) -> Result<Option<String>, String> {
     }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn secret_delete(name: String) -> Result<(), String> {
     match entry(&name)?.delete_credential() {
         Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),

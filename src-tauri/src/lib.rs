@@ -79,6 +79,14 @@ fn kill_tracked_children(state: &BlueprintState) {
 /// `python main.py` for this build (the repo's, or the installed app's own), with the saved AI keys and the app-wide
 /// Mapbox token (`NAVIVI_MAPBOX_TOKEN`) in its environment.
 /// Fails with a `SETUP_REQUIRED` message the frontend turns into the setup screen when an installed app has no Python yet.
+fn vc_runtime_guard() -> Result<(), String> {
+    if runtime::vc_runtime_present() {
+        Ok(())
+    } else {
+        Err("VC_RUNTIME_MISSING: the Microsoft Visual C++ runtime is not installed.".into())
+    }
+}
+
 fn python_command(app: &AppHandle) -> Result<Command, String> {
     let rt = runtime::get();
     if !rt.python_ready() {
@@ -219,6 +227,7 @@ fn start_render(
     force: Option<bool>,
     state: State<'_, BlueprintState>,
 ) -> Result<String, String> {
+    vc_runtime_guard()?;
     let mut command = python_command(&app)?;
     command.arg("full_pipeline").arg(&config_path);
     if force.unwrap_or(false) {
@@ -326,7 +335,7 @@ fn ollama_candidates() -> Vec<std::path::PathBuf> {
     found
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn wake_up_ollama() -> Result<String, String> {
     if is_ollama_running() {
         return Ok("Ollama OK".to_string());
@@ -420,7 +429,7 @@ async fn copy_asset_file(source_path: String, target_dir: String) -> Result<Stri
     }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn open_in_explorer(path: String) -> Result<(), String> {
     let p = std::path::Path::new(&path);
     #[cfg(target_os = "windows")]
@@ -455,8 +464,39 @@ fn open_in_explorer(path: String) -> Result<(), String> {
 }
 
 
+/// Downloads Microsoft's Visual C++ redistributable and runs it; Windows shows its own permission prompt (UAC).
+/// Done here, not in Python: a clean PC may need it before the Python tools exist.
+#[tauri::command]
+async fn install_vc_runtime() -> Result<(), String> {
+    if runtime::vc_runtime_present() {
+        return Ok(());
+    }
+    let script = r#"$ErrorActionPreference = 'Stop'
+$f = Join-Path $env:TEMP 'navivi_vc_redist.x64.exe'
+Invoke-WebRequest 'https://aka.ms/vs/17/release/vc_redist.x64.exe' -OutFile $f -UseBasicParsing
+$p = Start-Process $f -ArgumentList '/install','/quiet','/norestart' -Verb RunAs -Wait -PassThru
+Remove-Item $f -Force -ErrorAction SilentlyContinue
+exit $p.ExitCode"#;
+    let output = tauri::async_runtime::spawn_blocking(move || {
+        let mut cmd = Command::new("powershell");
+        runtime::hide_window(&mut cmd);
+        cmd.args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script]).output()
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(|e| e.to_string())?;
+    // 1638: a newer one is already there; 3010: installed, restart pending.
+    let code = output.status.code().unwrap_or(-1);
+    if matches!(code, 0 | 1638 | 3010) || runtime::vc_runtime_present() {
+        Ok(())
+    } else {
+        Err(format!("The Visual C++ runtime was not installed (exit {code}). {}", String::from_utf8_lossy(&output.stderr).trim()))
+    }
+}
+
 #[tauri::command]
 async fn convert_gps_to_gpx(input_path: String, input_format: String) -> Result<String, String> {
+    vc_runtime_guard()?;
     let mut gpsbabel = Command::new(runtime::get().gpsbabel());
     runtime::hide_window(&mut gpsbabel);
     let output = gpsbabel
@@ -530,6 +570,7 @@ pub fn run() {
             copy_asset_file,
             open_in_explorer,
             runtime::runtime_status,
+            install_vc_runtime,
             runtime::runtime_install,
             oauth::oauth_listen_start,
             oauth::oauth_listen_wait,

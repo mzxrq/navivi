@@ -13,6 +13,7 @@ from typing import Any, Dict, Optional
 
 import httpx
 
+from services import system_runtime
 from services.logger.logger import setup_logger
 from services.tts.kokoro_setup import _run, find_uv
 from services.tts.ttsengine import IrodoriTTSClient
@@ -72,6 +73,9 @@ def _imports_work(python: Path) -> bool:
 
 def install_irodori(fetch: Optional[Any] = None) -> Dict[str, Any]:
     directory, python = IrodoriTTSClient._SERVER_DIR, IrodoriTTSClient._SERVER_VENV_PYTHON
+    needed = system_runtime.missing_runtime_message("The natural voice")
+    if needed:
+        return {"success": False, "error": needed}
     try:
         if not source_present(directory):
             unpack_source((fetch or fetch_zip)(), directory)
@@ -85,7 +89,7 @@ def install_irodori(fetch: Optional[Any] = None) -> Dict[str, Any]:
                 f"installing Irodori-TTS ({'GPU' if backend != 'cpu' else 'CPU'} build)",
             )
             if not _imports_work(python):
-                raise RuntimeError("The packages installed, but Irodori-TTS could not be imported. See the log above.")
+                raise RuntimeError(system_runtime.import_failure(python, "import irodori_openai_tts, torch", "Irodori-TTS"))
         _run(
             [str(python), "-c", f"from huggingface_hub import snapshot_download as d; d({MODEL_REPO!r})"],
             "downloading the model",

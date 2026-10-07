@@ -1,4 +1,5 @@
 import { LatLon, legAlongTrack, legElevations, stopsAlongTrack, tidyPlaceName, TrackStop } from "../utils/gpxTrack";
+import { announceVcRuntimeMissing, isVcRuntimeMissing } from "../services/setup";
 import { invoke } from "@tauri-apps/api/core";
 import { useWorkspace } from "./useWorkspace";
 import { useUI } from "./useUI";
@@ -179,6 +180,9 @@ export function useFileActions() {
         fileContent = await invoke<string>("convert_gps_to_gpx", {
            inputPath: selectedPath,
            inputFormat
+        }).catch((e) => {
+          if (isVcRuntimeMissing(e)) announceVcRuntimeMissing();
+          throw e;
         });
       }
 
