@@ -11,6 +11,7 @@ from services.mapfetcher.mapgeometry import RouteGeometryProcessor
 from services.vdoprocessing.vdoexporter import VideoExporter
 from services import tuning
 from services.mapbox_token import resolve_mapbox_token
+from services.mapfetcher.graphicengine.pinimage import marker_for
 
 from .base import logger
 
@@ -330,7 +331,8 @@ class _TransitionMixin:
             label, color, split_color = self._pin_label_and_color(wp, total_points)
             self.graphics.draw_marker(
                 frame, px, py, number=label, color=color, split_color=split_color,
-                is_circle=bool(is_stopby)
+                is_circle=bool(is_stopby),
+                image=marker_for(jw, {"routeMarker": (self.config or {}).get("route_marker")}, (self.config or {}).get("marker_base_dir")),
             )
 
     def _gl_ending_zoom_enabled(self, bounding_box) -> bool:
@@ -619,6 +621,7 @@ class _TransitionMixin:
                             frame_out, frame_px, frame_py,
                             number="S" if is_start else "E",
                             color=self._START_PIN_COLOR if is_start else self._END_PIN_COLOR,
+                            image=highlight_popup["data"].get("pin_image"),
                         )
                     if frame_idx >= lead_in_n:
                         # The "hard cut to arrived" moment — before this
@@ -639,6 +642,7 @@ class _TransitionMixin:
                             frame_out, frame_px, frame_py,
                             number="S" if is_start else "E",
                             color=self._START_PIN_COLOR if is_start else self._END_PIN_COLOR,
+                            image=highlight_popup["data"].get("pin_image"),
                         )
                         frame_out = self.graphics.render_popup_box(
                             frame_out, highlight_popup, skip_line=True
@@ -753,6 +757,7 @@ class _TransitionMixin:
                 highlight_bg, px, py,
                 number="S" if is_start else "E",
                 color=self._START_PIN_COLOR if is_start else self._END_PIN_COLOR,
+                image=highlight_popup["data"].get("pin_image"),
             )
             highlight_frame = self.graphics.render_popup_box(
                 highlight_bg, highlight_popup, skip_line=True

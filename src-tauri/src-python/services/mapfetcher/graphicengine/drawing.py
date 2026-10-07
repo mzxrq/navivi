@@ -8,10 +8,14 @@ import numpy as np
 
 from services import tuning
 
+from .pinimage import blit_pin, load_pin
+
 # Vertical distance from the pin's round head to its tip (cx,cy),
 # expressed as a multiple of the marker radius so the tail lengthens or
 # shortens proportionally as marker_radius changes.
 _PIN_HEAD_OFFSET_RATIO: Final[float] = 1.5
+# An image pin fits a square this many radii wide: about the teardrop's own height (2.5r + halo).
+_IMAGE_PIN_BOX_RATIO: Final[float] = 3.0
 
 
 def _pin_silhouette(cx: int, head_cy: int, radius: float, tip_y: int) -> np.ndarray:
@@ -106,6 +110,7 @@ class _DrawingMixin:
         split_color: Optional[Tuple[int, int, int]] = None,
         is_circle: bool = False,
         scale: float = 1.0,
+        image: Optional[str] = None,
     ):
         """Draws a classic Google-Maps-style teardrop map-pin marker with
         its TIP anchored at (cx, cy) — the actual waypoint coordinate —
@@ -127,11 +132,21 @@ class _DrawingMixin:
         one color and losing that it's the same place as the departure.
 
         `scale` sizes the pin about its tip (a pin popping in grows from the
-        spot it marks); below 0.6 its label is left off - too small to read."""
+        spot it marks); below 0.6 its label is left off - too small to read.
+
+        `image`: path of the user's own pin picture (see pinimage.py). It replaces
+        the teardrop (and its label) for numbered/S/E pins; a stop-by dot, or an
+        image that cannot be read, keeps the teardrop."""
         pin_color = color if color is not None else self.marker_color
         radius = int(self.marker_radius * scale)
         if radius < 2:
             return
+        if image and not is_circle:
+            sprite = load_pin(image)
+            if sprite is not None:
+                box = int(radius * _IMAGE_PIN_BOX_RATIO)
+                blit_pin(frame, sprite, cx, cy, box, box)
+                return
         if scale < 0.6:
             number = None
         head_cy = cy - int(radius * _PIN_HEAD_OFFSET_RATIO)

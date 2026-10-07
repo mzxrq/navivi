@@ -73,8 +73,11 @@ def resolve_marker_path(value, base_dir: Optional[str] = None) -> Optional[str]:
 
 def marker_for(waypoint: Optional[dict], settings: Optional[dict], base_dir: Optional[str] = None) -> Optional[str]:
     """The pin image for one stop: its own customMarker, else the project's routeMarker."""
-    own = resolve_marker_path((waypoint or {}).get("customMarker"), base_dir)
-    return own or resolve_marker_path((settings or {}).get("routeMarker"), base_dir)
+    own = (waypoint or {}).get("customMarker")
+    if isinstance(own, str) and own.strip():
+        # The stop chose its own pin (a preset or a file): never the project's image instead.
+        return resolve_marker_path(own, base_dir)
+    return resolve_marker_path((settings or {}).get("routeMarker"), base_dir)
 
 
 def _warn_once(path: str, why: str) -> None:
@@ -223,3 +226,39 @@ def deck_icon(path: Optional[str]) -> Optional[Dict]:
         "url": "data:image/png;base64," + base64.b64encode(png.tobytes()).decode("ascii"),
         "width": cw, "height": ch, "anchorY": ch,
     }
+
+
+def blit_pin(frame: np.ndarray, sprite: PinSprite, cx: int, cy: int, box_w: int, box_h: int) -> None:
+    """Alpha-blend the sprite onto a BGR(A) frame with its bottom centre at (cx, cy)
+    (the spot the pin marks), scaled to fit box_w x box_h; clipped at the frame edges."""
+    img = sprite.fitted(box_w, box_h)
+    h, w = img.shape[:2]
+    x0, y0 = int(cx) - w // 2, int(cy) - h
+    fh, fw = frame.shape[:2]
+    sx0, sy0 = max(0, -x0), max(0, -y0)
+    sx1, sy1 = min(w, fw - x0), min(h, fh - y0)
+    if sx1 <= sx0 or sy1 <= sy0:
+        return
+    src = img[sy0:sy1, sx0:sx1]
+    dst = frame[y0 + sy0:y0 + sy1, x0 + sx0:x0 + sx1]
+    alpha = src[:, :, 3:4].astype(np.float32) / 255.0
+    dst[:, :, :3] = (src[:, :, :3] * alpha + dst[:, :, :3] * (1.0 - alpha)).astype(np.uint8)
+
+
+def marker_inputs_hash(config: Optional[dict], base_dir: Optional[str] = None) -> Optional[str]:
+    """A short hash of the pin pictures a render would use (path, size, mtime), or None when
+    there are none, so a project without custom pins keeps the checkpoint it already has."""
+    import hashlib
+    import json
+
+    config = config or {}
+    settings = config.get("settings") or {}
+    paths = [marker_for({}, settings, base_dir)]
+    paths += [marker_for(wp, settings, base_dir) for wp in config.get("waypoints") or [] if isinstance(wp, dict)]
+    rows = []
+    for path in sorted({p for p in paths if p}):
+        st = os.stat(path)
+        rows.append((path, st.st_size, st.st_mtime_ns))
+    if not rows:
+        return None
+    return hashlib.sha256(json.dumps(rows).encode("utf-8")).hexdigest()[:16]
