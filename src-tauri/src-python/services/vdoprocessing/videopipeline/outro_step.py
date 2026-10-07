@@ -41,6 +41,11 @@ def render_outro_clip(project_config_path: str) -> Optional[str]:
     video_dir = project_video_dir(job_config.get("directory_path", config_path.parent))
 
     settings = job_config.get("settings", {}) or {}
+    # settings.enable_outro: false = no outro clip at all (default on, as before).
+    if not settings.get("enable_outro", tuning.DEFAULT_ENABLE_OUTRO):
+        logger.info("Outro step: switched off in the project settings - skipping.")
+        return None
+
     # settings.outro_style: "scroll" (default, tuning.DEFAULT_OUTRO_STYLE) or "grid".
     style = str(settings.get("outro_style", tuning.DEFAULT_OUTRO_STYLE)).lower()
 
