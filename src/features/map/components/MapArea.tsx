@@ -21,6 +21,8 @@ import { LayerManager } from "./MapLayers/LayerManager";
 import { RouteLayer } from "./MapLayers/RouteLayer";
 import { NaviPin } from "./MapLayers/NaviPin";
 import { ElevationProfile } from "./ElevationProfile";
+import { HeatmapLegend } from "./MapLayers/HeatmapLegend";
+import { useLegElevations } from "./MapLayers/useLegElevations";
 import { t } from "@lingui/core/macro";
 import { useLingui } from "@lingui/react";
 import { Trans } from "@lingui/react/macro";
@@ -63,6 +65,7 @@ export function MapArea() {
   const [isProcessing] = useState(false);
   const [uploadedRouteLine] = useState<[number, number][]>([]);
   const mapRef = useRef<MapRef>(null);
+  const legElevations = useLegElevations(mapRef, is3D, !!settings.show_route_heatmap);
   const thumbnailCaptureTimeoutRef = useRef<ReturnType<
     typeof setTimeout
   > | null>(null);
@@ -893,6 +896,7 @@ export function MapArea() {
           <RouteLayer
             uploadedRouteLine={uploadedRouteLine}
             routePoints={routePoints}
+            legs={legElevations.legs}
           />
 
           {waypoints.map((wp, index) => {
@@ -1171,7 +1175,10 @@ export function MapArea() {
         </Map>
       </div>
 
-      <ElevationProfile />
+      {settings.show_route_heatmap && (
+        <HeatmapLegend state={legElevations} is3D={is3D} onEnable3D={() => setIs3D(true)} />
+      )}
+      <ElevationProfile legs={legElevations.legs} />
 
       {/* OVERLAYS */}
       {isHovering && (

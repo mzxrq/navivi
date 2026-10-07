@@ -141,7 +141,8 @@ export function ProjectSettingsModal({
             <Trans>Route marker</Trans>
           </p>
           <p className="mt-0.5 text-[12px] text-zinc-500 dark:text-zinc-400">
-            <Trans>Default marker for all waypoints. Can be overridden per-stop.</Trans>
+            <Trans>Default marker for all waypoints. Can be overridden per-stop.</Trans>{" "}
+            <Trans>Your own image is also drawn as the pin in the video; the built-in icons show on the map only.</Trans>
           </p>
         </div>
         <div className="flex items-center gap-2">

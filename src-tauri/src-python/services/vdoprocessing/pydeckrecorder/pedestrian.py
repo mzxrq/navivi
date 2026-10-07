@@ -32,6 +32,7 @@ import pydeck as pdk
 
 from services import tuning
 from services.logger.progress import tracker
+from services.mapfetcher.graphicengine.pinimage import deck_icon
 from services.vdoprocessing.cliptiming import timing_sidecar_path, write_audio_offset
 
 from .common import MAPBOX_API_KEY, logger
@@ -277,7 +278,7 @@ def _overview_pin_icons(numbered: List[Dict]) -> List[Dict]:
     return [
         {
             "lon": wp["lon"], "lat": wp["lat"],
-            "icon": {
+            "icon": deck_icon(wp.get("pin_image")) or {
                 "url": _teardrop_pin_svg_url(
                     _bgr_to_hex(wp.get("pin_color") or _OVERVIEW_PIN_FALLBACK_BGR),
                     str(wp.get("pin_glyph") or wp.get("order", "")),
@@ -295,6 +296,10 @@ def _leg_pin_url(pin: Optional[Dict], fallback: str) -> str:
     as "pin 1 -> pin 2" of the overview; `fallback` when not given."""
     if not pin or not pin.get("glyph") or pin.get("color") is None:
         return fallback
+    # The user's own pin picture (same 384x512 canvas, so the layer code is unchanged).
+    icon = deck_icon(pin.get("image")) if pin.get("image") else None
+    if icon:
+        return icon["url"]
     return _teardrop_pin_svg_url(_bgr_to_hex(pin["color"]), str(pin["glyph"]))
 
 # Place-name label pill geometry, in SVG units (the icon is rendered at

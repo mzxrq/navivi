@@ -443,7 +443,7 @@ export function AppSettings() {
                 <Section title={t`Map`}>
                   <Row
                     title={t`Route marker`}
-                    description={t`Default marker for all waypoints. Can be overridden per-stop.`}
+                    description={`${t`Default marker for all waypoints. Can be overridden per-stop.`} ${t`Your own image is also drawn as the pin in the video; the built-in icons show on the map only.`}`}
                     stacked
                   >
                     <div className="flex items-center gap-2 flex-wrap">
@@ -510,7 +510,7 @@ export function AppSettings() {
                   </Row>
                   <Row
                     title={t`Elevation heatmap`}
-                    description={t`Color GPX routes dynamically based on steepness`}
+                    description={t`Color the route by steepness, using the GPX elevation or 3D terrain`}
                   >
                     <Switch
                       checked={!!settings.show_route_heatmap}
@@ -523,7 +523,7 @@ export function AppSettings() {
             )}
 
             {activeTab === "api" && (
-              <Section title={t`Services`}>
+              <Section title={t`Services`} hint={t`Saved on this PC only, never inside projects or shared files`}>
                 <Row
                   title={t`Mapbox`}
                   description={t`Required for map rendering and 3D terrain`}
@@ -533,7 +533,7 @@ export function AppSettings() {
                     type="text"
                     value={settings.mapbox_api_key || ""}
                     onChange={(e) =>
-                      updateProject({ mapbox_api_key: e.target.value })
+                      updateSettings({ mapbox_api_key: e.target.value })
                     }
                     placeholder="pk.eyJ1..."
                     spellCheck={false}
@@ -549,7 +549,7 @@ export function AppSettings() {
                     type="text"
                     value={settings.ors_api_key || ""}
                     onChange={(e) =>
-                      updateProject({ ors_api_key: e.target.value })
+                      updateSettings({ ors_api_key: e.target.value })
                     }
                     placeholder={t`API key`}
                     spellCheck={false}

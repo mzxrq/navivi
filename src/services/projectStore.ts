@@ -4,6 +4,7 @@ import { DbProject, DbProjectInput, RecentProjects } from "../types";
 import { db } from "./db";
 import { duplicateProjectFolder, loadProjectData, loadRouteCache } from "./fileSystem";
 import { readLegacyHistory } from "./versionHistory";
+import { AppApiKeys, legacyApiKeys, stripApiKeys } from "../utils/apiKeys";
 
 type RouteCache = Record<string, [number, number][]>;
 
@@ -48,11 +49,14 @@ export function projectInputFromJobConfig(data: any, selectedPath?: string): DbP
 export async function syncProjectOnOpen(
   data: any,
   selectedPath: string,
-): Promise<{ data: any; routingCache: RouteCache; project: DbProject }> {
+): Promise<{ data: any; routingCache: RouteCache; project: DbProject; legacyApiKeys: AppApiKeys }> {
   const input = projectInputFromJobConfig(data, selectedPath);
   const dir = input.directoryPath;
   const fileUpdatedAt = typeof data.updated_at === "number" ? data.updated_at : 0;
   let row = await db.projects.get(input.id);
+  // The map keys are app-wide: an older project's copy is reported back for the app to adopt and is never stored.
+  const fileSettings = data.settings ? stripApiKeys(data.settings) : null;
+  let legacyKeys = legacyApiKeys(data.settings);
 
   if (!row) {
     const [versions, routeCache] = await Promise.all([
@@ -61,7 +65,7 @@ export async function syncProjectOnOpen(
     ]);
     const report = await db.projects.importLegacy({
       project: input,
-      settings: data.settings ?? null,
+      settings: fileSettings,
       versions,
       routeCache,
     });
@@ -71,7 +75,7 @@ export async function syncProjectOnOpen(
     row = report.project;
   } else if (fileUpdatedAt > row.updatedAt) {
     row = await db.projects.upsert(input);
-    if (data.settings) await db.settings.put(row.id, data.settings);
+    if (fileSettings) await db.settings.put(row.id, fileSettings);
     await db.routeCache.replace(row.id, await loadRouteCache(dir));
   } else {
     row = await db.projects.update(row.id, {
@@ -84,12 +88,21 @@ export async function syncProjectOnOpen(
   }
 
   row = await db.projects.touchOpened(row.id);
-  const settings = (await db.settings.get(row.id)) ?? data.settings;
+  const stored = await db.settings.get(row.id);
+  if (stored) {
+    const fromDb = legacyApiKeys(stored);
+    if (Object.keys(fromDb).length > 0) {
+      legacyKeys = { ...legacyKeys, ...fromDb };
+      await db.settings.put(row.id, stripApiKeys(stored));
+    }
+  }
+  const settings = stored ? stripApiKeys(stored) : fileSettings;
   const routingCache = await db.routeCache.getAll(row.id);
 
   return {
     project: row,
     routingCache,
+    legacyApiKeys: legacyKeys,
     data: {
       ...data,
       project_name: row.name,

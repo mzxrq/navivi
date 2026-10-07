@@ -4,6 +4,7 @@ import { useWorkspace } from "../../../hooks/useWorkspace";
 import type { Waypoint } from "../../../types";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
+import { OverviewNarration } from "./OverviewNarration";
 
 // Prefecture + city of a point, e.g. "和歌山・和歌山市" (県/府 and 東京都's 都 dropped).
 // Same rule as route_brief.on_route for the count.
@@ -79,6 +80,7 @@ export function OverviewPanel() {
   }, [pointKey, manual, settings.intro_location_at]);
 
   return (
+    <div className="space-y-2">
     <section className="rounded-lg border border-zinc-200 dark:border-white/8 bg-white dark:bg-white/2">
       <div className="flex items-center gap-2.5 pl-2 pr-2.5 py-2">
         <button
@@ -227,5 +229,7 @@ export function OverviewPanel() {
         </div>
       )}
     </section>
+    <OverviewNarration />
+    </div>
   );
 }

@@ -2,7 +2,7 @@
 Route to Video Animator (route2vdo.py)
 ---------------------------------------------------------------------------
 Main Orchestrator. Parses CLI arguments and JSON data, then routes
-the drawing commands to either the Spatial or Storyboard renderers.
+the drawing commands to the Spatial renderer.
 ---------------------------------------------------------------------------
 """
 
@@ -19,6 +19,7 @@ from services.mapfetcher.graphicengine import GraphicsEngine
 from services.logger.logger import setup_logger
 from services.logger.progress import tracker
 from services import tuning
+from services.mapbox_token import resolve_mapbox_token
 from services.vdoprocessing.spatial_renderer import SpatialRenderer
 from services.vdoprocessing.pydeckrecorder import record_headless_video
 from services.vdoprocessing.route_inputs import photo_inputs_hash
@@ -32,7 +33,8 @@ logger = setup_logger("RouteAnimator")
 # fallback when neither the CLI flag nor the route JSON's settings supply
 # one. Named here so both use sites can't silently drift apart.
 DEFAULT_LINE_THICKNESS = 10
-DEFAULT_MARKER_RADIUS = 24
+# [NOTE] [Config] 16 is the GraphicsEngine floor (it draws max(16, r) + 3 px); a larger default was clamped to it anyway.
+DEFAULT_MARKER_RADIUS = 16
 DEFAULT_SUMMARY_HOLD_SECONDS = 4.0
 
 
@@ -273,6 +275,15 @@ class RouteAnimator:
         else:
             logger.warning("Failed to freeze video end. Skipping freeze frame.")
 
+    def _mapbox_token(self) -> Optional[str]:
+        """The app's token (NAVIVI_MAPBOX_TOKEN), else what a project saved by an older version still carries in its
+        job_config.json settings (this animator's own config is a curated subset without it), else the old env names."""
+        try:
+            settings = (self.spatial_renderer._get_job_config() or {}).get("settings")
+        except Exception:
+            settings = None
+        return resolve_mapbox_token(settings if isinstance(settings, dict) else None)
+
     def _render_overview_pydeck(
         self, img_path: str, points: List, labels: List, popups: List,
         extent: Optional[Tuple[float, float, float, float]], fps: int,
@@ -318,6 +329,8 @@ class RouteAnimator:
             # gets set (as the pre-increment count) so it's never missing,
             # just not incremented for it.
             entry = {"lat": lat, "lon": lon, "order": order, "label": labels[i], "is_stopby": is_stopby}
+            if popup.get("pin_image"):
+                entry["pin_image"] = popup["pin_image"]
             if not is_stopby:
                 order += 1
                 entry["order"] = order
@@ -348,6 +361,7 @@ class RouteAnimator:
         duration = self.config.get("duration", 30.0)
         return render_overview_video_pydeck(
             route_latlon, waypoints, output_path, duration=duration, fps=fps, title_text=title_text,
+            mapbox_key=self._mapbox_token(),
         )
 
     def _leg_hud_card_png(self, mode: str):
@@ -732,7 +746,9 @@ class RouteAnimator:
             # narration restarting on every piece.
             leg_paths = render_residential_leg_pydeck(
                 leg_latlon, dest_label, output_path,
-                hud_card_png=self._leg_hud_card_png(leg_mode), **leg_kwargs,
+                hud_card_png=self._leg_hud_card_png(leg_mode),
+                # Not in leg_kwargs: a token change must not re-render finished legs (see the fingerprint above).
+                mapbox_key=self._mapbox_token(), **leg_kwargs,
             )
             if leg_paths:
                 keep = {Path(p).resolve() for p in leg_paths}
@@ -778,13 +794,6 @@ class RouteAnimator:
             raise FileNotFoundError(f"Background path does not exist: {img_path}")
 
         output_paths = []
-
-        # [HACK] [Core] No StoryboardRenderer implementation exists anywhere in this codebase, so use_leg_storyboard can never actually run — fail loudly here instead of an opaque AttributeError deep in a dead branch.
-        if self.config.get("use_leg_storyboard", False) and wp_indices:
-            raise NotImplementedError(
-                "use_leg_storyboard is enabled but no StoryboardRenderer is "
-                "implemented — use the default spatial renderer instead."
-            )
 
         if render_mode == "recap_frame":
             overview_path = self.spatial_renderer.render_overview(
@@ -901,9 +910,6 @@ def main():
     parser.add_argument("--summary-json", default=None)
     parser.add_argument("--summary-hold", type=float, default=4.0)
     parser.add_argument("--summary-fade", type=float, default=0.5)
-    parser.add_argument(
-        "--use-storyboard", action="store_true", help="Slice the overview video"
-    )
 
     args = parser.parse_args()
 
@@ -913,7 +919,6 @@ def main():
         "summary_hold": args.summary_hold,
         "summary_fade": args.summary_fade,
         "res_duration": args.res_duration,
-        "use_leg_storyboard": args.use_storyboard,
     }
 
     animator = RouteAnimator(config)

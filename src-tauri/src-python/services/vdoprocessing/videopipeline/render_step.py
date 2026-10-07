@@ -22,6 +22,7 @@ from services.localization.localization import format_waypoint_label
 from services.config.job_config import JobConfigManager
 from services.config.upscaled_images import IMAGE_KEYS, apply_upscaled_images
 from services import tuning
+from services.mapfetcher.graphicengine.pinimage import marker_for, marker_inputs_hash
 
 from .audio_step import overview_tagged_script
 from .narration_step import MAX_EARLY_ARRIVAL_SECONDS, CueStore, leg_walk_plan
@@ -103,7 +104,7 @@ def overview_pin_glyphs(waypoints: list) -> dict:
     return glyphs
 
 
-def _leg_pin(glyph, settings: dict, arrived: bool) -> Optional[dict]:
+def _leg_pin(glyph, settings: dict, arrived: bool, image: Optional[str] = None) -> Optional[dict]:
     """One end of a leg's pin, in the overview's colors: S green, E red, a
     stop-by brown, a numbered stop the marker color (the darker "arrived"
     shade for the pin the leg departs from, which is already visited)."""
@@ -118,7 +119,10 @@ def _leg_pin(glyph, settings: dict, arrived: bool) -> Optional[dict]:
     else:
         marker = _project_color(settings, "marker_color", (235, 150, 60))
         color = _arrived_marker_color(settings, marker) if arrived else marker
-    return {"glyph": glyph, "color": tuple(int(c) for c in color)}
+    pin = {"glyph": glyph, "color": tuple(int(c) for c in color)}
+    if image and glyph != "・":  # a stop-by stays a dot
+        pin["image"] = image
+    return pin
 
 
 def _arrived_marker_color(settings: dict, marker_bgr: tuple) -> tuple:
@@ -257,6 +261,9 @@ def _checkpoint_parts(
     parts["route.photos"] = photo_inputs_hash(
         [[wp.get(k) for k in IMAGE_KEYS] for wp in shown.get("waypoints") or [] if isinstance(wp, dict)]
     )
+    marker_part = marker_inputs_hash(shown, str(Path(project_config_path).parent))
+    if marker_part:
+        parts["route.markers"] = marker_part
     for key, value in config_data.items():
         if key == "updated_at":
             continue
@@ -298,7 +305,8 @@ def _checkpoint_parts(
 # an output is missing). Not route.geometry: the app can save a different
 # GPX line for the same waypoints (see route_inputs.py).
 # route.photos: a new or upscaled pop-up photo has to reach the overview and legs.
-ROUTE_CHECKPOINT_PARTS = ("route.waypoints", "route.overview_flags", "route.photos")
+# route.markers: a new pin picture too (absent, so unchanged, for a project with none).
+ROUTE_CHECKPOINT_PARTS = ("route.waypoints", "route.overview_flags", "route.photos", "route.markers")
 
 
 def _describe_changed_parts(old: dict, new: dict, limit: int = 25) -> str:
@@ -550,6 +558,9 @@ def render_route_video(
 
     settings = project_config.get("settings", {})
     waypoints = project_config.get("waypoints", [])
+    # The user's own pin pictures (customMarker / routeMarker); empty -> every pin stays the built-in teardrop.
+    marker_base_dir = str(Path(project_config_path).parent)
+    route_marker = marker_for({}, settings, marker_base_dir)
     # use_pydeck_pedestrian (the GeoJsonLayer chase camera, top-down ->
     # follow) is now the DEFAULT residential engine — see route2vdo.py's
     # RouteAnimator.render, which picks it unless a project explicitly sets
@@ -730,6 +741,7 @@ def render_route_video(
 
         for idx, wp in enumerate(waypoints):
             route_point_idx = wp_indices[idx]
+            _pin_image = marker_for(wp, settings, marker_base_dir)
             raw_label = wp.get("label", PIPELINE_LABELS["waypoint_fallback"])
 
             if idx == 0 and start_label:
@@ -799,6 +811,7 @@ def render_route_video(
                     wp.get("image_display", "cover")
                 ).lower(),
                 "triggered": False,
+                **({"pin_image": _pin_image} if _pin_image else {}),
                 # Matches the map editor's own MapArea.tsx: a stop-by
                 # waypoint always renders as pinType="stopby" (dark brown, a
                 # "・" dot instead of a number) and is skipped entirely by
@@ -984,6 +997,10 @@ def render_route_video(
         glyph_by_id = {
             wp.get("id"): _glyph_by_pos[pos]
             for pos, wp in enumerate(res_waypoints) if wp.get("id")
+        }
+        pin_image_by_id = {
+            wp.get("id"): marker_for(wp, settings, marker_base_dir)
+            for wp in res_waypoints if wp.get("id")
         }
 
         for seq_idx, leg_item in enumerate(sequence_data):
@@ -1207,11 +1224,13 @@ def render_route_video(
                         glyph_by_id.get(leg_item.get("start_waypoint_id"))
                         or ("S" if seq_idx == 0 else None),
                         settings, arrived=True,
+                        image=pin_image_by_id.get(leg_item.get("start_waypoint_id")),
                     ),
                     "dest_pin": _leg_pin(
                         glyph_by_id.get(leg_item.get("end_waypoint_id"))
                         or ("E" if seq_idx == len(sequence_data) - 1 else None),
                         settings, arrived=False,
+                        image=pin_image_by_id.get(leg_item.get("end_waypoint_id")),
                     ),
                     "real_duration_seconds": (
                         (
@@ -1354,7 +1373,7 @@ def render_route_video(
             for k, default in [
                 ("fps", 30),
                 ("line_thickness", 10),
-                ("marker_radius", 24),
+                ("marker_radius", 16),
                 ("map_font_size", 24),
                 ("card_border_thickness", tuning.DEFAULT_CARD_BORDER_THICKNESS),
                 ("route_line_border_thickness", tuning.DEFAULT_LINE_BORDER_THICKNESS),
@@ -1365,7 +1384,6 @@ def render_route_video(
                 ("show_segment_summary", True),
                 ("res_duration", 12.0),
                 ("post_arrival_hold_seconds", 1.0),
-                ("use_leg_storyboard", False),
                 ("default_transition_hold_seconds", 1.5),
                 ("hide_route_on_popup", False),
                 ("enable_fullscreen_popups", True),
@@ -1392,6 +1410,8 @@ def render_route_video(
         "drawn_pin_color": _project_color(settings, "drawn_pin_color", tuning.DRAWN_PIN_COLOR),
         "stopby_pin_color": _project_color(settings, "stopby_pin_color", tuning.STOPBY_PIN_COLOR),
         "trigger_radius_padding": settings.get("trigger_radius_padding", {}),
+        "route_marker": route_marker,
+        "marker_base_dir": marker_base_dir,
         "fullscreen_transition": settings.get("fullscreen_transition", {}),
         # Real-world average speed (km/h) per travel mode — how much
         # faster a car/ferry/etc. leg animates on screen relative to a
