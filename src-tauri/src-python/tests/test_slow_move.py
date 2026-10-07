@@ -40,12 +40,8 @@ class TestPresets:
         assert not slow_move.is_moving_preset(None)
 
     def test_editor_moves_do(self):
-        for preset in ("pan-left", "pan-right", "pan-up", "pan-down", "walk-in"):
+        for preset in ("pan-left", "pan-right", "pan-up", "pan-down", "walk-in", "zoom-in", "zoom-out"):
             assert slow_move.is_moving_preset(preset)
-
-    def test_jump_cuts_hold_instead(self):
-        assert not slow_move.is_moving_preset("zoom-in")
-        assert not slow_move.is_moving_preset("zoom-out")
 
 
 class TestExtend:
