@@ -24,6 +24,7 @@ import { useUI } from "../../../hooks/useUI";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { ScriptInput } from "../../../components/ui/ScriptInput";
 import { Switch } from "../../../components/ui/Switch";
+import { Segmented } from "../../../components/ui/Segmented";
 import { MAX_VIDEOS, WaypointVideos } from "./WaypointVideos";
 import { openContextMenu, separator } from "../../../components/ui/menuItems";
 import { Folder, Video } from "../../../components/ui/icons";
@@ -691,6 +692,28 @@ ${t`Open the photo's page on Wikimedia Commons`}`}
                     }
                     onChange={(v) => updateWaypoint(wp.id, { pauseAtWaypoint: v })}
                     label={t`Pause at Location`}
+                  />
+                </OptionRow>
+
+                {!!wp.images?.length && (
+                  <OptionRow title={t`Photo card`} description={t`Boxed keeps the photo in a card with its caption; full photo fills the frame.`}>
+                    <Segmented<"pip" | "cover">
+                      compact
+                      value={wp.imageDisplay === "cover" ? "cover" : "pip"}
+                      onChange={(v) => updateWaypoint(wp.id, { imageDisplay: v })}
+                      options={[
+                        { id: "pip", label: t`Boxed` },
+                        { id: "cover", label: t`Full photo` },
+                      ]}
+                    />
+                  </OptionRow>
+                )}
+
+                <OptionRow title={t`Describe in the overview`} description={t`Off keeps this stop out of the overview narration.`}>
+                  <Switch
+                    checked={wp.overviewHighlight !== false}
+                    onChange={(v) => updateWaypoint(wp.id, { overviewHighlight: v ? undefined : false })}
+                    label={t`Describe in the overview`}
                   />
                 </OptionRow>
 
