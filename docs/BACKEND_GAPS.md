@@ -16,6 +16,24 @@ Treat line numbers as pointers: they move.
 
 ---
 
+## Status after the wrap2 push (2026-10-07)
+
+The tables below are the audit as it was written. What has been done on branch `wrap2` (details in `.agents/CODEMAP.md`, "wrap2 additions"):
+
+| Item | State |
+|---|---|
+| Bugs 1, 2, 8, 9 (imageTransitions), 12 | fixed (Fly alias, overview model, marker radius, dead field, docs) |
+| Bug 3, custom pin icons in the video | done (drawn in the overview and every leg's start/end pins; built-in preset icons and 3D models still teardrops) |
+| Bugs 4, 11 and V2, V3 (map style, export options) | done |
+| Bug 5 (Mapbox key) | done as app-wide keys: never inside projects or archives |
+| Bugs 6, 7, 10 and V1, V4 to V10, V13 (overview panel, look settings, outro) | done; per-stop `freeze_seconds`, `mode_speeds_kmh` and `animation_speeds_kmh` deliberately not exposed |
+| V11 (on-video language) | done: `video_text_language` auto/en/ja |
+| T1 to T3, T5, T6 (voice) | done; T4 (romaji labels) not offered: it only reaches the waypoint chips |
+| G1, G2 (force, per-stop regeneration) | done for voice, subtitles and photo clip; no leg video; G3 obsolete (multi-photo clips combine automatically) |
+| T7, G4, G5 | second wave: translated subtitles and stay detection in progress; G5 previews are inside the overview panel |
+| Section 5 dead code | removed (all but the legacy 3D renderer, which is not dead) |
+| Elevation heatmap (reported by the user, not in this audit) | fixed: see CODEMAP |
+
 ## 1. Bugs and broken promises (fix these before building anything new)
 
 These are places where the UI says one thing and the pipeline does another. They are small and worth doing first.
