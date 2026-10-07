@@ -329,6 +329,8 @@ class RouteAnimator:
             # gets set (as the pre-increment count) so it's never missing,
             # just not incremented for it.
             entry = {"lat": lat, "lon": lon, "order": order, "label": labels[i], "is_stopby": is_stopby}
+            if popup.get("pin_image"):
+                entry["pin_image"] = popup["pin_image"]
             if not is_stopby:
                 order += 1
                 entry["order"] = order
