@@ -146,18 +146,36 @@ class AttractionVideoGenerator:
                 digest.update(chunk)
         digest.update(b"|" + pan.encode("utf-8"))
         # Switching generator rebuilds the kept clips.
-        if pan in tuning.ATTRACTION_JUMP_CUT_PRESETS:
+        if pan in tuning.ATTRACTION_JUMP_CUT_PRESETS and tuning.ATTRACTION_ZOOM_STYLE == "dolly":
+            digest.update(
+                f"|dolly|{tuning.PARALLAX_ZOOM}|{tuning.PARALLAX_ARC}|{tuning.PARALLAX_FAR_WEIGHT}"
+                f"|{tuning.PARALLAX_LAYERS}".encode("utf-8")
+            )
+        elif pan in tuning.ATTRACTION_JUMP_CUT_PRESETS:
             digest.update(
                 f"|jumpcut|{tuning.ATTRACTION_JUMP_CUT_TIGHT}|{tuning.ATTRACTION_JUMP_CUT_AT}"
-                f"|{tuning.ATTRACTION_JUMP_CUT_AI}|{tuning.ATTRACTION_JUMP_CUT_AI_STRENGTH}".encode("utf-8")
+                f"|{tuning.ATTRACTION_AI_SURROUNDINGS}|{tuning.ATTRACTION_JUMP_CUT_AI_STRENGTH}".encode("utf-8")
             )
         elif pan in tuning.ATTRACTION_LTX_PRESETS:
             digest.update(f"|ltxv13b-crops|{tuning.ATTRACTION_SECOND_SHOT}".encode("utf-8"))
+            digest.update(f"|{tuning.LTXV_PROMPTS.get(pan, '')}".encode("utf-8"))
+            if pan in tuning.LTXV_DEPTH_KEYFRAMES:
+                digest.update(
+                    f"|depthkf|{tuning.LTXV_DEPTH_TRUCK}|{tuning.LTXV_DEPTH_PAN}|{tuning.LTXV_DEPTH_DOLLY}"
+                    f"|{tuning.PARALLAX_FAR_WEIGHT}|{tuning.LTXV_DEPTH_MID_GUIDES}|{tuning.LTXV_MID_GUIDE_STRENGTH}".encode("utf-8")
+                )
             digest.update(
                 f"|{tuning.ATTRACTION_SECOND_SHOT_STYLE}|{','.join(tuning.ATTRACTION_SECOND_SHOT_MOVES)}"
                 f"|{tuning.ATTRACTION_SECOND_SHOT_MIN_SOURCE_PX}|{tuning.LTXV_FREE_MOVE_FALLBACK}"
-                f"|{tuning.LTXV_SMALL_PHOTO_WALK_FALLBACK}".encode("utf-8")
+                f"|{tuning.LTXV_SMALL_PHOTO_WALK_FALLBACK}|{tuning.ATTRACTION_AI_SURROUNDINGS}".encode("utf-8")
             )
+            if pan == "walkin":
+                digest.update(
+                    f"|{','.join(tuning.LTXV_FREE_MOVES)}|{tuning.WALKAI_STYLE}|{tuning.PARALLAX_WALK_DOLLY}"
+                    f"|{tuning.PARALLAX_WALK_STEPS_PER_SEC}|{tuning.PARALLAX_WALK_BOB}|{tuning.PARALLAX_WALK_SWAY}"
+                    f"|{tuning.PARALLAX_WALK_ROLL_DEG}|{tuning.LTXV_WALK_TO_SIGN}|{tuning.LTXV_WALK_SLOWDOWN}|{tuning.LTXV_WALK_ANCHOR_DOLLY}|{tuning.LTXV_WALK_ANCHOR_STRENGTH}"
+                    f"|{tuning.LTXV_WALK_QC_MIN_SHARE}|{tuning.LTXV_WALK_ATTEMPTS}|walkqc1".encode("utf-8")
+                )
         elif tuning.ATTRACTION_GENERATOR != "chain":
             digest.update(b"|" + tuning.ATTRACTION_GENERATOR.encode("utf-8"))
         return digest.hexdigest()[:12]
@@ -248,6 +266,7 @@ class AttractionVideoGenerator:
         prompt_text: str,
         duration_sec: float = 6.0,
         save_path: Optional[str] = None,
+        place: Optional[str] = None,
     ) -> Optional[str]:
         """Generates a clip via ComfyUI (Wan2.2 I2V), falling back to the
         local pan/zoom generator on failure. Returns the raw clip path.
@@ -269,17 +288,19 @@ class AttractionVideoGenerator:
             from services.vdoprocessing.jump_cut import generate_jump_cut, upscaled_photo
 
             photo = upscaled_photo(local_image_path, getattr(self.config, "config_path", None))
+            if tuning.ATTRACTION_ZOOM_STYLE == "dolly":
+                return self._parallax_clip(photo, str(save_path), duration_sec, prompt_text)
             return generate_jump_cut(photo, str(save_path), duration_sec, normalize_camera_pan(prompt_text))
 
         if normalize_camera_pan(prompt_text) in tuning.ATTRACTION_LTX_PRESETS:
             from services.vdoprocessing.ltx_keyframed import generate_ltx_move
 
             try:
-                return generate_ltx_move(local_image_path, str(save_path), prompt_text)
+                return generate_ltx_move(local_image_path, str(save_path), prompt_text, duration_sec, place)
             except Exception as exc:
                 logger.warning(
                     "LTXV clip failed for %s (%s: %s) - 3D photo instead.",
-                    local_image_path, type(exc).__name__, exc,
+                    local_image_path, type(exc).__name__, exc, exc_info=True,
                 )
                 return self._parallax_clip(local_image_path, str(save_path), duration_sec, prompt_text)
 
@@ -904,7 +925,7 @@ class AttractionVideoGenerator:
                 f"   -> Rendering image {idx + 1}/{len(image_list)}: {img_path} with prompt: '{current_prompt}'"
             )
             clip = self._generate_single_clip(
-                img_path, current_prompt, per_clip_duration, save_path=str(raw_clip_path)
+                img_path, current_prompt, per_clip_duration, save_path=str(raw_clip_path), place=place_label,
             )
             if clip:
                 self._lock_signs(clip, img_path, pans[idx])

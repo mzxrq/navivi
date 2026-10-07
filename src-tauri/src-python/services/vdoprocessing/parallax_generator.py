@@ -77,7 +77,32 @@ def camera(preset: str, p: float) -> Tuple[float, float, float]:
     return drift * p, 0.0, z * p  # zoomin
 
 
+def walk_camera(t: float, seconds: float) -> Tuple[float, float, float, float]:
+    """(tx, ty, tz, roll degrees) at time share t of a POV walk: a steady dolly
+    forward, the view dipping on every step, swaying and rolling every two."""
+    steps = math.pi * tuning.PARALLAX_WALK_STEPS_PER_SEC * seconds * t
+    p = t * t / 0.3 if t < 0.15 else t - 0.075  # brief start-up, then a steady pace
+    return (
+        tuning.PARALLAX_WALK_SWAY * math.sin(steps / 2),
+        tuning.PARALLAX_WALK_BOB * (abs(math.sin(steps)) - 0.5),
+        tuning.PARALLAX_WALK_DOLLY * p / 0.925,
+        tuning.PARALLAX_WALK_ROLL_DEG * math.sin(steps / 2),
+    )
+
+
+def _roll(frame: np.ndarray, degrees: float) -> np.ndarray:
+    """Turned about the centre, enlarged just enough to keep the corners filled."""
+    if not degrees:
+        return frame
+    a = math.radians(abs(degrees))
+    grow = math.cos(a) + math.sin(a) * max(OUT_W / OUT_H, OUT_H / OUT_W)
+    m = cv2.getRotationMatrix2D((OUT_W / 2, OUT_H / 2), degrees, grow)
+    return cv2.warpAffine(frame, m, (OUT_W, OUT_H), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REFLECT)
+
+
 def margin_for(preset: str) -> float:
+    if preset == "walk":
+        return max(tuning.PARALLAX_WALK_SWAY, tuning.PARALLAX_WALK_BOB) + 0.02
     if preset in _PANS:
         return tuning.PARALLAX_PAN / 2 + 0.02
     return tuning.PARALLAX_ARC + 0.02
@@ -221,23 +246,33 @@ class _Projector:
     """Per-clip constants: each output pixel's spot in the covered photo, and
     each layer's depth weight there."""
 
-    def __init__(self, layers: List[_Layer]):
+    def __init__(self, layers: List[_Layer], rigid: bool = False):
+        """rigid: each layer moves as one flat card at its median depth, so a
+        sign spanning a depth gradient can't shear."""
         sh, sw = layers[0].depth.shape
         self.cx, self.cy = sw / 2, sh / 2
         u, v = np.meshgrid(np.arange(OUT_W, dtype=np.float32), np.arange(OUT_H, dtype=np.float32))
         self.bx, self.by = u + (self.cx - OUT_W / 2), v + (self.cy - OUT_H / 2)
         far = tuning.PARALLAX_FAR_WEIGHT
+        if rigid:
+            self.weights = [
+                np.float32(far + (1 - far) * np.median(layer.depth[layer.alpha > 0.5] if k else layer.depth))
+                for k, layer in enumerate(layers)
+            ]
+            return
         self.weights = [
             far + (1 - far) * cv2.remap(layer.depth, self.bx, self.by, cv2.INTER_LINEAR)
             for layer in layers
         ]
 
-    def maps(self, k: int, cam: Tuple[float, float, float]):
-        tx, ty, tz = cam
+    def maps(self, k: int, cam: Tuple[float, ...]):
+        """cam: (tx, ty, tz[, pan]) - pan shifts every depth alike (a turn)."""
+        tx, ty, tz = cam[:3]
+        pan = cam[3] if len(cam) > 3 else 0.0
         w = self.weights[k]
         s = 1 + tz * w
         return (
-            self.cx + (self.bx - self.cx) / s + tx * OUT_W * w,
+            self.cx + (self.bx - self.cx) / s + (tx * w + pan) * OUT_W,
             self.cy + (self.by - self.cy) / s + ty * OUT_H * w,
         )
 
@@ -292,6 +327,29 @@ def _focus_depths(depth: np.ndarray) -> Tuple[float, float]:
     return float(np.percentile(depth, 95)), float(np.median(centre))
 
 
+def release_models() -> None:
+    """Drops the depth and LaMa models (a few GB of RAM), e.g. before an LTXV job."""
+    global _depth_pipe, _lama
+    import gc
+
+    _depth_pipe, _lama = None, None
+    gc.collect()
+
+
+def render_views(
+    image_path: str, cams: List[Tuple[float, ...]], margin: float,
+    depth_fn: Callable[[np.ndarray], np.ndarray] = estimate_depth,
+) -> List[np.ndarray]:
+    """The photo seen from each camera, OUT_W x OUT_H BGR, no film finish."""
+    photo = read_image(image_path)
+    if photo is None:
+        raise RuntimeError(f"Cannot read {image_path}")
+    image, depth = _cover(photo, depth_fn(photo), margin)
+    layers = build_layers(image, depth, tuning.PARALLAX_LAYERS)
+    proj = _Projector(layers, rigid=True)
+    return [np.clip(_render(layers, proj, cam)[0], 0, 255).astype(np.uint8) for cam in cams]
+
+
 def generate_parallax_clip(
     image_path: str,
     output_path: str,
@@ -304,7 +362,7 @@ def generate_parallax_clip(
     from services.tts.ttsengine import FFmpegManager
 
     preset = normalize_camera_pan(camera_pan_hint)
-    if preset not in _PANS + ("zoomin", "zoomout"):
+    if preset not in _PANS + ("zoomin", "zoomout", "walk"):
         preset = "zoomin"
     photo = read_image(image_path)
     if photo is None:
@@ -336,7 +394,12 @@ def generate_parallax_clip(
             acc = seen = None
             for j in range(subs):
                 ts = t - shutter * j / max(1, subs - 1) if subs > 1 else t
-                img, d = _render(layers, proj, camera(preset, _ease(ts)))
+                if preset == "walk":
+                    *cam, roll = walk_camera(max(ts, 0.0), duration_sec)
+                    img, d = _render(layers, proj, tuple(cam))
+                    img = _roll(img, roll)
+                else:
+                    img, d = _render(layers, proj, camera(preset, _ease(ts)))
                 acc = img if acc is None else acc + img
                 seen = d if seen is None else seen
             frame = acc / subs

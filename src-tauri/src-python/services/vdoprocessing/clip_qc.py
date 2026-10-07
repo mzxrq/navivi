@@ -150,3 +150,39 @@ def first_bad_frame(
             )
             return i
     return None
+
+
+def scene_lost_frame(frames: List[np.ndarray], photo: np.ndarray, step: int = 3) -> Optional[int]:
+    """First frame (checked every `step`) sharing too few features with the photo
+    to still be the same place, None if all do. Epipolar inliers, not a
+    homography: a real walk changes perspective. Calibrated 2026-10-07: test23's
+    station walk kept >= 15 of 254; the invented forest corridor fell to 8 of
+    647 at 1.0 s and 0 after."""
+    if not frames:
+        return None
+    h, w = frames[0].shape[:2]
+    ref = _Reference(photo, w, h)
+    if ref.descriptors is None:
+        return None
+    floor = None
+    for i in range(0, len(frames), step):
+        gray = cv2.cvtColor(_small(frames[i]), cv2.COLOR_BGR2GRAY)
+        keypoints, descriptors = ref.sift.detectAndCompute(gray, None)
+        inliers = 0
+        if descriptors is not None and len(keypoints) >= 8:
+            good = [
+                m for m, n in (p for p in ref.matcher.knnMatch(descriptors, ref.descriptors, k=2) if len(p) == 2)
+                if m.distance < 0.75 * n.distance
+            ]
+            if len(good) >= 8:
+                _, mask = cv2.findFundamentalMat(
+                    np.float32([keypoints[m.queryIdx].pt for m in good]),
+                    np.float32([ref.keypoints[m.trainIdx].pt for m in good]), cv2.FM_RANSAC, 3.0,
+                )
+                inliers = int(mask.sum()) if mask is not None else 0
+        if floor is None:
+            floor = max(tuning.LTXV_WALK_QC_MIN_INLIERS, tuning.LTXV_WALK_QC_MIN_SHARE * inliers)
+        elif inliers < floor:
+            logger.info("QC: frame %d/%d left the photo (%d inliers, need %.0f).", i, len(frames), inliers, floor)
+            return i
+    return None

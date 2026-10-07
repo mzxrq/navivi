@@ -50,8 +50,8 @@ function useCameraMotions() {
     { value: "pan-right", label: t`Pan Right`, icon: ArrowRight },
     { value: "pan-up", label: t`Pan Up`, icon: ArrowUp },
     { value: "pan-down", label: t`Pan Down`, icon: ArrowDown },
-    { value: "zoom-in", label: t`Zoom In`, icon: ZoomIn },
-    { value: "zoom-out", label: t`Zoom Out`, icon: ZoomOut },
+    { value: "zoom-in", label: t`Dolly In`, icon: ZoomIn },
+    { value: "zoom-out", label: t`Dolly Out`, icon: ZoomOut },
     { value: "walk-in", label: t`Walk In`, icon: Footprints },
   ];
 }

@@ -138,11 +138,11 @@ class TestTwoShots:
             tuning.LTXV_PROMPTS["closein"].format(place="the scene")
         assert not set(tuning.ATTRACTION_SECOND_SHOT_MOVES) & set(tuning.LTXV_FREE_MOVES)
 
-    def test_walk_in_is_rendered_as_a_pinned_walk(self, monkeypatch):
-        assert ltx_keyframed.pinned_preset("walkin") == "walkfwd"
-        assert ltx_keyframed.pinned_preset("panright") == "panright"
-        monkeypatch.setattr(tuning, "LTXV_FREE_MOVE_FALLBACK", None)
+    def test_walk_in_is_the_free_pov_walk_unless_a_fallback_is_set(self, monkeypatch):
         assert ltx_keyframed.pinned_preset("walkin") == "walkin"
+        assert ltx_keyframed.pinned_preset("panright") == "panright"
+        monkeypatch.setattr(tuning, "LTXV_FREE_MOVE_FALLBACK", "walkfwd")
+        assert ltx_keyframed.pinned_preset("walkin") == "walkfwd"
 
     def test_pinned_walk_has_both_ends_pinned_and_goes_deeper_than_zoom(self):
         (fx, fy, fw, fh), (lx, ly, lw, lh) = ltx_keyframed.keyframe_rects(1920, 1080, "walkfwd")
@@ -159,13 +159,41 @@ class TestTwoShots:
         (tmp_path / "s").mkdir()
         (tmp_path / "b").mkdir()
         small = self._upscaled(tmp_path / "s", (800, 450))
-        assert ltx_keyframed.sharp_enough_preset("walkfwd", small) == "walkshort"
+        assert ltx_keyframed.sharp_enough_preset("walkfwd", small) == "walkai"
         assert ltx_keyframed.keyframe_rects(1920, 1080, "walkshort") == ltx_keyframed.keyframe_rects(1920, 1080, "zoomin")
-        assert ltx_keyframed.prompt_for("walkshort") == ltx_keyframed.prompt_for("walkfwd")
+        assert "moving continuously straight forward" in ltx_keyframed.prompt_for("walkai")
         assert ltx_keyframed.pinned_preset("zoomin") == "zoomin"
         big = self._upscaled(tmp_path / "b", (1920, 1080))
         assert ltx_keyframed.sharp_enough_preset("walkfwd", big) == "walkfwd"
         assert ltx_keyframed.sharp_enough_preset("panright", small) == "panright"
+
+    def _photo(self, tmp_path):
+        from PIL import Image
+
+        path = tmp_path / "p.png"
+        Image.new("RGB", (1600, 900), (0, 0, 255)).save(path)
+        return str(path)
+
+    def test_walkai_walks_from_the_ai_wide_shot_into_the_whole_photo(self, tmp_path, monkeypatch):
+        from PIL import Image
+
+        from services.vdoprocessing import jump_cut
+
+        monkeypatch.setattr(jump_cut, "ai_wide", lambda p, w, h: Image.new("RGB", (w, h), (255, 0, 0)))
+        first, last = ltx_keyframed.crop_keyframes(self._photo(tmp_path), "walkai", tmp_path / "w")
+        f, l = cv2.imread(first), cv2.imread(last)
+        assert f.shape[:2] == l.shape[:2] == (tuning.LTXV_HEIGHT, tuning.LTXV_WIDTH)
+        assert tuple(f[5, 5]) == (0, 0, 255)  # AI (red, BGR)
+        assert tuple(l[5, 5]) == (255, 0, 0)  # the photo's own blue, edge to edge
+
+    def test_walkai_is_not_pinned_to_a_last_frame(self):
+        assert "walkai" in tuning.LTXV_FREE_MOVES
+        assert "walkfwd" not in tuning.LTXV_FREE_MOVES
+
+    def test_walkai_without_the_ai_shot_walks_from_the_whole_photo(self, tmp_path):
+        first, _ = ltx_keyframed.crop_keyframes(self._photo(tmp_path), "walkai", tmp_path / "a")
+        assert tuple(cv2.imread(first)[5, 5]) == (255, 0, 0)
+        assert ltx_keyframed.keyframe_rects(1600, 900, "walkai")[0] == ltx_keyframed.keyframe_rects(1600, 900, "walkin")[0]
 
     def _upscaled(self, tmp_path, src_size, up_size=(1920, 1080)):
         from PIL import Image
@@ -221,8 +249,12 @@ class TestGraph:
         g = ltx_keyframed.decode_graph("x.latent", "x/y")
         assert g["58"]["class_type"] == "SaveVideo" and g["lat"]["class_type"] == "LoadLatent"
 
-    def test_pan_right_prompt_leads_with_the_move(self):
-        assert ltx_keyframed.prompt_for("panright").startswith("A slow, calm gimbal shot pans smoothly to the right")
+    def test_pan_right_prompt_walks_the_way_it_pans(self):
+        prompt = ltx_keyframed.prompt_for("panright")
+        assert "walking pace to the right" in prompt and "pans to the right" in prompt
+
+    def test_zoom_prompts_are_dollies(self):
+        assert all("dolly shot" in ltx_keyframed.prompt_for(p) for p in ("zoomin", "zoomout"))
 
 
 class TestRouting:
@@ -233,7 +265,7 @@ class TestRouting:
 
     def test_pan_right_uses_ltx(self, tmp_path, monkeypatch):
         calls = []
-        monkeypatch.setattr(ltx_keyframed, "generate_ltx_move", lambda p, o, h: calls.append(h) or o)
+        monkeypatch.setattr(ltx_keyframed, "generate_ltx_move", lambda p, o, h, d=0.0, place=None: calls.append(h) or o)
         out = self._gen(tmp_path)._generate_single_clip("photo.png", "pan-right", 6.0, str(tmp_path / "o.mp4"))
         assert calls == ["pan-right"] and out.endswith("o.mp4")
 
@@ -263,3 +295,51 @@ class TestRouting:
         with_ltx = img2vdo.AttractionVideoGenerator._clip_key(photo, "panright")
         monkeypatch.setattr(tuning, "ATTRACTION_LTX_PRESETS", ())
         assert img2vdo.AttractionVideoGenerator._clip_key(photo, "panright") != with_ltx
+
+
+class TestDepthKeyframes:
+    """Pans and dollies pinned to 3D-photo views (2026-10-07)."""
+
+    def test_pan_cameras_step_and_turn_the_way_they_pan(self):
+        first, last, margin = ltx_keyframed.depth_cams("panright")
+        assert first[0] < 0 < last[0] and first[3] < 0 < last[3]
+        assert ltx_keyframed.depth_cams("panleft")[:2] == (last, first)
+        assert margin >= abs(last[0]) + abs(last[3])
+
+    def test_dollies_travel_forward_or_back(self):
+        first, last, _ = ltx_keyframed.depth_cams("zoomin")
+        assert first[2] == 0 and last[2] == tuning.LTXV_DEPTH_DOLLY
+        assert ltx_keyframed.depth_cams("zoomout")[:2] == (last, first)
+
+    def test_mid_guides_are_evenly_spaced_latent_frames(self, tmp_path):
+        mids = ltx_keyframed.mid_guides("panleft", tmp_path)
+        idx = [i for _, i in mids]
+        assert len(mids) == tuning.LTXV_DEPTH_MID_GUIDES
+        assert all(i % 8 == 0 and 0 < i < tuning.LTXV_FRAMES - 1 for i in idx) and idx == sorted(idx)
+        assert ltx_keyframed.mid_guides("panup", tmp_path) == []
+
+    def test_mid_guides_chain_after_the_end_guide(self):
+        g = ltx_keyframed.sample_graph("a.png", "b.png", "p", 1, "x", [("m1.png", 32), ("m2.png", 64)])
+        assert g["guide0"]["inputs"]["latent"] == ["guide", 2]
+        assert g["guide1"]["inputs"]["latent"] == ["guide0", 2]
+        assert g["cond"]["inputs"]["positive"] == ["guide1", 0]
+        assert g["sample"]["inputs"]["latent_image"] == ["guide1", 2]
+        assert [g[f"guide{k}"]["inputs"]["frame_idx"] for k in (0, 1)] == [32, 64]
+
+    def test_walk_target_prefers_the_sign_naming_the_place(self, monkeypatch):
+        import sys
+        import types
+
+        from services.vdoprocessing import sign_lock
+
+        name_board, marker = (100, 100, 300, 160), (400, 300, 480, 500)
+        monkeypatch.setattr(sign_lock, "find_signs", lambda img: [marker, name_board])
+        fake = types.ModuleType("rapidocr_onnxruntime")
+        fake.RapidOCR = lambda: (lambda img, use_cls=False: ([
+            ([[120, 110], [280, 110], [280, 150], [120, 150]], "八王子峠", 0.9),
+            ([[410, 320], [470, 320], [470, 480], [410, 480]], "二州山", 0.9),
+        ], None))
+        monkeypatch.setitem(sys.modules, "rapidocr_onnxruntime", fake)
+        image = np.zeros((600, 800, 3), np.uint8)
+        assert ltx_keyframed.walk_target(image, "八王子峠") == (200, 130)
+        assert ltx_keyframed.walk_target(image) == (440, 400)  # no name: the largest

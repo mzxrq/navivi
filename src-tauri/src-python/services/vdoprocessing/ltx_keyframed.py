@@ -14,9 +14,10 @@ import shutil
 import time
 import uuid
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 
 import cv2
+import numpy as np
 
 from services import tuning
 from services.logger.logger import setup_logger
@@ -29,10 +30,13 @@ logger = setup_logger("LtxKeyframed")
 Rect = Tuple[int, int, int, int]  # x0, y0, width, height
 
 
-def keyframe_rects(w: int, h: int, move: str) -> Tuple[Rect, Rect]:
+def keyframe_rects(
+    w: int, h: int, move: str, target: Optional[Tuple[float, float]] = None,
+) -> Tuple[Rect, Rect]:
     """(first, last) crop windows in a w x h photo, at the LTXV aspect. Pans
     slide a LTXV_CROP_WIDTH share of the widest window from edge to edge;
-    zooms and the close-in shot scale about the middle."""
+    zooms and the close-in shot scale about the middle. `target`: where a
+    pinned walk ends up (the photo's sign), else straight ahead."""
     aspect = tuning.LTXV_WIDTH / tuning.LTXV_HEIGHT
     full_w = min(w, round(h * aspect))
 
@@ -59,8 +63,9 @@ def keyframe_rects(w: int, h: int, move: str) -> Tuple[Rect, Rect]:
         return whole, whole
     if move.startswith("walkfwd"):
         turn = {"walkfwdleft": -1, "walkfwdright": 1}.get(move, 0) * tuning.LTXV_WALK_TURN * full_w
+        end_x, end_y = target if target and move == "walkfwd" else (mid_x + turn, mid_y)
         return (window(tuning.LTXV_CLOSE_WIDE, mid_x, mid_y),
-                window(tuning.LTXV_WALK_TIGHT, mid_x + turn, mid_y))
+                window(tuning.LTXV_WALK_TIGHT, end_x, end_y))
     if move.startswith("closepan"):
         c = tuning.LTXV_CLOSE_WIDE
         dx = tuning.LTXV_CLOSE_PAN * full_w / 2
@@ -69,26 +74,122 @@ def keyframe_rects(w: int, h: int, move: str) -> Tuple[Rect, Rect]:
                  "closepanup": (0, dy, 0, -dy), "closepandown": (0, -dy, 0, dy)}
         ax, ay, bx, by = steps[move]
         return window(c, mid_x + ax, mid_y + ay), window(c, mid_x + bx, mid_y + by)
-    # zoomin, zoomout and walkshort.
+    # zoomin, zoomout, walkshort (and walkai without its AI wide shot).
     wide, tight = window(tuning.LTXV_ZOOM_WIDE, mid_x, mid_y), window(tuning.LTXV_ZOOM_TIGHT, mid_x, mid_y)
     return (tight, wide) if move == "zoomout" else (wide, tight)
 
 
-def crop_keyframes(photo_path: str, move: str, work_dir: Path) -> Tuple[str, str]:
+def depth_cams(move: str) -> Tuple[Tuple[float, ...], Tuple[float, ...], float]:
+    """(first, last) 3D-photo cameras for a LTXV_DEPTH_KEYFRAMES move, and the margin they need."""
+    t, u = tuning.LTXV_DEPTH_TRUCK / 2, tuning.LTXV_DEPTH_PAN / 2
+    if move in ("panright", "panleft"):
+        left, right = (-t, 0.0, 0.0, -u), (t, 0.0, 0.0, u)
+        return (left, right, t + u + 0.02) if move == "panright" else (right, left, t + u + 0.02)
+    if move == "walkin":
+        return (0.0, 0.0, 0.0), (0.0, 0.0, tuning.LTXV_WALK_ANCHOR_DOLLY), 0.02
+    near, far = (0.0, 0.0, 0.0), (0.0, 0.0, tuning.LTXV_DEPTH_DOLLY)
+    return (near, far, 0.02) if move == "zoomin" else (far, near, 0.02)
+
+
+def walk_target(image, place: Optional[str] = None) -> Optional[Tuple[float, float]]:
+    """Centre of the sign reading the place's name (OCR), else of the largest
+    sign, else None. 2026-10-07: walking straight ahead at 八王子峠 left its
+    sign out of frame, and "largest" picked a ground marker over the name board."""
+    if not tuning.LTXV_WALK_TO_SIGN:
+        return None
+    try:
+        from rapidocr_onnxruntime import RapidOCR
+
+        from services.vdoprocessing.sign_lock import find_signs
+
+        signs = find_signs(image)
+        if not signs:
+            return None
+        best = signs[0]
+        if place:
+            lines, _ = RapidOCR()(image, use_cls=False)
+            scored = []
+            for quad, text, _conf in lines or []:
+                hits = sum(ch in str(text) for ch in set(place))
+                cx, cy = np.asarray(quad, np.float32).mean(0)
+                sign = next((r for r in signs if r[0] <= cx <= r[2] and r[1] <= cy <= r[3]), None)
+                if hits and sign:
+                    scored.append((hits, sign))
+            if scored:
+                best = max(scored, key=lambda s: s[0])[1]
+    except Exception as exc:
+        logger.info("No walk target (%s: %s) - walking straight ahead.", type(exc).__name__, exc)
+        return None
+    x0, y0, x1, y1 = best
+    return (x0 + x1) / 2, (y0 + y1) / 2
+
+
+def _depth_keyframes(photo_path: str, move: str, work_dir: Path) -> Tuple[str, str]:
+    from services.vdoprocessing.parallax_generator import release_models, render_views
+
+    first, last, margin = depth_cams(move)
+    n = 0 if move in tuning.LTXV_FREE_MOVES else tuning.LTXV_DEPTH_MID_GUIDES
+    mids = [tuple(a + (b - a) * k / (n + 1) for a, b in zip(first, last)) for k in range(1, n + 1)]
+    try:
+        views = render_views(photo_path, [first, last, *mids], margin)
+    finally:
+        release_models()  # LTXV needs the RAM next
+    paths = []
+    for name, frame in zip(("first", "last", *(f"mid{k}" for k in range(1, n + 1))), views):
+        path = work_dir / f"{move}_{name}.png"
+        frame = cv2.resize(frame, (tuning.LTXV_WIDTH, tuning.LTXV_HEIGHT), interpolation=cv2.INTER_AREA)
+        cv2.imencode(".png", frame)[1].tofile(str(path))
+        paths.append(str(path))
+    return paths[0], paths[1]
+
+
+def mid_guides(move: str, work_dir: Path) -> List[Tuple[str, int]]:
+    """In-between 3D views written by _depth_keyframes, with the LTXV frame each
+    is pinned to (evenly spaced, multiples of 8 - one latent frame each)."""
+    if move not in tuning.LTXV_DEPTH_KEYFRAMES or move in tuning.LTXV_FREE_MOVES:
+        return []
+    n = tuning.LTXV_DEPTH_MID_GUIDES
+    span = tuning.LTXV_FRAMES - 1
+    return [(str(work_dir / f"{move}_mid{k}.png"), round(span * k / (n + 1) / 8) * 8) for k in range(1, n + 1)]
+
+
+def crop_keyframes(photo_path: str, move: str, work_dir: Path, place: Optional[str] = None) -> Tuple[str, str]:
     """(first, last) PNGs at LTXV_WIDTH x LTXV_HEIGHT for the move."""
     image = read_image(photo_path)
     if image is None:
         raise RuntimeError(f"Cannot read {photo_path}")
     h, w = image.shape[:2]
     work_dir.mkdir(parents=True, exist_ok=True)
+    if move in tuning.LTXV_DEPTH_KEYFRAMES:
+        return _depth_keyframes(photo_path, move, work_dir)
     paths = []
-    for name, (x0, y0, cw, ch) in zip(("first", "last"), keyframe_rects(w, h, move)):
+    target = walk_target(image, place) if move == "walkfwd" else None
+    for name, (x0, y0, cw, ch) in zip(("first", "last"), keyframe_rects(w, h, move, target)):
         path = work_dir / f"{move}_{name}.png"
         frame = cv2.resize(image[y0:y0 + ch, x0:x0 + cw], (tuning.LTXV_WIDTH, tuning.LTXV_HEIGHT),
                            interpolation=cv2.INTER_AREA)
         cv2.imencode(".png", frame)[1].tofile(str(path))
         paths.append(str(path))
+    if move == "walkai":
+        return _walkai_keyframes(photo_path, image, work_dir, paths)
     return paths[0], paths[1]
+
+
+def _walkai_keyframes(photo_path: str, image, work_dir: Path, crops: List[str]) -> Tuple[str, str]:
+    """AI wide shot -> the photo full frame; the "walkshort" crops if the outpaint fails."""
+    from PIL import Image, ImageOps
+
+    from services.vdoprocessing.jump_cut import ai_wide
+
+    wide = ai_wide(photo_path, tuning.LTXV_WIDTH, tuning.LTXV_HEIGHT)
+    if wide is None:
+        logger.info("walkai on %s: no AI wide shot - walking from the whole photo.", Path(photo_path).name)
+        return crops[0], crops[1]
+    first, last = work_dir / "walkai_first.png", work_dir / "walkai_last.png"
+    wide.save(first)
+    rgb = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+    ImageOps.fit(rgb, (tuning.LTXV_WIDTH, tuning.LTXV_HEIGHT), Image.LANCZOS).save(last)
+    return str(first), str(last)
 
 
 def ensure_files() -> None:
@@ -126,7 +227,10 @@ def prompt_for(preset: str, seed: str = "", second: bool = False) -> str:
     return tuning.LTXV_PROMPTS[preset].format(place=place)
 
 
-def sample_graph(start_name: str, end_name: Optional[str], prompt: str, seed: int, prefix: str) -> Dict:
+def sample_graph(
+    start_name: str, end_name: Optional[str], prompt: str, seed: int, prefix: str,
+    mids: Sequence[Tuple[str, int]] = (), end_strength: Optional[float] = None,
+) -> Dict:
     """Mirrors ComfyUI's ltxv_image_to_video template, loaders swapped for the
     GGUF model + separate VAE/T5, last frame pinned by LTXVAddGuide (none when
     end_name is None); stops at a saved latent."""
@@ -146,7 +250,8 @@ def sample_graph(start_name: str, end_name: Optional[str], prompt: str, seed: in
             "batch_size": 1, "strength": 1.0}},
         "guide": {"class_type": "LTXVAddGuide", "inputs": {
             "positive": ["i2v", 0], "negative": ["i2v", 1], "vae": ["vae", 0], "latent": ["i2v", 2],
-            "image": ["end", 0], "frame_idx": -1, "strength": tuning.LTXV_GUIDE_STRENGTH}},
+            "image": ["end", 0], "frame_idx": -1,
+            "strength": tuning.LTXV_GUIDE_STRENGTH if end_strength is None else end_strength}},
         "cond": {"class_type": "LTXVConditioning", "inputs": {
             "positive": ["guide", 0], "negative": ["guide", 1], "frame_rate": float(tuning.LTXV_FPS)}},
         "sigmas": {"class_type": "ManualSigmas", "inputs": {"sigmas": tuning.LTXV_SIGMAS}},
@@ -159,6 +264,16 @@ def sample_graph(start_name: str, end_name: Optional[str], prompt: str, seed: in
             "positive": ["cond", 0], "negative": ["cond", 1], "latent": ["sample", 0]}},
         "lat": {"class_type": "SaveLatent", "inputs": {"samples": ["crop", 2], "filename_prefix": prefix}},
     }
+    last = "guide"
+    for k, (name, idx) in enumerate(mids):
+        graph[f"mid{k}"] = {"class_type": "LoadImage", "inputs": {"image": name}}
+        graph[f"guide{k}"] = {"class_type": "LTXVAddGuide", "inputs": {
+            "positive": [last, 0], "negative": [last, 1], "vae": ["vae", 0], "latent": [last, 2],
+            "image": [f"mid{k}", 0], "frame_idx": idx, "strength": tuning.LTXV_MID_GUIDE_STRENGTH}}
+        last = f"guide{k}"
+    if last != "guide" and end_name is not None:
+        graph["cond"]["inputs"].update(positive=[last, 0], negative=[last, 1])
+        graph["sample"]["inputs"]["latent_image"] = [last, 2]
     if end_name is None:
         for node in ("end", "guide", "crop"):
             del graph[node]
@@ -188,6 +303,7 @@ _SAME_WAY = {
     "panright": "closepanright", "panleft": "closepanleft", "panup": "closepanup",
     "pandown": "closepandown", "zoomin": "closein", "zoomout": "closeout",
     "walkfwd": "closein", "walkfwdleft": "closein", "walkfwdright": "closein", "walkshort": "closein",
+    "walkai": "closein",
 }
 
 
@@ -284,7 +400,10 @@ def _photo_seed(photo_path: str) -> str:
     return digest.hexdigest()
 
 
-def render_shot(photo_path: str, move: str, output_path: str, work: Path, prompt: Optional[str] = None) -> str:
+def render_shot(
+    photo_path: str, move: str, output_path: str, work: Path, prompt: Optional[str] = None,
+    place: Optional[str] = None,
+) -> str:
     """One LTXV clip (LTXV_FRAMES at LTXV_FPS) of `move` between its two crops,
     colour-matched to its own first crop. Raises on any failure."""
     import httpx
@@ -295,9 +414,9 @@ def render_shot(photo_path: str, move: str, output_path: str, work: Path, prompt
 
     from services.vdoprocessing.local_pan_generator import release_models
 
+    first, last = crop_keyframes(photo_path, move, work, place)
     release_models()
     tuning.ensure_free_ram("LTXV clip", min_free_gb=tuning.LTXV_MIN_FREE_RAM_GB, relief=ComfyUII2VClient.stop_server)
-    first, last = crop_keyframes(photo_path, move, work)
     prefix = f"attraction_ltx/{uuid.uuid4().hex[:8]}"
     client = ComfyUII2VClient()
     copied: Optional[Path] = None
@@ -307,8 +426,11 @@ def render_shot(photo_path: str, move: str, output_path: str, work: Path, prompt
         with httpx.Client() as http:
             graph = sample_graph(
                 client._upload_image(http, first),
-                None if move in tuning.LTXV_FREE_MOVES else client._upload_image(http, last),
+                None if move in tuning.LTXV_FREE_MOVES and move not in tuning.LTXV_DEPTH_KEYFRAMES
+                else client._upload_image(http, last),
                 prompt or prompt_for(move), uuid.uuid4().int & 0xFFFFFFFF, prefix,
+                [(client._upload_image(http, path), idx) for path, idx in mid_guides(move, work)],
+                tuning.LTXV_WALK_ANCHOR_STRENGTH if move in tuning.LTXV_FREE_MOVES else None,
             )
             prompt_id = client._submit(http, graph)
             info = client._wait_for_result(http, prompt_id, output_node="lat", label=f"LTXV {move}")["latents"][0]
@@ -327,6 +449,66 @@ def render_shot(photo_path: str, move: str, output_path: str, work: Path, prompt
     finally:
         if copied is not None:
             copied.unlink(missing_ok=True)
+
+
+def _trim_frames(path: str, frames: int) -> None:
+    import subprocess
+
+    from services.tts.ttsengine import FFmpegManager
+
+    tmp = str(Path(path).with_suffix(".trim.mp4"))
+    cmd = [
+        FFmpegManager.resolve_ffmpeg_bin(), "-y", *tuning.ffmpeg_log_args(), "-i", path, "-frames:v", str(frames),
+        "-c:v", "libx264", *tuning.ffmpeg_thread_args(), "-crf", "16", "-preset", "fast", "-pix_fmt", "yuv420p", tmp,
+    ]
+    if subprocess.run(cmd, capture_output=True).returncode == 0:
+        Path(tmp).replace(path)
+
+
+def render_walk(photo_path: str, move: str, path: str, work: Path, prompt: str, place: Optional[str]) -> str:
+    """A free walk, cut where it leaves the photo; rendered again (new seed) when
+    too little is left. Raises when every attempt leaves the photo too soon."""
+    from services.vdoprocessing.clip_qc import read_frames, scene_lost_frame
+
+    photo = read_image(photo_path)
+    for attempt in range(1, tuning.LTXV_WALK_ATTEMPTS + 1):
+        render_shot(photo_path, move, path, work, prompt, place)
+        lost = scene_lost_frame(read_frames(path), photo) if photo is not None else None
+        if lost is None:
+            return path
+        keep = max(0, lost - 3)
+        if keep >= tuning.LTXV_WALK_MIN_SECONDS * tuning.LTXV_FPS:
+            logger.info("LTXV %s on %s left the photo at frame %d - kept %d frames.",
+                        move, Path(photo_path).name, lost, keep)
+            _trim_frames(path, keep)
+            return path
+        logger.warning("LTXV %s on %s left the photo at frame %d (attempt %d/%d).",
+                       move, Path(photo_path).name, lost, attempt, tuning.LTXV_WALK_ATTEMPTS)
+    raise RuntimeError(f"LTXV {move} left the photo on every attempt")
+
+
+def slow_down(path: str, factor: float) -> str:
+    """Rewrites path `factor` times slower, the extra frames motion-interpolated."""
+    import subprocess
+
+    from services.tts.ttsengine import FFmpegManager
+
+    if factor <= 1.0:
+        return path
+    fps = tuning.LTXV_FPS
+    tmp = str(Path(path).with_suffix(".slow.mp4"))
+    cmd = [
+        FFmpegManager.resolve_ffmpeg_bin(), "-y", *tuning.ffmpeg_log_args(), "-i", path, "-vf",
+        f"minterpolate=fps={fps * factor:g}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=1,"
+        f"setpts={factor:g}*PTS,fps={fps}",
+        "-c:v", "libx264", *tuning.ffmpeg_thread_args(), "-crf", "16", "-preset", "fast", "-pix_fmt", "yuv420p", tmp,
+    ]
+    result = subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace")
+    if result.returncode != 0:
+        logger.warning("Slowing %s failed: %s", path, result.stderr.strip())
+        return path
+    Path(tmp).replace(path)
+    return path
 
 
 def crossfade(paths: List[str], output_path: str) -> str:
@@ -367,10 +549,32 @@ def pinned_preset(preset: str) -> str:
     return preset
 
 
-def generate_ltx_move(photo_path: str, output_path: str, camera_pan_hint) -> str:
+def walkai_parallax(photo_path: str, output_path: str, duration_sec: float) -> str:
+    """A 3D-photo POV walk forward from the AI wide shot (the photo itself
+    without one). Raises on failure."""
+    from services.vdoprocessing.jump_cut import ai_wide
+    from services.vdoprocessing.parallax_generator import OUT_H, OUT_W, generate_parallax_clip
+
+    wide = ai_wide(photo_path, OUT_W, OUT_H)
+    src = photo_path
+    if wide is not None:
+        src = str(Path(output_path).with_suffix(".walk_start.png"))
+        wide.save(src)
+    try:
+        return generate_parallax_clip(src, output_path, max(3.0, duration_sec), "walk")
+    finally:
+        if src != photo_path:
+            Path(src).unlink(missing_ok=True)
+
+
+def generate_ltx_move(
+    photo_path: str, output_path: str, camera_pan_hint, duration_sec: float = 0.0, place: Optional[str] = None,
+) -> str:
     """The chosen move, then the second shot, dissolved together. A failed
     second shot leaves the first alone; a failed first raises."""
     preset = sharp_enough_preset(pinned_preset(normalize_camera_pan(camera_pan_hint)), photo_path)
+    if preset == "walkai" and tuning.WALKAI_STYLE == "parallax":
+        return walkai_parallax(photo_path, output_path, duration_sec)
     if preset not in tuning.LTXV_PROMPTS:
         raise ValueError(f"No LTXV recipe for preset {preset!r}")
     ensure_files()
@@ -382,7 +586,11 @@ def generate_ltx_move(photo_path: str, output_path: str, camera_pan_hint) -> str
         for i, move in enumerate(shot_list(preset, seed, photo_path)):
             path = str(work / f"shot{i}.mp4")
             try:
-                shots.append(render_shot(photo_path, move, path, work, prompt_for(move, seed, second=i > 0)))
+                if move in tuning.LTXV_FREE_MOVES:
+                    shots.append(render_walk(photo_path, move, path, work, prompt_for(move, seed), place))
+                    slow_down(shots[-1], tuning.LTXV_WALK_SLOWDOWN)
+                else:
+                    shots.append(render_shot(photo_path, move, path, work, prompt_for(move, seed, second=i > 0), place))
             except Exception as exc:
                 if i == 0:
                     raise
