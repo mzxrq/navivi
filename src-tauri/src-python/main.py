@@ -16,31 +16,36 @@ import json
 import traceback
 from pathlib import Path
 
-from services.logger.progress import tracker as _tracker
-from services.cli import (
-    _output_dir_from_config,
-    test_gps,
-    test_residential_video,
-    test_tts,
-    test_tts_all,
-    test_overview_tts,
-    test_attraction_tts,
-    test_attraction_tts_all,
-    test_attraction_video,
-    test_attraction_videos,
-    test_attraction_finalize,
-    test_subtitle,
-    test_subtitles,
-    test_intro_video,
-    test_outro_video,
-    test_video_concat,
-    test_mux_audio,
-    test_transition_editor,
-    test_all,
-    test_overview_map,
-    test_overview_video,
-    test_overview_script,
-)
+try:
+    from services.logger.progress import tracker as _tracker
+    from services.cli import (
+        _output_dir_from_config,
+        test_gps,
+        test_residential_video,
+        test_tts,
+        test_tts_all,
+        test_overview_tts,
+        test_attraction_tts,
+        test_attraction_tts_all,
+        test_attraction_video,
+        test_attraction_videos,
+        test_attraction_finalize,
+        test_subtitle,
+        test_subtitles,
+        test_intro_video,
+        test_outro_video,
+        test_video_concat,
+        test_mux_audio,
+        test_transition_editor,
+        test_all,
+        test_overview_map,
+        test_overview_video,
+        test_overview_script,
+    )
+except Exception as _exc:
+    # [NOTE] [Core] A broken install (a missing package, an import-time error) still answers with the one JSON result the app parses.
+    print(json.dumps({"success": False, "error": f"The media tools could not start: {_exc}", "traceback": traceback.format_exc()}))
+    sys.exit(1)
 
 
 def split_mode_payload(argv: list) -> list:

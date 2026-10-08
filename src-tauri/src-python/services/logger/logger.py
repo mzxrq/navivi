@@ -33,17 +33,22 @@ def setup_logger(name: str):
         # src-python/services/logger/app.log, which sat empty/stale while
         # logging silently landed elsewhere.
         log_dir = Path(__file__).resolve().parent
-        log_dir.mkdir(parents=True, exist_ok=True)
         # NAVIVI_LOG_FILE redirects it (the test suite does, so fake test
         # values never land in the real app.log).
         log_path = Path(os.environ.get("NAVIVI_LOG_FILE") or log_dir / "app.log")
-        file_handler = logging.FileHandler(log_path, encoding="utf-8")
-        file_handler.setLevel(logging.INFO)
-        file_formatter = logging.Formatter(
-            "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
-        )
-        file_handler.setFormatter(file_formatter)
-        logger.addHandler(file_handler)
+        # [HACK] [Core] An installed app can sit in a folder it cannot write to; a failed log file must not stop every mode at import.
+        try:
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            file_handler = logging.FileHandler(log_path, encoding="utf-8")
+        except OSError:
+            file_handler = None
+        if file_handler:
+            file_handler.setLevel(logging.INFO)
+            file_formatter = logging.Formatter(
+                "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+            )
+            file_handler.setFormatter(file_formatter)
+            logger.addHandler(file_handler)
 
         # [NOTE] [Core] Console only surfaces ERROR+ (stderr feeds Tauri's error stream/stdout JSON parsing),
         # while the file handler above keeps the full INFO+ history.

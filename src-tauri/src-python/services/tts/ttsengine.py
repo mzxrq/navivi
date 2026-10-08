@@ -28,6 +28,7 @@ import tempfile
 from typing import Any, ClassVar, Dict, Final, List, Optional, Tuple
 
 from services import runtime_paths, tuning
+from services.ffconcat import concat_entry
 from services.tts import phrase_cache
 from services.gpu_cooldown import wait_for_gpu_cooldown
 from services.tts.artifacts import cut_off_ratio, remove_stray_bursts
@@ -1162,8 +1163,7 @@ class AudioProcessor:
         with open(concat_list_path, "w", encoding="utf-8") as f:
             for path in audio_paths:
                 if path and os.path.exists(path):
-                    abs_path = os.path.abspath(path).replace("\\", "/")
-                    f.write(f"file '{abs_path}'\n")
+                    f.write(concat_entry(path))
 
         ffmpeg_cmd = FFmpegManager.resolve_ffmpeg_bin()
         cmd = [
@@ -1181,10 +1181,10 @@ class AudioProcessor:
         ]
 
         logger.info("Merging audio segments...")
-        subprocess.run(cmd, check=True)
-
-        if concat_list_path.exists():
-            concat_list_path.unlink()
+        result = subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace")
+        concat_list_path.unlink(missing_ok=True)
+        if result.returncode != 0:
+            raise RuntimeError(f"Audio merge failed: {result.stderr.strip()[-600:]}")
 
         logger.info(
             f"Successfully compiled audio into 1 single file: {final_output_path}"
@@ -1377,8 +1377,7 @@ class VideoProcessor:
 
         with open(concat_list_path, "w", encoding="utf-8") as f:
             for path in video_paths:
-                abs_path = os.path.abspath(path).replace("\\", "/")
-                f.write(f"file '{abs_path}'\n")
+                f.write(concat_entry(path))
 
         ffmpeg_cmd = FFmpegManager.resolve_ffmpeg_bin()
         cmd = [
