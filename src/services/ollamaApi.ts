@@ -391,7 +391,9 @@ export async function generateWaypointScriptStream(
     const place = tidyPlaceName(locationName) || locationName;
     let facts = "";
 
-    if (lat !== 0 && lng !== 0) {
+    // The arriving line only gives the direction: facts and photos would only invite scenery.
+    const arriving = scriptType === "arriving";
+    if (!arriving && lat !== 0 && lng !== 0) {
         const { geo, searchTerms } = await fetchLocationContext(lat, lng);
         const webContext = await fetchKeylessWebContext(searchTerms);
         facts = [geo && `地理情報: ${geo}`, webContext && `参考情報: ${webContext}`].filter(Boolean).join("\n");
@@ -399,7 +401,7 @@ export async function generateWaypointScriptStream(
 
     const online = isOnlineEngine(engine);
     const base64Images: string[] = [];
-    for (const p of online && !engine.sendPhotos ? [] : imagePaths.slice(0, online ? MAX_ONLINE_PHOTOS : undefined)) {
+    for (const p of arriving || (online && !engine.sendPhotos) ? [] : imagePaths.slice(0, online ? MAX_ONLINE_PHOTOS : undefined)) {
         try {
             const bytes = await readFile(p);
             const encoded = online ? await shrinkForUpload(bytes) : uint8ArrayToBase64(bytes);

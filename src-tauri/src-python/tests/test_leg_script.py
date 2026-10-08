@@ -4,7 +4,7 @@ import json
 import math
 
 from services.cli.script_commands import leg_scripts
-from services.localization.leg_script import build_leg_scripts, leg_turns, walking_directions
+from services.localization.leg_script import brief_directions, build_leg_scripts, leg_turns, walking_directions
 
 LAT0, LNG0 = 35.0, 139.0
 M_LAT = 1 / 110540.0
@@ -77,25 +77,51 @@ def test_every_stop_gets_its_directions_and_opening():
     rows = {r["id"]: r for r in build_leg_scripts(*_project())}
     assert rows["加太駅"]["arriving"] is None
     assert rows["加太駅"]["attraction"] == "ここは加太駅。このコースの出発点です。"
-    assert rows["称念寺"]["arriving"].startswith("加太駅から東へ進みます。")
+    assert rows["称念寺"]["arriving"] == "加太駅を出て、まずは東へ向かいます。しばらく道なりに進みます。右に曲がると、称念寺はすぐそこです。"
     assert rows["称念寺"]["attraction"] == "時間に余裕があれば立ち寄れる地点、称念寺です。小さなお寺です。"
     assert rows["加太港"]["attraction"] == "加太港です。フェリーが出る港です。"
-    assert rows["野奈浦桟橋"]["arriving"] == "加太港からフェリーに乗り、野奈浦桟橋へ渡ります。船はまもなく野奈浦桟橋に到着します。"
+    assert rows["野奈浦桟橋"]["arriving"] == "加太港からフェリーに乗り込みます。船は東へ進み、野奈浦桟橋へ渡ります。"
     assert rows["野奈浦桟橋"]["attraction"].startswith("ゴールの野奈浦桟橋に到着しました。")
     # an unconnected stop-by is told from the previous stop to where the leg passes it
-    assert rows["常行寺"]["arriving"] == "加太駅から東へ、道なりに進むと、常行寺はすぐ先です。"
+    assert rows["常行寺"]["arriving"] == "加太駅から東へ少し歩きます。まもなく常行寺に着きます。"
     assert rows["常行寺"]["attraction"] == "時間に余裕があれば立ち寄れる地点、常行寺です。"
+
+
+def test_brief_arriving_lines_are_two_to_five_sentences_each_opened_differently():
+    project, cache = _project()
+    arriving = [r["arriving"] for r in build_leg_scripts(project, cache) if r["arriving"]]
+    assert all(2 <= a.count("。") <= 5 for a in arriving)
+    walks = [a for a in arriving if "フェリー" not in a]
+    assert len(walks) == len({a.split("。")[0][-5:] for a in walks})
+
+
+def test_a_winding_leg_is_summed_up_not_told_turn_by_turn():
+    stairs = [(300.0 * (i // 2 + i % 2), 300.0 * (i // 2)) for i in range(8)]
+    text = brief_directions("A", "B", "walking", [], _path(*stairs))
+    assert "何度か角を曲がりながら" in text and text.count("。") <= 5
+
+
+def test_a_long_first_stretch_does_not_say_shibaraku_twice():
+    text = brief_directions("A", "B", "walking", [], _path((0, 0), (2000, 0)))
+    assert text.count("しばらく") <= 1
+
+
+def test_the_turns_setting_keeps_the_turn_by_turn_directions():
+    project, cache = _project()
+    project["settings"]["leg_directions"] = "turns"
+    rows = {r["id"]: r for r in build_leg_scripts(project, cache)}
+    assert rows["称念寺"]["arriving"].startswith("加太駅から東へ進みます。")
+    assert rows["常行寺"]["arriving"] == "加太駅から東へ、道なりに進むと、常行寺はすぐ先です。"
 
 
 def test_the_next_stop_continues_from_a_stopby_the_walk_pauses_at():
     project, cache = _project()
     project["waypoints"][1]["popup_image"] = "assets/image/jogyoji.jpg"
     rows = {r["id"]: r for r in build_leg_scripts(project, cache)}
-    assert rows["常行寺"]["arriving"] == "加太駅から東へ、道なりに進むと、常行寺はすぐ先です。"
-    assert rows["称念寺"]["arriving"] == "常行寺から東へ進みます。右に曲がって南へ入ると、称念寺はすぐ先です。"
+    assert rows["称念寺"]["arriving"].startswith("常行寺を出て")
     project["settings"]["overview_style"] = "walk"  # the walk style only passes it
     rows = {r["id"]: r for r in build_leg_scripts(project, cache)}
-    assert rows["称念寺"]["arriving"].startswith("加太駅から東へ進みます。")
+    assert rows["称念寺"]["arriving"].startswith("加太駅を出て")
 
 
 def test_openings_are_added_once():

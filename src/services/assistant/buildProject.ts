@@ -3,7 +3,7 @@ import { withFoundPhotos } from "../../utils/photoCredits";
 import type { PhotoCredit, PlaceQuery } from "../placePhotos";
 import type { AiEngine } from "../ai/engine";
 import { geocodeRoute } from "../geocode";
-import { cleanNarration } from "../narrationPrompt";
+import { cleanNarration, legOf } from "../narrationPrompt";
 import { completeText, generateWaypointScriptStream } from "../ollamaApi";
 import type { ProjectBrief } from "./brief";
 
@@ -228,6 +228,8 @@ export async function buildProject({ brief, sourceText, engine, mapboxToken, sig
           total: waypoints.length,
           otherScript: kind === "attraction" ? wp.arrivingNarration : undefined,
           otherStops: waypoints.slice(0, i).map((w) => (kind === "arriving" ? w.arrivingNarration : w.attractionNarration) ?? ""),
+          // A guessed spot would give a wrong direction.
+          ...(found[i].uncertain || found[i === 0 ? 1 : i - 1]?.uncertain ? {} : legOf(waypoints, i)),
         },
       );
       if (kind === "arriving") wp.arrivingNarration = cleanNarration(script);

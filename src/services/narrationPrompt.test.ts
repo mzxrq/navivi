@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildWaypointPrompt, dropRepeatedSentences, usedWords } from "./narrationPrompt";
+import { buildWaypointPrompt, dropRepeatedSentences, legDirection, legOf, usedWords } from "./narrationPrompt";
 
 const base = { place: "高仙寺", theme: "", userPrompt: "", facts: "", isFirstWaypoint: false };
 const arriving = "孝子駅から歩いて高仙寺に着きました。";
@@ -20,6 +20,27 @@ describe("buildWaypointPrompt", () => {
     const prompt = buildWaypointPrompt({ ...base, scriptType: "attraction", route: { otherScript: "  " } });
     expect(prompt).not.toContain("内容を重ねないこと");
     expect(prompt).not.toContain("\n6. ");
+  });
+
+  it("gives the arriving line the leg's direction and keeps it to one short sentence", () => {
+    const route = legOf([{ lat: 34.27, lng: 135.06, routeMode: "walking" }, { lat: 34.28, lng: 135.07 }], 1);
+    const prompt = buildWaypointPrompt({ ...base, scriptType: "arriving", route });
+    expect(prompt).toContain("この移動の方角: 北東、距離の感じ: 少し先、移動手段: 歩いて");
+    expect(prompt).toContain("1文、20〜50文字");
+    expect(prompt).toContain("景色、気持ち、歴史や解説は書かないで");
+  });
+
+  it("tells the arriving line which phrasings the other stops' arriving lines used", () => {
+    const otherStops = ["ここから北へ、歩いて向かいます。", "次は東へ、車で向かいます。"];
+    const prompt = buildWaypointPrompt({ ...base, scriptType: "arriving", route: { otherStops } });
+    expect(prompt).toContain("【ほかの場所で使った言葉】向かいます、ここから、次は\n");
+    expect(prompt).toContain("違う文の形にすること");
+  });
+
+  it("leaves the direction out when a stop has no position", () => {
+    const route = legOf([{ lat: 0, lng: 0 }, { lat: 34.28, lng: 135.07 }], 1);
+    expect(legDirection(route)).toBe("");
+    expect(buildWaypointPrompt({ ...base, scriptType: "attraction", route: legOf([{ lat: 34, lng: 135 }, { lat: 35, lng: 135 }], 1) })).not.toContain("方角:");
   });
 
   it("never asks the attraction script about arriving", () => {
