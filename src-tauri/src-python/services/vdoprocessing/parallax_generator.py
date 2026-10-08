@@ -13,6 +13,7 @@ services/model/depth_parallax_pan.py.
 
 import math
 import subprocess
+import tempfile
 from typing import Callable, List, Optional, Tuple
 
 import cv2
@@ -397,6 +398,8 @@ def generate_parallax_clip(
     subs = max(1, tuning.PARALLAX_MOTION_BLUR_SAMPLES)
     shutter = 0.5 / max(1, frames - 1)
 
+    # ffmpeg's messages go to a file, not a pipe that is only read at the end (a flood of warnings would fill it and hang).
+    err = tempfile.TemporaryFile()
     proc = subprocess.Popen(
         [
             FFmpegManager.resolve_ffmpeg_bin(), "-y", *tuning.ffmpeg_pipe_log_args(),
@@ -404,7 +407,7 @@ def generate_parallax_clip(
             "-c:v", "libx264", *tuning.ffmpeg_thread_args(), "-crf", "17", "-preset", "fast",
             "-pix_fmt", "yuv420p", output_path,
         ],
-        stdin=subprocess.PIPE, stderr=subprocess.PIPE,
+        stdin=subprocess.PIPE, stderr=err,
     )
     try:
         for i in range(frames):
@@ -427,10 +430,13 @@ def generate_parallax_clip(
             proc.stdin.write(_finish(frame, vignette, rng).tobytes())
         proc.stdin.close()
         if proc.wait() != 0:
-            raise RuntimeError(f"Parallax encode failed: {proc.stderr.read().decode('utf-8', 'replace')}")
+            err.seek(0)
+            raise RuntimeError(f"Parallax encode failed: {err.read().decode('utf-8', 'replace')}")
     except Exception:
         proc.kill()
         raise
+    finally:
+        err.close()
     logger.info("3D photo %s %.1fs over %s -> %s", preset, duration_sec, image_path, output_path)
     return output_path
 

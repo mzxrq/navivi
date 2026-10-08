@@ -10,6 +10,7 @@ last-frame chaining did.
 import math
 import shutil
 import subprocess
+import tempfile
 import uuid
 from pathlib import Path
 from typing import Callable, List, Optional
@@ -63,7 +64,12 @@ def settle(frames: List[np.ndarray], fps: float, max_frames: Optional[int] = Non
 def _write(frames: List[np.ndarray], fps: float, path: str) -> None:
     from services.tts.ttsengine import FFmpegManager
 
+    if not frames:
+        raise ValueError("There are no frames to write.")
     h, w = frames[0].shape[:2]
+    # [NOTE] ffmpeg's messages go to a file, not a pipe nobody reads while frames are being written: a flood of warnings
+    # would fill the pipe and hang both processes.
+    err = tempfile.TemporaryFile()
     proc = subprocess.Popen(
         [
             FFmpegManager.resolve_ffmpeg_bin(), "-y", *tuning.ffmpeg_pipe_log_args(),
@@ -71,17 +77,20 @@ def _write(frames: List[np.ndarray], fps: float, path: str) -> None:
             "-c:v", "libx264", *tuning.ffmpeg_thread_args(), "-crf", "16", "-preset", "fast",
             "-pix_fmt", "yuv420p", path,
         ],
-        stdin=subprocess.PIPE, stderr=subprocess.PIPE,
+        stdin=subprocess.PIPE, stderr=err,
     )
     try:
         for frame in frames:
             proc.stdin.write(frame.tobytes())
         proc.stdin.close()
         if proc.wait() != 0:
-            raise RuntimeError(proc.stderr.read().decode("utf-8", "replace"))
+            err.seek(0)
+            raise RuntimeError(err.read().decode("utf-8", "replace"))
     except Exception:
         proc.kill()
         raise
+    finally:
+        err.close()
 
 
 def concat_clips(paths: List[str], output_path: str, width: int, height: int, fps: float) -> None:

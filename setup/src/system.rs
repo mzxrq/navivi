@@ -21,6 +21,34 @@ pub fn local_app_data() -> PathBuf {
     std::env::var_os("LOCALAPPDATA").map(PathBuf::from).unwrap_or_else(|| PathBuf::from(r"C:\Users\Public"))
 }
 
+/// `%APPDATA%`, where the app keeps its database (settings, project list, version history).
+pub fn roaming_app_data() -> PathBuf {
+    std::env::var_os("APPDATA").map(PathBuf::from).unwrap_or_else(|| PathBuf::from(r"C:\Users\Public"))
+}
+
+/// The user's Documents folder, which may be redirected (OneDrive), as the app sees it.
+pub fn documents_dir() -> PathBuf {
+    powershell("[Environment]::GetFolderPath('MyDocuments')")
+        .map(|s| PathBuf::from(s.trim()))
+        .filter(|p| p.is_absolute())
+        .or_else(|| std::env::var_os("USERPROFILE").map(|p| PathBuf::from(p).join("Documents")))
+        .unwrap_or_else(|| PathBuf::from(r"C:\Users\Public\Documents"))
+}
+
+/// The AI provider keys the app saved in Windows Credential Manager (service "Navivi", user `ai-key:<provider>`; the keyring
+/// crate names the credential `<user>.<service>`). Best effort: a key that is not there is not an error.
+pub fn delete_saved_keys() {
+    for provider in ["anthropic", "openai", "gemini", "openrouter", "custom"] {
+        let _ = Command::new("cmdkey")
+            .arg(format!("/delete:ai-key:{provider}.Navivi"))
+            .creation_flags(CREATE_NO_WINDOW)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+    }
+}
+
 fn ps_quote(s: &str) -> String {
     format!("'{}'", s.replace('\'', "''"))
 }
@@ -45,12 +73,27 @@ pub fn vc_runtime_installed() -> bool {
         .unwrap_or(false)
 }
 
+/// The PowerShell that fetches Microsoft's redistributable. It is the code that gets elevated, so: a fresh random folder per run
+/// (not a fixed name in %TEMP% that another process could pre-create or swap), and the file must carry a valid Authenticode
+/// signature from Microsoft before it is started. The same script is in src-tauri/src/lib.rs `install_vc_runtime`.
+const VC_REDIST_SCRIPT: &str = "$ErrorActionPreference = 'Stop'; \
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; \
+    $dir = Join-Path ([IO.Path]::GetTempPath()) ('navivi-vc-' + [guid]::NewGuid().ToString('N')); \
+    New-Item -ItemType Directory -Path $dir | Out-Null; \
+    try { \
+      $f = Join-Path $dir 'vc_redist.x64.exe'; \
+      Invoke-WebRequest -UseBasicParsing 'https://aka.ms/vs/17/release/vc_redist.x64.exe' -OutFile $f; \
+      $sig = Get-AuthenticodeSignature -LiteralPath $f; \
+      if ($sig.Status -ne 'Valid' -or $sig.SignerCertificate.Subject -notmatch 'O=Microsoft Corporation') { throw 'The downloaded file is not signed by Microsoft, so it was not run.' }; \
+      $p = Start-Process -FilePath $f -ArgumentList '/install','/quiet','/norestart' -Verb RunAs -Wait -PassThru; \
+      $p.ExitCode \
+    } finally { Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction SilentlyContinue }";
+
 /// Downloads Microsoft's redistributable and runs it quietly (Windows asks for permission). Exit codes 0, 1638 (a newer one is
 /// already there) and 3010 (done, restart pending) all mean it is in place.
 pub fn install_vc_runtime() -> Result<(), String> {
-    let script = "$ErrorActionPreference = 'Stop';         [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;         $f = Join-Path $env:TEMP 'navivi_vc_redist.x64.exe';         Invoke-WebRequest -UseBasicParsing 'https://aka.ms/vs/17/release/vc_redist.x64.exe' -OutFile $f;         $p = Start-Process -FilePath $f -ArgumentList '/install','/quiet','/norestart' -Verb RunAs -Wait -PassThru;         Remove-Item $f -ErrorAction SilentlyContinue;         $p.ExitCode";
     let out = Command::new("powershell")
-        .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script])
+        .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", VC_REDIST_SCRIPT])
         .creation_flags(CREATE_NO_WINDOW)
         .stdin(Stdio::null())
         .output()
@@ -63,11 +106,18 @@ pub fn install_vc_runtime() -> Result<(), String> {
     }
 }
 
+/// `dir` as a prefix that matches only paths inside it: with a trailing backslash, `...\Navivi` no longer matches `...\Navivi-dev\...`.
+/// Compared with StartsWith, not -like, so `[`, `]` and `*` in a folder name are plain characters.
+fn inside_prefix(dir: &Path) -> String {
+    let text = dir.display().to_string();
+    format!("{}\\", text.trim_end_matches('\\'))
+}
+
 /// Process ids of `navivi.exe` running from `dir`.
 pub fn running_instances(dir: &Path) -> Vec<u32> {
     let script = format!(
-        "Get-CimInstance Win32_Process -Filter \"Name='navivi.exe'\" | Where-Object {{ $_.ExecutablePath -like ({} + '*') }} | ForEach-Object {{ $_.ProcessId }}",
-        ps_quote(&dir.display().to_string())
+        "Get-CimInstance Win32_Process -Filter \"Name='navivi.exe'\" | Where-Object {{ $_.ExecutablePath -and $_.ExecutablePath.StartsWith({}, [StringComparison]::OrdinalIgnoreCase) }} | ForEach-Object {{ $_.ProcessId }}",
+        ps_quote(&inside_prefix(dir))
     );
     powershell(&script)
         .unwrap_or_default()
@@ -109,9 +159,9 @@ pub fn remove_shortcuts(name: &str, dir: &Path) {
         "$s = New-Object -ComObject WScript.Shell; \
          foreach ($f in @([Environment]::GetFolderPath('Desktop'), [Environment]::GetFolderPath('Programs'))) {{ \
            $p = Join-Path $f ({n} + '.lnk'); \
-           if (Test-Path -LiteralPath $p) {{ if ($s.CreateShortcut($p).TargetPath -like ({d} + '*')) {{ Remove-Item -LiteralPath $p -Force -ErrorAction SilentlyContinue }} }} }}",
+           if (Test-Path -LiteralPath $p) {{ if ($s.CreateShortcut($p).TargetPath.StartsWith({d}, [StringComparison]::OrdinalIgnoreCase)) {{ Remove-Item -LiteralPath $p -Force -ErrorAction SilentlyContinue }} }} }}",
         n = ps_quote(name),
-        d = ps_quote(&dir.display().to_string()),
+        d = ps_quote(&inside_prefix(dir)),
     );
     let _ = powershell(&script);
 }

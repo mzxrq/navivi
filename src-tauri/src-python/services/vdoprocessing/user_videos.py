@@ -14,6 +14,7 @@ import tempfile
 from pathlib import Path
 from typing import List, Optional
 
+from services.ffconcat import concat_entry
 from services.logger.logger import setup_logger
 from services.vdoprocessing.vdoexporter import VideoExporter
 from services.vdoprocessing.videopipeline.helpers import output_is_valid
@@ -92,7 +93,7 @@ def _write_original_sound(clips: List[str], raws: List[str], keep: List[bool], t
             parts.append(part)
         listing = os.path.join(tmp, "parts.txt")
         with open(listing, "w", encoding="utf-8") as f:
-            f.writelines(f"file '{Path(p).as_posix()}'\n" for p in parts)
+            f.writelines(concat_entry(p) for p in parts)
         joined = os.path.join(tmp, "joined.wav")
         subprocess.run(
             [_ffmpeg(), "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", listing, "-c", "copy", joined],

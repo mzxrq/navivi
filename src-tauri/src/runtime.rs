@@ -15,7 +15,7 @@ use serde::Serialize;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::OnceLock;
 use tauri::{AppHandle, Emitter};
 
@@ -232,6 +232,35 @@ pub fn install_steps(rt: &Runtime) -> Result<Vec<(String, Vec<String>)>, String>
 }
 
 static INSTALLING: AtomicBool = AtomicBool::new(false);
+// The child the first-run setup is waiting on, so quitting the app or pressing Cancel can end it (and what it started).
+static SETUP_PID: AtomicU32 = AtomicU32::new(0);
+static SETUP_CANCELLED: AtomicBool = AtomicBool::new(false);
+
+/// Ends a process and everything it started (uv spawns pip builds, Playwright spawns a downloader).
+pub fn kill_pid_tree(pid: u32) {
+    #[cfg(target_os = "windows")]
+    {
+        let mut cmd = Command::new("taskkill");
+        cmd.args(["/PID", &pid.to_string(), "/T", "/F"]).stdout(Stdio::null()).stderr(Stdio::null());
+        hide_window(&mut cmd);
+        let _ = cmd.status();
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = Command::new("kill").args(["-9", &pid.to_string()]).status();
+    }
+}
+
+/// Stops the first-run setup: the step that is running now and any step after it. Also used when the app quits.
+#[tauri::command]
+pub fn runtime_cancel() -> Result<(), String> {
+    SETUP_CANCELLED.store(true, Ordering::SeqCst);
+    let pid = SETUP_PID.swap(0, Ordering::SeqCst);
+    if pid != 0 {
+        kill_pid_tree(pid);
+    }
+    Ok(())
+}
 
 #[derive(Serialize, Clone)]
 struct SetupStep {
@@ -246,6 +275,7 @@ fn run_logged(app: &AppHandle, mut cmd: Command, title: &str) -> Result<(), Stri
     cmd.env("NO_COLOR", "1").env("UV_NO_PROGRESS", "1").stdout(Stdio::piped()).stderr(Stdio::piped());
     hide_window(&mut cmd);
     let mut child = cmd.spawn().map_err(|e| format!("{title}: {e}"))?;
+    SETUP_PID.store(child.id(), Ordering::SeqCst);
     let stderr = child.stderr.take().ok_or("no stderr")?;
     let stdout = child.stdout.take().ok_or("no stdout")?;
     let for_stderr = app.clone();
@@ -258,7 +288,12 @@ fn run_logged(app: &AppHandle, mut cmd: Command, title: &str) -> Result<(), Stri
         let _ = app.emit("setup-log", line);
     }
     let _ = reader.join();
-    let status = child.wait().map_err(|e| format!("{title}: {e}"))?;
+    let status = child.wait().map_err(|e| format!("{title}: {e}"));
+    SETUP_PID.store(0, Ordering::SeqCst);
+    if SETUP_CANCELLED.load(Ordering::SeqCst) {
+        return Err("Setup was cancelled.".into());
+    }
+    let status = status?;
     if status.success() {
         Ok(())
     } else {
@@ -273,6 +308,9 @@ fn install_blocking(app: &AppHandle) -> Result<(), String> {
     let uv = rt.uv();
 
     for (i, (title, args)) in steps.iter().enumerate() {
+        if SETUP_CANCELLED.load(Ordering::SeqCst) {
+            return Err("Setup was cancelled.".into());
+        }
         let _ = app.emit("setup-step", SetupStep { index: i + 1, total, title: title.clone() });
         if args[0] == "venv" && rt.python.exists() {
             continue; // already made; the next step repairs whatever is missing
@@ -282,6 +320,9 @@ fn install_blocking(app: &AppHandle) -> Result<(), String> {
         run_logged(app, cmd, title)?;
     }
 
+    if SETUP_CANCELLED.load(Ordering::SeqCst) {
+        return Err("Setup was cancelled.".into());
+    }
     let title = "Downloading the browser used to draw the route";
     let _ = app.emit("setup-step", SetupStep { index: total, total, title: title.into() });
     let mut cmd = Command::new(&rt.python);
@@ -296,6 +337,7 @@ pub async fn runtime_install(app: AppHandle) -> Result<(), String> {
     if INSTALLING.swap(true, Ordering::SeqCst) {
         return Err("Setup is already running.".into());
     }
+    SETUP_CANCELLED.store(false, Ordering::SeqCst);
     let worker = app.clone();
     let result = tauri::async_runtime::spawn_blocking(move || install_blocking(&worker))
         .await

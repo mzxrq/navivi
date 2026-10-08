@@ -1,23 +1,30 @@
 import { useEffect, useState } from "react";
 
-// How see-through the floating map panels (elevation profile, gradient key) are. A per-viewer preference, kept in localStorage.
+// How see-through the floating map panels (elevation profile, gradient key) are. A per-viewer preference kept in localStorage,
+// with a copy in memory so the slider still works when storage is blocked.
 const KEY = "navivi_map_panel_opacity";
 const EVENT = "map-panel-opacity";
 export const MAP_PANEL_OPACITY = { min: 0.2, max: 1, fallback: 0.9 };
 
+const clamp = (value: number) => Math.min(MAP_PANEL_OPACITY.max, Math.max(MAP_PANEL_OPACITY.min, value));
+
+let current: number | null = null;
+
 export function getMapPanelOpacity(): number {
+  if (current !== null) return current;
   try {
     const raw = localStorage.getItem(KEY);
     const value = raw === null ? NaN : Number(raw);
-    return Number.isFinite(value) ? Math.min(MAP_PANEL_OPACITY.max, Math.max(MAP_PANEL_OPACITY.min, value)) : MAP_PANEL_OPACITY.fallback;
+    return Number.isFinite(value) ? clamp(value) : MAP_PANEL_OPACITY.fallback;
   } catch {
     return MAP_PANEL_OPACITY.fallback;
   }
 }
 
 export function setMapPanelOpacity(value: number) {
+  current = clamp(value);
   try {
-    localStorage.setItem(KEY, String(value));
+    localStorage.setItem(KEY, String(current));
   } catch {}
   window.dispatchEvent(new Event(EVENT));
 }

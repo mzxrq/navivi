@@ -13,7 +13,8 @@ _total = 1
 def begin(total: int) -> None:
     global _done, _total
     _done, _total = 0, max(1, total)
-    step("Starting")
+    # Not a counted step: the first real step announces 0/total, the last one (total-1)/total, and 100% comes when the call returns.
+    print(f"[progress] 0/{_total}|Starting", file=sys.stderr, flush=True)
 
 
 def step(label: str) -> None:

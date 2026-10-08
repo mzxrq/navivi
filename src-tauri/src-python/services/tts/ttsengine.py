@@ -28,6 +28,7 @@ import tempfile
 from typing import Any, ClassVar, Dict, Final, List, Optional, Tuple
 
 from services import runtime_paths, tuning
+from services.ffconcat import concat_entry
 from services.tts import phrase_cache
 from services.gpu_cooldown import wait_for_gpu_cooldown
 from services.tts.artifacts import cut_off_ratio, remove_stray_bursts
@@ -366,17 +367,20 @@ class IrodoriTTSClient:
             "IRODORI_VOICES_DIR": str(voices_dir()),
         }
         logger.info("Irodori TTS server device: %s (Precision: %s).", device, precision)
-        return subprocess.Popen(
+        proc = subprocess.Popen(
             [
                 str(self._SERVER_VENV_PYTHON), "-m", "irodori_openai_tts",
                 "--host", "127.0.0.1", "--port", str(port),
             ],
             cwd=str(self._SERVER_DIR),
             env=server_env,
-            stdout=log_file,    
+            stdout=log_file,
             stderr=subprocess.STDOUT,
             **popen_kwargs,
         )
+        # The child holds its own copy of the handle; ours would stay open (and lock server.log) for as long as this process lives.
+        log_file.close()
+        return proc
 
     # [Config] Initializes the TTS client with output directory, API base URL, and synthesis config
     def __init__(
@@ -423,16 +427,32 @@ class IrodoriTTSClient:
             return False
 
     @classmethod
+    def _pidfile_pid(cls) -> Optional[int]:
+        try:
+            return int(cls._PIDFILE.read_text().strip())
+        except (OSError, ValueError):
+            return None
+
+    @classmethod
     def _other_process_is_starting_server(cls) -> bool:
         """Reads the pidfile a spawning process writes right after Popen —
         True if some other still-alive process claims to already be
         starting the server, so this one should just wait instead of
-        racing to spawn a second copy."""
-        try:
-            pid = int(cls._PIDFILE.read_text().strip())
-        except (OSError, ValueError):
+        racing to spawn a second copy.
+
+        [HACK] [TTS] Windows hands PIDs out again quickly, and a crash or hard kill leaves the pidfile behind: a live PID is only
+        believed when its command line really is the server's. A PID that is alive but belongs to something else is a stale file
+        (removed here, so the server is started); if the command line cannot be read at all the PID is trusted, because starting a
+        second copy next to a healthy one is the worse mistake."""
+        pid = cls._pidfile_pid()
+        if pid is None or not cls._pid_is_alive(pid):
             return False
-        return cls._pid_is_alive(pid)
+        command_line = cls._pid_command_line(pid)
+        if command_line is None or cls._PROCESS_MARKER in command_line:
+            return True
+        logger.info("%s pidfile names PID %s, which is another program now; ignoring it.", cls._SERVER_NAME, pid)
+        cls._PIDFILE.unlink(missing_ok=True)
+        return False
 
     async def _ensure_server_running(self) -> None:
         """Starts the local Irodori TTS server as a subprocess if it isn't
@@ -507,6 +527,15 @@ class IrodoriTTSClient:
                     "Irodori TTS server subprocess exited while starting up — "
                     f"see {self._SERVER_DIR / 'server.log'} for details."
                 )
+            # Started by another process (a preview, another stage): if that server's PID is gone it died while loading, and waiting
+            # out the rest of the (many minutes) timeout would only delay the same error.
+            if type(self)._server_process is None:
+                other = self._pidfile_pid()
+                if other is not None and not self._pid_is_alive(other):
+                    raise RuntimeError(
+                        f"The {self._SERVER_NAME} server another process was starting stopped before it was ready — "
+                        f"see {self._SERVER_DIR / 'server.log'} for details."
+                    )
             await asyncio.sleep(self._SERVER_POLL_INTERVAL_SECONDS)
 
         raise RuntimeError(
@@ -558,21 +587,24 @@ class IrodoriTTSClient:
             "Open Settings > Voice and press Set up natural voice, or start the server by hand."
         )
 
-    @classmethod
-    def _pid_is_server(cls, pid: int) -> bool:
-        """Guards against a stale pidfile whose PID now belongs to something else."""
+    @staticmethod
+    def _pid_command_line(pid: int) -> Optional[str]:
+        """The command line of a running process, or None when it cannot be read (no PowerShell, a timeout, no /proc)."""
         try:
             if os.name == "nt":
-                out = subprocess.run(
+                return subprocess.run(
                     ["powershell", "-NoProfile", "-Command",
                      f"(Get-CimInstance Win32_Process -Filter 'ProcessId={int(pid)}').CommandLine"],
                     capture_output=True, text=True, timeout=15,
                 ).stdout
-            else:
-                out = Path(f"/proc/{pid}/cmdline").read_bytes().decode(errors="replace")
+            return Path(f"/proc/{pid}/cmdline").read_bytes().decode(errors="replace")
         except Exception:
-            return False
-        return cls._PROCESS_MARKER in out
+            return None
+
+    @classmethod
+    def _pid_is_server(cls, pid: int) -> bool:
+        """Guards against a stale pidfile whose PID now belongs to something else."""
+        return cls._PROCESS_MARKER in (cls._pid_command_line(pid) or "")
 
     def _touch_activity(self) -> None:
         """Marks the server as just-used — read by idle_watchdog.py (as the
@@ -819,7 +851,7 @@ class _VenvEngineClient(IrodoriTTSClient):
 
     def _spawn_server(self, port: int, popen_kwargs: Dict[str, Any]) -> subprocess.Popen:
         log_file = open(self._SERVER_DIR / "server.log", "ab")
-        return subprocess.Popen(
+        proc = subprocess.Popen(
             [
                 str(self._SERVER_VENV_PYTHON), str(Path(__file__).with_name(self._SERVER_SCRIPT)),
                 "--host", "127.0.0.1", "--port", str(port), "--idle-seconds", str(int(self._IDLE_TIMEOUT_SECONDS)),
@@ -830,6 +862,8 @@ class _VenvEngineClient(IrodoriTTSClient):
             stderr=subprocess.STDOUT,
             **popen_kwargs,
         )
+        log_file.close()  # the child has its own copy of the handle
+        return proc
 
     def _server_env(self) -> Dict[str, str]:
         return {}
@@ -1162,8 +1196,7 @@ class AudioProcessor:
         with open(concat_list_path, "w", encoding="utf-8") as f:
             for path in audio_paths:
                 if path and os.path.exists(path):
-                    abs_path = os.path.abspath(path).replace("\\", "/")
-                    f.write(f"file '{abs_path}'\n")
+                    f.write(concat_entry(path))
 
         ffmpeg_cmd = FFmpegManager.resolve_ffmpeg_bin()
         cmd = [
@@ -1181,10 +1214,10 @@ class AudioProcessor:
         ]
 
         logger.info("Merging audio segments...")
-        subprocess.run(cmd, check=True)
-
-        if concat_list_path.exists():
-            concat_list_path.unlink()
+        result = subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace")
+        concat_list_path.unlink(missing_ok=True)
+        if result.returncode != 0:
+            raise RuntimeError(f"Audio merge failed: {result.stderr.strip()[-600:]}")
 
         logger.info(
             f"Successfully compiled audio into 1 single file: {final_output_path}"
@@ -1377,8 +1410,7 @@ class VideoProcessor:
 
         with open(concat_list_path, "w", encoding="utf-8") as f:
             for path in video_paths:
-                abs_path = os.path.abspath(path).replace("\\", "/")
-                f.write(f"file '{abs_path}'\n")
+                f.write(concat_entry(path))
 
         ffmpeg_cmd = FFmpegManager.resolve_ffmpeg_bin()
         cmd = [

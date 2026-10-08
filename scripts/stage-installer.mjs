@@ -3,7 +3,8 @@
 //   tools/       ffmpeg/bin/{ffmpeg,ffprobe}.exe, gpsbabel/, uv.exe
 // Downloads go to scripts/.cache and are reused. Run with: npm run stage:installer
 import { execFileSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync, createWriteStream } from "node:fs";
+import { createHash } from "node:crypto";
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync, createReadStream, createWriteStream } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { pipeline } from "node:stream/promises";
@@ -14,13 +15,15 @@ const pyDir = join(root, "src-tauri", "src-python");
 const staging = join(root, "src-tauri", "installer-staging");
 const cache = join(root, "scripts", ".cache");
 
-const FFMPEG_URL = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip";
-const UV_URL = "https://github.com/astral-sh/uv/releases/latest/download/uv-x86_64-pc-windows-msvc.zip";
+// The bundled tools are pinned to a release and a sha256 (scripts/tool-pins.json) and checked after every download, cached or not.
+const pins = JSON.parse(readFileSync(join(root, "scripts", "tool-pins.json"), "utf8"));
 
 // Not shipped: engines made on first run, caches, tests.
 const SKIP_DIRS = new Set(["bin", "tests", "data", "frames", "__pycache__", ".pytest_cache", "logs", ".venv"]);
-// .env holds the developer's own API keys: never packaged. Users enter theirs in Settings > API keys.
-const SKIP_FILES = /(\.pyc$|^pytest\.ini$|^ruff\.toml$|^requirements-test\.txt$|^requirements.*\.in$|^\.env(\..*)?$)/;
+// Secrets and test config are never packaged: .env holds the developer's own API keys (users enter theirs in Settings > API keys),
+// and key/certificate/credential files have no place in an installer either, whatever they are called.
+const SECRET_FILES = /(^\.env(\..*)?$|\.env$|\.(pem|pfx|p12|key|kdbx|jks)$|^id_(rsa|ed25519|ecdsa)|^credentials.*\.json$|^secrets?\.(json|ya?ml|toml|txt|env)$|^\.(npmrc|netrc|git-credentials)$)/i;
+const SKIP_FILES = new RegExp(`(\\.pyc$|^pytest\\.ini$|^ruff\\.toml$|^requirements-test\\.txt$|^requirements.*\\.in$|${SECRET_FILES.source})`, "i");
 
 const mb = (bytes) => `${(bytes / 1048576).toFixed(1)} MB`;
 const warn = (message) => console.warn(`  ! ${message}`);
@@ -69,15 +72,33 @@ function stageVoices() {
   console.log(`  ${mb(size(out))}`);
 }
 
-async function download(url, file) {
-  if (existsSync(file)) return file;
-  mkdirSync(dirname(file), { recursive: true });
-  console.log(`  downloading ${url}`);
-  const response = await fetch(url, { redirect: "follow" });
-  if (!response.ok) throw new Error(`${url} answered ${response.status}`);
-  await pipeline(Readable.fromWeb(response.body), createWriteStream(`${file}.part`));
-  cpSync(`${file}.part`, file);
-  rmSync(`${file}.part`);
+async function sha256Of(file) {
+  const hash = createHash("sha256");
+  await pipeline(createReadStream(file), hash);
+  return hash.digest("hex");
+}
+
+// Downloads `url` once into the cache and checks it against the pinned sha256, also when it was cached by an earlier run:
+// a cache entry that does not match is deleted, not trusted.
+async function download(url, file, sha256) {
+  if (existsSync(file) && (await sha256Of(file)) !== sha256) {
+    warn(`${file} does not match its pinned sha256; downloading it again.`);
+    rmSync(file);
+  }
+  if (!existsSync(file)) {
+    mkdirSync(dirname(file), { recursive: true });
+    console.log(`  downloading ${url}`);
+    const response = await fetch(url, { redirect: "follow" });
+    if (!response.ok) throw new Error(`${url} answered ${response.status}`);
+    await pipeline(Readable.fromWeb(response.body), createWriteStream(`${file}.part`));
+    const actual = await sha256Of(`${file}.part`);
+    if (actual !== sha256) {
+      rmSync(`${file}.part`);
+      throw new Error(`${url} has sha256 ${actual}, not the pinned ${sha256}. Nothing was bundled from it.`);
+    }
+    cpSync(`${file}.part`, file);
+    rmSync(`${file}.part`);
+  }
   return file;
 }
 
@@ -88,20 +109,14 @@ function unzip(zip, into, patterns = []) {
   execFileSync(tar, ["-xf", zip, "-C", into, ...patterns], { stdio: "inherit" });
 }
 
-function findOnPath(name) {
-  try {
-    return execFileSync("where", [name], { encoding: "utf8" }).split(/\r?\n/)[0].trim() || null;
-  } catch {
-    return null;
-  }
-}
-
 async function stageFfmpeg() {
   console.log("ffmpeg");
   const out = join(staging, "tools", "ffmpeg", "bin");
   mkdirSync(out, { recursive: true });
-  const zip = await download(FFMPEG_URL, join(cache, "ffmpeg-essentials.zip"));
-  const extracted = join(cache, "ffmpeg-essentials");
+  const { version, url, sha256 } = pins.ffmpeg;
+  const zip = await download(url, join(cache, `ffmpeg-${version}.zip`), sha256);
+  // Versioned, so a newer pin is never served from an older extraction.
+  const extracted = join(cache, `ffmpeg-${version}`);
   if (!existsSync(extracted)) unzip(zip, extracted);
   const top = readdirSync(extracted).find((name) => existsSync(join(extracted, name, "bin", "ffmpeg.exe")));
   if (!top) throw new Error("ffmpeg.exe was not found in the downloaded archive");
@@ -132,18 +147,36 @@ async function stageUv() {
   console.log("uv");
   const out = join(staging, "tools");
   mkdirSync(out, { recursive: true });
-  const local = findOnPath("uv");
-  if (local) {
-    cpSync(local, join(out, "uv.exe"));
-  } else {
-    const zip = await download(UV_URL, join(cache, "uv.zip"));
-    const extracted = join(cache, "uv");
-    if (!existsSync(extracted)) unzip(zip, extracted);
-    const exe = [extracted, ...readdirSync(extracted).map((n) => join(extracted, n))].map((d) => join(d, "uv.exe")).find(existsSync);
-    if (!exe) throw new Error("uv.exe was not found in the downloaded archive");
-    cpSync(exe, join(out, "uv.exe"));
-  }
+  // The pinned release, never whatever uv.exe happens to be first on PATH: that file would end up on every user's PC.
+  const { version, url, sha256 } = pins.uv;
+  const zip = await download(url, join(cache, `uv-${version}.zip`), sha256);
+  const extracted = join(cache, `uv-${version}`);
+  if (!existsSync(extracted)) unzip(zip, extracted);
+  const exe = [extracted, ...readdirSync(extracted).map((n) => join(extracted, n))].map((d) => join(d, "uv.exe")).find(existsSync);
+  if (!exe) throw new Error("uv.exe was not found in the downloaded archive");
+  cpSync(exe, join(out, "uv.exe"));
   console.log(`  ${mb(size(join(out, "uv.exe")))}`);
+}
+
+// Last line of defence: nothing secret-looking may be in what is about to be packaged, by name or by content.
+function assertNoSecrets() {
+  console.log("Checking for secrets");
+  const walk = (dir) => readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(join(dir, e.name)) : [join(dir, e.name)]));
+  const files = walk(staging);
+  const named = files.filter((f) => SECRET_FILES.test(f.split(/[\\/]/).pop()));
+  if (named.length) throw new Error(`These look like secrets and must not be packaged:\n  ${named.join("\n  ")}`);
+  // The values of this machine's own keys (VITE_ and *_API_KEY / *_TOKEN variables) must not appear inside any staged text file.
+  const values = Object.entries(process.env)
+    .filter(([name, value]) => /^VITE_|API_KEY|TOKEN|SECRET|PASSWORD/i.test(name) && value && value.trim().length >= 16)
+    .map(([name, value]) => [name, value.trim()]);
+  const textual = /\.(py|json|txt|md|html|js|mjs|css|toml|ya?ml|cfg|ini|bat|ps1|sh|csv)$/i;
+  const leaks = [];
+  for (const file of files.filter((f) => textual.test(f) && statSync(f).size < 8 * 1048576)) {
+    const text = readFileSync(file, "utf8");
+    for (const [name, value] of values) if (text.includes(value)) leaks.push(`${file} contains the value of ${name}`);
+  }
+  if (leaks.length) throw new Error(`A secret would be packaged:\n  ${leaks.join("\n  ")}`);
+  console.log(`  ${files.length} files checked, ${values.length} secret value(s) searched for: none found.`);
 }
 
 rmSync(staging, { recursive: true, force: true });
@@ -153,4 +186,5 @@ stageVoices();
 await stageFfmpeg();
 stageGpsbabel();
 await stageUv();
+assertNoSecrets();
 console.log(`\nStaged ${mb(size(staging))} in ${staging}`);
