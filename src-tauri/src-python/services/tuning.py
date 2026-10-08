@@ -737,6 +737,11 @@ STOPBY_NOTICE_TITLE = LABELS_JA["stopby_notice_title"]
 STOPBY_NOTICE_BODY = LABELS_JA["stopby_notice_body"]
 STOPBY_NOTICE_RIBBON_COLOR: Tuple[int, int, int] = (40, 110, 220)  # BGR, warm orange ribbon
 STOPBY_NOTICE_FADE_SECONDS = 0.6
+# A leg's piece after a stop-by opens on its photo fullscreen (this long when the
+# stop-by's attraction video played just before; its own freeze otherwise), shrinks
+# into its card above the marker, holds the card this long, then the walk resumes.
+STOPBY_REOPEN_HOLD_SECONDS = 0.5
+STOPBY_CARD_HOLD_SECONDS = 1.0
 # How long the notice stays up when the first stop-by reached isn't a batch
 # (a connected / skipped one); a batch keeps it for the batch's own length.
 STOPBY_NOTICE_SECONDS = 5.0
