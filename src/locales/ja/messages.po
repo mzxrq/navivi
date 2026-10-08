@@ -1415,7 +1415,7 @@ msgstr "この場所の地名を取得できませんでした。"
 
 #: src/features/map/components/OverviewNarration.tsx:185
 msgid "Course introduction"
-msgstr ""
+msgstr "コースの紹介"
 
 #: src/components/ui/SaveAs.tsx:99
 msgid "Create a copy of this workspace"
@@ -2688,7 +2688,7 @@ msgstr "レイヤー"
 
 #: src/features/map/components/OverviewNarration.tsx:196
 msgid "Leave blank and it's written from your stops."
-msgstr ""
+msgstr "空欄のままなら、地点の情報から自動で書かれます。"
 
 #: src/features/map/components/OverviewPanel.tsx:179
 msgid "Leave blank to use the project name."
@@ -3231,11 +3231,11 @@ msgstr "参照なし(モデル標準)"
 
 #: src/features/map/components/WaypointEditor.tsx:297
 msgid "No route leads to this stop, so there is no way to describe."
-msgstr ""
+msgstr "この地点へ向かうルートがないため、道順を書けません。"
 
 #: src/features/map/components/WaypointEditor.tsx:304
 msgid "No route leads to this stop; only its description's opening line was added."
-msgstr ""
+msgstr "この地点へ向かうルートがないため、説明の冒頭の一文だけを加えました。"
 
 #: src/components/ui/StatusBar.tsx:337
 msgid "No saved versions yet"
@@ -4679,7 +4679,7 @@ msgstr "読み上げた行は保存され、同じ行を再び読み上げるこ
 
 #: src/features/map/components/OverviewNarration.tsx:200
 msgid "Spoken over the opening photos, before the map appears. Auto-write starts the script with it."
-msgstr ""
+msgstr "地図が出る前、冒頭の写真に重ねて読み上げます。自動作成の原稿はこの文から始まります。"
 
 #: src/features/map/components/WaypointEditor.tsx:398
 msgid "Spoken over this stop's photos once you arrive."
@@ -5475,7 +5475,7 @@ msgstr "動画のエクスポートに成功しました"
 
 #: src/components/ui/AppSettings.tsx:602
 msgid "Video style"
-msgstr ""
+msgstr "動画のスタイル"
 
 #: src/features/map/components/WaypointEditor.tsx:544
 #: src/features/map/components/WaypointVideos.tsx:24
@@ -5562,11 +5562,11 @@ msgstr "ウォークイン"
 
 #: src/components/ui/AppSettings.tsx:609
 msgid "Walk the route"
-msgstr ""
+msgstr "ルートを歩く"
 
 #: src/components/ui/AppSettings.tsx:603
 msgid "Walk the route: a walker travels the map and stops at each place. Whole route first: the whole route is shown and traced, stop-bys come last, and every stop-by gets its own stop in its leg. Each style has its own overview script; switching rewrites an automatic one."
-msgstr ""
+msgstr "ルートを歩く：地図上を歩きながら、各地点で止まって紹介します。ルート全体から：ルート全体を見せてからなぞり、立ち寄りスポットは最後に紹介します。区間の動画では、立ち寄りスポットごとに止まります。スタイルごとにオーバービューの原稿が異なり、切り替えると自動作成の原稿は書き直されます。"
 
 #: src/components/ui/VideoLookSettings.tsx:60
 msgid "Walking"
@@ -5640,7 +5640,7 @@ msgstr "白"
 
 #: src/components/ui/AppSettings.tsx:610
 msgid "Whole route first"
-msgstr ""
+msgstr "ルート全体から"
 
 #: src/components/ui/VideoLookSettings.tsx:108
 #: src/components/ui/VideoLookSettings.tsx:109
