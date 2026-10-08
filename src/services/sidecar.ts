@@ -18,17 +18,24 @@ const CANCELLED = /process was cancelled/i;
 
 const messageOf = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
-// main.py prints one JSON result as the last line of stdout; anything before it is progress or library noise.
+// main.py ends stdout with one JSON result, on one line or indented over several (project modes); anything before it is noise.
 export function parseReply<T>(stdout: string): SidecarReply<T> {
-  const last = stdout.trim().split("\n").pop() ?? "";
-  try {
-    const parsed = JSON.parse(last);
-    if (parsed && typeof parsed === "object" && typeof parsed.success === "boolean") return parsed;
-  } catch {
-    // fall through to the error below
+  const text = stdout.trim();
+  const candidates = [text.split("\n").pop() ?? "", text.slice(text.lastIndexOf("\n{") + 1)];
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(candidate);
+      if (parsed && typeof parsed === "object" && typeof parsed.success === "boolean") return parsed;
+    } catch {
+      // try the next form
+    }
   }
   return { success: false, error: "The media pipeline returned an unexpected reply" };
 }
+
+// Blueprint calls share one process slot (a new one kills the running one); background asks check this first.
+let inFlight = 0;
+export const sidecarBusy = () => inFlight > 0;
 
 // A pipeline stage run on a project: resolves with the process's stdout, rejects with its error text.
 export function runStage(configPath: string, mode: string): Promise<string> {
@@ -41,12 +48,15 @@ export function runStage(configPath: string, mode: string): Promise<string> {
 // A utility mode with its input (a string is passed as is, anything else as JSON); never throws.
 export async function callSidecar<T>(mode: string, input: string | object = {}): Promise<SidecarReply<T>> {
   const payload = typeof input === "string" ? input : JSON.stringify(input);
+  inFlight += 1;
   try {
     return parseReply<T>(await invoke<string>("run_python_blueprint", { action: mode, payload }));
   } catch (e) {
     if (isSetupRequired(e)) announceSetupRequired();
     const error = messageOf(e);
     return { success: false, error, cancelled: CANCELLED.test(error) };
+  } finally {
+    inFlight -= 1;
   }
 }
 
