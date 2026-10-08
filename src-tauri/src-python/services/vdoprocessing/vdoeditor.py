@@ -233,7 +233,7 @@ class VideoEditor:
         # different sample rate/channel layout than the source, which plays
         # back pitch-shifted ("chipmunk") audio.
         probe_cmd = [
-            "ffprobe",
+            runtime_paths.ffprobe_exe() or "ffprobe",
             "-v",
             "error",
             "-select_streams",
@@ -469,7 +469,7 @@ class VideoEditor:
             raise FileNotFoundError(f"Video file not found: {vid_p}")
 
         probe_cmd = [
-            "ffprobe",
+            runtime_paths.ffprobe_exe() or "ffprobe",
             "-v",
             "error",
             "-show_entries",
