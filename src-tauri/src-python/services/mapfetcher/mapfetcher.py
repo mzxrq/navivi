@@ -22,6 +22,7 @@ from services.logger.progress import tracker
 from services import tuning
 from services.mapbox_token import resolve_mapbox_token
 from services.mapfetcher.maplanguage import resolve_map_style
+from services.vdoprocessing.stopby_visits import visits_stopby
 
 # Logging configuration
 logger = setup_logger("MapFetcher")
@@ -181,10 +182,9 @@ class MapFetcher:
                     # pedestrian.py's `landmarks` docstring) -- missing
                     # entirely from this dict before, so that feature could
                     # never actually trigger.
-                    "connect_to_route": bool(
-                        waypoints[p].get("connectToRoute", False)
-                        and not waypoints[p].get("skipAssetGeneration")
-                    ),
+                    # The walk pauses here (stopby_visits: connected, or any
+                    # stop-by with a photo in the "course" overview type).
+                    "connect_to_route": visits_stopby(waypoints[p]),
                     # This waypoint's own stable job_config id -- lets
                     # route2vdo.py resolve its RAW position in job_config's
                     # own "waypoints" array (the same 0-based index the

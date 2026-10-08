@@ -142,7 +142,9 @@ export function WaypointEditor({
   const label = stopLabel(waypoints, wpIndex);
 
   const hasArrivalVoice = !!wp.arrivingNarration?.trim();
-  const hasAttractionVoice = !!wp.attractionNarration?.trim() && !(isStopBy && !isLinked);
+  // The "Whole route first" type visits every stop-by: each is narrated, linked or not.
+  const visited = !isStopBy || isLinked || settings.overview_style === "course";
+  const hasAttractionVoice = !!wp.attractionNarration?.trim() && visited;
   const canRegen = !!metadata.directory_path && !wp.skipAssetGeneration && !wp.isStub;
 
   // Redo one stop's files through the single-stop CLI modes (one sidecar call at a time), then re-read them in the timeline.
@@ -357,7 +359,7 @@ export function WaypointEditor({
       value: wp.arrivingNarration || "",
       onChange: (v: string) => updateWaypoint(wp.id, { arrivingNarration: v }),
     },
-    ...(isStopBy && !isLinked
+    ...(!visited
       ? []
       : [
           {

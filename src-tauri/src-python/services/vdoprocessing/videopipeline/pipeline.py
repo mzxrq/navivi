@@ -13,6 +13,8 @@ from services.config.upscaled_images import upscale_enabled
 from services.ollama_memory import unload_ollama_models
 from services.logger.progress import tracker
 from services.render_estimate import StageRecorder
+from services.localization.overview_script import overview_style
+from services.vdoprocessing.stopby_visits import set_visit_all_stopbys
 from services.vdoprocessing.vdoexporter import VideoExporter, sweep_stale_temp_files
 
 from .attraction_step import render_attraction_videos
@@ -109,6 +111,9 @@ def run_full_pipeline(
     # attraction text, so a leg speaks only its route (arriving) text -
     # otherwise the same attraction text played twice, leg then clip.
     set_route_only_legs(attractions_on)
+    # "Whole route first" (overview_style "course"): every stop-by with a photo
+    # is visited - narrated, a fullscreen photo in its leg, its own clip.
+    set_visit_all_stopbys(overview_style(job_config.to_dict()) == "course")
     if fast_render:
         logger.info("Step 2: settings.skip_rich_media is on — skipping TTS.")
         audio_data = {

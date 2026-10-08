@@ -5,6 +5,9 @@ import json
 import math
 import re
 from services.localization.cues import tags_at_sentence_start
+from services.localization.overview_script import course_summary, course_taglines, overview_style
+from services.localization.route_brief import load_brief
+from services.vdoprocessing.stopby_visits import visits_stopby
 from pathlib import Path
 from typing import Any, Optional
 
@@ -433,6 +436,24 @@ def _reserve_overview_bands(
         "max_lat": merc_lat(top_y),
         "min_lon": mid_lon - half_lon,
         "max_lon": mid_lon + half_lon,
+    }
+
+
+def _course_config(project_config: dict, config_path: Path) -> dict:
+    """The overview type, plus what the "course" overview needs from the route:
+    headline taglines and the stats card's numbers (the same the script speaks)."""
+    style = overview_style(project_config)
+    if style != "course":
+        return {"overview_style": style}
+    try:
+        brief = load_brief(str(config_path))
+    except (OSError, ValueError, KeyError) as exc:
+        logger.warning("Course overview: could not read the route brief (%s).", exc)
+        return {"overview_style": style}
+    return {
+        "overview_style": style,
+        "overview_taglines": course_taglines(project_config, brief),
+        "course_summary": course_summary(brief),
     }
 
 
@@ -1161,8 +1182,7 @@ def render_route_video(
             max_wait = float(settings.get("max_early_arrival_seconds", MAX_EARLY_ARRIVAL_SECONDS))
             stop_positions = [
                 p for p in range(start_pos + 1, min(end_pos, len(waypoints)))
-                if waypoints[p].get("connectToRoute") and waypoints[p].get("isStopBy")
-                and waypoints[p].get("popup_image") and not waypoints[p].get("skipAssetGeneration")
+                if visits_stopby(waypoints[p]) and waypoints[p].get("popup_image")
             ]
             piece_targets = stop_positions + [end_pos]
             piece_plans: dict = {}
@@ -1434,6 +1454,10 @@ def render_route_video(
             overview_tagged_script(project_config, config_path.parent)
         ),
         "overview_cue_wait_seconds": float(settings.get("overview_cue_wait_seconds", 2.0)),
+        # The overview video type (each with its own script); "course" also
+        # cycles headline taglines taken from the route (overview_script.course_taglines).
+        "overview_style": overview_style(project_config),
+        **_course_config(project_config, config_path),
         "res_route_path": project_config_path,
         "leg_durations": seg_durations or None,
         "duration": settings.get("duration", overview_duration),

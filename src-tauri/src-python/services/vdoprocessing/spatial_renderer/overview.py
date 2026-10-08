@@ -518,6 +518,14 @@ class _OverviewRenderMixin:
         if len(pin_obstacles):
             route_obstacle_arr = np.vstack([route_obstacle_arr, pin_obstacles])
 
+        if self.config.get("overview_style") == "course" and not preview_recap_only:
+            result = self._render_course_overview(
+                current_bg, w, h, fps, points, smooth_path, mode_breakpoints, cum_smooth_dist,
+                total_smooth_dist, active_popups, route_obstacle_arr, summary, overview_path,
+            )
+            self.pending_overview_checkpoint = save_fingerprint
+            return result
+
         logger.info(f"Rendering Overview Map ({duration}s)")
         overview_path = str(self.out_dir / "01_overview.mp4")
         video = VideoExporter(overview_path, w, h, fps)

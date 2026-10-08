@@ -1202,7 +1202,7 @@ class _CardMixin:
         return out
 
     def render_top_banner(
-        self, frame: np.ndarray, text: str, alpha: float = 1.0, top_margin: int = 30,
+        self, frame: np.ndarray, text: str, alpha: float = 1.0, top_margin: int = 30, font_px: int = 22,
     ) -> np.ndarray:
         """A dark rounded-pill caption centered near the top of the frame —
         the OpenCV/PIL equivalent of pydeckrecorder.pedestrian's own CSS HUD
@@ -1217,11 +1217,12 @@ class _CardMixin:
             return frame
 
         scale = 2  # supersampled for antialiased text/corners, then downscaled
-        font = self._card_font(self.FONT_CANDIDATES_BOLD, 22 * scale)
+        font = self._card_font(self.FONT_CANDIDATES_BOLD, font_px * scale)
         measure = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
         bbox = measure.textbbox((0, 0), text, font=font)
         text_w, text_h = bbox[2] - bbox[0], bbox[3] - bbox[1]
-        pad_x, pad_y = 28 * scale, 14 * scale
+        pad = font_px / 22
+        pad_x, pad_y = int(28 * pad) * scale, int(14 * pad) * scale
         card_w, card_h = text_w + pad_x * 2, text_h + pad_y * 2
 
         canvas = Image.new("RGBA", (card_w, card_h), (0, 0, 0, 0))

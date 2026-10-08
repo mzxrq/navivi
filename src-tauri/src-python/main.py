@@ -59,6 +59,17 @@ def split_mode_payload(argv: list) -> list:
     return argv
 
 
+def _set_stopby_visits(job_config_path: str) -> None:
+    from services.localization.overview_script import overview_style
+    from services.vdoprocessing.stopby_visits import set_visit_all_stopbys
+
+    try:
+        project = json.loads(Path(job_config_path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return
+    set_visit_all_stopbys(overview_style(project) == "course")
+
+
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print(
@@ -230,6 +241,9 @@ if __name__ == "__main__":
             route_dir_arg = str(Path(output_dir_arg) / "route")
             attraction_dir_arg = str(Path(output_dir_arg) / "attraction")
             mode_arg = sys.argv[2] if len(sys.argv) > 2 else "overview"
+            # The single-stop modes see stop-bys the way the full pipeline does
+            # (the "course" overview type visits every stop-by with a photo).
+            _set_stopby_visits(job_config_arg)
 
             # [NOTE] [Core] Each branch below is one isolated pipeline step
             # (see services/cli/'s own module docstrings / test_*

@@ -1158,6 +1158,7 @@ def render_residential_leg_pydeck(
     hud_card_png: Optional[Callable[[float, float], bytes]] = None,
     theme: Optional[str] = None,
     bottom_reserve_px: float = 0.0,
+    arrival_slow_seconds: float = 0.0,
 ) -> List[str]:
     """Renders one leg as a straight-down, locked-camera video with a live
     turn-by-turn HUD (destination banner + time/distance card) -- the
@@ -1328,7 +1329,8 @@ def render_residential_leg_pydeck(
     total_frames = max(10, int(leg_duration * fps))
 
     smooth_df = interpolate_route_data(
-        df_raw, leg_duration, total_frames, total_leg_km, leg_dist_km, segment_plan=segment_plan
+        df_raw, leg_duration, total_frames, total_leg_km, leg_dist_km, segment_plan=segment_plan,
+        arrival_slow_seconds=arrival_slow_seconds,
     )
 
     step_km = [0.0] + [
