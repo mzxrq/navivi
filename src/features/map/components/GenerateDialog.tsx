@@ -65,7 +65,9 @@ export function GenerateDialog({ onClose, onConfirm }: { onClose: () => void; on
   const toggleGroup = (group: AssetGroup) =>
     setClear((prev) => (prev.includes(group) ? prev.filter((g) => g !== group) : [...prev, group]));
 
-  const setOption = (patch: { skip_rich_media?: boolean; quick_export?: boolean }) => {
+  const sharpen = settings.upscale_popup_images !== false;
+
+  const setOption = (patch: { skip_rich_media?: boolean; quick_export?: boolean; upscale_popup_images?: boolean }) => {
     updateSettings(patch);
     setIsDirty(true);
   };
@@ -255,6 +257,14 @@ export function GenerateDialog({ onClose, onConfirm }: { onClose: () => void; on
           checked={skipRich}
           onChange={(v) => setOption({ skip_rich_media: v })}
         />
+        {!skipRich && (
+          <OptionRow
+            label={t`Sharpen photos`}
+            hint={t`Upscales photos before they are shown. Needs a GPU and takes longer.`}
+            checked={sharpen}
+            onChange={(v) => setOption({ upscale_popup_images: v })}
+          />
+        )}
         <OptionRow
           label={t`Export automatically`}
           hint={t`Stitch the clips and export when done, without pausing to review.`}

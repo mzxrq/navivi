@@ -130,7 +130,7 @@ msgstr "{0} of {1}"
 
 #. placeholder {0}: voiced.length
 #. placeholder {1}: active.length
-#: src/features/map/components/GenerateDialog.tsx:84
+#: src/features/map/components/GenerateDialog.tsx:86
 msgid "{0} of {1} stops"
 msgstr "{0} of {1} stops"
 
@@ -141,17 +141,17 @@ msgstr "{0} s dissolve"
 
 #. placeholder {0}: waypoints.length
 #: src/components/ui/StatusBar.tsx:222
-#: src/features/map/components/GenerateDialog.tsx:146
+#: src/features/map/components/GenerateDialog.tsx:148
 msgid "{0} stops"
 msgstr "{0} stops"
 
 #. placeholder {0}: silent.length
-#: src/features/map/components/GenerateDialog.tsx:180
+#: src/features/map/components/GenerateDialog.tsx:182
 msgid "{0} stops have no narration and will be silent"
 msgstr "{0} stops have no narration and will be silent"
 
 #. placeholder {0}: withPhotos.length
-#: src/features/map/components/GenerateDialog.tsx:91
+#: src/features/map/components/GenerateDialog.tsx:93
 msgid "{0} stops with photos"
 msgstr "{0} stops with photos"
 
@@ -187,7 +187,7 @@ msgstr "{clips} clips"
 msgid "{count} clips are ready to be redone. Change their photo, script or route, then choose Resume Generation."
 msgstr "{count} clips are ready to be redone. Change their photo, script or route, then choose Resume Generation."
 
-#: src/features/map/components/GenerateDialog.tsx:234
+#: src/features/map/components/GenerateDialog.tsx:236
 msgid "{count} files"
 msgstr "{count} files"
 
@@ -207,7 +207,7 @@ msgstr "{h} h {rest} min"
 msgid "{imageCount} photos"
 msgstr "{imageCount} photos"
 
-#: src/features/map/components/GenerateDialog.tsx:78
+#: src/features/map/components/GenerateDialog.tsx:80
 msgid "{legs} legs"
 msgstr "{legs} legs"
 
@@ -272,7 +272,7 @@ msgstr "0 = no limit"
 msgid "1 clip"
 msgstr "1 clip"
 
-#: src/features/map/components/GenerateDialog.tsx:234
+#: src/features/map/components/GenerateDialog.tsx:236
 msgid "1 file"
 msgstr "1 file"
 
@@ -280,7 +280,7 @@ msgstr "1 file"
 msgid "1 file was skipped: only photos, GPX files and text files can be dropped here."
 msgstr "1 file was skipped: only photos, GPX files and text files can be dropped here."
 
-#: src/features/map/components/GenerateDialog.tsx:78
+#: src/features/map/components/GenerateDialog.tsx:80
 msgid "1 leg"
 msgstr "1 leg"
 
@@ -292,11 +292,11 @@ msgstr "1 minute"
 msgid "1 photo could not be converted and was skipped."
 msgstr "1 photo could not be converted and was skipped."
 
-#: src/features/map/components/GenerateDialog.tsx:146
+#: src/features/map/components/GenerateDialog.tsx:148
 msgid "1 stop"
 msgstr "1 stop"
 
-#: src/features/map/components/GenerateDialog.tsx:179
+#: src/features/map/components/GenerateDialog.tsx:181
 msgid "1 stop has no narration and will be silent"
 msgstr "1 stop has no narration and will be silent"
 
@@ -359,7 +359,7 @@ msgid "About"
 msgstr "About"
 
 #. placeholder {0}: formatDuration(estimate.total_seconds)
-#: src/features/map/components/GenerateDialog.tsx:150
+#: src/features/map/components/GenerateDialog.tsx:152
 msgid "About {0}"
 msgstr "About {0}"
 
@@ -611,7 +611,7 @@ msgstr "AI features"
 msgid "AI models"
 msgstr "AI models"
 
-#: src/features/map/components/GenerateDialog.tsx:83
+#: src/features/map/components/GenerateDialog.tsx:85
 msgid "AI voiceover"
 msgstr "AI voiceover"
 
@@ -845,7 +845,7 @@ msgstr "Auto-Write sends the prompt, the place name and its location facts to {0
 msgid "Auto-Write sends the prompt, the place name, its location facts and the stop's photos to {0}. Generate Assets also sends your stops' names and scripts to {1} when it drafts the overview narration. Nothing is sent before then, and usage is billed to your own account there."
 msgstr "Auto-Write sends the prompt, the place name, its location facts and the stop's photos to {0}. Generate Assets also sends your stops' names and scripts to {1} when it drafts the overview narration. Nothing is sent before then, and usage is billed to your own account there."
 
-#: src/features/map/components/GenerateDialog.tsx:113
+#: src/features/map/components/GenerateDialog.tsx:115
 msgid "Back"
 msgstr "Back"
 
@@ -895,7 +895,7 @@ msgstr "Base Map Style"
 msgid "Base maps and place names."
 msgstr "Base maps and place names."
 
-#: src/features/map/components/GenerateDialog.tsx:270
+#: src/features/map/components/GenerateDialog.tsx:280
 msgid "Based on your earlier renders on this PC. Unchanged clips are reused, so it may finish sooner."
 msgstr "Based on your earlier renders on this PC. Unchanged clips are reused, so it may finish sooner."
 
@@ -1012,7 +1012,7 @@ msgstr "Cancel"
 #: src/components/view/ProjectManager.tsx:667
 #: src/components/view/ProjectSettingsModal.tsx:127
 #: src/features/editor/ExportDialog.tsx:110
-#: src/features/map/components/GenerateDialog.tsx:122
+#: src/features/map/components/GenerateDialog.tsx:124
 #: src/features/map/components/OverviewNarration.tsx:285
 #: src/features/map/components/Sidebar.tsx:252
 #: src/features/map/components/WaypointEditor.tsx:880
@@ -1543,7 +1543,7 @@ msgstr "Delete {0} subtitles"
 msgid "Delete Anchor"
 msgstr "Delete Anchor"
 
-#: src/features/map/components/GenerateDialog.tsx:125
+#: src/features/map/components/GenerateDialog.tsx:127
 msgid "Delete and generate"
 msgstr "Delete and generate"
 
@@ -1926,7 +1926,7 @@ msgstr "Estimating render time…"
 msgid "Estimating time left…"
 msgstr "Estimating time left…"
 
-#: src/features/map/components/GenerateDialog.tsx:150
+#: src/features/map/components/GenerateDialog.tsx:152
 msgid "Estimating…"
 msgstr "Estimating…"
 
@@ -1934,7 +1934,7 @@ msgstr "Estimating…"
 msgid "Every subtitle starts from this look"
 msgstr "Every subtitle starts from this look"
 
-#: src/features/map/components/GenerateDialog.tsx:135
+#: src/features/map/components/GenerateDialog.tsx:137
 msgid "Every voice, subtitle and clip in this project is made again, even the ones you are happy with, and replaces the files you have now. This can take as long as your first render. Your own photos, videos and music are not touched."
 msgstr "Every voice, subtitle and clip in this project is made again, even the ones you are happy with, and replaces the files you have now. This can take as long as your first render. Your own photos, videos and music are not touched."
 
@@ -1961,7 +1961,7 @@ msgstr "Expand Review"
 msgid "Export"
 msgstr "Export"
 
-#: src/features/map/components/GenerateDialog.tsx:259
+#: src/features/map/components/GenerateDialog.tsx:269
 msgid "Export automatically"
 msgstr "Export automatically"
 
@@ -2099,7 +2099,7 @@ msgstr "Failed to update project"
 msgid "Fast draft"
 msgstr "Fast draft"
 
-#: src/features/map/components/GenerateDialog.tsx:253
+#: src/features/map/components/GenerateDialog.tsx:255
 msgid "Fast render"
 msgstr "Fast render"
 
@@ -2255,8 +2255,8 @@ msgstr "Full-screen photos"
 msgid "General"
 msgstr "General"
 
-#: src/features/map/components/GenerateDialog.tsx:107
-#: src/features/map/components/GenerateDialog.tsx:125
+#: src/features/map/components/GenerateDialog.tsx:109
+#: src/features/map/components/GenerateDialog.tsx:127
 msgid "Generate assets"
 msgstr "Generate assets"
 
@@ -2269,7 +2269,7 @@ msgstr "Generate Assets"
 msgid "Generate intro video"
 msgstr "Generate intro video"
 
-#: src/features/map/components/GenerateDialog.tsx:196
+#: src/features/map/components/GenerateDialog.tsx:198
 msgid "Generate only makes what is missing and reuses the rest, so running it again will not change what you already have. To make something again, tick it here and it is deleted first."
 msgstr "Generate only makes what is missing and reuses the rest, so running it again will not change what you already have. To make something again, tick it here and it is deleted first."
 
@@ -2335,7 +2335,7 @@ msgstr "Get Ollama"
 msgid "Glass"
 msgstr "Glass"
 
-#: src/features/map/components/GenerateDialog.tsx:231
+#: src/features/map/components/GenerateDialog.tsx:233
 msgid "Goes with the voice"
 msgstr "Goes with the voice"
 
@@ -2460,7 +2460,7 @@ msgstr "I could not finish building: {0}"
 msgid "I could not reach the AI: {0}. Check Settings > AI models."
 msgstr "I could not reach the AI: {0}. Check Settings > AI models."
 
-#: src/features/map/components/GenerateDialog.tsx:243
+#: src/features/map/components/GenerateDialog.tsx:245
 msgid "Ignores what already exists and makes every voice, subtitle and clip from scratch, even if nothing changed. Takes the longest."
 msgstr "Ignores what already exists and makes every voice, subtitle and clip from scratch, even if nothing changed. Takes the longest."
 
@@ -2495,7 +2495,7 @@ msgstr "Include rendered video clips"
 msgid "Include the version and system details from \"This copy\" so it is easier to reproduce."
 msgstr "Include the version and system details from \"This copy\" so it is easier to reproduce."
 
-#: src/features/map/components/GenerateDialog.tsx:98
+#: src/features/map/components/GenerateDialog.tsx:100
 msgid "Included"
 msgstr "Included"
 
@@ -2613,7 +2613,7 @@ msgstr "Italic"
 msgid "Japanese"
 msgstr "Japanese"
 
-#: src/features/map/components/GenerateDialog.tsx:208
+#: src/features/map/components/GenerateDialog.tsx:210
 msgid "Keep all"
 msgstr "Keep all"
 
@@ -2872,7 +2872,7 @@ msgstr "Lower turns the camera more gently."
 msgid "lowSpecGenSessionMessage"
 msgstr "System in low-spec mode. Opened Waypoint Editor on map to adjust images, script, or route mode before re-running generation"
 
-#: src/features/map/components/GenerateDialog.tsx:231
+#: src/features/map/components/GenerateDialog.tsx:233
 msgid "Made again"
 msgstr "Made again"
 
@@ -2880,8 +2880,8 @@ msgstr "Made again"
 msgid "Make again for this stop"
 msgstr "Make again for this stop"
 
-#: src/features/map/components/GenerateDialog.tsx:125
-#: src/features/map/components/GenerateDialog.tsx:242
+#: src/features/map/components/GenerateDialog.tsx:127
+#: src/features/map/components/GenerateDialog.tsx:244
 msgid "Make everything again"
 msgstr "Make everything again"
 
@@ -3327,7 +3327,7 @@ msgid "Nothing was made: {skipped}"
 msgstr "Nothing was made: {skipped}"
 
 #: src/components/ui/AppSettings.tsx:335
-#: src/features/map/components/GenerateDialog.tsx:98
+#: src/features/map/components/GenerateDialog.tsx:100
 #: src/features/map/components/OverviewPanel.tsx:40
 msgid "Off"
 msgstr "Off"
@@ -3593,7 +3593,7 @@ msgid "Photo clip"
 msgstr "Photo clip"
 
 #: src/features/map/components/GenerateDialog.tsx:58
-#: src/features/map/components/GenerateDialog.tsx:90
+#: src/features/map/components/GenerateDialog.tsx:92
 msgid "Photo clips"
 msgstr "Photo clips"
 
@@ -4184,7 +4184,7 @@ msgstr "Rise"
 msgid "Road and path data that drawn routes snap to in Japan."
 msgstr "Road and path data that drawn routes snap to in Japan."
 
-#: src/features/map/components/GenerateDialog.tsx:272
+#: src/features/map/components/GenerateDialog.tsx:282
 msgid "Rough estimate from this PC's hardware. It becomes accurate after your first render."
 msgstr "Rough estimate from this PC's hardware. It becomes accurate after your first render."
 
@@ -4219,7 +4219,7 @@ msgstr "Route Lines Config"
 msgid "Route marker"
 msgstr "Route marker"
 
-#: src/features/map/components/GenerateDialog.tsx:254
+#: src/features/map/components/GenerateDialog.tsx:256
 msgid "Route only. Skips voiceover and photo clips."
 msgstr "Route only. Skips voiceover and photo clips."
 
@@ -4236,7 +4236,7 @@ msgid "Route video"
 msgstr "Route video"
 
 #: src/features/map/components/GenerateDialog.tsx:57
-#: src/features/map/components/GenerateDialog.tsx:77
+#: src/features/map/components/GenerateDialog.tsx:79
 msgid "Route videos"
 msgstr "Route videos"
 
@@ -4418,7 +4418,7 @@ msgid "Select a recent route or create a new workspace to begin"
 msgstr "Select a recent route or create a new workspace to begin"
 
 #: src/components/ui/ContextMenu.tsx:413
-#: src/features/map/components/GenerateDialog.tsx:208
+#: src/features/map/components/GenerateDialog.tsx:210
 msgid "Select all"
 msgstr "Select all"
 
@@ -4531,6 +4531,7 @@ msgstr "Shadow color"
 
 #: src/components/ui/VideoLookSettings.tsx:171
 #: src/components/ui/VideoLookSettings.tsx:172
+#: src/features/map/components/GenerateDialog.tsx:262
 msgid "Sharpen photos"
 msgstr "Sharpen photos"
 
@@ -4628,8 +4629,8 @@ msgid "Skip in Video Export"
 msgstr "Skip in Video Export"
 
 #: src/components/ui/PipelineLogPanel.tsx:277
-#: src/features/map/components/GenerateDialog.tsx:84
-#: src/features/map/components/GenerateDialog.tsx:91
+#: src/features/map/components/GenerateDialog.tsx:86
+#: src/features/map/components/GenerateDialog.tsx:93
 msgid "Skipped"
 msgstr "Skipped"
 
@@ -4754,7 +4755,7 @@ msgstr "Starts after"
 msgid "Starts at"
 msgstr "Starts at"
 
-#: src/features/map/components/GenerateDialog.tsx:260
+#: src/features/map/components/GenerateDialog.tsx:270
 msgid "Stitch the clips and export when done, without pausing to review."
 msgstr "Stitch the clips and export when done, without pausing to review."
 
@@ -5130,7 +5131,7 @@ msgstr "this project"
 msgid "This project"
 msgstr "This project"
 
-#: src/features/map/components/GenerateDialog.tsx:193
+#: src/features/map/components/GenerateDialog.tsx:195
 msgid "This project already has assets"
 msgstr "This project already has assets"
 
@@ -5170,7 +5171,7 @@ msgstr "This version is no longer available"
 msgid "Throw away your script? The video will write its own when you make it."
 msgstr "Throw away your script? The video will write its own when you make it."
 
-#: src/features/map/components/GenerateDialog.tsx:150
+#: src/features/map/components/GenerateDialog.tsx:152
 msgid "Time unavailable"
 msgstr "Time unavailable"
 
@@ -5206,7 +5207,7 @@ msgstr "Title and ending cards"
 
 #: src/components/ui/NewProject.tsx:362
 #: src/components/ui/RenderOverlay.tsx:396
-#: src/features/map/components/GenerateDialog.tsx:97
+#: src/features/map/components/GenerateDialog.tsx:99
 msgid "Title card"
 msgstr "Title card"
 
@@ -5380,7 +5381,7 @@ msgstr "Unset, it is the marker color, darker."
 msgid "Unset, the project name."
 msgstr "Unset, the project name."
 
-#: src/features/map/components/GenerateDialog.tsx:182
+#: src/features/map/components/GenerateDialog.tsx:184
 msgid "Untitled"
 msgstr "Untitled"
 
@@ -5408,6 +5409,7 @@ msgid "Upload 5–20 seconds of clear speech from one person, with no music or b
 msgstr "Upload 5–20 seconds of clear speech from one person, with no music or background noise."
 
 #: src/components/ui/VideoLookSettings.tsx:171
+#: src/features/map/components/GenerateDialog.tsx:263
 msgid "Upscales photos before they are shown. Needs a GPU and takes longer."
 msgstr "Upscales photos before they are shown. Needs a GPU and takes longer."
 
@@ -5730,7 +5732,7 @@ msgstr "Written automatically"
 msgid "Written automatically when you make the video"
 msgstr "Written automatically when you make the video"
 
-#: src/features/map/components/GenerateDialog.tsx:116
+#: src/features/map/components/GenerateDialog.tsx:118
 msgid "Yes, make everything again"
 msgstr "Yes, make everything again"
 
