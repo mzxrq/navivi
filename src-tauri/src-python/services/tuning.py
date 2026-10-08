@@ -1854,6 +1854,11 @@ CAPTION_MARGIN_V = 20  # gap above the bottom edge
 CAPTION_BOX_PADDING = 2.0  # libass pads a box by its outline width
 CAPTION_BOX_COLOR = "&H66000000"  # ASS alpha 66 = 60% opaque black
 CAPTION_PLAY_RES_X = 384
+# Generated subtitles: characters per line when caption_style.max_chars_per_line is 0,
+# and what a longer clause does (settings.subtitle_long_lines): "split" = one-line
+# captions in turn, "wrap" = up to 2 lines per caption.
+SUBTITLE_MAX_CHARS_PER_LINE = 20
+SUBTITLE_LONG_LINES = "split"
 
 # --- Narration speed presets and cache (Irodori) -------------------------------
 # On a CPU a request costs ~22 s of fixed work plus sampling that scales with the number of steps, so fewer steps is the one big

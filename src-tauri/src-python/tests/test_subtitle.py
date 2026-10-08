@@ -59,44 +59,32 @@ class TestTextSegmenter:
             "no punctuation here"
         ]
 
-    def test_wrap_short_text_returns_single_line_unwrapped(self):
-        # Regression: the old behavior force-wrapped even short-ish clauses.
+    def test_split_lines_short_text_stays_one_caption(self):
         text = "a" * 24
-        assert TextSegmenter.wrap(text, max_chars_per_line=24) == text
+        assert TextSegmenter.split_lines(text, max_chars_per_line=24) == [text]
 
-    def test_wrap_long_text_breaks_at_space_not_mid_word(self):
+    def test_split_lines_breaks_at_space_not_mid_word(self):
         text = "a" * 10 + " " + "b" * 10
-        wrapped = TextSegmenter.wrap(text, max_chars_per_line=12, max_lines=2)
-        lines = wrapped.split("\n")
-        assert lines[0] == "a" * 10
-        assert lines[1] == "b" * 10
+        assert TextSegmenter.split_lines(text, max_chars_per_line=12) == ["a" * 10, "b" * 10]
 
-    def test_wrap_no_natural_break_falls_back_to_hard_cut(self):
-        # Japanese-style text has no spaces at all.
-        text = "あ" * 30
-        wrapped = TextSegmenter.wrap(text, max_chars_per_line=10, max_lines=2)
-        lines = wrapped.split("\n")
-        assert len(lines) == 2
-        assert lines[0] == "あ" * 10
+    def test_split_lines_no_natural_break_falls_back_to_hard_cut(self):
+        assert TextSegmenter.split_lines("あ" * 30, max_chars_per_line=10) == ["あ" * 10] * 3
 
-    def test_wrap_never_starts_a_line_with_closing_punctuation(self):
+    def test_split_lines_never_starts_a_line_with_closing_punctuation(self):
         text = "曲がりくねった道を2時間21分ほど歩くと、"
-        assert TextSegmenter.wrap(text, max_chars_per_line=20) == text
-        assert TextSegmenter.wrap("「" + "あ" * 9 + "」です", max_chars_per_line=10).split("\n")[1][0] != "」"
+        assert TextSegmenter.split_lines(text, max_chars_per_line=20) == [text]
+        assert TextSegmenter.split_lines("「" + "あ" * 9 + "」です", max_chars_per_line=10)[1][0] != "」"
 
-    def test_wrap_balances_lines_at_a_phrase_end(self):
-        wrapped = TextSegmenter.wrap("昔の修験者たちが歩いた古い道に入っていきます", max_chars_per_line=20)
-        assert wrapped == "昔の修験者たちが歩いた\n古い道に入っていきます"
+    def test_split_lines_balances_at_a_phrase_end(self):
+        lines = TextSegmenter.split_lines("昔の修験者たちが歩いた古い道に入っていきます", max_chars_per_line=20)
+        assert lines == ["昔の修験者たちが歩いた", "古い道に入っていきます"]
 
-    def test_wrap_overflow_past_max_lines_truncates_with_ellipsis(self):
+    def test_long_text_is_never_truncated(self):
         text = " ".join(["word"] * 20)
-        wrapped = TextSegmenter.wrap(text, max_chars_per_line=8, max_lines=2)
-        lines = wrapped.split("\n")
-        assert len(lines) == 2
-        assert lines[-1].endswith("…")
+        assert " ".join(TextSegmenter.split_lines(text, max_chars_per_line=8)) == text
 
-    def test_wrap_empty_text_returns_empty(self):
-        assert TextSegmenter.wrap("") == ""
+    def test_split_lines_empty_text_returns_nothing(self):
+        assert TextSegmenter.split_lines("") == []
 
 
 class TestSpeakingTimelineMapper:
@@ -165,6 +153,40 @@ class TestSubtitleBuilder:
         assert cues[0].start == 0.0
         assert cues[0].end == pytest.approx(3.0)
         assert cues[1].end == pytest.approx(6.0)
+
+    def test_cues_start_where_the_voice_resumes_after_each_pause(self):
+        # Short in-sentence pauses (7.0, 16.4) must not pull a cue early, which
+        # character-proportional timing did by up to 2 s.
+        pauses = [(2.2, 3.15), (5.1, 5.9), (7.0, 7.3), (8.05, 9.0), (11.35, 12.45),
+                  (14.35, 15.35), (16.4, 16.6), (17.35, 18.45), (20.35, 21.5)]
+        cues = SubtitleBuilder.build(
+            "西念寺から北へ進みます。そのまま道なりに進みます。左に曲がって北西へ。鋭く右に曲がって東へ。"
+            "左に曲がって北西へ。右に曲がって北東へ。そのまま道なりに進みます。左に曲がって北西へ。",
+            23.0,
+            [{"start": s, "end": e} for s, e in pauses],
+        )
+        assert [c.start for c in cues] == pytest.approx([0.0, 3.15, 5.9, 9.0, 12.45, 15.35, 18.45, 21.5])
+        for a, b in zip(cues, cues[1:]):
+            assert a.end == pytest.approx(b.start)
+
+    def test_a_clause_too_long_for_one_line_becomes_consecutive_one_line_cues(self):
+        cues = SubtitleBuilder.build("自然豊かな風景の中で静かに佇む歴史ある寺院です。", 5.0, [])
+        assert [c.text for c in cues] == ["自然豊かな風景の中で静かに", "佇む歴史ある寺院です。"]
+        assert all("\n" not in c.text for c in cues)
+        assert cues[0].end == pytest.approx(cues[1].start)
+        assert cues[-1].end == pytest.approx(5.0)
+
+    def test_wrap_mode_keeps_two_lines_per_cue_and_never_truncates(self):
+        cues = SubtitleBuilder.build("あ" * 50 + "。", 6.0, [], max_chars_per_line=10, lines_per_caption=2)
+        assert [c.text.count("\n") for c in cues] == [1, 1, 1]
+        assert "".join(c.text.replace("\n", "") for c in cues) == "あ" * 50 + "。"
+
+    def test_caption_layout_reads_project_settings(self):
+        from services.localization.subtitle import caption_layout
+
+        assert caption_layout(None) == {"max_chars_per_line": 20, "lines_per_caption": 1}
+        settings = {"subtitle_long_lines": "wrap", "caption_style": {"max_chars_per_line": 16}}
+        assert caption_layout(settings) == {"max_chars_per_line": 16, "lines_per_caption": 2}
 
     def test_build_cues_are_in_chronological_order(self):
         cues = SubtitleBuilder.build(
