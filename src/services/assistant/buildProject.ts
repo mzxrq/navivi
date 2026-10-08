@@ -227,6 +227,7 @@ export async function buildProject({ brief, sourceText, engine, mapboxToken, sig
           index: i,
           total: waypoints.length,
           otherScript: kind === "attraction" ? wp.arrivingNarration : undefined,
+          otherStops: waypoints.slice(0, i).map((w) => (kind === "arriving" ? w.arrivingNarration : w.attractionNarration) ?? ""),
         },
       );
       if (kind === "arriving") wp.arrivingNarration = cleanNarration(script);
