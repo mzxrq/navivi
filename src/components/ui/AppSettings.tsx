@@ -3,9 +3,10 @@ import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useAnimatedUnmount } from "../../hooks/useAnimatedUnmount";
+import { MAP_PANEL_OPACITY, setMapPanelOpacity, useMapPanelOpacity } from "../../hooks/useMapPanelOpacity";
 import { useTheme } from "../../hooks/useTheme";
 import { useUI } from "../../hooks/useUI";
 import { useWorkspace } from "../../hooks/useWorkspace";
@@ -16,6 +17,7 @@ import {
   pullModelStream,
 } from "../../services/ollamaApi";
 import { callSidecar, systemRamGb } from "../../services/sidecar";
+import { DEFAULT_LOCAL_MODEL } from "../../services/ai/engine";
 import { modelFit } from "../../utils/modelFit";
 import { CaptionStyleFields } from "./CaptionStyleFields";
 import { resolveCaptionStyle } from "../../utils/textStyle";
@@ -112,6 +114,7 @@ export function AppSettings() {
   const { i18n } = useLingui();
   const { showAppSettings, setShowAppSettings, currentView } = useUI();
   const { theme, setTheme, accentTheme, setAccentTheme } = useTheme();
+  const mapPanelOpacity = useMapPanelOpacity();
 
   const [activeTab, setActiveTab] = useState<SettingsTab>("general");
 
@@ -192,24 +195,28 @@ export function AppSettings() {
     setIsDirty(true);
   };
 
-  const tabs: { id: SettingsTab; icon: any; label: string }[] = [
-    { id: "general", icon: Settings, label: t`General` },
-    { id: "appearance", icon: Palette, label: t`Appearance` },
-    { id: "api", icon: Key, label: t`API keys` },
-    ...(inEditor
+  type TabInfo = { id: SettingsTab; icon: any; label: string };
+  const tabGroups: TabInfo[][] = [
+    inEditor ? [{ id: "project", icon: SlidersHorizontal, label: t`Project` }] : [],
+    inEditor
       ? [
-          { id: "project" as const, icon: SlidersHorizontal, label: t`Project` },
-          { id: "video" as const, icon: Film, label: t`Video` },
-          { id: "voice" as const, icon: Volume2, label: t`Voice` },
+          { id: "video", icon: Film, label: t`Video` },
+          { id: "voice", icon: Volume2, label: t`Voice` },
         ]
-      : []),
-    { id: "tts_dictionary", icon: Mic, label: t`Pronunciation` },
-    ...(settings.ai_features_enabled
-      ? [{ id: "ai" as const, icon: Sparkles, label: t`AI models` }]
-      : []),
-    { id: "setup", icon: Download, label: t`Setup` },
-    { id: "about", icon: Info, label: t`About` },
-  ];
+      : [],
+    [{ id: "tts_dictionary", icon: Mic, label: t`Pronunciation` }],
+    [
+      { id: "general", icon: Settings, label: t`General` },
+      { id: "appearance", icon: Palette, label: t`Appearance` },
+      { id: "api", icon: Key, label: t`API keys` },
+      ...(settings.ai_features_enabled
+        ? [{ id: "ai" as const, icon: Sparkles, label: t`AI models` }]
+        : []),
+      { id: "setup", icon: Download, label: t`Setup` },
+      { id: "about", icon: Info, label: t`About` },
+    ],
+  ].filter((group) => group.length > 0) as TabInfo[][];
+  const tabs = tabGroups.flat();
   const activeLabel = tabs.find((tab) => tab.id === activeTab)?.label;
 
   const dictionary = settings.pronunciation_dictionary || [];
@@ -245,26 +252,31 @@ export function AppSettings() {
             aria-orientation="vertical"
             className="flex flex-col gap-0.5"
           >
-            {tabs.map(({ id, icon: Icon, label }) => {
-              const active = activeTab === id;
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  role="tab"
-                  aria-selected={active}
-                  onClick={() => setActiveTab(id)}
-                  className={`flex items-center gap-2.5 h-8 px-2.5 rounded-lg text-[13px] text-left whitespace-nowrap transition-colors ${
-                    active
-                      ? "bg-navi/10 text-navi font-medium"
-                      : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200/60 dark:hover:bg-white/5 hover:text-zinc-900 dark:hover:text-zinc-100"
-                  }`}
-                >
-                  <Icon className="w-4 h-4 shrink-0" />
-                  {label}
-                </button>
-              );
-            })}
+            {tabGroups.map((group, index) => (
+              <Fragment key={group[0].id}>
+                {index > 0 && <div role="separator" className="my-1.5 mx-2.5 h-px bg-zinc-200/80 dark:bg-white/10" />}
+                {group.map(({ id, icon: Icon, label }) => {
+                  const active = activeTab === id;
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      role="tab"
+                      aria-selected={active}
+                      onClick={() => setActiveTab(id)}
+                      className={`flex items-center gap-2.5 h-8 px-2.5 rounded-lg text-[13px] text-left whitespace-nowrap transition-colors ${
+                        active
+                          ? "bg-navi/10 text-navi font-medium"
+                          : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200/60 dark:hover:bg-white/5 hover:text-zinc-900 dark:hover:text-zinc-100"
+                      }`}
+                    >
+                      <Icon className="w-4 h-4 shrink-0" />
+                      {label}
+                    </button>
+                  );
+                })}
+              </Fragment>
+            ))}
           </div>
           <NaviviType className="mt-auto mb-2 mx-2.5 h-3.5 self-start text-zinc-300 dark:text-zinc-700" />
         </nav>
@@ -390,6 +402,22 @@ export function AppSettings() {
                           <option.icon className="w-3.5 h-3.5" /> {option.label}
                         </button>
                       ))}
+                    </div>
+                  </Row>
+                  <Row title={t`Map panel opacity`} info={t`How solid the elevation profile and the uphill/downhill key on the map are.`}>
+                    <div className="flex items-center gap-2">
+                      <Slider
+                        value={mapPanelOpacity}
+                        min={MAP_PANEL_OPACITY.min}
+                        max={MAP_PANEL_OPACITY.max}
+                        step={0.05}
+                        label={t`Map panel opacity`}
+                        onChange={setMapPanelOpacity}
+                        className="w-36"
+                      />
+                      <span className="w-10 text-right text-[12px] tabular-nums text-zinc-500 dark:text-zinc-400">
+                        {Math.round(mapPanelOpacity * 100)}%
+                      </span>
                     </div>
                   </Row>
                   <Row title={t`Accent color`}>
@@ -970,11 +998,14 @@ function AiModelsTab() {
     getLocalModels().then(setLocalModels);
   }, []);
 
-  const activeModel = settings.ai_model || "schroneko/gemma-2-2b-jpn-it";
+  // Only a model that is really installed counts as selected; the unset default is not shown as if it were there.
+  const configuredModel = settings.ai_model || DEFAULT_LOCAL_MODEL;
+  const activeModel = localModels.includes(configuredModel) ? configuredModel : "";
   const [seesPhotos, setSeesPhotos] = useState<boolean | null>(null);
   useEffect(() => {
     let current = true;
     setSeesPhotos(null);
+    if (!activeModel) return;
     modelSeesPhotos(activeModel).then(
       (result) => current && setSeesPhotos(result),
     );
@@ -1115,11 +1146,12 @@ function AiModelsTab() {
       <Section title={t`Narration`}>
         <Row
           title={t`Active model`}
-          description={t`Select which model to use for narration synthesis, only downloaded models are shown`}
+          description={t`The model that writes narration scripts and answers in the assistant chat. Only downloaded models are shown.`}
         >
           <Select
             label={t`Active model`}
             value={activeModel}
+            placeholder={t`Choose a model`}
             onChange={(model) => {
               updateSettings({ ai_model: model });
               setIsDirty(true);

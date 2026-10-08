@@ -13,7 +13,7 @@ from typing import Any, Dict, Optional
 
 import httpx
 
-from services import system_runtime
+from services import install_progress, system_runtime
 from services.logger.logger import setup_logger
 from services.tts.kokoro_setup import _run, find_uv
 from services.tts.ttsengine import IrodoriTTSClient
@@ -76,8 +76,10 @@ def install_irodori(fetch: Optional[Any] = None) -> Dict[str, Any]:
     needed = system_runtime.missing_runtime_message("The natural voice")
     if needed:
         return {"success": False, "error": needed}
+    install_progress.begin(3)
     try:
         if not source_present(directory):
+            install_progress.step("downloading the server source")
             unpack_source((fetch or fetch_zip)(), directory)
         if not (python.exists() and _imports_work(python)):
             uv = find_uv()

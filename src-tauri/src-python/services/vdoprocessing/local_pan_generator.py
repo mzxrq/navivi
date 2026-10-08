@@ -18,7 +18,7 @@ import cv2
 import numpy as np
 from PIL import Image, ImageFilter
 
-from services import tuning
+from services import runtime_paths, tuning
 from services.logger.logger import setup_logger
 
 logger = setup_logger("LocalPanGenerator")
@@ -322,7 +322,7 @@ def _render_pan(image: Image.Image, output_path: str, duration_sec: float, camer
 
     import subprocess
     subprocess.run(
-        ["ffmpeg", "-y", *tuning.ffmpeg_log_args(), "-i", raw_path, "-c:v", "libx264", *tuning.ffmpeg_thread_args(), "-crf", "20",
+        [runtime_paths.ffmpeg_exe() or "ffmpeg", "-y", *tuning.ffmpeg_log_args(), "-i", raw_path, "-c:v", "libx264", *tuning.ffmpeg_thread_args(), "-crf", "20",
          "-preset", "medium", "-pix_fmt", "yuv420p", output_path],
         check=True, capture_output=True,
     )

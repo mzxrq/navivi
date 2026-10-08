@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 import { ChevronDown, ChevronUp, Mountain } from "../../../components/ui/icons";
+import { panelAlphaStyle, useMapPanelOpacity } from "../../../hooks/useMapPanelOpacity";
 import { useWorkspace } from "../../../hooks/useWorkspace";
 import { gradientColor, routeProfile, segmentGradients, type LegElevation } from "../../../utils/elevation";
 
@@ -10,6 +11,7 @@ const HIDDEN_KEY = "navivi_elevation_hidden";
 
 export function ElevationProfile({ legs }: { legs: LegElevation[] }) {
   const { routePoints, settings } = useWorkspace();
+  const opacity = useMapPanelOpacity();
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const [hidden, setHiddenState] = useState(() => {
     try {
@@ -56,7 +58,8 @@ export function ElevationProfile({ legs }: { legs: LegElevation[] }) {
         type="button"
         onClick={() => setHidden(false)}
         aria-label={t`Show elevation profile`}
-        className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 pointer-events-auto flex items-center gap-1.5 h-8 px-3 rounded-lg bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md shadow-lg text-[12px] font-medium text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors"
+        style={panelAlphaStyle(opacity)}
+        className="absolute bottom-4 left-3 z-10 pointer-events-auto flex items-center gap-1.5 h-8 px-3 rounded-lg bg-white/(--panel-alpha) dark:bg-zinc-900/(--panel-alpha) backdrop-blur-md shadow-lg text-[12px] font-medium text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors"
       >
         <Mountain className="w-3.5 h-3.5" />
         <Trans>Elevation profile</Trans>
@@ -66,7 +69,10 @@ export function ElevationProfile({ legs }: { legs: LegElevation[] }) {
   }
 
   return (
-    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-1/2 min-w-80 max-w-[calc(100%-2rem)] h-36 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md rounded-xl px-4 pt-2.5 pb-3 shadow-xl z-10 flex flex-col pointer-events-auto">
+    <div
+      style={panelAlphaStyle(opacity)}
+      className="absolute bottom-4 left-3 w-80 max-w-[calc(100%-1.5rem)] h-28 bg-white/(--panel-alpha) dark:bg-zinc-900/(--panel-alpha) backdrop-blur-md rounded-xl px-3 pt-2 pb-2.5 shadow-xl z-10 flex flex-col pointer-events-auto"
+    >
       <div className="text-xs text-zinc-700 dark:text-zinc-300 mb-2 flex items-center justify-between gap-3 shrink-0">
         <span><Trans>Elevation profile</Trans></span>
         <span className="flex items-center gap-2">

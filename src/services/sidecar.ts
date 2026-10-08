@@ -20,14 +20,16 @@ const messageOf = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 // main.py prints one JSON result as the last line of stdout; anything before it is progress or library noise.
 export function parseReply<T>(stdout: string): SidecarReply<T> {
-  const last = stdout.trim().split("\n").pop() ?? "";
+  const last = stdout.trim().split("\n").pop()?.trim() ?? "";
   try {
     const parsed = JSON.parse(last);
     if (parsed && typeof parsed === "object" && typeof parsed.success === "boolean") return parsed;
   } catch {
     // fall through to the error below
   }
-  return { success: false, error: "The media pipeline returned an unexpected reply" };
+  // Show what came back (a library's stray print, a crash message) so the toast says more than "unexpected".
+  const seen = last ? `: ${last.length > 300 ? `${last.slice(0, 300)}…` : last}` : " (it printed nothing)";
+  return { success: false, error: `The media pipeline returned an unexpected reply${seen}` };
 }
 
 // A pipeline stage run on a project: resolves with the process's stdout, rejects with its error text.
@@ -43,6 +45,18 @@ export async function callSidecar<T>(mode: string, input: string | object = {}):
   const payload = typeof input === "string" ? input : JSON.stringify(input);
   try {
     return parseReply<T>(await invoke<string>("run_python_blueprint", { action: mode, payload }));
+  } catch (e) {
+    if (isSetupRequired(e)) announceSetupRequired();
+    const error = messageOf(e);
+    return { success: false, error, cancelled: CANCELLED.test(error) };
+  }
+}
+
+// Engine installs (`tts_install_*`, `comfyui_install`, `ollama_install`) run in a process slot of their own, so later calls
+// (the voice list, a preview, a render stage) neither stop them nor are stopped by them. Progress arrives as `install-log` events.
+export async function callSidecarInstall<T>(mode: string): Promise<SidecarReply<T>> {
+  try {
+    return parseReply<T>(await invoke<string>("run_python_install", { action: mode, payload: "{}" }));
   } catch (e) {
     if (isSetupRequired(e)) announceSetupRequired();
     const error = messageOf(e);

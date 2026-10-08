@@ -211,6 +211,12 @@ class GPSParser:
                 waypoints_df = pd.DataFrame()
                 route_df = dataframe.copy()
 
+            # [HACK] [GPS] Some GPX files name every track point, so none looked like a plain route point; use them all.
+            if route_df.empty and not dataframe.empty:
+                route_df = dataframe.copy()
+            if route_df.empty:
+                raise ValueError("The GPS file has no usable points (no latitude/longitude rows).")
+
             if "timestamp" in route_df.columns:
                 # Stable: the CSV's whole-second times tie for nearby points, and an
                 # unstable sort reordered them differently for each sub-second start time.
