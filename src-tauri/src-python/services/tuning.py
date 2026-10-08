@@ -946,6 +946,14 @@ COMFYUI_CHAIN_COLOR_MATCH = True
 # by the cap is still filled by slow_move. False: slow_move fills any gap
 # over 1s regardless.
 ATTRACTION_CHAIN_TO_FULL_LENGTH = True
+# A script edit that makes a narration longer reuses the stop's kept photo
+# clips and fills the extra time on the CPU (slow move or hold), instead of
+# generating the photo again on the GPU (the user's choice, 2026-10-08). True:
+# a clip made for a shorter narration is generated again.
+ATTRACTION_REGENERATE_FOR_LONGER_NARRATION = False
+# A finished clip whose narration changed by more than this is fitted again
+# from its kept photo clips (each photo trimmed or extended to its equal share).
+ATTRACTION_REFIT_SLACK_SECONDS = 0.2
 # After the Wan motion runs out, a moving preset's clip continues as a slow
 # push-in/drift over its last frame (vdoprocessing/slow_move.py) instead of
 # freezing, in a random direction per clip: the frame grows by about this
