@@ -38,7 +38,8 @@ from .common import MAPBOX_API_KEY, logger
 from .geomath import cumulative_distance_km, haversine_km
 from .httpserver import start_local_server
 from .popupsequence import _wait_for_paint
-from .recorder import _route_linestring_feature
+from .recorder import _route_gradient_feature, _route_linestring_feature
+from .elevation import leg_segment_colors, quantize, usable_heights
 from .routedata import interpolate_route_data, patch_pydeck_html
 
 # ---------------------------------------------------------------------------
@@ -1159,6 +1160,7 @@ def render_residential_leg_pydeck(
     theme: Optional[str] = None,
     bottom_reserve_px: float = 0.0,
     arrival_slow_seconds: float = 0.0,
+    leg_elevations: Optional[List[float]] = None,
 ) -> List[str]:
     """Renders one leg as a straight-down, locked-camera video with a live
     turn-by-turn HUD (destination banner + time/distance card) -- the
@@ -1314,7 +1316,11 @@ def render_residential_leg_pydeck(
     if travel_speed_kmh is None:
         travel_speed_kmh = mode_hud["default_speed_kmh"]
 
-    df_raw = pd.DataFrame([{"lat": lat, "lon": lon} for lat, lon in leg_latlon]).drop_duplicates().reset_index(drop=True)
+    heights = usable_heights(leg_elevations, len(leg_latlon))  # [NOTE] [Heatmap] same points as leg_latlon, before de-duplication
+    df_raw = pd.DataFrame([{"lat": lat, "lon": lon} for lat, lon in leg_latlon])
+    if heights is not None:
+        df_raw["ele"] = heights
+    df_raw = df_raw.drop_duplicates(subset=["lat", "lon"]).reset_index(drop=True)
     if len(df_raw) < 2:
         raise ValueError("leg_latlon collapsed to <2 distinct points after de-duplication")
 
@@ -1344,6 +1350,10 @@ def render_residential_leg_pydeck(
     remaining_km = cum_km.iloc[-1] - cum_km
 
     route_preview_path = df_raw[["lon", "lat"]].values.tolist()
+    segment_colors = (
+        quantize(leg_segment_colors(df_raw[["lat", "lon"]].values.tolist(), df_raw["ele"].tolist()) or [])
+        if "ele" in df_raw.columns else []
+    ) or None
     # This leg's own grey guide line -- from this leg's start waypoint to
     # its destination only. Neighboring legs' routes are deliberately never
     # drawn here (they used to be, as static blue/green "context" lines,
@@ -1353,7 +1363,10 @@ def render_residential_leg_pydeck(
     base_layers = [
         pdk.Layer(
             "GeoJsonLayer", id="route-preview",
-            data=_route_linestring_feature(route_preview_path, line_color=upcoming_color),
+            data=(
+                _route_gradient_feature(route_preview_path, [c[:3] + [upcoming_color[3] if len(upcoming_color) > 3 else 200] for c in segment_colors])
+                if segment_colors else _route_linestring_feature(route_preview_path, line_color=upcoming_color)
+            ),
             stroked=True, filled=False, get_line_color="properties.line_color",
             # Exactly the walked trail's own thickness (see _record_leg's
             # 'walker-trail' layer) -- the guide line is the SAME road, just
@@ -1482,6 +1495,7 @@ def render_residential_leg_pydeck(
             arrival_photo_hold_seconds, arrival_wait_seconds, dest_image_display,
             dest_pin_url=_leg_pin_url(dest_pin, _DEST_PIN_URL),
             hud_card_png=hud_card_png, theme=theme, bottom_reserve_px=bottom_reserve_px,
+            segment_colors=segment_colors,
         ))
 
     logger.info(f"Residential leg rendered ({mode}): {produced_paths}")
@@ -1856,6 +1870,7 @@ async def _record_leg(
     hud_card_png: Optional[Callable[[float, float], bytes]] = None,
     theme: Optional[str] = None,
     bottom_reserve_px: float = 0.0,
+    segment_colors: Optional[List[List[int]]] = None,
 ):
     from pathlib import Path
 
@@ -2719,7 +2734,8 @@ async def _record_leg(
                     n_pts = bisect.bisect_right(leg_dist_km, traveled_km) if leg_dist_km else 0
                     active_trail = all_trail_points[:n_pts] + [[row["lon"], row["lat"]]]
                     trail_geojson = json.dumps(
-                        _route_linestring_feature(active_trail, line_color=walker_color)
+                        _route_gradient_feature(active_trail, [c[:3] + [255] for c in segment_colors])
+                        if segment_colors else _route_linestring_feature(active_trail, line_color=walker_color)
                     ) if len(active_trail) >= 2 else json.dumps({"type": "FeatureCollection", "features": []})
                     walker_json = json.dumps([{"lon": row["lon"], "lat": row["lat"]}])
 

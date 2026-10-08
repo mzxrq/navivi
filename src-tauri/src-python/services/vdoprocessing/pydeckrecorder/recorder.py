@@ -59,6 +59,27 @@ def _route_linestring_feature(coords_lonlat: list, line_color: list) -> dict:
     }
 
 
+def _route_gradient_feature(coords_lonlat: list, segment_colors: list) -> dict:
+    """Like `_route_linestring_feature`, but one colour per segment (`segment_colors[i]` colours point i -> i+1):
+    runs of equal colour become one LineString feature, neighbours sharing their joint vertex so the line stays
+    unbroken. Fewer segment colours than segments reuse the last one (a trail's partial tail segment)."""
+    n = len(coords_lonlat)
+    if n < 2 or not segment_colors:
+        return {"type": "FeatureCollection", "features": []}
+    colors = [segment_colors[min(i, len(segment_colors) - 1)] for i in range(n - 1)]
+    features = []
+    start = 0
+    for i in range(1, n):
+        if i == n - 1 or colors[i] != colors[start]:
+            features.append({
+                "type": "Feature",
+                "geometry": {"type": "LineString", "coordinates": coords_lonlat[start:i + 1]},
+                "properties": {"line_color": colors[start]},
+            })
+            start = i
+    return {"type": "FeatureCollection", "features": features}
+
+
 def record_headless_video(
     config_path: str,
     output_video_path: str = "final_reliable_map_animation.mp4",
