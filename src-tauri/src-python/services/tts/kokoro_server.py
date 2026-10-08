@@ -17,22 +17,41 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 SAMPLE_RATE = 24000
-LANG_CODE = "j"  # Japanese
 REPO_ID = "hexgrad/Kokoro-82M"
 LOAD_WAIT_SECONDS = 300  # how long a request waits for the model before giving up
 
-_pipeline = None
+_pipelines = {}  # language code ("j" Japanese, "a" American, "b" British English) -> KPipeline; all share one model
 _ready = threading.Event()
 _synth_lock = threading.Lock()
 _last_request = time.monotonic()
 
 
+def language_of(voice: str) -> str:
+    """A voice id starts with its language: jf_tebukuro Japanese, af_heart American English, bf_emma British English."""
+    return voice[:1] if voice[:1] in ("j", "a", "b") else "j"
+
+
 def load_pipeline():
-    global _pipeline
     from kokoro import KPipeline
 
-    _pipeline = KPipeline(lang_code=LANG_CODE, repo_id=REPO_ID)
+    # Japanese first: it loads the model, and the other languages reuse it.
+    _pipelines["j"] = KPipeline(lang_code="j", repo_id=REPO_ID)
     _ready.set()
+
+
+def pipeline_for(voice: str):
+    code = language_of(voice)
+    if code not in _pipelines:
+        if code in ("a", "b"):
+            import spacy
+
+            # misaki would try `pip install` for this and exit the process when the venv has no pip.
+            if not spacy.util.is_package("en_core_web_sm"):
+                raise RuntimeError("The English language data is not installed. Open Settings > Voice and update the fast voice.")
+        from kokoro import KPipeline
+
+        _pipelines[code] = KPipeline(lang_code=code, repo_id=REPO_ID, model=_pipelines["j"].model)
+    return _pipelines[code]
 
 
 def synthesize(text: str, voice: str, speed: float) -> bytes:
@@ -40,7 +59,7 @@ def synthesize(text: str, voice: str, speed: float) -> bytes:
     import soundfile as sf
 
     with _synth_lock:
-        chunks = [np.asarray(audio, dtype=np.float32) for _, _, audio in _pipeline(text, voice=voice, speed=speed)]
+        chunks = [np.asarray(audio, dtype=np.float32) for _, _, audio in pipeline_for(voice)(text, voice=voice, speed=speed)]
     if not chunks:
         raise ValueError("Kokoro returned no audio for this text.")
     out = io.BytesIO()

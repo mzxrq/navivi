@@ -73,7 +73,7 @@ def cue_tags(text: Optional[str]) -> List[str]:
     return [c.tag for c in strip_cues(text)[1]]
 
 
-_SENTENCE_END_CHARS = "。！？!?\n"
+_SENTENCE_END_CHARS = "。！？!?.\n"
 
 
 def tags_at_sentence_start(text: Optional[str]) -> List[str]:

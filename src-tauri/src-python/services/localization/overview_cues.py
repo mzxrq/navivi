@@ -25,8 +25,9 @@ import re
 from typing import List, Optional, Sequence
 
 from services.localization.cues import cue_tags
+from services.localization.sentence_split import SENTENCE_END
 
-_SENTENCE_END = re.compile(r"(?<=[。！？!?\n])")
+_SENTENCE_END = SENTENCE_END
 
 # A sentence that starts with one of these leaves the place just described.
 TRANSITION_OPENERS = (

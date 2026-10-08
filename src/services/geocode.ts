@@ -47,7 +47,7 @@ export function geocodeUrl(place: string, { mapboxToken, near, country, bounds }
   const around = bounds ?? (near ? boundsAround(near, 1) : undefined);
   const view = around ? `&viewbox=${around.west},${around.north},${around.east},${around.south}${bounds ? "&bounded=1" : ""}` : "";
   const within = country ? `&countrycodes=${country}` : "";
-  return `https://nominatim.openstreetmap.org/search?format=json&limit=1&addressdetails=1&q=${q}${view}${within}`;
+  return `https://nominatim.openstreetmap.org/search?format=json&limit=${near ? 5 : 1}&addressdetails=1&q=${q}${view}${within}`;
 }
 
 const aborted = () => new DOMException("Aborted", "AbortError");
@@ -76,8 +76,11 @@ async function ask(place: string, opts: GeocodeOptions, token: string | undefine
         weak: typeof feature.relevance === "number" && feature.relevance < WEAK_BELOW,
       };
     }
-    const hit = data?.[0];
-    return hit ? { lat: parseFloat(hit.lat), lng: parseFloat(hit.lon), country: hit.address?.country_code } : null;
+    // Several places share a name: the one closest to where the route already is, not the one OpenStreetMap ranks first.
+    const hits: any[] = Array.isArray(data) ? data : [];
+    const here = opts.near;
+    const hit = here ? [...hits].sort((a, b) => distanceKm(here, { lat: +a.lat, lng: +a.lon }) - distanceKm(here, { lat: +b.lat, lng: +b.lon }))[0] : hits[0];
+    return hit ?{ lat: parseFloat(hit.lat), lng: parseFloat(hit.lon), country: hit.address?.country_code } : null;
   } catch (e: any) {
     if (e?.name === "AbortError") throw e;
     console.warn("Geocoding failed for", place, e);
@@ -139,8 +142,23 @@ export type Lookup = (place: string, constraints: Omit<GeocodeOptions, "signal">
 export type Rename = (names: string[], region: string | null) => Promise<Record<string, string>>;
 
 export interface RouteGeocode {
-  found: { name: string; point: GeoPoint; uncertain: boolean }[]; // in the order of `places`
+  // in the order of `places`; shortName is the place without the region ("Sainen-ji, Wakayama" -> "Sainen-ji"), localName its name on local maps
+  found: { name: string; shortName: string; localName?: string; point: GeoPoint; uncertain: boolean }[];
   failed: string[];
+}
+
+const SPIKE_MIN_KM = 15; // a detour shorter than this is ordinary routing, not a wrong namesake
+
+// Indexes of found points that sit far off the line between the found points before and after them.
+export function spikes(points: (GeoPoint | null)[]): number[] {
+  const out: number[] = [];
+  const have = points.map((p, i) => (p ? i : -1)).filter((i) => i >= 0);
+  for (let k = 1; k < have.length - 1; k++) {
+    const [a, b, c] = [points[have[k - 1]]!, points[have[k]]!, points[have[k + 1]]!];
+    const direct = distanceKm(a, c);
+    if (distanceKm(a, b) + distanceKm(b, c) - direct > Math.max(SPIKE_MIN_KM, 4 * direct)) out.push(have[k]);
+  }
+  return out;
 }
 
 // Small places must resolve inside the area the route is in, so names shared with famous places elsewhere do not win.
@@ -183,9 +201,9 @@ export async function geocodeRoute(
   };
 
   // Names to try for one place, in a box around its neighbor (or the anchor); a hit that is just the region itself is a miss.
-  const search = async (i: number, names: string[]): Promise<GeoPoint | null> => {
-    const around = neighbor(i) ?? center;
-    const size = around === center ? REGION_DEGREES : hopDegrees;
+  const search = async (i: number, names: string[], tight?: { at: GeoPoint; degrees: number }): Promise<GeoPoint | null> => {
+    const around = tight?.at ?? neighbor(i) ?? center;
+    const size = tight?.degrees ?? (around === center ? REGION_DEGREES : hopDegrees);
     for (const name of names) {
       const hit = await lookup(name, { near: around, country: center.country, bounds: boundsAround(around, size) });
       if (!hit || hit.weak) continue;
@@ -197,18 +215,36 @@ export async function geocodeRoute(
   const namesFor = (place: string, local?: string) =>
     [local, ...nameVariants(stripRegion(place, region)), place].filter((n, k, all): n is string => !!n && all.indexOf(n) === k).slice(0, MAX_NAMES);
 
+  // In Japan the search indexes know small places only under their Japanese names (English spellings find nothing or a namesake
+  // elsewhere), so there the local names are asked for up front and tried first; elsewhere only a miss is retried under one.
+  const localFirst = !!opts.rename && center.country === "jp";
+  const locals: Record<string, string> = localFirst ? await opts.rename!(places.map((p) => stripRegion(p, region)), region).catch(() => ({})) : {};
+  const localOf = (place: string) => locals[stripRegion(place, region)];
+
   for (const [i, place] of places.entries()) {
     if (signal?.aborted) throw aborted();
     onProgress?.(i, place);
-    points[i] = await search(i, namesFor(place));
+    points[i] = await search(i, namesFor(place, localOf(place)));
+  }
+
+  // A stop far off the line between the stops on either side of it is a namesake elsewhere ("西念寺" is a common name): the
+  // stops are in travel order, so it is searched again close to that line and, failing that, placed between its neighbors.
+  for (const i of spikes(points)) {
+    if (signal?.aborted) throw aborted();
+    const [before, after] = [points.slice(0, i).reverse().find(Boolean)!, points.slice(i + 1).find(Boolean)!];
+    const gap = distanceKm(before, after);
+    const mid = { lat: (before.lat + after.lat) / 2, lng: (before.lng + after.lng) / 2, country: before.country };
+    points[i] = await search(i, namesFor(places[i], localOf(places[i])), { at: mid, degrees: Math.max(gap, SPIKE_MIN_KM) / KM_PER_DEGREE });
   }
 
   let missing = places.map((_, i) => i).filter((i) => !points[i]);
-  const local = missing.length > 0 && opts.rename ? await opts.rename(missing.map((i) => stripRegion(places[i], region)), region).catch(() => ({})) : {};
-  for (const i of missing) {
-    if (signal?.aborted) throw aborted();
-    const renamed = (local as Record<string, string>)[stripRegion(places[i], region)];
-    if (renamed) points[i] = await search(i, namesFor(places[i], renamed));
+  if (!localFirst && missing.length > 0 && opts.rename) {
+    Object.assign(locals, await opts.rename(missing.map((i) => stripRegion(places[i], region)), region).catch(() => ({})));
+    for (const i of missing) {
+      if (signal?.aborted) throw aborted();
+      const renamed = localOf(places[i]);
+      if (renamed) points[i] = await search(i, namesFor(places[i], renamed));
+    }
   }
 
   // What no service knows by name sits between its neighbors on the route: the stops are in travel order.
@@ -231,7 +267,7 @@ export async function geocodeRoute(
   const failed: string[] = [];
   places.forEach((name, i) => {
     const point = points[i];
-    if (point) found.push({ name, point, uncertain: uncertain.has(i) });
+    if (point) found.push({ name, shortName: stripRegion(name, region), localName: localOf(name), point, uncertain: uncertain.has(i) });
     else failed.push(name);
   });
   return { found, failed };

@@ -64,7 +64,7 @@ export function tidyPlaces(places: unknown[], cap = MAX_PLACES): string[] {
 export async function localNames(names: string[], region: string | null, engine: AiEngine, signal?: AbortSignal): Promise<Record<string, string>> {
   if (names.length === 0) return {};
   const where = region ? `in ${region} (Japan if it is a Japanese area)` : "";
-  const prompt = `Give the name each of these places has on local maps ${where}: the original script (for Japanese places: kanji and kana, e.g. "Sainen-ji Temple" -> "西念寺", "Mt. Kabuto" -> "兜山"). Return ONLY a JSON object mapping each input exactly as written to its local name. If you do not know a place, map it to itself.
+  const prompt = `Give the name each of these places has on local maps ${where}: the original script (for Japanese places: kanji and kana, e.g. "Sainen-ji Temple" -> "西念寺", "Nishinosho Sta." -> "西ノ庄駅"). Use the exact spelling a map shows; do not guess characters for a name you are unsure of. Return ONLY a JSON object mapping each input exactly as written to its local name. If you do not know a place, map it to itself.
 Places: ${JSON.stringify(names)}`;
   const reply = await completeText(prompt, engine, signal, { num_predict: 600 });
   const match = reply.match(/\{[\s\S]*\}/);
@@ -168,9 +168,11 @@ export async function buildProject({ brief, sourceText, engine, mapboxToken, sig
   onProgress({ step: "geocode", done: places.length, total: places.length, label: "" });
 
   const mode = wantsWalking(brief) ? "walking" : "driving";
-  const waypoints: Waypoint[] = found.map(({ name, point }) => ({
+  // Stops are named in the language of the video: a Japanese video does not show "Sainen-ji Temple, Wakayama" over a Japanese script.
+  const englishOnly = brief.languages.length === 1 && brief.languages[0] === "en";
+  const waypoints: Waypoint[] = found.map(({ shortName, localName, point }) => ({
     id: crypto.randomUUID(),
-    name,
+    name: englishOnly ? shortName : localName ?? shortName,
     lat: point.lat,
     lng: point.lng,
     routeMode: mode,
@@ -208,7 +210,7 @@ export async function buildProject({ brief, sourceText, engine, mapboxToken, sig
       const withFacts = kind === "attraction" && !found[i].uncertain;
       await generateWaypointScriptStream(
         wp.name,
-        briefToScriptRequest(brief, waypoints.length, { index: i, kind, excerpt: kind === "attraction" ? findExcerpt(sourceText, wp.name) : undefined }),
+        briefToScriptRequest(brief, waypoints.length, { index: i, kind, excerpt: kind === "attraction" ? findExcerpt(sourceText, found[i].name) || findExcerpt(sourceText, found[i].shortName) || findExcerpt(sourceText, wp.name) : undefined }),
         engine,
         brief.name,
         (chunk) => {

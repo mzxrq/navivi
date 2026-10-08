@@ -30,8 +30,10 @@ from typing import Any, ClassVar, Dict, Final, List, Optional, Tuple
 from services import runtime_paths, tuning
 from services.ffconcat import concat_entry
 from services.tts import phrase_cache
+from services.tts.errors import TTSNotReady
 from services.gpu_cooldown import wait_for_gpu_cooldown
 from services.tts.artifacts import cut_off_ratio, remove_stray_bursts
+from services.localization.sentence_split import SENTENCE_END
 from services.localization.subtitle import SubtitleStyle
 from services.logger.logger import setup_logger
 
@@ -879,13 +881,14 @@ class _VenvEngineClient(IrodoriTTSClient):
             return await self._post_speech(payload)
 
 
-# [TTS] The fast engine: Kokoro, a small model with a few fixed Japanese voices (no cloning).
+# [TTS] The fast engine: Kokoro, a small model with fixed voices (no cloning): Japanese, and American and British English.
 class KokoroTTSClient(_VenvEngineClient):
     _SERVER_DIR: Final[Path] = runtime_paths.engine_dir("Kokoro-TTS")
     _SERVER_VENV_PYTHON: Final[Path] = runtime_paths.venv_python(_SERVER_DIR)
     _ACTIVITY_FILE: Final[Path] = _SERVER_DIR / ".last_active"
     _PIDFILE: Final[Path] = _SERVER_DIR / ".server.pid"
     _READY_FILE: Final[Path] = _SERVER_DIR / ".ready"
+    _ENGLISH_READY_FILE: Final[Path] = _SERVER_DIR / ".ready_en"  # the English voices and language data are in
     _PROCESS_MARKER: ClassVar[str] = "kokoro_server"
     _SERVER_NAME: ClassVar[str] = "Kokoro TTS"
     _SERVER_SCRIPT: ClassVar[str] = "kokoro_server.py"
@@ -905,7 +908,21 @@ class KokoroTTSClient(_VenvEngineClient):
     def _voice_sha256(self) -> Optional[str]:
         return None  # the voice is built into the model
 
+    @classmethod
+    def english_ready(cls) -> bool:
+        return cls.is_ready() and cls._ENGLISH_READY_FILE.exists()
+
+    @classmethod
+    def require_voice(cls, voice: str) -> None:
+        """Raises, with what to do, when `voice` speaks English and the English voices are not set up."""
+        if tuning.kokoro_language(voice) != "j" and not cls.english_ready():
+            raise TTSNotReady(
+                f"The voice '{voice}' speaks English, which the fast voice does not have yet. "
+                "Open Settings > Voice and press Add English voices."
+            )
+
     async def call_api(self, text: str) -> bytes:
+        self.require_voice(self.config.voice)
         payload = {"input": text, "voice": self.config.voice, "speed": self.config.speed}
         key = phrase_cache.cache_key({"engine": "kokoro", **payload}, None)
         cached = self._cached_line(key)
@@ -1013,6 +1030,8 @@ class Qwen3TTSClient(_VenvEngineClient):
 def make_tts_client(settings: Optional[Dict[str, Any]], output_dir: Path) -> IrodoriTTSClient:
     config = tts_config_from_settings(settings)
     client_class = {"kokoro": KokoroTTSClient, "qwen3": Qwen3TTSClient}.get(config.engine, IrodoriTTSClient)
+    if client_class is KokoroTTSClient:
+        KokoroTTSClient.require_voice(config.voice)  # stop before the run, not as silent narration halfway through
     return client_class(output_dir=output_dir, config=config)
 
 
@@ -1021,7 +1040,7 @@ def stop_all_tts_servers() -> None:
     KokoroTTSClient.stop_server()
     Qwen3TTSClient.stop_server()
 
-_SENTENCE_END = re.compile(r"(?<=[。！？!?\n])")
+_SENTENCE_END = SENTENCE_END
 _CLAUSE_END = re.compile(r"(?<=[、，,])")
 
 

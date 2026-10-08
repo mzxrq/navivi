@@ -24,6 +24,7 @@ from .gps_step import process_gps
 from .helpers import (
     attraction_videos_enabled,
     logger,
+    project_export_dir,
     project_subtitle_dir,
     project_video_dir,
     skip_rich_media,
@@ -430,7 +431,9 @@ def render_from_timeline(
     move_timed_narration(timeline_data)
 
     if not output_video_path:
-        output_video_path = str(project_video_dir(project_dir) / "01_overview_rerendered.mp4")
+        export_dir = project_export_dir(project_dir)
+        export_dir.mkdir(parents=True, exist_ok=True)
+        output_video_path = str(export_dir / f"{project_dir.name}.mp4")
 
     print(f"NLE Engine: Re-rendering video from {timeline_path.name}...")
     logger.info("NLE Engine: Re-rendering video from %s...", timeline_path.name)
