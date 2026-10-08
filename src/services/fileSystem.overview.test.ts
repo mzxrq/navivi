@@ -34,7 +34,8 @@ vi.mock("./db", () => ({
   },
 }));
 
-import { saveProjectData } from "./fileSystem";
+import { readTextFile } from "@tauri-apps/plugin-fs";
+import { readRenderedOverviewNarration, saveProjectData } from "./fileSystem";
 
 beforeEach(() => {
   mocks.written = {};
@@ -62,5 +63,32 @@ describe("saving the overview narration", () => {
     const config = await save({});
     expect(config.overview_narration).toBe("");
     expect(config).not.toHaveProperty("overview_narration_is_auto");
+  });
+});
+
+describe("reading back the script a render wrote", () => {
+  const files = (map: Record<string, unknown>) =>
+    vi.mocked(readTextFile).mockImplementation((path: any) =>
+      path in map ? Promise.resolve(JSON.stringify(map[path])) : Promise.reject(new Error("missing")),
+    );
+
+  it("takes the automatic script from job_config.json", async () => {
+    files({ "C:/p/job_config.json": { overview_narration: "{start}案内", overview_narration_is_auto: true, overview_narration_source_ids: "a,b" } });
+    expect(await readRenderedOverviewNarration("C:/p")).toEqual({
+      overview_narration: "{start}案内", overview_narration_is_auto: true, overview_narration_source_ids: "a,b",
+    });
+  });
+
+  it("falls back to the pipeline's copy when the config was saved blank", async () => {
+    files({
+      "C:/p/job_config.json": { overview_narration: "" },
+      "C:/p/.navivi/overview_narration.json": { source_ids: "a,b", script: "{start}保存" },
+    });
+    expect(await readRenderedOverviewNarration("C:/p")).toMatchObject({ overview_narration: "{start}保存", overview_narration_is_auto: true });
+  });
+
+  it("never offers a script the user wrote, and nothing when there is none", async () => {
+    files({ "C:/p/job_config.json": { overview_narration: "自分の案内", overview_narration_is_auto: false } });
+    expect(await readRenderedOverviewNarration("C:/p")).toBeNull();
   });
 });

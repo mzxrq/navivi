@@ -518,6 +518,15 @@ class _OverviewRenderMixin:
         if len(pin_obstacles):
             route_obstacle_arr = np.vstack([route_obstacle_arr, pin_obstacles])
 
+        if self.config.get("overview_style") == "course" and not preview_recap_only:
+            result = self._render_course_overview(
+                current_bg, w, h, fps, points, smooth_path, mode_breakpoints, cum_smooth_dist,
+                total_smooth_dist, active_popups, route_obstacle_arr, summary, overview_path,
+                bounding_box=bounding_box,
+            )
+            self.pending_overview_checkpoint = save_fingerprint
+            return result
+
         logger.info(f"Rendering Overview Map ({duration}s)")
         overview_path = str(self.out_dir / "01_overview.mp4")
         video = VideoExporter(overview_path, w, h, fps)
@@ -1115,7 +1124,7 @@ class _OverviewRenderMixin:
             video.write(self.last_frame)
 
         hard_ended = False
-        if stop_popup and self.config.get("enable_ending_highlight", True):
+        if stop_popup and self.config.get("enable_ending_highlight", True) and self.config.get("overview_style") != "course":
             # However fit_ending above actually split the remaining voice
             # (it may have favored the summary hold over this), what's
             # STILL left once that hold has actually been written is what

@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 
 import json
+import math
 import numpy as np
 import pandas as pd
 import pydeck as pdk
@@ -76,6 +77,23 @@ def build_pydeck_map(
     return output_html_path
 
 
+def arrival_time_fraction(frac: float, seconds: float, slow_seconds: float, end_speed: float = 0.4) -> float:
+    """When (as a fraction of a walk lasting `seconds`) the walker reaches
+    `frac` of its distance, if it walks at full speed and then slows down
+    evenly to `end_speed` of it over the last `slow_seconds` (at most half the
+    walk). It still arrives at 1.0: only the pace inside the walk changes."""
+    if slow_seconds <= 0 or seconds <= 0 or frac <= 0 or frac >= 1:
+        return min(1.0, max(0.0, frac))
+    a = max(0.5, 1.0 - slow_seconds / seconds)  # time fraction where slowing starts
+    k = (1.0 - end_speed) / (2.0 * (1.0 - a))
+    whole = 1.0 - (1.0 - end_speed) * (1.0 - a) / 2.0  # distance at u=1, in full-speed units
+    target = min(1.0, max(0.0, frac)) * whole
+    if target <= a:
+        return target
+    x = (1.0 - math.sqrt(max(0.0, 1.0 - 4.0 * k * (target - a)))) / (2.0 * k)
+    return min(1.0, a + x)
+
+
 def interpolate_route_data(
     df_raw: pd.DataFrame,
     leg_duration: float,
@@ -83,11 +101,14 @@ def interpolate_route_data(
     total_leg_km: float,
     leg_dist_km: list,
     segment_plan: "list[tuple[int, float]] | None" = None,
+    arrival_slow_seconds: float = 0.0,
 ) -> pd.DataFrame:
     """`segment_plan`: [(last raw point index of a segment, seconds it takes)]
     in route order, covering the whole leg. Each segment then takes exactly its
     own time (constant speed inside it), so a leg cut at stop-bys can give every
-    piece its own length. None: one constant speed over the whole leg."""
+    piece its own length. None: one constant speed over the whole leg.
+    `arrival_slow_seconds`: the walker slows down over this long before each
+    stop (see arrival_time_fraction); 0 keeps a constant speed."""
     # [NOTE] [Animation] Each raw route point gets a timestamp proportional
     # to its cumulative distance along the leg (not evenly spaced in time),
     # so a constant-speed vehicle really does move at constant speed once
@@ -104,10 +125,13 @@ def interpolate_route_data(
             end_idx, seconds = segment_plan[seg]
             d0, d1 = leg_dist_km[seg_start_idx], leg_dist_km[min(end_idx, len(leg_dist_km) - 1)]
             frac = 1.0 if d1 <= d0 else min(1.0, max(0.0, (d - d0) / (d1 - d0)))
-            times.append(seg_start_time + frac * seconds)
+            times.append(seg_start_time + arrival_time_fraction(frac, seconds, arrival_slow_seconds) * seconds)
         df_raw["time_sec"] = times
     elif total_leg_km > 0:
-        df_raw["time_sec"] = [(d / total_leg_km) * leg_duration for d in leg_dist_km]
+        df_raw["time_sec"] = [
+            arrival_time_fraction(d / total_leg_km, leg_duration, arrival_slow_seconds) * leg_duration
+            for d in leg_dist_km
+        ]
     else:
         df_raw["time_sec"] = np.linspace(0, leg_duration, num=len(df_raw))
 

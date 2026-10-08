@@ -78,9 +78,10 @@ def test_a_leg_cut_by_a_connected_stopby_gets_an_attraction_after_each_piece(tmp
     assert all(f == 0.8 for n, f in _order(path) if n.startswith("02_"))
 
 
-def test_attraction_of_an_unconnected_stopby_is_not_used(tmp_path):
+def _stopby_timeline(tmp_path, b_extra=None):
     (tmp_path / "job_config.json").write_text(json.dumps({"waypoints": [
-        {"id": "a"}, {"id": "b", "isStopBy": True}, {"id": "c", "isStopBy": True, "connectToRoute": True}, {"id": "d"},
+        {"id": "a"}, {"id": "b", "isStopBy": True, **(b_extra or {})},
+        {"id": "c", "isStopBy": True, "connectToRoute": True}, {"id": "d"},
     ]}), encoding="utf-8")
     route = tmp_path / "assets/video/route"
     attr = tmp_path / "assets/video/attraction"
@@ -90,9 +91,24 @@ def test_attraction_of_an_unconnected_stopby_is_not_used(tmp_path):
     attractions = [_touch(attr / f"04_attraction_{i:02d}_x.mp4") for i in range(4)]
     path = build_timeline(video_paths=[leg], attraction_videos=attractions, final_videos=[leg] + attractions,
                           project_dir=str(tmp_path))
-    names = [n for n, _ in _order(path)]
+    return [n for n, _ in _order(path)]
+
+
+def test_attraction_of_an_unconnected_stopby_is_not_used(tmp_path):
+    names = _stopby_timeline(tmp_path)
     assert "04_attraction_01_x.mp4" not in names  # b: stop-by not connected to the route
     assert "04_attraction_02_x.mp4" in names  # c: connected, still used
+
+
+def test_the_course_style_uses_every_stopby_with_a_photo(tmp_path):
+    from services.vdoprocessing.stopby_visits import set_visit_all_stopbys
+
+    set_visit_all_stopbys(True)
+    try:
+        names = _stopby_timeline(tmp_path, {"popup_image": ["b.jpg"]})
+    finally:
+        set_visit_all_stopbys(False)
+    assert "04_attraction_01_x.mp4" in names
 
 
 def test_subtitles_are_written_into_the_timeline_to_burn_at_export(tmp_path, monkeypatch):

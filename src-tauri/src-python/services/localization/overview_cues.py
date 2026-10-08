@@ -10,6 +10,10 @@ never changing a word of the script:
     {go}  before the first later sentence of that stop's passage that sets
           off for somewhere else ("次は…", "ここから…"): the stop is described
           until there, then the walker heads on
+    {start} before "これが全体のルートです。" (the map appears; the opening
+          before it plays over the intro, and its names are not stops), and
+          {route} before the next sentence (the route is traced from there)
+    {extras} before "茶色で示した地点は…" (the stop-bys appear; not stops either)
 
 Tags the user wrote win: a script with any {n} keeps its own, and one with any
 {go} keeps its own.
@@ -32,6 +36,9 @@ TRANSITION_OPENERS = (
 )
 # ...or that ends by heading somewhere.
 TRANSITION_ENDINGS = re.compile(r"(へ|に)(向かい|進み|歩き|移動し|戻り)(ます|ましょう)[。！!]?$")
+
+_ROUTE_PIVOT = re.compile(r"全体のルート|ルート全体|ルートの全体")
+_EXTRAS = re.compile(r"茶色で示した|茶色のマーカー|追加の見どころ")
 
 # Dropped from a name to also find its short form (加太駅 -> 加太).
 _NAME_SUFFIXES = ("駅", "神社", "寺", "城", "公園", "港", "橋", "展望台", "資料館", "博物館")
@@ -68,9 +75,22 @@ def auto_tag_overview(script: Optional[str], labels: Sequence[str]) -> Optional[
     tags = cue_tags(script)
     has_numbers = any(t.isdigit() for t in tags)
     has_go = "{go}" in script
-    if has_numbers and has_go:
-        return script
     sentences = _sentences(script)
+    # "これが全体のルートです。": the map appears there, so the opening before it plays
+    # over the intro ({start}); the route is traced from the next sentence ({route}).
+    # "茶色で示した地点は…": the stop-bys appear ({extras}); their names are not stops.
+    pivot = None if "start" in tags else next((i for i, s in enumerate(sentences) if _ROUTE_PIVOT.search(s)), None)
+    extras = None if "extras" in tags else next((i for i, s in enumerate(sentences) if _EXTRAS.search(s)), None)
+    marks: dict = {}
+    if pivot is not None:
+        marks.setdefault(pivot, []).append("{start}")
+        if pivot + 1 < len(sentences) and "route" not in tags:
+            marks.setdefault(pivot + 1, []).append("{route}")
+    if extras is not None:
+        marks.setdefault(extras, []).append("{extras}")
+    limit = extras if extras is not None else len(sentences)
+    if has_numbers and has_go:
+        return _with_marks(sentences, marks)
 
     # sentence index -> the stop number whose description starts there
     starts = {}
@@ -81,14 +101,14 @@ def auto_tag_overview(script: Optional[str], labels: Sequence[str]) -> Optional[
                 if t.isdigit():
                     starts.setdefault(i, int(t))
     else:
-        after = -1
+        after = -1 if pivot is None else pivot  # names in the opening introduce, they are not stops
         for n, label in enumerate(labels, start=1):
             # The full name first: a short form (加太 for 加太駅) is often also
             # the town's name, so it only counts when the full one never appears.
             mentions = []
             for variants in (name_variants(label)[:1], name_variants(label)):
                 mentions = [
-                    i for i in range(after + 1, len(sentences))
+                    i for i in range(after + 1, limit)
                     if i not in starts and any(v in sentences[i] for v in variants)
                 ]
                 if mentions:
@@ -102,7 +122,7 @@ def auto_tag_overview(script: Optional[str], labels: Sequence[str]) -> Optional[
                 starts[hit] = n
                 after = hit
     if not starts:
-        return script
+        return _with_marks(sentences, marks)
 
     # {go}: in each stop's passage, the first transition after its opening sentence
     go_before = set()
@@ -122,4 +142,14 @@ def auto_tag_overview(script: Optional[str], labels: Sequence[str]) -> Optional[
             lead = len(s) - len(s.lstrip())  # keep a line's indent before the tag
             s = s[:lead] + "{%d}" % starts[i] + s[lead:]
         out.append(s)
+    return _with_marks(_sentences("".join(out)), marks)
+
+
+def _with_marks(sentences: List[str], marks: dict) -> str:
+    """The sentences joined, each tag in marks[i] before sentence i (after its indent)."""
+    out = list(sentences)
+    for i, tags in marks.items():
+        s = out[i]
+        lead = len(s) - len(s.lstrip())
+        out[i] = s[:lead] + "".join(tags) + s[lead:]
     return "".join(out)

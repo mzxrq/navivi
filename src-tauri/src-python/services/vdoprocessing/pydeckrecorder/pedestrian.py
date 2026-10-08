@@ -1158,6 +1158,7 @@ def render_residential_leg_pydeck(
     hud_card_png: Optional[Callable[[float, float], bytes]] = None,
     theme: Optional[str] = None,
     bottom_reserve_px: float = 0.0,
+    arrival_slow_seconds: float = 0.0,
 ) -> List[str]:
     """Renders one leg as a straight-down, locked-camera video with a live
     turn-by-turn HUD (destination banner + time/distance card) -- the
@@ -1328,7 +1329,8 @@ def render_residential_leg_pydeck(
     total_frames = max(10, int(leg_duration * fps))
 
     smooth_df = interpolate_route_data(
-        df_raw, leg_duration, total_frames, total_leg_km, leg_dist_km, segment_plan=segment_plan
+        df_raw, leg_duration, total_frames, total_leg_km, leg_dist_km, segment_plan=segment_plan,
+        arrival_slow_seconds=arrival_slow_seconds,
     )
 
     step_km = [0.0] + [
@@ -1663,6 +1665,7 @@ async def _play_stopby_photo_pause(
                 const img = document.getElementById('stopby-preview'); if (img) img.remove();
             }"""
         )
+        await cut_to_new_clip()
         return idx
 
     # Pop-in: card + leader line fade/ease in together at their fixed,
@@ -1727,16 +1730,83 @@ async def _play_stopby_photo_pause(
     # viewer never actually got to register it fullscreen.
     grown_png = await page.screenshot(**_FRAME_SHOT)
     dissolve = has_attraction and bool(stopby.get("dissolve_into_attraction"))
-    # With a dissolve into the attraction video the photo is not held: the clip
-    # ends as it reaches fullscreen and the dissolve starts right from there.
-    for _ in range(1 if dissolve else max(1, int(freeze_sec * fps))):
+    # With a dissolve (or any cut to an attraction video), the photo is not held:
+    # the clip ends as it reaches fullscreen and hands off to the video.
+    for _ in range(1 if has_attraction else max(1, int(freeze_sec * fps))):
         await write_frame(grown_png)
 
-    if has_attraction and dissolve:
+    async def reopen_and_shrink(full_hold_sec: float) -> None:
+        """The new piece opens on the photo fullscreen and shrinks into its card
+        above the marker (as a leg opens on its photo), holds, then fades out."""
         await page.evaluate(
-            "() => { const img = document.getElementById('stopby-preview'); if (img) img.remove(); }"
+            """([ax, ay, mx, my]) => {
+                const img = document.getElementById('stopby-preview');
+                if (img) { img.style.filter = ''; img.style.opacity = '1'; }
+                const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                svg.id = 'stopby-leader';
+                Object.assign(svg.style, {
+                    position: 'fixed', inset: '0', width: '100vw', height: '100vh',
+                    zIndex: '9997', pointerEvents: 'none',
+                });
+                const line = document.createElementNS(svg.namespaceURI, 'line');
+                line.id = 'stopby-leader-line';
+                line.setAttribute('x1', ax); line.setAttribute('y1', ay);
+                line.setAttribute('x2', mx); line.setAttribute('y2', my);
+                line.setAttribute('stroke', 'white'); line.setAttribute('stroke-width', '3');
+                line.setAttribute('opacity', '0');
+                svg.appendChild(line);
+                document.body.appendChild(svg);
+            }""",
+            [anchor_x, anchor_y, marker_x, marker_y],
         )
+        full_png = await page.screenshot(**_FRAME_SHOT)
+        for _ in range(max(1, int(full_hold_sec * fps))):
+            await write_frame(full_png)
+        shrink_frames = max(1, int(0.6 * fps))
+        for i in range(shrink_frames):
+            t = _ease_in_out_cubic((i + 1) / shrink_frames)
+            box = [f + (c - f) * t for f, c in zip(full_box, card_box)]
+            await page.evaluate(
+                """([left, top, w, h, radius, lineAlpha]) => {
+                    const img = document.getElementById('stopby-preview');
+                    if (img) {
+                        img.style.left = left + 'px'; img.style.top = top + 'px';
+                        img.style.width = w + 'px'; img.style.height = h + 'px';
+                        img.style.borderRadius = radius + 'px';
+                    }
+                    const line = document.getElementById('stopby-leader-line');
+                    if (line) line.setAttribute('opacity', lineAlpha);
+                }""",
+                [*box, 15.0 * t, max(0.0, t * 2.0 - 1.0)],
+            )
+            await write_frame(await page.screenshot(**_FRAME_SHOT))
+        card_png = await page.screenshot(**_FRAME_SHOT)
+        for _ in range(max(1, int(tuning.STOPBY_CARD_HOLD_SECONDS * fps))):
+            await write_frame(card_png)
+        fade_frames = max(1, int(0.4 * fps))
+        for i in range(fade_frames):
+            a = 1.0 - (i + 1) / fade_frames
+            await page.evaluate(
+                """([a]) => {
+                    const img = document.getElementById('stopby-preview');
+                    if (img) img.style.opacity = a;
+                    const line = document.getElementById('stopby-leader-line');
+                    if (line) line.setAttribute('opacity', a);
+                }""",
+                [a],
+            )
+            await write_frame(await page.screenshot(**_FRAME_SHOT))
+        await page.evaluate(
+            """() => {
+                const svg = document.getElementById('stopby-leader'); if (svg) svg.remove();
+                const img = document.getElementById('stopby-preview'); if (img) img.remove();
+            }"""
+        )
+
+    if has_attraction and dissolve:
         await cut_to_new_clip()
+        # Back from the stop-by's attraction video: its photo, then the walk.
+        await reopen_and_shrink(tuning.STOPBY_REOPEN_HOLD_SECONDS)
         return
 
     if has_attraction:
@@ -1761,50 +1831,14 @@ async def _play_stopby_photo_pause(
             )
             await write_frame(await page.screenshot(**_FRAME_SHOT))
 
-        await page.evaluate(
-            "() => { const img = document.getElementById('stopby-preview'); if (img) img.remove(); }"
-        )
         await cut_to_new_clip()
+        await reopen_and_shrink(tuning.STOPBY_REOPEN_HOLD_SECONDS)
         return
 
+    # The canvas never stopped rendering across the cut: the walk's map/trail
+    # are underneath the photo the whole time.
     await cut_to_new_clip()
-
-    fullscreen_png = await page.screenshot(**_FRAME_SHOT)
-    for _ in range(max(1, int(freeze_sec * fps))):
-        await write_frame(fullscreen_png)
-
-    # Shrinks back down to nothing right on the marker -- the walk's own
-    # map/trail/dot are already sitting underneath, unchanged, the whole
-    # time (the canvas never stopped rendering across the cut).
-    vanish_size = 140.0
-    vanish_box = (marker_x - vanish_size / 2.0, marker_y - vanish_size / 2.0, vanish_size, vanish_size)
-    vanish_frames = max(1, int(0.5 * fps))
-    for i in range(vanish_frames):
-        t = _ease_in_out_cubic((i + 1) / vanish_frames)
-        left = full_box[0] + (vanish_box[0] - full_box[0]) * t
-        top = full_box[1] + (vanish_box[1] - full_box[1]) * t
-        w = full_box[2] + (vanish_box[2] - full_box[2]) * t
-        h = full_box[3] + (vanish_box[3] - full_box[3]) * t
-        radius = (vanish_size / 2.0) * t
-        alpha = 1.0 - t
-        await page.evaluate(
-            """([left, top, w, h, radius, alpha]) => {
-                const img = document.getElementById('stopby-preview');
-                if (!img) return;
-                img.style.left = left + 'px';
-                img.style.top = top + 'px';
-                img.style.width = w + 'px';
-                img.style.height = h + 'px';
-                img.style.borderRadius = radius + 'px';
-                img.style.opacity = alpha;
-            }""",
-            [left, top, w, h, radius, alpha],
-        )
-        await write_frame(await page.screenshot(**_FRAME_SHOT))
-
-    await page.evaluate(
-        "() => { const img = document.getElementById('stopby-preview'); if (img) img.remove(); }"
-    )
+    await reopen_and_shrink(freeze_sec)
 
 
 async def _record_leg(

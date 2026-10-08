@@ -54,6 +54,30 @@ export function overviewNarrationFields(metadata: ProjectMetadata) {
   };
 }
 
+// The automatic overview script a render wrote: job_config.json, else the pipeline's own copy in .navivi.
+export async function readRenderedOverviewNarration(dir: string): Promise<Partial<ProjectMetadata> | null> {
+  const read = async (...parts: string[]) => {
+    try {
+      return JSON.parse(await readTextFile(await join(dir, ...parts)));
+    } catch {
+      return null;
+    }
+  };
+  const config = await read(fileSystem.configFile);
+  if (config?.overview_narration_is_auto === true && (config.overview_narration || "").trim()) {
+    return {
+      overview_narration: config.overview_narration,
+      overview_narration_is_auto: true,
+      overview_narration_source_ids: config.overview_narration_source_ids,
+    };
+  }
+  const saved = await read(fileSystem.metaFolder, "overview_narration.json");
+  if ((saved?.script || "").trim()) {
+    return { overview_narration: saved.script, overview_narration_is_auto: true, overview_narration_source_ids: saved.source_ids };
+  }
+  return null;
+}
+
 export const saveProjectData = async (
   waypoints: any[],
   routeSegments: any[],

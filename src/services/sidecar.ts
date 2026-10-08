@@ -18,19 +18,27 @@ const CANCELLED = /process was cancelled/i;
 
 const messageOf = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
-// main.py prints one JSON result as the last line of stdout; anything before it is progress or library noise.
+// main.py ends stdout with one JSON result, on one line or indented over several (project modes); anything before it is noise.
 export function parseReply<T>(stdout: string): SidecarReply<T> {
-  const last = stdout.trim().split("\n").pop()?.trim() ?? "";
-  try {
-    const parsed = JSON.parse(last);
-    if (parsed && typeof parsed === "object" && typeof parsed.success === "boolean") return parsed;
-  } catch {
-    // fall through to the error below
+  const text = stdout.trim();
+  const last = text.split("\n").pop()?.trim() ?? "";
+  const candidates = [last, text.slice(text.lastIndexOf("\n{") + 1)];
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(candidate);
+      if (parsed && typeof parsed === "object" && typeof parsed.success === "boolean") return parsed;
+    } catch {
+      // try the next form
+    }
   }
   // Show what came back (a library's stray print, a crash message) so the toast says more than "unexpected".
   const seen = last ? `: ${last.length > 300 ? `${last.slice(0, 300)}…` : last}` : " (it printed nothing)";
   return { success: false, error: `The media pipeline returned an unexpected reply${seen}` };
 }
+
+// Blueprint calls share one process slot (a new one kills the running one); background asks check this first.
+let inFlight = 0;
+export const sidecarBusy = () => inFlight > 0;
 
 // A pipeline stage run on a project: resolves with the process's stdout, rejects with its error text.
 export function runStage(configPath: string, mode: string): Promise<string> {
@@ -50,6 +58,7 @@ const READ_ONLY_MODES = new Set([
 // A utility mode with its input (a string is passed as is, anything else as JSON); never throws.
 export async function callSidecar<T>(mode: string, input: string | object = {}): Promise<SidecarReply<T>> {
   const payload = typeof input === "string" ? input : JSON.stringify(input);
+  inFlight += 1;
   try {
     const command = READ_ONLY_MODES.has(mode) ? "run_python_utility" : "run_python_blueprint";
     return parseReply<T>(await invoke<string>(command, { action: mode, payload }));
@@ -57,6 +66,8 @@ export async function callSidecar<T>(mode: string, input: string | object = {}):
     if (isSetupRequired(e)) announceSetupRequired();
     const error = messageOf(e);
     return { success: false, error, cancelled: CANCELLED.test(error) };
+  } finally {
+    inFlight -= 1;
   }
 }
 

@@ -27,9 +27,11 @@ from .helpers import (
 
 
 def is_unvisited_stopby(waypoint: dict) -> bool:
-    """A stop-by the route only passes near (not connected to it): the walker
-    never goes there, so it gets no narration audio and no attraction video."""
-    return isinstance(waypoint, dict) and bool(waypoint.get("isStopBy")) and not waypoint.get("connectToRoute")
+    """A stop-by the walker never goes to (see stopby_visits.visits_stopby), so
+    it gets no narration audio and no attraction video."""
+    from services.vdoprocessing.stopby_visits import visits_stopby
+
+    return isinstance(waypoint, dict) and bool(waypoint.get("isStopBy")) and not visits_stopby(waypoint)
 
 
 def is_skipped(waypoint: dict) -> bool:

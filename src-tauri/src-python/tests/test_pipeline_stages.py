@@ -49,7 +49,7 @@ def stubbed_pipeline(monkeypatch):
     monkeypatch.setattr(
         pipeline, "compute_leg_narration_splits", lambda videos, *a, **k: (videos, {})
     )
-    monkeypatch.setattr(pipeline, "render_intro_clip", lambda *_: None)
+    monkeypatch.setattr(pipeline, "render_intro_clip", lambda *a, **k: None)
     monkeypatch.setattr(pipeline, "render_outro_clip", lambda *_: None)
     monkeypatch.setattr(pipeline, "build_timeline", lambda *a, **k: "timeline.json")
 

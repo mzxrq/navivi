@@ -1,5 +1,5 @@
 // Mirrors services/localization/cues.CUE_RE: tags are never spoken.
-const CUE = /\{(start|arrive|end|distance|goPre\d+|go|\d+)\}/g;
+const CUE = /\{(start|arrive|end|distance|route|extras|goPre\d+|go|\d+)\}/g;
 
 export interface OverviewLength {
   chars_per_second: number;
@@ -21,6 +21,17 @@ export function lengthVerdict(seconds: number, { min_seconds, max_seconds }: Ove
   if (seconds < min_seconds - tolerance) return "short";
   if (seconds > max_seconds + tolerance) return "long";
   return "ok";
+}
+
+// The opening (before {start}, heard over the intro photos) and the rest; joinOpening puts them back.
+export function splitOpening(text: string): { opening: string; body: string } {
+  const at = text.indexOf("{start}");
+  return at > 0 ? { opening: text.slice(0, at), body: text.slice(at + "{start}".length) } : { opening: "", body: text };
+}
+
+export function joinOpening(opening: string, body: string): string {
+  if (!opening.trim()) return body;
+  return opening + (body.includes("{start}") ? "" : "{start}") + body;
 }
 
 // The stop number the next {n} button inserts: one after the highest already in the script.

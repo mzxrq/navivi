@@ -58,3 +58,24 @@ describe("ScriptInput cue buttons", () => {
     expect(screen.queryByRole("button", { name: /walk starts moving/ })).toBeNull();
   });
 });
+
+describe("ScriptInput Auto-Write", () => {
+  const show = (props: Partial<Parameters<typeof ScriptInput>[0]>) => {
+    const onGenerate = vi.fn();
+    render(
+      <I18nProvider i18n={i18n}>
+        <ScriptInput showLabel={false} value="" onChange={vi.fn()} onGenerate={onGenerate} isGenerating={false} aiEnabled {...props} />
+      </I18nProvider>,
+    );
+    return { onGenerate, button: screen.getByRole("button", { name: "Auto-Write" }) as HTMLButtonElement };
+  };
+
+  it("needs a prompt, unless the text comes from elsewhere", () => {
+    expect(show({}).button.disabled).toBe(true);
+    cleanup();
+    const { button, onGenerate } = show({ promptOptional: true });
+    expect(button.disabled).toBe(false);
+    fireEvent.click(button);
+    expect(onGenerate).toHaveBeenCalled();
+  });
+});

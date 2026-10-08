@@ -5,6 +5,9 @@ import json
 import math
 import re
 from services.localization.cues import tags_at_sentence_start
+from services.localization.overview_script import course_summary, course_taglines, overview_style
+from services.localization.route_brief import load_brief
+from services.vdoprocessing.stopby_visits import visits_stopby
 from pathlib import Path
 from typing import Any, Optional
 
@@ -333,7 +336,11 @@ def _checkpoint_parts(
 # route.photos: a new or upscaled pop-up photo has to reach the overview and legs.
 # route.markers: a new pin picture too (absent, so unchanged, for a project with none).
 # route.map_style: the video's map style or tile sharpness (absent, so unchanged, until a project sets one).
-ROUTE_CHECKPOINT_PARTS = ("route.waypoints", "route.overview_flags", "route.photos", "route.markers", "route.map_style")
+# route.overview_voice: the overview's cue times and voice length (set by render_route_video).
+ROUTE_CHECKPOINT_PARTS = (
+    "route.waypoints", "route.overview_flags", "route.photos", "route.markers", "route.map_style",
+    "route.overview_voice",
+)
 
 
 def _describe_changed_parts(old: dict, new: dict, limit: int = 25) -> str:
@@ -402,6 +409,10 @@ def _adaptive_overview_padding(route_df: pd.DataFrame) -> float:
     return tuning.OVERVIEW_PADDING_MAX_SPAN
 
 
+# The overview map's size (MapFetcher.fetch_image's default output_size).
+OVERVIEW_FRAME_SIZE = (1920, 1080)
+
+
 def _reserve_overview_bands(
     bbox: dict, frame_size: tuple[int, int], top_px: float, bottom_px: float
 ) -> dict:
@@ -429,6 +440,37 @@ def _reserve_overview_bands(
         "max_lat": merc_lat(top_y),
         "min_lon": mid_lon - half_lon,
         "max_lon": mid_lon + half_lon,
+    }
+
+
+def overview_bounding_box(fetcher, route_df: pd.DataFrame, project_config: dict) -> dict:
+    """The overview map's box: the route padded by its span; in the "course"
+    style also clear of the headline above and the subtitles/cards below."""
+    bbox = fetcher.get_bounding_box(route_df, padding_factor=_adaptive_overview_padding(route_df))
+    if overview_style(project_config) == "course":
+        bbox = _reserve_overview_bands(
+            bbox, OVERVIEW_FRAME_SIZE,
+            OVERVIEW_FRAME_SIZE[1] * tuning.COURSE_TOP_BAND_FRACTION,
+            OVERVIEW_FRAME_SIZE[1] * tuning.COURSE_BOTTOM_BAND_FRACTION,
+        )
+    return bbox
+
+
+def _course_config(project_config: dict, config_path: Path) -> dict:
+    """The overview type, plus what the "course" overview needs from the route:
+    headline taglines and the stats card's numbers (the same the script speaks)."""
+    style = overview_style(project_config)
+    if style != "course":
+        return {"overview_style": style}
+    try:
+        brief = load_brief(str(config_path))
+    except (OSError, ValueError, KeyError) as exc:
+        logger.warning("Course overview: could not read the route brief (%s).", exc)
+        return {"overview_style": style}
+    return {
+        "overview_style": style,
+        "overview_taglines": course_taglines(project_config, brief),
+        "course_summary": course_summary(brief),
     }
 
 
@@ -515,6 +557,12 @@ def render_route_video(
     checkpoint_parts = _checkpoint_parts(
         project_config_path, cleaned_route, audio_durations, audio_pauses
     )
+    if overview_cue_times:
+        # Where the overview voice lands (it moves with the intro's length).
+        checkpoint_parts["route.overview_voice"] = _short_hash(
+            {"cues": {k: round(float(v), 2) for k, v in overview_cue_times.items()},
+             "audio": round(float(overview_audio_duration or 0.0), 2)}
+        )
     overview_stale = False
     if is_full_pipeline_render and not force and manifest_path.exists():
         try:
@@ -645,9 +693,7 @@ def render_route_video(
     # constructing (and re-loading/re-normalizing) a second one.
     fetcher = MapFetcher(job_config=job_config_mgr or JobConfigManager(str(config_path)))
 
-    bbox = fetcher.get_bounding_box(
-        route_df, padding_factor=_adaptive_overview_padding(route_df)
-    )
+    bbox = overview_bounding_box(fetcher, route_df, project_config)
 
     map_output_path, extent, (img_w, img_h) = fetcher.fetch_image(
         bounding_box=bbox, output_filename=map_output_path
@@ -1151,8 +1197,7 @@ def render_route_video(
             max_wait = float(settings.get("max_early_arrival_seconds", MAX_EARLY_ARRIVAL_SECONDS))
             stop_positions = [
                 p for p in range(start_pos + 1, min(end_pos, len(waypoints)))
-                if waypoints[p].get("connectToRoute") and waypoints[p].get("isStopBy")
-                and waypoints[p].get("popup_image") and not waypoints[p].get("skipAssetGeneration")
+                if visits_stopby(waypoints[p]) and waypoints[p].get("popup_image")
             ]
             piece_targets = stop_positions + [end_pos]
             piece_plans: dict = {}
@@ -1424,6 +1469,10 @@ def render_route_video(
             overview_tagged_script(project_config, config_path.parent)
         ),
         "overview_cue_wait_seconds": float(settings.get("overview_cue_wait_seconds", 2.0)),
+        # The overview video type (each with its own script); "course" also
+        # cycles headline taglines taken from the route (overview_script.course_taglines).
+        "overview_style": overview_style(project_config),
+        **_course_config(project_config, config_path),
         "res_route_path": project_config_path,
         "leg_durations": seg_durations or None,
         "duration": settings.get("duration", overview_duration),

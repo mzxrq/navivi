@@ -78,6 +78,7 @@ export function RenderOverlay() {
     updateMetadata,
     updateSettings,
     autoLoadTimeline,
+    adoptRenderedOverview,
     saveProject,
     setActiveWaypointId,
     timeline,
@@ -205,6 +206,7 @@ export function RenderOverlay() {
       track(await listen<string>(
         "render-finish",
         async (event) => {
+          if (metadata.directory_path) await adoptRenderedOverview(metadata.directory_path);
           if (
             event.payload === "Success" ||
             event.payload.includes("complete")

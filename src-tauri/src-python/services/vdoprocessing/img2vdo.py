@@ -126,14 +126,18 @@ class AttractionVideoGenerator:
 
     def _write_inputs(
         self, output_filename: str, keys: List[str], pans: List[str],
-        requested: Optional[dict] = None,
+        requested: Optional[dict] = None, target: Optional[float] = None,
     ) -> None:
-        """`requested`: seconds each photo clip (by key) was generated for."""
+        """`requested`: seconds each photo clip (by key) was generated for;
+        `target`: the narration length the deliverable was fitted to."""
         path = self._inputs_path(output_filename)
+        record = {"keys": keys, "pans": pans, "requested": requested or {}}
+        if target is not None:
+            record["target"] = round(float(target), 3)
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
             with open(path, "w", encoding="utf-8") as f:
-                json.dump({"keys": keys, "pans": pans, "requested": requested or {}}, f)
+                json.dump(record, f)
         except OSError as exc:
             logger.warning("Could not record clip inputs for %s: %s", output_filename, exc)
 
@@ -884,14 +888,21 @@ class AttractionVideoGenerator:
             )
 
         final_path = self.output_dir / output_filename
+        refit = False
         if not force and not inputs_changed and output_is_valid(final_path):
-            if "keys" not in recorded:
-                self._write_inputs(output_filename, keys, pans)
+            if self._fits_narration(final_path, recorded, target_audio_duration):
+                if "keys" not in recorded:
+                    self._write_inputs(output_filename, keys, pans)
+                logger.info(
+                    "Waypoint deliverable already exists — skipping generation: %s",
+                    final_path,
+                )
+                return str(final_path)
+            refit = True
             logger.info(
-                "Waypoint deliverable already exists — skipping generation: %s",
-                final_path,
+                "The narration for %s is now %.1fs — fitting the kept photo clips to it "
+                "(nothing is generated again).", output_filename, target_audio_duration,
             )
-            return str(final_path)
 
         # Rebuilding: drop the old deliverable/pending manifest. Raw photo
         # clips stay for reuse, unless force=True.
@@ -907,6 +918,11 @@ class AttractionVideoGenerator:
         else:
             self._migrate_index_named_raws(stem, keys, pans, recorded.get("pans"))
             self._adopt_raws_by_key(stem, keys)
+        if refit and not all(output_is_valid(self.output_dir / f"raw_{stem}_{k}.mp4") for k in keys):
+            return self._refit_deliverable(
+                final_path, target_audio_duration, output_filename, place_label,
+                prompt_list[0] if len(image_list) == 1 and prompt_list else None, recorded,
+            )
 
         logger.info(f"Processing waypoint with {len(image_list)} image(s)...")
 
@@ -1005,17 +1021,57 @@ class AttractionVideoGenerator:
             self._write_inputs(
                 output_filename, built_keys, pans,
                 {k: requested_by_key[k] for k in built_keys if k in requested_by_key},
+                target=target_audio_duration,
             )
             self._remove_orphan_raws(stem, keys)
         return final_output
 
     @staticmethod
+    def _fits_narration(final_path: Path, recorded: dict, target: float) -> bool:
+        """The deliverable was fitted to this narration length (the recorded
+        one, else its own length for a clip made before it was recorded)."""
+        if target <= 0:
+            return True
+        from services.tts.ttsengine import FFmpegManager
+
+        made_for = recorded.get("target")
+        if made_for is None:
+            made_for = FFmpegManager.get_media_duration(str(final_path))
+        return abs(float(made_for) - target) <= tuning.ATTRACTION_REFIT_SLACK_SECONDS
+
+    def _refit_deliverable(
+        self, final_path: Path, target: float, output_filename: str,
+        place_label: Optional[str], camera_pan, recorded: dict,
+    ) -> Optional[str]:
+        """No kept photo clips to rebuild from: the finished clip itself is
+        trimmed or extended to the new narration."""
+        work = self._partial_path(self.output_dir / f"refit_{Path(output_filename).stem}.mp4")
+        try:
+            shutil.copy2(final_path, work)
+            out = self._fit_and_finalize(
+                str(work), target, output_filename, self._AUDIO_DURATION_TOLERANCE_SECONDS,
+                place_label=place_label, camera_pan=camera_pan, generation_cap=False,
+            )
+        finally:
+            work.unlink(missing_ok=True)
+        if out:
+            self._write_inputs(
+                output_filename, recorded.get("keys") or [], recorded.get("pans") or [],
+                recorded.get("requested"), target=target,
+            )
+        return out
+
+    @staticmethod
     def _raw_clip_covers(raw_path: Path, requested: Optional[float], needed: float) -> bool:
         """A kept photo clip is reusable if it was generated for at least its
-        current share (made for a shorter one, Wan would stop moving early).
-        Unknown request length (older clips): reuse."""
+        current share (made for a shorter one, Wan would stop moving early),
+        or always unless ATTRACTION_REGENERATE_FOR_LONGER_NARRATION: the fit
+        step trims it or fills the rest on the CPU. Unknown request length
+        (older clips): reuse."""
         if not output_is_valid(raw_path):
             return False
+        if not tuning.ATTRACTION_REGENERATE_FOR_LONGER_NARRATION:
+            return True
         if requested is not None and requested < needed - 0.1:
             logger.info(
                 "   -> %s was made for %.1fs, its share is now %.1fs — regenerating.",

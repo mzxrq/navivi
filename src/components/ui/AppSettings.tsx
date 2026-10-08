@@ -597,6 +597,23 @@ export function AppSettings() {
 
             {activeTab === "video" && (
               <>
+                <Section title={t`Style`}>
+                  <Row
+                    title={t`Video style`}
+                    description={t`Walk the route: a walker travels the map and stops at each place. Whole route first: the whole route is shown and traced, stop-bys come last, and every stop-by gets its own stop in its leg. Each style has its own overview script; switching rewrites an automatic one.`}
+                  >
+                    <Segmented<"walk" | "course">
+                      value={settings.overview_style ?? "walk"}
+                      onChange={(v) => updateProject({ overview_style: v })}
+                      options={[
+                        { id: "walk", label: t`Walk the route` },
+                        { id: "course", label: t`Whole route first` },
+                      ]}
+                      className="w-72"
+                    />
+                  </Row>
+                </Section>
+
                 <Section title={t`Output`}>
                   <Row title={t`Target FPS`}>
                     <NumberInput
@@ -655,6 +672,8 @@ export function AppSettings() {
                   onChange={(patch) =>
                     updateProject({ caption_style: { ...(settings.caption_style ?? {}), ...patch } })
                   }
+                  longLines={settings.subtitle_long_lines ?? "split"}
+                  onLongLines={(v) => updateProject({ subtitle_long_lines: v })}
                 />
               </>
             )}
@@ -908,9 +927,13 @@ function Badge({
 function CaptionStyleSection({
   style,
   onChange,
+  longLines,
+  onLongLines,
 }: {
   style: Required<TextStyle>;
   onChange: (patch: TextStyle) => void;
+  longLines: "split" | "wrap";
+  onLongLines: (v: "split" | "wrap") => void;
 }) {
   return (
     <Section title={t`Subtitles`} hint={t`Every subtitle starts from this look`}>
@@ -928,6 +951,20 @@ function CaptionStyleSection({
           </Row>
         )}
       />
+      <Row
+        title={t`Long subtitles`}
+        description={t`When a sentence doesn't fit on one line. Applies the next time the video is generated.`}
+      >
+        <Segmented<"split" | "wrap">
+          value={longLines}
+          onChange={onLongLines}
+          options={[
+            { id: "split", label: t`One line at a time` },
+            { id: "wrap", label: t`Two lines` },
+          ]}
+          className="w-64"
+        />
+      </Row>
     </Section>
   );
 }

@@ -139,7 +139,10 @@ def test_changed_preset_regenerates_only_that_photo(generator, tmp_path, calls):
     assert len(after) == 2 and len(set(before) & set(after)) == 1  # old photo-1 clip removed
 
 
-def test_removed_photo_regenerates_a_clip_made_for_a_shorter_share(generator, tmp_path, calls):
+def test_removed_photo_regenerates_a_clip_made_for_a_shorter_share(generator, tmp_path, calls, monkeypatch):
+    from services import tuning
+
+    monkeypatch.setattr(tuning, "ATTRACTION_REGENERATE_FOR_LONGER_NARRATION", True)
     photos = _photos(tmp_path, 2)
     kwargs = dict(target_audio_duration=8.0, output_filename="04_attraction_11_remove.mp4")
     generator.process_attraction_video(
@@ -150,6 +153,50 @@ def test_removed_photo_regenerates_a_clip_made_for_a_shorter_share(generator, tm
     generator.process_attraction_video(popup_image_entry=photos[:1], prompt_text=["pan-down"], **kwargs)
     assert [(img, pan, d) for img, pan, d in calls] == [(photos[0], "pan-down", pytest.approx(8.0))]
     assert len(_raws(generator, "04_attraction_11_remove")) == 1
+
+
+@pytest.fixture
+def shares(monkeypatch):
+    seen = []
+    real = AttractionVideoGenerator._fit_clip_to_share
+    monkeypatch.setattr(
+        AttractionVideoGenerator, "_fit_clip_to_share",
+        lambda self, clip, share, *a, **k: seen.append(round(share, 2)) or real(self, clip, share, *a, **k),
+    )
+    return seen
+
+
+def test_a_changed_script_refits_the_kept_clips_without_generating(generator, tmp_path, calls, shares):
+    photos = _photos(tmp_path, 2)
+    kwargs = dict(popup_image_entry=photos, prompt_text=["pan-down", "none"],
+                  output_filename="04_attraction_15_script.mp4")
+    generator.process_attraction_video(target_audio_duration=8.0, **kwargs)
+    calls.clear()
+    shares.clear()
+
+    for seconds in (12.0, 5.0):  # longer, then shorter narration
+        out = generator.process_attraction_video(target_audio_duration=seconds, **kwargs)
+        assert calls == []  # no photo generated again
+        assert shares[-2:] == [seconds / 2, seconds / 2]  # each photo trimmed or extended equally
+        assert FFmpegManager.get_media_duration(out) == pytest.approx(seconds, abs=0.3)
+
+    shares.clear()
+    generator.process_attraction_video(target_audio_duration=5.0, **kwargs)
+    assert shares == []  # same narration: the finished clip is reused as is
+
+
+def test_without_kept_clips_the_finished_clip_itself_is_refitted(generator, tmp_path, calls):
+    photos = _photos(tmp_path, 1)
+    kwargs = dict(popup_image_entry=photos, prompt_text=["pan-down"], output_filename="04_attraction_16_bare.mp4")
+    generator.process_attraction_video(target_audio_duration=6.0, **kwargs)
+    for raw in generator.output_dir.glob("raw_04_attraction_16_bare_*.mp4"):
+        raw.unlink()
+    calls.clear()
+
+    out = generator.process_attraction_video(target_audio_duration=4.0, **kwargs)
+    assert calls == []
+    assert FFmpegManager.get_media_duration(out) == pytest.approx(4.0, abs=0.3)
+    assert generator._read_inputs("04_attraction_16_bare.mp4")["target"] == 4.0
 
 
 def test_index_named_clip_from_an_older_run_is_reused(generator, tmp_path, calls):

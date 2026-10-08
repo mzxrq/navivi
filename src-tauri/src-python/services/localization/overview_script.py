@@ -68,6 +68,14 @@ def describes_stops(project: dict) -> bool:
     ))
 
 
+def overview_style(project: dict) -> str:
+    """The overview video type (tuning.OVERVIEW_STYLES); each has its own script."""
+    from services import tuning
+
+    style = project.get("settings", {}).get("overview_style", tuning.DEFAULT_OVERVIEW_STYLE)
+    return style if style in tuning.OVERVIEW_STYLES else tuning.DEFAULT_OVERVIEW_STYLE
+
+
 Generate = Callable[[str, int], Optional[str]]  # (prompt, max_chars) -> text
 
 
@@ -331,6 +339,16 @@ WAY_SECONDS_PER_LEG = 2.0
 DESCRIBE_TARGET_SECONDS = 4.0
 _MIN_WAY_CHARS = 6
 
+# The course-guide layout (settings.overview_style "course"): an opening over the
+# intro photos, the pivot line as the map appears, the route told in a few
+# grouped sentences, then totals and the goal.
+ROUTE_PIVOT_TEXT = "これが全体のルートです。"
+OPENING_MIN_SECONDS = 8.0
+OPENING_MAX_SECONDS = 24.0
+# At most this many stops are named in one route sentence ("AやBをめぐり、CからDへ。").
+GROUP_MAX_STOPS = 4
+_BOAT_MODES = ("ferry", "boat")
+
 # A sentence claiming a time or distance: the way lines tell those (from the
 # route itself), so a description keeps out of it.
 _ROUTE_CLAIM = re.compile(r"[0-9０-９]+\s*(分|時間|km|キロ|メートル|ｍ|m(?![a-z]))|歩くこと|歩いて")
@@ -528,6 +546,14 @@ def _intro_prompt(brief: dict, stops: List[str], limit: int, area: str = "", end
     )
 
 
+def spoken_area(location: str) -> str:
+    """The intro label as it is said: "和歌山・和歌山市" -> "和歌山市" (the voice garbles the repeated name)."""
+    parts = [p.strip() for p in re.split(r"[・･]", location or "") if p.strip()]
+    if len(parts) == 2 and parts[1].startswith(parts[0]):
+        return parts[1]
+    return (location or "").strip()
+
+
 def _intro_fallback(start: str, end: str, area: str, places: int, km, limit: int) -> str:
     """The longest factual opening that fits about `limit` characters."""
     where = f"{area}の{start}" if area and area not in start else start
@@ -628,6 +654,24 @@ def plan_budget(project: dict, brief: dict) -> dict:
         describe = {n: (hosts[n] if n in hosts else (DESCRIBE_TARGET_SECONDS if describing else 0.0)) for n in stops}
         return trips, ways, describe, INTRO_SECONDS + sum(ways) + sum(describe.values()) + closing
 
+    if overview_style(project) == "course":
+        # The route sentences are what they are, the opening takes the rest.
+        # The map never freezes mid-route (the stop-bys come last), so no holds.
+        stops = course_stops(brief, forced, banned)
+        trips = journeys(brief, stops)
+        ways = [_way_seconds({**t, "via_hold": 0.0}) for t in trips]
+        describe = {n: 0.0 for n in stops}
+        pivot = len(ROUTE_PIVOT_TEXT) / cps
+        ending = max(closing, len(totals_text(brief) + goal_text(brief) + stopby_text(project)) / cps)
+        rest = target - pivot - sum(ways) - sum(describe.values()) - ending
+        opening = min(OPENING_MAX_SECONDS, max(OPENING_MIN_SECONDS, rest))
+        estimated = opening + pivot + sum(ways) + sum(describe.values()) + ending
+        return {
+            "target": target, "cps": cps, "intro": opening, "pivot": pivot, "closing": closing,
+            "stops": sorted(stops), "trips": trips, "ways": ways, "describe": describe,
+            "estimated": estimated, "fits": in_overview_range(estimated),
+        }
+
     # Every numbered stop gets described (an explicit overviewHighlight:false
     # still opts a place out) - previously only as many as fit within `target`
     # were picked, ranked by _highlight_score, and the rest were only ever
@@ -680,6 +724,320 @@ def plan_budget(project: dict, brief: dict) -> dict:
     }
 
 
+def _is_break(leg: dict) -> bool:
+    """A leg told in its own sentence: a boat crossing or a ride."""
+    return leg["mode"] != "walking" or any(p["mode"] in _BOAT_MODES for p in leg.get("pieces") or [])
+
+
+def course_stops(brief: dict, keep: set, banned: set) -> set:
+    """The stops the walker pauses at in the course layout: the end of each
+    route sentence. Walks run together up to GROUP_MAX_STOPS stops; a crossing,
+    a ride, the last leg and every stop in `keep` (stop-by hosts, forced
+    highlights) end a sentence."""
+    legs = brief["legs"]
+    stops, run = set(), 0
+    for i, leg in enumerate(legs):
+        n = leg["to_number"]
+        run += 1  # every place reached is named in the sentence, numbered or not
+        if n is None or n in banned:
+            continue
+        nxt = legs[i + 1] if i + 1 < len(legs) else None
+        if (n in keep or _is_break(leg) or nxt is None or _is_break(nxt)
+                or nxt["to_number"] is None and i + 2 == len(legs) or run >= GROUP_MAX_STOPS):
+            stops.add(n)
+            run = 0
+    return stops
+
+
+def _numbers_ok(text: str, facts: str) -> bool:
+    known = set(_NUMBER.findall(facts))
+    return all(n in known for n in _NUMBER.findall(text))
+
+
+def _course_intro_prompt(info: str, limit: int) -> str:
+    return (
+        "あなたは旅番組のナレーターです。ルートの地図を見せる前に、写真を背景にこれから歩くコースを紹介する冒頭のナレーションを書きます。\n"
+        + info
+        + "■ 構成: 1文目でこの地域や場所がどんなところかを伝え、2文目でこのコースの見どころやテーマを伝え、"
+          "3文目は「このコースは、」で始めて、どんな旅かを一言でまとめる。\n"
+        + f"■ 条件: 日本語の話し言葉で3文、{limit}文字以内。挨拶（「こんにちは」「ようこそ」など）はしない。"
+          "上の情報にない地名・数字・歴史は書かない。道順や移動時間の話はしない。記号・括弧・英語は使わず、本文のみを出力。"
+        + SPOKEN_STYLE_JA
+    )
+
+
+def _course_intro_fallback(area: str, title: str, start: str, names: List[str], places: int, limit: int) -> str:
+    """A factual opening in the same shape: the area, the places, what the course is."""
+    first = f"今回の舞台は、{area}です。" if area else ""
+    last = f"このコースは、{title}をめぐる旅です。" if title else f"このコースは、{start}から始まります。"
+    for k in range(min(3, len(names)), 0, -1):
+        middle = f"{'、'.join(names[:k])}など、{places}か所を訪ねます。"
+        for text in (first + middle + last, middle + last):
+            if len(text) <= limit * 1.3:
+                return text
+    return last
+
+
+def _route_sentence(trip: dict, i: int, start: str, ferries: int, after_crossing: bool,
+                    start_at: Optional[List[float]] = None) -> str:
+    """One sentence telling a trip in the course layout (see course_stops)."""
+    to = trip["to"]
+    final = trip["to_number"] is None
+    back = final and (trip["is_return"] or to == start)
+    via = list(trip.get("via") or [])
+    if any(p["mode"] in _BOAT_MODES for p in trip["pieces"]) or trip["mode"] in _BOAT_MODES:
+        if start_at and not back:
+            from services.localization.route_brief import _length_km
+
+            # crossing back toward where the course began
+            back = _length_km([trip["to_at"], start_at]) < 0.5 * _length_km([trip["from_at"], start_at])
+        if ferries:
+            return f"そして再びフェリーで海を渡り、{to}{'へと戻ります' if back else 'へ向かいます'}。"
+        arrive = "へと戻ります" if back else "へ渡ります"
+        return f"{trip['from']}から{'は' if i else ''}フェリーに乗り、{to}{arrive}。"
+    if trip["mode"] != "walking":
+        from services.localization.route_brief import transition_text
+
+        return transition_text(trip, variant=i)
+    if i == 0:
+        arrive = "へと戻ります" if back else "へと向かいます"
+        return f"{trip['from']}から{_names(via)}を抜けて、{to}{arrive}。" if via else f"{trip['from']}から、{to}{arrive}。"
+    if final:
+        head = f"{_names(via)}を経て、" if via else ""
+        return f"最後は、{head}{to}へと戻ります。" if back else f"最後は、{head}{to}へ向かいます。"
+    lead = "渡った先では、" if after_crossing else ("続いて、" if i % 2 else "")
+    if not via:
+        return f"{lead}{to}へと歩きます。"
+    if len(via) == 1:
+        return f"{lead}{via[0]}を経て、{to}へ。"
+    return f"{lead}{_names(via[:-1])}をめぐり、{via[-1]}から{to}へ。"
+
+
+def _names(names: List[str], most: int = 3) -> str:
+    """"AやBやC", or "AやBなど" past `most` names."""
+    return "や".join(names) if len(names) <= most else "や".join(names[: most - 1]) + "など"
+
+
+def totals_text(brief: dict) -> str:
+    """"徒歩は合計およそ9キロ、フェリーは往復2回の乗船です。" from the legs."""
+    pieces = [p for leg in brief["legs"] for p in (leg.get("pieces") or [leg])]
+    walk = sum(p["km"] for p in pieces if p["mode"] == "walking")
+    ride = sum(p["km"] for p in pieces if p["mode"] in ("car", "driving"))
+    boats = sum(1 for p in pieces if p["mode"] in _BOAT_MODES)
+    legs = brief["legs"]
+    round_trip = bool(legs) and (legs[-1]["is_return"] or legs[-1]["to"] == brief["start"])
+
+    def distance(km: float) -> str:
+        return f"およそ{round(km)}キロ" if km >= 1 else f"およそ{max(100, int(round(km * 10)) * 100)}メートル"
+
+    parts = []
+    if walk >= 0.05:
+        parts.append(f"徒歩は合計{distance(walk)}")
+    if ride >= 0.05:
+        parts.append(f"車での移動は{distance(ride)}")
+    if boats:
+        parts.append(f"フェリーは{'往復' if boats == 2 and round_trip else ''}{boats}回の乗船")
+    if not parts:
+        return ""
+    return "、".join(parts) + "です。"
+
+
+_CAUTION = re.compile(r"必要|許可|予約|注意|禁止|立ち?入|ただし|有料|休館|閉館|同意書|申請|事前")
+
+
+def stopby_text(project: dict) -> str:
+    """The unconnected stop-bys (brown pins) as optional extras, with their own
+    cautions: "茶色で示した地点は、ルート沿いにある追加の見どころです。A、そしてBです。…"."""
+    from services.localization.route_brief import _length_km, _short_fact, clean_label, on_route
+
+    waypoints = [w for w in project.get("waypoints", []) if isinstance(w, dict) and "lat" in w]
+    route = [w for w in waypoints if on_route(w)]
+    extras = [w for w in waypoints if not on_route(w) and not w.get("skipAssetGeneration")]
+    if not extras or not route:
+        return ""
+    by_near: Dict[str, List[str]] = {}  # stop-bys near the same stop are named together
+    notes = []
+    for w in extras:
+        name = clean_label(w)
+        near = clean_label(min(route, key=lambda r: _length_km([[r["lat"], r["lng"]], [w["lat"], w["lng"]]])))
+        fact = _short_fact(w)
+        fact = fact[:-1] + "である" if fact.endswith("で") else fact
+        by_near.setdefault(near, []).append(f"{fact}{name}" if fact else name)
+        text = re.sub(r"\{[^}]*\}", "", w.get("attractionNarration") or "")
+        caution = next((s.strip() for s in _SENTENCE_END.split(text) if _CAUTION.search(s)), "")
+        if caution and len(notes) < 2:
+            notes.append(caution if caution.startswith("ただし") else "ただし、" + caution)
+    phrases = [f"{near}の近くにある、{'と'.join(items)}" for near, items in by_near.items()]
+    listed = phrases[0] if len(phrases) == 1 else "、".join(phrases[:-1]) + "、そして" + phrases[-1]
+    return (
+        "茶色で示した地点は、ルート沿いにある追加の見どころです。"
+        f"{listed}です。時間に余裕があれば、あわせて訪ねてみてください。" + "".join(notes)
+    )
+
+
+def course_taglines(project: dict, brief: dict, limit: int = 6) -> List[str]:
+    """Headline lines the "course" overview cycles through at the top: the
+    title and subtitle, start -> farthest stop, one per travel mode in route
+    order (a ferry is "海をわたり、Xへ"), and the area."""
+    from services.localization.route_brief import _length_km
+
+    def spoken(text: str) -> str:
+        text = (text or "").strip()
+        return "" if not text or text.isascii() else text  # an English working title is not shown
+
+    settings = project.get("settings", {})
+    legs = brief["legs"]
+    start = brief["start"]
+    lines = [spoken(project.get("video_title") or project.get("project_name")), spoken(project.get("video_subtitle"))]
+    if legs:
+        origin = legs[0]["from_at"]
+        far = max(legs, key=lambda leg: _length_km([origin, leg["to_at"]]))
+        if far["to"] != start:
+            lines.append(f"{start}から、{far['to']}へ")
+    seen = set()
+    for leg in legs:
+        for piece in leg.get("pieces") or [leg]:
+            mode = "ferry" if piece["mode"] in _BOAT_MODES else piece["mode"]
+            if mode in seen:
+                continue
+            seen.add(mode)
+            if mode == "ferry":
+                lines.append(f"海をわたり、{leg['to']}へ")
+            elif mode == "walking":
+                lines.append(f"{start}から歩いてめぐる道")
+            elif mode in ("car", "driving"):
+                lines.append(f"車で走る、{leg['to']}への道")
+            elif mode == "airplane":
+                lines.append(f"空をこえて、{leg['to']}へ")
+    lines.append(spoken(settings.get("intro_location")))
+    out: List[str] = []
+    for line in lines:
+        if line and line not in out:
+            out.append(line)
+    return out[:limit]
+
+
+def course_summary(brief: dict) -> dict:
+    """The stats card's numbers from the same pieces totals_text speaks (a
+    crossing hidden in a walking leg counts as the boat), so card and voice agree."""
+    km: Dict[str, float] = {}
+    minutes: Dict[str, float] = {}
+    for leg in brief["legs"]:
+        for piece in leg.get("pieces") or [leg]:
+            mode = "ferry" if piece["mode"] in _BOAT_MODES else piece["mode"]
+            km[mode] = km.get(mode, 0.0) + piece["km"]
+            minutes[mode] = minutes.get(mode, 0.0) + piece["minutes"]
+    order = ["walking", "ferry", "car", "driving", "airplane"]  # the card's column order
+    km = dict(sorted(km.items(), key=lambda kv: order.index(kv[0]) if kv[0] in order else len(order)))
+    return {
+        "total_distance_km": round(sum(km.values()), 2),
+        "total_duration_seconds": sum(minutes.values()) * 60.0,
+        "mode_breakdown": {m: round(v, 2) for m, v in km.items()},
+        "mode_duration": {m: v * 60.0 for m, v in minutes.items()},
+    }
+
+
+def goal_text(brief: dict) -> str:
+    legs = brief["legs"]
+    if not legs:
+        return ""
+    end = legs[-1]["to"]
+    if legs[-1]["is_return"] or end == brief["start"]:
+        return f"コースのゴールは、出発地と同じ{brief['start']}です。"
+    return f"コースのゴールは、{end}です。"
+
+
+def build_course_script(
+    project: dict,
+    brief: dict,
+    budget: dict,
+    generate: Optional[Generate] = None,
+    intro_text: Optional[str] = None,
+    closing_text: str = "今日の旅は、ここまでです。",
+) -> Tuple[str, List[dict]]:
+    """The course-guide layout:
+    <opening>{start}これが全体のルートです。<route sentences>{end}<totals>{distance}<goal>.
+    The opening plays over the intro photos (the intro lasts until {start}); each
+    route sentence ends at a stop ({n}{go}); places in between are passed. The
+    opening is the project's own settings.overview_intro, else the model's (checked),
+    else a template; everything after it is built from the route facts."""
+    from services.localization.route_brief import _minutes_phrase, _short_fact
+
+    trips = budget["trips"]
+    cps = budget["cps"]
+    chars = lambda seconds: max(1, int(round(seconds * cps)))  # noqa: E731
+    places = {n: w for n, w in enumerate(visible_waypoints(project), start=1)}
+    report: List[dict] = []
+    settings = project.get("settings", {})
+
+    own = ((project.get("settings") or {}).get("overview_intro") or "").strip() if intro_text is None else intro_text
+    opening_chars = chars(budget["intro"])
+    if own:
+        opening = re.sub(r"\{[^}]*\}", "", own).strip()
+        report.append({"kind": "intro", "text": opening, "used": "user", "raw": None, "budget_chars": opening_chars})
+    else:
+        area = spoken_area(settings.get("intro_location"))
+        title = (project.get("video_title") or project.get("project_name") or "").strip()
+        if title and title.isascii():
+            title = ""  # an English working title ("Untitled Project") is not spoken
+        subtitle = (project.get("video_subtitle") or "").strip()
+        named = [(w.get("label") or w.get("name") or "").strip() for w in places.values()]
+        facts = [f"{name}（{_short_fact(w)}）" if _short_fact(w) else name
+                 for name, w in zip(named, places.values()) if name]
+        info = (
+            (f"■ 地域: {area}\n" if area else "")
+            + (f"■ タイトル: {title}\n" if title else "")
+            + (f"■ 副題: {subtitle}\n" if subtitle else "")
+            + f"■ 出発地: {brief['start']}\n"
+            + (f"■ 主な場所: {'、'.join(facts)}\n" if facts else "")
+        )
+        fallback = _course_intro_fallback(area, title, brief["start"], [n for n in named if n], len(places), opening_chars)
+        anchors = [brief["start"], *named, *re.split(r"[・\s]+", area), title]
+        raw = None
+        if generate is not None:
+            try:
+                raw = generate(_course_intro_prompt(info, opening_chars), opening_chars)
+            except Exception as exc:  # the model must never break the script
+                logger.warning("Overview intro: generator failed (%s).", exc)
+        text = _clean(raw, opening_chars)
+        ok = (
+            raw is not None and _looks_ok(text, opening_chars, over=1.3)
+            and any(a and _names_in(text, a) for a in anchors)
+            and not _GREETING.search(text) and not _GREETING_SENTENCE.search(text)
+            and _numbers_ok(text, info)
+        )
+        opening = text if ok else fallback
+        report.append({"kind": "intro", "text": opening, "used": "model" if ok else "template", "raw": raw,
+                       "budget_chars": opening_chars})
+
+    # {route}: the trace starts once the whole route has been shown.
+    parts = [opening, "{start}", ROUTE_PIVOT_TEXT, "{route}"]
+    ferries, after_crossing = 0, False
+    for i, trip in enumerate(trips):
+        line = _route_sentence(trip, i, brief["start"], ferries, after_crossing, trips[0]["from_at"])
+        boats = sum(1 for p in trip["pieces"] if p["mode"] in _BOAT_MODES) or int(trip["mode"] in _BOAT_MODES)
+        # The trace needs this long on the map: a line that runs short tells the time too.
+        need = chars(budget["ways"][i])
+        if len(line) < need and trip["mode"] == "walking" and not boats:
+            line += f"歩いて{_minutes_phrase(trip['minutes'])}の道のりです。"
+        report.append({"kind": f"way{i}", "text": line, "used": "template", "raw": None, "budget_chars": need})
+        parts.append(line)
+        ferries += boats
+        after_crossing = bool(boats)
+        if trip["to_number"] is not None:
+            parts.append("{%d}{go}" % trip["to_number"])
+
+    totals, goal, extras = totals_text(brief), goal_text(brief), stopby_text(project)
+    # {extras}: the stop-bys appear on the map (they are only shown at the end).
+    closing = f"{totals}{{distance}}{goal}" + (f"{{extras}}{extras}" if extras else "")
+    if len(totals + goal + extras) < chars(budget["closing"]):
+        closing += closing_text
+    report.append({"kind": "closing", "text": closing, "used": "template", "raw": None,
+                   "budget_chars": chars(budget["closing"])})
+    parts.append("{end}" + closing)
+    return "".join(parts), report
+
+
 def _opener(text: str) -> str:
     """The short lead word a line starts with ("さあ", "次は", "続いて"), or ""
     when it starts straight away (a place name is not a lead word): two lines
@@ -708,6 +1066,8 @@ def build_tour_script(
 
     brief = build_brief(project, routing_cache)
     budget = plan_budget(project, brief)
+    if overview_style(project) == "course":
+        return build_course_script(project, brief, budget, generate, intro_text, closing_text)
     trips = budget["trips"]
     cps = budget["cps"]
     chars = lambda seconds: max(1, int(round(seconds * cps)))  # noqa: E731
@@ -733,7 +1093,7 @@ def build_tour_script(
     place_count = len(places)  # every place on the route, stopped at or passed
     intro_chars = chars(budget["intro"])
     km = round(brief["total_km"]) if brief["total_km"] >= 1 else brief["total_km"]
-    area = (project.get("settings", {}).get("intro_location") or "").strip()
+    area = spoken_area(project.get("settings", {}).get("intro_location"))
     end = trips[-1]["to"] if trips else ""
     if intro_text is not None:
         intro = re.sub(r"\{[^}]*\}", "", intro_text).strip()

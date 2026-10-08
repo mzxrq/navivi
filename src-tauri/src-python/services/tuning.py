@@ -429,8 +429,39 @@ DEFAULT_AUTO_NARRATION_CUES = True
 # mean a numbered stop was named ("{n}...{go}") but never actually
 # described - just a silent pause between "heading to X" and "leaving X".
 # Overridable per project via job_config.json's
-# settings.overview_describe_stops.
+# settings.overview_describe_stops. Only the "walk" overview uses it.
 DEFAULT_OVERVIEW_DESCRIBE_STOPS = True
+# The overview video type, each with its own script (settings.overview_style):
+# "walk"   - the walker travels the route and stops at each place (overview_script.build_tour_script);
+# "course" - the whole route is shown first, then traced, with the stop-bys
+#            last; the course-guide script (overview_script.build_course_script).
+DEFAULT_OVERVIEW_STYLE = "walk"
+OVERVIEW_STYLES = ("walk", "course")
+# The "course" overview (spatial_renderer/course.py). The traced line is one
+# accent over the whole planned route (settings.course_trace_color overrides).
+COURSE_TRACE_COLOR: Tuple[int, int, int] = (40, 90, 240)  # BGR, #F05A28 orange
+# Whole route shown this long after {start} when the script has no {route} cue.
+COURSE_PIVOT_HOLD_SECONDS = 2.5
+# Without cues: seconds of trace per leg (kept within MIN..MAX in total).
+COURSE_SECONDS_PER_LEG = 3.0
+COURSE_TRACE_MIN_SECONDS = 8.0
+COURSE_TRACE_MAX_SECONDS = 40.0
+COURSE_TAGLINE_SECONDS = 5.0
+COURSE_TAGLINE_FADE_SECONDS = 0.5
+COURSE_CARD_POP_SECONDS = 0.45
+COURSE_STATS_SLIDE_SECONDS = 0.6
+COURSE_STOPBY_STAGGER_SECONDS = 0.15
+# Share of the frame kept clear of the route at the top (the headline) and the
+# bottom (subtitles, stats card, stop-by notice): the map is framed around it.
+# Added on top of the route's own padding (OVERVIEW_PADDING_BY_SPAN_KM).
+COURSE_TOP_BAND_FRACTION = 0.10
+COURSE_BOTTOM_BAND_FRACTION = 0.10
+# The stats card sits this much lower than the shared 20px margin (its image
+# has ~26px of shadow padding, so it floated ~46px above the bottom edge).
+COURSE_STATS_DROP_PX = 30
+# Its legs: the walker slows down (to 40% pace) over this long before each
+# stop, as in the reference video; arrival times, and so the voice sync, stay.
+COURSE_ARRIVAL_SLOW_SECONDS = 3.0
 # Every residential leg opens on a brief WIDE shot of the whole leg, then
 # zooms — a scale+crossfade between two separately-fetched static tiles,
 # not a continuous crop within one image — into the existing tight/close
@@ -667,26 +698,17 @@ OVERVIEW_CONNECTED_STOPBY_HOLD_SECONDS = 2.0
 # crop; bigger ones get more room so nearby pins/labels don't crowd the
 # frame edge. (span_km ceiling, padding_factor) pairs, checked in order -
 # the first ceiling the route's own span fits under wins.
-# TileDownloader._optimal_zoom_for_span rounds the padded span's zoom UP to
-# the nearest WHOLE level (never down), and zoom is log2-scaled - so most
-# padding changes land inside the same whole level and change nothing
-# visible; only enough padding to push past the NEXT level's threshold
-# changes the fetched crop at all, and that jump is a big, discrete step
-# (confirmed on this project's own route, span ~7.5km: 0.05-0.50 all stayed
-# at zoom 13 - identical crop; 0.70 dropped to zoom 12 - roughly 2x the
-# area, at which point the card layout (built for the tighter crop) started
-# overlapping/crowding, so that's a real regression, not just "more
-# zoomed out"). Kept modest for now, matching zoom 13 on that route -
-# raise a tier past its own threshold only once the card layout can also
-# handle the wider crop it produces.
+# The map is cut to exactly the padded box (maptile._crop_to_window), so each
+# step here shows. Lowered 2026-10-08 (was 0.10/0.15/0.20/0.25, max 0.25): a
+# shorter route was drawn too small to follow its line.
 OVERVIEW_PADDING_BY_SPAN_KM: Tuple[Tuple[float, float], ...] = (
-    (1.5, 0.10),
-    (5.0, 0.15),
-    (15.0, 0.20),
-    (40.0, 0.25),
+    (1.5, 0.05),
+    (5.0, 0.07),
+    (15.0, 0.10),
+    (40.0, 0.14),
 )
 # Above the largest span_km ceiling in OVERVIEW_PADDING_BY_SPAN_KM.
-OVERVIEW_PADDING_MAX_SPAN = 0.25
+OVERVIEW_PADDING_MAX_SPAN = 0.18
 # Overview: the walker takes at least this long from one numbered stop to the
 # next, however close they are (stops a few hundred metres apart used to flash
 # past in a fraction of a second, their cards all popping up at once). The
@@ -715,6 +737,11 @@ STOPBY_NOTICE_TITLE = LABELS_JA["stopby_notice_title"]
 STOPBY_NOTICE_BODY = LABELS_JA["stopby_notice_body"]
 STOPBY_NOTICE_RIBBON_COLOR: Tuple[int, int, int] = (40, 110, 220)  # BGR, warm orange ribbon
 STOPBY_NOTICE_FADE_SECONDS = 0.6
+# A leg's piece after a stop-by opens on its photo fullscreen (this long when the
+# stop-by's attraction video played just before; its own freeze otherwise), shrinks
+# into its card above the marker, holds the card this long, then the walk resumes.
+STOPBY_REOPEN_HOLD_SECONDS = 0.5
+STOPBY_CARD_HOLD_SECONDS = 1.0
 # How long the notice stays up when the first stop-by reached isn't a batch
 # (a connected / skipped one); a batch keeps it for the batch's own length.
 STOPBY_NOTICE_SECONDS = 5.0
@@ -922,6 +949,14 @@ COMFYUI_CHAIN_COLOR_MATCH = True
 # by the cap is still filled by slow_move. False: slow_move fills any gap
 # over 1s regardless.
 ATTRACTION_CHAIN_TO_FULL_LENGTH = True
+# A script edit that makes a narration longer reuses the stop's kept photo
+# clips and fills the extra time on the CPU (slow move or hold), instead of
+# generating the photo again on the GPU (the user's choice, 2026-10-08). True:
+# a clip made for a shorter narration is generated again.
+ATTRACTION_REGENERATE_FOR_LONGER_NARRATION = False
+# A finished clip whose narration changed by more than this is fitted again
+# from its kept photo clips (each photo trimmed or extended to its equal share).
+ATTRACTION_REFIT_SLACK_SECONDS = 0.2
 # After the Wan motion runs out, a moving preset's clip continues as a slow
 # push-in/drift over its last frame (vdoprocessing/slow_move.py) instead of
 # freezing, in a random direction per clip: the frame grows by about this
@@ -1554,6 +1589,15 @@ INTRO_IMAGE_COUNT = 3
 # of it — total intro length = COUNT*PER_IMAGE - (COUNT-1)*CROSSFADE.
 INTRO_PER_IMAGE_SECONDS = 3.5
 INTRO_CROSSFADE_SECONDS = 0.8
+# The overview narration starts on the intro (settings.overview_voice_over_intro):
+# its opening (up to {start}) plays over the photos, so the intro lasts
+# INTRO_VOICE_LEAD_SECONDS (the fade from black) + the {start} cue, within
+# MIN..MAX, using up to INTRO_MAX_IMAGE_COUNT photos.
+DEFAULT_OVERVIEW_VOICE_OVER_INTRO = True
+INTRO_VOICE_LEAD_SECONDS = 0.5
+INTRO_MIN_SECONDS = 4.0
+INTRO_MAX_SECONDS = 26.0
+INTRO_MAX_IMAGE_COUNT = 5
 # Font/outline are in intro pixels; scaled x1080/704 from the old 1280x704 intro to look the same.
 # These are defaults; settings.intro_title_style / intro_subtitle_style override per project.
 INTRO_TITLE_FONT_FAMILY = "Yu Gothic UI"
@@ -1813,6 +1857,11 @@ CAPTION_MARGIN_V = 20  # gap above the bottom edge
 CAPTION_BOX_PADDING = 2.0  # libass pads a box by its outline width
 CAPTION_BOX_COLOR = "&H66000000"  # ASS alpha 66 = 60% opaque black
 CAPTION_PLAY_RES_X = 384
+# Generated subtitles: characters per line when caption_style.max_chars_per_line is 0,
+# and what a longer clause does (settings.subtitle_long_lines): "split" = one-line
+# captions in turn, "wrap" = up to 2 lines per caption.
+SUBTITLE_MAX_CHARS_PER_LINE = 20
+SUBTITLE_LONG_LINES = "split"
 
 # --- Narration speed presets and cache (Irodori) -------------------------------
 # On a CPU a request costs ~22 s of fixed work plus sampling that scales with the number of steps, so fewer steps is the one big

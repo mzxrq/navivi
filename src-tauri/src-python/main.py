@@ -64,13 +64,24 @@ def split_mode_payload(argv: list) -> list:
     return argv
 
 
+def _set_stopby_visits(job_config_path: str) -> None:
+    from services.localization.overview_script import overview_style
+    from services.vdoprocessing.stopby_visits import set_visit_all_stopbys
+
+    try:
+        project = json.loads(Path(job_config_path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return
+    set_visit_all_stopbys(overview_style(project) == "course")
+
+
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print(
             "Usage: python main.py <path/to/job_config.json> "
             "[gps|map|overview|residential|tts|tts-all|overview-tts|attraction-tts|attraction-tts-all|"
             "attraction|attraction-all|attraction-finalize|intro|outro|subtitle|subtitle-all|concat|mux|"
-            "transition|all|overview-script|upscale-images] [index] [--force] [--no-llm]\n"
+            "transition|all|overview-script|leg-scripts|upscale-images] [index] [--force] [--no-llm]\n"
             "       (output dir is always <job_config's directory_path>/video; no mode = the overview map video)\n"
             "       (--force bypasses checkpointing and regenerates everything)\n"
             "       python main.py full_pipeline <path/to/job_config.json> [output_dir] [--force]\n"
@@ -235,6 +246,9 @@ if __name__ == "__main__":
             route_dir_arg = str(Path(output_dir_arg) / "route")
             attraction_dir_arg = str(Path(output_dir_arg) / "attraction")
             mode_arg = sys.argv[2] if len(sys.argv) > 2 else "overview"
+            # The single-stop modes see stop-bys the way the full pipeline does
+            # (the "course" overview type visits every stop-by with a photo).
+            _set_stopby_visits(job_config_arg)
 
             # [NOTE] [Core] Each branch below is one isolated pipeline step
             # (see services/cli/'s own module docstrings / test_*
@@ -334,6 +348,10 @@ if __name__ == "__main__":
             elif mode_arg == "overview-script":
                 # [NOTE] [LLM] Drafts a tour-guide overview narration from the route (the way between stops, each stop described, {n}/{go} cues) into overview_script_draft.txt — never over overview_narration.
                 result = test_overview_script(job_config_arg, use_llm=not no_llm_arg)
+            elif mode_arg == "leg-scripts":
+                # [NOTE] [Script] Turn-by-turn arriving scripts + opening lines for every stop, from the route alone; returned, never written.
+                from services.cli.script_commands import leg_scripts
+                result = leg_scripts(job_config_arg)
             elif mode_arg == "all":
                 # [NOTE] [Core] Runs every isolated stage above in the pipeline's order and settings (TTS, subtitles, attractions, overview+residential, intro/outro, concat) — NOT the same as full_pipeline (no timeline.json, no audio in the concat).
                 result = test_all(job_config_arg, output_dir_arg, force=force_arg)

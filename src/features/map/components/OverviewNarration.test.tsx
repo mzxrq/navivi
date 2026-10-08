@@ -99,6 +99,28 @@ describe("overview narration section", () => {
     expect(screen.getByRole("button", { name: /description of that stop ends/ }).textContent).toBe("{go}");
   });
 
+  it("splits a course script: the opening in the introduction box, the rest below, one script on save", async () => {
+    const opening = "今回の舞台は、和歌山市です。";
+    const rest = "これが全体のルートです。{1}";
+    workspace.settings = { overview_style: "course" };
+    workspace.metadata = { directory_path: "C:/p", overview_narration: `${opening}{start}${rest}`, overview_narration_is_auto: true };
+    workspace.updateSettings.mockReset();
+    await show();
+    const [introBox, scriptBox] = screen.getAllByRole("textbox") as HTMLTextAreaElement[];
+    expect(introBox.value).toBe(opening);
+    expect(scriptBox.value).toBe(rest);
+    expect(screen.getByText("Written automatically", { selector: "label span" })).toBeTruthy();
+
+    fireEvent.change(introBox, { target: { value: "新しい紹介。" } });
+    expect(workspace.updateSettings).toHaveBeenCalledWith({ overview_intro: "新しい紹介。" });
+    expect(workspace.updateMetadata).toHaveBeenCalledWith({ overview_narration: `新しい紹介。{start}${rest}` });
+
+    fireEvent.change(scriptBox, { target: { value: `${rest}追記` } });
+    fireEvent.blur(scriptBox);
+    expect(workspace.updateMetadata).toHaveBeenCalledWith(expect.objectContaining({ overview_narration: `${opening}{start}${rest}追記`, overview_narration_is_auto: false }));
+    workspace.settings = {};
+  });
+
   it("reverts to automatic only after confirming", async () => {
     workspace.metadata = { directory_path: "C:/p", overview_narration: "自分の案内", overview_narration_is_auto: false };
     await show();

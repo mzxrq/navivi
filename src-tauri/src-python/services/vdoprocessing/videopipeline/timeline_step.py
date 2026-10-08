@@ -143,6 +143,7 @@ def build_timeline(
     attraction_fade_seconds: float = 0.0,
     intro_text: Optional[dict] = None,
     place_label_look: Optional[dict] = None,
+    overview_voice_start: Optional[float] = None,
 ) -> str:
     """Builds timeline.json with clips ordered intro -> overview -> for each
     leg in travel order, that leg's departure waypoint's own attraction
@@ -232,7 +233,7 @@ def build_timeline(
         # reflects that padding, since pipeline.py replaces video_paths
         # with the padded result before this function ever sees it.
         split = leg_narration_splits.get(Path(source_name).stem)
-        if split and split[0]:
+        if split is not None:
             return split
         audio_path = audio_paths[idx]
         subtitle_path = (
@@ -316,12 +317,32 @@ def build_timeline(
     for name, path in trailing_pairs:
         ordered.append(("route", name, path))
 
+    # The overview voice starting on the intro (overview_voice_start seconds in):
+    # it is placed at that timeline time, and its captions go on whichever of
+    # the two clips they fall in (one across the cut is split in two).
+    voice_over_intro = bool(
+        overview_voice_start is not None and intro_pair and overview_pair and overview_audio_path
+    )
+    voice_cues: dict = {}
+    if voice_over_intro:
+        intro_len = _clip_length(intro_pair[1], None, 0.0)
+        voice_cues = {"intro": [], "overview": []}
+        for cue in _read_srt(overview_subtitle_path):
+            start, end = cue["start"] + overview_voice_start, cue["end"] + overview_voice_start
+            if start < intro_len:
+                voice_cues["intro"].append({**cue, "start": start, "end": min(end, intro_len)})
+            if end > intro_len:
+                voice_cues["overview"].append(
+                    {**cue, "start": max(start, intro_len) - intro_len, "end": end - intro_len}
+                )
+
     tracks = []
     all_cues = []
     all_texts = []
     clip_start = 0.0
     for order, (kind, source_or_name, burned) in enumerate(ordered):
         source_name = Path(source_or_name).name
+        is_intro = source_name == tuning.INTRO_OUTPUT_FILENAME
         if kind == "route":
             audio_path, subtitle_path = _leg_audio(source_name)
         elif kind == "overview":
@@ -344,10 +365,15 @@ def build_timeline(
         # Seconds the narration starts into the clip (a leg's opening
         # before the walker moves) - applied at export; 0 otherwise.
         audio_offset = read_audio_offset(source_or_name) if audio_path and kind == "route" else 0.0
-        length = _clip_length(burned, audio_path, audio_offset)
+        free_voice = voice_over_intro and kind == "overview"
+        length = _clip_length(burned, None if free_voice else audio_path, audio_offset)
+        if voice_over_intro and (is_intro or free_voice):
+            source_cues = voice_cues["intro" if is_intro else "overview"]
+        else:
+            source_cues = _read_srt(subtitle_path)
         # Cues relative to the clip (narration offset applied), not burned in.
         clip_cues = []
-        for cue in _read_srt(subtitle_path):
+        for cue in source_cues:
             start = min(cue["start"] + audio_offset, length)
             end = min(cue["end"] + audio_offset, length)
             if end - start >= 0.05:
@@ -358,7 +384,7 @@ def build_timeline(
         )
         # The intro's title + subtitle ride on the text track, over the whole intro.
         clip_texts = []
-        if intro_text and source_name == tuning.INTRO_OUTPUT_FILENAME:
+        if intro_text and is_intro:
             clip_texts.append({"start": 0.0, "end": round(length, 3), **intro_text})
         # An attraction's place name, when its clip was finalized without it.
         if kind == "attraction":
@@ -385,6 +411,9 @@ def build_timeline(
                 "subtitle_path": _resolve(subtitle_path),
                 "subtitles": clip_cues,
                 **({"texts": clip_texts} if clip_texts else {}),
+                # Timeline seconds the narration starts at, wherever the clip is
+                # (render_from_timeline mixes it in as unlinked_audio).
+                **({"audio_start": round(overview_voice_start, 3)} if free_voice else {}),
             }
         )
 

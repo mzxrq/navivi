@@ -41,11 +41,12 @@ def test_an_english_caption_gets_a_wider_line_than_a_japanese_one():
     assert line_budget("", 20) == 20
 
 
-def test_an_english_clause_is_not_cut_short_with_an_ellipsis():
+def test_a_long_english_clause_keeps_every_word_on_lines_as_wide_as_english_needs():
     clause = "Continue along the ridge until you reach the signpost for the pass."
     cues = SubtitleBuilder.build(clause, 6.0, [], max_chars_per_line=20)
-    assert "…" not in cues[0].text
-    assert cues[0].text.replace("\n", " ") == clause
+    assert " ".join(cue.text for cue in cues) == clause
+    assert all(len(line) <= 40 for cue in cues for line in cue.text.split("\n"))
+    assert len(cues) < 4  # at 20 characters a line it would take 4
 
 
 def test_tts_chunks_english_at_sentence_ends_and_joins_back_exactly():

@@ -47,7 +47,7 @@
     "places_value": "{count}か所",
     "longest": "最長区間"
   },
-  "stopby_notice_title": "追加の見どころ（まるのマーカー）",
-  "stopby_notice_body": "まるのマーカーは、ルートの近くにある\n追加の見どころです。立ち寄るかどうかは自由。\n時間や体力に合わせて決めてください。",
+  "stopby_notice_title": "追加の見どころ",
+  "stopby_notice_body": "ルートの近くにある追加の見どころです。\n立ち寄るかどうかは自由。\n時間や体力に合わせて決めてください。",
   "duration_sample": "8時間88分"
 }

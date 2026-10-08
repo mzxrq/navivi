@@ -12,12 +12,27 @@ from services.config.job_config import JobConfigManager
 from .helpers import logger, project_video_dir
 
 
-def render_intro_clip(project_config_path: str) -> Optional[str]:
+def plan_intro_seconds(settings: dict, cue_times: Optional[dict], audio_seconds: float) -> Optional[float]:
+    """How long the intro lasts when the overview voice starts on it: the fade
+    from black plus the voice's opening (up to its {start} cue), within
+    INTRO_MIN..MAX_SECONDS; the default slideshow length when the script has no
+    {start}. None when the voice doesn't start on the intro (setting off, no voice)."""
+    if not audio_seconds or not settings.get("overview_voice_over_intro", tuning.DEFAULT_OVERVIEW_VOICE_OVER_INTRO):
+        return None
+    start = (cue_times or {}).get("start")
+    if start is None:
+        n = tuning.INTRO_IMAGE_COUNT
+        return n * tuning.INTRO_PER_IMAGE_SECONDS - (n - 1) * tuning.INTRO_CROSSFADE_SECONDS
+    return min(tuning.INTRO_MAX_SECONDS, max(tuning.INTRO_MIN_SECONDS, tuning.INTRO_VOICE_LEAD_SECONDS + float(start)))
+
+
+def render_intro_clip(project_config_path: str, duration_sec: Optional[float] = None) -> Optional[str]:
     """Builds the project's intro clip: a randomly-chosen waypoint popup
     image (a fresh pick every call), animated with a gradual zoom-in and
     the project's name burned in, centered. Returns None (never raises) if
     no waypoint has a popup image or generation fails — an intro is
-    optional, not something that should hard-fail a pipeline run."""
+    optional, not something that should hard-fail a pipeline run.
+    `duration_sec` fits it to that length (plan_intro_seconds)."""
     config_path = Path(project_config_path)
     if not config_path.exists():
         logger.warning("Intro step: no project config found at %s — skipping.", config_path)
@@ -43,7 +58,7 @@ def render_intro_clip(project_config_path: str) -> Optional[str]:
     # The title and subtitle are a text item on the timeline (intro_text_item), not burned in.
     intro_path = generate_intro_clip(
         video_dir=str(video_dir), title=video_title, subtitle=video_subtitle, waypoints=waypoints,
-        burn_text=False,
+        burn_text=False, duration_sec=duration_sec,
     )
 
     if intro_path:

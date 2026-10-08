@@ -133,8 +133,12 @@ def add_default_cues(project_config_path: str) -> int:
 def _overview_source_ids(project: dict) -> str:
     """The waypoint ids the overview script was made from. A middle waypoint
     that isn't a numbered stop is marked "-", a stop-by that is one "+", so
-    toggling either renumbers the script's {n} cues instead of reusing stale ones."""
-    from services.localization.overview_script import visible_waypoints
+    toggling either renumbers the script's {n} cues instead of reusing stale ones.
+    The overview type is part of it (each type has its own script), and for
+    "course" so is the course introduction (settings.overview_intro), which opens it."""
+    import hashlib
+
+    from services.localization.overview_script import overview_style, visible_waypoints
 
     waypoints = [wp for wp in project.get("waypoints", []) if isinstance(wp, dict)]
     numbered = {id(wp) for wp in visible_waypoints(project)}
@@ -147,7 +151,11 @@ def _overview_source_ids(project: dict) -> str:
             return "-"
         return "+" if wp.get("isStopBy") else ""
 
-    return ",".join(str(wp.get("id", "")) + mark(i, wp) for i, wp in enumerate(waypoints))
+    ids = ",".join(str(wp.get("id", "")) + mark(i, wp) for i, wp in enumerate(waypoints))
+    if overview_style(project) != "course":
+        return ids
+    intro = ((project.get("settings") or {}).get("overview_intro") or "").strip()
+    return f"{ids}|course|{hashlib.md5(intro.encode('utf-8')).hexdigest()[:8]}"
 
 
 def ensure_overview_narration(project_config_path: str) -> bool:
