@@ -21,6 +21,7 @@ import { LayerManager } from "./MapLayers/LayerManager";
 import { RouteLayer } from "./MapLayers/RouteLayer";
 import { NaviPin } from "./MapLayers/NaviPin";
 import { ElevationProfile } from "./ElevationProfile";
+import { MapTokenNotice } from "./MapTokenNotice";
 import { HeatmapLegend } from "./MapLayers/HeatmapLegend";
 import { useLegElevations } from "./MapLayers/useLegElevations";
 import { t } from "@lingui/core/macro";
@@ -874,6 +875,8 @@ export function MapArea() {
           setIs3D={setIs3D}
         />
       </div>
+
+      {!mapboxToken && <MapTokenNotice />}
 
       {/* MAPBOX CANVAS */}
       <div ref={mapBoxRef} className="absolute inset-0 z-0">

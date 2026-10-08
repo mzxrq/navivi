@@ -7,7 +7,7 @@
 import { needsVcRuntime } from "./pe-imports.mjs";
 import { signFile, signingConfigured } from "./sign.mjs";
 import { execFileSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -18,7 +18,8 @@ const stage = join(setupDir, "stage");
 const dist = join(setupDir, "dist");
 const skipApp = process.argv.includes("--skip-app");
 const npm = process.platform === "win32" ? "npm.cmd" : "npm";
-const run = (cmd, args, cwd = root) => execFileSync(cmd, args, { cwd, stdio: "inherit", shell: process.platform === "win32" && cmd.endsWith(".cmd") });
+const withKeys = process.argv.includes("--with-keys");
+const run = (cmd, args, cwd = root, env = process.env) => execFileSync(cmd, args, { cwd, env, stdio: "inherit", shell: process.platform === "win32" && cmd.endsWith(".cmd") });
 const mb = (path) => `${(statSync(path).size / 1048576).toFixed(1)} MB`;
 
 const conf = JSON.parse(readFileSync(join(tauriDir, "tauri.conf.json"), "utf8"));
@@ -26,15 +27,42 @@ const version = conf.version;
 const appExe = join(tauriDir, "target", "release", "navivi.exe");
 
 console.log(`\n[1/4] The app`);
-// Vite inlines VITE_* values from a root .env into the JS inside navivi.exe, where anyone can read them with `strings`.
-for (const name of [".env", ".env.local", ".env.production"]) {
+// Vite inlines VITE_* values from a root .env into the JS inside navivi.exe, where anyone can extract them. The developer's own
+// keys therefore stay out of the shipped app unless --with-keys is given; users enter theirs in Settings > API keys (the app
+// prefers those and only falls back to the build-time value).
+const secrets = new Map(); // variable name -> value, from the root .env files and the environment
+for (const name of [".env", ".env.local", ".env.production", ".env.production.local"]) {
   const file = join(root, name);
   if (!existsSync(file)) continue;
-  const keys = readFileSync(file, "utf8").split(/\r?\n/).filter((l) => /^VITE_\w*(KEY|TOKEN|SECRET)\w*\s*=\s*\S/.test(l)).map((l) => l.split("=")[0].trim());
-  if (keys.length) console.warn(`  WARNING: ${name} defines ${keys.join(", ")}; the values will be readable inside the shipped navivi.exe.`);
+  for (const line of readFileSync(file, "utf8").split(/\r?\n/)) {
+    const match = /^\s*(VITE_\w*(?:KEY|TOKEN|SECRET|PASSWORD)\w*)\s*=\s*(.*)$/.exec(line);
+    const value = match?.[2].trim().replace(/^(['"])(.*)\1$/, "$2");
+    if (match && value) secrets.set(match[1], value);
+  }
 }
-if (!skipApp || !existsSync(appExe)) run(npm, ["run", "tauri", "--", "build", "--no-bundle"]);
+// The environment beats the .env files in Vite, and it is where the developer's keys actually live (a user or system variable),
+// so those count too. Names the app reads are always scrubbed, even when nothing defines them.
+for (const [name, value] of Object.entries(process.env)) {
+  if (/^VITE_\w*(KEY|TOKEN|SECRET|PASSWORD)/.test(name) && value?.trim()) secrets.set(name, value.trim());
+}
+const scrubbed = new Set(["VITE_MAPBOX_TOKEN", "VITE_ORS_API_KEY", ...secrets.keys()]);
+const appEnv = withKeys ? process.env : { ...process.env, ...Object.fromEntries([...scrubbed].map((k) => [k, ""])) };
+if (withKeys && secrets.size) console.warn(`  WARNING: --with-keys: ${[...secrets.keys()].join(", ")} will be readable inside the shipped navivi.exe.`);
+if (!withKeys && secrets.size) console.log(`  Keeping ${[...secrets.keys()].join(", ")} out of the build (use --with-keys to bake them in).`);
+if (!skipApp || !existsSync(appExe)) run(npm, ["run", "tauri", "--", "build", "--no-bundle"], root, appEnv);
 console.log(`  ${appExe} (${mb(appExe)})`);
+
+// Proof, not trust: the built frontend (what navivi.exe embeds) must not contain any of the secret values.
+if (!withKeys && secrets.size) {
+  const walk = (dir) => readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(join(dir, e.name)) : [join(dir, e.name)]));
+  const files = walk(join(root, "dist")).filter((f) => /\.(js|css|html|map|json)$/.test(f));
+  const leaked = [...secrets].filter(([, value]) => files.some((f) => readFileSync(f, "utf8").includes(value))).map(([name]) => name);
+  if (leaked.length) throw new Error(`The built frontend in dist/ contains the value of ${leaked.join(", ")}. Rebuild the app (not --skip-app) so the keys are left out, or pass --with-keys to ship them on purpose.`);
+  console.log(`  Checked dist/: none of ${secrets.size} secret value(s) found.`);
+  // The exe embeds dist/ as it was when the exe was built; a reused exe is only trusted if it is newer than that clean dist/.
+  const distStamp = statSync(join(root, "dist", "index.html")).mtimeMs;
+  if (statSync(appExe).mtimeMs < distStamp) throw new Error("navivi.exe is older than dist/, so it may embed an older frontend with the keys in it. Run without --skip-app to rebuild it.");
+}
 
 console.log(`\n[2/4] Tools and code`);
 run("node", ["scripts/stage-installer.mjs"]);

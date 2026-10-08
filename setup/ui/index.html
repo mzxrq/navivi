@@ -54,6 +54,11 @@
   label.check input:checked + .box::after { content: ""; width: 9px; height: 5px; border-left: 2px solid #fff; border-bottom: 2px solid #fff; transform: rotate(-45deg) translate(1px,-1px); }
   label.check input:focus-visible + .box { outline: 2px solid rgba(66,135,245,.6); outline-offset: 2px; }
 
+  .opts .row.item { align-items: flex-start; }
+  .opts .row.item label.check { flex: 1; min-width: 0; align-items: flex-start; }
+  .opts .row.item .box { margin-top: 2px; }
+  .opts .row.item .desc { margin-top: 1px; font-size: 12px; color: var(--faint); line-height: 1.45; }
+  .opts .row.item .size { flex: none; font-size: 12.5px; color: var(--dim); padding-top: 1px; }
   .note { margin-top: 14px; font-size: 12px; color: var(--faint); }
   .banner { margin-top: 14px; padding: 9px 12px; border-radius: 10px; background: rgba(255,126,95,.1); color: #ffb7a3; font-size: 12.5px; display: none; }
   .banner.on { display: block; }
@@ -106,6 +111,7 @@
         <div class="row"><label class="check"><input type="checkbox" id="w-desktop" checked><span class="box"></span><span id="w-desktop-l"></span></label></div>
         <div class="row"><label class="check"><input type="checkbox" id="w-menu" checked><span class="box"></span><span id="w-menu-l"></span></label></div>
       </div>
+      <div class="banner" id="w-dirbad" role="alert"></div>
       <div class="grow"></div>
       <p class="note" id="w-size"></p>
       <div class="actions"><span class="sp"></span><button class="btn primary" id="w-install"></button></div>
@@ -142,7 +148,8 @@
     <section class="view" id="v-uninstall">
       <h1 id="u-title"></h1>
       <p class="lead" id="u-text"></p>
-      <div class="opts" style="margin-top:20px"><div class="row"><label class="check"><input type="checkbox" id="u-data"><span class="box"></span><span id="u-data-l"></span></label></div></div>
+      <p class="lead" id="u-pick" style="margin-top:14px;font-size:13px"></p>
+      <div class="opts" id="u-items" style="margin-top:10px;overflow-y:auto;min-height:0"></div>
       <p class="note" id="u-note"></p>
       <div class="grow"></div>
       <div class="actions"><span class="sp"></span><button class="btn" id="u-cancel"></button><button class="btn danger" id="u-go"></button></div>
@@ -163,7 +170,22 @@ const TEXT = {
     launch: "Navivi を起動する", finish: "完了",
     errTitle: "インストールできませんでした", retry: "もう一度", close: "閉じる",
     uTitle: "Navivi を削除しますか？", uText: "アプリとショートカットを削除します。作成したプロジェクトは削除されません。",
-    uData: (mb) => `ダウンロード済みのツールと音声も削除する（約 ${mb} MB）`, uNote: "あとで再インストールすると、もう一度ダウンロードが必要になります。",
+    dirBad: {
+      drive: "ドライブ全体ではなく、フォルダーを選んでください。",
+      system: "書き込めるフォルダー（既定のフォルダーなど）を選んでください。",
+      network: "ネットワーク上ではなく、このPC内のフォルダーを選んでください。",
+      userdata: "そのフォルダーは、Navivi がプロジェクトやデータを保存する場所です。既定のフォルダーなど、別の場所を選んでください。",
+    },
+    uPick: "あわせて削除するデータを選んでください。選ばなかったものは残ります。",
+    uItems: {
+      runtime: ["Python 環境", "動画づくりに使うツールです。再インストール後に自動で作り直されます。"],
+      engines: ["音声エンジンと AI ツール", "ダウンロード済みのエンジンとモデルです。必要になればもう一度ダウンロードできます。"],
+      voices: ["録音した音声（ボイス）", "あなたが追加した音声です。削除すると元に戻せません。"],
+      cache: ["地図タイルのキャッシュ", "削除しても、必要になったときにまた取得されます。"],
+      settings: ["設定とプロジェクト一覧", "Mapbox などの API キー、最近のプロジェクト、バージョン履歴を含みます。"],
+      keys: ["保存済みの AI キー", "Windows の資格情報マネージャーに保存されています。"],
+    },
+    uNote: "Documents\\Navivi 内のプロジェクトは、どれを選んでも削除されません。",
     remove: "削除する", cancel: "キャンセル", removing: "削除しています…", removed: "削除しました", removedText: "ご利用ありがとうございました。",
     runtime: "Microsoft Visual C++ ランタイムをインストールしています…",
     runtimeMissing: "音声エンジンに必要な Microsoft Visual C++ ランタイムを入れられませんでした。音声のセットアップ前に https://aka.ms/vs/17/release/vc_redist.x64.exe からインストールしてください。",
@@ -179,14 +201,29 @@ const TEXT = {
     launch: "Start Navivi", finish: "Finish",
     errTitle: "Couldn't install Navivi", retry: "Try again", close: "Close",
     uTitle: "Remove Navivi?", uText: "This removes the app and its shortcuts. Your projects are not deleted.",
-    uData: (mb) => `Also delete the downloaded tools and voices (about ${mb} MB)`, uNote: "If you install again later, they have to be downloaded again.",
+    dirBad: {
+      drive: "Choose a folder, not a whole drive.",
+      system: "Choose a folder you can write to, such as the default one.",
+      network: "Choose a folder on this PC, not a network location.",
+      userdata: "That folder is where Navivi keeps your projects and data. Choose another folder, such as the default one.",
+    },
+    uPick: "Choose which saved data to delete too. Whatever you leave unchecked stays.",
+    uItems: {
+      runtime: ["Python environment", "The tools that make videos. Recreated automatically after a reinstall."],
+      engines: ["Voice engines and AI tools", "Downloaded engines and models. They can be downloaded again."],
+      voices: ["Your recorded voices", "The voices you added. This cannot be undone."],
+      cache: ["Map tile cache", "Fetched again whenever it is needed."],
+      settings: ["Settings and project list", "Includes your Mapbox and route-service keys, recent projects and version history."],
+      keys: ["Saved AI keys", "Stored in Windows Credential Manager."],
+    },
+    uNote: "Your projects in Documents\\Navivi are never deleted, whatever you choose.",
     remove: "Remove", cancel: "Cancel", removing: "Removing…", removed: "Navivi was removed", removedText: "Thanks for using it.",
     runtime: "Installing the Microsoft Visual C++ runtime…",
     runtimeMissing: "The Microsoft Visual C++ runtime that the voice engines need could not be installed. Install it from https://aka.ms/vs/17/release/vc_redist.x64.exe before you set up a voice.",
   },
 };
 
-let S = { lang: "en", mode: "install", dir: "", running: false, sizeMb: 0, dataMb: 0 };
+let S = { lang: "en", mode: "install", dir: "", running: false, sizeMb: 0, data: [] };
 const $ = (id) => document.getElementById(id);
 const t = (k, ...a) => { const v = TEXT[S.lang][k]; return typeof v === "function" ? v(...a) : v; };
 const send = (o) => window.ipc.postMessage(JSON.stringify(o));
@@ -204,11 +241,38 @@ function movePin(f) {
 }
 movePin(0);
 
+// What can be deleted with the app. What is large and can be downloaded again starts checked; what cannot be recreated starts unchecked.
+const DEFAULT_ON = new Set(["runtime", "engines", "cache"]);
+function paintItems() {
+  const list = $("u-items");
+  const checked = new Set([...list.querySelectorAll("input:checked")].map((i) => i.dataset.id));
+  const first = !list.children.length;
+  list.textContent = "";
+  for (const item of S.data) {
+    const text = TEXT[S.lang].uItems[item.id];
+    if (!text) continue;
+    const row = document.createElement("div"); row.className = "row item";
+    const label = document.createElement("label"); label.className = "check";
+    const input = document.createElement("input"); input.type = "checkbox"; input.dataset.id = item.id;
+    input.checked = first ? DEFAULT_ON.has(item.id) : checked.has(item.id);
+    const box = document.createElement("span"); box.className = "box";
+    const meta = document.createElement("span");
+    const name = document.createElement("span"); name.textContent = text[0];
+    const desc = document.createElement("div"); desc.className = "desc"; desc.textContent = text[1];
+    meta.append(name, desc);
+    label.append(input, box, meta);
+    row.append(label);
+    if (item.mb > 0) { const size = document.createElement("span"); size.className = "size"; size.textContent = item.mb + " MB"; row.append(size); }
+    list.append(row);
+  }
+}
+
 function paint() {
   document.documentElement.lang = S.lang;
   $("tagline").textContent = t("tagline");
   if (S.mode === "uninstall") {
-    $("u-title").textContent = t("uTitle"); $("u-text").textContent = t("uText"); $("u-data-l").textContent = t("uData", S.dataMb);
+    $("u-title").textContent = t("uTitle"); $("u-text").textContent = t("uText"); $("u-pick").textContent = t("uPick");
+    paintItems();
     $("u-note").textContent = t("uNote"); $("u-cancel").textContent = t("cancel"); $("u-go").textContent = t("remove");
     show("uninstall");
     return;
@@ -236,14 +300,19 @@ $("d-finish").onclick = () => send({ cmd: $("d-launch").checked ? "launch" : "cl
 $("e-close").onclick = () => send({ cmd: "close" });
 $("e-retry").onclick = () => { S.running = false; paint(); };
 $("u-cancel").onclick = () => send({ cmd: "close" });
-$("u-go").onclick = () => { setWorking("removing", "removing", 100); send({ cmd: "uninstall", removeData: $("u-data").checked }); };
+$("u-go").onclick = () => {
+  const remove = [...document.querySelectorAll("#u-items input:checked")].map((i) => i.dataset.id);
+  setWorking("removing", "removing", 100);
+  send({ cmd: "uninstall", remove });
+};
 
 const handlers = {
   init(e) {
-    Object.assign(S, { lang: e.lang, mode: e.mode, dir: e.dir, running: e.running, sizeMb: e.sizeMb, dataMb: e.dataMb });
+    Object.assign(S, { lang: e.lang, mode: e.mode, dir: e.dir, running: e.running, sizeMb: e.sizeMb, data: e.data || [] });
     paint();
   },
-  dir(e) { S.dir = e.path; $("w-dir").textContent = "‎" + S.dir; },
+  dir(e) { S.dir = e.path; $("w-dir").textContent = "‎" + S.dir; $("w-dirbad").classList.remove("on"); },
+  dirRejected(e) { const b = $("w-dirbad"); b.textContent = t("dirBad")[e.reason] || t("dirBad").system; b.classList.add("on"); },
   step(e) { $("p-text").textContent = t(e.name); },
   note(e) { S.note = t(e.name); },
   progress(e) { $("p-fill").style.width = e.pct + "%"; $("p-pct").textContent = Math.round(e.pct) + "%"; $("p-file").textContent = "‎" + e.file; movePin(e.pct / 100); },

@@ -28,7 +28,8 @@ struct Args {
     relaunched: bool,
     no_launch: bool,
     no_shortcuts: bool,
-    remove_data: bool,
+    /// Kinds of saved data to delete with the app (install::DATA_IDS); `--remove-data` means all of them.
+    remove: Vec<String>,
     dir: Option<PathBuf>,
     log: Option<PathBuf>,
 }
@@ -43,7 +44,10 @@ fn parse_args(args: impl Iterator<Item = String>) -> Args {
             "--relaunched" => out.relaunched = true,
             "--no-launch" => out.no_launch = true,
             "--no-shortcuts" => out.no_shortcuts = true,
-            "--remove-data" => out.remove_data = true,
+            "--remove-data" => out.remove = install::DATA_IDS.iter().map(|s| s.to_string()).collect(),
+            "--remove" => {
+                out.remove = it.next().map(|list| list.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect()).unwrap_or_default()
+            }
             "--dir" => out.dir = it.next().map(PathBuf::from),
             "--log" => out.log = it.next().map(PathBuf::from),
             _ => {}
@@ -118,16 +122,28 @@ fn silent_install(args: Args, payload: Payload) {
 /// The uninstaller runs from a copy in %TEMP% so it can delete its own folder.
 fn uninstall_main(args: Args, exe: PathBuf) {
     let dir = args.dir.clone().or_else(|| exe.parent().map(Path::to_path_buf)).expect("a folder to remove");
+    // Only a folder this installer made: a setup file run with --uninstall from Downloads, or a mistyped --dir, must not stop or
+    // remove anything there.
+    if !dir.join(install::MARKER).exists() && !dir.join(install::UNINSTALLER).exists() {
+        let message = format!("{} is not a Navivi install folder, so nothing was removed.", dir.display());
+        log_line(&args.log, &message);
+        if !args.silent {
+            fail_box(&message);
+        }
+        std::process::exit(2);
+    }
     if !args.relaunched {
         let copy = std::env::temp_dir().join(format!("navivi-uninstall-{}.exe", std::process::id()));
         if std::fs::copy(&exe, &copy).is_ok() {
             let mut forward = vec!["--uninstall", "--relaunched", "--dir"];
             let dir_text = dir.display().to_string();
             forward.push(&dir_text);
-            for (on, flag) in [(args.silent, "--silent"), (args.remove_data, "--remove-data")] {
-                if on {
-                    forward.push(flag);
-                }
+            if args.silent {
+                forward.push("--silent");
+            }
+            let remove_text = args.remove.join(",");
+            if !args.remove.is_empty() {
+                forward.extend(["--remove", &remove_text]);
             }
             let log_text = args.log.as_ref().map(|p| p.display().to_string());
             if let Some(l) = &log_text {
@@ -138,7 +154,7 @@ fn uninstall_main(args: Args, exe: PathBuf) {
         }
     }
     if args.silent {
-        let result = install::uninstall(&dir, args.remove_data);
+        let result = install::uninstall(&dir, &args.remove);
         log_line(&args.log, &format!("uninstall: {result:?}"));
         finish_uninstall(&dir, &exe);
         if result.is_err() {
@@ -235,7 +251,13 @@ fn run_window(payload: Option<Payload>, uninstall: bool, default_dir: PathBuf, o
                         "type": "init", "mode": if uninstall { "uninstall" } else { "install" },
                         "lang": if system::ui_is_japanese() { "ja" } else { "en" },
                         "version": version, "name": name, "dir": handler_dir.display().to_string(),
-                        "sizeMb": size_mb, "running": running, "dataMb": install::data_size() / 1_048_576,
+                        "sizeMb": size_mb, "running": running,
+                        // Only the uninstaller lists saved data (asking Windows for the Documents folder takes a moment).
+                        "data": if uninstall {
+                            install::DATA_IDS.iter().map(|id| json!({ "id": id, "mb": install::data_size_of(id) / 1_048_576 })).collect::<Vec<_>>()
+                        } else {
+                            Vec::new()
+                        },
                     }));
                 }
                 "drag" => {
@@ -249,7 +271,12 @@ fn run_window(payload: Option<Payload>, uninstall: bool, default_dir: PathBuf, o
                     let start = handler_dir.clone();
                     std::thread::spawn(move || {
                         if let Some(picked) = rfd::FileDialog::new().set_directory(&start).pick_folder() {
-                            say(&proxy, json!({ "type": "dir", "path": install::resolve_dir(&picked).display().to_string() }));
+                            let resolved = install::resolve_dir(&picked);
+                            // A folder the install cannot go into is refused right here, so the old choice stays.
+                            match install::check_dir(&resolved) {
+                                Ok(()) => say(&proxy, json!({ "type": "dir", "path": resolved.display().to_string() })),
+                                Err(problem) => say(&proxy, json!({ "type": "dirRejected", "reason": problem.code() })),
+                            }
                         }
                     });
                 }
@@ -289,8 +316,11 @@ fn run_window(payload: Option<Payload>, uninstall: bool, default_dir: PathBuf, o
                 "uninstall" => {
                     let dir = handler_dir.clone();
                     let own = handler_exe.clone();
-                    let remove_data = msg["removeData"].as_bool().unwrap_or(false);
-                    std::thread::spawn(move || match install::uninstall(&dir, remove_data) {
+                    let remove: Vec<String> = msg["remove"]
+                        .as_array()
+                        .map(|list| list.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                        .unwrap_or_default();
+                    std::thread::spawn(move || match install::uninstall(&dir, &remove) {
                         Ok(()) => {
                             finish_uninstall(&dir, &own);
                             say(&proxy, json!({ "type": "done" }));
@@ -340,7 +370,11 @@ mod tests {
         assert_eq!(a.dir, Some(PathBuf::from(r"C:\Apps\Navivi")));
         assert_eq!(a.log, Some(PathBuf::from("x.log")));
         let u = args(&["--uninstall", "--relaunched", "--remove-data"]);
-        assert!(u.uninstall && u.relaunched && u.remove_data);
+        assert!(u.uninstall && u.relaunched);
+        assert_eq!(u.remove.len(), install::DATA_IDS.len(), "--remove-data means every kind");
+        let some = args(&["--uninstall", "--remove", "runtime, engines,,keys"]);
+        assert_eq!(some.remove, ["runtime", "engines", "keys"]);
+        assert!(args(&["--uninstall"]).remove.is_empty(), "nothing is deleted unless asked");
         assert!(args(&["/S"]).silent, "NSIS-style silent flag still works");
     }
 

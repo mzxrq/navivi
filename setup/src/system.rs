@@ -21,6 +21,34 @@ pub fn local_app_data() -> PathBuf {
     std::env::var_os("LOCALAPPDATA").map(PathBuf::from).unwrap_or_else(|| PathBuf::from(r"C:\Users\Public"))
 }
 
+/// `%APPDATA%`, where the app keeps its database (settings, project list, version history).
+pub fn roaming_app_data() -> PathBuf {
+    std::env::var_os("APPDATA").map(PathBuf::from).unwrap_or_else(|| PathBuf::from(r"C:\Users\Public"))
+}
+
+/// The user's Documents folder, which may be redirected (OneDrive), as the app sees it.
+pub fn documents_dir() -> PathBuf {
+    powershell("[Environment]::GetFolderPath('MyDocuments')")
+        .map(|s| PathBuf::from(s.trim()))
+        .filter(|p| p.is_absolute())
+        .or_else(|| std::env::var_os("USERPROFILE").map(|p| PathBuf::from(p).join("Documents")))
+        .unwrap_or_else(|| PathBuf::from(r"C:\Users\Public\Documents"))
+}
+
+/// The AI provider keys the app saved in Windows Credential Manager (service "Navivi", user `ai-key:<provider>`; the keyring
+/// crate names the credential `<user>.<service>`). Best effort: a key that is not there is not an error.
+pub fn delete_saved_keys() {
+    for provider in ["anthropic", "openai", "gemini", "openrouter", "custom"] {
+        let _ = Command::new("cmdkey")
+            .arg(format!("/delete:ai-key:{provider}.Navivi"))
+            .creation_flags(CREATE_NO_WINDOW)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+    }
+}
+
 fn ps_quote(s: &str) -> String {
     format!("'{}'", s.replace('\'', "''"))
 }
