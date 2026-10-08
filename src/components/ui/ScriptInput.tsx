@@ -51,6 +51,8 @@ interface ScriptInputProps {
   thoughtProcess?: string;
   showLabel?: boolean;
   cues?: CueTag[];
+  // Auto-Write needs no prompt (the text comes from elsewhere, e.g. the route).
+  promptOptional?: boolean;
 }
 
 export function ScriptInput({
@@ -63,6 +65,7 @@ export function ScriptInput({
   thoughtProcess = "",
   showLabel = true,
   cues = ["start", "arrive", "end"],
+  promptOptional = false,
 }: ScriptInputProps) {
   const [localPrompt, setLocalPrompt] = useState(value);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
@@ -91,7 +94,7 @@ export function ScriptInput({
   const hasUnsavedChanges = localPrompt !== value;
 
   const handleGenerateClick = () => {
-    if (!localPrompt.trim()) return;
+    if (!localPrompt.trim() && !promptOptional) return;
     onGenerate(localPrompt, "gemma2", language);
   };
 
@@ -235,7 +238,7 @@ export function ScriptInput({
               <button
                 type="button"
                 onClick={handleGenerateClick}
-                disabled={!localPrompt.trim()}
+                disabled={!localPrompt.trim() && !promptOptional}
                 className="shrink-0 flex items-center gap-1.5 h-6 px-2 rounded-md text-[11px] font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed text-navi hover:bg-navi/10"
               >
                 <PencilSparkles className="w-3 h-3" />
@@ -264,7 +267,7 @@ export function ScriptInput({
           className="w-full flex-1 min-h-0 resize-none p-2.5 text-[13px] leading-relaxed custom-scrollbar bg-transparent text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:outline-none read-only:opacity-80"
         />
 
-        <div className="shrink-0 flex h-9 items-center justify-between gap-2 px-2.5 border-t border-zinc-100 dark:border-white/5">
+        <div className="shrink-0 flex flex-wrap min-h-9 py-1 items-center justify-between gap-x-2 gap-y-0.5 px-2.5 border-t border-zinc-100 dark:border-white/5">
           <div className="flex items-center gap-1 min-w-0">
             <span className="text-[11px] text-zinc-400 dark:text-zinc-500 tabular-nums mr-1 shrink-0">
               {localPrompt.length > 0 ? t`${localPrompt.length} characters` : ""}
@@ -286,7 +289,7 @@ export function ScriptInput({
           </div>
 
           {!isGenerating && (
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 ml-auto">
             <button
               type="button"
               onMouseDown={(e) => e.preventDefault()}

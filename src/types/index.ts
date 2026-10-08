@@ -126,6 +126,8 @@ export interface ProjectSettings {
   intro_location?: string;
   intro_location_manual?: boolean; // typed by the user: stop following the first waypoint
   intro_location_at?: string; // first waypoint "lat,lng" (3 dp) intro_location was detected for
+  overview_intro?: string; // course introduction: opens the "course" overview narration, spoken over the intro photos
+  overview_style?: "walk" | "course"; // overview video type; each has its own script (absent = walk)
 
   // Append "· N か所" to the intro/outro subtitle (default on).
   intro_place_count?: boolean;
@@ -272,6 +274,7 @@ export interface WorkspaceState {
   timeline: TimelineData;
   setTimeline: (action: SetStateAction<TimelineData>) => void;
   autoLoadTimeline: (projectDir: string) => Promise<void>;
+  adoptRenderedOverview: (projectDir: string) => Promise<void>;
   undoTimeline: () => void;
   redoTimeline: () => void;
   canUndoTimeline: boolean;

@@ -520,6 +520,8 @@ export async function timelineFromPipeline(
       audio,
       audioDuration,
       audioOffset: Number(t.audio_offset) || 0,
+      // The overview voice that starts on the intro: a free narration at its own time.
+      ...(audio && typeof t.audio_start === "number" ? { audioStart: t.audio_start } : {}),
       subtitleFile: t.subtitle_path || undefined,
       extraAudio: t.extra_audio_path || undefined,
       extraVolume: typeof t.extra_audio_volume === "number" ? t.extra_audio_volume : undefined,

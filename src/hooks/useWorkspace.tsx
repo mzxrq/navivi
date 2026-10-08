@@ -32,6 +32,7 @@ import {
   loadRouteCache,
   tidyProjectFolder,
   saveTimelineManifest,
+  readRenderedOverviewNarration,
 } from "../services/fileSystem";
 import { savedImages } from "../utils/waypointImages";
 import {
@@ -665,6 +666,18 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // A script the user wrote stays; an empty or automatic one takes what the render spoke.
+  const metadataRef = useRef(metadata);
+  metadataRef.current = metadata;
+  const adoptRenderedOverview = useCallback(async (projectDir: string) => {
+    const rendered = await readRenderedOverviewNarration(projectDir);
+    const now = metadataRef.current;
+    const own = (now.overview_narration || "").trim() && now.overview_narration_is_auto !== true;
+    if (!rendered || now.directory_path !== projectDir || own || now.overview_narration === rendered.overview_narration) return;
+    setMetadata((prev) => ({ ...prev, ...rendered }));
+    setIsDirty(true);
+  }, [setIsDirty]);
+
   const forceReroute = () => {
     setRoutingCache({});
   };
@@ -681,6 +694,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         timeline,
         setTimeline,
         autoLoadTimeline,
+        adoptRenderedOverview,
         undoTimeline,
         redoTimeline,
         canUndoTimeline,

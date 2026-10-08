@@ -1,4 +1,4 @@
-import { callSidecar } from "./sidecar";
+import { callSidecar, sidecarBusy } from "./sidecar";
 import { t } from "@lingui/core/macro";
 
 export interface RenderEstimate {
@@ -10,6 +10,7 @@ export interface RenderEstimate {
 }
 
 export async function fetchRenderEstimate(projectDir: string): Promise<RenderEstimate | null> {
+  if (sidecarBusy()) return null; // asking now would kill that job
   const reply = await callSidecar<RenderEstimate>("estimate", `${projectDir}/job_config.json`);
   return reply.success ? reply : null;
 }

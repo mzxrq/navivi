@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const invoke = vi.hoisted(() => vi.fn());
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
 
-import { callSidecar, callSidecarShared, parseReply, runStage } from "./sidecar";
+import { callSidecar, callSidecarShared, parseReply, runStage, sidecarBusy } from "./sidecar";
 
 beforeEach(() => {
   invoke.mockReset();
@@ -17,6 +17,12 @@ describe("parseReply", () => {
 
   it("passes a failure reply through", () => {
     expect(parseReply(JSON.stringify({ success: false, error: "no model" }))).toEqual({ success: false, error: "no model" });
+  });
+
+  it("reads the indented reply a project mode prints", () => {
+    const reply = { success: true, scripts: [{ id: "a", arriving: "東へ進みます。" }] };
+    const out = "warning: noise\n" + JSON.stringify(reply, null, 2) + "\n";
+    expect(parseReply(out)).toEqual(reply);
   });
 
   it("turns output that is not a reply into an error", () => {
@@ -66,6 +72,16 @@ describe("callSidecar", () => {
       throw "Process was cancelled";
     });
     await expect(callSidecar("tts_voices_list")).resolves.toEqual({ success: false, error: "Process was cancelled", cancelled: true });
+  });
+
+  it("is busy while a call runs, so a background ask can wait", async () => {
+    let finish: (v: string) => void = () => {};
+    invoke.mockImplementation(() => new Promise<string>((resolve) => (finish = resolve)));
+    const call = callSidecar("C:/p/job_config.json", "leg-scripts");
+    expect(sidecarBusy()).toBe(true);
+    finish(JSON.stringify({ success: true }));
+    await call;
+    expect(sidecarBusy()).toBe(false);
   });
 
   it("does not mark other failures as cancelled", async () => {

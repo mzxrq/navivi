@@ -29,12 +29,14 @@ import re
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
-CUE_RE = re.compile(r"\{(start|arrive|end|distance|goPre\d+|go|\d+)\}")
+CUE_RE = re.compile(r"\{(start|arrive|end|distance|route|extras|goPre\d+|go|\d+)\}")
 
 
 @dataclass(frozen=True)
 class Cue:
-    tag: str  # "start" | "arrive" | "end" | "1", "2", ... | "go1", "go2", ...
+    # "start" | "arrive" | "end" | "1", "2", ... | "go1", "go2", ...; the "course"
+    # overview also has "route" (the trace starts) and "extras" (the stop-bys appear)
+    tag: str
     char_index: int  # offset into the CLEAN text: the cue sits right before this char
 
 

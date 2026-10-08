@@ -403,6 +403,17 @@ def _pick_random_images(waypoints: List[Dict[str, Any]], count: int) -> List[str
     return random.sample(candidates, k=min(count, len(candidates)))
 
 
+def fitted_layout(duration_sec: float, available: int) -> Tuple[int, float]:
+    """(photos, seconds per photo) for an intro of `duration_sec` from up to
+    `available` photos: about INTRO_PER_IMAGE_SECONDS each, at most
+    INTRO_MAX_IMAGE_COUNT, each long enough for its crossfades."""
+    cf = tuning.INTRO_CROSSFADE_SECONDS
+    n = max(1, min(available, tuning.INTRO_MAX_IMAGE_COUNT, round(duration_sec / tuning.INTRO_PER_IMAGE_SECONDS)))
+    while n > 1 and (duration_sec + (n - 1) * cf) / n < 2 * cf:
+        n -= 1
+    return n, (duration_sec + (n - 1) * cf) / n
+
+
 def generate_intro_clip(
     video_dir: str,
     title: str,
@@ -412,6 +423,7 @@ def generate_intro_clip(
     title_style: Optional[Dict[str, Any]] = None,
     subtitle_style: Optional[Dict[str, Any]] = None,
     burn_text: bool = True,
+    duration_sec: Optional[float] = None,
 ) -> Optional[str]:
     """Picks up to INTRO_IMAGE_COUNT random, distinct waypoint popup images
     (a fresh pick every call), renders a slow zoom-in over each, crossfades
@@ -419,11 +431,17 @@ def generate_intro_clip(
     fade in/out at the very start/end. Returns the output path, or None
     (logged, never raises) if there are no waypoint images or generation
     fails — an intro is a nice-to-have, not something that should hard-fail
-    a pipeline run."""
-    image_paths = _pick_random_images(waypoints, tuning.INTRO_IMAGE_COUNT)
+    a pipeline run. `duration_sec` fits the intro to that length (the overview
+    voice's opening, see intro_step.plan_intro_seconds)."""
+    count = tuning.INTRO_MAX_IMAGE_COUNT if duration_sec else tuning.INTRO_IMAGE_COUNT
+    image_paths = _pick_random_images(waypoints, count)
     if not image_paths:
         logger.warning("No waypoint popup images available — cannot build an intro yet.")
         return None
+    per_clip_sec = tuning.INTRO_PER_IMAGE_SECONDS
+    if duration_sec:
+        n, per_clip_sec = fitted_layout(duration_sec, len(image_paths))
+        image_paths = image_paths[:n]
 
     logger.info("Intro: picked %d source image(s): %s", len(image_paths), image_paths)
 
@@ -435,7 +453,6 @@ def generate_intro_clip(
     combined_path = video_dir_path / f".intro_combined_{run_id}.mp4"
     title_path: Optional[Path] = None
 
-    per_clip_sec = tuning.INTRO_PER_IMAGE_SECONDS
     crossfade_sec = tuning.INTRO_CROSSFADE_SECONDS
     total_sec = (
         len(image_paths) * per_clip_sec - (len(image_paths) - 1) * crossfade_sec

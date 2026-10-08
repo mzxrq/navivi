@@ -682,6 +682,8 @@ class RouteAnimator:
             )
             if self.config.get("mapbox_style_id"):  # only a chosen style, so a finished leg's fingerprint stays as it was
                 leg_kwargs["map_style"] = resolve_map_style(self.config, "mapbox/outdoors-v12")
+            if self.config.get("overview_style") == "course":  # likewise: the walker slows down before each stop
+                leg_kwargs["arrival_slow_seconds"] = tuning.COURSE_ARRIVAL_SLOW_SECONDS
             # Everything this leg's clip is made from. Existing files are
             # only reused when it matches what they were rendered from: a
             # bare existence check kept legs rendered with an old walk
@@ -822,7 +824,11 @@ class RouteAnimator:
             # (stop holds, stop-by timing, ending fitted to the voice) — the
             # 2D spatial_renderer path below does; settings.use_pydeck_overview
             # = false selects it.
-            if self.config.get("use_pydeck_overview", tuning.DEFAULT_USE_PYDECK_OVERVIEW):
+            # The "course" overview exists only in the 2D renderer.
+            if (
+                self.config.get("use_pydeck_overview", tuning.DEFAULT_USE_PYDECK_OVERVIEW)
+                and self.config.get("overview_style") != "course"
+            ):
                 logger.info("Rendering Overview using GeoJsonLayer PyDeck...")
                 overview_path = self._render_overview_pydeck(
                     img_path, points, labels, popups,

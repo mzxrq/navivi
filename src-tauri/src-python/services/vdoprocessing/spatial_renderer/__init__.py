@@ -8,6 +8,7 @@ overview and waypoint maps, split by concern:
 - overview_pacing.py: mode-breakpoint lookup + speed-weighted path building (_OverviewPacingMixin)
 - overview_animation.py: the overview's frame-by-frame animation loop (_OverviewAnimationMixin)
 - overview.py: render_overview — setup + wrap-up orchestration around the above (_OverviewRenderMixin)
+- course.py: the "course" overview (whole route first), branched to from render_overview (_CourseOverviewMixin)
 - waypoints.py: render_waypoints — the per-residential-leg entry point (_WaypointRenderMixin)
 
 `SpatialRenderer` composes all of the above, preserving the exact same
@@ -15,6 +16,7 @@ method set/behavior as the original single-file class.
 """
 
 from .base import _SpatialRendererBase
+from .course import _CourseOverviewMixin
 from .overview import _OverviewRenderMixin
 from .overview_animation import _OverviewAnimationMixin
 from .overview_pacing import _OverviewPacingMixin
@@ -31,6 +33,7 @@ from .waypoints import _WaypointRenderMixin
 # super()/self.
 class SpatialRenderer(
     _OverviewRenderMixin,
+    _CourseOverviewMixin,
     _OverviewAnimationMixin,
     _OverviewPacingMixin,
     _WaypointRenderMixin,
