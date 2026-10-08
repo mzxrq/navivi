@@ -10,7 +10,8 @@ import { join } from "node:path";
 export const signingConfigured = () => !!(process.env.NAVIVI_SIGN_PFX || process.env.NAVIVI_SIGN_COMMAND);
 
 function findSigntool() {
-  const kits = join(process.env["ProgramFiles(x86)"] ?? "C:\Program Files (x86)", "Windows Kits", "10", "bin");
+  // The fallback needs its backslashes doubled: in a plain string "C:\P" is "C:P", which silently found no Windows Kits folder.
+  const kits = join(process.env["ProgramFiles(x86)"] ?? "C:\\Program Files (x86)", "Windows Kits", "10", "bin");
   if (existsSync(kits)) {
     const versions = readdirSync(kits).filter((v) => /^\d/.test(v)).sort().reverse();
     for (const v of versions) {

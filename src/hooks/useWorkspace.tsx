@@ -79,7 +79,7 @@ const DefaultMetadata: ProjectMetadata = {
 const getDefaultTimeline = (): TimelineData => emptyTimeline();
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
-  const { editorMode, isRendering, isBackgroundRender } = useUI();
+  const { editorMode, isRendering, isBackgroundRender, showToast } = useUI();
   const [isDirty, setIsDirtyState] = useState(false);
   const [isProjectLoading, setIsProjectLoading] = useState(false);
   const dirtyRevisionRef = useRef(0);
@@ -398,7 +398,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     setIsDirty(true);
   }, []);
 
-  const saveProject = async (
+  const runSave = async (
     overrideName?: string,
     asDuplicate?: boolean,
     safeFolderName?: string,
@@ -436,14 +436,15 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       // The assistant keeps its chat in the project folder: a first save or a Save As tells it where the chat now lives.
       window.dispatchEvent(new CustomEvent("project-saved", { detail: { dir: result.projectDir, saveAs: !!asDuplicate } }));
 
-      setMetadata({
-        ...metadata,
+      // Functional: text typed while the save ran (title, narration) must not be put back to what it was when the save began.
+      setMetadata((current) => ({
+        ...current,
         project_name: result.projName,
         status: "saved",
         directory_path: result.projectDir,
         project_id: result.projId,
         thumbnail_path: result.thumbnailPath || "",
-      });
+      }));
       if (dirtyRevisionRef.current === saveRevision) {
         isDirtyRef.current = false;
         setIsDirtyState(false);
@@ -488,6 +489,15 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       console.error("Failed to save Navivi project:", error);
       throw error;
     }
+  };
+
+  // Saves run one after another. A manual save (Ctrl+S, the one before a render) used to be able to overlap an autosave, and both copy
+  // files and write the database; the later call has the newer state, so it simply waits its turn.
+  const saveQueue = useRef<Promise<unknown>>(Promise.resolve());
+  const saveProject = (...args: Parameters<typeof runSave>): ReturnType<typeof runSave> => {
+    const run = saveQueue.current.then(() => runSave(...args));
+    saveQueue.current = run.catch(() => undefined);
+    return run;
   };
 
   const loadProject = async (
@@ -741,7 +751,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           setUnsavedAction(null);
         }}
         onSave={async () => {
-          await saveProject();
+          try {
+            await saveProject();
+          } catch (e) {
+            // Stay on the dialog: continuing (closing, opening another project) after a failed save would lose the work.
+            showToast(String(e instanceof Error ? e.message : e), "error");
+            return;
+          }
           setIsUnsavedModalOpen(false);
           if (unsavedAction) unsavedAction();
           setUnsavedAction(null);

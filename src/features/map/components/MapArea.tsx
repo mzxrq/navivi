@@ -21,6 +21,7 @@ import { LayerManager } from "./MapLayers/LayerManager";
 import { RouteLayer } from "./MapLayers/RouteLayer";
 import { NaviPin } from "./MapLayers/NaviPin";
 import { ElevationProfile } from "./ElevationProfile";
+import { MapTokenNotice } from "./MapTokenNotice";
 import { HeatmapLegend } from "./MapLayers/HeatmapLegend";
 import { useLegElevations } from "./MapLayers/useLegElevations";
 import { t } from "@lingui/core/macro";
@@ -642,6 +643,11 @@ export function MapArea() {
   // Picking a different stop (map or list) opens its editor, so any tool steps back to Select.
   const drawTargetRef = useRef<string | null>(null);
   const previousActiveRef = useRef<string | null>(null);
+  // Draw started from the toolbar (not the leg buttons) edits the stop that is selected at that moment.
+  useEffect(() => {
+    if (isDrawMode && activeWaypointId) drawTargetRef.current = activeWaypointId;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isDrawMode]);
   useEffect(() => {
     const previous = previousActiveRef.current;
     previousActiveRef.current = activeWaypointId;
@@ -811,6 +817,7 @@ export function MapArea() {
             isEraserMode={isEraserMode}
             setIsEraserMode={setIsEraserMode}
             onPickLeg={(wpId) => {
+              drawTargetRef.current = wpId;
               setActiveWaypointId(wpId);
               fitToLeg(wpId);
             }}
@@ -868,6 +875,8 @@ export function MapArea() {
           setIs3D={setIs3D}
         />
       </div>
+
+      {!mapboxToken && <MapTokenNotice />}
 
       {/* MAPBOX CANVAS */}
       <div ref={mapBoxRef} className="absolute inset-0 z-0">

@@ -80,8 +80,10 @@ async def render_leg_animation(
     waypoints_json = json.dumps(waypoint_markers or [])
 
     async with async_playwright() as p:
+        # [NOTE] [Animation] Headless like every other renderer here: a visible window popped up and took the foreground for each leg.
+        # The GPU flags below still give a hardware WebGL2 context in headless mode (checked: ANGLE on the real GPU, same as headed).
         browser = await p.chromium.launch(
-            headless=False,
+            headless=True,
             args=[
                 "--disable-web-security",
                 "--ignore-gpu-blocklist",
@@ -467,5 +469,9 @@ async def render_leg_animation(
                     proc.stdin.write(frozen_png)
                     await proc.stdin.drain()
 
-    await asyncio.sleep(0.2)
+    # [NOTE] [Animation] Closing stdin is what tells ffmpeg the frames are over; without it (and the wait) libx264 is still flushing
+    # when the next stage opens the clip, which then has no moov atom or is cut short.
+    proc.stdin.close()
+    if await proc.wait() != 0:
+        logger.warning(f"ffmpeg exited with an error while finishing {output_filename}")
     logger.info(f"\nSUCCESS! High-speed animation saved to: {output_filename}")

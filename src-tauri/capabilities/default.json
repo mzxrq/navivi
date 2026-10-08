@@ -36,7 +36,17 @@
     },
     {
       "identifier": "fs:scope",
-      "allow": [{ "path": "**/*" }]
+      "allow": [{ "path": "**/*" }],
+      "deny": [
+        { "path": "**/.ssh/**" }, { "path": "**/.aws/**" }, { "path": "**/.azure/**" }, { "path": "**/.gnupg/**" },
+        { "path": "**/.kube/**" }, { "path": "**/.docker/**" },
+        { "path": "**/.git-credentials" }, { "path": "**/.npmrc" }, { "path": "**/.netrc" }, { "path": "**/.env" }, { "path": "**/.env.*" },
+        { "path": "**/id_rsa*" }, { "path": "**/id_ed25519*" }, { "path": "**/*.pem" }, { "path": "**/*.pfx" }, { "path": "**/*.kdbx" },
+        { "path": "$DATA/Microsoft/Credentials/**" }, { "path": "$DATA/Microsoft/Protect/**" }, { "path": "$LOCALDATA/Microsoft/Credentials/**" },
+        { "path": "$LOCALDATA/Google/**" }, { "path": "$LOCALDATA/Microsoft/Edge/**" }, { "path": "$LOCALDATA/BraveSoftware/**" }, { "path": "$LOCALDATA/Vivaldi/**" },
+        { "path": "$DATA/Mozilla/**" }, { "path": "$DATA/Opera Software/**" },
+        { "path": "$APPDATA/**" }, { "path": "$APPLOCALDATA/EBWebView/**" }
+      ]
     }
   ]
 }

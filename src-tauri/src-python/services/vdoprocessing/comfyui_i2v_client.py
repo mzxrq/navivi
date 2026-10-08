@@ -24,7 +24,7 @@ import sys
 import time
 import uuid
 from pathlib import Path
-from typing import Any, Dict, Final, List, Optional, Tuple
+from typing import Any, ClassVar, Dict, Final, List, Optional, Tuple
 from urllib.parse import urlsplit
 
 import httpx
@@ -590,13 +590,44 @@ class ComfyUII2VClient:
         except OSError:
             return False
 
+    # What our server's command line contains, to tell it from an unrelated program that reused a stale pidfile's PID.
+    _PROCESS_MARKER: ClassVar[str] = "--disable-auto-launch"
+
+    @classmethod
+    def _pidfile_pid(cls) -> Optional[int]:
+        try:
+            return int(cls._PIDFILE.read_text().strip())
+        except (OSError, ValueError):
+            return None
+
+    @staticmethod
+    def _pid_command_line(pid: int) -> Optional[str]:
+        """The command line of a running process, or None when it cannot be read."""
+        try:
+            if os.name == "nt":
+                return subprocess.run(
+                    ["powershell", "-NoProfile", "-Command",
+                     f"(Get-CimInstance Win32_Process -Filter 'ProcessId={int(pid)}').CommandLine"],
+                    capture_output=True, text=True, timeout=15,
+                ).stdout
+            return Path(f"/proc/{pid}/cmdline").read_bytes().decode(errors="replace")
+        except Exception:
+            return None
+
     @classmethod
     def _other_process_is_starting_server(cls) -> bool:
-        try:
-            pid = int(cls._PIDFILE.read_text().strip())
-        except (OSError, ValueError):
+        """True if another live process is starting the server. A live PID is believed only when its command line is ComfyUI's:
+        Windows reuses PIDs and a crash leaves the pidfile behind, so a PID that is some other program now is a stale file (removed).
+        An unreadable command line is trusted, since a second copy next to a healthy one is the worse mistake."""
+        pid = cls._pidfile_pid()
+        if pid is None or not cls._pid_is_alive(pid):
             return False
-        return cls._pid_is_alive(pid)
+        command_line = cls._pid_command_line(pid)
+        if command_line is None or cls._PROCESS_MARKER in command_line:
+            return True
+        logger.info("ComfyUI pidfile names PID %s, which is another program now; ignoring it.", pid)
+        cls._PIDFILE.unlink(missing_ok=True)
+        return False
 
     def _ensure_server_running(self) -> None:
         """Starts the bundled ComfyUI server as a subprocess if it isn't
@@ -660,6 +691,7 @@ class ComfyUII2VClient:
                     stderr=subprocess.STDOUT,
                     **popen_kwargs,
                 )
+                log_file.close()  # the child has its own copy; ours would keep the log locked for the life of this process
                 self._PIDFILE.write_text(str(ComfyUII2VClient._server_process.pid))
                 self._touch_activity()
                 self._start_idle_watchdog(ComfyUII2VClient._server_process.pid)
@@ -680,6 +712,14 @@ class ComfyUII2VClient:
                     "Bundled ComfyUI subprocess exited while starting up — "
                     f"see {self._SERVER_DIR / 'comfyui_server.log'} for details."
                 )
+            # Started by another process: if its PID is gone it died while loading; do not wait out the rest of the timeout.
+            if ComfyUII2VClient._server_process is None:
+                other = self._pidfile_pid()
+                if other is not None and not self._pid_is_alive(other):
+                    raise RuntimeError(
+                        "The ComfyUI server another process was starting stopped before it was ready — "
+                        f"see {self._SERVER_DIR / 'comfyui_server.log'} for details."
+                    )
             time.sleep(1.0)
 
         raise RuntimeError(

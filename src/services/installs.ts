@@ -68,7 +68,11 @@ async function ensureListening() {
   listening ??= listen<string>("install-log", (e) => onLine(String(e.payload))).then((fn) => {
     unlisten = fn;
   });
-  await listening;
+  // A rejected registration must not be cached, or every later install would run without progress until the app restarts.
+  await listening.catch((e) => {
+    listening = undefined;
+    throw e;
+  });
 }
 
 function stopListening() {

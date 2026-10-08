@@ -81,10 +81,11 @@ pub fn write_archive(source: &Path, dest: &Path, include_rendered: bool) -> Resu
     let result = write_archive_to(source, &partial, include_rendered);
     match result {
         Ok(()) => {
-            if dest.exists() {
-                fs::remove_file(dest).map_err(|e| e.to_string())?;
+            // rename replaces an existing file; deleting it first would lose the previous export if the rename then failed.
+            if let Err(e) = fs::rename(&partial, dest) {
+                let _ = fs::remove_file(&partial);
+                return Err(e.to_string());
             }
-            fs::rename(&partial, dest).map_err(|e| e.to_string())?;
             fs::metadata(dest).map(|m| m.len()).map_err(|e| e.to_string())
         }
         Err(e) => {

@@ -155,6 +155,34 @@ pub fn safe_join(base: &Path, name: &str) -> Option<PathBuf> {
     (out != base).then_some(out)
 }
 
+/// The relative paths `extract` is going to write, in the same form it returns them (folders end in `/`), without writing anything.
+/// The installer saves this list before copying, so a copy that stops half way can still be uninstalled completely.
+pub fn planned_names(archive: &mut ZipArchive<Section>) -> Result<Vec<String>, String> {
+    let mut names = Vec::new();
+    for i in 0..archive.len() {
+        let entry = archive.by_index_raw(i).map_err(|e| e.to_string())?;
+        let name = entry.name().to_string();
+        if name.starts_with(META_PREFIX) {
+            continue;
+        }
+        if safe_join(Path::new("."), &name).is_none() {
+            return Err(format!("The setup file contains an unsafe path: {name}"));
+        }
+        names.push(if entry.is_dir() { format!("{}/", name.replace('\\', "/").trim_end_matches('/')) } else { name.replace('\\', "/") });
+    }
+    Ok(names)
+}
+
+/// An error for a file that could not be written; a file that is open in a running copy or held by a scanner gets a plain reason.
+fn write_error(path: &Path, e: &std::io::Error) -> String {
+    // 5 = access denied, 32 = sharing violation, 33 = lock violation
+    if matches!(e.raw_os_error(), Some(5 | 32 | 33)) || e.kind() == std::io::ErrorKind::PermissionDenied {
+        format!("{} is in use or protected. Close Navivi, wait a moment and try again. ({e})", path.display())
+    } else {
+        format!("{}: {e}", path.display())
+    }
+}
+
 /// Unpacks everything except the metadata entries into `dest`, calling `progress(done_bytes, total_bytes, current_file)`.
 /// Returns the relative paths written (folders end in `/`), for the uninstaller's list.
 pub fn extract(
@@ -190,13 +218,13 @@ pub fn extract(
         if let Some(parent) = target.parent() {
             fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
         }
-        let mut out = File::create(&target).map_err(|e| format!("{}: {e}", target.display()))?;
+        let mut out = File::create(&target).map_err(|e| write_error(&target, &e))?;
         loop {
             let n = entry.read(&mut buffer).map_err(|e| format!("{name}: {e}"))?;
             if n == 0 {
                 break;
             }
-            out.write_all(&buffer[..n]).map_err(|e| format!("{}: {e}", target.display()))?;
+            out.write_all(&buffer[..n]).map_err(|e| write_error(&target, &e))?;
             done += n as u64;
             progress(done, total, &name);
         }
@@ -295,6 +323,29 @@ mod tests {
         let mut archive = payload.archive().unwrap();
         let manifest = read_manifest(&mut archive).unwrap();
         assert_eq!((manifest.name.as_str(), manifest.version.as_str(), manifest.exe.as_str()), ("Navivi", "1.2.3", "navivi.exe"));
+    }
+
+    #[test]
+    fn the_planned_list_matches_what_extract_writes_and_writes_nothing() {
+        let dir = temp("planned");
+        let exe = fake_setup(&dir, &[(MANIFEST_NAME, "{}"), ("navivi.exe", "x"), ("src-python/a.py", "y"), ("tools/ffmpeg/bin/ffmpeg.exe", "z")]);
+        let payload = Payload::find(&exe).unwrap().expect("a payload");
+        let mut archive = payload.archive().unwrap();
+        let planned = planned_names(&mut archive).unwrap();
+        let target = dir.join("out");
+        assert!(!target.exists(), "planning writes nothing");
+        let written = extract(&mut archive, &target, |_, _, _| {}).unwrap();
+        assert_eq!(planned, written, "the list saved before copying is the list of what gets copied");
+        assert!(!planned.iter().any(|n| n.starts_with(META_PREFIX)));
+    }
+
+    #[test]
+    fn a_locked_file_gets_a_plain_message() {
+        let denied = std::io::Error::from_raw_os_error(32); // sharing violation: the file is open in a running app
+        let text = write_error(Path::new(r"C:\Navivi\navivi.exe"), &denied);
+        assert!(text.contains("in use") && text.contains("navivi.exe"), "{text}");
+        let other = std::io::Error::from_raw_os_error(112); // disk full
+        assert!(!write_error(Path::new("x"), &other).contains("in use"));
     }
 
     #[test]

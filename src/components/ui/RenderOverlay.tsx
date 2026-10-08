@@ -250,7 +250,12 @@ export function RenderOverlay() {
       });
     };
 
-    setupListeners();
+    // A listener that cannot be registered would leave the overlay at "processing" for good; say so instead.
+    setupListeners().catch((err) => {
+      if (disposed) return;
+      setStatus("error");
+      pushSystemLog(t`Failed to invoke Python render: ${err}`, "error");
+    });
 
     return () => {
       disposed = true;

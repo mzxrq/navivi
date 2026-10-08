@@ -70,6 +70,9 @@ export function EditorView() {
   }, [pps, total]);
 
   const commit = useCallback((next: TimelineData) => setTimeline(next), [setTimeline]);
+  // Importing awaits a file dialog, a copy and a probe; the timeline to build on is the one at the end, not the one at the click.
+  const latestTimeline = useRef(timeline);
+  latestTimeline.current = timeline;
 
   const toRel = (abs: string) => toRelativeProjectPath(abs, dir);
 
@@ -107,10 +110,12 @@ export function EditorView() {
         muted: false,
         fadeIntoNext: 0,
       }));
-      const at = selection?.type === "segment" ? timeline.segments.findIndex((s) => s.id === selection.id) + 1 : timeline.segments.length;
-      const segments = [...timeline.segments];
+      const current = latestTimeline.current;
+      const found = selection?.type === "segment" ? current.segments.findIndex((s) => s.id === selection.id) : -1;
+      const at = found >= 0 ? found + 1 : current.segments.length;
+      const segments = [...current.segments];
       segments.splice(at, 0, ...added);
-      commit({ ...timeline, segments });
+      commit({ ...current, segments });
       setSelection({ type: "segment", id: added[0].id });
     } catch (e: any) {
       showToast(t`Could not add the video: ${e?.message ?? e}`, "error");
@@ -121,7 +126,8 @@ export function EditorView() {
     const copied = await invoke<string>("copy_asset_file", { sourcePath: source, targetDir: `${dir}/assets/audio/music` });
     const rel = toRel(copied);
     const duration = await probeDuration(convertFileSrc((await toAbsoluteProjectPath(rel, dir)).split(String.fromCharCode(92)).join("/")), "audio", 0);
-    commit({ ...timeline, music: { path: rel, label, duration, volume: timeline.music?.volume ?? 0.25, credit } });
+    const current = latestTimeline.current;
+    commit({ ...current, music: { path: rel, label, duration, volume: current.music?.volume ?? 0.25, credit } });
   };
 
   const useLibraryTrack = async (track: LibraryTrack) => {
@@ -137,7 +143,10 @@ export function EditorView() {
     setMusicOpen(false);
     try {
       const [file] = await importMedia("audio", "audio/music");
-      if (file) commit({ ...timeline, music: { path: file.rel, label: file.name, duration: file.duration, volume: timeline.music?.volume ?? 0.25 } });
+      if (file) {
+        const current = latestTimeline.current;
+        commit({ ...current, music: { path: file.rel, label: file.name, duration: file.duration, volume: current.music?.volume ?? 0.25 } });
+      }
     } catch (e: any) {
       showToast(t`Could not add the music: ${e?.message ?? e}`, "error");
     }
@@ -256,6 +265,8 @@ export function EditorView() {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
       if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
+      // Behind an open dialog or menu these keys belong to it: Delete must not remove the selected clip under the Export window.
+      if (document.querySelector('[role="dialog"], [role="menu"]')) return;
       const k = keyRef.current;
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a" && k.selection?.type === "cue") {
         e.preventDefault();

@@ -187,6 +187,7 @@ export function VoiceTab() {
     if (finished) void refresh();
   }, [finished, refresh]);
   const installing = jobs.some((j) => j.state === "running");
+  const installingNow = (id: string) => jobs.some((j) => j.state === "running" && j.id === id);
 
   // With exactly one engine set up, that is the one to use, whatever the project's default says.
   useEffect(() => {
@@ -290,8 +291,8 @@ export function VoiceTab() {
                 </Trans>
               </p>
               <button type="button" className={primaryButton} disabled={disabled || installing || !kokoro} onClick={() => install("kokoro")}>
-                {installing && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                {installing ? t`Setting up…` : t`Set up Kokoro-82M`}
+                {installingNow("kokoro") && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                {installingNow("kokoro") ? t`Setting up…` : t`Set up Kokoro-82M`}
               </button>
             </div>
           ) : (
@@ -340,8 +341,8 @@ export function VoiceTab() {
               </Trans>
             </p>
             <button type="button" className={primaryButton} disabled={disabled || installing} onClick={() => install("irodori")}>
-              {installing && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-              {installing ? t`Setting up…` : t`Set up Irodori-TTS`}
+              {installingNow("irodori") && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              {installingNow("irodori") ? t`Setting up…` : t`Set up Irodori-TTS`}
             </button>
           </div>
         </section>
@@ -358,8 +359,8 @@ export function VoiceTab() {
               </Trans>
             </p>
             <button type="button" className={primaryButton} disabled={disabled || installing} onClick={() => install("qwen3")}>
-              {installing && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-              {installing ? t`Setting up…` : t`Set up Qwen3-TTS`}
+              {installingNow("qwen3") && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              {installingNow("qwen3") ? t`Setting up…` : t`Set up Qwen3-TTS`}
             </button>
           </div>
         </section>

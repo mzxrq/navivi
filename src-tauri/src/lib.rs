@@ -5,7 +5,7 @@ mod secrets;
 use std::net::TcpStream;
 use std::process::{Child, Command, Stdio};
 use std::io::{BufRead, BufReader};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Mutex;
 use std::{thread};
 use std::time::Duration;
@@ -64,22 +64,20 @@ struct BlueprintState {
     render_cancelled: AtomicBool,
 }
 
+/// A slot's child, whether or not a panic elsewhere poisoned the lock: a poisoned lock still holds the data, and one panicking thread
+/// must not make every later call panic too.
+fn lock_slot(slot: &Mutex<Option<Child>>) -> std::sync::MutexGuard<'_, Option<Child>> {
+    slot.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
 fn kill_tracked_children(state: &BlueprintState) {
-    if let Ok(mut lock) = state.process.lock() {
-        if let Some(mut child) = lock.take() {
+    for slot in [&state.process, &state.install_process, &state.render_process] {
+        if let Some(mut child) = lock_slot(slot).take() {
             kill_tree(&mut child);
         }
     }
-    if let Ok(mut lock) = state.install_process.lock() {
-        if let Some(mut child) = lock.take() {
-            kill_tree(&mut child);
-        }
-    }
-    if let Ok(mut lock) = state.render_process.lock() {
-        if let Some(mut child) = lock.take() {
-            kill_tree(&mut child);
-        }
-    }
+    kill_export();
+    let _ = runtime::runtime_cancel(); // the first-run setup's uv / pip / browser download
 }
 
 
@@ -111,34 +109,35 @@ fn python_command(app: &AppHandle) -> Result<Command, String> {
 }
 
 #[tauri::command]
-async fn run_python_blueprint(
-    app: AppHandle,
-    action: String,
-    payload: String,
-    state: State<'_, BlueprintState>
-) -> Result<String, String> {
-    run_in_slot(&app, &action, &payload, &state.process, "blueprint-log")
+async fn run_python_blueprint(app: AppHandle, action: String, payload: String) -> Result<String, String> {
+    // Blocking work (it waits for the process): keep it off the async workers.
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<BlueprintState>();
+        run_in_slot(&app, &action, &payload, &state.process, None)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 // The modes that set up an engine or a model. They run in their own slot (see BlueprintState::install_process).
 const INSTALL_MODES: &[&str] = &["tts_install_kokoro", "tts_install_qwen3", "tts_install_irodori", "comfyui_install", "ollama_install"];
 
 #[tauri::command]
-async fn run_python_install(
-    app: AppHandle,
-    action: String,
-    payload: String,
-    state: State<'_, BlueprintState>,
-) -> Result<String, String> {
+async fn run_python_install(app: AppHandle, action: String, payload: String) -> Result<String, String> {
     if !INSTALL_MODES.contains(&action.as_str()) {
         return Err(format!("Not an install mode: {action}"));
     }
-    run_in_slot(&app, &action, &payload, &state.install_process, "install-log")
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<BlueprintState>();
+        run_in_slot(&app, &action, &payload, &state.install_process, Some("install-log"))
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
 fn cancel_python_install(state: State<'_, BlueprintState>) -> Result<String, String> {
-    let mut lock = state.install_process.lock().map_err(|e| e.to_string())?;
+    let mut lock = lock_slot(&state.install_process);
     if let Some(mut child) = lock.take() {
         kill_tree(&mut child);
         let _ = child.wait();
@@ -149,8 +148,8 @@ fn cancel_python_install(state: State<'_, BlueprintState>) -> Result<String, Str
 }
 
 /// Runs `python main.py <action> <payload>` and keeps it in `slot`; a new call on the same slot kills the previous one.
-/// Every stderr line is also sent to the window as `log_event`.
-fn run_in_slot(app: &AppHandle, action: &str, payload: &str, slot: &Mutex<Option<Child>>, log_event: &'static str) -> Result<String, String> {
+/// With `log_event`, every stderr line is also sent to the window under that event name (installs show progress from it).
+fn run_in_slot(app: &AppHandle, action: &str, payload: &str, slot: &Mutex<Option<Child>>, log_event: Option<&'static str>) -> Result<String, String> {
     // Spawn instead of output()
     let mut cmd = python_command(app)?;
     cmd.arg(action)
@@ -166,7 +165,7 @@ fn run_in_slot(app: &AppHandle, action: &str, payload: &str, slot: &Mutex<Option
     // 2. Lock the Mutex and store the child process safely
     let my_pid = child.id();
     {
-        let mut lock = slot.lock().unwrap();
+        let mut lock = lock_slot(slot);
         // If there's an existing process stuck, kill it before starting a new one
         if let Some(mut old_child) = lock.take() {
             kill_tree(&mut old_child);
@@ -182,7 +181,9 @@ fn run_in_slot(app: &AppHandle, action: &str, payload: &str, slot: &Mutex<Option
         let mut err_str = String::new();
         for line in std::io::BufReader::new(stderr).split(b'\n').map_while(Result::ok) {
             let line = String::from_utf8_lossy(&line).trim_end_matches('\r').to_string();
-            let _ = app_for_log.emit(log_event, line.clone());
+            if let Some(event) = log_event {
+                let _ = app_for_log.emit(event, line.clone());
+            }
             err_str.push_str(&line);
             err_str.push('\n');
         }
@@ -198,7 +199,7 @@ fn run_in_slot(app: &AppHandle, action: &str, payload: &str, slot: &Mutex<Option
 
     // 5. Streams are closed. Clean up and get the exit status.
     // Only this call's own process is reaped here: if a newer call (or a cancel) replaced it, the slot holds someone else's child.
-    let mut lock = slot.lock().unwrap();
+    let mut lock = lock_slot(slot);
     if lock.as_ref().map(|c| c.id()) == Some(my_pid) {
         if let Some(mut child) = lock.take() {
             match child.wait() {
@@ -219,7 +220,11 @@ fn run_in_slot(app: &AppHandle, action: &str, payload: &str, slot: &Mutex<Option
 }
 // Quick read-only modes that run beside the tracked process instead of replacing it,
 // so a background scan can't kill a TTS stage or an assistant call.
-const UTILITY_MODES: &[&str] = &["extract_words", "extract_place_words", "get_furigana"];
+const UTILITY_MODES: &[&str] = &[
+    "extract_words", "extract_place_words", "get_furigana",
+    // What the Voice tab, the setup checklist and the settings ask on every mount; on the shared slot they cancelled each other.
+    "tts_voices_list", "tts_engines", "tts_cache_info", "system_info", "list_fonts", "overview_length",
+];
 
 #[tauri::command]
 async fn run_python_utility(app: AppHandle, action: String, payload: String) -> Result<String, String> {
@@ -242,7 +247,7 @@ async fn run_python_utility(app: AppHandle, action: String, payload: String) -> 
 
 #[tauri::command]
 fn cancel_python_blueprint(state: State<'_, BlueprintState>) -> Result<String, String>{
-    let mut lock = state.process.lock().map_err(|e| e.to_string())?;
+    let mut lock = lock_slot(&state.process);
 
     if let Some(mut child) = lock.take() {
         kill_tree(&mut child);
@@ -256,7 +261,7 @@ fn cancel_python_blueprint(state: State<'_, BlueprintState>) -> Result<String, S
 #[tauri::command]
 fn cancel_render(app: AppHandle, state: State<'_, BlueprintState>) -> Result<String, String> {
     state.render_cancelled.store(true, Ordering::SeqCst);
-    let mut lock = state.render_process.lock().map_err(|e| e.to_string())?;
+    let mut lock = lock_slot(&state.render_process);
     if let Some(mut child) = lock.take() {
         kill_tree(&mut child);
         let _ = child.wait();
@@ -297,7 +302,7 @@ fn start_render(
     // an app exit (or a future cancel-render command) can find and kill it.
     // Kill off any previous render that's still stuck first.
     {
-        let mut lock = state.render_process.lock().unwrap();
+        let mut lock = lock_slot(&state.render_process);
         if let Some(mut old_child) = lock.take() {
             kill_tree(&mut old_child);
             let _ = old_child.wait();
@@ -329,7 +334,8 @@ fn start_render(
         let child_state = app.state::<BlueprintState>();
         let mut finished = None;
 
-        if let Ok(mut lock) = child_state.render_process.lock() {
+        {
+            let mut lock = lock_slot(&child_state.render_process);
             if let Some(child) = lock.as_mut() {
                 match child.try_wait() {
                     Ok(Some(status)) => {
@@ -396,7 +402,8 @@ fn wake_up_ollama() -> Result<String, String> {
         let mut serve = Command::new(&exe);
         runtime::hide_window(&mut serve);
         let spawned = serve
-            .env("OLLAMA_ORIGINS", "*")
+            // Only this app's own origins: "*" would let any web page the user visits call the local model server.
+            .env("OLLAMA_ORIGINS", "http://tauri.localhost,https://tauri.localhost,tauri://localhost,http://localhost:1420,http://127.0.0.1:1420")
             .arg("serve")
             .stdout(Stdio::null())
             .stderr(Stdio::null())
@@ -409,19 +416,66 @@ fn wake_up_ollama() -> Result<String, String> {
     Err(format!("Ollama is not installed or could not be started ({})", last_error))
 }
 
+// The export's Python process: u32::MAX while it is being started, 0 when none runs. Tracked so Cancel and quitting the app end it
+// (it used to be invisible to both, so python, ffmpeg and Chromium kept running after the window closed).
+static EXPORT_PID: AtomicU32 = AtomicU32::new(0);
+static EXPORT_CANCELLED: AtomicBool = AtomicBool::new(false);
+
+fn kill_export() {
+    let pid = EXPORT_PID.swap(0, Ordering::SeqCst);
+    if pid != 0 && pid != u32::MAX {
+        runtime::kill_pid_tree(pid);
+    }
+}
+
+#[tauri::command]
+fn cancel_export() -> Result<String, String> {
+    let running = EXPORT_PID.load(Ordering::SeqCst) != 0;
+    if running {
+        EXPORT_CANCELLED.store(true, Ordering::SeqCst);
+        let pid = EXPORT_PID.load(Ordering::SeqCst);
+        if pid != u32::MAX {
+            runtime::kill_pid_tree(pid);
+        }
+        Ok("Cancelled".to_string())
+    } else {
+        Ok("No export is running".to_string())
+    }
+}
+
 #[tauri::command]
 async fn export_video(app: tauri::AppHandle, project_dir: String) -> Result<String, String> {
+    // Blocking work (it waits for the process): off the async workers.
+    tauri::async_runtime::spawn_blocking(move || export_blocking(&app, &project_dir))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+fn export_blocking(app: &tauri::AppHandle, project_dir: &str) -> Result<String, String> {
+    if EXPORT_PID.compare_exchange(0, u32::MAX, Ordering::SeqCst, Ordering::SeqCst).is_err() {
+        return Err("An export is already running.".into());
+    }
+    EXPORT_CANCELLED.store(false, Ordering::SeqCst);
     println!("Starting video export for: {}", project_dir);
 
     let timeline_path = format!("{}/timeline.json", project_dir);
 
-    let mut child = python_command(&app)?
-        .arg("render_timeline")
-        .arg(&timeline_path)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| e.to_string())?;
+    let spawned = python_command(app).and_then(|mut cmd| {
+        cmd.arg("render_timeline")
+            .arg(&timeline_path)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|e| e.to_string())
+    });
+    let mut child = match spawned {
+        Ok(child) => child,
+        Err(e) => {
+            EXPORT_PID.store(0, Ordering::SeqCst);
+            return Err(e);
+        }
+    };
+    EXPORT_PID.store(child.id(), Ordering::SeqCst);
 
     // "EXPORT_PROGRESS <pct>" lines become export-progress events; the rest is kept for errors.
     let stderr = child.stderr.take().ok_or("Failed to capture stderr")?;
@@ -442,8 +496,13 @@ async fn export_video(app: tauri::AppHandle, project_dir: String) -> Result<Stri
         rest
     });
 
-    let output = child.wait_with_output().map_err(|e| e.to_string())?;
+    let waited = child.wait_with_output();
+    EXPORT_PID.store(0, Ordering::SeqCst);
     let err = stderr_reader.join().unwrap_or_default();
+    if EXPORT_CANCELLED.swap(false, Ordering::SeqCst) {
+        return Err("Export cancelled.".into());
+    }
+    let output = waited.map_err(|e| e.to_string())?;
 
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
     if output.status.success() {
@@ -518,12 +577,21 @@ async fn install_vc_runtime() -> Result<(), String> {
     if runtime::vc_runtime_present() {
         return Ok(());
     }
+    // The code that gets elevated: a fresh random folder per run (not a fixed %TEMP% name another process could swap) and a valid
+    // Microsoft Authenticode signature before it starts. The setup program has the same script (setup/src/system.rs).
     let script = r#"$ErrorActionPreference = 'Stop'
-$f = Join-Path $env:TEMP 'navivi_vc_redist.x64.exe'
-Invoke-WebRequest 'https://aka.ms/vs/17/release/vc_redist.x64.exe' -OutFile $f -UseBasicParsing
-$p = Start-Process $f -ArgumentList '/install','/quiet','/norestart' -Verb RunAs -Wait -PassThru
-Remove-Item $f -Force -ErrorAction SilentlyContinue
-exit $p.ExitCode"#;
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+$dir = Join-Path ([IO.Path]::GetTempPath()) ('navivi-vc-' + [guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $dir | Out-Null
+try {
+  $f = Join-Path $dir 'vc_redist.x64.exe'
+  Invoke-WebRequest 'https://aka.ms/vs/17/release/vc_redist.x64.exe' -OutFile $f -UseBasicParsing
+  $sig = Get-AuthenticodeSignature -LiteralPath $f
+  if ($sig.Status -ne 'Valid' -or $sig.SignerCertificate.Subject -notmatch 'O=Microsoft Corporation') { throw 'The downloaded file is not signed by Microsoft, so it was not run.' }
+  $p = Start-Process -FilePath $f -ArgumentList '/install','/quiet','/norestart' -Verb RunAs -Wait -PassThru
+  $code = $p.ExitCode
+} finally { Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction SilentlyContinue }
+exit $code"#;
     let output = tauri::async_runtime::spawn_blocking(move || {
         let mut cmd = Command::new("powershell");
         runtime::hide_window(&mut cmd);
@@ -609,6 +677,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             run_python_blueprint,
             run_python_utility,
+            cancel_export,
+            runtime::runtime_cancel,
             run_python_install,
             cancel_python_install,
             cancel_python_blueprint,
@@ -728,6 +798,19 @@ mod tests {
             .filter_map(|l| l.split(',').nth(1).map(|p| p.trim_matches('"').to_string()))
             .filter(|p| p.chars().all(|c| c.is_ascii_digit()) && !p.is_empty())
             .collect()
+    }
+
+    #[test]
+    fn a_poisoned_process_slot_is_still_usable() {
+        let slot = std::sync::Arc::new(Mutex::new(None::<Child>));
+        let other = slot.clone();
+        let _ = thread::spawn(move || {
+            let _guard = other.lock().unwrap();
+            panic!("a thread dies while holding the slot");
+        })
+        .join();
+        assert!(slot.is_poisoned());
+        assert!(lock_slot(&slot).is_none(), "one panic must not make every later call panic");
     }
 
     #[test]

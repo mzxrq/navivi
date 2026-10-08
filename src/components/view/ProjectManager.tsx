@@ -142,7 +142,7 @@ export function ProjectManager() {
       const absoluteDemoPath = await join(demoFolder, "kyoto_demo.nvv");
       await writeTextFile(absoluteDemoPath, demoText);
 
-      await loadProject(absoluteDemoPath);
+      await handleOpenProject(absoluteDemoPath);
     } catch (e) {
       console.error("Failed to load demo route:", e);
       showToast(t`Failed to load demo route`, "error");
