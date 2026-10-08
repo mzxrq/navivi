@@ -12,7 +12,6 @@ after TTS the second each cue is spoken is recorded from the real audio
 
 import hashlib
 import json
-import re
 from pathlib import Path
 from typing import Optional
 
