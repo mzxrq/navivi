@@ -392,6 +392,7 @@ def capture_pydeck_zoom_sequence(
     extents: List[Tuple[float, float, float, float]] = []
     for i in range(max(1, num_frames)):
         t = i / max(1, num_frames - 1)
+        t = t * t * (3 - 2 * t)  # eased: the push starts and settles gently
         if end_view is not None:
             end_lon, end_lat, end_zoom = end_view
             zoom = base_zoom + (end_zoom - base_zoom) * t

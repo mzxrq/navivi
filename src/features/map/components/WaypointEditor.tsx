@@ -362,6 +362,7 @@ export function WaypointEditor({
           index: wpIndex,
           total: waypoints.length,
           otherScript: type === "arriving" ? wp.attractionNarration : wp.arrivingNarration,
+          otherStops: waypoints.filter((w) => w.id !== wp.id).map((w) => (type === "arriving" ? w.arrivingNarration : w.attractionNarration) ?? ""),
         },
       );
     } catch (err: any) {

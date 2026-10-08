@@ -588,6 +588,7 @@ class VideoExporter:
         volume: float = 1.0, muted: bool = False,
         extra_audio: Optional[str] = None, extra_volume: float = 0.5,
         duration: Optional[float] = None,
+        end_hold: float = 0.0, fade_out: float = 0.0,
     ) -> Path:
         """Combines one timeline track's silent video with its own separate
         audio track (see timeline_step.build_timeline — video and audio are
@@ -615,6 +616,9 @@ class VideoExporter:
         # after it would drift against its sound. Hold the last frame until the
         # voice is done, and a little beyond (tuning.AUDIO_END_HOLD_SECONDS).
         # An editor timeline states each clip's length (as its preview plays it), used as is.
+        # end_hold: extra seconds on the last frame (the goodbye before the outro, tuning.ENDING_HOLD_SECONDS).
+        if duration and end_hold:
+            duration += end_hold
         hold_extra = 0.0
         if has_audio or duration:
             try:
@@ -636,6 +640,22 @@ class VideoExporter:
                 logger.warning("concat_from_timeline: could not probe track %d for its audio end: %s", index, exc)
             if hold_extra < 0.05:
                 hold_extra = 0.0
+        if end_hold and not duration:
+            hold_extra += end_hold
+
+        # fade_out: the video's last clip fades to black and silence.
+        fade_start = None
+        if fade_out > 0:
+            try:
+                from services.tts.ttsengine import FFmpegManager
+
+                length = duration or (
+                    min(FFmpegManager.get_media_duration(str(video_path)), trim_out or float("inf")) - trim_in + hold_extra
+                )
+                fade_out = min(fade_out, length / 2.0)
+                fade_start = max(0.0, length - fade_out)
+            except (RuntimeError, OSError) as exc:
+                logger.warning("concat_from_timeline: no fade-out on track %d: %s", index, exc)
 
         # Every segment must have the same picture size: the concat step below
         # stream-copies, and a clip of another size (the 1280x704 intro/outro
@@ -661,6 +681,8 @@ class VideoExporter:
         if hold_extra:
             logger.info("Track %d: holding its last frame %.2fs so the video lasts as long as its audio.", index, hold_extra)
             filters.append(f"tpad=stop_mode=clone:stop_duration={hold_extra:.3f}")
+        if fade_start is not None:
+            filters.append(f"fade=t=out:st={fade_start:.3f}:d={fade_out:.3f}")
 
         trimmed = trim_in > 0.01 or trim_out is not None
         cmd = [ffmpeg_cmd, "-y", *tuning.ffmpeg_log_args()]
@@ -707,13 +729,16 @@ class VideoExporter:
             audio_filters.append(f"volume={0.0 if muted else max(0.0, volume):.3f}")
         if has_audio:
             audio_filters.append("apad")
+        audio_fade = f",afade=t=out:st={fade_start:.3f}:d={fade_out:.3f}" if fade_start is not None else ""
+        if has_audio and audio_fade and not extra:
+            audio_filters.append(audio_fade[1:])
         if extra:
             # Narration (or silence) plus the footage's own sound, mixed under it.
             voice_chain = ",".join(audio_filters) if audio_filters else "anull"
             cmd += [
                 "-filter_complex",
                 f"[1:a]{voice_chain}[v];[2:a]volume={max(0.0, extra_volume):.3f}[e];"
-                f"[v][e]amix=inputs=2:duration=longest:normalize=0,apad[a]",
+                f"[v][e]amix=inputs=2:duration=longest:normalize=0,apad{audio_fade}[a]",
                 "-map", "[a]",
             ]
         elif audio_filters:
@@ -904,6 +929,9 @@ class VideoExporter:
                     extra_audio=track.get("extra_audio_path"),
                     extra_volume=float(track.get("extra_audio_volume") if track.get("extra_audio_volume") is not None else 0.5),
                     duration=float(track["duration"]) if track.get("duration") else None,
+                    end_hold=tuning.ENDING_HOLD_SECONDS
+                    if i == len(tracks) - 2 and Path(tracks[-1]["file_path"]).name == tuning.OUTRO_OUTPUT_FILENAME else 0.0,
+                    fade_out=tuning.VIDEO_END_FADE_SECONDS if i == len(tracks) - 1 else 0.0,
                 ))
                 report(mux_end * sum(weights[: i + 1]) / sum(weights))
 

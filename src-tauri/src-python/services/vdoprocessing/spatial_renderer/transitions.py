@@ -584,7 +584,19 @@ class _TransitionMixin:
                 # hang it below the start pin).
                 self._place_cards_above_pins([highlight_popup], w, h, *self.graphics.beside_card_footprint())
 
-                for frame_idx, (frame_bgr, extent) in enumerate(dynamic_frames):
+                # The card waits for the zoom to settle, then pops in like the walk's photo cards
+                # (fade, slide up, grow) over ENDING_HIGHLIGHT_POP_SECONDS of the hold.
+                pop_start = len(dynamic_frames)
+                pop_frames = max(1, int(tuning.ENDING_HIGHLIGHT_POP_SECONDS * fps))
+                pop_total = 10 ** 6
+                pop = {"total_frames": pop_total, "frames_left": pop_total, "fade_frames": pop_frames}
+                total_n = pop_start + hold_n
+                frame_out = None
+                for frame_idx in range(total_n):
+                    if frame_idx - pop_start > pop_frames:
+                        video.write(frame_out)
+                        continue
+                    frame_bgr, extent = dynamic_frames[min(frame_idx, pop_start - 1)]
                     frame_out = frame_bgr.copy()
                     # Re-projected fresh against THIS frame's own extent,
                     # same as _draw_nearby_waypoints just below — NOT
@@ -613,27 +625,30 @@ class _TransitionMixin:
                     # was simply missing from every lead-in frame.
                     self._draw_route_line_on_extent(frame_out, w, h, extent)
                     self._draw_nearby_waypoints(frame_out, w, h, extent, frame_px, frame_py)
-                    if frame_idx < lead_in_n:
+                    if frame_idx < pop_start:
                         self.graphics.draw_marker(
                             frame_out, frame_px, frame_py,
                             number="S" if is_start else "E",
                             color=self._START_PIN_COLOR if is_start else self._END_PIN_COLOR,
                             image=highlight_popup["data"].get("pin_image"),
                         )
-                    if frame_idx >= lead_in_n:
-                        # The "hard cut to arrived" moment — before this
-                        # frame the featured point is just a plain pin on
-                        # the map, same as every other waypoint (matches
-                        # the static-tile fallback's own lead-in, which
-                        # shows no card either); from here on its
-                        # leader-lined card joins it too. The card's own
-                        # box was already laid out once (above) against
-                        # the final settled position, so only the pin end
-                        # of its leader line needs to track this frame's
-                        # own (by now very close to final) position.
+                    else:
                         highlight_popup["x"], highlight_popup["y"] = frame_px, frame_py
+                        card = highlight_popup.copy()
+                        pop["frames_left"] = pop_total - (frame_idx - pop_start)
+                        alpha = self._popup_fade_alpha(pop)
+                        if card.get("beside_box"):
+                            bx, by = card["beside_box"]
+                            by += self._popup_slide_offset_y(pop)
+                            grow = self._popup_enter_scale(pop)
+                            if grow < 0.999:
+                                full_w, full_h = self.graphics.beside_card_footprint(1.0)
+                                now_w, now_h = self.graphics.beside_card_footprint(grow)
+                                bx, by = bx + (full_w - now_w) / 2, by + (full_h - now_h) / 2
+                                card["card_scale"] = grow
+                            card["beside_box"] = (int(bx), int(by))
                         frame_out = self.graphics.render_popup_box(
-                            frame_out, highlight_popup, line_only=True
+                            frame_out, card, alpha=alpha, line_only=True
                         )
                         self.graphics.draw_marker(
                             frame_out, frame_px, frame_py,
@@ -642,16 +657,11 @@ class _TransitionMixin:
                             image=highlight_popup["data"].get("pin_image"),
                         )
                         frame_out = self.graphics.render_popup_box(
-                            frame_out, highlight_popup, skip_line=True
+                            frame_out, card, alpha=alpha, skip_line=True
                         )
                     video.write(frame_out)
                     if frame_idx == lead_in_n + wait_n - 1:
                         dynamic_zoomed_end = frame_out
-                # hold_n: a genuine hold on the last real frame reached —
-                # see the comment above on why this doesn't re-capture
-                # more (identical-looking) pydeck frames.
-                for _ in range(hold_n):
-                    video.write(frame_out)
                 dynamic_final_hold = frame_out
                 self.last_frame = frame_out
                 # highlight_bg only needs to stay non-None here so the

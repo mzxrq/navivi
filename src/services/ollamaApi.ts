@@ -409,15 +409,16 @@ export async function generateWaypointScriptStream(
         }
     }
 
+    const copied = (context: RouteContext) => [context.otherScript, ...(context.otherStops ?? [])].filter(Boolean).join("\n");
     // Lower temperature keeps a small model close to the facts it was given.
     const run = async (context: RouteContext, temperature: number) => {
         let raw = "";
         await streamLLM(
-            buildWaypointPrompt({ place, theme, userPrompt, facts, scriptType, isFirstWaypoint, route: context }),
+            buildWaypointPrompt({ place, theme, userPrompt, facts, scriptType, isFirstWaypoint, hasPhotos: base64Images.length > 0, route: context }),
             engine,
             (text) => {
                 raw = cleanNarration(text);
-                onChunk(dropRepeatedSentences(raw, route.otherScript, scriptType) || raw);
+                onChunk(dropRepeatedSentences(raw, copied(context), scriptType) || raw);
             },
             signal,
             base64Images,
@@ -428,7 +429,7 @@ export async function generateWaypointScriptStream(
     };
     const first = await run(route, 0.4);
     // Every sentence repeated the other script: once more without showing it, so there is nothing to copy.
-    if (first.trim() && !dropRepeatedSentences(first, route.otherScript, scriptType)) {
+    if (first.trim() && !dropRepeatedSentences(first, copied(route), scriptType)) {
         await run({ ...route, otherScript: undefined }, 0.8);
     }
 }

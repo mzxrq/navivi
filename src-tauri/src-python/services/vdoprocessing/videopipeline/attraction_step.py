@@ -8,6 +8,7 @@ than reimplementing prompt resolution and filename conventions on its own."""
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from services import tuning
 from services.logger.progress import tracker
 
 from .helpers import attraction_output_filename, has_attraction_media, logger
@@ -63,6 +64,8 @@ def generate_waypoint_attraction_video(
     # `images` holds every photo; the editor saves only the first into `popup_image`.
     popup_image_entry = waypoint.get("images") or waypoint.get("popup_image")
     label = waypoint.get("label", f"waypoint_{idx}")
+    if target_audio_duration > 0:
+        target_audio_duration += tuning.ATTRACTION_NARRATION_TAIL_SECONDS
 
     if waypoint.get("videos"):
         from services.vdoprocessing.user_videos import process_user_videos
