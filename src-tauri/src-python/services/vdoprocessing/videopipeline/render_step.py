@@ -1262,8 +1262,17 @@ def render_route_video(
             if len(leg_popups) > 0:
                 leg_popups[-1] = route_popups[end_idx]
 
+            # [NOTE] [Heatmap] The app writes each track point's elevation into raw_track.gpx (GPSBabel's csv: `height`);
+            # only with the switch on, and only when it lines up with the leg's points (a ferry leg's chunk is synthetic).
+            leg_heights = (
+                chunk["height"].tolist()
+                if settings.get("show_route_heatmap") and "height" in chunk.columns and len(chunk) == len(lats_arr)
+                else None
+            )
+
             res_sequence.append(
                 {
+                    **({"elevations": leg_heights} if leg_heights else {}),
                     "img_path": (
                         str(raw_img[0])
                         if isinstance(raw_img, list) and raw_img

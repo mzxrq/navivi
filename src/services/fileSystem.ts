@@ -7,6 +7,7 @@ import { buildAssetManifest } from "../utils/manifestBuilder";
 import { TimelineData, RecentProjects, TextStyle, ProjectMetadata } from "../types";
 import { routeCacheKey } from "../utils/routeCacheKey";
 import { stripApiKeys } from "../utils/apiKeys";
+import { mapboxTileLoader, segmentElevations } from "../utils/terrainElevation";
 import { planFileNames } from "../utils/fileNames";
 import { renameCredits } from "../utils/photoCredits";
 import { emptyTimeline, type ExportOptions, timelineFromEditorState, timelineFromPipeline, toManifest } from "../features/editor/model";
@@ -151,6 +152,18 @@ export const saveProjectData = async (
     gpxLines.push(` </wpt>`);
   });
 
+  // The video colors the route by steepness from these <ele> values (Python reads them back from raw_track.gpx).
+  // Without the switch, a token or a network they stay the old constant, which Python ignores as "no elevation".
+  let legEle: (number[] | null)[] = [];
+  const mapboxToken = settings?.mapbox_api_key || import.meta.env.VITE_MAPBOX_TOKEN;
+  if (settings?.show_route_heatmap && mapboxToken) {
+    try {
+      legEle = await segmentElevations(routeSegments, waypoints, mapboxTileLoader(mapboxToken));
+    } catch {
+      legEle = [];
+    }
+  }
+
   // track segments
   gpxLines.push(`  <trk>\n    <name>${xmlText(projName)}</name>\n    <trkseg>`);
 
@@ -158,11 +171,11 @@ export const saveProjectData = async (
   let lastPos: [number, number] | null = null;
 
   // export tracks
-  routeSegments.forEach((segment) => {
+  routeSegments.forEach((segment, segIndex) => {
     // Rough speed estimates: 15 m/s (~54 km/h) for driving, 1.4 m/s (~5 km/h) for walking
     const speedMs = (segment.mode === "walking" || segment.mode === "direct" || segment.mode === "draw") ? 1.4 : 15.0;
 
-    segment.positions.forEach((pos: [number, number]) => {
+    segment.positions.forEach((pos: [number, number], posIndex: number) => {
       let dist = 0;
 
       if (lastPos) {
@@ -174,7 +187,7 @@ export const saveProjectData = async (
       currentTime = new Date(currentTime.getTime() + timeDeltaSeconds * 1000);
 
       gpxLines.push(`      <trkpt lat="${pos[0]}" lon="${pos[1]}">`);
-      gpxLines.push(`        <ele>35.0</ele>`); // Static fake elevation
+      gpxLines.push(`        <ele>${(legEle[segIndex]?.[posIndex] ?? 35).toFixed(1)}</ele>`); // 35 = no elevation known
       gpxLines.push(`        <time>${currentTime.toISOString()}</time>`);
       gpxLines.push(`        <speed>${speedMs.toFixed(6)}</speed>`);
       gpxLines.push(`        <fix>3d</fix>`);
