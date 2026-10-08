@@ -5,7 +5,7 @@ import { ScriptInput } from "../../../components/ui/ScriptInput";
 import { useUI } from "../../../hooks/useUI";
 import { useWorkspace } from "../../../hooks/useWorkspace";
 import { callSidecar, callSidecarShared } from "../../../services/sidecar";
-import { estimateSeconds, lengthVerdict, type OverviewLength } from "../../../utils/overviewScript";
+import { estimateSeconds, joinOpening, lengthVerdict, splitOpening, type OverviewLength } from "../../../utils/overviewScript";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 
@@ -22,7 +22,7 @@ const buttonClass =
   "h-7 px-2 inline-flex items-center gap-1.5 rounded-md border border-zinc-200 dark:border-white/10 text-[11px] text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-white/5 disabled:opacity-50 disabled:cursor-not-allowed transition-colors";
 
 export function OverviewNarration() {
-  const { metadata, updateMetadata, saveProject } = useWorkspace();
+  const { metadata, updateMetadata, saveProject, settings, updateSettings } = useWorkspace();
   const { showToast, isRendering } = useUI();
   const [isOpen, setIsOpen] = useState(false);
   const [busy, setBusy] = useState<Busy>(null);
@@ -39,6 +39,12 @@ export function OverviewNarration() {
   const isAuto = metadata.overview_narration_is_auto === true;
   const userWritten = hasText && !isAuto;
   const locked = busy !== null || isRendering;
+  const style = settings.overview_style ?? "walk"; // chosen in Settings > Video
+  const course = style === "course";
+  const intro = settings.overview_intro ?? "";
+  // Course: the opening sits in the Course introduction box, the rest below; the file keeps one script.
+  const { opening, body } = course ? splitOpening(text) : { opening: "", body: text };
+  const autoIntro = hasText && isAuto && !intro.trim() && opening.trim().length > 0;
 
   const seconds = useMemo(() => (limits ? estimateSeconds(text, limits.chars_per_second) : 0), [text, limits]);
   const verdict = limits ? lengthVerdict(seconds, limits) : "empty";
@@ -171,13 +177,37 @@ export function OverviewNarration() {
             </Trans>
           </p>
 
+          {course && (
+            <label className="block space-y-1">
+              <span className="flex items-baseline justify-between gap-2 text-[11px]">
+                <span className="font-medium text-zinc-700 dark:text-zinc-300">
+                  <Trans>Course introduction</Trans>
+                </span>
+                {autoIntro && <span className="text-zinc-400">{t`Written automatically`}</span>}
+              </span>
+              <textarea
+                value={hasText ? opening : intro}
+                onChange={(e) => {
+                  updateSettings({ overview_intro: e.target.value });
+                  if (hasText) updateMetadata({ overview_narration: joinOpening(e.target.value, body) });
+                }}
+                rows={3}
+                placeholder={t`Leave blank and it's written from your stops.`}
+                className="w-full resize-y rounded-md border border-zinc-200 dark:border-white/10 bg-white dark:bg-zinc-900 px-2 py-1.5 text-[13px] leading-relaxed text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:border-navi"
+              />
+              <span className="block text-[11px] text-zinc-500">
+                <Trans>Spoken over the opening photos, before the map appears. Auto-write starts the script with it.</Trans>
+              </span>
+            </label>
+          )}
+
           <ScriptInput
-            value={text}
-            onChange={setText}
+            value={body}
+            onChange={(value) => setText(course ? joinOpening(opening, value) : value)}
             onGenerate={() => undefined}
             isGenerating={false}
             showLabel={false}
-            cues={["start", "n", "go", "end"]}
+            cues={course ? ["n", "go", "end"] : ["start", "n", "go", "end"]}
           />
 
           {readout && (

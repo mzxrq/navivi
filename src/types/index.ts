@@ -274,6 +274,7 @@ export interface WorkspaceState {
   timeline: TimelineData;
   setTimeline: (action: SetStateAction<TimelineData>) => void;
   autoLoadTimeline: (projectDir: string) => Promise<void>;
+  adoptRenderedOverview: (projectDir: string) => Promise<void>;
   undoTimeline: () => void;
   redoTimeline: () => void;
   canUndoTimeline: boolean;
