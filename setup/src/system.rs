@@ -73,12 +73,27 @@ pub fn vc_runtime_installed() -> bool {
         .unwrap_or(false)
 }
 
+/// The PowerShell that fetches Microsoft's redistributable. It is the code that gets elevated, so: a fresh random folder per run
+/// (not a fixed name in %TEMP% that another process could pre-create or swap), and the file must carry a valid Authenticode
+/// signature from Microsoft before it is started. The same script is in src-tauri/src/lib.rs `install_vc_runtime`.
+const VC_REDIST_SCRIPT: &str = "$ErrorActionPreference = 'Stop'; \
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; \
+    $dir = Join-Path ([IO.Path]::GetTempPath()) ('navivi-vc-' + [guid]::NewGuid().ToString('N')); \
+    New-Item -ItemType Directory -Path $dir | Out-Null; \
+    try { \
+      $f = Join-Path $dir 'vc_redist.x64.exe'; \
+      Invoke-WebRequest -UseBasicParsing 'https://aka.ms/vs/17/release/vc_redist.x64.exe' -OutFile $f; \
+      $sig = Get-AuthenticodeSignature -LiteralPath $f; \
+      if ($sig.Status -ne 'Valid' -or $sig.SignerCertificate.Subject -notmatch 'O=Microsoft Corporation') { throw 'The downloaded file is not signed by Microsoft, so it was not run.' }; \
+      $p = Start-Process -FilePath $f -ArgumentList '/install','/quiet','/norestart' -Verb RunAs -Wait -PassThru; \
+      $p.ExitCode \
+    } finally { Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction SilentlyContinue }";
+
 /// Downloads Microsoft's redistributable and runs it quietly (Windows asks for permission). Exit codes 0, 1638 (a newer one is
 /// already there) and 3010 (done, restart pending) all mean it is in place.
 pub fn install_vc_runtime() -> Result<(), String> {
-    let script = "$ErrorActionPreference = 'Stop';         [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;         $f = Join-Path $env:TEMP 'navivi_vc_redist.x64.exe';         Invoke-WebRequest -UseBasicParsing 'https://aka.ms/vs/17/release/vc_redist.x64.exe' -OutFile $f;         $p = Start-Process -FilePath $f -ArgumentList '/install','/quiet','/norestart' -Verb RunAs -Wait -PassThru;         Remove-Item $f -ErrorAction SilentlyContinue;         $p.ExitCode";
     let out = Command::new("powershell")
-        .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script])
+        .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", VC_REDIST_SCRIPT])
         .creation_flags(CREATE_NO_WINDOW)
         .stdin(Stdio::null())
         .output()

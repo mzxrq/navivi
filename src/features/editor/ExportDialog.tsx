@@ -28,6 +28,7 @@ export function ExportDialog({ timeline, projectDir, projectName, onClose }: Exp
   const [error, setError] = useState("");
   const [progress, setProgress] = useState(0);
   const startedAt = useRef(0);
+  const stopped = useRef(false);
   const [now, setNow] = useState(0);
   const { total } = layout(timeline);
   const resolution = settings.default_export_resolution ?? "1080p";
@@ -41,17 +42,30 @@ export function ExportDialog({ timeline, projectDir, projectName, onClose }: Exp
     setProgress(0);
     startedAt.current = Date.now();
     setNow(startedAt.current);
-    const unlisten = await listen<number>("export-progress", (e) => setProgress((p) => Math.max(p, e.payload)));
+    stopped.current = false;
+    let unlisten: (() => void) | undefined;
     try {
+      // The progress bar is a nicety: if registering for it fails the export still runs, without one (and the dialog is not stuck).
+      unlisten = await listen<number>("export-progress", (e) => setProgress((p) => Math.max(p, e.payload))).catch(() => undefined);
       if (!(await saveTimelineManifest(projectDir, projectName, timeline, settings.caption_style ?? {}, options))) throw new Error(t`Could not save the timeline`);
       setOutput(await invoke<string>("export_video", { projectDir }));
       setPhase("done");
     } catch (e: any) {
-      setError(String(e?.message ?? e));
-      setPhase("error");
+      if (stopped.current) {
+        setPhase("ready");
+      } else {
+        setError(String(e?.message ?? e));
+        setPhase("error");
+      }
     } finally {
-      unlisten();
+      unlisten?.();
     }
+  };
+
+  // Ends the export's Python process (and ffmpeg, Chromium with it); the call then comes back as cancelled.
+  const stop = () => {
+    stopped.current = true;
+    invoke("cancel_export").catch(() => undefined);
   };
 
   useEffect(() => {
@@ -92,8 +106,8 @@ export function ExportDialog({ timeline, projectDir, projectName, onClose }: Exp
           </>
         ) : (
           <>
-            <button className={dialogButton.secondary} disabled={phase === "working"} onClick={onClose}>
-              <Trans>Cancel</Trans>
+            <button className={dialogButton.secondary} onClick={phase === "working" ? stop : onClose}>
+              {phase === "working" ? <Trans>Stop export</Trans> : <Trans>Cancel</Trans>}
             </button>
             <button className={dialogButton.primary} disabled={phase === "working" || !timeline.segments.length} onClick={run}>
               {phase === "error" ? <Trans>Try again</Trans> : <Trans>Export</Trans>}

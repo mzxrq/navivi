@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 import { db } from "../../services/db";
-import { getRuntimeStatus, installRuntime, needsSetup, parseDownloadLine, SETUP_REQUIRED_EVENT, type SetupStep } from "../../services/setup";
+import { cancelRuntimeInstall, getRuntimeStatus, installRuntime, isSetupCancelled, needsSetup, parseDownloadLine, SETUP_REQUIRED_EVENT, type SetupStep } from "../../services/setup";
 import { ComponentsChecklist } from "./ComponentsChecklist";
 import { Dialog, dialogButton } from "./Dialog";
 import { CheckCircle2, Loader2 } from "./icons";
@@ -97,6 +97,11 @@ export function SetupGate() {
       setPhase("idle");
       setChecklist(true);
     } catch (e) {
+      // Cancel is a choice, not a failure: back to the start with nothing in red. What was downloaded stays and is reused.
+      if (isSetupCancelled(e)) {
+        setPhase("idle");
+        return;
+      }
       setError(e instanceof Error ? e.message : String(e));
       setPhase("failed");
     }
@@ -115,6 +120,11 @@ export function SetupGate() {
           {phase !== "running" && (
             <button type="button" className={dialogButton.secondary} onClick={() => setOpen(false)}>
               <Trans>Not now</Trans>
+            </button>
+          )}
+          {phase === "running" && (
+            <button type="button" className={dialogButton.secondary} onClick={() => void cancelRuntimeInstall().catch(() => undefined)}>
+              <Trans>Cancel</Trans>
             </button>
           )}
           <button type="button" className={dialogButton.primary} disabled={phase === "running"} onClick={run}>

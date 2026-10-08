@@ -46,6 +46,24 @@ fn parse_callback(request: &str, nonce: &str) -> Callback {
     }
 }
 
+/// The first line of the request (all `parse_callback` needs), read until its end-of-line arrives, which may take several reads.
+/// A connection that sends nothing is given up on after a second instead of holding up the real callback.
+fn read_request_line(stream: &mut impl Read) -> String {
+    let started = Instant::now();
+    let mut text = Vec::new();
+    let mut buf = [0u8; 1024];
+    while !text.contains(&b'\n') && text.len() < 8192 && started.elapsed() < Duration::from_secs(1) {
+        match stream.read(&mut buf) {
+            Ok(0) => break,
+            Ok(n) => text.extend_from_slice(&buf[..n]),
+            // A read that times out is not the end: the rest of the line may still be on its way.
+            Err(e) if matches!(e.kind(), std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut) => {}
+            Err(_) => break,
+        }
+    }
+    String::from_utf8_lossy(&text).into_owned()
+}
+
 fn wait_for_code(listener: TcpListener, nonce: &str, timeout: Duration, cancelled: &AtomicBool) -> Result<String, String> {
     listener.set_nonblocking(true).map_err(|e| e.to_string())?;
     let deadline = Instant::now() + timeout;
@@ -56,10 +74,8 @@ fn wait_for_code(listener: TcpListener, nonce: &str, timeout: Duration, cancelle
         match listener.accept() {
             Ok((mut stream, _)) => {
                 let _ = stream.set_nonblocking(false);
-                let _ = stream.set_read_timeout(Some(Duration::from_secs(2)));
-                let mut buf = [0u8; 4096];
-                let read = stream.read(&mut buf).unwrap_or(0);
-                let callback = parse_callback(&String::from_utf8_lossy(&buf[..read]), nonce);
+                let _ = stream.set_read_timeout(Some(Duration::from_millis(250)));
+                let callback = parse_callback(&read_request_line(&mut stream), nonce);
                 let (status, body) = match callback {
                     Callback::Code(_) => ("200 OK", DONE_PAGE),
                     _ => ("404 Not Found", ""),
@@ -90,7 +106,7 @@ pub fn oauth_listen_start(state: State<OauthListener>, nonce: String) -> Result<
     let listener = TcpListener::bind("127.0.0.1:0").map_err(|e| e.to_string())?;
     let port = listener.local_addr().map_err(|e| e.to_string())?.port();
     state.cancelled.store(false, Ordering::Relaxed);
-    *state.pending.lock().map_err(|e| e.to_string())? = Some((listener, nonce));
+    *state.pending.lock().unwrap_or_else(|p| p.into_inner()) = Some((listener, nonce));
     Ok(port)
 }
 
@@ -99,7 +115,7 @@ pub async fn oauth_listen_wait(state: State<'_, OauthListener>, timeout_secs: u6
     let (listener, nonce) = state
         .pending
         .lock()
-        .map_err(|e| e.to_string())?
+        .unwrap_or_else(|p| p.into_inner())
         .take()
         .ok_or_else(|| "No sign-in is waiting.".to_string())?;
     let timeout = Duration::from_secs(timeout_secs.min(600));
@@ -113,9 +129,7 @@ pub async fn oauth_listen_wait(state: State<'_, OauthListener>, timeout_secs: u6
 #[tauri::command]
 pub fn oauth_listen_cancel(state: State<OauthListener>) {
     state.cancelled.store(true, Ordering::Relaxed);
-    if let Ok(mut pending) = state.pending.lock() {
-        pending.take();
-    }
+    state.pending.lock().unwrap_or_else(|p| p.into_inner()).take();
 }
 
 #[cfg(test)]
@@ -129,6 +143,33 @@ mod tests {
             Callback::Code(c) => Some(c),
             _ => None,
         }
+    }
+
+    /// Hands out its pieces one read at a time, like a request that arrives in fragments.
+    struct Pieces(std::collections::VecDeque<&'static [u8]>);
+    impl Read for Pieces {
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            match self.0.pop_front() {
+                Some(piece) => {
+                    buf[..piece.len()].copy_from_slice(piece);
+                    Ok(piece.len())
+                }
+                None => Ok(0),
+            }
+        }
+    }
+
+    #[test]
+    fn a_request_split_across_reads_is_still_understood() {
+        let mut stream = Pieces(vec![&b"GET /callback/n0nce-n0n"[..], &b"ce-n0nce?code=abc"[..], &b"123 HTTP/1.1\r\nHost: x"[..]].into());
+        let line = read_request_line(&mut stream);
+        assert_eq!(code(&line).as_deref(), Some("abc123"));
+    }
+
+    #[test]
+    fn a_connection_that_sends_nothing_does_not_hang_the_reader() {
+        let mut stream = Pieces(Default::default());
+        assert_eq!(read_request_line(&mut stream), "");
     }
 
     #[test]

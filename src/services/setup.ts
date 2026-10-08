@@ -31,6 +31,9 @@ export const VC_RUNTIME_EVENT = "navivi-vc-runtime-missing";
 export const isVcRuntimeMissing = (error: unknown) => /VC_RUNTIME_MISSING/.test(error instanceof Error ? error.message : String(error));
 export const announceVcRuntimeMissing = () => window.dispatchEvent(new Event(VC_RUNTIME_EVENT));
 export const installVcRuntime = () => invoke<void>("install_vc_runtime");
+// Stops the first-run setup (the running uv / pip / browser download and the steps after it); `installRuntime` then rejects with "cancelled".
+export const cancelRuntimeInstall = () => invoke<void>("runtime_cancel");
+export const isSetupCancelled = (error: unknown) => /was cancelled/i.test(error instanceof Error ? error.message : String(error));
 
 // A tool's own download bar (Playwright: `|■■■■    |  40% of 150 MiB`, sometimes several joined by carriage returns): the latest percentage, or null for any other line.
 export function parseDownloadLine(line: string): { percent: number; size: string } | null {
