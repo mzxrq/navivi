@@ -5,6 +5,7 @@ import json
 
 import cv2
 import numpy as np
+import pytest
 
 from services import tuning
 from services.config.job_config import JobConfigManager
@@ -25,6 +26,11 @@ def _has(img, bgr):
 
 
 class TestCropKeyframes:
+    @pytest.fixture(autouse=True)
+    def _plain_crops(self, monkeypatch):
+        # The 3D keyframes need the depth model; these tests cover the crop path.
+        monkeypatch.setattr(tuning, "LTXV_DEPTH_KEYFRAMES", ())
+
     def test_pan_right_goes_from_the_left_crop_to_the_right_crop(self, tmp_path):
         first, last = ltx_keyframed.crop_keyframes(_marked_photo(tmp_path / "p.png"), "panright", tmp_path / "k")
         a, b = cv2.imread(first), cv2.imread(last)
