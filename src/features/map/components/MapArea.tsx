@@ -622,6 +622,7 @@ export function MapArea() {
 
     const handleEnterDraw = ((e: CustomEvent) => {
       if (isViaMode) window.dispatchEvent(new CustomEvent("exit-via-mode"));
+      drawTargetRef.current = e.detail.wpId;
       setActiveWaypointId(e.detail.wpId);
       setIsAddMode(false);
       setIsDrawMode(true);
@@ -637,6 +638,18 @@ export function MapArea() {
       window.removeEventListener("enter-draw-mode", handleEnterDraw);
     };
   }, [waypoints, routeSegments, isViaMode]);
+
+  // Picking a different stop (map or list) opens its editor, so any tool steps back to Select.
+  const drawTargetRef = useRef<string | null>(null);
+  const previousActiveRef = useRef<string | null>(null);
+  useEffect(() => {
+    const previous = previousActiveRef.current;
+    previousActiveRef.current = activeWaypointId;
+    if (!activeWaypointId || activeWaypointId === previous) return;
+    if (isAddMode) setIsAddMode(false);
+    if (isDrawMode && activeWaypointId !== drawTargetRef.current) setIsDrawMode(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeWaypointId]);
 
   useEffect(() => {
     if (!isDrawMode) setIsEraserMode(false);

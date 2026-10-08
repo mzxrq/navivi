@@ -4,6 +4,8 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 import { useWorkspace } from "../../hooks/useWorkspace";
+import { useInstalls } from "../../hooks/useInstalls";
+import { startInstall } from "../../services/installs";
 import { callSidecar, callSidecarShared } from "../../services/sidecar";
 import { Loader2, Play, Plus, Trash2, Volume2 } from "./icons";
 import { Segmented } from "./Segmented";
@@ -30,6 +32,8 @@ interface KokoroInfo {
   default_voice: string;
   voices: { id: string; label: string }[];
 }
+
+const ENGINE_NAME = { irodori: "Irodori-TTS", qwen3: "Qwen3-TTS", kokoro: "Kokoro-82M" } as const;
 
 const DEFAULT_VOICE = "test1";
 const fallback = DEFAULT_VOICE;
@@ -171,14 +175,28 @@ export function VoiceTab() {
     audio.play().catch((e) => setMessage({ tone: "error", text: String(e) }));
   };
 
-  const install = async (which: "kokoro" | "qwen3" | "irodori") => {
-    setBusy("install");
+  const install = (which: "kokoro" | "qwen3" | "irodori") => {
     setMessage(null);
-    const res = await callSidecar(`tts_install_${which}`, {});
-    setBusy(null);
-    if (!res.success) return res.cancelled ? undefined : setMessage({ tone: "error", text: res.error });
-    await refresh();
+    void startInstall(which, ENGINE_NAME[which], `tts_install_${which}`);
   };
+
+  // A finished background install changes which engines are ready.
+  const jobs = useInstalls();
+  const finished = jobs.filter((j) => j.state !== "running").map((j) => `${j.id}:${j.state}`).join();
+  useEffect(() => {
+    if (finished) void refresh();
+  }, [finished, refresh]);
+  const installing = jobs.some((j) => j.state === "running");
+
+  // With exactly one engine set up, that is the one to use, whatever the project's default says.
+  useEffect(() => {
+    const ready = (["irodori", "qwen3", "kokoro"] as const).filter((e) => (e === "kokoro" ? kokoro?.ready : e === "qwen3" ? qwen3Ready : irodoriReady));
+    if (ready.length === 1 && ready[0] !== engine) {
+      updateSettings({ tts: { ...settings.tts, engine: ready[0] } });
+      setIsDirty(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kokoro?.ready, qwen3Ready, irodoriReady]);
 
   const pickFile = async () => {
     const path = await open({ multiple: false, filters: [{ name: t`Audio`, extensions: AUDIO_EXT }] });
@@ -235,25 +253,25 @@ export function VoiceTab() {
               save({ engine: e, ...(e === "qwen3" && selected === "none" ? { voice: voices?.find((v) => !v.builtin)?.id ?? DEFAULT_VOICE } : {}) })
             }
             options={[
-              { id: "irodori", label: t`Natural voice` },
-              { id: "qwen3", label: t`Balanced voice` },
-              { id: "kokoro", label: t`Fast voice` },
+              { id: "irodori", label: ENGINE_NAME.irodori },
+              { id: "qwen3", label: ENGINE_NAME.qwen3 },
+              { id: "kokoro", label: ENGINE_NAME.kokoro },
             ]}
           />
           <p className="text-[12px] leading-relaxed text-zinc-500 dark:text-zinc-400">
             {engine === "irodori" ? (
               <Trans>
-                Natural voice can clone a voice from a recording and sounds the most natural, but takes about half a minute per line on a PC
+                Irodori-TTS can clone a voice from a recording and sounds the most natural, but takes about half a minute per line on a PC
                 without a graphics card.
               </Trans>
             ) : engine === "qwen3" ? (
               <Trans>
-                Balanced voice also clones a voice from a recording, in less than half the time. It sounds a little less natural and can
+                Qwen3-TTS also clones a voice from a recording, in less than half the time. It sounds a little less natural and can
                 occasionally change the intonation of a short line. It uses about 3 GB of memory while it runs.
               </Trans>
             ) : (
               <Trans>
-                Fast voice has a few built-in Japanese voices and takes a few seconds per line. It sounds a little flatter and cannot clone a voice.
+                Kokoro-82M has a few built-in Japanese voices and takes a few seconds per line. It sounds a little flatter and cannot clone a voice.
               </Trans>
             )}
           </p>
@@ -267,13 +285,13 @@ export function VoiceTab() {
             <div className="rounded-xl border border-zinc-200 dark:border-white/10 p-3 space-y-2.5">
               <p className="text-[12px] leading-relaxed text-zinc-500 dark:text-zinc-400">
                 <Trans>
-                  The fast voice needs a one-time setup: a small separate Python environment and the model files (about 2 GB in all). It takes a few
-                  minutes and needs an internet connection. Keep this window open while it runs.
+                  Kokoro-82M needs a one-time setup: a small separate Python environment and the model files (about 2 GB in all). It takes a few
+                  minutes and needs an internet connection. It continues in the background if you close this window.
                 </Trans>
               </p>
-              <button type="button" className={primaryButton} disabled={disabled || !kokoro} onClick={() => install("kokoro")}>
-                {busy === "install" && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                {busy === "install" ? t`Setting up…` : t`Set up fast voice`}
+              <button type="button" className={primaryButton} disabled={disabled || installing || !kokoro} onClick={() => install("kokoro")}>
+                {installing && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                {installing ? t`Setting up…` : t`Set up Kokoro-82M`}
               </button>
             </div>
           ) : (
@@ -313,17 +331,17 @@ export function VoiceTab() {
 
       {engine === "irodori" && irodoriReady === false && (
         <section>
-          <h4 className="mb-2 px-0.5 text-[12px] font-semibold text-zinc-500 dark:text-zinc-400"><Trans>Natural voice setup</Trans></h4>
+          <h4 className="mb-2 px-0.5 text-[12px] font-semibold text-zinc-500 dark:text-zinc-400"><Trans>Irodori-TTS setup</Trans></h4>
           <div className="rounded-xl border border-zinc-200 dark:border-white/10 p-3 space-y-2.5">
             <p className="text-[12px] leading-relaxed text-zinc-500 dark:text-zinc-400">
               <Trans>
-                The natural voice needs a one-time setup: a separate Python environment and the model files (about 3 GB, more with a graphics card).
-                It takes several minutes and needs an internet connection. Keep this window open while it runs.
+                Irodori-TTS needs a one-time setup: a separate Python environment and the model files (about 3 GB, more with a graphics card).
+                It takes several minutes and needs an internet connection. It continues in the background if you close this window.
               </Trans>
             </p>
-            <button type="button" className={primaryButton} disabled={disabled} onClick={() => install("irodori")}>
-              {busy === "install" && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-              {busy === "install" ? t`Setting up…` : t`Set up natural voice`}
+            <button type="button" className={primaryButton} disabled={disabled || installing} onClick={() => install("irodori")}>
+              {installing && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              {installing ? t`Setting up…` : t`Set up Irodori-TTS`}
             </button>
           </div>
         </section>
@@ -331,17 +349,17 @@ export function VoiceTab() {
 
       {engine === "qwen3" && qwen3Ready === false && (
         <section>
-          <h4 className="mb-2 px-0.5 text-[12px] font-semibold text-zinc-500 dark:text-zinc-400"><Trans>Balanced voice setup</Trans></h4>
+          <h4 className="mb-2 px-0.5 text-[12px] font-semibold text-zinc-500 dark:text-zinc-400"><Trans>Qwen3-TTS setup</Trans></h4>
           <div className="rounded-xl border border-zinc-200 dark:border-white/10 p-3 space-y-2.5">
             <p className="text-[12px] leading-relaxed text-zinc-500 dark:text-zinc-400">
               <Trans>
-                The balanced voice needs a one-time setup: a separate Python environment and the model files (about 4 GB in all). It takes several
-                minutes and needs an internet connection. Keep this window open while it runs.
+                Qwen3-TTS needs a one-time setup: a separate Python environment and the model files (about 4 GB in all). It takes several
+                minutes and needs an internet connection. It continues in the background if you close this window.
               </Trans>
             </p>
-            <button type="button" className={primaryButton} disabled={disabled} onClick={() => install("qwen3")}>
-              {busy === "install" && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-              {busy === "install" ? t`Setting up…` : t`Set up balanced voice`}
+            <button type="button" className={primaryButton} disabled={disabled || installing} onClick={() => install("qwen3")}>
+              {installing && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              {installing ? t`Setting up…` : t`Set up Qwen3-TTS`}
             </button>
           </div>
         </section>

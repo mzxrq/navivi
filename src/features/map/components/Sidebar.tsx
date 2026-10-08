@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Route, Film, Trash2 } from "../../../components/ui/icons";
+import { Route, Film, Trash2, SlidersHorizontal } from "../../../components/ui/icons";
 import {
   DragDropContext,
   Droppable,
@@ -24,6 +24,7 @@ export function Sidebar() {
     setIsRendering,
     isRenderCollapsed,
     setIsRenderCollapsed,
+    setShowAppSettings,
   } = useUI();
 
   const {
@@ -45,6 +46,11 @@ export function Sidebar() {
 
   const handleCloseEditor = () => {
     setActiveWaypointId(null);
+  };
+
+  const openProjectSettings = () => {
+    setShowAppSettings(true);
+    setTimeout(() => window.dispatchEvent(new CustomEvent("open-app-settings-tab", { detail: "project" })), 50);
   };
 
   useEffect(() => {
@@ -277,6 +283,16 @@ export function Sidebar() {
             </div>
           )
         ) : (
+          <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={openProjectSettings}
+            title={t`Project settings`}
+            aria-label={t`Project settings`}
+            className="h-9 w-9 shrink-0 rounded-lg flex items-center justify-center text-zinc-500 dark:text-zinc-400 border border-zinc-200 dark:border-white/10 hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-white/5 dark:hover:text-zinc-100 transition-colors"
+          >
+            <SlidersHorizontal className="w-4 h-4" />
+          </button>
           <button
             type="button"
             onClick={handleGenerateClick}
@@ -285,7 +301,7 @@ export function Sidebar() {
               (isRendering && !isRenderCollapsed) ||
               isPreviewing
             }
-            className={`w-full h-9 rounded-lg flex items-center justify-center gap-2 text-[13px] font-semibold text-white transition-colors disabled:opacity-40 disabled:pointer-events-none ${
+            className={`flex-1 min-w-0 h-9 rounded-lg flex items-center justify-center gap-2 text-[13px] font-semibold text-white transition-colors disabled:opacity-40 disabled:pointer-events-none ${
               isRenderCollapsed
                 ? "bg-amber-500 hover:bg-amber-600"
                 : "bg-navi hover:brightness-110"
@@ -306,6 +322,7 @@ export function Sidebar() {
               </>
             )}
           </button>
+          </div>
         )}
       </div>
 

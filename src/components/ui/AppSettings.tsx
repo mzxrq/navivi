@@ -6,6 +6,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useAnimatedUnmount } from "../../hooks/useAnimatedUnmount";
+import { MAP_PANEL_OPACITY, setMapPanelOpacity, useMapPanelOpacity } from "../../hooks/useMapPanelOpacity";
 import { useTheme } from "../../hooks/useTheme";
 import { useUI } from "../../hooks/useUI";
 import { useWorkspace } from "../../hooks/useWorkspace";
@@ -113,6 +114,7 @@ export function AppSettings() {
   const { i18n } = useLingui();
   const { showAppSettings, setShowAppSettings, currentView } = useUI();
   const { theme, setTheme, accentTheme, setAccentTheme } = useTheme();
+  const mapPanelOpacity = useMapPanelOpacity();
 
   const [activeTab, setActiveTab] = useState<SettingsTab>("general");
 
@@ -400,6 +402,22 @@ export function AppSettings() {
                           <option.icon className="w-3.5 h-3.5" /> {option.label}
                         </button>
                       ))}
+                    </div>
+                  </Row>
+                  <Row title={t`Map panel opacity`} info={t`How solid the elevation profile and the uphill/downhill key on the map are.`}>
+                    <div className="flex items-center gap-2">
+                      <Slider
+                        value={mapPanelOpacity}
+                        min={MAP_PANEL_OPACITY.min}
+                        max={MAP_PANEL_OPACITY.max}
+                        step={0.05}
+                        label={t`Map panel opacity`}
+                        onChange={setMapPanelOpacity}
+                        className="w-36"
+                      />
+                      <span className="w-10 text-right text-[12px] tabular-nums text-zinc-500 dark:text-zinc-400">
+                        {Math.round(mapPanelOpacity * 100)}%
+                      </span>
                     </div>
                   </Row>
                   <Row title={t`Accent color`}>
