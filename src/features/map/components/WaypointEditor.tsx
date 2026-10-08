@@ -43,6 +43,7 @@ import { stopLabel } from "../../../utils/stopLabel";
 import { readTextFile } from "@tauri-apps/plugin-fs";
 import { probeDuration, toAbsoluteProjectPath } from "../../../services/fileSystem";
 import { fetchLegScripts } from "../../../services/legScripts";
+import { legOf } from "../../../services/narrationPrompt";
 import { RegenKind, refreshStopMedia, regenModes, runRegen } from "../../../services/stopRegen";
 import { PHOTO_EXTENSIONS, isHeic, preparePhotos } from "../../../services/imageImport";
 import { t } from "@lingui/core/macro";
@@ -363,6 +364,7 @@ export function WaypointEditor({
           total: waypoints.length,
           otherScript: type === "arriving" ? wp.attractionNarration : wp.arrivingNarration,
           otherStops: waypoints.filter((w) => w.id !== wp.id).map((w) => (type === "arriving" ? w.arrivingNarration : w.attractionNarration) ?? ""),
+          ...legOf(waypoints, wpIndex),
         },
       );
     } catch (err: any) {

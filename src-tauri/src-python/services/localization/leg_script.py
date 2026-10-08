@@ -117,8 +117,10 @@ def leg_turns(points: List[List[float]]) -> dict:
             "heading": heading_between(marks[k + 1], marks[k + 2]),
             "run": marks[k + 2] - marks[k + 1],
             "to_end": total - marks[k + 1],
+            "at": marks[k + 1],
         })
-    return {"heading": heading_between(0.0, marks[1]), "first_run": marks[1], "turns": out, "length": total}
+    return {"heading": heading_between(0.0, marks[1]), "first_run": marks[1], "turns": out, "length": total,
+            "heading_between": heading_between}
 
 
 def _point_at(line: List[tuple], lengths: List[float], at: float) -> tuple:
@@ -176,6 +178,78 @@ def walking_directions(origin: str, to: str, points: List[List[float]], variant:
     return "".join(sentences)
 
 
+# The brief arriving script: 2-5 sentences (start, a long straight, at most two
+# real turns or one summary of many, arrival), worded differently at each stop.
+BRIEF_STARTS = (
+    "{origin}から{heading}へ{far}歩きます。",
+    "{origin}を出て、まずは{heading}へ向かいます。",
+    "ここからは{heading}へ進みます。",
+    "{origin}をあとに、{heading}の方角へ歩き出します。",
+    "{heading}へ延びる道を{far}たどります。",
+)
+BRIEF_ARRIVALS = ("{to}が見えてきます。", "その先に{to}があります。", "まもなく{to}に着きます。",
+                  "{to}はすぐ先です。", "{to}に到着です。")
+BRIEF_ARRIVALS_AFTER_TURN = ("{to}が見えてきます。", "{to}はすぐそこです。", "{to}が目の前です。")
+BRIEF_MAX_TURNS = 2
+
+
+def _far(points: List[List[float]]) -> str:
+    km = _length_km(points)
+    return "少し" if km < 0.3 else "" if km < 1.5 else "しばらく"
+
+
+def _brief_walk(origin: str, to: str, points: List[List[float]], variant: int) -> str:
+    plan = leg_turns(points)
+    overall = route_heading(*points[0], *points[-1])
+    turns = [t for t in plan["turns"] if abs(t["angle"]) >= TURN_DEG]
+    summarized = len(turns) > BRIEF_MAX_TURNS
+    # Headings over the stretches between real turns: the small bends between are not told.
+    marks = [0.0, *[t["at"] for t in turns], plan["length"]]
+    headings = [plan["heading_between"](a, b) for a, b in zip(marks, marks[1:])]
+    start = BRIEF_STARTS[variant % len(BRIEF_STARTS)]
+    far = _far(points)
+    sentences = [start.format(origin=origin, heading=overall if summarized else headings[0], far=far)]
+    arrival = BRIEF_ARRIVALS[(variant + 2) % len(BRIEF_ARRIVALS)].format(to=to)
+    if marks[1] >= STRAIGHT_M and not summarized:
+        sentences.append("そのまま道なりに進みます。" if far and far in sentences[0] else "しばらく道なりに進みます。")
+    last_near = bool(turns) and turns[-1]["to_end"] <= ARRIVE_NEAR_M
+    told = list(enumerate(turns))
+    if summarized:
+        sentences.append(f"何度か角を曲がりながら、{overall}へ進んでいきます。")
+        told = told[-1:] if last_near else []
+    for k, (i, turn) in enumerate(told):
+        # Told from the two stretches' headings, so the turn and the heading after it agree.
+        delta = (_COMPASS.index(headings[i + 1]) - _COMPASS.index(headings[i])) * 45
+        delta = (delta + 540) % 360 - 180
+        phrase = _turn_phrase(delta) if delta else _turn_phrase(turn["angle"])
+        if k == len(told) - 1 and last_near:
+            near = BRIEF_ARRIVALS_AFTER_TURN[variant % len(BRIEF_ARRIVALS_AFTER_TURN)].format(to=to)
+            sentences.append(f"{'最後に' if k or summarized else ''}{phrase[:-2]}ると、{near}")
+            return "".join(sentences)
+        sentences.append(f"{'続いて' if k else ''}{phrase}{headings[i + 1]}へ。")
+    sentences.append(arrival)
+    return "".join(sentences)
+
+
+def brief_directions(origin: str, to: str, mode: str, pieces: List[dict], points: List[List[float]], variant: int = 0) -> str:
+    """The way to go in 2-5 sentences: the heading, how far it feels, the
+    main turns only and, off foot, how it is travelled."""
+    heading = route_heading(*points[0], *points[-1]) if len(points) > 1 else ""
+    toward = f"{heading}へ" if heading else ""
+    if mode in ("ferry", "boat"):
+        boat = "フェリー" if mode == "ferry" else "船"
+        return f"{origin}から{boat}に乗り込みます。船は{toward}進み、{to}へ渡ります。"
+    if any(p["mode"] == "ferry" for p in pieces):
+        return f"{origin}から港へ歩き、フェリーで海を渡ります。{to}はその先です。"
+    if mode == "airplane":
+        return f"{origin}から空路で{to}へ向かいます。"
+    if mode != "walking":
+        return f"{origin}から車に乗り、{toward}走ります。まもなく{to}に到着します。"
+    if not heading:
+        return f"{origin}から{to}へ歩きます。"
+    return _brief_walk(origin, to, points, variant)
+
+
 def transit_directions(origin: str, to: str, mode: str, pieces: List[dict], points: List[List[float]]) -> str:
     if mode in ("ferry", "boat"):
         boat = "フェリー" if mode == "ferry" else "船"
@@ -209,11 +283,13 @@ def _is_return(project_route: List[dict]) -> bool:
     return near or "return" in (last.get("label") or last.get("name") or "").lower()
 
 
-def _directions(origin: str, to: str, set_mode: str, points: List[List[float]], variant: int) -> str:
+def _directions(origin: str, to: str, set_mode: str, points: List[List[float]], variant: int, brief: bool = True) -> str:
     mode = tuning.MODE_ALIASES.get(set_mode, set_mode)
+    pieces = split_crossings(points, mode) if mode == "walking" and set_mode == mode else []
+    if brief:
+        return brief_directions(origin, to, mode, pieces if len(pieces) > 1 else [], points, variant)
     if mode != "walking":
         return transit_directions(origin, to, mode, [], points)
-    pieces = split_crossings(points, mode) if set_mode == mode else []
     if len(pieces) > 1:
         return transit_directions(origin, to, mode, pieces, points)
     return walking_directions(origin, to, points, variant=variant)
@@ -251,6 +327,8 @@ def _arrivals(project: dict, waypoints: List[dict], route: List[dict], cache: di
     from services.localization.overview_script import overview_style
 
     course = overview_style(project) == "course"
+    style = (project.get("settings") or {}).get("leg_directions", tuning.DEFAULT_LEG_DIRECTIONS)
+    brief = style != "turns"
     order = {id(w): i for i, w in enumerate(waypoints)}
     out: Dict[int, str] = {}
     for k in range(1, len(route)):
@@ -263,11 +341,13 @@ def _arrivals(project: dict, waypoints: List[dict], route: List[dict], cache: di
         cuts = sorted(((_cut_at(points, w["lat"], w["lng"]), w) for w in loose), key=lambda c: c[0][0])
         origin, start = clean_label(a), (0.0, points[0])
         for at, w in cuts:
-            out[id(w)] = _directions(origin, clean_label(w), set_mode, _between(points, start, at), k)
+            out[id(w)] = _directions(origin, clean_label(w), set_mode, _between(points, start, at),
+                                     len(out) if brief else k, brief)
             if course and w.get("popup_image"):
                 origin, start = clean_label(w), at
         end = (float(len(points) - 1), points[-1])
-        out[id(b)] = _directions(origin, clean_label(b), set_mode, _between(points, start, end), k)
+        out[id(b)] = _directions(origin, clean_label(b), set_mode, _between(points, start, end),
+                                 len(out) if brief else k, brief)
     return out
 
 

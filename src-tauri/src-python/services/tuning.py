@@ -437,6 +437,10 @@ DEFAULT_OVERVIEW_DESCRIBE_STOPS = True
 #            last; the course-guide script (overview_script.build_course_script).
 DEFAULT_OVERVIEW_STYLE = "walk"
 OVERVIEW_STYLES = ("walk", "course")
+# The arriving script the course style writes from the route (localization/leg_script.py):
+# "brief" = one sentence, the overall direction only; "turns" = every turn on the way.
+# Overridable per project via job_config.json's settings.leg_directions.
+DEFAULT_LEG_DIRECTIONS = "brief"
 # The "course" overview (spatial_renderer/course.py). The traced line is one
 # accent over the whole planned route (settings.course_trace_color overrides).
 COURSE_TRACE_COLOR: Tuple[int, int, int] = (40, 90, 240)  # BGR, #F05A28 orange
