@@ -47,10 +47,10 @@
             "**/.ssh/**", "**/.aws/**", "**/.azure/**", "**/.gnupg/**", "**/.kube/**", "**/.docker/**",
             "**/.git-credentials", "**/.npmrc", "**/.netrc", "**/.env", "**/.env.*",
             "**/id_rsa*", "**/id_ed25519*", "**/*.pem", "**/*.pfx", "**/*.kdbx",
-            "$APPDATA/Microsoft/Credentials/**", "$APPDATA/Microsoft/Protect/**", "$LOCALAPPDATA/Microsoft/Credentials/**",
-            "$LOCALAPPDATA/Google/**", "$LOCALAPPDATA/Microsoft/Edge/**", "$LOCALAPPDATA/BraveSoftware/**", "$LOCALAPPDATA/Vivaldi/**",
-            "$APPDATA/Mozilla/**", "$APPDATA/Opera Software/**",
-            "$APPDATA/navivi/**", "$LOCALAPPDATA/navivi/EBWebView/**"
+            "$DATA/Microsoft/Credentials/**", "$DATA/Microsoft/Protect/**", "$LOCALDATA/Microsoft/Credentials/**",
+            "$LOCALDATA/Google/**", "$LOCALDATA/Microsoft/Edge/**", "$LOCALDATA/BraveSoftware/**", "$LOCALDATA/Vivaldi/**",
+            "$DATA/Mozilla/**", "$DATA/Opera Software/**",
+            "$APPDATA/**", "$APPLOCALDATA/EBWebView/**"
           ]
         }
       }

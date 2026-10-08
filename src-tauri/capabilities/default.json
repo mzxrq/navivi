@@ -42,10 +42,10 @@
         { "path": "**/.kube/**" }, { "path": "**/.docker/**" },
         { "path": "**/.git-credentials" }, { "path": "**/.npmrc" }, { "path": "**/.netrc" }, { "path": "**/.env" }, { "path": "**/.env.*" },
         { "path": "**/id_rsa*" }, { "path": "**/id_ed25519*" }, { "path": "**/*.pem" }, { "path": "**/*.pfx" }, { "path": "**/*.kdbx" },
-        { "path": "$APPDATA/Microsoft/Credentials/**" }, { "path": "$APPDATA/Microsoft/Protect/**" }, { "path": "$LOCALAPPDATA/Microsoft/Credentials/**" },
-        { "path": "$LOCALAPPDATA/Google/**" }, { "path": "$LOCALAPPDATA/Microsoft/Edge/**" }, { "path": "$LOCALAPPDATA/BraveSoftware/**" }, { "path": "$LOCALAPPDATA/Vivaldi/**" },
-        { "path": "$APPDATA/Mozilla/**" }, { "path": "$APPDATA/Opera Software/**" },
-        { "path": "$APPDATA/navivi/**" }, { "path": "$LOCALAPPDATA/navivi/EBWebView/**" }
+        { "path": "$DATA/Microsoft/Credentials/**" }, { "path": "$DATA/Microsoft/Protect/**" }, { "path": "$LOCALDATA/Microsoft/Credentials/**" },
+        { "path": "$LOCALDATA/Google/**" }, { "path": "$LOCALDATA/Microsoft/Edge/**" }, { "path": "$LOCALDATA/BraveSoftware/**" }, { "path": "$LOCALDATA/Vivaldi/**" },
+        { "path": "$DATA/Mozilla/**" }, { "path": "$DATA/Opera Software/**" },
+        { "path": "$APPDATA/**" }, { "path": "$APPLOCALDATA/EBWebView/**" }
       ]
     }
   ]
