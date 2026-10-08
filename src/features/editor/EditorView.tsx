@@ -265,6 +265,8 @@ export function EditorView() {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
       if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
+      // Behind an open dialog or menu these keys belong to it: Delete must not remove the selected clip under the Export window.
+      if (document.querySelector('[role="dialog"], [role="menu"]')) return;
       const k = keyRef.current;
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a" && k.selection?.type === "cue") {
         e.preventDefault();

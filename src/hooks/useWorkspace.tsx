@@ -397,7 +397,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     setIsDirty(true);
   }, []);
 
-  const saveProject = async (
+  const runSave = async (
     overrideName?: string,
     asDuplicate?: boolean,
     safeFolderName?: string,
@@ -488,6 +488,15 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       console.error("Failed to save Navivi project:", error);
       throw error;
     }
+  };
+
+  // Saves run one after another. A manual save (Ctrl+S, the one before a render) used to be able to overlap an autosave, and both copy
+  // files and write the database; the later call has the newer state, so it simply waits its turn.
+  const saveQueue = useRef<Promise<unknown>>(Promise.resolve());
+  const saveProject = (...args: Parameters<typeof runSave>): ReturnType<typeof runSave> => {
+    const run = saveQueue.current.then(() => runSave(...args));
+    saveQueue.current = run.catch(() => undefined);
+    return run;
   };
 
   const loadProject = async (
