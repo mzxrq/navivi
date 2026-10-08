@@ -9,7 +9,7 @@ import pytest
 
 from services import tuning
 from services.config.job_config import JobConfigManager
-from services.vdoprocessing import img2vdo, ltx_keyframed
+from services.vdoprocessing import img2vdo, ltx_keyframed, parallax_generator
 from services.vdoprocessing.img2vdo import AttractionVideoGenerator
 
 
@@ -27,9 +27,16 @@ def _has(img, bgr):
 
 class TestCropKeyframes:
     @pytest.fixture(autouse=True)
-    def _plain_crops(self, monkeypatch):
-        # The 3D keyframes need the depth model; these tests cover the crop path.
-        monkeypatch.setattr(tuning, "LTXV_DEPTH_KEYFRAMES", ())
+    def _views_in_process(self, monkeypatch):
+        """Flat depth, no LaMa, no child process: CI has no transformers/torch."""
+        monkeypatch.setattr(parallax_generator, "_lama", False)
+        flat = lambda img: np.full(img.shape[:2], 0.5, np.float32)
+
+        def render_to_files(image, cams, margin, out_paths):
+            for path, view in zip(out_paths, parallax_generator.render_views(image, cams, margin, depth_fn=flat)):
+                cv2.imencode(".png", view)[1].tofile(path)
+
+        monkeypatch.setattr(parallax_generator, "render_views_to_files", render_to_files)
 
     def test_pan_right_goes_from_the_left_crop_to_the_right_crop(self, tmp_path):
         first, last = ltx_keyframed.crop_keyframes(_marked_photo(tmp_path / "p.png"), "panright", tmp_path / "k")
