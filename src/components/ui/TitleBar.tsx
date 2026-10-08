@@ -62,7 +62,7 @@ export function TitleBar() {
   const [showSaveAs, setShowSaveAs] = useState(false);
   const [saveMode, setSaveMode] = useState<"initial" | "duplicate">("initial");
   const [pendingNavigation, setPendingNavigation] = useState<
-    "title_screen" | "new_project" | "close" | null
+    "title_screen" | "new_project" | "close" | "open_file" | "open_folder" | null
   >(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -110,6 +110,43 @@ export function TitleBar() {
     }
     clearProjectState();
     setCurrentView(targetView);
+  };
+
+  const openProject = async (folder: boolean) => {
+    try {
+      const success = await loadProject(undefined, folder || undefined);
+      if (success) {
+        setCurrentView("editor");
+        showToast(t`Project loaded successfully`, "success");
+      }
+    } catch (err) {
+      showToast(folder ? t`Failed to read project folder` : t`Failed to read project file`, "error");
+    }
+  };
+
+  // Opening another project replaces the one in memory, so it asks first like New Project does.
+  const askThenOpen = (folder: boolean) => {
+    setIsMenuOpen(false);
+    if (currentView === "editor" && isDirty) {
+      setPendingNavigation(folder ? "open_folder" : "open_file");
+      return;
+    }
+    void openProject(folder);
+  };
+
+  // What the unsaved-changes dialog was guarding, once the user has saved or chosen to discard.
+  const finishPending = async (target: NonNullable<typeof pendingNavigation>) => {
+    if (target === "close") {
+      try {
+        await getCurrentWindow().destroy();
+      } catch (e) {
+        console.error(e);
+      }
+    } else if (target === "title_screen" || target === "new_project") {
+      setCurrentView(target);
+    } else {
+      await openProject(target === "open_folder");
+    }
   };
 
   const handleWindow = async (action: "minimize" | "maximize" | "close") => {
@@ -164,19 +201,9 @@ export function TitleBar() {
         );
 
         if (pendingNavigation) {
-          if (pendingNavigation === "close") {
-            try {
-              await getCurrentWindow().destroy();
-            } catch (e) {
-              console.error(e);
-            }
-          } else if (
-            pendingNavigation === "title_screen" ||
-            pendingNavigation === "new_project"
-          ) {
-            setCurrentView(pendingNavigation);
-          }
+          const target = pendingNavigation;
           setPendingNavigation(null);
+          await finishPending(target);
         }
       }
     } catch (err) {
@@ -292,36 +319,10 @@ export function TitleBar() {
                 <MenuItem onClick={() => handleSafeNavigation("new_project")}>
                   <Trans>New Project</Trans>
                 </MenuItem>
-                <MenuItem
-                  onClick={async () => {
-                    setIsMenuOpen(false);
-                    try {
-                      const success = await loadProject();
-                      if (success) {
-                        setCurrentView("editor");
-                        showToast(t`Project loaded successfully`, "success");
-                      }
-                    } catch (err) {
-                      showToast(t`Failed to read project file`, "error");
-                    }
-                  }}
-                >
+                <MenuItem onClick={() => askThenOpen(false)}>
                   <Trans>Open Project File...</Trans>
                 </MenuItem>
-                <MenuItem
-                  onClick={async () => {
-                    setIsMenuOpen(false);
-                    try {
-                      const success = await loadProject(undefined, true);
-                      if (success) {
-                        setCurrentView("editor");
-                        showToast(t`Project loaded successfully`, "success");
-                      }
-                    } catch (err) {
-                      showToast(t`Failed to read project folder`, "error");
-                    }
-                  }}
-                >
+                <MenuItem onClick={() => askThenOpen(true)}>
                   <Trans>Open Project Folder...</Trans>
                 </MenuItem>
 
@@ -494,19 +495,9 @@ export function TitleBar() {
         onCancel={() => setPendingNavigation(null)}
         onDiscard={async () => {
           setIsDirty(false);
-          if (pendingNavigation === "close") {
-            try {
-              await getCurrentWindow().destroy();
-            } catch (e) {
-              console.error(e);
-            }
-          } else if (
-            pendingNavigation === "title_screen" ||
-            pendingNavigation === "new_project"
-          ) {
-            setCurrentView(pendingNavigation);
-          }
+          const target = pendingNavigation;
           setPendingNavigation(null);
+          if (target) await finishPending(target);
         }}
         onSave={async () => {
           if (
@@ -520,19 +511,9 @@ export function TitleBar() {
 
           const saved = await handleSave();
           if (saved && pendingNavigation) {
-            if (pendingNavigation === "close") {
-              try {
-                await getCurrentWindow().destroy();
-              } catch (e) {
-                console.error(e);
-              }
-            } else if (
-              pendingNavigation === "title_screen" ||
-              pendingNavigation === "new_project"
-            ) {
-              setCurrentView(pendingNavigation);
-            }
+            const target = pendingNavigation;
             setPendingNavigation(null);
+            await finishPending(target);
           }
         }}
       />

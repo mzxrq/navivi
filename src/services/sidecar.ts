@@ -40,11 +40,19 @@ export function runStage(configPath: string, mode: string): Promise<string> {
   });
 }
 
+// Read-only modes: Rust runs them beside the tracked process (`run_python_utility`, same list as UTILITY_MODES in lib.rs), so asking
+// for the voice list on mount neither cancels another screen's request nor stops a running stage.
+const READ_ONLY_MODES = new Set([
+  "extract_words", "extract_place_words", "get_furigana",
+  "tts_voices_list", "tts_engines", "tts_cache_info", "system_info", "list_fonts", "overview_length",
+]);
+
 // A utility mode with its input (a string is passed as is, anything else as JSON); never throws.
 export async function callSidecar<T>(mode: string, input: string | object = {}): Promise<SidecarReply<T>> {
   const payload = typeof input === "string" ? input : JSON.stringify(input);
   try {
-    return parseReply<T>(await invoke<string>("run_python_blueprint", { action: mode, payload }));
+    const command = READ_ONLY_MODES.has(mode) ? "run_python_utility" : "run_python_blueprint";
+    return parseReply<T>(await invoke<string>(command, { action: mode, payload }));
   } catch (e) {
     if (isSetupRequired(e)) announceSetupRequired();
     const error = messageOf(e);

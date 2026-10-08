@@ -642,6 +642,11 @@ export function MapArea() {
   // Picking a different stop (map or list) opens its editor, so any tool steps back to Select.
   const drawTargetRef = useRef<string | null>(null);
   const previousActiveRef = useRef<string | null>(null);
+  // Draw started from the toolbar (not the leg buttons) edits the stop that is selected at that moment.
+  useEffect(() => {
+    if (isDrawMode && activeWaypointId) drawTargetRef.current = activeWaypointId;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isDrawMode]);
   useEffect(() => {
     const previous = previousActiveRef.current;
     previousActiveRef.current = activeWaypointId;
@@ -811,6 +816,7 @@ export function MapArea() {
             isEraserMode={isEraserMode}
             setIsEraserMode={setIsEraserMode}
             onPickLeg={(wpId) => {
+              drawTargetRef.current = wpId;
               setActiveWaypointId(wpId);
               fitToLeg(wpId);
             }}

@@ -111,29 +111,30 @@ fn python_command(app: &AppHandle) -> Result<Command, String> {
 }
 
 #[tauri::command]
-async fn run_python_blueprint(
-    app: AppHandle,
-    action: String,
-    payload: String,
-    state: State<'_, BlueprintState>
-) -> Result<String, String> {
-    run_in_slot(&app, &action, &payload, &state.process, "blueprint-log")
+async fn run_python_blueprint(app: AppHandle, action: String, payload: String) -> Result<String, String> {
+    // Blocking work (it waits for the process): keep it off the async workers.
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<BlueprintState>();
+        run_in_slot(&app, &action, &payload, &state.process, None)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 // The modes that set up an engine or a model. They run in their own slot (see BlueprintState::install_process).
 const INSTALL_MODES: &[&str] = &["tts_install_kokoro", "tts_install_qwen3", "tts_install_irodori", "comfyui_install", "ollama_install"];
 
 #[tauri::command]
-async fn run_python_install(
-    app: AppHandle,
-    action: String,
-    payload: String,
-    state: State<'_, BlueprintState>,
-) -> Result<String, String> {
+async fn run_python_install(app: AppHandle, action: String, payload: String) -> Result<String, String> {
     if !INSTALL_MODES.contains(&action.as_str()) {
         return Err(format!("Not an install mode: {action}"));
     }
-    run_in_slot(&app, &action, &payload, &state.install_process, "install-log")
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<BlueprintState>();
+        run_in_slot(&app, &action, &payload, &state.install_process, Some("install-log"))
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -149,8 +150,8 @@ fn cancel_python_install(state: State<'_, BlueprintState>) -> Result<String, Str
 }
 
 /// Runs `python main.py <action> <payload>` and keeps it in `slot`; a new call on the same slot kills the previous one.
-/// Every stderr line is also sent to the window as `log_event`.
-fn run_in_slot(app: &AppHandle, action: &str, payload: &str, slot: &Mutex<Option<Child>>, log_event: &'static str) -> Result<String, String> {
+/// With `log_event`, every stderr line is also sent to the window under that event name (installs show progress from it).
+fn run_in_slot(app: &AppHandle, action: &str, payload: &str, slot: &Mutex<Option<Child>>, log_event: Option<&'static str>) -> Result<String, String> {
     // Spawn instead of output()
     let mut cmd = python_command(app)?;
     cmd.arg(action)
@@ -182,7 +183,9 @@ fn run_in_slot(app: &AppHandle, action: &str, payload: &str, slot: &Mutex<Option
         let mut err_str = String::new();
         for line in std::io::BufReader::new(stderr).split(b'\n').map_while(Result::ok) {
             let line = String::from_utf8_lossy(&line).trim_end_matches('\r').to_string();
-            let _ = app_for_log.emit(log_event, line.clone());
+            if let Some(event) = log_event {
+                let _ = app_for_log.emit(event, line.clone());
+            }
             err_str.push_str(&line);
             err_str.push('\n');
         }
@@ -219,7 +222,11 @@ fn run_in_slot(app: &AppHandle, action: &str, payload: &str, slot: &Mutex<Option
 }
 // Quick read-only modes that run beside the tracked process instead of replacing it,
 // so a background scan can't kill a TTS stage or an assistant call.
-const UTILITY_MODES: &[&str] = &["extract_words", "extract_place_words", "get_furigana"];
+const UTILITY_MODES: &[&str] = &[
+    "extract_words", "extract_place_words", "get_furigana",
+    // What the Voice tab, the setup checklist and the settings ask on every mount; on the shared slot they cancelled each other.
+    "tts_voices_list", "tts_engines", "tts_cache_info", "system_info", "list_fonts", "overview_length",
+];
 
 #[tauri::command]
 async fn run_python_utility(app: AppHandle, action: String, payload: String) -> Result<String, String> {
@@ -396,7 +403,8 @@ fn wake_up_ollama() -> Result<String, String> {
         let mut serve = Command::new(&exe);
         runtime::hide_window(&mut serve);
         let spawned = serve
-            .env("OLLAMA_ORIGINS", "*")
+            // Only this app's own origins: "*" would let any web page the user visits call the local model server.
+            .env("OLLAMA_ORIGINS", "http://tauri.localhost,https://tauri.localhost,tauri://localhost,http://localhost:1420,http://127.0.0.1:1420")
             .arg("serve")
             .stdout(Stdio::null())
             .stderr(Stdio::null())

@@ -63,11 +63,18 @@ pub fn install_vc_runtime() -> Result<(), String> {
     }
 }
 
+/// `dir` as a prefix that matches only paths inside it: with a trailing backslash, `...\Navivi` no longer matches `...\Navivi-dev\...`.
+/// Compared with StartsWith, not -like, so `[`, `]` and `*` in a folder name are plain characters.
+fn inside_prefix(dir: &Path) -> String {
+    let text = dir.display().to_string();
+    format!("{}\\", text.trim_end_matches('\\'))
+}
+
 /// Process ids of `navivi.exe` running from `dir`.
 pub fn running_instances(dir: &Path) -> Vec<u32> {
     let script = format!(
-        "Get-CimInstance Win32_Process -Filter \"Name='navivi.exe'\" | Where-Object {{ $_.ExecutablePath -like ({} + '*') }} | ForEach-Object {{ $_.ProcessId }}",
-        ps_quote(&dir.display().to_string())
+        "Get-CimInstance Win32_Process -Filter \"Name='navivi.exe'\" | Where-Object {{ $_.ExecutablePath -and $_.ExecutablePath.StartsWith({}, [StringComparison]::OrdinalIgnoreCase) }} | ForEach-Object {{ $_.ProcessId }}",
+        ps_quote(&inside_prefix(dir))
     );
     powershell(&script)
         .unwrap_or_default()
@@ -109,9 +116,9 @@ pub fn remove_shortcuts(name: &str, dir: &Path) {
         "$s = New-Object -ComObject WScript.Shell; \
          foreach ($f in @([Environment]::GetFolderPath('Desktop'), [Environment]::GetFolderPath('Programs'))) {{ \
            $p = Join-Path $f ({n} + '.lnk'); \
-           if (Test-Path -LiteralPath $p) {{ if ($s.CreateShortcut($p).TargetPath -like ({d} + '*')) {{ Remove-Item -LiteralPath $p -Force -ErrorAction SilentlyContinue }} }} }}",
+           if (Test-Path -LiteralPath $p) {{ if ($s.CreateShortcut($p).TargetPath.StartsWith({d}, [StringComparison]::OrdinalIgnoreCase)) {{ Remove-Item -LiteralPath $p -Force -ErrorAction SilentlyContinue }} }} }}",
         n = ps_quote(name),
-        d = ps_quote(&dir.display().to_string()),
+        d = ps_quote(&inside_prefix(dir)),
     );
     let _ = powershell(&script);
 }

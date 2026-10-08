@@ -26,6 +26,13 @@ const version = conf.version;
 const appExe = join(tauriDir, "target", "release", "navivi.exe");
 
 console.log(`\n[1/4] The app`);
+// Vite inlines VITE_* values from a root .env into the JS inside navivi.exe, where anyone can read them with `strings`.
+for (const name of [".env", ".env.local", ".env.production"]) {
+  const file = join(root, name);
+  if (!existsSync(file)) continue;
+  const keys = readFileSync(file, "utf8").split(/\r?\n/).filter((l) => /^VITE_\w*(KEY|TOKEN|SECRET)\w*\s*=\s*\S/.test(l)).map((l) => l.split("=")[0].trim());
+  if (keys.length) console.warn(`  WARNING: ${name} defines ${keys.join(", ")}; the values will be readable inside the shipped navivi.exe.`);
+}
 if (!skipApp || !existsSync(appExe)) run(npm, ["run", "tauri", "--", "build", "--no-bundle"]);
 console.log(`  ${appExe} (${mb(appExe)})`);
 
