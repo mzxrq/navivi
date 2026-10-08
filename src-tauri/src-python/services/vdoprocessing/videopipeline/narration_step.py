@@ -17,13 +17,14 @@ from pathlib import Path
 from typing import Optional
 
 from services.localization.cues import cue_tags, cue_times, strip_cues
+from services.localization.sentence_split import SENTENCE_END
 
 from . import audio_step
 from .audio_step import OVERVIEW_CUE_KEY, base_narration_script, raw_narration_script, waypoint_cue_key
 from .helpers import logger
 
 from services.projectfiles import NARRATION_CUES, OVERVIEW_NARRATION, ROUTE_CACHE, meta_file, meta_path
-_SENTENCE_END = re.compile(r"(?<=[。！？!?\n])")
+_SENTENCE_END = SENTENCE_END
 
 # How much of the narration is left to speak after the walker arrives. 0: the
 # voice ends as the walker reaches the destination, and all that follows is the

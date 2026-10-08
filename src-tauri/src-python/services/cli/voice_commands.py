@@ -48,6 +48,7 @@ def engines(_payload: Dict[str, Any]) -> Dict[str, Any]:
         "comfyui": {"ready": comfyui_setup.is_ready(), "nvidia": pick_backend() == "cu128"},
         "kokoro": {
             "ready": KokoroTTSClient.is_ready(),
+            "english_ready": KokoroTTSClient.english_ready(),
             "default_voice": tuning.KOKORO_VOICE,
             "voices": [{"id": vid, "label": label} for vid, label in tuning.KOKORO_VOICES.items()],
         },

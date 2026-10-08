@@ -128,6 +128,11 @@ def project_video_dir(project_dir) -> Path:
     return Path(project_dir) / "assets" / "video"
 
 
+def project_export_dir(project_dir) -> Path:
+    """<project>/export: only the finished videos the user exports."""
+    return Path(project_dir) / "export"
+
+
 # Route outputs (overview map, residential leg clips, the render manifest)
 # and attraction outputs (ComfyUI/Wan2.2 image-to-video clips) used to share
 # one flat assets/video/ folder, which made it hard to tell the two domains'

@@ -124,7 +124,7 @@ msgstr "{0} min"
 
 #. placeholder {0}: formatBytes(cache.bytes)
 #. placeholder {1}: formatBytes(cache.max_bytes)
-#: src/components/ui/VoiceSettings.tsx:542
+#: src/components/ui/VoiceSettings.tsx:556
 msgid "{0} of {1}"
 msgstr "{0} of {1}"
 
@@ -324,7 +324,7 @@ msgstr "A calm 5 minute video of the pilgrimage route in the PDF I attach, for v
 msgid "A day trip around Shirahama in Wakayama, Japanese narration, about 3 minutes"
 msgstr "A day trip around Shirahama in Wakayama, Japanese narration, about 3 minutes"
 
-#: src/components/ui/VoiceSettings.tsx:581
+#: src/components/ui/VoiceSettings.tsx:595
 msgid "A fast draft takes about half the time per line and sounds a little rougher. Use it while you are checking a project and switch to Best for the final render. Narration you already have is kept; use Redo voice in the review step to remake it with this setting."
 msgstr "A fast draft takes about half the time per line and sounds a little rougher. Use it while you are checking a project and switch to Best for the final render. Narration you already have is kept; use Redo voice in the review step to remake it with this setting."
 
@@ -335,18 +335,24 @@ msgstr "A fast draft takes about half the time per line and sounds a little roug
 #. placeholder {0}: MODEL_CREDITS.kokoro.by
 #. placeholder {1}: MODEL_CREDITS.kokoro.license
 #: src/components/ui/ComponentsChecklist.tsx:204
-msgid "A few built-in Japanese voices, a few seconds per line. A little flatter, and it cannot clone a voice. By {0}, {1}."
-msgstr "A few built-in Japanese voices, a few seconds per line. A little flatter, and it cannot clone a voice. By {0}, {1}."
+#~ msgid "A few built-in Japanese voices, a few seconds per line. A little flatter, and it cannot clone a voice. By {0}, {1}."
+#~ msgstr "A few built-in Japanese voices, a few seconds per line. A little flatter, and it cannot clone a voice. By {0}, {1}."
+
+#. placeholder {0}: MODEL_CREDITS.kokoro.by
+#. placeholder {1}: MODEL_CREDITS.kokoro.license
+#: src/components/ui/ComponentsChecklist.tsx:204
+msgid "A few built-in voices, Japanese and English, a few seconds per line. A little flatter, and it cannot clone a voice. By {0}, {1}."
+msgstr "A few built-in voices, Japanese and English, a few seconds per line. A little flatter, and it cannot clone a voice. By {0}, {1}."
 
 #: src/features/assistant/AssistantChat.tsx:61
 msgid "A relaxed walking video that follows the GPX track I attach, with English narration, about 4 minutes"
 msgstr "A relaxed walking video that follows the GPX track I attach, with English narration, about 4 minutes"
 
-#: src/components/ui/VoiceSettings.tsx:508
+#: src/components/ui/VoiceSettings.tsx:522
 msgid "A short description of the way the natural voice speaks, written in Japanese. Leave it empty for no style. Changing it regenerates the narration the next time you generate."
 msgstr "A short description of the way the natural voice speaks, written in Japanese. Leave it empty for no style. Changing it regenerates the narration the next time you generate."
 
-#: src/components/ui/VoiceSettings.tsx:621
+#: src/components/ui/VoiceSettings.tsx:635
 msgid "A voice with this name already exists."
 msgstr "A voice with this name already exists."
 
@@ -452,7 +458,7 @@ msgstr "Add a video first, then import subtitles"
 msgid "Add a video to start"
 msgstr "Add a video to start"
 
-#: src/components/ui/VoiceSettings.tsx:591
+#: src/components/ui/VoiceSettings.tsx:605
 msgid "Add a voice"
 msgstr "Add a voice"
 
@@ -472,6 +478,10 @@ msgstr "Add as start"
 #: src/features/map/components/DrawBar.tsx:144
 msgid "Add at least two stops to draw a path between them."
 msgstr "Add at least two stops to draw a path between them."
+
+#: src/components/ui/VoiceSettings.tsx:333
+msgid "Add English voices"
+msgstr "Add English voices"
 
 #: src/features/editor/EditorView.tsx:339
 #: src/features/editor/EditorView.tsx:376
@@ -551,7 +561,7 @@ msgstr "Add via point here"
 msgid "Add video"
 msgstr "Add video"
 
-#: src/components/ui/VoiceSettings.tsx:615
+#: src/components/ui/VoiceSettings.tsx:629
 msgid "Add voice"
 msgstr "Add voice"
 
@@ -576,6 +586,10 @@ msgstr "Add your own token in Settings. A free Mapbox account is enough, and the
 #: src/features/map/components/WaypointEditor.tsx:259
 msgid "Added {0} photos from Wikimedia Commons. Check that they show the right place."
 msgstr "Added {0} photos from Wikimedia Commons. Check that they show the right place."
+
+#: src/components/ui/VoiceSettings.tsx:333
+msgid "Adding…"
+msgstr "Adding…"
 
 #: src/components/ui/OnlineAiSettings.tsx:225
 msgid "Address"
@@ -725,7 +739,7 @@ msgid "Apply to all titles like this"
 msgstr "Apply to all titles like this"
 
 #. placeholder {0}: modalState.project?.name
-#: src/components/view/ProjectManager.tsx:636
+#: src/components/view/ProjectManager.tsx:655
 msgid "Are you sure you want to remove <0>{0}</0> from your recent list? The original files will remain on your computer."
 msgstr "Are you sure you want to remove <0>{0}</0> from your recent list? The original files will remain on your computer."
 
@@ -771,7 +785,7 @@ msgstr "Attraction Script"
 msgid "Attraction videos"
 msgstr "Attraction videos"
 
-#: src/components/ui/VoiceSettings.tsx:203
+#: src/components/ui/VoiceSettings.tsx:204
 #: src/features/editor/EditorView.tsx:82
 msgid "Audio"
 msgstr "Audio"
@@ -863,7 +877,7 @@ msgstr "Background box"
 msgid "Background music"
 msgstr "Background music"
 
-#: src/components/ui/VoiceSettings.tsx:576
+#: src/components/ui/VoiceSettings.tsx:590
 msgid "Balanced"
 msgstr "Balanced"
 
@@ -899,7 +913,7 @@ msgstr "Base maps and place names."
 msgid "Based on your earlier renders on this PC. Unchanged clips are reused, so it may finish sooner."
 msgstr "Based on your earlier renders on this PC. Unchanged clips are reused, so it may finish sooner."
 
-#: src/components/ui/VoiceSettings.tsx:577
+#: src/components/ui/VoiceSettings.tsx:591
 msgid "Best"
 msgstr "Best"
 
@@ -1005,11 +1019,12 @@ msgstr "Cancel"
 #: src/components/ui/SaveAs.tsx:105
 #: src/components/ui/SetupGate.tsx:127
 #: src/components/ui/UnsavedChanges.tsx:35
-#: src/components/ui/VoiceSettings.tsx:417
-#: src/components/ui/VoiceSettings.tsx:554
-#: src/components/ui/VoiceSettings.tsx:619
-#: src/components/view/ProjectManager.tsx:622
-#: src/components/view/ProjectManager.tsx:667
+#: src/components/ui/VoiceSettings.tsx:431
+#: src/components/ui/VoiceSettings.tsx:568
+#: src/components/ui/VoiceSettings.tsx:633
+#: src/components/view/LanguageVersionDialog.tsx:91
+#: src/components/view/ProjectManager.tsx:641
+#: src/components/view/ProjectManager.tsx:704
 #: src/components/view/ProjectSettingsModal.tsx:127
 #: src/features/editor/ExportDialog.tsx:110
 #: src/features/map/components/GenerateDialog.tsx:122
@@ -1080,7 +1095,7 @@ msgid "Check what you need. Only one voice is required; everything else is optio
 msgstr "Check what you need. Only one voice is required; everything else is optional and can be added later."
 
 #: src/components/ui/ComponentsChecklist.tsx:227
-#: src/components/ui/VoiceSettings.tsx:542
+#: src/components/ui/VoiceSettings.tsx:556
 msgid "Checking…"
 msgstr "Checking…"
 
@@ -1097,7 +1112,7 @@ msgstr "Choose a leg"
 msgid "Choose a model"
 msgstr "Choose a model"
 
-#: src/components/ui/VoiceSettings.tsx:626
+#: src/components/ui/VoiceSettings.tsx:640
 msgid "Choose a recording…"
 msgstr "Choose a recording…"
 
@@ -1124,7 +1139,7 @@ msgstr "Clean map before the card"
 #: src/components/ui/NewProject.tsx:317
 #: src/components/ui/ReviewStep.tsx:182
 #: src/components/ui/StatusBar.tsx:402
-#: src/components/ui/VoiceSettings.tsx:551
+#: src/components/ui/VoiceSettings.tsx:565
 #: src/features/map/components/Sidebar.tsx:262
 msgid "Clear"
 msgstr "Clear"
@@ -1137,7 +1152,7 @@ msgstr "Clear all"
 msgid "Clear All Notifications"
 msgstr "Clear All Notifications"
 
-#: src/components/ui/VoiceSettings.tsx:559
+#: src/components/ui/VoiceSettings.tsx:573
 msgid "Clear cache"
 msgstr "Clear cache"
 
@@ -1152,6 +1167,10 @@ msgstr "Clear route"
 #: src/features/map/hooks/useStopMenus.ts:187
 msgid "Clear via points ({viaCount})"
 msgstr "Clear via points ({viaCount})"
+
+#: src/components/view/LanguageVersionDialog.tsx:73
+msgid "Clearing the old audio and clips…"
+msgstr "Clearing the old audio and clips…"
 
 #: src/features/map/components/DrawBar.tsx:327
 msgid "Click a point to remove it."
@@ -1260,7 +1279,7 @@ msgstr "Combining all route segments, narration voiceovers, and transitions into
 msgid "Compass on stop maps"
 msgstr "Compass on stop maps"
 
-#: src/components/view/ProjectManager.tsx:675
+#: src/components/view/ProjectManager.tsx:712
 msgid "Confirm"
 msgstr "Confirm"
 
@@ -1333,6 +1352,10 @@ msgstr "Copy Message"
 msgid "Copy path from"
 msgstr "Copy path from"
 
+#: src/components/view/LanguageVersionDialog.tsx:72
+msgid "Copying the project…"
+msgstr "Copying the project…"
+
 #: src/components/ui/CaptionStyleFields.tsx:147
 msgid "Corner radius"
 msgstr "Corner radius"
@@ -1375,8 +1398,12 @@ msgstr "Could not look for photos: {0}"
 msgid "Could not make that again: {message}"
 msgstr "Could not make that again: {message}"
 
+#: src/components/view/ProjectManager.tsx:671
+msgid "Could not make the version: {message}"
+msgstr "Could not make the version: {message}"
+
 #: src/components/ui/TitleBar.tsx:309
-#: src/components/view/ProjectManager.tsx:268
+#: src/components/view/ProjectManager.tsx:287
 msgid "Could not open file location"
 msgstr "Could not open file location"
 
@@ -1398,7 +1425,7 @@ msgstr "Could not read the file: {0}"
 msgid "Could not redo that: {0}"
 msgstr "Could not redo that: {0}"
 
-#: src/components/view/ProjectManager.tsx:109
+#: src/components/view/ProjectManager.tsx:113
 msgid "Could not render project directly: "
 msgstr "Could not render project directly: "
 
@@ -1417,6 +1444,10 @@ msgstr "Could not save this version"
 #: src/features/map/components/WaypointEditor.tsx:205
 msgid "Couldn't look up a place name for this location."
 msgstr "Couldn't look up a place name for this location."
+
+#: src/components/view/LanguageVersionDialog.tsx:94
+msgid "Create"
+msgstr "Create"
 
 #: src/components/ui/SaveAs.tsx:99
 msgid "Create a copy of this workspace"
@@ -1515,8 +1546,8 @@ msgstr "Default travel mode"
 msgid "default-routing-mode-detail"
 msgstr "Sets the default pathfinding engine when placing waypoints"
 
-#: src/components/ui/VoiceSettings.tsx:414
-#: src/components/ui/VoiceSettings.tsx:426
+#: src/components/ui/VoiceSettings.tsx:428
+#: src/components/ui/VoiceSettings.tsx:440
 #: src/features/editor/Inspector.tsx:575
 #: src/features/editor/Inspector.tsx:609
 #: src/features/map/components/WaypointEditor.tsx:854
@@ -1524,7 +1555,7 @@ msgid "Delete"
 msgstr "Delete"
 
 #. placeholder {0}: v.id
-#: src/components/ui/VoiceSettings.tsx:426
+#: src/components/ui/VoiceSettings.tsx:440
 msgid "Delete {0}"
 msgstr "Delete {0}"
 
@@ -1585,7 +1616,7 @@ msgstr "Deleted 1 old file. It will be made again."
 msgid "Describe a trip and I will set up the stops and scripts for you. Attach an itinerary if you have one."
 msgstr "Describe a trip and I will set up the stops and scripts for you. Attach an itinerary if you have one."
 
-#: src/components/ui/VoiceSettings.tsx:503
+#: src/components/ui/VoiceSettings.tsx:517
 msgid "Describe how the voice should speak"
 msgstr "Describe how the voice should speak"
 
@@ -1780,18 +1811,18 @@ msgstr "Driving"
 msgid "Drop photos or GPS files to plot route"
 msgstr "Drop photos or GPS files to plot route"
 
-#: src/components/view/ProjectManager.tsx:228
+#: src/components/view/ProjectManager.tsx:232
 #: src/features/editor/EditorView.tsx:304
 #: src/features/editor/Inspector.tsx:516
 #: src/features/map/hooks/useStopMenus.ts:239
 msgid "Duplicate"
 msgstr "Duplicate"
 
-#: src/components/view/ProjectManager.tsx:655
+#: src/components/view/ProjectManager.tsx:692
 msgid "Duplicate Project"
 msgstr "Duplicate Project"
 
-#: src/components/view/ProjectManager.tsx:689
+#: src/components/view/ProjectManager.tsx:726
 msgid "Duplicate Project Name"
 msgstr "Duplicate Project Name"
 
@@ -1971,7 +2002,7 @@ msgid "Export for sharing"
 msgstr "Export for sharing"
 
 #: src/components/ui/TitleBar.tsx:279
-#: src/components/view/ProjectManager.tsx:244
+#: src/components/view/ProjectManager.tsx:263
 msgid "Export for sharing..."
 msgstr "Export for sharing..."
 
@@ -2017,7 +2048,7 @@ msgstr "Fades into the next clip"
 msgid "Failed"
 msgstr "Failed"
 
-#: src/components/view/ProjectManager.tsx:204
+#: src/components/view/ProjectManager.tsx:208
 msgid "Failed to duplicate project"
 msgstr "Failed to duplicate project"
 
@@ -2034,11 +2065,11 @@ msgstr "Failed to geocode any locations."
 msgid "Failed to invoke Python render: {err}"
 msgstr "Failed to invoke Python render: {err}"
 
-#: src/components/view/ProjectManager.tsx:148
+#: src/components/view/ProjectManager.tsx:152
 msgid "Failed to load demo route"
 msgstr "Failed to load demo route"
 
-#: src/components/view/ProjectManager.tsx:123
+#: src/components/view/ProjectManager.tsx:127
 msgid "Failed to load project: "
 msgstr "Failed to load project: "
 
@@ -2071,11 +2102,11 @@ msgstr "Failed to read project file"
 msgid "Failed to read project folder"
 msgstr "Failed to read project folder"
 
-#: src/components/view/ProjectManager.tsx:206
+#: src/components/view/ProjectManager.tsx:210
 msgid "Failed to remove project"
 msgstr "Failed to remove project"
 
-#: src/components/view/ProjectManager.tsx:202
+#: src/components/view/ProjectManager.tsx:206
 msgid "Failed to rename project"
 msgstr "Failed to rename project"
 
@@ -2087,11 +2118,11 @@ msgstr "Failed to save project."
 msgid "Failed to save settings"
 msgstr "Failed to save settings"
 
-#: src/components/view/ProjectManager.tsx:208
+#: src/components/view/ProjectManager.tsx:212
 msgid "Failed to update project"
 msgstr "Failed to update project"
 
-#: src/components/ui/VoiceSettings.tsx:575
+#: src/components/ui/VoiceSettings.tsx:589
 msgid "Fast draft"
 msgstr "Fast draft"
 
@@ -2135,7 +2166,7 @@ msgstr "Fetch the overview map image to check how the route is framed"
 msgid "Fetching..."
 msgstr "Fetching..."
 
-#: src/components/view/ProjectManager.tsx:529
+#: src/components/view/ProjectManager.tsx:548
 msgid "File Path"
 msgstr "File Path"
 
@@ -2281,11 +2312,11 @@ msgstr "Generating Assets..."
 msgid "Generating Subtitles{prog}..."
 msgstr "Generating Subtitles{prog}..."
 
-#: src/components/ui/VoiceSettings.tsx:438
+#: src/components/ui/VoiceSettings.tsx:452
 msgid "Generating the sample. The first one can take a minute or more while the voice model loads."
 msgstr "Generating the sample. The first one can take a minute or more while the voice model loads."
 
-#: src/components/ui/VoiceSettings.tsx:327
+#: src/components/ui/VoiceSettings.tsx:341
 msgid "Generating the sample. The first one takes about 20 seconds while the voice model loads."
 msgstr "Generating the sample. The first one takes about 20 seconds while the voice model loads."
 
@@ -2366,7 +2397,7 @@ msgstr "Green"
 msgid "Grid"
 msgstr "Grid"
 
-#: src/components/view/ProjectManager.tsx:424
+#: src/components/view/ProjectManager.tsx:443
 msgid "Grid View"
 msgstr "Grid View"
 
@@ -2583,15 +2614,15 @@ msgstr "Intro & outro"
 msgid "Intro card size"
 msgstr "Intro card size"
 
-#: src/components/ui/VoiceSettings.tsx:264
+#: src/components/ui/VoiceSettings.tsx:265
 msgid "Irodori-TTS can clone a voice from a recording and sounds the most natural, but takes about half a minute per line on a PC without a graphics card."
 msgstr "Irodori-TTS can clone a voice from a recording and sounds the most natural, but takes about half a minute per line on a PC without a graphics card."
 
-#: src/components/ui/VoiceSettings.tsx:338
+#: src/components/ui/VoiceSettings.tsx:352
 msgid "Irodori-TTS needs a one-time setup: a separate Python environment and the model files (about 3 GB, more with a graphics card). It takes several minutes and needs an internet connection. It continues in the background if you close this window."
 msgstr "Irodori-TTS needs a one-time setup: a separate Python environment and the model files (about 3 GB, more with a graphics card). It takes several minutes and needs an internet connection. It continues in the background if you close this window."
 
-#: src/components/ui/VoiceSettings.tsx:335
+#: src/components/ui/VoiceSettings.tsx:349
 msgid "Irodori-TTS setup"
 msgstr "Irodori-TTS setup"
 
@@ -2644,14 +2675,18 @@ msgstr "Key saved"
 #~ msgstr "Key saved for {0}."
 
 #: src/components/ui/VoiceSettings.tsx:274
-msgid "Kokoro-82M has a few built-in Japanese voices and takes a few seconds per line. It sounds a little flatter and cannot clone a voice."
-msgstr "Kokoro-82M has a few built-in Japanese voices and takes a few seconds per line. It sounds a little flatter and cannot clone a voice."
+#~ msgid "Kokoro-82M has a few built-in Japanese voices and takes a few seconds per line. It sounds a little flatter and cannot clone a voice."
+#~ msgstr "Kokoro-82M has a few built-in Japanese voices and takes a few seconds per line. It sounds a little flatter and cannot clone a voice."
 
-#: src/components/ui/VoiceSettings.tsx:288
+#: src/components/ui/VoiceSettings.tsx:275
+msgid "Kokoro-82M has a few built-in voices, Japanese and English, and takes a few seconds per line. It sounds a little flatter and cannot clone a voice."
+msgstr "Kokoro-82M has a few built-in voices, Japanese and English, and takes a few seconds per line. It sounds a little flatter and cannot clone a voice."
+
+#: src/components/ui/VoiceSettings.tsx:289
 msgid "Kokoro-82M needs a one-time setup: a small separate Python environment and the model files (about 2 GB in all). It takes a few minutes and needs an internet connection. It continues in the background if you close this window."
 msgstr "Kokoro-82M needs a one-time setup: a small separate Python environment and the model files (about 2 GB in all). It takes a few minutes and needs an internet connection. It continues in the background if you close this window."
 
-#: src/components/view/ProjectManager.tsx:399
+#: src/components/view/ProjectManager.tsx:418
 msgid "Kyoto Demo Route"
 msgstr "Kyoto Demo Route"
 
@@ -2668,6 +2703,10 @@ msgstr "Labels, route banners and cards drawn into the video. Auto follows the l
 msgid "Language"
 msgstr "Language"
 
+#: src/components/view/LanguageVersionDialog.tsx:102
+msgid "Language of the new version"
+msgstr "Language of the new version"
+
 #: src/components/ui/AppSettings.tsx:608
 msgid "Language of the text in the video"
 msgstr "Language of the text in the video"
@@ -2676,7 +2715,7 @@ msgstr "Language of the text in the video"
 msgid "Larger map tiles for a crisper picture. They take longer to download."
 msgstr "Larger map tiles for a crisper picture. They take longer to download."
 
-#: src/components/view/ProjectManager.tsx:532
+#: src/components/view/ProjectManager.tsx:551
 msgid "Last Opened"
 msgstr "Last Opened"
 
@@ -2773,7 +2812,7 @@ msgstr "Listen to the narration"
 msgid "Loading the font list…"
 msgstr "Loading the font list…"
 
-#: src/components/ui/VoiceSettings.tsx:382
+#: src/components/ui/VoiceSettings.tsx:396
 msgid "Loading voices…"
 msgstr "Loading voices…"
 
@@ -2863,6 +2902,14 @@ msgstr "System in low-spec mode. Opened Waypoint Editor on map to adjust images,
 #: src/features/map/components/GenerateDialog.tsx:231
 msgid "Made again"
 msgstr "Made again"
+
+#: src/components/view/LanguageVersionDialog.tsx:84
+msgid "Make a language version"
+msgstr "Make a language version"
+
+#: src/components/view/ProjectManager.tsx:245
+msgid "Make a language version..."
+msgstr "Make a language version..."
 
 #: src/features/map/components/WaypointEditor.tsx:181
 msgid "Make again for this stop"
@@ -3017,10 +3064,10 @@ msgstr "Models and engines you can download"
 msgid "More"
 msgstr "More"
 
-#: src/components/view/ProjectManager.tsx:511
-#: src/components/view/ProjectManager.tsx:512
-#: src/components/view/ProjectManager.tsx:588
-#: src/components/view/ProjectManager.tsx:589
+#: src/components/view/ProjectManager.tsx:530
+#: src/components/view/ProjectManager.tsx:531
+#: src/components/view/ProjectManager.tsx:607
+#: src/components/view/ProjectManager.tsx:608
 msgid "More actions"
 msgstr "More actions"
 
@@ -3068,6 +3115,10 @@ msgstr "Mute"
 msgid "Mute narration"
 msgstr "Mute narration"
 
+#: src/components/view/LanguageVersionDialog.tsx:122
+msgid "Name"
+msgstr "Name"
+
 #: src/components/ui/SaveAs.tsx:99
 msgid "Name your project to continue"
 msgstr "Name your project to continue"
@@ -3084,11 +3135,11 @@ msgstr "Narration"
 msgid "Narration audio"
 msgstr "Narration audio"
 
-#: src/components/ui/VoiceSettings.tsx:569
+#: src/components/ui/VoiceSettings.tsx:583
 msgid "Narration quality"
 msgstr "Narration quality"
 
-#: src/components/ui/VoiceSettings.tsx:456
+#: src/components/ui/VoiceSettings.tsx:470
 msgid "Narration speed"
 msgstr "Narration speed"
 
@@ -3138,11 +3189,11 @@ msgid "New points go after point {0}. Click it again to add at the end."
 msgstr "New points go after point {0}. Click it again to add at the end."
 
 #: src/components/ui/TitleBar.tsx:320
-#: src/components/view/ProjectManager.tsx:364
+#: src/components/view/ProjectManager.tsx:383
 msgid "New Project"
 msgstr "New Project"
 
-#: src/components/view/ProjectManager.tsx:688
+#: src/components/view/ProjectManager.tsx:725
 msgid "New Project Name"
 msgstr "New Project Name"
 
@@ -3215,11 +3266,11 @@ msgstr "No points yet"
 msgid "No recent activity"
 msgstr "No recent activity"
 
-#: src/components/view/ProjectManager.tsx:454
+#: src/components/view/ProjectManager.tsx:473
 msgid "No recent projects"
 msgstr "No recent projects"
 
-#: src/components/ui/VoiceSettings.tsx:237
+#: src/components/ui/VoiceSettings.tsx:238
 msgid "No reference (model default)"
 msgstr "No reference (model default)"
 
@@ -3362,7 +3413,7 @@ msgstr "One-time setup"
 msgid "Open"
 msgstr "Open"
 
-#: src/components/view/ProjectManager.tsx:354
+#: src/components/view/ProjectManager.tsx:373
 msgid "Open a single project file (.nvv or .zip archive)"
 msgstr "Open a single project file (.nvv or .zip archive)"
 
@@ -3374,7 +3425,7 @@ msgstr "Open API keys"
 msgid "Open dictionary…"
 msgstr "Open dictionary…"
 
-#: src/components/view/ProjectManager.tsx:357
+#: src/components/view/ProjectManager.tsx:376
 msgid "Open File..."
 msgstr "Open File..."
 
@@ -3386,7 +3437,7 @@ msgstr "Open folder"
 msgid "Open music folder"
 msgstr "Open music folder"
 
-#: src/components/view/ProjectManager.tsx:217
+#: src/components/view/ProjectManager.tsx:221
 msgid "Open Project"
 msgstr "Open Project"
 
@@ -3630,13 +3681,13 @@ msgstr "Pixels on a 1080p frame"
 msgid "Place"
 msgstr "Place"
 
-#: src/components/ui/VoiceSettings.tsx:529
-#: src/components/ui/VoiceSettings.tsx:532
+#: src/components/ui/VoiceSettings.tsx:543
+#: src/components/ui/VoiceSettings.tsx:546
 msgid "Place cues in each stop's narration"
 msgstr "Place cues in each stop's narration"
 
-#: src/components/ui/VoiceSettings.tsx:522
-#: src/components/ui/VoiceSettings.tsx:525
+#: src/components/ui/VoiceSettings.tsx:536
+#: src/components/ui/VoiceSettings.tsx:539
 msgid "Place cues in the overview narration"
 msgstr "Place cues in the overview narration"
 
@@ -3650,7 +3701,7 @@ msgstr "Play"
 msgid "Play anything you want to check. Mark what you want redone, then choose Redo selected. If it all looks right, accept and export. Turn on Fast render and Export automatically in the generate dialog to skip this check."
 msgstr "Play anything you want to check. Mark what you want redone, then choose Redo selected. If it all looks right, accept and export. Turn on Fast render and Export automatically in the generate dialog to skip this check."
 
-#: src/components/ui/VoiceSettings.tsx:156
+#: src/components/ui/VoiceSettings.tsx:157
 msgid "Playing the original recording. Set up this voice engine to hear it read your text."
 msgstr "Playing the original recording. Set up this voice engine to hear it read your text."
 
@@ -3676,19 +3727,19 @@ msgstr "Pop in"
 msgid "Position"
 msgstr "Position"
 
-#: src/components/view/ProjectManager.tsx:402
+#: src/components/view/ProjectManager.tsx:421
 msgid "Pre-configured sample project"
 msgstr "Pre-configured sample project"
 
-#: src/components/ui/VoiceSettings.tsx:317
-#: src/components/ui/VoiceSettings.tsx:422
+#: src/components/ui/VoiceSettings.tsx:318
+#: src/components/ui/VoiceSettings.tsx:436
 msgid "Preview"
 msgstr "Preview"
 
 #. placeholder {0}: label(v)
 #. placeholder {0}: v.label
-#: src/components/ui/VoiceSettings.tsx:317
-#: src/components/ui/VoiceSettings.tsx:422
+#: src/components/ui/VoiceSettings.tsx:318
+#: src/components/ui/VoiceSettings.tsx:436
 msgid "Preview {0}"
 msgstr "Preview {0}"
 
@@ -3701,7 +3752,7 @@ msgstr "Preview framing"
 msgid "Project"
 msgstr "Project"
 
-#: src/components/view/ProjectManager.tsx:198
+#: src/components/view/ProjectManager.tsx:202
 msgid "Project duplicated"
 msgstr "Project duplicated"
 
@@ -3714,13 +3765,13 @@ msgid "Project exported"
 msgstr "Project exported"
 
 #: src/components/ui/TitleBar.tsx:120
-#: src/components/view/ProjectManager.tsx:120
+#: src/components/view/ProjectManager.tsx:124
 msgid "Project loaded successfully"
 msgstr "Project loaded successfully"
 
 #: src/components/ui/TitleBar.tsx:292
 #: src/components/ui/TitleBar.tsx:388
-#: src/components/view/ProjectManager.tsx:340
+#: src/components/view/ProjectManager.tsx:359
 msgid "Project Manager"
 msgstr "Project Manager"
 
@@ -3729,15 +3780,15 @@ msgid "Project name"
 msgstr "Project name"
 
 #: src/components/ui/SaveAs.tsx:125
-#: src/components/view/ProjectManager.tsx:526
+#: src/components/view/ProjectManager.tsx:545
 msgid "Project Name"
 msgstr "Project Name"
 
-#: src/components/view/ProjectManager.tsx:181
+#: src/components/view/ProjectManager.tsx:185
 msgid "Project removed from recent list"
 msgstr "Project removed from recent list"
 
-#: src/components/view/ProjectManager.tsx:193
+#: src/components/view/ProjectManager.tsx:197
 msgid "Project renamed successfully"
 msgstr "Project renamed successfully"
 
@@ -3749,7 +3800,7 @@ msgstr "Project saved"
 msgid "Project saved to {fileName}"
 msgstr "Project saved to {fileName}"
 
-#: src/components/view/ProjectManager.tsx:239
+#: src/components/view/ProjectManager.tsx:258
 #: src/features/map/components/Sidebar.tsx:290
 #: src/features/map/components/Sidebar.tsx:291
 msgid "Project settings"
@@ -3805,15 +3856,15 @@ msgstr "Quick Export"
 msgid "Quick Export Complete!"
 msgstr "Quick Export Complete!"
 
-#: src/components/view/ProjectManager.tsx:257
+#: src/components/view/ProjectManager.tsx:276
 msgid "Quick Render"
 msgstr "Quick Render"
 
-#: src/components/view/ProjectManager.tsx:106
+#: src/components/view/ProjectManager.tsx:110
 msgid "Quick Render complete for "
 msgstr "Quick Render complete for "
 
-#: src/components/view/ProjectManager.tsx:104
+#: src/components/view/ProjectManager.tsx:108
 msgid "Quick Render started for "
 msgstr "Quick Render started for "
 
@@ -3825,15 +3876,15 @@ msgstr "Quick Export: Stitching and exporting video automatically..."
 msgid "quickExportToastMsg2"
 msgstr "Stitching videos together and exporting..."
 
-#: src/components/ui/VoiceSettings.tsx:269
+#: src/components/ui/VoiceSettings.tsx:270
 msgid "Qwen3-TTS also clones a voice from a recording, in less than half the time. It sounds a little less natural and can occasionally change the intonation of a short line. It uses about 3 GB of memory while it runs."
 msgstr "Qwen3-TTS also clones a voice from a recording, in less than half the time. It sounds a little less natural and can occasionally change the intonation of a short line. It uses about 3 GB of memory while it runs."
 
-#: src/components/ui/VoiceSettings.tsx:356
+#: src/components/ui/VoiceSettings.tsx:370
 msgid "Qwen3-TTS needs a one-time setup: a separate Python environment and the model files (about 4 GB in all). It takes several minutes and needs an internet connection. It continues in the background if you close this window."
 msgstr "Qwen3-TTS needs a one-time setup: a separate Python environment and the model files (about 4 GB in all). It takes several minutes and needs an internet connection. It continues in the background if you close this window."
 
-#: src/components/ui/VoiceSettings.tsx:353
+#: src/components/ui/VoiceSettings.tsx:367
 msgid "Qwen3-TTS setup"
 msgstr "Qwen3-TTS setup"
 
@@ -3857,7 +3908,7 @@ msgstr "Reading (Furigana)"
 msgid "Reading guessed automatically from the scripts. Edit it to keep your own."
 msgstr "Reading guessed automatically from the scripts. Edit it to keep your own."
 
-#: src/components/view/ProjectManager.tsx:329
+#: src/components/view/ProjectManager.tsx:348
 msgid "Reading Project File..."
 msgstr "Reading Project File..."
 
@@ -3879,7 +3930,7 @@ msgid "Ready to build"
 msgstr "Ready to build"
 
 #: src/components/ui/ColorPicker.tsx:300
-#: src/components/view/ProjectManager.tsx:413
+#: src/components/view/ProjectManager.tsx:432
 msgid "Recent"
 msgstr "Recent"
 
@@ -3946,7 +3997,7 @@ msgstr "Reload Application"
 #: src/components/ui/AppSettings.tsx:818
 #: src/components/ui/OnlineAiSettings.tsx:178
 #: src/components/ui/ReviewStep.tsx:111
-#: src/components/view/ProjectManager.tsx:630
+#: src/components/view/ProjectManager.tsx:649
 #: src/features/assistant/AssistantChat.tsx:179
 #: src/features/editor/EditorView.tsx:322
 #: src/features/editor/Inspector.tsx:519
@@ -3962,7 +4013,7 @@ msgstr "Remove all {0} stops?"
 msgid "Remove all {count} via points"
 msgstr "Remove all {count} via points"
 
-#: src/components/view/ProjectManager.tsx:274
+#: src/components/view/ProjectManager.tsx:293
 msgid "Remove from List"
 msgstr "Remove from List"
 
@@ -3981,7 +4032,7 @@ msgstr "Remove music"
 msgid "Remove narration"
 msgstr "Remove narration"
 
-#: src/components/view/ProjectManager.tsx:613
+#: src/components/view/ProjectManager.tsx:632
 msgid "Remove Project"
 msgstr "Remove Project"
 
@@ -4000,11 +4051,11 @@ msgstr "Remove via point"
 msgid "Remove video"
 msgstr "Remove video"
 
-#: src/components/view/ProjectManager.tsx:223
+#: src/components/view/ProjectManager.tsx:227
 msgid "Rename"
 msgstr "Rename"
 
-#: src/components/view/ProjectManager.tsx:653
+#: src/components/view/ProjectManager.tsx:690
 msgid "Rename Project"
 msgstr "Rename Project"
 
@@ -4044,7 +4095,7 @@ msgstr "Starting Python generation pipeline..."
 msgid "Replace"
 msgstr "Replace"
 
-#: src/components/ui/VoiceSettings.tsx:611
+#: src/components/ui/VoiceSettings.tsx:625
 msgid "Replace existing voice"
 msgstr "Replace existing voice"
 
@@ -4069,14 +4120,14 @@ msgstr "Required for map rendering and 3D terrain"
 #~ msgstr "Requires Ollama"
 
 #: src/components/ui/VideoLookSettings.tsx:39
-#: src/components/ui/VoiceSettings.tsx:461
-#: src/components/ui/VoiceSettings.tsx:477
+#: src/components/ui/VoiceSettings.tsx:475
+#: src/components/ui/VoiceSettings.tsx:491
 #: src/components/view/ProjectSettingsModal.tsx:245
 #: src/features/map/components/WaypointEditor.tsx:827
 msgid "Reset"
 msgstr "Reset"
 
-#: src/components/ui/VoiceSettings.tsx:474
+#: src/components/ui/VoiceSettings.tsx:488
 msgid "Reset speaking style"
 msgstr "Reset speaking style"
 
@@ -4125,7 +4176,7 @@ msgid "Retry"
 msgstr "Retry"
 
 #: src/components/ui/TitleBar.tsx:313
-#: src/components/view/ProjectManager.tsx:262
+#: src/components/view/ProjectManager.tsx:281
 #: src/features/map/components/WaypointEditor.tsx:622
 #: src/features/map/components/WaypointVideos.tsx:58
 msgid "Reveal in File Explorer"
@@ -4389,7 +4440,7 @@ msgstr "Seconds the overview shows the bare map first."
 msgid "Select"
 msgstr "Select"
 
-#: src/components/view/ProjectManager.tsx:343
+#: src/components/view/ProjectManager.tsx:362
 msgid "Select a recent route or create a new workspace to begin"
 msgstr "Select a recent route or create a new workspace to begin"
 
@@ -4456,11 +4507,11 @@ msgstr "Set up at least one voice, or the video has no narration."
 #~ msgid "Set up fast voice"
 #~ msgstr "Set up fast voice"
 
-#: src/components/ui/VoiceSettings.tsx:345
+#: src/components/ui/VoiceSettings.tsx:359
 msgid "Set up Irodori-TTS"
 msgstr "Set up Irodori-TTS"
 
-#: src/components/ui/VoiceSettings.tsx:295
+#: src/components/ui/VoiceSettings.tsx:296
 msgid "Set up Kokoro-82M"
 msgstr "Set up Kokoro-82M"
 
@@ -4472,7 +4523,7 @@ msgstr "Set up Kokoro-82M"
 msgid "Set up Navivi"
 msgstr "Set up Navivi"
 
-#: src/components/ui/VoiceSettings.tsx:363
+#: src/components/ui/VoiceSettings.tsx:377
 msgid "Set up Qwen3-TTS"
 msgstr "Set up Qwen3-TTS"
 
@@ -4481,9 +4532,9 @@ msgstr "Set up Qwen3-TTS"
 msgid "Setting up {0}"
 msgstr "Setting up {0}"
 
-#: src/components/ui/VoiceSettings.tsx:295
-#: src/components/ui/VoiceSettings.tsx:345
-#: src/components/ui/VoiceSettings.tsx:363
+#: src/components/ui/VoiceSettings.tsx:296
+#: src/components/ui/VoiceSettings.tsx:359
+#: src/components/ui/VoiceSettings.tsx:377
 msgid "Setting up…"
 msgstr "Setting up…"
 
@@ -4645,12 +4696,12 @@ msgstr "Something went wrong"
 msgid "Source code"
 msgstr "Source code"
 
-#: src/components/ui/VoiceSettings.tsx:469
-#: src/components/ui/VoiceSettings.tsx:504
+#: src/components/ui/VoiceSettings.tsx:483
+#: src/components/ui/VoiceSettings.tsx:518
 msgid "Speaking style"
 msgstr "Speaking style"
 
-#: src/components/ui/VoiceSettings.tsx:446
+#: src/components/ui/VoiceSettings.tsx:460
 msgid "Speed"
 msgstr "Speed"
 
@@ -4658,7 +4709,7 @@ msgstr "Speed"
 msgid "Splits the scripts into words and reads them for the voice."
 msgstr "Splits the scripts into words and reads them for the voice."
 
-#: src/components/ui/VoiceSettings.tsx:545
+#: src/components/ui/VoiceSettings.tsx:559
 msgid "Spoken lines are kept so a repeated line is not spoken again. Narration already in your projects is not touched."
 msgstr "Spoken lines are kept so a repeated line is not spoken again. Narration already in your projects is not touched."
 
@@ -4860,7 +4911,7 @@ msgstr "System Log"
 msgid "System Logs & Notifications"
 msgstr "System Logs & Notifications"
 
-#: src/components/view/ProjectManager.tsx:425
+#: src/components/view/ProjectManager.tsx:444
 msgid "Table View"
 msgstr "Table View"
 
@@ -4880,7 +4931,7 @@ msgstr "Tauri Window API error:"
 #~ msgid "Tell me about the trip and I will find the places, put them on the map and write a script for each stop."
 #~ msgstr "Tell me about the trip and I will find the places, put them on the map and write a script for each stop."
 
-#: src/components/view/ProjectManager.tsx:385
+#: src/components/view/ProjectManager.tsx:404
 msgid "Templates"
 msgstr "Templates"
 
@@ -4977,6 +5028,14 @@ msgstr "The model the assistant and Auto-Write use."
 #~ msgid "The natural voice needs a one-time setup: a separate Python environment and the model files (about 3 GB, more with a graphics card). It takes several minutes and needs an internet connection. Keep this window open while it runs."
 #~ msgstr "The natural voice needs a one-time setup: a separate Python environment and the model files (about 3 GB, more with a graphics card). It takes several minutes and needs an internet connection. Keep this window open while it runs."
 
+#: src/components/view/ProjectManager.tsx:676
+msgid "The new version is ready. {untranslated} texts could not be translated and are still in the old language: check them before generating."
+msgstr "The new version is ready. {untranslated} texts could not be translated and are still in the old language: check them before generating."
+
+#: src/components/view/ProjectManager.tsx:677
+msgid "The new version is ready. Read the translation, then generate it."
+msgstr "The new version is ready. Read the translation, then generate it."
+
 #: src/components/ui/ReviewStep.tsx:250
 #~ msgid "The overview script is edited in the Intro panel on the map. You can still fix pronunciations here."
 #~ msgstr "The overview script is edited in the Intro panel on the map. You can still fix pronunciations here."
@@ -4985,7 +5044,7 @@ msgstr "The model the assistant and Auto-Write use."
 msgid "The overview script is edited in the Overview narration section at the top of the map sidebar. You can still fix pronunciations here."
 msgstr "The overview script is edited in the Overview narration section at the top of the map sidebar. You can still fix pronunciations here."
 
-#: src/components/ui/VoiceSettings.tsx:523
+#: src/components/ui/VoiceSettings.tsx:537
 msgid "The overview stops at each stop while the voice describes it, then moves on."
 msgstr "The overview stops at each stop while the voice describes it, then moves on."
 
@@ -5037,7 +5096,7 @@ msgstr "The voice is ready. If its length changed, redo the photo clip so it fit
 msgid "The voice is ready. Listen to check it."
 msgstr "The voice is ready. Listen to check it."
 
-#: src/components/ui/VoiceSettings.tsx:242
+#: src/components/ui/VoiceSettings.tsx:243
 msgid "The voice reads every narration in this project. Changing the voice or the speed regenerates the narration the next time you generate. The voice library is shared by all projects."
 msgstr "The voice reads every narration in this project. Changing the voice or the speed regenerates the narration the next time you generate. The voice library is shared by all projects."
 
@@ -5045,7 +5104,7 @@ msgstr "The voice reads every narration in this project. Changing the voice or t
 #~ msgid "The voice-over of the whole-route map shot at the start. Leave it blank and it is written for you when you make the video; once you edit it, it is never replaced."
 #~ msgstr "The voice-over of the whole-route map shot at the start. Leave it blank and it is written for you when you make the video; once you edit it, it is never replaced."
 
-#: src/components/ui/VoiceSettings.tsx:530
+#: src/components/ui/VoiceSettings.tsx:544
 msgid "The walk reaches the stop by the time its name is spoken. Cues you type yourself always win."
 msgstr "The walk reaches the stop by the time its name is spoken. Cues you type yourself always win."
 
@@ -5064,6 +5123,10 @@ msgstr "These legs have no recorded elevation. 3D terrain can supply it."
 #: src/features/assistant/AssistantChat.tsx:97
 msgid "Thinking…"
 msgstr "Thinking…"
+
+#: src/components/view/LanguageVersionDialog.tsx:139
+msgid "This copies the stops, routes and photos into a new project and translates the stop names and scripts with your AI. The audio, captions and video clips are made again for the new language, so generate it once you have read the translation. The original project is not changed."
+msgstr "This copies the stops, routes and photos into a new project and translates the stop names and scripts with your AI. The audio, captions and video clips are made again for the new language, so generate it once you have read the translation. The original project is not changed."
 
 #: src/components/ui/AboutPanel.tsx:67
 msgid "This copy"
@@ -5105,17 +5168,21 @@ msgstr "This project"
 msgid "This project already has assets"
 msgstr "This project already has assets"
 
-#: src/components/view/ProjectManager.tsx:95
+#: src/components/view/ProjectManager.tsx:99
 msgid "This project is archived. Please open it first to render"
 msgstr "This project is archived. Please open it first to render"
 
-#: src/components/view/ProjectManager.tsx:232
+#: src/components/view/ProjectManager.tsx:236
 msgid "This project is still an archive file. Open it once, then duplicate it."
 msgstr "This project is still an archive file. Open it once, then duplicate it."
 
-#: src/components/view/ProjectManager.tsx:249
+#: src/components/view/ProjectManager.tsx:268
 msgid "This project is still an archive file. Open it once, then export."
 msgstr "This project is still an archive file. Open it once, then export."
+
+#: src/components/view/ProjectManager.tsx:249
+msgid "This project is still an archive file. Open it once, then make a version of it."
+msgstr "This project is still an archive file. Open it once, then make a version of it."
 
 #: src/features/map/components/OverviewNarration.tsx:243
 msgid "This replaces the script you wrote."
@@ -5137,6 +5204,14 @@ msgstr "This version could not be deleted"
 msgid "This version is no longer available"
 msgstr "This version is no longer available"
 
+#: src/components/ui/VoiceSettings.tsx:327
+#~ msgid "This voice can also speak English, for a project made in English. Adding the English voices downloads a small language file and four voices (about 100 MB)."
+#~ msgstr "This voice can also speak English, for a project made in English. Adding the English voices downloads a small language file and four voices (about 100 MB)."
+
+#: src/components/ui/VoiceSettings.tsx:327
+msgid "This voice can also speak English. The English voices are needed to make an English version of a project (in the project list menu). Adding them downloads a small language file and four voices."
+msgstr "This voice can also speak English. The English voices are needed to make an English version of a project (in the project list menu). Adding them downloads a small language file and four voices."
+
 #: src/features/map/components/OverviewNarration.tsx:241
 msgid "Throw away your script? The video will write its own when you make it."
 msgstr "Throw away your script? The video will write its own when you make it."
@@ -5154,7 +5229,7 @@ msgstr "Timeline"
 msgid "Timing"
 msgstr "Timing"
 
-#: src/components/ui/VoiceSettings.tsx:518
+#: src/components/ui/VoiceSettings.tsx:532
 msgid "Timing cues"
 msgstr "Timing cues"
 
@@ -5229,6 +5304,12 @@ msgstr "Tracks in your Music folder"
 #: src/features/editor/Inspector.tsx:508
 msgid "Transition"
 msgstr "Transition"
+
+#. placeholder {0}: progress.done
+#. placeholder {1}: progress.total
+#: src/components/view/LanguageVersionDialog.tsx:74
+msgid "Translating {0} of {1}…"
+msgstr "Translating {0} of {1}…"
 
 #: src/features/map/components/WaypointItem.tsx:277
 msgid "Travel mode to the next stop"
@@ -5370,7 +5451,7 @@ msgstr "Updated in place {0} times"
 msgid "Uphill"
 msgstr "Uphill"
 
-#: src/components/ui/VoiceSettings.tsx:594
+#: src/components/ui/VoiceSettings.tsx:608
 msgid "Upload 5–20 seconds of clear speech from one person, with no music or background noise."
 msgstr "Upload 5–20 seconds of clear speech from one person, with no music or background noise."
 
@@ -5408,7 +5489,7 @@ msgstr "Use your own footage for this stop. It plays in place of the animated ph
 #~ msgid "Used as the default when exporting"
 #~ msgstr "Used as the default when exporting"
 
-#: src/components/ui/VoiceSettings.tsx:412
+#: src/components/ui/VoiceSettings.tsx:426
 msgid "Used by all projects."
 msgstr "Used by all projects."
 
@@ -5471,26 +5552,26 @@ msgid "Visited pin"
 msgstr "Visited pin"
 
 #: src/components/ui/AppSettings.tsx:204
-#: src/components/ui/VoiceSettings.tsx:284
-#: src/components/ui/VoiceSettings.tsx:373
+#: src/components/ui/VoiceSettings.tsx:285
+#: src/components/ui/VoiceSettings.tsx:387
 #: src/features/map/components/WaypointEditor.tsx:182
 msgid "Voice"
 msgstr "Voice"
 
-#: src/components/ui/VoiceSettings.tsx:377
+#: src/components/ui/VoiceSettings.tsx:391
 msgid "Voice \"{selected}\" is missing, using {fallback}"
 msgstr "Voice \"{selected}\" is missing, using {fallback}"
 
-#: src/components/ui/VoiceSettings.tsx:538
+#: src/components/ui/VoiceSettings.tsx:552
 msgid "Voice cache"
 msgstr "Voice cache"
 
-#: src/components/ui/VoiceSettings.tsx:249
+#: src/components/ui/VoiceSettings.tsx:250
 msgid "Voice engine"
 msgstr "Voice engine"
 
-#: src/components/ui/VoiceSettings.tsx:603
-#: src/components/ui/VoiceSettings.tsx:604
+#: src/components/ui/VoiceSettings.tsx:617
+#: src/components/ui/VoiceSettings.tsx:618
 msgid "Voice name"
 msgstr "Voice name"
 
@@ -5684,7 +5765,7 @@ msgstr "Yes, make everything again"
 msgid "You can do this later in Settings > Setup"
 msgstr "You can do this later in Settings > Setup"
 
-#: src/components/view/ProjectManager.tsx:457
+#: src/components/view/ProjectManager.tsx:476
 msgid "You don't have any recent workspaces. Create a new project or open an existing .nvv file to get started."
 msgstr "You don't have any recent workspaces. Create a new project or open an existing .nvv file to get started."
 

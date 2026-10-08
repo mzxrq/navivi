@@ -12,6 +12,7 @@ import {
   Film,
   Folder,
   FolderOpen,
+  Globe,
   LayoutGrid,
   List,
   Map,
@@ -26,17 +27,20 @@ import { Trans } from "@lingui/react/macro";
 import { ProjectSettingsModal } from "./ProjectSettingsModal";
 import { AssistantChat } from "../../features/assistant/AssistantChat";
 import { useAiReady } from "../../hooks/useAiReady";
+import { useEnglishVoiceReady } from "../../hooks/useEnglishVoiceReady";
 import { duplicateProject, listRecents, removeRecent, renameRecent } from "../../services/projectStore";
 import { runStage } from "../../services/sidecar";
 import { MenuEntry, openContextMenu, separator } from "../ui/menuItems";
 import { Dialog, dialogButton, dialogInput } from "../ui/Dialog";
+import { LanguageVersionDialog } from "./LanguageVersionDialog";
 
-type ModalActionType = "rename" | "duplicate" | "remove" | "settings" | null;
+type ModalActionType = "rename" | "duplicate" | "remove" | "settings" | "version" | null;
 
 const VIEW_MODE_KEY = "navivi_project_view";
 
 export function ProjectManager() {
   const aiReady = useAiReady();
+  const englishVoiceReady = useEnglishVoiceReady();
   const { setCurrentView, showToast } = useUI();
   const {
     loadProject,
@@ -235,6 +239,21 @@ export function ProjectManager() {
         openModal("duplicate", project);
       },
     },
+    ...(aiReady && englishVoiceReady
+      ? [
+          {
+            label: t`Make a language version...`,
+            icon: Globe,
+            onSelect: () => {
+              if (project.path.toLowerCase().endsWith(".nvv")) {
+                showToast(t`This project is still an archive file. Open it once, then make a version of it.`, "info");
+                return;
+              }
+              openModal("version", project);
+            },
+          },
+        ]
+      : []),
     {
       label: t`Project settings`,
       icon: Settings,
@@ -643,6 +662,24 @@ export function ProjectManager() {
               </Trans>
             </p>
           </Dialog>
+        )}
+
+        {modalState.type === "version" && modalState.project && (
+          <LanguageVersionDialog
+            project={modalState.project}
+            onClose={closeModal}
+            onError={(message) => showToast(t`Could not make the version: ${message}`, "error")}
+            onDone={async ({ untranslated }) => {
+              if (setRecentProjects) setRecentProjects(await listRecents());
+              showToast(
+                untranslated > 0
+                  ? t`The new version is ready. ${untranslated} texts could not be translated and are still in the old language: check them before generating.`
+                  : t`The new version is ready. Read the translation, then generate it.`,
+                untranslated > 0 ? "info" : "success",
+              );
+              closeModal();
+            }}
+          />
         )}
 
         {(modalState.type === "rename" || modalState.type === "duplicate") &&

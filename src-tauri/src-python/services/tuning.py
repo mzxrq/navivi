@@ -1848,14 +1848,24 @@ TTS_ENGINES = ("irodori", "qwen3", "kokoro")
 TTS_ENGINE_DEFAULT = "irodori"
 KOKORO_PORT = 8089
 KOKORO_VOICE = "jf_tebukuro"
-# id -> label. The model's own ids: jf_ = Japanese female, jm_ = Japanese male.
+# id -> label. The model's own ids: jf_ = Japanese female, jm_ = Japanese male, af_/am_ = American English, bf_/bm_ = British English.
 KOKORO_VOICES: Dict[str, str] = {
     "jf_tebukuro": "Tebukuro (female)",
     "jf_alpha": "Alpha (female)",
     "jf_gongitsune": "Gongitsune (female)",
     "jf_nezumi": "Nezumi (female)",
     "jm_kumo": "Kumo (male)",
+    "af_heart": "Heart (US, female)",
+    "af_bella": "Bella (US, female)",
+    "am_michael": "Michael (US, male)",
+    "bf_emma": "Emma (UK, female)",
 }
+KOKORO_ENGLISH_VOICE = "af_heart"
+
+
+def kokoro_language(voice: str) -> str:
+    """The Kokoro language code a voice speaks (its id's first letter): "j" Japanese, "a" American, "b" British English."""
+    return voice[:1] if voice[:1] in ("j", "a", "b") else "j"
 # Measured on a Ryzen 5 5600GE: ~1 s per request plus ~0.09 s per character once loaded; the model takes ~35 s to import and load, once
 # per process (the server stays up between lines).
 KOKORO_COST = {"request": 1.0, "char": 0.09, "startup": 35.0}

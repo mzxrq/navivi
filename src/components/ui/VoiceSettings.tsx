@@ -29,6 +29,7 @@ interface CacheInfo {
 
 interface KokoroInfo {
   ready: boolean;
+  english_ready?: boolean;
   default_voice: string;
   voices: { id: string; label: string }[];
 }
@@ -272,7 +273,7 @@ export function VoiceTab() {
               </Trans>
             ) : (
               <Trans>
-                Kokoro-82M has a few built-in Japanese voices and takes a few seconds per line. It sounds a little flatter and cannot clone a voice.
+                Kokoro-82M has a few built-in voices, Japanese and English, and takes a few seconds per line. It sounds a little flatter and cannot clone a voice.
               </Trans>
             )}
           </p>
@@ -297,7 +298,7 @@ export function VoiceTab() {
             </div>
           ) : (
             <div className="rounded-xl border border-zinc-200 dark:border-white/10 divide-y divide-zinc-100 dark:divide-white/5">
-              {kokoro.voices.map((v) => {
+              {kokoro.voices.filter((v) => kokoro.english_ready || v.id.startsWith("j")).map((v) => {
                 const active = kokoroVoice === v.id;
                 return (
                   <div key={v.id} className="flex items-center gap-2 px-3 py-2">
@@ -320,6 +321,19 @@ export function VoiceTab() {
                   </div>
                 );
               })}
+              {!kokoro.english_ready && (
+                <div className="px-3 py-2.5 space-y-2">
+                  <p className="text-[12px] leading-relaxed text-zinc-500 dark:text-zinc-400">
+                    <Trans>
+                      This voice can also speak English. The English voices are needed to make an English version of a project (in the project list menu). Adding them downloads a small language file and four voices.
+                    </Trans>
+                  </p>
+                  <button type="button" className={secondaryButton} disabled={disabled || installing} onClick={() => install("kokoro")}>
+                    {installingNow("kokoro") && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                    {installingNow("kokoro") ? t`Adding…` : t`Add English voices`}
+                  </button>
+                </div>
+              )}
             </div>
           )}
           {busy === "preview" && (

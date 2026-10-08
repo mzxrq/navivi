@@ -201,7 +201,7 @@ export function ComponentsChecklist({ onReadyChange }: { onReadyChange?: (voiceR
           "kokoro",
           "Kokoro-82M",
           t`About 2 GB · fast, built-in voices`,
-          t`A few built-in Japanese voices, a few seconds per line. A little flatter, and it cannot clone a voice. By ${MODEL_CREDITS.kokoro.by}, ${MODEL_CREDITS.kokoro.license}.`,
+          t`A few built-in voices, Japanese and English, a few seconds per line. A little flatter, and it cannot clone a voice. By ${MODEL_CREDITS.kokoro.by}, ${MODEL_CREDITS.kokoro.license}.`,
         )}
         {engineRow(
           "qwen3",

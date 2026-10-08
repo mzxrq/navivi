@@ -6,7 +6,10 @@ huggingface_hub pins uv resolves transformers 4.12.2, which cannot work).
 
 Needs `uv` (https://docs.astral.sh/uv/). Idempotent: steps that are already done are skipped, so it can also repair a half-finished setup."""
 
+import hashlib
 import subprocess
+import tempfile
+import urllib.request
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -23,6 +26,11 @@ PACKAGES = [
     "jaconv", "mojimoji", "fugashi", "unidic-lite", "pyopenjtalk-prebuilt", "soundfile",
 ]
 MODEL_FILES = ["config.json", "kokoro-v1_0.pth"]
+# English voices need the English language data (spaCy's small model). misaki would fetch it with pip, which this venv does not have, so
+# it is downloaded here, checked against this hash and installed with uv. The venv's spaCy is 3.8: the model must be the 3.8 build (the copy
+# on Hugging Face is 3.7.1) and the file must keep its release name, which pip and uv read the version from.
+ENGLISH_DATA_URL = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl"
+ENGLISH_DATA_SHA256 = "1932429db727d4bff3deed6b34cfc05df17794f4a52eeb26cf8928f7c1a0fb85"
 
 
 def find_uv() -> Optional[str]:
@@ -44,13 +52,44 @@ def _imports_work(python: Path) -> bool:
     return check.returncode == 0
 
 
+def _english_data_installed(python: Path) -> bool:
+    check = subprocess.run(
+        [str(python), "-c", "import spacy, sys; sys.exit(0 if spacy.util.is_package('en_core_web_sm') else 1)"], capture_output=True, encoding="utf-8", errors="replace"
+    )
+    return check.returncode == 0
+
+
+def _download_english_data(folder: Path) -> Path:
+    install_progress.step("downloading the English language data")
+    target = folder / ENGLISH_DATA_URL.rsplit("/", 1)[-1]
+    try:
+        with urllib.request.urlopen(ENGLISH_DATA_URL, timeout=120) as response:
+            data = response.read()
+    except OSError as exc:
+        raise RuntimeError(f"downloading the English language data failed: {exc}") from exc
+    if hashlib.sha256(data).hexdigest() != ENGLISH_DATA_SHA256:
+        raise RuntimeError("The English language data did not match its checksum and was not installed.")
+    target.write_bytes(data)
+    return target
+
+
+def _install_english_data(python: Path, uv: str) -> None:
+    if _english_data_installed(python):
+        return
+    with tempfile.TemporaryDirectory() as tmp:
+        wheel = _download_english_data(Path(tmp))
+        _run([uv, "pip", "install", "--no-deps", "--python", str(python), str(wheel)], "installing the English language data")
+    if not _english_data_installed(python):
+        raise RuntimeError("The English language data was installed but cannot be loaded.")
+
+
 def install_kokoro() -> Dict[str, Any]:
     needed = system_runtime.missing_runtime_message("The fast voice")
     if needed:
         return {"success": False, "error": needed}
     directory, python = KokoroTTSClient._SERVER_DIR, KokoroTTSClient._SERVER_VENV_PYTHON
     directory.mkdir(parents=True, exist_ok=True)
-    install_progress.begin(4)
+    install_progress.begin(6)
     try:
         if not (python.exists() and _imports_work(python)):
             uv = find_uv()
@@ -70,6 +109,11 @@ def install_kokoro() -> Dict[str, Any]:
             "downloading the model and the voices",
         )
         KokoroTTSClient._READY_FILE.write_text("ok", encoding="utf-8")
+        uv = find_uv()
+        if not uv:
+            raise RuntimeError("Adding the English voices needs uv (https://docs.astral.sh/uv/). Install it, then try again.")
+        _install_english_data(python, uv)
+        KokoroTTSClient._ENGLISH_READY_FILE.write_text("ok", encoding="utf-8")
     except RuntimeError as exc:
         return {"success": False, "error": str(exc)}
     return {"success": True, "ready": True}

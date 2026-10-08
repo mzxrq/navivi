@@ -14,6 +14,7 @@ from typing import Any, Dict, Optional
 from services import tuning
 from services.localization.cues import clean_text, cue_times, strip_cues
 from services.logger.progress import tracker
+from services.tts.errors import TTSNotReady
 
 from .helpers import (
     attraction_audio_filename,
@@ -220,6 +221,19 @@ def _write_voice_note(audio_path, client: Any) -> None:
         pass
 
 
+def _remake_reason(existing_path, same_text: bool, client: Any, force: bool) -> str:
+    """Why a clip is being spoken again; logged so an unexpected redo can be traced."""
+    if force:
+        return "forced"
+    if not output_is_valid(existing_path):
+        return "no audio file yet"
+    if not same_text:
+        return "the spoken text changed or has no note"
+    if not _voice_matches(existing_path, client):
+        return "the voice, speed or engine changed"
+    return "unknown"
+
+
 def merge_pronunciation(shared: Optional[list], project: Optional[list]) -> list:
     """The words every project shares plus this project's own; the project's reading wins for the same word."""
     merged = {}
@@ -318,7 +332,10 @@ async def generate_attraction_audio_for_waypoint(
         )
         audio_path = str(existing_path)
     else:
-        logger.info("Step 2: [%d] Generating attraction narration for: '%s'", idx + 1, label)
+        logger.info(
+            "Step 2: [%d] Generating attraction narration for: '%s' (%s)", idx + 1, label,
+            _remake_reason(existing_path, same_text, client, force),
+        )
         audio_path = await client.generate_speech(tts_script, output_filename=audio_filename)
         try:
             _spoken_text_path(audio_path).write_text(tts_script, encoding="utf-8")
@@ -369,7 +386,10 @@ async def generate_overview_audio(
         logger.info("Step 2: Overview narration audio already exists — skipping TTS.")
         audio_path = str(existing_path)
     else:
-        logger.info("Step 2: Generating overview narration audio.")
+        logger.info(
+            "Step 2: Generating overview narration audio (%s).",
+            _remake_reason(existing_path, same_text, client, force),
+        )
         audio_path = await client.generate_speech(tts_script, output_filename=audio_filename)
         try:
             _spoken_text_path(audio_path).write_text(tts_script, encoding="utf-8")
@@ -454,18 +474,17 @@ async def generate_waypoint_audio(
     audio_filename = waypoint_audio_filename(idx, label)
     existing_path = Path(output_dir) / audio_filename
 
-    if (
-        not force
-        and output_is_valid(existing_path)
-        and _spoken_text_matches(existing_path, script, waypoint, tts_script)
-        and _voice_matches(existing_path, client)
-    ):
+    same_text = output_is_valid(existing_path) and _spoken_text_matches(existing_path, script, waypoint, tts_script)
+    if not force and same_text and _voice_matches(existing_path, client):
         logger.info(
             "Step 2: [%d] '%s' already exists — skipping TTS.", idx + 1, label
         )
         audio_path = str(existing_path)
     else:
-        logger.info("Step 2: [%d] Generating audio for: '%s'", idx + 1, label)
+        logger.info(
+            "Step 2: [%d] Generating audio for: '%s' (%s)", idx + 1, label,
+            _remake_reason(existing_path, same_text, client, force),
+        )
         audio_path = await client.generate_speech(tts_script, output_filename=audio_filename)
         try:
             _spoken_text_path(audio_path).write_text(tts_script, encoding="utf-8")
@@ -773,6 +792,8 @@ def generate_audio(
             "overview_cue_times": overview_cue_times,
         }
 
+    except TTSNotReady:
+        raise  # a voice that is not set up: the run stops with the reason, not with silent narration
     except ImportError as e:
         logger.error(
             "Step 2 failed: Could not import IrodoriTTSClient/AudioProcessor "

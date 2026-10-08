@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from services import tuning
+from services.localization.sentence_split import ABBREVIATIONS
 from services.logger.logger import setup_logger
 
 # Logging configuration
@@ -22,6 +23,16 @@ logger = setup_logger("SubtitleService")
 
 # Clause delimiters TTS engines (and human speech) naturally pause on.
 _CLAUSE_DELIMITERS = re.compile(r"([、。！？!?,.])")
+_HIDDEN_POINT = "․"  # one dot leader: stands in for a period that must not split a clause
+_DECIMAL_POINT = re.compile(r"(?<=\d)\.(?=\d)")
+_ABBREVIATION_POINT = re.compile(r"\b(%s)\." % "|".join(ABBREVIATIONS))
+
+
+def line_budget(text: str, max_chars_per_line: int) -> int:
+    """The line length for `text`: the budget counts Japanese characters, and a Latin letter is about half as wide."""
+    letters = [c for c in text if c.isalpha()]
+    latin = sum(1 for c in letters if c.isascii())
+    return max_chars_per_line * 2 if letters and latin * 2 > len(letters) else max_chars_per_line
 
 
 # [Config] Default subtitle style for libass/FFmpeg `force_style` override
@@ -102,6 +113,9 @@ class TextSegmenter:
         text = text.strip()
         if not text:
             return []
+        # The point of "Mt. Kabuto" or "1.5 km" is not a pause: hide it from the split, then give it back.
+        text = _DECIMAL_POINT.sub(_HIDDEN_POINT, text)
+        text = _ABBREVIATION_POINT.sub(lambda m: m.group(1) + _HIDDEN_POINT, text)
         parts = _CLAUSE_DELIMITERS.split(text)
         clauses: List[str] = []
         buf = ""
@@ -112,7 +126,7 @@ class TextSegmenter:
                 buf = ""
         if buf.strip():
             clauses.append(buf.strip())
-        return clauses or [text]
+        return [c.replace(_HIDDEN_POINT, ".") for c in clauses or [text]]
 
     @staticmethod
     def wrap(text: str, max_chars_per_line: int = 24, max_lines: int = 2) -> str:
@@ -273,7 +287,7 @@ class SubtitleBuilder:
             SubtitleCue(
                 start=s,
                 end=e,
-                text=TextSegmenter.wrap(c, max_chars_per_line, max_lines),
+                text=TextSegmenter.wrap(c, line_budget(c, max_chars_per_line), max_lines),
             )
             for (s, e), c in zip(spans, clauses)
         ]

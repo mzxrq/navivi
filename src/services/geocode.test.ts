@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { boundsAround, distanceKm, geocodeRoute, geocodeUrl, GeoPoint, Lookup, nameVariants, regionOf, stripRegion } from "./geocode";
+import { describe, expect, it, vi } from "vitest";
+import { boundsAround, distanceKm, geocodePlace, geocodeRoute, geocodeUrl, GeoPoint, Lookup, nameVariants, regionOf, spikes, stripRegion } from "./geocode";
 
 const WAKAYAMA: GeoPoint = { lat: 34.0, lng: 135.19, country: "jp" };
 
@@ -29,10 +29,30 @@ describe("geocodeUrl limits", () => {
     expect(url).toContain("&country=jp");
     expect(url).toContain("&bbox=134.39,33.2,135.99,34.8");
   });
+  it("asks Nominatim for a few matches when it knows where the route is, so the closest can be chosen", () => {
+    expect(geocodeUrl("甲山", { near: WAKAYAMA })).toContain("limit=5");
+    expect(geocodeUrl("甲山", {})).toContain("limit=1");
+  });
   it("makes the Nominatim box a hard limit", () => {
     const url = geocodeUrl("Sainen-ji", { country: "jp", bounds });
     expect(url).toContain("bounded=1");
     expect(url).toContain("countrycodes=jp");
+  });
+});
+
+describe("geocodePlace", () => {
+  it("takes the namesake closest to the route, not the first one OpenStreetMap lists", async () => {
+    const hits = [
+      { lat: "35.6964", lon: "138.6286" },
+      { lat: "34.2322", lon: "135.1916" },
+    ];
+    vi.stubGlobal("fetch", async () => ({ json: async () => hits }));
+    try {
+      const point = await geocodePlace("甲山", { near: WAKAYAMA });
+      expect(point).toMatchObject({ lat: 34.2322, lng: 135.1916 });
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
 
@@ -95,6 +115,34 @@ describe("geocodeRoute", () => {
     expect(out.found.map((f) => f.uncertain)).toEqual([false, false]);
   });
 
+  it("in Japan asks for local names up front, tries them first, and keeps both names for display", async () => {
+    const asked: string[] = [];
+    const lookup: Lookup = async (place) => {
+      asked.push(place);
+      return place === "Wakayama" ? WAKAYAMA : place === "西念寺" ? { lat: 34.2547, lng: 135.1485 } : null;
+    };
+    let renameCalls = 0;
+    const rename = async (names: string[]) => {
+      renameCalls += 1;
+      expect(names).toEqual(["Sainen-ji Temple"]);
+      return { "Sainen-ji Temple": "西念寺" };
+    };
+    const out = await geocodeRoute(["Sainen-ji Temple, Wakayama"], { lookup, rename });
+    expect(renameCalls).toBe(1);
+    expect(asked.indexOf("西念寺")).toBeLessThan(asked.indexOf("Sainen-ji Temple") === -1 ? Infinity : asked.indexOf("Sainen-ji Temple"));
+    expect(out.found[0]).toMatchObject({ name: "Sainen-ji Temple, Wakayama", shortName: "Sainen-ji Temple", localName: "西念寺", uncertain: false });
+  });
+
+  it("does not ask for local names up front outside Japan", async () => {
+    const rename = async () => {
+      throw new Error("not needed");
+    };
+    const lookup: Lookup = async (place) => (place === "Paris" ? { lat: 48.85, lng: 2.35, country: "fr" } : place === "Louvre" ? { lat: 48.86, lng: 2.34, country: "fr" } : null);
+    const out = await geocodeRoute(["Louvre, Paris"], { lookup, rename });
+    expect(out.found[0].uncertain).toBe(false);
+    expect(out.found[0].localName).toBeUndefined();
+  });
+
   it("does not accept the region's own point for a place that is not the region", async () => {
     const lookup: Lookup = async (place) => (place === "Wakayama" || place === "Shrine" ? WAKAYAMA : null);
     const out = await geocodeRoute(["Shrine, Wakayama", "Other, Wakayama"], { lookup });
@@ -124,6 +172,33 @@ describe("geocodeRoute", () => {
     expect(Math.min(...boxes)).toBeCloseTo((2 * 15) / 111, 2);
     expect(out.found[1].uncertain).toBe(true);
     expect(out.found[1].point.lat).toBeLessThan(34.1);
+  });
+});
+
+describe("spikes", () => {
+  const p = (lat: number, lng: number): GeoPoint => ({ lat, lng });
+  it("finds a stop far off the line between the stops around it", () => {
+    expect(spikes([p(34.25, 135.11), p(34.53, 134.99), p(34.27, 135.12), p(34.29, 135.15)])).toEqual([1]);
+  });
+  it("leaves an ordinary route, a short detour and missing stops alone", () => {
+    expect(spikes([p(34.25, 135.11), null, p(34.27, 135.12), p(34.29, 135.15)])).toEqual([]);
+    expect(spikes([p(34.0, 135.0), p(34.05, 135.05), p(34.1, 135.1)])).toEqual([]);
+    expect(spikes([p(34.0, 135.0), p(34.04, 135.0), p(34.0, 135.01)])).toEqual([]);
+  });
+});
+
+describe("geocodeRoute with a wrong namesake", () => {
+  it("searches a far-off stop again near the line between its neighbors and, finding nothing, places it there as uncertain", async () => {
+    const wrong: GeoPoint = { lat: 34.53, lng: 134.99 };
+    const lookup: Lookup = async (place, c) => {
+      const hit = place === "Wakayama" ? WAKAYAMA : ({ A: { lat: 34.25, lng: 135.11 }, Temple: wrong, B: { lat: 34.27, lng: 135.12 }, C: { lat: 34.29, lng: 135.15 } } as Record<string, GeoPoint>)[place];
+      if (!hit) return null;
+      const b = c.bounds;
+      return b && (hit.lng < b.west || hit.lng > b.east || hit.lat < b.south || hit.lat > b.north) ? null : hit;
+    };
+    const out = await geocodeRoute(["A, Wakayama", "Temple, Wakayama", "B, Wakayama", "C, Wakayama"], { lookup });
+    expect(out.found[1].uncertain).toBe(true);
+    expect(distanceKm(out.found[1].point, out.found[0].point)).toBeLessThan(5);
   });
 });
 
