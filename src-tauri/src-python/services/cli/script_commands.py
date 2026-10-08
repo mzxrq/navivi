@@ -79,6 +79,15 @@ def test_overview_script(job_config_path: str, use_llm: bool = True) -> Dict[str
     }
 
 
+def leg_scripts(job_config_path: str) -> Dict[str, Any]:
+    """Turn-by-turn arriving scripts and opening lines for every stop (course
+    style), from the route alone. Nothing is written: the editor applies them."""
+    from services.localization.leg_script import build_leg_scripts
+
+    _config_path, project, cache = _load_project(job_config_path)
+    return {"success": True, "scripts": build_leg_scripts(project, cache)}
+
+
 def overview_length(job_config_path: str, text: str) -> Dict[str, Any]:
     """The length report for a script the user typed (no model, no files
     written): lets the editor show "about 74 s of 60-120 s" for a hand edit."""
