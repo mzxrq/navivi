@@ -80,8 +80,10 @@ async def render_leg_animation(
     waypoints_json = json.dumps(waypoint_markers or [])
 
     async with async_playwright() as p:
+        # [NOTE] [Animation] Headless like every other renderer here: a visible window popped up and took the foreground for each leg.
+        # The GPU flags below still give a hardware WebGL2 context in headless mode (checked: ANGLE on the real GPU, same as headed).
         browser = await p.chromium.launch(
-            headless=False,
+            headless=True,
             args=[
                 "--disable-web-security",
                 "--ignore-gpu-blocklist",

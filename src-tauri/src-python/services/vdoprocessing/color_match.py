@@ -10,6 +10,7 @@ doesn't make it flicker.
 """
 
 import subprocess
+import tempfile
 from pathlib import Path
 from typing import List
 
@@ -111,6 +112,8 @@ def match_clip_to_photo(video_path: str, photo_path: str) -> bool:
         from services.tts.ttsengine import FFmpegManager
 
         out_path = str(Path(video_path).with_suffix(".colormatch.mp4"))
+        # ffmpeg's messages go to a file, not a pipe that is only read at the end (a flood of warnings would fill it and hang).
+        err = tempfile.TemporaryFile()
         proc = subprocess.Popen(
             [
                 FFmpegManager.resolve_ffmpeg_bin(), "-y", *tuning.ffmpeg_pipe_log_args(),
@@ -118,20 +121,23 @@ def match_clip_to_photo(video_path: str, photo_path: str) -> bool:
                 "-c:v", "libx264", *tuning.ffmpeg_thread_args(), "-crf", "16", "-preset", "fast",
                 "-pix_fmt", "yuv420p", out_path,
             ],
-            stdin=subprocess.PIPE, stderr=subprocess.PIPE,
+            stdin=subprocess.PIPE, stderr=err,
         )
         try:
             for frame, frame_stats in zip(frames, stats):
                 proc.stdin.write(correct_frame(frame, frame_stats, target, tuning.ATTRACTION_COLOR_MATCH_STRENGTH).tobytes())
             proc.stdin.close()
             if proc.wait() != 0:
-                logger.warning("Colour match encode failed: %s", proc.stderr.read().decode("utf-8", "replace"))
+                err.seek(0)
+                logger.warning("Colour match encode failed: %s", err.read().decode("utf-8", "replace"))
                 Path(out_path).unlink(missing_ok=True)
                 return False
         except Exception:
             proc.kill()
             Path(out_path).unlink(missing_ok=True)
             raise
+        finally:
+            err.close()
 
         Path(out_path).replace(video_path)
         drift = np.abs(np.stack(stats) - target).max(0)
