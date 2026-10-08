@@ -21,7 +21,8 @@ const messageOf = (e: unknown) => (e instanceof Error ? e.message : String(e));
 // main.py ends stdout with one JSON result, on one line or indented over several (project modes); anything before it is noise.
 export function parseReply<T>(stdout: string): SidecarReply<T> {
   const text = stdout.trim();
-  const candidates = [text.split("\n").pop() ?? "", text.slice(text.lastIndexOf("\n{") + 1)];
+  const last = text.split("\n").pop()?.trim() ?? "";
+  const candidates = [last, text.slice(text.lastIndexOf("\n{") + 1)];
   for (const candidate of candidates) {
     try {
       const parsed = JSON.parse(candidate);
@@ -30,7 +31,9 @@ export function parseReply<T>(stdout: string): SidecarReply<T> {
       // try the next form
     }
   }
-  return { success: false, error: "The media pipeline returned an unexpected reply" };
+  // Show what came back (a library's stray print, a crash message) so the toast says more than "unexpected".
+  const seen = last ? `: ${last.length > 300 ? `${last.slice(0, 300)}…` : last}` : " (it printed nothing)";
+  return { success: false, error: `The media pipeline returned an unexpected reply${seen}` };
 }
 
 // Blueprint calls share one process slot (a new one kills the running one); background asks check this first.
@@ -57,6 +60,18 @@ export async function callSidecar<T>(mode: string, input: string | object = {}):
     return { success: false, error, cancelled: CANCELLED.test(error) };
   } finally {
     inFlight -= 1;
+  }
+}
+
+// Engine installs (`tts_install_*`, `comfyui_install`, `ollama_install`) run in a process slot of their own, so later calls
+// (the voice list, a preview, a render stage) neither stop them nor are stopped by them. Progress arrives as `install-log` events.
+export async function callSidecarInstall<T>(mode: string): Promise<SidecarReply<T>> {
+  try {
+    return parseReply<T>(await invoke<string>("run_python_install", { action: mode, payload: "{}" }));
+  } catch (e) {
+    if (isSetupRequired(e)) announceSetupRequired();
+    const error = messageOf(e);
+    return { success: false, error, cancelled: CANCELLED.test(error) };
   }
 }
 

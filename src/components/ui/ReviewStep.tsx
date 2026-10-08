@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
+import { Select } from "./Select";
 import { Check, Film, Mic, PlayCircle, Plus, RotateCcw, Trash2, X } from "./icons";
 
 export type ReviewKind = "overview" | "leg" | "attraction" | "other";
@@ -86,10 +87,17 @@ function PronunciationFixer({ fixes, onChange, disabled }: { fixes: Pronunciatio
           className={`${field} w-44`}
           aria-label={t`Reading`}
         />
-        <select value={scope} onChange={(e) => setScope(e.target.value as PronunciationFix["scope"])} disabled={disabled} className={`${field} pr-6 cursor-pointer`} aria-label={t`Where to save`}>
-          <option value="project">{t`This project`}</option>
-          <option value="global">{t`All projects`}</option>
-        </select>
+        <Select<PronunciationFix["scope"]>
+          value={scope}
+          onChange={setScope}
+          disabled={disabled}
+          label={t`Where to save`}
+          className="w-32"
+          options={[
+            { value: "project", label: t`This project` },
+            { value: "global", label: t`All projects` },
+          ]}
+        />
         <button type="button" onClick={add} disabled={disabled || !word.trim() || !reading.trim()} className="inline-flex items-center gap-1 h-8 px-2.5 rounded-lg border border-zinc-200 dark:border-white/10 text-[12px] font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-white/5 disabled:opacity-40 transition-colors">
           <Plus className="w-3.5 h-3.5" /> <Trans>Add</Trans>
         </button>

@@ -16,7 +16,8 @@ import {
 } from "../../services/ai/providers";
 import { AlertTriangle, CheckCircle2, ExternalLink, Loader2, RefreshCw, Trash2 } from "./icons";
 import { ComboBox } from "./ComboBox";
-import { inputClass, Row, secondaryButton, primaryButton, Section, selectClass } from "./SettingsParts";
+import { inputClass, Row, secondaryButton, primaryButton, Section } from "./SettingsParts";
+import { Select } from "./Select";
 import { Switch } from "./Switch";
 
 type Check = { state: "idle" } | { state: "working" } | { state: "ok" } | { state: "failed"; message: string };
@@ -24,32 +25,35 @@ type Check = { state: "idle" } | { state: "working" } | { state: "ok" } | { stat
 const messageOf = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 // Settings > AI models: who writes the scripts. Local Ollama (the default) or a provider on the internet with the user's own key.
-export function ProviderPicker() {
+// `allowNone` adds "None" (the first-run checklist), which turns the AI features off; `children` sit inside the same box under the picker.
+export function ProviderPicker({ allowNone, children }: { allowNone?: boolean; children?: React.ReactNode }) {
   const { settings, updateSettings, setIsDirty } = useWorkspace();
-  const provider: AiProviderId = isOnlineProvider(settings.ai_provider) ? settings.ai_provider : "ollama";
+  const chosen: AiProviderId = isOnlineProvider(settings.ai_provider) ? settings.ai_provider : "ollama";
+  const provider: AiProviderId | "none" = allowNone && settings.ai_features_enabled === false ? "none" : chosen;
 
   return (
-    <Section title={t`Script writer`}>
+    <Section title={t`AI assistant`}>
       <Row
         title={t`Provider`}
-        description={t`Where scripts are written. A provider on the internet is usually faster than a local model and does not need a powerful PC.`}
+        info={t`Where scripts are written. A provider on the internet is usually faster than a local model and does not need a powerful PC.`}
       >
-        <select
+        <Select<AiProviderId | "none">
+          label={t`Provider`}
           value={provider}
-          onChange={(e) => {
-            updateSettings({ ai_provider: e.target.value as AiProviderId });
+          onChange={(next) => {
+            if (next === "none") updateSettings({ ai_features_enabled: false });
+            else updateSettings({ ai_provider: next, ai_features_enabled: true });
             setIsDirty(true);
           }}
-          className={`${selectClass} w-64`}
-        >
-          <option value="ollama">{t`This PC (Ollama)`}</option>
-          {ONLINE_PROVIDERS.map((id) => (
-            <option key={id} value={id}>
-              {PROVIDERS[id].label}
-            </option>
-          ))}
-        </select>
+          options={[
+            ...(allowNone ? [{ value: "none" as const, label: t`None` }] : []),
+            { value: "ollama", label: t`This PC (Ollama)` },
+            ...ONLINE_PROVIDERS.map((id) => ({ value: id as AiProviderId, label: PROVIDERS[id].label })),
+          ]}
+          className="w-64"
+        />
       </Row>
+      {children}
     </Section>
   );
 }

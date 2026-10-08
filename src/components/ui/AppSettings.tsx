@@ -3,9 +3,10 @@ import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useAnimatedUnmount } from "../../hooks/useAnimatedUnmount";
+import { MAP_PANEL_OPACITY, setMapPanelOpacity, useMapPanelOpacity } from "../../hooks/useMapPanelOpacity";
 import { useTheme } from "../../hooks/useTheme";
 import { useUI } from "../../hooks/useUI";
 import { useWorkspace } from "../../hooks/useWorkspace";
@@ -16,6 +17,7 @@ import {
   pullModelStream,
 } from "../../services/ollamaApi";
 import { callSidecar, systemRamGb } from "../../services/sidecar";
+import { DEFAULT_LOCAL_MODEL } from "../../services/ai/engine";
 import { modelFit } from "../../utils/modelFit";
 import { CaptionStyleFields } from "./CaptionStyleFields";
 import { resolveCaptionStyle } from "../../utils/textStyle";
@@ -29,6 +31,7 @@ import {
   Check,
   CheckCircle2,
   Film,
+  SlidersHorizontal,
   Key,
   MapPin,
   Download,
@@ -60,13 +63,16 @@ import { OnlineProviderSettings, ProviderPicker } from "./OnlineAiSettings";
 import { ComponentsChecklist } from "./ComponentsChecklist";
 import { AboutPanel } from "./AboutPanel";
 import { CaptionPreview } from "./CaptionPreview";
-import { inputClass, Row, secondaryButton, Section, selectClass } from "./SettingsParts";
+import { inputClass, Row, secondaryButton, Section } from "./SettingsParts";
+import { Select } from "./Select";
+import { OpenProjectSettings } from "../view/ProjectSettingsModal";
 import { isOnlineProvider, type OnlineProvider } from "../../services/ai/providers";
 
 type SettingsTab =
   | "general"
   | "appearance"
   | "api"
+  | "project"
   | "video"
   | "ai"
   | "voice"
@@ -108,6 +114,7 @@ export function AppSettings() {
   const { i18n } = useLingui();
   const { showAppSettings, setShowAppSettings, currentView } = useUI();
   const { theme, setTheme, accentTheme, setAccentTheme } = useTheme();
+  const mapPanelOpacity = useMapPanelOpacity();
 
   const [activeTab, setActiveTab] = useState<SettingsTab>("general");
 
@@ -141,7 +148,7 @@ export function AppSettings() {
   useEffect(() => {
     if (activeTab === "ai" && !settings.ai_features_enabled)
       setActiveTab("general");
-    if (!inEditor && (activeTab === "video" || activeTab === "voice"))
+    if (!inEditor && (activeTab === "project" || activeTab === "video" || activeTab === "voice"))
       setActiveTab("general");
   }, [activeTab, settings.ai_features_enabled, inEditor]);
 
@@ -188,23 +195,28 @@ export function AppSettings() {
     setIsDirty(true);
   };
 
-  const tabs: { id: SettingsTab; icon: any; label: string }[] = [
-    { id: "general", icon: Settings, label: t`General` },
-    { id: "appearance", icon: Palette, label: t`Appearance` },
-    { id: "api", icon: Key, label: t`API keys` },
-    ...(inEditor
+  type TabInfo = { id: SettingsTab; icon: any; label: string };
+  const tabGroups: TabInfo[][] = [
+    inEditor ? [{ id: "project", icon: SlidersHorizontal, label: t`Project` }] : [],
+    inEditor
       ? [
-          { id: "video" as const, icon: Film, label: t`Video` },
-          { id: "voice" as const, icon: Volume2, label: t`Voice` },
+          { id: "video", icon: Film, label: t`Video` },
+          { id: "voice", icon: Volume2, label: t`Voice` },
         ]
-      : []),
-    { id: "tts_dictionary", icon: Mic, label: t`Pronunciation` },
-    ...(settings.ai_features_enabled
-      ? [{ id: "ai" as const, icon: Sparkles, label: t`AI models` }]
-      : []),
-    { id: "setup", icon: Download, label: t`Setup` },
-    { id: "about", icon: Info, label: t`About` },
-  ];
+      : [],
+    [{ id: "tts_dictionary", icon: Mic, label: t`Pronunciation` }],
+    [
+      { id: "general", icon: Settings, label: t`General` },
+      { id: "appearance", icon: Palette, label: t`Appearance` },
+      { id: "api", icon: Key, label: t`API keys` },
+      ...(settings.ai_features_enabled
+        ? [{ id: "ai" as const, icon: Sparkles, label: t`AI models` }]
+        : []),
+      { id: "setup", icon: Download, label: t`Setup` },
+      { id: "about", icon: Info, label: t`About` },
+    ],
+  ].filter((group) => group.length > 0) as TabInfo[][];
+  const tabs = tabGroups.flat();
   const activeLabel = tabs.find((tab) => tab.id === activeTab)?.label;
 
   const dictionary = settings.pronunciation_dictionary || [];
@@ -229,9 +241,9 @@ export function AppSettings() {
         role="dialog"
         aria-modal="true"
         aria-label={t`Settings`}
-        className={`flex w-184 max-w-full h-144 max-h-full rounded-2xl overflow-hidden bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 shadow-2xl ${isAnimatingOut ? "animate-out zoom-out-95 duration-150" : "animate-in zoom-in-95 duration-150"}`}
+        className={`flex w-[clamp(46rem,78vw,72rem)] max-w-full h-[clamp(34rem,82vh,52rem)] max-h-full rounded-2xl overflow-hidden bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 shadow-2xl ${isAnimatingOut ? "animate-out zoom-out-95 duration-150" : "animate-in zoom-in-95 duration-150"}`}
       >
-        <nav className="w-48 max-[700px]:w-40 shrink-0 flex flex-col p-2 bg-zinc-50 dark:bg-black/20 border-r border-zinc-200/80 dark:border-white/5">
+        <nav className="w-48 min-[1100px]:w-52 max-[700px]:w-40 shrink-0 flex flex-col p-2 bg-zinc-50 dark:bg-black/20 border-r border-zinc-200/80 dark:border-white/5">
           <h2 className="px-2.5 pt-2 pb-3 text-[13px] font-semibold text-zinc-900 dark:text-zinc-100">
             <Trans>Settings</Trans>
           </h2>
@@ -240,26 +252,31 @@ export function AppSettings() {
             aria-orientation="vertical"
             className="flex flex-col gap-0.5"
           >
-            {tabs.map(({ id, icon: Icon, label }) => {
-              const active = activeTab === id;
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  role="tab"
-                  aria-selected={active}
-                  onClick={() => setActiveTab(id)}
-                  className={`flex items-center gap-2.5 h-8 px-2.5 rounded-lg text-[13px] text-left whitespace-nowrap transition-colors ${
-                    active
-                      ? "bg-navi/10 text-navi font-medium"
-                      : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200/60 dark:hover:bg-white/5 hover:text-zinc-900 dark:hover:text-zinc-100"
-                  }`}
-                >
-                  <Icon className="w-4 h-4 shrink-0" />
-                  {label}
-                </button>
-              );
-            })}
+            {tabGroups.map((group, index) => (
+              <Fragment key={group[0].id}>
+                {index > 0 && <div role="separator" className="my-1.5 mx-2.5 h-px bg-zinc-200/80 dark:bg-white/10" />}
+                {group.map(({ id, icon: Icon, label }) => {
+                  const active = activeTab === id;
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      role="tab"
+                      aria-selected={active}
+                      onClick={() => setActiveTab(id)}
+                      className={`flex items-center gap-2.5 h-8 px-2.5 rounded-lg text-[13px] text-left whitespace-nowrap transition-colors ${
+                        active
+                          ? "bg-navi/10 text-navi font-medium"
+                          : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200/60 dark:hover:bg-white/5 hover:text-zinc-900 dark:hover:text-zinc-100"
+                      }`}
+                    >
+                      <Icon className="w-4 h-4 shrink-0" />
+                      {label}
+                    </button>
+                  );
+                })}
+              </Fragment>
+            ))}
           </div>
           <NaviviType className="mt-auto mb-2 mx-2.5 h-3.5 self-start text-zinc-300 dark:text-zinc-700" />
         </nav>
@@ -282,8 +299,9 @@ export function AppSettings() {
 
           <div
             key={activeTab}
-            className="flex-1 overflow-y-auto custom-scrollbar px-6 py-5 space-y-6 animate-in fade-in duration-150"
+            className="flex-1 overflow-y-auto custom-scrollbar px-6 py-5 animate-in fade-in duration-150"
           >
+            <div className="space-y-6">
             {activeTab === "general" && (
               <>
                 <Section title={t`Application`}>
@@ -291,38 +309,37 @@ export function AppSettings() {
                     title={t`Language`}
                     description={t`Choose your preferred language for the application`}
                   >
-                    <select
+                    <Select
+                      label={t`Language`}
                       value={i18n.locale}
-                      onChange={(e) => {
-                        const newLocale = e.target.value;
+                      onChange={(newLocale) => {
                         localStorage.setItem("navivi_locale", newLocale);
                         dynamicActivate(newLocale);
                       }}
-                      className={`${selectClass} w-40`}
-                    >
-                      <option value="en">English</option>
-                      <option value="ja">日本語</option>
-                    </select>
+                      options={[
+                        { value: "en", label: "English" },
+                        { value: "ja", label: "日本語" },
+                      ]}
+                      className="w-40"
+                    />
                   </Row>
                   <Row
                     title={t`Auto-save`}
                     description={t`Controls auto save of editors that have unsaved changes`}
                   >
-                    <select
-                      value={autoSaveInterval}
-                      onChange={(e) =>
-                        updateSettings({
-                          auto_save_interval: parseInt(e.target.value),
-                        })
-                      }
-                      className={`${selectClass} w-40`}
-                    >
-                      <option value={0}>{t`Off`}</option>
-                      <option value={3}>{t`3 seconds`}</option>
-                      <option value={30}>{t`30 seconds`}</option>
-                      <option value={60}>{t`1 minute`}</option>
-                      <option value={600}>{t`10 minutes`}</option>
-                    </select>
+                    <Select
+                      label={t`Auto-save`}
+                      value={String(autoSaveInterval)}
+                      onChange={(v) => updateSettings({ auto_save_interval: parseInt(v) })}
+                      options={[
+                        { value: "0", label: t`Off` },
+                        { value: "3", label: t`3 seconds` },
+                        { value: "30", label: t`30 seconds` },
+                        { value: "60", label: t`1 minute` },
+                        { value: "600", label: t`10 minutes` },
+                      ]}
+                      className="w-40"
+                    />
                   </Row>
                   <Row
                     title={t`AI features`}
@@ -385,6 +402,22 @@ export function AppSettings() {
                           <option.icon className="w-3.5 h-3.5" /> {option.label}
                         </button>
                       ))}
+                    </div>
+                  </Row>
+                  <Row title={t`Map panel opacity`} info={t`How solid the elevation profile and the uphill/downhill key on the map are.`}>
+                    <div className="flex items-center gap-2">
+                      <Slider
+                        value={mapPanelOpacity}
+                        min={MAP_PANEL_OPACITY.min}
+                        max={MAP_PANEL_OPACITY.max}
+                        step={0.05}
+                        label={t`Map panel opacity`}
+                        onChange={setMapPanelOpacity}
+                        className="w-36"
+                      />
+                      <span className="w-10 text-right text-[12px] tabular-nums text-zinc-500 dark:text-zinc-400">
+                        {Math.round(mapPanelOpacity * 100)}%
+                      </span>
                     </div>
                   </Row>
                   <Row title={t`Accent color`}>
@@ -560,6 +593,8 @@ export function AppSettings() {
               </Section>
             )}
 
+            {activeTab === "project" && <OpenProjectSettings />}
+
             {activeTab === "video" && (
               <>
                 <Section title={t`Style`}>
@@ -618,19 +653,17 @@ export function AppSettings() {
                     title={t`Hardware mode`}
                     description={t`Which pipeline to use when regenerating assets`}
                   >
-                    <select
+                    <Select
+                      label={t`Hardware mode`}
                       value={settings.hardware_spec_override || "auto"}
-                      onChange={(e) =>
-                        updateProject({
-                          hardware_spec_override: e.target.value as any,
-                        })
-                      }
-                      className={`${selectClass} w-56`}
-                    >
-                      <option value="auto">{t`Auto-Detect (Recommended)`}</option>
-                      <option value="low">{t`Low-spec Mode`}</option>
-                      <option value="high">{t`High-spec Mode`}</option>
-                    </select>
+                      onChange={(v) => updateProject({ hardware_spec_override: v as any })}
+                      options={[
+                        { value: "auto", label: t`Auto-Detect (Recommended)` },
+                        { value: "low", label: t`Low-spec Mode` },
+                        { value: "high", label: t`High-spec Mode` },
+                      ]}
+                      className="w-56"
+                    />
                   </Row>
                 </Section>
 
@@ -716,6 +749,7 @@ export function AppSettings() {
             {activeTab === "ai" && settings.ai_features_enabled && (
               <AiModelsTab />
             )}
+            </div>
           </div>
         </div>
       </div>
@@ -981,11 +1015,14 @@ function AiModelsTab() {
     getLocalModels().then(setLocalModels);
   }, []);
 
-  const activeModel = settings.ai_model || "schroneko/gemma-2-2b-jpn-it";
+  // Only a model that is really installed counts as selected; the unset default is not shown as if it were there.
+  const configuredModel = settings.ai_model || DEFAULT_LOCAL_MODEL;
+  const activeModel = localModels.includes(configuredModel) ? configuredModel : "";
   const [seesPhotos, setSeesPhotos] = useState<boolean | null>(null);
   useEffect(() => {
     let current = true;
     setSeesPhotos(null);
+    if (!activeModel) return;
     modelSeesPhotos(activeModel).then(
       (result) => current && setSeesPhotos(result),
     );
@@ -1126,28 +1163,23 @@ function AiModelsTab() {
       <Section title={t`Narration`}>
         <Row
           title={t`Active model`}
-          description={t`Select which model to use for narration synthesis, only downloaded models are shown`}
+          description={t`The model that writes narration scripts and answers in the assistant chat. Only downloaded models are shown.`}
         >
-          <select
+          <Select
+            label={t`Active model`}
             value={activeModel}
-            onChange={(e) => {
-              updateSettings({ ai_model: e.target.value });
+            placeholder={t`Choose a model`}
+            onChange={(model) => {
+              updateSettings({ ai_model: model });
               setIsDirty(true);
             }}
-            className={`${selectClass} w-52`}
-          >
-            {localModels.length === 0 ? (
-              <option value="" disabled>
-                {t`No models installed`}
-              </option>
-            ) : (
-              localModels.map((modelId) => (
-                <option key={modelId} value={modelId}>
-                  {modelId}
-                </option>
-              ))
-            )}
-          </select>
+            options={
+              localModels.length === 0
+                ? [{ value: "", label: t`No models installed` }]
+                : localModels.map((modelId) => ({ value: modelId, label: modelId }))
+            }
+            className="w-52"
+          />
         </Row>
         {fit?.tooBig && (
           <div className="px-4 py-3">

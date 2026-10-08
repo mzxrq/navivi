@@ -18,7 +18,7 @@ from typing import Dict, Any, List, Optional, Tuple
 from services.mapfetcher.graphicengine import GraphicsEngine
 from services.logger.logger import setup_logger
 from services.logger.progress import tracker
-from services import tuning, video_text
+from services import runtime_paths, tuning, video_text
 from services.mapbox_token import resolve_mapbox_token
 from services.mapfetcher.maplanguage import resolve_map_style
 from services.vdoprocessing.spatial_renderer import SpatialRenderer
@@ -255,7 +255,7 @@ class RouteAnimator:
         # an already-encoded clip, so tpad's clone mode re-encodes the whole
         # file just to duplicate the final frame for hold_seconds.
         cmd = [
-            "ffmpeg",
+            runtime_paths.ffmpeg_exe() or "ffmpeg",
             "-y", *tuning.ffmpeg_log_args(),
             "-i",
             video_path,

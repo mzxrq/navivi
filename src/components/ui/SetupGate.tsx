@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 import { db } from "../../services/db";
-import { getRuntimeStatus, installRuntime, needsSetup, SETUP_REQUIRED_EVENT, type SetupStep } from "../../services/setup";
+import { getRuntimeStatus, installRuntime, needsSetup, parseDownloadLine, SETUP_REQUIRED_EVENT, type SetupStep } from "../../services/setup";
 import { ComponentsChecklist } from "./ComponentsChecklist";
 import { Dialog, dialogButton } from "./Dialog";
 import { CheckCircle2, Loader2 } from "./icons";
+import { InfoTip } from "./SettingsParts";
 
 type Phase = "idle" | "running" | "failed";
 
@@ -21,6 +22,8 @@ export function SetupGate() {
   const [step, setStep] = useState<SetupStep | null>(null);
   const [log, setLog] = useState<string[]>([]);
   const [error, setError] = useState("");
+  const [download, setDownload] = useState<{ percent: number; size: string } | null>(null);
+  const [voiceReady, setVoiceReady] = useState(false);
   const [showLog, setShowLog] = useState(false);
   const logEnd = useRef<HTMLDivElement>(null);
 
@@ -56,16 +59,21 @@ export function SetupGate() {
     return (
       <Dialog
         width="w-[36rem]"
-        title={t`What else do you want to set up?`}
+        title={
+          <span className="flex items-center gap-2">
+            {t`What else do you want to set up?`}
+            <InfoTip text={t`Check what you need. Only one voice is required; everything else is optional and can be added later.`} />
+          </span>
+        }
         subtitle={t`You can do this later in Settings > Setup`}
         onClose={closeChecklist}
         footer={
-          <button type="button" className={dialogButton.primary} onClick={closeChecklist}>
-            <Trans>Done</Trans>
+          <button type="button" className={voiceReady ? dialogButton.primary : dialogButton.secondary} onClick={closeChecklist}>
+            {voiceReady ? <Trans>Done</Trans> : <Trans>Skip for now</Trans>}
           </button>
         }
       >
-        <ComponentsChecklist />
+        <ComponentsChecklist onReadyChange={setVoiceReady} />
       </Dialog>
     );
   }
@@ -77,8 +85,14 @@ export function SetupGate() {
     setError("");
     setLog([]);
     setStep(null);
+    setDownload(null);
     try {
-      await installRuntime(setStep, (line) => setLog((prev) => [...prev.slice(-(MAX_LOG_LINES - 1)), line]));
+      await installRuntime(setStep, (line) => {
+        const bar = parseDownloadLine(line);
+        if (bar) return setDownload(bar);
+        setDownload(null);
+        setLog((prev) => [...prev.slice(-(MAX_LOG_LINES - 1)), line]);
+      });
       setOpen(false);
       setPhase("idle");
       setChecklist(true);
@@ -135,7 +149,19 @@ export function SetupGate() {
                 <div className="h-full bg-navi transition-all duration-500" style={{ width: `${((step.index - 1) / step.total) * 100 + 5}%` }} />
               </div>
             )}
-            {!showLog && lastLine && <p className="truncate text-[11px] text-zinc-400" title={lastLine}>{lastLine}</p>}
+            {download ? (
+              <div className="space-y-1 pt-1">
+                <div className="flex items-center justify-between text-[11px] text-zinc-500 dark:text-zinc-400">
+                  <span className="truncate">{t`Downloading`}{download.size ? ` · ${download.size}` : ""}</span>
+                  <span className="tabular-nums">{download.percent}%</span>
+                </div>
+                <div className="h-1 rounded-full overflow-hidden bg-zinc-200 dark:bg-white/10">
+                  <div className="h-full bg-navi/70 transition-all duration-300" style={{ width: `${download.percent}%` }} />
+                </div>
+              </div>
+            ) : (
+              !showLog && lastLine && <p className="truncate text-[11px] text-zinc-400" title={lastLine}>{lastLine}</p>
+            )}
           </div>
         )}
 

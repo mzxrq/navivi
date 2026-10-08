@@ -1,4 +1,5 @@
 import { Trans } from "@lingui/react/macro";
+import { panelAlphaStyle, useMapPanelOpacity } from "../../../../hooks/useMapPanelOpacity";
 import { GRADIENT_STOPS } from "../../../../utils/elevation";
 import type { LegElevationState } from "./useLegElevations";
 
@@ -15,11 +16,15 @@ const bar = `linear-gradient(to right, ${GRADIENT_STOPS.map(
 /** Colour key for the elevation heatmap, plus the reason when some legs could not be coloured. */
 export function HeatmapLegend({ state, is3D, onEnable3D }: HeatmapLegendProps) {
   const { legs, missing, needsTerrain } = state;
+  const opacity = useMapPanelOpacity();
   if (legs.length === 0) return null;
   const anyColored = legs.some((leg) => leg.ele);
 
   return (
-    <div className="absolute bottom-10 left-3 z-10 w-52 rounded-xl border border-zinc-200 bg-white/95 p-2.5 text-[11px] shadow-sm backdrop-blur-md dark:border-white/10 dark:bg-zinc-900/95">
+    <div
+      style={panelAlphaStyle(opacity)}
+      className="absolute top-14 left-3 z-10 w-40 rounded-lg border border-zinc-200 bg-white/(--panel-alpha) p-2 text-[10px] shadow-sm backdrop-blur-md dark:border-white/10 dark:bg-zinc-900/(--panel-alpha)"
+    >
       {anyColored && (
         <>
           <div className="mb-1 flex justify-between text-zinc-700 dark:text-zinc-300">

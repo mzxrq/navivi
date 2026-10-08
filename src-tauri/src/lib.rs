@@ -58,12 +58,19 @@ async fn app_ready(app: AppHandle, started: State<'_, StartedAt>) -> Result<(), 
 
 struct BlueprintState {
     process: Mutex<Option<Child>>,
+    // Engine installs have a slot of their own: a long download must not be killed by the next voice-list or preview call, and must not kill a render's stage.
+    install_process: Mutex<Option<Child>>,
     render_process: Mutex<Option<Child>>,
     render_cancelled: AtomicBool,
 }
 
 fn kill_tracked_children(state: &BlueprintState) {
     if let Ok(mut lock) = state.process.lock() {
+        if let Some(mut child) = lock.take() {
+            kill_tree(&mut child);
+        }
+    }
+    if let Ok(mut lock) = state.install_process.lock() {
         if let Some(mut child) = lock.take() {
             kill_tree(&mut child);
         }
@@ -79,6 +86,14 @@ fn kill_tracked_children(state: &BlueprintState) {
 /// `python main.py` for this build (the repo's, or the installed app's own), with the saved AI keys and the app-wide
 /// Mapbox token (`NAVIVI_MAPBOX_TOKEN`) in its environment.
 /// Fails with a `SETUP_REQUIRED` message the frontend turns into the setup screen when an installed app has no Python yet.
+fn vc_runtime_guard() -> Result<(), String> {
+    if runtime::vc_runtime_present() {
+        Ok(())
+    } else {
+        Err("VC_RUNTIME_MISSING: the Microsoft Visual C++ runtime is not installed.".into())
+    }
+}
+
 fn python_command(app: &AppHandle) -> Result<Command, String> {
     let rt = runtime::get();
     if !rt.python_ready() {
@@ -102,23 +117,56 @@ async fn run_python_blueprint(
     payload: String,
     state: State<'_, BlueprintState>
 ) -> Result<String, String> {
+    run_in_slot(&app, &action, &payload, &state.process, "blueprint-log")
+}
 
+// The modes that set up an engine or a model. They run in their own slot (see BlueprintState::install_process).
+const INSTALL_MODES: &[&str] = &["tts_install_kokoro", "tts_install_qwen3", "tts_install_irodori", "comfyui_install", "ollama_install"];
+
+#[tauri::command]
+async fn run_python_install(
+    app: AppHandle,
+    action: String,
+    payload: String,
+    state: State<'_, BlueprintState>,
+) -> Result<String, String> {
+    if !INSTALL_MODES.contains(&action.as_str()) {
+        return Err(format!("Not an install mode: {action}"));
+    }
+    run_in_slot(&app, &action, &payload, &state.install_process, "install-log")
+}
+
+#[tauri::command]
+fn cancel_python_install(state: State<'_, BlueprintState>) -> Result<String, String> {
+    let mut lock = state.install_process.lock().map_err(|e| e.to_string())?;
+    if let Some(mut child) = lock.take() {
+        kill_tree(&mut child);
+        let _ = child.wait();
+        Ok("Cancelled".to_string())
+    } else {
+        Ok("No active install to cancel".to_string())
+    }
+}
+
+/// Runs `python main.py <action> <payload>` and keeps it in `slot`; a new call on the same slot kills the previous one.
+/// Every stderr line is also sent to the window as `log_event`.
+fn run_in_slot(app: &AppHandle, action: &str, payload: &str, slot: &Mutex<Option<Child>>, log_event: &'static str) -> Result<String, String> {
     // Spawn instead of output()
-    let mut cmd = python_command(&app)?;
-    cmd.arg(&action)
-        .arg(&payload)
+    let mut cmd = python_command(app)?;
+    cmd.arg(action)
+        .arg(payload)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     let mut child = cmd.spawn().map_err(|e| e.to_string())?;
 
     // Extract the pipes before moving the child to the state
     let mut stdout = child.stdout.take().ok_or("Failed to capture stdout")?;
-    let mut stderr = child.stderr.take().ok_or("Failed to capture stderr")?;
+    let stderr = child.stderr.take().ok_or("Failed to capture stderr")?;
 
     // 2. Lock the Mutex and store the child process safely
     let my_pid = child.id();
     {
-        let mut lock = state.process.lock().unwrap();
+        let mut lock = slot.lock().unwrap();
         // If there's an existing process stuck, kill it before starting a new one
         if let Some(mut old_child) = lock.take() {
             kill_tree(&mut old_child);
@@ -128,9 +176,16 @@ async fn run_python_blueprint(
     }
 
     // 3. Read stderr on a separate thread to prevent OS pipe deadlocks
+    // The full text is kept for the error; the lines also go out as events so long installs can show progress.
+    let app_for_log = app.clone();
     let stderr_thread = thread::spawn(move || {
         let mut err_str = String::new();
-        let _ = stderr.read_to_string(&mut err_str);
+        for line in std::io::BufReader::new(stderr).split(b'\n').map_while(Result::ok) {
+            let line = String::from_utf8_lossy(&line).trim_end_matches('\r').to_string();
+            let _ = app_for_log.emit(log_event, line.clone());
+            err_str.push_str(&line);
+            err_str.push('\n');
+        }
         err_str
     });
 
@@ -143,7 +198,7 @@ async fn run_python_blueprint(
 
     // 5. Streams are closed. Clean up and get the exit status.
     // Only this call's own process is reaped here: if a newer call (or a cancel) replaced it, the slot holds someone else's child.
-    let mut lock = state.process.lock().unwrap();
+    let mut lock = slot.lock().unwrap();
     if lock.as_ref().map(|c| c.id()) == Some(my_pid) {
         if let Some(mut child) = lock.take() {
             match child.wait() {
@@ -219,6 +274,7 @@ fn start_render(
     force: Option<bool>,
     state: State<'_, BlueprintState>,
 ) -> Result<String, String> {
+    vc_runtime_guard()?;
     let mut command = python_command(&app)?;
     command.arg("full_pipeline").arg(&config_path);
     if force.unwrap_or(false) {
@@ -326,7 +382,7 @@ fn ollama_candidates() -> Vec<std::path::PathBuf> {
     found
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn wake_up_ollama() -> Result<String, String> {
     if is_ollama_running() {
         return Ok("Ollama OK".to_string());
@@ -420,7 +476,7 @@ async fn copy_asset_file(source_path: String, target_dir: String) -> Result<Stri
     }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn open_in_explorer(path: String) -> Result<(), String> {
     let p = std::path::Path::new(&path);
     #[cfg(target_os = "windows")]
@@ -455,8 +511,39 @@ fn open_in_explorer(path: String) -> Result<(), String> {
 }
 
 
+/// Downloads Microsoft's Visual C++ redistributable and runs it; Windows shows its own permission prompt (UAC).
+/// Done here, not in Python: a clean PC may need it before the Python tools exist.
+#[tauri::command]
+async fn install_vc_runtime() -> Result<(), String> {
+    if runtime::vc_runtime_present() {
+        return Ok(());
+    }
+    let script = r#"$ErrorActionPreference = 'Stop'
+$f = Join-Path $env:TEMP 'navivi_vc_redist.x64.exe'
+Invoke-WebRequest 'https://aka.ms/vs/17/release/vc_redist.x64.exe' -OutFile $f -UseBasicParsing
+$p = Start-Process $f -ArgumentList '/install','/quiet','/norestart' -Verb RunAs -Wait -PassThru
+Remove-Item $f -Force -ErrorAction SilentlyContinue
+exit $p.ExitCode"#;
+    let output = tauri::async_runtime::spawn_blocking(move || {
+        let mut cmd = Command::new("powershell");
+        runtime::hide_window(&mut cmd);
+        cmd.args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script]).output()
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(|e| e.to_string())?;
+    // 1638: a newer one is already there; 3010: installed, restart pending.
+    let code = output.status.code().unwrap_or(-1);
+    if matches!(code, 0 | 1638 | 3010) || runtime::vc_runtime_present() {
+        Ok(())
+    } else {
+        Err(format!("The Visual C++ runtime was not installed (exit {code}). {}", String::from_utf8_lossy(&output.stderr).trim()))
+    }
+}
+
 #[tauri::command]
 async fn convert_gps_to_gpx(input_path: String, input_format: String) -> Result<String, String> {
+    vc_runtime_guard()?;
     let mut gpsbabel = Command::new(runtime::get().gpsbabel());
     runtime::hide_window(&mut gpsbabel);
     let output = gpsbabel
@@ -515,12 +602,15 @@ pub fn run() {
         .manage(oauth::OauthListener::default())
         .manage(BlueprintState {
             process: Mutex::new(None),
+            install_process: Mutex::new(None),
             render_process: Mutex::new(None),
             render_cancelled: AtomicBool::new(false),
         })
         .invoke_handler(tauri::generate_handler![
             run_python_blueprint,
             run_python_utility,
+            run_python_install,
+            cancel_python_install,
             cancel_python_blueprint,
             cancel_render,
             start_render,
@@ -530,6 +620,7 @@ pub fn run() {
             copy_asset_file,
             open_in_explorer,
             runtime::runtime_status,
+            install_vc_runtime,
             runtime::runtime_install,
             oauth::oauth_listen_start,
             oauth::oauth_listen_wait,

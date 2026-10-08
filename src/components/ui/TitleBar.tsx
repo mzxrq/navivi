@@ -16,6 +16,7 @@ import {
   Film,
 } from "../ui/icons";
 import { useAssistant } from "../../hooks/useAssistant";
+import { useAiReady } from "../../hooks/useAiReady";
 import { Tip } from "./Tip";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
@@ -56,6 +57,7 @@ export function TitleBar() {
 
   const { importRouteFile, importPhotos } = useFileActions();
   const { panelOpen, setPanelOpen } = useAssistant();
+  const aiReady = useAiReady();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [showSaveAs, setShowSaveAs] = useState(false);
   const [saveMode, setSaveMode] = useState<"initial" | "duplicate">("initial");
@@ -249,6 +251,15 @@ export function TitleBar() {
                     >
                       <Trans>Export for sharing...</Trans>
                     </MenuItem>
+                    <MenuItem
+                      onClick={() => {
+                        setIsMenuOpen(false);
+                        setShowAppSettings(true);
+                        setTimeout(() => window.dispatchEvent(new CustomEvent("open-app-settings-tab", { detail: "project" })), 0);
+                      }}
+                    >
+                      <Trans>Project settings...</Trans>
+                    </MenuItem>
                     <MenuSeparator />
                     <MenuItem onClick={() => handleSafeNavigation("title_screen")}>
                       <Trans>Project Manager</Trans>
@@ -417,7 +428,7 @@ export function TitleBar() {
             </div>
           )}
 
-          {currentView === "editor" && (
+          {currentView === "editor" && aiReady && (
             <button
               type="button"
               onClick={() => setPanelOpen(!panelOpen)}

@@ -8,7 +8,9 @@ import { NewProject } from "./components/ui/NewProject";
 import { AppSettings } from "./components/ui/AppSettings";
 import { AssistantPanel } from "./features/assistant/AssistantPanel";
 import { SetupGate } from "./components/ui/SetupGate";
+import { VcRuntimeGate } from "./components/ui/VcRuntimeGate";
 import { Toast } from "./components/ui/Toast";
+import { InstallToast } from "./components/ui/InstallToast";
 import { useUI } from "./hooks/useUI";
 import "./App.css";
 import { StatusBar } from "./components/ui/StatusBar";
@@ -35,6 +37,7 @@ export default function App() {
       <RenderOverlay />
       <AppSettings />
       <SetupGate />
+      <VcRuntimeGate />
 
       {(currentView === "title_screen" || currentView === "new_project") && (
         <ProjectManager />
@@ -60,6 +63,7 @@ export default function App() {
       <AssistantPanel />
       <ContextMenu />
       <Toast />
+      <InstallToast />
       {currentView === "editor" && <StatusBar />}
       <AutoDirectorModal />
       <ExportProjectDialog />

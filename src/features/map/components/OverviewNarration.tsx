@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { ChevronDown, Mic, PencilSparkles, Play, Undo2 } from "../../../components/ui/icons";
 import { ScriptInput } from "../../../components/ui/ScriptInput";
+import { InfoTip } from "../../../components/ui/SettingsParts";
 import { useUI } from "../../../hooks/useUI";
 import { useWorkspace } from "../../../hooks/useWorkspace";
 import { callSidecar, callSidecarShared } from "../../../services/sidecar";
@@ -170,12 +171,12 @@ export function OverviewNarration() {
 
       {isOpen && (
         <div className="px-3 pb-3 pt-2 space-y-2.5 border-t border-zinc-100 dark:border-white/5">
-          <p className="text-[11px] text-zinc-500 leading-relaxed">
-            <Trans>
-              The voice-over of the whole-route map shot at the start. Leave it blank and it is written for you when you make the video;
-              once you edit it, it is never replaced.
-            </Trans>
-          </p>
+          <div className="flex items-center gap-1.5 text-[11px] text-zinc-500">
+            <Trans>Voice-over for the route map at the start</Trans>
+            <InfoTip
+              text={t`Leave it blank and it is written for you when you make the video. To draft it now, press Auto-write (AI model) or Write without AI (a template filled from the route facts), then edit it. Once you edit it, it is never replaced.`}
+            />
+          </div>
 
           {course && (
             <label className="block space-y-1">

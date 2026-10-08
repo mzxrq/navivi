@@ -7,11 +7,12 @@ import asyncio
 import re
 from typing import Any, Callable, Dict
 
+from services import ollama_setup
 from services.tts import voices
 
 PREVIEW_TEXT = "こんにちは。この声で、旅の案内をお届けします。"
 
-VOICE_ACTIONS = ("tts_voices_list", "tts_voice_add", "tts_voice_delete", "tts_voice_preview", "tts_engines", "tts_cache_info", "tts_cache_clear", "tts_install_kokoro", "tts_install_qwen3", "tts_install_irodori", "comfyui_install")
+VOICE_ACTIONS = ("tts_voices_list", "tts_voice_add", "tts_voice_delete", "tts_voice_preview", "tts_engines", "tts_cache_info", "tts_cache_clear", "tts_install_kokoro", "tts_install_qwen3", "tts_install_irodori", "comfyui_install", "ollama_install")
 
 
 def voices_list(_payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -34,13 +35,14 @@ def voice_delete(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 def engines(_payload: Dict[str, Any]) -> Dict[str, Any]:
     """What the Voice tab needs to offer the fast engine: whether it is set up and the voices it has."""
-    from services import tuning
+    from services import system_runtime, tuning
     from services.tts.irodori_setup import pick_backend
     from services.tts.ttsengine import IrodoriTTSClient, KokoroTTSClient, Qwen3TTSClient
     from services.vdoprocessing import comfyui_setup
 
     return {
         "success": True,
+        "vc_runtime": system_runtime.vc_runtime_installed(),
         "irodori": {"ready": IrodoriTTSClient.is_ready()},
         "qwen3": {"ready": Qwen3TTSClient.is_ready()},
         "comfyui": {"ready": comfyui_setup.is_ready(), "nvidia": pick_backend() == "cu128"},
@@ -123,6 +125,7 @@ _HANDLERS: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "tts_install_qwen3": install_qwen3,
     "tts_install_irodori": install_irodori,
     "comfyui_install": install_comfyui,
+    "ollama_install": ollama_setup.install_ollama,
 }
 
 

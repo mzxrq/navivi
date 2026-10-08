@@ -21,16 +21,16 @@ export function Segmented<T extends string>({ value, onChange, options, compact,
           aria-label={iconOnly ? option.label : undefined}
           aria-pressed={value === option.id}
           onClick={() => onChange(option.id)}
-          className={`flex-1 min-w-0 flex items-center justify-center gap-1.5 rounded-md font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-navi ${
+          className={`flex-1 flex items-center justify-center gap-1.5 rounded-md font-medium whitespace-nowrap transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-navi ${
             compact ? "h-7 text-[12px]" : "h-8 text-[13px]"
-          } ${
+          } ${iconOnly ? "min-w-0" : compact ? "px-2.5" : "px-3"} ${
             value === option.id
               ? "bg-white dark:bg-zinc-800 text-navi shadow-sm"
               : "text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200"
           }`}
         >
           {option.icon}
-          {!iconOnly && <span className="truncate">{option.label}</span>}
+          {!iconOnly && <span>{option.label}</span>}
         </button>
       ))}
     </div>
