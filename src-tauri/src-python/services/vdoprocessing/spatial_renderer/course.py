@@ -97,6 +97,7 @@ class _CourseOverviewMixin:
         route_obstacle_arr: np.ndarray,
         summary: Optional[Dict],
         overview_path: str,
+        bounding_box: Optional[Dict[str, float]] = None,
     ) -> str:
         cues = dict(self.config.get("overview_cue_seconds") or {})
         audio_seconds = float(self.config.get("overview_audio_seconds") or 0.0)
@@ -172,10 +173,12 @@ class _CourseOverviewMixin:
         reserved = [(w * 0.18, 0.0, w * 0.82, h * 0.16)]  # the headline
         if summary_card is not None:
             ch, cw = summary_card.shape[:2]
-            reserved.append((w - cw - 20.0, h - ch - 20.0, w - 20.0, h - 20.0))
+            drop = tuning.COURSE_STATS_DROP_PX
+            reserved.append((w - cw - 20.0, h - ch - 20.0 + drop, w - 20.0, h - 20.0 + drop))
         if extras:
             reserved.append(tuple(float(v) for v in self.graphics.stopby_notice_box(w, h)))
-        card_popups = [ap for ap in on_route if ap["data"].get("popup_image")]
+        # Stop-bys with a photo get their card too, popping in with their pin at {extras}.
+        card_popups = [ap for ap in on_route + extras if ap["data"].get("popup_image")]
         if self._is_loop_route and stop_popup is not None:
             card_popups = [ap for ap in card_popups if ap is not stop_popup]
         laid_out = self._layout_recap_cards(card_popups, w, h, reserved_boxes=reserved,
@@ -209,8 +212,11 @@ class _CourseOverviewMixin:
         thick = max(3, int(round(self.graphics.line_thickness * 1.4)))
         border = self.graphics.line_border_thickness
 
-        labels = {id(ap): self._course_label_sprite(ap.get("label") or "") for ap in extras}
-        badges: Dict[str, np.ndarray] = {}
+        # A name beside the pin only where no card names it.
+        labels = {
+            id(ap): None if ap["index"] in cards else self._course_label_sprite(ap.get("label") or "")
+            for ap in extras
+        }
         pop = tuning.COURSE_CARD_POP_SECONDS
 
         def plate_state(t: float):
@@ -232,12 +238,12 @@ class _CourseOverviewMixin:
             )
             return tuple(shown), tuple(anim), bumps, arrived, extra_on
 
-        def build_plate(state) -> Tuple[np.ndarray, np.ndarray]:
+        def build_layer(state, base: np.ndarray) -> np.ndarray:
             shown, anim, bumps, arrived, extra_on = state
             alpha = dict(anim)
             for ap in on_route:
                 ap["data"]["arrived"] = ap["index"] in arrived
-            plate = route_bg.copy()
+            plate = base.copy()
             huds = [self._course_hud(cards[i]) for i in shown]
             for hud in huds:
                 plate = self.graphics.render_popup_box(
@@ -263,7 +269,17 @@ class _CourseOverviewMixin:
                     hud = dict(hud, beside_box=(bx, int(by + 14 * (1 - _smoothstep(a)))))
                 plate = self.graphics.render_popup_box(
                     plate, hud, alpha=_smoothstep(a if a is not None else 1.0), skip_line=True)
-            return plate, np.any(plate != route_bg, axis=2)
+            return plate
+
+        def build_overlay(state) -> Tuple[np.ndarray, np.ndarray]:
+            """Cards and pins as their own layer: drawn over black and over white,
+            whose difference is each pixel's opacity. Blended over the traced
+            route, so the trace shows through their soft shadows (pasting every
+            changed pixel used to bring back the untraced line around each card)."""
+            on_black = build_layer(state, np.zeros_like(route_bg)).astype(np.float32)
+            on_white = build_layer(state, np.full_like(route_bg, 255)).astype(np.float32)
+            opacity = np.clip(1.0 - (on_white - on_black).mean(axis=2, keepdims=True) / 255.0, 0.0, 1.0)
+            return 1.0 - opacity, on_black
 
         taglines = [str(x) for x in (self.config.get("overview_taglines") or []) if str(x).strip()]
         total_frames = int(math.ceil(end_at * fps))
@@ -274,20 +290,23 @@ class _CourseOverviewMixin:
         )
         video = VideoExporter(overview_path, w, h, fps)
         tracker.begin_substeps(max(1, int(end_at)))
-        state, plate, mask = None, None, None
+        state, keep, layer = None, None, None
         frame = route_bg
+        prev_cx, prev_cy = None, None
+        smoothed_angle = self._initial_heading(path)
+
         for i in range(total_frames):
             t = i / fps
             new_state = plate_state(t)
             if new_state != state:
                 state = new_state
-                plate, mask = build_plate(state)
+                keep, layer = build_overlay(state)
             frame = route_bg.copy()
 
             dist = distance_at(anchors, t)
             k = int(np.searchsorted(cum, dist))
+            head = path[min(k, len(path) - 1)]
             if t >= route_at and k > 0:
-                head = path[min(k, len(path) - 1)]
                 if k < len(path):
                     d0, d1 = cum[k - 1], cum[k]
                     u = (dist - d0) / max(1e-6, d1 - d0)
@@ -296,13 +315,22 @@ class _CourseOverviewMixin:
                 if border:
                     cv2.polylines(frame, [line], False, self.graphics.line_border_color, thick + 2 * border, cv2.LINE_AA)
                 cv2.polylines(frame, [line], False, trace_color, thick, cv2.LINE_AA)
-            np.copyto(frame, plate, where=mask[..., None])
+            frame = np.clip(frame.astype(np.float32) * keep + layer + 0.5, 0, 255).astype(np.uint8)
 
             if route_at <= t < trace_end + 0.6:
                 mode = modes[min(max(0, k - 1), len(modes) - 1)]
-                head = path[min(k, len(path) - 1)] if t < trace_end else path[-1]
+                head = head if t < trace_end else path[-1]
                 fade = 1.0 if t < trace_end else max(0.0, 1.0 - (t - trace_end) / 0.6)
-                self._draw_course_marker(frame, badges, mode, int(head[0]), int(head[1]), t - route_at, fade)
+                cx, cy = int(head[0]), int(head[1])
+                smoothed_angle = self._smoothed_heading(smoothed_angle, cx, cy, prev_cx, prev_cy)
+                prev_cx, prev_cy = cx, cy
+
+                if fade < 1.0:
+                    overlay = frame.copy()
+                    self.graphics.draw_transport_icon(overlay, cx, cy, i, smoothed_angle, mode)
+                    cv2.addWeighted(overlay, fade, frame, 1.0 - fade, 0, dst=frame)
+                else:
+                    self.graphics.draw_transport_icon(frame, cx, cy, i, smoothed_angle, mode)
 
             text, alpha = tagline_at(taglines, t)
             if text and alpha > 0:
@@ -311,7 +339,7 @@ class _CourseOverviewMixin:
             if summary_card is not None and t >= stats_at:
                 u = _smoothstep((t - stats_at) / tuning.COURSE_STATS_SLIDE_SECONDS)
                 frame = self.graphics.composite_card_on_frame(
-                    frame, summary_card, alpha=u, slide_offset_y=(1 - u) * 80)
+                    frame, summary_card, alpha=u, slide_offset_y=tuning.COURSE_STATS_DROP_PX + (1 - u) * 80)
             if extras_at is not None and t >= extras_at:
                 frame = self.graphics.render_stopby_notice(frame, alpha=_smoothstep((t - extras_at) / 0.5))
 
@@ -319,12 +347,28 @@ class _CourseOverviewMixin:
             if i % fps == 0:
                 tracker.show_item(i // fps + 1, f"Rendering course overview {i // fps}/{int(end_at)}s")
 
+        # After the voice, the walk overview's ending: the GL zoom to the start and its photo.
+        self.last_frame = frame
+        hard_ended = False
+        if stop_popup is not None and self.config.get("enable_ending_highlight", True):
+            clean = route_bg.copy()
+            whole = np.array(pts, dtype=np.int32)
+            if border:
+                cv2.polylines(clean, [whole], False, self.graphics.line_border_color, thick + 2 * border, cv2.LINE_AA)
+            cv2.polylines(clean, [whole], False, trace_color, thick, cv2.LINE_AA)
+            for ap in on_route + extras:
+                self._draw_pin(clean, ap, total_points)
+            start_popup = next((ap for ap in active_popups if ap["index"] == 0), None)
+            hard_ended = self._render_ending_highlight(
+                video, w, h, fps, stop_popup, start_popup,
+                clean_map_frame=clean, bounding_box=bounding_box,
+            )
+
         for ap in active_popups:
             ap["data"]["triggered"] = False
             ap["data"]["arrived"] = False
-        self.last_frame = frame
-        self.last_rendered_seconds = total_frames / fps
-        self.last_ending_hard_ended = False
+        self.last_rendered_seconds = video.frames_written / fps
+        self.last_ending_hard_ended = hard_ended
         return video.release(overview_path)
 
     def _course_hud(self, ap: Dict) -> Dict:
@@ -350,37 +394,3 @@ class _CourseOverviewMixin:
                                  stroke_width=3, stroke_fill=(255, 255, 255, 255))
         return np.array(img)[:, :, [2, 1, 0, 3]]
 
-    def _draw_course_marker(
-        self, frame: np.ndarray, badges: Dict[str, np.ndarray], mode: str,
-        x: int, y: int, t: float, fade: float,
-    ) -> None:
-        """The travel mode's own icon (assets/image/icon/*.svg) on a white badge,
-        bobbing gently, with a ripple ring spreading from it."""
-        size = tuning.COURSE_MARKER_SIZE
-        key = "ferry" if mode in ("ferry", "boat") else mode or "walking"
-        if key not in badges:
-            s = 2  # drawn large, then downscaled for smooth edges
-            img = Image.new("RGBA", (size * s, size * s), (0, 0, 0, 0))
-            d = ImageDraw.Draw(img)
-            accent = tuple(reversed(self.graphics.MODE_COLORS.get(key, self.graphics.marker_color)))
-            d.ellipse([4 * s, 4 * s, (size - 4) * s, (size - 4) * s], fill=(255, 255, 255, 255),
-                      outline=accent + (255,), width=4 * s)
-            self.graphics._draw_mode_icon(d, key, size * s // 2, size * s // 2, int(size * s * 0.5), accent + (255,))
-            img = img.resize((size, size), Image.LANCZOS)
-            badges[key] = np.array(img)[:, :, [2, 1, 0, 3]]
-        accent = self.graphics.MODE_COLORS.get(key, self.graphics.marker_color)
-        phase = (t % 1.2) / 1.2
-        x0, y0 = max(0, x - size), max(0, y - size)
-        x1, y1 = min(frame.shape[1], x + size), min(frame.shape[0], y + size)
-        if x1 > x0 and y1 > y0:
-            roi = frame[y0:y1, x0:x1]
-            ripple = roi.copy()
-            cv2.circle(ripple, (x - x0, y - y0), int(size * 0.45 + phase * size * 0.5), accent, 3, cv2.LINE_AA)
-            a = (1 - phase) * 0.6 * fade
-            cv2.addWeighted(ripple, a, roi, 1 - a, 0, dst=roi)
-        sprite = badges[key]
-        if fade < 1.0:
-            sprite = sprite.copy()
-            sprite[:, :, 3] = (sprite[:, :, 3].astype(np.float32) * fade).astype(np.uint8)
-        bob = int(round(3 * math.sin(2 * math.pi * t / 1.1)))
-        self.graphics.blit_sprite(frame, sprite, (size // 2, size // 2), x, y - bob)

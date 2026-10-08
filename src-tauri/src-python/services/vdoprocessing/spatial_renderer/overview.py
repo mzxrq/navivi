@@ -522,6 +522,7 @@ class _OverviewRenderMixin:
             result = self._render_course_overview(
                 current_bg, w, h, fps, points, smooth_path, mode_breakpoints, cum_smooth_dist,
                 total_smooth_dist, active_popups, route_obstacle_arr, summary, overview_path,
+                bounding_box=bounding_box,
             )
             self.pending_overview_checkpoint = save_fingerprint
             return result
@@ -1123,7 +1124,7 @@ class _OverviewRenderMixin:
             video.write(self.last_frame)
 
         hard_ended = False
-        if stop_popup and self.config.get("enable_ending_highlight", True):
+        if stop_popup and self.config.get("enable_ending_highlight", True) and self.config.get("overview_style") != "course":
             # However fit_ending above actually split the remaining voice
             # (it may have favored the summary hold over this), what's
             # STILL left once that hold has actually been written is what

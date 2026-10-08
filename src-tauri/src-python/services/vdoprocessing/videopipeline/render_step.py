@@ -409,6 +409,10 @@ def _adaptive_overview_padding(route_df: pd.DataFrame) -> float:
     return tuning.OVERVIEW_PADDING_MAX_SPAN
 
 
+# The overview map's size (MapFetcher.fetch_image's default output_size).
+OVERVIEW_FRAME_SIZE = (1920, 1080)
+
+
 def _reserve_overview_bands(
     bbox: dict, frame_size: tuple[int, int], top_px: float, bottom_px: float
 ) -> dict:
@@ -437,6 +441,19 @@ def _reserve_overview_bands(
         "min_lon": mid_lon - half_lon,
         "max_lon": mid_lon + half_lon,
     }
+
+
+def overview_bounding_box(fetcher, route_df: pd.DataFrame, project_config: dict) -> dict:
+    """The overview map's box: the route padded by its span; in the "course"
+    style also clear of the headline above and the subtitles/cards below."""
+    bbox = fetcher.get_bounding_box(route_df, padding_factor=_adaptive_overview_padding(route_df))
+    if overview_style(project_config) == "course":
+        bbox = _reserve_overview_bands(
+            bbox, OVERVIEW_FRAME_SIZE,
+            OVERVIEW_FRAME_SIZE[1] * tuning.COURSE_TOP_BAND_FRACTION,
+            OVERVIEW_FRAME_SIZE[1] * tuning.COURSE_BOTTOM_BAND_FRACTION,
+        )
+    return bbox
 
 
 def _course_config(project_config: dict, config_path: Path) -> dict:
@@ -676,9 +693,7 @@ def render_route_video(
     # constructing (and re-loading/re-normalizing) a second one.
     fetcher = MapFetcher(job_config=job_config_mgr or JobConfigManager(str(config_path)))
 
-    bbox = fetcher.get_bounding_box(
-        route_df, padding_factor=_adaptive_overview_padding(route_df)
-    )
+    bbox = overview_bounding_box(fetcher, route_df, project_config)
 
     map_output_path, extent, (img_w, img_h) = fetcher.fetch_image(
         bounding_box=bbox, output_filename=map_output_path
