@@ -451,7 +451,14 @@ COURSE_TAGLINE_FADE_SECONDS = 0.5
 COURSE_CARD_POP_SECONDS = 0.45
 COURSE_STATS_SLIDE_SECONDS = 0.6
 COURSE_STOPBY_STAGGER_SECONDS = 0.15
-COURSE_MARKER_SIZE = 64
+# Share of the frame kept clear of the route at the top (the headline) and the
+# bottom (subtitles, stats card, stop-by notice): the map is framed around it.
+# Added on top of the route's own padding (OVERVIEW_PADDING_BY_SPAN_KM).
+COURSE_TOP_BAND_FRACTION = 0.10
+COURSE_BOTTOM_BAND_FRACTION = 0.10
+# The stats card sits this much lower than the shared 20px margin (its image
+# has ~26px of shadow padding, so it floated ~46px above the bottom edge).
+COURSE_STATS_DROP_PX = 30
 # Its legs: the walker slows down (to 40% pace) over this long before each
 # stop, as in the reference video; arrival times, and so the voice sync, stay.
 COURSE_ARRIVAL_SLOW_SECONDS = 3.0
@@ -691,26 +698,17 @@ OVERVIEW_CONNECTED_STOPBY_HOLD_SECONDS = 2.0
 # crop; bigger ones get more room so nearby pins/labels don't crowd the
 # frame edge. (span_km ceiling, padding_factor) pairs, checked in order -
 # the first ceiling the route's own span fits under wins.
-# TileDownloader._optimal_zoom_for_span rounds the padded span's zoom UP to
-# the nearest WHOLE level (never down), and zoom is log2-scaled - so most
-# padding changes land inside the same whole level and change nothing
-# visible; only enough padding to push past the NEXT level's threshold
-# changes the fetched crop at all, and that jump is a big, discrete step
-# (confirmed on this project's own route, span ~7.5km: 0.05-0.50 all stayed
-# at zoom 13 - identical crop; 0.70 dropped to zoom 12 - roughly 2x the
-# area, at which point the card layout (built for the tighter crop) started
-# overlapping/crowding, so that's a real regression, not just "more
-# zoomed out"). Kept modest for now, matching zoom 13 on that route -
-# raise a tier past its own threshold only once the card layout can also
-# handle the wider crop it produces.
+# The map is cut to exactly the padded box (maptile._crop_to_window), so each
+# step here shows. Lowered 2026-10-08 (was 0.10/0.15/0.20/0.25, max 0.25): a
+# shorter route was drawn too small to follow its line.
 OVERVIEW_PADDING_BY_SPAN_KM: Tuple[Tuple[float, float], ...] = (
-    (1.5, 0.10),
-    (5.0, 0.15),
-    (15.0, 0.20),
-    (40.0, 0.25),
+    (1.5, 0.05),
+    (5.0, 0.07),
+    (15.0, 0.10),
+    (40.0, 0.14),
 )
 # Above the largest span_km ceiling in OVERVIEW_PADDING_BY_SPAN_KM.
-OVERVIEW_PADDING_MAX_SPAN = 0.25
+OVERVIEW_PADDING_MAX_SPAN = 0.18
 # Overview: the walker takes at least this long from one numbered stop to the
 # next, however close they are (stops a few hundred metres apart used to flash
 # past in a fraction of a second, their cards all popping up at once). The
@@ -739,6 +737,11 @@ STOPBY_NOTICE_TITLE = LABELS_JA["stopby_notice_title"]
 STOPBY_NOTICE_BODY = LABELS_JA["stopby_notice_body"]
 STOPBY_NOTICE_RIBBON_COLOR: Tuple[int, int, int] = (40, 110, 220)  # BGR, warm orange ribbon
 STOPBY_NOTICE_FADE_SECONDS = 0.6
+# A leg's piece after a stop-by opens on its photo fullscreen (this long when the
+# stop-by's attraction video played just before; its own freeze otherwise), shrinks
+# into its card above the marker, holds the card this long, then the walk resumes.
+STOPBY_REOPEN_HOLD_SECONDS = 0.5
+STOPBY_CARD_HOLD_SECONDS = 1.0
 # How long the notice stays up when the first stop-by reached isn't a batch
 # (a connected / skipped one); a batch keeps it for the batch's own length.
 STOPBY_NOTICE_SECONDS = 5.0
@@ -1854,6 +1857,11 @@ CAPTION_MARGIN_V = 20  # gap above the bottom edge
 CAPTION_BOX_PADDING = 2.0  # libass pads a box by its outline width
 CAPTION_BOX_COLOR = "&H66000000"  # ASS alpha 66 = 60% opaque black
 CAPTION_PLAY_RES_X = 384
+# Generated subtitles: characters per line when caption_style.max_chars_per_line is 0,
+# and what a longer clause does (settings.subtitle_long_lines): "split" = one-line
+# captions in turn, "wrap" = up to 2 lines per caption.
+SUBTITLE_MAX_CHARS_PER_LINE = 20
+SUBTITLE_LONG_LINES = "split"
 
 # --- Narration speed presets and cache (Irodori) -------------------------------
 # On a CPU a request costs ~22 s of fixed work plus sampling that scales with the number of steps, so fewer steps is the one big

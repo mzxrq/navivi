@@ -105,16 +105,17 @@ def test_overview_map(job_config_path: str, output_path: Optional[str] = None) -
     from services.config.job_config import JobConfigManager
     from services.mapfetcher.mapfetcher import MapFetcher
     from services.vdoprocessing.videopipeline import process_gps
-    from services.vdoprocessing.videopipeline.render_step import _adaptive_overview_padding
+    from services.vdoprocessing.videopipeline.render_step import _adaptive_overview_padding, overview_bounding_box
 
     config_path = Path(job_config_path)
     if not config_path.exists():
         raise FileNotFoundError(f"job_config.json not found: {config_path}")
 
     route_df = process_gps(str(config_path))["route"]
-    fetcher = MapFetcher(job_config=JobConfigManager(str(config_path)))
+    job_config = JobConfigManager(str(config_path))
+    fetcher = MapFetcher(job_config=job_config)
     padding = _adaptive_overview_padding(route_df)
-    bbox = fetcher.get_bounding_box(route_df, padding_factor=padding)
+    bbox = overview_bounding_box(fetcher, route_df, job_config.data)
     target = output_path or str(
         config_path.parent / "assets" / "image" / "map" / "overview_map_preview.png"
     )

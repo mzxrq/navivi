@@ -64,11 +64,11 @@ def test_the_script_follows_the_course_guide_shape():
 def test_the_stop_bys_get_their_own_paragraph_with_their_cautions():
     project, _ = _island_course()
     text = stopby_text(project)
-    assert text.startswith("黒色で示した地点は、ルート沿いにある追加の見どころです。")
+    assert text.startswith("茶色で示した地点は、ルート沿いにある追加の見どころです。")
     assert "閼伽井跡" in text and "時間に余裕があれば" in text
     assert "ただし、訪れるには管理事務所で同意書を受け取る必要があります。" in text
     script, _ = build_tour_script(*_island_course())
-    assert script.index("{end}") < script.index("黒色で示した地点")
+    assert script.index("{end}") < script.index("茶色で示した地点")
 
 
 def test_totals_count_the_walk_and_each_crossing():

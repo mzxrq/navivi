@@ -15,7 +15,7 @@ from services.vdoprocessing.cliptiming import read_audio_offset
 from services.vdoprocessing.vdoexporter import VideoExporter
 
 from .audio_step import _resolve_attraction_narration_script, _resolve_narration_script
-from .helpers import is_newer_than, logger, output_is_valid
+from .helpers import logger, output_is_valid
 
 
 def _burn_checkpoint_key(video_path: str, sub_path: str, style: Optional[SubtitleStyle] = None) -> str:
@@ -91,12 +91,26 @@ _ATTRACTION_RE = re.compile(r"04_attraction_(\d+)_")
 _OVERVIEW_FILENAME = "01_overview.mp4"
 
 
+def _write_srt(script: str, audio_path, subtitle_path: Path, layout: Optional[dict]) -> int:
+    """Times `script` against its audio and writes the .srt only when it changed. Always
+    rebuilt (milliseconds), so a line-layout setting change applies without --force."""
+    from services.localization.subtitle import SRTDocument, SubtitleBuilder
+    from services.tts.ttsengine import AudioProcessor
+
+    analysis = AudioProcessor().analyze_pauses(str(audio_path))
+    cues = SubtitleBuilder.build(script, analysis["duration_seconds"], analysis["pauses"], **(layout or {}))
+    if not (subtitle_path.exists() and subtitle_path.read_text(encoding="utf-8") == SRTDocument.to_string(cues)):
+        SRTDocument.write(cues, str(subtitle_path))
+    return len(cues)
+
+
 def build_waypoint_subtitle(
     waypoint: dict,
     idx: int,
     audio_path: Optional[str],
     output_dir,
     force: bool = False,
+    layout: Optional[dict] = None,
 ) -> Dict[str, Any]:
     """Builds (or, if already present and not `force`, reuses) one
     waypoint's .srt subtitle file from its narration text and matching TTS
@@ -118,34 +132,13 @@ def build_waypoint_subtitle(
     label = waypoint.get("label", f"Waypoint {idx + 1}")
     output_dir = Path(output_dir)
     subtitle_path = output_dir / f"{Path(audio_path).stem}.srt"
-
-    if not force and output_is_valid(subtitle_path, min_bytes=10) and is_newer_than(subtitle_path, audio_path):
-        return {
-            "index": idx,
-            "label": label,
-            "audio_path": str(audio_path),
-            "subtitle_path": str(subtitle_path),
-            "cue_count": None,
-            "skipped": True,
-        }
-
-    from services.localization.subtitle import SRTDocument, SubtitleBuilder
-    from services.tts.ttsengine import AudioProcessor
-
-    analysis = AudioProcessor().analyze_pauses(str(audio_path))
-    cues = SubtitleBuilder.build(
-        text=script,
-        duration_seconds=analysis["duration_seconds"],
-        pauses=analysis["pauses"],
-    )
-    output_dir.mkdir(parents=True, exist_ok=True)
-    SRTDocument.write(cues, str(subtitle_path))
+    cue_count = _write_srt(script, audio_path, subtitle_path, layout)
     return {
         "index": idx,
         "label": label,
         "audio_path": str(audio_path),
         "subtitle_path": str(subtitle_path),
-        "cue_count": len(cues),
+        "cue_count": cue_count,
     }
 
 
@@ -167,28 +160,16 @@ def build_overview_subtitle(
     if not script or not audio_path or not Path(audio_path).exists():
         return None
 
-    output_dir = Path(output_dir)
-    subtitle_path = output_dir / f"{Path(audio_path).stem}.srt"
+    from services.localization.subtitle import caption_layout
 
-    if not force and output_is_valid(subtitle_path, min_bytes=10) and is_newer_than(subtitle_path, audio_path):
-        return str(subtitle_path)
-
-    from services.localization.subtitle import SRTDocument, SubtitleBuilder
-    from services.tts.ttsengine import AudioProcessor
-
-    analysis = AudioProcessor().analyze_pauses(str(audio_path))
-    cues = SubtitleBuilder.build(
-        text=script,
-        duration_seconds=analysis["duration_seconds"],
-        pauses=analysis["pauses"],
-    )
-    output_dir.mkdir(parents=True, exist_ok=True)
-    SRTDocument.write(cues, str(subtitle_path))
+    subtitle_path = Path(output_dir) / f"{Path(audio_path).stem}.srt"
+    _write_srt(script, audio_path, subtitle_path, caption_layout(project_config.get("settings")))
     return str(subtitle_path)
 
 
 def build_subtitles(
-    waypoints: list, audio_paths: list, output_subtitle_dir: str, force: bool = False
+    waypoints: list, audio_paths: list, output_subtitle_dir: str, force: bool = False,
+    layout: Optional[dict] = None,
 ) -> list:
     """Step: builds .srt subtitle files for every narrated waypoint that
     has matching TTS audio, keeping the returned list index-aligned with
@@ -202,7 +183,7 @@ def build_subtitles(
         audio_path = audio_paths[idx] if idx < len(audio_paths) else None
         tracker.show(f"Generating subtitle {idx + 1}/{total}")
         try:
-            result = build_waypoint_subtitle(wp, idx, audio_path, output_dir, force=force)
+            result = build_waypoint_subtitle(wp, idx, audio_path, output_dir, force=force, layout=layout)
             subtitle_paths.append(result["subtitle_path"])
         except (ValueError, FileNotFoundError):
             subtitle_paths.append(None)
@@ -217,7 +198,8 @@ def build_subtitles(
 
 
 def build_attraction_subtitles(
-    waypoints: list, attraction_audio_paths: list, output_subtitle_dir: str, force: bool = False
+    waypoints: list, attraction_audio_paths: list, output_subtitle_dir: str, force: bool = False,
+    layout: Optional[dict] = None,
 ) -> list:
     """Step: builds .srt subtitle files for each waypoint's ATTRACTION-only
     narration (attractionNarration alone — see
@@ -243,25 +225,12 @@ def build_attraction_subtitles(
         script = _resolve_attraction_narration_script(wp)
         subtitle_path = output_dir / f"{Path(audio_path).stem}.srt"
 
-        if not force and output_is_valid(subtitle_path, min_bytes=10) and is_newer_than(subtitle_path, audio_path):
-            subtitle_paths.append(str(subtitle_path))
-            continue
-
         if not Path(audio_path).exists():
             subtitle_paths.append(None)
             continue
 
         try:
-            from services.localization.subtitle import SRTDocument, SubtitleBuilder
-            from services.tts.ttsengine import AudioProcessor
-
-            analysis = AudioProcessor().analyze_pauses(str(audio_path))
-            cues = SubtitleBuilder.build(
-                text=script,
-                duration_seconds=analysis["duration_seconds"],
-                pauses=analysis["pauses"],
-            )
-            SRTDocument.write(cues, str(subtitle_path))
+            _write_srt(script, audio_path, subtitle_path, layout)
             subtitle_paths.append(str(subtitle_path))
         except Exception as e:
             logger.error("Failed to build attraction subtitle for waypoint %d: %s", idx, e)
@@ -329,7 +298,7 @@ def burn_subtitles(
             # lets a connected stop-by's own written narration actually
             # show up as its own piece's subtitle.
             split = leg_narration_splits.get(original_file.stem)
-            if split and split[1]:
+            if split is not None:
                 sub_path = split[1]
             else:
                 sub_path = subtitle_paths[sub_idx] if 0 <= sub_idx < len(subtitle_paths) else None

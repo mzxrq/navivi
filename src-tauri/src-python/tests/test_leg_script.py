@@ -82,9 +82,20 @@ def test_every_stop_gets_its_directions_and_opening():
     assert rows["加太港"]["attraction"] == "加太港です。フェリーが出る港です。"
     assert rows["野奈浦桟橋"]["arriving"] == "加太港からフェリーに乗り、野奈浦桟橋へ渡ります。船はまもなく野奈浦桟橋に到着します。"
     assert rows["野奈浦桟橋"]["attraction"].startswith("ゴールの野奈浦桟橋に到着しました。")
-    # an unconnected stop-by is never walked to, only named
-    assert rows["常行寺"]["arriving"] is None
+    # an unconnected stop-by is told from the previous stop to where the leg passes it
+    assert rows["常行寺"]["arriving"] == "加太駅から東へ、道なりに進むと、常行寺はすぐ先です。"
     assert rows["常行寺"]["attraction"] == "時間に余裕があれば立ち寄れる地点、常行寺です。"
+
+
+def test_the_next_stop_continues_from_a_stopby_the_walk_pauses_at():
+    project, cache = _project()
+    project["waypoints"][1]["popup_image"] = "assets/image/jogyoji.jpg"
+    rows = {r["id"]: r for r in build_leg_scripts(project, cache)}
+    assert rows["常行寺"]["arriving"] == "加太駅から東へ、道なりに進むと、常行寺はすぐ先です。"
+    assert rows["称念寺"]["arriving"] == "常行寺から東へ進みます。右に曲がって南へ入ると、称念寺はすぐ先です。"
+    project["settings"]["overview_style"] = "walk"  # the walk style only passes it
+    rows = {r["id"]: r for r in build_leg_scripts(project, cache)}
+    assert rows["称念寺"]["arriving"].startswith("加太駅から東へ進みます。")
 
 
 def test_openings_are_added_once():

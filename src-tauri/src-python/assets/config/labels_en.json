@@ -51,7 +51,7 @@
     "places_value_one": "{count} place",
     "longest": "Longest leg"
   },
-  "stopby_notice_title": "Optional extras (round markers)",
-  "stopby_notice_body": "Round markers are extra sights near the route.\nStopping by is up to you.\nPlan around your time and energy.",
+  "stopby_notice_title": "Optional extras",
+  "stopby_notice_body": "These are extra sights near the route.\nStop by if you have time and energy.",
   "duration_sample": "8h 88m"
 }

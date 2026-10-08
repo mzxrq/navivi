@@ -155,6 +155,8 @@ def compute_leg_narration_splits(
                 continue
             t_idx = id_to_position[wp_id]
             if not (t_idx < len(audio_paths)) or not audio_paths[t_idx]:
+                # A target with no narration (e.g. a stop-by) walks silently, never with the departure's voice.
+                splits[Path(video_path).stem] = (None, None)
                 continue
             target_audio = audio_paths[t_idx]
             target_subtitle = subtitle_paths[t_idx] if t_idx < len(subtitle_paths) else None

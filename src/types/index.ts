@@ -119,6 +119,7 @@ export interface ProjectSettings {
   subtitle_margin_v?: number;
   // The subtitle_* fields above are no longer read; captions use caption_style.
   caption_style?: TextStyle;
+  subtitle_long_lines?: "split" | "wrap"; // a clause longer than one line: one-line captions in turn, or 2 lines (absent = split)
   intro_title_style?: TextStyle;
   intro_subtitle_style?: TextStyle;
   intro_kicker_style?: TextStyle;

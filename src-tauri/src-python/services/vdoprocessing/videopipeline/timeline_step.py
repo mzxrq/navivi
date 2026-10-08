@@ -233,7 +233,7 @@ def build_timeline(
         # reflects that padding, since pipeline.py replaces video_paths
         # with the padded result before this function ever sees it.
         split = leg_narration_splits.get(Path(source_name).stem)
-        if split and split[0]:
+        if split is not None:
             return split
         audio_path = audio_paths[idx]
         subtitle_path = (

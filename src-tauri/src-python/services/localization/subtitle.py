@@ -115,47 +115,18 @@ class TextSegmenter:
         return clauses or [text]
 
     @staticmethod
-    def wrap(text: str, max_chars_per_line: int = 24, max_lines: int = 2) -> str:
-        """
-        PATCH: budget-aware wrapping instead of blind fixed-width chunking.
-
-        OLD BEHAVIOR: every clause >max_chars_per_line got mechanically cut
-        at that exact offset, so a 22-char clause with a 20-char budget
-        always produced 2 lines even though it would read fine on one line
-        at a slightly wider budget — and the cut point ignored word/phrase
-        boundaries entirely.
-
-        NEW BEHAVIOR:
-          1. If the WHOLE clause fits in max_chars_per_line, return it as a
-             single line — no forced wrapping, ever. This alone eliminates
-             the vast majority of unnecessary 2-line captions, since most
-             TTS clauses (already pre-split on 、。！？!? by split_clauses)
-             are short.
-          2. If it doesn't fit, find a natural break point (nearest space,
-             scanning backward from the ideal midpoint) instead of cutting
-             at a fixed character offset — avoids splitting mid-word.
-          3. Still respects max_lines and still truncates with an ellipsis
-             as an absolute last resort for pathologically long clauses.
-
-        O(k) where k = len(text) — a single backward scan, negligible cost
-        even at hundreds of calls per pipeline run.
-        """
+    def split_lines(text: str, max_chars_per_line: int = 24) -> List[str]:
+        """A clause too long for one line becomes several one-line captions, broken
+        evenly at a space, punctuation or phrase end (kinsoku-safe). Captions are never 2 lines."""
         text = text.strip()
         if not text:
-            return text
-
-        # Case 1: fits on one line (a closing 、。 is dropped on display, so it doesn't count).
+            return []
+        # A closing 、。 is dropped on display, so it doesn't count.
         if len(text.rstrip("、。")) <= max_chars_per_line:
-            return text
-
-        # Case 2: balanced lines broken at a space, punctuation or phrase end, with kinsoku.
+            return [text]
         from services.localization.text_style import wrap_line
 
-        lines = wrap_line(text, max_chars_per_line)
-        if len(lines) > max_lines:
-            lines = lines[:max_lines]
-            lines[-1] = lines[-1][: max_chars_per_line - 1] + "…"
-        return "\n".join(lines)
+        return wrap_line(text, max_chars_per_line)
 
 
 # [Subtitle] SpeakingTimelineMapper: maps pure speaking-time onto real timeline
@@ -235,6 +206,80 @@ def strip_bracket_tags(text: str) -> str:
     return _BRACKET_TAG.sub("", text or "")
 
 
+_TWO_MORA = re.compile(r"[㐀-鿿豈-﫿0-9０-９]")
+_UNSPOKEN = re.compile(r"[\s、。！？!?,.「」『』（）()【】\[\]・…]")
+
+
+def spoken_weight(text: str) -> int:
+    """Rough spoken length: a kanji or digit usually reads as ~2 morae."""
+    return max(1, sum(0 if _UNSPOKEN.match(ch) else 2 if _TWO_MORA.match(ch) else 1 for ch in text))
+
+
+def align_to_pauses(
+    weights: List[int], speech: List[Tuple[float, float]], max_group: int = 6, unsnapped_cost: float = 1.0,
+    soft: Optional[List[bool]] = None,
+) -> Optional[List[Tuple[float, float]]]:
+    """Places clause boundaries in the voice's real pauses, choosing the pauses whose
+    spans best match each clause's spoken length (DP over clause count x pause).
+    Clauses with no pause between them share a span by weight. soft[i]: the break after
+    clause i is a line split mid-sentence, cheap to leave off a pause. None if it can't fit."""
+    n = len(weights)
+    if n == 0 or not speech:
+        return None
+    miss = [unsnapped_cost * (0.1 if soft and soft[i] else 1.0) for i in range(n)]
+    # Nodes: 0 = voice start, 1..P = gaps between speech intervals, P+1 = voice end.
+    opens = [speech[0][0]] + [s for s, _ in speech[1:]]
+    closes = [e for _, e in speech[:-1]] + [speech[-1][1]]
+    gap_sum = [0.0]
+    for k in range(1, len(speech)):
+        gap_sum.append(gap_sum[-1] + opens[k] - closes[k - 1])
+    last = len(speech)
+    rate = sum(e - s for s, e in speech) / sum(weights)
+    prefix = [0]
+    for w in weights:
+        prefix.append(prefix[-1] + w)
+
+    def spoken(a: int, b: int) -> float:
+        return closes[b - 1] - opens[a] - (gap_sum[b - 1] - gap_sum[a])
+
+    inf = float("inf")
+    best = [[inf] * (last + 1) for _ in range(n + 1)]
+    back: List[List[Optional[Tuple[int, int]]]] = [[None] * (last + 1) for _ in range(n + 1)]
+    best[0][0] = 0.0
+    for k0 in range(n):
+        for a in range(last):
+            if best[k0][a] == inf:
+                continue
+            for k in range(k0 + 1, min(n, k0 + max_group) + 1):
+                target = rate * (prefix[k] - prefix[k0])
+                extra = sum(miss[k0 : k - 1])
+                for b in range(a + 1, last + 1):
+                    if (b == last) != (k == n):
+                        continue
+                    cost = best[k0][a] + (spoken(a, b) - target) ** 2 + extra
+                    if cost < best[k][b]:
+                        best[k][b] = cost
+                        back[k][b] = (k0, a)
+    if best[n][last] == inf:
+        return None
+
+    spans: List[Tuple[float, float]] = []
+    k, b = n, last
+    while k > 0:
+        k0, a = back[k][b]
+        start, end = opens[a], closes[b - 1]
+        total = prefix[k] - prefix[k0]
+        group = []
+        for i in range(k0, k):
+            s = start + (end - start) * (prefix[i] - prefix[k0]) / total
+            e = start + (end - start) * (prefix[i + 1] - prefix[k0]) / total
+            group.append((s, e))
+        spans[:0] = group
+        k, b = k0, a
+    # Hold each caption through the pause until the next one starts.
+    return [(s, spans[i + 1][0] if i + 1 < len(spans) else e) for i, (s, e) in enumerate(spans)]
+
+
 # [Subtitle] SubtitleBuilder: builds timed SubtitleCue list from raw text + pause analysis
 class SubtitleBuilder:
     """Facade: raw narration text + audio analysis -> timed SubtitleCue list."""
@@ -245,10 +290,16 @@ class SubtitleBuilder:
         text: str,
         duration_seconds: float,
         pauses: List[Dict[str, float]],
-        max_chars_per_line: int = 20,
-        max_lines: int = 2,
+        max_chars_per_line: int = tuning.SUBTITLE_MAX_CHARS_PER_LINE,
+        lines_per_caption: int = 1,
     ) -> List[SubtitleCue]:
-        clauses = TextSegmenter.split_clauses(strip_bracket_tags(text))
+        clauses, soft = [], []
+        for clause in TextSegmenter.split_clauses(strip_bracket_tags(text)):
+            lines = TextSegmenter.split_lines(clause, max_chars_per_line)
+            per = max(1, lines_per_caption)
+            parts = ["\n".join(lines[i : i + per]) for i in range(0, len(lines), per)]
+            clauses += parts
+            soft += [True] * (len(parts) - 1) + [False]
         if not clauses:
             return []
 
@@ -263,17 +314,17 @@ class SubtitleBuilder:
                 (i * per_clause, (i + 1) * per_clause) for i in range(len(clauses))
             ]
         else:
-            total_chars = sum(len(c) for c in clauses) or 1
-            needed = [
-                mapper.total_speaking_time * (len(c) / total_chars) for c in clauses
-            ]
-            spans = mapper.allocate(needed)
+            weights = [spoken_weight(c) for c in clauses]
+            spans = align_to_pauses(weights, mapper._speaking_intervals, soft=soft)
+            if spans is None:
+                total = sum(weights)
+                spans = mapper.allocate([mapper.total_speaking_time * w / total for w in weights])
 
         return [
             SubtitleCue(
                 start=s,
                 end=e,
-                text=TextSegmenter.wrap(c, max_chars_per_line, max_lines),
+                text=c,
             )
             for (s, e), c in zip(spans, clauses)
         ]
@@ -328,6 +379,22 @@ class MasterSubtitleAssembler:
         for cues, offset in zip(segment_cues, segment_offsets):
             master.extend(cue.shifted(offset) for cue in cues)
         return master
+
+
+def caption_layout(settings: Optional[dict] = None) -> Dict[str, int]:
+    """SubtitleBuilder.build's line options from the project's settings: line length from
+    caption_style.max_chars_per_line, and settings.subtitle_long_lines "split" | "wrap"."""
+    settings = settings or {}
+    style = settings.get("caption_style") or {}
+    try:
+        max_chars = int(style.get("max_chars_per_line") or 0)
+    except (TypeError, ValueError):
+        max_chars = 0
+    wrap = (settings.get("subtitle_long_lines") or tuning.SUBTITLE_LONG_LINES) == "wrap"
+    return {
+        "max_chars_per_line": max_chars if max_chars > 0 else tuning.SUBTITLE_MAX_CHARS_PER_LINE,
+        "lines_per_caption": 2 if wrap else 1,
+    }
 
 
 def caption_style(settings: Optional[dict] = None) -> SubtitleStyle:

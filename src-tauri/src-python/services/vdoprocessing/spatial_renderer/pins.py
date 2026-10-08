@@ -103,8 +103,6 @@ class _PinMixin:
         (0.65 * marker_radius) inside a 3px white ring, everything else as
         a teardrop whose head is marker_radius plus a 4px white halo."""
         radius = float(self.graphics.marker_radius)
-        if wp.get("data", {}).get("is_stopby"):
-            return radius * 0.65 + 3.0
         return radius + 4.0
 
     def _declutter_pins(self, active_popups: List[Dict]) -> None:
@@ -222,7 +220,7 @@ class _PinMixin:
         count the same way MapArea.tsx's normalIndex does)."""
         label, pin_color, split_color = self._pin_label_and_color(wp, total_points)
         px, py = int(wp.get("pin_x", wp["x"])), int(wp.get("pin_y", wp["y"]))
-        is_circle = bool(wp.get("data", {}).get("is_stopby"))
+        is_circle = False  # Normal marker for stop-bys as well
         self.graphics.draw_marker(
             frame, px, py, number=label, color=pin_color, split_color=split_color, is_circle=is_circle,
             scale=scale, image=wp.get("data", {}).get("pin_image"),

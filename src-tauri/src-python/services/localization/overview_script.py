@@ -847,7 +847,7 @@ _CAUTION = re.compile(r"必要|許可|予約|注意|禁止|立ち?入|ただし|
 
 def stopby_text(project: dict) -> str:
     """The unconnected stop-bys (brown pins) as optional extras, with their own
-    cautions: "黒色で示した地点は、ルート沿いにある追加の見どころです。A、そしてBです。…"."""
+    cautions: "茶色で示した地点は、ルート沿いにある追加の見どころです。A、そしてBです。…"."""
     from services.localization.route_brief import _length_km, _short_fact, clean_label, on_route
 
     waypoints = [w for w in project.get("waypoints", []) if isinstance(w, dict) and "lat" in w]
@@ -870,7 +870,7 @@ def stopby_text(project: dict) -> str:
     phrases = [f"{near}の近くにある、{'と'.join(items)}" for near, items in by_near.items()]
     listed = phrases[0] if len(phrases) == 1 else "、".join(phrases[:-1]) + "、そして" + phrases[-1]
     return (
-        "黒色で示した地点は、ルート沿いにある追加の見どころです。"
+        "茶色で示した地点は、ルート沿いにある追加の見どころです。"
         f"{listed}です。時間に余裕があれば、あわせて訪ねてみてください。" + "".join(notes)
     )
 
