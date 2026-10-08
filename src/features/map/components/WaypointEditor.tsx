@@ -42,6 +42,7 @@ import { PROVIDERS } from "../../../services/ai/providers";
 import { stopLabel } from "../../../utils/stopLabel";
 import { readTextFile } from "@tauri-apps/plugin-fs";
 import { probeDuration, toAbsoluteProjectPath } from "../../../services/fileSystem";
+import { fetchLegScripts } from "../../../services/legScripts";
 import { RegenKind, refreshStopMedia, regenModes, runRegen } from "../../../services/stopRegen";
 import { PHOTO_EXTENSIONS, isHeic, preparePhotos } from "../../../services/imageImport";
 import { t } from "@lingui/core/macro";
@@ -145,6 +146,7 @@ export function WaypointEditor({
   // The "Whole route first" type visits every stop-by: each is narrated, linked or not.
   const visited = !isStopBy || isLinked || settings.overview_style === "course";
   const hasAttractionVoice = !!wp.attractionNarration?.trim() && visited;
+  const routeDirections = settings.overview_style === "course" && !!metadata.directory_path;
   const canRegen = !!metadata.directory_path && !wp.skipAssetGeneration && !wp.isStub;
 
   // Redo one stop's files through the single-stop CLI modes (one sidecar call at a time), then re-read them in the timeline.
@@ -280,7 +282,35 @@ export function WaypointEditor({
     updateWaypoint(wp.id, { imagePans: pans });
   };
 
+  // "Whole route first": the arriving script is the way here, read off the route (no AI); the description gets its opening line.
+  const writeDirections = async () => {
+    updateWaypoint(wp.id, { generatingScriptType: "arriving" });
+    try {
+      await saveProject(undefined, undefined, undefined, false);
+      const reply = await fetchLegScripts(metadata.directory_path);
+      if (!reply.success) {
+        if (!reply.cancelled) showToast(reply.error, "error");
+        return;
+      }
+      const row = reply.scripts.find((s) => s.id === wp.id);
+      if (!row?.arriving && !row?.attraction) {
+        showToast(t`No route leads to this stop, so there is no way to describe.`, "warning");
+        return;
+      }
+      updateWaypoint(wp.id, {
+        ...(row.arriving ? { arrivingNarration: row.arriving } : {}),
+        ...(row.attraction ? { attractionNarration: row.attraction } : {}),
+      });
+      if (!row.arriving) showToast(t`No route leads to this stop; only its description's opening line was added.`, "info");
+    } catch (e) {
+      showToast(String(e), "error");
+    } finally {
+      updateWaypoint(wp.id, { generatingScriptType: null });
+    }
+  };
+
   const handleGenerateScript = async (type: "arriving" | "attraction", prompt: string) => {
+    if (type === "arriving" && routeDirections) return writeDirections();
     const engine = aiEngine(settings);
 
     abortControllerRef.current?.abort();
@@ -569,7 +599,8 @@ export function WaypointEditor({
                           isGenerating={wp.generatingScriptType === section.type}
                           onCancel={cancelGeneration}
                           onGenerate={(prompt) => handleGenerateScript(section.type, prompt)}
-                          aiEnabled={!!settings.ai_features_enabled}
+                          aiEnabled={!!settings.ai_features_enabled || (routeDirections && section.type === "arriving")}
+                          promptOptional={routeDirections && section.type === "arriving"}
                         />
                       </section>
                     ))}

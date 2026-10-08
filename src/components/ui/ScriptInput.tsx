@@ -51,6 +51,8 @@ interface ScriptInputProps {
   thoughtProcess?: string;
   showLabel?: boolean;
   cues?: CueTag[];
+  // Auto-Write needs no prompt (the text comes from elsewhere, e.g. the route).
+  promptOptional?: boolean;
 }
 
 export function ScriptInput({
@@ -63,6 +65,7 @@ export function ScriptInput({
   thoughtProcess = "",
   showLabel = true,
   cues = ["start", "arrive", "end"],
+  promptOptional = false,
 }: ScriptInputProps) {
   const [localPrompt, setLocalPrompt] = useState(value);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
@@ -91,7 +94,7 @@ export function ScriptInput({
   const hasUnsavedChanges = localPrompt !== value;
 
   const handleGenerateClick = () => {
-    if (!localPrompt.trim()) return;
+    if (!localPrompt.trim() && !promptOptional) return;
     onGenerate(localPrompt, "gemma2", language);
   };
 
@@ -235,7 +238,7 @@ export function ScriptInput({
               <button
                 type="button"
                 onClick={handleGenerateClick}
-                disabled={!localPrompt.trim()}
+                disabled={!localPrompt.trim() && !promptOptional}
                 className="shrink-0 flex items-center gap-1.5 h-6 px-2 rounded-md text-[11px] font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed text-navi hover:bg-navi/10"
               >
                 <PencilSparkles className="w-3 h-3" />
