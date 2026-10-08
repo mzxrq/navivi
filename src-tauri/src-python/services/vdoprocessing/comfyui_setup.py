@@ -20,7 +20,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 import httpx
 
-from services import system_runtime, tuning
+from services import install_progress, system_runtime, tuning
 from services.logger.logger import setup_logger
 from services.tts.irodori_setup import pick_backend
 from services.tts.kokoro_setup import _run, find_uv
@@ -184,7 +184,9 @@ def install_comfyui(fetch: Optional[Fetch] = None, download: Optional[Callable[[
         if needed:
             raise RuntimeError(needed)
         check_requirements(directory, free_gb)
+        install_progress.begin(5 + len(model_files()))
         if not source_present(directory):
+            install_progress.step("downloading ComfyUI")
             unpack_source(fetch(COMFYUI_ZIP), directory)
         if not gguf_present(directory):
             unpack_source(fetch(GGUF_ZIP), directory / "custom_nodes" / "ComfyUI-GGUF")
@@ -201,6 +203,7 @@ def install_comfyui(fetch: Optional[Fetch] = None, download: Optional[Callable[[
             if not _imports_work(python):
                 raise RuntimeError("The packages installed, but PyTorch cannot use the graphics card. Update the NVIDIA driver and try again.")
         for spec in model_files():
+            install_progress.step(f"downloading {spec['file']}")
             download(spec)
     except (RuntimeError, httpx.HTTPError, zipfile.BadZipFile, OSError) as exc:
         return {"success": False, "error": str(exc)}

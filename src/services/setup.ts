@@ -33,6 +33,16 @@ export const announceVcRuntimeMissing = () => window.dispatchEvent(new Event(VC_
 export const installVcRuntime = () => invoke<void>("install_vc_runtime");
 
 // Makes the pipeline's Python and installs the media libraries and the browser that draws the route.
+// A tool's own download bar (Playwright: `|■■■■    |  40% of 150 MiB`, sometimes several joined by carriage returns): the latest percentage, or null for any other line.
+export function parseDownloadLine(line: string): { percent: number; size: string } | null {
+  const parts = line.split("\r");
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const match = /(\d{1,3})%(?:\s+of\s+([\d.]+\s*[KMGT]?i?B))?/i.exec(parts[i]);
+    if (match && /[■|]|\bof\b/.test(parts[i])) return { percent: Math.min(100, Number(match[1])), size: match[2] ?? "" };
+  }
+  return null;
+}
+
 // Progress arrives as `setup-step` (which step of how many) and `setup-log` (what the tools print).
 export async function installRuntime(onStep: (step: SetupStep) => void, onLog: (line: string) => void): Promise<void> {
   const unlisten = await Promise.all([

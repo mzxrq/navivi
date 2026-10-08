@@ -10,7 +10,7 @@ import subprocess
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from services import runtime_paths, system_runtime, tuning
+from services import install_progress, runtime_paths, system_runtime, tuning
 from services.logger.logger import setup_logger
 from services.tts.ttsengine import KokoroTTSClient
 
@@ -31,6 +31,7 @@ def find_uv() -> Optional[str]:
 
 def _run(cmd: List[str], what: str) -> None:
     logger.info("Kokoro setup: %s", what)
+    install_progress.step(what)
     result = subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace")
     if result.returncode != 0:
         raise RuntimeError(f"{what} failed:\n{(result.stderr or result.stdout)[-600:]}")
@@ -49,6 +50,7 @@ def install_kokoro() -> Dict[str, Any]:
         return {"success": False, "error": needed}
     directory, python = KokoroTTSClient._SERVER_DIR, KokoroTTSClient._SERVER_VENV_PYTHON
     directory.mkdir(parents=True, exist_ok=True)
+    install_progress.begin(4)
     try:
         if not (python.exists() and _imports_work(python)):
             uv = find_uv()

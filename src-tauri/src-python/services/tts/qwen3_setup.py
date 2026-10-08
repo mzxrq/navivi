@@ -5,7 +5,7 @@ Idempotent, like kokoro_setup."""
 
 from typing import Any, Dict
 
-from services import system_runtime, tuning
+from services import install_progress, system_runtime, tuning
 from services.logger.logger import setup_logger
 from services.tts.irodori_setup import pick_backend
 from services.tts.kokoro_setup import TORCH_INDEX, _run, find_uv
@@ -40,6 +40,7 @@ def install_qwen3() -> Dict[str, Any]:
     directory, python = Qwen3TTSClient._SERVER_DIR, Qwen3TTSClient._SERVER_VENV_PYTHON
     directory.mkdir(parents=True, exist_ok=True)
     gpu = pick_backend() == "cu128" and tuning.QWEN3_DEVICE != "cpu"
+    install_progress.begin(4)
     try:
         if not (python.exists() and _imports_work(python)):
             uv = find_uv()

@@ -121,7 +121,7 @@ async fn run_python_blueprint(
 
     // Extract the pipes before moving the child to the state
     let mut stdout = child.stdout.take().ok_or("Failed to capture stdout")?;
-    let mut stderr = child.stderr.take().ok_or("Failed to capture stderr")?;
+    let stderr = child.stderr.take().ok_or("Failed to capture stderr")?;
 
     // 2. Lock the Mutex and store the child process safely
     let my_pid = child.id();
@@ -136,9 +136,16 @@ async fn run_python_blueprint(
     }
 
     // 3. Read stderr on a separate thread to prevent OS pipe deadlocks
+    // Each line is also sent to the window as `blueprint-log` so long installs can show progress; the full text is still kept for the error.
+    let app_for_log = app.clone();
     let stderr_thread = thread::spawn(move || {
         let mut err_str = String::new();
-        let _ = stderr.read_to_string(&mut err_str);
+        for line in std::io::BufReader::new(stderr).split(b'\n').map_while(Result::ok) {
+            let line = String::from_utf8_lossy(&line).trim_end_matches('\r').to_string();
+            let _ = app_for_log.emit("blueprint-log", line.clone());
+            err_str.push_str(&line);
+            err_str.push('\n');
+        }
         err_str
     });
 
