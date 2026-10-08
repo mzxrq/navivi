@@ -52,6 +52,18 @@ export async function callSidecar<T>(mode: string, input: string | object = {}):
   }
 }
 
+// Engine installs (`tts_install_*`, `comfyui_install`, `ollama_install`) run in a process slot of their own, so later calls
+// (the voice list, a preview, a render stage) neither stop them nor are stopped by them. Progress arrives as `install-log` events.
+export async function callSidecarInstall<T>(mode: string): Promise<SidecarReply<T>> {
+  try {
+    return parseReply<T>(await invoke<string>("run_python_install", { action: mode, payload: "{}" }));
+  } catch (e) {
+    if (isSetupRequired(e)) announceSetupRequired();
+    const error = messageOf(e);
+    return { success: false, error, cancelled: CANCELLED.test(error) };
+  }
+}
+
 // Read-only modes (`extract_words`, `get_furigana`) run beside the tracked process, so they never kill another job.
 export async function callSidecarUtility<T>(mode: string, input: string | object = {}): Promise<SidecarReply<T>> {
   const payload = typeof input === "string" ? input : JSON.stringify(input);

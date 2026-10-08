@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ callSidecar: vi.fn(), invoke: vi.fn(() => Promise.resolve("Cancelled")) }));
-vi.mock("./sidecar", () => ({ callSidecar: mocks.callSidecar }));
+const mocks = vi.hoisted(() => ({ callSidecarInstall: vi.fn(), invoke: vi.fn(() => Promise.resolve("Cancelled")) }));
+vi.mock("./sidecar", () => ({ callSidecarInstall: mocks.callSidecarInstall }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke: mocks.invoke }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn(() => Promise.resolve(() => {})) }));
 
@@ -22,11 +22,11 @@ describe("parseProgress", () => {
 describe("cancelInstall", () => {
   it("stops the process and drops the job instead of showing a failure", async () => {
     let finish: (v: unknown) => void = () => {};
-    mocks.callSidecar.mockReturnValue(new Promise((resolve) => (finish = resolve)));
+    mocks.callSidecarInstall.mockReturnValue(new Promise((resolve) => (finish = resolve)));
     const started = startInstall("kokoro", "Kokoro-82M", "tts_install_kokoro");
-    await vi.waitFor(() => expect(mocks.callSidecar).toHaveBeenCalled());
+    await vi.waitFor(() => expect(mocks.callSidecarInstall).toHaveBeenCalled());
     await cancelInstall("kokoro");
-    expect(mocks.invoke).toHaveBeenCalledWith("cancel_python_blueprint");
+    expect(mocks.invoke).toHaveBeenCalledWith("cancel_python_install");
     finish({ success: false, error: "Process was cancelled", cancelled: true });
     await started;
     expect(getInstalls()).toHaveLength(0);

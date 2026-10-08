@@ -1,10 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import { callSidecar } from "./sidecar";
+import { callSidecarInstall } from "./sidecar";
 
 // Engine installs (voices, ComfyUI, Ollama) run in the background: they live here, not in the dialog that started them,
 // so closing the window does not lose them. Python prints `[progress] <done>/<total>|<label>` (services/install_progress.py);
-// Rust forwards every stderr line as `blueprint-log`.
+// Rust runs installs in their own process slot (`run_python_install`) and forwards every stderr line as `install-log`.
 
 export type InstallState = "running" | "done" | "failed";
 export interface InstallJob {
@@ -65,7 +65,7 @@ function onLine(line: string) {
 }
 
 async function ensureListening() {
-  listening ??= listen<string>("blueprint-log", (e) => onLine(String(e.payload))).then((fn) => {
+  listening ??= listen<string>("install-log", (e) => onLine(String(e.payload))).then((fn) => {
     unlisten = fn;
   });
   await listening;
@@ -78,14 +78,15 @@ function stopListening() {
   listening = undefined;
 }
 
-// Installs share the one tracked Python process, so only one runs at a time; a second start is ignored.
+// Only one install runs at a time (a second one in the same slot would stop the first); a second start is ignored.
+// Other Python calls do not touch it: they use the blueprint slot.
 export async function startInstall(id: string, label: string, action: string): Promise<boolean> {
   if (jobs.some((j) => j.state === "running")) return false;
   jobs = jobs.filter((j) => j.id !== id);
   jobs.push({ id, label, state: "running", fraction: 0, step: "", log: [], error: "" });
   emit();
   await ensureListening().catch(() => {});
-  const reply = await callSidecar(action, {});
+  const reply = await callSidecarInstall(action);
   if (reply.success) update(id, { state: "done", fraction: 1 });
   else if (reply.cancelled) jobs = jobs.filter((j) => j.id !== id), emit();
   else update(id, { state: "failed", error: reply.error });
@@ -96,7 +97,7 @@ export async function startInstall(id: string, label: string, action: string): P
 // Stops the install's Python process; the call then comes back as cancelled and the job disappears. Installs resume where they stopped.
 export async function cancelInstall(id: string) {
   if (!jobs.some((j) => j.id === id && j.state === "running")) return;
-  await invoke("cancel_python_blueprint").catch(() => {});
+  await invoke("cancel_python_install").catch(() => {});
 }
 
 export function dismissInstall(id: string) {

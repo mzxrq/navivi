@@ -4,7 +4,7 @@ import { I18nProvider } from "@lingui/react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const sidecar = vi.hoisted(() => ({ callSidecar: vi.fn(), callSidecarShared: vi.fn() }));
+const sidecar = vi.hoisted(() => ({ callSidecarInstall: vi.fn(), callSidecarShared: vi.fn() }));
 const ollama = vi.hoisted(() => ({ getOllamaState: vi.fn() }));
 const setup = vi.hoisted(() => ({ installVcRuntime: vi.fn() }));
 const online = vi.hoisted(() => ({ hasApiKey: vi.fn() }));
@@ -46,7 +46,7 @@ beforeEach(() => {
   setup.installVcRuntime.mockResolvedValue(undefined);
   online.hasApiKey.mockResolvedValue(false);
   sidecar.callSidecarShared.mockResolvedValue(engines({}));
-  sidecar.callSidecar.mockResolvedValue({ success: true });
+  sidecar.callSidecarInstall.mockResolvedValue({ success: true });
 });
 afterEach(() => {
   cleanup();
@@ -70,13 +70,13 @@ describe("ComponentsChecklist", () => {
     });
     sidecar.callSidecarShared.mockResolvedValue(engines({ kokoro: true }));
     fireEvent.click(buttons[0]); // the fast voice is listed first
-    await waitFor(() => expect(sidecar.callSidecar).toHaveBeenCalledWith("tts_install_kokoro", {}));
+    await waitFor(() => expect(sidecar.callSidecarInstall).toHaveBeenCalledWith("tts_install_kokoro"));
     await waitFor(() => expect(screen.getAllByRole("button", { name: "Set up" })).toHaveLength(2));
   });
 
   it("does not start a second install while one runs, which would cancel it, and shows its progress", async () => {
     let finish: (v: unknown) => void = () => {};
-    sidecar.callSidecar.mockReturnValue(new Promise((resolve) => (finish = resolve)));
+    sidecar.callSidecarInstall.mockReturnValue(new Promise((resolve) => (finish = resolve)));
     show();
     const buttons = await waitFor(() => screen.getAllByRole("button", { name: "Set up" }));
     fireEvent.click(buttons[0]);
@@ -88,7 +88,7 @@ describe("ComponentsChecklist", () => {
   });
 
   it("keeps a failed install's message for the details window", async () => {
-    sidecar.callSidecar.mockResolvedValue({ success: false, error: "uv is missing" });
+    sidecar.callSidecarInstall.mockResolvedValue({ success: false, error: "uv is missing" });
     show();
     const buttons = await waitFor(() => screen.getAllByRole("button", { name: "Set up" }));
     fireEvent.click(buttons[1]);
@@ -108,10 +108,10 @@ describe("ComponentsChecklist", () => {
     const install = await waitFor(() => screen.getByRole("button", { name: "Install now" }));
     expect(screen.getByRole("button", { name: /Get Ollama/ })).toBeTruthy();
     fireEvent.click(install);
-    expect(sidecar.callSidecar).not.toHaveBeenCalledWith("ollama_install", {});
+    expect(sidecar.callSidecarInstall).not.toHaveBeenCalledWith("ollama_install");
     expect(screen.getByText("irm https://ollama.com/install.ps1 | iex")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Install" }));
-    await waitFor(() => expect(sidecar.callSidecar).toHaveBeenCalledWith("ollama_install", {}));
+    await waitFor(() => expect(sidecar.callSidecarInstall).toHaveBeenCalledWith("ollama_install"));
   });
 
   it("notices Ollama appearing after the first look", async () => {
@@ -150,9 +150,9 @@ describe("ComponentsChecklist", () => {
       expect(found).toHaveLength(4);
       return found;
     });
-    sidecar.callSidecar.mockReturnValue(new Promise(() => {}));
+    sidecar.callSidecarInstall.mockReturnValue(new Promise(() => {}));
     fireEvent.click(buttons[3]);
-    await waitFor(() => expect(sidecar.callSidecar).toHaveBeenCalledWith("comfyui_install", {}));
+    await waitFor(() => expect(sidecar.callSidecarInstall).toHaveBeenCalledWith("comfyui_install"));
     await waitFor(() => expect(screen.getByText(/Installing in the background/)).toBeTruthy());
   });
 

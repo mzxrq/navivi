@@ -58,12 +58,19 @@ async fn app_ready(app: AppHandle, started: State<'_, StartedAt>) -> Result<(), 
 
 struct BlueprintState {
     process: Mutex<Option<Child>>,
+    // Engine installs have a slot of their own: a long download must not be killed by the next voice-list or preview call, and must not kill a render's stage.
+    install_process: Mutex<Option<Child>>,
     render_process: Mutex<Option<Child>>,
     render_cancelled: AtomicBool,
 }
 
 fn kill_tracked_children(state: &BlueprintState) {
     if let Ok(mut lock) = state.process.lock() {
+        if let Some(mut child) = lock.take() {
+            kill_tree(&mut child);
+        }
+    }
+    if let Ok(mut lock) = state.install_process.lock() {
         if let Some(mut child) = lock.take() {
             kill_tree(&mut child);
         }
@@ -110,11 +117,44 @@ async fn run_python_blueprint(
     payload: String,
     state: State<'_, BlueprintState>
 ) -> Result<String, String> {
+    run_in_slot(&app, &action, &payload, &state.process, "blueprint-log")
+}
 
+// The modes that set up an engine or a model. They run in their own slot (see BlueprintState::install_process).
+const INSTALL_MODES: &[&str] = &["tts_install_kokoro", "tts_install_qwen3", "tts_install_irodori", "comfyui_install", "ollama_install"];
+
+#[tauri::command]
+async fn run_python_install(
+    app: AppHandle,
+    action: String,
+    payload: String,
+    state: State<'_, BlueprintState>,
+) -> Result<String, String> {
+    if !INSTALL_MODES.contains(&action.as_str()) {
+        return Err(format!("Not an install mode: {action}"));
+    }
+    run_in_slot(&app, &action, &payload, &state.install_process, "install-log")
+}
+
+#[tauri::command]
+fn cancel_python_install(state: State<'_, BlueprintState>) -> Result<String, String> {
+    let mut lock = state.install_process.lock().map_err(|e| e.to_string())?;
+    if let Some(mut child) = lock.take() {
+        kill_tree(&mut child);
+        let _ = child.wait();
+        Ok("Cancelled".to_string())
+    } else {
+        Ok("No active install to cancel".to_string())
+    }
+}
+
+/// Runs `python main.py <action> <payload>` and keeps it in `slot`; a new call on the same slot kills the previous one.
+/// Every stderr line is also sent to the window as `log_event`.
+fn run_in_slot(app: &AppHandle, action: &str, payload: &str, slot: &Mutex<Option<Child>>, log_event: &'static str) -> Result<String, String> {
     // Spawn instead of output()
-    let mut cmd = python_command(&app)?;
-    cmd.arg(&action)
-        .arg(&payload)
+    let mut cmd = python_command(app)?;
+    cmd.arg(action)
+        .arg(payload)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     let mut child = cmd.spawn().map_err(|e| e.to_string())?;
@@ -126,7 +166,7 @@ async fn run_python_blueprint(
     // 2. Lock the Mutex and store the child process safely
     let my_pid = child.id();
     {
-        let mut lock = state.process.lock().unwrap();
+        let mut lock = slot.lock().unwrap();
         // If there's an existing process stuck, kill it before starting a new one
         if let Some(mut old_child) = lock.take() {
             kill_tree(&mut old_child);
@@ -136,13 +176,13 @@ async fn run_python_blueprint(
     }
 
     // 3. Read stderr on a separate thread to prevent OS pipe deadlocks
-    // Each line is also sent to the window as `blueprint-log` so long installs can show progress; the full text is still kept for the error.
+    // The full text is kept for the error; the lines also go out as events so long installs can show progress.
     let app_for_log = app.clone();
     let stderr_thread = thread::spawn(move || {
         let mut err_str = String::new();
         for line in std::io::BufReader::new(stderr).split(b'\n').map_while(Result::ok) {
             let line = String::from_utf8_lossy(&line).trim_end_matches('\r').to_string();
-            let _ = app_for_log.emit("blueprint-log", line.clone());
+            let _ = app_for_log.emit(log_event, line.clone());
             err_str.push_str(&line);
             err_str.push('\n');
         }
@@ -158,7 +198,7 @@ async fn run_python_blueprint(
 
     // 5. Streams are closed. Clean up and get the exit status.
     // Only this call's own process is reaped here: if a newer call (or a cancel) replaced it, the slot holds someone else's child.
-    let mut lock = state.process.lock().unwrap();
+    let mut lock = slot.lock().unwrap();
     if lock.as_ref().map(|c| c.id()) == Some(my_pid) {
         if let Some(mut child) = lock.take() {
             match child.wait() {
@@ -562,12 +602,15 @@ pub fn run() {
         .manage(oauth::OauthListener::default())
         .manage(BlueprintState {
             process: Mutex::new(None),
+            install_process: Mutex::new(None),
             render_process: Mutex::new(None),
             render_cancelled: AtomicBool::new(false),
         })
         .invoke_handler(tauri::generate_handler![
             run_python_blueprint,
             run_python_utility,
+            run_python_install,
+            cancel_python_install,
             cancel_python_blueprint,
             cancel_render,
             start_render,
