@@ -93,12 +93,12 @@ msgid "{0} elapsed"
 msgstr "{0} 経過"
 
 #. placeholder {0}: job.label
-#: src/components/ui/InstallToast.tsx:64
+#: src/components/ui/InstallToast.tsx:71
 msgid "{0} failed"
 msgstr "{0} のセットアップに失敗しました"
 
 #. placeholder {0}: job.label
-#: src/components/ui/InstallToast.tsx:64
+#: src/components/ui/InstallToast.tsx:71
 msgid "{0} is ready"
 msgstr "{0} の準備ができました"
 
@@ -1019,6 +1019,12 @@ msgstr "キャンセル"
 msgid "Cancel download"
 msgstr "ダウンロードをキャンセル"
 
+#: src/components/ui/InstallToast.tsx:39
+#: src/components/ui/InstallToast.tsx:85
+#: src/components/ui/InstallToast.tsx:86
+msgid "Cancel install"
+msgstr "インストールをキャンセル"
+
 #: src/components/ui/RenderOverlay.tsx:1112
 msgid "Cancelling process..."
 msgstr "処理をキャンセルしています..."
@@ -1146,7 +1152,7 @@ msgstr "中継点をすべて削除（{viaCount}）"
 msgid "Click a point to remove it."
 msgstr "点をクリックして削除します。"
 
-#: src/components/ui/InstallToast.tsx:73
+#: src/components/ui/InstallToast.tsx:80
 msgid "Click for details"
 msgstr "クリックして詳細を表示"
 
@@ -1196,7 +1202,7 @@ msgstr "録音から声をクローンします。生成にかかる時間はナ
 #: src/components/ui/AppSettings.tsx:293
 #: src/components/ui/ErrorBoundary.tsx:85
 #: src/components/ui/FontDownloadDialog.tsx:80
-#: src/components/ui/InstallToast.tsx:37
+#: src/components/ui/InstallToast.tsx:43
 #: src/components/ui/NewProject.tsx:232
 #: src/components/ui/RenderOverlay.tsx:1304
 #: src/components/ui/StatusBar.tsx:454
@@ -1631,8 +1637,8 @@ msgstr "直線"
 msgid "Discard"
 msgstr "破棄"
 
-#: src/components/ui/InstallToast.tsx:79
-#: src/components/ui/InstallToast.tsx:80
+#: src/components/ui/InstallToast.tsx:85
+#: src/components/ui/InstallToast.tsx:86
 #: src/components/ui/RenderOverlay.tsx:802
 #: src/components/ui/Toast.tsx:68
 #: src/components/ui/Toast.tsx:69
@@ -3187,7 +3193,7 @@ msgstr "これらのクリップにナレーション字幕が見つかりませ
 msgid "No other drawn paths yet"
 msgstr "他に描いた経路はありません"
 
-#: src/components/ui/InstallToast.tsx:45
+#: src/components/ui/InstallToast.tsx:52
 msgid "No output yet."
 msgstr "まだ出力はありません。"
 
@@ -4462,7 +4468,7 @@ msgid "Set up Qwen3-TTS"
 msgstr "Qwen3-TTSをセットアップ"
 
 #. placeholder {0}: job.label
-#: src/components/ui/InstallToast.tsx:64
+#: src/components/ui/InstallToast.tsx:71
 msgid "Setting up {0}"
 msgstr "{0} をセットアップ中"
 
@@ -4505,7 +4511,7 @@ msgstr "より鮮明な地図タイル"
 #~ msgstr "AI機能を有効にする。開催されてインストールされているOllamaが必要です。"
 
 #: src/components/ui/ErrorBoundary.tsx:127
-#: src/components/ui/InstallToast.tsx:70
+#: src/components/ui/InstallToast.tsx:77
 #: src/components/ui/SetupGate.tsx:175
 msgid "Show details"
 msgstr "詳細を表示"

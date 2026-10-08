@@ -1,3 +1,4 @@
+import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { callSidecar } from "./sidecar";
 
@@ -90,6 +91,12 @@ export async function startInstall(id: string, label: string, action: string): P
   else update(id, { state: "failed", error: reply.error });
   stopListening();
   return reply.success;
+}
+
+// Stops the install's Python process; the call then comes back as cancelled and the job disappears. Installs resume where they stopped.
+export async function cancelInstall(id: string) {
+  if (!jobs.some((j) => j.id === id && j.state === "running")) return;
+  await invoke("cancel_python_blueprint").catch(() => {});
 }
 
 export function dismissInstall(id: string) {

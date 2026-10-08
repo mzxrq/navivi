@@ -21,6 +21,8 @@ describe("parseReply", () => {
 
   it("turns output that is not a reply into an error", () => {
     expect(parseReply("Traceback (most recent call last):")).toMatchObject({ success: false });
+    expect(parseReply("noise\nSomething broke")).toEqual({ success: false, error: "The media pipeline returned an unexpected reply: Something broke" });
+    expect(parseReply("")).toMatchObject({ error: expect.stringContaining("printed nothing") });
     expect(parseReply("")).toMatchObject({ success: false });
     expect(parseReply(JSON.stringify({ voices: [] }))).toMatchObject({ success: false });
   });

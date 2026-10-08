@@ -1,6 +1,14 @@
-import { describe, expect, it } from "vitest";
-import { parseProgress } from "./installs";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+const mocks = vi.hoisted(() => ({ callSidecar: vi.fn(), invoke: vi.fn(() => Promise.resolve("Cancelled")) }));
+vi.mock("./sidecar", () => ({ callSidecar: mocks.callSidecar }));
+vi.mock("@tauri-apps/api/core", () => ({ invoke: mocks.invoke }));
+vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn(() => Promise.resolve(() => {})) }));
+
+import { cancelInstall, getInstalls, parseProgress, resetInstalls, startInstall } from "./installs";
 import { parseDownloadLine } from "./setup";
+
+afterEach(resetInstalls);
 
 describe("parseProgress", () => {
   it("reads the installer's progress line", () => {
@@ -8,6 +16,26 @@ describe("parseProgress", () => {
   });
   it("ignores any other line", () => {
     expect(parseProgress("2026-10-08 [INFO] Kokoro setup: creating the environment")).toBeNull();
+  });
+});
+
+describe("cancelInstall", () => {
+  it("stops the process and drops the job instead of showing a failure", async () => {
+    let finish: (v: unknown) => void = () => {};
+    mocks.callSidecar.mockReturnValue(new Promise((resolve) => (finish = resolve)));
+    const started = startInstall("kokoro", "Kokoro-82M", "tts_install_kokoro");
+    await vi.waitFor(() => expect(mocks.callSidecar).toHaveBeenCalled());
+    await cancelInstall("kokoro");
+    expect(mocks.invoke).toHaveBeenCalledWith("cancel_python_blueprint");
+    finish({ success: false, error: "Process was cancelled", cancelled: true });
+    await started;
+    expect(getInstalls()).toHaveLength(0);
+  });
+
+  it("does nothing for an install that is not running", async () => {
+    mocks.invoke.mockClear();
+    await cancelInstall("nothing");
+    expect(mocks.invoke).not.toHaveBeenCalled();
   });
 });
 

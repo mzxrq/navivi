@@ -20,14 +20,16 @@ const messageOf = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 // main.py prints one JSON result as the last line of stdout; anything before it is progress or library noise.
 export function parseReply<T>(stdout: string): SidecarReply<T> {
-  const last = stdout.trim().split("\n").pop() ?? "";
+  const last = stdout.trim().split("\n").pop()?.trim() ?? "";
   try {
     const parsed = JSON.parse(last);
     if (parsed && typeof parsed === "object" && typeof parsed.success === "boolean") return parsed;
   } catch {
     // fall through to the error below
   }
-  return { success: false, error: "The media pipeline returned an unexpected reply" };
+  // Show what came back (a library's stray print, a crash message) so the toast says more than "unexpected".
+  const seen = last ? `: ${last.length > 300 ? `${last.slice(0, 300)}…` : last}` : " (it printed nothing)";
+  return { success: false, error: `The media pipeline returned an unexpected reply${seen}` };
 }
 
 // A pipeline stage run on a project: resolves with the process's stdout, rejects with its error text.

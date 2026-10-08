@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 import { useInstalls } from "../../hooks/useInstalls";
-import { dismissInstall, type InstallJob } from "../../services/installs";
+import { cancelInstall, dismissInstall, type InstallJob } from "../../services/installs";
 import { AlertCircle, CheckCircle2, Loader2, X } from "./icons";
 import { Dialog, dialogButton } from "./Dialog";
 
@@ -33,9 +33,16 @@ function InstallDetails({ job, onClose }: { job: InstallJob; onClose: () => void
       subtitle={job.state === "running" ? job.step || t`Starting…` : job.state === "done" ? t`Finished` : t`Failed`}
       onClose={onClose}
       footer={
-        <button type="button" className={dialogButton.primary} onClick={onClose}>
-          <Trans>Close</Trans>
-        </button>
+        <>
+          {job.state === "running" && (
+            <button type="button" className={dialogButton.secondary} onClick={() => void cancelInstall(job.id)}>
+              <Trans>Cancel install</Trans>
+            </button>
+          )}
+          <button type="button" className={dialogButton.primary} onClick={onClose}>
+            <Trans>Close</Trans>
+          </button>
+        </>
       }
     >
       <div className="space-y-3 pb-1">
@@ -72,17 +79,15 @@ function InstallItem({ job }: { job: InstallJob }) {
           {job.state !== "done" && <InstallProgressBar job={job} />}
           {job.state === "failed" && <p className="text-[11px] text-red-500">{t`Click for details`}</p>}
         </button>
-        {job.state !== "running" && (
-          <button
-            type="button"
-            onClick={() => dismissInstall(job.id)}
-            aria-label={t`Dismiss`}
-            title={t`Dismiss`}
-            className="flex items-center justify-center w-6 h-6 -my-0.5 rounded-md shrink-0 text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 dark:hover:text-zinc-200 dark:hover:bg-white/5 transition-colors"
-          >
-            <X className="w-3.5 h-3.5" />
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={() => (job.state === "running" ? void cancelInstall(job.id) : dismissInstall(job.id))}
+          aria-label={job.state === "running" ? t`Cancel install` : t`Dismiss`}
+          title={job.state === "running" ? t`Cancel install` : t`Dismiss`}
+          className="flex items-center justify-center w-6 h-6 -my-0.5 rounded-md shrink-0 text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 dark:hover:text-zinc-200 dark:hover:bg-white/5 transition-colors"
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
       </div>
       {open && <InstallDetails job={job} onClose={() => setOpen(false)} />}
     </>
